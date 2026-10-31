@@ -19,7 +19,6 @@ export const LOCAL_ID_PATTERN = new RegExp(`^${LOCAL_ID_SOURCE}$`);
 
 const FULL_ID_PATTERN = new RegExp(`^plugin\\.(${PLUGIN_ID_SOURCE})\\.(${LOCAL_ID_SOURCE})$`);
 
-
 /** The shape of a derived Plugin contribution id, registered or not. */
 export function isPluginContributionId(value: string): value is PluginContributionId {
   return FULL_ID_PATTERN.test(value);

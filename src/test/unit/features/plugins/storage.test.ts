@@ -15,13 +15,15 @@ type SyncState = {
 };
 type Listener = (state: SyncState, previous: SyncState) => void;
 
-const { settings, syncState, syncListeners, mockGetPassphrase, mockGetDatabase } = vi.hoisted(() => ({
-  settings: { autoSync: true },
-  syncState: {} as SyncState,
-  syncListeners: new Set<Listener>(),
-  mockGetPassphrase: vi.fn(),
-  mockGetDatabase: vi.fn(),
-}));
+const { settings, syncState, syncListeners, mockGetPassphrase, mockGetDatabase } = vi.hoisted(
+  () => ({
+    settings: { autoSync: true },
+    syncState: {} as SyncState,
+    syncListeners: new Set<Listener>(),
+    mockGetPassphrase: vi.fn(),
+    mockGetDatabase: vi.fn(),
+  })
+);
 
 vi.mock("@/lib/db", () => ({
   getDatabase: mockGetDatabase,

@@ -35,9 +35,9 @@ describe("resolvePluginTarget", () => {
       kind: "note",
       id: "n1",
     });
-    expect(
-      resolvePluginTarget(["canvas"], { ...EMPTY_PLUGIN_ITEM_CONTEXT, canvas: "v1" })
-    ).toEqual({ kind: "canvas", id: "v1" });
+    expect(resolvePluginTarget(["canvas"], { ...EMPTY_PLUGIN_ITEM_CONTEXT, canvas: "v1" })).toEqual(
+      { kind: "canvas", id: "v1" }
+    );
     expect(
       resolvePluginTarget(["canvasNode"], { ...EMPTY_PLUGIN_ITEM_CONTEXT, canvasNode: "node1" })
     ).toEqual({ kind: "canvasNode", id: "node1" });
@@ -65,7 +65,9 @@ describe("resolvePluginTarget", () => {
   });
 
   it("returns null for a kind the Command does not declare", () => {
-    expect(resolvePluginTarget(["note"], { ...EMPTY_PLUGIN_ITEM_CONTEXT, chapter: "c1" })).toBeNull();
+    expect(
+      resolvePluginTarget(["note"], { ...EMPTY_PLUGIN_ITEM_CONTEXT, chapter: "c1" })
+    ).toBeNull();
     expect(resolvePluginTarget([], full)).toBeNull();
     expect(resolvePluginTarget(undefined, full)).toBeNull();
   });
@@ -73,8 +75,9 @@ describe("resolvePluginTarget", () => {
 
 describe("pluginItemContextForPath", () => {
   it("maps the active route to the item the author is in", () => {
-    expect(pluginItemContextForPath("/book/b1", { ...EMPTY_PLUGIN_ITEM_CONTEXT, chapter: "c1" }))
-      .toEqual({ book: "b1", chapter: "c1", note: null, canvas: null, canvasNode: null });
+    expect(
+      pluginItemContextForPath("/book/b1", { ...EMPTY_PLUGIN_ITEM_CONTEXT, chapter: "c1" })
+    ).toEqual({ book: "b1", chapter: "c1", note: null, canvas: null, canvasNode: null });
     expect(pluginItemContextForPath("/book/b1/cover", EMPTY_PLUGIN_ITEM_CONTEXT)).toEqual({
       book: "b1",
       chapter: null,

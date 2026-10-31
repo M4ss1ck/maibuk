@@ -12,11 +12,7 @@
  */
 
 import { resolve } from "node:path";
-import {
-  NODE_TYPE_ELEMENT,
-  NODE_TYPE_TEXT,
-  type RemoteMutationRecord,
-} from "@remote-dom/core";
+import { NODE_TYPE_ELEMENT, NODE_TYPE_TEXT, type RemoteMutationRecord } from "@remote-dom/core";
 import { RemoteReceiver, type RemoteReceiverElement } from "@remote-dom/core/receivers";
 import { release, retain, ThreadMessagePort } from "@quilted/threads";
 import { screen } from "@testing-library/react";
@@ -145,9 +141,7 @@ function textOf(receiver: RemoteReceiver, tag: string): string[] {
   return elements(receiver)
     .filter((node) => node.element === tag)
     .map((node) =>
-      node.children
-        .map((child) => (child.type === NODE_TYPE_TEXT ? child.data : ""))
-        .join("")
+      node.children.map((child) => (child.type === NODE_TYPE_TEXT ? child.data : "")).join("")
     );
 }
 

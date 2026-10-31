@@ -158,7 +158,10 @@ describe("library.notes.update (#588)", () => {
       content: "<p>Stored</p>",
       tags: JSON.stringify(["pacing", "Pacing", "voice"]),
     });
-    expect(await readNote("note-1")).toMatchObject({ id: "note-1", tags: ["pacing", "Pacing", "voice"] });
+    expect(await readNote("note-1")).toMatchObject({
+      id: "note-1",
+      tags: ["pacing", "Pacing", "voice"],
+    });
     expect(await readNotes("book-1")).toEqual([
       expect.objectContaining({ id: "note-1", tags: ["pacing", "Pacing", "voice"] }),
     ]);

@@ -6,10 +6,7 @@
 import { bench, describe } from "vitest";
 import { filterNotes, sortNotesBy } from "@/components/notes/notes-list-model";
 import type { NotesSidebarSort } from "@/components/notes/notes-list-model";
-import {
-  NOTES_FILTER_BENCH_CASES,
-  notesFilterBenchNotes,
-} from "@/test/support/notes-filter-bench";
+import { NOTES_FILTER_BENCH_CASES, notesFilterBenchNotes } from "@/test/support/notes-filter-bench";
 
 const notes = notesFilterBenchNotes();
 

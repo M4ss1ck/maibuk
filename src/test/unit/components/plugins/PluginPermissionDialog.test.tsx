@@ -160,14 +160,10 @@ describe("PluginPermissionDialog", () => {
 
   it("shows the custom-UI notice when the manifest declares one", async () => {
     const user = userEvent.setup();
-    render(
-      <Harness copy={{ ...manifest, customUi: true }} onApprove={vi.fn()} />
-    );
+    render(<Harness copy={{ ...manifest, customUi: true }} onApprove={vi.fn()} />);
     await tabTo(user, screen.getByRole("button", { name: "Review and enable" }));
     await user.keyboard("{Enter}");
-    expect(
-      screen.getByText(/Custom UI: accessibility not verified by Maibuk/)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Custom UI: accessibility not verified by Maibuk/)).toBeInTheDocument();
   });
 
   it("shows the process permission in plain language", async () => {
@@ -208,6 +204,8 @@ describe("PluginPermissionDialog", () => {
         name: "Leer tu Biblioteca · Obligatorio para activar este Plugin",
       })
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Aprobar esta copia y activar" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Aprobar esta copia y activar" })
+    ).toBeInTheDocument();
   });
 });

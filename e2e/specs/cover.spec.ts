@@ -291,7 +291,8 @@ test.describe("Cover export @wf:cover-export", () => {
     await openCover(page);
     // The app names the file after the Book title. WebKit (Playwright 1.64's
     // build) saves a download name's spaces as underscores; Chromium keeps them.
-    const savedName = (name: string) => (browserName === "webkit" ? name.replaceAll(" ", "_") : name);
+    const savedName = (name: string) =>
+      browserName === "webkit" ? name.replaceAll(" ", "_") : name;
 
     const png = await exportCover(page, "Export as PNG");
     expect(png.suggestedFilename()).toBe(savedName(`${SEED_BOOK.title}.png`));

@@ -339,7 +339,12 @@ export function runQuickJsPlugin(options: QuickJsRunOptions): QuickJsPluginRun {
       let dataHandle: QuickJSHandle | null = null;
       let portsHandle: QuickJSHandle | null = null;
       try {
-        portsHandle = bridgePortList(activeContext, activeBridge, messageEvent.ports ?? [], handles);
+        portsHandle = bridgePortList(
+          activeContext,
+          activeBridge,
+          messageEvent.ports ?? [],
+          handles
+        );
         dataHandle = toVmValue(activeContext, messageEvent.data, (port) =>
           bridgedPortHandle(activeBridge, port, handles)
         );
@@ -399,7 +404,12 @@ export function runQuickJsPlugin(options: QuickJsRunOptions): QuickJsPluginRun {
       dataHandle = toVmValue(activeContext, event.data, (port) =>
         bridgedPortHandle(activeBridge, port, handles)
       );
-      result = activeContext.callFunction(scopeDispatch, activeContext.undefined, dataHandle, portsHandle);
+      result = activeContext.callFunction(
+        scopeDispatch,
+        activeContext.undefined,
+        dataHandle,
+        portsHandle
+      );
     } catch (error) {
       if (isMemoryDeathError(error)) dieOfMemory();
       else reportError(error instanceof Error ? error.message : String(error));

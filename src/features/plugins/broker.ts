@@ -195,7 +195,7 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
   const { pluginId, port, declared, granted, handlers = {}, onStop, onCall } = options;
   const now = options.now ?? (() => performance.now());
   const isLibraryAvailable = options.isLibraryAvailable ?? (() => true);
-  const trackLibraryWork = options.trackLibraryWork ?? (<T,>(work: Promise<T>) => work);
+  const trackLibraryWork = options.trackLibraryWork ?? (<T>(work: Promise<T>) => work);
   const hasUserActivation =
     options.hasUserActivation ??
     (() =>
@@ -604,7 +604,8 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
     // reply posted first, so the Plugin's listener exists when this arrives.
     if (row.replays) {
       const snapshot = options.eventSnapshot?.(event);
-      if (snapshot !== undefined) post({ kind: "event", event, payload: row.payload.parse(snapshot) });
+      if (snapshot !== undefined)
+        post({ kind: "event", event, payload: row.payload.parse(snapshot) });
     }
   }
 

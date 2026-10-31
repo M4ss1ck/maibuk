@@ -120,142 +120,140 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe("Reader", () => {
-  test(
-    "page forward to page 4, back to the Shelf, reload, and reopen at page 4 @wf:reader-open-reopen @sc:plugin.maibuk-reader.openFile @sc:plugin.maibuk-reader.nextPage @sc:plugin.maibuk-reader.previousPage @sc:plugin.maibuk-reader.lastPage @sc:plugin.maibuk-reader.firstPage @sc:plugin.maibuk-reader.findInDocument @sc:plugin.maibuk-reader.toggleContents @sc:plugin.maibuk-reader.zoomIn @sc:plugin.maibuk-reader.zoomOut @sc:plugin.maibuk-reader.fitWidth @sc:plugin.maibuk-reader.fitPage @sc:plugin.maibuk-reader.backToShelf @sc:plugin.maibuk-reader.toggleContinuousScroll @sandbox",
-    async ({ page }) => {
-      await page.goto("/");
-      await openReader(page);
-      await expect(page.getByText("Your Shelf is empty", { exact: true })).toBeVisible();
-      await capture(page, "reader-shelf-empty");
+  test("page forward to page 4, back to the Shelf, reload, and reopen at page 4 @wf:reader-open-reopen @sc:plugin.maibuk-reader.openFile @sc:plugin.maibuk-reader.nextPage @sc:plugin.maibuk-reader.previousPage @sc:plugin.maibuk-reader.lastPage @sc:plugin.maibuk-reader.firstPage @sc:plugin.maibuk-reader.findInDocument @sc:plugin.maibuk-reader.toggleContents @sc:plugin.maibuk-reader.zoomIn @sc:plugin.maibuk-reader.zoomOut @sc:plugin.maibuk-reader.fitWidth @sc:plugin.maibuk-reader.fitPage @sc:plugin.maibuk-reader.backToShelf @sc:plugin.maibuk-reader.toggleContinuousScroll @sandbox", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await openReader(page);
+    await expect(page.getByText("Your Shelf is empty", { exact: true })).toBeVisible();
+    await capture(page, "reader-shelf-empty");
 
-      await tabTo(page, page.getByRole("button", { name: "Open file…", exact: true }), {
-        max: 60,
-      });
-      await page.keyboard.press("Enter");
-      await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/document$/);
+    await tabTo(page, page.getByRole("button", { name: "Open file…", exact: true }), {
+      max: 60,
+    });
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/document$/);
 
-      const frame = await focusDocument(page);
-      await expect(pageIndicator(page)).toContainText("1 of 12");
+    const frame = await focusDocument(page);
+    await expect(pageIndicator(page)).toContainText("1 of 12");
 
-      // Arrow keys page inside the Frame; the Command does the same from the
-      // host's keyboard, and both leave the indicator on the same page.
-      await pageForward(page, 1);
-      await expect(pageIndicator(page)).toContainText("2 of 12");
-      await runHostCommand(page, "Next page");
-      await expect(pageIndicator(page)).toContainText("3 of 12");
-      await runHostCommand(page, "Previous page");
-      await expect(pageIndicator(page)).toContainText("2 of 12");
-      // The host palette hands focus back to the host, so re-enter the Frame
-      // before the arrow keys page inside it.
-      await focusDocument(page);
-      await pageForward(page, 2);
-      await expect(pageIndicator(page)).toContainText("4 of 12");
-      await capture(page, "reader-page-view");
+    // Arrow keys page inside the Frame; the Command does the same from the
+    // host's keyboard, and both leave the indicator on the same page.
+    await pageForward(page, 1);
+    await expect(pageIndicator(page)).toContainText("2 of 12");
+    await runHostCommand(page, "Next page");
+    await expect(pageIndicator(page)).toContainText("3 of 12");
+    await runHostCommand(page, "Previous page");
+    await expect(pageIndicator(page)).toContainText("2 of 12");
+    // The host palette hands focus back to the host, so re-enter the Frame
+    // before the arrow keys page inside it.
+    await focusDocument(page);
+    await pageForward(page, 2);
+    await expect(pageIndicator(page)).toContainText("4 of 12");
+    await capture(page, "reader-page-view");
 
-      await runHostCommand(page, "Find in Document");
-      await expect(frame.getByRole("searchbox")).toBeVisible();
-      await page.keyboard.press("Escape");
+    await runHostCommand(page, "Find in Document");
+    await expect(frame.getByRole("searchbox")).toBeVisible();
+    await page.keyboard.press("Escape");
 
-      await runHostCommand(page, "Toggle contents");
-      await expect(frame.getByRole("tree")).toBeVisible();
-      await page.keyboard.press("Escape");
+    await runHostCommand(page, "Toggle contents");
+    await expect(frame.getByRole("tree")).toBeVisible();
+    await page.keyboard.press("Escape");
 
-      // The zoom Commands are keyboard-reachable through the palette even
-      // though Reader ships them unbound; the Frame's own zoom readout moves.
-      const zoom = frame.locator("#zoom-level");
-      const before = await zoom.textContent();
-      await runHostCommand(page, "Zoom in");
-      await expect(zoom).not.toHaveText(before ?? "");
-      await runHostCommand(page, "Zoom out");
-      await runHostCommand(page, "Fit width");
-      await runHostCommand(page, "Fit page");
+    // The zoom Commands are keyboard-reachable through the palette even
+    // though Reader ships them unbound; the Frame's own zoom readout moves.
+    const zoom = frame.locator("#zoom-level");
+    const before = await zoom.textContent();
+    await runHostCommand(page, "Zoom in");
+    await expect(zoom).not.toHaveText(before ?? "");
+    await runHostCommand(page, "Zoom out");
+    await runHostCommand(page, "Fit width");
+    await runHostCommand(page, "Fit page");
 
-      await runHostCommand(page, "Back to Shelf");
-      await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
-      await expect(page.getByText("p. 4 of 12", { exact: true })).toBeVisible();
-      await expect(page.getByText("twelve-pages", { exact: true })).toBeVisible();
-      await capture(page, "reader-shelf-filled");
+    await runHostCommand(page, "Back to Shelf");
+    await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
+    await expect(page.getByText("p. 4 of 12", { exact: true })).toBeVisible();
+    await expect(page.getByText("twelve-pages", { exact: true })).toBeVisible();
+    await capture(page, "reader-shelf-filled");
 
-      await page.reload();
-      await openReader(page);
-      await openFromShelf(page);
-      await expect(pageIndicator(page)).toContainText("4 of 12", { timeout: 30_000 });
+    await page.reload();
+    await openReader(page);
+    await openFromShelf(page);
+    await expect(pageIndicator(page)).toContainText("4 of 12", { timeout: 30_000 });
 
-      // Last page and first page round-trip the same Position from the host.
-      await focusDocument(page);
-      await runHostCommand(page, "Last page");
-      await expect(pageIndicator(page)).toContainText("12 of 12");
-      await runHostCommand(page, "First page");
-      await expect(pageIndicator(page)).toContainText("1 of 12");
+    // Last page and first page round-trip the same Position from the host.
+    await focusDocument(page);
+    await runHostCommand(page, "Last page");
+    await expect(pageIndicator(page)).toContainText("12 of 12");
+    await runHostCommand(page, "First page");
+    await expect(pageIndicator(page)).toContainText("1 of 12");
 
-      // Continuous scroll stacks every page; the Command and the toolbar toggle agree.
-      const layout = frame.locator("#layout-toggle");
-      await runHostCommand(page, "Continuous scroll");
-      await expect(layout).toHaveAttribute("aria-pressed", "true");
-      await expect(frame.locator(".pdf-page:not([hidden])")).toHaveCount(12);
-      await capture(page, "reader-continuous-view");
-      await runHostCommand(page, "Continuous scroll");
-      await expect(layout).toHaveAttribute("aria-pressed", "false");
-      await expect(frame.locator(".pdf-page:not([hidden])")).toHaveCount(1);
-    }
-  );
+    // Continuous scroll stacks every page; the Command and the toolbar toggle agree.
+    const layout = frame.locator("#layout-toggle");
+    await runHostCommand(page, "Continuous scroll");
+    await expect(layout).toHaveAttribute("aria-pressed", "true");
+    await expect(frame.locator(".pdf-page:not([hidden])")).toHaveCount(12);
+    await capture(page, "reader-continuous-view");
+    await runHostCommand(page, "Continuous scroll");
+    await expect(layout).toHaveAttribute("aria-pressed", "false");
+    await expect(frame.locator(".pdf-page:not([hidden])")).toHaveCount(1);
+  });
 
-  test(
-    "open the reflowable EPUB by Command, page forward twice, and reopen at the same spot @wf:reader-open-reopen @sc:plugin.maibuk-reader.openReader @sc:plugin.maibuk-reader.openFile @sandbox",
-    async ({ page }) => {
-      await page.goto("/");
-      await expect(navOption(page, "Reader")).toBeVisible({ timeout: 60_000 });
-      await runPaletteCommand(page, "Open Reader");
-      await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
+  test("open the reflowable EPUB by Command, page forward twice, and reopen at the same spot @wf:reader-open-reopen @sc:plugin.maibuk-reader.openReader @sc:plugin.maibuk-reader.openFile @sandbox", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await expect(navOption(page, "Reader")).toBeVisible({ timeout: 60_000 });
+    await runPaletteCommand(page, "Open Reader");
+    await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
 
-      await chooseNextFile(page, EPUB);
-      await runPaletteCommand(page, "Open file…");
-      await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/document$/);
+    await chooseNextFile(page, EPUB);
+    await runPaletteCommand(page, "Open file…");
+    await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/document$/);
 
-      const frame = await focusDocument(page);
-      await expect(frame.getByRole("heading", { name: "One" })).toBeVisible({ timeout: 30_000 });
-      await pageForward(page, 2);
+    const frame = await focusDocument(page);
+    await expect(frame.getByRole("heading", { name: "One" })).toBeVisible({ timeout: 30_000 });
+    await pageForward(page, 2);
 
-      // The spot is whichever of the two chapters' text is on screen; the
-      // indicator says where in its section the page sits.
-      const spot = await pageIndicator(page).textContent();
-      const visible = frame.getByText(
+    // The spot is whichever of the two chapters' text is on screen; the
+    // indicator says where in its section the page sits.
+    const spot = await pageIndicator(page).textContent();
+    const visible = frame.getByText(
+      /The spice must flow across Arrakis\.|The journey continues past the desert\./
+    );
+    await expect(visible).toBeVisible();
+    await capture(page, "reader-flowing-view");
+
+    await page.keyboard.press("Escape");
+    await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
+
+    await openFromShelf(page);
+    await expect(pageIndicator(page)).toHaveText(spot ?? "", { timeout: 30_000 });
+    await expect(
+      documentFrame(page).getByText(
         /The spice must flow across Arrakis\.|The journey continues past the desert\./
-      );
-      await expect(visible).toBeVisible();
-      await capture(page, "reader-flowing-view");
+      )
+    ).toBeVisible();
 
-      await page.keyboard.press("Escape");
-      await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
+    // Contents is the EPUB's nav (One, Two). It opens by the Command, so it
+    // runs before the search and no palette step follows the capture.
+    await focusDocument(page);
+    await runHostCommand(page, "Toggle contents");
+    await expect(frame.getByRole("tree").getByText("One", { exact: true })).toBeVisible();
+    await capture(page, "reader-contents");
+    await page.keyboard.press("Escape");
+    await expect(frame.getByRole("tree")).toBeHidden();
 
-      await openFromShelf(page);
-      await expect(pageIndicator(page)).toHaveText(spot ?? "", { timeout: 30_000 });
-      await expect(
-        documentFrame(page).getByText(
-          /The spice must flow across Arrakis\.|The journey continues past the desert\./
-        )
-      ).toBeVisible();
-
-      // Contents is the EPUB's nav (One, Two). It opens by the Command, so it
-      // runs before the search and no palette step follows the capture.
-      await focusDocument(page);
-      await runHostCommand(page, "Toggle contents");
-      await expect(frame.getByRole("tree").getByText("One", { exact: true })).toBeVisible();
-      await capture(page, "reader-contents");
-      await page.keyboard.press("Escape");
-      await expect(frame.getByRole("tree")).toBeHidden();
-
-      // Search runs inside the Frame: Ctrl+F opens the bar with focus in its
-      // input, the query types there, and Enter runs it. The status reads
-      // "1 of N" once the first match is shown.
-      await page.keyboard.press("ControlOrMeta+f");
-      await expect(frame.getByRole("searchbox")).toBeVisible();
-      await page.keyboard.type("spice");
-      await page.keyboard.press("Enter");
-      await expect(frame.locator("#search-status")).toHaveText(/^1 of \d+$/, { timeout: 30_000 });
-      await capture(page, "reader-search");
-    }
-  );
+    // Search runs inside the Frame: Ctrl+F opens the bar with focus in its
+    // input, the query types there, and Enter runs it. The status reads
+    // "1 of N" once the first match is shown.
+    await page.keyboard.press("ControlOrMeta+f");
+    await expect(frame.getByRole("searchbox")).toBeVisible();
+    await page.keyboard.type("spice");
+    await page.keyboard.press("Enter");
+    await expect(frame.locator("#search-status")).toHaveText(/^1 of \d+$/, { timeout: 30_000 });
+    await capture(page, "reader-search");
+  });
 
   test("a Missing Document shows its state, and Locate again keeps the Reading Position @wf:reader-missing-locate @sc:plugin.maibuk-reader.openFile @sandbox", async ({
     page,

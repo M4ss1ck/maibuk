@@ -87,16 +87,14 @@ describe("dispatchTypingKey", () => {
 
 describe("findEchoElement / findEchoInput", () => {
   it("finds the echo Text and the labelled input", () => {
-    document.body.innerHTML =
-      '<div><p>echo:abc</p><input aria-label="Echo input" /></div>';
+    document.body.innerHTML = '<div><p>echo:abc</p><input aria-label="Echo input" /></div>';
     expect(findEchoElement(document)?.textContent).toBe("echo:abc");
     expect(findEchoInput(document)?.tagName).toBe("INPUT");
     document.body.innerHTML = "";
   });
 
   it("resolves the input's name through aria-labelledby, as React Aria associates it", () => {
-    document.body.innerHTML =
-      '<label id="lbl">Echo input</label><input aria-labelledby="lbl" />';
+    document.body.innerHTML = '<label id="lbl">Echo input</label><input aria-labelledby="lbl" />';
     expect(findEchoInput(document)?.tagName).toBe("INPUT");
     document.body.innerHTML = "";
   });
@@ -190,9 +188,7 @@ describe("pollFor", () => {
   });
 
   it("throws when the value never arrives", async () => {
-    await expect(
-      pollFor(() => null, { timeoutMs: 5, intervalMs: 1 })
-    ).rejects.toThrow(/timed out/);
+    await expect(pollFor(() => null, { timeoutMs: 5, intervalMs: 1 })).rejects.toThrow(/timed out/);
   });
 });
 

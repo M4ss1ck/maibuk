@@ -57,4 +57,3 @@ export function installFocusReturn(): () => void {
     window.removeEventListener("pointerdown", onUserInput, true);
   };
 }
-

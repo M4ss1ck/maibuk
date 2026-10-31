@@ -736,4 +736,3 @@ describe("Dictation scratch that after a layout Command", () => {
     }
   });
 });
-

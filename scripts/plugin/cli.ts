@@ -185,7 +185,10 @@ async function main(): Promise<number> {
   // `configs` only generates the editor's TypeScript configs, so it runs before
   // the manifest check: `setup` runs it right after writing `maibuk.local.json`.
   if (parsed.command === "configs") {
-    const { checkConfigPath, pathsConfigPath } = await writeGeneratedConfigs(pluginRoot, maibukRoot);
+    const { checkConfigPath, pathsConfigPath } = await writeGeneratedConfigs(
+      pluginRoot,
+      maibukRoot
+    );
     console.log(
       `wrote ${relative(pluginRoot, pathsConfigPath)} and ${relative(pluginRoot, checkConfigPath)}`
     );

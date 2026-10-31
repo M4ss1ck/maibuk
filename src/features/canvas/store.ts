@@ -384,7 +384,9 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   updateCanvas: async (id, input) => {
     // The write path persists, returns the stored canvas, and emits the
     // Change (content for a title change, metadata for pin/order).
-    const stored = await canvasWriteQueue.enqueue(() => updateCanvasRow(id, input, "local", STORE_VIEW));
+    const stored = await canvasWriteQueue.enqueue(() =>
+      updateCanvasRow(id, input, "local", STORE_VIEW)
+    );
     if (!stored) return;
     writeEpoch++;
     set((state) => ({

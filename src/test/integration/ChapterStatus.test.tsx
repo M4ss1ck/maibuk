@@ -3,7 +3,12 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
-import { isEntityChange, onChange, resetChangeFeedForTests, type Change } from "@/features/sync/change-feed";
+import {
+  isEntityChange,
+  onChange,
+  resetChangeFeedForTests,
+  type Change,
+} from "@/features/sync/change-feed";
 
 const { mockGetDatabase, mockReindex, mockToastError } = vi.hoisted(() => ({
   mockGetDatabase: vi.fn(),

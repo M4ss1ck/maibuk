@@ -61,9 +61,7 @@ describe("FindReplace", () => {
     await waitFor(() => expect(document.querySelectorAll(".search-result")).toHaveLength(2));
 
     await user.keyboard("{Alt>}c{/Alt}");
-    await waitFor(() =>
-      expect(document.querySelectorAll(".search-result")).toHaveLength(1)
-    );
+    await waitFor(() => expect(document.querySelectorAll(".search-result")).toHaveLength(1));
     expect(useSearchSwitchesStore.getState().matchCase).toBe(true);
     // The switch key never reaches the field as text.
     expect(find).toHaveValue("cat");

@@ -110,12 +110,7 @@ function DisabledTargetHarness() {
   return (
     <>
       <input ref={searchRef} aria-label="Search" />
-      <button
-        ref={openerRef}
-        type="button"
-        disabled={!customized}
-        onClick={() => setIsOpen(true)}
-      >
+      <button ref={openerRef} type="button" disabled={!customized} onClick={() => setIsOpen(true)}>
         Reset all
       </button>
       <Dialog

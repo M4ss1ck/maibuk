@@ -363,11 +363,21 @@ describe("re-registering the same editor id", () => {
     editor.view.dom.focus();
     const seen = vi.fn();
     const off = onEditorFocusChanged(seen);
-    registerPluginEditor({ id: "note-editor", editor, entity: { kind: "note", id: "n1" }, language: "en" });
+    registerPluginEditor({
+      id: "note-editor",
+      editor,
+      entity: { kind: "note", id: "n1" },
+      language: "en",
+    });
     seen.mockClear();
 
     // A Note switch re-registers the same editor instance and id.
-    registerPluginEditor({ id: "note-editor", editor, entity: { kind: "note", id: "n2" }, language: "en" });
+    registerPluginEditor({
+      id: "note-editor",
+      editor,
+      entity: { kind: "note", id: "n2" },
+      language: "en",
+    });
 
     expect(seen).not.toHaveBeenCalledWith(null);
     expect(seen).toHaveBeenCalledTimes(1);
@@ -939,8 +949,18 @@ describe("editor writes", () => {
   it("edits the editor it resolved even when focus moves to another during the call", () => {
     const first = mountEditor("<p>Alpha</p>");
     const second = mountEditor("<p>Beta</p>");
-    registerPluginEditor({ id: "a", editor: first, entity: { kind: "chapter", id: "c1" }, language: "en" });
-    registerPluginEditor({ id: "b", editor: second, entity: { kind: "chapter", id: "c2" }, language: "en" });
+    registerPluginEditor({
+      id: "a",
+      editor: first,
+      entity: { kind: "chapter", id: "c1" },
+      language: "en",
+    });
+    registerPluginEditor({
+      id: "b",
+      editor: second,
+      entity: { kind: "chapter", id: "c2" },
+      language: "en",
+    });
     first.view.dom.focus();
     const secondBefore = second.getHTML();
     // The edit's own update moves focus to the other editor mid-call.

@@ -83,7 +83,10 @@ describe("the Plugin-side node budget, per mount", () => {
     const watch = createRemovalWatch(budget);
     for (let round = 0; round < 200; round += 1) {
       render(budget, 500);
-      const subtree = element(`r${round}`, Array.from({ length: 499 }, (_, i) => element(`r${round}-${i}`)));
+      const subtree = element(
+        `r${round}`,
+        Array.from({ length: 499 }, (_, i) => element(`r${round}-${i}`))
+      );
       watch.observe([insert(ROOT, subtree)]);
       watch.observe([remove(ROOT, 0)]);
       expect(budget.live).toBe(0);

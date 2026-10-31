@@ -496,9 +496,7 @@ describe("useNoteStore", () => {
     });
 
     it("does not let an older read finishing last replace newer rows", async () => {
-      const note = await useNoteStore
-        .getState()
-        .createNote({ title: "A", content: "<p>old</p>" });
+      const note = await useNoteStore.getState().createNote({ title: "A", content: "<p>old</p>" });
       const newer = note.contentUpdatedAt + 1000;
 
       const held = holdFirstNotesRead();
@@ -583,9 +581,7 @@ describe("useNoteStore", () => {
     });
 
     it("keeps the applied notes array when a stale read is dropped", async () => {
-      const note = await useNoteStore
-        .getState()
-        .createNote({ title: "A", content: "<p>old</p>" });
+      const note = await useNoteStore.getState().createNote({ title: "A", content: "<p>old</p>" });
 
       const held = holdFirstNotesRead();
       const loading = useNoteStore.getState().loadNotes();

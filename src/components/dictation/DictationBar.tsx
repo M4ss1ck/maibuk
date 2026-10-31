@@ -18,8 +18,7 @@ const AUTO = "auto";
 /** The two drawn sizes; Hidden draws the Compact microphone while listening. */
 type BarLayout = "full" | "compact";
 
-const FOCUS_RING =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
+const FOCUS_RING = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
 
 /**
  * Every part's classes per size. The live bar and its Settings preview both
@@ -128,91 +127,91 @@ export function DictationBar() {
   return (
     <div className="fixed bottom-4 right-4 z-30">
       <div data-bar-part="frame" className={`${FRAME_CLASS} ${L.frame}`}>
-      <button
-        type="button"
-        data-bar-part="mic"
-        data-command="dictation.toggle"
-        aria-pressed={noModel ? undefined : listening}
-        aria-label={`${label}${hintLabel}`}
-        title={`${label}${hintLabel}`}
-        onClick={() =>
-          noModel
-            ? openSettings()
-            : void getDictation()
-                .then((r) => r.session.toggle())
-                .catch(() => {})
-        }
-        className={buttonClass(layout, listening)}
-        style={
-          listening
-            ? {
-                boxShadow: `0 0 0 ${2 + ring * 6}px color-mix(in oklab, var(--color-primary) 35%, transparent)`,
-              }
-            : undefined
-        }
-      >
-        {loading ? (
-          <Loader2 className={`${L.icon} animate-spin`} aria-hidden />
-        ) : noModel ? (
-          <MicOff className={L.icon} aria-hidden />
-        ) : (
-          <Mic className={L.icon} aria-hidden />
-        )}
-      </button>
-      {!collapsed && !noModel && (
-        <div data-bar-part="language" className={L.language}>
-          <Select<string>
-            ariaLabel={t("dictation.language")}
-            variant={L.languageVariant}
-            minWidth="none"
-            triggerClassName={L.languageTrigger}
-            value={languageOverride ?? AUTO}
-            options={[
-              { value: AUTO, label: AUTO, accessibleName: t("dictation.languageAuto") },
-              ...languages.map((l) => ({
-                value: l,
-                label: l,
-                accessibleName: t(`dictation.languageNames.${l}`),
-              })),
-            ]}
-            onChange={(value) => {
-              void setDictationLanguage(
-                value === AUTO ? null : (value as DictationLanguage)
-              ).catch(() => {});
-            }}
-          />
-        </div>
-      )}
-      {!collapsed && (
         <button
           type="button"
-          data-bar-part="settings"
-          aria-label={t("dictation.settings")}
-          title={t("dictation.settings")}
-          onClick={openSettings}
-          className={buttonClass(layout)}
+          data-bar-part="mic"
+          data-command="dictation.toggle"
+          aria-pressed={noModel ? undefined : listening}
+          aria-label={`${label}${hintLabel}`}
+          title={`${label}${hintLabel}`}
+          onClick={() =>
+            noModel
+              ? openSettings()
+              : void getDictation()
+                  .then((r) => r.session.toggle())
+                  .catch(() => {})
+          }
+          className={buttonClass(layout, listening)}
+          style={
+            listening
+              ? {
+                  boxShadow: `0 0 0 ${2 + ring * 6}px color-mix(in oklab, var(--color-primary) 35%, transparent)`,
+                }
+              : undefined
+          }
         >
-          <Settings2 className={L.icon} aria-hidden />
-        </button>
-      )}
-      {!hidden && (
-        <button
-          type="button"
-          data-bar-part="collapse"
-          data-command="dictation.toggleBar"
-          aria-expanded={!barCollapsed}
-          aria-label={barCollapsed ? t("dictation.bar.expand") : t("dictation.bar.collapse")}
-          title={barCollapsed ? t("dictation.bar.expand") : t("dictation.bar.collapse")}
-          onClick={toggleBarCollapsed}
-          className={COLLAPSE_CLASS}
-        >
-          {barCollapsed ? (
-            <ChevronLeft className={CARET_ICON} aria-hidden />
+          {loading ? (
+            <Loader2 className={`${L.icon} animate-spin`} aria-hidden />
+          ) : noModel ? (
+            <MicOff className={L.icon} aria-hidden />
           ) : (
-            <ChevronRight className={CARET_ICON} aria-hidden />
+            <Mic className={L.icon} aria-hidden />
           )}
         </button>
-      )}
+        {!collapsed && !noModel && (
+          <div data-bar-part="language" className={L.language}>
+            <Select<string>
+              ariaLabel={t("dictation.language")}
+              variant={L.languageVariant}
+              minWidth="none"
+              triggerClassName={L.languageTrigger}
+              value={languageOverride ?? AUTO}
+              options={[
+                { value: AUTO, label: AUTO, accessibleName: t("dictation.languageAuto") },
+                ...languages.map((l) => ({
+                  value: l,
+                  label: l,
+                  accessibleName: t(`dictation.languageNames.${l}`),
+                })),
+              ]}
+              onChange={(value) => {
+                void setDictationLanguage(
+                  value === AUTO ? null : (value as DictationLanguage)
+                ).catch(() => {});
+              }}
+            />
+          </div>
+        )}
+        {!collapsed && (
+          <button
+            type="button"
+            data-bar-part="settings"
+            aria-label={t("dictation.settings")}
+            title={t("dictation.settings")}
+            onClick={openSettings}
+            className={buttonClass(layout)}
+          >
+            <Settings2 className={L.icon} aria-hidden />
+          </button>
+        )}
+        {!hidden && (
+          <button
+            type="button"
+            data-bar-part="collapse"
+            data-command="dictation.toggleBar"
+            aria-expanded={!barCollapsed}
+            aria-label={barCollapsed ? t("dictation.bar.expand") : t("dictation.bar.collapse")}
+            title={barCollapsed ? t("dictation.bar.expand") : t("dictation.bar.collapse")}
+            onClick={toggleBarCollapsed}
+            className={COLLAPSE_CLASS}
+          >
+            {barCollapsed ? (
+              <ChevronLeft className={CARET_ICON} aria-hidden />
+            ) : (
+              <ChevronRight className={CARET_ICON} aria-hidden />
+            )}
+          </button>
+        )}
       </div>
     </div>
   );

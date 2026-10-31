@@ -90,7 +90,9 @@ describe("a Stopped Plugin's sidebar entry", () => {
     while (document.activeElement?.getAttribute("role") !== "option") await user.tab();
     const entry = navigation().getByRole("option", { name: STOPPED_NAME });
     while (document.activeElement !== entry) await user.keyboard("{ArrowDown}");
-    expect(await screen.findByRole("tooltip")).toHaveTextContent("Word Stats stopped unexpectedly.");
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "Word Stats stopped unexpectedly."
+    );
 
     await user.keyboard("{Enter}");
     expect(screen.getByTestId("route")).toHaveTextContent(pluginPageRoute("alpha", "report"));

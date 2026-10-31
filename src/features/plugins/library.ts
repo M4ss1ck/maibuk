@@ -46,10 +46,7 @@ import type {
 import { DEFAULT_SEARCH_LIMIT, searchLibrary } from "@/features/search/search";
 import type { SearchResult } from "@/features/search/types";
 import { PendingEditsFlushError, flushPendingEdits } from "@/features/sync/pending-edits";
-import {
-  TutorialIdLeakError,
-  assertWritableId,
-} from "@/features/tutorial/library-switch";
+import { TutorialIdLeakError, assertWritableId } from "@/features/tutorial/library-switch";
 import { useVersionStore } from "@/features/versions/store";
 import { getDatabase } from "@/lib/db";
 import { PluginApiError } from "@/plugin-sdk/protocol";
@@ -112,7 +109,9 @@ function parseTags(raw: unknown): string[] {
   if (typeof raw !== "string" || raw.length === 0) return [];
   try {
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((tag): tag is string => typeof tag === "string") : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((tag): tag is string => typeof tag === "string")
+      : [];
   } catch {
     return [];
   }
@@ -180,7 +179,9 @@ export async function listPluginNotes(bookId?: string): Promise<PluginNoteSummar
   const db = await getDatabase();
   const rows =
     bookId === undefined
-      ? await db.select<Row[]>('SELECT * FROM notes ORDER BY pinned DESC, "order" ASC, updated_at DESC')
+      ? await db.select<Row[]>(
+          'SELECT * FROM notes ORDER BY pinned DESC, "order" ASC, updated_at DESC'
+        )
       : await db.select<Row[]>(
           'SELECT * FROM notes WHERE book_id = ? ORDER BY pinned DESC, "order" ASC, updated_at DESC',
           [bookId]
@@ -454,7 +455,11 @@ export async function updatePluginChapterContent(
         });
       }
     }
-    const chapter = await updateChapterRow(chapterId, { content: fragmentToHtml(fragment) }, "local");
+    const chapter = await updateChapterRow(
+      chapterId,
+      { content: fragmentToHtml(fragment) },
+      "local"
+    );
     if (!chapter) throw notFound("Chapter", chapterId);
     return null;
   });
@@ -494,10 +499,7 @@ export async function createPluginChapter(input: {
     }
 
     const content = input.content === undefined ? undefined : fragmentToHtml(input.content);
-    const chapter = await createChapterRow(
-      { bookId: input.bookId, title: input.title },
-      "local"
-    );
+    const chapter = await createChapterRow({ bookId: input.bookId, title: input.title }, "local");
     try {
       if (content !== undefined) {
         await updateChapterRow(chapter.id, { content }, "local");
@@ -615,9 +617,7 @@ export async function createPluginNote(input: {
       {
         title: input.title,
         bookId: input.bookId ?? null,
-        ...(content === undefined
-          ? {}
-          : { content, wordCount: contentWordCount(content) }),
+        ...(content === undefined ? {} : { content, wordCount: contentWordCount(content) }),
         ...(input.tags === undefined ? {} : { tags: normalizeNoteTags(input.tags) }),
       },
       "local"
@@ -677,9 +677,7 @@ export async function updatePluginNote(input: {
       {
         id: input.noteId,
         ...(input.title === undefined ? {} : { title: input.title }),
-        ...(content === undefined
-          ? {}
-          : { content, wordCount: contentWordCount(content) }),
+        ...(content === undefined ? {} : { content, wordCount: contentWordCount(content) }),
         ...(input.tags === undefined ? {} : { tags: normalizeNoteTags(input.tags) }),
         // `undefined` keeps the stored Book; null is Unfiled.
         ...(input.bookId === undefined ? {} : { bookId: input.bookId }),

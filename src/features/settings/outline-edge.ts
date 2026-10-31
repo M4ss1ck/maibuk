@@ -11,12 +11,7 @@
  * by two control points; the returned function takes t in [0, 1] and returns
  * the eased progress, 0 and 1 exactly at the ends.
  */
-export function cubicBezier(
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number
-): (t: number) => number {
+export function cubicBezier(x1: number, y1: number, x2: number, y2: number): (t: number) => number {
   const sample = (a: number, b: number, s: number) => {
     const u = 1 - s;
     return 3 * u * u * s * a + 3 * u * s * s * b + s * s * s;
@@ -119,9 +114,7 @@ export function edgeKeyframes(
   // already covered; a crossing closer than 1e-6 to a kept offset is dropped.
   const merged = uniforms.sort((a, b) => a - b);
   for (const crossing of crossings) {
-    const duplicate = merged.some(
-      (offset) => Math.abs(offset - crossing) <= 1e-6
-    );
+    const duplicate = merged.some((offset) => Math.abs(offset - crossing) <= 1e-6);
     if (!duplicate) merged.push(crossing);
   }
   merged.sort((a, b) => a - b);
@@ -130,9 +123,7 @@ export function edgeKeyframes(
 
   return merged.map((offset) => {
     const edge = from + (to - from) * ease(offset);
-    const heights = naturals.map((natural, i) =>
-      Math.min(natural, Math.max(0, edge - tops[i]))
-    );
+    const heights = naturals.map((natural, i) => Math.min(natural, Math.max(0, edge - tops[i])));
     return { offset, heights };
   });
 }

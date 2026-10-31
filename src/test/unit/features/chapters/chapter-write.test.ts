@@ -169,9 +169,7 @@ describe("chapter write path", () => {
     }
 
     // Only the persisted write is described; no bulk completion is announced.
-    expect(signals).toEqual([
-      { entity: "book", id: "book-1", origin: "local", kind: "metadata" },
-    ]);
+    expect(signals).toEqual([{ entity: "book", id: "book-1", origin: "local", kind: "metadata" }]);
     expect(changes).toEqual([{ entity: "book", id: "book-1", origin: "local", kind: "metadata" }]);
   });
 

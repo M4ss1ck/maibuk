@@ -78,10 +78,32 @@ export interface ChordEvent {
 }
 
 const LETTER_CODE: Record<string, string> = {
-  a: "KeyA", b: "KeyB", c: "KeyC", d: "KeyD", e: "KeyE", f: "KeyF", g: "KeyG",
-  h: "KeyH", i: "KeyI", j: "KeyJ", k: "KeyK", l: "KeyL", m: "KeyM", n: "KeyN",
-  o: "KeyO", p: "KeyP", q: "KeyQ", r: "KeyR", s: "KeyS", t: "KeyT", u: "KeyU",
-  v: "KeyV", w: "KeyW", x: "KeyX", y: "KeyY", z: "KeyZ",
+  a: "KeyA",
+  b: "KeyB",
+  c: "KeyC",
+  d: "KeyD",
+  e: "KeyE",
+  f: "KeyF",
+  g: "KeyG",
+  h: "KeyH",
+  i: "KeyI",
+  j: "KeyJ",
+  k: "KeyK",
+  l: "KeyL",
+  m: "KeyM",
+  n: "KeyN",
+  o: "KeyO",
+  p: "KeyP",
+  q: "KeyQ",
+  r: "KeyR",
+  s: "KeyS",
+  t: "KeyT",
+  u: "KeyU",
+  v: "KeyV",
+  w: "KeyW",
+  x: "KeyX",
+  y: "KeyY",
+  z: "KeyZ",
 };
 
 /**

@@ -17,16 +17,15 @@ import { expect, test } from "../support/test";
 
 const ROW_NAME = "Approvals Fixture";
 /** The fixture reports that its Worker ran through a toast naming the Plugin. */
-const ran = (page: Page) => page.getByRole("status").filter({ hasText: "approvals fixture running" });
+const ran = (page: Page) =>
+  page.getByRole("status").filter({ hasText: "approvals fixture running" });
 /** The changed-files notice the store lists for a copy that no longer matches its pin. */
-const changedNotice = (page: Page) =>
-  page.getByRole("status").filter({ hasText: "files changed" });
+const changedNotice = (page: Page) => page.getByRole("status").filter({ hasText: "files changed" });
 /** The built-in update notice. */
 const updateNotice = (page: Page) =>
   page.getByRole("status").filter({ hasText: "Update available" });
 
-const pluginRow = (page: Page) =>
-  page.getByRole("button", { name: new RegExp(`^${ROW_NAME}`) });
+const pluginRow = (page: Page) => page.getByRole("button", { name: new RegExp(`^${ROW_NAME}`) });
 
 /** Jumps to the Plugins section through the Settings outline, leaving its heading focused. */
 async function openPluginsSection(page: Page): Promise<void> {
@@ -78,7 +77,8 @@ const nowRequiredManifest = JSON.stringify({
   manifestVersion: 1,
   id: "approvals",
   name: ROW_NAME,
-  description: "The E2E approvals fixture with editor:read promoted to a required Plugin Permission.",
+  description:
+    "The E2E approvals fixture with editor:read promoted to a required Plugin Permission.",
   author: "Maibuk",
   version: "1.1.0",
   apiVersion: "^0.1",
@@ -231,7 +231,9 @@ test.describe("Plugin approvals @wf:plugins-approvals", () => {
       await openPluginsSection(page);
       // One notice, with a Review action, and the row reads Review required.
       await expect(changedNotice(page)).toBeVisible({ timeout: 15_000 });
-      await expect(changedNotice(page).getByRole("button", { name: "Review", exact: true })).toBeVisible();
+      await expect(
+        changedNotice(page).getByRole("button", { name: "Review", exact: true })
+      ).toBeVisible();
       await expect(page.getByText("Review required", { exact: true })).toBeVisible();
       // The copy never ran: no Worker reported.
       await expect(ran(page)).toHaveCount(0);
@@ -316,7 +318,9 @@ test.describe("Plugin approvals @wf:plugins-approvals", () => {
       builtInPlugins: [{ id: "approvals", hash: "h1:e2e-shipped-newer" }],
     });
 
-    test("offers Update available and Keep my copy, which never prompts again", async ({ page }) => {
+    test("offers Update available and Keep my copy, which never prompts again", async ({
+      page,
+    }) => {
       await openPluginsSection(page);
       // The Built-in is modified and an update is offered, with one notice.
       await expect(page.getByText("Modified", { exact: true })).toBeVisible();

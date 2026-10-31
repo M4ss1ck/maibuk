@@ -127,9 +127,7 @@ describe("Dictation new item inside a checklist", () => {
     try {
       const before = undoDepth(editor.state);
       host.emitFinal("new item eggs");
-      expect(outline(editor.state.doc)).toBe(
-        'taskList([x]("Milk") [ ]("Eggs") [ ]("Bread")) ""'
-      );
+      expect(outline(editor.state.doc)).toBe('taskList([x]("Milk") [ ]("Eggs") [ ]("Bread")) ""');
       expect(undoDepth(editor.state)).toBe(before + 1);
       undo(editor.state, editor.view.dispatch);
       expect(outline(editor.state.doc)).toBe('taskList([x]("Milk") [ ]("Bread")) ""');
@@ -234,7 +232,10 @@ describe("Dictation scratch that after a new Task Item", () => {
   });
 
   it("removes the item's dictated text first, then the item, never text typed before", async () => {
-    const { editor, host, notices } = await dictateInto(taskList(task(true, "<p>Milk</p>")), "Milk");
+    const { editor, host, notices } = await dictateInto(
+      taskList(task(true, "<p>Milk</p>")),
+      "Milk"
+    );
     try {
       host.emitFinal("new item");
       host.emitFinal("eggs");
@@ -253,7 +254,10 @@ describe("Dictation scratch that after a new Task Item", () => {
   });
 
   it("refuses to remove an item the author typed into", async () => {
-    const { editor, host, notices } = await dictateInto(taskList(task(true, "<p>Milk</p>")), "Milk");
+    const { editor, host, notices } = await dictateInto(
+      taskList(task(true, "<p>Milk</p>")),
+      "Milk"
+    );
     try {
       host.emitFinal("new item");
       editor.commands.insertContent("eggs");

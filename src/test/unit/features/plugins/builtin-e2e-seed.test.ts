@@ -126,7 +126,11 @@ describe("Built-in source E2E seed", () => {
         {
           id: "built-in",
           hash: "h1:seeded",
-          manifest: { id: "built-in", name: "Open file…", permissions: { required: [], optional: [] } },
+          manifest: {
+            id: "built-in",
+            name: "Open file…",
+            permissions: { required: [], optional: [] },
+          },
           files: [{ path: "index.js", bytes: big }],
         },
       ],

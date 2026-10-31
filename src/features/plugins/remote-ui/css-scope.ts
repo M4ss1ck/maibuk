@@ -45,13 +45,7 @@ import Input from "postcss/lib/input";
 import tokenize, { type Tokenizer } from "postcss/lib/tokenize";
 
 /** At-rules whose body holds more rules, which are then scoped in turn. */
-const RECURSIVE_AT_RULES = new Set([
-  "media",
-  "supports",
-  "container",
-  "layer",
-  "starting-style",
-]);
+const RECURSIVE_AT_RULES = new Set(["media", "supports", "container", "layer", "starting-style"]);
 
 /**
  * A selector a flat prefix cannot scope. A leading combinator (`>`, `+`, `~`)

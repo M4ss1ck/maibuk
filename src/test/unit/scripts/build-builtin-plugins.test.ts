@@ -100,11 +100,7 @@ describe("buildBuiltInPlugins()", () => {
       outRoot,
       target: "desktop",
     });
-    expect(readdirSync(outRoot).sort()).toEqual([
-      "desktop-only",
-      "index.json",
-      "sample-builtin",
-    ]);
+    expect(readdirSync(outRoot).sort()).toEqual(["desktop-only", "index.json", "sample-builtin"]);
 
     const index = await buildBuiltInPlugins({
       sourceRoot: FIXTURE_ROOT,

@@ -80,7 +80,9 @@ describe("classifyRun()", () => {
   });
 
   it("is incomplete when the process died before T7", () => {
-    const state = stateOf([{ method: "POST", path: "/progress", body: check("T2-worker-ipc", "pass") }]);
+    const state = stateOf([
+      { method: "POST", path: "/progress", body: check("T2-worker-ipc", "pass") },
+    ]);
     expect(classifyRun(state, { processDied: true })).toEqual({ kind: "incomplete" });
   });
 
@@ -106,7 +108,11 @@ describe("finalizeRun()", () => {
 
   it("exits 0 when the result has every check passing", () => {
     const state = stateOf([
-      { method: "POST", path: "/result", body: { engine: ENGINE, checks: [T7, check("T8-oom", "pass")] } },
+      {
+        method: "POST",
+        path: "/result",
+        body: { engine: ENGINE, checks: [T7, check("T8-oom", "pass")] },
+      },
       { method: "POST", path: "/done" },
     ]);
     const outcome = finalizeRun(state, { processDied: false });
@@ -173,12 +179,24 @@ describe("buildPlatformRun()", () => {
   });
 
   it("omits the device when there is none", () => {
-    const run = buildPlatformRun({ platform: "linux", engine: ENGINE, checks: [T7], ranAt: "t", exit: 1 });
+    const run = buildPlatformRun({
+      platform: "linux",
+      engine: ENGINE,
+      checks: [T7],
+      ranAt: "t",
+      exit: 1,
+    });
     expect("device" in run).toBe(false);
   });
 
   it("judges an Android run as supported like Linux: no marker, no follow-up, its exit kept (#517)", () => {
-    const run = buildPlatformRun({ platform: "android", engine: ENGINE, checks: [T7], ranAt: "t", exit: 1 });
+    const run = buildPlatformRun({
+      platform: "android",
+      engine: ENGINE,
+      checks: [T7],
+      ranAt: "t",
+      exit: 1,
+    });
     expect(run).toEqual({ ranAt: "t", engine: ENGINE, exit: 1, checks: [T7] });
     expect("support" in run).toBe(false);
     expect("followUp" in run).toBe(false);
@@ -213,7 +231,13 @@ describe("buildPlatformRun()", () => {
   });
 
   it("leaves a Linux run without a support marker", () => {
-    const run = buildPlatformRun({ platform: "linux", engine: ENGINE, checks: [T7], ranAt: "t", exit: 0 });
+    const run = buildPlatformRun({
+      platform: "linux",
+      engine: ENGINE,
+      checks: [T7],
+      ranAt: "t",
+      exit: 0,
+    });
     expect("support" in run).toBe(false);
     expect("followUp" in run).toBe(false);
     expect("quickjs" in run).toBe(false);
@@ -238,9 +262,9 @@ describe("mergeRunEngine()", () => {
   });
 
   it("keeps the userAgent from the first request that carried it", () => {
-    expect(mergeRunEngine({ run: null, platform: "android", userAgent: "UA-progress" }).userAgent).toBe(
-      "UA-progress"
-    );
+    expect(
+      mergeRunEngine({ run: null, platform: "android", userAgent: "UA-progress" }).userAgent
+    ).toBe("UA-progress");
   });
 
   it("falls back to the run's version and unknown when nothing was measured", () => {
@@ -272,7 +296,11 @@ describe("mergePlatformRun()", () => {
 
   it("keeps the other platform and the WebView versions it measured", () => {
     const first = mergePlatformRun(null, "linux", run, stack, "now");
-    const androidStack: ConformanceStack = { tauri: "2.9.5", wry: "0.53.5", androidWebView: "113.0" };
+    const androidStack: ConformanceStack = {
+      tauri: "2.9.5",
+      wry: "0.53.5",
+      androidWebView: "113.0",
+    };
     const second = mergePlatformRun(first, "android", run, androidStack, "later");
     expect(second.platforms.linux).toEqual(run);
     expect(second.platforms.android).toEqual(run);
@@ -289,7 +317,12 @@ describe("mergePlatformRun()", () => {
 describe("emptyResultsFile()", () => {
   it("has the schema id and no platforms", () => {
     const file = emptyResultsFile("now", { tauri: "1", wry: "2" });
-    expect(file).toEqual({ schema: CONFORMANCE_RESULTS_SCHEMA, recordedAt: "now", stack: { tauri: "1", wry: "2" }, platforms: {} });
+    expect(file).toEqual({
+      schema: CONFORMANCE_RESULTS_SCHEMA,
+      recordedAt: "now",
+      stack: { tauri: "1", wry: "2" },
+      platforms: {},
+    });
   });
 });
 
@@ -317,7 +350,11 @@ describe("formatConformanceTable()", () => {
     const table = formatConformanceTable([
       {
         platform: "linux",
-        outcome: { checks: [check("T7-hang", "pass"), check("T8-oom", "fail")], exitCode: 1, note: "check failed" },
+        outcome: {
+          checks: [check("T7-hang", "pass"), check("T8-oom", "fail")],
+          exitCode: 1,
+          note: "check failed",
+        },
         leaks: 0,
         engine: ENGINE,
       },

@@ -25,17 +25,17 @@ describe("createMemoryDatabase()", () => {
 
   it("runs SQLite new enough for diacritic-insensitive trigrams", async () => {
     const db = await createMemoryDatabase();
-    const rows = await db.select<{ version: string }[]>(
-      "SELECT sqlite_version() AS version"
-    );
+    const rows = await db.select<{ version: string }[]>("SELECT sqlite_version() AS version");
     const [major, minor] = rows[0].version.split(".").map(Number);
     expect(major > 3 || (major === 3 && minor >= 45)).toBe(true);
 
-    await db.execute("CREATE VIRTUAL TABLE folded USING fts5(x, tokenize='trigram remove_diacritics 1')");
+    await db.execute(
+      "CREATE VIRTUAL TABLE folded USING fts5(x, tokenize='trigram remove_diacritics 1')"
+    );
     await db.execute("INSERT INTO folded (x) VALUES ('canción del faro')");
-    await expect(
-      db.select("SELECT x FROM folded WHERE folded MATCH 'cancion'")
-    ).resolves.toEqual([{ x: "canción del faro" }]);
+    await expect(db.select("SELECT x FROM folded WHERE folded MATCH 'cancion'")).resolves.toEqual([
+      { x: "canción del faro" },
+    ]);
   });
 
   it("opens after the EPUB exporter has loaded, which once replaced SharedArrayBuffer", async () => {

@@ -86,8 +86,8 @@ export function DictationSection() {
           id="dictationEnabled"
           className="flex items-center justify-between gap-3"
           // The declared description renders below the row, as before, not
-          // inside it; the empty override only suppresses the in-row copy.
-          descriptionOverride={<></>}
+          // inside it; the false override only suppresses the in-row copy.
+          descriptionOverride={false}
         >
           <Switch checked={enabled} onChange={setEnabled} label={t("dictation.section.title")} />
         </SettingRow>

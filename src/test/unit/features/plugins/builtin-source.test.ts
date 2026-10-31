@@ -163,7 +163,11 @@ describe("createBuiltInPluginSource() (production)", () => {
         jsonResponse(
           indexWith([
             // Missing `hash`.
-            { id: "maibuk-shapeless", manifest: MANIFEST, files: ["index.js"] } as unknown as IndexEntry,
+            {
+              id: "maibuk-shapeless",
+              manifest: MANIFEST,
+              files: ["index.js"],
+            } as unknown as IndexEntry,
             // Invalid manifest (no name).
             { id: "maibuk-manifestless", manifest: { id: "x" }, hash: "h1:x", files: [] },
             { id: "maibuk-good", manifest: MANIFEST, hash: "h1:good", files: ["index.js"] },

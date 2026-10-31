@@ -147,12 +147,8 @@ test.describe("Plugin management: list and filters @wf:plugin-management-list-fi
 
     // The tracer matched only Installed, so it is gone; the approvals copy still
     // matches the still-selected Disabled category.
-    await expect(main(page).getByRole("button", { name: /^Tracer Fixture v\d/ })).toHaveCount(
-      0
-    );
-    await expect(
-      main(page).getByRole("button", { name: /^Approvals Fixture v\d/ })
-    ).toBeVisible();
+    await expect(main(page).getByRole("button", { name: /^Tracer Fixture v\d/ })).toHaveCount(0);
+    await expect(main(page).getByRole("button", { name: /^Approvals Fixture v\d/ })).toBeVisible();
   });
 
   test("deselecting every category shows the empty-result copy", async ({ page }) => {
@@ -185,9 +181,7 @@ test.describe("Plugin management: add zip @wf:plugin-management-add-zip", () => 
 
     const dialog = page.getByRole("dialog", { name: "Review access" });
     await expect(dialog).toBeVisible();
-    await expect(
-      dialog.getByRole("checkbox", { name: ADDED_REQUIRED, exact: true })
-    ).toBeVisible();
+    await expect(dialog.getByRole("checkbox", { name: ADDED_REQUIRED, exact: true })).toBeVisible();
     await capture(page, "plugin-management-add-zip");
   });
 });
@@ -212,12 +206,12 @@ test.describe("Plugin management: remove @wf:plugin-management-remove", () => {
 
     // The row stays, now Removed, still holding its Library data: the size
     // shows and Delete data is offered.
-    await expect(
-      main(page).getByRole("button", { name: /^Tracer Fixture/ })
-    ).toBeVisible();
+    await expect(main(page).getByRole("button", { name: /^Tracer Fixture/ })).toBeVisible();
     await expect(main(page).getByText("Removed", { exact: true })).toBeVisible();
     await expect(main(page).getByText("Library data")).toBeVisible();
-    await expect(main(page).getByRole("button", { name: "Delete data", exact: true })).toBeVisible();
+    await expect(
+      main(page).getByRole("button", { name: "Delete data", exact: true })
+    ).toBeVisible();
     await capture(page, "plugin-management-removed");
   });
 
@@ -240,11 +234,11 @@ test.describe("Plugin management: remove @wf:plugin-management-remove", () => {
     await expect(dialog).toBeHidden();
 
     // The row stays Removed, its data gone: no Delete data is offered.
-    await expect(
-      main(page).getByRole("button", { name: /^Tracer Fixture/ })
-    ).toBeVisible();
+    await expect(main(page).getByRole("button", { name: /^Tracer Fixture/ })).toBeVisible();
     await expect(main(page).getByText("Removed", { exact: true })).toBeVisible();
-    await expect(main(page).getByRole("button", { name: "Delete data", exact: true })).toHaveCount(0);
+    await expect(main(page).getByRole("button", { name: "Delete data", exact: true })).toHaveCount(
+      0
+    );
   });
 });
 
@@ -340,7 +334,9 @@ test.describe("Plugin management: restart a stopped Plugin @wf:plugin-management
     const row = await expandRow(page, "Remote UI Fixture");
     await expect(main(page).getByText("Stopped", { exact: true })).toBeVisible();
     await expect(
-      main(page).getByText("Remote UI Fixture declared an interface Maibuk could not accept and was stopped.")
+      main(page).getByText(
+        "Remote UI Fixture declared an interface Maibuk could not accept and was stopped."
+      )
     ).toBeVisible();
     await capture(page, "plugin-management-stopped");
 
@@ -392,9 +388,7 @@ test.describe("Plugin management by touch @touch", () => {
       await listbox.getByRole("option", { name: /^Installed\b/ }).tap();
       await page.keyboard.press("Escape");
 
-      await expect(
-        main(page).getByRole("button", { name: /^Tracer Fixture v\d/ })
-      ).toHaveCount(0);
+      await expect(main(page).getByRole("button", { name: /^Tracer Fixture v\d/ })).toHaveCount(0);
       await expect(
         main(page).getByRole("button", { name: /^Approvals Fixture v\d/ })
       ).toBeVisible();
@@ -404,9 +398,7 @@ test.describe("Plugin management by touch @touch", () => {
   test.describe("add zip", () => {
     test.use({ library: "empty", usesPluginDirectory: true });
 
-    test("taps Add Plugin and picks a .zip @wf:plugin-management-add-zip", async ({
-      page,
-    }) => {
+    test("taps Add Plugin and picks a .zip @wf:plugin-management-add-zip", async ({ page }) => {
       await tapPluginsSection(page);
       const chooser = page.waitForEvent("filechooser");
       await main(page).getByRole("button", { name: "Add Plugin", exact: true }).tap();
@@ -426,7 +418,9 @@ test.describe("Plugin management by touch @touch", () => {
       page,
     }) => {
       await tapPluginsSection(page);
-      await main(page).getByRole("button", { name: /^Tracer Fixture v\d/ }).tap();
+      await main(page)
+        .getByRole("button", { name: /^Tracer Fixture v\d/ })
+        .tap();
       await main(page).getByRole("button", { name: "Remove", exact: true }).tap();
       const dialog = page.getByRole("alertdialog", { name: "Remove Tracer Fixture?" });
       await expect(dialog).toBeVisible();
@@ -447,9 +441,7 @@ test.describe("Plugin management by touch @touch", () => {
   test.describe("reinstall a Built-in", () => {
     test.use({ library: "empty", plugins: ["approvals"], builtInPlugins: [{ id: "approvals" }] });
 
-    test("taps Remove then Reinstall @wf:plugin-management-reinstall", async ({
-      page,
-    }) => {
+    test("taps Remove then Reinstall @wf:plugin-management-reinstall", async ({ page }) => {
       await tapPluginsSection(page);
       await main(page)
         .getByRole("button", { name: /^Approvals Fixture/ })
@@ -477,9 +469,7 @@ test.describe("Plugin management by touch @touch", () => {
   test.describe("restart a stopped Plugin", () => {
     test.use({ library: "empty", plugins: ["remote-ui"] });
 
-    test("taps Try again on a stopped Plugin @wf:plugin-management-restart", async ({
-      page,
-    }) => {
+    test("taps Try again on a stopped Plugin @wf:plugin-management-restart", async ({ page }) => {
       await page.goto("/");
       await page.getByRole("button", { name: "Open navigation menu" }).tap();
       const dialog = page.getByRole("dialog", { name: "Primary navigation" });

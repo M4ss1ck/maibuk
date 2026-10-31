@@ -39,9 +39,7 @@ describe("the E2E fixture-everything seed", () => {
     const files = readFolderFiles(outDir);
     const manifestFile = files.find((file) => file.path === "manifest.json");
     if (manifestFile === undefined) throw new Error("fixture-everything has no manifest.json");
-    const manifest = JSON.parse(
-      new TextDecoder().decode(manifestFile.bytes)
-    ) as PluginManifest;
+    const manifest = JSON.parse(new TextDecoder().decode(manifestFile.bytes)) as PluginManifest;
     const pinnedHash = await hashPluginDirectory(files);
     const seed: PluginSeedData = {
       name: "fixture-everything",
@@ -59,12 +57,7 @@ describe("the E2E fixture-everything seed", () => {
       granted: [...manifest.permissions.required],
     });
     // What the approval flow writes for that same choice (optionalGranted: []).
-    const written = approvePluginCopy(
-      manifest,
-      pinnedHash,
-      await pluginFileDigests(files),
-      []
-    );
+    const written = approvePluginCopy(manifest, pinnedHash, await pluginFileDigests(files), []);
 
     expect(seeded).toEqual(written);
   });

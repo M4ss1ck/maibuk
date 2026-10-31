@@ -1,11 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import githubReleases from "@/test/fixtures/releases/github-releases.json";
-import {
-  parseChangelog,
-  parseInline,
-  parseReleaseBody,
-} from "@/features/releases/release-notes";
+import { parseChangelog, parseInline, parseReleaseBody } from "@/features/releases/release-notes";
 import { BUNDLED_RELEASES, loadBundledReleaseNotes } from "@/features/releases/bundled";
 
 describe("the shipped CHANGELOG.md", () => {

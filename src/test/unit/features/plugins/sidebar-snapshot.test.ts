@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import {
-  PLUGIN_APPROVALS_STORAGE_KEY,
-  savePluginApproval,
-} from "@/features/plugins/approvals";
+import { PLUGIN_APPROVALS_STORAGE_KEY, savePluginApproval } from "@/features/plugins/approvals";
 import {
   dropSeededPluginContributions,
   getPluginSidebarEntries,

@@ -157,7 +157,8 @@ body {
   @supports not selector(::-webkit-scrollbar) {
     * {
       scrollbar-width: thin;
-      scrollbar-color: color-mix(in srgb, var(--color-muted-foreground) 45%, transparent) transparent;
+      scrollbar-color: color-mix(in srgb, var(--color-muted-foreground) 45%, transparent)
+        transparent;
     }
   }
 
@@ -1320,10 +1321,6 @@ option {
   font-size: 0.8125rem;
 }
 
-.footnote-list-panel .notes-chapter-title {
-  padding: 0.5rem 0.5rem 0;
-}
-
 .footnote-item {
   /* A focused entry scrolls clear of the floating Dictation controls. */
   scroll-margin-bottom: 4.5rem;
@@ -1427,6 +1424,10 @@ li.footnote-item,
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 0.5rem;
+}
+
+.footnote-list-panel .notes-chapter-title {
+  padding: 0.5rem 0.5rem 0;
 }
 
 /* Wiktionary dictionary dialog content (raw article body, app-controlled styles) */
@@ -1768,13 +1769,16 @@ li.footnote-item,
      fades with an inline transition and the spotlight cutout fades in. */
   [data-tutorial-portal],
   [data-tutorial-portal] * {
+    /* biome-ignore lint/complexity/noImportantStyles: Joyride sets these inline, and only !important outranks an inline style. */
     transition: none !important;
+    /* biome-ignore lint/complexity/noImportantStyles: Joyride sets these inline, and only !important outranks an inline style. */
     animation: none !important;
   }
 }
 
 /* The Tutorial card draws its own shadow; Joyride's inline drop-shadow doubles it. */
 [data-tutorial-portal] .react-joyride__floater {
+  /* biome-ignore lint/complexity/noImportantStyles: Joyride sets these inline, and only !important outranks an inline style. */
   filter: none !important;
 }
 

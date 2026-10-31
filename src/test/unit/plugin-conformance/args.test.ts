@@ -57,7 +57,9 @@ describe("parsePluginConformanceArgs()", () => {
     expect(() => parsePluginConformanceArgs(["--platform", "web"])).toThrow(
       PluginConformanceUsageError
     );
-    expect(() => parsePluginConformanceArgs(["--platform", "web"])).toThrow(/unknown platform "web"/);
+    expect(() => parsePluginConformanceArgs(["--platform", "web"])).toThrow(
+      /unknown platform "web"/
+    );
   });
 
   it("rejects a non-integer or below-one --timeout", () => {

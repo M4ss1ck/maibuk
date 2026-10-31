@@ -83,9 +83,7 @@ export const WINDOWS_FRAME_CHECK_IDS = [
  * `scripts/plugin-conformance-gate.mjs` requires present, so a record that
  * quietly drops a check cannot flip the gate.
  */
-export function windowsFrameRecordPasses(
-  record: WindowsFrameRecord | null | undefined
-): boolean {
+export function windowsFrameRecordPasses(record: WindowsFrameRecord | null | undefined): boolean {
   if (record == null) return false;
   if (!Array.isArray(record.checks) || record.checks.length === 0) return false;
   const ids = new Set(record.checks.map((check) => check.id));

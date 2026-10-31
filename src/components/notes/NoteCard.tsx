@@ -47,7 +47,6 @@ export const NoteCard = memo(function NoteCard({
   });
   useItemCommands(cardRef, actions);
 
-
   return (
     <GridListItem
       id={note.id}

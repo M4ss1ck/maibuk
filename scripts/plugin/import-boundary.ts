@@ -179,11 +179,7 @@ function refusalReason(
   }
   if (specifier.startsWith(".")) {
     const target = resolve(dirname(fromFile), specifier);
-    if (
-      maibukRoot !== undefined &&
-      isInside(maibukRoot, target) &&
-      !isInside(pluginRoot, target)
-    ) {
+    if (maibukRoot !== undefined && isInside(maibukRoot, target) && !isInside(pluginRoot, target)) {
       return `${specifier} ${MAIBUK_CHECKOUT_REASON}`;
     }
     return staysInside(fromFile, specifier, pluginRoot)

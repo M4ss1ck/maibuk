@@ -59,7 +59,12 @@ async function shippedOf(folder: PluginFolder): Promise<BuiltInPlugin> {
   const manifest = JSON.parse(
     new TextDecoder().decode(folder.files.find((file) => file.path === "manifest.json")?.bytes)
   ) as PluginManifest;
-  return { id: manifest.id, manifest, hash: await hashPluginDirectory(folder.files), files: folder.files };
+  return {
+    id: manifest.id,
+    manifest,
+    hash: await hashPluginDirectory(folder.files),
+    files: folder.files,
+  };
 }
 
 interface SetupOptions {

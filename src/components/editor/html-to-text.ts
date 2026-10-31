@@ -50,7 +50,11 @@ function editorExtensions(): Extensions {
 function removeWhitespaces(node: Element): void {
   for (let i = node.childNodes.length - 1; i >= 0; i -= 1) {
     const child = node.childNodes[i];
-    if (child.nodeType === Node.TEXT_NODE && child.nodeValue && /^(\n\s\s|\n)$/.test(child.nodeValue)) {
+    if (
+      child.nodeType === Node.TEXT_NODE &&
+      child.nodeValue &&
+      /^(\n\s\s|\n)$/.test(child.nodeValue)
+    ) {
       node.removeChild(child);
     } else if (child.nodeType === Node.ELEMENT_NODE) {
       removeWhitespaces(child as Element);

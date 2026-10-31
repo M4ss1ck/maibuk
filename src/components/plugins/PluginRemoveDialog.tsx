@@ -52,7 +52,12 @@ export function PluginRemoveDialog({
         <p className="mt-2 text-sm text-destructive">{t("plugins.management.thirdWarning")}</p>
       )}
       <div className="mt-3 flex items-center gap-2">
-        <Checkbox id={checkboxId} checked={deleteData} onChange={setDeleteData} label={t("plugins.management.deleteAlso")} />
+        <Checkbox
+          id={checkboxId}
+          checked={deleteData}
+          onChange={setDeleteData}
+          label={t("plugins.management.deleteAlso")}
+        />
         <label htmlFor={checkboxId} className="text-sm">
           {t("plugins.management.deleteAlso")}
         </label>

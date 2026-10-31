@@ -354,39 +354,39 @@ describe("DictationBar sizes", () => {
 });
 
 describe("DictationBarPreview", () => {
-  it.each(["compact", "full"] as const)(
-    "draws the %s bar with the live bar's parts but takes no focus and no name",
-    async (size) => {
-      useDictationStore.setState({ barSize: size });
-      const live = renderControl();
-      const liveParts = [...live.container.querySelectorAll("[data-bar-part]")].map((el) => [
-        el.getAttribute("data-bar-part"),
-        el.className,
-      ]);
-      live.unmount();
+  it.each([
+    "compact",
+    "full",
+  ] as const)("draws the %s bar with the live bar's parts but takes no focus and no name", async (size) => {
+    useDictationStore.setState({ barSize: size });
+    const live = renderControl();
+    const liveParts = [...live.container.querySelectorAll("[data-bar-part]")].map((el) => [
+      el.getAttribute("data-bar-part"),
+      el.className,
+    ]);
+    live.unmount();
 
-      const user = userEvent.setup();
-      const { container } = render(
-        <>
-          <button type="button">before</button>
-          <DictationBarPreview size={size} />
-          <button type="button">after</button>
-        </>
-      );
-      const preview = container.querySelector("[data-dictation-bar-preview]")!;
-      expect(preview).toHaveAttribute("aria-hidden", "true");
-      expect(preview).not.toHaveClass("fixed");
-      // Same parts, same classes: the preview is the bar's real size.
-      const previewParts = [...preview.querySelectorAll("[data-bar-part]")].map((el) => [
-        el.getAttribute("data-bar-part"),
-        el.className,
-      ]);
-      expect(previewParts).toEqual(liveParts);
-      expect(preview.querySelector("button, [tabindex]")).toBeNull();
+    const user = userEvent.setup();
+    const { container } = render(
+      <>
+        <button type="button">before</button>
+        <DictationBarPreview size={size} />
+        <button type="button">after</button>
+      </>
+    );
+    const preview = container.querySelector("[data-dictation-bar-preview]")!;
+    expect(preview).toHaveAttribute("aria-hidden", "true");
+    expect(preview).not.toHaveClass("fixed");
+    // Same parts, same classes: the preview is the bar's real size.
+    const previewParts = [...preview.querySelectorAll("[data-bar-part]")].map((el) => [
+      el.getAttribute("data-bar-part"),
+      el.className,
+    ]);
+    expect(previewParts).toEqual(liveParts);
+    expect(preview.querySelector("button, [tabindex]")).toBeNull();
 
-      await user.tab();
-      await user.tab();
-      expect(screen.getByRole("button", { name: "after" })).toHaveFocus();
-    }
-  );
+    await user.tab();
+    await user.tab();
+    expect(screen.getByRole("button", { name: "after" })).toHaveFocus();
+  });
 });

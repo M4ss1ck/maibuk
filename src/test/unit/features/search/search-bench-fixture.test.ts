@@ -3,11 +3,7 @@ import type { DatabaseAdapter } from "@/lib/platform/types";
 import { searchLibrary } from "@/features/search/search";
 import type { SearchLibraryResult } from "@/features/search/types";
 import type { AtomicStatement } from "@/lib/platform/types";
-import {
-  BUDGETS_MS,
-  checkBudgets,
-  engineOf,
-} from "../../../../../scripts/search-bench-budget.mjs";
+import { BUDGETS_MS, checkBudgets, engineOf } from "../../../../../scripts/search-bench-budget.mjs";
 import {
   SEARCH_BENCH_COMMON_WORD,
   SEARCH_BENCH_INDEXED_QUERIES,
@@ -238,9 +234,7 @@ describe("search bench budget", () => {
   });
 
   it("fails when an engine's budgeted benchmark did not run", () => {
-    const result = checkBudgets(
-      reportFor("desktop", rowsUnderBudget())
-    );
+    const result = checkBudgets(reportFor("desktop", rowsUnderBudget()));
     expect(result.ok).toBe(false);
     expect(result.missing).toContain("indexed query: @ web");
     expect(result.missing).toContain("full rebuild: @ web");

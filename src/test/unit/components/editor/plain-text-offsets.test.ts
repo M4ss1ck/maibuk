@@ -30,15 +30,17 @@ const DOCUMENTS: Record<string, string> = {
   heading: "<h1>Title</h1><h2>Sub</h2><p>Body text</p>",
   list: "<ul><li><p>First item</p></li><li><p>Second item</p></li></ul>",
   orderedList: "<ol><li><p>One</p></li><li><p>Two</p></li></ol>",
-  taskList: '<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p>Todo</p></li></ul>',
-  footnote: '<p>Before<sup data-footnote data-footnote-id="fn-1" data-footnote-content="note">*</sup>after</p>',
+  taskList:
+    '<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p>Todo</p></li></ul>',
+  footnote:
+    '<p>Before<sup data-footnote data-footnote-id="fn-1" data-footnote-content="note">*</sup>after</p>',
   image: '<p>Before</p><img src="data:image/png;base64,iVBORw0KGgo=" alt="img"><p>After</p>',
   hardBreak: "<p>Line one<br>Line two</p>",
   blockquote: "<blockquote><p>Quoted words</p></blockquote><p>Outside</p>",
-  table:
-    "<table><tbody><tr><th><p>Head</p></th></tr><tr><td><p>Cell</p></td></tr></tbody></table>",
+  table: "<table><tbody><tr><th><p>Head</p></th></tr><tr><td><p>Cell</p></td></tr></tbody></table>",
   sceneBreak: '<p>Before</p><hr data-scene-break="symbol"><p>After</p>',
-  nested: "<p>Intro</p><ul><li><p>Item <strong>bold</strong></p><ul><li><p>Nested</p></li></ul></li></ul><p>Outro</p>",
+  nested:
+    "<p>Intro</p><ul><li><p>Item <strong>bold</strong></p><ul><li><p>Nested</p></li></ul></li></ul><p>Outro</p>",
 };
 
 describe("buildPlainTextMap()", () => {

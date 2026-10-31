@@ -7,10 +7,7 @@ import {
   type SettingsSectionDef,
 } from "@/features/settings/rows";
 import type { Language } from "@/features/settings/types";
-import {
-  localizedPluginManifest,
-  usePluginManagementStore,
-} from "@/features/plugins/management";
+import { localizedPluginManifest, usePluginManagementStore } from "@/features/plugins/management";
 
 /**
  * One Plugin card the Plugins section renders, named for the outline and the

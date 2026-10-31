@@ -1439,7 +1439,9 @@ describe("Command Palette modes", () => {
 
     // Commands mode shows only the Command of the two.
     let dialog = await openPaletteWithF1(user);
-    await waitFor(() => expect(sectionOptions(dialog, "Recent").map(optionLabel)).toEqual(["Dark"]));
+    await waitFor(() =>
+      expect(sectionOptions(dialog, "Recent").map(optionLabel)).toEqual(["Dark"])
+    );
     await user.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull());
 
@@ -1452,9 +1454,7 @@ describe("Command Palette modes", () => {
     await user.keyboard("{ArrowDown}");
     await waitFor(() => expect(activeResultLabel(search)).toContain("Recent Note"));
     await user.keyboard("{Shift>}{Delete}{/Shift}");
-    await waitFor(() =>
-      expect(within(dialog).queryByRole("group", { name: "Recent" })).toBeNull()
-    );
+    await waitFor(() => expect(within(dialog).queryByRole("group", { name: "Recent" })).toBeNull());
     expect(useCommandPaletteRecentStore.getState().keys).toEqual(["command:global.themeDark"]);
 
     // The Command's own mode still lists it, and removes it too.
@@ -1464,9 +1464,7 @@ describe("Command Palette modes", () => {
     await user.keyboard("{ArrowDown}");
     await user.keyboard("{Shift>}{Delete}{/Shift}");
     await waitFor(() => expect(useCommandPaletteRecentStore.getState().keys).toEqual([]));
-    await waitFor(() =>
-      expect(within(dialog).queryByRole("group", { name: "Recent" })).toBeNull()
-    );
+    await waitFor(() => expect(within(dialog).queryByRole("group", { name: "Recent" })).toBeNull());
     expect(sectionOptions(dialog, "Suggested").length).toBeGreaterThan(0);
   });
 });
@@ -1691,10 +1689,7 @@ describe("Command Palette text results", () => {
       { content: "<p>The harbour light blinked, harbour dark</p>" },
       "local"
     );
-    await createNoteRow(
-      { title: "Marginalia", content: "<p>harbour gossip</p>" },
-      "local"
-    );
+    await createNoteRow({ title: "Marginalia", content: "<p>harbour gossip</p>" }, "local");
     const user = userEvent.setup();
     renderApp("/");
     await settleOn("/");
@@ -1705,8 +1700,9 @@ describe("Command Palette text results", () => {
     const textGroup = await within(dialog).findByRole("group", { name: "Text" });
     // The Text section trails every title section.
     const chaptersGroup = within(dialog).getByRole("group", { name: "Chapters" });
-    expect(chaptersGroup.compareDocumentPosition(textGroup) & Node.DOCUMENT_POSITION_FOLLOWING)
-      .toBeTruthy();
+    expect(
+      chaptersGroup.compareDocumentPosition(textGroup) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
     // One row per item, however many times the item matched.
     expect(sectionOptions(dialog, "Text")).toHaveLength(2);
     // Two matches fit well under the cap, so no refine line.
@@ -1794,10 +1790,7 @@ describe("Command Palette text results", () => {
     await createChapterRow({ bookId: book.id, title: "Lookout" }, "local").then((chapter) =>
       updateChapterRow(chapter.id, { content: "<p>sharedword in a chapter</p>" }, "local")
     );
-    await createNoteRow(
-      { title: "Marginalia", content: "<p>sharedword in a note</p>" },
-      "local"
-    );
+    await createNoteRow({ title: "Marginalia", content: "<p>sharedword in a note</p>" }, "local");
     const user = userEvent.setup();
     renderApp("/");
     await settleOn("/");

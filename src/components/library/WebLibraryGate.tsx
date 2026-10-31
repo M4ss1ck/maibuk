@@ -17,9 +17,7 @@ import type { WebLibraryOpenResult } from "@/lib/platform/web/library-open";
 /** Opens the Library and says how it opened. */
 export type OpenWebLibrary = () => Promise<WebLibraryOpenResult>;
 
-type GateState =
-  | { status: "opening" }
-  | { status: "ready"; result: WebLibraryOpenResult | null };
+type GateState = { status: "opening" } | { status: "ready"; result: WebLibraryOpenResult | null };
 
 interface WebLibraryGateProps {
   children: ReactNode;
@@ -70,9 +68,7 @@ export function WebLibraryGate({ children, open = openAuthorLibrary }: WebLibrar
   return (
     <>
       {children}
-      {state.result && state.result.kind !== "opfs" && (
-        <WebLibraryNotice result={state.result} />
-      )}
+      {state.result && state.result.kind !== "opfs" && <WebLibraryNotice result={state.result} />}
     </>
   );
 }
@@ -108,7 +104,10 @@ function LockedScreen({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-type NoticeResult = Extract<WebLibraryOpenResult, { kind: "memory" } | { kind: "migration-failed" }>;
+type NoticeResult = Extract<
+  WebLibraryOpenResult,
+  { kind: "memory" } | { kind: "migration-failed" }
+>;
 
 /**
  * The app-wide notice for the two Library states that still let the author
@@ -123,9 +122,7 @@ function WebLibraryNotice({ result }: { result: NoticeResult }) {
       role={isFailure ? "alert" : "status"}
       className="pointer-events-none fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] left-1/2 z-40 w-[min(32rem,calc(100vw-3rem))] -translate-x-1/2 rounded-lg border border-border bg-card px-4 py-3 shadow-lg"
     >
-      <p
-        className={`text-sm font-medium ${isFailure ? "text-destructive" : "text-foreground"}`}
-      >
+      <p className={`text-sm font-medium ${isFailure ? "text-destructive" : "text-foreground"}`}>
         {isFailure ? t("webLibrary.migrationFailed.title") : t("webLibrary.memory.title")}
       </p>
       <p className="mt-1 text-sm text-muted-foreground">

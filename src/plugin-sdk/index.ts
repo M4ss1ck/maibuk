@@ -391,7 +391,8 @@ export function createPluginClient(port: PluginMessagePort): PluginClient {
         );
         return;
       case "event":
-        for (const listener of listeners.get(hostMessage.event) ?? []) listener(hostMessage.payload);
+        for (const listener of listeners.get(hostMessage.event) ?? [])
+          listener(hostMessage.payload);
         return;
       case "request":
         void answer(hostMessage.id, hostMessage.method, hostMessage.params);

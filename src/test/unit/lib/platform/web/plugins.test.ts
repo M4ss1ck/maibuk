@@ -88,7 +88,10 @@ function seededRoot(): FileSystemDirectoryHandle {
       ["loose-file", file("not a folder")],
     ]),
   });
-  return handleOf("", directory({ children: new Map([["plugins", plugins]]) })) as FileSystemDirectoryHandle;
+  return handleOf(
+    "",
+    directory({ children: new Map([["plugins", plugins]]) })
+  ) as FileSystemDirectoryHandle;
 }
 
 describe("createWebPluginDirectory()", () => {
@@ -115,7 +118,9 @@ describe("createWebPluginDirectory()", () => {
   });
 
   it("lists nothing when the Plugin Directory was never created", async () => {
-    const adapter = createWebPluginDirectory(handleOf("", directory({})) as FileSystemDirectoryHandle);
+    const adapter = createWebPluginDirectory(
+      handleOf("", directory({})) as FileSystemDirectoryHandle
+    );
     await expect(adapter.listFolders()).resolves.toEqual([]);
   });
 

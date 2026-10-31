@@ -77,7 +77,12 @@ async function closeOverlays(): Promise<void> {
     if (dialog === null) return;
     const target = document.activeElement ?? dialog;
     target.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true })
+      new KeyboardEvent("keydown", {
+        key: "Escape",
+        code: "Escape",
+        bubbles: true,
+        cancelable: true,
+      })
     );
     await sleep(100);
   }
@@ -166,13 +171,16 @@ function waitForPluginReady(pluginId: string): Promise<number> {
 
 /** Waits until the echo page's input and its echo Text are both in the DOM. */
 async function waitForEchoPage(): Promise<{ input: HTMLInputElement; element: Element }> {
-  return pollFor(() => {
-    const input = findEchoInput(document);
-    const element = findEchoElement(document);
-    const row = document.body.textContent?.includes(ROW_SENTINEL) ?? false;
-    if (input === null || element === null || !row) return null;
-    return { input, element };
-  }, { timeoutMs: READY_TIMEOUT_MS, sleep });
+  return pollFor(
+    () => {
+      const input = findEchoInput(document);
+      const element = findEchoElement(document);
+      const row = document.body.textContent?.includes(ROW_SENTINEL) ?? false;
+      if (input === null || element === null || !row) return null;
+      return { input, element };
+    },
+    { timeoutMs: READY_TIMEOUT_MS, sleep }
+  );
 }
 
 /**

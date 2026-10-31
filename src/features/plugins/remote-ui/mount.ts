@@ -37,11 +37,7 @@ export function openPluginUiMount(
   const channel = new MessageChannel();
   const surface = `${kind}:${page}#${++nextSurface}`;
   const mounted = broker
-    .request(
-      PLUGIN_UI_MOUNT_REQUEST,
-      { surface, kind, page, port: channel.port2 },
-      [channel.port2]
-    )
+    .request(PLUGIN_UI_MOUNT_REQUEST, { surface, kind, page, port: channel.port2 }, [channel.port2])
     .then(() => undefined);
   // `mounted` still rejects for a caller that awaits it. This internal no-op
   // handler keeps a refused mount whose caller never observes it from becoming

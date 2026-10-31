@@ -15,7 +15,12 @@ import {
 import { resetPluginContributionsForTests } from "@/features/plugins/contributions";
 import { hashPluginDirectory, pluginFileDigests } from "@/features/plugins/directory-hash";
 import { launchReads, scanApprovedPlugins, syncBuiltInPlugins } from "@/features/plugins/launch";
-import type { BuiltInPlugin, BuiltInPluginSource, PluginFolder, PluginManifest } from "@/features/plugins/types";
+import type {
+  BuiltInPlugin,
+  BuiltInPluginSource,
+  PluginFolder,
+  PluginManifest,
+} from "@/features/plugins/types";
 import type { PluginDirectoryAdapter } from "@/lib/platform/types";
 import { pluginFolder } from "@/test/support/plugin-fixtures";
 
@@ -80,7 +85,12 @@ describe("launchReads(): one folder read per launch", () => {
     // leaves the approval alone: the approval an enabled Built-in carries is
     // the one the store pinned, saved here as the sync would have saved it.
     savePluginApproval({
-      ...approveBuiltInCopy(built.manifest, built.hash, await pluginFileDigests(folder.files), built.hash),
+      ...approveBuiltInCopy(
+        built.manifest,
+        built.hash,
+        await pluginFileDigests(folder.files),
+        built.hash
+      ),
       enabled: true,
     });
 

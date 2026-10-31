@@ -478,7 +478,10 @@ describe("content-store", () => {
       "SELECT format FROM book_versions WHERE id = 'dup-1'"
     );
     expect(rows[0].format).toBe("legacy");
-    expect(await readVersionSnapshot(db, "dup-1")).toEqual({ bookId: "book-1", snapshot: duplicate });
+    expect(await readVersionSnapshot(db, "dup-1")).toEqual({
+      bookId: "book-1",
+      snapshot: duplicate,
+    });
     // The failed split rolled back whole: no half-written manifest or text.
     expect(await count(db, "book_version_chapters")).toBe(0);
     expect(await count(db, "version_blobs")).toBe(0);

@@ -4,5 +4,9 @@
  * so a normal build never reaches it and the whole measurement graph stays out
  * of a shipped bundle.
  */
-export { preparePluginsBench, getPluginsBenchSeed, readBenchSeed } from "@/features/plugins/bench/seed";
+export {
+  preparePluginsBench,
+  getPluginsBenchSeed,
+  readBenchSeed,
+} from "@/features/plugins/bench/seed";
 export { runPluginsBenchDriver } from "@/features/plugins/bench/driver";

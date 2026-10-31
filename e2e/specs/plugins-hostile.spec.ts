@@ -217,9 +217,7 @@ test.describe("fixture-hostile escapes @wf:plugins-sandbox @sandbox", () => {
     await tabTo(page, read, { max: 20 });
     await page.keyboard.press("Space");
     await expect(read).not.toBeChecked();
-    await expect(
-      page.getByRole("switch", { name: "Enable Fixture Hostile" })
-    ).toBeChecked();
+    await expect(page.getByRole("switch", { name: "Enable Fixture Hostile" })).toBeChecked();
 
     // Reload with the revoked grant and run the Command: the read is refused.
     await waitForReady(page);

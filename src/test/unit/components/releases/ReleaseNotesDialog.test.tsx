@@ -85,9 +85,11 @@ describe("Release Notes dialog", () => {
 
     const first = within(dialog).getAllByRole("article")[0];
     const kinds = BUNDLED_RELEASES[0].sections.map((s) => `releases.sections.${s.kind}`);
-    expect(within(first).getAllByRole("heading", { level: 4 }).map((h) => h.textContent)).toEqual(
-      kinds
-    );
+    expect(
+      within(first)
+        .getAllByRole("heading", { level: 4 })
+        .map((h) => h.textContent)
+    ).toEqual(kinds);
     expect(within(first).getAllByRole("listitem")).toHaveLength(
       BUNDLED_RELEASES[0].sections.reduce((count, s) => count + s.items.length, 0)
     );
@@ -110,9 +112,9 @@ describe("Release Notes dialog", () => {
     const dialog = await openFromBadge(user, `releases.badgeWithUpdate:${APP_VERSION}`);
 
     const articles = within(dialog).getAllByRole("article");
-    expect(articles.slice(0, 3).map((a) => within(a).getByRole("heading", { level: 3 }).textContent)).toEqual(
-      ["99.1.0", "99.0.0", BUNDLED_RELEASES[0].number]
-    );
+    expect(
+      articles.slice(0, 3).map((a) => within(a).getByRole("heading", { level: 3 }).textContent)
+    ).toEqual(["99.1.0", "99.0.0", BUNDLED_RELEASES[0].number]);
     expect(within(articles[0]).getByText("releases.new")).toBeInTheDocument();
     expect(within(articles[1]).getByText("releases.new")).toBeInTheDocument();
     expect(within(articles[2]).queryByText("releases.new")).not.toBeInTheDocument();

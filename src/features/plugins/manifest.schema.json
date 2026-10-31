@@ -56,27 +56,17 @@
       "type": "array",
       "items": {
         "type": "string",
-        "enum": [
-          "desktop",
-          "web",
-          "android"
-        ]
+        "enum": ["desktop", "web", "android"]
       }
     },
     "lifecycle": {
       "type": "string",
-      "enum": [
-        "persistent",
-        "on-demand"
-      ],
+      "enum": ["persistent", "on-demand"],
       "description": "persistent starts with the app; on-demand starts when a surface becomes reachable."
     },
     "defaultLanguage": {
       "type": "string",
-      "enum": [
-        "en",
-        "es"
-      ]
+      "enum": ["en", "es"]
     },
     "permissions": {
       "type": "object",
@@ -96,10 +86,7 @@
           "description": "Plugin Permissions the author may deny one by one."
         }
       },
-      "required": [
-        "required",
-        "optional"
-      ],
+      "required": ["required", "optional"],
       "additionalProperties": false,
       "patternProperties": {
         "^x-": {}
@@ -118,10 +105,7 @@
     "warmStart": {
       "description": "surface (the default) warm-starts an on-demand Plugin when a surface it contributes is reached, sidebar entries and Command Contexts included; intent warms it only on an intent: its page mounting, a hover, focus, or press on its sidebar entry, or running one of its Commands. Requires an on-demand lifecycle.",
       "type": "string",
-      "enum": [
-        "surface",
-        "intent"
-      ]
+      "enum": ["surface", "intent"]
     },
     "contributes": {
       "type": "object",
@@ -265,13 +249,7 @@
                 "type": "array",
                 "items": {
                   "type": "string",
-                  "enum": [
-                    "book",
-                    "chapter",
-                    "note",
-                    "canvas",
-                    "canvasNode"
-                  ]
+                  "enum": ["book", "chapter", "note", "canvas", "canvasNode"]
                 }
               },
               "navigates": {
@@ -287,19 +265,11 @@
                 "type": "array",
                 "items": {
                   "type": "string",
-                  "enum": [
-                    "desktop",
-                    "web",
-                    "android"
-                  ]
+                  "enum": ["desktop", "web", "android"]
                 }
               }
             },
-            "required": [
-              "id",
-              "label",
-              "contexts"
-            ],
+            "required": ["id", "label", "contexts"],
             "additionalProperties": false,
             "patternProperties": {
               "^x-": {}
@@ -340,19 +310,11 @@
                 "type": "array",
                 "items": {
                   "type": "string",
-                  "enum": [
-                    "desktop",
-                    "web",
-                    "android"
-                  ]
+                  "enum": ["desktop", "web", "android"]
                 }
               }
             },
-            "required": [
-              "id",
-              "title",
-              "command"
-            ],
+            "required": ["id", "title", "command"],
             "additionalProperties": false,
             "patternProperties": {
               "^x-": {}
@@ -405,9 +367,7 @@
                         "description": "SVG elements on a 24x24 grid: [tag, attributes] pairs. The validator sets the allowed tags, attributes, and count."
                       }
                     },
-                    "required": [
-                      "elements"
-                    ],
+                    "required": ["elements"],
                     "additionalProperties": false,
                     "patternProperties": {
                       "^x-": {}
@@ -421,18 +381,11 @@
                 "type": "array",
                 "items": {
                   "type": "string",
-                  "enum": [
-                    "desktop",
-                    "web",
-                    "android"
-                  ]
+                  "enum": ["desktop", "web", "android"]
                 }
               }
             },
-            "required": [
-              "page",
-              "icon"
-            ],
+            "required": ["page", "icon"],
             "additionalProperties": false,
             "patternProperties": {
               "^x-": {}
@@ -469,18 +422,11 @@
                 "type": "array",
                 "items": {
                   "type": "string",
-                  "enum": [
-                    "desktop",
-                    "web",
-                    "android"
-                  ]
+                  "enum": ["desktop", "web", "android"]
                 }
               }
             },
-            "required": [
-              "id",
-              "label"
-            ],
+            "required": ["id", "label"],
             "additionalProperties": false,
             "patternProperties": {
               "^x-": {}
@@ -538,9 +484,7 @@
                         "description": "SVG elements on a 24x24 grid: [tag, attributes] pairs. The validator sets the allowed tags, attributes, and count."
                       }
                     },
-                    "required": [
-                      "elements"
-                    ],
+                    "required": ["elements"],
                     "additionalProperties": false,
                     "patternProperties": {
                       "^x-": {}
@@ -554,11 +498,7 @@
                 "type": "array",
                 "items": {
                   "type": "string",
-                  "enum": [
-                    "desktop",
-                    "web",
-                    "android"
-                  ]
+                  "enum": ["desktop", "web", "android"]
                 }
               },
               "toggle": {
@@ -566,11 +506,7 @@
                 "type": "boolean"
               }
             },
-            "required": [
-              "id",
-              "command",
-              "icon"
-            ],
+            "required": ["id", "command", "icon"],
             "additionalProperties": false,
             "patternProperties": {
               "^x-": {}
@@ -592,17 +528,11 @@
                 "type": "array",
                 "items": {
                   "type": "string",
-                  "enum": [
-                    "desktop",
-                    "web",
-                    "android"
-                  ]
+                  "enum": ["desktop", "web", "android"]
                 }
               }
             },
-            "required": [
-              "command"
-            ],
+            "required": ["command"],
             "additionalProperties": false,
             "patternProperties": {
               "^x-": {}

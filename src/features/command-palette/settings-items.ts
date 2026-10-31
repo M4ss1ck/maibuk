@@ -37,7 +37,11 @@ function labelOf(t: PaletteTranslate, key: string, fallback: string): string {
  * detail that says where choosing it lands. Runtime Plugin rows join with
  * their metadata only, without running the Plugin.
  */
-export function buildSettingsItems({ t, platform, language }: BuildSettingsItemsOptions): PaletteItem[] {
+export function buildSettingsItems({
+  t,
+  platform,
+  language,
+}: BuildSettingsItemsOptions): PaletteItem[] {
   const items: PaletteItem[] = [];
   for (const section of SETTINGS_SECTIONS) {
     const sectionLabel = labelOf(t, section.labelKey, section.id);

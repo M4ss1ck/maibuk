@@ -118,7 +118,9 @@ export function parsePluginCommandIds(pluginId: string, manifestSource: string):
   } catch {
     throw new Error(`plugin ${pluginId}: manifest is not valid JSON`);
   }
-  const commands = Array.isArray(manifest.contributes?.commands) ? manifest.contributes.commands : [];
+  const commands = Array.isArray(manifest.contributes?.commands)
+    ? manifest.contributes.commands
+    : [];
   return commands
     .map((command) => (command as { id?: unknown } | null)?.id)
     .filter((id): id is string => typeof id === "string")

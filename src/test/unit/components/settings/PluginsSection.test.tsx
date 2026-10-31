@@ -14,7 +14,11 @@ import { PluginsSection } from "@/components/settings/PluginsSection";
 import { toast } from "@/components/ui/Toast";
 import { useModalStore } from "@/components/ui/modal-store";
 import { PLUGIN_APPROVALS_STORAGE_KEY, savePluginApproval } from "@/features/plugins/approvals";
-import { PLUGIN_FILTER_CATEGORIES, PLUGIN_DATA_SIZE_WARNING_BYTES, usePluginManagementStore } from "@/features/plugins/management";
+import {
+  PLUGIN_FILTER_CATEGORIES,
+  PLUGIN_DATA_SIZE_WARNING_BYTES,
+  usePluginManagementStore,
+} from "@/features/plugins/management";
 import {
   resetPluginLifecycleForTests,
   setPluginLifecycleInstance,
@@ -428,9 +432,7 @@ describe("PluginsSection", () => {
     expect(revoke).toHaveBeenCalledWith("echoes", "library:read");
     await waitFor(() =>
       expect(
-        screen.getByText(
-          "Required access is missing. Review and approve it to enable this Plugin."
-        )
+        screen.getByText("Required access is missing. Review and approve it to enable this Plugin.")
       ).toBeInTheDocument()
     );
     expect(screen.getByRole("switch", { name: "Enable Echoes" })).not.toBeChecked();
@@ -1397,9 +1399,7 @@ describe("Plugin management (#443)", () => {
     render(<PluginsSection />);
 
     await openRow(user);
-    expect(
-      screen.getByText("Custom UI: accessibility not verified by Maibuk")
-    ).toBeInTheDocument();
+    expect(screen.getByText("Custom UI: accessibility not verified by Maibuk")).toBeInTheDocument();
   });
 
   it("hides the custom-UI disclosure for a Plugin with none", async () => {
@@ -1408,9 +1408,7 @@ describe("Plugin management (#443)", () => {
     render(<PluginsSection />);
 
     await openRow(user);
-    expect(
-      screen.queryByText("Custom UI: accessibility not verified by Maibuk")
-    ).toBeNull();
+    expect(screen.queryByText("Custom UI: accessibility not verified by Maibuk")).toBeNull();
   });
 
   it("removes a third-party Plugin, warning it cannot be recovered, and deletes its data", async () => {
@@ -1616,9 +1614,7 @@ describe("Plugin management (#443)", () => {
     // Saved credentials and the approved copy are both gone after removal.
     expect(screen.getAllByText("None")).toHaveLength(2);
     expect(screen.getByText("Retained")).toBeInTheDocument();
-    expect(
-      screen.getByText("Manually add the Plugin again to use it.")
-    ).toBeInTheDocument();
+    expect(screen.getByText("Manually add the Plugin again to use it.")).toBeInTheDocument();
   });
 
   it("shows the 50 MB size warning inline in the expanded row", async () => {
@@ -1668,22 +1664,12 @@ describe("Plugin management (#443)", () => {
     render(<PluginsSection />);
 
     await waitFor(() =>
-      expect(
-        useBoundShortcutStore.getState().counts["settings.removePlugin"]
-      ).toBeGreaterThan(0)
+      expect(useBoundShortcutStore.getState().counts["settings.removePlugin"]).toBeGreaterThan(0)
     );
-    expect(
-      useBoundShortcutStore.getState().counts["settings.reinstallBuiltIn"]
-    ).toBeGreaterThan(0);
-    expect(
-      useBoundShortcutStore.getState().counts["settings.deletePluginData"]
-    ).toBeGreaterThan(0);
-    expect(
-      useBoundShortcutStore.getState().counts["settings.restartPlugin"]
-    ).toBeGreaterThan(0);
-    expect(
-      useBoundShortcutStore.getState().counts["settings.togglePlugin"]
-    ).toBeGreaterThan(0);
+    expect(useBoundShortcutStore.getState().counts["settings.reinstallBuiltIn"]).toBeGreaterThan(0);
+    expect(useBoundShortcutStore.getState().counts["settings.deletePluginData"]).toBeGreaterThan(0);
+    expect(useBoundShortcutStore.getState().counts["settings.restartPlugin"]).toBeGreaterThan(0);
+    expect(useBoundShortcutStore.getState().counts["settings.togglePlugin"]).toBeGreaterThan(0);
   });
 
   it("opens the Remove dialog when its Command runs", async () => {
@@ -1693,9 +1679,7 @@ describe("Plugin management (#443)", () => {
     render(<PluginsSection />);
 
     await waitFor(() =>
-      expect(
-        useBoundShortcutStore.getState().counts["settings.removePlugin"]
-      ).toBeGreaterThan(0)
+      expect(useBoundShortcutStore.getState().counts["settings.removePlugin"]).toBeGreaterThan(0)
     );
     await expect(runCommand("settings.removePlugin", { source: "palette" })).resolves.toBe("ran");
     expect(await screen.findByRole("alertdialog", { name: "Remove Echoes?" })).toBeInTheDocument();
@@ -1742,9 +1726,7 @@ describe("Plugin credential storage on web (#453 unit 5)", () => {
   it("offers the switch and turns remembering on by keyboard", async () => {
     const user = userEvent.setup();
     const setRemembered = vi.fn(async () => {});
-    registerPluginSecretStore(
-      secretStore({ isRemembered: () => false, setRemembered })
-    );
+    registerPluginSecretStore(secretStore({ isRemembered: () => false, setRemembered }));
     seed(secretsEntry());
     render(<PluginsSection />);
 
@@ -1791,9 +1773,7 @@ describe("Plugin credential storage on web (#453 unit 5)", () => {
     registerPluginSecretStore(
       secretStore({ isRemembered: () => false, setRemembered: async () => {} })
     );
-    seed(
-      entry({ approval: approval({ enabled: true }), review: review({ status: "approved" }) })
-    );
+    seed(entry({ approval: approval({ enabled: true }), review: review({ status: "approved" }) }));
     render(<PluginsSection />);
 
     await openRow(user);

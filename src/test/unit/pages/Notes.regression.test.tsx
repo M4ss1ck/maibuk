@@ -356,10 +356,7 @@ describe("Notes repeated heading regression (behavioral)", () => {
     );
 
     await waitFor(() =>
-      expect(mockRequestReveal).toHaveBeenCalledWith(
-        { kind: "note", id: "n1" },
-        { from: 4, to: 7 }
-      )
+      expect(mockRequestReveal).toHaveBeenCalledWith({ kind: "note", id: "n1" }, { from: 4, to: 7 })
     );
   });
 });

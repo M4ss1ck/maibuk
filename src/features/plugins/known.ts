@@ -97,7 +97,10 @@ export function saveKnownPlugin(known: KnownPlugin): void {
 export function markPluginRemoved(pluginId: string): void {
   const known = getKnownPlugin(pluginId);
   if (known === null || known.removed) return;
-  write([...read().filter((current) => current.pluginId !== pluginId), { ...known, removed: true }]);
+  write([
+    ...read().filter((current) => current.pluginId !== pluginId),
+    { ...known, removed: true },
+  ]);
 }
 
 /**

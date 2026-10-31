@@ -36,7 +36,11 @@ import {
 import { PLUGIN_UI_TABLE } from "@/plugin-sdk/ui-table";
 import type { PluginUiComponents, PluginUiElementProps } from "@/plugin-sdk/ui.generated";
 
-export type { PluginUiComponents, PluginUiElementProps, PluginUiTag } from "@/plugin-sdk/ui.generated";
+export type {
+  PluginUiComponents,
+  PluginUiElementProps,
+  PluginUiTag,
+} from "@/plugin-sdk/ui.generated";
 export { PLUGIN_UI_TAGS } from "@/plugin-sdk/ui.generated";
 export { PLUGIN_UI_LIMITS, PLUGIN_UI_TABLE } from "@/plugin-sdk/ui-table";
 
@@ -148,17 +152,18 @@ function kitComponent(
   eventProps: Readonly<Record<string, string>>,
   name: string
 ): ComponentType<Record<string, unknown>> {
-  const KitComponent = forwardRef<HTMLElement, Record<string, unknown>>(
-    function KitComponent({ children, ...props }, ref) {
-      const bundle: KitProps = { properties: {}, listeners: {} };
-      for (const [prop, value] of Object.entries(props)) {
-        const event = eventProps[prop];
-        if (event === undefined) bundle.properties[prop] = value;
-        else if (typeof value === "function") bundle.listeners[event] = value as EventListener;
-      }
-      return createElement(tag, { ref, [KIT_PROPS]: bundle }, children as ReactNode);
+  const KitComponent = forwardRef<HTMLElement, Record<string, unknown>>(function KitComponent(
+    { children, ...props },
+    ref
+  ) {
+    const bundle: KitProps = { properties: {}, listeners: {} };
+    for (const [prop, value] of Object.entries(props)) {
+      const event = eventProps[prop];
+      if (event === undefined) bundle.properties[prop] = value;
+      else if (typeof value === "function") bundle.listeners[event] = value as EventListener;
     }
-  );
+    return createElement(tag, { ref, [KIT_PROPS]: bundle }, children as ReactNode);
+  });
   KitComponent.displayName = name;
   return KitComponent as unknown as ComponentType<Record<string, unknown>>;
 }

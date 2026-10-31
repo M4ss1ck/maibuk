@@ -72,13 +72,20 @@ const canonicalDocs: JSONContent[][] = [
       {
         type: "text",
         text: "link",
-        marks: [{ type: "link", attrs: { href: "https://maibuk.test", target: null, rel: null, class: null } }],
+        marks: [
+          {
+            type: "link",
+            attrs: { href: "https://maibuk.test", target: null, rel: null, class: null },
+          },
+        ],
       },
       text(" "),
       {
         type: "text",
         text: "styled",
-        marks: [{ type: "textStyle", attrs: { color: "#ff0000", fontFamily: null, fontSize: null } }],
+        marks: [
+          { type: "textStyle", attrs: { color: "#ff0000", fontFamily: null, fontSize: null } },
+        ],
       }
     ),
   ],
@@ -106,7 +113,10 @@ const canonicalDocs: JSONContent[][] = [
     {
       type: "bulletList",
       content: [
-        item(paragraph(text("One")), { type: "bulletList", content: [item(paragraph(text("Nested")))] }),
+        item(paragraph(text("One")), {
+          type: "bulletList",
+          content: [item(paragraph(text("Nested")))],
+        }),
         item(paragraph(text("Two"))),
         item(),
       ],
@@ -122,22 +132,58 @@ const canonicalDocs: JSONContent[][] = [
     {
       type: "table",
       content: [
-        { type: "tableRow", content: [cell("tableHeader", paragraph(text("H1"))), cell("tableHeader", paragraph(text("H2")))] },
-        { type: "tableRow", content: [cell("tableCell", paragraph(text("C1")), paragraph(text("C1 again"))), cell("tableCell", paragraph(text("C2")))] },
+        {
+          type: "tableRow",
+          content: [
+            cell("tableHeader", paragraph(text("H1"))),
+            cell("tableHeader", paragraph(text("H2"))),
+          ],
+        },
+        {
+          type: "tableRow",
+          content: [
+            cell("tableCell", paragraph(text("C1")), paragraph(text("C1 again"))),
+            cell("tableCell", paragraph(text("C2"))),
+          ],
+        },
       ],
     },
   ],
   // images with and without caption text
   [
-    { type: "image", attrs: { src: "a.png", alt: "Alt", title: null, caption: "", width: null, alignment: "center" }, content: [] },
-    { type: "image", attrs: { src: "b.png", alt: null, title: null, caption: "", width: null, alignment: "left" }, content: [text("Caption text")] },
+    {
+      type: "image",
+      attrs: {
+        src: "a.png",
+        alt: "Alt",
+        title: null,
+        caption: "",
+        width: null,
+        alignment: "center",
+      },
+      content: [],
+    },
+    {
+      type: "image",
+      attrs: { src: "b.png", alt: null, title: null, caption: "", width: null, alignment: "left" },
+      content: [text("Caption text")],
+    },
   ],
   // scene break, horizontal rule
   [
     paragraph(text("a")),
     {
       type: "sceneBreak",
-      attrs: { kind: "text", symbols: "* * *", unit: null, count: null, spaced: true, src: null, assetId: null, alt: null },
+      attrs: {
+        kind: "text",
+        symbols: "* * *",
+        unit: null,
+        count: null,
+        spaced: true,
+        src: null,
+        assetId: null,
+        alt: null,
+      },
     },
     paragraph(text("b")),
     { type: "horizontalRule" },
@@ -145,12 +191,20 @@ const canonicalDocs: JSONContent[][] = [
   ],
   // code blocks keep whitespace, with and without a language
   [
-    { type: "codeBlock", attrs: { language: "ts" }, content: [text("const a = 1;\n  const b = 2;")] },
+    {
+      type: "codeBlock",
+      attrs: { language: "ts" },
+      content: [text("const a = 1;\n  const b = 2;")],
+    },
     { type: "codeBlock", attrs: { language: null }, content: [text("  spaced  ")] },
   ],
   // footnote (inline atom) and an empty paragraph
   [
-    paragraph(text("Note"), { type: "footnote", attrs: { id: "fn-1", content: "hidden note body" } }, text(" after")),
+    paragraph(
+      text("Note"),
+      { type: "footnote", attrs: { id: "fn-1", content: "hidden note body" } },
+      text(" after")
+    ),
     paragraph(),
     paragraph(text("after empty")),
   ],
@@ -255,7 +309,7 @@ describe("fastHtmlBlocks() parity with htmlToPlainText()", () => {
     // A block inside a textblock splits it; the oracle's split is the one that
     // counts, so the fast path declines rather than reproduce it.
     expect(fastHtmlBlocks('<p>a<img src="x.png">b</p>')).toBeNull();
-    expect(fastHtmlBlocks('<p>a<table><tr><td><p>c</p></td></tr></table>b</p>')).toBeNull();
+    expect(fastHtmlBlocks("<p>a<table><tr><td><p>c</p></td></tr></table>b</p>")).toBeNull();
     // And extraction still matches the oracle through the fallback.
     expect(chapterContentBlocks('<p>a<img src="x.png">b</p>')).toEqual(
       oracleBlocks('<p>a<img src="x.png">b</p>')

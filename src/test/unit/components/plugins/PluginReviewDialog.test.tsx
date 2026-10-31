@@ -172,7 +172,9 @@ describe("PluginReviewDialog", () => {
 
   it("shows the Older version label", async () => {
     const user = userEvent.setup();
-    render(<Harness copy={entry({ review: review({ olderVersion: true }) })} onApprove={vi.fn()} />);
+    render(
+      <Harness copy={entry({ review: review({ olderVersion: true }) })} onApprove={vi.fn()} />
+    );
     await openDialog(user);
     expect(screen.getByText("Older version")).toBeInTheDocument();
   });
@@ -181,7 +183,9 @@ describe("PluginReviewDialog", () => {
     const user = userEvent.setup();
     render(
       <Harness
-        copy={entry({ review: review({ files: { added: ["fresh.js"], removed: [], changed: [] } }) })}
+        copy={entry({
+          review: review({ files: { added: ["fresh.js"], removed: [], changed: [] } }),
+        })}
         onApprove={vi.fn()}
       />
     );
@@ -227,9 +231,13 @@ describe("PluginReviewDialog", () => {
   it("shows the Spanish copy", async () => {
     const user = userEvent.setup();
     await i18n.changeLanguage("es");
-    render(<Harness copy={entry({ review: review({ olderVersion: true }) })} onApprove={vi.fn()} />);
+    render(
+      <Harness copy={entry({ review: review({ olderVersion: true }) })} onApprove={vi.fn()} />
+    );
     await openDialog(user);
     expect(screen.getByText("Versión anterior")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Aprobar esta copia y activar" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Aprobar esta copia y activar" })
+    ).toBeInTheDocument();
   });
 });

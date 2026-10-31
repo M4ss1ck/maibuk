@@ -23,11 +23,7 @@ describe("chapterContentBlocks()", () => {
 
   it("keeps headings and list items in separate blocks", () => {
     const blocks = chapterContentBlocks("<h2>A heading</h2><ul><li>One</li><li>Two</li></ul>");
-    expect(blocks.map((block) => block.text.split("\n")[0])).toEqual([
-      "A heading",
-      "One",
-      "Two",
-    ]);
+    expect(blocks.map((block) => block.text.split("\n")[0])).toEqual(["A heading", "One", "Two"]);
   });
 
   it("skips empty blocks and returns nothing for null or blank content", () => {

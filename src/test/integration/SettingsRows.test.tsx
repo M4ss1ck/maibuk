@@ -328,7 +328,10 @@ describe("Settings rows", () => {
         document.querySelector('[data-settings-section="appearance"]')
       );
       expect(scrollIntoView).toHaveBeenCalledWith({ block: "start", behavior: "auto" });
-      expect(useSettingsRevealStore.getState()).toMatchObject({ pendingRowId: null, pendingAlign: "row" });
+      expect(useSettingsRevealStore.getState()).toMatchObject({
+        pendingRowId: null,
+        pendingAlign: "row",
+      });
     } finally {
       Element.prototype.scrollIntoView = original;
     }

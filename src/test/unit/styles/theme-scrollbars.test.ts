@@ -43,20 +43,22 @@ describe("themed scrollbar", () => {
   it("styles every scroll container in WebKit and Chromium, corner included", () => {
     for (const part of ["", "-track", "-thumb", "-corner"]) {
       expect(css, `::-webkit-scrollbar${part}`).toMatch(
-        new RegExp(`\\n\\s*::-webkit-scrollbar${part}\\s*\\{`),
+        new RegExp(`\\n\\s*::-webkit-scrollbar${part}\\s*\\{`)
       );
     }
   });
 
   it("gives Firefox the standard properties only where ::-webkit-scrollbar is unsupported", () => {
-    const gated = css.match(/@supports not selector\(::-webkit-scrollbar\)\s*\{\s*\*\s*\{([^}]*)\}/);
+    const gated = css.match(
+      /@supports not selector\(::-webkit-scrollbar\)\s*\{\s*\*\s*\{([^}]*)\}/
+    );
     expect(gated?.[1]).toMatch(/scrollbar-width:\s*thin;/);
     expect(gated?.[1]).toMatch(/scrollbar-color:/);
   });
 
   it("is global, so no scroll box opts in through a class", () => {
     const optIns = sourceFiles(join(root, "src")).filter((file) =>
-      readFileSync(file, "utf8").includes("scrollbar-themed"),
+      readFileSync(file, "utf8").includes("scrollbar-themed")
     );
     expect(optIns).toEqual([]);
   });

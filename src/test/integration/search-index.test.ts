@@ -13,29 +13,17 @@ vi.mock("@/lib/db", async (importOriginal) => ({
   exportDatabase: mockExportDatabase,
 }));
 
-const {
-  createBookRow,
-  updateBookRow,
-  deleteBookRow,
-  applyBookSnapshotData,
-} = await import("@/features/books/write");
-const {
-  createChapterRow,
-  updateChapterRow,
-  deleteChapterRow,
-} = await import("@/features/chapters/write");
-const {
-  createNoteRow,
-  updateNoteRow,
-  deleteNoteRow,
-  applyNoteSnapshotData,
-} = await import("@/features/notes/write");
-const {
-  createCanvasRow,
-  updateCanvasDocRow,
-  deleteCanvasRow,
-  applyCanvasSnapshotData,
-} = await import("@/features/canvas/write");
+const { createBookRow, updateBookRow, deleteBookRow, applyBookSnapshotData } = await import(
+  "@/features/books/write"
+);
+const { createChapterRow, updateChapterRow, deleteChapterRow } = await import(
+  "@/features/chapters/write"
+);
+const { createNoteRow, updateNoteRow, deleteNoteRow, applyNoteSnapshotData } = await import(
+  "@/features/notes/write"
+);
+const { createCanvasRow, updateCanvasDocRow, deleteCanvasRow, applyCanvasSnapshotData } =
+  await import("@/features/canvas/write");
 const { BackupService, resetBackupQueueForTests } = await import(
   "@/features/backup/backup-service"
 );
@@ -122,17 +110,14 @@ async function ftsRowCount(): Promise<number> {
 }
 
 async function searchRowCount(): Promise<number> {
-  const rows = await db.select<{ count: number }[]>(
-    "SELECT COUNT(*) AS count FROM search_text"
-  );
+  const rows = await db.select<{ count: number }[]>("SELECT COUNT(*) AS count FROM search_text");
   return rows[0]?.count ?? 0;
 }
 
 async function setting(key: string): Promise<string | null> {
-  const rows = await db.select<{ value: string }[]>(
-    "SELECT value FROM settings WHERE key = ?",
-    [key]
-  );
+  const rows = await db.select<{ value: string }[]>("SELECT value FROM settings WHERE key = ?", [
+    key,
+  ]);
   return rows[0]?.value ?? null;
 }
 
@@ -218,7 +203,11 @@ describe("Library Search index write hooks", () => {
     const book = await createBookRow({ title: "Novel", authorName: "Author" }, "local");
     const chapter = await seedChapter(book.id, "<p>Original words</p>");
 
-    await updateChapterRow(chapter.id, { content: "<p>Rewritten words</p><p>New block</p>" }, "local");
+    await updateChapterRow(
+      chapter.id,
+      { content: "<p>Rewritten words</p><p>New block</p>" },
+      "local"
+    );
 
     expect(textOf(await rowsFor("chapter", chapter.id))).toEqual(["Rewritten words", "New block"]);
   });
@@ -272,7 +261,11 @@ describe("Library Search index write hooks", () => {
       "A description",
     ]);
 
-    await updateBookRow(book.id, { title: "Renamed Novel", description: "New description" }, "local");
+    await updateBookRow(
+      book.id,
+      { title: "Renamed Novel", description: "New description" },
+      "local"
+    );
     expect(textOf(await rowsFor("book", book.id))).toEqual([
       "Renamed Novel",
       "A subtitle",
@@ -304,9 +297,7 @@ describe("Library Search index removal", () => {
       canvas.id,
       {
         ...createDefaultCanvasDoc(),
-        nodes: [
-          { id: "n1", kind: "text", position: { x: 0, y: 0 }, html: "<p>Deleted card</p>" },
-        ],
+        nodes: [{ id: "n1", kind: "text", position: { x: 0, y: 0 }, html: "<p>Deleted card</p>" }],
       },
       "local"
     );
@@ -477,9 +468,9 @@ describe("Library Search index sync and Restore hooks", () => {
 
     const rows = await indexRows();
     expect(rows.some((row) => row.item_id === book.id && row.text === "Restored Novel")).toBe(true);
-    expect(rows.some((row) => row.item_id === chapter.id && row.text === "Restored paragraph")).toBe(
-      true
-    );
+    expect(
+      rows.some((row) => row.item_id === chapter.id && row.text === "Restored paragraph")
+    ).toBe(true);
     expect(rows.some((row) => row.text === "Temporary Novel")).toBe(false);
   });
 
@@ -510,11 +501,7 @@ describe("Library Search index exclusions", () => {
     const book = await createBookRow({ title: "Novel", authorName: "Author" }, "local");
     const chapter = await seedChapter(book.id, "<p>Body text</p>");
 
-    await updateChapterRow(
-      chapter.id,
-      { synopsis: "SynopsisOnlySecret" },
-      "local"
-    );
+    await updateChapterRow(chapter.id, { synopsis: "SynopsisOnlySecret" }, "local");
     await updateBookRow(book.id, { coverData: '{"secret":"CoverOnlySecret"}' }, "local");
     await db.execute(
       `INSERT INTO book_versions (id, book_id, name, snapshot, word_count, checksum, trigger_type, created_at)
@@ -559,9 +546,7 @@ describe("Library Search index is device-local", () => {
     expect(tableNames).not.toContain("search_text_fts");
 
     const workerPath = new TextDecoder().decode(await db.exportData());
-    const fallbackPath = new TextDecoder().decode(
-      await formatDump(db, new Date().toISOString())
-    );
+    const fallbackPath = new TextDecoder().decode(await formatDump(db, new Date().toISOString()));
     expect(workerPath).not.toContain("search_text");
     expect(fallbackPath).not.toContain("search_text");
   });
@@ -575,9 +560,7 @@ describe("Library Search index is device-local", () => {
       canvas.id,
       {
         ...createDefaultCanvasDoc(),
-        nodes: [
-          { id: "n1", kind: "text", position: { x: 0, y: 0 }, html: "<p>Card body</p>" },
-        ],
+        nodes: [{ id: "n1", kind: "text", position: { x: 0, y: 0 }, html: "<p>Card body</p>" }],
       },
       "local"
     );
@@ -636,17 +619,13 @@ describe("Library Search FTS5 trigram index", () => {
   });
 
   it("runs on SQLite new enough for diacritic-insensitive trigrams", async () => {
-    const rows = await db.select<{ version: string }[]>(
-      "SELECT sqlite_version() AS version"
-    );
+    const rows = await db.select<{ version: string }[]>("SELECT sqlite_version() AS version");
     const [major, minor] = rows[0].version.split(".").map(Number);
     expect(major > 3 || (major === 3 && minor >= 45)).toBe(true);
   });
 
   it("recreates an index left on the old tokenizer", async () => {
-    const { ensureSearchSchema, SEARCH_FTS_TABLE } = await import(
-      "@/features/search/schema"
-    );
+    const { ensureSearchSchema, SEARCH_FTS_TABLE } = await import("@/features/search/schema");
     await db.execute(`DROP TABLE ${SEARCH_FTS_TABLE}`);
     await db.execute(
       `CREATE VIRTUAL TABLE ${SEARCH_FTS_TABLE} USING fts5(

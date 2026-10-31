@@ -9,11 +9,7 @@
 
 import { diffPluginPermissions } from "@/features/plugins/manifest-compat";
 import { compareSemver, parseSemver } from "@/features/plugins/semver";
-import type {
-  PluginFileDiff,
-  PluginReview,
-  PluginReviewInput,
-} from "@/features/plugins/types";
+import type { PluginFileDiff, PluginReview, PluginReviewInput } from "@/features/plugins/types";
 
 function diffFiles(
   approvedFiles: Record<string, string>,

@@ -46,7 +46,10 @@ export function PluginPermissionDialog({
   if (!isOpen || manifest === null) return null;
 
   const chosen = selection ?? optional;
-  const declared = [...required, ...optional.filter((permission) => !required.includes(permission))];
+  const declared = [
+    ...required,
+    ...optional.filter((permission) => !required.includes(permission)),
+  ];
 
   return (
     <Modal
@@ -70,9 +73,7 @@ export function PluginPermissionDialog({
         onToggle={(permission, next) =>
           setSelection((current) => {
             const base = current ?? optional;
-            return next
-              ? [...base, permission]
-              : base.filter((entry) => entry !== permission);
+            return next ? [...base, permission] : base.filter((entry) => entry !== permission);
           })
         }
       />

@@ -95,9 +95,7 @@ describe("view refresh on local Changes", () => {
     await seedBook("book-1");
     await seedChapter("ch-1", "book-1");
     await useChapterStore.getState().loadChapters("book-1");
-    useChapterStore
-      .getState()
-      .setCurrentChapter(useChapterStore.getState().chapters[0] ?? null);
+    useChapterStore.getState().setCurrentChapter(useChapterStore.getState().chapters[0] ?? null);
 
     await updateChapterRow("ch-1", { content: "<p>Written outside</p>" }, "local");
 

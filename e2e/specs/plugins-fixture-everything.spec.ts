@@ -35,8 +35,7 @@ const OPTIONAL_LABELS = [
 const primaryNav = (page: Page) => page.getByRole("listbox", { name: "Primary navigation" });
 const navOption = (page: Page, name: string) =>
   primaryNav(page).getByRole("option", { name: new RegExp(`^${name}`) });
-const pluginRow = (page: Page) =>
-  page.getByRole("button", { name: new RegExp(`^${PLUGIN_NAME}`) });
+const pluginRow = (page: Page) => page.getByRole("button", { name: new RegExp(`^${PLUGIN_NAME}`) });
 
 /** Jumps to the Plugins section through the Settings outline, leaving its heading focused. */
 async function openPluginsSection(page: Page): Promise<void> {
@@ -190,7 +189,10 @@ test.describe("fixture-everything approval @wf:plugins-contributions", () => {
     }
     await capture(page, "plugins-fixture-permissions");
 
-    const approve = dialog.getByRole("button", { name: "Approve this copy and enable", exact: true });
+    const approve = dialog.getByRole("button", {
+      name: "Approve this copy and enable",
+      exact: true,
+    });
     await tabTo(page, approve, { max: 20 });
     await page.keyboard.press("Enter");
     await expect(dialog).toBeHidden();
@@ -223,9 +225,7 @@ test.describe("fixture-everything contributions @wf:plugins-contributions", () =
     library: "oneBookThreeChapters",
     plugins: ["fixture-everything"],
     // The record the approval flow writes: required granted, optional off.
-    pluginApprovals: [
-      { pluginId: "fixture-everything", granted: [...REQUIRED_PERMISSIONS] },
-    ],
+    pluginApprovals: [{ pluginId: "fixture-everything", granted: [...REQUIRED_PERMISSIONS] }],
   });
 
   test("the sidebar entry opens the Plugin page and it renders its content", async ({ page }) => {
@@ -279,7 +279,9 @@ test.describe("fixture-everything contributions @wf:plugins-contributions", () =
     await page.keyboard.press("Enter");
     await expect(page.getByRole("heading", { name: SEED_BOOK.title, level: 1 })).toBeVisible();
     // Wait for the Chapter to be current, so the target resolver finds it.
-    await expect(page.getByRole("textbox", { name: `Text of ${SEED_CHAPTERS[2].title}` })).toBeVisible();
+    await expect(
+      page.getByRole("textbox", { name: `Text of ${SEED_CHAPTERS[2].title}` })
+    ).toBeVisible();
 
     const dialog = await openPalette(page);
     const option = await selectPaletteCommand(page, dialog, "Stamp");
@@ -293,7 +295,9 @@ test.describe("fixture-everything contributions @wf:plugins-contributions", () =
     });
   });
 
-  test("the Settings row the Plugin declares mounts the Plugin's own controls", async ({ page }) => {
+  test("the Settings row the Plugin declares mounts the Plugin's own controls", async ({
+    page,
+  }) => {
     await openPluginsSection(page);
     await expandPluginRow(page);
     // The row's body is the Plugin's Remote UI, not a host placeholder field;
@@ -313,7 +317,9 @@ test.describe("fixture-everything contributions @wf:plugins-contributions", () =
     await page.keyboard.press("Enter");
     await expect(page.getByRole("heading", { name: SEED_BOOK.title, level: 1 })).toBeVisible();
 
-    const button = page.getByRole("toolbar", { name: "Toolbar" }).getByRole("button", { name: "Stamp" });
+    const button = page
+      .getByRole("toolbar", { name: "Toolbar" })
+      .getByRole("button", { name: "Stamp" });
     await expect(button).toBeVisible({ timeout: 15_000 });
     await capture(page, "plugins-fixture-toolbar");
   });
@@ -348,9 +354,9 @@ test.describe("fixture-everything contributions @wf:plugins-contributions", () =
     await page.goto("/");
     // The sidebar entry's label is the Plugin's localized page title.
     const spanishNav = page.getByRole("listbox", { name: "Navegación principal" });
-    await expect(
-      spanishNav.getByRole("option", { name: /^Fixture completo/ })
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(spanishNav.getByRole("option", { name: /^Fixture completo/ })).toBeVisible({
+      timeout: 15_000,
+    });
 
     const dialog = await openPalette(page, "Paleta de comandos");
     // The localized Command's Spanish label.
@@ -368,9 +374,7 @@ test.describe("fixture-everything target Command, four ways @wf:plugins-contribu
   test.use({
     library: "oneBookTwoChapters",
     plugins: ["fixture-everything"],
-    pluginApprovals: [
-      { pluginId: "fixture-everything", granted: [...REQUIRED_PERMISSIONS] },
-    ],
+    pluginApprovals: [{ pluginId: "fixture-everything", granted: [...REQUIRED_PERMISSIONS] }],
   });
 
   test("runs from its Shortcut and names the open Chapter A", async ({ page }) => {

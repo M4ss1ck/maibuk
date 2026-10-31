@@ -100,10 +100,18 @@ export function checkBudgets(report) {
   rows.push(row("remoteUiBurst", percentile(remoteUiBurst, 95), BUDGETS.remoteUiBurstP95Ms));
   if (echoes) {
     rows.push(
-      row("echoHighlightUpdate", percentile(echoHighlightUpdate, 95), BUDGETS.echoHighlightUpdateP95Ms)
+      row(
+        "echoHighlightUpdate",
+        percentile(echoHighlightUpdate, 95),
+        BUDGETS.echoHighlightUpdateP95Ms
+      )
     );
     rows.push(
-      row("echoWorkerRecompute", percentile(echoWorkerRecompute, 95), BUDGETS.echoWorkerRecomputeP95Ms)
+      row(
+        "echoWorkerRecompute",
+        percentile(echoWorkerRecompute, 95),
+        BUDGETS.echoWorkerRecomputeP95Ms
+      )
     );
     rows.push(
       row("echoRefreshLatency", percentile(echoRefreshLatency, 95), BUDGETS.echoRefreshLatencyP95Ms)
@@ -114,13 +122,21 @@ export function checkBudgets(report) {
   rows.push(flagRow("remoteUiEcho text kept", report.remoteUiEchoTextLost === true));
   rows.push(flagRow("remoteUiBurst text kept", report.remoteUiBurstTextLost === true));
 
-  const required = { baseline, installed20, persistent3, commandToEffect, remoteUiEcho, remoteUiBurst };
+  const required = {
+    baseline,
+    installed20,
+    persistent3,
+    commandToEffect,
+    remoteUiEcho,
+    remoteUiBurst,
+  };
   if (echoes) {
     required.echoHighlightUpdate = echoHighlightUpdate;
     required.echoWorkerRecompute = echoWorkerRecompute;
     required.echoRefreshLatency = echoRefreshLatency;
   }
-  for (const [id, samples] of Object.entries(startToReady)) required[`startToReady ${id}`] = samples;
+  for (const [id, samples] of Object.entries(startToReady))
+    required[`startToReady ${id}`] = samples;
   const empty = Object.keys(required).filter((name) => required[name].length === 0);
 
   // "Cannot measure" takes precedence over a miss, so an incomplete report

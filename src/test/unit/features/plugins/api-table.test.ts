@@ -41,7 +41,14 @@ import {
   type PluginApiMethods,
 } from "@/plugin-sdk/api.generated";
 
-const UNGATED = new Set(["storage", "notifications", "navigation", "language", "permissions", "toolbar"]);
+const UNGATED = new Set([
+  "storage",
+  "notifications",
+  "navigation",
+  "language",
+  "permissions",
+  "toolbar",
+]);
 
 describe("PLUGIN_API_TABLE", () => {
   it("names every method <namespace>.<verb> with unique ids", () => {
@@ -487,8 +494,6 @@ describe("generated types", () => {
   });
 
   it("pass the Change Feed's own shapes through library.changed, so they cannot drift", () => {
-    expectTypeOf<PluginApiEventPayloadOf<"library.changed">>().toEqualTypeOf<
-      Change | BulkSignal
-    >();
+    expectTypeOf<PluginApiEventPayloadOf<"library.changed">>().toEqualTypeOf<Change | BulkSignal>();
   });
 });

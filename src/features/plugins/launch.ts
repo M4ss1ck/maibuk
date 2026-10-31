@@ -202,9 +202,7 @@ async function syncInstalledApproval(
   if (!copy) return;
   const approval = getPluginApproval(builtIn.id);
   if (approval === null) {
-    savePluginApproval(
-      approveBuiltInCopy(copy.manifest, copy.hash, copy.digests, builtIn.hash)
-    );
+    savePluginApproval(approveBuiltInCopy(copy.manifest, copy.hash, copy.digests, builtIn.hash));
     return;
   }
   savePluginApproval(repinnedBuiltInApproval(approval, copy, builtIn));

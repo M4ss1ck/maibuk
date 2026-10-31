@@ -323,11 +323,16 @@ describe("palette-index empty query", () => {
     ]);
     expect(
       sectionIds(
-        searchPalette(index, query("commands", "", { recent: commandsRecent.map((entry) => entry.key) }))
+        searchPalette(
+          index,
+          query("commands", "", { recent: commandsRecent.map((entry) => entry.key) })
+        )
       )
     ).toEqual(["recent"]);
     expect(
-      sectionIds(searchPalette(index, query("library", "", { recent: notes.map((note) => note.key) })))
+      sectionIds(
+        searchPalette(index, query("library", "", { recent: notes.map((note) => note.key) }))
+      )
     ).toEqual(["recent"]);
   });
 
@@ -336,9 +341,7 @@ describe("palette-index empty query", () => {
       ...PALETTE_SUGGESTED_COMMAND_KEYS.map((key) => suggestedItem(key)),
       ...PALETTE_SUGGESTED_PAGE_KEYS.map((key) => suggestedItem(key)),
     ]);
-    expect(sectionIds(searchPalette(index, query("commands", "label")))).not.toContain(
-      "suggested"
-    );
+    expect(sectionIds(searchPalette(index, query("commands", "label")))).not.toContain("suggested");
     expect(sectionIds(searchPalette(index, query("library", "label")))).not.toContain("suggested");
     expect(searchPalette(index, query("library", "", { page: "notes" }))).toEqual([]);
   });

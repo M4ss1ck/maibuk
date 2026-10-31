@@ -80,7 +80,10 @@ describe("AGENTS.md pointers", () => {
   it("say when to read each target, and every target exists", () => {
     expect(rows.length).toBeGreaterThan(5);
     for (const row of rows) {
-      const [when, read] = row.split("|").slice(1, 3).map((cell) => cell.trim());
+      const [when, read] = row
+        .split("|")
+        .slice(1, 3)
+        .map((cell) => cell.trim());
       expect(when, row).toMatch(/^Before |^When |^Every /);
       const targets = [...read.matchAll(/`([^`]+\.md|docs\/adr\/)`/g)].map((m) => m[1]);
       expect(targets.length, row).toBeGreaterThan(0);

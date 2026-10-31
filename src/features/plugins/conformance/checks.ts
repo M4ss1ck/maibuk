@@ -90,7 +90,8 @@ export const T8_UNRESPONSIVE_DETAIL = "stopped as unresponsive before reaching t
 export const RENDERER_DIED_DETAIL = "renderer-died";
 
 /** T8's detail when a healthy Plugin beside the hostile one stopped answering (#516). */
-export const T8_NEIGHBOUR_DIED_DETAIL = "the healthy Plugin beside it did not answer after the stop";
+export const T8_NEIGHBOUR_DIED_DETAIL =
+  "the healthy Plugin beside it did not answer after the stop";
 
 /**
  * The stop reasons T8 accepts. Under the Android QuickJS engine (#516) only
@@ -354,9 +355,7 @@ export async function runConformanceChecks(
   );
 
   await record(
-    await measure(FILE_GRANTS_CHECK_ID, async () =>
-      fileGrantsCheck(await seam.probeFileGrants())
-    )
+    await measure(FILE_GRANTS_CHECK_ID, async () => fileGrantsCheck(await seam.probeFileGrants()))
   );
 
   return checks;

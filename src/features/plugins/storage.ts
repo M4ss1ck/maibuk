@@ -61,10 +61,10 @@ export async function setPluginStorageValue(
 /** Removes one key; a missing key is a no-op. */
 export async function deletePluginStorageValue(pluginId: string, key: string): Promise<void> {
   const db = await getDatabase();
-  await db.execute(
-    `DELETE FROM "${PLUGIN_STORAGE_TABLE}" WHERE plugin_id = ? AND "key" = ?`,
-    [pluginId, key]
-  );
+  await db.execute(`DELETE FROM "${PLUGIN_STORAGE_TABLE}" WHERE plugin_id = ? AND "key" = ?`, [
+    pluginId,
+    key,
+  ]);
 }
 
 /** Erases a whole namespace, its dataVersion record included, in one transaction. */

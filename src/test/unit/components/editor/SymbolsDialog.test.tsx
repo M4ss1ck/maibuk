@@ -501,9 +501,13 @@ describe("SymbolsDialog", () => {
       const recents = await screen.findByRole("listbox", { name: /recent/i });
       const results = screen.getByRole("listbox", { name: "symbols.grid" });
 
-      within(results).getByRole("option", { name: /EN DASH/ }).focus();
+      within(results)
+        .getByRole("option", { name: /EN DASH/ })
+        .focus();
       await user.keyboard("{Enter}");
-      within(recents).getByRole("option", { name: /DAGGER/ }).focus();
+      within(recents)
+        .getByRole("option", { name: /DAGGER/ })
+        .focus();
       await user.keyboard("{Enter}");
 
       expect(inserted).toEqual(["\u2013", "\u2020"]);

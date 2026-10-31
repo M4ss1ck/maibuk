@@ -135,10 +135,7 @@ export async function createCanvasRow(
 
   const stored = await fetchStoredCanvas(id);
   // A read-back failure after the durable write still emits below.
-  await emitChange(
-    { entity: "canvas", id, origin, kind: "content" },
-    viewMeta
-  );
+  await emitChange({ entity: "canvas", id, origin, kind: "content" }, viewMeta);
   return (
     stored ?? {
       id,
@@ -182,10 +179,7 @@ export async function updateCanvasDocRow(
 
   const stored = await fetchStoredCanvas(id);
   // A read-back failure after the durable write still emits below.
-  await emitChange(
-    { entity: "canvas", id, origin, kind: "content" },
-    viewMeta
-  );
+  await emitChange({ entity: "canvas", id, origin, kind: "content" }, viewMeta);
   return stored;
 }
 
@@ -254,10 +248,7 @@ export async function reorderCanvasRows(
       affected = result.rowsAffected ?? 0;
     } catch (error) {
       for (const id of persistedIds) {
-        await emitChange(
-          { entity: "canvas", id, origin, kind: "metadata" },
-          viewMeta
-        );
+        await emitChange({ entity: "canvas", id, origin, kind: "metadata" }, viewMeta);
       }
       throw error;
     }
@@ -265,10 +256,7 @@ export async function reorderCanvasRows(
   }
 
   for (const id of persistedIds) {
-    await emitChange(
-      { entity: "canvas", id, origin, kind: "metadata" },
-      viewMeta
-    );
+    await emitChange({ entity: "canvas", id, origin, kind: "metadata" }, viewMeta);
   }
 }
 
@@ -295,10 +283,7 @@ export async function deleteCanvasRow(
     { sql: "DELETE FROM canvases WHERE id = ?", params: [id] },
     deleteSearchItemStatement("canvas", id),
   ]);
-  await emitChange(
-    { entity: "canvas", id, origin, kind: "content" },
-    viewMeta
-  );
+  await emitChange({ entity: "canvas", id, origin, kind: "content" }, viewMeta);
 }
 
 /**

@@ -50,12 +50,7 @@ function changeLabelKey(
   return null;
 }
 
-export function PluginReviewDialog({
-  isOpen,
-  onClose,
-  entry,
-  onApprove,
-}: PluginReviewDialogProps) {
+export function PluginReviewDialog({ isOpen, onClose, entry, onApprove }: PluginReviewDialogProps) {
   const { t } = useTranslation();
   const translate = t as unknown as PermissionTranslate;
   // Null until the author changes a toggle, so an open dialog starts with every
@@ -71,7 +66,10 @@ export function PluginReviewDialog({
   const { manifest, review } = entry;
   const required = manifest.permissions.required;
   const optional = manifest.permissions.optional;
-  const declared = [...required, ...optional.filter((permission) => !required.includes(permission))];
+  const declared = [
+    ...required,
+    ...optional.filter((permission) => !required.includes(permission)),
+  ];
   const chosen = selection ?? optional;
   const files = review.files;
   const fileSections: Array<{ key: string; label: string; paths: string[] }> = [
@@ -132,9 +130,7 @@ export function PluginReviewDialog({
           onToggle={(permission, next) =>
             setSelection((current) => {
               const base = current ?? optional;
-              return next
-                ? [...base, permission]
-                : base.filter((entry) => entry !== permission);
+              return next ? [...base, permission] : base.filter((entry) => entry !== permission);
             })
           }
           labelSuffix={(permission) => {

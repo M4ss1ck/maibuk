@@ -333,9 +333,7 @@ describe("endpoint requests", () => {
       client.onEndpointRequest(() => ({ status: 200 }));
       const sink = recordingSink();
       broker.requestEndpoint(request(), sink.sink);
-      await vi.waitFor(() =>
-        expect(sink.respond).toHaveBeenCalledWith(200, [], undefined, false)
-      );
+      await vi.waitFor(() => expect(sink.respond).toHaveBeenCalledWith(200, [], undefined, false));
 
       vi.advanceTimersByTime(ENDPOINT_ANSWER_DEADLINE_MS);
 

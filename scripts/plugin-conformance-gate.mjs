@@ -23,10 +23,7 @@ const repoRoot = join(scriptDir, "..");
  * lane's own `docs/research/plugins-conformance.results.json`. A Tauri or wry
  * bump cannot merge without a fresh `pnpm conformance:plugins` that refreshes it.
  */
-export const GATE_RESULTS_PATH = join(
-  repoRoot,
-  "docs/research/plugins-conformance.results.json"
-);
+export const GATE_RESULTS_PATH = join(repoRoot, "docs/research/plugins-conformance.results.json");
 
 /** The lockfile whose gated package versions the gate checks. */
 export const CARGO_LOCK_PATH = join(repoRoot, "src-tauri/Cargo.lock");
@@ -199,7 +196,7 @@ export function checkConformanceGate(cargoLockText, resultsJson) {
   // (not run yet) is fine and adds no problem.
   const platforms = resultsJson?.platforms;
   if (platforms !== null && typeof platforms === "object" && !Array.isArray(platforms)) {
-    if (Object.prototype.hasOwnProperty.call(platforms, WINDOWS_FRAME_PLATFORM)) {
+    if (Object.hasOwn(platforms, WINDOWS_FRAME_PLATFORM)) {
       problems.push(...checkWindowsFrameRecord(platforms[WINDOWS_FRAME_PLATFORM]));
     }
   }

@@ -210,7 +210,7 @@ const NotesTaskDndBehavior = Extension.create({
 interface NoteEditorProps {
   note: Note;
   /** Resolves with the note as stored (null or nothing when unknown). */
-  onSave: (input: UpdateNoteInput) => Promise<Note | null | void>;
+  onSave: (input: UpdateNoteInput) => Promise<Note | null> | Promise<void>;
   onReturnToBook?: () => void;
   returnLabel?: string;
   suppressRestore?: boolean;
@@ -394,7 +394,9 @@ export function NoteEditor({
   const saveNoteFields = useCallback(
     (fields: Omit<UpdateNoteInput, "id">) => {
       void saveQueue
-        .enqueue(() => onSave({ id: note.id, ...fields }))
+        .enqueue(async () => {
+          await onSave({ id: note.id, ...fields });
+        })
         .catch((error) => {
           console.error("Failed to save note:", error);
           toast.error(t("common.error"));

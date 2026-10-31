@@ -37,7 +37,9 @@ function sleep(ms: number): Promise<void> {
 export function webkitgtkVersion(): string | null {
   for (const pkg of WEBKITGTK_PACKAGES) {
     try {
-      const version = execFileSync("pkg-config", ["--modversion", pkg], { encoding: "utf8" }).trim();
+      const version = execFileSync("pkg-config", ["--modversion", pkg], {
+        encoding: "utf8",
+      }).trim();
       if (version !== "") return version;
     } catch {
       // try the next package; a missing pkg-config fails every one.

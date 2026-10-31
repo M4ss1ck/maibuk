@@ -18,11 +18,9 @@ const {
   removeCanvasRow,
   applyCanvasSnapshotData,
 } = await import("@/features/canvas/write");
-const {
-  isEntityChange,
-  onChange,
-  resetChangeFeedForTests,
-} = await import("@/features/sync/change-feed");
+const { isEntityChange, onChange, resetChangeFeedForTests } = await import(
+  "@/features/sync/change-feed"
+);
 const { getTombstone } = await import("@/features/sync/tombstones");
 
 let changes: Change[];

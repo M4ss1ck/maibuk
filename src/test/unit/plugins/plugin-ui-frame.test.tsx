@@ -40,9 +40,7 @@ function frameElement(extra: Partial<RemoteNodeSerialization> = {}): RemoteNodeS
 function frameHost(customUi: boolean): PluginFrameHost {
   return {
     manifest: { customUi } as PluginManifest,
-    files: [
-      { path: "ui/report.html", bytes: new TextEncoder().encode("<html></html>") },
-    ],
+    files: [{ path: "ui/report.html", bytes: new TextEncoder().encode("<html></html>") }],
     sendFrame: () => {},
   };
 }
@@ -111,9 +109,7 @@ describe("the Frame kit component", () => {
   });
 
   it("refuses a Frame without its required title", () => {
-    const { violations } = validate(
-      frameElement({ properties: { src: "ui/report.html" } })
-    );
+    const { violations } = validate(frameElement({ properties: { src: "ui/report.html" } }));
     expect(violations[0]?.code).toBe("invalid-prop");
     expect(violations[0]?.prop).toBe("title");
   });

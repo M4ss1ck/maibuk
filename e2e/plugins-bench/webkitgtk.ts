@@ -16,7 +16,15 @@
 //
 // Not in CI: real app timing on a shared machine is noise.
 
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { resolve } from "node:path";
 
 import { BENCH_SEED_FILE, BENCH_COLLECTOR_PATHS } from "@/features/plugins/bench/protocol";

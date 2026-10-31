@@ -44,9 +44,7 @@ let testDb: DatabaseAdapter;
 type SearchSuccess = Extract<PluginApiOutput<"library.search">, { results: unknown }>;
 type SearchResult = SearchSuccess["results"][number];
 
-function resultsOf(
-  result: PluginApiOutput<"library.search">
-): asserts result is SearchSuccess {
+function resultsOf(result: PluginApiOutput<"library.search">): asserts result is SearchSuccess {
   if ("error" in result) throw new Error(`unexpected search error: ${result.message}`);
 }
 
@@ -232,10 +230,7 @@ describe("library.search through the broker (#641)", () => {
     const second = await createBookRow({ title: "Second", authorName: "Author" }, "local");
     await seedChapter(first.id, "<p>shared harbour</p>");
     await seedChapter(second.id, "<p>shared harbour</p>");
-    await createNoteRow(
-      { title: "Unfiled", content: "<p>shared harbour</p>" },
-      "local"
-    );
+    await createNoteRow({ title: "Unfiled", content: "<p>shared harbour</p>" }, "local");
     const canvas = await createCanvasRow({ title: "Board" }, "local");
     await updateCanvasDocRow(
       canvas.id,
@@ -410,12 +405,12 @@ describe("library.search through the broker (#641)", () => {
 
     const { client, close } = connectLibraryWritePlugin({ granted: ["library:read"] });
     try {
-      await expect(
-        client.library.search({ query: "x", limit: 0 })
-      ).rejects.toMatchObject({ code: "invalid-params" });
-      await expect(
-        client.library.search({ query: "x", limit: 51 })
-      ).rejects.toMatchObject({ code: "invalid-params" });
+      await expect(client.library.search({ query: "x", limit: 0 })).rejects.toMatchObject({
+        code: "invalid-params",
+      });
+      await expect(client.library.search({ query: "x", limit: 51 })).rejects.toMatchObject({
+        code: "invalid-params",
+      });
       await expect(client.library.search({ query: "" })).rejects.toMatchObject({
         code: "invalid-params",
       });
@@ -428,12 +423,12 @@ describe("library.search through the broker (#641)", () => {
       await expect(
         client.library.search({ query: "x", kinds: ["poem"] } as unknown as { query: string })
       ).rejects.toMatchObject({ code: "invalid-params" });
-      await expect(
-        client.library.search({ query: "x", kinds: [] })
-      ).rejects.toMatchObject({ code: "invalid-params" });
-      await expect(
-        client.library.search({ query: "x", cursor: "" })
-      ).rejects.toMatchObject({ code: "invalid-params" });
+      await expect(client.library.search({ query: "x", kinds: [] })).rejects.toMatchObject({
+        code: "invalid-params",
+      });
+      await expect(client.library.search({ query: "x", cursor: "" })).rejects.toMatchObject({
+        code: "invalid-params",
+      });
     } finally {
       close();
     }

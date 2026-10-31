@@ -17,7 +17,11 @@ import type {
   PluginStreamResult,
 } from "@/features/plugins/types";
 import type { PluginFetchAdapter } from "@/lib/platform/types";
-import { PLUGIN_STREAM_CHUNK_MAX_BYTES, PluginApiError, utf8ByteLength } from "@/plugin-sdk/protocol";
+import {
+  PLUGIN_STREAM_CHUNK_MAX_BYTES,
+  PluginApiError,
+  utf8ByteLength,
+} from "@/plugin-sdk/protocol";
 
 type FetchChunk = PluginApiChunk<"network.fetch">;
 type FetchOutput = PluginApiOutput<"network.fetch">;

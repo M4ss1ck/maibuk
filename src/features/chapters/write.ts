@@ -176,10 +176,7 @@ export async function createChapterRow(
     createdAt: new Date(now * 1000),
     updatedAt: new Date(now * 1000),
   };
-  await emitChange(
-    { entity: "book", id: input.bookId, origin, kind: "content" },
-    viewMeta
-  );
+  await emitChange({ entity: "book", id: input.bookId, origin, kind: "content" }, viewMeta);
   if (parentError) throw parentError;
   return own;
 }
@@ -273,10 +270,7 @@ export async function updateChapterRow(
     // write leaves the Chapter unchanged rather than silently unsearchable.
     await db.executeAtomic([
       { sql: updateSql, params: values as (string | number | null)[] },
-      ...chapterSearchStatements(
-        { id, bookId: existing.bookId, content: normalizedContent },
-        now
-      ),
+      ...chapterSearchStatements({ id, bookId: existing.bookId, content: normalizedContent }, now),
     ]);
   } else {
     await db.execute(updateSql, values);
@@ -328,10 +322,7 @@ export async function updateChapterRow(
       contentHtml: normalizedContent,
     }).catch(() => {});
   }
-  await emitChange(
-    { entity: "book", id: existing.bookId, origin, kind },
-    viewMeta
-  );
+  await emitChange({ entity: "book", id: existing.bookId, origin, kind }, viewMeta);
   if (parentError) throw parentError;
   return own;
 }
@@ -381,10 +372,7 @@ export async function deleteChapterRow(
     } catch (error) {
       parentError = error;
     }
-    await emitChange(
-      { entity: "book", id: rows[0].book_id, origin, kind: "content" },
-      viewMeta
-    );
+    await emitChange({ entity: "book", id: rows[0].book_id, origin, kind: "content" }, viewMeta);
     if (parentError) throw parentError;
   }
 }
@@ -417,10 +405,7 @@ export async function reorderChapterRows(
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       if (persisted > 0) {
-        await emitChange(
-          { entity: "book", id: bookId, origin, kind: "metadata" },
-          viewMeta
-        );
+        await emitChange({ entity: "book", id: bookId, origin, kind: "metadata" }, viewMeta);
       }
       throw new Error(`Failed to reorder chapter ${i + 1}/${chapterIds.length}: ${detail}`);
     }
@@ -428,9 +413,6 @@ export async function reorderChapterRows(
   }
 
   if (persisted > 0) {
-    await emitChange(
-      { entity: "book", id: bookId, origin, kind: "metadata" },
-      viewMeta
-    );
+    await emitChange({ entity: "book", id: bookId, origin, kind: "metadata" }, viewMeta);
   }
 }

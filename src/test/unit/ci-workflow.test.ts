@@ -36,6 +36,7 @@ describe("CI workflow", () => {
 
   it("shards the suite and enforces the coverage thresholds only on the merged report", () => {
     const tests = job("tests");
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: asserts the literal GitHub Actions expression in ci.yml.
     expect(tests).toContain("--shard=${{ matrix.shard }}/");
     expect(tests).toContain("--reporter=blob");
     for (const metric of ["lines", "functions", "statements", "branches"]) {

@@ -164,11 +164,9 @@ self.onmessage = (event) => {
           (message) => message.kind === "module-created" && message.id === 1
         );
         const channel = new MessageChannel();
-        frame.contentWindow?.postMessage(
-          { kind: "start-worker", url: created.url },
-          "*",
-          [channel.port2]
-        );
+        frame.contentWindow?.postMessage({ kind: "start-worker", url: created.url }, "*", [
+          channel.port2,
+        ]);
         await waitFor(
           (message) => message.kind === "worker-message" || message.kind === "worker-error"
         );

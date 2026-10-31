@@ -118,7 +118,9 @@ describe("plugins bench budget check", () => {
 
   it("holds the launch delta at the 20 ms floor and fails just past it", () => {
     const pass = checkBudgets(
-      baseReport({ launch: { baseline: [100, 100], installed20: [120, 120], persistent3: [100, 100] } })
+      baseReport({
+        launch: { baseline: [100, 100], installed20: [120, 120], persistent3: [100, 100] },
+      })
     );
     expect(pass.exitCode).toBe(0);
     expect(pass.rows.find((row) => row.name === "launch delta")?.budget).toBe(20);
@@ -175,7 +177,9 @@ describe("plugins bench budget check", () => {
       [150, 0],
       [150.1, 1],
     ] as const) {
-      const result = checkBudgets(baseReport({ startToReady: { "maibuk.everything": [boundary, boundary] } }));
+      const result = checkBudgets(
+        baseReport({ startToReady: { "maibuk.everything": [boundary, boundary] } })
+      );
       expect(result.exitCode).toBe(expected);
     }
   });
@@ -262,7 +266,9 @@ describe("plugins bench budget check", () => {
 
   it("returns exitCode 2 when a required sample array is empty", () => {
     expect(checkBudgets(baseReport({ commandToEffect: [] })).exitCode).toBe(2);
-    expect(checkBudgets(baseReport({ startToReady: { "maibuk.everything": [] } })).exitCode).toBe(2);
+    expect(checkBudgets(baseReport({ startToReady: { "maibuk.everything": [] } })).exitCode).toBe(
+      2
+    );
     const result = checkBudgets(baseReport({ commandToEffect: [] }));
     expect(result.rows.find((row) => row.name === "commandToEffect")).toMatchObject({
       value: null,

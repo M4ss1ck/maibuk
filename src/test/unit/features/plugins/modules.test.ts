@@ -86,9 +86,9 @@ describe("planPluginModules()", () => {
   });
 
   it("refuses absolute URLs", async () => {
-    expect(await codes(folder({ "index.js": 'import x from "https://example.com/x.js";' }))).toEqual(
-      ["url-import"]
-    );
+    expect(
+      await codes(folder({ "index.js": 'import x from "https://example.com/x.js";' }))
+    ).toEqual(["url-import"]);
     expect(await codes(folder({ "index.js": 'import x from "/abs.js";' }))).toEqual(["url-import"]);
     expect(await codes(folder({ "index.js": 'import x from "data:text/javascript,1";' }))).toEqual([
       "url-import",

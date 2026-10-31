@@ -102,9 +102,7 @@ export function SettingRow({
         <p className={hidden ?? labelClassName ?? "font-medium"}>{label}</p>
         {descriptionOverride ??
           (descriptionKey ? (
-            <p className={hidden ?? "text-sm text-muted-foreground"}>
-              {translate(descriptionKey)}
-            </p>
+            <p className={hidden ?? "text-sm text-muted-foreground"}>{translate(descriptionKey)}</p>
           ) : descriptionLiteral ? (
             <p className={hidden ?? "text-sm text-muted-foreground"}>{descriptionLiteral}</p>
           ) : null)}

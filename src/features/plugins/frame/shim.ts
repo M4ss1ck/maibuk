@@ -179,7 +179,9 @@ export function frameShim(win: Window): void {
     for (const element of parsed.querySelectorAll('link[rel="stylesheet"]')) {
       rewriteReference(element, "href", htmlPath);
     }
-    for (const element of parsed.querySelectorAll("img[src], source[src], video[src], audio[src]")) {
+    for (const element of parsed.querySelectorAll(
+      "img[src], source[src], video[src], audio[src]"
+    )) {
       rewriteReference(element, "src", htmlPath);
     }
     for (const element of parsed.querySelectorAll("[style]")) {

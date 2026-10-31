@@ -6,7 +6,10 @@ import {
   registerPluginContributions,
   resetPluginContributionsForTests,
 } from "@/features/plugins/contributions";
-import { resetPluginEditorHostForTests, registerPluginEditor } from "@/features/plugins/editor-host";
+import {
+  resetPluginEditorHostForTests,
+  registerPluginEditor,
+} from "@/features/plugins/editor-host";
 import { readPluginManifest } from "@/features/plugins/runtime";
 import { PLUGIN_MANIFEST, pluginFolder } from "@/test/support/plugin-fixtures";
 import type { DatabaseAdapter } from "@/lib/platform/types";
@@ -92,9 +95,7 @@ describe("createPluginHandlers(): the wired rows", () => {
     try {
       const open = createPluginHandlers(PLUGIN_MANIFEST)["navigation.openEntity"];
       if (!open) throw new Error("navigation.openEntity is not wired");
-      await expect(
-        open({ entity: { kind: "chapter", id: "c1" } }, context)
-      ).resolves.toBeNull();
+      await expect(open({ entity: { kind: "chapter", id: "c1" } }, context)).resolves.toBeNull();
       expect(navigate).toHaveBeenCalledWith("/book/b1", {
         state: { openChapterId: "c1" },
       });
@@ -160,9 +161,9 @@ describe("createPluginHandlers(): the wired rows", () => {
     expect(
       handlers["editor.replace"]?.({ range: { from: 0, to: 1 }, content: { text: "x" } }, context)
     ).toEqual({ status: "no-target" });
-    expect(
-      handlers["editor.setHighlights"]?.({ kind: "info", ranges: [] }, context)
-    ).toEqual({ status: "no-target" });
+    expect(handlers["editor.setHighlights"]?.({ kind: "info", ranges: [] }, context)).toEqual({
+      status: "no-target",
+    });
   });
 
   it("serves the focused editor through the wired handlers", async () => {
@@ -402,8 +403,9 @@ describe("createPluginHandlers(): File Grants", () => {
     if (!read || !list) throw new Error("files rows are not wired");
     const [grant] = await store.list("tracer");
 
-    await expect(read({ grant: grant.grant, offset: 0, length: 1 }, { pluginId: "other" })).rejects
-      .toMatchObject({ name: "PluginApiError", code: "file-missing" });
+    await expect(
+      read({ grant: grant.grant, offset: 0, length: 1 }, { pluginId: "other" })
+    ).rejects.toMatchObject({ name: "PluginApiError", code: "file-missing" });
     await expect(list({}, { pluginId: "other" })).resolves.toEqual([]);
   });
 

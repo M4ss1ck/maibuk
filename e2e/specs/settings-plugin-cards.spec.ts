@@ -10,12 +10,7 @@
 import type { Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { runningAnimationCount } from "../support/layout";
-import {
-  expectFocusWithin,
-  isFocusWithin,
-  pressUntilFocused,
-  tabTo,
-} from "../support/keyboard";
+import { expectFocusWithin, isFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
 import { selectPaletteCommand } from "../support/palette";
 import { expect, test } from "../support/test";
 
@@ -37,8 +32,7 @@ const cardTrigger = (page: Page) => card(page).getByRole("button").first();
 const enableSwitch = (page: Page) =>
   page.getByRole("switch", { name: `Enable ${PLUGIN_NAME}`, exact: true });
 /** The nested Permissions accordion's trigger. */
-const permissionsTrigger = (page: Page) =>
-  page.getByRole("button", { name: /Plugin permissions/ });
+const permissionsTrigger = (page: Page) => page.getByRole("button", { name: /Plugin permissions/ });
 
 /** Jumps to the Plugins section through the Settings outline, leaving its heading focused. */
 async function openPluginsSection(page: Page): Promise<void> {
@@ -84,9 +78,7 @@ test.use({
 });
 
 test.describe("Settings Plugin cards @wf:settings-plugin-cards", () => {
-  test("first sight: the Echoes switch is off and its entry is not available", async ({
-    page,
-  }) => {
+  test("first sight: the Echoes switch is off and its entry is not available", async ({ page }) => {
     await page.goto("/");
     // The nav is up once a core entry is; the disabled Built-in contributes no
     // sidebar entry of its own.
@@ -132,9 +124,7 @@ test.describe("Settings Plugin cards @wf:settings-plugin-cards", () => {
     await expect(page.getByRole("heading", { name: PLUGIN_NAME, level: 1 })).toBeVisible();
   });
 
-  test("the card expands to the description and the pre-granted Permissions", async ({
-    page,
-  }) => {
+  test("the card expands to the description and the pre-granted Permissions", async ({ page }) => {
     await openPluginsSection(page);
     const trigger = cardTrigger(page);
     await tabTo(page, trigger, { max: 40 });
@@ -156,13 +146,13 @@ test.describe("Settings Plugin cards @wf:settings-plugin-cards", () => {
     // leaves no band of padding below it.
     const permissionsBox = await permissions.locator("xpath=..").boundingBox();
     const permissionsTriggerBox = await permissions.boundingBox();
-    expect((permissionsBox?.height ?? 0) - (permissionsTriggerBox?.height ?? 0)).toBeLessThanOrEqual(2);
+    expect(
+      (permissionsBox?.height ?? 0) - (permissionsTriggerBox?.height ?? 0)
+    ).toBeLessThanOrEqual(2);
     await tabTo(page, permissions, { max: 40 });
     await page.keyboard.press("Enter");
     await expect(permissions).toHaveAttribute("aria-expanded", "true");
-    await expect(
-      card(page).getByRole("checkbox", { name: /Read your Library/ })
-    ).toBeVisible();
+    await expect(card(page).getByRole("checkbox", { name: /Read your Library/ })).toBeVisible();
   });
 
   test("the collapsed Permissions panel takes no space on first open, and still animates", async ({

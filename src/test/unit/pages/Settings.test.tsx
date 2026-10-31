@@ -19,7 +19,6 @@ vi.mock("../../../i18n", () => ({
   detectSystemLocale: vi.fn().mockResolvedValue("en"),
 }));
 
-
 vi.mock("../../../lib/platform", () => ({
   IS_WEB: true,
   IS_TAURI: false,

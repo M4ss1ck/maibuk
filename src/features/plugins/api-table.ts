@@ -266,7 +266,11 @@ export const PLUGIN_API_TABLE = [
       matchCase: z.boolean().optional(),
       wholeWord: z.boolean().optional(),
       regex: z.boolean().optional(),
-      kinds: z.array(z.enum(["book", "chapter", "note", "canvas"])).min(1).max(4).optional(),
+      kinds: z
+        .array(z.enum(["book", "chapter", "note", "canvas"]))
+        .min(1)
+        .max(4)
+        .optional(),
       bookId: id.optional(),
       limit: z.int().min(1).max(50).optional(),
       cursor: z.string().min(1).max(4096).nullable().optional(),
@@ -804,8 +808,7 @@ export const PLUGIN_API_EVENTS = [
   }),
   defineApiEvent({
     id: "editor.contentChanged",
-    description:
-      "The target editor's content or language changed; sent once per typing burst.",
+    description: "The target editor's content or language changed; sent once per typing burst.",
     payload: z.strictObject({ entity: editorEntityRef }),
     permission: "editor:read",
   }),

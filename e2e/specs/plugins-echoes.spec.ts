@@ -21,7 +21,8 @@ const navOption = (page: Page, name: string) =>
 
 /** A Chapter of the Book the Chapter editor has open, named in the Chapter list. */
 const chapterGrid = (page: Page) => page.getByRole("grid", { name: "Chapters" });
-const chapterRow = (page: Page, title: string) => chapterGrid(page).getByRole("row", { name: title });
+const chapterRow = (page: Page, title: string) =>
+  chapterGrid(page).getByRole("row", { name: title });
 
 /** The report's active tab's listbox, by its tab name. */
 const listbox = (page: Page, name: string) => page.getByRole("listbox", { name });
@@ -85,7 +86,11 @@ test.describe("Echoes report @wf:plugins-echoes @sc:plugin.maibuk-echoes.openEch
     await expect(navOption(page, "Echoes")).toBeVisible({ timeout: 60_000 });
 
     await openEchoesFromPalette(page);
-    await expect(nearbyList(page).getByRole("option", { name: /harbor/ }).first()).toBeVisible({
+    await expect(
+      nearbyList(page)
+        .getByRole("option", { name: /harbor/ })
+        .first()
+    ).toBeVisible({
       timeout: 20_000,
     });
   });
@@ -93,7 +98,11 @@ test.describe("Echoes report @wf:plugins-echoes @sc:plugin.maibuk-echoes.openEch
   test("opens from the sidebar entry and shows the same page", async ({ page }) => {
     await page.goto("/");
     await openEchoesFromSidebar(page);
-    await expect(nearbyList(page).getByRole("option", { name: /harbor/ }).first()).toBeVisible({
+    await expect(
+      nearbyList(page)
+        .getByRole("option", { name: /harbor/ })
+        .first()
+    ).toBeVisible({
       timeout: 20_000,
     });
   });

@@ -61,7 +61,10 @@ export interface ChangeFeedMeta {
 /** Meta for a store's own write, which already re-read its view. */
 export const STORE_VIEW: ChangeFeedMeta = Object.freeze({ viewUpdated: true });
 
-export type ChangeListener = (signal: ChangeFeedSignal, meta?: ChangeFeedMeta) => void | Promise<void>;
+export type ChangeListener = (
+  signal: ChangeFeedSignal,
+  meta?: ChangeFeedMeta
+) => void | Promise<void>;
 
 export function isEntityChange(signal: ChangeFeedSignal): signal is Change {
   return "entity" in signal;
@@ -84,10 +87,7 @@ const listeners = new Set<ChangeListener>();
  * never turns a persisted save into a failure and never blocks the remaining
  * subscribers. Never rejects.
  */
-export async function emitChange(
-  signal: ChangeFeedSignal,
-  meta?: ChangeFeedMeta
-): Promise<void> {
+export async function emitChange(signal: ChangeFeedSignal, meta?: ChangeFeedMeta): Promise<void> {
   for (const listener of [...listeners]) {
     try {
       await listener(signal, meta);

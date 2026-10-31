@@ -29,7 +29,11 @@ import {
   toChapter,
 } from "@/features/chapters/write";
 import { reindexSource } from "@/features/links/link-index";
-import { bookSearchStatements, chapterSearchStatements, deleteSearchItemStatement } from "@/features/search/statements";
+import {
+  bookSearchStatements,
+  chapterSearchStatements,
+  deleteSearchItemStatement,
+} from "@/features/search/statements";
 import { appLanguage } from "@/features/settings/app-language";
 import type { Book, BookStatus, CreateBookInput, UpdateBookInput } from "@/features/books/types";
 import type { BookSnapshot } from "@/features/sync/types";

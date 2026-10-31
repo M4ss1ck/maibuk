@@ -152,7 +152,6 @@ export function NoteListItem({
   );
   useItemCommands(rowRef, actions, { enabled: !isEditing });
 
-
   const commitTitle = () => {
     const nextTitle = draftTitle.trim();
     if (nextTitle && nextTitle !== note.title) {
