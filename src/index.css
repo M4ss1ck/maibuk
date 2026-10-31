@@ -1659,7 +1659,6 @@ li.footnote-item,
   animation: logo-entrance 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Dropdown menu entrance */
 /* An Update download bar in the New chip's amber, so the bar and the badge read
    as one thing. The fill is the chip's text color: 6.4:1 on the track in light,
    10.4:1 in dark (the chip's border color is under 3:1). `appearance: none` leaves an indeterminate bar blank in WebKit,

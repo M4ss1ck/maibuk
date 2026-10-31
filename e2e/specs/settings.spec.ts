@@ -62,7 +62,7 @@ test.describe("Settings theme @wf:settings-theme", () => {
 
   // Issue #671: the browser draws scrollbars and native controls from
   // color-scheme, so it must follow the theme, live and without a reload.
-  test("scrollbars and native controls follow the theme live", async ({ page }) => {
+  test("color-scheme follows the theme live, so native scrollbars and controls do too", async ({ page }) => {
     await openSettings(page);
     await capture(page, "settings-scrollbars");
     const theme = settingsMain(page).getByRole("group", { name: "Theme" });

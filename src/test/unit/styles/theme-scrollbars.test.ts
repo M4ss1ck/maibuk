@@ -33,12 +33,14 @@ describe("theme color scheme", () => {
   });
 
   it("lets .dark win over :root, which has the same specificity", () => {
-    expect(css.search(/\n:root\s*\{[^}]*color-scheme/)).toBeLessThan(css.search(/\n\.dark\s*\{/));
+    const root = css.search(/\n:root\s*\{[^}]*color-scheme/);
+    expect(root).toBeGreaterThanOrEqual(0);
+    expect(root).toBeLessThan(css.search(/\n\.dark\s*\{/));
   });
 });
 
-describe("themed scrollbars", () => {
-  it("style every scroll container in WebKit and Chromium, corner included", () => {
+describe("themed scrollbar", () => {
+  it("styles every scroll container in WebKit and Chromium, corner included", () => {
     for (const part of ["", "-track", "-thumb", "-corner"]) {
       expect(css, `::-webkit-scrollbar${part}`).toMatch(
         new RegExp(`\\n\\s*::-webkit-scrollbar${part}\\s*\\{`),
@@ -46,13 +48,13 @@ describe("themed scrollbars", () => {
     }
   });
 
-  it("give Firefox the standard properties only where ::-webkit-scrollbar is unsupported", () => {
+  it("gives Firefox the standard properties only where ::-webkit-scrollbar is unsupported", () => {
     const gated = css.match(/@supports not selector\(::-webkit-scrollbar\)\s*\{\s*\*\s*\{([^}]*)\}/);
     expect(gated?.[1]).toMatch(/scrollbar-width:\s*thin;/);
     expect(gated?.[1]).toMatch(/scrollbar-color:/);
   });
 
-  it("are global, so no scroll box opts in through a class", () => {
+  it("is global, so no scroll box opts in through a class", () => {
     const optIns = sourceFiles(join(root, "src")).filter((file) =>
       readFileSync(file, "utf8").includes("scrollbar-themed"),
     );
