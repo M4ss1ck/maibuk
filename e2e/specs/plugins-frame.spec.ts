@@ -136,6 +136,11 @@ test.describe("Frame custom UI @wf:plugins-frame @sandbox", () => {
     const background = await frame.getByTestId("token-bg").textContent();
     expect(background).toBeTruthy();
     await expect(frame.getByTestId("scheme")).toHaveText("light");
+    // The fixture sets `color-scheme` from the token, as `docs/plugins/frame-ui.md`
+    // tells authors to (#674). A Frame whose scheme differs from the host's gets
+    // an opaque backdrop in its own scheme, so the two must match.
+    await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
+    await expect(frame.locator("html")).toHaveCSS("color-scheme", "light");
 
     // The real theme toggle, on the same page: no reload, so the Frame must
     // follow the live `frame-theme` update (U4).
@@ -143,6 +148,8 @@ test.describe("Frame custom UI @wf:plugins-frame @sandbox", () => {
     await page.keyboard.press("t");
 
     await expect(frame.getByTestId("scheme")).toHaveText("dark");
+    await expect(page.locator("html")).toHaveCSS("color-scheme", "dark");
+    await expect(frame.locator("html")).toHaveCSS("color-scheme", "dark");
     await expect
       .poll(() => frame.getByTestId("token-bg").textContent(), {
         message: "the Frame background token follows the theme",

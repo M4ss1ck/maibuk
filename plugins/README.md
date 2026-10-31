@@ -86,6 +86,11 @@ colors. Names are a stable Plugin-facing contract; see
 --maibuk-font-size                --maibuk-spacing-editor-max
 ```
 
+Every Frame sets `:root { color-scheme: var(--maibuk-color-scheme, light dark); }`.
+Without it, a Frame shows an opaque light backdrop and light native scrollbars
+and controls in the dark theme (see [Frame UI](../docs/plugins/frame-ui.md)
+"Theme tokens").
+
 ## Adding a Built-in
 
 1. Create `plugins/<id>/` with `manifest.json` and an `index.ts` or `index.tsx`.
