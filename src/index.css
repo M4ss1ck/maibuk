@@ -65,8 +65,16 @@
   --spacing-editor-max: 720px;
 }
 
+/* Native scrollbars and controls (form controls, date pickers, <select>
+   popups) are drawn by the browser from color-scheme, not from our tokens.
+   It must come before .dark: both have one class's specificity. */
+:root {
+  color-scheme: light;
+}
+
 /* Dark mode color overrides */
 .dark {
+  color-scheme: dark;
   --color-primary: #60a5fa;
   --color-primary-hover: #3b82f6;
   --color-primary-foreground: #000000;
@@ -139,6 +147,39 @@ body {
 
 #root {
   min-height: 100vh;
+}
+
+/* Every scroll container, the root scroller included, gets one scrollbar that
+   follows the theme instead of the OS default. */
+@layer base {
+  /* Firefox. Chromium would take these too, and then draw arrow buttons and
+     ignore the rounded thumb below, so only engines without it get them. */
+  @supports not selector(::-webkit-scrollbar) {
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: color-mix(in srgb, var(--color-muted-foreground) 45%, transparent) transparent;
+    }
+  }
+
+  /* Chromium, Safari, and the Linux desktop webview. */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  /* Where a vertical and a horizontal scrollbar meet; the engine paints it
+     white otherwise. */
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 9999px;
+    background-clip: padding-box;
+    background-color: color-mix(in srgb, var(--color-muted-foreground) 45%, transparent);
+  }
 }
 
 /* Form elements - ensure visibility in both themes */
@@ -1616,32 +1657,6 @@ li.footnote-item,
 /* Loading screen entrance */
 .loading-entrance {
   animation: logo-entrance 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-/* Dropdown menu entrance */
-/* A scroll box whose scrollbar follows the theme instead of the OS default. */
-@utility scrollbar-themed {
-  /* Firefox. Chromium would take these too, and then draw arrow buttons and
-     ignore the rounded thumb below, so only engines without it get them. */
-  @supports not selector(::-webkit-scrollbar) {
-    scrollbar-width: thin;
-    scrollbar-color: color-mix(in srgb, var(--color-muted-foreground) 45%, transparent) transparent;
-  }
-
-  /* Chromium, Safari, and the Linux desktop webview. */
-  &::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  &::-webkit-scrollbar-thumb {
-    border: 2px solid transparent;
-    border-radius: 9999px;
-    background-clip: padding-box;
-    background-color: color-mix(in srgb, var(--color-muted-foreground) 45%, transparent);
-  }
 }
 
 /* An Update download bar in the New chip's amber, so the bar and the badge read

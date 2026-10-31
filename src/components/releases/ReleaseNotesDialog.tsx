@@ -184,7 +184,7 @@ export function ReleaseNotesDialog() {
         // biome-ignore lint/a11y/noNoninteractiveTabindex: a scroll region takes focus so arrow keys and Page Down scroll the notes
         tabIndex={0}
         data-autofocus
-        className="min-h-0 flex-1 divide-y divide-border overflow-auto px-4 py-4 scrollbar-themed focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/30 sm:px-6"
+        className="min-h-0 flex-1 divide-y divide-border overflow-auto px-4 py-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/30 sm:px-6"
       >
         {releases.map(({ release, isNew }) => (
           <Release key={release.number} release={release} isNew={isNew} />

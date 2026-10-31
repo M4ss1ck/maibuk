@@ -270,7 +270,7 @@ export function Layout() {
                 // resize handle and does not spill into the pinned pair. The
                 // scroll padding stops scrollIntoView landing a row flush with
                 // the clip edge.
-                className="flex flex-col gap-2 min-h-0 overflow-y-auto scrollbar-themed pl-1.5 -ml-1.5 pr-1 pt-1.5 -mt-1.5 pb-1.5 scroll-py-1.5"
+                className="flex flex-col gap-2 min-h-0 overflow-y-auto pl-1.5 -ml-1.5 pr-1 pt-1.5 -mt-1.5 pb-1.5 scroll-py-1.5"
               >
                 {scrollNavItems.map(renderNavItem)}
               </ListBoxSection>

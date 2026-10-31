@@ -64,7 +64,7 @@ export function SettingsSectionMenu({
           </AriaButton>
           <Popover
             placement="bottom start"
-            className="w-64 max-h-[60vh] overflow-auto scrollbar-themed rounded-lg border border-border bg-card shadow-lg"
+            className="w-64 max-h-[60vh] overflow-auto rounded-lg border border-border bg-card shadow-lg"
           >
             <Menu
               aria-label={t("settings.outline.label")}
