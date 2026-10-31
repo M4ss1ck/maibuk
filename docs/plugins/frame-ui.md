@@ -48,11 +48,17 @@ The host writes its semantic theme tokens onto the Frame's `<html>` as public `-
 For example:
 
 ```css
+:root {
+  color-scheme: var(--maibuk-color-scheme, light dark);
+}
+
 body {
   background: var(--maibuk-color-background);
   color: var(--maibuk-color-foreground);
 }
 ```
+
+Set `color-scheme` from `--maibuk-color-scheme` on every Frame, as above. The host page sets its own `color-scheme` to match the theme, and when a Frame's scheme differs from the host's, the browser paints an opaque backdrop behind the Frame in the Frame's scheme: a Frame with a transparent body and no `color-scheme` shows as a white box in the dark theme. The same property makes the Frame's native scrollbars and form controls follow the theme. The `light dark` fallback covers the moment before the host writes the tokens.
 
 ## The custom-UI notice
 

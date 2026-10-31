@@ -1,14 +1,15 @@
 // The custom-UI Frame (@sandbox lane, issue #454 unit U6; ADR 0021): a
 // whole-page Frame and an embedded kit Frame render the Plugin's own verified
 // HTML/CSS/JS from its hashed set inside a `sandbox="allow-scripts"` iframe
-// (opaque origin), carry the reused custom-UI notice, round-trip a message over
-// `window.maibuk.port`, follow a live theme change through the `--maibuk-*`
-// tokens, and cannot reach the network, Tauri IPC, or the host DOM. That last
-// half is asserted Node-side: every probe targets the recording server the E2E
-// global setup starts (`e2e/support/request-log.ts`), and `loggedRequests()` —
-// read with Node fs, never `evaluate` — must stay empty, including after the
-// Frame navigates itself to a `data:` and to a `blob:` document. Tagged
-// @sandbox so the lane runs on Chromium, WebKit, and Firefox.
+// (opaque origin), show no custom-UI notice (it lives only in Settings since
+// #657), round-trip a message over `window.maibuk.port`, follow a live theme
+// change through the `--maibuk-*` tokens, and cannot reach the network, Tauri
+// IPC, or the host DOM. That last half is asserted Node-side: every probe
+// targets the recording server the E2E global setup starts
+// (`e2e/support/request-log.ts`), and `loggedRequests()` — read with Node fs,
+// never `evaluate` — must stay empty, including after the Frame navigates
+// itself to a `data:` and to a `blob:` document. Tagged @sandbox so the lane
+// runs on Chromium, WebKit, and Firefox.
 //
 // Frames get no accessibility test of their contents (#402): this spec never
 // runs axe on the Frame (the suite has no axe helper at all) and asserts only
@@ -23,7 +24,11 @@ import { expect, test } from "../support/test";
 
 const PLUGIN_ID = "fixture-frame";
 
-/** The reused custom-UI notice (en copy), `plugins.management.custom`. */
+/**
+ * The custom-UI notice (en copy), `plugins.management.custom`. Since #657 it
+ * shows only in Settings (covered by `PluginsSection.test.tsx`), never on a
+ * page that renders a Frame.
+ */
 const NOTICE = "Custom UI: accessibility not verified by Maibuk";
 
 /** The Frame's isolation probes, each writing "blocked" or "LEAK:<detail>". */
@@ -93,7 +98,7 @@ test.describe("Frame custom UI @wf:plugins-frame @sandbox", () => {
   test("the whole-page Frame renders from the hashed set and answers a ping", async ({ page }) => {
     const before = await leakCount();
     await openFramePage(page);
-    await expect(page.getByText(NOTICE, { exact: true })).toBeVisible();
+    await expect(page.getByText(NOTICE)).toHaveCount(0);
     const frame = pageFrame(page);
     await expect(frame.getByTestId("css-applied")).toHaveCSS("color", "rgb(12, 34, 56)");
     // The naturalWidth > 0 the Frame writes once the hashed image loaded.
@@ -116,10 +121,10 @@ test.describe("Frame custom UI @wf:plugins-frame @sandbox", () => {
     await expectNoLeak(before);
   });
 
-  test("the embedded kit Frame renders with its notice and answers a ping", async ({ page }) => {
+  test("the embedded kit Frame renders without the notice and answers a ping", async ({ page }) => {
     await page.goto(`/plugin/${PLUGIN_ID}/embed`);
-    await expect(page.getByText(NOTICE, { exact: true })).toBeVisible({ timeout: 15_000 });
     await expect(embeddedFrame(page).getByTestId("pong")).toHaveText("pong", { timeout: 15_000 });
+    await expect(page.getByText(NOTICE)).toHaveCount(0);
     await capture(page, "plugin-frame-embedded");
   });
 
@@ -131,6 +136,11 @@ test.describe("Frame custom UI @wf:plugins-frame @sandbox", () => {
     const background = await frame.getByTestId("token-bg").textContent();
     expect(background).toBeTruthy();
     await expect(frame.getByTestId("scheme")).toHaveText("light");
+    // The fixture sets `color-scheme` from the token, as `docs/plugins/frame-ui.md`
+    // tells authors to (#674). A Frame whose scheme differs from the host's gets
+    // an opaque backdrop in its own scheme, so the two must match.
+    await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
+    await expect(frame.locator("html")).toHaveCSS("color-scheme", "light");
 
     // The real theme toggle, on the same page: no reload, so the Frame must
     // follow the live `frame-theme` update (U4).
@@ -138,6 +148,8 @@ test.describe("Frame custom UI @wf:plugins-frame @sandbox", () => {
     await page.keyboard.press("t");
 
     await expect(frame.getByTestId("scheme")).toHaveText("dark");
+    await expect(page.locator("html")).toHaveCSS("color-scheme", "dark");
+    await expect(frame.locator("html")).toHaveCSS("color-scheme", "dark");
     await expect
       .poll(() => frame.getByTestId("token-bg").textContent(), {
         message: "the Frame background token follows the theme",

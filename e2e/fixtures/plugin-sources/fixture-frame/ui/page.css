@@ -8,6 +8,10 @@
 }
 
 /* Styled with Maibuk's public theme tokens, as a Frame author would. */
+:root {
+  color-scheme: var(--maibuk-color-scheme, light dark);
+}
+
 body {
   margin: 0;
   padding: 16px;

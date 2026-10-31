@@ -113,3 +113,8 @@ not part of the contract.
 | `--maibuk-font-size`               | The user's chosen body font size                    |
 | `--maibuk-spacing-editor-max`      | Editor column max width (a real design measure)     |
 
+Every Frame sets `:root { color-scheme: var(--maibuk-color-scheme, light dark); }`
+itself; the shim does not, so a Plugin's own choice is never overridden (#674).
+A Frame whose scheme differs from the host's gets an opaque backdrop in its own
+scheme and light native controls (`docs/plugins/frame-ui.md`, "Theme tokens").
+
