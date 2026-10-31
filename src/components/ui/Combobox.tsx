@@ -80,7 +80,7 @@ export function Combobox({
       value={value}
       inputValue={displayValue}
       onInputChange={setQuery}
-      onSelectionChange={handleSelectionChange}
+      onChange={handleSelectionChange}
       defaultFilter={() => true}
       aria-label={ariaLabel}
       isDisabled={isDisabled}

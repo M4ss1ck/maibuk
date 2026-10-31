@@ -12,7 +12,18 @@
  * a type error, and the coverage gate fails when a table component has no test.
  */
 
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ReactNode, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentType,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { useTranslation } from "react-i18next";
 import {
   FieldError,
@@ -23,13 +34,14 @@ import {
   TextField as AriaTextField,
 } from "react-aria-components/TextField";
 import { NumberField as AriaNumberField } from "react-aria-components/NumberField";
-import { Radio, RadioGroup as AriaRadioGroup } from "react-aria-components/RadioGroup";
+import {
+  RadioGroup as AriaRadioGroup,
+  RadioButton,
+  RadioField,
+} from "react-aria-components/RadioGroup";
 import { Link as AriaLink } from "react-aria-components/Link";
 import { Tabs as AriaTabs, TabList, Tab, TabPanel } from "react-aria-components/Tabs";
-import {
-  Disclosure as AriaDisclosure,
-  DisclosurePanel,
-} from "react-aria-components/Disclosure";
+import { Disclosure as AriaDisclosure, DisclosurePanel } from "react-aria-components/Disclosure";
 import { Button as AriaButton } from "react-aria-components/Button";
 import { Heading as AriaHeading } from "react-aria-components/Heading";
 import { ProgressBar as AriaProgressBar } from "react-aria-components/ProgressBar";
@@ -601,18 +613,18 @@ function RadioGroupHost({
       className="w-full"
     >
       <AriaLabel className="block text-sm font-medium mb-1.5">{label}</AriaLabel>
-      <div className={orientation === "horizontal" ? "flex flex-wrap gap-4" : "flex flex-col gap-2"}>
+      <div
+        className={orientation === "horizontal" ? "flex flex-wrap gap-4" : "flex flex-col gap-2"}
+      >
         {options.map((option) => (
-          <Radio
-            key={option.value}
-            value={option.value}
-            className="group flex items-center gap-2 text-sm text-foreground data-focus-visible:ring-2 data-focus-visible:ring-primary"
-          >
-            <span className="flex size-4 items-center justify-center rounded-full border border-muted-foreground">
-              <span className="size-2 rounded-full bg-current opacity-0 group-data-selected:opacity-100" />
-            </span>
-            {option.label}
-          </Radio>
+          <RadioField key={option.value} value={option.value} className="contents">
+            <RadioButton className="group flex items-center gap-2 text-sm text-foreground data-focus-visible:ring-2 data-focus-visible:ring-primary">
+              <span className="flex size-4 items-center justify-center rounded-full border border-muted-foreground">
+                <span className="size-2 rounded-full bg-current opacity-0 group-data-selected:opacity-100" />
+              </span>
+              {option.label}
+            </RadioButton>
+          </RadioField>
         ))}
       </div>
       {description && (
@@ -620,7 +632,9 @@ function RadioGroupHost({
           {description}
         </AriaText>
       )}
-      {errorMessage && <FieldError className="mt-1 text-sm text-destructive">{errorMessage}</FieldError>}
+      {errorMessage && (
+        <FieldError className="mt-1 text-sm text-destructive">{errorMessage}</FieldError>
+      )}
     </AriaRadioGroup>
   );
 }
@@ -634,7 +648,14 @@ interface ButtonHostProps {
   onPress?: () => void;
 }
 
-function ButtonHost({ variant = "primary", size = "md", icon, isDisabled, children, onPress }: ButtonHostProps) {
+function ButtonHost({
+  variant = "primary",
+  size = "md",
+  icon,
+  isDisabled,
+  children,
+  onPress,
+}: ButtonHostProps) {
   return (
     <Button variant={variant} size={size} disabled={isDisabled} onClick={() => onPress?.()}>
       {icon && <PluginIcon icon={icon} className="h-4 w-4" />}
@@ -651,7 +672,13 @@ interface IconButtonHostProps {
   onPress?: () => void;
 }
 
-function IconButtonHost({ label, icon, variant = "ghost", isDisabled, onPress }: IconButtonHostProps) {
+function IconButtonHost({
+  label,
+  icon,
+  variant = "ghost",
+  isDisabled,
+  onPress,
+}: IconButtonHostProps) {
   return (
     <Button
       variant={variant}
@@ -759,7 +786,9 @@ function TextHost({
   weight?: keyof typeof TEXT_WEIGHT;
   children?: ReactNode;
 }) {
-  return <p className={`${TEXT_TONE[tone]} ${TEXT_SIZE[size]} ${TEXT_WEIGHT[weight]}`}>{children}</p>;
+  return (
+    <p className={`${TEXT_TONE[tone]} ${TEXT_SIZE[size]} ${TEXT_WEIGHT[weight]}`}>{children}</p>
+  );
 }
 
 function HeadingHost({ level = 2, children }: { level?: number; children?: ReactNode }) {
@@ -776,7 +805,11 @@ function AriaHeadingTag({ level, ...props }: { level: number; [key: string]: unk
   return <Tag {...(props as Record<string, unknown>)} />;
 }
 
-function SeparatorHost({ orientation = "horizontal" }: { orientation?: "horizontal" | "vertical" }) {
+function SeparatorHost({
+  orientation = "horizontal",
+}: {
+  orientation?: "horizontal" | "vertical";
+}) {
   return orientation === "vertical" ? (
     <span aria-hidden="true" className="mx-2 inline-block h-4 w-px bg-border" />
   ) : (
@@ -822,7 +855,9 @@ function ImageHost({
   width?: number;
   height?: number;
 }) {
-  return <img src={src} alt={alt} width={width} height={height} className="max-w-full rounded-lg" />;
+  return (
+    <img src={src} alt={alt} width={width} height={height} className="max-w-full rounded-lg" />
+  );
 }
 
 function ListHost({
@@ -848,7 +883,11 @@ function CodeHost({ block, children }: { block?: boolean; children?: ReactNode }
       </pre>
     );
   }
-  return <code className="rounded bg-muted px-1 py-0.5 font-mono text-sm text-foreground">{children}</code>;
+  return (
+    <code className="rounded bg-muted px-1 py-0.5 font-mono text-sm text-foreground">
+      {children}
+    </code>
+  );
 }
 
 /** Organization: tabs, disclosure, collections, tables (#439). */
@@ -934,10 +973,7 @@ function TabsHost({ label, items, selectedKey, children, onChange }: TabsHostPro
       onSelectionChange={(key) => onChange?.(String(key))}
       className="w-full"
     >
-      <TabList
-        aria-label={label}
-        className="flex flex-wrap gap-1 border-b border-border pb-px"
-      >
+      <TabList aria-label={label} className="flex flex-wrap gap-1 border-b border-border pb-px">
         {items.map((item) => (
           <Tab
             key={item.value}
@@ -1157,7 +1193,8 @@ function CollectionRowHost({
   const [descriptionEl, setDescriptionEl] = useState<HTMLSpanElement | null>(null);
   const [truncated, setTruncated] = useState(false);
   useLayoutEffect(() => {
-    const measure = () => setTruncated(isTextOverflowing(labelEl) || isTextOverflowing(descriptionEl));
+    const measure = () =>
+      setTruncated(isTextOverflowing(labelEl) || isTextOverflowing(descriptionEl));
     measure();
     if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(measure);
@@ -1238,12 +1275,17 @@ function CollectionRowHost({
         {isExpandable ? <Chevron expanded={expanded} /> : null}
         <span
           ref={setLabelEl}
-          className={description ? "min-w-0 max-w-[60%] shrink-0 truncate" : "min-w-0 flex-1 truncate"}
+          className={
+            description ? "min-w-0 max-w-[60%] shrink-0 truncate" : "min-w-0 flex-1 truncate"
+          }
         >
           {label}
         </span>
         {description && !expanded ? (
-          <span ref={setDescriptionEl} className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
+          <span
+            ref={setDescriptionEl}
+            className="min-w-0 flex-1 truncate text-sm text-muted-foreground"
+          >
             {description}
           </span>
         ) : null}
@@ -1258,7 +1300,9 @@ function CollectionRowHost({
       </div>
       {expanded && description ? (
         <div className="pl-7">
-          <span className="whitespace-normal break-words text-sm text-muted-foreground">{description}</span>
+          <span className="whitespace-normal break-words text-sm text-muted-foreground">
+            {description}
+          </span>
         </div>
       ) : null}
       {expanded && children ? <div className="pl-7 text-muted-foreground">{children}</div> : null}
@@ -1491,7 +1535,10 @@ const STATUS_TONE: Record<StatusTone, string> = {
 
 function StatusHost({ tone = "info", children }: { tone?: StatusTone; children?: ReactNode }) {
   return (
-    <p role={tone === "danger" ? "alert" : "status"} className={`rounded-lg px-3 py-2 text-sm ${STATUS_TONE[tone]}`}>
+    <p
+      role={tone === "danger" ? "alert" : "status"}
+      className={`rounded-lg px-3 py-2 text-sm ${STATUS_TONE[tone]}`}
+    >
       {children}
     </p>
   );
@@ -1512,9 +1559,7 @@ function EmptyStateHost({
     <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border px-6 py-10 text-center">
       {icon ? <PluginIcon icon={icon} className="h-8 w-8 text-muted-foreground" /> : null}
       <p className="text-sm font-medium text-foreground">{title}</p>
-      {description ? (
-        <p className="max-w-sm text-sm text-muted-foreground">{description}</p>
-      ) : null}
+      {description ? <p className="max-w-sm text-sm text-muted-foreground">{description}</p> : null}
       {children}
     </div>
   );
@@ -1633,13 +1678,16 @@ export function createPluginUiComponents(host?: PluginFrameHost): RemoteComponen
     if (Host === undefined) throw new Error(`The UI kit has no host component for ${element.tag}`);
     components.set(
       element.tag,
-      createRemoteComponentRenderer(Host as never, {
-        // The table names each event's React prop; the host must read the same
-        // prop, not Remote DOM's mechanical `on<Eventname>` guess.
-        eventProps: Object.fromEntries(
-          element.events.map((event) => [event.prop, { event: event.event }])
-        ),
-      } as never)
+      createRemoteComponentRenderer(
+        Host as never,
+        {
+          // The table names each event's React prop; the host must read the same
+          // prop, not Remote DOM's mechanical `on<Eventname>` guess.
+          eventProps: Object.fromEntries(
+            element.events.map((event) => [event.prop, { event: event.event }])
+          ),
+        } as never
+      )
     );
   }
   return components;

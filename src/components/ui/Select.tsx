@@ -112,8 +112,8 @@ export function Select<T extends string | number>({
 
   return (
     <RACSelect
-      selectedKey={value as SelectKey}
-      onSelectionChange={(key) => {
+      value={value as SelectKey}
+      onChange={(key) => {
         if (key !== null) onChange(key as T);
       }}
       className={`relative ${className}`}
@@ -131,8 +131,8 @@ export function Select<T extends string | number>({
         className={selectTriggerClassName({ variant, minWidth, triggerClassName })}
       >
         <SelectValue>
-          {({ selectedItem, selectedText, isPlaceholder }) => {
-            const selected = selectedItem as SelectOption<T> | null;
+          {({ selectedItems, selectedText, isPlaceholder }) => {
+            const selected = (selectedItems[0] ?? null) as SelectOption<T> | null;
             if (selected?.swatches?.length) {
               return (
                 <span className="flex min-w-0 flex-1 items-center gap-2">

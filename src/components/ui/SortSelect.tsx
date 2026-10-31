@@ -43,8 +43,8 @@ export function SortSelect<T extends string>({
   return (
     <Select
       aria-label={triggerLabel}
-      selectedKey={value}
-      onSelectionChange={(key) => {
+      value={value}
+      onChange={(key) => {
         const option = options.find((item) => item.value === key);
         if (option && option.value !== value) onChange(option.value);
       }}

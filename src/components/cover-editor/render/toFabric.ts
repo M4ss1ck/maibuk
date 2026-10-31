@@ -6,8 +6,8 @@ import {
   filters,
   Gradient,
   IText,
-  Line,
   Path,
+  Polyline,
   Rect,
   Shadow,
   Textbox,
@@ -226,10 +226,16 @@ export async function buildObject(layer: Layer): Promise<FabricObject | null> {
     } else {
       const lineColor =
         stroke?.color ?? (layer.fill.type === "solid" ? layer.fill.color : "#888888");
-      obj = new Line([0, 0, layer.width, 0], {
-        stroke: lineColor,
-        strokeWidth: stroke?.width ?? 2,
-      });
+      obj = new Polyline(
+        [
+          { x: 0, y: 0 },
+          { x: layer.width, y: 0 },
+        ],
+        {
+          stroke: lineColor,
+          strokeWidth: stroke?.width ?? 2,
+        }
+      );
     }
     if (stroke && stroke.width > 0 && layer.shape !== "line") {
       obj.set({ stroke: stroke.color, strokeWidth: stroke.width });

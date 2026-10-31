@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { Radio, RadioGroup } from "react-aria-components";
+import { RadioButton, RadioField, RadioGroup } from "react-aria-components";
 import { DictationBarPreview } from "@/components/dictation/DictationBar";
 import { SettingRow } from "@/components/settings/SettingRow";
 import { useDictationStore } from "@/features/dictation/store";
@@ -24,20 +24,18 @@ export function DictationBarSizeRow() {
         className="flex flex-wrap items-center gap-2"
       >
         {DICTATION_BAR_SIZES.map((size) => (
-          <Radio
-            key={size}
-            value={size}
-            className="inline-flex min-h-12 cursor-pointer items-center rounded-lg border-2 border-transparent px-3 py-2 text-sm text-muted-foreground outline-none transition-colors hover:text-foreground data-selected:border-primary data-selected:text-foreground data-focus-visible:ring-2 data-focus-visible:ring-primary data-focus-visible:ring-offset-1"
-          >
-            {size === "hidden" ? (
-              t("dictation.bar.sizes.hidden")
-            ) : (
-              <>
-                <DictationBarPreview size={size} />
-                <span className="sr-only">{t(`dictation.bar.sizes.${size}`)}</span>
-              </>
-            )}
-          </Radio>
+          <RadioField key={size} value={size} className="contents">
+            <RadioButton className="inline-flex min-h-12 cursor-pointer items-center rounded-lg border-2 border-transparent px-3 py-2 text-sm text-muted-foreground outline-none transition-colors hover:text-foreground data-selected:border-primary data-selected:text-foreground data-focus-visible:ring-2 data-focus-visible:ring-primary data-focus-visible:ring-offset-1">
+              {size === "hidden" ? (
+                t("dictation.bar.sizes.hidden")
+              ) : (
+                <>
+                  <DictationBarPreview size={size} />
+                  <span className="sr-only">{t(`dictation.bar.sizes.${size}`)}</span>
+                </>
+              )}
+            </RadioButton>
+          </RadioField>
         ))}
       </RadioGroup>
     </SettingRow>
