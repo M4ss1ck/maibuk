@@ -149,7 +149,8 @@ async function main() {
     );
     process.exit(1);
   }
-  console.log(`[deprecated] ${files.size} files across ${PROJECTS.length} projects, no deprecated APIs`);
+  const gated = [...files].filter((path) => isGatedFile(relative(root, path))).length;
+  console.log(`[deprecated] ${gated} files across ${PROJECTS.length} projects, no deprecated APIs`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

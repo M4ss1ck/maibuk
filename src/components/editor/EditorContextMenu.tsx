@@ -278,6 +278,7 @@ export function EditorContextMenu({
         if (from !== to) {
           // Trigger the same path as Ctrl+C
           editor.commands.focus();
+          // deprecated-api: fires the copy event, so ProseMirror serializes the selection as Ctrl+C does.
           document.execCommand("copy");
         } else {
           void navigator.clipboard.writeText(menu.wordUnderCursor ?? "");
@@ -288,6 +289,7 @@ export function EditorContextMenu({
         // Trigger the same path as Ctrl+V: PasteHandler/default
         // ProseMirror paste runs via the synchronous paste event.
         editor.commands.focus();
+        // deprecated-api: fires the paste event that PasteHandler reads; the Clipboard API does not.
         const ok = document.execCommand("paste");
         if (!ok) {
           void fallbackPaste(editor);

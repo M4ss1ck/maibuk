@@ -106,7 +106,7 @@ describe("cleanPastedHtml() — hygiene", () => {
 
   it("removes empty span/font tags", () => {
     const out = clean("<p><span></span><span>x</span><font></font></p>", settings());
-    expect(out.querySelector("font")).toBeNull();
+    expect(out.querySelector<HTMLElement>("font")).toBeNull();
     expect(out.textContent).toBe("x");
   });
 
@@ -195,7 +195,7 @@ describe("cleanPastedHtml() — unwrapBareInlineTags", () => {
 
   it("unwraps a bare <font> element", () => {
     const out = clean("<p><font>text</font></p>", settings());
-    expect(out.querySelector("font")).toBeNull();
+    expect(out.querySelector<HTMLElement>("font")).toBeNull();
     expect(out.textContent).toBe("text");
   });
 

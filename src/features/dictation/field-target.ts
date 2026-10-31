@@ -43,9 +43,11 @@ export function createFieldTarget(
     caret: number
   ): void {
     let native = false;
+    // deprecated-api: execCommand is the only edit that joins the field's native undo stack.
     if (el.selectionStart !== null && typeof doc.execCommand === "function") {
       el.setSelectionRange(from, to);
       const ok =
+        // deprecated-api: execCommand is the only edit that joins the field's native undo stack.
         text === "" ? doc.execCommand("delete") : doc.execCommand("insertText", false, text);
       native = ok && el.value === expected;
     }
@@ -102,7 +104,9 @@ export function createFieldTarget(
           voice: (run: VoiceCommandRun): VoiceOutcome => {
             if (run.id !== "common.undo" && run.id !== "common.redo") return "unavailable";
             const valueBefore = el.value;
+            // deprecated-api: a text field's native undo and redo have no other API.
             if (run.id === "common.undo") doc.execCommand?.("undo");
+            // deprecated-api: a text field's native undo and redo have no other API.
             else doc.execCommand?.("redo");
             return el.value !== valueBefore ? "ran" : "empty";
           },
