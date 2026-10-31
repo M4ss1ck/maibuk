@@ -7,6 +7,7 @@ export { createSandboxElement, hostDocument } from "@/features/plugins/frame/hos
 export {
   FRAME_CSP,
   FRAME_DOCUMENT,
+  FRAME_HOST_FOCUS_MESSAGE,
   FRAME_LOAD_MESSAGE,
   FRAME_READY_MESSAGE,
   FRAME_FULLSCREEN_MESSAGE,

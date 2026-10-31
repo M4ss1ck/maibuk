@@ -6,8 +6,8 @@
  * are all proven without a browser.
  */
 
-import { beforeEach, describe, expect, it } from "vitest";
-import { FRAME_READY_MESSAGE, frameShim } from "@/features/plugins/frame";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { FRAME_HOST_FOCUS_MESSAGE, FRAME_READY_MESSAGE, frameShim } from "@/features/plugins/frame";
 
 const encoder = new TextEncoder();
 
@@ -205,5 +205,68 @@ describe("frameShim()", () => {
     expect(document.querySelector("#first")).not.toBeNull();
     expect(document.querySelector("#second")).toBeNull();
     expect(harness.posted).toEqual([{ kind: FRAME_READY_MESSAGE.kind }]);
+  });
+});
+
+describe("frameShim() focus leaving the Frame", () => {
+  // Firefox restores a Frame's remembered element when Tab re-enters it, and
+  // Shift+Tab from there never reaches the host again. The host says when focus
+  // lands on one of its controls, and the shim drops the stale element then
+  // (the Reader E2E walk on Firefox).
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function focusedButton(): HTMLButtonElement {
+    const button = document.createElement("button");
+    button.textContent = "Back to Shelf";
+    document.body.appendChild(button);
+    button.focus();
+    return button;
+  }
+
+  it("blurs the remembered element when the host says focus moved to a host control", () => {
+    const harness = makeWindow();
+    frameShim(harness.win as unknown as Window);
+    const button = focusedButton();
+    vi.spyOn(document, "hasFocus").mockReturnValue(false);
+    expect(document.activeElement).toBe(button);
+
+    dispatch(harness, { kind: FRAME_HOST_FOCUS_MESSAGE.kind });
+
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  it("keeps a control focused when focus leaves without the host's word, as on an app switch", () => {
+    const harness = makeWindow();
+    frameShim(harness.win as unknown as Window);
+    const button = focusedButton();
+    vi.spyOn(document, "hasFocus").mockReturnValue(false);
+
+    button.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+
+    expect(document.activeElement).toBe(button);
+  });
+
+  it("keeps a control focused when a Tab back in beat the host's message", () => {
+    const harness = makeWindow();
+    frameShim(harness.win as unknown as Window);
+    const button = focusedButton();
+    vi.spyOn(document, "hasFocus").mockReturnValue(true);
+
+    dispatch(harness, { kind: FRAME_HOST_FOCUS_MESSAGE.kind });
+
+    expect(document.activeElement).toBe(button);
+  });
+
+  it("ignores the message from any window but the host", () => {
+    const harness = makeWindow();
+    frameShim(harness.win as unknown as Window);
+    const button = focusedButton();
+    vi.spyOn(document, "hasFocus").mockReturnValue(false);
+
+    dispatch(harness, { kind: FRAME_HOST_FOCUS_MESSAGE.kind }, [], makeWindow().win);
+
+    expect(document.activeElement).toBe(button);
   });
 });

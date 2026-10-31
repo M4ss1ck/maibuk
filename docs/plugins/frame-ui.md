@@ -60,6 +60,10 @@ body {
 
 Set `color-scheme` from `--maibuk-color-scheme` on every Frame, as above. The host page sets its own `color-scheme` to match the theme, and when a Frame's scheme differs from the host's, the browser paints an opaque backdrop behind the Frame in the Frame's scheme: a Frame with a transparent body and no `color-scheme` shows as a white box in the dark theme. The same property makes the Frame's native scrollbars and form controls follow the theme. The `light dark` fallback covers the moment before the host writes the tokens.
 
+## Focus when the author leaves the Frame
+
+When focus leaves the Frame for another Maibuk control, the Frame drops its focused element, so the next Tab in starts at the Frame's first control rather than where the author left. Firefox would otherwise restore the old element, and from there Shift+Tab cannot get back out of the Frame. Switching to another app is not leaving the Frame: a field keeps its focus. A Frame that wants to come back to a control should focus it again itself.
+
 ## The custom-UI notice
 
 When the author reviews or manages a Plugin that uses a Frame, Maibuk shows this notice: `Custom UI: accessibility not verified by Maibuk. Keyboard and screen-reader support may vary.` A Plugin that declares a `frame` without `customUi: true` cannot use custom UI, and the message then reads `This Plugin cannot use custom UI.`
