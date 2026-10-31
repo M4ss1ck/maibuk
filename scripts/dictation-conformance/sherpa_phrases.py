@@ -25,8 +25,7 @@ SAMPLE_RATE = 16000
 CHUNK = 2560  # 160 ms at 16 kHz
 TAIL_SILENCE_S = 1.0
 VAD_FRAME = 320  # 20 ms at 16 kHz
-VAD_HANGOVER_FRAMES = 25  # 500 ms of non-speech ends a line
-VAD_THRESHOLD_RATIO = 0.10  # of the file's 95th-percentile frame RMS
+VAD_MIN_SILENCE_S = 0.5  # non-speech that ends a line; main() sets it from --min-silence
 OFFLINE_HANGOVER_S = 0.5
 CONTROL_CLIPS = {"en": "two_cities_16k.wav", "es": "quijote_es_16k.wav"}
 
@@ -118,22 +117,36 @@ def tail_padded(samples):
 # ---------------------------------------------------------------- phrase lane
 
 
-def phrase_offline(rec, path):
+def phrase_offline(rec, path, whole_clip):
+    """Without --whole-clip, a line per pause, as the app types an offline model's text."""
     samples = read_wav(path)
+    lines = [samples] if whole_clip else [line_audio(samples, f, l) for f, l in vad_lines(samples)]
+    finals, latencies = [], []
     t0 = time.perf_counter()
-    text = offline_decode(rec, samples).strip()
-    ms = ms_since(t0)
+    for audio in lines:
+        t_line = time.perf_counter()
+        text = offline_decode(rec, audio).strip()
+        if text:
+            finals.append(text)
+            latencies.append(round(ms_since(t_line), 2))
     return {
         "file": path.name,
-        "finals": [text] if text else [],
-        "ms": round(ms, 2),
-        "latencies": [round(ms, 2)],
+        "finals": finals,
+        "ms": round(ms_since(t0), 2),
+        "latencies": latencies,
     }
 
 
-def phrase_online(rec, path):
-    samples = tail_padded(read_wav(path))
+def online_stream(rec, lang):
+    # Nemotron reads a per-stream language (model card: "en", "es", "auto").
     stream = rec.create_stream()
+    stream.set_option("language", lang)
+    return stream
+
+
+def phrase_online(rec, path, lang):
+    samples = tail_padded(read_wav(path))
+    stream = online_stream(rec, lang)
     finals, latencies = [], []
     t0 = time.perf_counter()
     for start in range(0, len(samples), CHUNK):
@@ -195,8 +208,8 @@ class LineTracker:
             self.last_text = text
 
 
-def control_online(rec, samples):
-    stream = rec.create_stream()
+def control_online(rec, samples, lang):
+    stream = online_stream(rec, lang)
     padded = tail_padded(samples)
     lines = LineTracker()
     clock = 0.0
@@ -224,39 +237,53 @@ def control_online(rec, samples):
     return lines.events, lines.trace
 
 
+# Silero VAD through sherpa-onnx, the VAD an offline sherpa engine would segment
+# with. An energy gate split on the click at each clip's start, and Canary
+# hallucinated a line ("um") on it. Set by main().
+VAD_MODEL = None
+
+
 def vad_lines(samples):
-    """Energy VAD: return (first_frame, last_speech_frame) per line, inclusive."""
-    n = len(samples) // VAD_FRAME
-    frames = samples[: n * VAD_FRAME].reshape(n, VAD_FRAME).astype(np.float64)
-    rms = np.sqrt(np.mean(frames ** 2, axis=1))
-    threshold = VAD_THRESHOLD_RATIO * np.percentile(rms, 95)
-    speech = rms > threshold
+    """Silero VAD: return (first_frame, last_frame) per line, inclusive, in 20 ms frames."""
+    config = sherpa_onnx.VadModelConfig()
+    config.silero_vad = sherpa_onnx.SileroVadModelConfig(
+        model=str(VAD_MODEL),
+        min_silence_duration=VAD_MIN_SILENCE_S,
+        min_speech_duration=0.25,
+    )
+    config.sample_rate = SAMPLE_RATE
+    vad = sherpa_onnx.VoiceActivityDetector(config, buffer_size_in_seconds=60)
+    window = config.silero_vad.window_size
+    for i in range(0, len(samples), window):
+        vad.accept_waveform(samples[i : i + window])
+    vad.flush()
     spans = []
-    start = None
-    last_speech = None
-    for i in range(n):
-        if speech[i]:
-            if start is None:
-                start = i
-            last_speech = i
-        elif start is not None and i - last_speech >= VAD_HANGOVER_FRAMES:
-            spans.append((start, last_speech))
-            start = None
-            last_speech = None
-    if start is not None:
-        spans.append((start, last_speech))
+    while not vad.empty():
+        segment = vad.front
+        first = segment.start // VAD_FRAME
+        last = max(first, (segment.start + len(segment.samples)) // VAD_FRAME - 1)
+        spans.append((first, last))
+        vad.pop()
     return spans
+
+
+LINE_PAD = SAMPLE_RATE // 5  # 200 ms each side, so a tight energy cut keeps soft edges
+
+
+def line_audio(samples, first, last):
+    """One line's audio from a vad_lines span, padded and clamped to the clip."""
+    begin = max(0, first * VAD_FRAME - LINE_PAD)
+    end = min(len(samples), (last + 1) * VAD_FRAME + LINE_PAD)
+    return samples[begin:end]
 
 
 def control_offline(rec, samples):
     events, trace = [], []
     clock = 0.0
     for first, last in vad_lines(samples):
-        begin = first * VAD_FRAME
-        end = (last + 1) * VAD_FRAME
-        end_of_speech_s = end / SAMPLE_RATE
+        end_of_speech_s = (last + 1) * VAD_FRAME / SAMPLE_RATE
         t0 = time.perf_counter()
-        text = offline_decode(rec, samples[begin:end]).strip()
+        text = offline_decode(rec, line_audio(samples, first, last)).strip()
         decode_s = time.perf_counter() - t0
         clock = max(clock, end_of_speech_s + OFFLINE_HANGOVER_S) + decode_s
         decode_ms = decode_s * 1000.0
@@ -278,9 +305,11 @@ def run_control(cand, lang, rec, vendor, run_id, load_ms):
     duration = len(samples) / SAMPLE_RATE
     cpu0 = time.process_time()
     if cand["kind"] == "online-transducer":
-        events, trace = control_online(rec, samples)
+        events, trace = control_online(rec, samples, lang)
     else:
         events, trace = control_offline(rec, samples)
+    # The RecognizerHost contract ends every session with one stopped event.
+    events.append({"t": round(max([duration] + [e["t"] for e in events]), 3), "type": "stopped"})
     cpu = time.process_time() - cpu0
     return {
         "audio": audio_name,
@@ -317,6 +346,17 @@ def main(argv=None):
     parser.add_argument("--threads", type=int, default=2)
     parser.add_argument("--vendor", type=Path, default=None, help="vendor/moonshine directory")
     parser.add_argument("--skip-control", action="store_true")
+    parser.add_argument(
+        "--min-silence",
+        type=float,
+        default=0.5,
+        help="offline models: seconds of non-speech that end a line (Silero VAD)",
+    )
+    parser.add_argument(
+        "--whole-clip",
+        action="store_true",
+        help="offline models: one line per clip; writes phrases-<id>-<lang>.whole-clip.json",
+    )
     args = parser.parse_args(argv)
 
     cand = load_candidate(args.candidate)
@@ -327,6 +367,9 @@ def main(argv=None):
 
     vendor = args.vendor if args.vendor is not None else DEFAULT_VENDOR
     model_dir = vendor / "models" / "sherpa" / cand["dir"]
+    global VAD_MODEL, VAD_MIN_SILENCE_S
+    VAD_MIN_SILENCE_S = args.min_silence
+    VAD_MODEL = vendor / "models" / "sherpa" / "silero_vad.onnx"
     missing = [f for f in model_files(cand) if not (model_dir / f).is_file()]
     if missing:
         sys.exit(f"missing model files in {model_dir}: {', '.join(missing)}")
@@ -345,7 +388,7 @@ def main(argv=None):
     load_ms = ms_since(t0)
 
     online = cand["kind"] == "online-transducer"
-    clips = [phrase_online(rec, w) if online else phrase_offline(rec, w) for w in wavs]
+    clips = [phrase_online(rec, w, args.lang) if online else phrase_offline(rec, w, args.whole_clip) for w in wavs]
     phrases = {
         "backend": "native",
         "language": args.lang,
@@ -354,11 +397,12 @@ def main(argv=None):
         "loadMs": round(load_ms, 2),
         "clips": clips,
     }
-    phrases_path = out_dir / f"phrases-{run_id}.json"
+    label = ".whole-clip" if args.whole_clip else ("" if args.min_silence == 0.5 else f".silence-{args.min_silence:g}")
+    phrases_path = out_dir / f"phrases-{run_id}{label}.json"
     write_json(phrases_path, phrases)
 
     control = None
-    control_path = out_dir / f"native-{run_id}.json"
+    control_path = out_dir / f"native-{run_id}{label}.json"
     if not args.skip_control:
         control = run_control(cand, args.lang, rec, vendor, run_id, load_ms)
         write_json(control_path, control)
