@@ -27,9 +27,6 @@ describe("CI workflow", () => {
     expect(checks).not.toMatch(/needs:/);
   });
 
-  // The e2e project has its own tsconfig, outside the root one: without this
-  // step a broken e2e config or spec type only fails a local run, because
-  // Playwright never runs in CI (issue #472).
   // `pnpm lint` fails on Biome warnings, infos, and unformatted files, and the
   // deprecation gate needs the compiler API, so both live in the fast job (#670).
   it("runs the strict lint and the deprecation gate in the fast job", () => {
@@ -39,6 +36,9 @@ describe("CI workflow", () => {
     expect(packageJson.scripts.lint).toBe("node scripts/lint.mjs");
   });
 
+  // The e2e project has its own tsconfig, outside the root one: without this
+  // step a broken e2e config or spec type only fails a local run, because
+  // Playwright never runs in CI (issue #472).
   it("typechecks the e2e project in the fast job", () => {
     expect(job("checks")).toContain("run: pnpm exec tsc --noEmit -p e2e");
   });
