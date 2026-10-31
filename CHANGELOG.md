@@ -5,6 +5,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.0] - 2026-10-31
+
+### Added
+- Optional Resource Usage in Settings > Window, showing Maibuk's CPU, RAM, and storage use in the tray and Settings
+
+### Changed
+- The tray menu is now fully localized
+
+### Fixed
+- Native scrollbars and controls follow the dark theme, with consistent scrollbar styling across all scroll containers
+- Shift+Tab no longer traps keyboard focus inside a Frame in Firefox
+- Resource Usage only measures Maibuk's data and the approved Backup Directory
+- Resource Usage no longer shows stale values after a quick off/on toggle
+
 ## [0.18.0] - 2026-10-30
 
 ### Added
