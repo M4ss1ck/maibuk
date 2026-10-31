@@ -37,12 +37,18 @@ jobs:
       - name: Fetch dictation runtime
         run: pnpm fetch:dictation
 
+      # Biome lint, format, and assist at zero errors, warnings, and infos.
       - name: Lint
         run: pnpm lint
 
       # Vitest strips types without checking them: test files only meet tsc here.
       - name: Typecheck
         run: pnpm typecheck
+
+      # A use of an @deprecated symbol fails here, so a dependency bump that
+      # deprecates something we call migrates it in the same PR (issue #670).
+      - name: No deprecated APIs
+        run: pnpm check:deprecated
 
       # Playwright never runs in CI, but a broken e2e config or spec should
       # fail here, not in a local run (issue #472).

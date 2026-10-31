@@ -6,7 +6,12 @@ const root = "/repo";
 
 /** A deprecation diagnostic at the first occurrence of `needle` in `source`. */
 function at(file: string, source: string, needle: string, text = `'${needle}' is deprecated.`) {
-  return { fileName: `${root}/${file}`, pos: source.indexOf(needle), text, reportsDeprecated: true };
+  return {
+    fileName: `${root}/${file}`,
+    pos: source.indexOf(needle),
+    text,
+    reportsDeprecated: true,
+  };
 }
 
 function problems(sources: Record<string, string>, diagnostics: ReturnType<typeof at>[]) {
@@ -42,15 +47,17 @@ describe("deprecationProblems()", () => {
   it("reports a deprecated use with its file, line, and column", () => {
     const source = 'import { Line } from "fabric";\nnew Line([0, 0, 1, 0]);\n';
     const diagnostic = at("src/a.ts", source, "Line([");
-    expect(problems({ "src/a.ts": source }, [{ ...diagnostic, text: "'Line' is deprecated." }])).toEqual([
-      "src/a.ts:2:5 'Line' is deprecated.",
-    ]);
+    expect(
+      problems({ "src/a.ts": source }, [{ ...diagnostic, text: "'Line' is deprecated." }])
+    ).toEqual(["src/a.ts:2:5 'Line' is deprecated."]);
   });
 
   it("ignores suggestions that are not deprecations", () => {
     const source = "const unused = 1;\n";
     expect(
-      problems({ "src/a.ts": source }, [{ ...at("src/a.ts", source, "unused"), reportsDeprecated: false }])
+      problems({ "src/a.ts": source }, [
+        { ...at("src/a.ts", source, "unused"), reportsDeprecated: false },
+      ])
     ).toEqual([]);
   });
 
@@ -100,7 +107,11 @@ describe("deprecationProblems()", () => {
     const b = "z.keyCode;\n";
     const second = { ...at("src/a.ts", a, "keyCode"), pos: a.lastIndexOf("keyCode") };
     expect(
-      problems({ "src/a.ts": a, "src/b.ts": b }, [at("src/b.ts", b, "keyCode"), second, at("src/a.ts", a, "keyCode")])
+      problems({ "src/a.ts": a, "src/b.ts": b }, [
+        at("src/b.ts", b, "keyCode"),
+        second,
+        at("src/a.ts", a, "keyCode"),
+      ])
     ).toEqual([
       "src/a.ts:1:3 'keyCode' is deprecated.",
       "src/a.ts:2:3 'keyCode' is deprecated.",
