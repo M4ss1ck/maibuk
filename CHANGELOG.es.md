@@ -5,6 +5,20 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 y este proyecto sigue el [Versionado Semántico](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.0] - 2026-10-31
+
+### Added
+- Uso de recursos opcional en Ajustes > Ventana, que muestra el uso de CPU, RAM y almacenamiento de Maibuk en la bandeja y en Ajustes
+
+### Changed
+- El menú de la bandeja ahora está completamente localizado
+
+### Fixed
+- Las barras de desplazamiento nativas y los controles siguen el tema oscuro, con un estilo de barra de desplazamiento consistente en todos los contenedores con desplazamiento
+- Mayús+Tab ya no atrapa el foco del teclado dentro de un Frame en Firefox
+- Uso de recursos solo mide los datos de Maibuk y la Carpeta de copias aprobada
+- Uso de recursos ya no muestra valores obsoletos tras un apagado/encendido rápido
+
 ## [0.18.0] - 2026-10-30
 
 ### Added
