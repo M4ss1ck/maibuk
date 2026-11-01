@@ -15,6 +15,25 @@ mod window_background;
 #[cfg(desktop)]
 mod window_restore;
 
+/// WebKitGTK defaults suit a browser. Maibuk serves one local page, so the
+/// memory cache for other pages, the back/forward page cache, and the offline
+/// application cache only hold memory: `DocumentViewer` keeps the smallest
+/// cache, and the page cache never restores a page in a single-page app.
+#[cfg(target_os = "linux")]
+fn tune_webkit_memory<R: tauri::Runtime>(win: &tauri::WebviewWindow<R>) {
+    let _ = win.with_webview(|webview| {
+        use webkit2gtk::{CacheModel, SettingsExt, WebContextExt, WebViewExt};
+        let view = webview.inner();
+        if let Some(context) = view.context() {
+            context.set_cache_model(CacheModel::DocumentViewer);
+        }
+        if let Some(settings) = WebViewExt::settings(&view) {
+            settings.set_enable_page_cache(false);
+            settings.set_enable_offline_web_application_cache(false);
+        }
+    });
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[allow(unused_mut)]
@@ -231,6 +250,8 @@ pub fn run() {
                 // the theme resolved to last time, or the stylesheet default
                 // when the frontend never reported one.
                 if let Some(win) = app.get_webview_window("main") {
+                    #[cfg(target_os = "linux")]
+                    tune_webkit_memory(&win);
                     let color = app
                         .path()
                         .app_data_dir()
