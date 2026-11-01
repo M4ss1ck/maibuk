@@ -27,12 +27,16 @@ import {
   Undo2,
   type LucideIcon,
 } from "lucide-react";
-import type { ParseKeys } from "i18next";
+import type { ParseKeys, TFunction } from "i18next";
+import { Puzzle } from "lucide-react";
 import {
   ALL_GROUP_IDS,
   FLOATING_ELIGIBLE_IDS,
+  isPluginToolbarButtonId,
+  registeredToolbarButtons,
   type ToolbarGroupId,
 } from "@/features/settings/toolbar-config";
+import { commandLabel, isCommandId } from "@/lib/shortcut-registry";
 
 export interface ToolbarGroupMeta {
   id: ToolbarGroupId;
@@ -117,3 +121,27 @@ export const TOOLBAR_GROUP_META = ALL_GROUP_IDS.reduce(
 export const TOOLBAR_GROUP_META_LIST: ToolbarGroupMeta[] = ALL_GROUP_IDS.map(
   (id) => TOOLBAR_GROUP_META[id]
 );
+
+/**
+ * A Toolbar Button's name and icon. A live Plugin button is named by its
+ * Command's label (its local id until one resolves); a raw full id is never shown.
+ */
+export function toolbarButtonPresentation(
+  id: string,
+  t: TFunction
+): { label: string; Icon: LucideIcon } {
+  const meta = (TOOLBAR_GROUP_META as Record<string, ToolbarGroupMeta | undefined>)[id];
+  if (meta) return { label: t(meta.labelKey), Icon: meta.Icon };
+  const pluginButton = isPluginToolbarButtonId(id)
+    ? registeredToolbarButtons().find((button) => button.id === id)
+    : undefined;
+  const commandId =
+    pluginButton?.command !== undefined
+      ? (`plugin.${pluginButton.pluginId}.${pluginButton.command}` as const)
+      : null;
+  const label =
+    commandId !== null && isCommandId(commandId)
+      ? commandLabel(commandId, t)
+      : (pluginButton?.localId ?? id);
+  return { label, Icon: Puzzle };
+}

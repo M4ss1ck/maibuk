@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   TOOLBAR_SETTINGS_ROW_GRID,
@@ -14,6 +15,17 @@ import {
   type ToolbarConfig,
 } from "@/features/settings/toolbar-config";
 import { registerPluginCommands } from "@/lib/shortcut-registry";
+import { makeToolbarEditor } from "@/test/support/toolbar-editor";
+
+vi.mock("@tiptap/react", () => ({
+  useEditorState: ({
+    editor,
+    selector,
+  }: {
+    editor: unknown;
+    selector: (value: { editor: unknown }) => unknown;
+  }) => selector({ editor }),
+}));
 
 const { i18nTestState } = vi.hoisted(() => ({
   i18nTestState: { localizeGroupLabels: false },
@@ -58,8 +70,16 @@ beforeEach(() => {
 
 // ─── helpers ───────────────────────────────────────────────────────────
 
+// These tests drive the List layout; the dialog opens on Toolbar.
 function renderDialog() {
-  return render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+  // Plugin buttons in the previews read the active route.
+  const view = render(
+    <MemoryRouter>
+      <ToolbarSettingsDialog editor={makeToolbarEditor()} isOpen onClose={vi.fn()} />
+    </MemoryRouter>
+  );
+  fireEvent.click(screen.getByRole("radio", { name: "toolbar.settings.layoutList" }));
+  return view;
 }
 
 function findStartGrid(): HTMLElement {
@@ -453,7 +473,7 @@ describe("keyboard operation of every control", () => {
   it("closes dialog via keyboard Enter on Close", async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
-    render(<ToolbarSettingsDialog isOpen onClose={onClose} />);
+    render(<ToolbarSettingsDialog editor={makeToolbarEditor()} isOpen onClose={onClose} />);
 
     const closeBtn = screen.getByRole("button", { name: "toolbar.settings.close", hidden: true });
     closeBtn.focus();
@@ -751,7 +771,7 @@ it("resets to defaults only after the inline confirm step", () => {
 
 it("calls onClose when the Close button is clicked", () => {
   const onClose = vi.fn();
-  render(<ToolbarSettingsDialog isOpen onClose={onClose} />);
+  render(<ToolbarSettingsDialog editor={makeToolbarEditor()} isOpen onClose={onClose} />);
   fireEvent.click(screen.getByRole("button", { name: "toolbar.settings.close", hidden: true }));
   expect(onClose).toHaveBeenCalledTimes(1);
 });

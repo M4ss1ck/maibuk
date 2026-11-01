@@ -470,9 +470,13 @@ _Avoid_: formatting bar, ribbon
 One unit the author places, shows, or hides in the Editor Toolbar or Selection Toolbar: a core tool or a Plugin's button. A core Toolbar Button can hold several controls that always move together, such as undo and redo, or font family and size.
 _Avoid_: group, toolbar group, tool
 
-**Start**, **End**:
-The two sections of the Editor Toolbar: Start runs from the leading edge, End sits against the trailing edge.
-_Avoid_: left, right (they flip in right-to-left layouts)
+**Start**:
+The section of the Editor Toolbar that runs from the leading edge; End follows it.
+_Avoid_: left (it flips in right-to-left layouts)
+
+**End**:
+The section of the Editor Toolbar that sits against the trailing edge, after Start.
+_Avoid_: right (it flips in right-to-left layouts)
 
 **Toolbar Divider**:
 A thin line the author places between Toolbar Buttons to set them apart. Unlike a Toolbar Button, the author can place as many as they like, but never two side by side.

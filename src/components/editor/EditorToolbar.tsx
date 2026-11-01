@@ -11,10 +11,7 @@ import {
 import { HtmlViewPanel } from "@/components/editor/HtmlViewPanel";
 import { EditorContextMenu } from "@/components/editor/EditorContextMenu";
 import { findBlockOffsetInHtml } from "@/components/editor/HtmlInspectMenu";
-import { ToolbarButton, Divider } from "@/components/editor/ToolbarButton";
-import { Tooltip, TooltipGroup } from "@/components/ui";
-import { ZoomControl } from "@/components/editor/ZoomControl";
-import { WidthControl } from "@/components/editor/WidthControl";
+import { TooltipGroup } from "@/components/ui";
 import { DictionaryDialog } from "@/components/editor/DictionaryDialog";
 import { DictionaryPromptDialog } from "@/components/editor/DictionaryPromptDialog";
 import { SymbolsDialog } from "@/components/editor/SymbolsDialog";
@@ -22,8 +19,11 @@ import { ShortcutsHelpDialog } from "@/components/ShortcutsHelpDialog";
 import { ShortcutEditorDialog } from "@/components/shortcuts/ShortcutEditorDialog";
 import { ResponsiveEditorToolbar } from "@/components/editor/toolbar/ResponsiveEditorToolbar";
 import { ToolbarSettingsDialog } from "@/components/editor/toolbar/ToolbarSettingsDialog";
+import {
+  ToolbarFixedUtilities,
+  ToolbarUtilityCluster,
+} from "@/components/editor/toolbar/ToolbarUtilities";
 import type { ToolbarGroupCallbacks } from "@/components/editor/toolbar/EditorToolbarGroups";
-import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "@/features/settings/store";
 import type { SearchHandoff } from "@/features/search/types";
 import type { Language } from "@/features/settings/types";
@@ -32,7 +32,6 @@ import { isModKey } from "@/lib/keyboard";
 import { useShortcuts } from "@/lib/shortcuts";
 import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
 import { useSearchSwitchesStore } from "@/features/search/switches";
-import { ChevronDown, ChevronUp, Settings2 } from "lucide-react";
 
 interface EditorToolbarProps {
   editor: Editor;
@@ -78,7 +77,6 @@ export function EditorToolbar({
   findHandoff = null,
   onHandoffApplied,
 }: EditorToolbarProps) {
-  const { t } = useTranslation();
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [findReplaceFocusSignal, setFindReplaceFocusSignal] = useState(0);
   const [showImageDialog, setShowImageDialog] = useState(false);
@@ -362,46 +360,16 @@ export function EditorToolbar({
           callbacks={callbacks}
           onExitToolbar={onExitToolbar}
           utilityCluster={
-            <>
-              <ToolbarButton
-                onClick={openShortcutsHelp}
-                label={t("shortcuts.title")}
-                shortcut="global.showHelp"
-              >
-                <span className="w-4 h-4 flex items-center justify-center font-bold">?</span>
-              </ToolbarButton>
-              <Divider />
-              <ToolbarButton
-                onClick={() => setShowToolbarSettings(true)}
-                label={t("toolbar.settings.open")}
-                shortcut="editor.toolbarSettings"
-              >
-                <Settings2 className="w-4 h-4" />
-              </ToolbarButton>
-            </>
+            <ToolbarUtilityCluster
+              onShortcutsHelp={openShortcutsHelp}
+              onToolbarSettings={() => setShowToolbarSettings(true)}
+            />
           }
           fixedUtilities={
-            <div className="flex items-center gap-0.5">
-              <WidthControl />
-              <Divider />
-              <ZoomControl />
-              <Tooltip
-                content={isToolbarExpanded ? t("editor.hideToolbar") : t("editor.showToolbar")}
-              >
-                <button
-                  type="button"
-                  onClick={() => setIsToolbarExpanded(!isToolbarExpanded)}
-                  className="p-2 rounded hover:bg-muted transition-colors"
-                  aria-label={isToolbarExpanded ? t("editor.hideToolbar") : t("editor.showToolbar")}
-                >
-                  {isToolbarExpanded ? (
-                    <ChevronUp className="w-4 h-4" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4" />
-                  )}
-                </button>
-              </Tooltip>
-            </div>
+            <ToolbarFixedUtilities
+              isExpanded={isToolbarExpanded}
+              onToggleExpanded={() => setIsToolbarExpanded(!isToolbarExpanded)}
+            />
           }
         />
 
@@ -486,6 +454,7 @@ export function EditorToolbar({
           }}
         />
         <ToolbarSettingsDialog
+          editor={editor}
           isOpen={showToolbarSettings}
           onClose={() => setShowToolbarSettings(false)}
         />

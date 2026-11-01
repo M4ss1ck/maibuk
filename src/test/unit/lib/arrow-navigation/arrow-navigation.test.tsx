@@ -1100,3 +1100,70 @@ describe("virtualized grid rows (aria-rowindex / aria-rowcount)", () => {
     expect(button("Editor action")).toHaveFocus();
   });
 });
+
+// The Customize toolbar previews (#672): a horizontal grid list box whose
+// items wrap onto rows like a toolbar, with the tray below it.
+function WrappedRowFixture() {
+  const items = [
+    { id: "a", rect: "0 0 40 30" },
+    { id: "b", rect: "50 0 150 30" },
+    { id: "c", rect: "160 0 200 30" },
+    { id: "d", rect: "0 40 40 70" },
+    { id: "e", rect: "90 40 130 70" },
+  ];
+  return (
+    <main>
+      <ListBox aria-label="Preview" layout="grid" orientation="horizontal" data-rect="0 0 200 70">
+        {items.map(({ id, rect }) => (
+          <ListBoxItem key={id} id={id} textValue={`Item ${id}`} data-rect={rect}>
+            Item {id}
+          </ListBoxItem>
+        ))}
+      </ListBox>
+      <ListBox aria-label="Tray" layout="grid" orientation="horizontal" data-rect="0 100 200 130">
+        <ListBoxItem id="t" textValue="Tray item" data-rect="0 100 40 130">
+          Tray item
+        </ListBoxItem>
+      </ListBox>
+    </main>
+  );
+}
+
+describe("a horizontal grid list box that wraps like a toolbar", () => {
+  const option = (name: string) => screen.getByRole("option", { name });
+
+  it("moves Left and Right in reading order across its rows", async () => {
+    const user = userEvent.setup();
+    render(<WrappedRowFixture />);
+    act(() => option("Item c").focus());
+
+    await user.keyboard("{ArrowRight}");
+    expect(option("Item d")).toHaveFocus();
+    await user.keyboard("{ArrowLeft}");
+    expect(option("Item c")).toHaveFocus();
+  });
+
+  it("moves Up and Down between its rows by position", async () => {
+    const user = userEvent.setup();
+    render(<WrappedRowFixture />);
+    act(() => option("Item b").focus());
+
+    await user.keyboard("{ArrowDown}");
+    expect(option("Item e")).toHaveFocus();
+    await user.keyboard("{ArrowUp}");
+    expect(option("Item b")).toHaveFocus();
+  });
+
+  it("leaves its last row Down into the widget below, and comes back Up", async () => {
+    const user = userEvent.setup();
+    render(<WrappedRowFixture />);
+    act(() => option("Item d").focus());
+
+    await user.keyboard("{ArrowDown}");
+    expect(option("Tray item")).toHaveFocus();
+    await user.keyboard("{ArrowUp}");
+    expect(screen.getByRole("listbox", { name: "Preview" }).contains(document.activeElement)).toBe(
+      true
+    );
+  });
+});

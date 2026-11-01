@@ -59,6 +59,8 @@ export const TUTORIAL_SECTIONS: readonly TutorialSection[] = [
       step("book-editor.text", ["Heading", "Scene Break", "Footnote"]),
       step("book-editor.outline", ["Outline"]),
       step("book-editor.toolbar", [
+        "Editor Toolbar",
+        "Toolbar Button",
         "Find and Replace",
         "Spell Check",
         "Word Lookup",
@@ -264,6 +266,13 @@ export const TUTORIAL_OUT_OF_SCOPE_TERMS: Readonly<Record<string, string>> = {
     "One of the Command Palette's two modes: the Tutorial runs keep the app inert and the palette refuses to open during a run, so no step can show it.",
   "Reset settings":
     "lives inside the Advanced settings section and runs a destructive confirm dialog; steps never open dialogs",
+  Start:
+    "a section of the Editor Toolbar the author arranges only inside Toolbar settings; steps never open dialogs",
+  End: "a section of the Editor Toolbar the author arranges only inside Toolbar settings; steps never open dialogs",
+  "Toolbar Divider":
+    "added, moved, and removed only inside Toolbar settings; on the toolbar itself it is a thin line with no control, and steps never open dialogs",
+  "Selection Toolbar":
+    "appears only while text is selected, and a Tutorial run keeps the app inert, so no step can select text to show it",
   Watermark:
     "decorative: painted behind a Canvas and never an outcome the author acts on, so no step can point at it",
 };

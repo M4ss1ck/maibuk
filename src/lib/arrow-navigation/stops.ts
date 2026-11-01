@@ -148,6 +148,8 @@ export function arrowOutcome(el: HTMLElement, key: ArrowKey): ArrowOutcome {
     return !collapsible && topLevel && row === el ? { kind: "edge" } : { kind: "inside" };
   }
 
+  if (isWrappedRow(widget)) return wrappedRowOutcome(el, widget, key);
+
   // Grid lists and list boxes. Up/Down never leave a list or grid.
   if (vertical) return { kind: "inside" };
   if (isTwoDimensional(widget)) return gridOutcome(el, widget, key);
@@ -161,6 +163,41 @@ export function arrowOutcome(el: HTMLElement, key: ArrowKey): ArrowOutcome {
   return children.length === 0 || children[children.length - 1] === el
     ? { kind: "edge" }
     : { kind: "inside" };
+}
+
+// A horizontal grid list box whose items wrap onto rows, as a toolbar does
+// (the Customize toolbar previews). React Aria's grid delegate assumes equal
+// columns, so it stops Left/Right at a row's end and has no Up/Down for a
+// horizontal grid. Left/Right follow reading order, Up/Down move by position,
+// and both leave at the widget's edge, so Down from the last row reaches the
+// widget below.
+function isWrappedRow(widget: Element): boolean {
+  return (
+    widget.getAttribute("role") === "listbox" &&
+    isTwoDimensional(widget) &&
+    widget.getAttribute("aria-orientation") === "horizontal"
+  );
+}
+
+function wrappedRowOutcome(el: HTMLElement, widget: Element, key: ArrowKey): ArrowOutcome {
+  const item = el.closest('[role="option"]');
+  if (!item || !widget.contains(item)) return { kind: "edge" };
+  if (el !== item) return { kind: "inside" };
+  const items = [...widget.querySelectorAll<HTMLElement>('[role="option"]')].filter(
+    (option) => option.getAttribute("aria-disabled") !== "true"
+  );
+  if (!isVerticalKey(key)) {
+    const to = items[items.indexOf(el) + (key === "ArrowRight" ? 1 : -1)];
+    return to ? { kind: "move", to } : { kind: "edge" };
+  }
+  const to = pickInDirection(
+    el.getBoundingClientRect(),
+    items
+      .filter((option) => option !== el)
+      .map((option) => ({ rect: option.getBoundingClientRect(), id: option })),
+    DIRECTION[key]
+  );
+  return to ? { kind: "move", to } : { kind: "edge" };
 }
 
 // A vertical toolbar inside a grid-list row (the Chapter outline). React

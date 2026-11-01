@@ -1,49 +1,78 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { Editor } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
 import {
   ChevronDown,
   ChevronUp,
   GripVertical,
   Plus,
-  Puzzle,
   SeparatorHorizontal,
   Trash2,
 } from "lucide-react";
 import { GridList, GridListItem } from "react-aria-components/GridList";
 import { Button as AriaButton } from "react-aria-components/Button";
+import { ToggleButton } from "react-aria-components/ToggleButton";
+import { ToggleButtonGroup } from "react-aria-components/ToggleButtonGroup";
 import { useDragAndDrop, type TextDropItem } from "react-aria-components/useDragAndDrop";
 import { Button, Modal, Switch, Tooltip, TooltipGroup } from "@/components/ui";
 import { useSettingsStore } from "@/features/settings/store";
 import { useParkSelectionWhileDragging } from "@/hooks/useParkSelectionWhileDragging";
 import { useToolbarRegistryRevision } from "@/hooks/useToolbarRegistryRevision";
-import { TOOLBAR_GROUP_META } from "@/components/editor/toolbar/toolbar-groups";
+import { toolbarButtonPresentation } from "@/components/editor/toolbar/toolbar-groups";
 import {
+  SelectionArrangementLayout,
+  ToolbarArrangementLayout,
+} from "@/components/editor/toolbar/ToolbarArrangementLayouts";
+import {
+  isFloatingEligible,
   isLiveToolbarEntry,
-  isPluginToolbarButtonId,
-  registeredToolbarButtons,
   type ToolbarEntry,
   type ToolbarSection,
 } from "@/features/settings/toolbar-config";
-import { commandLabel, isCommandId } from "@/lib/shortcut-registry";
 
 export const TOOLBAR_SETTINGS_ROW_GRID = "grid-cols-[minmax(0,1fr)_3rem_3rem_3rem_3rem]";
 export const TOOLBAR_SETTINGS_ROW_MIN_WIDTH = "min-w-[24rem]";
 const TOOLBAR_DND_TYPE = "toolbar-entry";
 
+type ToolbarSettingsLayout = "toolbar" | "selection" | "list";
+const LAYOUTS = [
+  { id: "toolbar", labelKey: "toolbar.settings.layoutToolbar" },
+  { id: "selection", labelKey: "toolbar.settings.layoutSelection" },
+  { id: "list", labelKey: "toolbar.settings.layoutList" },
+] as const;
+
 interface ToolbarSettingsDialogProps {
+  /** The editor whose real toolbar controls the previews render, inert. */
+  editor: Editor;
   isOpen: boolean;
   onClose: () => void;
 }
 
-export function ToolbarSettingsDialog({ isOpen, onClose }: ToolbarSettingsDialogProps) {
+export function ToolbarSettingsDialog({ editor, isOpen, onClose }: ToolbarSettingsDialogProps) {
   const { t } = useTranslation();
-  const toolbarConfig = useSettingsStore((state) => state.toolbarConfig);
   const resetToolbarConfig = useSettingsStore((state) => state.resetToolbarConfig);
   const [confirmingReset, setConfirmingReset] = useState(false);
-  const [announcement, setAnnouncement] = useState("");
+  const [layout, setLayout] = useState<ToolbarSettingsLayout>("toolbar");
+  const liveRef = useRef<HTMLDivElement>(null);
+
+  // The dialog opens on the Toolbar layout every time; the last choice is not kept.
+  useEffect(() => {
+    if (isOpen) setLayout("toolbar");
+  }, [isOpen]);
+
+  // Written straight into the live region, clearing it first, so a repeated
+  // message is announced again.
+  const announce = (message: string) => {
+    const live = liveRef.current;
+    if (!live) return;
+    live.textContent = "";
+    requestAnimationFrame(() => {
+      live.textContent = message;
+    });
+  };
 
   const announceMove = (section: ToolbarSection, position: number, total: number) => {
-    setAnnouncement(
+    announce(
       t("toolbar.settings.moved", {
         section: t(`toolbar.settings.${section}`),
         position,
@@ -56,6 +85,7 @@ export function ToolbarSettingsDialog({ isOpen, onClose }: ToolbarSettingsDialog
     if (confirmingReset) {
       resetToolbarConfig();
       setConfirmingReset(false);
+      announce(t("toolbar.settings.resetDone"));
     } else {
       setConfirmingReset(true);
     }
@@ -66,63 +96,101 @@ export function ToolbarSettingsDialog({ isOpen, onClose }: ToolbarSettingsDialog
       isOpen={isOpen}
       onClose={onClose}
       title={t("toolbar.settings.title")}
-      size="wide"
+      size="xl"
+      fullScreenOnPhone
+      headerActions={
+        <Button
+          size="sm"
+          variant={confirmingReset ? "destructive" : "secondary"}
+          onClick={handleResetClick}
+          onBlur={() => setConfirmingReset(false)}
+        >
+          {confirmingReset ? t("toolbar.settings.resetConfirm") : t("toolbar.settings.reset")}
+        </Button>
+      }
       footer={
         <>
-          <Button
-            variant={confirmingReset ? "destructive" : "secondary"}
-            onClick={handleResetClick}
+          <ToggleButtonGroup
+            aria-label={t("toolbar.settings.layout")}
+            selectionMode="single"
+            disallowEmptySelection
+            selectedKeys={[layout]}
+            onSelectionChange={(keys) => {
+              const next = [...keys][0];
+              if (next) setLayout(next as ToolbarSettingsLayout);
+            }}
+            className="mr-auto flex w-full gap-0.5 rounded-[10px] bg-muted p-[3px] sm:inline-flex sm:w-auto"
           >
-            {confirmingReset ? t("toolbar.settings.resetConfirm") : t("toolbar.settings.reset")}
-          </Button>
-          <Button variant="primary" onClick={onClose}>
+            {LAYOUTS.map(({ id, labelKey }) => (
+              <ToggleButton
+                key={id}
+                id={id}
+                className="flex-1 cursor-pointer rounded-lg px-3.5 py-1.5 text-[13px] font-medium text-muted-foreground outline-none transition-colors data-[focus-visible]:ring-2 data-[focus-visible]:ring-primary data-[selected]:bg-background data-[selected]:text-foreground data-[selected]:shadow-sm"
+              >
+                {t(labelKey)}
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+          <Button variant="primary" onClick={onClose} className="w-full sm:w-auto">
             {t("toolbar.settings.close")}
           </Button>
         </>
       }
     >
-      <div className="overflow-x-auto">
-        <div
-          className={`grid ${TOOLBAR_SETTINGS_ROW_GRID} ${TOOLBAR_SETTINGS_ROW_MIN_WIDTH} sticky top-0 z-10 gap-2 border-b border-border bg-background px-2 pb-2 text-xs font-medium text-muted-foreground`}
-        >
-          <ColumnHeader
-            label={t("toolbar.settings.itemColumn")}
-            help={t("toolbar.settings.itemColumnHelp")}
-          />
-          <ColumnHeader
-            label={t("toolbar.settings.toolbarColumn")}
-            help={t("toolbar.settings.toolbarColumnHelp")}
-            className="text-center"
-          />
-          <ColumnHeader
-            label={t("toolbar.settings.selectionMenuColumn")}
-            help={t("toolbar.settings.selectionMenuColumnHelp")}
-            className="text-center"
-          />
-          <ColumnHeader
-            label={t("toolbar.settings.orderColumn")}
-            help={t("toolbar.settings.orderColumnHelp")}
-            className="text-center"
-          />
-          <ColumnHeader
-            label={t("toolbar.settings.actionsColumn")}
-            help={t("toolbar.settings.actionsColumnHelp")}
-            className="text-center"
-          />
-        </div>
-        <SectionHeaderRow section="start" />
-        <ToolbarSectionGrid
-          section="start"
-          entries={toolbarConfig.start}
-          announceMove={announceMove}
-        />
-        <SectionHeaderRow section="end" />
-        <ToolbarSectionGrid section="end" entries={toolbarConfig.end} announceMove={announceMove} />
-      </div>
-      <div role="status" aria-live="polite" className="sr-only">
-        {announcement}
-      </div>
+      {layout === "toolbar" && <ToolbarArrangementLayout editor={editor} announce={announce} />}
+      {layout === "selection" && <SelectionArrangementLayout editor={editor} announce={announce} />}
+      {layout === "list" && <ToolbarListLayout announceMove={announceMove} />}
+      <div ref={liveRef} role="status" aria-live="polite" className="sr-only" />
     </Modal>
+  );
+}
+
+function ToolbarListLayout({
+  announceMove,
+}: {
+  announceMove: (section: ToolbarSection, position: number, total: number) => void;
+}) {
+  const { t } = useTranslation();
+  const toolbarConfig = useSettingsStore((state) => state.toolbarConfig);
+  return (
+    <div className="overflow-x-auto">
+      <div
+        className={`grid ${TOOLBAR_SETTINGS_ROW_GRID} ${TOOLBAR_SETTINGS_ROW_MIN_WIDTH} sticky top-0 z-10 gap-2 border-b border-border bg-background px-2 pb-2 text-xs font-medium text-muted-foreground`}
+      >
+        <ColumnHeader
+          label={t("toolbar.settings.itemColumn")}
+          help={t("toolbar.settings.itemColumnHelp")}
+        />
+        <ColumnHeader
+          label={t("toolbar.settings.toolbarColumn")}
+          help={t("toolbar.settings.toolbarColumnHelp")}
+          className="text-center"
+        />
+        <ColumnHeader
+          label={t("toolbar.settings.selectionMenuColumn")}
+          help={t("toolbar.settings.selectionMenuColumnHelp")}
+          className="text-center"
+        />
+        <ColumnHeader
+          label={t("toolbar.settings.orderColumn")}
+          help={t("toolbar.settings.orderColumnHelp")}
+          className="text-center"
+        />
+        <ColumnHeader
+          label={t("toolbar.settings.actionsColumn")}
+          help={t("toolbar.settings.actionsColumnHelp")}
+          className="text-center"
+        />
+      </div>
+      <SectionHeaderRow section="start" />
+      <ToolbarSectionGrid
+        section="start"
+        entries={toolbarConfig.start}
+        announceMove={announceMove}
+      />
+      <SectionHeaderRow section="end" />
+      <ToolbarSectionGrid section="end" entries={toolbarConfig.end} announceMove={announceMove} />
+    </div>
   );
 }
 
@@ -272,31 +340,10 @@ function GroupGridItem({ section, entry, isDragging, onMove }: GroupGridItemProp
   const inSelectionToolbar = useSettingsStore((state) =>
     state.toolbarConfig.selectionToolbar.includes(entry.id)
   );
-  // Plugin buttons join the same ordering, visibility, and selection-toolbar
-  // membership as core groups. A live button is named by its Command's label
-  // (its local id until the wiring slice resolves more); a raw full id is
-  // never shown.
-  const meta = (
-    TOOLBAR_GROUP_META as Record<
-      string,
-      (typeof TOOLBAR_GROUP_META)[keyof typeof TOOLBAR_GROUP_META] | undefined
-    >
-  )[entry.id];
-  const pluginButton = isPluginToolbarButtonId(entry.id)
-    ? registeredToolbarButtons().find((button) => button.id === entry.id)
-    : undefined;
-  const commandId =
-    pluginButton?.command !== undefined
-      ? (`plugin.${pluginButton.pluginId}.${pluginButton.command}` as const)
-      : null;
-  const label =
-    meta !== undefined
-      ? t(meta.labelKey)
-      : commandId !== null && isCommandId(commandId)
-        ? commandLabel(commandId, t)
-        : (pluginButton?.localId ?? entry.id);
-  const Icon = meta?.Icon ?? Puzzle;
-  const floatingEligible = meta ? meta.floatingEligible : true;
+  // Plugin buttons join the same ordering, visibility, and Selection Toolbar
+  // membership as core groups.
+  const { label, Icon } = toolbarButtonPresentation(entry.id, t);
+  const floatingEligible = isFloatingEligible(entry.id);
 
   return (
     <GridListItem
