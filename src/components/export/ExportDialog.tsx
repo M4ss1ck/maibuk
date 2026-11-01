@@ -3,8 +3,6 @@ import { Button, Modal, Switch, Select } from "@/components/ui";
 import {
   generateEpub,
   getEpubFilename,
-  generatePdf,
-  getPdfFilename,
   DEFAULT_EXPORT_OPTIONS,
   DEFAULT_PDF_OPTIONS,
   type EpubExportOptions,
@@ -85,6 +83,7 @@ export function ExportDialog({ isOpen, onClose, book, chapters }: ExportDialogPr
       let filterExtension: string;
 
       if (format === "pdf") {
+        const { generatePdf, getPdfFilename } = await import("@/features/export/pdf-generator");
         blob = await generatePdf(book, chapters, pdfOptions, (message: string) => {
           setProgress((prev) => ({ ...prev, message }));
         });

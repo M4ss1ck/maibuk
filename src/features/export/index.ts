@@ -18,10 +18,8 @@ export {
   DEFAULT_PDF_OPTIONS,
   PDF_BASE_FONT,
 } from "@/features/export/types";
-export { generatePdf, getPdfFilename, sanitizePdfText } from "@/features/export/pdf-generator";
-export { createPdfStyles } from "@/features/export/pdf-styles";
+// The PDF (@react-pdf) and image (html-to-image) exporters are not
+// re-exported: they are about 1.5 MB, so callers `import()` them when an
+// export runs instead of loading them with the screen.
 export type { PdfStyles } from "@/features/export/pdf-styles";
-export { mapCssFontToPdf } from "@/features/export/pdf-content-renderer";
-export { generateDocumentPdf } from "@/features/export/document-pdf";
-export { elementToPngBytes } from "@/features/export/element-to-image";
 export { saveBinaryFile, exportFilename } from "@/features/export/save-binary-file";
