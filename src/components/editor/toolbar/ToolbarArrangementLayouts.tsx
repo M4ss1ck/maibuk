@@ -1194,7 +1194,7 @@ export function SelectionArrangementLayout({ editor, announce }: ArrangementLayo
     },
   });
 
-  const dropInBubble = async (items: readonly unknown[], target: DropTarget) => {
+  const dropInSelectionPreview = async (items: readonly unknown[], target: DropTarget) => {
     const data = await readDrag(items);
     if (!data) return;
     const others = shownWithoutId(data.id);
@@ -1224,7 +1224,7 @@ export function SelectionArrangementLayout({ editor, announce }: ArrangementLayo
     announce(t("toolbar.settings.takenOut", { name: label(data.id) }));
   };
 
-  const { dragAndDropHooks: bubbleDnd } = useDragAndDrop({
+  const { dragAndDropHooks: selectionPreviewDnd } = useDragAndDrop({
     getItems: (keys) => dragItems(keys, "preview", label),
     ...dragHandlers,
     acceptedDragTypes: [DRAG_TYPE],
@@ -1232,9 +1232,9 @@ export function SelectionArrangementLayout({ editor, announce }: ArrangementLayo
     getDropOperation: (target) =>
       target.type === "item" && target.dropPosition === "on" ? "cancel" : "move",
     onReorder: (event) =>
-      dropInBubble(dragItems(event.keys, "preview", label).map(asTextItem), event.target),
-    onInsert: (event) => dropInBubble(event.items, event.target),
-    onRootDrop: (event) => dropInBubble(event.items, { type: "root" }),
+      dropInSelectionPreview(dragItems(event.keys, "preview", label).map(asTextItem), event.target),
+    onInsert: (event) => dropInSelectionPreview(event.items, event.target),
+    onRootDrop: (event) => dropInSelectionPreview(event.items, { type: "root" }),
   });
 
   const { dragAndDropHooks: trayDnd } = useDragAndDrop({
@@ -1253,13 +1253,13 @@ export function SelectionArrangementLayout({ editor, announce }: ArrangementLayo
     ref: rootRef,
     getDropOperationForPoint: (types, _allowed, x, y) => {
       if (!types.has(DRAG_TYPE)) return "cancel";
-      const bubble = previewRef.current?.getBoundingClientRect();
+      const previewBox = previewRef.current?.getBoundingClientRect();
       if (
-        bubble &&
-        x >= bubble.left &&
-        x <= bubble.right &&
-        y >= bubble.top &&
-        y <= bubble.bottom
+        previewBox &&
+        x >= previewBox.left &&
+        x <= previewBox.right &&
+        y >= previewBox.top &&
+        y <= previewBox.bottom
       ) {
         return "cancel";
       }
@@ -1306,7 +1306,7 @@ export function SelectionArrangementLayout({ editor, announce }: ArrangementLayo
               <SkeletonBar width="100%" />
               <SkeletonBar width="94%" />
               <span className="h-14" />
-              {/* The selected text sits mid-row, so the bubble centred over the row is
+              {/* The selected text sits mid-row, so the Selection Toolbar centred over the row is
                   centred over it too, and wraps rather than leave a narrow preview. */}
               <div className="relative flex items-center gap-2">
                 <SkeletonBar className="flex-1" width="auto" />
@@ -1319,7 +1319,7 @@ export function SelectionArrangementLayout({ editor, announce }: ArrangementLayo
                       layout="grid"
                       orientation="horizontal"
                       items={shown.map((id) => ({ id }))}
-                      dragAndDropHooks={bubbleDnd}
+                      dragAndDropHooks={selectionPreviewDnd}
                       renderEmptyState={() => (
                         <span className="block whitespace-nowrap px-1.5 py-1 font-sans text-xs text-muted-foreground">
                           {t("toolbar.settings.selectionEmpty")}

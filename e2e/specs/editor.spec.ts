@@ -806,11 +806,16 @@ test.describe("toolbar arrangement @wf:editor-toolbar-arrangement", () => {
       .poll(async () => Math.round((await customize(page).boundingBox())?.width ?? 0))
       .toBe(viewport?.width);
     await customize(page).getByRole("radio", { name: "Selection" }).tap();
-    const bubble = customize(page).getByRole("listbox", { name: "Selection menu preview" });
-    await expect(bubble).toBeVisible();
+    const selectionPreview = customize(page).getByRole("listbox", {
+      name: "Selection menu preview",
+    });
+    await expect(selectionPreview).toBeVisible();
     await capture(page, "toolbar-arrangement-phone-selection");
-    // The bubble wraps on a narrow screen instead of running off the preview.
-    for (const button of [bubble.getByRole("option").first(), bubble.getByRole("option").last()]) {
+    // The Selection Toolbar preview wraps on a narrow screen instead of running off the preview.
+    for (const button of [
+      selectionPreview.getByRole("option").first(),
+      selectionPreview.getByRole("option").last(),
+    ]) {
       const at = await button.boundingBox();
       expect(at && viewport && at.x >= 0 && at.x + at.width <= viewport.width).toBe(true);
     }
@@ -885,22 +890,24 @@ test.describe("toolbar arrangement @wf:editor-toolbar-arrangement", () => {
     await expect(selectionRadio).toBeChecked();
     await expect(selectionRadio).toBeFocused();
 
-    const bubble = customize(page).getByRole("listbox", { name: "Selection menu preview" });
-    await expect(bubble).toBeVisible();
+    const selectionPreview = customize(page).getByRole("listbox", {
+      name: "Selection menu preview",
+    });
+    await expect(selectionPreview).toBeVisible();
     await capture(page, "toolbar-arrangement-selection-layout", { around: [customize(page)] });
     await expect(preview(page)).toHaveCount(0);
 
-    await tabTo(page, bubble.getByRole("option").first());
+    await tabTo(page, selectionPreview.getByRole("option").first());
     await pressUntilFocused(
       page,
       "ArrowRight",
-      bubble.getByRole("option", { name: "Headings", exact: true }),
+      selectionPreview.getByRole("option", { name: "Headings", exact: true }),
       { max: 8 }
     );
     await page.keyboard.press("Enter");
     await page.keyboard.press("ArrowLeft");
     await page.keyboard.press("Enter");
-    await expect(bubble.getByRole("option").first()).toHaveAccessibleName("Headings");
+    await expect(selectionPreview.getByRole("option").first()).toHaveAccessibleName("Headings");
 
     await page.keyboard.press("Escape");
     await expect(customize(page)).toBeHidden();
