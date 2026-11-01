@@ -44,8 +44,8 @@ function deferred() {
 }
 
 /** Model files that mark a spec complete once it installs; `hold` defers one spec's install. */
-function fakeModelFiles() {
-  const complete = new Set<string>();
+function fakeModelFiles(initiallyComplete: string[] = []) {
+  const complete = new Set<string>(initiallyComplete);
   const held = new Map<string, Promise<void>>();
   const files: ModelFiles = {
     install: async (spec, _onProgress, signal) => {
@@ -61,6 +61,7 @@ function fakeModelFiles() {
       complete.add(spec.id);
     },
     isComplete: async (spec) => complete.has(spec.id),
+    listInstalled: async () => [...complete],
     remove: async (id) => {
       complete.delete(id);
     },
@@ -92,6 +93,7 @@ beforeEach(() => {
   useDictationStore.setState({
     enabled: true,
     installed: [],
+    orphans: [],
     downloads: {},
     selectedModel: {},
   });
@@ -342,6 +344,7 @@ describe("getDictation()", () => {
         throw new DictationError("download_failed");
       },
       isComplete: async () => false,
+      listInstalled: async () => [],
       remove: async () => {},
     } satisfies ModelFiles);
     const runtime = await getDictation();
@@ -408,6 +411,26 @@ describe("install()", () => {
       en: bilingual.id,
       es: bilingual.id,
     });
+  });
+
+  it("lists installed models the catalog no longer offers as orphans, and removing one clears it", async () => {
+    createRecognizerHost.mockResolvedValue(listeningHost());
+    const retiredPlatformOnly = MODEL_CATALOG.find((m) => !m.platforms.includes("web"));
+    if (!retiredPlatformOnly) throw new Error("no desktop-only model in the catalog");
+    const files = fakeModelFiles([
+      catalogModel("en", "fast").id,
+      "retired-model",
+      retiredPlatformOnly.id,
+    ]);
+    getModelFiles.mockResolvedValue(files.files);
+    const runtime = await getDictation();
+
+    await runtime.refreshInstalled();
+    expect(useDictationStore.getState().orphans).toEqual(["retired-model"]);
+
+    await runtime.remove("retired-model");
+    expect(useDictationStore.getState().orphans).toEqual([]);
+    expect(useDictationStore.getState().installed).toEqual([catalogModel("en", "fast").id]);
   });
 
   it("falls back to another installed model when the selected one is removed", async () => {
@@ -556,6 +579,7 @@ describe("install()", () => {
         throw new DictationError("download_failed");
       },
       isComplete: async () => false,
+      listInstalled: async () => [],
       remove: async () => {},
     } satisfies ModelFiles);
     const runtime = await getDictation();

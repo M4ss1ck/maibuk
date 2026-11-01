@@ -29,6 +29,7 @@ function fakeFiles(complete: string[] = []): ModelFiles & { installed: Set<strin
     installed,
     install: vi.fn(async (s: ModelSpec) => void installed.add(s.id)),
     isComplete: vi.fn(async (s: ModelSpec) => installed.has(s.id)),
+    listInstalled: vi.fn(async () => [...installed]),
     remove: vi.fn(async (id: string) => void installed.delete(id)),
   };
 }

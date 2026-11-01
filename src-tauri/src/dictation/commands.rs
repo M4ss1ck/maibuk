@@ -200,6 +200,13 @@ mod imp {
     }
 
     #[tauri::command]
+    pub fn dictation_models_list(app: AppHandle) -> Vec<String> {
+        base(&app)
+            .map(|b| models::list_installed(&b))
+            .unwrap_or_default()
+    }
+
+    #[tauri::command]
     pub fn dictation_models_remove(
         app: AppHandle,
         state: State<'_, DictationState>,
@@ -274,6 +281,10 @@ mod imp {
     pub fn dictation_models_is_complete(spec: ModelSpec) -> bool {
         let _ = spec;
         false
+    }
+    #[tauri::command]
+    pub fn dictation_models_list() -> Vec<String> {
+        Vec::new()
     }
     #[tauri::command]
     pub fn dictation_models_remove(id: String) -> Result<(), DictationError> {

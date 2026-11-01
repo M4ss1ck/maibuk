@@ -155,8 +155,14 @@ async function build(): Promise<DictationRuntime> {
   session.subscribe(() => useDictationStore.setState({ snapshot: session.getSnapshot() }));
 
   const refreshInstalled = async () => {
+    const offered = new Set(MODEL_CATALOG.map((spec) => spec.id));
+    const [installedIds, listed] = await Promise.all([
+      models.installedIds(),
+      files.listInstalled(),
+    ]);
     useDictationStore.setState({
-      installed: [...(await models.installedIds())],
+      installed: [...installedIds],
+      orphans: listed.filter((id) => !offered.has(id)),
     });
   };
 

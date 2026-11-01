@@ -35,6 +35,8 @@ export interface DictationStoreState {
   snapshot: SessionSnapshot;
   support: SupportReport | null;
   installed: string[];
+  /** Installed models the catalog no longer offers; Settings lists them to remove. Not persisted. */
+  orphans: string[];
   downloads: Record<string, { done: number; total: number }>;
   /** The model each language uses, by id; `pickModel` resolves a missing or unavailable one. */
   selectedModel: Partial<Record<DictationLanguage, string>>;
@@ -109,6 +111,7 @@ export const useDictationStore = create<DictationStoreState>()(
       },
       support: null,
       installed: [],
+      orphans: [],
       downloads: {},
       selectedModel: {},
       announcement: "",

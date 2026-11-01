@@ -2067,7 +2067,8 @@
       "noLivePreview": "Sin vista previa en vivo: escribe cada línea al hacer una pausa.",
       "source": "Fuente",
       "sourceFor": "Fuente: {{name}}",
-      "device": "Micrófono: {{device}}"
+      "device": "Micrófono: {{device}}",
+      "orphan": "Ya no se ofrece"
     },
     "spokenPunctuation": {
       "title": "Puntuación dictada",

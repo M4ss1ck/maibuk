@@ -122,5 +122,7 @@ export interface ModelFiles {
     signal: AbortSignal
   ): Promise<void>;
   isComplete(spec: ModelSpec): Promise<boolean>;
+  /** Ids of every model complete on this device, catalog or not, so a retired one can be removed. */
+  listInstalled(): Promise<string[]>;
   remove(id: string): Promise<void>;
 }

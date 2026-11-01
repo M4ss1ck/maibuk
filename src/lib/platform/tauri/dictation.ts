@@ -85,5 +85,6 @@ export const tauriModelFiles: ModelFiles = {
     }
   },
   isComplete: (spec) => call<boolean>("dictation_models_is_complete", { spec }),
+  listInstalled: () => call<string[]>("dictation_models_list"),
   remove: (id) => call("dictation_models_remove", { id }),
 };

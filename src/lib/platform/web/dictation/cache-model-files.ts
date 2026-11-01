@@ -75,6 +75,15 @@ export const cacheModelFiles: ModelFiles = {
     const cache = await caches.open(CACHE_NAME);
     return (await cache.match(marker(spec.id))) !== undefined;
   },
+  async listInstalled() {
+    const cache = await caches.open(CACHE_NAME);
+    const ids = new Set<string>();
+    for (const request of await cache.keys()) {
+      const match = /^\/dictation\/([^/]+)\/\.complete$/.exec(new URL(request.url).pathname);
+      if (match) ids.add(match[1]);
+    }
+    return [...ids].sort();
+  },
   remove: removeAll,
 };
 

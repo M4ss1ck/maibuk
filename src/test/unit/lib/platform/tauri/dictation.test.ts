@@ -87,6 +87,7 @@ describe("TauriRecognizerHost", () => {
       "dictation_models_cancel",
       "dictation_models_is_complete",
       "dictation_models_remove",
+      "dictation_models_list",
     ])
       handlers[name] = () => undefined;
     const host = createTauriRecognizerHost();
@@ -120,6 +121,12 @@ describe("TauriRecognizerHost", () => {
     expect(calls[6][1]).toEqual({ spec });
     expect(calls[7][1]).toEqual({ id: "m" });
     expect(Object.keys(calls[8][1] as object)).toEqual(["spec", "onProgress"]);
+  });
+
+  it("lists installed model ids from the native side", async () => {
+    handlers.dictation_models_list = () => ["m1", "retired"];
+    expect(await tauriModelFiles.listInstalled()).toEqual(["m1", "retired"]);
+    expect(invoke).toHaveBeenCalledWith("dictation_models_list", undefined);
   });
 
   it("stop resolves when the runner already ended", async () => {

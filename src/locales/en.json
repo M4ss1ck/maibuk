@@ -2055,7 +2055,8 @@
       "noLivePreview": "No live preview: types each line after you pause.",
       "source": "Source",
       "sourceFor": "Source: {{name}}",
-      "device": "Microphone: {{device}}"
+      "device": "Microphone: {{device}}",
+      "orphan": "No longer offered"
     },
     "spokenPunctuation": {
       "title": "Spoken punctuation",

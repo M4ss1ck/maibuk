@@ -26,6 +26,7 @@ export function DictationSection() {
   const enabled = useDictationStore((s) => s.enabled);
   const setEnabled = useDictationStore((s) => s.setEnabled);
   const installed = useDictationStore((s) => s.installed);
+  const orphans = useDictationStore((s) => s.orphans);
   const downloads = useDictationStore((s) => s.downloads);
   const selected = useDictationStore((s) => s.selectedModel);
   const setSelected = useDictationStore((s) => s.setSelectedModel);
@@ -237,6 +238,32 @@ export function DictationSection() {
                           </fieldset>
                         );
                       })}
+                      {orphans.map((id) => (
+                        <fieldset
+                          key={id}
+                          aria-label={id}
+                          className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3"
+                        >
+                          <div className="min-w-48 flex-1">
+                            <h4 className="font-medium">{id}</h4>
+                            <div className="text-sm text-muted-foreground">
+                              {t("dictation.section.orphan")}
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            aria-label={`${t("dictation.section.remove")} ${id}`}
+                            onClick={() =>
+                              void getDictation()
+                                .then((r) => r.remove(id))
+                                .catch(() => {})
+                            }
+                          >
+                            {t("dictation.section.remove")}
+                          </Button>
+                        </fieldset>
+                      ))}
                     </div>
                   </SettingRow>
                   <SettingRow id="dictationSpokenPunctuation" visuallyHiddenLabel className="py-3">

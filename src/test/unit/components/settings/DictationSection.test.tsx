@@ -190,6 +190,19 @@ describe("DictationSection", () => {
     expect(remove).toHaveBeenCalledWith(esFast.id);
   });
 
+  it("lists an installed model the catalog no longer offers, and removes it by keyboard", async () => {
+    useDictationStore.setState({ orphans: ["retired-model"] });
+    const user = userEvent.setup();
+    render(<DictationSection />);
+    const row = screen.getByRole("group", { name: "retired-model" });
+    expect(within(row).getByText("No longer offered")).toBeInTheDocument();
+    await tabToFocused(user, () =>
+      within(row).getByRole("button", { name: /remove retired-model/i })
+    );
+    await user.keyboard("{Enter}");
+    expect(remove).toHaveBeenCalledWith("retired-model");
+  });
+
   it("names the microphone when the backend can", async () => {
     render(<DictationSection />);
     expect(await screen.findByText("Microphone: USB Mic")).toBeInTheDocument();
