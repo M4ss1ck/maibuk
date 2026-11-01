@@ -6,7 +6,9 @@
 // comparison constants DEB, RPM, APP, MSI, NSS and the value the bundler
 // overwrites in place (its UNK placeholder becomes DEB, RPM or APP). The binary
 // carries one of two layouts, depending on the compiler:
-//   - six markers, the constants first in that order, then the value;
+//   - six markers, the five constants first, then the value. The constants'
+//     order is the linker's: DEB,RPM,APP,MSI,NSS by default, APP,MSI,NSS,DEB,RPM
+//     under the release profile's fat LTO and single codegen unit;
 //   - one marker, the value alone, when the compiler inlines the constant
 //     comparisons (rustc 1.99 does).
 // Only the value is rewritten. Any other layout throws, because a guessed patch
@@ -33,8 +35,9 @@ function markerOffsets(buffer) {
 /**
  * Rewrites the bundle-type marker in `buffer` to UNK, in place.
  * Returns `changed: false` when it already reads UNK. Throws, leaving `buffer`
- * untouched, unless the layout is six markers with the first five suffixes
- * DEB,RPM,APP,MSI,NSS in order, or one marker holding a known bundle type.
+ * untouched, unless the layout is six markers whose first five suffixes are
+ * DEB, RPM, APP, MSI and NSS in any order, or one marker holding a known bundle
+ * type.
  * @param {Buffer} buffer
  * @returns {{ changed: boolean; was: string }}
  */
@@ -57,9 +60,9 @@ export function clearBundleType(buffer) {
   });
   if (offsets.length === 6) {
     const firstFive = suffixes.slice(0, 5);
-    if (firstFive.some((suffix, index) => suffix !== CONSTANT_SUFFIXES[index])) {
+    if (CONSTANT_SUFFIXES.some((suffix) => !firstFive.includes(suffix))) {
       throw new Error(
-        `expected the first five markers to be ${CONSTANT_SUFFIXES.join(",")} in order, found ${firstFive.join(",")}`
+        `expected the first five markers to be ${CONSTANT_SUFFIXES.join(",")} in any order, found ${firstFive.join(",")}`
       );
     }
   } else if (![...CONSTANT_SUFFIXES, UNKNOWN_SUFFIX].includes(suffixes[0])) {
