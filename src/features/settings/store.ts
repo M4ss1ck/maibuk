@@ -133,7 +133,8 @@ interface SettingsStore extends Settings {
   setSelectionToolbarMember: (id: ToolbarEntryId, member: boolean) => void;
   placeToolbarEntry: (entry: ToolbarEntry, slot: ToolbarSlot) => void;
   hideToolbarEntry: (id: string) => void;
-  mergeToolbarDividers: () => void;
+  /** Drops the dividers a move left redundant, judged against the config from before the move. */
+  mergeToolbarDividers: (before: ToolbarConfig) => void;
   placeSelectionToolbarEntry: (id: ToolbarEntryId, index: number) => void;
   removeSelectionToolbarEntry: (id: ToolbarEntryId) => void;
   /** Puts back a toolbar configuration taken earlier: a cancelled move in the Customize toolbar dialog. */
@@ -436,8 +437,8 @@ export const useSettingsStore = create<SettingsStore>()(
         set((state) => ({ toolbarConfig: placeToolbarEntry(state.toolbarConfig, entry, slot) })),
       hideToolbarEntry: (id) =>
         set((state) => ({ toolbarConfig: hideToolbarEntry(state.toolbarConfig, id) })),
-      mergeToolbarDividers: () =>
-        set((state) => ({ toolbarConfig: mergeToolbarDividers(state.toolbarConfig) })),
+      mergeToolbarDividers: (before) =>
+        set((state) => ({ toolbarConfig: mergeToolbarDividers(state.toolbarConfig, before) })),
       placeSelectionToolbarEntry: (id, index) =>
         set((state) => ({
           toolbarConfig: placeSelectionToolbarEntry(state.toolbarConfig, id, index),

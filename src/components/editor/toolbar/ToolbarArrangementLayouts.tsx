@@ -734,7 +734,7 @@ export function ToolbarArrangementLayout({ editor, announce }: ArrangementLayout
       return { id: key, at: slot ?? "tray" };
     },
     afterDrop: (carry) => {
-      mergeToolbarDividers();
+      mergeToolbarDividers(carry.snapshot);
       const stillShown = sectionOf(useSettingsStore.getState().toolbarConfig, carry.id) !== null;
       return isDividerId(carry.id) && !stillShown ? DIVIDER_SOURCE_KEY : carry.id;
     },
@@ -768,7 +768,7 @@ export function ToolbarArrangementLayout({ editor, announce }: ArrangementLayout
     if (!slot || !previewAcceptsDrop(current, slot, data.id)) return;
     const id = data.id === DIVIDER_SOURCE_KEY ? makeDividerId() : data.id;
     placeToolbarEntry(entryOf(id), slot);
-    mergeToolbarDividers();
+    mergeToolbarDividers(current);
     announce(
       t("toolbar.settings.dropped", {
         name: label(id),
@@ -781,8 +781,9 @@ export function ToolbarArrangementLayout({ editor, announce }: ArrangementLayout
     const data = await readDrag(items);
     if (!data || data.from !== "preview") return;
     const divider = isDividerId(data.id);
+    const before = useSettingsStore.getState().toolbarConfig;
     hideToolbarEntry(data.id);
-    mergeToolbarDividers();
+    mergeToolbarDividers(before);
     announce(
       divider
         ? t("toolbar.settings.dividerRemoved")

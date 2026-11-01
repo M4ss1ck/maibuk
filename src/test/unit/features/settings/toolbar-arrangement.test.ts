@@ -217,22 +217,75 @@ describe("the visual Toolbar layout's moves", () => {
     ]);
   });
 
-  it("merges dividers a move left side by side, and drops them from a lane's ends", () => {
+  it("merges two dividers a move left side by side when it drops", () => {
+    const before = config([
+      group("history"),
+      divider("d1"),
+      group("font"),
+      divider("d2"),
+      group("find"),
+    ]);
+    const after = config([
+      group("history"),
+      divider("d1"),
+      divider("d2"),
+      group("font"),
+      group("find"),
+    ]);
+    const merged = mergeToolbarDividers(after, before);
+    expect(ids(merged.start)).toEqual(["history", "d1", "font", "find"]);
+  });
+
+  it("keeps a leading and a trailing divider already stored in a lane", () => {
     const before = config(
-      [
-        divider("lead"),
-        group("history"),
-        divider("d1"),
-        group("font", false),
-        divider("d2"),
-        group("find"),
-        divider("tail"),
-      ],
+      [divider("lead"), group("history"), group("font"), group("find"), divider("tail")],
       [divider("endLead"), group("export")]
     );
-    const merged = mergeToolbarDividers(before);
-    expect(ids(merged.start)).toEqual(["history", "d1", "font", "find"]);
-    expect(ids(merged.end)).toEqual(["export"]);
+    const after = config(
+      [divider("lead"), group("font"), group("history"), group("find"), divider("tail")],
+      [divider("endLead"), group("export")]
+    );
+    const merged = mergeToolbarDividers(after, before);
+    expect(ids(merged.start)).toEqual(["lead", "font", "history", "find", "tail"]);
+    expect(ids(merged.end)).toEqual(["endLead", "export"]);
+  });
+
+  it("keeps two dividers a hidden button separates, so they return when it is shown", () => {
+    const start = [
+      group("history"),
+      divider("d1"),
+      group("font", false),
+      divider("d2"),
+      group("find"),
+    ];
+    const before = config(start, [group("export"), group("basic-marks", false)]);
+    const after = config(start, [group("basic-marks"), group("export")]);
+    expect(ids(mergeToolbarDividers(after, before).start)).toEqual([
+      "history",
+      "d1",
+      "font",
+      "d2",
+      "find",
+    ]);
+    expect(ids(displayedToolbarEntries(mergeToolbarDividers(after, before).start))).toEqual([
+      "history",
+      "d1",
+      "find",
+    ]);
+  });
+
+  it("removes a divider a move left at a lane's end when it was shown in the other lane", () => {
+    const before = config(
+      [group("history"), group("font"), group("find")],
+      [group("export"), divider("d1"), group("basic-marks")]
+    );
+    const after = config(
+      [group("history"), group("font"), group("find"), divider("d1")],
+      [group("export"), group("basic-marks")]
+    );
+    const merged = mergeToolbarDividers(after, before);
+    expect(ids(merged.start)).toEqual(["history", "font", "find"]);
+    expect(ids(merged.end)).toEqual(["export", "basic-marks"]);
   });
 });
 

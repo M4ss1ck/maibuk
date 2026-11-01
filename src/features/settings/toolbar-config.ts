@@ -765,13 +765,24 @@ export function hideToolbarEntry(config: ToolbarConfig, id: string): ToolbarConf
 }
 
 /**
- * Deletes the dividers the Editor Toolbar would not render: a lane's leading
- * and trailing ones, and the second of two that a move left side by side.
+ * Deletes the dividers a move made redundant: one that the Editor Toolbar
+ * rendered before the move (in either lane of `before`) and no longer renders
+ * after it, because the move left it side by side with another divider or at a
+ * lane's edge. A divider that was never rendered, such as one beside a hidden
+ * button or one stored at a lane's edge, is kept, so it returns if the button
+ * is shown again. Returns `config` itself when nothing is removed.
  */
-export function mergeToolbarDividers(config: ToolbarConfig): ToolbarConfig {
+export function mergeToolbarDividers(config: ToolbarConfig, before: ToolbarConfig): ToolbarConfig {
+  const wasShown = new Set(
+    [...displayedToolbarEntries(before.start), ...displayedToolbarEntries(before.end)].flatMap(
+      (entry) => (entry.kind === "divider" ? [entry.id] : [])
+    )
+  );
   const merge = (lane: ToolbarEntry[]): ToolbarEntry[] => {
     const shown = new Set(displayedToolbarEntries(lane));
-    const result = lane.filter((entry) => entry.kind !== "divider" || shown.has(entry));
+    const result = lane.filter(
+      (entry) => entry.kind !== "divider" || shown.has(entry) || !wasShown.has(entry.id)
+    );
     return result.length === lane.length ? lane : result;
   };
   const start = merge(config.start);
