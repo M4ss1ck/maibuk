@@ -3,7 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { FloatingFormattingGroups } from "@/components/editor/toolbar/FloatingFormattingGroups";
 import {
   DEFAULT_TOOLBAR_CONFIG,
-  setGroupFloatingVisible,
+  setSelectionToolbarMember,
 } from "@/features/settings/toolbar-config";
 import { useSettingsStore } from "@/features/settings/store";
 import { makeToolbarEditor } from "@/test/support/toolbar-editor";
@@ -39,7 +39,7 @@ it("renders floating-eligible visible groups in Start-then-End order", () => {
 it("returns null when every floating group is disabled", () => {
   let config = DEFAULT_TOOLBAR_CONFIG;
   for (const id of ["basic-marks", "headings", "highlight", "link-code"] as const) {
-    config = setGroupFloatingVisible(config, id, false);
+    config = setSelectionToolbarMember(config, id, false);
   }
   useSettingsStore.setState({ toolbarConfig: config });
   const { container } = render(

@@ -5,7 +5,7 @@ import { SelectionToolbar } from "@/components/editor/SelectionToolbar";
 import {
   DEFAULT_TOOLBAR_CONFIG,
   registerToolbarButtons,
-  setGroupFloatingVisible,
+  setSelectionToolbarMember,
   type ToolbarEntry,
 } from "@/features/settings/toolbar-config";
 import { useSettingsStore } from "@/features/settings/store";
@@ -83,7 +83,7 @@ describe("SelectionToolbar", () => {
   it("does not mount the styled bubble when every floating group is disabled", () => {
     let config = DEFAULT_TOOLBAR_CONFIG;
     for (const id of ["basic-marks", "headings", "highlight", "link-code"] as const) {
-      config = setGroupFloatingVisible(config, id, false);
+      config = setSelectionToolbarMember(config, id, false);
     }
     useSettingsStore.setState({ toolbarConfig: config });
     const { editor, listeners } = makeEditor();
@@ -97,15 +97,20 @@ describe("SelectionToolbar", () => {
   it("mounts and unmounts the bubble as a floating Plugin button registers and unregisters", () => {
     let config = DEFAULT_TOOLBAR_CONFIG;
     for (const id of ["basic-marks", "headings", "highlight", "link-code"] as const) {
-      config = setGroupFloatingVisible(config, id, false);
+      config = setSelectionToolbarMember(config, id, false);
     }
     const retained: ToolbarEntry = {
       kind: "group",
       id: "plugin.echoes.float",
       toolbarVisible: true,
-      floatingVisible: true,
     };
-    useSettingsStore.setState({ toolbarConfig: { start: [...config.start, retained], end: [] } });
+    useSettingsStore.setState({
+      toolbarConfig: {
+        start: [...config.start, retained],
+        end: [],
+        selectionToolbar: ["plugin.echoes.float"],
+      },
+    });
     const { editor, listeners } = makeEditor();
     const { container } = render(
       // Plugin toolbar buttons read the active route.

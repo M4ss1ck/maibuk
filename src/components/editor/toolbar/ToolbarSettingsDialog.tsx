@@ -268,8 +268,9 @@ function GroupGridItem({ section, entry, isDragging, onMove }: GroupGridItemProp
   );
   const laneLength = useSettingsStore((state) => state.toolbarConfig[section].length);
   const setToolbarGroupVisible = useSettingsStore((state) => state.setToolbarGroupVisible);
-  const setToolbarGroupFloatingVisible = useSettingsStore(
-    (state) => state.setToolbarGroupFloatingVisible
+  const setSelectionToolbarMember = useSettingsStore((state) => state.setSelectionToolbarMember);
+  const inSelectionToolbar = useSettingsStore((state) =>
+    state.toolbarConfig.selectionToolbar.includes(entry.id)
   );
   // Plugin buttons join the same ordering, visibility, and selection-toolbar
   // membership as core groups. A live button is named by its Command's label
@@ -331,8 +332,8 @@ function GroupGridItem({ section, entry, isDragging, onMove }: GroupGridItemProp
         >
           <span className="inline-flex">
             <Switch
-              checked={entry.floatingVisible}
-              onChange={(checked) => setToolbarGroupFloatingVisible(entry.id, checked)}
+              checked={inSelectionToolbar}
+              onChange={(checked) => setSelectionToolbarMember(entry.id, checked)}
               disabled={!floatingEligible}
               label={
                 floatingEligible

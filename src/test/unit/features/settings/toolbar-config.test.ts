@@ -4,13 +4,13 @@ import {
   DEFAULT_TOOLBAR_CONFIG,
   FLOATING_ELIGIBLE_IDS,
   addDivider,
-  deriveFloatingGroupIds,
+  liveSelectionToolbarIds,
   moveEntry,
   moveEntryTo,
   normalizeToolbarConfig,
   removeDivider,
   resetToolbarConfig,
-  setGroupFloatingVisible,
+  setSelectionToolbarMember,
   setGroupToolbarVisible,
   suppressOrphanDividers,
   transferEntry,
@@ -35,11 +35,10 @@ describe("DEFAULT_TOOLBAR_CONFIG", () => {
   it("puts all groups in Start by default with an empty End", () => {
     expect(groupIds(DEFAULT_TOOLBAR_CONFIG.end)).toEqual([]);
   });
-  it("defaults floating-eligible groups to floatingVisible", () => {
-    for (const entry of DEFAULT_TOOLBAR_CONFIG.start) {
-      if (entry.kind !== "group") continue;
-      expect(entry.floatingVisible).toBe(FLOATING_ELIGIBLE_IDS.has(entry.id));
-    }
+  it("defaults the Selection Toolbar to every eligible group", () => {
+    expect([...DEFAULT_TOOLBAR_CONFIG.selectionToolbar].sort()).toEqual(
+      [...FLOATING_ELIGIBLE_IDS].sort()
+    );
   });
   it("has the exact semantic divider boundaries and is deeply frozen", () => {
     expect(
@@ -112,19 +111,16 @@ describe("normalizeToolbarConfig", () => {
           kind: "group",
           id: "basic-marks",
           toolbarVisible: true,
-          floatingVisible: true,
         },
         {
           kind: "group",
           id: "basic-marks",
           toolbarVisible: false,
-          floatingVisible: false,
         },
         {
           kind: "group",
           id: "not-a-real-group",
           toolbarVisible: true,
-          floatingVisible: true,
         },
       ],
       end: [],
@@ -137,7 +133,6 @@ describe("normalizeToolbarConfig", () => {
     const marks = result.start.find((e) => e.kind === "group" && e.id === "basic-marks");
     expect(marks).toMatchObject({
       toolbarVisible: true,
-      floatingVisible: true,
     });
   });
   it("preserves valid user order, flags, and dividers; drops duplicate divider ids", () => {
@@ -148,7 +143,6 @@ describe("normalizeToolbarConfig", () => {
           kind: "group",
           id: "history",
           toolbarVisible: false,
-          floatingVisible: false,
         },
       ],
       end: [{ kind: "divider", id: "d1" }],
@@ -180,7 +174,7 @@ describe("normalizeToolbarConfig", () => {
     expect(result.start.some((entry) => entry.kind === "divider")).toBe(false);
     expect(
       result.start.find((entry) => entry.kind === "group" && entry.id === "basic-marks")
-    ).toMatchObject({ toolbarVisible: true, floatingVisible: true });
+    ).toMatchObject({ toolbarVisible: true });
   });
 });
 
@@ -192,16 +186,15 @@ describe("mutation helpers are immutable", () => {
           kind: "group",
           id: "history",
           toolbarVisible: true,
-          floatingVisible: false,
         },
         {
           kind: "group",
           id: "font",
           toolbarVisible: true,
-          floatingVisible: false,
         },
       ],
       end: [],
+      selectionToolbar: [],
     };
     const snapshot = JSON.stringify(before);
     const moved = moveEntry(before, "start", 1, "up");
@@ -216,10 +209,10 @@ describe("mutation helpers are immutable", () => {
           kind: "group",
           id: "history",
           toolbarVisible: true,
-          floatingVisible: false,
         },
       ],
       end: [],
+      selectionToolbar: [],
     };
     const after = transferEntry(before, "start", 0);
     expect(groupIds(after.start)).toEqual([]);
@@ -235,10 +228,11 @@ describe("mutation helpers are immutable", () => {
   it("moveEntry supports down and returns the same ref out of range", () => {
     const before: ToolbarConfig = {
       start: [
-        { kind: "group", id: "history", toolbarVisible: true, floatingVisible: false },
-        { kind: "group", id: "font", toolbarVisible: true, floatingVisible: false },
+        { kind: "group", id: "history", toolbarVisible: true },
+        { kind: "group", id: "font", toolbarVisible: true },
       ],
       end: [],
+      selectionToolbar: [],
     };
     expect(groupIds(moveEntry(before, "start", 0, "down").start)).toEqual(["font", "history"]);
     expect(moveEntry(before, "start", 2, "down")).toBe(before);
@@ -247,10 +241,11 @@ describe("mutation helpers are immutable", () => {
   it("moveEntryTo reorders and transfers with clamped insertion indices", () => {
     const before: ToolbarConfig = {
       start: [
-        { kind: "group", id: "history", toolbarVisible: true, floatingVisible: false },
-        { kind: "group", id: "font", toolbarVisible: true, floatingVisible: false },
+        { kind: "group", id: "history", toolbarVisible: true },
+        { kind: "group", id: "font", toolbarVisible: true },
       ],
-      end: [{ kind: "group", id: "find", toolbarVisible: true, floatingVisible: false }],
+      end: [{ kind: "group", id: "find", toolbarVisible: true }],
+      selectionToolbar: [],
     };
     expect(groupIds(moveEntryTo(before, "start", 0, "start", 99).start)).toEqual([
       "font",
@@ -266,18 +261,17 @@ describe("mutation helpers are immutable", () => {
     expect(
       toolbarHidden.start.find((entry) => entry.kind === "group" && entry.id === "history")
     ).toMatchObject({ toolbarVisible: false });
-    const floatingHidden = setGroupFloatingVisible(DEFAULT_TOOLBAR_CONFIG, "basic-marks", false);
-    expect(
-      floatingHidden.start.find((entry) => entry.kind === "group" && entry.id === "basic-marks")
-    ).toMatchObject({ floatingVisible: false });
-    expect(setGroupFloatingVisible(DEFAULT_TOOLBAR_CONFIG, "history", true)).toBe(
+    const floatingHidden = setSelectionToolbarMember(DEFAULT_TOOLBAR_CONFIG, "basic-marks", false);
+    expect(floatingHidden.selectionToolbar).not.toContain("basic-marks");
+    expect(setSelectionToolbarMember(DEFAULT_TOOLBAR_CONFIG, "history", true)).toBe(
       DEFAULT_TOOLBAR_CONFIG
     );
   });
   it("inserts dividers at clamped positions and remove-missing is a no-op", () => {
     const before: ToolbarConfig = {
-      start: [{ kind: "group", id: "history", toolbarVisible: true, floatingVisible: false }],
+      start: [{ kind: "group", id: "history", toolbarVisible: true }],
       end: [],
+      selectionToolbar: [],
     };
     expect(addDivider(before, "start", -10).start[0].kind).toBe("divider");
     expect(addDivider(before, "start", 99).start[1].kind).toBe("divider");
@@ -286,16 +280,21 @@ describe("mutation helpers are immutable", () => {
   it("generates unique divider ids", () => {
     const ids = Array.from(
       { length: 20 },
-      () => (addDivider({ start: [], end: [] }, "start").start[0] as { id: string }).id
+      () =>
+        (
+          addDivider({ start: [], end: [], selectionToolbar: [] }, "start").start[0] as {
+            id: string;
+          }
+        ).id
     );
     expect(new Set(ids).size).toBe(ids.length);
   });
 });
 
 describe("floating derivation & orphan suppression", () => {
-  it("deriveFloatingGroupIds returns Start-then-End order, eligible + visible only, ignoring dividers", () => {
-    const config = setGroupFloatingVisible(DEFAULT_TOOLBAR_CONFIG, "headings", false);
-    const ids = deriveFloatingGroupIds(config);
+  it("liveSelectionToolbarIds returns the Selection Toolbar's eligible members only", () => {
+    const config = setSelectionToolbarMember(DEFAULT_TOOLBAR_CONFIG, "headings", false);
+    const ids = liveSelectionToolbarIds(config);
     expect(ids).not.toContain("headings");
     expect(ids).toContain("basic-marks");
     expect(ids.every((id) => FLOATING_ELIGIBLE_IDS.has(id))).toBe(true);
@@ -307,7 +306,6 @@ describe("floating derivation & orphan suppression", () => {
         kind: "group",
         id: "history",
         toolbarVisible: true,
-        floatingVisible: false,
       },
       { kind: "divider", id: "b" },
       { kind: "divider", id: "c" },
@@ -315,7 +313,6 @@ describe("floating derivation & orphan suppression", () => {
         kind: "group",
         id: "font",
         toolbarVisible: true,
-        floatingVisible: false,
       },
       { kind: "divider", id: "d" },
     ];
@@ -334,19 +331,14 @@ describe("resetToolbarConfig", () => {
     const secondReset = resetToolbarConfig();
     const layout = (config: ToolbarConfig) =>
       config.start.map((entry) =>
-        entry.kind === "divider"
-          ? "D"
-          : {
-              id: entry.id,
-              toolbarVisible: entry.toolbarVisible,
-              floatingVisible: entry.floatingVisible,
-            }
+        entry.kind === "divider" ? "D" : { id: entry.id, toolbarVisible: entry.toolbarVisible }
       );
     const dividerIds = (config: ToolbarConfig) =>
       config.start.filter((entry) => entry.kind === "divider").map((entry) => entry.id);
 
     expect(layout(firstReset)).toEqual(layout(DEFAULT_TOOLBAR_CONFIG));
     expect(firstReset.end).toEqual([]);
+    expect(firstReset.selectionToolbar).toEqual(DEFAULT_TOOLBAR_CONFIG.selectionToolbar);
     expect(firstReset).not.toBe(DEFAULT_TOOLBAR_CONFIG);
     expect(dividerIds(firstReset)).not.toEqual(dividerIds(DEFAULT_TOOLBAR_CONFIG));
     expect(dividerIds(secondReset)).not.toEqual(dividerIds(firstReset));
@@ -364,7 +356,6 @@ describe("normalizeToolbarConfig with a pre-symbols persisted config", () => {
           kind: "group" as const,
           id,
           toolbarVisible: true,
-          floatingVisible: false,
         })),
       end: [],
     };

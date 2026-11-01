@@ -61,7 +61,6 @@ export interface ToolbarGroupPreference {
   kind: "group";
   id: ToolbarEntryId;
   toolbarVisible: boolean;
-  floatingVisible: boolean;
 }
 
 export interface ToolbarDividerPreference {
@@ -74,6 +73,8 @@ export type ToolbarEntry = ToolbarGroupPreference | ToolbarDividerPreference;
 export interface ToolbarConfig {
   start: ToolbarEntry[];
   end: ToolbarEntry[];
+  /** The Selection Toolbar's own order (ADR 0038); retained ids of absent Plugins keep their slots. */
+  selectionToolbar: ToolbarEntryId[];
 }
 
 /** Canonical left-to-right order. Also the "append new groups" order for normalize. */
@@ -177,14 +178,12 @@ function makeDefaultConfig(): ToolbarConfig {
   const start: ToolbarEntry[] = DEFAULT_START_LAYOUT.map((token) =>
     token === "D"
       ? { kind: "divider", id: makeDividerId() }
-      : {
-          kind: "group",
-          id: token,
-          toolbarVisible: true,
-          floatingVisible: FLOATING_ELIGIBLE_IDS.has(token),
-        }
+      : { kind: "group", id: token, toolbarVisible: true }
   );
-  return { start, end: [] };
+  const selectionToolbar = DEFAULT_START_LAYOUT.filter(
+    (token): token is ToolbarGroupId => token !== "D" && FLOATING_ELIGIBLE_IDS.has(token)
+  );
+  return { start, end: [], selectionToolbar };
 }
 
 function freezeToolbarConfig(config: ToolbarConfig): ToolbarConfig {
@@ -192,6 +191,7 @@ function freezeToolbarConfig(config: ToolbarConfig): ToolbarConfig {
   config.end.forEach(Object.freeze);
   Object.freeze(config.start);
   Object.freeze(config.end);
+  Object.freeze(config.selectionToolbar);
   return Object.freeze(config);
 }
 
@@ -201,6 +201,7 @@ export function cloneToolbarConfig(config: ToolbarConfig): ToolbarConfig {
   return {
     start: config.start.map((entry) => ({ ...entry })),
     end: config.end.map((entry) => ({ ...entry })),
+    selectionToolbar: [...config.selectionToolbar],
   };
 }
 
@@ -428,15 +429,28 @@ export function applyToolbarButtonRenames(config: ToolbarConfig): ToolbarConfig 
   };
   const nextStart = rebuild(mapped[0]);
   const nextEnd = rebuild(mapped[1]);
+  const selectionSeen = new Set<string>();
+  const nextSelection: ToolbarEntryId[] = [];
+  for (const id of config.selectionToolbar) {
+    const next = resolveToolbarButtonRename(id) as ToolbarEntryId;
+    if (next !== id) changed = true;
+    if (selectionSeen.has(next)) {
+      changed = true;
+      continue;
+    }
+    selectionSeen.add(next);
+    nextSelection.push(next);
+  }
   if (!changed) return config;
-  return { start: nextStart, end: nextEnd };
+  return { start: nextStart, end: nextEnd, selectionToolbar: nextSelection };
 }
 
 /**
  * Appends every registered Plugin button missing from the config to the end
  * of Start, preserving the author's arrangement. An author's visibility and
- * selection-toolbar choices for a retained button survive its absence because
- * `normalizeToolbarConfig` keeps unknown `plugin.` ids.
+ * Selection Toolbar slots for a retained button survive its absence because
+ * `normalizeToolbarConfig` keeps unknown `plugin.` ids. A new button joins the
+ * Selection Toolbar too, at its end.
  */
 export function withRegisteredToolbarButtons(config: ToolbarConfig): ToolbarConfig {
   const known = new Set<string>();
@@ -447,19 +461,22 @@ export function withRegisteredToolbarButtons(config: ToolbarConfig): ToolbarConf
   if (missing.length === 0) return config;
   const start = [...config.start];
   for (const id of missing) {
-    start.push({ kind: "group", id, toolbarVisible: true, floatingVisible: true });
+    start.push({ kind: "group", id, toolbarVisible: true });
   }
-  return { start, end: config.end };
+  return { start, end: config.end, selectionToolbar: [...config.selectionToolbar, ...missing] };
 }
 
 export function normalizeToolbarConfig(value: unknown): ToolbarConfig {
   if (!value || typeof value !== "object") return makeDefaultConfig();
-  const raw = value as Partial<ToolbarConfig>;
+  const raw = value as Record<string, unknown>;
   if (!Array.isArray(raw.start) || !Array.isArray(raw.end)) {
     return makeDefaultConfig();
   }
   const seenGroups = new Set<string>();
   const seenDividers = new Set<string>();
+  // Before ADR 0038 each entry carried a `floatingVisible` flag; an upgrade
+  // reads them once to build the Selection Toolbar's own list.
+  const legacyFloating = new Set<string>();
 
   const normalizeLane = (lane: unknown): ToolbarEntry[] => {
     if (!Array.isArray(lane)) return [];
@@ -485,13 +502,13 @@ export function normalizeToolbarConfig(value: unknown): ToolbarConfig {
           continue;
         }
         seenGroups.add(resolved);
+        if (isFloatingEligible(resolved) && entry.floatingVisible !== false) {
+          legacyFloating.add(resolved);
+        }
         result.push({
           kind: "group",
           id: resolved,
           toolbarVisible: typeof entry.toolbarVisible === "boolean" ? entry.toolbarVisible : true,
-          floatingVisible:
-            isFloatingEligible(resolved) &&
-            (typeof entry.floatingVisible === "boolean" ? entry.floatingVisible : true),
         });
       }
     }
@@ -505,9 +522,31 @@ export function normalizeToolbarConfig(value: unknown): ToolbarConfig {
     if (entry.kind === "group" && !seenGroups.has(entry.id)) {
       start.push({ ...entry });
       seenGroups.add(entry.id);
+      if (isFloatingEligible(entry.id)) legacyFloating.add(entry.id);
     }
   }
-  return { start, end };
+
+  let selectionToolbar: ToolbarEntryId[];
+  if (Array.isArray(raw.selectionToolbar)) {
+    const seen = new Set<string>();
+    selectionToolbar = [];
+    for (const rawId of raw.selectionToolbar) {
+      if (typeof rawId !== "string") continue;
+      const resolved = resolveStoredToolbarButtonId(rawId);
+      if (resolved === null || seen.has(resolved)) continue;
+      if (!seenGroups.has(resolved) || !isFloatingEligible(resolved)) continue;
+      seen.add(resolved);
+      selectionToolbar.push(resolved);
+    }
+  } else {
+    selectionToolbar = [...start, ...end]
+      .filter(
+        (entry): entry is ToolbarGroupPreference =>
+          entry.kind === "group" && legacyFloating.has(entry.id)
+      )
+      .map((entry) => entry.id);
+  }
+  return { start, end, selectionToolbar };
 }
 
 function laneOf(config: ToolbarConfig, section: ToolbarSection): ToolbarEntry[] {
@@ -519,9 +558,7 @@ function withLane(
   section: ToolbarSection,
   lane: ToolbarEntry[]
 ): ToolbarConfig {
-  return section === "start"
-    ? { start: lane, end: config.end }
-    : { start: config.start, end: lane };
+  return section === "start" ? { ...config, start: lane } : { ...config, end: lane };
 }
 
 export function moveEntry(
@@ -581,7 +618,7 @@ function mapGroups(
     lane.map((entry) =>
       entry.kind === "group" && entry.id === id ? { ...entry, ...patch } : entry
     );
-  return { start: apply(config.start), end: apply(config.end) };
+  return { ...config, start: apply(config.start), end: apply(config.end) };
 }
 
 export function setGroupToolbarVisible(
@@ -592,13 +629,31 @@ export function setGroupToolbarVisible(
   return mapGroups(config, id, { toolbarVisible: visible });
 }
 
-export function setGroupFloatingVisible(
+/**
+ * The List switch (ADR 0038): removes a button from the Selection Toolbar, or
+ * inserts it after the Selection Toolbar's last button that comes before it in
+ * the Editor Toolbar, or first when none does.
+ */
+export function setSelectionToolbarMember(
   config: ToolbarConfig,
   id: ToolbarEntryId,
-  visible: boolean
+  member: boolean
 ): ToolbarConfig {
-  if (!isFloatingEligible(id)) return config;
-  return mapGroups(config, id, { floatingVisible: visible });
+  const has = config.selectionToolbar.includes(id);
+  if (!member) {
+    if (!has) return config;
+    return { ...config, selectionToolbar: config.selectionToolbar.filter((other) => other !== id) };
+  }
+  if (has || !isFloatingEligible(id)) return config;
+  const editorOrder = [...config.start, ...config.end].map((entry) => entry.id);
+  const before = new Set(editorOrder.slice(0, Math.max(0, editorOrder.indexOf(id))));
+  let insertAt = 0;
+  config.selectionToolbar.forEach((other, index) => {
+    if (before.has(other)) insertAt = index + 1;
+  });
+  const selectionToolbar = [...config.selectionToolbar];
+  selectionToolbar.splice(insertAt, 0, id);
+  return { ...config, selectionToolbar };
 }
 
 export function addDivider(
@@ -623,16 +678,9 @@ export function removeDivider(
   return withLane(config, section, next);
 }
 
-export function deriveFloatingGroupIds(config: ToolbarConfig): ToolbarEntryId[] {
-  return [...config.start, ...config.end]
-    .filter(
-      (entry): entry is ToolbarGroupPreference =>
-        entry.kind === "group" &&
-        entry.floatingVisible &&
-        isFloatingEligible(entry.id) &&
-        isLiveToolbarEntry(entry.id)
-    )
-    .map((entry) => entry.id);
+/** The Selection Toolbar's buttons that render now, in its own order. */
+export function liveSelectionToolbarIds(config: ToolbarConfig): ToolbarEntryId[] {
+  return config.selectionToolbar.filter((id) => isFloatingEligible(id) && isLiveToolbarEntry(id));
 }
 
 export function suppressOrphanDividers(entries: ToolbarEntry[]): ToolbarEntry[] {
@@ -650,4 +698,108 @@ export function suppressOrphanDividers(entries: ToolbarEntry[]): ToolbarEntry[] 
     result.pop();
   }
   return result;
+}
+
+/** What the Editor Toolbar renders of a lane: shown, live buttons, and no orphan dividers. */
+export function displayedToolbarEntries(entries: ToolbarEntry[]): ToolbarEntry[] {
+  // Retained buttons of absent Plugins stay in the config but render nothing:
+  // dropping them before orphan suppression leaves no empty boundary and no
+  // doubled dividers.
+  return suppressOrphanDividers(
+    entries.filter(
+      (entry) => entry.kind === "divider" || (entry.toolbarVisible && isLiveToolbarEntry(entry.id))
+    )
+  );
+}
+
+/** A place between shown entries: `index` counts the entries the author sees in that lane. */
+export interface ToolbarSlot {
+  section: ToolbarSection;
+  index: number;
+}
+
+/** The lane index a shown slot stands for: just before the shown entry at that slot. */
+function laneIndexOfSlot<T>(lane: T[], shown: T[], index: number): number {
+  if (index < shown.length) return lane.indexOf(shown[index]);
+  return shown.length === 0 ? lane.length : lane.indexOf(shown[shown.length - 1]) + 1;
+}
+
+/** Whether a Toolbar Divider may sit at a shown slot: never at a lane's end, never beside another. */
+export function toolbarSlotAcceptsDivider(shown: ToolbarEntry[], index: number): boolean {
+  if (index <= 0 || index >= shown.length) return false;
+  return shown[index - 1].kind !== "divider" && shown[index].kind !== "divider";
+}
+
+/**
+ * Moves an entry to a shown slot of the Editor Toolbar, showing it if it was
+ * hidden. A divider not in the config yet (pulled from the Divider source) is
+ * added there.
+ */
+export function placeToolbarEntry(
+  config: ToolbarConfig,
+  entry: ToolbarEntry,
+  slot: ToolbarSlot
+): ToolbarConfig {
+  const existing = [...config.start, ...config.end].find((other) => other.id === entry.id);
+  const placed: ToolbarEntry =
+    existing?.kind === "group" ? { ...existing, toolbarVisible: true } : { ...(existing ?? entry) };
+  const without = {
+    ...config,
+    start: config.start.filter((other) => other.id !== entry.id),
+    end: config.end.filter((other) => other.id !== entry.id),
+  };
+  const lane = [...laneOf(without, slot.section)];
+  const at = laneIndexOfSlot(lane, displayedToolbarEntries(lane), slot.index);
+  lane.splice(at, 0, placed);
+  return withLane(without, slot.section, lane);
+}
+
+/** Dropped outside the toolbar: a button hides in place, a divider is deleted. */
+export function hideToolbarEntry(config: ToolbarConfig, id: string): ToolbarConfig {
+  const apply = (lane: ToolbarEntry[]): ToolbarEntry[] =>
+    lane.flatMap((entry) => {
+      if (entry.id !== id) return [entry];
+      return entry.kind === "divider" ? [] : [{ ...entry, toolbarVisible: false }];
+    });
+  return { ...config, start: apply(config.start), end: apply(config.end) };
+}
+
+/**
+ * Deletes the dividers the Editor Toolbar would not render: a lane's leading
+ * and trailing ones, and the second of two that a move left side by side.
+ */
+export function mergeToolbarDividers(config: ToolbarConfig): ToolbarConfig {
+  const merge = (lane: ToolbarEntry[]): ToolbarEntry[] => {
+    const shown = new Set(displayedToolbarEntries(lane));
+    const result = lane.filter((entry) => entry.kind !== "divider" || shown.has(entry));
+    return result.length === lane.length ? lane : result;
+  };
+  const start = merge(config.start);
+  const end = merge(config.end);
+  if (start === config.start && end === config.end) return config;
+  return { ...config, start, end };
+}
+
+/** Moves a button to a shown slot of the Selection Toolbar, adding it if it was out. */
+export function placeSelectionToolbarEntry(
+  config: ToolbarConfig,
+  id: ToolbarEntryId,
+  index: number
+): ToolbarConfig {
+  if (!isFloatingEligible(id)) return config;
+  const list = config.selectionToolbar.filter((other) => other !== id);
+  const at = laneIndexOfSlot(
+    list,
+    liveSelectionToolbarIds({ ...config, selectionToolbar: list }),
+    index
+  );
+  list.splice(at, 0, id);
+  return { ...config, selectionToolbar: list };
+}
+
+export function removeSelectionToolbarEntry(
+  config: ToolbarConfig,
+  id: ToolbarEntryId
+): ToolbarConfig {
+  return setSelectionToolbarMember(config, id, false);
 }

@@ -60,10 +60,11 @@ const callbacks: ToolbarGroupCallbacks = {
 
 const TWO_START_ONE_END_CONFIG: ToolbarConfig = {
   start: [
-    { kind: "group", id: "history", toolbarVisible: true, floatingVisible: false },
-    { kind: "group", id: "font", toolbarVisible: true, floatingVisible: false },
+    { kind: "group", id: "history", toolbarVisible: true },
+    { kind: "group", id: "font", toolbarVisible: true },
   ],
-  end: [{ kind: "group", id: "export", toolbarVisible: true, floatingVisible: false }],
+  end: [{ kind: "group", id: "export", toolbarVisible: true }],
+  selectionToolbar: [],
 };
 
 beforeEach(() => {
@@ -121,9 +122,10 @@ it("suppresses a leading divider at the Start lane boundary", () => {
     toolbarConfig: {
       start: [
         { kind: "divider", id: "d1" },
-        { kind: "group", id: "history", toolbarVisible: true, floatingVisible: false },
+        { kind: "group", id: "history", toolbarVisible: true },
       ],
       end: [],
+      selectionToolbar: [],
     },
   });
   const { getByTestId } = renderToolbar();
@@ -138,18 +140,18 @@ it("collapses dividers around a retained absent button to one, with no empty bou
     toolbarExpanded: true,
     toolbarConfig: {
       start: [
-        { kind: "group", id: "history", toolbarVisible: true, floatingVisible: false },
+        { kind: "group", id: "history", toolbarVisible: true },
         { kind: "divider", id: "d1" },
         {
           kind: "group",
           id: "plugin.echoes.gone",
           toolbarVisible: true,
-          floatingVisible: false,
         },
         { kind: "divider", id: "d2" },
-        { kind: "group", id: "font", toolbarVisible: true, floatingVisible: false },
+        { kind: "group", id: "font", toolbarVisible: true },
       ],
       end: [],
+      selectionToolbar: [],
     },
   });
   const { getByTestId } = renderToolbar();
@@ -166,15 +168,15 @@ it("shows and hides a retained button's boundary as its Plugin registers and unr
     toolbarExpanded: true,
     toolbarConfig: {
       start: [
-        { kind: "group", id: "history", toolbarVisible: true, floatingVisible: false },
+        { kind: "group", id: "history", toolbarVisible: true },
         {
           kind: "group",
           id: "plugin.echoes.gone",
           toolbarVisible: true,
-          floatingVisible: false,
         },
       ],
       end: [],
+      selectionToolbar: [],
     },
   });
   const { getByTestId } = renderToolbar();
@@ -202,11 +204,12 @@ it("does not end the Start lane on a divider when the cut falls after one", () =
   useSettingsStore.setState({
     toolbarConfig: {
       start: [
-        { kind: "group", id: "history", toolbarVisible: true, floatingVisible: false },
+        { kind: "group", id: "history", toolbarVisible: true },
         { kind: "divider", id: "d1" },
-        { kind: "group", id: "font", toolbarVisible: true, floatingVisible: false },
+        { kind: "group", id: "font", toolbarVisible: true },
       ],
       end: [],
+      selectionToolbar: [],
     },
   });
   const { getByTestId } = renderToolbar();

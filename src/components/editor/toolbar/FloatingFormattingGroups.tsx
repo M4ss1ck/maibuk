@@ -1,7 +1,7 @@
 import type { Editor } from "@tiptap/react";
 import { TooltipGroup } from "@/components/ui";
 import { EditorToolbarGroups } from "@/components/editor/toolbar/EditorToolbarGroups";
-import { deriveFloatingGroupIds } from "@/features/settings/toolbar-config";
+import { liveSelectionToolbarIds } from "@/features/settings/toolbar-config";
 import { useSettingsStore } from "@/features/settings/store";
 import { useToolbarRegistryRevision } from "@/hooks/useToolbarRegistryRevision";
 
@@ -20,7 +20,7 @@ export function FloatingFormattingGroups({
   const toolbarConfig = useSettingsStore((state) => state.toolbarConfig);
   // Recompute entry liveness when Plugins register or unregister their buttons.
   useToolbarRegistryRevision();
-  const groupIds = deriveFloatingGroupIds(toolbarConfig);
+  const groupIds = liveSelectionToolbarIds(toolbarConfig);
 
   if (groupIds.length === 0) return null;
 

@@ -890,12 +890,9 @@ describe("toolbarConfig actions", () => {
     );
   });
 
-  it("setToolbarGroupFloatingVisible is a no-op for ineligible groups", () => {
-    useSettingsStore.getState().setToolbarGroupFloatingVisible("history", true);
-    const historyEntry = useSettingsStore
-      .getState()
-      .toolbarConfig.start.find((entry) => entry.kind === "group" && entry.id === "history");
-    expect(historyEntry).toMatchObject({ floatingVisible: false });
+  it("setSelectionToolbarMember is a no-op for ineligible groups", () => {
+    useSettingsStore.getState().setSelectionToolbarMember("history", true);
+    expect(useSettingsStore.getState().toolbarConfig.selectionToolbar).not.toContain("history");
     expect(FLOATING_ELIGIBLE_IDS.has("history")).toBe(false);
   });
 
@@ -958,6 +955,38 @@ describe("toolbarConfig actions", () => {
     } finally {
       unregister();
     }
+  });
+
+  it("rehydrate upgrades a pre-ADR 0038 config without moving the Selection Toolbar", async () => {
+    localStorage.setItem(
+      "maibuk-settings",
+      JSON.stringify({
+        state: {
+          toolbarConfig: {
+            start: [
+              { kind: "group", id: "highlight", toolbarVisible: true, floatingVisible: true },
+              { kind: "group", id: "basic-marks", toolbarVisible: false, floatingVisible: true },
+              { kind: "group", id: "headings", toolbarVisible: true, floatingVisible: false },
+            ],
+            end: [{ kind: "group", id: "link-code", toolbarVisible: true, floatingVisible: true }],
+          },
+        },
+        version: 0,
+      })
+    );
+    await useSettingsStore.persist.rehydrate();
+    const config = useSettingsStore.getState().toolbarConfig;
+    expect(config.selectionToolbar).toEqual(["highlight", "basic-marks", "link-code"]);
+    expect(config.start.every((entry) => !("floatingVisible" in entry))).toBe(true);
+
+    // The upgraded list persists, so the next load reads it as the author's order.
+    useSettingsStore.getState().placeSelectionToolbarEntry("link-code", 0);
+    await useSettingsStore.persist.rehydrate();
+    expect(useSettingsStore.getState().toolbarConfig.selectionToolbar).toEqual([
+      "link-code",
+      "highlight",
+      "basic-marks",
+    ]);
   });
 
   it("merge normalizes a malformed persisted toolbarConfig", async () => {

@@ -37,16 +37,18 @@ function cloneConfig(config: ToolbarConfig): ToolbarConfig {
   return {
     start: config.start.map((entry) => ({ ...entry })),
     end: config.end.map((entry) => ({ ...entry })),
+    selectionToolbar: [...config.selectionToolbar],
   };
 }
 
 const TEST_CONFIG: ToolbarConfig = {
   start: [
-    { kind: "group", id: "history", toolbarVisible: true, floatingVisible: false },
+    { kind: "group", id: "history", toolbarVisible: true },
     { kind: "divider", id: "divider-1" },
-    { kind: "group", id: "basic-marks", toolbarVisible: true, floatingVisible: true },
+    { kind: "group", id: "basic-marks", toolbarVisible: true },
   ],
   end: [],
+  selectionToolbar: ["basic-marks"],
 };
 
 beforeEach(() => {
@@ -153,8 +155,7 @@ it("toggles group floating visibility via keyboard Space when eligible", async (
   await arrowToControl(user, basicMarksRow, sw);
   await user.keyboard(" ");
 
-  const updated = useSettingsStore.getState().toolbarConfig.start[2];
-  expect(updated.kind === "group" && updated.floatingVisible).toBe(false);
+  expect(useSettingsStore.getState().toolbarConfig.selectionToolbar).toEqual([]);
 });
 
 it("disables the floating switch for an ineligible group and labels it accordingly", () => {
@@ -174,6 +175,7 @@ describe("contextual add divider controls", () => {
       toolbarConfig: {
         start: [TEST_CONFIG.start[0], TEST_CONFIG.start[2]],
         end: [],
+        selectionToolbar: [],
       },
     });
     renderDialog();
@@ -189,6 +191,7 @@ describe("contextual add divider controls", () => {
       toolbarConfig: {
         start: [TEST_CONFIG.start[0], TEST_CONFIG.start[2]],
         end: [],
+        selectionToolbar: [],
       },
     });
     renderDialog();
@@ -211,6 +214,7 @@ describe("contextual add divider controls", () => {
       toolbarConfig: {
         start: [TEST_CONFIG.start[0]],
         end: [],
+        selectionToolbar: [],
       },
     });
     renderDialog();
@@ -250,6 +254,7 @@ describe("contextual add divider controls", () => {
       toolbarConfig: {
         start: [TEST_CONFIG.start[0]],
         end: [],
+        selectionToolbar: [],
       },
     });
     renderDialog();
@@ -299,6 +304,7 @@ describe("add divider below (touch)", () => {
       toolbarConfig: {
         start: [TEST_CONFIG.start[0], TEST_CONFIG.start[2]],
         end: [],
+        selectionToolbar: [],
       },
     });
     renderDialog();
@@ -402,6 +408,7 @@ describe("keyboard operation of every control", () => {
       toolbarConfig: {
         start: [TEST_CONFIG.start[0], TEST_CONFIG.start[2]],
         end: [],
+        selectionToolbar: [],
       },
     });
     renderDialog();
@@ -540,11 +547,12 @@ describe("keyboard navigation (React Aria GridList)", () => {
     useSettingsStore.setState({
       toolbarConfig: {
         start: [
-          { kind: "group", id: "history", toolbarVisible: true, floatingVisible: false },
-          { kind: "group", id: "font", toolbarVisible: true, floatingVisible: false },
-          { kind: "group", id: "basic-marks", toolbarVisible: true, floatingVisible: true },
+          { kind: "group", id: "history", toolbarVisible: true },
+          { kind: "group", id: "font", toolbarVisible: true },
+          { kind: "group", id: "basic-marks", toolbarVisible: true },
         ],
         end: [],
+        selectionToolbar: [],
       },
     });
     renderDialog();
@@ -599,7 +607,8 @@ describe("keyboard drag-and-drop (React Aria)", () => {
     useSettingsStore.setState({
       toolbarConfig: {
         start: TEST_CONFIG.start,
-        end: [{ kind: "group", id: "find", toolbarVisible: true, floatingVisible: false }],
+        end: [{ kind: "group", id: "find", toolbarVisible: true }],
+        selectionToolbar: [],
       },
     });
     renderDialog();
@@ -921,15 +930,15 @@ describe("runtime Plugin buttons", () => {
     useSettingsStore.setState({
       toolbarConfig: {
         start: [
-          { kind: "group", id: "history", toolbarVisible: true, floatingVisible: false },
+          { kind: "group", id: "history", toolbarVisible: true },
           {
             kind: "group",
             id: "plugin.echoes.gone",
             toolbarVisible: false,
-            floatingVisible: true,
           },
         ],
         end: [],
+        selectionToolbar: [],
       },
     });
     // The Plugin leaves; its ids stay in the config as retained arrangement.
@@ -960,15 +969,15 @@ describe("runtime Plugin buttons", () => {
     useSettingsStore.setState({
       toolbarConfig: {
         start: [
-          { kind: "group", id: "history", toolbarVisible: true, floatingVisible: false },
+          { kind: "group", id: "history", toolbarVisible: true },
           {
             kind: "group",
             id: "plugin.echoes.show",
             toolbarVisible: true,
-            floatingVisible: false,
           },
         ],
         end: [],
+        selectionToolbar: [],
       },
     });
     renderDialog();

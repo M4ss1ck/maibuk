@@ -11,11 +11,7 @@ import {
 } from "@/components/editor/toolbar/EditorToolbarGroups";
 import { useToolbarOverflow } from "@/components/editor/toolbar/useToolbarOverflow";
 import { useSettingsStore } from "@/features/settings/store";
-import {
-  isLiveToolbarEntry,
-  suppressOrphanDividers,
-  type ToolbarEntry,
-} from "@/features/settings/toolbar-config";
+import { displayedToolbarEntries, type ToolbarEntry } from "@/features/settings/toolbar-config";
 
 interface ResponsiveEditorToolbarProps {
   editor: Editor;
@@ -24,17 +20,6 @@ interface ResponsiveEditorToolbarProps {
   utilityCluster: ReactNode;
   /** Esc inside the toolbar hands focus back to the Chapter text. */
   onExitToolbar?: () => void;
-}
-
-function visibleEntries(entries: ToolbarEntry[]): ToolbarEntry[] {
-  // Retained buttons of absent Plugins stay in the config but render nothing:
-  // dropping them before orphan suppression leaves no empty boundary and no
-  // doubled dividers.
-  return suppressOrphanDividers(
-    entries.filter(
-      (entry) => entry.kind === "divider" || (entry.toolbarVisible && isLiveToolbarEntry(entry.id))
-    )
-  );
 }
 
 function withoutTrailingDividers(entries: ToolbarEntry[]): ToolbarEntry[] {
@@ -74,8 +59,8 @@ export function ResponsiveEditorToolbar({
   const toolbarConfig = useSettingsStore((state) => state.toolbarConfig);
   const toolbarExpanded = useSettingsStore((state) => state.toolbarExpanded);
 
-  const startEntries = visibleEntries(toolbarConfig.start);
-  const endEntries = visibleEntries(toolbarConfig.end);
+  const startEntries = displayedToolbarEntries(toolbarConfig.start);
+  const endEntries = displayedToolbarEntries(toolbarConfig.end);
 
   const rootRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
