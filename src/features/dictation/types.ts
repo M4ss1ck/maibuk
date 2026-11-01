@@ -99,8 +99,12 @@ export interface SupportReport {
  */
 export interface RecognizerHost {
   isSupported(): Promise<SupportReport>;
-  /** Loads an installed model; rejects with DictationError("model_corrupt") on bad files. */
-  load(spec: ModelSpec): Promise<void>;
+  /**
+   * Loads an installed model for one language; rejects with DictationError("model_corrupt")
+   * on bad files. Multilingual models read the language to choose what to transcribe;
+   * single-language models ignore it.
+   */
+  load(spec: ModelSpec, language: DictationLanguage): Promise<void>;
   start(listener: (event: DictationEvent) => void): Promise<void>;
   stop(): Promise<void>;
   setContext(text: string): Promise<void>;

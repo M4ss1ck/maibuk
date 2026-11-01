@@ -196,6 +196,7 @@ mod tests {
             &mut self,
             _: &std::path::Path,
             _: &crate::dictation::protocol::ModelSpec,
+            _: &str,
         ) -> Result<(), DictationError> {
             Ok(())
         }
@@ -342,6 +343,7 @@ mod tests {
                 &mut self,
                 _: &std::path::Path,
                 _: &crate::dictation::protocol::ModelSpec,
+                _: &str,
             ) -> Result<(), DictationError> {
                 Ok(())
             }
@@ -903,7 +905,7 @@ mod tests {
             let mut engine = crate::dictation::engine::create_engine(&spec).expect("create engine");
             let load_start = Instant::now();
             engine
-                .load(&dir, &bias.load_spec(&spec))
+                .load(&dir, &bias.load_spec(&spec), &language)
                 .expect("load model");
             let load_ms = load_start.elapsed().as_secs_f64() * 1000.0;
             let set_context_ms = bias.apply_context(engine.as_mut());
@@ -1055,6 +1057,7 @@ mod tests {
                 &mut self,
                 _: &std::path::Path,
                 _: &crate::dictation::protocol::ModelSpec,
+                _: &str,
             ) -> Result<(), DictationError> {
                 Ok(())
             }
@@ -1129,7 +1132,7 @@ mod tests {
             let bias = Bias::from_env(&language);
             let mut engine = crate::dictation::engine::create_engine(&spec).expect("create engine");
             engine
-                .load(&dir, &bias.load_spec(&spec))
+                .load(&dir, &bias.load_spec(&spec), &language)
                 .expect("load model");
             let set_context_ms = bias.apply_context(engine.as_mut());
             let realtime = std::env::var_os("PHRASE_REALTIME").is_some();
@@ -1202,7 +1205,7 @@ mod tests {
                 .unwrap_or_else(|| "en".into());
             let dir = root.join("models").join(&spec.id);
             let mut engine = crate::dictation::engine::create_engine(&spec).expect("create engine");
-            engine.load(&dir, &spec).expect("load model");
+            engine.load(&dir, &spec, &language).expect("load model");
             for template in templates.split(',') {
                 let path = template.trim().replace("{lang}", &language);
                 let passage =

@@ -1,6 +1,7 @@
 import {
   DictationError,
   type DictationEvent,
+  type DictationLanguage,
   type ModelSpec,
   type RecognizerHost,
   type SupportReport,
@@ -80,7 +81,7 @@ export function createWebRecognizerHost(deps: { createWorker?: () => Worker } = 
       }
       return { supported: true };
     },
-    load: (spec: ModelSpec) => rpc("load", { spec }),
+    load: (spec: ModelSpec, language: DictationLanguage) => rpc("load", { spec, language }),
     async start(onEvent) {
       try {
         media = await navigator.mediaDevices.getUserMedia({

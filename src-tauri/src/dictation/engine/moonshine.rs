@@ -71,7 +71,8 @@ impl MoonshineEngine {
 }
 
 impl SpeechEngine for MoonshineEngine {
-    fn load(&mut self, dir: &Path, spec: &ModelSpec) -> Result<(), DictationError> {
+    fn load(&mut self, dir: &Path, spec: &ModelSpec, _language: &str) -> Result<(), DictationError> {
+        // Moonshine's models are per language, so the language is already in the files.
         // Without this, ONNX Runtime spins 5-7 cores for Tiny English (spike).
         std::env::set_var("MOONSHINE_ORT_SINGLE_THREAD", "1");
         let arch = match spec.engine_options.get("arch").map(String::as_str) {

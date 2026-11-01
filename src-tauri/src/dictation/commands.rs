@@ -17,7 +17,9 @@ mod imp {
 
     #[derive(Default)]
     pub struct DictationState {
-        loaded: Mutex<Option<(String, SharedEngine)>>,
+        /// The loaded model's id and language, and its engine. A load for another
+        /// language replaces it: multilingual models read the language at load time.
+        loaded: Mutex<Option<(String, String, SharedEngine)>>,
         running: Mutex<Option<Runner>>,
         /// The channel of the last start, so a stop with no runner (it ended on
         /// an error) still sends `stopped` and the TS host's stop() resolves.
@@ -50,29 +52,31 @@ mod imp {
         app: AppHandle,
         state: State<'_, DictationState>,
         spec: ModelSpec,
+        language: String,
     ) -> Result<(), DictationError> {
         if state
             .loaded
             .lock()
             .unwrap()
             .as_ref()
-            .is_some_and(|(id, _)| *id == spec.id)
+            .is_some_and(|(id, loaded_language, _)| *id == spec.id && *loaded_language == language)
         {
             return Ok(());
         }
         let base = base(&app)?;
         let id = spec.id.clone();
+        let loaded_language = language.clone();
         let engine = tauri::async_runtime::spawn_blocking(
             move || -> Result<SharedEngine, DictationError> {
                 let dir = models::verify(&base, &spec)?;
                 let mut engine = create_engine(&spec)?;
-                engine.load(&dir, &spec)?;
+                engine.load(&dir, &spec, &language)?;
                 Ok(Arc::new(Mutex::new(engine)))
             },
         )
         .await
         .map_err(|e| DictationError::new(ErrorCode::EngineCrashed, e.to_string()))??;
-        *state.loaded.lock().unwrap() = Some((id, engine));
+        *state.loaded.lock().unwrap() = Some((id, loaded_language, engine));
         Ok(())
     }
 
@@ -86,7 +90,7 @@ mod imp {
             .lock()
             .unwrap()
             .as_ref()
-            .map(|(_, e)| e.clone())
+            .map(|(_, _, e)| e.clone())
             .ok_or_else(|| DictationError::new(ErrorCode::ModelMissing, "load first"))?;
         let old = state.running.lock().unwrap().take();
         if let Some(old) = old {
@@ -123,7 +127,7 @@ mod imp {
 
     #[tauri::command]
     pub fn dictation_set_context(state: State<'_, DictationState>, text: String) {
-        if let Some((_, engine)) = state.loaded.lock().unwrap().as_ref() {
+        if let Some((_, _, engine)) = state.loaded.lock().unwrap().as_ref() {
             engine.lock().unwrap().set_context(&text);
         }
     }
@@ -205,7 +209,7 @@ mod imp {
             let mut loaded = state.loaded.lock().unwrap();
             if loaded
                 .as_ref()
-                .is_some_and(|(loaded_id, _)| *loaded_id == id)
+                .is_some_and(|(loaded_id, _, _)| *loaded_id == id)
             {
                 *loaded = None;
             }
@@ -233,8 +237,8 @@ mod imp {
         }
     }
     #[tauri::command]
-    pub fn dictation_load(spec: ModelSpec) -> Result<(), DictationError> {
-        let _ = spec;
+    pub fn dictation_load(spec: ModelSpec, language: String) -> Result<(), DictationError> {
+        let _ = (spec, language);
         Err(unsupported())
     }
     #[tauri::command]

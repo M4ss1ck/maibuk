@@ -34,13 +34,15 @@ function fakeHost() {
   let releaseLoad: (() => void) | null = null;
   const host = {
     loads: [] as string[],
+    loadLanguages: [] as string[],
     starts: 0,
     holdLoad: false,
     emit: (e: DictationEvent) => listener?.(e),
     finishLoad: () => releaseLoad?.(),
     isSupported: vi.fn(async () => ({ supported: true })),
-    load: vi.fn(async (spec: ModelSpec) => {
+    load: vi.fn(async (spec: ModelSpec, language: string) => {
       host.loads.push(spec.id);
+      host.loadLanguages.push(language);
       if (host.holdLoad) await new Promise<void>((r) => (releaseLoad = r));
     }),
     start: vi.fn(async (l: (e: DictationEvent) => void) => {
@@ -346,6 +348,15 @@ describe("Dictation Session", () => {
       status: "listening",
       language: "en",
     });
+  });
+
+  it("passes the session language to the host's load", async () => {
+    const session = makeSession();
+    session.register(fakeTarget("a", "es"));
+    session.focus("a");
+    await session.start();
+    await session.setLanguage("en");
+    expect(host.loadLanguages).toEqual(["es", "en"]);
   });
 
   it("switching language while loading starts only the newly selected model", async () => {

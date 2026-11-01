@@ -520,7 +520,7 @@ export function createDictationSession(deps: {
     set({ status: "loading", language, modelId: spec.id });
     starting = (async () => {
       try {
-        await deps.host.load(spec);
+        await deps.host.load(spec, language);
         if (stopRequested || deps.isEnabled?.() === false) {
           set({ status: "idle", level: 0 });
           return;
@@ -703,7 +703,7 @@ export function createDictationSession(deps: {
     const loaded = spec;
     current.startup = (async () => {
       try {
-        await deps.host.load(loaded);
+        await deps.host.load(loaded, language);
         if (recording !== current) return false;
         await deps.host.start(onEvent);
         return true;
