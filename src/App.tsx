@@ -3,19 +3,9 @@ import { Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { FullPageScreen } from "@/components/FullPageScreen";
 import { Home } from "@/pages/Home";
-import { BookEditor } from "@/pages/BookEditor";
-import { CoverDesigner } from "@/pages/CoverDesigner";
-import { Settings } from "@/pages/Settings";
-import { Metrics } from "@/pages/Metrics";
-import { Notes } from "@/pages/Notes";
-import { NotesGallery } from "@/pages/NotesGallery";
-import { Canvas } from "@/pages/Canvas";
-import { CanvasGallery } from "@/pages/CanvasGallery";
-import { Ephemeral } from "@/pages/Ephemeral";
-import { Embed } from "@/pages/Embed";
-import { PluginPage } from "@/pages/PluginPage";
 import { StartupRedirect } from "@/components/StartupRedirect";
 import { WebLibraryGate } from "@/components/library/WebLibraryGate";
+import { Embed } from "@/pages/Embed";
 import { PathTracker } from "@/components/PathTracker";
 import { PluginCommands } from "@/components/plugins/PluginCommands";
 import { PluginChangeNotices } from "@/components/plugins/PluginChangeNotices";
@@ -47,6 +37,34 @@ import { installAndroidLifecycleHandler } from "@/lib/window/androidLifecycle";
 import { installWindowCloseHandler } from "@/lib/window/closeHandler";
 import { installAlwaysOnTopReapply } from "@/lib/window/alwaysOnTop";
 import { installFocusReturn } from "@/lib/window/focusReturn";
+
+/**
+ * Every screen but Home loads when it is first visited, so launch parses and
+ * holds only the Library's code: the Cover Designer's Fabric, the Canvas's
+ * React Flow, and the editor's extensions stay out of memory until used. React
+ * Router runs navigations in a transition, so the current screen stays up while
+ * the next one's chunk loads; there is no fallback flash between screens.
+ */
+const BookEditor = lazy(() =>
+  import("@/pages/BookEditor").then((m) => ({ default: m.BookEditor }))
+);
+const CoverDesigner = lazy(() =>
+  import("@/pages/CoverDesigner").then((m) => ({ default: m.CoverDesigner }))
+);
+const Settings = lazy(() => import("@/pages/Settings").then((m) => ({ default: m.Settings })));
+const Metrics = lazy(() => import("@/pages/Metrics").then((m) => ({ default: m.Metrics })));
+const Notes = lazy(() => import("@/pages/Notes").then((m) => ({ default: m.Notes })));
+const NotesGallery = lazy(() =>
+  import("@/pages/NotesGallery").then((m) => ({ default: m.NotesGallery }))
+);
+const Canvas = lazy(() => import("@/pages/Canvas").then((m) => ({ default: m.Canvas })));
+const CanvasGallery = lazy(() =>
+  import("@/pages/CanvasGallery").then((m) => ({ default: m.CanvasGallery }))
+);
+const Ephemeral = lazy(() => import("@/pages/Ephemeral").then((m) => ({ default: m.Ephemeral })));
+const PluginPage = lazy(() =>
+  import("@/pages/PluginPage").then((m) => ({ default: m.PluginPage }))
+);
 
 /**
  * The test-only Plugin conformance route (#447, D3). `VITE_PLUGIN_CONFORMANCE`
@@ -131,34 +149,36 @@ function App() {
         <PaneFocusFrame />
         <CommandPalette />
         <TutorialBoundary>
-          <Routes>
-            {CONFORMANCE_ENABLED && ConformancePage !== null && (
-              <Route
-                path={CONFORMANCE_ROUTE}
-                element={
-                  <Suspense fallback={null}>
-                    <ConformancePage />
-                  </Suspense>
-                }
-              />
-            )}
-            <Route path="/" element={<Layout />}>
-              <Route index element={<Home />} />
-              <Route path="notes" element={<NotesGallery />} />
-              <Route path="canvas" element={<CanvasGallery />} />
-              <Route path="ephemeral" element={<Ephemeral />} />
-              <Route path="metrics" element={<Metrics />} />
-              <Route path="settings" element={<Settings />} />
-              <Route path="plugin/:pluginId/:pageId" element={<PluginPage />} />
-            </Route>
-            {/* Full-page editors without sidebar */}
-            <Route element={<FullPageScreen />}>
-              <Route path="notes/:noteId" element={<Notes />} />
-              <Route path="canvas/:canvasId" element={<Canvas />} />
-              <Route path="book/:bookId" element={<BookEditor />} />
-              <Route path="book/:bookId/cover" element={<CoverDesigner />} />
-            </Route>
-          </Routes>
+          <Suspense fallback={null}>
+            <Routes>
+              {CONFORMANCE_ENABLED && ConformancePage !== null && (
+                <Route
+                  path={CONFORMANCE_ROUTE}
+                  element={
+                    <Suspense fallback={null}>
+                      <ConformancePage />
+                    </Suspense>
+                  }
+                />
+              )}
+              <Route path="/" element={<Layout />}>
+                <Route index element={<Home />} />
+                <Route path="notes" element={<NotesGallery />} />
+                <Route path="canvas" element={<CanvasGallery />} />
+                <Route path="ephemeral" element={<Ephemeral />} />
+                <Route path="metrics" element={<Metrics />} />
+                <Route path="settings" element={<Settings />} />
+                <Route path="plugin/:pluginId/:pageId" element={<PluginPage />} />
+              </Route>
+              {/* Full-page editors without sidebar */}
+              <Route element={<FullPageScreen />}>
+                <Route path="notes/:noteId" element={<Notes />} />
+                <Route path="canvas/:canvasId" element={<Canvas />} />
+                <Route path="book/:bookId" element={<BookEditor />} />
+                <Route path="book/:bookId/cover" element={<CoverDesigner />} />
+              </Route>
+            </Routes>
+          </Suspense>
         </TutorialBoundary>
         <TutorialRunner />
         <TutorialOffer />
