@@ -5,6 +5,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.2] - 2026-11-01
+
+### Added
+- Visual Customize toolbar editor with separate Toolbar and Selection layouts
+- Keyboard move mode for reordering toolbar buttons, with Enter to pick up and drop, arrows to move, and Escape to cancel
+- Pointer drag-and-drop for arranging toolbar buttons
+- Tray for hiding toolbar buttons
+
+### Changed
+- The Selection Toolbar now keeps its own button order, independent of the main toolbar
+- Wrapped toolbar grids move Left/Right in reading order and Up/Down by position
+
+### Fixed
+- Dropping a button removes only the dividers made redundant by the move, preserving stored edge dividers and those beside hidden buttons
+- Escape leaves the arrangement preview before it closes the Customize toolbar dialog
+
 ## [0.19.1] - 2026-11-01
 
 ### Added
