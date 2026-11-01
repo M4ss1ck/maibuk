@@ -14,7 +14,7 @@ import { catalogCapabilities } from "@/features/dictation/spoken-punctuation";
 import type { LineStatsSummary } from "@/features/dictation/stats";
 import { dictationLanguageFor, pickModel, useDictationStore } from "@/features/dictation/store";
 import type { DictationLanguage, ModelSpec } from "@/features/dictation/types";
-import { dictationPlatform } from "@/lib/platform";
+import { dictationPlatform, openExternal } from "@/lib/platform";
 
 const MB = 1_000_000;
 const sizeMb = (spec: ModelSpec) =>
@@ -114,7 +114,13 @@ export function DictationSection() {
                     <div className="space-y-2" data-tutorial="dictation.models">
                       <h3 className="font-medium">{t("dictation.section.models")}</h3>
                       {specs.map((spec) => {
-                        const name = `${t(`dictation.languageNames.${language}`)}, ${t(`dictation.section.${spec.tier}`)}`;
+                        const name = `${spec.name}, ${t(`dictation.section.${spec.tier}`)}`;
+                        const languageList = new Intl.ListFormat(i18n.language, {
+                          style: "long",
+                          type: "conjunction",
+                        }).format(
+                          spec.languages.map((code) => t(`dictation.languageNames.${code}`))
+                        );
                         const download = downloads[spec.id];
                         const isInstalled = installed.includes(spec.id);
                         const inUse = picked?.id === spec.id;
@@ -125,18 +131,42 @@ export function DictationSection() {
                             className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3"
                           >
                             <div className="min-w-48 flex-1">
-                              <div className="font-medium">
+                              <h4 className="font-medium">{spec.name}</h4>
+                              <div>
                                 {t(`dictation.section.${spec.tier}`)} ·{" "}
                                 {t("dictation.section.size", { size: sizeMb(spec) })}
                               </div>
                               <div className="text-sm text-muted-foreground">
                                 {t(`dictation.section.${spec.tier}Hint`)}
                               </div>
+                              <div className="text-sm text-muted-foreground">
+                                {t("dictation.section.languages", { languages: languageList })}
+                              </div>
+                              {spec.installedBytes !== undefined && (
+                                <div className="text-sm text-muted-foreground">
+                                  {t("dictation.section.installedSize", {
+                                    size: Math.round(spec.installedBytes / MB),
+                                  })}
+                                </div>
+                              )}
+                              {!spec.capabilities.streaming && (
+                                <div className="text-sm text-muted-foreground">
+                                  {t("dictation.section.noLivePreview")}
+                                </div>
+                              )}
                               {!spec.capabilities.punctuation && (
                                 <div className="text-sm text-muted-foreground">
                                   {t("dictation.section.noPunctuation")}
                                 </div>
                               )}
+                              <button
+                                type="button"
+                                aria-label={t("dictation.section.sourceFor", { name: spec.name })}
+                                className="text-sm font-medium text-primary underline-offset-2 hover:underline"
+                                onClick={() => void openExternal(spec.source)}
+                              >
+                                {t("dictation.section.source")}
+                              </button>
                             </div>
                             {download && (
                               <progress

@@ -9,6 +9,9 @@ import "@/i18n";
 const install = vi.fn(async () => {});
 const remove = vi.fn(async () => {});
 const cancelInstall = vi.fn();
+const openExternal = vi.fn(async (_url: string) => {});
+// Canary and Nemotron exist only on tauri-linux; the rest of the file renders the web list.
+let platformName: "web" | "tauri-linux" = "web";
 const defaultSummary: LineStatsSummary = {
   lines: 3,
   medianLatencyMs: 120,
@@ -32,7 +35,8 @@ vi.mock("@/features/dictation/runtime", () => ({
 }));
 vi.mock("@/lib/platform", async (orig) => ({
   ...(await orig<object>()),
-  dictationPlatform: () => "web",
+  dictationPlatform: () => platformName,
+  openExternal: (url: string) => openExternal(url),
 }));
 const { useDictationStore } = await import("@/features/dictation/store");
 const { DictationSection } = await import("@/components/settings/DictationSection");
@@ -77,6 +81,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  platformName = "web";
   await act(() => i18n.changeLanguage("en"));
 });
 
@@ -486,5 +491,75 @@ describe("Dictation bar size", () => {
     await user.tab();
     await user.keyboard(" ");
     expect(screen.queryByRole("radiogroup", { name: "Dictation bar size" })).toBeNull();
+  });
+});
+
+describe("DictationSection model rows", () => {
+  const MB_BYTES = 1_000_000;
+  const canary = MODEL_CATALOG.find((m) => m.name === "Canary 180M Flash")!;
+  const megabytes = (bytes: number) => Math.round(bytes / MB_BYTES);
+  const totalBytes = (spec: { files: { bytes: number }[] }) =>
+    spec.files.reduce((sum, f) => sum + f.bytes, 0);
+
+  afterEach(() => {
+    delete (enFast as { installedBytes?: number }).installedBytes;
+  });
+
+  it("names each row by its model and tier, and heads the row with the model name", () => {
+    render(<DictationSection />);
+    const row = screen.getByRole("group", { name: `${enFast.name}, Fast` });
+    expect(within(row).getByRole("heading", { name: enFast.name })).toBeInTheDocument();
+  });
+
+  it("lists the languages the model serves, joined in the app language", async () => {
+    platformName = "tauri-linux";
+    render(<DictationSection />);
+    const row = screen.getByRole("group", { name: `${canary.name}, Accurate` });
+    expect(within(row).getByText("Languages: English and Spanish")).toBeInTheDocument();
+
+    await act(() => i18n.changeLanguage("es"));
+    expect(within(row).getByText("Idiomas: Inglés y Español")).toBeInTheDocument();
+  });
+
+  it("shows the download size as the sum of the model's files", () => {
+    render(<DictationSection />);
+    const row = screen.getByRole("group", { name: `${enFast.name}, Fast` });
+    expect(
+      within(row).getByText(`${megabytes(totalBytes(enFast))} MB`, { exact: false })
+    ).toBeInTheDocument();
+  });
+
+  it("shows the installed size only for a model that sets one", () => {
+    (enFast as { installedBytes?: number }).installedBytes = 150 * MB_BYTES;
+    render(<DictationSection />);
+    const row = screen.getByRole("group", { name: `${enFast.name}, Fast` });
+    expect(within(row).getByText("Installed: 150 MB")).toBeInTheDocument();
+  });
+
+  it("omits the installed size when the model sets none", () => {
+    render(<DictationSection />);
+    const row = screen.getByRole("group", { name: `${enFast.name}, Fast` });
+    expect(within(row).queryByText(/Installed:/)).toBeNull();
+  });
+
+  it("says there is no live preview only for a model without streaming", () => {
+    platformName = "tauri-linux";
+    render(<DictationSection />);
+    const batch = screen.getByRole("group", { name: `${canary.name}, Accurate` });
+    expect(
+      within(batch).getByText("No live preview: types each line after you pause.")
+    ).toBeInTheDocument();
+    const streaming = screen.getByRole("group", { name: `${enFast.name}, Fast` });
+    expect(within(streaming).queryByText(/No live preview/)).toBeNull();
+  });
+
+  it("opens the model's source from its Source button by keyboard", async () => {
+    platformName = "tauri-linux";
+    const user = userEvent.setup();
+    render(<DictationSection />);
+    const source = screen.getByRole("button", { name: `Source: ${canary.name}` });
+    await tabToFocused(user, () => source);
+    await user.keyboard("{Enter}");
+    expect(openExternal).toHaveBeenCalledWith(canary.source);
   });
 });

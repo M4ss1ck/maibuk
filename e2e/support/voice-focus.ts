@@ -38,6 +38,11 @@ export const dictationStatus = (page: Page) =>
 export const voiceStatus = (page: Page) =>
   page.getByRole("status").filter({ hasText: /^Voice command/ });
 
+/** The catalog name of a language's model for a tier, as its Settings row is named. */
+function modelName(language: "English" | "Spanish", tier: "Fast" | "Accurate") {
+  return `Moonshine ${tier === "Fast" ? "Tiny" : "Small"} ${language}`;
+}
+
 export async function downloadEnglishFast(page: Page) {
   await downloadEnglish(page, "Fast");
 }
@@ -48,7 +53,7 @@ export async function downloadEnglishAccurate(page: Page) {
 
 export async function downloadEnglish(page: Page, tier: "Fast" | "Accurate") {
   await page.goto("/settings#dictation");
-  const group = page.getByRole("group", { name: `English, ${tier}` });
+  const group = page.getByRole("group", { name: `${modelName("English", tier)}, ${tier}` });
   await tabTo(page, group.getByRole("button", { name: "Download" }), { max: 200 });
   await page.keyboard.press("Enter");
   await expect(group.getByText("Used for English")).toBeVisible({ timeout: 60_000 });
@@ -66,7 +71,7 @@ export async function downloadSpanish(page: Page, tier: "Fast" | "Accurate") {
   await pressUntilFocused(page, "ArrowRight", page.getByRole("tab", { name: "Spanish" }), {
     max: 4,
   });
-  const group = page.getByRole("group", { name: `Spanish, ${tier}` });
+  const group = page.getByRole("group", { name: `${modelName("Spanish", tier)}, ${tier}` });
   await tabTo(page, group.getByRole("button", { name: "Download" }), { max: 200 });
   await page.keyboard.press("Enter");
   await expect(group.getByText("Used for Spanish")).toBeVisible({ timeout: 60_000 });

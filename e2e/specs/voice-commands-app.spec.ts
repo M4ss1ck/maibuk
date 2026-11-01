@@ -38,7 +38,7 @@ const voiceStatus = (page: Page) => page.getByRole("status").filter({ hasText: /
 
 async function downloadEnglishFast(page: Page) {
   await page.goto("/settings#dictation");
-  const row = page.getByRole("group", { name: "English, Fast" });
+  const row = page.getByRole("group", { name: "Moonshine Tiny English, Fast" });
   await tabTo(page, row.getByRole("button", { name: "Download" }), { max: 200 });
   await page.keyboard.press("Enter");
   await expect(row.getByText("Used for English")).toBeVisible({ timeout: 60_000 });
