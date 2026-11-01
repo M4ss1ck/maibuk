@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 import { useModalStore } from "@/components/ui/modal-store";
 import { FormattingButtons } from "@/components/editor/FormattingButtons";
 import { setSelectionKept } from "@/components/editor/extensions/SelectionKept";
-import { deriveFloatingGroupIds } from "@/features/settings/toolbar-config";
+import { liveSelectionToolbarIds } from "@/features/settings/toolbar-config";
 import { useSettingsStore } from "@/features/settings/store";
 import { useToolbarRegistryRevision } from "@/hooks/useToolbarRegistryRevision";
 import { useShortcuts } from "@/lib/shortcuts";
@@ -53,7 +53,7 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
   const toolbarConfig = useSettingsStore((state) => state.toolbarConfig);
   // Recompute entry liveness when Plugins register or unregister their buttons.
   useToolbarRegistryRevision();
-  const hasFloatingGroups = deriveFloatingGroupIds(toolbarConfig).length > 0;
+  const hasFloatingGroups = liveSelectionToolbarIds(toolbarConfig).length > 0;
 
   const isVisible =
     editorState.hasSelection && position !== null && !isAnyModalOpen && hasFloatingGroups;

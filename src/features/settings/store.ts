@@ -61,18 +61,26 @@ import {
   addDivider,
   applyToolbarButtonRenames,
   cloneToolbarConfig,
+  hideToolbarEntry,
+  mergeToolbarDividers,
   moveEntry,
   moveEntryTo,
   normalizeToolbarConfig,
   onToolbarRegistryChange,
+  placeSelectionToolbarEntry,
+  placeToolbarEntry,
   removeDivider,
+  removeSelectionToolbarEntry,
   resetToolbarConfig as makeResetToolbarConfig,
-  setGroupFloatingVisible,
   setGroupToolbarVisible,
+  setSelectionToolbarMember,
   transferEntry,
   withRegisteredToolbarButtons,
+  type ToolbarConfig,
+  type ToolbarEntry,
   type ToolbarEntryId,
   type ToolbarSection,
+  type ToolbarSlot,
 } from "@/features/settings/toolbar-config";
 
 const STORAGE_KEY = "maibuk-settings";
@@ -122,7 +130,15 @@ interface SettingsStore extends Settings {
   ) => void;
   transferToolbarEntry: (from: ToolbarSection, index: number) => void;
   setToolbarGroupVisible: (id: ToolbarEntryId, visible: boolean) => void;
-  setToolbarGroupFloatingVisible: (id: ToolbarEntryId, visible: boolean) => void;
+  setSelectionToolbarMember: (id: ToolbarEntryId, member: boolean) => void;
+  placeToolbarEntry: (entry: ToolbarEntry, slot: ToolbarSlot) => void;
+  hideToolbarEntry: (id: string) => void;
+  /** Drops the dividers a move left redundant, judged against the config from before the move. */
+  mergeToolbarDividers: (before: ToolbarConfig) => void;
+  placeSelectionToolbarEntry: (id: ToolbarEntryId, index: number) => void;
+  removeSelectionToolbarEntry: (id: ToolbarEntryId) => void;
+  /** Puts back a toolbar configuration taken earlier: a cancelled move in the Customize toolbar dialog. */
+  restoreToolbarConfig: (config: ToolbarConfig) => void;
   addToolbarDivider: (section: ToolbarSection, index?: number) => void;
   removeToolbarDivider: (section: ToolbarSection, dividerId: string) => void;
   resetToolbarConfig: () => void;
@@ -413,10 +429,25 @@ export const useSettingsStore = create<SettingsStore>()(
         set((state) => ({
           toolbarConfig: setGroupToolbarVisible(state.toolbarConfig, id, visible),
         })),
-      setToolbarGroupFloatingVisible: (id, visible) =>
+      setSelectionToolbarMember: (id, member) =>
         set((state) => ({
-          toolbarConfig: setGroupFloatingVisible(state.toolbarConfig, id, visible),
+          toolbarConfig: setSelectionToolbarMember(state.toolbarConfig, id, member),
         })),
+      placeToolbarEntry: (entry, slot) =>
+        set((state) => ({ toolbarConfig: placeToolbarEntry(state.toolbarConfig, entry, slot) })),
+      hideToolbarEntry: (id) =>
+        set((state) => ({ toolbarConfig: hideToolbarEntry(state.toolbarConfig, id) })),
+      mergeToolbarDividers: (before) =>
+        set((state) => ({ toolbarConfig: mergeToolbarDividers(state.toolbarConfig, before) })),
+      placeSelectionToolbarEntry: (id, index) =>
+        set((state) => ({
+          toolbarConfig: placeSelectionToolbarEntry(state.toolbarConfig, id, index),
+        })),
+      removeSelectionToolbarEntry: (id) =>
+        set((state) => ({
+          toolbarConfig: removeSelectionToolbarEntry(state.toolbarConfig, id),
+        })),
+      restoreToolbarConfig: (toolbarConfig) => set({ toolbarConfig }),
       addToolbarDivider: (section, index) =>
         set((state) => ({
           toolbarConfig: addDivider(state.toolbarConfig, section, index),

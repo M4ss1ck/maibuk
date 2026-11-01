@@ -90,11 +90,11 @@ export const EXCLUSIONS: Exclusion[] = [
   },
   {
     kind: "behavior",
-    items: ["HTML5 drag-and-drop started by touch"],
+    items: ["HTML5 drag-and-drop started by touch", "Toolbar settings pointer drag"],
     reason:
-      "Chromium's emulated touch input starts no HTML5 drag, so the phone project cannot drag a row by its handle; phone-drag-handle proves the handle owns the gesture instead",
+      "Chromium's emulated touch input starts no HTML5 drag, so the phone project cannot drag a row by its handle; phone-drag-handle proves the handle owns the gesture instead. Pointer drags in Toolbar settings are a pointer gesture outside the keyboard contract; editor-toolbar-arrangement proves the same moves by keyboard",
     owner:
-      "Vitest (ChapterList and NotesList suites: a touch drag starts from the grip, never from the row body)",
+      "Vitest (ChapterList and NotesList suites: a touch drag starts from the grip, never from the row body; ToolbarArrangementLayouts.test.tsx: pointer drops reorder, hide, and delete)",
   },
   {
     kind: "behavior",
@@ -866,6 +866,31 @@ export const ROWS: MatrixRow[] = [
     edges: ["Reset cancel"],
     terms: [],
     shortcuts: ["editor.toolbarSettings"],
+    routes: ["/book/:bookId"],
+    fixture: "oneBookThreeChapters",
+    tags: [],
+    status: "accepted",
+  },
+  {
+    id: "editor-toolbar-arrangement",
+    area: "editor",
+    workflow:
+      "Mod+Shift+, opens Toolbar settings on the Toolbar layout; Enter picks up a preview Toolbar Button, arrows move it across Start and End, Enter drops it; carrying it into the tray hides it; the footer switch shows the Selection layout, where a button is reordered; asserts: Dialog focus and Tab containment; order in the preview and the Editor Toolbar; Escape returns focus to the trigger; persists: yes (settings, after reload)",
+    edges: [
+      "Escape while carrying puts the button back",
+      "Escape with nothing carried leaves the preview before closing",
+      "a Toolbar Divider can be carried and dropped",
+      "switching layouts by keyboard keeps focus in the switch",
+    ],
+    terms: [
+      "Editor Toolbar",
+      "Toolbar Button",
+      "Start",
+      "End",
+      "Toolbar Divider",
+      "Selection Toolbar",
+    ],
+    shortcuts: [],
     routes: ["/book/:bookId"],
     fixture: "oneBookThreeChapters",
     tags: [],

@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   TOOLBAR_SETTINGS_ROW_GRID,
@@ -14,6 +15,17 @@ import {
   type ToolbarConfig,
 } from "@/features/settings/toolbar-config";
 import { registerPluginCommands } from "@/lib/shortcut-registry";
+import { makeToolbarEditor } from "@/test/support/toolbar-editor";
+
+vi.mock("@tiptap/react", () => ({
+  useEditorState: ({
+    editor,
+    selector,
+  }: {
+    editor: unknown;
+    selector: (value: { editor: unknown }) => unknown;
+  }) => selector({ editor }),
+}));
 
 const { i18nTestState } = vi.hoisted(() => ({
   i18nTestState: { localizeGroupLabels: false },
@@ -37,16 +49,18 @@ function cloneConfig(config: ToolbarConfig): ToolbarConfig {
   return {
     start: config.start.map((entry) => ({ ...entry })),
     end: config.end.map((entry) => ({ ...entry })),
+    selectionToolbar: [...config.selectionToolbar],
   };
 }
 
 const TEST_CONFIG: ToolbarConfig = {
   start: [
-    { kind: "group", id: "history", toolbarVisible: true, floatingVisible: false },
+    { kind: "group", id: "history", toolbarVisible: true },
     { kind: "divider", id: "divider-1" },
-    { kind: "group", id: "basic-marks", toolbarVisible: true, floatingVisible: true },
+    { kind: "group", id: "basic-marks", toolbarVisible: true },
   ],
   end: [],
+  selectionToolbar: ["basic-marks"],
 };
 
 beforeEach(() => {
@@ -56,8 +70,16 @@ beforeEach(() => {
 
 // ─── helpers ───────────────────────────────────────────────────────────
 
+// These tests drive the List layout; the dialog opens on Toolbar.
 function renderDialog() {
-  return render(<ToolbarSettingsDialog isOpen onClose={vi.fn()} />);
+  // Plugin buttons in the previews read the active route.
+  const view = render(
+    <MemoryRouter>
+      <ToolbarSettingsDialog editor={makeToolbarEditor()} isOpen onClose={vi.fn()} />
+    </MemoryRouter>
+  );
+  fireEvent.click(screen.getByRole("radio", { name: "toolbar.settings.layoutList" }));
+  return view;
 }
 
 function findStartGrid(): HTMLElement {
@@ -153,8 +175,7 @@ it("toggles group floating visibility via keyboard Space when eligible", async (
   await arrowToControl(user, basicMarksRow, sw);
   await user.keyboard(" ");
 
-  const updated = useSettingsStore.getState().toolbarConfig.start[2];
-  expect(updated.kind === "group" && updated.floatingVisible).toBe(false);
+  expect(useSettingsStore.getState().toolbarConfig.selectionToolbar).toEqual([]);
 });
 
 it("disables the floating switch for an ineligible group and labels it accordingly", () => {
@@ -174,6 +195,7 @@ describe("contextual add divider controls", () => {
       toolbarConfig: {
         start: [TEST_CONFIG.start[0], TEST_CONFIG.start[2]],
         end: [],
+        selectionToolbar: [],
       },
     });
     renderDialog();
@@ -189,6 +211,7 @@ describe("contextual add divider controls", () => {
       toolbarConfig: {
         start: [TEST_CONFIG.start[0], TEST_CONFIG.start[2]],
         end: [],
+        selectionToolbar: [],
       },
     });
     renderDialog();
@@ -211,6 +234,7 @@ describe("contextual add divider controls", () => {
       toolbarConfig: {
         start: [TEST_CONFIG.start[0]],
         end: [],
+        selectionToolbar: [],
       },
     });
     renderDialog();
@@ -250,6 +274,7 @@ describe("contextual add divider controls", () => {
       toolbarConfig: {
         start: [TEST_CONFIG.start[0]],
         end: [],
+        selectionToolbar: [],
       },
     });
     renderDialog();
@@ -299,6 +324,7 @@ describe("add divider below (touch)", () => {
       toolbarConfig: {
         start: [TEST_CONFIG.start[0], TEST_CONFIG.start[2]],
         end: [],
+        selectionToolbar: [],
       },
     });
     renderDialog();
@@ -402,6 +428,7 @@ describe("keyboard operation of every control", () => {
       toolbarConfig: {
         start: [TEST_CONFIG.start[0], TEST_CONFIG.start[2]],
         end: [],
+        selectionToolbar: [],
       },
     });
     renderDialog();
@@ -446,7 +473,7 @@ describe("keyboard operation of every control", () => {
   it("closes dialog via keyboard Enter on Close", async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
-    render(<ToolbarSettingsDialog isOpen onClose={onClose} />);
+    render(<ToolbarSettingsDialog editor={makeToolbarEditor()} isOpen onClose={onClose} />);
 
     const closeBtn = screen.getByRole("button", { name: "toolbar.settings.close", hidden: true });
     closeBtn.focus();
@@ -540,11 +567,12 @@ describe("keyboard navigation (React Aria GridList)", () => {
     useSettingsStore.setState({
       toolbarConfig: {
         start: [
-          { kind: "group", id: "history", toolbarVisible: true, floatingVisible: false },
-          { kind: "group", id: "font", toolbarVisible: true, floatingVisible: false },
-          { kind: "group", id: "basic-marks", toolbarVisible: true, floatingVisible: true },
+          { kind: "group", id: "history", toolbarVisible: true },
+          { kind: "group", id: "font", toolbarVisible: true },
+          { kind: "group", id: "basic-marks", toolbarVisible: true },
         ],
         end: [],
+        selectionToolbar: [],
       },
     });
     renderDialog();
@@ -599,7 +627,8 @@ describe("keyboard drag-and-drop (React Aria)", () => {
     useSettingsStore.setState({
       toolbarConfig: {
         start: TEST_CONFIG.start,
-        end: [{ kind: "group", id: "find", toolbarVisible: true, floatingVisible: false }],
+        end: [{ kind: "group", id: "find", toolbarVisible: true }],
+        selectionToolbar: [],
       },
     });
     renderDialog();
@@ -742,7 +771,7 @@ it("resets to defaults only after the inline confirm step", () => {
 
 it("calls onClose when the Close button is clicked", () => {
   const onClose = vi.fn();
-  render(<ToolbarSettingsDialog isOpen onClose={onClose} />);
+  render(<ToolbarSettingsDialog editor={makeToolbarEditor()} isOpen onClose={onClose} />);
   fireEvent.click(screen.getByRole("button", { name: "toolbar.settings.close", hidden: true }));
   expect(onClose).toHaveBeenCalledTimes(1);
 });
@@ -921,15 +950,15 @@ describe("runtime Plugin buttons", () => {
     useSettingsStore.setState({
       toolbarConfig: {
         start: [
-          { kind: "group", id: "history", toolbarVisible: true, floatingVisible: false },
+          { kind: "group", id: "history", toolbarVisible: true },
           {
             kind: "group",
             id: "plugin.echoes.gone",
             toolbarVisible: false,
-            floatingVisible: true,
           },
         ],
         end: [],
+        selectionToolbar: [],
       },
     });
     // The Plugin leaves; its ids stay in the config as retained arrangement.
@@ -960,15 +989,15 @@ describe("runtime Plugin buttons", () => {
     useSettingsStore.setState({
       toolbarConfig: {
         start: [
-          { kind: "group", id: "history", toolbarVisible: true, floatingVisible: false },
+          { kind: "group", id: "history", toolbarVisible: true },
           {
             kind: "group",
             id: "plugin.echoes.show",
             toolbarVisible: true,
-            floatingVisible: false,
           },
         ],
         end: [],
+        selectionToolbar: [],
       },
     });
     renderDialog();

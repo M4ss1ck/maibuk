@@ -48,7 +48,12 @@ interface ModalProps {
   title: string;
   children: ReactNode;
   footer?: ReactNode;
-  size?: "md" | "lg" | "wide";
+  /** Controls beside the close button in the header. */
+  headerActions?: ReactNode;
+  /** "xl" is the editing-surface width (about 960px), for a dialog that previews the app. */
+  size?: "md" | "lg" | "xl" | "wide";
+  /** Fills the screen on a phone, with the content scrolling between header and footer. */
+  fullScreenOnPhone?: boolean;
   contentClassName?: string;
   panelClassName?: string;
   panelStyle?: CSSProperties;
@@ -72,7 +77,9 @@ export function Modal({
   title,
   children,
   footer,
+  headerActions,
   size = "md",
+  fullScreenOnPhone = false,
   contentClassName = "overflow-auto",
   panelClassName,
   panelStyle,
@@ -83,7 +90,15 @@ export function Modal({
   role = "dialog",
 }: ModalProps) {
   const { t } = useTranslation();
-  const sizeClass = { md: "sm:max-w-md", lg: "sm:max-w-2xl", wide: "sm:max-w-5xl" }[size];
+  const sizeClass = {
+    md: "sm:max-w-md",
+    lg: "sm:max-w-2xl",
+    xl: "sm:max-w-[60rem]",
+    wide: "sm:max-w-5xl",
+  }[size];
+  const phoneClass = fullScreenOnPhone
+    ? "max-sm:h-dvh max-sm:max-h-none max-sm:rounded-none max-sm:pt-[env(safe-area-inset-top)]"
+    : "";
 
   const modalId = useModalScope(isOpen, () => onCloseRef.current());
   const modalRef = useRef<HTMLDivElement>(null);
@@ -156,10 +171,14 @@ export function Modal({
           <div
             {...overlayProps}
             ref={modalRef}
-            style={panelClassName ? panelStyle : { maxHeight: "90dvh", ...panelStyle }}
+            style={
+              panelClassName || fullScreenOnPhone
+                ? panelStyle
+                : { maxHeight: "90dvh", ...panelStyle }
+            }
             className={
               panelClassName ??
-              `relative bg-background rounded-t-xl sm:rounded-xl shadow-xl w-full ${sizeClass} sm:mx-4 max-h-[90vh] overflow-hidden flex flex-col modal-panel-enter`
+              `relative bg-background rounded-t-xl sm:rounded-xl shadow-xl w-full ${sizeClass} sm:mx-4 max-h-[90vh] ${fullScreenOnPhone ? "sm:max-h-[90dvh]" : ""} ${phoneClass} overflow-hidden flex flex-col modal-panel-enter`
             }
           >
             <Dialog
@@ -178,9 +197,16 @@ export function Modal({
               ) : (
                 <>
                   <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-border shrink-0">
-                    <Heading slot="title" level={2} className="text-base sm:text-lg font-semibold">
+                    <Heading
+                      slot="title"
+                      level={2}
+                      className="min-w-0 flex-1 text-base sm:text-lg font-semibold"
+                    >
                       {title}
                     </Heading>
+                    {headerActions && (
+                      <div className="flex shrink-0 items-center gap-2 mr-2">{headerActions}</div>
+                    )}
                     <button
                       type="button"
                       onClick={onClose}

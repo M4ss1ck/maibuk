@@ -34,6 +34,19 @@ async function openEditor(page: Page) {
   await expect(editorText(page)).toContainText("The storm came in from the west without warning.");
 }
 
+// Customize toolbar opens on its Toolbar layout; these specs drive the List layout.
+async function openToolbarSettingsList(page: Page) {
+  await page.keyboard.press("Control+Shift+,");
+  const dialog = page.getByRole("dialog", { name: "Customize toolbar" });
+  await tabTo(page, dialog.getByRole("radio", { name: "Toolbar" }));
+  await pressUntilFocused(page, "ArrowRight", dialog.getByRole("radio", { name: "List" }), {
+    max: 3,
+  });
+  await page.keyboard.press("Space");
+  await expect(dialog.getByRole("grid", { name: "Start" })).toBeVisible();
+  return dialog;
+}
+
 async function selectRange(page: Page, characters: number) {
   await page.keyboard.press("End");
   await page.keyboard.down("Shift");
@@ -621,6 +634,7 @@ test.describe("toolbar settings @wf:editor-toolbar-settings @sc:editor.toolbarSe
 
     const dialog = page.getByRole("dialog", { name: "Customize toolbar" });
     await expect(dialog).toBeVisible();
+    await capture(page, "toolbar-settings-opened", { around: [dialog] });
     await expectFocusWithin(dialog);
 
     await page.keyboard.press("Escape");
@@ -630,8 +644,7 @@ test.describe("toolbar settings @wf:editor-toolbar-settings @sc:editor.toolbarSe
 
   test("Move down reorders a group and the order survives a reload", async ({ page }) => {
     await openEditor(page);
-    await page.keyboard.press("Control+Shift+,");
-    const dialog = page.getByRole("dialog", { name: "Customize toolbar" });
+    const dialog = await openToolbarSettingsList(page);
     const startRows = dialog.getByRole("grid", { name: "Start" }).getByRole("row");
     const before = await startRows.allTextContents();
 
@@ -652,7 +665,7 @@ test.describe("toolbar settings @wf:editor-toolbar-settings @sc:editor.toolbarSe
     await page.keyboard.press("Escape");
     await page.reload();
     await expect(editorText(page)).toBeFocused();
-    await page.keyboard.press("Control+Shift+,");
+    await openToolbarSettingsList(page);
     await expect(
       page
         .getByRole("dialog", { name: "Customize toolbar" })
@@ -666,8 +679,7 @@ test.describe("toolbar settings @wf:editor-toolbar-settings @sc:editor.toolbarSe
     page,
   }) => {
     await openEditor(page);
-    await page.keyboard.press("Control+Shift+,");
-    const dialog = page.getByRole("dialog", { name: "Customize toolbar" });
+    const dialog = await openToolbarSettingsList(page);
 
     const historyRow = dialog
       .getByRole("row")
@@ -692,8 +704,7 @@ test.describe("toolbar settings @wf:editor-toolbar-settings @sc:editor.toolbarSe
 
   test("reset can be cancelled before confirming", async ({ page }) => {
     await openEditor(page);
-    await page.keyboard.press("Control+Shift+,");
-    const dialog = page.getByRole("dialog", { name: "Customize toolbar" });
+    const dialog = await openToolbarSettingsList(page);
 
     const historyRow = dialog
       .getByRole("row")
@@ -712,12 +723,227 @@ test.describe("toolbar settings @wf:editor-toolbar-settings @sc:editor.toolbarSe
     await page.keyboard.press("Escape");
     await page.reload();
     await expect(editorText(page)).toBeFocused();
-    await page.keyboard.press("Control+Shift+,");
+    await openToolbarSettingsList(page);
     await expect(
       page
         .getByRole("dialog", { name: "Customize toolbar" })
         .getByRole("switch", { name: "Show in toolbar" })
         .first()
     ).not.toBeChecked();
+  });
+});
+
+test.describe("toolbar arrangement @wf:editor-toolbar-arrangement", () => {
+  const customize = (page: Page) => page.getByRole("dialog", { name: "Customize toolbar" });
+  const preview = (page: Page) => customize(page).getByRole("listbox", { name: "Toolbar preview" });
+  const tray = (page: Page) => customize(page).getByRole("listbox", { name: "Hidden" });
+  const previewButton = (page: Page, name: string) =>
+    preview(page).getByRole("option", { name, exact: true });
+
+  /** Opens Customize toolbar with Mod+Shift+, and Tabs into the Toolbar preview. */
+  async function openArrangement(page: Page) {
+    await seedSettings(page, { toolbarExpanded: true });
+    await openEditor(page);
+    await page.keyboard.press("Control+Shift+,");
+    await expect(customize(page)).toBeVisible();
+    await expectFocusWithin(customize(page));
+    await expect(preview(page)).toBeVisible();
+    await tabTo(page, preview(page).getByRole("option").first());
+  }
+
+  /** Arrows inside the preview (reading order) until the named button has focus. */
+  async function focusPreviewButton(page: Page, name: string) {
+    await pressUntilFocused(page, "ArrowRight", previewButton(page, name), { max: 20 });
+  }
+
+  test("Enter picks up a Toolbar Button, arrows move it, Enter drops it, and the order persists", async ({
+    page,
+  }) => {
+    await openArrangement(page);
+    await capture(page, "toolbar-arrangement-toolbar-layout", { around: [customize(page)] });
+    await expectTabContained(page, customize(page));
+    await tabTo(page, preview(page).getByRole("option").first());
+
+    await focusPreviewButton(page, "Font");
+    await page.keyboard.press("Enter");
+    await expect(customize(page).getByRole("status")).toContainText("Picked up Font");
+    await capture(page, "toolbar-arrangement-carrying", { around: [preview(page)] });
+    await page.keyboard.press("ArrowLeft");
+    await page.keyboard.press("ArrowLeft");
+    await expect(previewButton(page, "Font")).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(customize(page).getByRole("status")).toContainText("Dropped Font");
+    await expect(preview(page).getByRole("option").first()).toHaveAccessibleName("Font");
+    await expect(previewButton(page, "Font")).toBeFocused();
+
+    // The first Escape leaves the preview; the second closes the dialog.
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+    await expect(customize(page)).toBeHidden();
+    await expect(editorText(page)).toBeFocused();
+    const size = toolbar(page).getByRole("combobox", { name: "Size" });
+    const sizeBox = await size.boundingBox();
+    const undoBox = await mark(page, "Undo").boundingBox();
+    expect(sizeBox && undoBox && sizeBox.x < undoBox.x).toBe(true);
+
+    await page.reload();
+    await expect(editorText(page)).toBeFocused();
+    await page.keyboard.press("Control+Shift+,");
+    await expect(preview(page).getByRole("option").first()).toHaveAccessibleName("Font");
+  });
+
+  test("on a phone, Toolbar settings opens full screen from the toolbar @touch", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await page.getByRole("row", { name: "The Lighthouse Keeper" }).tap();
+    await expect(editorText(page)).toBeVisible();
+    await toolbar(page).getByRole("button", { name: "Toolbar settings" }).tap();
+
+    await expect(preview(page)).toBeVisible();
+    await capture(page, "toolbar-arrangement-phone");
+    const viewport = page.viewportSize();
+    // Polled: the panel's enter animation scales it for a moment.
+    await expect
+      .poll(async () => Math.round((await customize(page).boundingBox())?.width ?? 0))
+      .toBe(viewport?.width);
+    await customize(page).getByRole("radio", { name: "Selection" }).tap();
+    const selectionPreview = customize(page).getByRole("listbox", {
+      name: "Selection menu preview",
+    });
+    await expect(selectionPreview).toBeVisible();
+    await capture(page, "toolbar-arrangement-phone-selection");
+    // The Selection Toolbar preview wraps on a narrow screen instead of running off the preview.
+    for (const button of [
+      selectionPreview.getByRole("option").first(),
+      selectionPreview.getByRole("option").last(),
+    ]) {
+      const at = await button.boundingBox();
+      expect(at && viewport && at.x >= 0 && at.x + at.width <= viewport.width).toBe(true);
+    }
+  });
+
+  test("Escape while carrying puts the button back and keeps the dialog open", async ({ page }) => {
+    await openArrangement(page);
+    const before = await preview(page).getByRole("option").allTextContents();
+
+    await focusPreviewButton(page, "Font");
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("ArrowLeft");
+    await page.keyboard.press("ArrowLeft");
+    await expect(preview(page).getByRole("option").first()).toHaveAccessibleName("Font");
+    await page.keyboard.press("Escape");
+
+    await expect(customize(page)).toBeVisible();
+    await expect(customize(page).getByRole("status")).toContainText("Move cancelled");
+    expect(await preview(page).getByRole("option").allTextContents()).toEqual(before);
+    await expect(previewButton(page, "Font")).toBeFocused();
+  });
+
+  test("Escape with nothing carried leaves the preview; a second Escape closes the dialog", async ({
+    page,
+  }) => {
+    await openArrangement(page);
+    await focusPreviewButton(page, "Font");
+    await page.keyboard.press("Escape");
+    await expect(customize(page)).toBeVisible();
+    await expectFocusWithin(customize(page));
+    expect(await isFocusWithin(preview(page))).toBe(false);
+
+    await page.keyboard.press("Escape");
+    await expect(customize(page)).toBeHidden();
+    await expect(editorText(page)).toBeFocused();
+  });
+
+  test("carrying a Toolbar Button down into the tray hides it", async ({ page }) => {
+    await openArrangement(page);
+
+    await focusPreviewButton(page, "Font");
+    await page.keyboard.press("Enter");
+    // The preview wraps: Down moves a row at a time and leaves at the last one.
+    // Font has no tray option until it arrives, so wait on the tray itself.
+    for (let i = 0; i < 10 && !(await isFocusWithin(tray(page))); i++) {
+      await page.keyboard.press("ArrowDown");
+    }
+    await expect(tray(page).getByRole("option", { name: "Font", exact: true })).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(customize(page).getByRole("status")).toContainText("Font hidden");
+    await expect(previewButton(page, "Font")).toHaveCount(0);
+    await capture(page, "toolbar-arrangement-tray", { around: [tray(page)] });
+
+    // The first Escape leaves the preview; the second closes the dialog.
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+    await expect(editorText(page)).toBeFocused();
+    await expect(toolbar(page).getByRole("combobox", { name: "Size" })).toHaveCount(0);
+  });
+
+  test("a Toolbar Divider can be carried and dropped", async ({ page }) => {
+    await openArrangement(page);
+    const dividers = preview(page).getByRole("option", { name: "Divider", exact: true });
+    const count = await dividers.count();
+    expect(count).toBeGreaterThan(0);
+
+    await pressUntilFocused(page, "ArrowRight", dividers.first(), { max: 20 });
+    await page.keyboard.press("Enter");
+    // Carried into the tray, the divider waits on the Divider source.
+    const source = tray(page).getByRole("option", { name: /^Add a divider/ });
+    await pressUntilFocused(page, "ArrowDown", source, { max: 10 });
+    await page.keyboard.press("Enter");
+
+    await expect(customize(page).getByRole("status")).toContainText("Divider removed");
+    await expect(dividers).toHaveCount(count - 1);
+    await expect(source).toBeFocused();
+  });
+
+  test("switching layouts by keyboard keeps focus in the switch, and the Selection Toolbar keeps its own order", async ({
+    page,
+  }) => {
+    await openArrangement(page);
+    const toolbarRadio = customize(page).getByRole("radio", { name: "Toolbar" });
+    const selectionRadio = customize(page).getByRole("radio", { name: "Selection" });
+    await tabTo(page, toolbarRadio);
+    await page.keyboard.press("ArrowRight");
+    await expect(selectionRadio).toBeFocused();
+    await page.keyboard.press("Space");
+    await expect(selectionRadio).toBeChecked();
+    await expect(selectionRadio).toBeFocused();
+
+    const selectionPreview = customize(page).getByRole("listbox", {
+      name: "Selection menu preview",
+    });
+    await expect(selectionPreview).toBeVisible();
+    await capture(page, "toolbar-arrangement-selection-layout", { around: [customize(page)] });
+    await expect(preview(page)).toHaveCount(0);
+
+    await tabTo(page, selectionPreview.getByRole("option").first());
+    await pressUntilFocused(
+      page,
+      "ArrowRight",
+      selectionPreview.getByRole("option", { name: "Headings", exact: true }),
+      { max: 8 }
+    );
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("ArrowLeft");
+    await page.keyboard.press("Enter");
+    await expect(selectionPreview.getByRole("option").first()).toHaveAccessibleName("Headings");
+
+    // The first Escape leaves the preview; the second closes the dialog.
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
+    await expect(customize(page)).toBeHidden();
+    await expect(editorText(page)).toBeFocused();
+
+    // The Editor Toolbar keeps its order: Undo still comes before Size.
+    const sizeBox = await toolbar(page).getByRole("combobox", { name: "Size" }).boundingBox();
+    const undoBox = await mark(page, "Undo").boundingBox();
+    expect(sizeBox && undoBox && undoBox.x < sizeBox.x).toBe(true);
+
+    await page.reload();
+    await expect(editorText(page)).toBeFocused();
+    await selectRange(page, 8);
+    const floating = page.getByRole("toolbar", { name: "Selection formatting" });
+    await expect(floating).toBeVisible();
+    await expect(floating.getByRole("button").first()).toHaveAccessibleName("Heading 1");
   });
 });

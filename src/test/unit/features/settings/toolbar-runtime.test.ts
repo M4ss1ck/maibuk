@@ -2,12 +2,12 @@ import { describe, expect, it, afterEach } from "vitest";
 import {
   DEFAULT_TOOLBAR_CONFIG,
   applyToolbarButtonRenames,
-  deriveFloatingGroupIds,
+  liveSelectionToolbarIds,
   isLiveToolbarEntry,
   isPluginToolbarButtonId,
   normalizeToolbarConfig,
   registerToolbarButtons,
-  setGroupFloatingVisible,
+  setSelectionToolbarMember,
   setGroupToolbarVisible,
   withRegisteredToolbarButtons,
   type ToolbarConfig,
@@ -75,8 +75,9 @@ describe("toolbar runtime buttons (issue #429)", () => {
     config = {
       start: config.start.filter((_, i) => i !== idx),
       end: [...config.end, moved],
+      selectionToolbar: config.selectionToolbar,
     };
-    config = setGroupFloatingVisible(config, "plugin.echoes.showReport" as never, true);
+    config = setSelectionToolbarMember(config, "plugin.echoes.showReport" as never, true);
     config = setGroupToolbarVisible(config, "plugin.echoes.showReport" as never, false);
     const snapshot = JSON.stringify(config);
 
@@ -88,7 +89,7 @@ describe("toolbar runtime buttons (issue #429)", () => {
     const back = withRegisteredToolbarButtons(kept);
     expect(JSON.stringify(back)).toBe(snapshot);
     expect(ids(back).filter((id) => id === "plugin.echoes.showReport")).toHaveLength(1);
-    expect(deriveFloatingGroupIds(back)).toContain("plugin.echoes.showReport");
+    expect(liveSelectionToolbarIds(back)).toContain("plugin.echoes.showReport");
   });
 
   it("migrates stored ids within one owner via buttonRenames", () => {
@@ -99,14 +100,15 @@ describe("toolbar runtime buttons (issue #429)", () => {
           kind: "group",
           id: "plugin.echoes.oldReport" as never,
           toolbarVisible: false,
-          floatingVisible: true,
         },
       ],
       end: [],
+      selectionToolbar: ["plugin.echoes.oldReport" as never],
     };
     const migrated = applyToolbarButtonRenames(config);
     expect(ids(migrated)).toEqual(["plugin.echoes.showReport"]);
-    expect(migrated.start[0]).toMatchObject({ toolbarVisible: false, floatingVisible: true });
+    expect(migrated.start[0]).toMatchObject({ toolbarVisible: false });
+    expect(migrated.selectionToolbar).toEqual(["plugin.echoes.showReport"]);
   });
 
   it("keeps the declared entry when a renamed old id and the new id both exist", () => {
@@ -115,31 +117,33 @@ describe("toolbar runtime buttons (issue #429)", () => {
       kind: "group",
       id: "plugin.echoes.old",
       toolbarVisible: false,
-      floatingVisible: false,
     } as const;
     const visible = {
       kind: "group",
       id: "plugin.echoes.neu",
       toolbarVisible: true,
-      floatingVisible: true,
     } as const;
     for (const start of [
       [hidden, visible],
       [visible, hidden],
     ] as const) {
-      const migrated = applyToolbarButtonRenames({ start: [...start], end: [] });
+      const migrated = applyToolbarButtonRenames({
+        start: [...start],
+        end: [],
+        selectionToolbar: [],
+      });
       const groups = migrated.start.filter((e) => e.kind === "group");
       expect(groups.map((e) => e.id)).toEqual(["plugin.echoes.neu"]);
-      expect(groups[0]).toMatchObject({ toolbarVisible: true, floatingVisible: true });
+      expect(groups[0]).toMatchObject({ toolbarVisible: true });
     }
     for (const config of [
-      { start: [{ ...hidden }], end: [{ ...visible }] },
-      { start: [{ ...visible }], end: [{ ...hidden }] },
+      { start: [{ ...hidden }], end: [{ ...visible }], selectionToolbar: [] },
+      { start: [{ ...visible }], end: [{ ...hidden }], selectionToolbar: [] },
     ]) {
       const migrated = applyToolbarButtonRenames(config as ToolbarConfig);
       const groups = [...migrated.start, ...migrated.end].filter((e) => e.kind === "group");
       expect(groups.map((e) => e.id)).toEqual(["plugin.echoes.neu"]);
-      expect(groups[0]).toMatchObject({ toolbarVisible: true, floatingVisible: true });
+      expect(groups[0]).toMatchObject({ toolbarVisible: true });
     }
   });
 
@@ -166,11 +170,11 @@ describe("toolbar runtime buttons (issue #429)", () => {
           kind: "group",
           id: "plugin.echoes.gone",
           toolbarVisible: true,
-          floatingVisible: true,
         },
       ],
       end: [],
+      selectionToolbar: ["plugin.echoes.gone"],
     };
-    expect(deriveFloatingGroupIds(config)).not.toContain("plugin.echoes.gone");
+    expect(liveSelectionToolbarIds(config)).not.toContain("plugin.echoes.gone");
   });
 });

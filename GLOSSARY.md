@@ -462,6 +462,32 @@ Saying a phrase once into the field where a Voice Command, a Dictation Vocabular
 _UI_: en "Record phrase" / es "Grabar frase"
 _Avoid_: voice training, teach
 
+**Editor Toolbar**:
+The row of Toolbar Buttons above a Chapter or Note editor, split into Start and End, as the author arranged it on this device.
+_Avoid_: formatting bar, ribbon
+
+**Toolbar Button**:
+One unit the author places, shows, or hides in the Editor Toolbar or Selection Toolbar: a core tool or a Plugin's button. A core Toolbar Button can hold several controls that always move together, such as undo and redo, or font family and size.
+_Avoid_: group, toolbar group, tool
+
+**Start**:
+The section of the Editor Toolbar that runs from the leading edge; End follows it.
+_Avoid_: left (it flips in right-to-left layouts)
+
+**End**:
+The section of the Editor Toolbar that sits against the trailing edge, after Start.
+_Avoid_: right (it flips in right-to-left layouts)
+
+**Toolbar Divider**:
+A thin line the author places between Toolbar Buttons to set them apart. Unlike a Toolbar Button, the author can place as many as they like, but never two side by side.
+_UI_: en "Divider" / es "Separador"
+_Avoid_: separator, divider on its own (Scene Break owns those words)
+
+**Selection Toolbar**:
+The small toolbar that appears beside selected Chapter or Note text, holding the Toolbar Buttons the author chose for it.
+_UI_: en "selection menu" / es "menú de selección" _(known mismatch)_
+_Avoid_: bubble menu, floating toolbar, selection menu
+
 ## Shortcuts
 
 Maibuk is keyboard-first: everything the author can do can run from the keyboard.
