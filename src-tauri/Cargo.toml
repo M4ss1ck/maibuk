@@ -76,3 +76,10 @@ windows-sys = { version = "0.61", features = [
 [target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
 keyring-core = "1"
 tauri-plugin-updater = "2.10"
+
+# Smaller, faster native code: one codegen unit and fat LTO let LLVM inline
+# across crates, and stripping drops the symbol tables from the shipped binary.
+[profile.release]
+codegen-units = 1
+lto = true
+strip = true
