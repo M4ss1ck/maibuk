@@ -88,7 +88,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            Some(vec!["--minimized"]),
+            Some(vec![window_background::MINIMIZED_ARG]),
         ));
 
     // Update ships for the Linux and Windows NSIS builds (ADR 0037); the web,
@@ -273,6 +273,37 @@ pub fn run() {
 
             Ok(())
         })
-        .run(context)
-        .expect("error while running tauri application");
+        .build(context)
+        .expect("error while building tauri application")
+        .run(on_run_event());
+}
+
+/// Restart now must bring the window back. Tauri's own restart relaunches with
+/// this launch's arguments, so a restart of an autostart launch (--minimized)
+/// came back hidden in the tray. On the Exit of a restart this relaunches with
+/// window_background::shown_args instead. Plugins have handled Exit by then,
+/// so the single-instance D-Bus name is free for the new process.
+#[cfg(desktop)]
+fn on_run_event() -> impl FnMut(&tauri::AppHandle, tauri::RunEvent) {
+    let mut restarting = false;
+    move |app, event| match event {
+        tauri::RunEvent::ExitRequested {
+            code: Some(tauri::RESTART_EXIT_CODE),
+            ..
+        } => restarting = true,
+        tauri::RunEvent::Exit if restarting => {
+            use tauri::Manager;
+
+            let mut env = app.env();
+            env.args_os = window_background::shown_args(env.args_os);
+            app.cleanup_before_exit();
+            tauri::process::restart(&env);
+        }
+        _ => {}
+    }
+}
+
+#[cfg(mobile)]
+fn on_run_event() -> impl FnMut(&tauri::AppHandle, tauri::RunEvent) {
+    |_, _| {}
 }

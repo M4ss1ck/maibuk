@@ -8,7 +8,7 @@
 //! app's own data, read in `setup` before `show()`. Desktop only: Android
 //! keeps its current launch behavior.
 
-use std::path::Path;
+use std::{ffi::OsString, path::Path};
 
 use tauri::window::Color;
 
@@ -81,6 +81,18 @@ pub fn set_window_background(app: tauri::AppHandle, color: String) -> Result<(),
 /// stalled load still gets a window.
 pub const REVEAL_FALLBACK: std::time::Duration = std::time::Duration::from_secs(3);
 
+/// The flag an autostart/login launch passes; that launch stays in the tray.
+pub const MINIMIZED_ARG: &str = "--minimized";
+
+/// The arguments a restart launches with: this launch's, without
+/// MINIMIZED_ARG. Restart now is a click in the window, so the author expects
+/// the window back even when this launch came from autostart.
+pub fn shown_args(args: Vec<OsString>) -> Vec<OsString> {
+    args.into_iter()
+        .filter(|arg| arg != MINIMIZED_ARG)
+        .collect()
+}
+
 static REVEALED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Show the main window the first time this is called, unless this is an
@@ -91,7 +103,7 @@ static REVEALED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::
 pub fn reveal_main_window(app: &tauri::AppHandle) {
     use tauri::Manager;
 
-    let minimized = std::env::args().any(|arg| arg == "--minimized");
+    let minimized = std::env::args().any(|arg| arg == MINIMIZED_ARG);
     reveal_once(&REVEALED, minimized, || {
         if let Some(win) = app.get_webview_window("main") {
             let _ = win.show();
@@ -129,6 +141,25 @@ mod tests {
         reveal_once(&revealed, true, || shows += 1);
         reveal_once(&revealed, true, || shows += 1);
         assert_eq!(shows, 0);
+    }
+
+    #[test]
+    fn a_restart_of_an_autostart_launch_comes_back_shown() {
+        let args = ["/usr/bin/maibuk", MINIMIZED_ARG]
+            .map(OsString::from)
+            .to_vec();
+        assert_eq!(shown_args(args), vec![OsString::from("/usr/bin/maibuk")]);
+    }
+
+    #[test]
+    fn a_restart_keeps_every_other_argument_in_order() {
+        let args = ["/usr/bin/maibuk", "maibuk://open", MINIMIZED_ARG, "--flag"]
+            .map(OsString::from)
+            .to_vec();
+        let expected = ["/usr/bin/maibuk", "maibuk://open", "--flag"]
+            .map(OsString::from)
+            .to_vec();
+        assert_eq!(shown_args(args), expected);
     }
 
     fn temp_dir(name: &str) -> PathBuf {
