@@ -19,7 +19,7 @@ import {
   type DropTarget,
   type TextDropItem,
 } from "react-aria-components/useDragAndDrop";
-import { useDrop } from "react-aria";
+import { useDrop, useFocusManager } from "react-aria";
 import { ResizeHandle } from "@/components/ui";
 import { Divider } from "@/components/editor/ToolbarButton";
 import {
@@ -204,6 +204,7 @@ function useMoveMode<Slot>(
   const restoreToolbarConfig = useSettingsStore((state) => state.restoreToolbarConfig);
   const config = useSettingsStore((state) => state.toolbarConfig);
   const focusKeyRef = useRef<string | null>(null);
+  const focusManager = useFocusManager();
   const carriedKey = carry ? (adapter.carriedFocusKey?.(carry) ?? carry.id) : null;
 
   const moveTo = (next: Carry<Slot>, at: CarryAt<Slot>) => {
@@ -270,6 +271,14 @@ function useMoveMode<Slot>(
     const option = (event.target as HTMLElement).closest<HTMLElement>('[role="option"][data-key]');
     if (!option || event.altKey || event.ctrlKey || event.metaKey) return;
     if (!carry) {
+      // Escape leaves the layout before it closes the dialog: focus goes back
+      // to where the dialog starts, and a second Escape closes it.
+      if (event.key === "Escape" && focusManager) {
+        event.preventDefault();
+        event.stopPropagation();
+        focusManager.focusFirst({ tabbable: true });
+        return;
+      }
       if (event.key !== "Enter" && event.key !== " ") return;
       // React Aria's own keyboard drag must not take Enter in these previews.
       const start = adapter.startFrom(option.dataset.key ?? "");

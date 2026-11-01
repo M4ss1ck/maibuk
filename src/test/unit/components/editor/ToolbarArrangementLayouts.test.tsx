@@ -270,6 +270,20 @@ describe("the Toolbar layout by keyboard", () => {
     expect(startIds()).toEqual(["history", "d1", "font", "find"]);
   });
 
+  it("Escape with nothing carried leaves the preview first; a second Escape closes", async () => {
+    const user = userEvent.setup();
+    const { onClose } = renderDialog();
+    act(() => option(preview(), "toolbar.groups.font").focus());
+
+    await user.keyboard("{Escape}");
+    expect(onClose).not.toHaveBeenCalled();
+    expect(preview()).not.toContainElement(document.activeElement as HTMLElement);
+    expect(screen.getByRole("dialog")).toContainElement(document.activeElement as HTMLElement);
+
+    await user.keyboard("{Escape}");
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it("owns the arrows only while a button is carried", async () => {
     const user = userEvent.setup();
     renderDialog();

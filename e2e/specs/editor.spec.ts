@@ -776,6 +776,8 @@ test.describe("toolbar arrangement @wf:editor-toolbar-arrangement", () => {
     await expect(preview(page).getByRole("option").first()).toHaveAccessibleName("Font");
     await expect(previewButton(page, "Font")).toBeFocused();
 
+    // The first Escape leaves the preview; the second closes the dialog.
+    await page.keyboard.press("Escape");
     await page.keyboard.press("Escape");
     await expect(customize(page)).toBeHidden();
     await expect(editorText(page)).toBeFocused();
@@ -838,6 +840,21 @@ test.describe("toolbar arrangement @wf:editor-toolbar-arrangement", () => {
     await expect(previewButton(page, "Font")).toBeFocused();
   });
 
+  test("Escape with nothing carried leaves the preview; a second Escape closes the dialog", async ({
+    page,
+  }) => {
+    await openArrangement(page);
+    await focusPreviewButton(page, "Font");
+    await page.keyboard.press("Escape");
+    await expect(customize(page)).toBeVisible();
+    await expectFocusWithin(customize(page));
+    expect(await isFocusWithin(preview(page))).toBe(false);
+
+    await page.keyboard.press("Escape");
+    await expect(customize(page)).toBeHidden();
+    await expect(editorText(page)).toBeFocused();
+  });
+
   test("carrying a Toolbar Button down into the tray hides it", async ({ page }) => {
     await openArrangement(page);
 
@@ -854,6 +871,8 @@ test.describe("toolbar arrangement @wf:editor-toolbar-arrangement", () => {
     await expect(previewButton(page, "Font")).toHaveCount(0);
     await capture(page, "toolbar-arrangement-tray", { around: [tray(page)] });
 
+    // The first Escape leaves the preview; the second closes the dialog.
+    await page.keyboard.press("Escape");
     await page.keyboard.press("Escape");
     await expect(editorText(page)).toBeFocused();
     await expect(toolbar(page).getByRole("combobox", { name: "Size" })).toHaveCount(0);
@@ -909,6 +928,8 @@ test.describe("toolbar arrangement @wf:editor-toolbar-arrangement", () => {
     await page.keyboard.press("Enter");
     await expect(selectionPreview.getByRole("option").first()).toHaveAccessibleName("Headings");
 
+    // The first Escape leaves the preview; the second closes the dialog.
+    await page.keyboard.press("Escape");
     await page.keyboard.press("Escape");
     await expect(customize(page)).toBeHidden();
     await expect(editorText(page)).toBeFocused();

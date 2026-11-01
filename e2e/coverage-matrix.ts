@@ -878,6 +878,7 @@ export const ROWS: MatrixRow[] = [
       "Mod+Shift+, opens Toolbar settings on the Toolbar layout; Enter picks up a preview Toolbar Button, arrows move it across Start and End, Enter drops it; carrying it into the tray hides it; the footer switch shows the Selection layout, where a button is reordered; asserts: Dialog focus and Tab containment; order in the preview and the Editor Toolbar; Escape returns focus to the trigger; persists: yes (settings, after reload)",
     edges: [
       "Escape while carrying puts the button back",
+      "Escape with nothing carried leaves the preview before closing",
       "a Toolbar Divider can be carried and dropped",
       "switching layouts by keyboard keeps focus in the switch",
     ],
