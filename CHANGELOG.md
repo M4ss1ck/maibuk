@@ -5,6 +5,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.1] - 2026-11-01
+
+### Added
+- Canary and Nemotron Dictation models on desktop via the sherpa-onnx engine
+- Installed Dictation models that are no longer in the catalog now appear in the list with a Remove option
+
+### Changed
+- Dictation model rows now show the model name, supported languages, a live preview, and its source
+- Lower idle memory use by stopping inactive sync and spell-check workers, unloading the Dictation model after use, and reducing idle WebKit and database resources
+- Faster launch and smaller app size with screens loaded on first visit and an optimized release build
+- Faster Book Editor opening by loading PDF and image export tools only when an export runs
+
+### Fixed
+- Restart now brings the main window back when Maibuk was started at login
+- Saved Sync sessions are verified at launch so Auto Sync starts promptly instead of waiting for window focus or the keep-alive interval
+
 ## [0.19.0] - 2026-10-31
 
 ### Added

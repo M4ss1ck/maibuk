@@ -5,6 +5,22 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 y este proyecto sigue el [Versionado Semántico](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.1] - 2026-11-01
+
+### Added
+- Los modelos de Dictado Canary y Nemotron en escritorio mediante el motor sherpa-onnx
+- Los modelos de Dictado instalados que ya no están en el catálogo ahora aparecen en la lista con una opción Eliminar
+
+### Changed
+- Las filas de los modelos de Dictado ahora muestran el nombre del modelo, los idiomas compatibles, una vista previa en vivo y su origen
+- Menor uso de memoria en reposo al detener los procesos de sincronización y corrección ortográfica inactivos, descargar de la memoria el modelo de Dictado después de usarlo y reducir los recursos de WebKit y de la base de datos en reposo
+- Inicio más rápido y menor tamaño de la aplicación con pantallas que se cargan en la primera visita y una compilación de lanzamiento optimizada
+- Apertura más rápida del Editor de Libros al cargar las herramientas de exportación a PDF e imágenes solo cuando se ejecuta una exportación
+
+### Fixed
+- Reiniciar ahora trae de vuelta la ventana principal cuando Maibuk se inició al iniciar sesión
+- Las sesiones de sincronización guardadas se verifican al iniciar para que la Sincronización automática comience de inmediato en lugar de esperar a que la ventana obtenga el foco o a que transcurra el intervalo de keep-alive
+
 ## [0.19.0] - 2026-10-31
 
 ### Added
