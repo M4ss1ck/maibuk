@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createUnsupportedHost, unsupportedModelFiles } from "@/lib/platform/unsupported-dictation";
 import { useTutorialStore } from "@/features/tutorial/store";
 import {
@@ -8,7 +8,9 @@ import {
   type ModelFiles,
   type ModelSpec,
   type ModelTier,
+  type RecognizerHost,
 } from "@/features/dictation/types";
+import { withIdleUnload } from "@/features/dictation/runtime";
 
 const { createRecognizerHost, getModelFiles } = vi.hoisted(() => ({
   createRecognizerHost: vi.fn(),
@@ -626,5 +628,62 @@ describe("install()", () => {
     const state = useDictationStore.getState();
     expect(state.installed).toEqual([]);
     expect(state.selectedModel).toEqual({});
+  });
+});
+
+describe("withIdleUnload", () => {
+  const spec = { id: "m" } as Parameters<RecognizerHost["load"]>[0];
+
+  function fakeHost() {
+    const calls: string[] = [];
+    const host: RecognizerHost = {
+      isSupported: async () => ({ supported: true }),
+      load: async () => void calls.push("load"),
+      start: async () => void calls.push("start"),
+      stop: async () => void calls.push("stop"),
+      setContext: async () => {},
+      inputDevice: async () => null,
+      dispose: async () => void calls.push("dispose"),
+    };
+    return { host, calls };
+  }
+
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("unloads the model once Dictation has been stopped for the idle time", async () => {
+    const { host, calls } = fakeHost();
+    const wrapped = withIdleUnload(host, 1000);
+    await wrapped.load(spec, "en");
+    await wrapped.start(() => {});
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(calls).not.toContain("dispose");
+
+    await wrapped.stop();
+    await vi.advanceTimersByTimeAsync(999);
+    expect(calls).not.toContain("dispose");
+    await vi.advanceTimersByTimeAsync(1);
+    expect(calls.at(-1)).toBe("dispose");
+  });
+
+  it("a new start before the idle time keeps the model loaded", async () => {
+    const { host, calls } = fakeHost();
+    const wrapped = withIdleUnload(host, 1000);
+    await wrapped.load(spec, "en");
+    await wrapped.start(() => {});
+    await wrapped.stop();
+    await vi.advanceTimersByTimeAsync(500);
+    await wrapped.load(spec, "en");
+    await wrapped.start(() => {});
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(calls).not.toContain("dispose");
+  });
+
+  it("a load that no start follows still unloads", async () => {
+    const { host, calls } = fakeHost();
+    const wrapped = withIdleUnload(host, 1000);
+    await wrapped.load(spec, "en");
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(calls).toEqual(["load", "dispose"]);
   });
 });

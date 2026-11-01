@@ -65,9 +65,76 @@ export function resetDictationForTests(): void {
   runtime = null;
 }
 
+/**
+ * A loaded model is released this long after Dictation stops: a speech model
+ * holds tens to hundreds of MB, and most writing happens between dictations.
+ * The next start loads it again, behind the Session's "loading" status.
+ */
+export const DICTATION_IDLE_UNLOAD_MS = 180_000;
+
+/**
+ * Wraps a host so its model unloads after `idleMs` with nothing loading or
+ * listening. Any load or start cancels the pending unload.
+ */
+export function withIdleUnload(host: RecognizerHost, idleMs: number): RecognizerHost {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  // A start not yet followed by a stop: the model is in use.
+  let listening = false;
+  const cancel = () => {
+    if (timer !== null) clearTimeout(timer);
+    timer = null;
+  };
+  const schedule = () => {
+    cancel();
+    timer = setTimeout(() => {
+      timer = null;
+      if (!listening) void host.dispose().catch(() => {});
+    }, idleMs);
+  };
+  // Each method hands back the host's own promise, so callers see the same
+  // settle timing as without the wrapper; the bookkeeping rides alongside.
+  const after = (promise: Promise<void>, settled: () => void) => {
+    promise.then(settled, settled);
+    return promise;
+  };
+  return {
+    ...host,
+    load(spec, language) {
+      cancel();
+      // A load that no start follows (the author cancelled) still unloads.
+      return after(host.load(spec, language), () => {
+        if (!listening) schedule();
+      });
+    },
+    start(listener) {
+      cancel();
+      listening = true;
+      const started = host.start(listener);
+      started.catch(() => {
+        listening = false;
+        schedule();
+      });
+      return started;
+    },
+    stop() {
+      return after(host.stop(), () => {
+        listening = false;
+        schedule();
+      });
+    },
+    dispose() {
+      cancel();
+      listening = false;
+      return host.dispose();
+    },
+  };
+}
+
 async function build(): Promise<DictationRuntime> {
   const platform = dictationPlatform();
-  const host = platform ? await createRecognizerHost() : createUnsupportedHost("platform");
+  const host = platform
+    ? withIdleUnload(await createRecognizerHost(), DICTATION_IDLE_UNLOAD_MS)
+    : createUnsupportedHost("platform");
   const files = platform ? await getModelFiles() : unsupportedModelFiles;
   const models = createModelStore({
     files,
