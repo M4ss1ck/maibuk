@@ -1,4 +1,5 @@
 import { render, waitFor } from "@testing-library/react";
+import { useLayoutEffect } from "react";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import type { DatabaseAdapter } from "@/lib/platform/types";
@@ -179,8 +180,13 @@ let path = "/";
 const pathLog: string[] = [];
 let navigateTo: (to: string) => void = () => {};
 function LocationProbe() {
-  path = useLocation().pathname;
-  if (pathLog.at(-1) !== path) pathLog.push(path);
+  const { pathname } = useLocation();
+  // Read on commit, not render: a screen loads on first visit, and its route
+  // renders while the old screen stays mounted until the chunk arrives.
+  useLayoutEffect(() => {
+    path = pathname;
+    if (pathLog.at(-1) !== pathname) pathLog.push(pathname);
+  }, [pathname]);
   const navigate = useNavigate();
   navigateTo = (to: string) => navigate(to);
   return null;
