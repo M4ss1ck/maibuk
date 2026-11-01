@@ -13,6 +13,25 @@ export interface ScoredModel {
   score: ModelScore;
 }
 
+/** A phase 1 candidate (scripts/dictation-conformance/candidates.json, issue #663). */
+export type Candidate = Pick<ModelSpec, "id" | "tier" | "languages" | "capabilities">;
+
+/**
+ * One run per model and language. A model for one language keeps its id; a
+ * multilingual one is `<id>-<language>`, the name the native lanes write its
+ * transcripts under.
+ */
+export function languageRuns(models: readonly Candidate[]): Candidate[] {
+  return models.flatMap(({ id, tier, languages, capabilities }) =>
+    languages.map((language) => ({
+      id: languages.length > 1 ? `${id}-${language}` : id,
+      tier,
+      languages: [language],
+      capabilities,
+    }))
+  );
+}
+
 export interface Report {
   markdown: string;
   /** Every failed bar; empty means the ship gate passes. */

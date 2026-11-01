@@ -26,5 +26,6 @@ export const unsupportedModelFiles: ModelFiles = {
     throw new DictationError("unsupported");
   },
   isComplete: async () => false,
+  listInstalled: async () => [],
   remove: async () => {},
 };

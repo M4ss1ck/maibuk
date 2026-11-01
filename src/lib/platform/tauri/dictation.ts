@@ -2,6 +2,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import {
   toDictationError,
   type DictationEvent,
+  type DictationLanguage,
   type ModelFiles,
   type ModelSpec,
   type RecognizerHost,
@@ -28,7 +29,8 @@ export function createTauriRecognizerHost(): RecognizerHost {
   let ended = false;
   return {
     isSupported: () => call<SupportReport>("dictation_is_supported"),
-    load: (spec: ModelSpec) => call("dictation_load", { spec }),
+    load: (spec: ModelSpec, language: DictationLanguage) =>
+      call("dictation_load", { spec, language }),
     async start(listener) {
       ended = false;
       const channel = new Channel<HostMessage>();
@@ -83,5 +85,6 @@ export const tauriModelFiles: ModelFiles = {
     }
   },
   isComplete: (spec) => call<boolean>("dictation_models_is_complete", { spec }),
+  listInstalled: () => call<string[]>("dictation_models_list"),
   remove: (id) => call("dictation_models_remove", { id }),
 };

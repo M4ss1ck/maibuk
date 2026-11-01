@@ -4,7 +4,7 @@
 import type { Language } from "@/features/settings/types";
 
 export type DictationLanguage = Language;
-export type EngineId = "moonshine";
+export type EngineId = "moonshine" | "sherpa";
 export type ModelTier = "fast" | "accurate";
 /** How much of the Dictation Bar an editor screen shows. */
 export const DICTATION_BAR_SIZES = ["hidden", "compact", "full"] as const;
@@ -22,15 +22,21 @@ export interface ModelFile {
 export interface ModelSpec {
   /** Changes whenever the file set changes, so stale installs never load. */
   id: string;
+  /** Display name, shown in Settings. */
+  name: string;
   engine: EngineId;
   languages: DictationLanguage[];
   tier: ModelTier;
   platforms: DictationPlatform[];
   files: ModelFile[];
+  /** Bytes on disk once installed, when it differs from the download. */
+  installedBytes?: number;
   /** Passed to the engine verbatim; only the engine adapter reads them. */
   engineOptions: Record<string, string>;
   /** What the model's text already has; the future interpreter reads this. */
   capabilities: { casing: boolean; punctuation: boolean; streaming: boolean };
+  /** Model card URL, shown as the Source link (CC-BY attribution). */
+  source: string;
 }
 
 export const ERROR_CODES = [
@@ -93,8 +99,12 @@ export interface SupportReport {
  */
 export interface RecognizerHost {
   isSupported(): Promise<SupportReport>;
-  /** Loads an installed model; rejects with DictationError("model_corrupt") on bad files. */
-  load(spec: ModelSpec): Promise<void>;
+  /**
+   * Loads an installed model for one language; rejects with DictationError("model_corrupt")
+   * on bad files. Multilingual models read the language to choose what to transcribe;
+   * single-language models ignore it.
+   */
+  load(spec: ModelSpec, language: DictationLanguage): Promise<void>;
   start(listener: (event: DictationEvent) => void): Promise<void>;
   stop(): Promise<void>;
   setContext(text: string): Promise<void>;
@@ -112,5 +122,7 @@ export interface ModelFiles {
     signal: AbortSignal
   ): Promise<void>;
   isComplete(spec: ModelSpec): Promise<boolean>;
+  /** Ids of every model complete on this device, catalog or not, so a retired one can be removed. */
+  listInstalled(): Promise<string[]>;
   remove(id: string): Promise<void>;
 }

@@ -2050,7 +2050,13 @@
       "voiceUnavailable": "Unavailable voice commands: {{count}}",
       "voiceRefused": "Refused voice commands: {{count}}",
       "noPunctuation": "Adds no punctuation or capitals.",
-      "device": "Microphone: {{device}}"
+      "languages": "Languages: {{languages}}",
+      "installedSize": "Installed: {{size}} MB",
+      "noLivePreview": "No live preview: types each line after you pause.",
+      "source": "Source",
+      "sourceFor": "Source: {{name}}",
+      "device": "Microphone: {{device}}",
+      "orphan": "No longer offered"
     },
     "spokenPunctuation": {
       "title": "Spoken punctuation",

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { DictationLanguage } from "@/features/dictation/types";
 import { scoreModel, type Clip } from "@/test/support/dictation-phrase-score";
@@ -19,7 +20,11 @@ import {
   formsRepeat,
   gutenbergBody,
 } from "../../../../scripts/dictation-phrases/passages";
-import { renderReport, type ScoredModel } from "../../../../scripts/dictation-phrases/report";
+import {
+  languageRuns,
+  renderReport,
+  type ScoredModel,
+} from "../../../../scripts/dictation-phrases/report";
 import { median, runSummary } from "../../../../scripts/dictation-phrases/summary";
 
 const PUNCTUATES = { casing: true, punctuation: true, streaming: true };
@@ -317,5 +322,26 @@ describe("traceNumbers() (issue #274)", () => {
         trace: [{ finalLatencyMs: 120 }, { finalLatencyMs: null }, { finalLatencyMs: 200 }],
       })
     ).toEqual({ lineLatencyP50: 160, lines: 3, cpuPct: 57.8, setContextMs: 2.5 });
+  });
+});
+
+describe("phase 1 candidates (issue #663)", () => {
+  it("names a multilingual model's runs by language and keeps a single-language id", () => {
+    const runs = languageRuns([
+      { id: "canary", tier: "accurate", languages: ["en", "es"], capabilities: PUNCTUATES },
+      { id: "moonshine-en", tier: "fast", languages: ["en"], capabilities: PUNCTUATES },
+    ]);
+    expect(runs).toEqual([
+      { id: "canary-en", tier: "accurate", languages: ["en"], capabilities: PUNCTUATES },
+      { id: "canary-es", tier: "accurate", languages: ["es"], capabilities: PUNCTUATES },
+      { id: "moonshine-en", tier: "fast", languages: ["en"], capabilities: PUNCTUATES },
+    ]);
+  });
+
+  it("reads the checked-in candidate file", () => {
+    const ids = languageRuns(
+      JSON.parse(readFileSync("scripts/dictation-conformance/candidates.json", "utf8")).candidates
+    ).map((run) => run.id);
+    expect(ids).toContain("canary-180m-flash-int8-es");
   });
 });

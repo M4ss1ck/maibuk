@@ -2062,7 +2062,13 @@
       "voiceUnavailable": "Comandos de voz no disponibles: {{count}}",
       "voiceRefused": "Comandos de voz rechazados: {{count}}",
       "noPunctuation": "No añade puntuación ni mayúsculas.",
-      "device": "Micrófono: {{device}}"
+      "languages": "Idiomas: {{languages}}",
+      "installedSize": "Instalado: {{size}} MB",
+      "noLivePreview": "Sin vista previa en vivo: escribe cada línea al hacer una pausa.",
+      "source": "Fuente",
+      "sourceFor": "Fuente: {{name}}",
+      "device": "Micrófono: {{device}}",
+      "orphan": "Ya no se ofrece"
     },
     "spokenPunctuation": {
       "title": "Puntuación dictada",

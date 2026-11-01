@@ -14,7 +14,7 @@ import { catalogCapabilities } from "@/features/dictation/spoken-punctuation";
 import type { LineStatsSummary } from "@/features/dictation/stats";
 import { dictationLanguageFor, pickModel, useDictationStore } from "@/features/dictation/store";
 import type { DictationLanguage, ModelSpec } from "@/features/dictation/types";
-import { dictationPlatform } from "@/lib/platform";
+import { dictationPlatform, openExternal } from "@/lib/platform";
 
 const MB = 1_000_000;
 const sizeMb = (spec: ModelSpec) =>
@@ -26,9 +26,10 @@ export function DictationSection() {
   const enabled = useDictationStore((s) => s.enabled);
   const setEnabled = useDictationStore((s) => s.setEnabled);
   const installed = useDictationStore((s) => s.installed);
+  const orphans = useDictationStore((s) => s.orphans);
   const downloads = useDictationStore((s) => s.downloads);
-  const preferred = useDictationStore((s) => s.preferredTier);
-  const setPreferred = useDictationStore((s) => s.setPreferredTier);
+  const selected = useDictationStore((s) => s.selectedModel);
+  const setSelected = useDictationStore((s) => s.setSelectedModel);
   const [recent, setRecent] = useState<LineStatsSummary | null>(null);
   const override = useDictationStore((s) => s.languageOverride);
   const [chosen, setChosen] = useState<DictationLanguage>(() =>
@@ -105,19 +106,25 @@ export function DictationSection() {
           >
             {(language) => {
               const specs = byLanguage.get(language) ?? [];
+              const picked = pickModel(language, specs, installed, selected);
               const capabilities =
-                (pickModel(language, specs, installed, preferred) ?? specs[0])?.capabilities ??
-                catalogCapabilities(language);
+                (picked ?? specs[0])?.capabilities ?? catalogCapabilities(language);
               return (
                 <div className={SETTINGS_ROWS_CLASS}>
                   <SettingRow id="dictationModels" visuallyHiddenLabel className="py-3">
                     <div className="space-y-2" data-tutorial="dictation.models">
                       <h3 className="font-medium">{t("dictation.section.models")}</h3>
                       {specs.map((spec) => {
-                        const name = `${t(`dictation.languageNames.${language}`)}, ${t(`dictation.section.${spec.tier}`)}`;
+                        const name = `${spec.name}, ${t(`dictation.section.${spec.tier}`)}`;
+                        const languageList = new Intl.ListFormat(i18n.language, {
+                          style: "long",
+                          type: "conjunction",
+                        }).format(
+                          spec.languages.map((code) => t(`dictation.languageNames.${code}`))
+                        );
                         const download = downloads[spec.id];
                         const isInstalled = installed.includes(spec.id);
-                        const inUse = isInstalled && preferred[language] === spec.tier;
+                        const inUse = picked?.id === spec.id;
                         return (
                           <fieldset
                             key={spec.id}
@@ -125,18 +132,42 @@ export function DictationSection() {
                             className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3"
                           >
                             <div className="min-w-48 flex-1">
-                              <div className="font-medium">
+                              <h4 className="font-medium">{spec.name}</h4>
+                              <div>
                                 {t(`dictation.section.${spec.tier}`)} ·{" "}
                                 {t("dictation.section.size", { size: sizeMb(spec) })}
                               </div>
                               <div className="text-sm text-muted-foreground">
                                 {t(`dictation.section.${spec.tier}Hint`)}
                               </div>
+                              <div className="text-sm text-muted-foreground">
+                                {t("dictation.section.languages", { languages: languageList })}
+                              </div>
+                              {spec.installedBytes !== undefined && (
+                                <div className="text-sm text-muted-foreground">
+                                  {t("dictation.section.installedSize", {
+                                    size: Math.round(spec.installedBytes / MB),
+                                  })}
+                                </div>
+                              )}
+                              {!spec.capabilities.streaming && (
+                                <div className="text-sm text-muted-foreground">
+                                  {t("dictation.section.noLivePreview")}
+                                </div>
+                              )}
                               {!spec.capabilities.punctuation && (
                                 <div className="text-sm text-muted-foreground">
                                   {t("dictation.section.noPunctuation")}
                                 </div>
                               )}
+                              <button
+                                type="button"
+                                aria-label={t("dictation.section.sourceFor", { name: spec.name })}
+                                className="text-sm font-medium text-primary underline-offset-2 hover:underline"
+                                onClick={() => void openExternal(spec.source)}
+                              >
+                                {t("dictation.section.source")}
+                              </button>
                             </div>
                             {download && (
                               <progress
@@ -164,7 +195,7 @@ export function DictationSection() {
                                 variant="secondary"
                                 size="sm"
                                 onClick={() => {
-                                  setPreferred(language, spec.tier);
+                                  setSelected(language, spec.id);
                                   // The button becomes text; keep focus in the row.
                                   actionRefs.current.get(spec.id)?.focus();
                                 }}
@@ -207,6 +238,32 @@ export function DictationSection() {
                           </fieldset>
                         );
                       })}
+                      {orphans.map((id) => (
+                        <fieldset
+                          key={id}
+                          aria-label={id}
+                          className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3"
+                        >
+                          <div className="min-w-48 flex-1">
+                            <h4 className="font-medium">{id}</h4>
+                            <div className="text-sm text-muted-foreground">
+                              {t("dictation.section.orphan")}
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            aria-label={`${t("dictation.section.remove")} ${id}`}
+                            onClick={() =>
+                              void getDictation()
+                                .then((r) => r.remove(id))
+                                .catch(() => {})
+                            }
+                          >
+                            {t("dictation.section.remove")}
+                          </Button>
+                        </fieldset>
+                      ))}
                     </div>
                   </SettingRow>
                   <SettingRow id="dictationSpokenPunctuation" visuallyHiddenLabel className="py-3">

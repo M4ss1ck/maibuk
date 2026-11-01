@@ -167,6 +167,20 @@ pub fn verify(base: &Path, spec: &ModelSpec) -> Result<PathBuf, DictationError> 
     Ok(dir)
 }
 
+/// Ids of every model folder marked complete, catalog or not, sorted.
+pub fn list_installed(base: &Path) -> Vec<String> {
+    let Ok(entries) = fs::read_dir(base.join("dictation")) else {
+        return Vec::new();
+    };
+    let mut ids: Vec<String> = entries
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().join(MARKER).exists())
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .collect();
+    ids.sort();
+    ids
+}
+
 pub fn remove(base: &Path, id: &str) -> Result<(), DictationError> {
     validate_name(id)?;
     match fs::remove_dir_all(model_dir(base, id)) {
@@ -235,6 +249,7 @@ mod tests {
     fn spec(files: Vec<ModelFile>) -> ModelSpec {
         ModelSpec {
             id: "m1".into(),
+            name: "Model".into(),
             engine: "moonshine".into(),
             languages: vec!["en".into()],
             tier: "fast".into(),
@@ -246,6 +261,8 @@ mod tests {
                 punctuation: true,
                 streaming: true,
             },
+            source: "https://example.com/m1".into(),
+            installed_bytes: None,
         }
     }
 
@@ -340,6 +357,18 @@ mod tests {
             ErrorCode::ModelCorrupt
         );
         assert!(!dir.join("dictation/outside").exists());
+    }
+
+    #[test]
+    fn lists_only_complete_models_sorted() {
+        let dir = tempdir();
+        for id in ["zeta", "alpha"] {
+            std::fs::create_dir_all(model_dir(&dir, id)).unwrap();
+            std::fs::write(model_dir(&dir, id).join(MARKER), b"").unwrap();
+        }
+        std::fs::create_dir_all(model_dir(&dir, "partial")).unwrap();
+        assert_eq!(list_installed(&dir), vec!["alpha", "zeta"]);
+        assert!(list_installed(&dir.join("missing")).is_empty());
     }
 
     fn tempdir() -> std::path::PathBuf {

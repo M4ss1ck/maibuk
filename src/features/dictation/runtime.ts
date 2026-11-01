@@ -101,8 +101,8 @@ async function build(): Promise<DictationRuntime> {
   const session = createDictationSession({
     host,
     modelFor: (language) => {
-      const { installed, preferredTier } = useDictationStore.getState();
-      const picked = pickModel(language, models.available(), installed, preferredTier);
+      const { installed, selectedModel: selected } = useDictationStore.getState();
+      const picked = pickModel(language, models.available(), installed, selected);
       // A Phrase Recording asks before it pauses anything: a language with no
       // model must leave the running Session's model and tables alone.
       if (!picked) return null;
@@ -155,8 +155,14 @@ async function build(): Promise<DictationRuntime> {
   session.subscribe(() => useDictationStore.setState({ snapshot: session.getSnapshot() }));
 
   const refreshInstalled = async () => {
+    const offered = new Set(MODEL_CATALOG.map((spec) => spec.id));
+    const [installedIds, listed] = await Promise.all([
+      models.installedIds(),
+      files.listInstalled(),
+    ]);
     useDictationStore.setState({
-      installed: [...(await models.installedIds())],
+      installed: [...installedIds],
+      orphans: listed.filter((id) => !offered.has(id)),
     });
   };
 
@@ -211,18 +217,18 @@ async function build(): Promise<DictationRuntime> {
           const installedModels = models
             .available()
             .filter((candidate) => state.installed.includes(candidate.id));
-          const preferredTier = { ...state.preferredTier };
+          const selectedModel = { ...state.selectedModel };
           for (const language of spec.languages) {
             const hasInstalledModel = installedModels.some((candidate) =>
               candidate.languages.includes(language)
             );
-            if (!hasInstalledModel) preferredTier[language] = spec.tier;
+            if (!hasInstalledModel) selectedModel[language] = spec.id;
           }
           return {
             installed: state.installed.includes(spec.id)
               ? state.installed
               : [...state.installed, spec.id],
-            preferredTier,
+            selectedModel,
           };
         });
       } catch (error) {

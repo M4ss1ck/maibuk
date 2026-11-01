@@ -1,12 +1,17 @@
 // The web backend: port → Resampler16k → SpeechEngine → DictationEvents.
-import { toDictationError, type DictationEvent, type ModelSpec } from "@/features/dictation/types";
+import {
+  toDictationError,
+  type DictationEvent,
+  type DictationLanguage,
+  type ModelSpec,
+} from "@/features/dictation/types";
 import { readModelFiles } from "@/lib/platform/web/dictation/cache-model-files";
 import { createEngine } from "@/lib/platform/web/dictation/engines";
 import { createResampler, type Resampler } from "@/lib/platform/web/dictation/resampler";
 import type { SpeechEngine } from "@/lib/platform/web/dictation/speech-engine";
 
 type Request =
-  | { id: number; type: "load"; spec: ModelSpec }
+  | { id: number; type: "load"; spec: ModelSpec; language: DictationLanguage }
   | { id: number; type: "start"; port: MessagePort; sampleRate: number }
   | { id: number; type: "stop" }
   | { id: number; type: "setContext"; text: string }
@@ -14,6 +19,7 @@ type Request =
 
 let engine: SpeechEngine | null = null;
 let loadedId: string | null = null;
+let loadedLanguage: DictationLanguage | null = null;
 let resampler: Resampler | null = null;
 let port: MessagePort | null = null;
 let running = false;
@@ -35,12 +41,13 @@ function poll() {
 async function handle(msg: Request): Promise<void> {
   switch (msg.type) {
     case "load": {
-      if (loadedId === msg.spec.id && engine) return;
+      if (loadedId === msg.spec.id && loadedLanguage === msg.language && engine) return;
       const files = await readModelFiles(msg.spec);
       engine?.dispose();
       engine = createEngine(msg.spec);
-      await engine.load(files, msg.spec);
+      await engine.load(files, msg.spec, msg.language);
       loadedId = msg.spec.id;
+      loadedLanguage = msg.language;
       return;
     }
     case "start": {
@@ -77,6 +84,7 @@ async function handle(msg: Request): Promise<void> {
       engine?.dispose();
       engine = null;
       loadedId = null;
+      loadedLanguage = null;
       return;
   }
 }

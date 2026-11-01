@@ -23,6 +23,7 @@ const bytesA = new TextEncoder().encode("hello");
 const bytesB = new TextEncoder().encode("world!!");
 const spec: ModelSpec = {
   id: "m1",
+  name: "Test Model",
   engine: "moonshine",
   languages: ["en"],
   tier: "fast",
@@ -43,6 +44,7 @@ const spec: ModelSpec = {
   ],
   engineOptions: {},
   capabilities: { casing: true, punctuation: true, streaming: true },
+  source: "https://example.test/model",
 };
 
 function serve(map: Record<string, Uint8Array<ArrayBuffer> | number>) {
@@ -144,6 +146,22 @@ describe("cacheModelFiles", () => {
     await expect(readModelFiles(spec)).rejects.toMatchObject({
       code: "model_corrupt",
     });
+  });
+
+  it("lists every complete model, catalog or not, and removing one needs only its id", async () => {
+    serve({
+      "https://cdn.test/a.ort": bytesA,
+      "https://cdn.test/b.bin": bytesB,
+    });
+    await cacheModelFiles.install(spec, () => {}, new AbortController().signal);
+    const cache = await caches.open("maibuk-dictation-v1");
+    await cache.put("/dictation/retired/a.ort", new Response("partial"));
+    await cache.put("/dictation/retired/.complete", new Response("[]"));
+    await cache.put("/dictation/unfinished/a.ort", new Response("partial"));
+    expect(await cacheModelFiles.listInstalled()).toEqual(["m1", "retired"]);
+
+    await cacheModelFiles.remove("retired");
+    expect(await cacheModelFiles.listInstalled()).toEqual(["m1"]);
   });
 
   it("remove deletes every entry of the model", async () => {

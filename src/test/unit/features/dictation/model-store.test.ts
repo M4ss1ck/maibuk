@@ -4,6 +4,7 @@ import { DictationError, type ModelFiles, type ModelSpec } from "@/features/dict
 
 const spec = (id: string, platforms: ModelSpec["platforms"] = ["web"]): ModelSpec => ({
   id,
+  name: "Test Model",
   engine: "moonshine",
   languages: ["en"],
   tier: "fast",
@@ -18,6 +19,7 @@ const spec = (id: string, platforms: ModelSpec["platforms"] = ["web"]): ModelSpe
   ],
   engineOptions: {},
   capabilities: { casing: true, punctuation: true, streaming: true },
+  source: "https://example.test/model",
 });
 
 /** Files whose completion marker exists for the ids in `complete`. */
@@ -27,6 +29,7 @@ function fakeFiles(complete: string[] = []): ModelFiles & { installed: Set<strin
     installed,
     install: vi.fn(async (s: ModelSpec) => void installed.add(s.id)),
     isComplete: vi.fn(async (s: ModelSpec) => installed.has(s.id)),
+    listInstalled: vi.fn(async () => [...installed]),
     remove: vi.fn(async (id: string) => void installed.delete(id)),
   };
 }

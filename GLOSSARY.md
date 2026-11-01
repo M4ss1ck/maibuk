@@ -429,7 +429,7 @@ _UI_: en "Dictation bar" / es "Barra de dictado"
 _Avoid_: dictation control, floating bar, mic button
 
 **Dictation Model**:
-A downloaded speech model for one language and tier (Fast or Accurate), kept on this device. When a Dictation Language has none installed, the first Dictation Model downloaded for it is automatically selected for that language; later downloads leave that choice alone.
+A named speech model for one or more Dictation Languages, downloaded and kept on this device. Each is described as Fast or Accurate, and one without live preview types a line only after each pause instead of while the author speaks. Each Dictation Language uses one installed Dictation Model, chosen per language. When a Dictation Language has none installed, the first Dictation Model downloaded for it is automatically selected for that language; later downloads leave that choice alone. Removing the Dictation Model a language uses switches that language to another installed Dictation Model for it, if any.
 _Avoid_: voice pack
 
 **Dictation Language**:

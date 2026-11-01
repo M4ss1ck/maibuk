@@ -1,6 +1,7 @@
 {
   "spec": {
     "id": "moonshine-tiny-en-260821",
+    "name": "Moonshine Tiny English",
     "engine": "moonshine",
     "languages": ["en"],
     "tier": "fast",
@@ -87,7 +88,8 @@
       "casing": true,
       "punctuation": true,
       "streaming": true
-    }
+    },
+    "source": "https://huggingface.co/moonshine-ai/moonshine-streaming"
   },
   "events": [
     {

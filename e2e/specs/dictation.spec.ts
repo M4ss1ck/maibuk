@@ -29,7 +29,7 @@ const dictationBar = (page: Page) =>
 
 async function downloadEnglishFast(page: Page) {
   await page.goto("/settings#dictation");
-  const row = page.getByRole("group", { name: "English, Fast" });
+  const row = page.getByRole("group", { name: "Moonshine Tiny English, Fast" });
   await tabTo(page, row.getByRole("button", { name: "Download" }), { max: 200 });
   await page.keyboard.press("Enter");
   await expect(row.getByText("Used for English")).toBeVisible({
@@ -127,8 +127,8 @@ test.describe("@wf:dictation-settings @chromium-only", () => {
   }) => {
     await page.goto("/settings#dictation");
     // The tab list opens on the author's language: English models, no Spanish.
-    await expect(page.getByRole("group", { name: "English, Fast" })).toBeVisible();
-    await expect(page.getByRole("group", { name: "Spanish, Fast" })).toHaveCount(0);
+    await expect(page.getByRole("group", { name: "Moonshine Tiny English, Fast" })).toBeVisible();
+    await expect(page.getByRole("group", { name: "Moonshine Tiny Spanish, Fast" })).toHaveCount(0);
 
     const englishTab = page.getByRole("tab", { name: "English" });
     await tabTo(page, englishTab, { max: 200 });
@@ -140,8 +140,8 @@ test.describe("@wf:dictation-settings @chromium-only", () => {
 
     // The one panel scopes the model fieldsets, Spoken punctuation, and the
     // Dictation vocabulary editor to the chosen language.
-    await expect(page.getByRole("group", { name: "Spanish, Fast" })).toBeVisible();
-    await expect(page.getByRole("group", { name: "English, Fast" })).toHaveCount(0);
+    await expect(page.getByRole("group", { name: "Moonshine Tiny Spanish, Fast" })).toBeVisible();
+    await expect(page.getByRole("group", { name: "Moonshine Tiny English, Fast" })).toHaveCount(0);
     await expect(
       page.getByRole("switch", { name: "Spoken punctuation for Spanish" })
     ).toBeVisible();
@@ -162,7 +162,7 @@ test.describe("@wf:dictation-settings @chromium-only", () => {
       await route.abort().catch(() => {});
     });
     await page.goto("/settings#dictation");
-    const row = page.getByRole("group", { name: "English, Fast" });
+    const row = page.getByRole("group", { name: "Moonshine Tiny English, Fast" });
     await tabTo(page, row.getByRole("button", { name: "Download" }), { max: 200 });
     await page.keyboard.press("Enter");
     const cancel = row.getByRole("button", { name: "Cancel" });
@@ -178,7 +178,7 @@ test.describe("@wf:dictation-settings @chromium-only", () => {
       route.fulfill({ status: 404 })
     );
     await page.goto("/settings#dictation");
-    const row = page.getByRole("group", { name: "English, Fast" });
+    const row = page.getByRole("group", { name: "Moonshine Tiny English, Fast" });
     await tabTo(page, row.getByRole("button", { name: "Download" }), { max: 200 });
     await page.keyboard.press("Enter");
     await expect(page.getByText(/The download failed|no longer available/).first()).toBeVisible();
@@ -234,7 +234,9 @@ test.describe("@wf:dictation-settings @chromium-only", () => {
     await page.keyboard.press("Space");
     await expect(backOn).toBeChecked();
     await expect(
-      page.getByRole("group", { name: "English, Fast" }).getByText("Used for English")
+      page
+        .getByRole("group", { name: "Moonshine Tiny English, Fast" })
+        .getByText("Used for English")
     ).toBeVisible();
 
     // Back on, the switch is followed by the Dictation bar size radios, also

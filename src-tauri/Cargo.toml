@@ -57,6 +57,7 @@ gtk = "0.18"
 gdkx11 = "0.18"
 cpal = "0.18"
 libloading = "0.8"
+sherpa-onnx = "=1.13.8"
 ureq = "2"
 dbus-secret-service-keyring-store = { version = "1", features = ["crypto-rust", "vendored"] }
 

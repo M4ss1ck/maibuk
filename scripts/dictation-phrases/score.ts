@@ -24,7 +24,7 @@ import {
   type Clip,
 } from "@/test/support/dictation-phrase-score";
 import { parseClipFileName } from "./clips";
-import { namesRate, renderReport, type ScoredModel } from "./report";
+import { languageRuns, namesRate, renderReport, type ScoredModel } from "./report";
 import { runSummary, type RunClip, type RunSummary } from "./summary";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -67,7 +67,13 @@ if (vocabularyPath) {
 const scored: ScoredModel[] = [];
 const summaries: RunSummary[] = [];
 const recorded: Record<string, VocabularyEntry[]> = {};
-for (const spec of MODEL_CATALOG) {
+// Phase 1 candidates (issue #663) score beside the catalog when their
+// transcripts exist.
+const candidates = languageRuns(
+  JSON.parse(readFileSync(resolve(here, "../dictation-conformance/candidates.json"), "utf8"))
+    .candidates
+);
+for (const spec of [...languageRuns(MODEL_CATALOG), ...candidates]) {
   const path = join(outDir, `phrases-${spec.id}${suffix}.json`);
   if (!existsSync(path)) {
     console.log(`${spec.id}: no transcripts (${path})`);

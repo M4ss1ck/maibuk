@@ -51,7 +51,7 @@ describe("WebRecognizerHost", () => {
     const host = createWebRecognizerHost({
       createWorker: () => worker as unknown as Worker,
     });
-    await host.load(spec);
+    await host.load(spec, "en");
     await expect(host.start(() => {})).rejects.toMatchObject({
       code: "mic_denied",
     });
@@ -108,11 +108,19 @@ describe("WebRecognizerHost", () => {
     const host = createWebRecognizerHost({
       createWorker: () => worker as unknown as Worker,
     });
-    await host.load(spec);
+    await host.load(spec, "en");
     (host as unknown as { attach(l: (e: DictationEvent) => void): void }).attach((e) =>
       events.push(e)
     );
     worker.onerror?.({ message: "boom" } as ErrorEvent);
     expect(events).toEqual([{ type: "error", code: "engine_crashed", detail: "boom" }]);
+  });
+
+  it("sends the load language to the worker with the spec", async () => {
+    const host = createWebRecognizerHost({
+      createWorker: () => worker as unknown as Worker,
+    });
+    await host.load(spec, "es");
+    expect(worker.posted).toContainEqual({ id: 1, type: "load", spec, language: "es" });
   });
 });

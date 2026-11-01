@@ -156,6 +156,7 @@ pub fn run() {
             dictation::commands::dictation_models_install,
             dictation::commands::dictation_models_cancel,
             dictation::commands::dictation_models_is_complete,
+            dictation::commands::dictation_models_list,
             dictation::commands::dictation_models_remove
         ])
         .setup(|app| {

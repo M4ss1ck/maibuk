@@ -1,0 +1,33 @@
+{
+  "$comment": "Phase 1 candidates for issue #663, read by sherpa_phrases.py and scripts/dictation-phrases/score.ts. Each run id is <id>-<language>; files live under vendor/moonshine/models/sherpa/<dir>/ at the pinned commit.",
+  "candidates": [
+    {
+      "id": "canary-180m-flash-int8",
+      "dir": "canary",
+      "repo": "csukuangfj/sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr-int8",
+      "sha": "9077164e0d3dd1d5353743e89ceaa1d3a770838c",
+      "kind": "offline-canary",
+      "tier": "accurate",
+      "languages": ["en", "es"],
+      "capabilities": { "casing": true, "punctuation": true, "streaming": false }
+    },
+    {
+      "id": "nemotron-3.5-streaming-160ms-int8",
+      "dir": "nemotron",
+      "repo": "csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-160ms-int8-2026-06-11",
+      "sha": "b3a4dbde84fba1a13cb4270e6730b525ac6a2db6",
+      "kind": "online-transducer",
+      "tier": "accurate",
+      "languages": ["en", "es"],
+      "capabilities": { "casing": true, "punctuation": true, "streaming": true }
+    }
+  ],
+  "notLoadable": [
+    {
+      "id": "parakeet-tdt-0.6b-v3-redux",
+      "repo": "Olicorne/parakeet-tdt-0.6b-v3-redux-onnx",
+      "sha": "de66c10f18f6d94cb3e910e48034e45ce51109bc",
+      "reason": "sherpa-onnx 1.13.8 OfflineRecognizer.from_transducer(model_type=nemo_transducer): 'vocab_size' does not exist in the metadata (encoder-model.w2a8.onnx); decoder and joiner ship combined as decoder_joint"
+    }
+  ]
+}

@@ -201,3 +201,29 @@ the phrase it stands for). Add one only when the recordings show the same
 mishearing on more than one clip or model; a one-off miss ("alinear zen") stays
 under the bar. Carriers use common words: an unknown word makes the model end
 the line before it.
+
+## Candidate models (issue #663)
+
+`sherpa_phrases.py` runs a model from `candidates.json` through sherpa-onnx's
+Python package over the same phrase clips and control clips, and writes the
+shapes the lanes above read: `phrases-<id>-<lang>.json` for `score.ts` and
+`native-<id>-<lang>.json` for `report.py`. One model and language per process,
+so peak RSS is that model's.
+
+```bash
+cd vendor/moonshine && uv venv .venv-sherpa && uv pip install -p .venv-sherpa/bin/python sherpa-onnx==1.13.8 numpy soundfile
+# model files, individually, at the pinned commit in candidates.json, into
+# vendor/moonshine/models/sherpa/<dir>/; plus silero_vad.onnx from the
+# k2-fsa/sherpa-onnx asr-models release into vendor/moonshine/models/sherpa/
+vendor/moonshine/.venv-sherpa/bin/python -I scripts/dictation-conformance/sherpa_phrases.py canary-180m-flash-int8 es
+pnpm exec tsx scripts/dictation-phrases/score.ts   # candidates score beside the catalog
+python3 scripts/dictation-conformance/report.py
+```
+
+An offline (non-streaming) model types one line per pause, as the app would:
+Silero VAD cuts the lines (`--min-silence`, default 0.5 s) and each line is
+decoded once, so it has no partials and its "first partial" in `report.py` is
+the finished line. `--whole-clip` decodes each phrase clip as one line;
+`--lines-from <trace>` cuts the control clip where another run's lines end
+(Moonshine Small's), to time decoding on the same lines. A streaming model is
+fed 160 ms chunks with sherpa's endpoint rules and its stream `language` set.

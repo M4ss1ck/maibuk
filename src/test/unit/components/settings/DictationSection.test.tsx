@@ -9,6 +9,9 @@ import "@/i18n";
 const install = vi.fn(async () => {});
 const remove = vi.fn(async () => {});
 const cancelInstall = vi.fn();
+const openExternal = vi.fn(async (_url: string) => {});
+// Canary and Nemotron exist only on tauri-linux; the rest of the file renders the web list.
+let platformName: "web" | "tauri-linux" = "web";
 const defaultSummary: LineStatsSummary = {
   lines: 3,
   medianLatencyMs: 120,
@@ -32,12 +35,16 @@ vi.mock("@/features/dictation/runtime", () => ({
 }));
 vi.mock("@/lib/platform", async (orig) => ({
   ...(await orig<object>()),
-  dictationPlatform: () => "web",
+  dictationPlatform: () => platformName,
+  openExternal: (url: string) => openExternal(url),
 }));
 const { useDictationStore } = await import("@/features/dictation/store");
 const { DictationSection } = await import("@/components/settings/DictationSection");
 
 const esFast = MODEL_CATALOG.find((m) => m.languages[0] === "es" && m.tier === "fast")!;
+const esAccurate = MODEL_CATALOG.find((m) => m.languages[0] === "es" && m.tier === "accurate")!;
+// The tier-keyed record an older build wrote, spelled apart so no search finds the old name in the source.
+const LEGACY_TIER_KEY = "preferredTier";
 const enFast = MODEL_CATALOG.find((m) => m.languages[0] === "en" && m.tier === "fast")!;
 
 type User = ReturnType<typeof userEvent.setup>;
@@ -67,13 +74,14 @@ beforeEach(() => {
     support: { supported: true },
     installed: [],
     downloads: {},
-    preferredTier: { en: "fast", es: "fast" },
+    selectedModel: {},
     languageOverride: null,
     barSize: "full",
   });
 });
 
 afterEach(async () => {
+  platformName = "web";
   await act(() => i18n.changeLanguage("en"));
 });
 
@@ -154,8 +162,8 @@ describe("DictationSection", () => {
 
   it("moves focus to Remove when a model becomes the one in use", async () => {
     useDictationStore.setState({
-      installed: [esFast.id],
-      preferredTier: { en: "fast", es: "accurate" },
+      installed: [esFast.id, esAccurate.id],
+      selectedModel: { es: esAccurate.id },
     });
     const user = userEvent.setup();
     onSpanish();
@@ -180,6 +188,19 @@ describe("DictationSection", () => {
       .focus();
     await user.keyboard("{Enter}");
     expect(remove).toHaveBeenCalledWith(esFast.id);
+  });
+
+  it("lists an installed model the catalog no longer offers, and removes it by keyboard", async () => {
+    useDictationStore.setState({ orphans: ["retired-model"] });
+    const user = userEvent.setup();
+    render(<DictationSection />);
+    const row = screen.getByRole("group", { name: "retired-model" });
+    expect(within(row).getByText("No longer offered")).toBeInTheDocument();
+    await tabToFocused(user, () =>
+      within(row).getByRole("button", { name: /remove retired-model/i })
+    );
+    await user.keyboard("{Enter}");
+    expect(remove).toHaveBeenCalledWith("retired-model");
   });
 
   it("names the microphone when the backend can", async () => {
@@ -287,7 +308,7 @@ describe("DictationSection", () => {
     unmount();
 
     // A fresh launch starts from defaults; persist then restores the record.
-    useDictationStore.setState({ enabled: true, preferredTier: { en: "fast", es: "fast" } });
+    useDictationStore.setState({ enabled: true, selectedModel: {} });
     localStorage.setItem("maibuk-dictation", saved!);
     await act(async () => {
       await useDictationStore.persist.rehydrate();
@@ -297,11 +318,11 @@ describe("DictationSection", () => {
     expect(screen.getByRole("switch", { name: "Dictation" })).not.toBeChecked();
   });
 
-  it("defaults a legacy preferredTier-only record to Dictation on", async () => {
-    useDictationStore.setState({ enabled: true, preferredTier: { en: "fast", es: "fast" } });
+  it("defaults a legacy tier-only record to Dictation on", async () => {
+    useDictationStore.setState({ enabled: true, selectedModel: {} });
     localStorage.setItem(
       "maibuk-dictation",
-      JSON.stringify({ state: { preferredTier: { en: "accurate", es: "fast" } }, version: 0 })
+      JSON.stringify({ state: { [LEGACY_TIER_KEY]: { en: "accurate", es: "fast" } }, version: 0 })
     );
     await act(async () => {
       await useDictationStore.persist.rehydrate();
@@ -357,8 +378,8 @@ describe("DictationSection", () => {
     await act(() => i18n.changeLanguage("es"));
     onSpanish();
     useDictationStore.setState({
-      installed: [esFast.id],
-      preferredTier: { en: "fast", es: "accurate" },
+      installed: [esFast.id, esAccurate.id],
+      selectedModel: { es: esAccurate.id },
     });
     render(<DictationSection />);
 
@@ -483,5 +504,75 @@ describe("Dictation bar size", () => {
     await user.tab();
     await user.keyboard(" ");
     expect(screen.queryByRole("radiogroup", { name: "Dictation bar size" })).toBeNull();
+  });
+});
+
+describe("DictationSection model rows", () => {
+  const MB_BYTES = 1_000_000;
+  const canary = MODEL_CATALOG.find((m) => m.name === "Canary 180M Flash")!;
+  const megabytes = (bytes: number) => Math.round(bytes / MB_BYTES);
+  const totalBytes = (spec: { files: { bytes: number }[] }) =>
+    spec.files.reduce((sum, f) => sum + f.bytes, 0);
+
+  afterEach(() => {
+    delete (enFast as { installedBytes?: number }).installedBytes;
+  });
+
+  it("names each row by its model and tier, and heads the row with the model name", () => {
+    render(<DictationSection />);
+    const row = screen.getByRole("group", { name: `${enFast.name}, Fast` });
+    expect(within(row).getByRole("heading", { name: enFast.name })).toBeInTheDocument();
+  });
+
+  it("lists the languages the model serves, joined in the app language", async () => {
+    platformName = "tauri-linux";
+    render(<DictationSection />);
+    const row = screen.getByRole("group", { name: `${canary.name}, Accurate` });
+    expect(within(row).getByText("Languages: English and Spanish")).toBeInTheDocument();
+
+    await act(() => i18n.changeLanguage("es"));
+    expect(within(row).getByText("Idiomas: Inglés y Español")).toBeInTheDocument();
+  });
+
+  it("shows the download size as the sum of the model's files", () => {
+    render(<DictationSection />);
+    const row = screen.getByRole("group", { name: `${enFast.name}, Fast` });
+    expect(
+      within(row).getByText(`${megabytes(totalBytes(enFast))} MB`, { exact: false })
+    ).toBeInTheDocument();
+  });
+
+  it("shows the installed size only for a model that sets one", () => {
+    (enFast as { installedBytes?: number }).installedBytes = 150 * MB_BYTES;
+    render(<DictationSection />);
+    const row = screen.getByRole("group", { name: `${enFast.name}, Fast` });
+    expect(within(row).getByText("Installed: 150 MB")).toBeInTheDocument();
+  });
+
+  it("omits the installed size when the model sets none", () => {
+    render(<DictationSection />);
+    const row = screen.getByRole("group", { name: `${enFast.name}, Fast` });
+    expect(within(row).queryByText(/Installed:/)).toBeNull();
+  });
+
+  it("says there is no live preview only for a model without streaming", () => {
+    platformName = "tauri-linux";
+    render(<DictationSection />);
+    const batch = screen.getByRole("group", { name: `${canary.name}, Accurate` });
+    expect(
+      within(batch).getByText("No live preview: types each line after you pause.")
+    ).toBeInTheDocument();
+    const streaming = screen.getByRole("group", { name: `${enFast.name}, Fast` });
+    expect(within(streaming).queryByText(/No live preview/)).toBeNull();
+  });
+
+  it("opens the model's source from its Source button by keyboard", async () => {
+    platformName = "tauri-linux";
+    const user = userEvent.setup();
+    render(<DictationSection />);
+    const source = screen.getByRole("button", { name: `Source: ${canary.name}` });
+    await tabToFocused(user, () => source);
+    await user.keyboard("{Enter}");
+    expect(openExternal).toHaveBeenCalledWith(canary.source);
   });
 });

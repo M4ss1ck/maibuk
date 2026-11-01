@@ -13,6 +13,7 @@ import type { DictationEvent, ModelSpec, RecognizerHost } from "@/features/dicta
 
 const model: ModelSpec = {
   id: "test-en",
+  name: "Test Model",
   engine: "moonshine",
   languages: ["en"],
   tier: "fast",
@@ -20,6 +21,7 @@ const model: ModelSpec = {
   files: [],
   engineOptions: {},
   capabilities: { casing: true, punctuation: true, streaming: true },
+  source: "https://example.test/model",
 };
 
 function fakeHost() {
