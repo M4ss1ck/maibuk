@@ -21,7 +21,7 @@ import {
   gutenbergBody,
 } from "../../../../scripts/dictation-phrases/passages";
 import {
-  candidateRuns,
+  languageRuns,
   renderReport,
   type ScoredModel,
 } from "../../../../scripts/dictation-phrases/report";
@@ -326,21 +326,21 @@ describe("traceNumbers() (issue #274)", () => {
 });
 
 describe("phase 1 candidates (issue #663)", () => {
-  it("expands each candidate into one scored run per language it lists", () => {
-    const runs = candidateRuns({
-      candidates: [
-        { id: "canary", tier: "accurate", languages: ["en", "es"], capabilities: PUNCTUATES },
-      ],
-    });
+  it("names a multilingual model's runs by language and keeps a single-language id", () => {
+    const runs = languageRuns([
+      { id: "canary", tier: "accurate", languages: ["en", "es"], capabilities: PUNCTUATES },
+      { id: "moonshine-en", tier: "fast", languages: ["en"], capabilities: PUNCTUATES },
+    ]);
     expect(runs).toEqual([
       { id: "canary-en", tier: "accurate", languages: ["en"], capabilities: PUNCTUATES },
       { id: "canary-es", tier: "accurate", languages: ["es"], capabilities: PUNCTUATES },
+      { id: "moonshine-en", tier: "fast", languages: ["en"], capabilities: PUNCTUATES },
     ]);
   });
 
   it("reads the checked-in candidate file", () => {
-    const ids = candidateRuns(
-      JSON.parse(readFileSync("scripts/dictation-conformance/candidates.json", "utf8"))
+    const ids = languageRuns(
+      JSON.parse(readFileSync("scripts/dictation-conformance/candidates.json", "utf8")).candidates
     ).map((run) => run.id);
     expect(ids).toContain("canary-180m-flash-int8-es");
   });

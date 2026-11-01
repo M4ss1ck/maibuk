@@ -769,6 +769,32 @@ mod tests {
         (root, models)
     }
 
+    /// One run per model and language it serves. A model for one language keeps
+    /// its id as the run name; a multilingual one (issue #663) is `<id>-<lang>`,
+    /// the name `score.ts` reads its transcripts under.
+    fn language_runs(
+        models: Vec<crate::dictation::protocol::ModelSpec>,
+    ) -> Vec<(crate::dictation::protocol::ModelSpec, String, String)> {
+        models
+            .into_iter()
+            .flat_map(|spec| {
+                let multilingual = spec.languages.len() > 1;
+                spec.languages
+                    .clone()
+                    .into_iter()
+                    .map(move |language| {
+                        let run = if multilingual {
+                            format!("{}-{}", spec.id, language)
+                        } else {
+                            spec.id.clone()
+                        };
+                        (spec.clone(), language, run)
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
     /// Contextual biasing for a lane run (issue #274), from the environment,
     /// so a run with and without it differs only in these. `{lang}` in a path
     /// is the model's language.
@@ -846,6 +872,20 @@ mod tests {
     }
 
     #[test]
+    fn a_multilingual_model_runs_once_per_language_under_its_own_name() {
+        let catalog: Vec<crate::dictation::protocol::ModelSpec> =
+            serde_json::from_str(include_str!("../../../src/features/dictation/catalog.json"))
+                .expect("catalog.json");
+        let runs: Vec<(String, String)> = language_runs(catalog)
+            .into_iter()
+            .map(|(_, language, run)| (language, run))
+            .collect();
+        assert!(runs.contains(&("en".into(), "moonshine-small-en-260821".into())));
+        assert!(runs.contains(&("es".into(), "canary-180m-flash-int8-9077164-es".into())));
+        assert!(runs.contains(&("en".into(), "canary-180m-flash-int8-9077164-en".into())));
+    }
+
+    #[test]
     fn bias_adds_its_load_options_and_names_its_files() {
         let spec: Vec<crate::dictation::protocol::ModelSpec> =
             serde_json::from_str(include_str!("../../../src/features/dictation/catalog.json"))
@@ -877,12 +917,7 @@ mod tests {
     #[ignore]
     fn conformance() {
         let (root, models) = conformance_models();
-        for spec in models {
-            let language = spec
-                .languages
-                .first()
-                .cloned()
-                .unwrap_or_else(|| "en".into());
+        for (spec, language, run) in language_runs(models) {
             let wav_name = if language == "es" {
                 "quijote_es_16k.wav"
             } else {
@@ -956,7 +991,7 @@ mod tests {
 
             let captured = messages.lock().unwrap();
             let mut doc = trace_document(
-                &spec.id,
+                &run,
                 &language,
                 wav_name,
                 captured.as_slice(),
@@ -968,7 +1003,7 @@ mod tests {
             doc["bias"]["setContextMs"] = serde_json::json!(set_context_ms.map(round3));
             let path = root
                 .join("conformance")
-                .join(bias.file_name(&format!("native-{}", spec.id)));
+                .join(bias.file_name(&format!("native-{}", run)));
             write_trace(&path, &doc);
             let finals = doc["trace"].as_array().unwrap().len();
             let violations = doc["summary"]["contractViolations"]
@@ -977,7 +1012,7 @@ mod tests {
                 .len();
             println!(
                 "{:<28} finals={:<3} cpu={cpu_pct:>6.1}% loadMs={load_ms:>8.1} violations={violations}",
-                spec.id, finals
+                run, finals
             );
         }
     }
@@ -1105,12 +1140,7 @@ mod tests {
     #[ignore]
     fn phrase_transcripts() {
         let (root, models) = conformance_models();
-        for spec in models {
-            let language = spec
-                .languages
-                .first()
-                .cloned()
-                .unwrap_or_else(|| "en".into());
+        for (spec, language, run) in language_runs(models) {
             let clips_dir = root.join("phrases").join(&language);
             let mut files: Vec<_> = match std::fs::read_dir(&clips_dir) {
                 Ok(entries) => entries
@@ -1118,7 +1148,7 @@ mod tests {
                     .filter(|p| p.extension().is_some_and(|x| x == "wav"))
                     .collect(),
                 Err(_) => {
-                    println!("{:<28} no clips in {}", spec.id, clips_dir.display());
+                    println!("{:<28} no clips in {}", run, clips_dir.display());
                     continue;
                 }
             };
@@ -1164,7 +1194,7 @@ mod tests {
                 }));
             }
             let doc = serde_json::json!({
-                "model": spec.id,
+                "model": run,
                 "language": language,
                 "backend": if realtime { "native-realtime" } else { "native" },
                 "bias": bias.describe(),
@@ -1173,7 +1203,7 @@ mod tests {
             });
             let stem = format!(
                 "phrases-{}{}",
-                spec.id,
+                run,
                 if realtime { ".realtime" } else { "" }
             );
             let path = root.join("conformance").join(bias.file_name(&stem));
