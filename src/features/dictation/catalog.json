@@ -1,6 +1,7 @@
 [
   {
     "id": "moonshine-tiny-en-260821",
+    "name": "Moonshine Tiny English",
     "engine": "moonshine",
     "languages": ["en"],
     "tier": "fast",
@@ -87,10 +88,12 @@
       "casing": true,
       "punctuation": true,
       "streaming": true
-    }
+    },
+    "source": "https://huggingface.co/moonshine-ai/moonshine-streaming"
   },
   {
     "id": "moonshine-small-en-260821",
+    "name": "Moonshine Small English",
     "engine": "moonshine",
     "languages": ["en"],
     "tier": "accurate",
@@ -177,10 +180,12 @@
       "casing": true,
       "punctuation": true,
       "streaming": true
-    }
+    },
+    "source": "https://huggingface.co/moonshine-ai/moonshine-streaming"
   },
   {
     "id": "moonshine-tiny-es-260824",
+    "name": "Moonshine Tiny Spanish",
     "engine": "moonshine",
     "languages": ["es"],
     "tier": "fast",
@@ -267,10 +272,12 @@
       "casing": false,
       "punctuation": false,
       "streaming": true
-    }
+    },
+    "source": "https://huggingface.co/moonshine-ai/moonshine-streaming"
   },
   {
     "id": "moonshine-small-es-260824",
+    "name": "Moonshine Small Spanish",
     "engine": "moonshine",
     "languages": ["es"],
     "tier": "accurate",
@@ -357,6 +364,127 @@
       "casing": false,
       "punctuation": false,
       "streaming": true
-    }
+    },
+    "source": "https://huggingface.co/moonshine-ai/moonshine-streaming"
+  },
+  {
+    "id": "canary-180m-flash-int8-9077164",
+    "name": "Canary 180M Flash",
+    "engine": "sherpa",
+    "languages": ["en", "es"],
+    "tier": "accurate",
+    "platforms": ["tauri-linux"],
+    "files": [
+      {
+        "name": "decoder.int8.onnx",
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr-int8/resolve/9077164e0d3dd1d5353743e89ceaa1d3a770838c/decoder.int8.onnx",
+        "bytes": 74437848,
+        "checksum": {
+          "algo": "crc32c",
+          "value": "ktIMiA=="
+        }
+      },
+      {
+        "name": "encoder.int8.onnx",
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr-int8/resolve/9077164e0d3dd1d5353743e89ceaa1d3a770838c/encoder.int8.onnx",
+        "bytes": 132678643,
+        "checksum": {
+          "algo": "crc32c",
+          "value": "g7DtgA=="
+        }
+      },
+      {
+        "name": "silero_vad.onnx",
+        "url": "https://huggingface.co/csukuangfj/vad/resolve/fba88cd2e921609e7675c3aaf51e0b9b295da4bc/silero_vad.onnx",
+        "bytes": 1807522,
+        "checksum": {
+          "algo": "crc32c",
+          "value": "AU1YoA=="
+        }
+      },
+      {
+        "name": "tokens.txt",
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr-int8/resolve/9077164e0d3dd1d5353743e89ceaa1d3a770838c/tokens.txt",
+        "bytes": 53555,
+        "checksum": {
+          "algo": "crc32c",
+          "value": "QwhidQ=="
+        }
+      }
+    ],
+    "engineOptions": {
+      "model": "canary",
+      "encoder": "encoder.int8.onnx",
+      "decoder": "decoder.int8.onnx",
+      "tokens": "tokens.txt",
+      "vad": "silero_vad.onnx",
+      "min_silence": "0.5",
+      "max_line": "8"
+    },
+    "capabilities": {
+      "casing": true,
+      "punctuation": true,
+      "streaming": false
+    },
+    "source": "https://huggingface.co/nvidia/canary-180m-flash"
+  },
+  {
+    "id": "nemotron-3.5-streaming-160ms-int8-b3a4dbd",
+    "name": "Nemotron 3.5 Streaming",
+    "engine": "sherpa",
+    "languages": ["en", "es"],
+    "tier": "accurate",
+    "platforms": ["tauri-linux"],
+    "files": [
+      {
+        "name": "decoder.int8.onnx",
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-160ms-int8-2026-06-11/resolve/b3a4dbde84fba1a13cb4270e6730b525ac6a2db6/decoder.int8.onnx",
+        "bytes": 14978075,
+        "checksum": {
+          "algo": "crc32c",
+          "value": "OBihJw=="
+        }
+      },
+      {
+        "name": "encoder.int8.onnx",
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-160ms-int8-2026-06-11/resolve/b3a4dbde84fba1a13cb4270e6730b525ac6a2db6/encoder.int8.onnx",
+        "bytes": 657601518,
+        "checksum": {
+          "algo": "crc32c",
+          "value": "DRjIwA=="
+        }
+      },
+      {
+        "name": "joiner.int8.onnx",
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-160ms-int8-2026-06-11/resolve/b3a4dbde84fba1a13cb4270e6730b525ac6a2db6/joiner.int8.onnx",
+        "bytes": 9504438,
+        "checksum": {
+          "algo": "crc32c",
+          "value": "fQw5gw=="
+        }
+      },
+      {
+        "name": "tokens.txt",
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-160ms-int8-2026-06-11/resolve/b3a4dbde84fba1a13cb4270e6730b525ac6a2db6/tokens.txt",
+        "bytes": 131440,
+        "checksum": {
+          "algo": "crc32c",
+          "value": "+3j/1w=="
+        }
+      }
+    ],
+    "engineOptions": {
+      "model": "transducer",
+      "encoder": "encoder.int8.onnx",
+      "decoder": "decoder.int8.onnx",
+      "joiner": "joiner.int8.onnx",
+      "tokens": "tokens.txt"
+    },
+    "capabilities": {
+      "casing": true,
+      "punctuation": true,
+      "streaming": true
+    },
+    "source": "https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b"
   }
 ]

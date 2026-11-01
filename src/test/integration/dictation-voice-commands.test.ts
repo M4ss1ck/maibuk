@@ -23,6 +23,7 @@ import type {
 const models: Record<DictationLanguage, ModelSpec> = {
   en: {
     id: "test-en",
+    name: "Test Model",
     engine: "moonshine",
     languages: ["en"],
     tier: "fast",
@@ -30,9 +31,11 @@ const models: Record<DictationLanguage, ModelSpec> = {
     files: [],
     engineOptions: {},
     capabilities: { casing: true, punctuation: true, streaming: true },
+    source: "https://example.test/model",
   },
   es: {
     id: "test-es",
+    name: "Test Model",
     engine: "moonshine",
     languages: ["es"],
     tier: "fast",
@@ -40,6 +43,7 @@ const models: Record<DictationLanguage, ModelSpec> = {
     files: [],
     engineOptions: {},
     capabilities: { casing: false, punctuation: false, streaming: true },
+    source: "https://example.test/model",
   },
 };
 

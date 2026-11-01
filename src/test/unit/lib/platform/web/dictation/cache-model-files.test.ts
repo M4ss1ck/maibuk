@@ -23,6 +23,7 @@ const bytesA = new TextEncoder().encode("hello");
 const bytesB = new TextEncoder().encode("world!!");
 const spec: ModelSpec = {
   id: "m1",
+  name: "Test Model",
   engine: "moonshine",
   languages: ["en"],
   tier: "fast",
@@ -43,6 +44,7 @@ const spec: ModelSpec = {
   ],
   engineOptions: {},
   capabilities: { casing: true, punctuation: true, streaming: true },
+  source: "https://example.test/model",
 };
 
 function serve(map: Record<string, Uint8Array<ArrayBuffer> | number>) {

@@ -235,6 +235,7 @@ mod tests {
     fn spec(files: Vec<ModelFile>) -> ModelSpec {
         ModelSpec {
             id: "m1".into(),
+            name: "Model".into(),
             engine: "moonshine".into(),
             languages: vec!["en".into()],
             tier: "fast".into(),
@@ -246,6 +247,8 @@ mod tests {
                 punctuation: true,
                 streaming: true,
             },
+            source: "https://example.com/m1".into(),
+            installed_bytes: None,
         }
     }
 

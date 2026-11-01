@@ -30,6 +30,7 @@ pub struct Capabilities {
 #[serde(rename_all = "camelCase")]
 pub struct ModelSpec {
     pub id: String,
+    pub name: String,
     pub engine: String,
     pub languages: Vec<String>,
     pub tier: String,
@@ -37,6 +38,9 @@ pub struct ModelSpec {
     pub files: Vec<ModelFile>,
     pub engine_options: BTreeMap<String, String>,
     pub capabilities: Capabilities,
+    pub source: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub installed_bytes: Option<u64>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]

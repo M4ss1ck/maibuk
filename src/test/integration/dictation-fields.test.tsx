@@ -23,6 +23,7 @@ import { useSettingsStore } from "@/features/settings/store";
 
 const EN_MODEL: ModelSpec = {
   id: "test-en",
+  name: "Test Model",
   engine: "moonshine",
   languages: ["en"],
   tier: "fast",
@@ -30,6 +31,7 @@ const EN_MODEL: ModelSpec = {
   files: [],
   engineOptions: {},
   capabilities: { casing: false, punctuation: false, streaming: true },
+  source: "https://example.test/model",
 };
 
 function fakeHost() {

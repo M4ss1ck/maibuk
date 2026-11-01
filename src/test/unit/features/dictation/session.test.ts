@@ -18,6 +18,7 @@ import {
 
 const model = (lang: "en" | "es"): ModelSpec => ({
   id: `m-${lang}`,
+  name: "Test Model",
   engine: "moonshine",
   languages: [lang],
   tier: "fast",
@@ -25,6 +26,7 @@ const model = (lang: "en" | "es"): ModelSpec => ({
   files: [],
   engineOptions: {},
   capabilities: { casing: true, punctuation: true, streaming: true },
+  source: "https://example.test/model",
 });
 
 function fakeHost() {

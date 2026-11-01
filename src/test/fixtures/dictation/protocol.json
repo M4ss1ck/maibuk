@@ -1,10 +1,16 @@
 {
   "spec": {
     "id": "moonshine-tiny-en-260821",
+    "name": "Moonshine Tiny English",
     "engine": "moonshine",
-    "languages": ["en"],
+    "languages": [
+      "en"
+    ],
     "tier": "fast",
-    "platforms": ["web", "tauri-linux"],
+    "platforms": [
+      "web",
+      "tauri-linux"
+    ],
     "files": [
       {
         "name": "adapter.ort",
@@ -87,7 +93,8 @@
       "casing": true,
       "punctuation": true,
       "streaming": true
-    }
+    },
+    "source": "https://huggingface.co/moonshine-ai/moonshine-streaming"
   },
   "events": [
     {
