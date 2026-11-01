@@ -170,8 +170,18 @@ async fn guard_connection(conn: &mut sqlx::SqliteConnection) -> Result<(), sqlx:
     Ok(())
 }
 
+/// The Library pool's ceiling. One author drives one webview, so a few
+/// connections cover a write beside a read; sqlx's default of ten would each
+/// hold their own page and statement caches for the whole session.
+pub const LIBRARY_POOL_MAX_CONNECTIONS: u32 = 4;
+/// An idle connection beyond the first closes after this, releasing its caches.
+pub const LIBRARY_POOL_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
 fn build_library_pool(path: &Path) -> SqlitePool {
     SqlitePoolOptions::new()
+        .max_connections(LIBRARY_POOL_MAX_CONNECTIONS)
+        .min_connections(1)
+        .idle_timeout(LIBRARY_POOL_IDLE_TIMEOUT)
         .after_connect(|conn, _meta| Box::pin(async move { guard_connection(conn).await }))
         .connect_lazy_with(connect_options(path))
 }
@@ -649,6 +659,18 @@ mod tests {
             sqlx::query("VACUUM").execute(&pool).await.unwrap();
         });
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn the_library_pool_keeps_few_connections_and_closes_idle_ones() {
+        let dir = temp_dir("pool-size");
+        let _ = std::fs::remove_dir_all(&dir);
+        let app = build_app();
+        install_at(app.handle(), &dir).unwrap();
+        let options = installed_pool(app.handle()).options().clone();
+        assert_eq!(options.get_max_connections(), LIBRARY_POOL_MAX_CONNECTIONS);
+        assert_eq!(options.get_idle_timeout(), Some(LIBRARY_POOL_IDLE_TIMEOUT));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
