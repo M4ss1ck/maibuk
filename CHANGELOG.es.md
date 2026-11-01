@@ -5,6 +5,22 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 y este proyecto sigue el [Versionado Semántico](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.2] - 2026-11-01
+
+### Added
+- Editor visual de Personalizar barra de herramientas con diseños separados para Barra de herramientas y Selección
+- Modo de movimiento por teclado para reordenar los botones de la barra de herramientas, con Enter para recoger y soltar, las flechas para mover y Escape para cancelar
+- Arrastrar y soltar con el puntero para organizar los botones de la barra de herramientas
+- Bandeja para ocultar los botones de la barra de herramientas
+
+### Changed
+- La Barra de herramientas de selección ahora mantiene su propio orden de botones, independiente de la barra de herramientas principal
+- Las cuadrículas de la barra de herramientas con salto de línea se mueven a Izquierda/Derecha en orden de lectura y Arriba/Abajo por posición
+
+### Fixed
+- Al soltar un botón solo se eliminan los separadores que la mudanza deja redundantes, conservando los separadores de borde guardados y los que están junto a botones ocultos
+- Escape abandona la vista previa de la disposición antes de cerrar el diálogo Personalizar barra de herramientas
+
 ## [0.19.1] - 2026-11-01
 
 ### Added
