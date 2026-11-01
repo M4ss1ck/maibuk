@@ -19,3 +19,11 @@ describe("launch chunk", () => {
     expect(pages.sort()).toEqual(["@/pages/Embed", "@/pages/Home"]);
   });
 });
+
+describe("launch chunk: libraries", () => {
+  it("the Tutorial Library imports sqlite-wasm only when it starts", () => {
+    expect(staticImports(read("src/features/tutorial/tutorial-library.ts"))).not.toContain(
+      "@/lib/db/memory-database"
+    );
+  });
+});
