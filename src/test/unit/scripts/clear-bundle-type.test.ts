@@ -8,6 +8,8 @@ import { clearBundleType } from "../../../../scripts/clear-bundle-type.mjs";
 const SCRIPT = resolve(import.meta.dirname, "../../../../scripts/clear-bundle-type.mjs");
 const PREFIX = "__TAURI_BUNDLE_TYPE_VAR_";
 const CONSTANTS = ["DEB", "RPM", "APP", "MSI", "NSS"];
+/** The constants' order in the v0.19.1 release binary, built with fat LTO and one codegen unit. */
+const LTO_CONSTANTS = ["APP", "MSI", "NSS", "DEB", "RPM"];
 
 const marker = (suffix: string) => Buffer.from(`${PREFIX}${suffix}`, "latin1");
 const filler = (length: number, seed: number) =>
@@ -102,11 +104,21 @@ describe("clearBundleType", () => {
     expect(() => clearBundleType(buffer)).toThrow(/expected 1 or 6 bundle type markers.*found 7/);
   });
 
-  it("throws when the first five markers are out of order and does not patch", () => {
-    const order = ["RPM", "DEB", "APP", "MSI", "NSS"];
-    const buffer = fakeBinary("DEB", order);
+  it("throws when the first five markers miss a constant and does not patch", () => {
+    const order = ["DEB", "DEB", "APP", "MSI", "NSS"];
+    const buffer = fakeBinary("RPM", order);
     const before = Buffer.from(buffer);
-    expect(() => clearBundleType(buffer)).toThrow(/first five markers to be DEB,RPM,APP,MSI,NSS/);
+    expect(() => clearBundleType(buffer)).toThrow(
+      /first five markers to be DEB,RPM,APP,MSI,NSS in any order, found DEB,DEB,APP,MSI,NSS/
+    );
+    expect(buffer.equals(before)).toBe(true);
+  });
+
+  it("throws when the value marker is not last and does not patch", () => {
+    const order = ["DEB", "RPM", "UNK", "MSI", "NSS"];
+    const buffer = fakeBinary("APP", order);
+    const before = Buffer.from(buffer);
+    expect(() => clearBundleType(buffer)).toThrow(/found DEB,RPM,UNK,MSI,NSS/);
     expect(buffer.equals(before)).toBe(true);
   });
 
@@ -116,6 +128,23 @@ describe("clearBundleType", () => {
 
     const sixthBad = fakeBinary("D1B");
     expect(() => clearBundleType(sixthBad)).toThrow(/marker 6 has no 3-letter suffix/);
+  });
+});
+
+describe("clearBundleType with the constants reordered by LTO", () => {
+  it("is a no-op on the release layout whose value already reads UNK", () => {
+    const before = fakeBinary("UNK", LTO_CONSTANTS);
+    const buffer = Buffer.from(before);
+
+    expect(clearBundleType(buffer)).toEqual({ changed: false, was: "UNK" });
+    expect(buffer.equals(before)).toBe(true);
+  });
+
+  it.each(["DEB", "RPM", "APP"])("resets a patched %s value to UNK", (was) => {
+    const buffer = fakeBinary(was, LTO_CONSTANTS);
+
+    expect(clearBundleType(buffer)).toEqual({ changed: true, was });
+    expect(buffer.equals(fakeBinary("UNK", LTO_CONSTANTS))).toBe(true);
   });
 });
 
