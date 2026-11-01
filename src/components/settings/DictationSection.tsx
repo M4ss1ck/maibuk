@@ -27,8 +27,8 @@ export function DictationSection() {
   const setEnabled = useDictationStore((s) => s.setEnabled);
   const installed = useDictationStore((s) => s.installed);
   const downloads = useDictationStore((s) => s.downloads);
-  const preferred = useDictationStore((s) => s.preferredTier);
-  const setPreferred = useDictationStore((s) => s.setPreferredTier);
+  const selected = useDictationStore((s) => s.selectedModel);
+  const setSelected = useDictationStore((s) => s.setSelectedModel);
   const [recent, setRecent] = useState<LineStatsSummary | null>(null);
   const override = useDictationStore((s) => s.languageOverride);
   const [chosen, setChosen] = useState<DictationLanguage>(() =>
@@ -105,9 +105,9 @@ export function DictationSection() {
           >
             {(language) => {
               const specs = byLanguage.get(language) ?? [];
+              const picked = pickModel(language, specs, installed, selected);
               const capabilities =
-                (pickModel(language, specs, installed, preferred) ?? specs[0])?.capabilities ??
-                catalogCapabilities(language);
+                (picked ?? specs[0])?.capabilities ?? catalogCapabilities(language);
               return (
                 <div className={SETTINGS_ROWS_CLASS}>
                   <SettingRow id="dictationModels" visuallyHiddenLabel className="py-3">
@@ -117,7 +117,7 @@ export function DictationSection() {
                         const name = `${t(`dictation.languageNames.${language}`)}, ${t(`dictation.section.${spec.tier}`)}`;
                         const download = downloads[spec.id];
                         const isInstalled = installed.includes(spec.id);
-                        const inUse = isInstalled && preferred[language] === spec.tier;
+                        const inUse = picked?.id === spec.id;
                         return (
                           <fieldset
                             key={spec.id}
@@ -164,7 +164,7 @@ export function DictationSection() {
                                 variant="secondary"
                                 size="sm"
                                 onClick={() => {
-                                  setPreferred(language, spec.tier);
+                                  setSelected(language, spec.id);
                                   // The button becomes text; keep focus in the row.
                                   actionRefs.current.get(spec.id)?.focus();
                                 }}

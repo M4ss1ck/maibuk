@@ -187,7 +187,7 @@ function resetStores() {
     support: { supported: true },
     installed: [],
     downloads: {},
-    preferredTier: { en: "fast", es: "fast" },
+    selectedModel: {},
     languageOverride: null,
   } as never);
   useSettingsRevealStore.setState({

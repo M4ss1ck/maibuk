@@ -13,7 +13,6 @@ import {
   type DictationBarSize,
   type DictationLanguage,
   type ModelSpec,
-  type ModelTier,
   type SupportReport,
 } from "@/features/dictation/types";
 import {
@@ -37,12 +36,13 @@ export interface DictationStoreState {
   support: SupportReport | null;
   installed: string[];
   downloads: Record<string, { done: number; total: number }>;
-  preferredTier: Record<DictationLanguage, ModelTier>;
+  /** The model each language uses, by id; `pickModel` resolves a missing or unavailable one. */
+  selectedModel: Partial<Record<DictationLanguage, string>>;
   /** The latest screen-reader announcement; the app shell renders it in a live region. */
   announcement: string;
   /** The control's language choice for the Session; `session.setLanguage` owns the engine. */
   languageOverride: DictationLanguage | null;
-  setPreferredTier: (language: DictationLanguage, tier: ModelTier) => void;
+  setSelectedModel: (language: DictationLanguage, id: string) => void;
   /** Spoken Punctuation per Dictation Language, this device only (ADR 0014). */
   spokenPunctuation: SpokenPunctuationSettings;
   setSpokenPunctuationEnabled: (language: DictationLanguage, enabled: boolean) => void;
@@ -110,12 +110,12 @@ export const useDictationStore = create<DictationStoreState>()(
       support: null,
       installed: [],
       downloads: {},
-      preferredTier: { en: "fast", es: "fast" },
+      selectedModel: {},
       announcement: "",
       languageOverride: null,
-      setPreferredTier: (language, tier) =>
+      setSelectedModel: (language, id) =>
         set((state) => ({
-          preferredTier: { ...state.preferredTier, [language]: tier },
+          selectedModel: { ...state.selectedModel, [language]: id },
         })),
       spokenPunctuation: defaultSpokenPunctuationSettings(),
       setSpokenPunctuationEnabled: (language, enabled) =>
@@ -229,8 +229,9 @@ export const useDictationStore = create<DictationStoreState>()(
     // Device-local, like the models themselves.
     {
       name: "maibuk-dictation",
+      // The retired tier key is no longer read; the next write drops it.
       partialize: (state) => ({
-        preferredTier: state.preferredTier,
+        selectedModel: state.selectedModel,
         enabled: state.enabled,
         barSize: state.barSize,
         barCollapsed: state.barCollapsed,
@@ -273,14 +274,19 @@ export function dictationLanguageFor(
   return override ?? (uiLanguage?.startsWith("es") ? "es" : "en");
 }
 
+/**
+ * The model a language uses: its selected id if that model is installed and
+ * serves the language, else the first installed one in catalog order. Nothing
+ * is written back, so a fallback is only ever a read.
+ */
 export function pickModel(
   language: DictationLanguage,
   available: readonly ModelSpec[],
   installed: readonly string[],
-  preferred: Record<DictationLanguage, ModelTier>
+  selected: Partial<Record<DictationLanguage, string>>
 ): ModelSpec | null {
   const candidates = available.filter(
     (spec) => spec.languages.includes(language) && installed.includes(spec.id)
   );
-  return candidates.find((spec) => spec.tier === preferred[language]) ?? candidates[0] ?? null;
+  return candidates.find((spec) => spec.id === selected[language]) ?? candidates[0] ?? null;
 }

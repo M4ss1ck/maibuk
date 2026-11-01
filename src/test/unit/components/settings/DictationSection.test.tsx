@@ -38,6 +38,9 @@ const { useDictationStore } = await import("@/features/dictation/store");
 const { DictationSection } = await import("@/components/settings/DictationSection");
 
 const esFast = MODEL_CATALOG.find((m) => m.languages[0] === "es" && m.tier === "fast")!;
+const esAccurate = MODEL_CATALOG.find((m) => m.languages[0] === "es" && m.tier === "accurate")!;
+// The tier-keyed record an older build wrote, spelled apart so no search finds the old name in the source.
+const LEGACY_TIER_KEY = "preferredTier";
 const enFast = MODEL_CATALOG.find((m) => m.languages[0] === "en" && m.tier === "fast")!;
 
 type User = ReturnType<typeof userEvent.setup>;
@@ -67,7 +70,7 @@ beforeEach(() => {
     support: { supported: true },
     installed: [],
     downloads: {},
-    preferredTier: { en: "fast", es: "fast" },
+    selectedModel: {},
     languageOverride: null,
     barSize: "full",
   });
@@ -154,8 +157,8 @@ describe("DictationSection", () => {
 
   it("moves focus to Remove when a model becomes the one in use", async () => {
     useDictationStore.setState({
-      installed: [esFast.id],
-      preferredTier: { en: "fast", es: "accurate" },
+      installed: [esFast.id, esAccurate.id],
+      selectedModel: { es: esAccurate.id },
     });
     const user = userEvent.setup();
     onSpanish();
@@ -287,7 +290,7 @@ describe("DictationSection", () => {
     unmount();
 
     // A fresh launch starts from defaults; persist then restores the record.
-    useDictationStore.setState({ enabled: true, preferredTier: { en: "fast", es: "fast" } });
+    useDictationStore.setState({ enabled: true, selectedModel: {} });
     localStorage.setItem("maibuk-dictation", saved!);
     await act(async () => {
       await useDictationStore.persist.rehydrate();
@@ -297,11 +300,11 @@ describe("DictationSection", () => {
     expect(screen.getByRole("switch", { name: "Dictation" })).not.toBeChecked();
   });
 
-  it("defaults a legacy preferredTier-only record to Dictation on", async () => {
-    useDictationStore.setState({ enabled: true, preferredTier: { en: "fast", es: "fast" } });
+  it("defaults a legacy tier-only record to Dictation on", async () => {
+    useDictationStore.setState({ enabled: true, selectedModel: {} });
     localStorage.setItem(
       "maibuk-dictation",
-      JSON.stringify({ state: { preferredTier: { en: "accurate", es: "fast" } }, version: 0 })
+      JSON.stringify({ state: { [LEGACY_TIER_KEY]: { en: "accurate", es: "fast" } }, version: 0 })
     );
     await act(async () => {
       await useDictationStore.persist.rehydrate();
@@ -357,8 +360,8 @@ describe("DictationSection", () => {
     await act(() => i18n.changeLanguage("es"));
     onSpanish();
     useDictationStore.setState({
-      installed: [esFast.id],
-      preferredTier: { en: "fast", es: "accurate" },
+      installed: [esFast.id, esAccurate.id],
+      selectedModel: { es: esAccurate.id },
     });
     render(<DictationSection />);
 

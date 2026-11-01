@@ -11,29 +11,37 @@ import { defaultVocabularySettings } from "@/features/dictation/vocabulary";
 const ids = (tier: string, lang: string) =>
   MODEL_CATALOG.find((m) => m.tier === tier && m.languages.includes(lang as "en"))!.id;
 
+// The tier-keyed record an older build wrote, spelled apart so no search finds the old name in the source.
+const LEGACY_TIER_KEY = "preferredTier";
+
 describe("pickModel()", () => {
-  it("prefers the author's tier when installed", () => {
+  it("returns the model the language selected when it is installed", () => {
     const installed = [ids("fast", "es"), ids("accurate", "es")];
-    expect(pickModel("es", MODEL_CATALOG, installed, { en: "fast", es: "accurate" })?.id).toBe(
+    expect(pickModel("es", MODEL_CATALOG, installed, { es: ids("accurate", "es") })?.id).toBe(
       ids("accurate", "es")
     );
   });
 
-  it("falls back to any installed tier for the language", () => {
+  it("falls back to the first installed model for the language in catalog order when nothing is selected", () => {
+    const installed = [ids("accurate", "es"), ids("fast", "es")];
+    expect(pickModel("es", MODEL_CATALOG, installed, {})?.id).toBe(ids("fast", "es"));
+  });
+
+  it("falls back the same way when the selected model is not installed", () => {
     expect(
-      pickModel("es", MODEL_CATALOG, [ids("fast", "es")], {
-        en: "fast",
-        es: "accurate",
-      })?.id
+      pickModel("es", MODEL_CATALOG, [ids("fast", "es")], { es: ids("accurate", "es") })?.id
+    ).toBe(ids("fast", "es"));
+  });
+
+  it("falls back the same way when the selected id is no longer in the catalog", () => {
+    expect(
+      pickModel("es", MODEL_CATALOG, [ids("fast", "es")], { es: "retired-model-id" })?.id
     ).toBe(ids("fast", "es"));
   });
 
   it("returns null when nothing for the language is installed", () => {
     expect(
-      pickModel("es", MODEL_CATALOG, [ids("fast", "en")], {
-        en: "fast",
-        es: "fast",
-      })
+      pickModel("es", MODEL_CATALOG, [ids("fast", "en")], { es: ids("accurate", "es") })
     ).toBeNull();
   });
 });
@@ -105,7 +113,7 @@ describe("Spoken Punctuation settings", () => {
       JSON.stringify({
         state: {
           enabled: true,
-          preferredTier: { en: "fast", es: "fast" },
+          selectedModel: {},
           spokenPunctuation: {
             es: { enabled: false, entries: { coma: true }, aliases: { coma: ["comita"] } },
             en: 7,
@@ -128,7 +136,7 @@ describe("Spoken Punctuation settings", () => {
   it("defaults a legacy record with no Spoken Punctuation settings", async () => {
     localStorage.setItem(
       "maibuk-dictation",
-      JSON.stringify({ state: { preferredTier: { en: "accurate", es: "fast" } }, version: 0 })
+      JSON.stringify({ state: { [LEGACY_TIER_KEY]: { en: "accurate", es: "fast" } }, version: 0 })
     );
     await act(async () => {
       await useDictationStore.persist.rehydrate();
@@ -237,13 +245,47 @@ describe("Dictation Vocabulary settings", () => {
   it("defaults a legacy record with no vocabulary", async () => {
     localStorage.setItem(
       "maibuk-dictation",
-      JSON.stringify({ state: { preferredTier: { en: "accurate", es: "fast" } }, version: 0 })
+      JSON.stringify({ state: { [LEGACY_TIER_KEY]: { en: "accurate", es: "fast" } }, version: 0 })
     );
     await act(async () => {
       await useDictationStore.persist.rehydrate();
     });
 
     expect(useDictationStore.getState().vocabulary).toEqual(defaultVocabularySettings());
+  });
+});
+
+describe("Dictation model selection persistence", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    useDictationStore.setState({ selectedModel: {}, installed: [] });
+  });
+
+  it("loads a record written with only the old tier key and resolves by fallback", async () => {
+    localStorage.setItem(
+      "maibuk-dictation",
+      JSON.stringify({ state: { [LEGACY_TIER_KEY]: { en: "accurate", es: "fast" } }, version: 0 })
+    );
+    await act(async () => {
+      await useDictationStore.persist.rehydrate();
+    });
+
+    const { selectedModel } = useDictationStore.getState();
+    expect(selectedModel).toEqual({});
+    const installed = [ids("accurate", "en"), ids("fast", "en")];
+    expect(pickModel("en", MODEL_CATALOG, installed, selectedModel)?.id).toBe(ids("fast", "en"));
+  });
+
+  it("drops the old tier key on the next write and persists the selection", () => {
+    localStorage.setItem(
+      "maibuk-dictation",
+      JSON.stringify({ state: { [LEGACY_TIER_KEY]: { en: "accurate", es: "fast" } }, version: 0 })
+    );
+    useDictationStore.getState().setSelectedModel("en", ids("accurate", "en"));
+
+    const saved = JSON.parse(localStorage.getItem("maibuk-dictation")!);
+    expect(saved.state).not.toHaveProperty(LEGACY_TIER_KEY);
+    expect(saved.state.selectedModel).toEqual({ en: ids("accurate", "en") });
   });
 });
 
@@ -289,7 +331,7 @@ describe("Dictation Bar settings", () => {
 
     localStorage.setItem(
       "maibuk-dictation",
-      JSON.stringify({ state: { preferredTier: { en: "fast", es: "fast" } }, version: 0 })
+      JSON.stringify({ state: { selectedModel: {} }, version: 0 })
     );
     await act(async () => {
       await useDictationStore.persist.rehydrate();

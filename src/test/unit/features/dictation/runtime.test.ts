@@ -93,7 +93,7 @@ beforeEach(() => {
     enabled: true,
     installed: [],
     downloads: {},
-    preferredTier: { en: "fast", es: "fast" },
+    selectedModel: {},
   });
   useTutorialStore.setState({ status: "idle" });
   useShortcutSettingsStore.setState({ shortcuts: structuredClone(DEFAULT_SHORTCUT_SETTINGS) });
@@ -349,6 +349,7 @@ describe("getDictation()", () => {
     runtime.setNotifier(notify);
     const spec = {
       id: "spec",
+      name: "Test Model",
       engine: "moonshine",
       languages: ["en"],
       tier: "fast",
@@ -356,6 +357,7 @@ describe("getDictation()", () => {
       files: [],
       engineOptions: {},
       capabilities: { casing: true, punctuation: true, streaming: true },
+      source: "https://example.test/model",
     } satisfies ModelSpec;
 
     await expect(runtime.install(spec)).rejects.toThrow("download_failed");
@@ -377,7 +379,7 @@ describe("install()", () => {
 
     const state = useDictationStore.getState();
     expect(state.installed).toEqual([accurate.id]);
-    expect(state.preferredTier).toEqual({ en: "accurate", es: "fast" });
+    expect(state.selectedModel).toEqual({ en: accurate.id });
     expect(state.downloads).toEqual({});
 
     // The Session runs on the model the automatic selection picked.
@@ -394,6 +396,46 @@ describe("install()", () => {
     await runtime.session.stop();
   });
 
+  it("selects a model that serves both languages for each of them", async () => {
+    createRecognizerHost.mockResolvedValue(createUnsupportedHost("platform"));
+    getModelFiles.mockResolvedValue(fakeModelFiles().files);
+    const runtime = await getDictation();
+    const bilingual = MODEL_CATALOG.find((spec) => spec.languages.length === 2)!;
+
+    await runtime.install(bilingual);
+
+    expect(useDictationStore.getState().selectedModel).toEqual({
+      en: bilingual.id,
+      es: bilingual.id,
+    });
+  });
+
+  it("falls back to another installed model when the selected one is removed", async () => {
+    createRecognizerHost.mockResolvedValue(listeningHost());
+    getModelFiles.mockResolvedValue(fakeModelFiles().files);
+    const runtime = await getDictation();
+    const accurate = catalogModel("en", "accurate");
+    const fast = catalogModel("en", "fast");
+    await runtime.install(accurate);
+    await runtime.install(fast);
+
+    await runtime.remove(accurate.id);
+
+    // The stored id stays put; the resolution rule is what moves the Session to fast.
+    expect(useDictationStore.getState().selectedModel.en).toBe(accurate.id);
+    runtime.session.register({
+      id: "chapter",
+      language: () => "en",
+      showPartial() {},
+      before: () => "",
+      apply() {},
+    });
+    runtime.session.focus("chapter");
+    await runtime.session.start();
+    expect(runtime.session.getSnapshot().modelId).toBe(fast.id);
+    await runtime.session.stop();
+  });
+
   it("selects each Dictation Language on its own first download", async () => {
     createRecognizerHost.mockResolvedValue(createUnsupportedHost("platform"));
     getModelFiles.mockResolvedValue(fakeModelFiles().files);
@@ -401,7 +443,9 @@ describe("install()", () => {
 
     await runtime.install(catalogModel("es", "accurate"));
 
-    expect(useDictationStore.getState().preferredTier).toEqual({ en: "fast", es: "accurate" });
+    expect(useDictationStore.getState().selectedModel).toEqual({
+      es: catalogModel("es", "accurate").id,
+    });
   });
 
   it("keeps the first selection when a second model of that language lands", async () => {
@@ -415,7 +459,7 @@ describe("install()", () => {
     await runtime.install(fast);
 
     const state = useDictationStore.getState();
-    expect(state.preferredTier.en).toBe("accurate");
+    expect(state.selectedModel.en).toBe(accurate.id);
     expect(state.installed).toHaveLength(2);
     expect(state.installed).toContain(accurate.id);
     expect(state.installed).toContain(fast.id);
@@ -446,12 +490,12 @@ describe("install()", () => {
     const gate = hold(accurate.id);
     const installing = runtime.install(accurate);
     // The author answers Fast again while Accurate is still downloading.
-    useDictationStore.getState().setPreferredTier("en", "fast");
+    useDictationStore.getState().setSelectedModel("en", fast.id);
     gate.resolve();
     await installing;
 
     const state = useDictationStore.getState();
-    expect(state.preferredTier).toEqual({ en: "fast", es: "fast" });
+    expect(state.selectedModel).toEqual({ en: fast.id });
     expect(state.installed).toContain(accurate.id);
   });
 
@@ -476,7 +520,7 @@ describe("install()", () => {
     const accurateInstall = runtime.install(accurate);
     const fastInstall = runtime.install(fast);
     accurateGate.resolve();
-    await vi.waitFor(() => expect(useDictationStore.getState().preferredTier.en).toBe("accurate"));
+    await vi.waitFor(() => expect(useDictationStore.getState().selectedModel.en).toBe(accurate.id));
 
     fastGate.resolve();
     await vi.waitFor(() => expect(useDictationStore.getState().downloads).toEqual({}));
@@ -484,7 +528,7 @@ describe("install()", () => {
     // Both downloads are read while neither refresh has run: the first
     // completion's selection is what the second one sees.
     const state = useDictationStore.getState();
-    expect(state.preferredTier.en).toBe("accurate");
+    expect(state.selectedModel.en).toBe(accurate.id);
     expect(state.installed).toContain(accurate.id);
     expect(state.installed).toContain(fast.id);
     readGate.resolve();
@@ -496,12 +540,13 @@ describe("install()", () => {
     getModelFiles.mockResolvedValue(fakeModelFiles().files);
     const runtime = await getDictation();
 
-    await runtime.install(catalogModel("en", "accurate"));
+    const accurate = catalogModel("en", "accurate");
+    await runtime.install(accurate);
 
     const saved = JSON.parse(localStorage.getItem("maibuk-dictation") ?? "{}") as {
-      state?: { preferredTier?: unknown };
+      state?: { selectedModel?: unknown };
     };
-    expect(saved.state?.preferredTier).toEqual({ en: "accurate", es: "fast" });
+    expect(saved.state?.selectedModel).toEqual({ en: accurate.id });
   });
 
   it("leaves every preference alone when a download fails", async () => {
@@ -521,7 +566,7 @@ describe("install()", () => {
 
     const state = useDictationStore.getState();
     expect(state.installed).toEqual([]);
-    expect(state.preferredTier).toEqual({ en: "fast", es: "fast" });
+    expect(state.selectedModel).toEqual({});
     expect(state.downloads).toEqual({});
   });
 
@@ -539,7 +584,7 @@ describe("install()", () => {
     await expect(installing).rejects.toMatchObject({ code: "cancelled" });
     const state = useDictationStore.getState();
     expect(state.installed).toEqual([]);
-    expect(state.preferredTier).toEqual({ en: "fast", es: "fast" });
+    expect(state.selectedModel).toEqual({});
     expect(state.downloads).toEqual({});
   });
 
@@ -556,6 +601,6 @@ describe("install()", () => {
 
     const state = useDictationStore.getState();
     expect(state.installed).toEqual([]);
-    expect(state.preferredTier).toEqual({ en: "fast", es: "fast" });
+    expect(state.selectedModel).toEqual({});
   });
 });
