@@ -3038,6 +3038,7 @@ dependencies = [
  "tauri-plugin-window-state",
  "tokio",
  "ureq",
+ "webkit2gtk",
  "windows-native-keyring-store",
  "windows-sys 0.61.2",
  "zip 9.0.1",

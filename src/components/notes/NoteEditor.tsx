@@ -26,12 +26,7 @@ import { SyncStatusButton } from "@/components/sync/SyncStatusButton";
 import { toast } from "@/components/ui/Toast";
 import { Tooltip } from "@/components/ui";
 import { editorHtmlToMarkdown, markdownFilename, saveMarkdownFile } from "@/features/markdown";
-import {
-  generateDocumentPdf,
-  elementToPngBytes,
-  saveBinaryFile,
-  exportFilename,
-} from "@/features/export";
+import { saveBinaryFile, exportFilename } from "@/features/export";
 import { useSettingsStore } from "@/features/settings/store";
 import { normalizeLanguage, type Language } from "@/features/settings/types";
 import { IS_DESKTOP } from "@/lib/platform";
@@ -446,6 +441,7 @@ export function NoteEditor({
   const handleExportPdf = useCallback(async () => {
     const noteTitle = title || note.title;
     try {
+      const { generateDocumentPdf } = await import("@/features/export/document-pdf");
       const blob = await generateDocumentPdf(latestContent() || "", noteTitle);
       const bytes = new Uint8Array(await blob.arrayBuffer());
       const saved = await saveBinaryFile(
@@ -465,6 +461,7 @@ export function NoteEditor({
     const editor = editorRef.current;
     if (!editor) return;
     try {
+      const { elementToPngBytes } = await import("@/features/export/element-to-image");
       const bytes = await elementToPngBytes(editor.view.dom as HTMLElement);
       const saved = await saveBinaryFile(
         exportFilename(title || note.title, "png"),

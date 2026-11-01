@@ -419,8 +419,10 @@ export const useSyncStore = create<SyncStore>()(
           }
           if (state.authToken && state.apiUrl) {
             restoreAuth(state.authToken);
-            // Fire-and-forget: validate token with server
-            useSyncStore.getState().verifyAuth();
+            // Fire-and-forget: validate token with server. Deferred because a
+            // launch rehydrates inside `create`, before `useSyncStore` is
+            // assigned; a direct call threw there and the launch sync never ran.
+            queueMicrotask(() => void useSyncStore.getState().verifyAuth());
           }
         };
       },

@@ -29,7 +29,15 @@ interface PendingEntry {
   reject: (error: Error) => void;
 }
 
+/**
+ * An idle codec Worker is stopped after this long: each Worker holds its own
+ * JS heap (tens of MB in WebKitGTK), and a sync burst is followed by long gaps.
+ * The next request starts a fresh one.
+ */
+export const SYNC_CODEC_IDLE_STOP_MS = 30_000;
+
 let workerInstance: Worker | null = null;
+let idleStopTimer: ReturnType<typeof setTimeout> | null = null;
 let createWorkerFn: (() => Worker) | null = null;
 let nextId = 0;
 const pending = new Map<number, PendingEntry>();
@@ -52,7 +60,24 @@ function defaultCreateWorker(): Worker | null {
   });
 }
 
+function cancelIdleStop(): void {
+  if (idleStopTimer === null) return;
+  clearTimeout(idleStopTimer);
+  idleStopTimer = null;
+}
+
+function scheduleIdleStop(): void {
+  cancelIdleStop();
+  idleStopTimer = setTimeout(() => {
+    idleStopTimer = null;
+    // Any request cancels this timer, so nothing is pending here.
+    workerInstance?.terminate();
+    workerInstance = null;
+  }, SYNC_CODEC_IDLE_STOP_MS);
+}
+
 function failAllPending(reason: Error): void {
+  cancelIdleStop();
   if (pending.size > 0) {
     const entries = [...pending.values()];
     pending.clear();
@@ -84,6 +109,7 @@ function handleMessage(data: CodecResponse): void {
   const entry = pending.get(data.id);
   if (!entry) return;
   pending.delete(data.id);
+  if (pending.size === 0) scheduleIdleStop();
   if (data.ok) {
     entry.resolve(data);
   } else {
@@ -164,6 +190,7 @@ async function dispatch(
 ): Promise<SuccessResponse> {
   const id = ++nextId;
   const request = { ...init, id } as CodecRequest;
+  cancelIdleStop();
   const worker = ensureWorker();
   // Pure fallback runs only when no Worker constructor exists (tests,
   // non-browser runtimes). A runtime worker failure rejects via failAllPending

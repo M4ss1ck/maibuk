@@ -5,7 +5,6 @@
 // Library rows is reloaded.
 
 import { initializeSchema } from "@/lib/db";
-import { createMemoryDatabase } from "@/lib/db/memory-database";
 import { metricsService } from "@/lib/metrics/MetricsService";
 import { countWords } from "@/features/metrics/word-count";
 import { flushPendingEdits } from "@/features/sync/pending-edits";
@@ -121,6 +120,8 @@ export async function enterTutorialLibrary(options: EnterTutorialLibraryOptions)
     metricsService.endSession();
     await metricsService.flushNow();
 
+    // sqlite-wasm loads only for the Tutorial: the desktop Library never needs it.
+    const { createMemoryDatabase } = await import("@/lib/db/memory-database");
     const database = await createMemoryDatabase();
     await initializeSchema(database);
     // Close the entry window: the first settle ran before the Flush and these

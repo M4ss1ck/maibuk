@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   SyncCryptoError,
   computeChecksum,
@@ -27,6 +27,7 @@ import {
   normalizeNoteSnapshotAsync,
   parseJsonAsync,
   resetSyncCodecForTests,
+  SYNC_CODEC_IDLE_STOP_MS,
   stringifySnapshotAsync,
 } from "@/features/sync/sync-codec";
 import { normalizeNoteSnapshotForSync } from "@/features/sync/serializer";
@@ -42,12 +43,24 @@ class FakeWorker {
   terminated = false;
   transfers: Transferable[][] = [];
   throwOnPost = false;
+  /** Requests held unanswered until `release()`, to keep one in flight. */
+  holding = false;
+  private held: CodecRequest[] = [];
 
   postMessage(message: CodecRequest, options?: { transfer: Transferable[] }): void {
     if (this.throwOnPost) throw new Error("postMessage failed");
     if (this.terminated) throw new Error("postMessage on terminated worker");
     this.transfers.push(options?.transfer ?? []);
+    if (this.holding) {
+      this.held.push(message);
+      return;
+    }
     queueMicrotask(() => void this.respond(message));
+  }
+
+  release(): void {
+    this.holding = false;
+    for (const message of this.held.splice(0)) void this.respond(message);
   }
 
   terminate(): void {
@@ -272,6 +285,59 @@ describe("sync codec failure recovery", () => {
     await expect(stringifySnapshotAsync({ a: 1 })).rejects.toThrow("postMessage failed");
     expect(await stringifySnapshotAsync({ b: 2 })).toBe(JSON.stringify({ b: 2 }));
     expect(created.length).toBe(2);
+  });
+});
+
+describe("sync codec idle stop", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("stops the worker once it has been idle, and the next request starts a fresh one", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    useFakeWorker();
+    expect(await stringifySnapshotAsync({ a: 1 })).toBe(JSON.stringify({ a: 1 }));
+    expect(created[0].terminated).toBe(false);
+
+    vi.advanceTimersByTime(SYNC_CODEC_IDLE_STOP_MS);
+    expect(created[0].terminated).toBe(true);
+
+    expect(await stringifySnapshotAsync({ b: 2 })).toBe(JSON.stringify({ b: 2 }));
+    expect(created.length).toBe(2);
+    expect(created[1].terminated).toBe(false);
+  });
+
+  it("keeps the worker while a request is in flight, and while requests keep coming", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    useFakeWorker();
+    await stringifySnapshotAsync({ a: 1 });
+    vi.advanceTimersByTime(SYNC_CODEC_IDLE_STOP_MS - 1);
+    await stringifySnapshotAsync({ a: 2 });
+    vi.advanceTimersByTime(SYNC_CODEC_IDLE_STOP_MS - 1);
+    expect(created[0].terminated).toBe(false);
+
+    created[0].holding = true;
+    const slow = stringifySnapshotAsync({ slow: true });
+    vi.advanceTimersByTime(SYNC_CODEC_IDLE_STOP_MS * 2);
+    expect(created[0].terminated).toBe(false);
+
+    created[0].release();
+    expect(await slow).toBe(JSON.stringify({ slow: true }));
+    vi.advanceTimersByTime(SYNC_CODEC_IDLE_STOP_MS);
+    expect(created[0].terminated).toBe(true);
+    expect(created.length).toBe(1);
+  });
+
+  it("a reset disarms the idle stop, so it never stops the next worker", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    useFakeWorker();
+    await stringifySnapshotAsync({ a: 1 });
+    resetSyncCodecForTests();
+    useFakeWorker();
+    vi.advanceTimersByTime(SYNC_CODEC_IDLE_STOP_MS - 1);
+    await stringifySnapshotAsync({ b: 1 });
+    vi.advanceTimersByTime(SYNC_CODEC_IDLE_STOP_MS - 1);
+    expect(created[0].terminated).toBe(false);
   });
 });
 

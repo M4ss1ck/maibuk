@@ -27,12 +27,7 @@ import type { EditorHandle } from "@/components/editor/Editor";
 import { useEditSession } from "@/features/edit-session";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ExportDialog } from "@/components/export";
-import {
-  generateDocumentPdf,
-  elementToPngBytes,
-  saveBinaryFile,
-  exportFilename,
-} from "@/features/export";
+import { saveBinaryFile, exportFilename } from "@/features/export";
 import {
   editorHtmlToMarkdown,
   droppedTextToEditorHtml,
@@ -555,6 +550,7 @@ export function BookEditor() {
     if (!currentChapter) return;
     const html = getLatestContent() || currentChapter.content || "";
     try {
+      const { generateDocumentPdf } = await import("@/features/export/document-pdf");
       const blob = await generateDocumentPdf(html, currentChapter.title);
       const bytes = new Uint8Array(await blob.arrayBuffer());
       const saved = await saveBinaryFile(
@@ -574,6 +570,7 @@ export function BookEditor() {
   const handleExportImage = useCallback(async () => {
     if (!currentChapter || !tocEditor) return;
     try {
+      const { elementToPngBytes } = await import("@/features/export/element-to-image");
       const bytes = await elementToPngBytes(tocEditor.view.dom as HTMLElement);
       const saved = await saveBinaryFile(
         exportFilename(currentChapter.title, "png"),
