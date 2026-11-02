@@ -90,17 +90,18 @@ export function CanvasCard({
             <h2 className="truncate font-medium">{canvas.title || t("canvas.untitled")}</h2>
             {canvas.pinned && <Pin className="size-4 shrink-0 text-primary" aria-hidden="true" />}
           </div>
-          {metadata}
+          {/* The card has a fixed height, so the delete prompt takes the metadata's room. */}
+          {!confirmingDelete && metadata}
         </button>
       )}
       {confirmingDelete ? (
         <div className="mt-2 border-t border-border pt-2">
           <p className="mb-2 text-xs text-muted-foreground">{t("canvas.deleteCanvasConfirm")}</p>
-          <div className="flex gap-2">
+          <div className="flex justify-end gap-2">
             <Button
               variant="destructive"
               size="sm"
-              className="flex-1"
+              className="whitespace-nowrap"
               onKeyDown={keepRowFromActing}
               onClick={(event) => {
                 stopRowActionClick(event);
@@ -113,7 +114,7 @@ export function CanvasCard({
             <Button
               variant="ghost"
               size="sm"
-              className="flex-1"
+              className="whitespace-nowrap"
               onKeyDown={keepRowFromActing}
               onClick={(event) => {
                 stopRowActionClick(event);
