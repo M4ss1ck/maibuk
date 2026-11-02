@@ -5,6 +5,11 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 y este proyecto sigue el [Versionado Semántico](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.3] - 2026-11-01
+
+### Fixed
+- Mantener el mensaje de confirmación de eliminación del lienzo dentro de la tarjeta de lienzo de altura fija, evitando que los botones de acción se desborden o se dividan en varias líneas
+
 ## [0.19.2] - 2026-11-01
 
 ### Added
