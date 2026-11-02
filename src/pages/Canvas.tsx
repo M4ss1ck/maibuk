@@ -84,9 +84,19 @@ const FIGLET_LINES = maibukArt
 const FIGLET_COLS = Math.max(...FIGLET_LINES.map((line) => line.length));
 const MONO_ASPECT = 0.6; // monospace glyph advance ÷ font size
 const CANVAS_PAGE_SIZE = 1200;
-// Focused controls that give Enter its own meaning, so it cannot place while they hold focus.
-const ENTER_OWNING_CONTROLS =
-  "button,a,[role='button'],[role='dialog'],[role='menu'],[role='listbox'],[role='option']";
+/**
+ * Enter places only from the surface itself: nothing focused, or a node on the
+ * Canvas that is not one of its controls. Everywhere else, the focused control
+ * keeps Enter, including the armed tool's button, which places through its click.
+ */
+function enterCanPlaceFrom(target: EventTarget | null | undefined): boolean {
+  if (target === document.body) return true;
+  return (
+    target instanceof Element &&
+    target.closest(".react-flow") !== null &&
+    target.closest("button,a,[role='button']") === null
+  );
+}
 const TILE_INSET = 0.1;
 const CANVAS_BACKGROUND_TILE_ID = "maibuk-canvas-tile";
 
@@ -453,11 +463,11 @@ function CanvasEditor() {
   const placeAtViewportCenter = () =>
     handlePlace(freeSpotNear(viewportCenter(), useCanvasStore.getState().doc.nodes));
 
-  const closeNotePicker = () => {
+  const closeNotePicker = useCallback(() => {
     notePlacementRef.current = null;
     setNotePickerOpen(false);
     setNoteQuery("");
-  };
+  }, []);
 
   const handleSurfaceDoubleClick = (event: ReactMouseEvent) => {
     if (toolMode !== "select" || interactivityLocked || editorReadOnly) return;
@@ -483,11 +493,9 @@ function CanvasEditor() {
         position: notePlacementRef.current ?? viewportCenter(),
       });
       selectNode(id);
-      notePlacementRef.current = null;
-      setNotePickerOpen(false);
-      setNoteQuery("");
+      closeNotePicker();
     },
-    [addNode, notes, selectNode, viewportCenter]
+    [addNode, closeNotePicker, notes, selectNode, viewportCenter]
   );
 
   const handleConnect = useCallback(
@@ -605,9 +613,7 @@ function CanvasEditor() {
         // button places through its click, and any other control just activates.
         preventDefault: false,
         onTrigger: (event) => {
-          if (event?.target instanceof Element && event.target.closest(ENTER_OWNING_CONTROLS)) {
-            return;
-          }
+          if (!enterCanPlaceFrom(event?.target)) return;
           event?.preventDefault();
           placeAtViewportCenter();
         },

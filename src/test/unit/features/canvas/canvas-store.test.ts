@@ -844,6 +844,17 @@ describe("placing with armed tools (#696)", () => {
     expect(ids()).toEqual(["existing"]);
   });
 
+  it("leaves nothing behind when the author leaves the Canvas while editing", () => {
+    const store = useCanvasStore.getState();
+    store.placeTextNode(placed());
+    store.closeCanvas();
+    const state = useCanvasStore.getState();
+    expect(state.doc.nodes).toEqual([]);
+    expect(state.pristineTextNode).toBeNull();
+    expect(state.editingNodeId).toBeNull();
+    expect(state.toolMode).toBe("select");
+  });
+
   it("deselects an Edge on arming, so its inspector cannot take Enter or Escape", () => {
     const store = useCanvasStore.getState();
     store.selectEdge("edge");

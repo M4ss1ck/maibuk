@@ -355,6 +355,22 @@ describe("Canvas page", () => {
       expect(mocks.actions.placeTextNode).not.toHaveBeenCalled();
     });
 
+    it("leaves Enter to a focused control the Canvas does not know about", async () => {
+      const user = userEvent.setup();
+      armTool("textNode");
+      renderCanvas();
+      const tab = document.createElement("div");
+      tab.setAttribute("role", "tab");
+      tab.tabIndex = 0;
+      document.body.append(tab);
+
+      tab.focus();
+      await user.keyboard("{Enter}");
+      tab.remove();
+
+      expect(mocks.actions.placeTextNode).not.toHaveBeenCalled();
+    });
+
     it("does nothing on Enter while Select is active", async () => {
       const user = userEvent.setup();
       renderCanvas();
