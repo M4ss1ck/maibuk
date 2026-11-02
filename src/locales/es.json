@@ -1846,11 +1846,11 @@
         },
         "text-node": {
           "title": "Nodos de texto",
-          "body": "Añade un nodo de texto: un bloque de texto enriquecido que puedes colocar en cualquier parte del Lienzo."
+          "body": "Añade un nodo de texto, luego haz clic donde irá o arrastra para fijar su ancho. Al hacer doble clic en el Lienzo vacío también se crea uno. Es un bloque de texto enriquecido que puedes colocar en cualquier parte del Lienzo."
         },
         "note-ref": {
           "title": "Referencias a Notas",
-          "body": "Una referencia a Nota representa una de tus Notas y la abre. Si esa Nota se elimina, la referencia se queda como Nota no disponible."
+          "body": "Añade una referencia a Nota, haz clic en un lugar y elige una Nota. Representa esa Nota y la abre. Si la Nota se elimina, la referencia se queda como Nota no disponible."
         },
         "pen": {
           "title": "Dibujo",
