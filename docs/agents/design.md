@@ -54,6 +54,7 @@ Design tokens are defined as CSS custom properties in `src/index.css` under `@th
 
 - **Always use semantic tokens** (`bg-primary`, `text-foreground`, `border-border`) — never raw color values in components
 - **Dark mode** is handled by toggling the `.dark` class on `<html>`, which swaps CSS variable values. No `dark:` prefixes needed in components
+- **Both themes share token equalities**: two `--color-*` tokens that are equal in one theme must be equal in the other, and two that differ must differ, or the themes draw different UI (dark `border` once equalled `card`, so cards lost their outline). Mirror the light step order when picking a dark value: light runs card → muted → border from white down to stone-300, dark runs stone-800 → stone-700 → stone-600. `src/test/unit/styles/theme-token-parity.test.ts` enforces it; `primary*` is exempt because the accent color rewrites it
 - **Spacing**: Use Tailwind spacing scale (`gap-2`, `px-4`, `py-2`). Custom spacing tokens: `--spacing-sidebar: 280px`, `--spacing-editor-max: 720px`
 - **Typography**: Three font families defined — `font-sans` (Inter), `font-serif` (Literata), `font-mono`
 - **Button variants**: `primary`, `secondary`, `ghost`, `destructive` — use the existing `Button` component, don't create ad-hoc button styles
