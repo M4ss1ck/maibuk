@@ -81,14 +81,14 @@
   --color-foreground: #fafaf9;
   --color-muted: #44403c;
   --color-muted-foreground: #a8a29e;
-  --color-border: #57534e;
+  --color-border: #36312d;
   --color-card: #292524;
   --color-card-foreground: #fafaf9;
   --color-destructive: #f87171;
   --color-destructive-hover: #ef4444;
   --color-success: #4ade80;
 
-  --color-table-border: #57534e;
+  --color-table-border: #36312d;
   --color-table-header: #2f2a26;
 
   /* Status badges */
