@@ -295,6 +295,9 @@ export async function testStep(context: PluginStepContext): Promise<StepResult> 
       test: {
         root: pluginRoot,
         environment: "jsdom",
+        // Node 26's own `localStorage` global is undefined without a storage
+        // file, and it hides jsdom's.
+        execArgv: ["--no-experimental-webstorage"],
         setupFiles: [join(maibukRoot, "src", "test", "setup.ts")],
         include: ["**/*.test.{ts,tsx}"],
         exclude: ["**/node_modules/**", "**/dist/**", "**/.maibuk/**"],
