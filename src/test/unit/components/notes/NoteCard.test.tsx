@@ -59,6 +59,19 @@ describe("NoteCard", () => {
     });
     expect(onClick).not.toHaveBeenCalled();
   });
+  it("keeps only the start of a long Note in its preview", () => {
+    render(
+      <GridList aria-label="Notes" selectionMode="none">
+        <NoteCard
+          note={buildNote({ content: `<p>start ${"word ".repeat(20000)}</p>` })}
+          onClick={vi.fn()}
+        />
+      </GridList>
+    );
+    const preview = screen.getByText(/^start word/);
+    expect(preview.textContent?.length).toBeLessThanOrEqual(400);
+  });
+
   it("renders title, stripped content preview and tags, and fires onClick", async () => {
     const user = userEvent.setup();
     const onClick = vi.fn();

@@ -10,6 +10,7 @@ import {
   filterNotes,
   normalizeNotesSidebarSort,
   notePlainText,
+  notePreviewText,
   notesSortOptions,
   placeNote,
   sortNotesBy,
@@ -554,5 +555,51 @@ describe("placeNote()", () => {
       ["pinned", ["a", "b"]],
       ["all", ["c", "d"]],
     ]);
+  });
+});
+
+describe("notePreviewText", () => {
+  const LIMIT = 400;
+  const longHtml = (paragraphs: number) =>
+    Array.from({ length: paragraphs }, (_, i) => `<p>Line ${i} of the keeper's log.</p>`).join("");
+
+  it("reads like the plain text of a short Note", () => {
+    const content = '<h1 id="a">Title</h1><p>Some <b>bold</b>  text</p>\n<ul><li>item</li></ul>';
+    expect(notePreviewText(content)).toBe(notePlainText(content));
+  });
+
+  it("is the start of the plain text of a long Note, and no longer than the limit", () => {
+    const content = longHtml(5000);
+    const preview = notePreviewText(content);
+    expect(preview).toHaveLength(LIMIT);
+    expect(notePlainText(content).startsWith(preview)).toBe(true);
+  });
+
+  it("skips an embedded image of any size to reach the text after it", () => {
+    const image = `<p><img src="data:image/png;base64,${"A".repeat(5000)}"></p>`;
+    expect(notePreviewText(`${image}<p>After the image</p>`)).toBe("After the image");
+  });
+
+  it("is not filled up by a long run of empty paragraphs", () => {
+    expect(notePreviewText(`${"<p></p>".repeat(1000)}<p>Finally</p>`)).toBe("Finally");
+  });
+
+  it("cuts one long run of text with no tags in it", () => {
+    expect(notePreviewText(`<p>${"word ".repeat(1000)}</p>`).length).toBeLessThanOrEqual(LIMIT);
+  });
+
+  it("keeps a tag that never closes as text, as the plain text does", () => {
+    const content = "<p>Before</p> a < b";
+    expect(notePreviewText(content)).toBe(notePlainText(content));
+    const unterminated = "<p>Before</p><p class=";
+    expect(notePreviewText(unterminated)).toBe(notePlainText(unterminated));
+  });
+
+  it("handles a Note that is not HTML", () => {
+    const json = JSON.stringify({ content: [{ text: "Hidden orchard" }] });
+    expect(notePreviewText(json)).toBe("Hidden orchard");
+    expect(notePreviewText("plain words")).toBe("plain words");
+    expect(notePreviewText("")).toBe("");
+    expect(notePreviewText("x".repeat(1000))).toHaveLength(LIMIT);
   });
 });

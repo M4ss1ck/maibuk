@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { BookOpen, Copy, GripVertical, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import type { Note } from "@/features/notes";
 import { NoteTagsRow } from "@/components/notes/NoteTagsRow";
+import { notePreviewText } from "@/components/notes/notes-list-model";
 import { noteDateLabel, noteFullDate } from "@/components/notes/timeAgo";
 import { ItemActionsMenu, ReorderHandle, Tooltip } from "@/components/ui";
 import type { ItemAction } from "@/components/ui";
@@ -41,13 +42,6 @@ interface NoteListItemProps {
   onDragEnd?: (e: DragEvent<HTMLDivElement>) => void;
 }
 
-function toPreview(content: string) {
-  return content
-    .replace(/<[^>]*>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 export function NoteListItem({
   note,
   isSelected,
@@ -73,7 +67,7 @@ export function NoteListItem({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const buildPluginActions = usePluginItemMenuActions("note");
   const title = note.title || t("notes.untitled");
-  const preview = toPreview(note.content);
+  const preview = notePreviewText(note.content);
 
   const actions: ItemAction[] = [];
   if (onRename) {

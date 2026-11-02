@@ -226,6 +226,7 @@
     "statusChangeFailed": "No se pudo cambiar el estado del capítulo"
   },
   "notes": {
+    "loading": "Cargando nota…",
     "title": "Notas",
     "collectionLabel": "Notas",
     "newNote": "Nueva nota",

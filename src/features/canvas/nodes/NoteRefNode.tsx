@@ -1,10 +1,12 @@
+import { useState } from "react";
 import { BookOpen, ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { type Node, type NodeProps } from "@xyflow/react";
+import { SpinnerIcon } from "@/components/icons";
 import { Button } from "@/components/ui/Button";
 import { NoteTagsRow } from "@/components/notes/NoteTagsRow";
-import { notePlainText } from "@/components/notes/notes-list-model";
+import { notePreviewText } from "@/components/notes/notes-list-model";
 import { timeAgo } from "@/components/notes/timeAgo";
 import { useBookStore } from "@/features/books/store";
 import { useNoteStore } from "@/features/notes";
@@ -18,6 +20,9 @@ type NoteRefFlowNode = Node<CanvasFlowNodeData, "noteRef">;
 export function NoteRefNode({ data, selected }: NodeProps<NoteRefFlowNode>) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  // The Router keeps this Canvas up until the Notes page has rendered, which a
+  // dense Canvas drags out. This is the answer to the press in the meantime.
+  const [isOpening, setIsOpening] = useState(false);
   const node = data.node;
   const note = useNoteStore((state) =>
     node.kind === "noteRef"
@@ -34,7 +39,7 @@ export function NoteRefNode({ data, selected }: NodeProps<NoteRefFlowNode>) {
   if (node.kind !== "noteRef") return null;
 
   const title = note?.title || node.label || t("canvas.missingNote");
-  const preview = note ? notePlainText(note.content) : "";
+  const preview = note ? notePreviewText(note.content) : "";
   const bookTitle = note?.bookId ? books.find((book) => book.id === note.bookId)?.title : null;
   const dateLabel = note ? timeAgo(note.contentUpdatedAt, i18n?.language ?? "en", t) : "";
 
@@ -70,16 +75,23 @@ export function NoteRefNode({ data, selected }: NodeProps<NoteRefFlowNode>) {
           size="sm"
           className="nodrag nopan mt-2 w-full"
           disabled={!note}
-          onClick={() =>
+          aria-busy={isOpening}
+          onClick={() => {
+            if (isOpening) return;
+            setIsOpening(true);
             navigate(`/notes/${node.noteId}`, {
               state: {
                 returnTo: `/canvas/${data.canvasId}`,
                 returnLabel: data.canvasTitle || t("canvas.untitled"),
               },
-            })
-          }
+            });
+          }}
         >
-          <ExternalLink className="size-4" aria-hidden="true" />
+          {isOpening ? (
+            <SpinnerIcon className="size-4 animate-spin" />
+          ) : (
+            <ExternalLink className="size-4" aria-hidden="true" />
+          )}
           {t("canvas.openNote")}
         </Button>
       </div>

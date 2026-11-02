@@ -174,11 +174,12 @@ describe("Notes page return-to-book navigation", () => {
     expect(container.querySelectorAll("main")).toHaveLength(1);
   });
 
-  it("passes suppressRestore while a note heading deep-link is pending", () => {
+  it("passes suppressRestore while a note heading deep-link is pending", async () => {
     mockLocation.state = { openNoteId: "n1", scrollToHeadingId: "heading-1" };
 
     render(<Notes />);
 
+    await waitFor(() => expect(noteEditorProps.length).toBeGreaterThan(0));
     const last = noteEditorProps[noteEditorProps.length - 1];
     expect(last?.suppressRestore).toBe(true);
   });

@@ -243,6 +243,40 @@ export function notePlainText(content: string): string {
   }
 }
 
+/** Longer than any preview shows: every one is clamped to a few lines by CSS. */
+const NOTE_PREVIEW_LENGTH = 400;
+
+/**
+ * The start of a Note's text, for a preview. A clamped preview still lays out
+ * all the text it holds, so handing it a whole Note freezes the screen on a
+ * long one. HTML is walked only until the preview is full.
+ */
+export function notePreviewText(content: string): string {
+  if (!content.startsWith("<")) return notePlainText(content).slice(0, NOTE_PREVIEW_LENGTH);
+
+  let text = "";
+  let position = 0;
+  while (position < content.length && text.length < NOTE_PREVIEW_LENGTH) {
+    const open = content.indexOf("<", position);
+    const runEnd = open === -1 ? content.length : open;
+    const sliceEnd = Math.min(runEnd, position + NOTE_PREVIEW_LENGTH);
+    text += content.slice(position, sliceEnd);
+    position = sliceEnd;
+    if (position < runEnd) continue;
+    if (open === -1) break;
+
+    const close = content.indexOf(">", open);
+    if (close === -1) {
+      text += content.slice(open, open + NOTE_PREVIEW_LENGTH);
+      break;
+    }
+    // Empty paragraphs add no length, or a run of them would fill the preview.
+    if (text && !text.endsWith(" ")) text += " ";
+    position = close + 1;
+  }
+  return text.replace(/\s+/g, " ").trim().slice(0, NOTE_PREVIEW_LENGTH);
+}
+
 function parseDateBoundary(value: string | undefined, boundary: "start" | "end") {
   if (!value) return null;
 
