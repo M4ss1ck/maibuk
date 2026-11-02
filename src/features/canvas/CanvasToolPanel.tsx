@@ -1,4 +1,4 @@
-import { ButtonHTMLAttributes, forwardRef } from "react";
+import { ButtonHTMLAttributes, forwardRef, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Toolbar } from "react-aria-components/Toolbar";
 import {
@@ -14,6 +14,7 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { useCanvasStore } from "@/features/canvas/store";
+import type { CanvasToolMode } from "@/features/canvas/types";
 import { Tooltip, TooltipGroup } from "@/components/ui";
 import type { CommandId } from "@/lib/shortcut-registry";
 
@@ -50,15 +51,14 @@ function ToolbarDivider() {
 }
 
 export function CanvasToolPanel({
-  onAddText,
-  onAddNoteRef,
+  onPlaceAtCenter,
   onZoomIn,
   onZoomOut,
   onFitView,
   trailing,
 }: {
-  onAddText: () => void;
-  onAddNoteRef: () => void;
+  /** Place with the armed tool at the viewport center: the keyboard's second Enter. */
+  onPlaceAtCenter: () => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onFitView: () => void;
@@ -71,8 +71,16 @@ export function CanvasToolPanel({
   const interactivityLocked = useCanvasStore((state) => state.interactivityLocked);
   const toggleInteractivityLocked = useCanvasStore((state) => state.toggleInteractivityLocked);
 
+  // A click from the keyboard or a screen reader has no pointer position
+  // (detail 0), so a second Enter places; a second click or tap cancels.
+  const handlePlacementToolClick = (mode: CanvasToolMode) => (event: MouseEvent) => {
+    if (toolMode !== mode) setToolMode(mode);
+    else if (event.detail === 0) onPlaceAtCenter();
+    else setToolMode("select");
+  };
+
   const tools: Array<{
-    mode: "select" | "pen" | "eraser";
+    mode: CanvasToolMode;
     icon: typeof MousePointer2;
     label: string;
     shortcutId: CommandId;
@@ -119,7 +127,8 @@ export function CanvasToolPanel({
         <ToolbarGroup>
           <Tooltip content={t("canvas.addTextNode")} shortcut="canvas.addTextNode">
             <ToolbarButton
-              onClick={onAddText}
+              active={toolMode === "textNode"}
+              onClick={handlePlacementToolClick("textNode")}
               aria-label={t("canvas.addTextNode")}
               data-tutorial="canvas.text-node"
             >
@@ -128,7 +137,8 @@ export function CanvasToolPanel({
           </Tooltip>
           <Tooltip content={t("canvas.addNoteRef")} shortcut="canvas.addNoteRef">
             <ToolbarButton
-              onClick={onAddNoteRef}
+              active={toolMode === "noteRef"}
+              onClick={handlePlacementToolClick("noteRef")}
               aria-label={t("canvas.addNoteRef")}
               data-tutorial="canvas.note-ref"
             >

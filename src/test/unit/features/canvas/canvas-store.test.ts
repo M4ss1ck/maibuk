@@ -698,3 +698,156 @@ describe("useCanvasStore", () => {
     });
   });
 });
+
+describe("placing with armed tools (#696)", () => {
+  const placed = (id = "placed", width?: number) => ({
+    id,
+    kind: "text" as const,
+    html: "<p></p>",
+    position: { x: 40, y: 80 },
+    ...(width ? { width } : {}),
+  });
+  const ids = () => useCanvasStore.getState().doc.nodes.map((node) => node.id);
+
+  beforeEach(() => {
+    useCanvasStore.getState().closeCanvas();
+    useCanvasStore.setState({
+      doc: { ...createDefaultCanvasDoc(), nodes: [textNode("existing")] },
+    });
+  });
+
+  it("returns to Select and opens the node after placing, from any tool", () => {
+    for (const tool of ["textNode", "pen", "eraser"] as const) {
+      useCanvasStore.getState().setToolMode(tool);
+      useCanvasStore.getState().placeTextNode(placed(tool));
+      const state = useCanvasStore.getState();
+      expect(state.toolMode).toBe("select");
+      expect(state.editingNodeId).toBe(tool);
+      expect(state.selectedNodeId).toBe(tool);
+    }
+  });
+
+  it("keeps an empty placed node out of history and the save session", () => {
+    useCanvasStore.getState().placeTextNode(placed());
+    const state = useCanvasStore.getState();
+    expect(ids()).toEqual(["existing", "placed"]);
+    expect(state.past).toEqual([]);
+    expect(state.revision).toBe(0);
+    expect(state.dirty).toBe(false);
+  });
+
+  it("removes an abandoned node without touching undo or redo", () => {
+    const store = useCanvasStore.getState();
+    store.addNode(textNode("second"));
+    store.undo();
+    const { past, future } = useCanvasStore.getState();
+    expect(future).toHaveLength(1);
+
+    store.placeTextNode(placed());
+    store.endNodeEdit();
+
+    const state = useCanvasStore.getState();
+    expect(ids()).toEqual(["existing"]);
+    expect(state.selectedNodeId).toBeNull();
+    expect(state.past).toEqual(past);
+    expect(state.future).toEqual(future);
+    store.undo();
+    expect(ids()).toEqual(["existing"]);
+  });
+
+  it("drops the node when another selection or a clear ends the edit", () => {
+    const store = useCanvasStore.getState();
+    store.placeTextNode(placed());
+    store.selectNode("existing");
+    expect(ids()).toEqual(["existing"]);
+    expect(useCanvasStore.getState().selectedNodeId).toBe("existing");
+
+    store.placeTextNode(placed());
+    store.clearSelection();
+    expect(ids()).toEqual(["existing"]);
+  });
+
+  it("makes the first text and the placement one undo step, and redo restores the text", () => {
+    const store = useCanvasStore.getState();
+    store.placeTextNode(placed());
+    store.updateTextNode("placed", { html: "<p>Hello</p>" });
+    store.endNodeEdit();
+    expect(ids()).toEqual(["existing", "placed"]);
+    expect(useCanvasStore.getState().revision).toBe(1);
+
+    store.undo();
+    expect(ids()).toEqual(["existing"]);
+    store.redo();
+    const node = useCanvasStore.getState().doc.nodes.find((candidate) => candidate.id === "placed");
+    expect(node).toMatchObject({ html: "<p>Hello</p>" });
+  });
+
+  it("keeps a node whose text was typed and then cleared", () => {
+    const store = useCanvasStore.getState();
+    store.placeTextNode(placed());
+    // The editor reports it once it has seen text, even if the html is blank again.
+    store.updateTextNode("placed", { html: "<p></p>" });
+    store.endNodeEdit();
+    expect(ids()).toEqual(["existing", "placed"]);
+    expect(useCanvasStore.getState().revision).toBe(1);
+  });
+
+  it("never deletes a cleared node that already had text, and keeps its Connections", () => {
+    const store = useCanvasStore.getState();
+    store.addNode(textNode("other"));
+    store.addEdge({ id: "edge", source: "existing", target: "other" });
+    store.beginNodeEdit("existing");
+    store.updateTextNode("existing", { html: "<p></p>" });
+    store.endNodeEdit();
+    const state = useCanvasStore.getState();
+    expect(ids()).toEqual(["existing", "other"]);
+    expect(state.doc.edges.map((edge) => edge.id)).toEqual(["edge"]);
+  });
+
+  it("does not let undo bring back a node abandoned after a commit made during its edit", () => {
+    const store = useCanvasStore.getState();
+    store.placeTextNode(placed());
+    store.updateTextNode("placed", { backgroundColor: "#123456" });
+    store.endNodeEdit();
+    expect(ids()).toEqual(["existing"]);
+    // The commit reached the session with the node in it, so the removal must too.
+    expect(useCanvasStore.getState().revision).toBe(2);
+    store.undo();
+    expect(ids()).toEqual(["existing"]);
+  });
+
+  it("discards the node instead of undoing past it while it is open", () => {
+    const store = useCanvasStore.getState();
+    store.addNode(textNode("second"));
+    store.placeTextNode(placed());
+    store.undo();
+    expect(ids()).toEqual(["existing", "second"]);
+    expect(useCanvasStore.getState().editingNodeId).toBeNull();
+  });
+
+  it("refuses to arm or place while locked or read-only, and lock disarms", () => {
+    const store = useCanvasStore.getState();
+    store.setToolMode("noteRef");
+    store.toggleInteractivityLocked();
+    expect(useCanvasStore.getState().toolMode).toBe("select");
+
+    store.setToolMode("textNode");
+    expect(useCanvasStore.getState().toolMode).toBe("select");
+    store.placeTextNode(placed());
+    expect(ids()).toEqual(["existing"]);
+    store.toggleInteractivityLocked();
+
+    useCanvasStore.setState({ editorReadOnly: true });
+    store.setToolMode("noteRef");
+    expect(useCanvasStore.getState().toolMode).toBe("select");
+    store.placeTextNode(placed());
+    expect(ids()).toEqual(["existing"]);
+  });
+
+  it("leaves Pen active through a lock, as today", () => {
+    const store = useCanvasStore.getState();
+    store.setToolMode("pen");
+    store.toggleInteractivityLocked();
+    expect(useCanvasStore.getState().toolMode).toBe("pen");
+  });
+});

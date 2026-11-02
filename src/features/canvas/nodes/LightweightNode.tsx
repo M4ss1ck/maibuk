@@ -1,7 +1,10 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { NodeResizeControl, ResizeControlVariant, type Node, type NodeProps } from "@xyflow/react";
+import Placeholder from "@tiptap/extension-placeholder";
 import { EditorContent, useEditor } from "@tiptap/react";
+import { CANVAS_TEXT_NODE_MIN_WIDTH } from "@/constants";
 import { useCanvasStore } from "@/features/canvas/store";
 import { useSettingsStore } from "@/features/settings/store";
 import type { CanvasFlowNodeData } from "@/features/canvas/reactFlowAdapter";
@@ -14,7 +17,10 @@ import { ImageContextMenu } from "@/components/editor/ImageContextMenu";
 import { CanvasNodeHandles } from "@/features/canvas/nodes/CanvasNodeHandles";
 import { NodeFormatBubble } from "@/features/canvas/nodes/NodeFormatBubble";
 import { useCanvasNodeMenu } from "@/features/canvas/nodes/CanvasNodeMenu";
-import { prepareStaticCanvasHtml } from "@/features/canvas/nodes/staticRichText";
+import {
+  isBlankTextNodeHtml,
+  prepareStaticCanvasHtml,
+} from "@/features/canvas/nodes/staticRichText";
 import { useOpeningMarksLanguage } from "@/components/editor/opening-marks-language";
 
 type LightweightFlowNode = Node<CanvasFlowNodeData, "text">;
@@ -40,6 +46,7 @@ function ActiveNodeEditor({
   /** Leave editing and hand focus back to the node (the Escape path). */
   onExit: () => void;
 }) {
+  const { t } = useTranslation();
   const updateTextNode = useCanvasStore((state) => state.updateTextNode);
   const colorPreview = useNodeColorPreview(node.id);
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
@@ -49,17 +56,27 @@ function ActiveNodeEditor({
   const openingMarksLanguage = useOpeningMarksLanguage(language);
   const overlayOpen = useRef(false);
   const [pendingMarkdownPaste, setPendingMarkdownPaste] = useState<string | null>(null);
+  const hadText = useRef(false);
   const editor = useEditor({
-    extensions: createRichTextExtensions({
-      onMarkdownPaste: setPendingMarkdownPaste,
-      footnoteStartIndex: 1,
-      spellCheck: { enabled: spellCheckEnabled, language },
-      autoClose: editorAutoClose,
-      openingMarksLanguage,
-      // Leaving the node writes its HTML back, so opening must not change it.
-      nameHeadingsOnOpen: false,
-    }),
+    extensions: [
+      ...createRichTextExtensions({
+        onMarkdownPaste: setPendingMarkdownPaste,
+        footnoteStartIndex: 1,
+        spellCheck: { enabled: spellCheckEnabled, language },
+        autoClose: editorAutoClose,
+        openingMarksLanguage,
+        // Leaving the node writes its HTML back, so opening must not change it.
+        nameHeadingsOnOpen: false,
+      }),
+      Placeholder.configure({
+        placeholder: t("canvas.textNodePlaceholder"),
+        emptyEditorClass: "is-editor-empty",
+      }),
+    ],
     content: node.html,
+    onUpdate: ({ editor: updated }) => {
+      if (updated.getText().trim()) hadText.current = true;
+    },
     editable: true,
     // The node opens from a keyboard shortcut (F2) or a double click; TipTap's
     // autofocus is the reliable path that lands the caret in the new editor.
@@ -87,7 +104,12 @@ function ActiveNodeEditor({
   if (!editor) return null;
 
   const commit = (leave: () => void = onDone) => {
-    updateTextNode(node.id, { html: editor.getHTML() });
+    const html = editor.getHTML();
+    // A node that has never had text stays uncommitted, and leaving drops it.
+    const pristine = useCanvasStore.getState().pristineTextNode?.id === node.id;
+    if (!pristine || hadText.current || !isBlankTextNodeHtml(html)) {
+      updateTextNode(node.id, { html });
+    }
     leave();
   };
 
@@ -134,6 +156,7 @@ function ActiveNodeEditor({
 }
 
 export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNode>) {
+  const { t } = useTranslation();
   const node = data.node;
   const colorPreview = useNodeColorPreview(node.id);
   const editorReadOnly = useCanvasStore((state) => state.editorReadOnly);
@@ -145,11 +168,13 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
   const beginNodeEdit = useCanvasStore((state) => state.beginNodeEdit);
   const endNodeEdit = useCanvasStore((state) => state.endNodeEdit);
   const editing = editingNodeId === node.id;
+  const pristine = useCanvasStore((state) => state.pristineTextNode?.id === node.id);
   const nodeMenu = useCanvasNodeMenu(node.id, {
     isDisabled: editorReadOnly || interactivityLocked || editing,
   });
   const html = node.kind === "text" ? node.html : null;
   const safeHtml = useMemo(() => (html === null ? "" : prepareStaticCanvasHtml(html)), [html]);
+  const blank = useMemo(() => html !== null && isBlankTextNodeHtml(html), [html]);
 
   if (node.kind !== "text") return null;
 
@@ -160,11 +185,14 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
     <div
       ref={nodeMenu.anchorRef}
       {...nodeMenu.itemProps}
-      className={`group relative min-h-24 min-w-24 transform-gpu ${node.width ? "w-full" : "max-w-72"} rounded-lg px-3 py-2 text-sm text-foreground ${
+      className={`group relative min-h-24 ${blank ? "min-w-40" : "min-w-24"} transform-gpu ${node.width ? "w-full" : "max-w-72"} ${pristine ? "nodrag nopan" : ""} rounded-lg px-3 py-2 text-sm text-foreground ${
         editing ? "" : "pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]"
       } ${selected ? "ring-1 ring-primary/40" : ""}`}
       style={backgroundColor ? { backgroundColor } : undefined}
       onDoubleClick={() => !editorReadOnly && beginNodeEdit(node.id)}
+      // The padding below a new node's first line reads as part of its text box.
+      // A press there must keep the editor focused, or the blur would drop the node.
+      onMouseDown={pristine ? (event) => event.preventDefault() : undefined}
     >
       <CanvasNodeHandles connectedSides={data.connectedSides} variant="text" selected={selected} />
       {nodeMenu.menu}
@@ -175,7 +203,7 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
             position={side}
             variant={ResizeControlVariant.Line}
             resizeDirection="horizontal"
-            minWidth={160}
+            minWidth={CANVAS_TEXT_NODE_MIN_WIDTH}
             className={`nodrag z-0! w-1! rounded-full! border-0! bg-primary! transition-opacity ${
               selected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
             }`}
@@ -201,6 +229,10 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
             nodeMenu.anchorRef.current?.focus();
           }}
         />
+      ) : blank ? (
+        <div className="canvas-node-content max-w-none text-muted-foreground">
+          {t("canvas.textNodePlaceholder")}
+        </div>
       ) : (
         <div
           className="canvas-node-content max-w-none"

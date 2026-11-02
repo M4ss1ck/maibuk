@@ -146,7 +146,7 @@ export function DrawingCaptureOverlay({
     };
   }, [eraserBox, reactFlow, toolMode]);
 
-  if (toolMode === "select") return null;
+  if (toolMode !== "pen" && toolMode !== "eraser") return null;
 
   const toFlow = (event: ReactPointerEvent) =>
     reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY });

@@ -44,6 +44,7 @@ import { NodeConnectButton } from "@/features/canvas/NodeConnectButton";
 import { PenSettingsPanel } from "@/features/canvas/PenSettingsPanel";
 import { CanvasDrawingLayer } from "@/features/canvas/drawing/CanvasDrawingLayer";
 import { DrawingCaptureOverlay } from "@/features/canvas/drawing/DrawingCaptureOverlay";
+import { PlacementCaptureOverlay, freeSpotNear } from "@/features/canvas/PlacementCaptureOverlay";
 import { nodeTypes } from "@/features/canvas/nodes";
 import { fromConnection, toFlowEdges, toFlowNodes } from "@/features/canvas/reactFlowAdapter";
 import { canvasWriteQueue, useCanvasStore } from "@/features/canvas/store";
@@ -52,6 +53,7 @@ import { useEditSession } from "@/features/edit-session";
 import { useNoteStore } from "@/features/notes";
 import { useThemeStore } from "@/features/theme";
 import { CANVAS_TEXT_NODE_DEFAULT_WIDTH } from "@/constants";
+import { isPlacementTool, type CanvasPosition } from "@/features/canvas/types";
 import { useShortcuts } from "@/lib/shortcuts";
 
 const DEFAULT_SESSION_VIEWPORT = { x: 0, y: 0, zoom: 1 };
@@ -82,6 +84,9 @@ const FIGLET_LINES = maibukArt
 const FIGLET_COLS = Math.max(...FIGLET_LINES.map((line) => line.length));
 const MONO_ASPECT = 0.6; // monospace glyph advance ÷ font size
 const CANVAS_PAGE_SIZE = 1200;
+// Focused controls that give Enter its own meaning, so it cannot place while they hold focus.
+const ENTER_OWNING_CONTROLS =
+  "button,a,[role='button'],[role='dialog'],[role='menu'],[role='listbox'],[role='option']";
 const TILE_INSET = 0.1;
 const CANVAS_BACKGROUND_TILE_ID = "maibuk-canvas-tile";
 
@@ -260,6 +265,7 @@ function CanvasEditor() {
     (state) => state.replaceCorruptDocWithDefault
   );
   const addNode = useCanvasStore((state) => state.addNode);
+  const placeTextNode = useCanvasStore((state) => state.placeTextNode);
   const addEdge = useCanvasStore((state) => state.addEdge);
   const updateEdge = useCanvasStore((state) => state.updateEdge);
   const moveNodeLive = useCanvasStore((state) => state.moveNodeLive);
@@ -280,6 +286,8 @@ function CanvasEditor() {
   const theme = useThemeStore((state) => state.theme);
   const [notePickerOpen, setNotePickerOpen] = useState(false);
   const [noteQuery, setNoteQuery] = useState("");
+  // Where the Note Reference lands once the picker opened for that spot has a choice.
+  const notePlacementRef = useRef<CanvasPosition | null>(null);
   const [titleDraft, setTitleDraft] = useState("");
   const [edgeLabelDraft, setEdgeLabelDraft] = useState("");
   const [connecting, setConnecting] = useState(false);
@@ -412,43 +420,74 @@ function CanvasEditor() {
     });
   }, [reactFlow]);
 
-  const handleAddTextNode = () => {
-    const id = crypto.randomUUID();
+  const placeTextNodeAt = (position: CanvasPosition, width?: number) => {
     // The store lives outside React's event system (the T shortcut is a native
     // listener), so without a synchronous flush the node's editor mounts after
     // the key event returns. In WebKit the next keystroke then arrives first and
     // hits the canvas instead of the text. flushSync commits, and the editor's
     // layout effect focuses, before the shortcut handler returns.
     flushSync(() => {
-      addNode({
-        id,
-        kind: "text",
-        html: `<p>${t("canvas.newTextNode")}</p>`,
-        position: viewportCenter(),
-        width: CANVAS_TEXT_NODE_DEFAULT_WIDTH,
-      });
-      selectNode(id);
       // The new node opens straight into its editor, so the letters that follow
       // the shortcut type text instead of switching tools.
-      beginNodeEdit(id);
+      placeTextNode({
+        id: crypto.randomUUID(),
+        kind: "text",
+        html: "<p></p>",
+        position,
+        ...(width === undefined ? {} : { width }),
+      });
     });
   };
+
+  const handlePlace = (position: CanvasPosition, width?: number) => {
+    if (useCanvasStore.getState().toolMode === "textNode") {
+      placeTextNodeAt(position, width);
+      return;
+    }
+    // Every way out of the picker ends in Select, so the tool can end here.
+    notePlacementRef.current = position;
+    setToolMode("select");
+    setNotePickerOpen(true);
+  };
+
+  const placeAtViewportCenter = () =>
+    handlePlace(freeSpotNear(viewportCenter(), useCanvasStore.getState().doc.nodes));
+
+  const closeNotePicker = () => {
+    notePlacementRef.current = null;
+    setNotePickerOpen(false);
+    setNoteQuery("");
+  };
+
+  const handleSurfaceDoubleClick = (event: ReactMouseEvent) => {
+    if (toolMode !== "select" || interactivityLocked || editorReadOnly) return;
+    if (!(event.target as Element).classList?.contains("react-flow__pane")) return;
+    placeTextNodeAt(reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY }));
+  };
+
+  // A Canvas can turn read-only while a tool is armed (a failed write, say).
+  useEffect(() => {
+    if (editorReadOnly && isPlacementTool(toolMode)) setToolMode("select");
+  }, [editorReadOnly, setToolMode, toolMode]);
 
   const handleAddNoteRef = useCallback(
     (noteId: string) => {
       const note = notes.find((candidate) => candidate.id === noteId);
       if (!note) return;
+      const id = crypto.randomUUID();
       addNode({
-        id: crypto.randomUUID(),
+        id,
         kind: "noteRef",
         noteId: note.id,
         label: note.title,
-        position: viewportCenter(),
+        position: notePlacementRef.current ?? viewportCenter(),
       });
+      selectNode(id);
+      notePlacementRef.current = null;
       setNotePickerOpen(false);
       setNoteQuery("");
     },
-    [addNode, notes, viewportCenter]
+    [addNode, notes, selectNode, viewportCenter]
   );
 
   const handleConnect = useCallback(
@@ -545,13 +584,34 @@ function CanvasEditor() {
       { id: "common.undo", onTrigger: undo },
       { id: "common.redo", onTrigger: redo },
       { id: "common.delete", onTrigger: deleteSelection },
-      { id: "canvas.clearSelection", onTrigger: clearSelection },
+      {
+        id: "canvas.clearSelection",
+        onTrigger: () => {
+          // An armed tool takes Escape first: it cancels and leaves the selection.
+          if (isPlacementTool(useCanvasStore.getState().toolMode)) setToolMode("select");
+          else clearSelection();
+        },
+      },
       { id: "canvas.backToGallery", onTrigger: () => navigate("/canvas") },
       { id: "canvas.toolSelect", onTrigger: () => setToolMode("select") },
       { id: "canvas.toolPen", onTrigger: () => setToolMode("pen") },
       { id: "canvas.toolEraser", onTrigger: () => setToolMode("eraser") },
-      { id: "canvas.addTextNode", onTrigger: handleAddTextNode },
-      { id: "canvas.addNoteRef", onTrigger: () => setNotePickerOpen(true) },
+      { id: "canvas.addTextNode", onTrigger: () => setToolMode("textNode") },
+      { id: "canvas.addNoteRef", onTrigger: () => setToolMode("noteRef") },
+      {
+        id: "canvas.placeArmedTool",
+        enabled: isPlacementTool(toolMode),
+        // Enter keeps its own meaning on a focused control: the armed tool's
+        // button places through its click, and any other control just activates.
+        preventDefault: false,
+        onTrigger: (event) => {
+          if (event?.target instanceof Element && event.target.closest(ENTER_OWNING_CONTROLS)) {
+            return;
+          }
+          event?.preventDefault();
+          placeAtViewportCenter();
+        },
+      },
       {
         id: "canvas.editTextNode",
         onTrigger: () => {
@@ -726,7 +786,9 @@ function CanvasEditor() {
           elementsSelectable={!interactivityLocked && toolMode === "select"}
           zoomOnScroll={!interactivityLocked}
           zoomOnPinch={!interactivityLocked}
-          zoomOnDoubleClick={!interactivityLocked}
+          // A double click on the empty Canvas creates a Text Node instead.
+          zoomOnDoubleClick={false}
+          onDoubleClick={handleSurfaceDoubleClick}
           defaultViewport={doc.viewport}
           fitView={!hasMeaningfulViewport(doc) && doc.nodes.length > 0}
         >
@@ -734,6 +796,7 @@ function CanvasEditor() {
           <CanvasDrawingLayer />
         </ReactFlow>
         <DrawingCaptureOverlay surfaceRef={surfaceRef} />
+        <PlacementCaptureOverlay surfaceRef={surfaceRef} onPlace={handlePlace} />
         {/* Right-side column bounded by the canvas edges: the tool stack scrolls
             in short landscape heights while the edge inspector stays visible
             below it (shrink-0), so the two never overlap. */}
@@ -741,8 +804,7 @@ function CanvasEditor() {
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="flex flex-col items-end gap-2">
               <CanvasToolPanel
-                onAddText={handleAddTextNode}
-                onAddNoteRef={() => setNotePickerOpen(true)}
+                onPlaceAtCenter={placeAtViewportCenter}
                 onZoomIn={() => reactFlow.zoomIn()}
                 onZoomOut={() => reactFlow.zoomOut()}
                 onFitView={() => reactFlow.fitView()}
@@ -771,11 +833,7 @@ function CanvasEditor() {
 
       <ConnectToDialog />
 
-      <Modal
-        isOpen={notePickerOpen}
-        onClose={() => setNotePickerOpen(false)}
-        title={t("canvas.addNoteRef")}
-      >
+      <Modal isOpen={notePickerOpen} onClose={closeNotePicker} title={t("canvas.addNoteRef")}>
         <Input
           autoFocus
           value={noteQuery}
