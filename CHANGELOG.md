@@ -5,6 +5,11 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.3] - 2026-11-01
+
+### Fixed
+- Keep the canvas delete confirmation prompt within the fixed-height canvas card, preventing the action buttons from overflowing or wrapping
+
 ## [0.19.2] - 2026-11-01
 
 ### Added
