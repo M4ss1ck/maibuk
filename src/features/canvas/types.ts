@@ -34,6 +34,16 @@ export type NoteRefCanvasNode = BaseCanvasNode & {
 
 export type CanvasNode = LightweightCanvasNode | NoteRefCanvasNode;
 
+export type CanvasToolMode = "select" | "pen" | "eraser" | "textNode" | "noteRef";
+
+/** The tools that place one item and then return to Select. */
+export function isPlacementTool(mode: CanvasToolMode): boolean {
+  return mode === "textNode" || mode === "noteRef";
+}
+
+/** A just-placed Text Node, and the revision it was placed at. */
+export type PristineTextNode = { id: string; revision: number };
+
 export type CanvasEdge = {
   id: string;
   source: string;

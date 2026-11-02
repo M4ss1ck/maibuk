@@ -16,16 +16,21 @@ import {
   parseCanvasDoc,
   type CanvasDocLoadError,
 } from "@/features/canvas/serialization";
+import { CANVAS_TEXT_NODE_MIN_WIDTH } from "@/constants";
 import {
   createDefaultCanvasDoc,
+  isPlacementTool,
   type Canvas,
   type CanvasDoc,
   type CanvasEdge,
   type CanvasNode,
   type CanvasPosition,
   type CanvasStroke,
+  type CanvasToolMode,
   type CanvasViewport,
   type CreateCanvasInput,
+  type LightweightCanvasNode,
+  type PristineTextNode,
   type ReorderCanvasItem,
   type UpdateCanvasInput,
   type UpdateEdgePatch,
@@ -174,6 +179,34 @@ function capHistory(history: CanvasDoc[]): CanvasDoc[] {
   return history.length > HISTORY_LIMIT ? history.slice(history.length - HISTORY_LIMIT) : history;
 }
 
+/** The doc without a node or the Connections that touch it. */
+function docWithoutNode(doc: CanvasDoc, id: string): CanvasDoc {
+  return {
+    ...doc,
+    nodes: doc.nodes.filter((node) => node.id !== id),
+    edges: doc.edges.filter((edge) => edge.source !== id && edge.target !== id),
+  };
+}
+
+/**
+ * The patch that drops a Text Node that has never had text. Placing it never
+ * entered history or the save session, so it leaves nothing behind unless a
+ * commit carried it to the session meanwhile; then its removal must follow.
+ */
+function discardPristineTextNode(state: {
+  doc: CanvasDoc;
+  revision: number;
+  pristineTextNode: PristineTextNode | null;
+}) {
+  const pristine = state.pristineTextNode;
+  if (!pristine) return {};
+  return {
+    doc: docWithoutNode(state.doc, pristine.id),
+    pristineTextNode: null,
+    ...(state.revision === pristine.revision ? {} : { dirty: true, revision: state.revision + 1 }),
+  };
+}
+
 function editorResetState() {
   return {
     current: null,
@@ -182,6 +215,7 @@ function editorResetState() {
     colorPreview: null,
     selectedEdgeId: null,
     editingNodeId: null,
+    pristineTextNode: null as PristineTextNode | null,
     loadState: "idle" as CanvasLoadState,
     saveState: "idle" as CanvasSaveState,
     editorError: null,
@@ -219,6 +253,8 @@ export interface CanvasStoreState {
   selectedEdgeId: string | null;
   /** The Text Node whose rich-text editor is open, if any (keyboard F2 or a double click). */
   editingNodeId: string | null;
+  /** The just-placed Text Node, while it is open and has never had text. */
+  pristineTextNode: PristineTextNode | null;
   loadState: CanvasLoadState;
   saveState: CanvasSaveState;
   editorError: string | null;
@@ -234,7 +270,7 @@ export interface CanvasStoreState {
   liveBaseDoc: CanvasDoc | null;
   /** Bumped when a remote Change replaces the open doc; the Edit Session adopts it as outside content. */
   externalDocNonce: number;
-  toolMode: "select" | "pen" | "eraser";
+  toolMode: CanvasToolMode;
   penWidth: number;
   penColor: string;
   interactivityLocked: boolean;
@@ -247,7 +283,7 @@ export interface CanvasStoreState {
   addStroke: (stroke: CanvasStroke) => void;
   removeStroke: (id: string) => void;
   eraseElements: (strokeIds: string[], nodeIds: string[], edgeIds: string[]) => void;
-  setToolMode: (mode: "select" | "pen" | "eraser") => void;
+  setToolMode: (mode: CanvasToolMode) => void;
   setPenWidth: (width: number) => void;
   setPenColor: (color: string) => void;
   toggleInteractivityLocked: () => void;
@@ -270,6 +306,8 @@ export interface CanvasStoreState {
   resizeNodeLive: (id: string, input: ResizeTextNodeInput) => void;
   endLiveChange: () => void;
   addNode: (node: CanvasNode) => void;
+  /** Add an empty Text Node, open it, and return to Select. It enters history with its first text. */
+  placeTextNode: (node: LightweightCanvasNode) => void;
   updateTextNode: (id: string, patch: UpdateTextNodePatch) => void;
   resizeTextNode: (id: string, input: ResizeTextNodeInput) => void;
   updateNoteRefNode: (id: string, patch: UpdateNoteRefNodePatch) => void;
@@ -358,6 +396,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
       doc,
       current: currentState.current ? { ...currentState.current, ...stored, doc } : null,
       externalDocNonce: currentState.externalDocNonce + 1,
+      pristineTextNode: null,
     }));
   },
 
@@ -476,7 +515,12 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   commit: (next) => {
     const state = get();
     if (state.editorReadOnly || next === state.doc) return;
-    const past = capHistory([...state.past, cloneDoc(state.doc)]);
+    // A pristine node is not history yet: undoing to it would bring back a node
+    // the author never wrote in.
+    const base = state.pristineTextNode
+      ? docWithoutNode(state.doc, state.pristineTextNode.id)
+      : state.doc;
+    const past = capHistory([...state.past, cloneDoc(base)]);
     set({
       doc: next,
       colorPreview: null,
@@ -490,6 +534,11 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
 
   undo: () => {
     const state = get();
+    // With a pristine node open, undo takes back the placement and nothing more.
+    if (state.pristineTextNode) {
+      get().endNodeEdit();
+      return;
+    }
     if (state.editorReadOnly || state.past.length === 0) return;
     const previous = cloneDoc(state.past[state.past.length - 1]);
     set({
@@ -505,6 +554,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   },
 
   redo: () => {
+    if (get().pristineTextNode) get().endNodeEdit();
     const state = get();
     if (state.editorReadOnly || state.future.length === 0) return;
     const next = cloneDoc(state.future[0]);
@@ -547,7 +597,11 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     const state = get();
     if (state.editorReadOnly || !state.liveBaseDoc) return;
     if (!isFinitePosition(input.position)) return;
-    if (typeof input.width !== "number" || !Number.isFinite(input.width) || input.width < 160) {
+    if (
+      typeof input.width !== "number" ||
+      !Number.isFinite(input.width) ||
+      input.width < CANVAS_TEXT_NODE_MIN_WIDTH
+    ) {
       return;
     }
     const node = state.doc.nodes.find((candidate) => candidate.id === id);
@@ -601,10 +655,38 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     get().commit({ ...state.doc, nodes: [...state.doc.nodes, { ...node, id }] });
   },
 
+  placeTextNode: (node) => {
+    const state = get();
+    if (state.editorReadOnly || state.interactivityLocked) return;
+    const doc = state.pristineTextNode
+      ? docWithoutNode(state.doc, state.pristineTextNode.id)
+      : state.doc;
+    set({
+      doc: { ...doc, nodes: [...doc.nodes, node] },
+      pristineTextNode: { id: node.id, revision: state.revision },
+      toolMode: "select",
+      selectedNodeId: node.id,
+      selectedEdgeId: null,
+      editingNodeId: node.id,
+    });
+  },
+
   updateTextNode: (id, patch) => {
     const state = get();
     const node = state.doc.nodes.find((candidate) => candidate.id === id);
     if (!node || node.kind !== "text") return;
+    // The editor saw text, so the node is real now, even if it is blank again:
+    // this commit is what enters it into history and the save session.
+    if (state.pristineTextNode?.id === id && patch.html !== undefined) {
+      get().commit({
+        ...state.doc,
+        nodes: state.doc.nodes.map((candidate) =>
+          candidate.id === id ? { ...node, ...patch } : candidate
+        ),
+      });
+      set({ pristineTextNode: null });
+      return;
+    }
     const textColor = patch.textColor === undefined ? node.textColor : patch.textColor || undefined;
     const backgroundColor =
       patch.backgroundColor === undefined
@@ -667,6 +749,10 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   removeNode: (id) => {
     const state = get();
     if (!state.doc.nodes.some((node) => node.id === id)) return;
+    if (state.pristineTextNode?.id === id) {
+      get().endNodeEdit();
+      return;
+    }
     const removedEdgeIds = new Set(
       state.doc.edges
         .filter((edge) => edge.source === id || edge.target === id)
@@ -762,11 +848,21 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     });
   },
 
-  setToolMode: (toolMode) => set({ toolMode }),
+  setToolMode: (toolMode) =>
+    set((state) => {
+      if (!isPlacementTool(toolMode)) return { toolMode };
+      if (state.interactivityLocked || state.editorReadOnly) return {};
+      // The Edge inspector holds focus and handles its own Escape, and an armed
+      // tool answers Enter and Escape first.
+      return { toolMode, selectedEdgeId: null };
+    }),
   setPenWidth: (penWidth) => set({ penWidth }),
   setPenColor: (penColor) => set({ penColor }),
   toggleInteractivityLocked: () =>
-    set((state) => ({ interactivityLocked: !state.interactivityLocked })),
+    set((state) => ({
+      interactivityLocked: !state.interactivityLocked,
+      toolMode: isPlacementTool(state.toolMode) ? "select" : state.toolMode,
+    })),
 
   openConnectPicker: (nodeId) =>
     set({ connectSourceNodeId: nodeId, selectedNodeId: nodeId, selectedEdgeId: null }),
@@ -817,12 +913,19 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
 
   selectNode: (id) =>
     set((state) => ({
+      ...(state.pristineTextNode?.id === id ? {} : discardPristineTextNode(state)),
       selectedNodeId: id,
       selectedEdgeId: null,
       // Editing follows selection: choosing another node (or nothing) closes the editor.
       editingNodeId: state.editingNodeId === id ? state.editingNodeId : null,
     })),
-  selectEdge: (id) => set({ selectedEdgeId: id, selectedNodeId: null, editingNodeId: null }),
+  selectEdge: (id) =>
+    set((state) => ({
+      ...discardPristineTextNode(state),
+      selectedEdgeId: id,
+      selectedNodeId: null,
+      editingNodeId: null,
+    })),
   beginNodeEdit: (id) =>
     set((state) => {
       const node = state.doc.nodes.find((candidate) => candidate.id === id);
@@ -831,8 +934,19 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
       }
       return { editingNodeId: id, selectedNodeId: id, selectedEdgeId: null };
     }),
-  endNodeEdit: () => set({ editingNodeId: null }),
-  clearSelection: () => set({ selectedNodeId: null, selectedEdgeId: null, editingNodeId: null }),
+  endNodeEdit: () =>
+    set((state) => ({
+      ...discardPristineTextNode(state),
+      selectedNodeId: state.pristineTextNode ? null : state.selectedNodeId,
+      editingNodeId: null,
+    })),
+  clearSelection: () =>
+    set((state) => ({
+      ...discardPristineTextNode(state),
+      selectedNodeId: null,
+      selectedEdgeId: null,
+      editingNodeId: null,
+    })),
   deleteSelection: () => {
     const { selectedNodeId, selectedEdgeId } = get();
     if (selectedNodeId) get().removeNode(selectedNodeId);

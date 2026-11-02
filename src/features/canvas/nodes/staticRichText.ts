@@ -3,6 +3,24 @@ import DOMPurify from "dompurify";
 const CANVAS_LINK_URI =
   /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|maibuk):|[^a-z]|[-a-z+.]+(?:[^-a-z+.:]|$))/i;
 
+const BLANK_TEXT_TAGS = new Set(
+  "P BR DIV SPAN H1 H2 H3 H4 H5 H6 UL OL LI BLOCKQUOTE STRONG B EM I U S CODE PRE MARK A".split(" ")
+);
+
+/**
+ * Whether Text Node HTML holds nothing an author could see: no text beyond
+ * whitespace, and only elements that show nothing on their own. An element not
+ * on the list (an image, a rule, a table) counts as content, so a node is never
+ * treated as empty by mistake.
+ */
+export function isBlankTextNodeHtml(html: string): boolean {
+  const { body } = new DOMParser().parseFromString(html, "text/html");
+  if (body.textContent?.trim()) return false;
+  return Array.from(body.querySelectorAll("*")).every((element) =>
+    BLANK_TEXT_TAGS.has(element.tagName)
+  );
+}
+
 /** Sanitize stored canvas node HTML with the canvas link-URI policy. */
 function sanitizeNodeHtml(html: string): string {
   return DOMPurify.sanitize(html, {

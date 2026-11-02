@@ -7,6 +7,14 @@ export const REPOSITORY = "M4ss1ck/maibuk";
 export const DOWNLOAD_PAGE = `https://github.com/${REPOSITORY}/releases`;
 
 export const CANVAS_TEXT_NODE_DEFAULT_WIDTH = 288;
+export const CANVAS_TEXT_NODE_MIN_WIDTH = 160;
+/** Horizontal travel, in screen pixels, that turns a Text Node placement click into a drag. */
+export const CANVAS_PLACEMENT_DRAG_THRESHOLD = 6;
+export const CANVAS_PLACEMENT_DRAG_THRESHOLD_COARSE = 16;
+/** A pointer still within the threshold after this long is a click, however it moves later. */
+export const CANVAS_PLACEMENT_DRAG_WINDOW_MS = 500;
+/** How far a keyboard placement steps away from a spot another item already holds. */
+export const CANVAS_PLACEMENT_OFFSET = 24;
 // Matches the Text Node's `min-h-24` (6rem). Used only to give React Flow a
 // starting height so a Text Node renders visible before it is measured; a
 // hidden node cannot receive focus when its editor opens.

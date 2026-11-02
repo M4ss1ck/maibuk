@@ -342,7 +342,8 @@
     "nodeActions": "Node actions",
     "undo": "Undo",
     "redo": "Redo",
-    "newTextNode": "New idea",
+    "textNodePlaceholder": "Type something…",
+    "placeArmedTool": "Place at the center of the view",
     "tools": "Tools",
     "toolSelect": "Select",
     "toolPen": "Pen",
@@ -1833,11 +1834,11 @@
         },
         "text-node": {
           "title": "Text Nodes",
-          "body": "Add a Text Node: a block of rich text you can place anywhere on the Canvas."
+          "body": "Add a Text Node, then click where it goes, or drag to set its width. Double-clicking the empty Canvas also makes one. It's a block of rich text you can place anywhere."
         },
         "note-ref": {
           "title": "Note References",
-          "body": "A Note Reference stands for one of your Notes and opens it. If that Note is deleted, the reference stays as a Missing Note Reference."
+          "body": "Add a Note Reference, click a spot, and choose a Note. It stands for that Note and opens it. If the Note is deleted, the reference stays as a Missing Note Reference."
         },
         "pen": {
           "title": "Drawing",

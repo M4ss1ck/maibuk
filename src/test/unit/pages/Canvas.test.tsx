@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useBoundShortcutStore } from "@/lib/bound-shortcuts";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => {
     saveDoc: vi.fn().mockResolvedValue(null),
     replaceCorruptDocWithDefault: vi.fn().mockResolvedValue(undefined),
     addNode: vi.fn(),
+    placeTextNode: vi.fn(),
     addEdge: vi.fn(),
     updateEdge: vi.fn(),
     updateTextNode: vi.fn(),
@@ -49,6 +50,7 @@ const mocks = vi.hoisted(() => {
     actions,
     flowActions,
     state,
+    notes: [] as Array<{ id: string; title: string }>,
     flowProps: { current: null as Record<string, unknown> | null },
   };
 });
@@ -63,7 +65,7 @@ vi.mock("../../../features/canvas/store", async (importOriginal) => {
 
 vi.mock("../../../features/notes", () => ({
   useNoteStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ notes: [], loadNotes: mocks.actions.loadNotes }),
+    selector({ notes: mocks.notes, loadNotes: mocks.actions.loadNotes }),
 }));
 
 vi.mock("../../../features/books/store", () => ({
@@ -162,6 +164,7 @@ describe("Canvas page", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.flowProps.current = null;
+    mocks.notes = [];
     readyState();
   });
 
@@ -172,6 +175,7 @@ describe("Canvas page", () => {
   });
 
   it("lists the canvas tool shortcuts as bound once the canvas is ready", () => {
+    Object.assign(mocks.state, { toolMode: "textNode" });
     renderCanvas();
 
     expect(boundIds()).toEqual(
@@ -181,6 +185,7 @@ describe("Canvas page", () => {
         "canvas.toolEraser",
         "canvas.addTextNode",
         "canvas.addNoteRef",
+        "canvas.placeArmedTool",
         "canvas.editTextNode",
         "common.zoomIn",
         "common.zoomOut",
@@ -188,6 +193,16 @@ describe("Canvas page", () => {
         "canvas.lock",
       ])
     );
+  });
+
+  it("binds the Enter placement only while a placement tool is armed", () => {
+    const { unmount } = renderCanvas();
+    expect(boundIds()).not.toContain("canvas.placeArmedTool");
+    unmount();
+
+    Object.assign(mocks.state, { toolMode: "noteRef" });
+    renderCanvas();
+    expect(boundIds()).toContain("canvas.placeArmedTool");
   });
 
   it("disables built-in deletion and synchronizes React Flow node selection to the store", () => {
@@ -210,19 +225,13 @@ describe("Canvas page", () => {
     expect(mocks.actions.selectEdge).not.toHaveBeenCalled();
   });
 
-  it("adds a roomy html text node and selects it from the floating tool panel", () => {
+  it("arms the Text Node tool from the floating panel without placing anything", () => {
     renderCanvas();
     fireEvent.click(screen.getByRole("button", { name: "canvas.addTextNode" }));
-    const addedNode = mocks.actions.addNode.mock.calls[0][0];
-    expect(addedNode).toEqual(
-      expect.objectContaining({
-        kind: "text",
-        html: "<p>canvas.newTextNode</p>",
-        width: 288,
-      })
-    );
-    expect(mocks.actions.selectNode).toHaveBeenCalledWith(addedNode.id);
-    expect(mocks.actions.beginNodeEdit).toHaveBeenCalledWith(addedNode.id);
+
+    expect(mocks.actions.setToolMode).toHaveBeenCalledWith("textNode");
+    expect(mocks.actions.placeTextNode).not.toHaveBeenCalled();
+    expect(mocks.actions.addNode).not.toHaveBeenCalled();
   });
 
   it("records a keyboard arrow key as one live move so the node persists", () => {
@@ -273,6 +282,225 @@ describe("Canvas page", () => {
 
     expect(mocks.actions.beginNodeEdit).toHaveBeenCalledWith("node");
     node.remove();
+  });
+
+  describe("placement tools", () => {
+    // The mocked store has no reducer, so the tool a key sets is read back from the mocked state.
+    function armTool(toolMode: "textNode" | "noteRef") {
+      Object.assign(mocks.state, { toolMode });
+    }
+
+    beforeEach(() => {
+      // readyState selects an edge, and its inspector then takes focus on mount. The keys
+      // under test are pressed with focus on the page, so they start with nothing selected.
+      Object.assign(mocks.state, { selectedEdgeId: null });
+    });
+
+    function paneElement() {
+      const pane = document.createElement("div");
+      pane.className = "react-flow__pane";
+      return pane;
+    }
+
+    function doubleClickSurface(target: Element, clientX = 40, clientY = 60) {
+      const onDoubleClick = mocks.flowProps.current?.onDoubleClick as (event: {
+        target: Element;
+        clientX: number;
+        clientY: number;
+      }) => void;
+      act(() => onDoubleClick({ target, clientX, clientY }));
+    }
+
+    it("arms Text Node with T and Note Reference with N from the keyboard", async () => {
+      const user = userEvent.setup();
+      renderCanvas();
+
+      await user.keyboard("t");
+      expect(mocks.actions.setToolMode).toHaveBeenCalledWith("textNode");
+
+      await user.keyboard("n");
+      expect(mocks.actions.setToolMode).toHaveBeenCalledWith("noteRef");
+    });
+
+    it("places an armed Text Node at the view center with the second Enter", async () => {
+      const user = userEvent.setup();
+      armTool("textNode");
+      renderCanvas();
+
+      await user.keyboard("{Enter}");
+
+      expect(mocks.actions.placeTextNode).toHaveBeenCalledTimes(1);
+      const placed = mocks.actions.placeTextNode.mock.calls[0][0];
+      expect(placed).toEqual(
+        expect.objectContaining({
+          id: expect.any(String),
+          kind: "text",
+          html: "<p></p>",
+          // The view center (0, 0) is held by the node at (0, 0), so the spot steps out by 24.
+          position: { x: 24, y: 24 },
+        })
+      );
+      expect(placed).not.toHaveProperty("width");
+    });
+
+    it("leaves Enter to a focused toolbar button while a tool is armed", async () => {
+      const user = userEvent.setup();
+      armTool("textNode");
+      renderCanvas();
+
+      screen.getByRole("button", { name: "canvas.zoomIn" }).focus();
+      await user.keyboard("{Enter}");
+
+      expect(mocks.flowActions.zoomIn).toHaveBeenCalledTimes(1);
+      expect(mocks.actions.placeTextNode).not.toHaveBeenCalled();
+    });
+
+    it("leaves Enter to a focused control the Canvas does not know about", async () => {
+      const user = userEvent.setup();
+      armTool("textNode");
+      renderCanvas();
+      const tab = document.createElement("div");
+      tab.setAttribute("role", "tab");
+      tab.tabIndex = 0;
+      document.body.append(tab);
+
+      tab.focus();
+      await user.keyboard("{Enter}");
+      tab.remove();
+
+      expect(mocks.actions.placeTextNode).not.toHaveBeenCalled();
+    });
+
+    it("does nothing on Enter while Select is active", async () => {
+      const user = userEvent.setup();
+      renderCanvas();
+
+      await user.keyboard("{Enter}");
+
+      expect(mocks.actions.placeTextNode).not.toHaveBeenCalled();
+    });
+
+    it("cancels an armed tool with Escape and keeps the selection", async () => {
+      const user = userEvent.setup();
+      armTool("textNode");
+      renderCanvas();
+
+      await user.keyboard("{Escape}");
+
+      expect(mocks.actions.setToolMode).toHaveBeenCalledWith("select");
+      expect(mocks.actions.clearSelection).not.toHaveBeenCalled();
+    });
+
+    it("clears the selection with Escape when no tool is armed", async () => {
+      const user = userEvent.setup();
+      renderCanvas();
+
+      await user.keyboard("{Escape}");
+
+      expect(mocks.actions.clearSelection).toHaveBeenCalledTimes(1);
+    });
+
+    it("places a Text Node where the pane is double clicked in Select", () => {
+      renderCanvas();
+
+      doubleClickSurface(paneElement(), 40, 60);
+
+      expect(mocks.actions.placeTextNode).toHaveBeenCalledTimes(1);
+      const placed = mocks.actions.placeTextNode.mock.calls[0][0];
+      expect(placed).toEqual(
+        expect.objectContaining({ kind: "text", html: "<p></p>", position: { x: 40, y: 60 } })
+      );
+      expect(placed).not.toHaveProperty("width");
+    });
+
+    it("ignores a double click on something other than the pane", () => {
+      renderCanvas();
+
+      doubleClickSurface(document.createElement("div"));
+
+      expect(mocks.actions.placeTextNode).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      "pen",
+      "eraser",
+    ] as const)("ignores a pane double click while %s is active", (mode) => {
+      Object.assign(mocks.state, { toolMode: mode });
+      renderCanvas();
+
+      doubleClickSurface(paneElement());
+
+      expect(mocks.actions.placeTextNode).not.toHaveBeenCalled();
+    });
+
+    it("ignores a pane double click while the canvas is locked", () => {
+      Object.assign(mocks.state, { interactivityLocked: true });
+      renderCanvas();
+
+      doubleClickSurface(paneElement());
+
+      expect(mocks.actions.placeTextNode).not.toHaveBeenCalled();
+    });
+
+    it("ignores a pane double click while the canvas is read-only", () => {
+      Object.assign(mocks.state, { editorReadOnly: true });
+      renderCanvas();
+
+      doubleClickSurface(paneElement());
+
+      expect(mocks.actions.placeTextNode).not.toHaveBeenCalled();
+    });
+
+    it("drops back to Select when the canvas turns read-only with a tool armed", () => {
+      Object.assign(mocks.state, { toolMode: "textNode", editorReadOnly: true });
+      renderCanvas();
+
+      expect(mocks.actions.setToolMode).toHaveBeenCalledWith("select");
+    });
+
+    it("opens the note picker on Enter and places the chosen note there", async () => {
+      const user = userEvent.setup();
+      mocks.notes = [{ id: "note-1", title: "Chapter notes" }];
+      armTool("noteRef");
+      renderCanvas();
+
+      await user.keyboard("{Enter}");
+
+      const dialog = await screen.findByRole("dialog", { name: "canvas.addNoteRef" });
+      expect(mocks.actions.setToolMode).toHaveBeenCalledWith("select");
+
+      await user.click(within(dialog).getByRole("option", { name: "Chapter notes" }));
+
+      expect(mocks.actions.addNode).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: expect.any(String),
+          kind: "noteRef",
+          noteId: "note-1",
+          label: "Chapter notes",
+          position: { x: 24, y: 24 },
+        })
+      );
+      const added = mocks.actions.addNode.mock.calls[0][0];
+      expect(mocks.actions.selectNode).toHaveBeenCalledWith(added.id);
+      expect(mocks.actions.placeTextNode).not.toHaveBeenCalled();
+    });
+
+    it("places nothing when the note picker is cancelled with Escape", async () => {
+      const user = userEvent.setup();
+      mocks.notes = [{ id: "note-1", title: "Chapter notes" }];
+      armTool("noteRef");
+      renderCanvas();
+
+      await user.keyboard("{Enter}");
+      await screen.findByRole("dialog", { name: "canvas.addNoteRef" });
+      await user.keyboard("{Escape}");
+
+      await waitFor(() =>
+        expect(screen.queryByRole("dialog", { name: "canvas.addNoteRef" })).not.toBeInTheDocument()
+      );
+      expect(mocks.actions.addNode).not.toHaveBeenCalled();
+      expect(mocks.actions.placeTextNode).not.toHaveBeenCalled();
+    });
   });
 
   describe("Connect to…", () => {
@@ -498,6 +726,10 @@ describe("Canvas page", () => {
     expect(mocks.flowProps.current?.elementsSelectable).toBe(false);
     expect(mocks.flowProps.current?.zoomOnScroll).toBe(false);
     expect(mocks.flowProps.current?.zoomOnPinch).toBe(false);
+  });
+
+  it("keeps React Flow's own double-click zoom off so a double click can add a Text Node", () => {
+    renderCanvas();
     expect(mocks.flowProps.current?.zoomOnDoubleClick).toBe(false);
   });
 

@@ -254,6 +254,14 @@ option {
   white-space: pre-wrap;
 }
 
+.canvas-node-content p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--color-muted-foreground);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
 .canvas-node-content p {
   margin: 0;
 }

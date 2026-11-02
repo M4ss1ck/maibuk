@@ -133,16 +133,22 @@ test.describe("tools @wf:canvas-tools @sc:canvas.toolSelect @sc:canvas.toolPen @
   });
 });
 
-test.describe("adding nodes @wf:canvas-tools @sc:canvas.addTextNode @sc:canvas.addNoteRef", () => {
-  test("T adds a Text Node whose editor takes the keys, so letters type text", async ({ page }) => {
+test.describe("adding nodes @wf:canvas-tools @sc:canvas.addTextNode @sc:canvas.addNoteRef @sc:canvas.placeArmedTool", () => {
+  test("T arms a Text Node and Enter places it, whose editor takes the keys, so letters type text", async ({
+    page,
+  }) => {
     await openMap(page);
     await expect(textNodes(page)).toHaveCount(2);
 
     await page.keyboard.press("t");
+    await capture(page, "canvas-text-tool-armed");
+    await expect(textNodes(page)).toHaveCount(2);
+    await page.keyboard.press("Enter");
     await expect(textNodes(page)).toHaveCount(3);
 
     const editor = page.locator(".react-flow__node-text .ProseMirror");
     await expect(editor).toBeFocused();
+    await capture(page, "canvas-new-text-node");
     // "pen" would switch tools anywhere else; inside the node it is text.
     await page.keyboard.type("pen");
     await expect(editor).toContainText("pen");
@@ -153,11 +159,15 @@ test.describe("adding nodes @wf:canvas-tools @sc:canvas.addTextNode @sc:canvas.a
     await page.keyboard.press("Escape");
   });
 
-  test("N opens the note picker and Enter adds a Note Reference", async ({ page }) => {
+  test("N arms a Note Reference, Enter opens the note picker, and choosing a Note adds it", async ({
+    page,
+  }) => {
     await openMap(page);
     await expect(noteRefs(page)).toHaveCount(2);
 
     await page.keyboard.press("n");
+    await expect(noteRefs(page)).toHaveCount(2);
+    await page.keyboard.press("Enter");
     const dialog = page.getByRole("dialog", { name: "Add note reference" });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByPlaceholder("Search notes…")).toBeFocused();
@@ -172,10 +182,94 @@ test.describe("adding nodes @wf:canvas-tools @sc:canvas.addTextNode @sc:canvas.a
     await expect(dialog).toBeHidden();
     await expect(noteRefs(page)).toHaveCount(3);
   });
+
+  test("Enter places an armed Text Node at the view's center, and a second one steps 24px away from a taken spot @sc:canvas.placeArmedTool", async ({
+    page,
+  }) => {
+    await openMap(page);
+    await expect(textNodes(page)).toHaveCount(2);
+
+    await page.keyboard.press("t");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("Lumen");
+    await page.keyboard.press("Escape");
+    await expect(textNodes(page)).toHaveCount(3);
+
+    await page.keyboard.press("t");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("Quill");
+    await page.keyboard.press("Escape");
+    await expect(textNodes(page)).toHaveCount(4);
+
+    const surface = await page.getByRole("main").boundingBox();
+    const first = await textNodes(page).filter({ hasText: "Lumen" }).boundingBox();
+    const second = await textNodes(page).filter({ hasText: "Quill" }).boundingBox();
+    if (!surface || !first || !second) throw new Error("placed Text Nodes are not visible");
+
+    // Placed with its top-left at the center of the view, within 3px.
+    expect(Math.abs(first.x - (surface.x + surface.width / 2))).toBeLessThanOrEqual(3);
+    expect(Math.abs(first.y - (surface.y + surface.height / 2))).toBeLessThanOrEqual(3);
+
+    // The offset is 24 Canvas units, which is 24 * zoom on screen.
+    const viewport = (await page.locator(".react-flow__viewport").getAttribute("style")) ?? "";
+    const zoom = Number(/scale\(([\d.]+)\)/.exec(viewport)?.[1] ?? "NaN");
+    expect(Number.isFinite(zoom)).toBe(true);
+    expect(Math.abs(second.x - first.x - 24 * zoom)).toBeLessThanOrEqual(3);
+    expect(Math.abs(second.y - first.y - 24 * zoom)).toBeLessThanOrEqual(3);
+  });
+
+  test("Escape cancels an armed Text Node: the tool returns to Select and Enter places nothing @sc:canvas.clearSelection", async ({
+    page,
+  }) => {
+    await openMap(page);
+    await expect(textNodes(page)).toHaveCount(2);
+    const select = page.getByRole("button", { name: "Select", exact: true });
+    const addText = page.getByRole("button", { name: "Add text node", exact: true });
+
+    await page.keyboard.press("t");
+    await expect(addText).toHaveAttribute("aria-pressed", "true");
+    await page.keyboard.press("Escape");
+    await expect(select).toHaveAttribute("aria-pressed", "true");
+    await expect(addText).toHaveAttribute("aria-pressed", "false");
+
+    await page.keyboard.press("Enter");
+    await expect(textNodes(page)).toHaveCount(2);
+  });
+
+  test("L while a Text Node is armed returns the tool to Select and places nothing @sc:canvas.lock", async ({
+    page,
+  }) => {
+    await openMap(page);
+    await expect(textNodes(page)).toHaveCount(2);
+    await page.keyboard.press("t");
+    await page.keyboard.press("l");
+    await expect(page.getByRole("button", { name: "Select", exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    await page.keyboard.press("Enter");
+    await expect(textNodes(page)).toHaveCount(2);
+  });
+
+  test("an armed Text Node left empty removes itself, and Control+z does not bring it back @sc:common.undo", async ({
+    page,
+  }) => {
+    await openMap(page);
+    await expect(textNodes(page)).toHaveCount(2);
+
+    await page.keyboard.press("t");
+    await page.keyboard.press("Enter");
+    await expect(textNodes(page)).toHaveCount(3);
+    await page.keyboard.press("Escape");
+    await expect(textNodes(page)).toHaveCount(2);
+
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect(textNodes(page)).toHaveCount(2);
+  });
 });
 
-test.describe("Text Node @wf:canvas-text-node @sc:canvas.editTextNode", () => {
-  test("T adds a Text Node, typing persists through Escape, and F2 reopens it", async ({
+test.describe("Text Node @wf:canvas-text-node @sc:canvas.editTextNode @sc:canvas.placeArmedTool", () => {
+  test("T arms a Text Node, Enter places it, typing persists through Escape, and F2 reopens it", async ({
     page,
   }) => {
     await openMap(page);
@@ -184,6 +278,7 @@ test.describe("Text Node @wf:canvas-text-node @sc:canvas.editTextNode", () => {
     // and silently dropped.
     await expect(textNodes(page)).toHaveCount(2);
     await page.keyboard.press("t");
+    await page.keyboard.press("Enter");
     await expect(textNodes(page)).toHaveCount(3);
 
     const editor = page.locator(".react-flow__node-text .ProseMirror");
@@ -221,15 +316,39 @@ test.describe("Text Node @wf:canvas-text-node @sc:canvas.editTextNode", () => {
     await expect(textNodes(page)).toHaveCount(2);
     await expect(storm).not.toContainText("Storm watch");
   });
+
+  test("a Text Node that once had text stays when cleared, and shows its placeholder @sc:canvas.editTextNode", async ({
+    page,
+  }) => {
+    await openMap(page);
+    await expect(textNodes(page)).toHaveCount(2);
+    await page.keyboard.press("t");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("Draft");
+    await page.keyboard.press("Escape");
+    await expect(textNodes(page)).toHaveCount(3);
+
+    // Tab to the new node (its id is random, so it is found by its text), then F2.
+    await tabTo(page, textNodes(page).filter({ hasText: "Draft" }), { max: 60 });
+    await page.keyboard.press("F2");
+    await expect(page.locator(".react-flow__node-text .ProseMirror")).toBeFocused();
+    await page.keyboard.press("Control+a");
+    await page.keyboard.press("Backspace");
+    await page.keyboard.press("Escape");
+
+    await expect(textNodes(page)).toHaveCount(3);
+    await expect(page.getByText("Type something…", { exact: true })).toBeVisible();
+  });
 });
 
-test.describe("Note Reference @wf:canvas-note-ref @sc:canvas.addNoteRef", () => {
+test.describe("Note Reference @wf:canvas-note-ref @sc:canvas.addNoteRef @sc:canvas.placeArmedTool", () => {
   test("N searches notes and adds a reference that opens its Note", async ({ page }) => {
     await openMap(page);
     // Wait for the loaded Canvas (and its seeded Note References) before the N
     // shortcut, which is unbound until then.
     await expect(noteRefs(page)).toHaveCount(2);
     await page.keyboard.press("n");
+    await page.keyboard.press("Enter");
     const dialog = page.getByRole("dialog", { name: "Add note reference" });
     // Wait for the picker and its search input to be ready before typing, so
     // the query lands in the input instead of the Canvas.
@@ -288,6 +407,25 @@ test.describe("Note Reference @wf:canvas-note-ref @sc:canvas.addNoteRef", () => 
     await expect(loading).toHaveCount(0);
   });
 
+  test("Escape on the note picker after an armed Note Reference places nothing", async ({
+    page,
+  }) => {
+    await openMap(page);
+    await expect(noteRefs(page)).toHaveCount(2);
+    await page.keyboard.press("n");
+    await page.keyboard.press("Enter");
+    const dialog = page.getByRole("dialog", { name: "Add note reference" });
+    await expect(dialog.getByPlaceholder("Search notes…")).toBeFocused();
+
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(noteRefs(page)).toHaveCount(2);
+    await expect(page.getByRole("button", { name: "Select", exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+  });
+
   test("a reference whose Note is gone reads Missing note and cannot open", async ({ page }) => {
     await openMap(page);
     const missing = flowNode(page, "ref-missing");
@@ -307,6 +445,7 @@ test.describe("no notes @wf:canvas-note-ref", () => {
     await expectCanvasReady(page);
 
     await page.keyboard.press("n");
+    await page.keyboard.press("Enter");
     await expect(page.getByRole("dialog", { name: "Add note reference" })).toBeVisible();
     await expect(page.getByText("No notes available")).toBeVisible();
   });
@@ -400,7 +539,10 @@ test.describe("no connect targets @wf:canvas-connect", () => {
     await page.keyboard.press("Enter");
     await expectCanvasReady(page);
 
+    // One Text Node with text, so it stays and is the selected node to connect from.
     await page.keyboard.press("t");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("Lone");
     await page.keyboard.press("Escape");
 
     const connect = page.getByRole("button", { name: "Connect to…" });
