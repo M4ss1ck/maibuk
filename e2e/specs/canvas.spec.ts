@@ -141,12 +141,14 @@ test.describe("adding nodes @wf:canvas-tools @sc:canvas.addTextNode @sc:canvas.a
     await expect(textNodes(page)).toHaveCount(2);
 
     await page.keyboard.press("t");
+    await capture(page, "canvas-text-tool-armed");
     await expect(textNodes(page)).toHaveCount(2);
     await page.keyboard.press("Enter");
     await expect(textNodes(page)).toHaveCount(3);
 
     const editor = page.locator(".react-flow__node-text .ProseMirror");
     await expect(editor).toBeFocused();
+    await capture(page, "canvas-new-text-node");
     // "pen" would switch tools anywhere else; inside the node it is text.
     await page.keyboard.type("pen");
     await expect(editor).toContainText("pen");
