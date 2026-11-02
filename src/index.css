@@ -48,9 +48,6 @@
   --color-update-text: #92400e;
   --color-update-border: #f59e0b;
 
-  /* Preview surface */
-  --color-preview-bg: #d6d3d1;
-
   /** Table */
   --color-table-border: #d6d3d1;
   --color-table-header: #f5f5f4;
@@ -84,22 +81,22 @@
   --color-foreground: #fafaf9;
   --color-muted: #44403c;
   --color-muted-foreground: #a8a29e;
-  --color-border: #292524;
+  --color-border: #36312d;
   --color-card: #292524;
   --color-card-foreground: #fafaf9;
   --color-destructive: #f87171;
   --color-destructive-hover: #ef4444;
   --color-success: #4ade80;
 
-  --color-table-border: #3f3a36;
+  --color-table-border: #36312d;
   --color-table-header: #2f2a26;
 
   /* Status badges */
   --color-status-draft-bg: #44403c;
   --color-status-draft-text: #a8a29e;
-  --color-status-progress-bg: rgba(37, 99, 235, 0.2);
+  --color-status-progress-bg: rgba(37, 99, 235, 0.15);
   --color-status-progress-text: #93c5fd;
-  --color-status-complete-bg: rgba(22, 163, 74, 0.2);
+  --color-status-complete-bg: rgba(22, 163, 74, 0.15);
   --color-status-complete-text: #86efac;
   --color-status-archived-bg: rgba(124, 58, 237, 0.2);
   --color-status-archived-text: #c4b5fd;
@@ -108,7 +105,8 @@
   --color-info-bg: rgba(37, 99, 235, 0.15);
   --color-info-text: #bfdbfe;
   --color-info-link: #93c5fd;
-  --color-warning-bg: rgba(217, 119, 6, 0.15);
+  /* Opaque like light: the update chip shares it and covers the Settings wordmark. */
+  --color-warning-bg: #382714;
   --color-warning-text: #fde68a;
   --color-feedback-error-bg: rgba(220, 38, 38, 0.15);
   --color-feedback-error-text: #fecaca;
@@ -116,12 +114,9 @@
   --color-feedback-success-text: #bbf7d0;
   --color-feedback-progress-bg: rgba(37, 99, 235, 0.15);
   --color-feedback-progress-text: #bfdbfe;
-  --color-update-bg: #451a03;
-  --color-update-text: #fcd34d;
+  --color-update-bg: #382714;
+  --color-update-text: #fde68a;
   --color-update-border: #b45309;
-
-  /* Preview surface */
-  --color-preview-bg: #292524;
 }
 
 /* Base styles */
