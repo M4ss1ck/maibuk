@@ -10,6 +10,7 @@ import { useBookStore } from "@/features/books/store";
 import { requestEditorReveal } from "@/features/plugins/editor-host";
 import type { PluginRevealRange } from "@/features/plugins/types";
 import { NotesList, NoteEditor, EmptyNotes } from "@/components/notes";
+import { SpinnerIcon } from "@/components/icons";
 import { DictationBar } from "@/components/dictation";
 import { duplicateNoteInput } from "@/components/notes/notes-list-model";
 import { useSettingsStore } from "@/features/settings/store";
@@ -22,6 +23,30 @@ import { useShortcuts } from "@/lib/shortcuts";
 import { droppedTextToEditorHtml } from "@/features/markdown";
 import type { DroppedTextFile } from "@/hooks/useTextFileDrop";
 import type { ListDropTarget } from "@/lib/drop-target";
+
+const PAINT_WAIT_LIMIT_MS = 100;
+
+/**
+ * Runs `run` once the screen has had the chance to paint. A frame callback runs
+ * before its paint, so the timeout lands after it. A hidden window gets no
+ * frames, so a timer stands in for them. Returns the cancel.
+ */
+function afterNextPaint(run: () => void): () => void {
+  let timer = 0;
+  const frame = requestAnimationFrame(() => {
+    clearTimeout(fallback);
+    timer = window.setTimeout(run, 0);
+  });
+  const fallback = window.setTimeout(() => {
+    cancelAnimationFrame(frame);
+    run();
+  }, PAINT_WAIT_LIMIT_MS);
+  return () => {
+    cancelAnimationFrame(frame);
+    clearTimeout(fallback);
+    clearTimeout(timer);
+  };
+}
 
 export function Notes() {
   const { t } = useTranslation();
@@ -50,6 +75,11 @@ export function Notes() {
     to: string;
     label: string;
   } | null>(null);
+  // The route's Note once it has been read. Until then the store's currentNote
+  // may be a Note from an earlier visit, and its Editor must not mount.
+  const [openedNoteId, setOpenedNoteId] = useState<string | null>(null);
+  const isOpening = Boolean(noteId) && openedNoteId !== noteId;
+  const openNote = isOpening ? null : currentNote;
   const [titleBarSlot, setTitleBarSlot] = useState<HTMLElement | null>(null);
   // A Library Search text row opened this note: the handoff Find and Replace
   // opens with, cleared once the editor applied it.
@@ -80,15 +110,28 @@ export function Notes() {
   }, [location.state]);
 
   // Open the note named in the route. Fall back to the gallery if it is gone.
+  // The Editor's mount blocks the thread for as long as the Note is long, so the
+  // read that starts it waits for the loading state to reach the screen.
   useEffect(() => {
     if (!noteId) return;
-    void loadNote(noteId).then(() => {
-      if (!useNoteStore.getState().currentNote) {
-        navigate("/notes", { replace: true });
-        return;
-      }
-      setLastNoteId(noteId);
+    let moved = false;
+    const cancelWait = afterNextPaint(() => {
+      void loadNote(noteId).then(() => {
+        if (moved) return;
+        // A read that failed leaves the previous Note in the store.
+        if (useNoteStore.getState().currentNote?.id !== noteId) {
+          navigate("/notes", { replace: true });
+          return;
+        }
+        setOpenedNoteId(noteId);
+        setLastNoteId(noteId);
+      });
     });
+    return () => {
+      moved = true;
+      cancelWait();
+      setOpenedNoteId(null);
+    };
   }, [noteId, loadNote, navigate, setLastNoteId]);
 
   // Scroll to heading on navigation - handles repeated warm note-heading
@@ -97,7 +140,7 @@ export function Notes() {
     if (!noteId) return;
     // Wait for the note to actually be loaded, or the heading is not in the DOM yet
     // (cold deep link mounts this effect before loadNote resolves).
-    if (currentNote?.id !== noteId) return;
+    if (openNote?.id !== noteId) return;
     const scrollToHeadingId = (location.state as { scrollToHeadingId?: string } | null)
       ?.scrollToHeadingId;
     if (!scrollToHeadingId) return;
@@ -109,17 +152,17 @@ export function Notes() {
         });
       });
     });
-  }, [location.key, currentNote?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [location.key, openNote?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // A Plugin's `navigation.openEntity(..., reveal)` lands the caret on its spot
   // once this Note's editor has the content loaded.
   useEffect(() => {
     if (!noteId) return;
-    if (currentNote?.id !== noteId) return;
+    if (openNote?.id !== noteId) return;
     const reveal = (location.state as { reveal?: PluginRevealRange } | null)?.reveal;
     if (!reveal) return;
     requestEditorReveal({ kind: "note", id: noteId }, reveal);
-  }, [location.key, location.state, noteId, currentNote?.id]);
+  }, [location.key, location.state, noteId, openNote?.id]);
 
   // A Library Search text row opened this note: Find and Replace opens with
   // its query and the switches the matches were counted with. The switches
@@ -128,7 +171,7 @@ export function Notes() {
   // and any other keys, so Back/Forward entries carry none and never reopen.
   useEffect(() => {
     if (!noteId) return;
-    if (currentNote?.id !== noteId) return;
+    if (openNote?.id !== noteId) return;
     const handoff = (location.state as { searchHandoff?: SearchHandoff } | null)?.searchHandoff;
     if (!handoff) return;
     useSearchSwitchesStore.setState({
@@ -142,7 +185,7 @@ export function Notes() {
       replace: true,
       state: Object.keys(rest).length > 0 ? rest : null,
     });
-  }, [location.state, location.pathname, noteId, currentNote?.id, navigate]);
+  }, [location.state, location.pathname, noteId, openNote?.id, navigate]);
 
   // The toolbar clears an applied handoff through `onHandoffApplied`, once its
   // panel has the query: clearing on note match instead would drop a handoff
@@ -151,10 +194,10 @@ export function Notes() {
   // nothing to reopen.
   const handleHandoffApplied = useCallback(() => setFindHandoff(null), []);
   useEffect(() => {
-    if (findHandoff && currentNote && currentNote.id !== findHandoff.noteId) {
+    if (findHandoff && openNote && openNote.id !== findHandoff.noteId) {
       setFindHandoff(null);
     }
-  }, [findHandoff, currentNote]);
+  }, [findHandoff, openNote]);
 
   useShortcuts([
     {
@@ -242,19 +285,19 @@ export function Notes() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* the note title bar portals here so it spans the whole app width */}
-      <div ref={setTitleBarSlot} className={currentNote ? "contents" : "hidden"} />
+      <div ref={setTitleBarSlot} className={openNote ? "contents" : "hidden"} />
       <div className="flex flex-1 min-h-0 overflow-hidden">
         <section
           data-focus-pane="notes-sidebar"
           tabIndex={-1}
           aria-label={t("panes.notesSidebar")}
-          className={`h-full relative shrink-0 max-w-full ${currentNote ? "hidden md:flex" : "flex"} flex-col`}
+          className={`h-full relative shrink-0 max-w-full ${openNote || isOpening ? "hidden md:flex" : "flex"} flex-col`}
           style={{ width: `${notesSidebarWidth}px` }}
         >
           <NotesList
             notes={notes}
             books={books}
-            currentNoteId={currentNote?.id ?? null}
+            currentNoteId={isOpening ? (noteId ?? null) : (currentNote?.id ?? null)}
             onSelectNote={handleSelectNote}
             onCreateNote={handleCreateNote}
             onReorderNotes={reorderNotes}
@@ -275,21 +318,29 @@ export function Notes() {
           />
         </section>
         <main
-          className={`flex-1 min-w-0 ${currentNote ? "flex" : "hidden md:flex"} flex-col`}
+          className={`flex-1 min-w-0 ${openNote || isOpening ? "flex" : "hidden md:flex"} flex-col`}
           data-focus-pane="notes-content"
           tabIndex={-1}
           aria-label={t("panes.notesContent")}
         >
-          {currentNote ? (
+          {isOpening ? (
+            <div
+              role="status"
+              className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground"
+            >
+              <SpinnerIcon className="size-4 animate-spin text-primary" />
+              {t("notes.loading")}
+            </div>
+          ) : openNote ? (
             <NoteEditor
-              key={currentNote.id}
-              note={currentNote}
+              key={openNote.id}
+              note={openNote}
               onSave={handleSave}
               onReturnToBook={returnTarget ? () => navigate(returnTarget.to) : undefined}
               returnLabel={returnTarget?.label}
               suppressRestore={hasPendingHeadingScroll}
               titleBarContainer={titleBarSlot}
-              findHandoff={findHandoff?.noteId === currentNote.id ? findHandoff.handoff : null}
+              findHandoff={findHandoff?.noteId === openNote.id ? findHandoff.handoff : null}
               onHandoffApplied={handleHandoffApplied}
             />
           ) : (

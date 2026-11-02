@@ -43,6 +43,13 @@ function renderRow(note: Note) {
   );
 }
 
+describe("NoteListItem preview", () => {
+  it("keeps only the start of a long Note", () => {
+    renderRow(buildNote({ content: `<p>start ${"word ".repeat(20000)}</p>` }));
+    expect(screen.getByText(/^start word/).textContent?.length).toBeLessThanOrEqual(400);
+  });
+});
+
 describe("NoteListItem date label", () => {
   it("shows the time of day, not a month and day, for a Note edited today", () => {
     const contentUpdatedAt = Math.floor(Date.now() / 1000);

@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { GridListItem } from "react-aria-components/GridList";
 import { BookOpen } from "lucide-react";
 import type { Note } from "@/features/notes";
-import { notePlainText } from "@/components/notes/notes-list-model";
+import { notePreviewText } from "@/components/notes/notes-list-model";
 import { NoteTagsRow } from "@/components/notes/NoteTagsRow";
 import { noteFullDate, timeAgo } from "@/components/notes/timeAgo";
 import { ItemActionsMenu } from "@/components/ui";
@@ -36,7 +36,7 @@ export const NoteCard = memo(function NoteCard({
   const { t, i18n } = useTranslation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const title = note.title || t("notes.untitled");
-  const preview = notePlainText(note.content);
+  const preview = notePreviewText(note.content);
   const hasActions = actions.length > 0;
   const menuAnchorRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);

@@ -192,6 +192,9 @@ export default defineConfig(() => ({
   test: {
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
+    // Node 26's own `localStorage` global is undefined without a storage file,
+    // and it hides jsdom's.
+    execArgv: ["--no-experimental-webstorage"],
     alias: [],
     include: [
       "src/test/**/*.test.ts",

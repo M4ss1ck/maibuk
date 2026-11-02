@@ -226,6 +226,7 @@
     "statusChangeFailed": "Couldn't change the Chapter Status"
   },
   "notes": {
+    "loading": "Loading note…",
     "title": "Notes",
     "collectionLabel": "Notes",
     "newNote": "New note",

@@ -1,7 +1,7 @@
 import { mockItemMenuLayout } from "@/test/support/item-menu-layout";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installPointerEvent, touchLongPress, touchTap } from "@/test/support/pointer-events";
 
@@ -498,6 +498,104 @@ describe("Canvas custom nodes", () => {
     expect(screen.getByText("Cached title")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "canvas.openNote" })).toBeDisabled();
     expect(screen.getAllByTestId("handle")).toHaveLength(4);
+  });
+
+  it("keeps only the start of a long note in its preview", () => {
+    mocks.notes = [
+      {
+        id: "long",
+        title: "Long",
+        content: `<p>${"word ".repeat(20000)}</p>`,
+        tags: [],
+        contentUpdatedAt: 1,
+      },
+    ] as never;
+    const { container } = render(
+      <MemoryRouter>
+        <NoteRefNode
+          {...({
+            selected: false,
+            data: {
+              node: { id: "ref", kind: "noteRef", noteId: "long", position: { x: 0, y: 0 } },
+              canvasId: "canvas",
+              canvasTitle: "Map",
+              connectedSides: {
+                top: { connected: false, incoming: false, outgoing: false },
+                right: { connected: false, incoming: false, outgoing: false },
+                bottom: { connected: false, incoming: false, outgoing: false },
+                left: { connected: false, incoming: false, outgoing: false },
+              },
+            },
+          } as Parameters<typeof NoteRefNode>[0])}
+        />
+      </MemoryRouter>
+    );
+    expect(container.querySelector("p")?.textContent?.length).toBeLessThanOrEqual(400);
+  });
+
+  it("answers Enter on Open note right away, before the route has changed screens", async () => {
+    const user = userEvent.setup();
+    mocks.notes = [
+      { id: "note-1", title: "Log", content: "<p>Body</p>", tags: [], contentUpdatedAt: 1 },
+    ] as never;
+    const { container } = render(
+      <MemoryRouter>
+        <NoteRefNode
+          {...({
+            selected: false,
+            data: {
+              node: { id: "ref", kind: "noteRef", noteId: "note-1", position: { x: 0, y: 0 } },
+              canvasId: "canvas",
+              canvasTitle: "Map",
+              connectedSides: {},
+            },
+          } as Parameters<typeof NoteRefNode>[0])}
+        />
+      </MemoryRouter>
+    );
+    const open = screen.getByRole("button", { name: "canvas.openNote" });
+    expect(container.querySelector(".animate-spin")).toBeNull();
+
+    open.focus();
+    await user.keyboard("{Enter}");
+
+    expect(container.querySelector(".animate-spin")).not.toBeNull();
+    expect(open).toHaveFocus();
+  });
+
+  it("opens the note once however many times Open note is pressed", async () => {
+    const user = userEvent.setup();
+    mocks.notes = [
+      { id: "note-1", title: "Log", content: "<p>Body</p>", tags: [], contentUpdatedAt: 1 },
+    ] as never;
+    const visited = new Set<string>();
+    function LocationProbe() {
+      visited.add(useLocation().key);
+      return null;
+    }
+    render(
+      <MemoryRouter>
+        <LocationProbe />
+        <NoteRefNode
+          {...({
+            selected: false,
+            data: {
+              node: { id: "ref", kind: "noteRef", noteId: "note-1", position: { x: 0, y: 0 } },
+              canvasId: "canvas",
+              canvasTitle: "Map",
+              connectedSides: {},
+            },
+          } as Parameters<typeof NoteRefNode>[0])}
+        />
+      </MemoryRouter>
+    );
+
+    screen.getByRole("button", { name: "canvas.openNote" }).focus();
+    await user.keyboard("{Enter}");
+    await user.keyboard("{Enter}");
+
+    // The first location and the one the press pushed.
+    expect(visited.size).toBe(2);
   });
 
   it("renders the preview for a note without a linked book", () => {

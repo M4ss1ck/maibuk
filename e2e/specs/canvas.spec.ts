@@ -253,6 +253,41 @@ test.describe("Note Reference @wf:canvas-note-ref @sc:canvas.addNoteRef", () => 
     await expect(page.getByRole("heading", { name: "Keeper's Log", level: 1 })).toBeVisible();
   });
 
+  test("Open note answers at once and shows the loading state before the editor", async ({
+    page,
+  }) => {
+    await openMap(page);
+    const refLog = flowNode(page, "ref-log");
+    await expect(refLog.getByRole("button", { name: "Open note" })).toBeEnabled();
+    await tabTo(page, refLog, { max: 60 });
+    await tabTo(page, refLog.getByRole("button", { name: "Open note" }), { max: 5 });
+
+    // Frozen timers hold the read that follows the first paint, so the loading
+    // state stays on screen long enough to assert. React's scheduler is not a timer.
+    await page.clock.install();
+    await page.clock.pauseAt(Date.now() + 60_000);
+    await page.keyboard.press("Enter");
+
+    const main = page.getByRole("main", { name: "Note editor" });
+    await expect(main).toBeVisible();
+    await capture(page, "note-opening-from-canvas");
+    const loading = page.getByRole("status").filter({ hasText: "Loading note…" });
+    await expect(loading).toBeVisible();
+    await expect(main.locator(".ProseMirror")).toHaveCount(0);
+
+    // On a phone the loading state takes the screen, as the Note will.
+    const viewport = page.viewportSize();
+    await page.setViewportSize({ width: 390, height: 800 });
+    await expect(loading).toBeVisible();
+    await expect(page.locator('[data-focus-pane="notes-sidebar"]')).toBeHidden();
+    await capture(page, "note-opening-from-canvas-narrow");
+    if (viewport) await page.setViewportSize(viewport);
+
+    await page.clock.resume();
+    await expect(page.getByRole("heading", { name: "Keeper's Log", level: 1 })).toBeVisible();
+    await expect(loading).toHaveCount(0);
+  });
+
   test("a reference whose Note is gone reads Missing note and cannot open", async ({ page }) => {
     await openMap(page);
     const missing = flowNode(page, "ref-missing");
