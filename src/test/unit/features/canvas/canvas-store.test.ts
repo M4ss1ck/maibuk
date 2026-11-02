@@ -844,6 +844,18 @@ describe("placing with armed tools (#696)", () => {
     expect(ids()).toEqual(["existing"]);
   });
 
+  it("deselects an Edge on arming, so its inspector cannot take Enter or Escape", () => {
+    const store = useCanvasStore.getState();
+    store.selectEdge("edge");
+    store.setToolMode("textNode");
+    expect(useCanvasStore.getState().selectedEdgeId).toBeNull();
+
+    store.setToolMode("select");
+    store.selectEdge("edge");
+    store.setToolMode("pen");
+    expect(useCanvasStore.getState().selectedEdgeId).toBe("edge");
+  });
+
   it("leaves Pen active through a lock, as today", () => {
     const store = useCanvasStore.getState();
     store.setToolMode("pen");

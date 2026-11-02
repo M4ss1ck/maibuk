@@ -18,8 +18,7 @@ vi.mock("@/components/ui", () => ({
 
 function callbacks() {
   return {
-    onAddText: vi.fn(),
-    onAddNoteRef: vi.fn(),
+    onPlaceAtCenter: vi.fn(),
     onZoomIn: vi.fn(),
     onZoomOut: vi.fn(),
     onFitView: vi.fn(),
@@ -49,8 +48,16 @@ describe("CanvasToolPanel", () => {
         "{Enter}",
         () => expect(useCanvasStore.getState().toolMode).toBe("eraser"),
       ],
-      ["canvas.addTextNode", " ", () => expect(handlers.onAddText).toHaveBeenCalledOnce()],
-      ["canvas.addNoteRef", "{Enter}", () => expect(handlers.onAddNoteRef).toHaveBeenCalledOnce()],
+      [
+        "canvas.addTextNode",
+        " ",
+        () => expect(useCanvasStore.getState().toolMode).toBe("textNode"),
+      ],
+      [
+        "canvas.addNoteRef",
+        "{Enter}",
+        () => expect(useCanvasStore.getState().toolMode).toBe("noteRef"),
+      ],
       ["canvas.zoomIn", " ", () => expect(handlers.onZoomIn).toHaveBeenCalledOnce()],
       ["canvas.zoomOut", "{Enter}", () => expect(handlers.onZoomOut).toHaveBeenCalledOnce()],
       ["canvas.fitView", " ", () => expect(handlers.onFitView).toHaveBeenCalledOnce()],
@@ -67,6 +74,8 @@ describe("CanvasToolPanel", () => {
       await user.keyboard(key);
       assertOutcome();
     }
+    // Arming a placement tool never places on its own; only the second press does.
+    expect(handlers.onPlaceAtCenter).not.toHaveBeenCalled();
   });
 
   it("uses larger mobile targets while preserving desktop dimensions", () => {
@@ -88,8 +97,27 @@ describe("CanvasToolPanel", () => {
       "aria-pressed",
       "true"
     );
-    expect(screen.getByRole("button", { name: "canvas.addTextNode" })).not.toHaveAttribute(
+    // A placement tool is a toggle too: pressed only while armed.
+    expect(screen.getByRole("button", { name: "canvas.addTextNode" })).toHaveAttribute(
+      "aria-pressed",
+      "false"
+    );
+    expect(screen.getByRole("button", { name: "canvas.zoomIn" })).not.toHaveAttribute(
       "aria-pressed"
+    );
+  });
+
+  it("shows the Text Node tool as pressed only while it is armed", () => {
+    useCanvasStore.setState({ toolMode: "textNode" });
+    render(<CanvasToolPanel {...callbacks()} />);
+
+    expect(screen.getByRole("button", { name: "canvas.addTextNode" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    expect(screen.getByRole("button", { name: "canvas.addNoteRef" })).toHaveAttribute(
+      "aria-pressed",
+      "false"
     );
   });
 
@@ -109,5 +137,53 @@ describe("CanvasToolPanel", () => {
     expect(select).toHaveFocus();
     await user.keyboard(" ");
     expect(useCanvasStore.getState().toolMode).toBe("select");
+  });
+
+  describe.each([
+    ["canvas.addTextNode", "textNode"],
+    ["canvas.addNoteRef", "noteRef"],
+  ] as const)("placement tool %s", (label, mode) => {
+    it("arms with the first Enter and places at the center with the second", async () => {
+      const user = userEvent.setup();
+      const handlers = callbacks();
+      render(<CanvasToolPanel {...handlers} />);
+
+      screen.getByRole("button", { name: label }).focus();
+      await user.keyboard("{Enter}");
+      expect(useCanvasStore.getState().toolMode).toBe(mode);
+      expect(handlers.onPlaceAtCenter).not.toHaveBeenCalled();
+
+      await user.keyboard("{Enter}");
+      expect(handlers.onPlaceAtCenter).toHaveBeenCalledOnce();
+      expect(useCanvasStore.getState().toolMode).toBe(mode);
+    });
+
+    it("returns to Select without placing when the armed button is clicked with the mouse", async () => {
+      const user = userEvent.setup();
+      const handlers = callbacks();
+      render(<CanvasToolPanel {...handlers} />);
+
+      await user.click(screen.getByRole("button", { name: label }));
+      expect(useCanvasStore.getState().toolMode).toBe(mode);
+
+      await user.click(screen.getByRole("button", { name: label }));
+      expect(useCanvasStore.getState().toolMode).toBe("select");
+      expect(handlers.onPlaceAtCenter).not.toHaveBeenCalled();
+    });
+
+    it("switches to Pen without placing when Pen is chosen while armed", async () => {
+      const user = userEvent.setup();
+      const handlers = callbacks();
+      render(<CanvasToolPanel {...handlers} />);
+
+      screen.getByRole("button", { name: label }).focus();
+      await user.keyboard("{Enter}");
+      expect(useCanvasStore.getState().toolMode).toBe(mode);
+
+      screen.getByRole("button", { name: "canvas.toolPen" }).focus();
+      await user.keyboard("{Enter}");
+      expect(useCanvasStore.getState().toolMode).toBe("pen");
+      expect(handlers.onPlaceAtCenter).not.toHaveBeenCalled();
+    });
   });
 });

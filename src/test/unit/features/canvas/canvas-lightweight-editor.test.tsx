@@ -4,6 +4,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useSettingsStore } from "@/features/settings/store";
+import { isBlankTextNodeHtml } from "@/features/canvas/nodes/staticRichText";
 
 const mocks = vi.hoisted(() => ({
   useEditor: vi.fn(),
@@ -27,9 +28,13 @@ vi.mock("@xyflow/react", () => ({
   ResizeControlVariant: { Line: "line", Handle: "handle" },
 }));
 
-vi.mock("../../../../features/canvas/store", () => ({
-  useCanvasStore: (selector: (state: Record<string, unknown>) => unknown) => selector(mocks.state),
-}));
+vi.mock("../../../../features/canvas/store", () => {
+  const useCanvasStore = (selector: (state: Record<string, unknown>) => unknown) =>
+    selector(mocks.state);
+  // The commit path reads the pristine marker straight from the store.
+  useCanvasStore.getState = () => mocks.state;
+  return { useCanvasStore };
+});
 
 vi.mock("../../../../features/canvas/nodes/NodeFormatBubble", () => ({
   NodeFormatBubble: () => null,
@@ -97,6 +102,20 @@ describe("LightweightNode editor lifecycle", () => {
 
     expect(screen.getByText("Idea")).toBeInTheDocument();
     expect(mocks.useEditor).not.toHaveBeenCalled();
+  });
+
+  it("shows the placeholder in an idle Text Node with no text", () => {
+    renderNode(textNode({ html: "<p></p>" }));
+
+    // The real i18n loads here, so the placeholder shows its English copy (en.json).
+    expect(screen.getByText("Type something…")).toBeInTheDocument();
+    expect(mocks.useEditor).not.toHaveBeenCalled();
+  });
+
+  it("does not show the placeholder once the Text Node has text", () => {
+    renderNode();
+
+    expect(screen.queryByText("Type something…")).not.toBeInTheDocument();
   });
 
   it("asks the store to begin editing on double click (the pointer path)", () => {
@@ -265,5 +284,56 @@ describe("LightweightNode editor lifecycle", () => {
     // Escape is the commit path: without it the typed text would be lost.
     expect(mocks.updateTextNode).toHaveBeenCalledWith("node", { html: "<p>Idea edited</p>" });
     expect(mocks.endNodeEdit).toHaveBeenCalled();
+  });
+
+  it("drops a just-placed Text Node that is still blank when it is left", async () => {
+    mocks.state.editingNodeId = "node";
+    mocks.state.pristineTextNode = { id: "node", revision: 0 };
+    mocks.useEditor.mockReturnValue({
+      commands: { focus: vi.fn() },
+      on: vi.fn(),
+      off: vi.fn(),
+      getHTML: vi.fn(() => "<p></p>"),
+    });
+    renderNode(textNode({ html: "<p></p>" }));
+    await waitFor(() => expect(mocks.useEditor).toHaveBeenCalled());
+
+    fireEvent.keyDown(screen.getByTestId("editor-content"), { key: "Escape" });
+
+    expect(mocks.updateTextNode).not.toHaveBeenCalled();
+    expect(mocks.endNodeEdit).toHaveBeenCalled();
+  });
+
+  it("writes a blank Text Node that is not just placed when it is left", async () => {
+    mocks.state.editingNodeId = "node";
+    mocks.state.pristineTextNode = null;
+    mocks.useEditor.mockReturnValue({
+      commands: { focus: vi.fn() },
+      on: vi.fn(),
+      off: vi.fn(),
+      getHTML: vi.fn(() => "<p></p>"),
+    });
+    renderNode(textNode({ html: "<p></p>" }));
+    await waitFor(() => expect(mocks.useEditor).toHaveBeenCalled());
+
+    fireEvent.keyDown(screen.getByTestId("editor-content"), { key: "Escape" });
+
+    expect(mocks.updateTextNode).toHaveBeenCalledWith("node", { html: "<p></p>" });
+    expect(mocks.endNodeEdit).toHaveBeenCalled();
+  });
+});
+
+describe("isBlankTextNodeHtml", () => {
+  it.each(["<p></p>", "<p>   </p>", "<p><br></p>", "<h1></h1>"])("treats %s as blank", (html) => {
+    expect(isBlankTextNodeHtml(html)).toBe(true);
+  });
+
+  it.each([
+    "<p>a</p>",
+    '<p><img src="x"></p>',
+    "<hr>",
+    "<table></table>",
+  ])("treats %s as content", (html) => {
+    expect(isBlankTextNodeHtml(html)).toBe(false);
   });
 });

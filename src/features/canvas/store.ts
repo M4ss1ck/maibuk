@@ -849,11 +849,13 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   },
 
   setToolMode: (toolMode) =>
-    set((state) =>
-      isPlacementTool(toolMode) && (state.interactivityLocked || state.editorReadOnly)
-        ? {}
-        : { toolMode }
-    ),
+    set((state) => {
+      if (!isPlacementTool(toolMode)) return { toolMode };
+      if (state.interactivityLocked || state.editorReadOnly) return {};
+      // The Edge inspector holds focus and handles its own Escape, and an armed
+      // tool answers Enter and Escape first.
+      return { toolMode, selectedEdgeId: null };
+    }),
   setPenWidth: (penWidth) => set({ penWidth }),
   setPenColor: (penColor) => set({ penColor }),
   toggleInteractivityLocked: () =>
