@@ -5,6 +5,14 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 y este proyecto sigue el [Versionado Semántico](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.4] - 2026-11-01
+
+### Fixed
+- Restaurar los contornos visibles en tarjetas, diálogos y campos de entrada en el tema oscuro
+- Suavizar los bordes del tema oscuro para mejorar el contraste con el fondo
+- Alinear los bordes de las tablas, el chip de actualización y los fondos de las insignias de estado con el tema claro
+- Hacer que el fondo del chip de actualización oscuro sea opaco para que se lea con claridad sobre el logotipo de Ajustes
+
 ## [0.19.3] - 2026-11-01
 
 ### Fixed

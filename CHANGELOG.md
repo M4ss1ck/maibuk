@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.4] - 2026-11-01
+
+### Fixed
+- Restore visible outlines on cards, dialogs, and inputs in the dark theme
+- Soften dark-theme borders for better contrast against the background
+- Align table borders, the update chip, and status badge backgrounds with the light theme
+- Make the dark update chip background opaque so it reads clearly over the Settings wordmark
+
 ## [0.19.3] - 2026-11-01
 
 ### Fixed
