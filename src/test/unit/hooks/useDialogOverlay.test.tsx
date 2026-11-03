@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { useDialogOverlay } from "@/hooks/useDialogOverlay";
 
 // The hook's wiring, not just the attribute helper: the page is hidden while
@@ -65,5 +65,71 @@ describe("useDialogOverlay()", () => {
     render(<Harness />);
 
     expect(hiddenAncestor(screen.getByTestId("app"))).toBeNull();
+  });
+});
+
+// WebKit restyles the whole document for any inline style write on <html>:
+// 137 ms on a dense Canvas (CODING_STANDARDS.md, "Scroll lock"). The app shell
+// is fixed to the viewport, so the lock runs only when the page can move.
+describe("the scroll lock", () => {
+  const html = document.documentElement;
+  const overflow = () => html.style.overflow;
+
+  afterEach(() => {
+    Reflect.deleteProperty(html, "scrollHeight");
+    Reflect.deleteProperty(html, "scrollWidth");
+    vi.restoreAllMocks();
+  });
+
+  it("leaves <html> alone when the document cannot scroll", () => {
+    render(<Harness initiallyOpen />);
+
+    expect(overflow()).toBe("");
+  });
+
+  it("locks a document that overflows, and releases it on close", () => {
+    Object.defineProperty(html, "scrollHeight", { configurable: true, value: 5000 });
+    render(<Harness initiallyOpen />);
+
+    expect(overflow()).toBe("hidden");
+
+    fireEvent.click(screen.getByRole("button", { name: "close" }));
+
+    expect(overflow()).toBe("");
+  });
+
+  it("locks a document that overflows sideways", () => {
+    Object.defineProperty(html, "scrollWidth", { configurable: true, value: 5000 });
+    render(<Harness initiallyOpen />);
+
+    expect(overflow()).toBe("hidden");
+  });
+
+  it("decides once per open, so the lock cannot toggle under an open dialog", () => {
+    const { rerender } = render(<Harness initiallyOpen />);
+
+    Object.defineProperty(html, "scrollHeight", { configurable: true, value: 5000 });
+    rerender(<Harness initiallyOpen />);
+    expect(overflow()).toBe("");
+
+    fireEvent.click(screen.getByRole("button", { name: "close" }));
+    fireEvent.click(screen.getByRole("button", { name: "open" }));
+    expect(overflow()).toBe("hidden");
+  });
+
+  it("reads no layout while closed", () => {
+    const scrollHeight = vi.fn(() => 0);
+    Object.defineProperty(html, "scrollHeight", { configurable: true, get: scrollHeight });
+    const { rerender } = render(<Harness />);
+    rerender(<Harness />);
+
+    expect(scrollHeight).not.toHaveBeenCalled();
+  });
+
+  it("locks on iOS, where Safari moves a page that does not overflow", () => {
+    vi.spyOn(navigator, "platform", "get").mockReturnValue("iPhone");
+    render(<Harness initiallyOpen />);
+
+    expect(overflow()).toBe("hidden");
   });
 });
