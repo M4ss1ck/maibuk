@@ -34,7 +34,7 @@ test.describe("@wf:voice-commands-app @chromium-only", () => {
 
     // "Show voice commands." runs global.showHelp: the Keyboard shortcuts
     // dialog opens and lists each Bound Shortcut's Voice Command next to its
-    // Shortcut. The spoken words never land in the Chapter text.
+    // Shortcut.
     const dialog = page.getByRole("dialog", { name: "Keyboard shortcuts" });
     await expect(dialog).toBeVisible({ timeout: 90_000 });
     await expectFocusWithin(dialog);
@@ -42,10 +42,12 @@ test.describe("@wf:voice-commands-app @chromium-only", () => {
     await expect(notes.getByText(/Voice \(English\)/)).toBeVisible();
     // The label and its Voice Command read the same; both are listed.
     await expect(notes.getByText("Go to Notes")).toHaveCount(2);
-    await expect(editorText(page)).not.toContainText("Show voice commands");
     await capture(page, "shortcut-help-voice", { around: [dialog] });
 
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
+
+    // The spoken words never land in the Chapter, which the Modal hid while it was open.
+    await expect(editorText(page)).not.toContainText("Show voice commands");
   });
 });

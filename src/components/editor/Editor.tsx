@@ -4,6 +4,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import CharacterCount from "@tiptap/extension-character-count";
 import {
   useEffect,
+  useLayoutEffect,
   useCallback,
   useImperativeHandle,
   useRef,
@@ -618,6 +619,16 @@ export function Editor({
 
   const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
 
+  // useEditor destroys a new editor on a 1 ms timer unless its effect has run.
+  // A time-sliced render (a lazy route's Suspense retry) lets that timer fire
+  // first, and a child's effects run before useEditor's, so one reading `view`
+  // would hit a dead editor and take the app down. The children that do mount
+  // from this layout effect, which runs useEditor's effect first and renders
+  // them synchronously before anything is painted. EditorContent stays in the
+  // first commit: a parent's effect may focus the text on open.
+  const [isEditorEffectFlushed, setIsEditorEffectFlushed] = useState(false);
+  useLayoutEffect(() => setIsEditorEffectFlushed(true), []);
+
   if (!editor) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -628,7 +639,7 @@ export function Editor({
 
   return (
     <div className={`flex-1 flex flex-col min-h-0 ${focusMode ? "focus-mode" : ""}`}>
-      {!focusMode && (
+      {!focusMode && isEditorEffectFlushed && (
         <MemoizedEditorToolbar
           editor={editor}
           onContextMenuOpenChange={setIsContextMenuOpen}
@@ -663,20 +674,24 @@ export function Editor({
           }`}
         >
           <EditorContent editor={editor} />
-          {showInlineFootnotes && (
+          {showInlineFootnotes && isEditorEffectFlushed && (
             <FootnoteList editor={editor} startIndex={footnoteStartIndex} readOnly={!editable} />
           )}
         </div>
       </div>
 
-      {!focusMode && <TaskListMenus editor={editor} />}
-      <LinkClickHandler editor={editor} />
-      <LinkPreviewLayer editor={editor} />
-      <ImageContextMenu editor={editor} />
+      {isEditorEffectFlushed && (
+        <>
+          {!focusMode && <TaskListMenus editor={editor} />}
+          <LinkClickHandler editor={editor} />
+          <LinkPreviewLayer editor={editor} />
+          <ImageContextMenu editor={editor} />
 
-      {/* Floating selection toolbar — hidden when the context menu is open */}
-      {!focusMode && !isContextMenuOpen && (
-        <SelectionToolbar editor={editor} onLinkClick={() => setShowBubbleLinkDialog(true)} />
+          {/* Floating selection toolbar — hidden when the context menu is open */}
+          {!focusMode && !isContextMenuOpen && (
+            <SelectionToolbar editor={editor} onLinkClick={() => setShowBubbleLinkDialog(true)} />
+          )}
+        </>
       )}
       <LinkDialog
         editor={editor}

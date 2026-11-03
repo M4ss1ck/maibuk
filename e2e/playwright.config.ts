@@ -43,7 +43,7 @@ const chromiumWithFakeMicrophone = {
   },
 };
 
-export default defineConfig<{ macPlatform: boolean }>({
+export default defineConfig<{ macPlatform: boolean; persistentContext: boolean }>({
   testDir: "./specs",
   // The Sync lane's specs need a sync server; run-sync.mjs runs them with
   // playwright.sync.config.ts.
@@ -85,10 +85,10 @@ export default defineConfig<{ macPlatform: boolean }>({
     {
       name: "webkit",
       // WebKit cannot grant clipboard permissions; clipboard rows are chromium-only.
-      // WebKit has OPFS only in a persistent context, so a test that seeds the
-      // Plugin Directory gets one (`needsPersistentContext`, support/test.ts).
+      // WebKit has OPFS only in a persistent context, and the web Library lives
+      // on OPFS, so every test here gets one (support/test.ts).
       grepInvert: /@chromium-only|@touch/,
-      use: { ...devices["Desktop Safari"], ...shared },
+      use: { ...devices["Desktop Safari"], ...shared, persistentContext: true },
     },
     {
       // Firefox runs only the @sandbox group: the Plugin sandbox's engine
