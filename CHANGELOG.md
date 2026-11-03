@@ -5,6 +5,24 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.5] - 2026-11-03
+
+### Added
+- Move checked Task List items to the top or bottom from the editor menu or the ⋯ button in Notes, Book Notes, and Ephemerals, with dictation positions preserved through reorder, undo, and redo
+- Add armed placement tools for Text Nodes and Note References on the Canvas, with placement returning to Select and opening the new item
+- Keep new empty Text Nodes out of history and saves until they contain text
+
+### Fixed
+- Apply the Ephemeral's selected spell check language consistently across the editor, toolbar, Opening Marks, and Embed, and keep it for the session
+- Make spell check language menu options keyboard-accessible
+- Prevent the Ephemeral from showing a blank page when opened
+- Apply modal scroll locks only when needed, avoiding unnecessary document restyling and slowdowns on dense Canvases
+- Keep the Task List ⋯ button available through editor redraws
+- Open editor menus at the pointer when clicked near the bottom of the screen
+- Show immediate loading feedback when opening a note from a Canvas instead of freezing on long notes
+- Read only the start of note text for previews to avoid layout work that grows with note length
+- Return to the gallery when opening a note fails instead of showing the previous note under the new URL
+
 ## [0.19.4] - 2026-11-01
 
 ### Fixed

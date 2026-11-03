@@ -5,6 +5,24 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 y este proyecto sigue el [Versionado Semántico](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.5] - 2026-11-03
+
+### Added
+- Mover los elementos marcados de la Lista de Tareas al principio o al final desde el menú del editor o el botón ⋯ en Notas, Notas del Libro y Efímeros, conservando las posiciones de dictado al reordenar, deshacer y rehacer
+- Añadir herramientas de colocación preparadas para Nodos de texto y Referencias de nota en el Lienzo, de modo que tras colocar se vuelva a Seleccionar y se abra el nuevo elemento
+- Mantener los nuevos Nodos de texto vacíos fuera del historial y de los guardados hasta que contengan texto
+
+### Fixed
+- Aplicar de forma consistente el idioma del corrector ortográfico seleccionado en el Efímero en el editor, la barra de herramientas, los Signos de apertura y el Incrustado, y mantenerlo durante la sesión
+- Hacer que las opciones del menú del idioma del corrector ortográfico sean accesibles mediante teclado
+- Evitar que el Efímero muestre una página en blanco al abrirse
+- Aplicar los bloqueos de desplazamiento de los modales solo cuando sea necesario, evitando restilizados innecesarios del documento y ralentizaciones en Lienzos densos
+- Mantener disponible el botón ⋯ de la Lista de Tareas durante los redibujados del editor
+- Abrir los menús del editor en la posición del puntero al hacer clic cerca de la parte inferior de la pantalla
+- Mostrar retroalimentación de carga de inmediato al abrir una nota desde un Lienzo en lugar de congelarse con notas largas
+- Leer solo el inicio del texto de la nota para las vistas previas, a fin de evitar un trabajo de maquetación que crece con la longitud de la nota
+- Volver a la galería cuando falla la apertura de una nota, en lugar de mostrar la nota anterior bajo la nueva URL
+
 ## [0.19.4] - 2026-11-01
 
 ### Fixed
