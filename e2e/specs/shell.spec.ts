@@ -544,6 +544,8 @@ test.describe("help lists this screen's shortcuts @wf:shell-help-bound-per-scree
     await tabTo(page, page.getByRole("button", { name: "New canvas" }).first());
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/canvas\/[\w-]+$/);
+    // The route is lazy: its shortcuts bind when the Canvas mounts, after the URL changes.
+    await expect(page.getByRole("toolbar", { name: "Tools" })).toBeVisible();
     const canvas = await groupsOnThisScreen(page);
     expect(canvas).toContain("Canvas");
     expect(canvas).not.toContain("Books");

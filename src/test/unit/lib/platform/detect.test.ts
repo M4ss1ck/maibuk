@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { isMac } from "@/lib/platform/detect";
+import { isIOS, isMac } from "@/lib/platform/detect";
 
 function stubNavigator(platform: string, userAgentDataPlatform?: string) {
   vi.stubGlobal("navigator", {
@@ -49,5 +49,45 @@ describe("isMac()", () => {
     vi.stubGlobal("navigator", undefined);
 
     expect(isMac()).toBe(false);
+  });
+});
+
+describe("isIOS()", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("returns true for iPhone and iPad", () => {
+    vi.stubGlobal("navigator", { platform: "iPhone", maxTouchPoints: 5 });
+    expect(isIOS()).toBe(true);
+
+    vi.stubGlobal("navigator", { platform: "iPad", maxTouchPoints: 5 });
+    expect(isIOS()).toBe(true);
+  });
+
+  it("returns true for an iPad that reports itself as a Mac", () => {
+    vi.stubGlobal("navigator", { platform: "MacIntel", maxTouchPoints: 5 });
+
+    expect(isIOS()).toBe(true);
+  });
+
+  it("returns false for a Mac, even with a single touch point", () => {
+    vi.stubGlobal("navigator", { platform: "MacIntel", maxTouchPoints: 0 });
+    expect(isIOS()).toBe(false);
+
+    vi.stubGlobal("navigator", { platform: "MacIntel", maxTouchPoints: 1 });
+    expect(isIOS()).toBe(false);
+  });
+
+  it("returns false for Android, which has touch points and is not Apple", () => {
+    vi.stubGlobal("navigator", { platform: "Linux armv81", maxTouchPoints: 5 });
+
+    expect(isIOS()).toBe(false);
+  });
+
+  it("returns false when navigator is unavailable", () => {
+    vi.stubGlobal("navigator", undefined);
+
+    expect(isIOS()).toBe(false);
   });
 });
