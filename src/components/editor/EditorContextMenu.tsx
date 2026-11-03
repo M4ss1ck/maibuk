@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import type { Editor } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
 import {
+  ArrowDownToLine,
+  ArrowUpToLine,
   Code2,
   BookOpen,
   ClipboardCopy,
@@ -22,6 +24,7 @@ import { spellCheckService } from "@/lib/spellcheck";
 import { looksLikeMarkdown, markdownToEditorHtml } from "@/features/markdown";
 import { useShortcuts } from "@/lib/shortcuts";
 import { clampPosition, getWordAtPosition } from "@/components/editor/editor-context-menu-utils";
+import { canMoveChecked, outermostTaskListAt } from "@/components/editor/extensions/TaskListOrder";
 import type { ClipboardProbe } from "@/components/editor/useClipboardProbe";
 import {
   fallbackPaste,
@@ -51,6 +54,8 @@ type MenuState = {
   canPaste: boolean;
   hasFormatting: boolean;
   markdown: { from: number; to: number; text: string } | null;
+  /** The Task List this menu was opened from. */
+  taskList: { pos: number; canMoveToTop: boolean; canMoveToBottom: boolean } | null;
 };
 
 const MENU_ITEM_CLASS =
@@ -144,6 +149,16 @@ export function EditorContextMenu({
         .replace(/^\n+|\n+$/g, "");
       const markdown = looksLikeMarkdown(mdText) ? { from: mdFrom, to: mdTo, text: mdText } : null;
 
+      const { doc } = editor.state;
+      const taskList =
+        editor.isEditable && outermostTaskListAt(doc, pos)
+          ? {
+              pos,
+              canMoveToTop: canMoveChecked(doc, pos, "top"),
+              canMoveToBottom: canMoveChecked(doc, pos, "bottom"),
+            }
+          : null;
+
       const menuId = ++menuIdCounter;
       setMenu({
         id: menuId,
@@ -156,6 +171,7 @@ export function EditorContextMenu({
         canPaste: false,
         hasFormatting: false,
         markdown,
+        taskList,
       });
 
       const probePromise = probe
@@ -317,6 +333,12 @@ export function EditorContextMenu({
         }
         break;
       }
+      case "move-checked-top":
+        if (menu.taskList) editor.chain().focus().moveCheckedToTop(menu.taskList.pos).run();
+        break;
+      case "move-checked-bottom":
+        if (menu.taskList) editor.chain().focus().moveCheckedToBottom(menu.taskList.pos).run();
+        break;
       case "inspect-html":
         onInspect(menu.blockIndex);
         break;
@@ -432,6 +454,37 @@ export function EditorContextMenu({
                 </MenuItem>
               )}
             </MenuSection>
+
+            {menu?.taskList && (
+              <>
+                <Separator className="my-1 border-t border-border" />
+                <MenuSection className="outline-none">
+                  <Header className="truncate px-3 py-1.5 text-xs text-muted-foreground">
+                    {t("editor.taskList")}
+                  </Header>
+                  <MenuItem
+                    id="move-checked-top"
+                    data-command="editor.moveCheckedToTop"
+                    isDisabled={!menu.taskList.canMoveToTop}
+                    textValue={t("editor.moveCheckedToTop")}
+                    className={`${MENU_ITEM_CLASS} data-disabled:opacity-50`}
+                  >
+                    <ArrowUpToLine className="w-4 h-4 shrink-0" />
+                    <span className="truncate">{t("editor.moveCheckedToTop")}</span>
+                  </MenuItem>
+                  <MenuItem
+                    id="move-checked-bottom"
+                    data-command="editor.moveCheckedToBottom"
+                    isDisabled={!menu.taskList.canMoveToBottom}
+                    textValue={t("editor.moveCheckedToBottom")}
+                    className={`${MENU_ITEM_CLASS} data-disabled:opacity-50`}
+                  >
+                    <ArrowDownToLine className="w-4 h-4 shrink-0" />
+                    <span className="truncate">{t("editor.moveCheckedToBottom")}</span>
+                  </MenuItem>
+                </MenuSection>
+              </>
+            )}
 
             {hasMisspelling && menu.misspelling && (
               <>

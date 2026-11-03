@@ -1,4 +1,5 @@
 export { SceneBreak } from "@/components/editor/extensions/SceneBreak";
+export { TaskListOrder } from "@/components/editor/extensions/TaskListOrder";
 export { Footnote } from "@/components/editor/extensions/Footnote";
 export { FontSize } from "@/components/editor/extensions/FontSize";
 export { TextIndent } from "@/components/editor/extensions/TextIndent";

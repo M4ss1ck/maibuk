@@ -1,9 +1,10 @@
 import { Editor } from "@tiptap/core";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
-import { undo, undoDepth } from "@tiptap/pm/history";
+import { redo, undo, undoDepth } from "@tiptap/pm/history";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
+import { TaskListOrder } from "@/components/editor/extensions/TaskListOrder";
 import { attachSession, resetDictationHubForTests } from "@/features/dictation/hub";
 import { buildPhraseTable, interpret } from "@/features/dictation/interpreter";
 import { createRouter } from "@/features/dictation/router";
@@ -101,6 +102,7 @@ async function dictateInto(content: string, caretText: string) {
       ...createRichTextExtensions({ spellCheck: { enabled: false, language: "en" } }),
       TaskList,
       TaskItem.configure({ nested: true }),
+      TaskListOrder,
     ],
     content,
   });
@@ -267,6 +269,97 @@ describe("Dictation scratch that after a new Task Item", () => {
       host.emitFinal("scratch that");
       expect(outline(editor.state.doc)).toBe('taskList([x]("Milk") [ ]("eggs")) ""');
       expect(notices).toContainEqual({ kind: "scratch_refused" });
+    } finally {
+      editor.destroy();
+    }
+  });
+});
+
+describe("Dictation while the checked items of a Task List move", () => {
+  it("keeps following the caret into its moved item", async () => {
+    const { editor, host } = await dictateInto(
+      taskList(task(true, "<p>Milk</p>"), task(false, "<p>Bread</p>")),
+      "Milk"
+    );
+    try {
+      host.emitFinal("and butter");
+      editor.commands.moveCheckedToBottom();
+      host.emitFinal("and eggs");
+      expect(outline(editor.state.doc)).toBe(
+        'taskList([ ]("Bread") [x]("Milk and butter and eggs")) ""'
+      );
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("scratches the right text in the item's new place", async () => {
+    const { editor, host } = await dictateInto(
+      taskList(task(true, "<p>Milk</p>"), task(false, "<p>Bread</p>")),
+      "Milk"
+    );
+    try {
+      host.emitFinal("and butter.");
+      editor.commands.moveCheckedToBottom();
+      host.emitFinal("scratch that");
+      expect(outline(editor.state.doc)).toBe('taskList([ ]("Bread") [x]("Milk")) ""');
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("scratches the right text in a nested item that moved at both levels", async () => {
+    const nested = taskList(task(true, "<p>Oat</p>"), task(false, "<p>Soy</p>"));
+    const { editor, host } = await dictateInto(
+      taskList(task(true, `<p>Milk</p>${nested}`), task(false, "<p>Bread</p>")),
+      "Oat"
+    );
+    try {
+      host.emitFinal("is good.");
+      editor.commands.moveCheckedToBottom();
+      host.emitFinal("scratch that");
+      expect(outline(editor.state.doc)).toBe(
+        'taskList([ ]("Bread") [x]("Milk" taskList([ ]("Soy") [x]("Oat")))) ""'
+      );
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("still scratches the right text after the move is undone and redone", async () => {
+    const { editor, host } = await dictateInto(
+      taskList(task(true, "<p>Milk</p>"), task(false, "<p>Bread</p>")),
+      "Milk"
+    );
+    try {
+      host.emitFinal("and butter.");
+      editor.commands.moveCheckedToBottom();
+      undo(editor.state, editor.view.dispatch);
+      expect(outline(editor.state.doc)).toBe('taskList([x]("Milk and butter.") [ ]("Bread")) ""');
+      redo(editor.state, editor.view.dispatch);
+      undo(editor.state, editor.view.dispatch);
+      host.emitFinal("scratch that");
+      expect(outline(editor.state.doc)).toBe('taskList([x]("Milk") [ ]("Bread")) ""');
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("scratches only the dictated item when a dictated line's items end up apart", async () => {
+    const { editor, host } = await dictateInto(
+      taskList(task(true, "<p>Milk</p>"), task(false, "<p>Bread</p>")),
+      "Milk"
+    );
+    try {
+      host.emitFinal("and jam new item and tea.");
+      editor.commands.moveCheckedToBottom();
+      expect(outline(editor.state.doc)).toBe(
+        'taskList([ ]("And tea.") [ ]("Bread") [x]("Milk and jam")) ""'
+      );
+      host.emitFinal("scratch that");
+      expect(outline(editor.state.doc)).toBe(
+        'taskList([ ]("") [ ]("Bread") [x]("Milk and jam")) ""'
+      );
     } finally {
       editor.destroy();
     }

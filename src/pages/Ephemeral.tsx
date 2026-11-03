@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { Feather, Pin, Trash2 } from "lucide-react";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
+import { TaskListOrder } from "@/components/editor/extensions/TaskListOrder";
 import { Editor, type EditorTutorialAnchors } from "@/components/editor";
 import { CollapsibleHeading } from "@/components/editor/extensions";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -39,6 +40,7 @@ export function Ephemeral() {
     () => [
       TaskList,
       TaskItem.configure({ nested: true }),
+      TaskListOrder,
       CollapsibleHeading.configure({
         collapseLabel: t("notes.collapseHeading"),
         expandLabel: t("notes.expandHeading"),

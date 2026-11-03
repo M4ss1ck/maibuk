@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { useEditor, EditorContent } from "@tiptap/react";
 import Placeholder from "@tiptap/extension-placeholder";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
+import { TaskListOrder } from "@/components/editor/extensions/TaskListOrder";
+import { TaskListMenus } from "@/components/editor/TaskListMenus";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 import { useEditorCommandSource } from "@/components/editor/editor-command-source";
 import { useOpeningMarksLanguage } from "@/components/editor/opening-marks-language";
@@ -62,6 +64,7 @@ export function QuickNoteEditor({
       }),
       TaskList,
       TaskItem.configure({ nested: true }),
+      TaskListOrder,
       Placeholder.configure({ placeholder: placeholder ?? "" }),
     ],
     content: "",
@@ -172,6 +175,7 @@ export function QuickNoteEditor({
       </div>
       <div className="max-h-64 overflow-y-auto px-2">
         <EditorContent editor={editor} />
+        <TaskListMenus editor={editor} />
       </div>
       {editor && (
         <MarkdownPasteDialog
