@@ -198,7 +198,17 @@ export function Editor({
   const { t } = useTranslation();
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
   const settingsLanguage = useSettingsStore((state) => state.language);
-  const activeSpellCheckLanguage = spellCheckLanguage ?? settingsLanguage;
+  // A host with no language of its own still gets one source of truth: the
+  // language menu, Spell Check, and Opening Marks all read this value.
+  const [pickedLanguage, setPickedLanguage] = useState<Language | null>(null);
+  const activeSpellCheckLanguage = spellCheckLanguage ?? pickedLanguage ?? settingsLanguage;
+  const handleSpellCheckLanguageChange = useCallback(
+    (language: Language) => {
+      setPickedLanguage(language);
+      onSpellCheckLanguageChange?.(language);
+    },
+    [onSpellCheckLanguageChange]
+  );
   const openingMarksLanguage = useOpeningMarksLanguage(
     pluginLanguage?.trim() || activeSpellCheckLanguage
   );
@@ -646,7 +656,7 @@ export function Editor({
           onExitToolbar={handleExitToolbar}
           bookId={bookId}
           spellCheckLanguage={activeSpellCheckLanguage}
-          onSpellCheckLanguageChange={onSpellCheckLanguageChange}
+          onSpellCheckLanguageChange={handleSpellCheckLanguageChange}
           internalTargets={internalTargets}
           loadInternalTargetChildren={loadInternalTargetChildren}
           onExportMarkdown={onExportMarkdown}

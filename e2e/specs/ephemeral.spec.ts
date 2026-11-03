@@ -1,5 +1,7 @@
 import type { Page } from "@playwright/test";
-import { tabTo } from "../support/keyboard";
+import { capture } from "../support/capture";
+import { pressUntilFocused, tabTo } from "../support/keyboard";
+import { seedSettings } from "../support/storage";
 import { expect, test } from "../support/test";
 
 // Ephemeral (issue #209): a scratch buffer that is never saved, clears on
@@ -38,6 +40,45 @@ test.describe("writing in Ephemeral @wf:ephemeral-write", () => {
     await expect(editor(page)).toBeVisible();
     await expect(editor(page)).not.toContainText("Hello world");
     await expect(words(page, 0)).toBeVisible();
+  });
+});
+
+test.describe("the Spell Check language @wf:ephemeral-write", () => {
+  test("a picked language shows on its button and drives Spell Check, Opening Marks, and the Note", async ({
+    page,
+  }) => {
+    await seedSettings(page, { toolbarExpanded: true, editorOpeningMarks: true });
+    await openEphemeral(page);
+    const languageButton = page.getByRole("button", { name: "Spell check language" });
+    await expect(languageButton).toHaveText(/en/i);
+
+    await tabTo(page, page.getByRole("combobox", { name: "Size" }));
+    await page.keyboard.press("Home");
+    await pressUntilFocused(page, "ArrowRight", languageButton, { max: 160 });
+    await page.keyboard.press("Enter");
+    await expect(page.getByText("Español")).toBeVisible();
+    await capture(page, "ephemeral-language-menu");
+    await pressUntilFocused(
+      page,
+      "ArrowDown",
+      page.getByRole("menuitemradio", { name: /Español/ })
+    );
+    await page.keyboard.press("Enter");
+    await expect(languageButton).toHaveText(/es/i);
+
+    await focusEditor(page);
+    await page.keyboard.type("casa house como estas?");
+    await expect(editor(page)).toContainText("¿casa house como estas?");
+    await expect(editor(page).locator(".spellcheck-error")).toContainText(["house"]);
+    await expect(editor(page).locator(".spellcheck-error", { hasText: "casa" })).toHaveCount(0);
+    await capture(page, "ephemeral-spanish-spell-check");
+
+    // The Note it becomes is written in the picked language.
+    await page.keyboard.press("Escape");
+    await expect(createNote(page)).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/\/notes\/.+/);
+    await expect(languageButton).toHaveText(/es/i);
   });
 });
 

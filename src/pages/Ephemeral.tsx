@@ -30,6 +30,8 @@ export function Ephemeral() {
   const wordCount = useEphemeralStore((s) => s.wordCount);
   const setContent = useEphemeralStore((s) => s.setContent);
   const setWordCount = useEphemeralStore((s) => s.setWordCount);
+  const language = useEphemeralStore((s) => s.language);
+  const setLanguage = useEphemeralStore((s) => s.setLanguage);
   const reset = useEphemeralStore((s) => s.reset);
   const alwaysOnTop = useSettingsStore((s) => s.alwaysOnTop);
   const setAlwaysOnTop = useSettingsStore((s) => s.setAlwaysOnTop);
@@ -67,7 +69,7 @@ export function Ephemeral() {
   }, []);
 
   const handleCreateNote = async () => {
-    const note = await useNoteStore.getState().createNote({ title: "", content });
+    const note = await useNoteStore.getState().createNote({ title: "", content, language });
     reset();
     navigate(`/notes/${note.id}`);
   };
@@ -144,6 +146,8 @@ export function Ephemeral() {
         extraExtensions={ephemeralExtensions}
         tutorialAnchors={EPHEMERAL_TUTORIAL_ANCHORS}
         pluginEntity={EPHEMERAL_PLUGIN_ENTITY}
+        spellCheckLanguage={language}
+        onSpellCheckLanguageChange={setLanguage}
       />
 
       <DictationBar />

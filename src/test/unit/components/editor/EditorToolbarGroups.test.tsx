@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -157,28 +157,40 @@ describe("EditorToolbarGroups", () => {
     }
   });
 
-  it("clamps the spellcheck language menu and closes it with Escape restoring focus to the trigger", async () => {
+  it("picks a language by keyboard and Escape returns focus to the trigger", async () => {
     const user = userEvent.setup();
+    const onSpellCheckLanguageChange = vi.fn();
     render(
       <EditorToolbarGroups
         editor={makeToolbarEditor()}
         groupIds={["spellcheck"]}
-        callbacks={callbacks}
+        callbacks={{ ...callbacks, onSpellCheckLanguageChange }}
       />
     );
 
-    const trigger = screen.getByLabelText("editor.spellCheckLanguage");
-    await user.click(trigger);
-
-    const menu = document.querySelector(".spellcheck-language-menu-portal") as HTMLElement | null;
-    expect(menu).not.toBeNull();
-    expect(parseFloat(menu!.style.left)).toBeGreaterThanOrEqual(0);
-    expect(parseFloat(menu!.style.top)).toBeGreaterThanOrEqual(0);
+    const trigger = screen.getByRole("button", { name: "editor.spellCheckLanguage" });
+    trigger.focus();
+    await user.keyboard("{Enter}");
+    const english = await screen.findByRole("menuitemradio", { name: /English/ });
+    await waitFor(() => expect(english).toHaveFocus());
+    expect(english).toBeChecked();
 
     await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(onSpellCheckLanguageChange).not.toHaveBeenCalled();
 
-    expect(document.querySelector(".spellcheck-language-menu-portal")).toBeNull();
-    expect(trigger).toHaveFocus();
+    await user.keyboard("{Enter}");
+    await waitFor(() =>
+      expect(screen.getByRole("menuitemradio", { name: /English/ })).toHaveFocus()
+    );
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("menuitemradio", { name: /Español/ })).toHaveFocus();
+    await user.keyboard("{Enter}");
+
+    expect(onSpellCheckLanguageChange).toHaveBeenCalledWith("es");
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 
   it("stops spellcheck-menu Escape propagation so an outer window Escape handler is not invoked", async () => {
@@ -195,11 +207,11 @@ describe("EditorToolbarGroups", () => {
       );
 
       await user.click(screen.getByLabelText("editor.spellCheckLanguage"));
-      expect(document.querySelector(".spellcheck-language-menu-portal")).not.toBeNull();
+      expect(screen.getByRole("menu")).toBeTruthy();
 
       await user.keyboard("{Escape}");
 
-      expect(document.querySelector(".spellcheck-language-menu-portal")).toBeNull();
+      expect(screen.queryByRole("menu")).toBeNull();
       expect(outerEscapeSpy).not.toHaveBeenCalled();
     } finally {
       window.removeEventListener("keydown", outerEscapeSpy);
