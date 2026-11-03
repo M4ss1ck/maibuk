@@ -33,6 +33,9 @@ async function openNote(page: Page, title: string) {
   await pressUntilFocused(page, "ArrowRight", galleryCard(page, title), { max: 10 });
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/notes\/.+/);
+  // The route is lazy: the Gallery card, which shares the Notes list row's name,
+  // keeps focus until the Note mounts, after the URL changes.
+  await expect(page.getByRole("textbox", { name: "Text", exact: true })).toBeVisible();
 }
 
 /** Opens the Sort menu from the keyboard and picks `label`. */

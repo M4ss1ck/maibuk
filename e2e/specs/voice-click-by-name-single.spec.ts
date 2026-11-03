@@ -33,11 +33,11 @@ test.describe("@wf:voice-click-by-name @sc:dictation.toggle @chromium-only", () 
     // The notice is heard while the dialog it opened is showing (issue #336).
     await expect(clickStatus(page, "Pressed Book Settings.")).toBeVisible();
 
-    // The words never land in the Chapter.
-    await expect(editorText(page)).not.toContainText("Click Book Settings");
-
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
+
+    // The words never land in the Chapter, which the Modal hid while it was open.
+    await expect(editorText(page)).not.toContainText("Click Book Settings");
 
     await stopDictation(page);
   });

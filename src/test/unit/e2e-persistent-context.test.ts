@@ -5,6 +5,8 @@
 // as in a Safari Private window (#479). The E2E `test` fixture asks
 // `needsPersistentContext` which context a test gets, so this pins the rule:
 // only a WebKit test that seeds the web Plugin Directory gets a persistent one.
+// The main lane's `webkit` project also sets `persistentContext` for every test;
+// this rule is what a lane without that option, such as the Sync lane, relies on.
 
 import { describe, expect, it } from "vitest";
 import { needsPersistentContext } from "../../../e2e/support/storage";

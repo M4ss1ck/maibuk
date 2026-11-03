@@ -351,7 +351,9 @@ export async function buildApproval(
  * Directory: it seeds Plugins, or (`usesPluginDirectory`) installs one through
  * the app. WebKit has OPFS only there: in Playwright's default ephemeral
  * context `navigator.storage.getDirectory()` throws UnknownError, as in a
- * Safari Private window (#479). Chromium and Firefox have OPFS in either.
+ * Safari Private window (#479). Chromium and Firefox have OPFS in either. The
+ * main lane's `webkit` project asks for one for every test (`persistentContext`);
+ * this rule serves a lane that does not, such as the Sync lane.
  */
 export function needsPersistentContext({
   browserName,

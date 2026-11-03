@@ -66,6 +66,9 @@ async function newNoteByKeyboard(page: Page) {
   await tabTo(page, page.getByRole("button", { name: "New note" }).first());
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/notes\/[\w-]+$/);
+  // The route is lazy: the Note's shortcuts bind and its path is saved when it
+  // mounts, after the URL changes.
+  await expect(page.getByRole("toolbar", { name: "Toolbar" })).toBeVisible();
 }
 
 // The nav is one list in two sections: the core destinations and Plugin
@@ -559,6 +562,8 @@ test.describe("help lists this screen's shortcuts @wf:shell-help-bound-per-scree
     await tabTo(page, page.getByRole("button", { name: "Design Cover" }), { max: 80 });
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/cover$/);
+    // The route is lazy: its shortcuts bind when the Cover Designer mounts, after the URL changes.
+    await expect(page.getByRole("heading", { name: "Cover Designer", level: 1 })).toBeVisible();
 
     const cover = await groupsOnThisScreen(page);
     expect(cover).toContain("Cover Designer");

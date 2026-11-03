@@ -42,6 +42,9 @@ async function openNote(page: Page, title: string) {
   );
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/notes\/.+/);
+  // The route is lazy: the Gallery card, which shares the Notes list row's name,
+  // keeps focus until the Note mounts, after the URL changes.
+  await expect(noteText(page)).toBeVisible();
 }
 
 /** Enters the seeded Book from the Gallery; focus starts in the last Chapter's text. */

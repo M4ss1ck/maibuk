@@ -107,7 +107,7 @@ run at once and a leftover never blocks a run. Running
 | --- | --- | --- |
 | `chromium` | Chromium | every spec except the audio specs |
 | `voice` | Chromium with the fake microphone, one worker | the audio specs: `voice-*.spec.ts` and `dictation*.spec.ts` |
-| `webkit` | WebKit (the engine of the Linux and macOS desktop shells) | every spec except `@chromium-only`; a test that seeds or installs Plugins gets a persistent context (see Troubleshooting) |
+| `webkit` | WebKit (the engine of the Linux and macOS desktop shells) | every spec except `@chromium-only`, each in a persistent context (see Troubleshooting) |
 | `firefox` | Firefox | only tests tagged `@sandbox` (the Plugin sandbox's engine coverage) |
 | `mac-platform` | Chromium reporting a Mac `navigator.platform` | only tests tagged `@mac-platform` |
 | `phone` | Chromium as a Pixel 7: 412x839 viewport, touch, `isMobile` | only tests tagged `@touch` |
@@ -973,10 +973,19 @@ focused element rather than a step count.
 **WebKit has OPFS only in a persistent context.** In Playwright's default
 ephemeral context, WebKit treats the session as private browsing and
 `navigator.storage.getDirectory()` throws `UnknownError`, as in a Safari
-Private window ([#479](https://github.com/M4ss1ck/maibuk/issues/479)). So on
-the `webkit` project a test that seeds Plugins (`plugins` or
-`unapprovedPlugins`), or installs one with none seeded
-(`usesPluginDirectory: true`), runs in a persistent context on a fresh temporary profile
-(`needsPersistentContext` in `support/storage.ts`, wired in `support/test.ts`);
-every other test keeps the default context. A spec that builds its own context
-(`browser.newContext()`) gets no OPFS on WebKit.
+Private window ([#479](https://github.com/M4ss1ck/maibuk/issues/479)). The web
+Library lives on OPFS, so without it WebKit falls back to memory and a reload
+loses the data. So every test on the `webkit` project runs in a persistent
+context on a fresh temporary profile (`persistentContext: true` in
+`playwright.config.ts`, wired in `support/test.ts`). A lane without that option
+gives one only to a test that seeds Plugins (`plugins` or `unapprovedPlugins`)
+or installs one with none seeded (`usesPluginDirectory: true`), through
+`needsPersistentContext` in `support/storage.ts`. A spec that builds its own
+context (`browser.newContext()`) gets no OPFS on WebKit.
+
+**A lazy route changes the URL before its screen mounts.** After `toHaveURL`, the
+old screen can still be there: its shortcuts are still bound, its focused control
+still has focus, and the new path is not saved yet. A `tabTo` to a row that shares
+its name with the old screen's focused row returns at once, and focus then drops
+to the page when that row unmounts. Before driving the new screen, assert
+something only it renders, such as its heading or toolbar.
