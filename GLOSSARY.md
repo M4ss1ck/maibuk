@@ -17,7 +17,7 @@ The browsable list of an author's Books, Notes, or Canvases.
 _Avoid_: dashboard, home (for the Book Gallery)
 
 **Item Menu**:
-The actions for one Note, Chapter, Text Node, Note Reference, or Symbol in the picker, opened from its ⋯ button (lists only), a long-press on touch, or a right click.
+The actions for one Note, Chapter, Text Node, Note Reference, Symbol in the picker, or Task List, opened from its ⋯ button (lists and Task Lists only), a long-press on touch, or a right click. On a Task List, a long-press or right click shows them inside the editor's own menu.
 _Avoid_: context menu, kebab menu, overflow menu
 
 **Tutorial**:
@@ -143,6 +143,11 @@ _Avoid_: updated, modified
 
 **Heading**:
 A titled division inside the text of a Chapter or Note, listed in the Outline and reachable by a Link.
+
+**Task List**:
+A list of items with checkboxes inside the text of a Note or the Ephemeral.
+_UI_: en "Task List" / es "Lista de Tareas"
+_Avoid_: checklist, todo list
 
 **Link**:
 A pointer from a Note, Chapter, or Text Node to a Book, Chapter, Note, heading, or web address that opens what it points to.
