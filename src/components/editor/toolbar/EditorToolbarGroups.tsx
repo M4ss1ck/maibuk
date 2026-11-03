@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import type { ReactNode } from "react";
+import { Button, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
 import { useEditorState, type Editor } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
 import {
@@ -53,7 +53,6 @@ import { TableMenu } from "@/components/editor/TableMenu";
 import { TextCaseMenu } from "@/components/editor/TextCaseMenu";
 import { ToolbarButton } from "@/components/editor/ToolbarButton";
 import { PluginToolbarButton } from "@/components/plugins/PluginToolbarButton";
-import { adjustPosition } from "@/components/editor/editor-context-menu-utils";
 import { Tooltip } from "@/components/ui";
 import { getEditorToolbarState } from "@/components/editor/toolbar/editor-toolbar-state";
 import { useSettingsStore } from "@/features/settings/store";
@@ -653,94 +652,46 @@ interface SpellCheckLanguageMenuProps {
 }
 
 function SpellCheckLanguageMenu({ value, onChange, label }: SpellCheckLanguageMenuProps) {
-  const [open, setOpen] = useState(false);
-  const [position, setPosition] = useState({ top: 0, left: 0 });
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
   const selected = LANGUAGE_OPTIONS.find((option) => option.value === value) ?? LANGUAGE_OPTIONS[0];
 
-  const toggle = () => {
-    if (buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      setPosition({ top: rect.bottom + 4, left: rect.left });
-    }
-    setOpen((current) => !current);
-  };
-
-  useEffect(() => {
-    if (!open) return;
-    const handleMouseDown = (event: MouseEvent) => {
-      const target = event.target as Node;
-      const isMenuTarget =
-        target instanceof HTMLElement && target.closest(".spellcheck-language-menu-portal");
-      if (buttonRef.current?.contains(target) || isMenuTarget) return;
-      setOpen(false);
-    };
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopPropagation();
-        setOpen(false);
-        buttonRef.current?.focus();
-      }
-    };
-
-    document.addEventListener("mousedown", handleMouseDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handleMouseDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [open]);
-
-  useLayoutEffect(() => {
-    if (!open || !menuRef.current) return;
-    setPosition((current) => adjustPosition(current, menuRef.current!.getBoundingClientRect()));
-  }, [open]);
-
   return (
-    <>
+    <MenuTrigger>
       <Tooltip content={label}>
-        <button
-          ref={buttonRef}
-          type="button"
-          onClick={toggle}
+        <Button
           aria-label={label}
-          className={`flex h-8 w-7 flex-col items-center justify-center gap-0 rounded text-[10px] font-medium leading-none transition-colors ${
-            open ? "bg-primary text-primary-foreground" : "hover:bg-muted"
-          }`}
+          className="flex h-8 w-7 flex-col items-center justify-center gap-0 rounded text-[10px] font-medium leading-none transition-colors hover:bg-muted data-pressed:bg-primary data-pressed:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           <span className="uppercase">{selected.value}</span>
           <ChevronDown className="h-2.5 w-2.5" />
-        </button>
+        </Button>
       </Tooltip>
-      {open &&
-        createPortal(
-          <div
-            ref={menuRef}
-            className="spellcheck-language-menu-portal fixed z-50 min-w-32 max-h-[calc(100vh-1rem)] overflow-y-auto rounded-lg border border-border bg-card py-1 shadow-lg"
-            style={{ top: position.top, left: position.left, maxHeight: "calc(100dvh - 1rem)" }}
-          >
-            {LANGUAGE_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => {
-                  onChange(option.value);
-                  setOpen(false);
-                }}
-                className={`flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left text-sm transition-colors hover:bg-muted ${
-                  option.value === value ? "text-primary" : "text-foreground"
-                }`}
-              >
-                <span>{option.label}</span>
-                <span className="text-xs uppercase text-muted-foreground">{option.value}</span>
-              </button>
-            ))}
-          </div>,
-          document.body
-        )}
-    </>
+      <Popover
+        placement="bottom start"
+        className="z-50 min-w-32 overflow-y-auto rounded-lg border border-border bg-card py-1 shadow-lg focus:outline-none"
+      >
+        <Menu
+          aria-label={label}
+          selectionMode="single"
+          selectedKeys={[value]}
+          onAction={(key) => onChange(key as Language)}
+          className="outline-none"
+        >
+          {LANGUAGE_OPTIONS.map((option) => (
+            <MenuItem
+              key={option.value}
+              id={option.value}
+              data-command-exempt="a value of the Spell Check language picker, not an action"
+              textValue={option.label}
+              className={`flex cursor-pointer items-center justify-between gap-3 px-3 py-1.5 text-sm outline-none data-focused:bg-muted ${
+                option.value === value ? "text-primary" : "text-foreground"
+              }`}
+            >
+              <span>{option.label}</span>
+              <span className="text-xs uppercase text-muted-foreground">{option.value}</span>
+            </MenuItem>
+          ))}
+        </Menu>
+      </Popover>
+    </MenuTrigger>
   );
 }

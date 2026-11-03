@@ -1567,7 +1567,9 @@ export const ROWS: MatrixRow[] = [
     area: "ephemeral",
     workflow:
       "Navigate by keyboard, focus lands in editor, type; asserts: word count; persists: Reload: text gone (never saved)",
-    edges: [],
+    edges: [
+      "A picked Spell Check language shows on its button, drives Spell Check and Opening Marks, and carries to the Note",
+    ],
     terms: ["Ephemeral"],
     shortcuts: [],
     routes: ["/ephemeral"],

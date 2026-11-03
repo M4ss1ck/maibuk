@@ -20,6 +20,13 @@ describe("useEphemeralStore", () => {
     expect(state.wordCount).toBe(2);
   });
 
+  it("reset keeps the picked language", () => {
+    useEphemeralStore.getState().setLanguage("es");
+    useEphemeralStore.getState().reset();
+    expect(useEphemeralStore.getState().language).toBe("es");
+    useEphemeralStore.setState({ language: undefined });
+  });
+
   it("reset clears content and word count", () => {
     useEphemeralStore.getState().setContent("<p>keep nothing</p>");
     useEphemeralStore.getState().setWordCount(2);

@@ -514,7 +514,12 @@ describe("Editor", () => {
 
     const lastProps = capturedToolbarProps[capturedToolbarProps.length - 1];
     expect(lastProps.spellCheckLanguage).toBe("es");
-    expect(lastProps.onSpellCheckLanguageChange).toBe(onSpellCheckLanguageChange);
+    act(() => (lastProps.onSpellCheckLanguageChange as (language: string) => void)("en"));
+    expect(onSpellCheckLanguageChange).toHaveBeenCalledWith("en");
+
+    // The host owns its language: a pick shows only once the host passes it back.
+    const afterPick = capturedToolbarProps[capturedToolbarProps.length - 1];
+    expect(afterPick.spellCheckLanguage).toBe("es");
   });
 
   describe("the Plugin editor registration", () => {

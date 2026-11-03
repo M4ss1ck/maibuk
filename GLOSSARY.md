@@ -162,7 +162,7 @@ What a Link points to, shown beside it without following it.
 _Avoid_: tooltip, hover card, peek
 
 **Ephemeral**:
-A single scratch space for writing that is never saved and can be turned into a Note.
+A single scratch space for writing that is never saved and can be turned into a Note. It has no language of its own: it writes in the app language until the author picks a Spell Check language, which lasts until the app restarts and carries over to the Note.
 _Avoid_: scratchpad, scratch editor, draft
 
 ## Canvas
