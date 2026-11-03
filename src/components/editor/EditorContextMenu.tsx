@@ -23,7 +23,7 @@ import {
 import { spellCheckService } from "@/lib/spellcheck";
 import { looksLikeMarkdown, markdownToEditorHtml } from "@/features/markdown";
 import { useShortcuts } from "@/lib/shortcuts";
-import { clampPosition, getWordAtPosition } from "@/components/editor/editor-context-menu-utils";
+import { getWordAtPosition } from "@/components/editor/editor-context-menu-utils";
 import { canMoveChecked, outermostTaskListAt } from "@/components/editor/extensions/TaskListOrder";
 import type { ClipboardProbe } from "@/components/editor/useClipboardProbe";
 import {
@@ -226,7 +226,7 @@ export function EditorContextMenu({
       if (!pos) return;
 
       event.preventDefault();
-      openMenuAt(pos.pos, clampPosition(event.clientX, event.clientY));
+      openMenuAt(pos.pos, { top: event.clientY, left: event.clientX });
     },
     [editor, openMenuAt, onEditLink]
   );
@@ -252,7 +252,7 @@ export function EditorContextMenu({
       let position = { top: 0, left: 0 };
       try {
         const coords = editor.view.coordsAtPos(pos);
-        position = clampPosition(coords.left, coords.bottom + 4);
+        position = { top: coords.bottom + 4, left: coords.left };
       } catch {
         // jsdom has no layout; the menu still opens for the keyboard.
       }
@@ -390,7 +390,8 @@ export function EditorContextMenu({
   return (
     <>
       {/* A zero-size anchor at the pointer/caret: MenuTrigger positions the menu
-          from it, and focus returns to the editor from onOpenChange below. */}
+          from it, flipping or shifting it to fit the window, and focus returns
+          to the editor from onOpenChange below. */}
       <MenuTrigger
         isOpen={menu !== null}
         onOpenChange={(open) => {

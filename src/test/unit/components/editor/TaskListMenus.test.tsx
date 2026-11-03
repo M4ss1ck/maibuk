@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Editor } from "@tiptap/core";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
@@ -189,6 +189,20 @@ describe("the editor's menu", () => {
     expect(texts(editor)).toEqual(["u", "c"]);
     expect(editor.state.selection.$from.parent.textContent).toBe("c");
     await waitFor(() => expect(document.activeElement).toBe(editor.view.dom));
+  });
+
+  it("anchors at the pointer low on the screen, leaving the flip to the popover", async () => {
+    const editor = await renderEditor(`<p>plain</p>`, menu);
+    const pos = textPos(editor, "plain");
+    editor.view.posAtCoords = vi.fn(() => ({ pos, inside: pos }));
+    const clientY = window.innerHeight - 10;
+
+    fireEvent.contextMenu(editor.view.dom, { clientX: 40, clientY });
+
+    await screen.findByRole("menu");
+    const anchor = document.querySelector<HTMLElement>('button[aria-label="editor.contextMenu"]');
+    expect(anchor?.style.top).toBe(`${clientY}px`);
+    expect(anchor?.style.left).toBe("40px");
   });
 
   it("has no Task List section outside a Task List", async () => {
