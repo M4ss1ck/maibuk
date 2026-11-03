@@ -1600,6 +1600,19 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "editor-task-list-menu",
+    area: "editor",
+    workflow:
+      "Move checked items of a Task List to the top or bottom from the Command Palette and from Shift+F10 (Editor options, Task List section); one undo restores; caret stays in its item; disabled when nothing to move; asserts: item order, caret in its item, aria-disabled on the menu item, focus back in the text; persists: no (Ephemeral is never saved)",
+    edges: ["Move checked to top disabled when no checked item is above the others"],
+    terms: ["Task List"],
+    shortcuts: ["editor.moveCheckedToTop", "editor.moveCheckedToBottom"],
+    routes: ["/ephemeral"],
+    fixture: "empty",
+    tags: [],
+    status: "accepted",
+  },
+  {
     id: "canvas-gallery",
     area: "canvas",
     workflow:
