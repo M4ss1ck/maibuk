@@ -13,6 +13,10 @@ import { ReplaceStep, type Step } from "@tiptap/pm/transform";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 
 declare module "@tiptap/core" {
+  interface Storage {
+    taskListOrder: TaskListOrderStorage;
+  }
+
   interface Commands<ReturnType> {
     taskListOrder: {
       /** Moves checked items up at every level of the list at `pos` (default: where the selection starts). */
@@ -226,7 +230,12 @@ const taskListOrderKey = new PluginKey<TaskListDecorations>("taskListOrder");
 
 let slotCounter = 0;
 
-/** An empty element the ⋯ button portals into (`TaskListMenus`); never part of the document. */
+/** The elements the ⋯ buttons portal into (`TaskListMenus`); never part of the document. */
+export interface TaskListOrderStorage {
+  slots: Set<HTMLElement>;
+  onSlotsChange: Set<() => void>;
+}
+
 function createMenuSlot(): HTMLElement {
   const slot = document.createElement("div");
   slot.className = "task-list-menu";
@@ -261,8 +270,12 @@ function activeList(lists: TaskListDecorations["lists"], state: EditorState | Tr
 function decorate(
   doc: ProseMirrorNode,
   lists: TaskListDecorations["lists"],
-  active: number
+  active: number,
+  storage: TaskListOrderStorage
 ): DecorationSet {
+  const changed = () => {
+    for (const listener of storage.onSlotsChange) listener();
+  };
   const decorations: Decoration[] = [];
   lists.forEach((list, index) => {
     decorations.push(
@@ -271,12 +284,27 @@ function decorate(
       }),
       // One key for all: ProseMirror keeps the slot's element across edits, so
       // React's portal and an open menu survive them.
-      Decoration.widget(list.from + 1, createMenuSlot, {
-        side: -1,
-        key: "task-list-menu",
-        ignoreSelection: true,
-        stopEvent: () => true,
-      })
+      Decoration.widget(
+        list.from + 1,
+        () => {
+          // ProseMirror can rebuild its DOM with no transaction, so the slots
+          // report themselves rather than being looked for after an update.
+          const slot = createMenuSlot();
+          storage.slots.add(slot);
+          changed();
+          return slot;
+        },
+        {
+          side: -1,
+          key: "task-list-menu",
+          ignoreSelection: true,
+          stopEvent: () => true,
+          destroy: (slot) => {
+            storage.slots.delete(slot as HTMLElement);
+            changed();
+          },
+        }
+      )
     );
   });
   return DecorationSet.create(doc, decorations);
@@ -286,8 +314,12 @@ function decorate(
  * Moves the checked items of a Task List (a one-off rewrite of the document,
  * not a held Sort), and marks each outermost list with a slot for its ⋯ button.
  */
-export const TaskListOrder = Extension.create({
+export const TaskListOrder = Extension.create<Record<string, never>, TaskListOrderStorage>({
   name: "taskListOrder",
+
+  addStorage() {
+    return { slots: new Set(), onSlotsChange: new Set() };
+  },
 
   addCommands() {
     const command =
@@ -305,7 +337,7 @@ export const TaskListOrder = Extension.create({
   },
 
   addProseMirrorPlugins() {
-    const editor = this.editor;
+    const { editor, storage } = this;
     return [
       new Plugin<TaskListDecorations>({
         key: taskListOrderKey,
@@ -313,13 +345,13 @@ export const TaskListOrder = Extension.create({
           init: (_config, state) => {
             const lists = findOutermostLists(state.doc);
             const active = activeList(lists, state);
-            return { lists, active, decorations: decorate(state.doc, lists, active) };
+            return { lists, active, decorations: decorate(state.doc, lists, active, storage) };
           },
           apply: (tr, prev) => {
             const lists = tr.docChanged ? findOutermostLists(tr.doc) : prev.lists;
             const active = activeList(lists, tr);
             if (!tr.docChanged && active === prev.active) return prev;
-            return { lists, active, decorations: decorate(tr.doc, lists, active) };
+            return { lists, active, decorations: decorate(tr.doc, lists, active, storage) };
           },
         },
         props: {

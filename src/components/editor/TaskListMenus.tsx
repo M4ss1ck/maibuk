@@ -3,7 +3,10 @@ import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
 import { ArrowDownToLine, ArrowUpToLine } from "lucide-react";
-import { canMoveChecked } from "@/components/editor/extensions/TaskListOrder";
+import {
+  canMoveChecked,
+  type TaskListOrderStorage,
+} from "@/components/editor/extensions/TaskListOrder";
 import { ItemActionsMenu, type ItemAction } from "@/components/ui/ItemActionsMenu";
 
 function TaskListMenu({ editor, slot }: { editor: Editor; slot: HTMLElement }) {
@@ -60,23 +63,14 @@ export function TaskListMenus({ editor }: { editor: Editor | null }) {
   const [slots, setSlots] = useState<HTMLElement[]>([]);
 
   useEffect(() => {
-    if (!editor) return;
-    const sync = () => {
-      if (editor.isDestroyed) return;
-      const found = editor.view.dom?.querySelectorAll<HTMLElement>("[data-task-list-menu]");
-      const next = found ? Array.from(found) : [];
-      setSlots((prev) =>
-        prev.length === next.length && prev.every((slot, index) => slot === next[index])
-          ? prev
-          : next
-      );
-    };
+    // Absent in an editor without Task Lists.
+    const storage: TaskListOrderStorage | undefined = editor?.storage.taskListOrder;
+    if (!storage) return;
+    const sync = () => setSlots(Array.from(storage.slots));
     sync();
-    editor.on("create", sync);
-    editor.on("transaction", sync);
+    storage.onSlotsChange.add(sync);
     return () => {
-      editor.off("create", sync);
-      editor.off("transaction", sync);
+      storage.onSlotsChange.delete(sync);
     };
   }, [editor]);
 

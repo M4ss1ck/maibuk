@@ -560,12 +560,12 @@ export function NoteEditor({
         nested: true,
       }),
       NotesTaskDndBehavior,
-      TaskListOrder,
       CollapsibleHeading.configure({
         collapseLabel: t("notes.collapseHeading"),
         expandLabel: t("notes.expandHeading"),
         collapsedHeadings: note.collapsedHeadings,
       }),
+      TaskListOrder,
     ],
     [t, collapsedHeadingsKey]
   );

@@ -125,6 +125,25 @@ describe("the ⋯ button", () => {
     expect(editor.state.selection.$from.parent.textContent).toBe("c1");
   });
 
+  it("keeps its button when the editor rebuilds its DOM with no transaction", async () => {
+    const editor = await renderEditor(taskList(task(false, "a")), (e) => (
+      <TaskListMenus editor={e} />
+    ));
+    await screen.findByRole("button", { name: "editor.taskListActions" });
+
+    // New node views redraw the whole document, as an Editor re-render's options can.
+    act(() => {
+      editor.view.setProps({
+        nodeViews: { horizontalRule: () => ({ dom: document.createElement("hr") }) },
+      });
+    });
+
+    await waitFor(() => {
+      const button = screen.getByRole("button", { name: "editor.taskListActions" });
+      expect(editor.view.dom.contains(button)).toBe(true);
+    });
+  });
+
   it("follows lists added and removed, and renders nothing without a list", async () => {
     const editor = await renderEditor("<p>plain</p>", (e) => <TaskListMenus editor={e} />);
     expect(screen.queryByRole("button", { name: "editor.taskListActions" })).toBeNull();
