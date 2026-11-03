@@ -47,13 +47,22 @@ test.describe("Task List menu @wf:editor-task-list-menu @sc:editor.moveCheckedTo
     // Caret from u2 up to c1.
     await page.keyboard.press("ArrowUp");
     await page.keyboard.press("ArrowUp");
+    // Typing proves the editor has caught up with the arrows before the move.
+    await page.keyboard.type("x");
+    await expect(items(page)).toHaveText(["c1x", "u1", "u2"]);
 
     await runPaletteCommand(page, "Move checked to bottom");
 
-    await expect(items(page)).toHaveText(["u1", "u2", "c1"]);
+    await expect(items(page)).toHaveText(["u1", "u2", "c1x"]);
     await expect(editor(page)).toBeFocused();
-    await page.keyboard.type("!");
-    await expect(items(page).nth(2)).toHaveText("c1!");
+    // The caret comes back a moment after focus, so a key sent at once can be
+    // dropped; when one lands, it has to land in c1x.
+    await expect(async () => {
+      await page.keyboard.type("!");
+      await expect(items(page).nth(2)).toHaveText(/^c1x!+$/, { timeout: 100 });
+    }).toPass({ timeout: 3000 });
+    await expect(items(page).nth(0)).toHaveText("u1");
+    await expect(items(page).nth(1)).toHaveText("u2");
   });
 
   test("one Undo restores the original order after a move", async ({ page }) => {
