@@ -186,7 +186,7 @@ describe("NoteEditor extensions", () => {
     };
 
     expect(Array.isArray(props?.extraExtensions)).toBe(true);
-    expect(props.extraExtensions).toHaveLength(5);
+    expect(props.extraExtensions).toHaveLength(6);
 
     const taskItemExtension = props.extraExtensions?.[1] as {
       options?: {

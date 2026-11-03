@@ -428,6 +428,46 @@ option {
   margin: 0.75em 0;
 }
 
+/* The ⋯ button of an outermost Task List: at the right end of its first row,
+   with space reserved so it never covers text. */
+.editor-content ul.task-list-root {
+  position: relative;
+}
+
+.editor-content ul.task-list-root > li:first-of-type > div > :where(:first-child) {
+  padding-right: 1.75rem;
+}
+
+.task-list-menu {
+  position: absolute;
+  top: 0;
+  right: 0;
+  visibility: hidden;
+}
+
+ul.task-list-root:hover > .task-list-menu,
+ul.task-list-caret > .task-list-menu,
+.task-list-menu:focus-within,
+.task-list-menu:has([aria-expanded="true"]) {
+  visibility: visible;
+}
+
+@media (pointer: coarse) {
+  .task-list-menu {
+    visibility: visible;
+  }
+
+  .editor-content ul.task-list-root > li:first-of-type > div > :where(:first-child) {
+    min-height: 2.5rem;
+    padding-right: 2.75rem;
+  }
+}
+
+.focus-mode .editor-content ul.task-list-root > li:first-of-type > div > :where(:first-child) {
+  min-height: 0;
+  padding-right: 0;
+}
+
 .editor-content ul[data-type="taskList"] li[data-checked] {
   display: flex;
   gap: 0.375rem;

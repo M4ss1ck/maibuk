@@ -15,6 +15,7 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from "react";
 import { EditorToolbar } from "@/components/editor/EditorToolbar";
+import { TaskListMenus } from "@/components/editor/TaskListMenus";
 import { SelectionToolbar } from "@/components/editor/SelectionToolbar";
 import { LinkClickHandler } from "@/components/editor/LinkClickHandler";
 import { LinkPreviewLayer } from "@/components/editor/LinkPreviewLayer";
@@ -668,6 +669,7 @@ export function Editor({
         </div>
       </div>
 
+      {!focusMode && <TaskListMenus editor={editor} />}
       <LinkClickHandler editor={editor} />
       <LinkPreviewLayer editor={editor} />
       <ImageContextMenu editor={editor} />

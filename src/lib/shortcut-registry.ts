@@ -843,6 +843,18 @@ export const COMMANDS = {
     source: "editor-keymap",
     defaults: [["Mod+Shift+9"]],
   },
+  "editor.moveCheckedToTop": {
+    labelKey: "editor.moveCheckedToTop",
+    contexts: ["editor"],
+    source: "editor-keymap",
+    defaults: [],
+  },
+  "editor.moveCheckedToBottom": {
+    labelKey: "editor.moveCheckedToBottom",
+    contexts: ["editor"],
+    source: "editor-keymap",
+    defaults: [],
+  },
   "editor.quote": {
     labelKey: "editor.quote",
     contexts: ["editor"],

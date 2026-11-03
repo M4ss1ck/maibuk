@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { ArrowLeft, Pin, Tags } from "lucide-react";
 import { Extension } from "@tiptap/core";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
+import { TaskListOrder } from "@/components/editor/extensions/TaskListOrder";
 import { NodeSelection, Plugin } from "@tiptap/pm/state";
 import { dropPoint } from "@tiptap/pm/transform";
 import type { Note, UpdateNoteInput } from "@/features/notes";
@@ -564,6 +565,7 @@ export function NoteEditor({
         expandLabel: t("notes.expandHeading"),
         collapsedHeadings: note.collapsedHeadings,
       }),
+      TaskListOrder,
     ],
     [t, collapsedHeadingsKey]
   );

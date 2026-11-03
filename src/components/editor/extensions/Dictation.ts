@@ -18,6 +18,7 @@ import {
 import type { VoiceCommandRun, VoiceOutcome } from "@/features/dictation/voice-commands";
 import { normalizeLanguage } from "@/features/settings/types";
 import { runVoiceCommand, VOICE_MARKS } from "@/components/editor/editor-commands";
+import { taskListMoveMap } from "@/components/editor/extensions/TaskListOrder";
 
 /** One dictated sentence: its range in the document and the exact text there. */
 export interface DictatedRange {
@@ -591,15 +592,20 @@ export const Dictation = Extension.create<Record<string, never>, DictationStorag
               (Array.isArray(meta.added) || meta.scratch === true);
             let history = prev.history;
             if (tr.docChanged) {
+              // Reordering a Task List replaces it whole, which `tr.mapping`
+              // collapses: an entry moves with its item instead.
+              const moved = history.length > 0 ? taskListMoveMap(tr) : null;
+              const mapFrom = moved ?? ((pos: number) => tr.mapping.map(pos, 1));
+              const mapTo = moved ?? ((pos: number) => tr.mapping.map(pos, -1));
               history = history.map((entry) => {
                 // Insertions at the edges stay outside the entry, so text
                 // typed right before or after it never gets absorbed.
-                const from = tr.mapping.map(entry.from, 1);
-                const to = tr.mapping.map(entry.to, -1);
+                const from = mapFrom(entry.from);
+                const to = mapTo(entry.to);
                 const lines = entry.lines
                   .map((line) => ({
-                    from: tr.mapping.map(line.from, 1),
-                    to: tr.mapping.map(line.to, -1),
+                    from: mapFrom(line.from),
+                    to: mapTo(line.to),
                   }))
                   .filter((line) => line.from < line.to && line.from >= from && line.to <= to);
                 const mapped: DictatedRange = {

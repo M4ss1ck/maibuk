@@ -51,6 +51,8 @@ export const EDITOR_COMMANDS: Partial<Record<CommandId, EditorCommand>> = {
   "editor.bulletList": run("toggleBulletList"),
   "editor.numberedList": run("toggleOrderedList"),
   "editor.taskList": run("toggleTaskList"),
+  "editor.moveCheckedToTop": run("moveCheckedToTop"),
+  "editor.moveCheckedToBottom": run("moveCheckedToBottom"),
   "editor.quote": run("toggleBlockquote"),
   "editor.alignLeft": run("setTextAlign", "left"),
   "editor.alignCenter": run("setTextAlign", "center"),

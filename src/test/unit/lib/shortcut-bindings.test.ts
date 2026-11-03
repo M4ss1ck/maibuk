@@ -89,7 +89,9 @@ describe("every registry shortcut is really bound", () => {
 
     const dead = ALL_IDS.filter((id) => {
       const definition: CommandDef = COMMANDS[id];
-      return definition.source === "editor-keymap" && !handled.has(id);
+      // A Command with no built-in Shortcut has no key for the keymap to handle.
+      const hasKey = definition.defaults.length > 0 || (definition.fixed ?? []).length > 0;
+      return definition.source === "editor-keymap" && hasKey && !handled.has(id);
     });
 
     expect(dead).toEqual([]);
