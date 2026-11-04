@@ -17,7 +17,9 @@ import type { Book } from "@/features/books/types";
 import type { Chapter } from "@/features/chapters/types";
 import type { PdfExportOptions } from "@/features/export/types";
 import { PdfDocument } from "@/features/export/pdf-document";
+import { embeddedPdfFontFamilies } from "@/features/export/pdf-font-registration";
 import { getMargins } from "@/features/export/pdf-styles";
+import { bookPdfText, hyphenateWord } from "@/features/export/pdf-text-support";
 
 // ---------------------------------------------------------------------------
 // Text sanitisation — prevents pdfkit coordinate overflow on malformed text
@@ -40,18 +42,6 @@ export function sanitizePdfText(text: string): string {
 // ---------------------------------------------------------------------------
 // Hyphenation callback — chunks very long words to prevent coordinate overflow
 // ---------------------------------------------------------------------------
-
-const MAX_WORD_LEN = 28;
-const CHUNK_SIZE = 16;
-
-function hyphenateWord(word: string): string[] {
-  if (word.length <= MAX_WORD_LEN) return [word];
-  const parts: string[] = [];
-  for (let i = 0; i < word.length; i += CHUNK_SIZE) {
-    parts.push(word.slice(i, i + CHUNK_SIZE));
-  }
-  return parts;
-}
 
 let hyphenationRegistered = false;
 
@@ -132,10 +122,13 @@ export async function generatePdf(
 
   onProgress?.("Generating PDF document...");
 
+  const fontFamilies = await embeddedPdfFontFamilies(bookPdfText(sanitizedBook, exportChapters));
+
   const element = createElement(PdfDocument, {
     book: sanitizedBook,
     chapters: exportChapters,
     options,
+    fontFamilies,
   });
 
   // PdfDocument returns a <Document> element — safe cast for pdf() type constraint

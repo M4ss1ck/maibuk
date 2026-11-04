@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { computeChecksum } from "@/lib/checksum";
-import type { SpellCheckDictionaryFiles } from "@/features/spell-check-dictionaries/types";
+import type { DownloadedFiles } from "@/lib/verified-download";
 
 const { mockGetFiles } = vi.hoisted(() => ({ mockGetFiles: vi.fn() }));
 vi.mock("@/lib/platform", () => ({ getSpellCheckDictionaryFiles: mockGetFiles }));
@@ -23,7 +23,7 @@ const originalDic = { ...fr.dic };
 
 function memoryFiles() {
   const store = new Map<string, Uint8Array>();
-  const files: SpellCheckDictionaryFiles = {
+  const files: DownloadedFiles = {
     read: vi.fn(async (language, name) => store.get(`${language}/${name}`) ?? null),
     write: vi.fn(async (language, name, data) => {
       store.set(`${language}/${name}`, data);
@@ -48,7 +48,7 @@ function serveCorrect() {
   );
 }
 
-let files: SpellCheckDictionaryFiles;
+let files: DownloadedFiles;
 let store: Map<string, Uint8Array>;
 
 beforeEach(() => {

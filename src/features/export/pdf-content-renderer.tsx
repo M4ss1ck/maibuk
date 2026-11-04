@@ -8,7 +8,7 @@
  * extracted from <span> and <mark> elements and mapped to react-pdf styles
  * so that the exported PDF preserves the look of the writing editor.
  */
-import { createElement, type ReactNode } from "react";
+import { createElement, type ComponentProps, type ReactNode } from "react";
 import { Text, View, Image, Link } from "@react-pdf/renderer";
 import type { PdfStyles } from "@/features/export/pdf-styles";
 import { ENDNOTE_BACKLINK } from "@/features/export/html-sanitizer";
@@ -20,7 +20,7 @@ import { parseLinkUri } from "@/features/links/link-uri";
 
 interface ParsedInlineStyles {
   color?: string;
-  fontFamily?: string;
+  fontFamily?: string | string[];
   fontSize?: number;
   backgroundColor?: string;
 }
@@ -56,10 +56,20 @@ export function mapCssFontToPdf(cssFontFamily: string): string {
 }
 
 /**
+ * The families the sheet embeds, or undefined when it draws text with the
+ * built-in fonts. An inline `font-family` keeps its mapped family first and
+ * falls back to these for the code points that family cannot draw.
+ */
+export function embeddedFontFamilies(styles: PdfStyles): string[] | undefined {
+  const family = styles.paragraph.fontFamily;
+  return Array.isArray(family) ? family : undefined;
+}
+
+/**
  * Parses a DOM element's inline `style` attribute into react-pdf-compatible
  * style properties.
  */
-function parseInlineStyles(el: Element): ParsedInlineStyles {
+function parseInlineStyles(el: Element, families: string[] | undefined): ParsedInlineStyles {
   const styleStr = el.getAttribute("style");
   if (!styleStr) return {};
 
@@ -80,9 +90,11 @@ function parseInlineStyles(el: Element): ParsedInlineStyles {
       case "color":
         result.color = value;
         break;
-      case "font-family":
-        result.fontFamily = mapCssFontToPdf(value);
+      case "font-family": {
+        const mapped = mapCssFontToPdf(value);
+        result.fontFamily = families ? [mapped, ...families] : mapped;
         break;
+      }
       case "font-size": {
         const match = value.match(/^(\d+(?:\.\d+)?)\s*px$/);
         if (match) {
@@ -135,13 +147,16 @@ function blockLineHeight(el: Element): number | undefined {
  * Converts a ParsedInlineStyles object into a react-pdf style object,
  * omitting undefined values.
  */
-function toReactPdfStyle(parsed: ParsedInlineStyles): Record<string, string | number> | null {
-  const style: Record<string, string | number> = {};
-  if (parsed.color) style.color = parsed.color;
-  if (parsed.fontFamily) style.fontFamily = parsed.fontFamily;
-  if (parsed.fontSize) style.fontSize = parsed.fontSize;
-  if (parsed.backgroundColor) style.backgroundColor = parsed.backgroundColor;
-  return Object.keys(style).length > 0 ? style : null;
+function toReactPdfStyle(parsed: ParsedInlineStyles): ComponentProps<typeof View>["style"] | null {
+  if (!parsed.color && !parsed.fontFamily && !parsed.fontSize && !parsed.backgroundColor) {
+    return null;
+  }
+  return {
+    ...(parsed.color ? { color: parsed.color } : {}),
+    ...(parsed.fontFamily ? { fontFamily: parsed.fontFamily } : {}),
+    ...(parsed.fontSize ? { fontSize: parsed.fontSize } : {}),
+    ...(parsed.backgroundColor ? { backgroundColor: parsed.backgroundColor } : {}),
+  };
 }
 
 /**
@@ -553,17 +568,21 @@ function renderInlineChildren(node: Element, styles: PdfStyles): ReactNode[] {
         );
         break;
       case "mark": {
-        const parsed = parseInlineStyles(el);
+        const parsed = parseInlineStyles(el, embeddedFontFamilies(styles));
         const bgColor = parsed.backgroundColor || "#ffff00";
-        const markStyle: Record<string, string | number> = { backgroundColor: bgColor };
         // Preserve any other inline styles on the mark itself
-        if (parsed.color) markStyle.color = parsed.color;
-        if (parsed.fontFamily) markStyle.fontFamily = parsed.fontFamily;
-        if (parsed.fontSize) markStyle.fontSize = parsed.fontSize;
         result.push(
           createElement(
             Text,
-            { key: nextKey(), style: markStyle },
+            {
+              key: nextKey(),
+              style: {
+                backgroundColor: bgColor,
+                ...(parsed.color ? { color: parsed.color } : {}),
+                ...(parsed.fontFamily ? { fontFamily: parsed.fontFamily } : {}),
+                ...(parsed.fontSize ? { fontSize: parsed.fontSize } : {}),
+              },
+            },
             ...renderInlineChildren(el, styles)
           )
         );
@@ -572,7 +591,7 @@ function renderInlineChildren(node: Element, styles: PdfStyles): ReactNode[] {
       case "span": {
         // Extract inline styles (color, font-family, font-size, background-color)
         // so the PDF preserves the same look as the writing editor.
-        const spanStyle = toReactPdfStyle(parseInlineStyles(el));
+        const spanStyle = toReactPdfStyle(parseInlineStyles(el, embeddedFontFamilies(styles)));
         if (spanStyle) {
           result.push(
             createElement(

@@ -29,6 +29,9 @@ once before `specs/voice-commands-app.spec.ts`; it skips files that exist.
 `@playwright/test` is pinned to an exact version; the browsers must match it.
 After bumping it, run the install command again.
 
+`specs/export-pdf-fonts.spec.ts` also needs `pdftotext` and `pdffonts` on PATH
+(they ship with poppler-utils).
+
 On Linux the browsers need their system libraries. `playwright install` prints
 the missing one when it cannot launch a browser. Install the whole set with:
 

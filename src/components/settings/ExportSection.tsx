@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useSettings, EXPORT_FORMAT_OPTIONS, type ExportFormat } from "@/features/settings";
 import { Select } from "@/components/ui";
+import { PdfFontsRow } from "@/components/settings/PdfFontsRow";
 import { SettingRow } from "@/components/settings/SettingRow";
 import { SettingsSection, SETTINGS_ROW_CLASS } from "@/components/settings/SettingsSection";
 
@@ -17,6 +18,9 @@ export function ExportSection() {
           onChange={setDefaultExportFormat}
           options={EXPORT_FORMAT_OPTIONS}
         />
+      </SettingRow>
+      <SettingRow id="pdfFonts" className="py-3 space-y-2">
+        <PdfFontsRow />
       </SettingRow>
     </SettingsSection>
   );

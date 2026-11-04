@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { computeChecksum } from "@/lib/checksum";
-import type { SpellCheckDictionaryFiles } from "@/features/spell-check-dictionaries/types";
+import type { DownloadedFiles } from "@/lib/verified-download";
 import i18n from "@/i18n";
 import "@/i18n";
 
@@ -33,7 +33,7 @@ const frEntry = fr;
 const originalAff = { ...frEntry.aff };
 const originalDic = { ...frEntry.dic };
 
-function memoryFiles(): SpellCheckDictionaryFiles {
+function memoryFiles(): DownloadedFiles {
   const store = new Map<string, Uint8Array>();
   return {
     read: vi.fn(async (language, name) => store.get(`${language}/${name}`) ?? null),

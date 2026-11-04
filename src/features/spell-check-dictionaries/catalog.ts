@@ -3,10 +3,10 @@
 // repository and is never mirrored. Re-pinning a file is an edit here; an old
 // copy on a device then reads as not installed.
 import type {
-  DictionaryFile,
   DictionaryScript,
   SpellCheckDictionary,
 } from "@/features/spell-check-dictionaries/types";
+import type { PinnedFile } from "@/lib/verified-download";
 
 export const DICTIONARY_COMMIT = "8cfea406b505e4d7df52d5a19bce525df98c54ab";
 
@@ -15,7 +15,7 @@ function file(
   name: "index.aff" | "index.dic",
   bytes: number,
   sha256: string
-): DictionaryFile {
+): PinnedFile {
   return {
     url: `https://raw.githubusercontent.com/wooorm/dictionaries/${DICTIONARY_COMMIT}/dictionaries/${language}/${name}`,
     bytes,

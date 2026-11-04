@@ -8,6 +8,7 @@ import {
   encrypt,
   encryptMeta,
   getPassphrase,
+  base64ToUint8Array,
   isSyncCryptoError,
   setPassphrase,
   uint8ArrayToBase64,
@@ -166,5 +167,18 @@ describe("meta envelope", () => {
     await expect(decryptMeta(meta)).rejects.toMatchObject({
       code: "INVALID_PASSPHRASE",
     });
+  });
+});
+
+describe("uint8ArrayToBase64()", () => {
+  it("encodes bytes as standard base64", () => {
+    const bytes = new TextEncoder().encode("hello");
+    expect(uint8ArrayToBase64(bytes)).toBe("aGVsbG8=");
+  });
+
+  it("round-trips 100 KiB without spreading the bytes into one call", () => {
+    const bytes = Uint8Array.from({ length: 100 * 1024 }, (_, index) => index % 256);
+    const decoded = base64ToUint8Array(uint8ArrayToBase64(bytes));
+    expect(decoded).toEqual(bytes);
   });
 });
