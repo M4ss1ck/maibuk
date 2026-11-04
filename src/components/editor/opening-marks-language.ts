@@ -9,11 +9,10 @@ import { useSettingsStore } from "@/features/settings/store";
  * changing a Book's language applies without re-creating the editor.
  */
 export function useOpeningMarksLanguage(language: string): () => string | null {
-  const languageRef = useRef(language);
-  languageRef.current = language;
+  const getLanguage = useWritingLanguageGetter(language);
   return useCallback(
-    () => (useSettingsStore.getState().editorOpeningMarks ? languageRef.current : null),
-    []
+    () => (useSettingsStore.getState().editorOpeningMarks ? getLanguage() : null),
+    [getLanguage]
   );
 }
 

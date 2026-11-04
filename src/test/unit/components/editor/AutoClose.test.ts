@@ -285,10 +285,8 @@ describe("AutoClose double quotes in the writing language", () => {
 
     // ProseMirror reconciles the browser-committed straight opener after compositionend.
     editor.view.dispatch(editor.state.tr.insertText('"', 1, 1));
-    await Promise.resolve();
-    await Promise.resolve();
 
-    expect(textWithCaret(editor)).toBe(expected);
+    await vi.waitFor(() => expect(textWithCaret(editor)).toBe(expected));
     editor.destroy();
   });
 

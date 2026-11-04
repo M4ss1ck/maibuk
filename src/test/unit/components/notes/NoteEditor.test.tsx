@@ -176,17 +176,21 @@ describe("NoteEditor", () => {
     vi.useRealTimers();
   });
 
-  it("does not save its language just because it mounted", async () => {
+  it("never saves its language unless the author changes it", async () => {
+    vi.useFakeTimers();
     const onSave = vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue();
 
     render(<NoteEditor note={buildNote({ language: "pt-BR" })} onSave={onSave} />);
 
+    // A content save must arrive after anything mounting could have written.
+    fireEvent.click(screen.getByRole("button", { name: "Apply editor update" }));
     await act(async () => {
-      await Promise.resolve();
+      await vi.runAllTimersAsync();
     });
 
-    expect(onSave).not.toHaveBeenCalledWith(expect.objectContaining({ language: "pt-BR" }));
-    expect(onSave).not.toHaveBeenCalled();
+    expect(onSave).toHaveBeenCalled();
+    for (const [input] of onSave.mock.calls) expect(input).not.toHaveProperty("language");
+    vi.useRealTimers();
   });
 
   it("writes in its Book's language when it has none of its own", () => {

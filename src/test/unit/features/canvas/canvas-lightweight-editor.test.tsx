@@ -98,16 +98,16 @@ describe("LightweightNode editor lifecycle", () => {
   });
 
   it("marks its static content with the app language", () => {
-    useSettingsStore.setState({ language: "pt-BR" as never });
+    useSettingsStore.setState({ language: "es" });
 
     renderNode();
 
     const content = screen.getByText("Idea").closest(".canvas-node-content");
-    expect(content?.getAttribute("lang")).toBe("pt-BR");
+    expect(content?.getAttribute("lang")).toBe("es");
   });
 
   it("passes the app language to the editor that opens the node", async () => {
-    useSettingsStore.setState({ language: "sv-FI" as never });
+    useSettingsStore.setState({ language: "es" });
     mocks.state.editingNodeId = "node";
     mocks.useEditor.mockReturnValue({
       commands: { focus: vi.fn() },
@@ -118,7 +118,7 @@ describe("LightweightNode editor lifecycle", () => {
     renderNode();
 
     await waitFor(() => expect(mocks.useEditor).toHaveBeenCalled());
-    expect(mocks.useEditor.mock.calls[0][0].editorProps.attributes.lang).toBe("sv-FI");
+    expect(mocks.useEditor.mock.calls[0][0].editorProps.attributes.lang).toBe("es");
   });
 
   it("does not create a Tiptap editor while the node is idle", () => {

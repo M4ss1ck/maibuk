@@ -12,10 +12,9 @@ export function baseLanguage(tag: string | null | undefined): string | null {
 }
 
 /**
- * The language a piece of text is written in: Book is the source of truth, so a
- * Note's own language wins over its Book, which wins over the app language.
- * A Chapter passes the Book, a Canvas passes only the app, and the Ephemeral
- * passes its pick as `own`.
+ * The language a piece of text is written in: its own, else its Book's, else the
+ * app's. A Note passes its own and its Book's, a Chapter only its Book's, a Canvas
+ * only the app's, and the Ephemeral passes its pick as `own`.
  */
 export function resolveWritingLanguage({
   own,
