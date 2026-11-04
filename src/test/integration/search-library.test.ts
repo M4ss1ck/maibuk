@@ -136,6 +136,18 @@ describe("searchLibrary matching", () => {
     expect(found.results[0].matchCount).toBe(2);
   });
 
+  it("finds Chinese and Japanese kana text by a short query", async () => {
+    const book = await createBookRow({ title: "Novel", authorName: "Author" }, "local");
+    await seedChapter(book.id, "<p>我喜欢写小说和读书</p><p>これは日本語です</p>");
+
+    expect((await search({ query: "小", kinds: ["chapter"] })).results[0].matchCount).toBe(1);
+    expect((await search({ query: "小说", kinds: ["chapter"] })).results[0].matchCount).toBe(1);
+    expect((await search({ query: "です", kinds: ["chapter"] })).results[0].matchCount).toBe(1);
+    expect(
+      (await search({ query: "小说", wholeWord: true, kinds: ["chapter"] })).results[0].matchCount
+    ).toBe(1);
+  });
+
   it("supports a Regex", async () => {
     const book = await createBookRow({ title: "Novel", authorName: "Author" }, "local");
     await seedChapter(book.id, "<p>a1 b2 c3</p>");

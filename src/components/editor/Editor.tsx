@@ -38,6 +38,7 @@ import type { SearchHandoff } from "@/features/search/types";
 import { assignHeadingIds } from "@/features/links/heading-ids";
 import type { InternalTarget, InternalTargetChildrenLoader } from "@/components/editor/LinkDialog";
 import { setContentSilently } from "@/features/metrics/programmatic";
+import { countWords } from "@/features/metrics/word-count";
 import { MarkdownPasteDialog } from "@/components/editor/MarkdownPasteDialog";
 import { buildDropHtml } from "@/components/editor/file-drop-html";
 import { textDropExtension } from "@/features/markdown/dropped-file";
@@ -335,7 +336,7 @@ export function Editor({
     // Counting the whole document is the expensive half; both consumers below
     // want the same number, so it is counted at most once per burst.
     let documentWords: number | null = null;
-    const countWords = () => {
+    const documentWordCount = () => {
       documentWords ??= editor.storage.characterCount.words();
       return documentWords;
     };
@@ -345,7 +346,7 @@ export function Editor({
       const html = editor.getHTML();
       appliedContentRef.current = html;
       onUpdateRef.current(html);
-      onWordCountChangeRef.current?.(countWords());
+      onWordCountChangeRef.current?.(documentWordCount());
     }
 
     if (statsDirtyRef.current) {
@@ -355,14 +356,13 @@ export function Editor({
         const { from, to } = editor.state.selection;
         if (from !== to) {
           const selectedText = editor.state.doc.textBetween(from, to, " ");
-          const words = selectedText
-            .trim()
-            .split(/\s+/)
-            .filter((word) => word.length > 0).length;
+          // The leaf separator matches the document count, so a hard break
+          // separates words in both.
+          const words = countWords(editor.state.doc.textBetween(from, to, " ", " "));
           onStatsChange({ words, characters: selectedText.length, hasSelection: true });
         } else {
           onStatsChange({
-            words: countWords(),
+            words: documentWordCount(),
             characters: editor.storage.characterCount.characters(),
             hasSelection: false,
           });
@@ -425,7 +425,7 @@ export function Editor({
         placeholder,
         emptyEditorClass: "is-editor-empty",
       }),
-      CharacterCount,
+      CharacterCount.configure({ wordCounter: countWords }),
       SearchReplace,
       MetricsObserver.configure({
         workId: bookId,
