@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, Input, Modal, Select, Switch } from "@/components/ui";
-import { LANGUAGE_OPTIONS, type Language } from "@/features/settings/types";
+import { LANGUAGE_OPTIONS } from "@/features/settings/types";
+import { withLanguageOption, type WritingLanguage } from "@/lib/writing-language";
 
 interface DictionaryPromptDialogProps {
   isOpen: boolean;
-  defaultLanguage: Language;
+  defaultLanguage: WritingLanguage;
   openInBrowser: boolean;
   onOpenInBrowserChange: (value: boolean) => void;
   onClose: () => void;
-  onSubmit: (word: string, language: Language) => void;
+  onSubmit: (word: string, language: WritingLanguage) => void;
 }
 
 export function DictionaryPromptDialog({
@@ -22,7 +23,7 @@ export function DictionaryPromptDialog({
 }: DictionaryPromptDialogProps) {
   const { t } = useTranslation();
   const [word, setWord] = useState("");
-  const [language, setLanguage] = useState<Language>(defaultLanguage);
+  const [language, setLanguage] = useState<WritingLanguage>(defaultLanguage);
 
   useEffect(() => {
     if (isOpen) {
@@ -65,7 +66,7 @@ export function DictionaryPromptDialog({
           <Select
             value={language}
             onChange={setLanguage}
-            options={LANGUAGE_OPTIONS}
+            options={withLanguageOption(LANGUAGE_OPTIONS, defaultLanguage)}
             ariaLabel={t("dictionary.languageLabel")}
           />
         </div>

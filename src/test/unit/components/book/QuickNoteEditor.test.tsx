@@ -78,6 +78,32 @@ describe("QuickNoteEditor", () => {
     expect(editor).toHaveTextContent("()");
   });
 
+  it("marks its content with the Book's language", async () => {
+    useSettingsStore.setState({ language: "en" });
+    const { container } = render(<QuickNoteEditor onChange={vi.fn()} bookLanguage="pt-BR" />);
+
+    const editor = await waitFor(() => {
+      const el = container.querySelector("[contenteditable='true']");
+      expect(el).not.toBeNull();
+      return el as HTMLElement;
+    });
+
+    expect(editor.getAttribute("lang")).toBe("pt-BR");
+  });
+
+  it("marks its content with the app language when the Book has none", async () => {
+    useSettingsStore.setState({ language: "es" });
+    const { container } = render(<QuickNoteEditor onChange={vi.fn()} />);
+
+    const editor = await waitFor(() => {
+      const el = container.querySelector("[contenteditable='true']");
+      expect(el).not.toBeNull();
+      return el as HTMLElement;
+    });
+
+    expect(editor.getAttribute("lang")).toBe("es");
+  });
+
   describe("Opening Marks", () => {
     async function typeInto(bookLanguage: string | undefined, text: string) {
       const user = userEvent.setup();

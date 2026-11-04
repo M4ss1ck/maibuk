@@ -56,7 +56,8 @@ import { PluginToolbarButton } from "@/components/plugins/PluginToolbarButton";
 import { Tooltip } from "@/components/ui";
 import { getEditorToolbarState } from "@/components/editor/toolbar/editor-toolbar-state";
 import { useSettingsStore } from "@/features/settings/store";
-import { LANGUAGE_OPTIONS, type Language } from "@/features/settings/types";
+import { LANGUAGE_OPTIONS } from "@/features/settings/types";
+import { withLanguageOption, type WritingLanguage } from "@/lib/writing-language";
 import type { ToolbarEntryId } from "@/features/settings/toolbar-config";
 import { isPluginToolbarButtonId } from "@/features/settings/toolbar-config";
 
@@ -69,8 +70,8 @@ const DEFAULT_FONT_SIZE = "18";
 
 export interface ToolbarGroupCallbacks {
   bookId?: string | null;
-  spellCheckLanguage: Language;
-  onSpellCheckLanguageChange: (language: Language) => void;
+  spellCheckLanguage: WritingLanguage;
+  onSpellCheckLanguageChange: (language: WritingLanguage) => void;
   openFindReplace: () => void;
   isFindReplaceOpen: boolean;
   onToggleFindReplace: () => void;
@@ -646,22 +647,26 @@ export function EditorToolbarGroups({
 }
 
 interface SpellCheckLanguageMenuProps {
-  value: Language;
-  onChange: (language: Language) => void;
+  value: WritingLanguage;
+  onChange: (language: WritingLanguage) => void;
   label: string;
 }
 
 function SpellCheckLanguageMenu({ value, onChange, label }: SpellCheckLanguageMenuProps) {
-  const selected = LANGUAGE_OPTIONS.find((option) => option.value === value) ?? LANGUAGE_OPTIONS[0];
+  const options = withLanguageOption(LANGUAGE_OPTIONS, value);
 
   return (
     <MenuTrigger>
       <Tooltip content={label}>
         <Button
           aria-label={label}
-          className="flex h-8 w-7 flex-col items-center justify-center gap-0 rounded text-[10px] font-medium leading-none transition-colors hover:bg-muted data-pressed:bg-primary data-pressed:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="flex h-8 min-w-7 max-w-12 flex-col items-center justify-center gap-0 rounded px-0.5 text-[10px] font-medium leading-none transition-colors hover:bg-muted data-pressed:bg-primary data-pressed:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
-          <span className="uppercase">{selected.value}</span>
+          <span
+            className={value.length === 2 ? "max-w-full truncate uppercase" : "max-w-full truncate"}
+          >
+            {value}
+          </span>
           <ChevronDown className="h-2.5 w-2.5" />
         </Button>
       </Tooltip>
@@ -673,10 +678,12 @@ function SpellCheckLanguageMenu({ value, onChange, label }: SpellCheckLanguageMe
           aria-label={label}
           selectionMode="single"
           selectedKeys={[value]}
-          onAction={(key) => onChange(key as Language)}
+          onAction={(key) => {
+            if (key !== value) onChange(key as WritingLanguage);
+          }}
           className="outline-none"
         >
-          {LANGUAGE_OPTIONS.map((option) => (
+          {options.map((option) => (
             <MenuItem
               key={option.value}
               id={option.value}
@@ -687,7 +694,15 @@ function SpellCheckLanguageMenu({ value, onChange, label }: SpellCheckLanguageMe
               }`}
             >
               <span>{option.label}</span>
-              <span className="text-xs uppercase text-muted-foreground">{option.value}</span>
+              <span
+                className={
+                  option.value.length === 2
+                    ? "text-xs text-muted-foreground uppercase"
+                    : "text-xs text-muted-foreground"
+                }
+              >
+                {option.value}
+              </span>
             </MenuItem>
           ))}
         </Menu>

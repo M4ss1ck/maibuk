@@ -385,6 +385,11 @@ A writing view that hides everything except the text.
 _UI_: en "Focus Mode" / es "Modo Enfocado", "Alternar modo enfocado"
 _Avoid_: zen mode, distraction-free mode
 
+**Writing Language**:
+The language a Book or Note is written in, kept as the exact tag the author or an imported file gave it, such as `pt-BR`. Separate from the app language. A Book owns its Writing Language and its Chapters inherit it. A Note keeps its own, which starts as its Book's, or the app language's when Unfiled. A Canvas uses the app language, and the Ephemeral follows its own rule. Spell Check, Word Lookup, and Opening Marks match on the language alone, so `es-MX` behaves as `es`; a language with no bundled dictionary gets no Spell Check rather than another language's. Picking one in the Spell Check menu changes that Book's or Note's Writing Language.
+_UI_: en "Language" / es "Idioma"
+_Avoid_: content language, book language, locale
+
 **Spell Check**:
 Marking misspelled words while the author writes.
 _UI_: en "Spell Check" / es "Corrector ortográfico"

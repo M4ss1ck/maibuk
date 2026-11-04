@@ -1,5 +1,6 @@
 import type { Language } from "@/features/settings/types";
 import type { WorkerRequest, WorkerResponse } from "@/lib/spellcheck/types";
+import { baseLanguage, type WritingLanguage } from "@/lib/writing-language";
 
 // Vite recognizes `new URL(..., import.meta.url)` and emits these as assets
 const DICTIONARY_URLS: Record<Language, { aff: string; dic: string }> = {
@@ -12,6 +13,12 @@ const DICTIONARY_URLS: Record<Language, { aff: string; dic: string }> = {
     dic: new URL("../../../node_modules/dictionary-es/index.dic", import.meta.url).href,
   },
 };
+
+/** The bundled dictionary a tag maps to, or null when it has none. */
+function bundledLanguage(tag: WritingLanguage): Language | null {
+  const base = baseLanguage(tag);
+  return base === "en" || base === "es" ? base : null;
+}
 
 type PendingRequest = {
   resolve: (value: WorkerResponse) => void;
@@ -40,7 +47,9 @@ export class SpellCheckService {
 
   constructor(private readonly createWorker: () => Worker = defaultCreateWorker) {}
 
-  async init(lang: Language, options: { force?: boolean } = {}): Promise<void> {
+  async init(tag: WritingLanguage, options: { force?: boolean } = {}): Promise<void> {
+    const lang = bundledLanguage(tag);
+
     // Skip if already initialized with the same language unless forced
     if (!options.force && this.lang === lang) {
       return this.ensureWorker();

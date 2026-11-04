@@ -9,6 +9,7 @@ import {
   type BookStatus,
   type UpdateBookInput,
 } from "@/features/books/types";
+import { withLanguageOption } from "@/lib/writing-language";
 
 interface BookSettingsDialogProps {
   isOpen: boolean;
@@ -273,10 +274,10 @@ export function BookSettingsDialog({
                 ariaLabel={t("books.language")}
                 value={language}
                 onChange={setLanguage}
-                options={LANGUAGES.map((lang) => ({
-                  value: lang.code,
-                  label: lang.name,
-                }))}
+                options={withLanguageOption(
+                  LANGUAGES.map((lang) => ({ value: lang.code, label: lang.name })),
+                  book.language
+                )}
               />
             </div>
           </div>

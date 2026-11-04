@@ -28,7 +28,7 @@ import { MetricsObserver } from "@/components/editor/extensions/MetricsObserver"
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "@/features/settings/store";
-import type { Language } from "@/features/settings/types";
+import { resolveWritingLanguage, type WritingLanguage } from "@/lib/writing-language";
 import { useChapterStore } from "@/features/chapters/store";
 import { useBookStore } from "@/features/books/store";
 import { useNoteStore } from "@/features/notes/store";
@@ -54,7 +54,10 @@ import { IS_TAURI } from "@/lib/platform";
 import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
 import { editorKeymapShortcutIds } from "@/components/editor/keymap-shortcuts";
 import { useEditorCommandSource } from "@/components/editor/editor-command-source";
-import { useOpeningMarksLanguage } from "@/components/editor/opening-marks-language";
+import {
+  useOpeningMarksLanguage,
+  useWritingLanguageGetter,
+} from "@/components/editor/opening-marks-language";
 import { hasActiveSuggestion } from "@/components/editor/suggestion-state";
 
 /**
@@ -122,8 +125,8 @@ interface EditorProps {
   extraExtensions?: Extensions;
   headerContent?: React.ReactNode;
   onEditorReady?: (editor: TiptapEditor | null) => void;
-  spellCheckLanguage?: Language;
-  onSpellCheckLanguageChange?: (language: Language) => void;
+  spellCheckLanguage?: WritingLanguage;
+  onSpellCheckLanguageChange?: (language: WritingLanguage) => void;
   onExportMarkdown?: () => void;
   onExportPdf?: () => void;
   onExportImage?: () => void;
@@ -200,10 +203,14 @@ export function Editor({
   const settingsLanguage = useSettingsStore((state) => state.language);
   // A host with no language of its own still gets one source of truth: the
   // language menu, Spell Check, and Opening Marks all read this value.
-  const [pickedLanguage, setPickedLanguage] = useState<Language | null>(null);
-  const activeSpellCheckLanguage = spellCheckLanguage ?? pickedLanguage ?? settingsLanguage;
+  const [pickedLanguage, setPickedLanguage] = useState<WritingLanguage | null>(null);
+  const activeSpellCheckLanguage = resolveWritingLanguage({
+    own: spellCheckLanguage ?? pickedLanguage,
+    app: settingsLanguage,
+  });
+  const writingLanguage = useWritingLanguageGetter(activeSpellCheckLanguage);
   const handleSpellCheckLanguageChange = useCallback(
-    (language: Language) => {
+    (language: WritingLanguage) => {
       setPickedLanguage(language);
       onSpellCheckLanguageChange?.(language);
     },
@@ -411,6 +418,7 @@ export function Editor({
         spellCheck: { enabled: spellCheckEnabled, language: activeSpellCheckLanguage },
         autoClose: editorAutoClose,
         openingMarksLanguage,
+        writingLanguage,
         dropcursor: !IS_TAURI,
       }),
       Placeholder.configure({
@@ -437,6 +445,7 @@ export function Editor({
         // F6 into the editor's Pane, or an arrow crossing into it, lands in
         // the text rather than on the toolbar's first control (ADR 0025).
         "data-focus-pane-entry": "",
+        lang: activeSpellCheckLanguage,
       },
       handleKeyDown: (view, event) => {
         if (event.key !== "Escape") return false;

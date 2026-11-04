@@ -26,7 +26,8 @@ import {
 import type { ToolbarGroupCallbacks } from "@/components/editor/toolbar/EditorToolbarGroups";
 import { useSettingsStore } from "@/features/settings/store";
 import type { SearchHandoff } from "@/features/search/types";
-import type { Language } from "@/features/settings/types";
+import { wiktionaryPageUrl } from "@/lib/dictionary";
+import type { WritingLanguage } from "@/lib/writing-language";
 import { openExternal } from "@/lib/platform";
 import { isModKey } from "@/lib/keyboard";
 import { useShortcuts } from "@/lib/shortcuts";
@@ -37,8 +38,8 @@ interface EditorToolbarProps {
   editor: Editor;
   onContextMenuOpenChange?: (open: boolean) => void;
   bookId?: string | null;
-  spellCheckLanguage: Language;
-  onSpellCheckLanguageChange?: (language: Language) => void;
+  spellCheckLanguage: WritingLanguage;
+  onSpellCheckLanguageChange?: (language: WritingLanguage) => void;
   internalTargets?: InternalTarget[];
   loadInternalTargetChildren?: InternalTargetChildrenLoader;
   onExportMarkdown?: () => void;
@@ -172,10 +173,9 @@ export function EditorToolbar({
   };
 
   const handleLookupWord = useCallback(
-    (word: string, language: Language = spellCheckLanguage) => {
+    (word: string, language: WritingLanguage = spellCheckLanguage) => {
       if (dictionaryOpenInBrowser) {
-        const url = `https://${language}.wiktionary.org/wiki/${encodeURIComponent(word)}`;
-        openExternal(url);
+        openExternal(wiktionaryPageUrl(word, language));
         return;
       }
       setDictionaryWord(word);
@@ -185,7 +185,7 @@ export function EditorToolbar({
   );
 
   const handleSpellCheckLanguageChange = useCallback(
-    (nextLanguage: Language) => {
+    (nextLanguage: WritingLanguage) => {
       editor.commands.setSpellCheckLanguage(nextLanguage);
       onSpellCheckLanguageChange?.(nextLanguage);
     },

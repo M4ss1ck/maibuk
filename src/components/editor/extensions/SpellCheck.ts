@@ -2,9 +2,9 @@ import { Extension } from "@tiptap/core";
 import { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
-import type { Language } from "@/features/settings/types";
 import { useSettingsStore } from "@/features/settings/store";
 import { spellCheckService } from "@/lib/spellcheck";
+import type { WritingLanguage } from "@/lib/writing-language";
 
 const WORD_REGEX = /\p{L}+(?:['\u2019]\p{L}+)*/gu;
 const FILE_LIKE_REGEX =
@@ -20,7 +20,7 @@ type Misspelling = {
 };
 
 type SpellCheckOptions = {
-  language: Language;
+  language: WritingLanguage;
   enabled: boolean;
   debounceMs: number;
 };
@@ -28,14 +28,14 @@ type SpellCheckOptions = {
 type SpellCheckStorage = {
   misspellings: Misspelling[];
   enabled: boolean;
-  language: Language;
+  language: WritingLanguage;
   requestCheck: (() => void) | null;
   clearDecorations: (() => void) | null;
   getMisspellingAt: ((pos: number) => Misspelling | null) | null;
 };
 
 async function initSpellCheckWithCustomDictionary(
-  language: Language,
+  language: WritingLanguage,
   options: { force?: boolean } = {}
 ): Promise<void> {
   await spellCheckService.init(language, options);
@@ -53,7 +53,7 @@ declare module "@tiptap/core" {
     spellCheck: {
       toggleSpellCheck: () => ReturnType;
       setSpellCheckEnabled: (enabled: boolean) => ReturnType;
-      setSpellCheckLanguage: (language: Language) => ReturnType;
+      setSpellCheckLanguage: (language: WritingLanguage) => ReturnType;
       addToDictionary: (word: string) => ReturnType;
     };
   }
@@ -64,7 +64,7 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
 
   addOptions() {
     return {
-      language: "en" as Language,
+      language: "en",
       enabled: true,
       debounceMs: 300,
     };
@@ -112,7 +112,7 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
           return true;
         },
       setSpellCheckLanguage:
-        (language: Language) =>
+        (language: WritingLanguage) =>
         ({ editor }) => {
           const storage = editor.storage.spellCheck;
           if (!storage || storage.language === language) return true;

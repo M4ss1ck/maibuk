@@ -58,11 +58,38 @@ describe("createRichTextExtensions", () => {
   it("omits autoclose by default", () => {
     const names = createRichTextExtensions().map((extension) => extension.name);
     expect(names).not.toContain("autoClose");
+    expect(names).toContain("writingQuotes");
   });
 
   it("includes autoclose only when enabled", () => {
     const names = createRichTextExtensions({ autoClose: true }).map((extension) => extension.name);
     expect(names).toContain("autoClose");
+    expect(names).not.toContain("writingQuotes");
+  });
+
+  it("gives the quote extension the writing language getter", () => {
+    const writingLanguage = () => "fr";
+    const configured = createRichTextExtensions({ writingLanguage }).find(
+      (extension) => extension.name === "writingQuotes"
+    );
+    const autoClose = createRichTextExtensions({ autoClose: true, writingLanguage }).find(
+      (extension) => extension.name === "autoClose"
+    );
+
+    expect(configured?.options.getLanguage).toBe(writingLanguage);
+    expect(autoClose?.options.getLanguage).toBe(writingLanguage);
+  });
+
+  it.each([
+    false,
+    true,
+  ])("leaves double quotes to the quote extension when autoclose is %s", (autoClose) => {
+    const typography = createRichTextExtensions({ autoClose }).find(
+      (extension) => extension.name === "typography"
+    );
+
+    expect(typography?.options.openDoubleQuote).toBe(false);
+    expect(typography?.options.closeDoubleQuote).toBe(false);
   });
 
   it("includes Opening Marks only when given a language getter", () => {

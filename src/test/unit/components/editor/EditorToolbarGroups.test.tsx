@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -191,6 +191,61 @@ describe("EditorToolbarGroups", () => {
     expect(onSpellCheckLanguageChange).toHaveBeenCalledWith("es");
     await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
     await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it("shows a regional tag as it is and lets the author pick another one by keyboard", async () => {
+    const user = userEvent.setup();
+    const onSpellCheckLanguageChange = vi.fn();
+    render(
+      <EditorToolbarGroups
+        editor={makeToolbarEditor()}
+        groupIds={["spellcheck"]}
+        callbacks={{
+          ...callbacks,
+          spellCheckLanguage: "pt-BR",
+          onSpellCheckLanguageChange,
+        }}
+      />
+    );
+
+    const trigger = screen.getByRole("button", { name: "editor.spellCheckLanguage" });
+    expect(within(trigger).getByText("pt-BR")).toBeInTheDocument();
+
+    trigger.focus();
+    await user.keyboard("{Enter}");
+    const portuguese = await screen.findByRole("menuitemradio", { name: /Brasil/ });
+    await waitFor(() => expect(portuguese).toHaveFocus());
+    expect(portuguese).toBeChecked();
+
+    // Activating the item already selected changes nothing.
+    await user.keyboard("{Enter}");
+    expect(onSpellCheckLanguageChange).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+
+    trigger.focus();
+    await user.keyboard("{Enter}");
+    const reopened = await screen.findByRole("menuitemradio", { name: /Brasil/ });
+    await waitFor(() => expect(reopened).toHaveFocus());
+    // The menu wraps, so two steps from the last option reach Español.
+    await user.keyboard("{ArrowDown}{ArrowDown}");
+    expect(screen.getByRole("menuitemradio", { name: /Español/ })).toHaveFocus();
+    await user.keyboard("{Enter}");
+
+    expect(onSpellCheckLanguageChange).toHaveBeenCalledWith("es");
+  });
+
+  it("shows a regional tag exactly instead of its base language", () => {
+    render(
+      <EditorToolbarGroups
+        editor={makeToolbarEditor()}
+        groupIds={["spellcheck"]}
+        callbacks={{ ...callbacks, spellCheckLanguage: "es-MX" }}
+      />
+    );
+
+    const trigger = screen.getByRole("button", { name: "editor.spellCheckLanguage" });
+    expect(within(trigger).getByText("es-MX")).toBeInTheDocument();
+    expect(within(trigger).queryByText("ES")).toBeNull();
   });
 
   it("stops spellcheck-menu Escape propagation so an outer window Escape handler is not invoked", async () => {

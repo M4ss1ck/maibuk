@@ -9,7 +9,6 @@ import { useNoteStore } from "@/features/notes";
 import type { Note } from "@/features/notes";
 import { useBookStore } from "@/features/books/store";
 import { useSettingsStore } from "@/features/settings/store";
-import { normalizeLanguage } from "@/features/settings/types";
 import { NoteCard } from "@/components/notes";
 import { DeleteNoteDialog } from "@/components/notes/DeleteNoteDialog";
 import {
@@ -221,7 +220,7 @@ export function NotesGallery() {
                 void updateNote({
                   id: note.id,
                   bookId: target.id,
-                  language: normalizeLanguage(target.language),
+                  ...(target.language ? { language: target.language } : {}),
                 });
               },
             })),

@@ -302,6 +302,16 @@ describe("generateEpub()", () => {
       expect(epubOptions.description).toBe("A great story");
     });
 
+    it("keeps a regional writing language as the EPUB language", async () => {
+      const book = buildBook({ language: "pt-BR" });
+      const chapters = [buildChapter()];
+
+      await generateEpub(book, chapters, defaultOptions);
+
+      const epubOptions = mockEpub.mock.calls[0][0];
+      expect(epubOptions.lang).toBe("pt-BR");
+    });
+
     it("maps includeTableOfContents to tocInTOC", async () => {
       const book = buildBook();
       const chapters = [buildChapter()];

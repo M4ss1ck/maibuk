@@ -16,3 +16,13 @@ export function useOpeningMarksLanguage(language: string): () => string | null {
     []
   );
 }
+
+/**
+ * The `writingLanguage` getter for `createRichTextExtensions`: the editor's
+ * language, read per keystroke.
+ */
+export function useWritingLanguageGetter(language: string): () => string {
+  const languageRef = useRef(language);
+  languageRef.current = language;
+  return useCallback(() => languageRef.current, []);
+}

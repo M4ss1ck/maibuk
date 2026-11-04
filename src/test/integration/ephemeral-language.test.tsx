@@ -144,6 +144,33 @@ describe("the Ephemeral's Spell Check language", () => {
     });
   });
 
+  it("Create note keeps a regional tag the Ephemeral holds", async () => {
+    const createNote = vi.fn().mockResolvedValue({ id: "note-1" });
+    useNoteStore.setState({ createNote });
+    useEphemeralStore.setState({ content: "<p>Olá</p>", wordCount: 1, language: "pt-BR" });
+    const { container } = renderEphemeral();
+    await waitFor(() => expect(container.querySelector(".ProseMirror")).not.toBeNull());
+
+    await userEvent.setup().click(screen.getByRole("button", { name: "ephemeral.createNote" }));
+
+    expect(createNote).toHaveBeenCalledWith({
+      title: "",
+      content: "<p>Olá</p>",
+      language: "pt-BR",
+    });
+  });
+
+  it("marks its content with the app language, then with the picked one", async () => {
+    const { container } = renderEphemeral();
+    await waitFor(() => expect(container.querySelector(".ProseMirror")).not.toBeNull());
+    const prose = container.querySelector(".ProseMirror") as HTMLElement;
+    expect(prose.getAttribute("lang")).toBe("en");
+
+    await pickLanguage(userEvent.setup(), /Español/);
+
+    await waitFor(() => expect(prose.getAttribute("lang")).toBe("es"));
+  });
+
   it("follows the app language until the author picks one", async () => {
     useSettingsStore.setState({ language: "es" });
     const { container } = renderEphemeral();

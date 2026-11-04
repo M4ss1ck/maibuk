@@ -58,6 +58,22 @@ describe("note write path", () => {
     expect(note.language).toBe("es");
   });
 
+  it("keeps a regional Book language on a Note created without one", async () => {
+    const { useSettingsStore } = await import("@/features/settings/store");
+    useSettingsStore.setState({ language: "en" });
+    await testDb.execute(
+      `INSERT INTO books (id, title, author_name, language, created_at, updated_at, content_updated_at)
+         VALUES ('b-pt', 'Livro', 'Eu', 'pt-BR', 1, 1, 1)`
+    );
+    const note = await useNoteStore.getState().createNote({ title: "Nota", bookId: "b-pt" });
+    expect(note.language).toBe("pt-BR");
+    const rows = await testDb.select<{ language: string }[]>(
+      "SELECT language FROM notes WHERE id = ?",
+      [note.id]
+    );
+    expect(rows[0].language).toBe("pt-BR");
+  });
+
   it("gives a Book Note the app language when its Book is missing", async () => {
     const { useSettingsStore } = await import("@/features/settings/store");
     useSettingsStore.setState({ language: "es" });

@@ -52,12 +52,8 @@ import { DictationBar } from "@/components/dictation";
 import { deriveNoteTitle } from "@/components/book/deriveNoteTitle";
 import { useNoteStore } from "@/features/notes";
 import { useSettingsStore } from "@/features/settings/store";
-import {
-  normalizeLanguage,
-  SIDE_PANEL_MAX_WIDTH,
-  SIDE_PANEL_MIN_WIDTH,
-  type Language,
-} from "@/features/settings/types";
+import { SIDE_PANEL_MAX_WIDTH, SIDE_PANEL_MIN_WIDTH } from "@/features/settings/types";
+import type { WritingLanguage } from "@/lib/writing-language";
 import {
   History,
   Menu,
@@ -353,7 +349,7 @@ export function BookEditor() {
         bookId,
         title: deriveNoteTitle(html),
         content: html,
-        language: normalizeLanguage(currentBook?.language),
+        language: currentBook?.language,
       });
     },
     [bookId, createNote, currentBook?.language]
@@ -782,7 +778,7 @@ export function BookEditor() {
   );
 
   const handleSpellCheckLanguageChange = useCallback(
-    (language: Language) => {
+    (language: WritingLanguage) => {
       if (bookId) void updateBook(bookId, { language });
     },
     [bookId, updateBook]
@@ -1409,7 +1405,7 @@ export function BookEditor() {
                 findHandoff?.chapterId === currentChapter.id ? findHandoff.handoff : null
               }
               onHandoffApplied={handleHandoffApplied}
-              spellCheckLanguage={normalizeLanguage(currentBook.language)}
+              spellCheckLanguage={currentBook.language}
               onSpellCheckLanguageChange={handleSpellCheckLanguageChange}
               restoreKey={`chapter:${currentChapter.id}`}
               suppressRestore={hasPendingHeadingScroll}

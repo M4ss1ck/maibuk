@@ -1,14 +1,14 @@
 import { type MouseEvent, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { Language } from "@/features/settings/types";
-import { lookupWord } from "@/lib/dictionary";
+import { lookupWord, wiktionaryPageUrl } from "@/lib/dictionary";
+import type { WritingLanguage } from "@/lib/writing-language";
 import { openExternal } from "@/lib/platform";
 import { Modal } from "@/components/ui/Modal";
 
 interface DictionaryDialogProps {
   isOpen: boolean;
   word: string;
-  language: Language;
+  language: WritingLanguage;
   onClose: () => void;
   /** Focus returns here when the dialog closes (the editor, usually). */
   restoreFocusTarget?: () => HTMLElement | null;
@@ -53,9 +53,7 @@ export function DictionaryDialog({
     };
   }, [isOpen, normalizedWord, language]);
 
-  const wiktionaryUrl = normalizedWord
-    ? `https://${language}.wiktionary.org/wiki/${encodeURIComponent(normalizedWord)}`
-    : "";
+  const wiktionaryUrl = normalizedWord ? wiktionaryPageUrl(normalizedWord, language) : "";
 
   // Open content links in the system browser instead of navigating in-app.
   const handleContentClick = (event: MouseEvent<HTMLDivElement>) => {

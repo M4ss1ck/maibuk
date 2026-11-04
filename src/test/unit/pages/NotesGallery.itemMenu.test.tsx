@@ -28,7 +28,10 @@ const { mockNavigate, noteState, bookState, settingsState } = vi.hoisted(() => (
     deleteNote: vi.fn(() => Promise.resolve()),
   },
   bookState: {
-    books: [{ id: "book-1", title: "My Book", language: "es" }],
+    books: [
+      { id: "book-1", title: "My Book", language: "es" },
+      { id: "book-fi", title: "Finnish Book", language: "sv-FI" },
+    ],
     loadBooks: vi.fn(() => Promise.resolve()),
   },
   settingsState: {
@@ -165,6 +168,45 @@ describe("Notes gallery Item Menu (how phones reach note actions)", () => {
       id: "n2",
       bookId: "book-1",
       language: "es",
+    });
+  });
+
+  it("keeps a regional Note's own language when it moves to Unfiled", async () => {
+    const user = userEvent.setup();
+    noteState.notes = [{ ...note("n2", "Second", "book-1"), language: "pt-BR" }];
+    render(<NotesGallery />);
+
+    await user.click(screen.getByRole("button", { name: "common.moreActionsFor" }));
+    const move = await screen.findByRole("menuitem", { name: "notes.moveToBook" });
+    while (document.activeElement !== move) await user.keyboard("{ArrowDown}");
+    await user.keyboard("{ArrowRight}");
+    await waitFor(() =>
+      expect(screen.getByRole("menuitem", { name: "notes.unfiled" })).toHaveFocus()
+    );
+    await user.keyboard("{Enter}");
+
+    // No language key at all: filing nowhere must not overwrite the Note's own.
+    expect(noteState.updateNote).toHaveBeenCalledWith({ id: "n2", bookId: null });
+  });
+
+  it("gives a regional Note the Book's exact tag when it moves", async () => {
+    const user = userEvent.setup();
+    noteState.notes = [{ ...note("n2", "Second", null), language: "pt-BR" }];
+    render(<NotesGallery />);
+
+    await user.click(screen.getByRole("button", { name: "common.moreActionsFor" }));
+    const move = await screen.findByRole("menuitem", { name: "notes.moveToBook" });
+    while (document.activeElement !== move) await user.keyboard("{ArrowDown}");
+    await user.keyboard("{ArrowRight}");
+    await waitFor(() =>
+      expect(screen.getByRole("menuitem", { name: "notes.unfiled" })).toHaveFocus()
+    );
+    await user.keyboard("{ArrowDown}{ArrowDown}{Enter}");
+
+    expect(noteState.updateNote).toHaveBeenCalledWith({
+      id: "n2",
+      bookId: "book-fi",
+      language: "sv-FI",
     });
   });
 

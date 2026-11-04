@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useBoundShortcutStore } from "@/lib/bound-shortcuts";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { Notes } from "@/pages/Notes";
 import { useNoteStore } from "../../../features/notes";
 
@@ -71,7 +71,7 @@ vi.mock("../../../features/notes", async () => {
 
 vi.mock("../../../features/books/store", () => {
   const state = {
-    books: [{ id: "book-1", title: "My Book" }],
+    books: [{ id: "book-1", title: "My Book", language: "pt-BR" }],
     loadBooks: vi.fn(() => Promise.resolve()),
   };
   const useBookStore = (selector: (s: typeof state) => unknown) => selector(state);
@@ -102,6 +102,7 @@ vi.mock("../../../components/notes", async () => {
     NotesList: (props: {
       notes?: Array<{ id: string; title: string }>;
       onSelectNote?: (note: unknown) => void;
+      onCreateNote?: (bookId?: string | null) => void;
     }) => (
       <div data-testid="notes-list">
         {(props.notes ?? []).map((note) => (
@@ -114,6 +115,13 @@ vi.mock("../../../components/notes", async () => {
             {note.title}
           </button>
         ))}
+        <button
+          type="button"
+          data-testid="create-in-book"
+          onClick={() => props.onCreateNote?.("book-1")}
+        >
+          create in book
+        </button>
       </div>
     ),
     EmptyNotes: () => <div data-testid="empty-notes" />,
@@ -154,6 +162,7 @@ describe("Notes page return-to-book navigation", () => {
     };
     // The store is a module singleton; put the first note back each test.
     useNoteStore.setState({ currentNote: useNoteStore.getState().notes[0] });
+    (useNoteStore.getState() as unknown as { createNote: Mock }).createNote.mockClear();
   });
 
   it("passes the return label and navigates to the book on return", async () => {
@@ -172,6 +181,19 @@ describe("Notes page return-to-book navigation", () => {
       "panes.notesContent"
     );
     expect(container.querySelectorAll("main")).toHaveLength(1);
+  });
+
+  it("creates a Note in a Book with the Book's writing language", () => {
+    render(<Notes />);
+
+    fireEvent.click(screen.getByTestId("create-in-book"));
+
+    const { createNote } = useNoteStore.getState() as unknown as { createNote: Mock };
+    expect(createNote).toHaveBeenCalledWith({
+      title: "",
+      bookId: "book-1",
+      language: "pt-BR",
+    });
   });
 
   it("passes suppressRestore while a note heading deep-link is pending", async () => {

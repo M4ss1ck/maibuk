@@ -31,19 +31,22 @@ import { HeadingId } from "@/components/editor/extensions/HeadingId";
 import { SymbolAutocomplete } from "@/components/editor/extensions/SymbolAutocomplete";
 import { SelectionKept } from "@/components/editor/extensions/SelectionKept";
 import { AutoClose } from "@/components/editor/extensions/AutoClose";
+import { WritingQuotes } from "@/components/editor/extensions/WritingQuotes";
 import { OpeningMarks } from "@/components/editor/extensions/OpeningMarks";
 import { ShortcutOverrides } from "@/components/editor/extensions/ShortcutOverrides";
 import { Dictation } from "@/components/editor/extensions/Dictation";
 import { DomSelectionSync } from "@/components/editor/extensions/DomSelectionSync";
-import type { Language } from "@/features/settings/types";
+import type { WritingLanguage } from "@/lib/writing-language";
 
 export interface RichTextExtensionsOptions {
   onMarkdownPaste?: (text: string) => void;
   footnoteStartIndex?: number;
-  spellCheck?: { enabled: boolean; language: Language };
+  spellCheck?: { enabled: boolean; language: WritingLanguage };
   autoClose?: boolean;
   /** The editor's text language while Opening Marks are on, else null. Read per keystroke. */
   openingMarksLanguage?: () => string | null;
+  /** The writing language for double quotes, read per keystroke. */
+  writingLanguage?: () => string;
   dropcursor?: boolean;
   /** See `HeadingId`'s `nameOnOpen`. */
   nameHeadingsOnOpen?: boolean;
@@ -61,6 +64,7 @@ export function createRichTextExtensions({
   spellCheck,
   autoClose = false,
   openingMarksLanguage,
+  writingLanguage = () => "en",
   dropcursor = true,
   nameHeadingsOnOpen = true,
 }: RichTextExtensionsOptions = {}): Extensions {
@@ -79,7 +83,9 @@ export function createRichTextExtensions({
     CodeBlockWithCopy,
     CustomCode,
     SmartItalic,
-    ...(autoClose ? [AutoClose] : []),
+    autoClose
+      ? AutoClose.configure({ getLanguage: writingLanguage })
+      : WritingQuotes.configure({ getLanguage: writingLanguage }),
     ...(openingMarksLanguage
       ? [OpeningMarks.configure({ getLanguage: openingMarksLanguage })]
       : []),
@@ -87,10 +93,10 @@ export function createRichTextExtensions({
     Underline,
     TextAlign.configure({ types: ["heading", "paragraph"] }),
     CustomHighlight.configure({ multicolor: true }),
-    // When autoclose is on, AutoClose owns double quotes (inserting curly pairs),
-    // so Typography's double-quote rules are disabled to avoid the two racing on
-    // dead-key/composition input. All other Typography rules stay active.
-    Typography.configure(autoClose ? { openDoubleQuote: false, closeDoubleQuote: false } : {}),
+    // One extension owns double quotes: AutoClose inserts a pair, WritingQuotes
+    // curls each quote, and both read the writing language per keystroke. All
+    // other Typography rules stay active.
+    Typography.configure({ openDoubleQuote: false, closeDoubleQuote: false }),
     TextStyle,
     FontFamily,
     FontSize,

@@ -14,11 +14,7 @@ import { SpinnerIcon } from "@/components/icons";
 import { DictationBar } from "@/components/dictation";
 import { duplicateNoteInput } from "@/components/notes/notes-list-model";
 import { useSettingsStore } from "@/features/settings/store";
-import {
-  normalizeLanguage,
-  SIDE_PANEL_MAX_WIDTH,
-  SIDE_PANEL_MIN_WIDTH,
-} from "@/features/settings/types";
+import { SIDE_PANEL_MAX_WIDTH, SIDE_PANEL_MIN_WIDTH } from "@/features/settings/types";
 import { useShortcuts } from "@/lib/shortcuts";
 import { droppedTextToEditorHtml } from "@/features/markdown";
 import type { DroppedTextFile } from "@/hooks/useTextFileDrop";
@@ -89,8 +85,7 @@ export function Notes() {
   } | null>(null);
 
   const getBookLanguage = useCallback(
-    (bookId?: string | null) =>
-      normalizeLanguage(books.find((book) => book.id === bookId)?.language),
+    (bookId?: string | null) => books.find((book) => book.id === bookId)?.language,
     [books]
   );
 
@@ -233,7 +228,8 @@ export function Notes() {
   };
 
   const handleReassignNoteBook = (noteId: string, bookId: string | null) => {
-    void updateNote({ id: noteId, bookId, language: getBookLanguage(bookId) });
+    const language = getBookLanguage(bookId);
+    void updateNote({ id: noteId, bookId, ...(language ? { language } : {}) });
   };
 
   const handleImportFiles = async (files: DroppedTextFile[], target: ListDropTarget | null) => {
@@ -243,7 +239,6 @@ export function Notes() {
         await createNote({
           title: file.stem.trim() || "Untitled",
           content: droppedTextToEditorHtml(file.text, file.extension),
-          language: "en",
         })
       );
     }

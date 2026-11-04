@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BookSettingsDialog } from "@/components/book/BookSettingsDialog";
 import { useModalStore } from "@/components/ui/modal-store";
 import { buildBook } from "@/test/support/fixtures";
+import { languageDisplayName } from "@/lib/writing-language";
 
 vi.mock("react-i18next", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react-i18next")>()),
@@ -22,10 +23,12 @@ describe("BookSettingsDialog modal registration", () => {
     initialOpen = true,
     onUpdateBookInfo = vi.fn(),
     onDelete = vi.fn(),
+    book = buildBook(),
   }: {
     initialOpen?: boolean;
     onUpdateBookInfo?: (input: { status?: string }) => void;
     onDelete?: () => void;
+    book?: ReturnType<typeof buildBook>;
   }) {
     const [open, setOpen] = useState(initialOpen);
     return (
@@ -36,7 +39,7 @@ describe("BookSettingsDialog modal registration", () => {
         <BookSettingsDialog
           isOpen={open}
           onClose={() => setOpen(false)}
-          book={buildBook()}
+          book={book}
           onUpdateBookInfo={onUpdateBookInfo}
           onDelete={onDelete}
         />
@@ -113,6 +116,32 @@ describe("BookSettingsDialog modal registration", () => {
     await user.click(screen.getByRole("button", { name: "common.save" }));
 
     expect(onUpdateBookInfo).toHaveBeenCalledWith(expect.objectContaining({ status: "archived" }));
+  });
+
+  it("shows a regional language by its own name and keeps it when another field saves", async () => {
+    const user = userEvent.setup();
+    const onUpdateBookInfo = vi.fn();
+
+    render(
+      <Harness
+        initialOpen
+        book={buildBook({ language: "sv-FI" })}
+        onUpdateBookInfo={onUpdateBookInfo}
+      />
+    );
+
+    const language = screen.getByRole("button", { name: /books\.language/ });
+    expect(within(language).getByText(languageDisplayName("sv-FI"))).toBeInTheDocument();
+    expect(within(language).queryByText("Português")).toBeNull();
+
+    const title = screen.getByLabelText("books.bookTitle");
+    await user.clear(title);
+    await user.type(title, "Ny bok");
+    await user.click(screen.getByRole("button", { name: "common.save" }));
+
+    expect(onUpdateBookInfo).toHaveBeenCalledWith(
+      expect.objectContaining({ language: "sv-FI", title: "Ny bok" })
+    );
   });
 
   it("expands and collapses the danger zone with the keyboard", async () => {

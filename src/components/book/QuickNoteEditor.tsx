@@ -7,10 +7,14 @@ import { TaskListOrder } from "@/components/editor/extensions/TaskListOrder";
 import { TaskListMenus } from "@/components/editor/TaskListMenus";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 import { useEditorCommandSource } from "@/components/editor/editor-command-source";
-import { useOpeningMarksLanguage } from "@/components/editor/opening-marks-language";
+import {
+  useOpeningMarksLanguage,
+  useWritingLanguageGetter,
+} from "@/components/editor/opening-marks-language";
 import { MarkdownPasteDialog } from "@/components/editor/MarkdownPasteDialog";
 import { editorKeymapShortcutIds } from "@/components/editor/keymap-shortcuts";
 import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
+import { resolveWritingLanguage } from "@/lib/writing-language";
 import { useSettingsStore } from "@/features/settings/store";
 import { Tooltip } from "@/components/ui";
 import {
@@ -52,15 +56,18 @@ export function QuickNoteEditor({
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
   const language = useSettingsStore((state) => state.language);
   const editorAutoClose = useSettingsStore((state) => state.editorAutoClose);
-  const openingMarksLanguage = useOpeningMarksLanguage(bookLanguage ?? language);
+  const writingLanguage = resolveWritingLanguage({ book: bookLanguage, app: language });
+  const openingMarksLanguage = useOpeningMarksLanguage(writingLanguage);
+  const writingLanguageGetter = useWritingLanguageGetter(writingLanguage);
 
   const editor = useEditor({
     extensions: [
       ...createRichTextExtensions({
         onMarkdownPaste: setPendingMarkdownPaste,
-        spellCheck: { enabled: spellCheckEnabled, language },
+        spellCheck: { enabled: spellCheckEnabled, language: writingLanguage },
         autoClose: editorAutoClose,
         openingMarksLanguage,
+        writingLanguage: writingLanguageGetter,
       }),
       TaskList,
       TaskItem.configure({ nested: true }),
@@ -75,6 +82,7 @@ export function QuickNoteEditor({
         role: "textbox",
         "aria-multiline": "true",
         "aria-label": t("bookNotes.quickNoteLabel"),
+        lang: writingLanguage,
       },
       handleKeyDown: (_view, event) => {
         if (event.key !== "Escape") return false;
