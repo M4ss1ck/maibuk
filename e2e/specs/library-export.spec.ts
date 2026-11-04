@@ -2,9 +2,17 @@ import { readFile } from "node:fs/promises";
 import type { Download, Locator, Page } from "@playwright/test";
 import { strFromU8, unzipSync } from "fflate";
 import { PDFDocument } from "pdf-lib";
-import { expectTabContained, pressUntilFocused, tabTo } from "../support/keyboard";
+import { capture } from "../support/capture";
+import {
+  expectTabContained,
+  expectFocusWithin,
+  isFocusWithin,
+  pressUntilFocused,
+  tabTo,
+} from "../support/keyboard";
 import { failBlobDownloads } from "../support/fault";
-import { BACKUPS_CHAPTERS } from "../support/seed/backups-present";
+import { BACKUPS_CHAPTERS, BACKUPS_NOTE } from "../support/seed/backups-present";
+import { seedSettings } from "../support/storage";
 import { expect, test } from "../support/test";
 
 // Book Export (issue #213): the Export dialog reached from the Book Editor
@@ -184,5 +192,158 @@ test.describe("Book export @wf:export-book-pdf", () => {
 
     await expect(dialog.getByText("Export failed", { exact: true })).toBeVisible();
     await expect(dialog).toBeVisible();
+  });
+});
+
+// PDF text warning (issue #706): the PDF's built-in fonts encode through
+// Windows-1252, so text outside it would come out garbled. Both PDF paths warn
+// first, and the author chooses whether to continue. The Polish words below are
+// the ones the issue rendered as garbage; the EPUB keeps them.
+const UNSUPPORTED_TEXT = "Zażółć gęślą jaźń";
+
+const warningDialog = (page: Page) =>
+  page.getByRole("alertdialog", { name: "Some text may be unreadable in this PDF" });
+
+/** Watches every download the page starts, so a cancelled export can be proven to start none. */
+function recordDownloads(page: Page): Download[] {
+  const downloads: Download[] = [];
+  page.on("download", (download) => downloads.push(download));
+  return downloads;
+}
+
+/** Types the unsupported text into the open editor and waits until the Chapter or Note is saved. */
+async function typeUnsupportedText(page: Page, textbox: Locator): Promise<void> {
+  await tabTo(page, textbox, { max: 80 });
+  await expect(textbox).toBeFocused();
+  await page.keyboard.press("End");
+  await page.keyboard.type(` ${UNSUPPORTED_TEXT}`);
+  await expect(textbox).toContainText(UNSUPPORTED_TEXT);
+  await page.keyboard.press("ControlOrMeta+s");
+  await expect(page.getByText("Saved", { exact: true })).toBeVisible();
+}
+
+test.describe("PDF text warning @wf:export-pdf-text-warning", () => {
+  test("a Book PDF with unsupported text warns first, and only Export PDF anyway downloads", async ({
+    page,
+  }) => {
+    const downloads = recordDownloads(page);
+    await enterBook(page);
+    await typeUnsupportedText(page, editorText(page));
+
+    // Back out of the editor and walk up into the header's Export Book button.
+    await page.keyboard.press("Escape");
+    await expect(chapterList(page)).toBeVisible();
+    await tabTo(page, page.getByRole("button", { name: "Export Book" }), {
+      max: 40,
+      backwards: true,
+    });
+    await page.keyboard.press("Enter");
+
+    const dialog = page.getByRole("dialog", { name: "Export Book" });
+    await expect(dialog).toBeVisible();
+    await tabTo(page, dialog.getByRole("button", { name: "PDF", exact: true }), { max: 6 });
+    await page.keyboard.press("Enter");
+
+    const exportPdf = dialog.getByRole("button", { name: "Export PDF", exact: true });
+    await tabTo(page, exportPdf, { max: 10 });
+    await page.keyboard.press("Enter");
+
+    const warning = warningDialog(page);
+    await expect(warning).toBeVisible();
+    expect(downloads).toHaveLength(0);
+    await capture(page, "pdf-text-warning-book", { around: [warning] });
+    await expectTabContained(page, warning);
+    await expect(
+      warning.getByRole("button", { name: "Export PDF anyway", exact: true })
+    ).toBeVisible();
+
+    // Escape closes only the warning: the Export dialog stays up and nothing downloads.
+    await page.keyboard.press("Escape");
+    await expect(warning).toBeHidden();
+    await expect(dialog).toBeVisible();
+    expect(downloads).toHaveLength(0);
+    await expect(exportPdf).toBeFocused();
+
+    // The same warning returns, and its Cancel exports nothing either.
+    await page.keyboard.press("Enter");
+    await expect(warning).toBeVisible();
+    await tabTo(page, warning.getByRole("button", { name: "Cancel", exact: true }), { max: 4 });
+    await page.keyboard.press("Enter");
+    await expect(warning).toBeHidden();
+    await expect(dialog).toBeVisible();
+    expect(downloads).toHaveLength(0);
+    await expect(exportPdf).toBeFocused();
+
+    // Export PDF anyway is the only path that starts the download.
+    await page.keyboard.press("Enter");
+    await expect(warning).toBeVisible();
+    await tabTo(page, warning.getByRole("button", { name: "Export PDF anyway", exact: true }), {
+      max: 4,
+    });
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      page.keyboard.press("Enter"),
+    ]);
+    expect(download.suggestedFilename()).toBe("The_Keeper's_Atlas.pdf");
+    const bytes = await readFile((await download.path()) as string);
+    expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
+  });
+
+  test("a Note PDF with unsupported text warns first, and Export PDF anyway downloads", async ({
+    page,
+  }) => {
+    const downloads = recordDownloads(page);
+    // The Note editor's toolbar holds the export buttons; an expanded toolbar
+    // wraps them into view instead of clipping the row.
+    await seedSettings(page, { toolbarExpanded: true });
+
+    const gallery = page.getByRole("grid", { name: "Notes" });
+    await page.goto("/notes");
+    await expect(gallery.getByRole("row").first()).toBeVisible();
+    await tabTo(page, gallery.getByRole("row").first(), { max: 40 });
+    await pressUntilFocused(
+      page,
+      "ArrowRight",
+      gallery.getByRole("row", { name: BACKUPS_NOTE, exact: true }),
+      { max: 10 }
+    );
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/\/notes\/.+/);
+
+    const noteText = page.getByRole("textbox", { name: "Text", exact: true });
+    await typeUnsupportedText(page, noteText);
+
+    // Escape leaves the writing surface; Tab then walks the title bar into the
+    // editor toolbar, which is one Tab stop that the arrows move through.
+    await page.keyboard.press("Escape");
+    const toolbar = page.getByRole("toolbar", { name: "Toolbar" });
+    for (let i = 0; i < 40 && !(await isFocusWithin(toolbar)); i++) {
+      await page.keyboard.press("Tab");
+    }
+    await expectFocusWithin(toolbar);
+    await page.keyboard.press("Home");
+    await pressUntilFocused(
+      page,
+      "ArrowRight",
+      toolbar.getByRole("button", { name: "Export as PDF", exact: true }),
+      { max: 160 }
+    );
+    await page.keyboard.press("Enter");
+
+    const warning = warningDialog(page);
+    await expect(warning).toBeVisible();
+    expect(downloads).toHaveLength(0);
+    await capture(page, "pdf-text-warning-note", { around: [warning] });
+
+    await tabTo(page, warning.getByRole("button", { name: "Export PDF anyway", exact: true }), {
+      max: 4,
+    });
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      page.keyboard.press("Enter"),
+    ]);
+    expect(download.suggestedFilename()).toBe("tide-notes.pdf");
+    const bytes = await readFile((await download.path()) as string);
+    expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
   });
 });

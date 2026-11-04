@@ -813,7 +813,13 @@
     "savingStatus": "Saving file...",
     "exportFailed": "Export failed",
     "exportSuccess": "{{format}} exported successfully!",
-    "exporting": "Exporting..."
+    "exporting": "Exporting...",
+    "pdfTextWarning": {
+      "title": "Some text may be unreadable in this PDF",
+      "body": "The PDF's built-in fonts can't show some characters in this text, so they would come out garbled. EPUB and Markdown exports keep them readable.",
+      "continue": "Export PDF anyway",
+      "cancel": "Cancel"
+    }
   },
   "bookSettings": {
     "title": "Book Settings",

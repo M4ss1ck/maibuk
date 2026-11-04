@@ -27,7 +27,8 @@ import type { EditorHandle } from "@/components/editor/Editor";
 import { useEditSession } from "@/features/edit-session";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ExportDialog } from "@/components/export";
-import { saveBinaryFile, exportFilename } from "@/features/export";
+import { saveBinaryFile, exportFilename, documentPdfText } from "@/features/export";
+import { usePdfTextWarning } from "@/components/export/PdfTextWarning";
 import {
   editorHtmlToMarkdown,
   droppedTextToEditorHtml,
@@ -401,6 +402,8 @@ export function BookEditor() {
     return sessionRef.current?.getContent() ?? "";
   }, [sessionRef]);
 
+  const { guardPdfText, pdfTextWarning } = usePdfTextWarning();
+
   // Load book and chapters
   useEffect(() => {
     if (bookId) {
@@ -542,25 +545,27 @@ export function BookEditor() {
   }, [currentChapter, t, getLatestContent]);
 
   // Export the current chapter as a PDF file
-  const handleExportPdf = useCallback(async () => {
+  const handleExportPdf = useCallback(() => {
     if (!currentChapter) return;
     const html = getLatestContent() || currentChapter.content || "";
-    try {
-      const { generateDocumentPdf } = await import("@/features/export/document-pdf");
-      const blob = await generateDocumentPdf(html, currentChapter.title);
-      const bytes = new Uint8Array(await blob.arrayBuffer());
-      const saved = await saveBinaryFile(
-        exportFilename(currentChapter.title, "pdf"),
-        bytes,
-        "application/pdf",
-        { name: "PDF", extensions: ["pdf"] }
-      );
-      if (saved) toast.success(t("editor.exportPdfSuccess"));
-    } catch (error) {
-      console.error("PDF export failed:", error);
-      toast.error(t("editor.exportPdfFailed"));
-    }
-  }, [currentChapter, t, getLatestContent]);
+    guardPdfText(documentPdfText(html, currentChapter.title), async () => {
+      try {
+        const { generateDocumentPdf } = await import("@/features/export/document-pdf");
+        const blob = await generateDocumentPdf(html, currentChapter.title);
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        const saved = await saveBinaryFile(
+          exportFilename(currentChapter.title, "pdf"),
+          bytes,
+          "application/pdf",
+          { name: "PDF", extensions: ["pdf"] }
+        );
+        if (saved) toast.success(t("editor.exportPdfSuccess"));
+      } catch (error) {
+        console.error("PDF export failed:", error);
+        toast.error(t("editor.exportPdfFailed"));
+      }
+    });
+  }, [currentChapter, t, getLatestContent, guardPdfText]);
 
   // Export the current chapter as a PNG image
   const handleExportImage = useCallback(async () => {
@@ -1474,6 +1479,8 @@ export function BookEditor() {
           bookLanguage={currentBook.language}
         />
       </div>
+
+      {pdfTextWarning}
 
       {/* Export Dialog */}
       <ExportDialog

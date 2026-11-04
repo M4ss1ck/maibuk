@@ -813,7 +813,13 @@
     "savingStatus": "Guardando archivo...",
     "exportFailed": "La exportación falló",
     "exportSuccess": "¡{{format}} exportado exitosamente!",
-    "exporting": "Exportando..."
+    "exporting": "Exportando...",
+    "pdfTextWarning": {
+      "title": "Parte del texto puede quedar ilegible en este PDF",
+      "body": "Las fuentes integradas del PDF no pueden mostrar algunos caracteres de este texto, así que saldrían alterados. Las exportaciones EPUB y Markdown los mantienen legibles.",
+      "continue": "Exportar PDF de todos modos",
+      "cancel": "Cancelar"
+    }
   },
   "bookSettings": {
     "title": "Configuración del Libro",

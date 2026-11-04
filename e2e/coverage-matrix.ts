@@ -2128,6 +2128,23 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "export-pdf-text-warning",
+    area: "library-data",
+    workflow:
+      'A Book or Note PDF export whose text holds characters the PDF\'s built-in fonts cannot render warns first: an alertdialog says "Some text may be unreadable in this PDF", focus enters it, and Tab stays inside; Escape or Cancel closes only the warning with nothing downloaded; Export PDF anyway downloads the PDF',
+    edges: [
+      "Escape closes only the warning: the Export dialog stays open and nothing is downloaded",
+      "Cancel closes only the warning: the Export dialog stays open and nothing is downloaded",
+      "Export PDF anyway downloads the PDF",
+    ],
+    terms: ["Export", "Book", "Note"],
+    shortcuts: [],
+    routes: ["/book/:bookId", "/notes/:noteId"],
+    fixture: "backupsPresent",
+    tags: ["download"],
+    status: "accepted",
+  },
+  {
     id: "web-library-locked",
     area: "library-data",
     workflow:

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Button, Modal, Switch, Select } from "@/components/ui";
 import {
+  bookPdfText,
   generateEpub,
   getEpubFilename,
   DEFAULT_EXPORT_OPTIONS,
@@ -18,6 +19,7 @@ import type { Chapter } from "@/features/chapters/types";
 import { IS_WEB, getDialog, getFileSystem } from "@/lib/platform";
 import { useTranslation } from "react-i18next";
 import { SpinnerIcon, CheckIcon, XIcon } from "@/components/icons";
+import { usePdfTextWarning } from "@/components/export/PdfTextWarning";
 
 interface ExportDialogProps {
   isOpen: boolean;
@@ -37,6 +39,7 @@ export function ExportDialog({ isOpen, onClose, book, chapters }: ExportDialogPr
     generateMaibukToc: true,
   });
   const [hasProjectEpubData, setHasProjectEpubData] = useState(false);
+  const { guardPdfText, pdfTextWarning } = usePdfTextWarning();
 
   const [progress, setProgress] = useState<ExportProgress>({
     status: "idle",
@@ -444,7 +447,11 @@ export function ExportDialog({ isOpen, onClose, book, chapters }: ExportDialogPr
         </Button>
         <Button
           variant="primary"
-          onClick={handleExport}
+          onClick={
+            format === "pdf"
+              ? () => guardPdfText(bookPdfText(book, chapters), handleExport)
+              : handleExport
+          }
           disabled={isExporting || exportableChapters.length === 0}
         >
           {isExporting
@@ -454,6 +461,8 @@ export function ExportDialog({ isOpen, onClose, book, chapters }: ExportDialogPr
               : t("export.exportPdf")}
         </Button>
       </div>
+
+      {pdfTextWarning}
     </Modal>
   );
 }
