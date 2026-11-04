@@ -5,6 +5,11 @@ export type {
   ProjectEpubPackage,
 } from "@/features/export/project-epub-generator";
 export { processChapterHtml, sanitizeHtmlForEpub } from "@/features/export/html-sanitizer";
+export {
+  bookPdfText,
+  builtInFontsCanRender,
+  documentPdfText,
+} from "@/features/export/pdf-text-support";
 export { EPUB_STYLES } from "@/features/export/epub-styles";
 export type {
   EpubExportOptions,

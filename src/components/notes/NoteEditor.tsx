@@ -27,7 +27,8 @@ import { SyncStatusButton } from "@/components/sync/SyncStatusButton";
 import { toast } from "@/components/ui/Toast";
 import { Tooltip } from "@/components/ui";
 import { editorHtmlToMarkdown, markdownFilename, saveMarkdownFile } from "@/features/markdown";
-import { saveBinaryFile, exportFilename } from "@/features/export";
+import { saveBinaryFile, exportFilename, documentPdfText } from "@/features/export";
+import { usePdfTextWarning } from "@/components/export/PdfTextWarning";
 import { useSettingsStore } from "@/features/settings/store";
 import { resolveWritingLanguage, type WritingLanguage } from "@/lib/writing-language";
 import { IS_DESKTOP } from "@/lib/platform";
@@ -293,6 +294,8 @@ export function NoteEditor({
     [sessionRef, note.content]
   );
 
+  const { guardPdfText, pdfTextWarning } = usePdfTextWarning();
+
   // Dismiss the tag editor popover when clicking outside of it.
   useEffect(() => {
     if (!showTagEditor) return;
@@ -440,24 +443,27 @@ export function NoteEditor({
     }
   }, [title, note.title, t, latestContent]);
 
-  const handleExportPdf = useCallback(async () => {
+  const handleExportPdf = useCallback(() => {
     const noteTitle = title || note.title;
-    try {
-      const { generateDocumentPdf } = await import("@/features/export/document-pdf");
-      const blob = await generateDocumentPdf(latestContent() || "", noteTitle);
-      const bytes = new Uint8Array(await blob.arrayBuffer());
-      const saved = await saveBinaryFile(
-        exportFilename(noteTitle, "pdf"),
-        bytes,
-        "application/pdf",
-        { name: "PDF", extensions: ["pdf"] }
-      );
-      if (saved) toast.success(t("editor.exportPdfSuccess"));
-    } catch (error) {
-      console.error("PDF export failed:", error);
-      toast.error(t("editor.exportPdfFailed"));
-    }
-  }, [title, note.title, t, latestContent]);
+    const html = latestContent() || "";
+    guardPdfText(documentPdfText(html, noteTitle), async () => {
+      try {
+        const { generateDocumentPdf } = await import("@/features/export/document-pdf");
+        const blob = await generateDocumentPdf(html, noteTitle);
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        const saved = await saveBinaryFile(
+          exportFilename(noteTitle, "pdf"),
+          bytes,
+          "application/pdf",
+          { name: "PDF", extensions: ["pdf"] }
+        );
+        if (saved) toast.success(t("editor.exportPdfSuccess"));
+      } catch (error) {
+        console.error("PDF export failed:", error);
+        toast.error(t("editor.exportPdfFailed"));
+      }
+    });
+  }, [title, note.title, t, latestContent, guardPdfText]);
 
   const handleExportImage = useCallback(async () => {
     const editor = editorRef.current;
@@ -741,6 +747,7 @@ export function NoteEditor({
         tutorialAnchors={NOTE_EDITOR_TUTORIAL_ANCHORS}
         onEscape={handleEditorEscape}
       />
+      {pdfTextWarning}
       <NoteBacklinks
         ref={backlinksRef}
         noteId={note.id}

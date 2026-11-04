@@ -11,6 +11,7 @@
 import { createElement, type ReactNode } from "react";
 import { Text, View, Image, Link } from "@react-pdf/renderer";
 import type { PdfStyles } from "@/features/export/pdf-styles";
+import { ENDNOTE_BACKLINK } from "@/features/export/html-sanitizer";
 import { parseLinkUri } from "@/features/links/link-uri";
 
 // ---------------------------------------------------------------------------
@@ -406,6 +407,8 @@ function renderTable(el: Element, styles: PdfStyles, key: string): ReactNode {
 
 function renderEndnotes(el: Element, styles: PdfStyles, key: string): ReactNode {
   const children: ReactNode[] = [];
+
+  for (const backlink of el.querySelectorAll(ENDNOTE_BACKLINK)) backlink.remove();
 
   // Title
   const h2 = el.querySelector("h2");

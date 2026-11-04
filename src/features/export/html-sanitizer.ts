@@ -8,6 +8,9 @@
  * - Preserving standard HTML formatting
  */
 
+/** The link back from an endnote to its marker: an arrow the PDF's built-in fonts cannot show. */
+export const ENDNOTE_BACKLINK = '.endnote a[href^="#fnref-"]';
+
 interface Footnote {
   id: string;
   content: string;
