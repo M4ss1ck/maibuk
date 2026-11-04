@@ -17,8 +17,8 @@
 // Pre-bundling. Vite's dependency scan crawls from index.html and never follows
 // `new Worker(new URL(...))`, so a package only a Worker imports is found the
 // first time that Worker starts. Vite then re-bundles and reloads the page
-// mid-session ("optimized dependencies changed. reloading"; `nspell` did this
-// the first time the editor started spellcheck). Scanning the Worker entries
+// mid-session ("optimized dependencies changed. reloading"; `hunspell-asm` does
+// this the first time the editor starts spellcheck). Scanning the Worker entries
 // too finds those packages at startup.
 //
 // Imported by vite.config.ts and by its unit test; there is no CLI.

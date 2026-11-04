@@ -195,6 +195,7 @@ export const TUTORIAL_SECTIONS: readonly TutorialSection[] = [
       step("settings.editor", [
         "Spell Check",
         "Custom Dictionary",
+        "Spell Check Dictionary",
         "Paste Cleanup",
         "Opening Marks",
       ]),

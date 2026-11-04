@@ -208,7 +208,7 @@ describe("EditorToolbarGroups", () => {
       />
     );
 
-    const trigger = screen.getByRole("button", { name: "editor.spellCheckLanguage" });
+    const trigger = screen.getByRole("button", { name: /^editor\.spellCheckLanguage/ });
     expect(within(trigger).getByText("pt-BR")).toBeInTheDocument();
 
     trigger.focus();
@@ -226,9 +226,13 @@ describe("EditorToolbarGroups", () => {
     await user.keyboard("{Enter}");
     const reopened = await screen.findByRole("menuitemradio", { name: /Brasil/ });
     await waitFor(() => expect(reopened).toHaveFocus());
-    // The menu wraps, so two steps from the last option reach Español.
-    await user.keyboard("{ArrowDown}{ArrowDown}");
-    expect(screen.getByRole("menuitemradio", { name: /Español/ })).toHaveFocus();
+    // The dictionary section follows the languages, so walk to Español rather
+    // than assume the tag is the last option.
+    const spanish = screen.getByRole("menuitemradio", { name: /Español/ });
+    for (let i = 0; i < 20 && document.activeElement !== spanish; i++) {
+      await user.keyboard("{ArrowDown}");
+    }
+    expect(spanish).toHaveFocus();
     await user.keyboard("{Enter}");
 
     expect(onSpellCheckLanguageChange).toHaveBeenCalledWith("es");

@@ -1,8 +1,6 @@
-import type { Language } from "@/features/settings/types";
-
 // Main thread -> Worker
 export type WorkerRequest =
-  | { type: "init"; lang: Language; affUrl: string; dicUrl: string }
+  | { type: "init"; lang: string; aff: Uint8Array; dic: Uint8Array }
   | { type: "check"; id: number; words: string[] }
   | { type: "suggest"; id: number; word: string }
   | { type: "addWord"; word: string };

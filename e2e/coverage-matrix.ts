@@ -1122,6 +1122,19 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "editor-spell-check-dictionaries",
+    area: "editor",
+    workflow:
+      "Pick Italiano in the Spell Check language menu; with no dictionary nothing is marked and the menu says so; Download fetches the pinned files and marks a misspelled word; Settings -> Spell Check dictionaries Remove deletes it and the editor marks nothing again; a tampered .dic shows the failure text and installs nothing; asserts: menu state, marked words, failure text; persists: yes, the dictionary stays on this device",
+    edges: ["A tampered .dic shows the failure text and installs nothing"],
+    terms: ["Spell Check Dictionary", "Spell Check"],
+    shortcuts: ["editor.downloadSpellCheckDictionary"],
+    routes: ["/book/:bookId", "/settings"],
+    fixture: "oneBookThreeChapters",
+    tags: [],
+    status: "accepted",
+  },
+  {
     id: "editor-custom-dictionary",
     area: "editor",
     workflow:

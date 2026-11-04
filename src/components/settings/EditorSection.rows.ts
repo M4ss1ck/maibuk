@@ -21,6 +21,11 @@ export const EDITOR_SECTION = {
       descriptionKey: "settings.customDictionaryDescription",
     },
     {
+      id: "spellCheckDictionaries",
+      labelKey: "settings.spellCheckDictionaries",
+      descriptionKey: "settings.spellCheckDictionariesDescription",
+    },
+    {
       id: "showInlineFootnotes",
       labelKey: "settings.showInlineFootnotes",
       descriptionKey: "settings.showInlineFootnotesDescription",

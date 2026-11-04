@@ -23,8 +23,13 @@ import {
   ToolbarFixedUtilities,
   ToolbarUtilityCluster,
 } from "@/components/editor/toolbar/ToolbarUtilities";
-import type { ToolbarGroupCallbacks } from "@/components/editor/toolbar/EditorToolbarGroups";
+import { useTranslation } from "react-i18next";
+import {
+  dictionaryStatusText,
+  type ToolbarGroupCallbacks,
+} from "@/components/editor/toolbar/EditorToolbarGroups";
 import { useSettingsStore } from "@/features/settings/store";
+import { dictionaryStatus, useSpellCheckDictionaries } from "@/features/spell-check-dictionaries";
 import type { SearchHandoff } from "@/features/search/types";
 import { wiktionaryPageUrl } from "@/lib/dictionary";
 import type { WritingLanguage } from "@/lib/writing-language";
@@ -101,6 +106,12 @@ export function EditorToolbar({
   const dictionaryOpenInBrowser = useSettingsStore((state) => state.dictionaryOpenInBrowser);
   const setDictionaryOpenInBrowser = useSettingsStore((state) => state.setDictionaryOpenInBrowser);
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
+  const { t } = useTranslation();
+  const dictionaries = useSpellCheckDictionaries();
+  const dictionaryText = dictionaryStatusText(
+    dictionaryStatus(spellCheckLanguage, dictionaries),
+    t
+  );
   const setSpellCheckEnabled = useSettingsStore((state) => state.setSpellCheckEnabled);
   const showHtmlPanelRef = useRef(showHtmlPanel);
   showHtmlPanelRef.current = showHtmlPanel;
@@ -306,6 +317,15 @@ export function EditorToolbar({
       onTrigger: () => setSpellCheckEnabled(!spellCheckEnabled),
     },
     {
+      id: "editor.downloadSpellCheckDictionary",
+      allowInInput: true,
+      onTrigger: () => {
+        const state = useSpellCheckDictionaries.getState();
+        const status = dictionaryStatus(spellCheckLanguage, state);
+        if (status.kind === "available") void state.download(status.entry.language);
+      },
+    },
+    {
       id: "editor.textColor",
       allowInInput: true,
       onTrigger: () => {
@@ -351,6 +371,9 @@ export function EditorToolbar({
 
   return (
     <TooltipGroup>
+      <span role="status" className="sr-only">
+        {dictionaryText}
+      </span>
       <div
         className="border-b border-border bg-background sticky top-0 z-10"
         data-tutorial={tutorialAnchor}
