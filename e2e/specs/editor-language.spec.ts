@@ -1,5 +1,7 @@
-import type { Page } from "@playwright/test";
-import { pressUntilFocused, tabTo } from "../support/keyboard";
+import type { Locator, Page } from "@playwright/test";
+import { capture } from "../support/capture";
+import { expectFocusWithin, isFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
+import { PORTUGUESE_BOOK } from "../support/seed/names";
 import { seedSettings } from "../support/storage";
 import { expect, test } from "../support/test";
 
@@ -9,15 +11,33 @@ import { expect, test } from "../support/test";
 test.use({ library: "oneBookThreeChapters" });
 
 const editorText = (page: Page) => page.getByRole("textbox", { name: /^Text of / });
+const toolbar = (page: Page) => page.getByRole("toolbar", { name: "Toolbar" });
+const spellCheckLanguage = (page: Page) =>
+  toolbar(page).getByRole("button", { name: "Spell check language", exact: true });
 
-async function openEditor(page: Page) {
+async function openEditor(
+  page: Page,
+  chapterText = "The storm came in from the west without warning."
+) {
   await seedSettings(page, { toolbarExpanded: true });
   await page.goto("/");
   await page.getByRole("grid", { name: "Books" }).getByRole("row").waitFor();
   await page.keyboard.press("1");
   await page.keyboard.press("Enter");
-  await expect(editorText(page)).toContainText("The storm came in from the west without warning.");
+  await expect(editorText(page)).toContainText(chapterText);
   await expect(editorText(page)).toBeFocused();
+}
+
+/** Tabs from the Chapter list until focus is inside the toolbar, then arrows to a control. */
+async function focusToolbarControl(page: Page, target: Locator) {
+  await page.keyboard.press("Escape");
+  await expectFocusWithin(page.getByRole("complementary", { name: "Chapter list" }));
+  for (let i = 0; i < 40; i++) {
+    if (await isFocusWithin(toolbar(page))) break;
+    await page.keyboard.press("Tab");
+  }
+  if (!(await isFocusWithin(toolbar(page)))) throw new Error("Tab never reached the toolbar");
+  await pressUntilFocused(page, "ArrowRight", target, { max: 120 });
 }
 
 async function stubWiktionary(page: Page, definition: string) {
@@ -96,6 +116,53 @@ test.describe("spell check @wf:editor-spell-check", () => {
     await tabTo(page, dialog.getByRole("button", { name: "Remove" }));
     await page.keyboard.press("Enter");
     await expect(dialog).not.toContainText("teh");
+  });
+});
+
+test.describe("a Writing Language outside the picker @wf:editor-spell-check", () => {
+  // The Book's stored tag is `pt-BR`, which the Book Settings picker does not
+  // list; it gets its own Language option from the stored value.
+  test.use({ library: "portugueseBook" });
+
+  test("a Book in a language outside the picker keeps its tag", async ({ page }) => {
+    await openEditor(page, PORTUGUESE_BOOK.text);
+
+    // Soft, so `pnpm screenshots` still reaches both captures on a base without the tag.
+    // The tag reaches the text and the Spell Check language button unchanged.
+    await expect.soft(editorText(page)).toHaveAttribute("lang", PORTUGUESE_BOOK.language);
+    await expect.soft(spellCheckLanguage(page)).toContainText(PORTUGUESE_BOOK.language);
+
+    // The picker lists the two supported languages plus the Book's own tag.
+    await focusToolbarControl(page, spellCheckLanguage(page));
+    await page.keyboard.press("Enter");
+    const picker = page.getByRole("menu", { name: "Spell check language" });
+    await expect(picker.getByRole("menuitemradio", { name: /English/ })).toBeVisible();
+    await expect(picker.getByRole("menuitemradio", { name: /Español/ })).toBeVisible();
+    await expect.soft(picker.getByRole("menuitemradio", { name: /português/i })).toBeVisible();
+    await capture(page, "spell-check-language-picker");
+    await page.keyboard.press("Escape");
+    await expect(picker).toBeHidden();
+
+    // Book Settings shows the tag by its Portuguese name, not as an unknown code.
+    await page.keyboard.press("Escape");
+    await expect(editorText(page)).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expectFocusWithin(page.getByRole("complementary", { name: "Chapter list" }));
+    const settings = page.getByRole("button", { name: "Book Settings" });
+    await tabTo(page, settings, { max: 80, backwards: true });
+    await page.keyboard.press("Enter");
+    const dialog = page.getByRole("dialog", { name: "Book Settings" });
+    await expect
+      .soft(dialog.getByRole("button", { name: /Language/ }))
+      .toContainText("português (Brasil)");
+    await capture(page, "book-language-select");
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+
+    // A reload reads the stored tag again: no path rewrote it to a listed code.
+    await page.reload();
+    await expect(editorText(page)).toHaveAttribute("lang", PORTUGUESE_BOOK.language);
+    await expect(spellCheckLanguage(page)).toContainText(PORTUGUESE_BOOK.language);
   });
 });
 

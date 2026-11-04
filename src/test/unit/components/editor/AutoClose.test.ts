@@ -1,7 +1,7 @@
 import { Editor } from "@tiptap/core";
 import Typography from "@tiptap/extension-typography";
 import StarterKit from "@tiptap/starter-kit";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { AutoClose } from "@/components/editor/extensions/AutoClose";
 

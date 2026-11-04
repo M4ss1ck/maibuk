@@ -20,6 +20,7 @@ import {
   SHELF_BOOKS,
   LANGUAGE_BOOKS,
   PALETTE_CANVAS,
+  PORTUGUESE_BOOK,
 } from "./names";
 import { checkpointHistory } from "./checkpoint-history";
 import { checkpointBacklog } from "./checkpoint-backlog";
@@ -54,6 +55,29 @@ async function spanishAndEnglishBooks(): Promise<void> {
     const saved = await updateChapterRow(created.id, { content: `<p>${seed.text}</p>` }, "local");
     await updateBookWordCountRow(book.id, saved?.wordCount ?? 0);
   }
+}
+
+// A Book whose stored tag is outside the Book Settings picker: the Writing
+// Language paths must keep the tag as stored, never narrow it to a listed code.
+async function portugueseBook(): Promise<void> {
+  const book = await createBookRow(
+    {
+      title: PORTUGUESE_BOOK.title,
+      authorName: SEED_BOOK.authorName,
+      language: PORTUGUESE_BOOK.language,
+    },
+    "local"
+  );
+  const created = await createChapterRow(
+    { bookId: book.id, title: PORTUGUESE_BOOK.chapter },
+    "local"
+  );
+  const saved = await updateChapterRow(
+    created.id,
+    { content: `<p>${PORTUGUESE_BOOK.text}</p>` },
+    "local"
+  );
+  await updateBookWordCountRow(book.id, saved?.wordCount ?? 0);
 }
 
 // A Book with exactly two Chapters (issue #446). The target-Command specs open
@@ -384,6 +408,7 @@ export const SEED_LIBRARIES = {
   oneBookThreeChapters,
   oneBookTwoChapters,
   spanishAndEnglishBooks,
+  portugueseBook,
   echoesBook,
   echoesLargeBook,
   bookShelf,
