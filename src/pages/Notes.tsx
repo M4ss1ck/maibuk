@@ -228,8 +228,7 @@ export function Notes() {
   };
 
   const handleReassignNoteBook = (noteId: string, bookId: string | null) => {
-    const language = getBookLanguage(bookId);
-    void updateNote({ id: noteId, bookId, ...(language ? { language } : {}) });
+    void updateNote({ id: noteId, bookId });
   };
 
   const handleImportFiles = async (files: DroppedTextFile[], target: ListDropTarget | null) => {

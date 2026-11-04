@@ -150,7 +150,7 @@ describe("Notes gallery Item Menu (how phones reach note actions)", () => {
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
-  it("moves a note to a Book by keyboard, taking the Book's language", async () => {
+  it("moves a note to a Book by keyboard, keeping its language", async () => {
     const user = userEvent.setup();
     render(<NotesGallery />);
 
@@ -167,7 +167,6 @@ describe("Notes gallery Item Menu (how phones reach note actions)", () => {
     expect(noteState.updateNote).toHaveBeenCalledWith({
       id: "n2",
       bookId: "book-1",
-      language: "es",
     });
   });
 
@@ -185,11 +184,11 @@ describe("Notes gallery Item Menu (how phones reach note actions)", () => {
     );
     await user.keyboard("{Enter}");
 
-    // No language key at all: filing nowhere must not overwrite the Note's own.
+    // No language key at all: a move must not overwrite the Note's own.
     expect(noteState.updateNote).toHaveBeenCalledWith({ id: "n2", bookId: null });
   });
 
-  it("gives a regional Note the Book's exact tag when it moves", async () => {
+  it("keeps a regional Note's own language when it moves into a Book", async () => {
     const user = userEvent.setup();
     noteState.notes = [{ ...note("n2", "Second", null), language: "pt-BR" }];
     render(<NotesGallery />);
@@ -206,7 +205,6 @@ describe("Notes gallery Item Menu (how phones reach note actions)", () => {
     expect(noteState.updateNote).toHaveBeenCalledWith({
       id: "n2",
       bookId: "book-fi",
-      language: "sv-FI",
     });
   });
 

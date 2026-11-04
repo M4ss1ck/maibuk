@@ -208,8 +208,8 @@ export function NotesGallery() {
             label: t("notes.moveToBook"),
             icon: BookOpen,
             children: [
-              { id: null as string | null, label: t("notes.unfiled"), language: undefined },
-              ...books.map((book) => ({ id: book.id, label: book.title, language: book.language })),
+              { id: null as string | null, label: t("notes.unfiled") },
+              ...books.map((book) => ({ id: book.id, label: book.title })),
               // command-exempt: submenu value (which Book a Note is filed in)
             ].map((target) => ({
               id: `move:${target.id ?? "unfiled"}`,
@@ -217,11 +217,7 @@ export function NotesGallery() {
               isCurrent: (note.bookId ?? null) === target.id,
               onAction: () => {
                 if ((note.bookId ?? null) === target.id) return;
-                void updateNote({
-                  id: note.id,
-                  bookId: target.id,
-                  ...(target.language ? { language: target.language } : {}),
-                });
+                void updateNote({ id: note.id, bookId: target.id });
               },
             })),
           },
