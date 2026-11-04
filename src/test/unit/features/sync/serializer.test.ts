@@ -33,14 +33,31 @@ const {
   serializeNote,
 } = await import("@/features/sync/serializer");
 
-async function insertBook(db: DatabaseAdapter, id: string): Promise<void> {
+async function insertBook(db: DatabaseAdapter, id: string, language = "en"): Promise<void> {
   await db.execute(
     `INSERT INTO books (
       id, title, subtitle, author_name, description, genre, language,
       cover_image_path, cover_data, word_count, target_word_count, status,
       created_at, updated_at, last_opened_at, last_chapter_id
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, "Title", null, "Author", null, null, "en", null, null, 5, null, "draft", 1, 2, null, null]
+    [
+      id,
+      "Title",
+      null,
+      "Author",
+      null,
+      null,
+      language,
+      null,
+      null,
+      5,
+      null,
+      "draft",
+      1,
+      2,
+      null,
+      null,
+    ]
   );
 }
 
@@ -201,6 +218,26 @@ describe("note snapshot serializer", () => {
       ["note-1"]
     );
     expect(rows[0].language).toBe("es");
+  });
+
+  it("round-trips a regional note language through serialize and apply", async () => {
+    await testDb.execute(
+      `INSERT INTO notes (id, title, content, language, tags, pinned, "order", word_count, collapsed_headings, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ["note-pt", "Nota", "<p>Olá</p>", "pt-BR", "[]", 0, 0, 1, "[]", 10, 40]
+    );
+
+    const snapshot = JSON.parse(await serializeNote("note-pt")) as NoteSnapshot;
+    expect(snapshot.note.language).toBe("pt-BR");
+
+    await testDb.execute("DELETE FROM notes");
+    await applyNoteSnapshot(snapshot);
+
+    const rows = await testDb.select<{ language: string }[]>(
+      "SELECT language FROM notes WHERE id = ?",
+      ["note-pt"]
+    );
+    expect(rows[0].language).toBe("pt-BR");
   });
 
   it("falls back to updatedAt when applying a snapshot without contentUpdatedAt", async () => {
@@ -421,6 +458,22 @@ describe("book snapshot serializer", () => {
     expect(snapshot.book.authorName).toBe("Author");
     expect(snapshot.chapters.map((c) => c.id)).toEqual(["ch-1", "ch-2"]);
     expect(snapshot.chapters[0].isIncludedInExport).toBe(true);
+  });
+
+  it("round-trips a regional book language through serialize and apply", async () => {
+    await insertBook(testDb, "book-pt", "pt-BR");
+
+    const snapshot = JSON.parse(await serializeBook("book-pt")) as BookSnapshot;
+    expect(snapshot.book.language).toBe("pt-BR");
+
+    await testDb.execute("DELETE FROM books WHERE id = ?", ["book-pt"]);
+    await applyBookSnapshot(snapshot);
+
+    const rows = await testDb.select<{ language: string }[]>(
+      "SELECT language FROM books WHERE id = ?",
+      ["book-pt"]
+    );
+    expect(rows[0].language).toBe("pt-BR");
   });
 
   it("throws when the book does not exist", async () => {

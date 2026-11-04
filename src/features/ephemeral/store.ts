@@ -1,15 +1,15 @@
 import { create } from "zustand";
 
-import type { Language } from "@/features/settings/types";
+import type { WritingLanguage } from "@/lib/writing-language";
 
 interface EphemeralState {
   content: string;
   wordCount: number;
   /** The Spell Check language the author picked; until then, the app language's. */
-  language: Language | undefined;
+  language: WritingLanguage | undefined;
   setContent: (html: string) => void;
   setWordCount: (n: number) => void;
-  setLanguage: (language: Language) => void;
+  setLanguage: (language: WritingLanguage) => void;
   reset: () => void;
 }
 

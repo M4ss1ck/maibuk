@@ -14,6 +14,13 @@ const { shortcutBindings } = vi.hoisted(() => ({
   shortcutBindings: [] as ShortcutBinding[],
 }));
 
+const { mockOpenExternal } = vi.hoisted(() => ({ mockOpenExternal: vi.fn() }));
+
+vi.mock("@/lib/platform", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/platform")>()),
+  openExternal: mockOpenExternal,
+}));
+
 vi.mock("react-i18next", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react-i18next")>()),
   useTranslation: () => ({ t: (key: string) => key }),
@@ -45,6 +52,7 @@ vi.mock("@/components/editor/toolbar/ResponsiveEditorToolbar", () => ({
       openFootnote: () => void;
       openLinkDialog: () => void;
       openHtmlPanel: () => void;
+      openDictionary: () => void;
     };
     utilityCluster: ReactNode;
     fixedUtilities: ReactNode;
@@ -68,6 +76,9 @@ vi.mock("@/components/editor/toolbar/ResponsiveEditorToolbar", () => ({
       </button>
       <button type="button" onClick={callbacks.openHtmlPanel}>
         html callback
+      </button>
+      <button type="button" onClick={callbacks.openDictionary}>
+        dictionary callback
       </button>
     </div>
   ),
@@ -116,13 +127,13 @@ vi.mock("@/components/editor/toolbar/ToolbarSettingsDialog", () => ({
     ) : null,
 }));
 
-function makeEditor() {
+function makeEditor(selectedText = "") {
   const dom = document.createElement("div");
   return {
     view: { dom },
     state: {
-      selection: { from: 0, to: 0 },
-      doc: { textBetween: () => "" },
+      selection: { from: 0, to: selectedText.length },
+      doc: { textBetween: () => selectedText },
     },
     commands: { setSpellCheckLanguage: vi.fn() },
     getHTML: () => "<p>Text</p>",
@@ -137,6 +148,7 @@ function renderToolbar() {
 
 beforeEach(() => {
   shortcutBindings.length = 0;
+  mockOpenExternal.mockClear();
   useSettingsStore.setState({
     toolbarExpanded: false,
     showNotesChapter: false,
@@ -185,6 +197,15 @@ describe("EditorToolbar", () => {
     renderToolbar();
     fireEvent.click(screen.getByRole("button", { name: callbackName }));
     expect(screen.getByText(openContent)).toBeInTheDocument();
+  });
+
+  it("opens the writing language's Wiktionary when lookups go to the browser", () => {
+    useSettingsStore.setState({ dictionaryOpenInBrowser: true });
+    render(<EditorToolbar editor={makeEditor("palavra")} spellCheckLanguage="pt-BR" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "dictionary callback" }));
+
+    expect(mockOpenExternal).toHaveBeenCalledWith("https://pt.wiktionary.org/wiki/palavra");
   });
 
   it("opens the footnote dialog when the editor had focus", () => {

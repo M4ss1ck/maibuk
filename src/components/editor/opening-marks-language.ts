@@ -9,10 +9,19 @@ import { useSettingsStore } from "@/features/settings/store";
  * changing a Book's language applies without re-creating the editor.
  */
 export function useOpeningMarksLanguage(language: string): () => string | null {
+  const getLanguage = useWritingLanguageGetter(language);
+  return useCallback(
+    () => (useSettingsStore.getState().editorOpeningMarks ? getLanguage() : null),
+    [getLanguage]
+  );
+}
+
+/**
+ * The `writingLanguage` getter for `createRichTextExtensions`: the editor's
+ * language, read per keystroke.
+ */
+export function useWritingLanguageGetter(language: string): () => string {
   const languageRef = useRef(language);
   languageRef.current = language;
-  return useCallback(
-    () => (useSettingsStore.getState().editorOpeningMarks ? languageRef.current : null),
-    []
-  );
+  return useCallback(() => languageRef.current, []);
 }

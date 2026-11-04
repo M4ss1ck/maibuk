@@ -17,6 +17,7 @@ import {
 } from "@/features/dictation/plain-text";
 import type { VoiceCommandRun, VoiceOutcome } from "@/features/dictation/voice-commands";
 import { normalizeLanguage } from "@/features/settings/types";
+import { baseLanguage } from "@/lib/writing-language";
 import { runVoiceCommand, VOICE_MARKS } from "@/components/editor/editor-commands";
 import { taskListMoveMap } from "@/components/editor/extensions/TaskListOrder";
 
@@ -720,7 +721,9 @@ export const Dictation = Extension.create<Record<string, never>, DictationStorag
       id: this.storage.targetId,
       language: () =>
         normalizeLanguage(
-          (editor.storage as { spellCheck?: { language?: string } }).spellCheck?.language
+          baseLanguage(
+            (editor.storage as { spellCheck?: { language?: string } }).spellCheck?.language
+          )
         ),
       // Behind a modal the editor keeps its DOM but the author cannot see it:
       // the Session treats it as absent and takes the orphan path instead.

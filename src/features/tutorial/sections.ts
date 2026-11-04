@@ -64,6 +64,7 @@ export const TUTORIAL_SECTIONS: readonly TutorialSection[] = [
         "Find and Replace",
         "Spell Check",
         "Word Lookup",
+        "Writing Language",
         "Symbol",
         "Text Case",
       ]),

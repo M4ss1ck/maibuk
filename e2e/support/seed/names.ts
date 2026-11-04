@@ -32,6 +32,17 @@ export const LANGUAGE_BOOKS = {
   },
 } as const;
 
+/**
+ * `portugueseBook`: one Book whose stored tag is a raw BCP 47 tag the Book
+ * Settings picker does not list, so the Writing Language paths must keep it.
+ */
+export const PORTUGUESE_BOOK = {
+  title: "O Farol",
+  language: "pt-BR",
+  chapter: "Chegada",
+  text: "O barco a deixou nas pedras ao anoitecer.",
+} as const;
+
 /** `bookShelf`: the seed Book above plus one Book per other Book Status. */
 export const SHELF_BOOKS = [
   { title: "Salt and Iron", authorName: "Ada Marsh", status: "draft" },

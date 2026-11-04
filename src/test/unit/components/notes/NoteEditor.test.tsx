@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NoteEditor } from "@/components/notes/NoteEditor";
 import type { Note, UpdateNoteInput } from "@/features/notes";
 import { useNoteStore } from "@/features/notes/store";
+import { useBookStore } from "@/features/books/store";
 import type { WikilinkCandidate } from "@/features/links/wikilink-targets";
 
 const { noteI18nState, platformState, mockNoteSetAlwaysOnTop } = vi.hoisted(() => ({
@@ -79,14 +80,19 @@ vi.mock("../../../../components/editor", () => ({
     onEscape,
     headerContent,
     extraExtensions,
+    spellCheckLanguage,
   }: {
     onUpdate: (content: string) => void;
     onWordCountChange: (count: number) => void;
     onEscape?: () => void;
     headerContent?: React.ReactNode;
     extraExtensions?: unknown[];
+    spellCheckLanguage?: string;
   }) => (
-    <div ref={() => void editorExtensions.push(extraExtensions ?? [])}>
+    <div
+      ref={() => void editorExtensions.push(extraExtensions ?? [])}
+      data-language={spellCheckLanguage}
+    >
       {headerContent}
       {/* biome-ignore lint/a11y/useSemanticElements: stands in for the contenteditable editor surface. */}
       <div
@@ -123,6 +129,7 @@ function buildNote(overrides: Partial<Note>): Note {
     id: overrides.id ?? "note-1",
     title: overrides.title ?? "Initial",
     content: overrides.content ?? "<p>Initial body</p>",
+    bookId: overrides.bookId ?? null,
     language: overrides.language ?? "en",
     tags: overrides.tags ?? [],
     pinned: overrides.pinned ?? false,
@@ -167,6 +174,55 @@ describe("NoteEditor", () => {
     });
 
     vi.useRealTimers();
+  });
+
+  it("never saves its language unless the author changes it", async () => {
+    vi.useFakeTimers();
+    const onSave = vi.fn<(input: UpdateNoteInput) => Promise<void>>().mockResolvedValue();
+
+    render(<NoteEditor note={buildNote({ language: "pt-BR" })} onSave={onSave} />);
+
+    // A content save must arrive after anything mounting could have written.
+    fireEvent.click(screen.getByRole("button", { name: "Apply editor update" }));
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+
+    expect(onSave).toHaveBeenCalled();
+    for (const [input] of onSave.mock.calls) expect(input).not.toHaveProperty("language");
+    vi.useRealTimers();
+  });
+
+  it("writes in its Book's language when it has none of its own", () => {
+    useBookStore.setState({
+      books: [{ id: "book-fr", title: "French Book", language: "fr" }] as never,
+    });
+    try {
+      const { container } = render(
+        <NoteEditor note={buildNote({ language: "", bookId: "book-fr" })} onSave={vi.fn()} />
+      );
+
+      const surface = container.querySelector("[data-language]");
+      expect(surface?.getAttribute("data-language")).toBe("fr");
+    } finally {
+      useBookStore.setState({ books: [] });
+    }
+  });
+
+  it("keeps its own regional language over its Book's", () => {
+    useBookStore.setState({
+      books: [{ id: "book-fr", title: "French Book", language: "fr" }] as never,
+    });
+    try {
+      const { container } = render(
+        <NoteEditor note={buildNote({ language: "pt-BR", bookId: "book-fr" })} onSave={vi.fn()} />
+      );
+
+      const surface = container.querySelector("[data-language]");
+      expect(surface?.getAttribute("data-language")).toBe("pt-BR");
+    } finally {
+      useBookStore.setState({ books: [] });
+    }
   });
 
   // TipTap keeps the extensions an editor was created with, so a [[ list

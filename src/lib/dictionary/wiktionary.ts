@@ -1,5 +1,15 @@
 import DOMPurify from "dompurify";
-import type { Language } from "@/features/settings/types";
+import { baseLanguage, type WritingLanguage } from "@/lib/writing-language";
+
+/** The base language's Wiktionary, English when the tag names none. */
+export function wiktionaryOrigin(language: WritingLanguage): string {
+  return `https://${baseLanguage(language) ?? "en"}.wiktionary.org`;
+}
+
+/** A word's page on the base language's Wiktionary. */
+export function wiktionaryPageUrl(word: string, language: WritingLanguage): string {
+  return `${wiktionaryOrigin(language)}/wiki/${encodeURIComponent(word)}`;
+}
 
 /**
  * Fetches the full Wiktionary article body for a word and returns sanitized
@@ -7,7 +17,7 @@ import type { Language } from "@/features/settings/types";
  * stripped (the app controls presentation) and every link is rewritten to
  * point at the external Wiktionary page.
  */
-export async function lookupWord(word: string, language: Language): Promise<string | null> {
+export async function lookupWord(word: string, language: WritingLanguage): Promise<string | null> {
   const normalized = word.trim();
   if (!normalized) return null;
 
@@ -18,7 +28,7 @@ export async function lookupWord(word: string, language: Language): Promise<stri
   const body = doc.querySelector(".mw-parser-output");
   if (!body) return null;
 
-  const pageUrl = `https://${language}.wiktionary.org/wiki/${encodeURIComponent(normalized)}`;
+  const pageUrl = wiktionaryPageUrl(normalized, language);
   cleanupBody(body, pageUrl);
 
   const sanitized = DOMPurify.sanitize(body.innerHTML, {
@@ -30,8 +40,8 @@ export async function lookupWord(word: string, language: Language): Promise<stri
   return sanitized.trim() ? sanitized : null;
 }
 
-async function fetchParsedHtml(word: string, language: Language): Promise<string | null> {
-  const url = new URL(`https://${language}.wiktionary.org/w/api.php`);
+async function fetchParsedHtml(word: string, language: WritingLanguage): Promise<string | null> {
+  const url = new URL(`${wiktionaryOrigin(language)}/w/api.php`);
   url.searchParams.set("action", "parse");
   url.searchParams.set("page", word);
   url.searchParams.set("prop", "text");

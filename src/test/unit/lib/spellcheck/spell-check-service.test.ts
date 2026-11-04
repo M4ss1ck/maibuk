@@ -101,4 +101,29 @@ describe("SpellCheckService idle stop", () => {
     expect(await service.suggest("ola")).toEqual([]);
     expect(workers).toHaveLength(0);
   });
+
+  it("opens the Spanish dictionary for an es-MX tag", async () => {
+    await service.init("es-MX");
+
+    const init = workers[0]?.received[0];
+    expect(init).toMatchObject({ type: "init", lang: "es" });
+    expect(init?.type === "init" && init.affUrl).toContain("dictionary-es");
+  });
+
+  it("starts no Worker for a tag with no bundled dictionary", async () => {
+    await service.init("fr");
+
+    expect(workers).toHaveLength(0);
+    expect(await service.check(["bonjour"])).toEqual([]);
+  });
+
+  it("stops the Worker when moving to a language with no dictionary", async () => {
+    await service.init("es");
+    await service.check(["hola"]);
+
+    await service.init("fr");
+
+    expect(workers).toHaveLength(1);
+    expect(workers[0]?.terminated).toBe(true);
+  });
 });

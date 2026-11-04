@@ -1,7 +1,7 @@
 import { Editor } from "@tiptap/core";
 import Typography from "@tiptap/extension-typography";
 import StarterKit from "@tiptap/starter-kit";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { AutoClose } from "@/components/editor/extensions/AutoClose";
 
@@ -208,6 +208,98 @@ describe("AutoClose", () => {
     expect(editor.getText()).toBe("```");
     expect(editor.state.selection.from).toBe(4);
     expect(editor.state.selection.empty).toBe(true);
+    editor.destroy();
+  });
+});
+
+describe("AutoClose double quotes in the writing language", () => {
+  function makeLanguageEditor(language: string | (() => string), content = "<p></p>") {
+    const getLanguage = typeof language === "function" ? language : () => language;
+    return new Editor({
+      extensions: [StarterKit, AutoClose.configure({ getLanguage })],
+      content,
+    });
+  }
+
+  /** The document text with the caret drawn into it as `|`. */
+  function textWithCaret(editor: Editor): string {
+    const text = editor.getText();
+    const position = editor.state.selection.from - 1;
+    return `${text.slice(0, position)}|${text.slice(position)}`;
+  }
+
+  it.each([
+    ["en", "\u201C|\u201D"],
+    ["es", "\u201C|\u201D"],
+    ["fr", "\u00AB\u00A0|\u00A0\u00BB"],
+    ["de", "\u201E|\u201C"],
+    ["pt-BR", "\u201C|\u201D"],
+    ["fr-CA", "\u00AB\u00A0|\u00A0\u00BB"],
+  ])("inserts the %s quote pair", (language, expected) => {
+    const editor = makeLanguageEditor(language);
+
+    expect(type(editor, '"')).toBe(true);
+
+    expect(textWithCaret(editor)).toBe(expected);
+    expect(editor.state.selection.empty).toBe(true);
+    editor.destroy();
+  });
+
+  it.each([
+    ["en", "\u201C\u201D"],
+    ["fr", "\u00AB\u00A0\u00A0\u00BB"],
+  ])("steps past the %s closer when the quote key is typed again", (language, pair) => {
+    const editor = makeLanguageEditor(language);
+
+    type(editor, '"');
+    expect(type(editor, '"')).toBe(true);
+
+    expect(editor.getText()).toBe(pair);
+    expect(editor.state.selection.from).toBe(pair.length + 1);
+    editor.destroy();
+  });
+
+  it.each([
+    ["fr", "\u00AB\u00A0", "\u00A0\u00BB"],
+    ["de", "\u201E", "\u201C"],
+  ])("wraps a selection in %s and leaves the caret after the closer", (language, open, close) => {
+    const editor = makeLanguageEditor(language, "<p>hola</p>");
+    editor.commands.setTextSelection({ from: 1, to: 5 });
+
+    expect(type(editor, '"')).toBe(true);
+
+    expect(editor.getText()).toBe(`${open}hola${close}`);
+    expect(editor.state.selection.from).toBe(1 + open.length + "hola".length + close.length);
+    editor.destroy();
+  });
+
+  it.each([
+    ["fr", "\u00AB\u00A0|\u00A0\u00BB"],
+    ["de", "\u201E|\u201C"],
+  ])("upgrades a composed quote into the %s pair", async (language, expected) => {
+    const editor = makeLanguageEditor(language);
+    const el = editor.view.dom as HTMLElement;
+
+    el.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+    el.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: '"' }));
+
+    // ProseMirror reconciles the browser-committed straight opener after compositionend.
+    editor.view.dispatch(editor.state.tr.insertText('"', 1, 1));
+
+    await vi.waitFor(() => expect(textWithCaret(editor)).toBe(expected));
+    editor.destroy();
+  });
+
+  it("reads the language again on each keystroke", () => {
+    let language = "en";
+    const editor = makeLanguageEditor(() => language);
+
+    type(editor, "a");
+    language = "fr";
+
+    expect(type(editor, '"')).toBe(true);
+
+    expect(editor.getText()).toBe("a\u00AB\u00A0\u00A0\u00BB");
     editor.destroy();
   });
 });

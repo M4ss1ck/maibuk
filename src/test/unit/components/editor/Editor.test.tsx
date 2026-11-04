@@ -522,6 +522,49 @@ describe("Editor", () => {
     expect(afterPick.spellCheckLanguage).toBe("es");
   });
 
+  it("marks the editable surface with the document's language and follows a change", async () => {
+    const { container, rerender } = render(
+      <Editor content={"<p>Chapter</p>"} onUpdate={vi.fn()} spellCheckLanguage="fr" />
+    );
+
+    const prose = (await waitFor(() => {
+      const element = container.querySelector(".ProseMirror");
+      expect(element).not.toBeNull();
+      return element as HTMLElement;
+    })) as HTMLElement;
+    expect(prose.getAttribute("lang")).toBe("fr");
+
+    rerender(<Editor content={"<p>Chapter</p>"} onUpdate={vi.fn()} spellCheckLanguage="de" />);
+
+    await waitFor(() => expect(prose.getAttribute("lang")).toBe("de"));
+  });
+
+  it.each([
+    ["fr", "\u00AB\u00A0\u00A0\u00BB"],
+    ["en", "\u201C\u201D"],
+  ])("types the %s pair when the author types a quote", async (language, expected) => {
+    const { container } = render(
+      <Editor content={"<p></p>"} onUpdate={vi.fn()} spellCheckLanguage={language} />
+    );
+    const prose = (await waitFor(() => {
+      const element = container.querySelector(".ProseMirror");
+      expect(element).not.toBeNull();
+      return element as HTMLElement;
+    })) as HTMLElement & { editor?: TiptapEditor };
+    const editor = prose.editor;
+    if (!editor) throw new Error("no editor mounted");
+
+    // jsdom keyboard events skip ProseMirror's text input path, so type through it.
+    const { view } = editor;
+    const { from, to } = view.state.selection;
+    const handled = view.someProp("handleTextInput", (handler) =>
+      handler(view, from, to, '"', () => view.state.tr.insertText('"', from, to))
+    );
+    if (!handled) view.dispatch(view.state.tr.insertText('"', from, to));
+
+    expect(editor.getText()).toBe(expected);
+  });
+
   describe("the Plugin editor registration", () => {
     afterEach(() => resetPluginEditorHostForTests());
 

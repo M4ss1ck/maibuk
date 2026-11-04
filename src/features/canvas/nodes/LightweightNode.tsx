@@ -21,7 +21,11 @@ import {
   isBlankTextNodeHtml,
   prepareStaticCanvasHtml,
 } from "@/features/canvas/nodes/staticRichText";
-import { useOpeningMarksLanguage } from "@/components/editor/opening-marks-language";
+import {
+  useOpeningMarksLanguage,
+  useWritingLanguageGetter,
+} from "@/components/editor/opening-marks-language";
+import { resolveWritingLanguage } from "@/lib/writing-language";
 
 type LightweightFlowNode = Node<CanvasFlowNodeData, "text">;
 
@@ -53,7 +57,9 @@ function ActiveNodeEditor({
   const language = useSettingsStore((state) => state.language);
   const editorAutoClose = useSettingsStore((state) => state.editorAutoClose);
   // A Canvas has no language of its own; its text follows the app's, like Spell Check.
-  const openingMarksLanguage = useOpeningMarksLanguage(language);
+  const writingLanguage = resolveWritingLanguage({ app: language });
+  const openingMarksLanguage = useOpeningMarksLanguage(writingLanguage);
+  const writingLanguageGetter = useWritingLanguageGetter(writingLanguage);
   const overlayOpen = useRef(false);
   const [pendingMarkdownPaste, setPendingMarkdownPaste] = useState<string | null>(null);
   const hadText = useRef(false);
@@ -62,9 +68,10 @@ function ActiveNodeEditor({
       ...createRichTextExtensions({
         onMarkdownPaste: setPendingMarkdownPaste,
         footnoteStartIndex: 1,
-        spellCheck: { enabled: spellCheckEnabled, language },
+        spellCheck: { enabled: spellCheckEnabled, language: writingLanguage },
         autoClose: editorAutoClose,
         openingMarksLanguage,
+        writingLanguage: writingLanguageGetter,
         // Leaving the node writes its HTML back, so opening must not change it.
         nameHeadingsOnOpen: false,
       }),
@@ -82,7 +89,7 @@ function ActiveNodeEditor({
     // autofocus is the reliable path that lands the caret in the new editor.
     autofocus: "end",
     editorProps: {
-      attributes: { class: "outline-none" },
+      attributes: { class: "outline-none", lang: writingLanguage },
     },
   });
   useEditorCommandSource(editor);
@@ -158,6 +165,8 @@ function ActiveNodeEditor({
 export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNode>) {
   const { t } = useTranslation();
   const node = data.node;
+  const language = useSettingsStore((state) => state.language);
+  const writingLanguage = resolveWritingLanguage({ app: language });
   const colorPreview = useNodeColorPreview(node.id);
   const editorReadOnly = useCanvasStore((state) => state.editorReadOnly);
   const interactivityLocked = useCanvasStore((state) => state.interactivityLocked);
@@ -236,6 +245,7 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
       ) : (
         <div
           className="canvas-node-content max-w-none"
+          lang={writingLanguage}
           style={textColorStyle(colorPreview?.textColor ?? node.textColor)}
           // biome-ignore lint/security/noDangerouslySetInnerHtml: canvas node HTML is sanitized with DOMPurify above
           dangerouslySetInnerHTML={{ __html: safeHtml }}

@@ -1570,7 +1570,7 @@ export const ROWS: MatrixRow[] = [
     edges: [
       "A picked Spell Check language shows on its button, drives Spell Check and Opening Marks, and carries to the Note",
     ],
-    terms: ["Ephemeral"],
+    terms: ["Ephemeral", "Writing Language"],
     shortcuts: [],
     routes: ["/ephemeral"],
     fixture: "empty",

@@ -16,7 +16,7 @@ let status: "idle" | "listening" = "idle";
 
 // TipTap emits "create" (and runs extension `onCreate`) on a macrotask, so the
 // editor must settle before an editor becomes a registered target.
-async function makeEditor(content = "<p>Hola</p>", language: "en" | "es" = "es") {
+async function makeEditor(content = "<p>Hola</p>", language = "es") {
   const editor = new Editor({
     extensions: createRichTextExtensions({
       spellCheck: { enabled: false, language },
@@ -65,6 +65,26 @@ describe("Dictation extension", () => {
     expect(targets[0].language()).toBe("es");
     editor.destroy();
     expect(targets).toHaveLength(0);
+  });
+
+  it("dictates in the base language of the Spell Check tag", async () => {
+    const editor = await makeEditor("<p>x</p>", "es-MX");
+    expect(targets).toHaveLength(1);
+    expect(targets[0].language()).toBe("es");
+    editor.destroy();
+  });
+
+  it("falls back to English when the Spell Check tag has no bundled base", async () => {
+    const editor = await makeEditor("<p>x</p>", "pt-BR");
+    expect(targets).toHaveLength(1);
+    expect(targets[0].language()).toBe("en");
+    editor.destroy();
+  });
+
+  it("dictates in English when the Spell Check language is English", async () => {
+    const editor = await makeEditor("<p>x</p>", "en");
+    expect(targets[0].language()).toBe("en");
+    editor.destroy();
   });
 
   it("reports unavailable behind a modal layer and available otherwise", async () => {

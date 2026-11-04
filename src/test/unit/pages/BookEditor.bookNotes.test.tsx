@@ -10,6 +10,8 @@ const {
   mockSetBookSidePanelTab,
   mockSetSidebarWidth,
   mockSettings,
+  mockUpdateBook,
+  mockBookLanguage,
 } = vi.hoisted(() => ({
   mockNavigate: vi.fn(),
   mockNoteState: {
@@ -26,6 +28,8 @@ const {
   mockSetBookSidePanelTab: vi.fn(),
   mockSetSidebarWidth: vi.fn(),
   mockSettings: { showNotesChapter: true },
+  mockUpdateBook: vi.fn(),
+  mockBookLanguage: { value: "en" },
 }));
 
 vi.mock("react-i18next", () => ({
@@ -56,7 +60,7 @@ vi.mock("../../../features/books/store", () => ({
       id: "book-1",
       title: "Draft",
       authorName: "Author",
-      language: "en",
+      language: mockBookLanguage.value,
       wordCount: 0,
       status: "draft",
       createdAt: new Date("2026-01-01T00:00:00Z"),
@@ -64,7 +68,7 @@ vi.mock("../../../features/books/store", () => ({
     },
     loadBook: vi.fn(),
     updateWordCount: vi.fn(),
-    updateBook: vi.fn(),
+    updateBook: mockUpdateBook,
     deleteBook: vi.fn(),
   }),
 }));
@@ -160,6 +164,39 @@ describe("BookEditor book notes panel", () => {
     mockSetBookSidePanelTab.mockClear();
     mockSetSidebarWidth.mockClear();
     mockSettings.showNotesChapter = true;
+    mockBookLanguage.value = "en";
+    mockUpdateBook.mockClear();
+    mockNoteState.createNote.mockClear();
+  });
+
+  it("saves a Quick Note in the Book's writing language", () => {
+    mockBookLanguage.value = "pt-BR";
+    render(<BookEditor />);
+
+    const calls = mockBookSidePanel.mock.calls;
+    const props = calls[calls.length - 1][0] as unknown as {
+      onCreateNote: (html: string) => void;
+    };
+    props.onCreateNote("<p>Olá</p>");
+
+    expect(mockNoteState.createNote).toHaveBeenCalledWith({
+      bookId: "book-1",
+      title: "Olá",
+      content: "<p>Olá</p>",
+      language: "pt-BR",
+    });
+  });
+
+  it("never writes the Book's language back just for opening it", () => {
+    mockBookLanguage.value = "fr";
+
+    render(<BookEditor />);
+
+    expect(mockUpdateBook).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ language: expect.anything() })
+    );
+    expect(mockUpdateBook).not.toHaveBeenCalled();
   });
 
   it("passes only this book's notes to the side panel on the notes tab", () => {

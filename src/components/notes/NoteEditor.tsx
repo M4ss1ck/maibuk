@@ -29,7 +29,7 @@ import { Tooltip } from "@/components/ui";
 import { editorHtmlToMarkdown, markdownFilename, saveMarkdownFile } from "@/features/markdown";
 import { saveBinaryFile, exportFilename } from "@/features/export";
 import { useSettingsStore } from "@/features/settings/store";
-import { normalizeLanguage, type Language } from "@/features/settings/types";
+import { resolveWritingLanguage, type WritingLanguage } from "@/lib/writing-language";
 import { IS_DESKTOP } from "@/lib/platform";
 import { useNavigate } from "react-router-dom";
 import { Wikilink } from "@/components/editor/extensions";
@@ -245,6 +245,7 @@ export function NoteEditor({
   const notes = useNoteStore((s) => s.notes);
   const alwaysOnTop = useSettingsStore((s) => s.alwaysOnTop);
   const setAlwaysOnTop = useSettingsStore((s) => s.setAlwaysOnTop);
+  const appLanguage = useSettingsStore((s) => s.language);
   const books = useBookStore((s) => s.books);
   const navigate = useNavigate();
   const wordCountRef = useRef(note.wordCount);
@@ -519,14 +520,15 @@ export function NoteEditor({
   );
 
   // Plugins detect in the language the Note is written in: its own, else its
-  // Book's (the editor falls back to the Spell Check language).
-  const pluginLanguage =
-    note.language?.trim() ||
-    (note.bookId ? books.find((book) => book.id === note.bookId)?.language : null) ||
-    null;
+  // Book's, else the app language.
+  const writingLanguage = resolveWritingLanguage({
+    own: note.language,
+    book: note.bookId ? books.find((book) => book.id === note.bookId)?.language : null,
+    app: appLanguage,
+  });
 
   const handleSpellCheckLanguageChange = useCallback(
-    (language: Language) => {
+    (language: WritingLanguage) => {
       saveNoteFields({ language });
     },
     [saveNoteFields]
@@ -725,8 +727,8 @@ export function NoteEditor({
         onExportImage={handleExportImage}
         restoreKey={`note:${note.id}`}
         pluginEntity={{ kind: "note", id: note.id }}
-        pluginLanguage={pluginLanguage}
-        spellCheckLanguage={normalizeLanguage(note.language)}
+        pluginLanguage={writingLanguage}
+        spellCheckLanguage={writingLanguage}
         onSpellCheckLanguageChange={handleSpellCheckLanguageChange}
         suppressRestore={suppressRestore}
         placeholder={t("notes.bodyPlaceholder")}
