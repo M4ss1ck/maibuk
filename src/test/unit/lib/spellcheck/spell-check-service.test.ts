@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SPELLCHECK_IDLE_STOP_MS, SpellCheckService } from "@/lib/spellcheck/SpellCheckService";
+import {
+  type DictionaryBytes,
+  SPELLCHECK_IDLE_STOP_MS,
+  SpellCheckService,
+} from "@/lib/spellcheck/SpellCheckService";
 import type { WorkerRequest, WorkerResponse } from "@/lib/spellcheck/types";
 
 /** A Worker that knows "hola" plus every word added to it after init. */
@@ -38,17 +42,26 @@ class FakeSpellWorker {
   }
 }
 
+const DICTIONARY: DictionaryBytes = { aff: new Uint8Array([1, 2, 3]), dic: new Uint8Array([4, 5]) };
+
 describe("SpellCheckService idle stop", () => {
   let workers: FakeSpellWorker[];
+  let loaded: string[];
   let service: SpellCheckService;
+
+  const createWorker = () => {
+    const worker = new FakeSpellWorker();
+    workers.push(worker);
+    return worker as unknown as Worker;
+  };
 
   beforeEach(() => {
     vi.useFakeTimers();
     workers = [];
-    service = new SpellCheckService(() => {
-      const worker = new FakeSpellWorker();
-      workers.push(worker);
-      return worker as unknown as Worker;
+    loaded = [];
+    service = new SpellCheckService(createWorker, async (lang) => {
+      loaded.push(lang);
+      return lang === "en" || lang === "es" ? DICTIONARY : null;
     });
   });
 
@@ -105,16 +118,53 @@ describe("SpellCheckService idle stop", () => {
   it("opens the Spanish dictionary for an es-MX tag", async () => {
     await service.init("es-MX");
 
-    const init = workers[0]?.received[0];
-    expect(init).toMatchObject({ type: "init", lang: "es" });
-    expect(init?.type === "init" && init.affUrl).toContain("dictionary-es");
+    expect(loaded).toEqual(["es"]);
+    expect(workers[0]?.received[0]).toMatchObject({ type: "init", lang: "es" });
   });
 
-  it("starts no Worker for a tag with no bundled dictionary", async () => {
+  it("posts the dictionary bytes to the Worker", async () => {
+    await service.init("en");
+
+    const init = workers[0]?.received[0];
+    if (init?.type !== "init") throw new Error("the Worker never got an init");
+    expect(init.lang).toBe("en");
+    expect(Array.from(init.aff)).toEqual([1, 2, 3]);
+    expect(Array.from(init.dic)).toEqual([4, 5]);
+  });
+
+  it("starts no Worker and checks nothing for a language with no dictionary", async () => {
     await service.init("fr");
 
     expect(workers).toHaveLength(0);
     expect(await service.check(["bonjour"])).toEqual([]);
+    expect(await service.check(["bonjour"])).toEqual([]);
+    expect(loaded).toEqual(["fr"]);
+  });
+
+  it("starts no Worker when the dictionary is still loading at destroy()", async () => {
+    let resolveLoad: (dictionary: DictionaryBytes | null) => void = () => undefined;
+    const loading = new Promise<DictionaryBytes | null>((resolve) => {
+      resolveLoad = resolve;
+    });
+    service = new SpellCheckService(createWorker, () => loading);
+
+    const init = service.init("es");
+    service.destroy();
+    resolveLoad(DICTIONARY);
+    await init;
+
+    expect(workers).toHaveLength(0);
+  });
+
+  it("answers a check still waiting on the Worker when destroy() stops it", async () => {
+    await service.init("es");
+    workers[0].postMessage = () => undefined;
+
+    const check = service.check(["hola"]);
+    await vi.advanceTimersByTimeAsync(0);
+    service.destroy();
+
+    expect(await check).toEqual([]);
   });
 
   it("stops the Worker when moving to a language with no dictionary", async () => {
@@ -124,6 +174,78 @@ describe("SpellCheckService idle stop", () => {
     await service.init("fr");
 
     expect(workers).toHaveLength(1);
+    expect(workers[0]?.terminated).toBe(true);
+  });
+
+  it("releaseLanguage stops the Worker only for the language it holds", async () => {
+    await service.init("es");
+    await service.check(["hola"]);
+
+    service.releaseLanguage("en");
+    expect(workers[0]?.terminated).toBe(false);
+
+    service.releaseLanguage("es");
+    expect(workers[0]?.terminated).toBe(true);
+    expect(service.isReady()).toBe(false);
+  });
+});
+
+describe("SpellCheckService script coverage and normalization", () => {
+  let workers: FakeSpellWorker[];
+  let service: SpellCheckService;
+
+  const createWorker = () => {
+    const worker = new FakeSpellWorker();
+    workers.push(worker);
+    return worker as unknown as Worker;
+  };
+
+  beforeEach(() => {
+    workers = [];
+    service = new SpellCheckService(createWorker, async (lang) =>
+      lang === "en" ? DICTIONARY : null
+    );
+  });
+
+  afterEach(() => {
+    service.destroy();
+  });
+
+  it("does not flag or send words outside the active script", async () => {
+    await service.init("en");
+
+    expect(await service.check(["привет", "ola"])).toEqual(["ola"]);
+
+    const check = workers[0]?.received.find((message) => message.type === "check");
+    expect(check).toMatchObject({ type: "check", words: ["ola"] });
+  });
+
+  it("sends an NFD word as NFC and returns the caller's original string", async () => {
+    await service.init("en");
+    const nfd = "cafe\u0301";
+
+    expect(await service.check([nfd])).toEqual([nfd]);
+
+    const check = workers[0]?.received.find((message) => message.type === "check");
+    expect(check).toMatchObject({ type: "check", words: [nfd.normalize("NFC")] });
+  });
+
+  it("starts no Worker without a dictionary, then loads and drops one as it appears", async () => {
+    let dictionary: DictionaryBytes | null = null;
+    service = new SpellCheckService(createWorker, async () => dictionary);
+
+    await service.init("fr");
+    expect(await service.check(["bonjour"])).toEqual([]);
+    expect(workers).toHaveLength(0);
+
+    dictionary = DICTIONARY;
+    await service.init("fr", { force: true });
+    expect(workers).toHaveLength(1);
+    expect(workers[0]?.received[0]).toMatchObject({ type: "init", lang: "fr" });
+
+    dictionary = null;
+    await service.init("fr", { force: true });
+    expect(await service.check(["bonjour"])).toEqual([]);
     expect(workers[0]?.terminated).toBe(true);
   });
 });

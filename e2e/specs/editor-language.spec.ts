@@ -13,7 +13,7 @@ test.use({ library: "oneBookThreeChapters" });
 const editorText = (page: Page) => page.getByRole("textbox", { name: /^Text of / });
 const toolbar = (page: Page) => page.getByRole("toolbar", { name: "Toolbar" });
 const spellCheckLanguage = (page: Page) =>
-  toolbar(page).getByRole("button", { name: "Spell check language", exact: true });
+  toolbar(page).getByRole("button", { name: /^Spell check language/ });
 
 async function openEditor(
   page: Page,
@@ -132,13 +132,15 @@ test.describe("a Writing Language outside the picker @wf:editor-spell-check", ()
     await expect.soft(editorText(page)).toHaveAttribute("lang", PORTUGUESE_BOOK.language);
     await expect.soft(spellCheckLanguage(page)).toContainText(PORTUGUESE_BOOK.language);
 
-    // The picker lists the two supported languages plus the Book's own tag.
+    // The picker lists the offered languages plus the Book's own tag.
     await focusToolbarControl(page, spellCheckLanguage(page));
     await page.keyboard.press("Enter");
     const picker = page.getByRole("menu", { name: "Spell check language" });
     await expect(picker.getByRole("menuitemradio", { name: /English/ })).toBeVisible();
     await expect(picker.getByRole("menuitemradio", { name: /Español/ })).toBeVisible();
-    await expect.soft(picker.getByRole("menuitemradio", { name: /português/i })).toBeVisible();
+    await expect
+      .soft(picker.getByRole("menuitemradio", { name: /português \(brasil\)/i }))
+      .toBeVisible();
     await capture(page, "spell-check-language-picker");
     await page.keyboard.press("Escape");
     await expect(picker).toBeHidden();
@@ -154,7 +156,7 @@ test.describe("a Writing Language outside the picker @wf:editor-spell-check", ()
     const dialog = page.getByRole("dialog", { name: "Book Settings" });
     await expect
       .soft(dialog.getByRole("button", { name: /Language/ }))
-      .toContainText("português (Brasil)");
+      .toContainText("português (Brasil)", { ignoreCase: true });
     await capture(page, "book-language-select");
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();

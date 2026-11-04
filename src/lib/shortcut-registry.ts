@@ -696,6 +696,11 @@ export const COMMANDS = {
     defaults: [],
   },
   "editor.spellCheck": { labelKey: "editor.spellCheck", contexts: ["editor"], defaults: [] },
+  "editor.downloadSpellCheckDictionary": {
+    labelKey: "editor.downloadSpellCheckDictionary",
+    contexts: ["editor"],
+    defaults: [],
+  },
   "editor.viewHtml": { labelKey: "editor.viewHtml", contexts: ["editor"], defaults: [] },
   "editor.exportMarkdown": {
     labelKey: "editor.exportMarkdown",

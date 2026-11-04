@@ -1,9 +1,13 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { Editor } from "@tiptap/react";
 import type { ReactNode } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EditorToolbar } from "@/components/editor/EditorToolbar";
 import { useSettingsStore } from "@/features/settings/store";
+import { computeChecksum } from "@/lib/checksum";
+import { dictionaryFor } from "@/features/spell-check-dictionaries/catalog";
+import { useSpellCheckDictionaries } from "@/features/spell-check-dictionaries/store";
+import type { SpellCheckDictionaryFiles } from "@/features/spell-check-dictionaries/types";
 
 interface ShortcutBinding {
   id: string;
@@ -14,11 +18,15 @@ const { shortcutBindings } = vi.hoisted(() => ({
   shortcutBindings: [] as ShortcutBinding[],
 }));
 
-const { mockOpenExternal } = vi.hoisted(() => ({ mockOpenExternal: vi.fn() }));
+const { mockOpenExternal, mockGetFiles } = vi.hoisted(() => ({
+  mockOpenExternal: vi.fn(),
+  mockGetFiles: vi.fn(),
+}));
 
 vi.mock("@/lib/platform", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/platform")>()),
   openExternal: mockOpenExternal,
+  getSpellCheckDictionaryFiles: mockGetFiles,
 }));
 
 vi.mock("react-i18next", async (importOriginal) => ({
@@ -219,5 +227,104 @@ describe("EditorToolbar", () => {
     renderToolbar();
     fireEvent.click(screen.getByRole("button", { name: "footnote callback" }));
     expect(screen.getByText("footnote dialog open")).toBeInTheDocument();
+  });
+});
+
+const DICT_AFF = new TextEncoder().encode("AFF");
+const DICT_DIC = new TextEncoder().encode("DIC");
+const dictAffSha256 = await computeChecksum(DICT_AFF);
+const dictDicSha256 = await computeChecksum(DICT_DIC);
+const frEntry = dictionaryFor("fr");
+if (!frEntry) throw new Error("the catalog has no French entry");
+const frOriginalAff = { ...frEntry.aff };
+const frOriginalDic = { ...frEntry.dic };
+
+describe("download Spell Check dictionary shortcut", () => {
+  function memoryFiles(): SpellCheckDictionaryFiles {
+    const store = new Map<string, Uint8Array>();
+    return {
+      read: vi.fn(async (language, name) => store.get(`${language}/${name}`) ?? null),
+      write: vi.fn(async (language, name, data) => {
+        store.set(`${language}/${name}`, data);
+      }),
+      remove: vi.fn(async (language) => {
+        for (const key of [...store.keys()]) {
+          if (key.startsWith(`${language}/`)) store.delete(key);
+        }
+      }),
+    };
+  }
+
+  beforeEach(() => {
+    frEntry.aff = { ...frOriginalAff, bytes: DICT_AFF.length, sha256: dictAffSha256 };
+    frEntry.dic = { ...frOriginalDic, bytes: DICT_DIC.length, sha256: dictDicSha256 };
+    mockGetFiles.mockClear();
+    mockGetFiles.mockResolvedValue(memoryFiles());
+    useSpellCheckDictionaries.setState({
+      installed: [],
+      downloading: [],
+      failed: [],
+      loaded: true,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url === frEntry.aff.url) return new Response(DICT_AFF);
+        if (url === frEntry.dic.url) return new Response(DICT_DIC);
+        return new Response(null, { status: 404 });
+      })
+    );
+  });
+
+  afterEach(() => {
+    frEntry.aff = frOriginalAff;
+    frEntry.dic = frOriginalDic;
+    vi.unstubAllGlobals();
+  });
+
+  function fireDownloadShortcut() {
+    const binding = shortcutBindings.find(
+      (item) => item.id === "editor.downloadSpellCheckDictionary"
+    );
+    expect(binding).toBeDefined();
+    act(() => binding?.onTrigger());
+  }
+
+  it("downloads the dictionary when the active language has one available", async () => {
+    render(<EditorToolbar editor={makeEditor()} spellCheckLanguage="fr" />);
+
+    fireDownloadShortcut();
+
+    await waitFor(() => expect(useSpellCheckDictionaries.getState().installed).toContain("fr"));
+  });
+
+  it("announces the active language's dictionary state once, and says nothing when it is ready", async () => {
+    const { rerender } = render(<EditorToolbar editor={makeEditor()} spellCheckLanguage="fr" />);
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "editor.spellCheckDictionaryStatusAvailable"
+    );
+
+    rerender(<EditorToolbar editor={makeEditor()} spellCheckLanguage="ja" />);
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "editor.spellCheckDictionaryStatusUnavailable"
+    );
+
+    rerender(<EditorToolbar editor={makeEditor()} spellCheckLanguage="en" />);
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+  });
+
+  it.each([
+    ["en", "is ready"],
+    ["ja", "has none"],
+  ])("does nothing when %s %s", async (language) => {
+    render(<EditorToolbar editor={makeEditor()} spellCheckLanguage={language} />);
+
+    fireDownloadShortcut();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockGetFiles).not.toHaveBeenCalled();
+    expect(useSpellCheckDictionaries.getState().installed).toEqual([]);
   });
 });

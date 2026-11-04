@@ -4,6 +4,7 @@ import { useSettings } from "@/features/settings";
 import { Button, Modal, Switch } from "@/components/ui";
 import { PasteCleanupSection } from "@/components/settings/PasteCleanupSection";
 import { SettingRow } from "@/components/settings/SettingRow";
+import { SpellCheckDictionariesRow } from "@/components/settings/SpellCheckDictionariesRow";
 import { SettingsSection, SETTINGS_ROW_CLASS } from "@/components/settings/SettingsSection";
 
 export function EditorSection() {
@@ -64,6 +65,10 @@ export function EditorSection() {
         <Button variant="primary" size="sm" onClick={() => setCustomDictionaryOpen(true)}>
           {t("settings.editCustomDictionary")}
         </Button>
+      </SettingRow>
+
+      <SettingRow id="spellCheckDictionaries" className="py-3 space-y-2">
+        <SpellCheckDictionariesRow />
       </SettingRow>
 
       <SettingRow id="showInlineFootnotes" className={SETTINGS_ROW_CLASS}>

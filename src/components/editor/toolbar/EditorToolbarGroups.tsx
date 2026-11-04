@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
-import { Button, Menu, MenuItem, MenuTrigger, Popover } from "react-aria-components";
+import { useEffect, type ReactNode } from "react";
+import type { TFunction } from "i18next";
+import { Button, Menu, MenuItem, MenuSection, MenuTrigger, Popover } from "react-aria-components";
 import { useEditorState, type Editor } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
 import {
@@ -57,7 +58,18 @@ import { Tooltip } from "@/components/ui";
 import { getEditorToolbarState } from "@/components/editor/toolbar/editor-toolbar-state";
 import { useSettingsStore } from "@/features/settings/store";
 import { LANGUAGE_OPTIONS } from "@/features/settings/types";
-import { withLanguageOption, type WritingLanguage } from "@/lib/writing-language";
+import {
+  DICTIONARY_CATALOG,
+  dictionarySizeMb,
+  dictionaryStatus,
+  useSpellCheckDictionaries,
+  type DictionaryStatus,
+} from "@/features/spell-check-dictionaries";
+import {
+  languageDisplayName,
+  withLanguageOption,
+  type WritingLanguage,
+} from "@/lib/writing-language";
 import type { ToolbarEntryId } from "@/features/settings/toolbar-config";
 import { isPluginToolbarButtonId } from "@/features/settings/toolbar-config";
 
@@ -652,18 +664,60 @@ interface SpellCheckLanguageMenuProps {
   label: string;
 }
 
+export function dictionaryStatusText(status: DictionaryStatus, t: TFunction): string | null {
+  switch (status.kind) {
+    case "ready":
+      return null;
+    case "available":
+      return t("editor.spellCheckDictionaryStatusAvailable");
+    case "downloading":
+      return t("editor.spellCheckDictionaryStatusDownloading");
+    case "unavailable":
+      return t("editor.spellCheckDictionaryStatusUnavailable");
+  }
+}
+
+const MENU_ITEM_CLASS =
+  "flex cursor-pointer items-center justify-between gap-3 px-3 py-1.5 text-sm outline-none data-focused:bg-muted data-disabled:cursor-default data-disabled:opacity-60";
+const STATUS_ITEM_CLASS =
+  "flex cursor-default items-center gap-3 px-3 py-1.5 text-sm text-muted-foreground outline-none data-disabled:opacity-60";
+
 function SpellCheckLanguageMenu({ value, onChange, label }: SpellCheckLanguageMenuProps) {
-  const options = withLanguageOption(LANGUAGE_OPTIONS, value);
+  const { t } = useTranslation();
+  const dictionaries = useSpellCheckDictionaries();
+  const { loaded, refresh } = dictionaries;
+
+  useEffect(() => {
+    if (!loaded) void refresh().catch(() => {});
+  }, [loaded, refresh]);
+
+  const status = dictionaryStatus(value, dictionaries);
+  const text = dictionaryStatusText(status, t);
+
+  const options = [
+    ...LANGUAGE_OPTIONS,
+    ...DICTIONARY_CATALOG.map((entry) => ({
+      value: entry.language,
+      label: languageDisplayName(entry.language),
+    })),
+  ];
+  const menuOptions = withLanguageOption(options, value);
+
+  const languageName =
+    status.kind === "available"
+      ? languageDisplayName(status.entry.language)
+      : languageDisplayName(value);
+  const accessibleLabel = text ? `${label}: ${text}` : label;
 
   return (
     <MenuTrigger>
-      <Tooltip content={label}>
+      <Tooltip content={accessibleLabel}>
         <Button
-          aria-label={label}
+          aria-label={accessibleLabel}
           className="flex h-8 min-w-7 max-w-12 flex-col items-center justify-center gap-0 rounded px-0.5 text-[10px] font-medium leading-none transition-colors hover:bg-muted data-pressed:bg-primary data-pressed:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           <span
-            className={value.length === 2 ? "max-w-full truncate uppercase" : "max-w-full truncate"}
+            className={`${value.length === 2 ? "max-w-full truncate uppercase" : "max-w-full truncate"} ${text ? "text-warning-text" : ""}`}
           >
             {value}
           </span>
@@ -679,17 +733,21 @@ function SpellCheckLanguageMenu({ value, onChange, label }: SpellCheckLanguageMe
           selectionMode="single"
           selectedKeys={[value]}
           onAction={(key) => {
+            if (key === "download-dictionary") {
+              if (status.kind === "available") void dictionaries.download(status.entry.language);
+              return;
+            }
             if (key !== value) onChange(key as WritingLanguage);
           }}
           className="outline-none"
         >
-          {options.map((option) => (
+          {menuOptions.map((option) => (
             <MenuItem
               key={option.value}
               id={option.value}
               data-command-exempt="a value of the Spell Check language picker, not an action"
               textValue={option.label}
-              className={`flex cursor-pointer items-center justify-between gap-3 px-3 py-1.5 text-sm outline-none data-focused:bg-muted ${
+              className={`${MENU_ITEM_CLASS} ${
                 option.value === value ? "text-primary" : "text-foreground"
               }`}
             >
@@ -705,6 +763,76 @@ function SpellCheckLanguageMenu({ value, onChange, label }: SpellCheckLanguageMe
               </span>
             </MenuItem>
           ))}
+          {status.kind !== "ready" && (
+            <MenuSection className="mt-1 border-t border-border pt-1 outline-none">
+              {status.kind === "available" &&
+                (status.failed ? (
+                  <MenuItem
+                    id="download-failed"
+                    isDisabled
+                    data-command-exempt="a failed download has no action of its own"
+                    textValue={t("editor.spellCheckDictionaryDownloadFailed")}
+                    className={STATUS_ITEM_CLASS}
+                  >
+                    {t("editor.spellCheckDictionaryDownloadFailed")}
+                  </MenuItem>
+                ) : (
+                  <MenuItem
+                    id="no-dictionary"
+                    isDisabled
+                    data-command-exempt="a statement about the language, not an action"
+                    textValue={t("editor.spellCheckDictionaryNoneFor", {
+                      language: languageName,
+                    })}
+                    className={STATUS_ITEM_CLASS}
+                  >
+                    {t("editor.spellCheckDictionaryNoneFor", { language: languageName })}
+                  </MenuItem>
+                ))}
+              {status.kind === "available" && (
+                <MenuItem
+                  id="download-dictionary"
+                  data-command="editor.downloadSpellCheckDictionary"
+                  textValue={t("editor.spellCheckDictionaryDownloadFor", {
+                    language: languageName,
+                    size: dictionarySizeMb(status.entry),
+                  })}
+                  className={`${MENU_ITEM_CLASS} text-foreground`}
+                >
+                  {t("editor.spellCheckDictionaryDownloadFor", {
+                    language: languageName,
+                    size: dictionarySizeMb(status.entry),
+                  })}
+                </MenuItem>
+              )}
+              {status.kind === "downloading" && (
+                <MenuItem
+                  id="download-downloading"
+                  isDisabled
+                  data-command-exempt="the download is already running"
+                  textValue={t("editor.spellCheckDictionaryDownloadingFor", {
+                    language: languageName,
+                  })}
+                  className={STATUS_ITEM_CLASS}
+                >
+                  {t("editor.spellCheckDictionaryDownloadingFor", { language: languageName })}
+                </MenuItem>
+              )}
+              {status.kind === "unavailable" && (
+                <MenuItem
+                  id="no-spell-check-dictionary"
+                  isDisabled
+                  data-command-exempt="a statement about the language, not an action"
+                  textValue={t("editor.spellCheckDictionaryUnavailableFor", {
+                    language: languageName,
+                  })}
+                  className={STATUS_ITEM_CLASS}
+                >
+                  {t("editor.spellCheckDictionaryUnavailableFor", { language: languageName })}
+                </MenuItem>
+              )}
+            </MenuSection>
+          )}
         </Menu>
       </Popover>
     </MenuTrigger>

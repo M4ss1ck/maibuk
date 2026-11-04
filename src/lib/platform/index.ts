@@ -16,6 +16,7 @@ import type {
 } from "@/lib/platform/types";
 
 import type { DictationPlatform, ModelFiles, RecognizerHost } from "@/features/dictation/types";
+import type { SpellCheckDictionaryFiles } from "@/features/spell-check-dictionaries/types";
 
 import { IS_WEB } from "@/lib/platform/target";
 import { IS_WINDOWS } from "@/lib/platform/windows";
@@ -375,4 +376,17 @@ export async function getModelFiles(): Promise<ModelFiles> {
   }
   const { tauriModelFiles } = await import("@/lib/platform/tauri/dictation");
   return tauriModelFiles;
+}
+
+export async function getSpellCheckDictionaryFiles(): Promise<SpellCheckDictionaryFiles> {
+  if (IS_WEB) {
+    const { webSpellCheckDictionaryFiles } = await import(
+      "@/lib/platform/web/spell-check-dictionaries"
+    );
+    return webSpellCheckDictionaryFiles;
+  }
+  const { tauriSpellCheckDictionaryFiles } = await import(
+    "@/lib/platform/tauri/spell-check-dictionaries"
+  );
+  return tauriSpellCheckDictionaryFiles;
 }

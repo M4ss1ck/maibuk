@@ -1,22 +1,18 @@
+import { type Hunspell, loadModule } from "hunspell-asm/dist/cjs/index.js";
 import type { WorkerRequest, WorkerResponse } from "@/lib/spellcheck/types";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let nspellInstance: any = null;
+let hunspell: Hunspell | null = null;
 
 function respond(message: WorkerResponse) {
   self.postMessage(message);
 }
 
-async function handleInit(lang: string, affUrl: string, dicUrl: string) {
+async function handleInit(lang: string, aff: Uint8Array, dic: Uint8Array) {
   try {
-    const [affResponse, dicResponse] = await Promise.all([fetch(affUrl), fetch(dicUrl)]);
-
-    const aff = await affResponse.text();
-    const dic = await dicResponse.text();
-
-    // nspell is CJS; Vite handles the conversion for workers
-    const NSpell = (await import("nspell")).default || (await import("nspell"));
-    nspellInstance = NSpell(aff, dic);
+    const factory = await loadModule();
+    const affPath = factory.mountBuffer(aff, "index.aff");
+    const dicPath = factory.mountBuffer(dic, "index.dic");
+    hunspell = factory.create(affPath, dicPath);
 
     respond({ type: "ready" });
   } catch (err) {
@@ -28,29 +24,18 @@ async function handleInit(lang: string, affUrl: string, dicUrl: string) {
 }
 
 function handleCheck(id: number, words: string[]) {
-  if (!nspellInstance) {
-    respond({ type: "checked", id, misspelled: [] });
-    return;
-  }
-
-  const misspelled = words.filter((word) => !nspellInstance.correct(word));
+  const engine = hunspell;
+  const misspelled = engine ? words.filter((word) => !engine.spell(word)) : [];
   respond({ type: "checked", id, misspelled });
 }
 
 function handleSuggest(id: number, word: string) {
-  if (!nspellInstance) {
-    respond({ type: "suggestions", id, word, suggestions: [] });
-    return;
-  }
-
-  const suggestions: string[] = nspellInstance.suggest(word);
-  respond({ type: "suggestions", id, word, suggestions: suggestions.slice(0, 8) });
+  const suggestions = hunspell?.suggest(word).slice(0, 8) ?? [];
+  respond({ type: "suggestions", id, word, suggestions });
 }
 
 function handleAddWord(word: string) {
-  if (nspellInstance) {
-    nspellInstance.add(word);
-  }
+  hunspell?.addWord(word);
 }
 
 self.onmessage = (event: MessageEvent<WorkerRequest>) => {
@@ -58,7 +43,7 @@ self.onmessage = (event: MessageEvent<WorkerRequest>) => {
 
   switch (msg.type) {
     case "init":
-      handleInit(msg.lang, msg.affUrl, msg.dicUrl);
+      handleInit(msg.lang, msg.aff, msg.dic);
       break;
     case "check":
       handleCheck(msg.id, msg.words);

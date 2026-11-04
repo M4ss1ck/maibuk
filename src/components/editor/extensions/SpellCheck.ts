@@ -3,10 +3,11 @@ import { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { useSettingsStore } from "@/features/settings/store";
+import { useSpellCheckDictionaries } from "@/features/spell-check-dictionaries/store";
 import { spellCheckService } from "@/lib/spellcheck";
-import type { WritingLanguage } from "@/lib/writing-language";
+import { baseLanguage, type WritingLanguage } from "@/lib/writing-language";
 
-const WORD_REGEX = /\p{L}+(?:['\u2019]\p{L}+)*/gu;
+export const WORD_REGEX = /\p{L}[\p{L}\p{M}]*(?:['\u2019]\p{L}[\p{L}\p{M}]*)*/gu;
 const FILE_LIKE_REGEX =
   /\b[\p{L}\p{N}][\p{L}\p{N}_-]*\.(?:[\p{L}\p{N}]{2,5})(?:\.[\p{L}\p{N}]{2,5})*\b/gu;
 const URL_LIKE_REGEX = /(?:https?:\/\/|www\.)\S+/gi;
@@ -183,7 +184,9 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
           let debounceTimer: number | null = null;
           let checkVersion = 0;
           let unsubscribe: (() => void) | null = null;
+          let unsubscribeDictionaries: (() => void) | null = null;
           let lastDictionary = normalizeDictionary(useSettingsStore.getState().customDictionary);
+          let lastInstalled = new Set(useSpellCheckDictionaries.getState().installed);
 
           if (extension.storage.enabled) {
             void initSpellCheckWithCustomDictionary(extension.storage.language);
@@ -287,6 +290,22 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
             }
           });
 
+          unsubscribeDictionaries = useSpellCheckDictionaries.subscribe((state) => {
+            const language = baseLanguage(extension.storage.language);
+            const installed = language !== null && state.installed.includes(language);
+            const wasInstalled = language !== null && lastInstalled.has(language);
+            lastInstalled = new Set(state.installed);
+
+            if (!extension.storage.enabled || language === null || installed === wasInstalled)
+              return;
+
+            void initSpellCheckWithCustomDictionary(extension.storage.language, {
+              force: true,
+            }).finally(() => {
+              extension.storage.requestCheck?.();
+            });
+          });
+
           extension.storage.requestCheck = scheduleCheck;
           extension.storage.clearDecorations = () => {
             extension.storage.misspellings = [];
@@ -314,6 +333,8 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
               }
               unsubscribe?.();
               unsubscribe = null;
+              unsubscribeDictionaries?.();
+              unsubscribeDictionaries = null;
               extension.storage.requestCheck = null;
               extension.storage.clearDecorations = null;
               extension.storage.getMisspellingAt = null;
