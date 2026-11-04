@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildSearchRegExp,
   countMatches,
   findMatchRanges,
   foldAccents,
@@ -119,5 +120,89 @@ describe("findMatchRanges with a Regex", () => {
 describe("countMatches", () => {
   it("counts accent-insensitive matches the way Find and Replace shows them", () => {
     expect(countMatches("canción, cancion, CANCIÓN", "cancion", literal())).toBe(3);
+  });
+});
+
+describe("Whole word across scripts", () => {
+  const whole = (over: Partial<SearchOptions> = {}): SearchOptions =>
+    literal({ wholeWord: true, ...over });
+
+  it("matches a Cyrillic word but not a longer one", () => {
+    expect(textOf("Привет мир", findMatchRanges("Привет мир", "мир", whole()))).toEqual(["мир"]);
+    expect(findMatchRanges("Привет мира", "мир", whole())).toEqual([]);
+  });
+
+  it("matches a Greek word", () => {
+    expect(textOf("Γειά σου", findMatchRanges("Γειά σου", "σου", whole()))).toEqual(["σου"]);
+  });
+
+  it("matches a Chinese word, where no boundary exists", () => {
+    expect(
+      textOf("我喜欢写小说和读书", findMatchRanges("我喜欢写小说和读书", "小说", whole()))
+    ).toEqual(["小说"]);
+  });
+
+  it("does not match inside a kana or Hangul character that decomposes", () => {
+    expect(findMatchRanges("がか", "か", literal())).toEqual([{ start: 1, end: 2 }]);
+    expect(findMatchRanges("がか", "か", whole())).toEqual([{ start: 1, end: 2 }]);
+    expect(findMatchRanges("한글", "하", literal())).toEqual([]);
+    expect(findMatchRanges("한글", "한", literal())).toEqual([{ start: 0, end: 1 }]);
+  });
+
+  it("still keeps ASCII words whole", () => {
+    expect(textOf("hello world", findMatchRanges("hello world", "world", whole()))).toEqual([
+      "world",
+    ]);
+    expect(findMatchRanges("helloworld", "world", whole())).toEqual([]);
+    expect(findMatchRanges("snake_case", "case", whole())).toEqual([]);
+  });
+
+  it("works the same through Regex", () => {
+    expect(
+      textOf("Привет мир", findMatchRanges("Привет мир", "мир", whole({ regex: true })))
+    ).toEqual(["мир"]);
+    expect(findMatchRanges("Привет мира", "мир", whole({ regex: true }))).toEqual([]);
+  });
+
+  it("keeps every branch of a Regex alternation whole", () => {
+    expect(findMatchRanges("мирок домик", "мир|дом", whole({ regex: true }))).toEqual([]);
+    expect(
+      textOf("мир дом", findMatchRanges("мир дом", "мир|дом", whole({ regex: true })))
+    ).toEqual(["мир", "дом"]);
+  });
+
+  it("does not let the boundary group make an invalid Regex valid", () => {
+    expect(() => findMatchRanges("x", "a)(b", whole({ regex: true }))).toThrow();
+  });
+
+  it("keeps folding accents while keeping the word whole", () => {
+    expect(
+      textOf("una canción hoy", findMatchRanges("una canción hoy", "cancion", whole()))
+    ).toEqual(["canción"]);
+  });
+
+  it("compiles legacy Regex syntax that the Unicode flag rejects", () => {
+    expect(textOf("x a-b y", findMatchRanges("x a-b y", "a\\-b", whole({ regex: true })))).toEqual([
+      "a-b",
+    ]);
+    expect(() => findMatchRanges("a{", "a{", whole({ regex: true }))).not.toThrow();
+    expect(() => findMatchRanges("]x", "]x", whole({ regex: true }))).not.toThrow();
+  });
+
+  it("still throws for an invalid Regex, whole word or not", () => {
+    expect(() => findMatchRanges("x", "(", whole({ regex: true }))).toThrow();
+    expect(() => findMatchRanges("x", "(", literal({ regex: true, wholeWord: false }))).toThrow();
+  });
+
+  it("leaves the flags without u when Whole word is off", () => {
+    expect(
+      buildSearchRegExp("a", { caseSensitive: false, wholeWord: false, regex: false }).unicode
+    ).toBe(false);
+  });
+
+  it("terminates on a zero-length match beside an emoji", () => {
+    expect(
+      findMatchRanges("😀😀", "x*", { caseSensitive: false, wholeWord: true, regex: true })
+    ).toEqual([]);
   });
 });

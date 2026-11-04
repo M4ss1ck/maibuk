@@ -29,6 +29,34 @@ function escapeRegExp(text: string): string {
 /** The combining marks NFD splits an accented letter into (`ñ` -> `n` + `~`). */
 const COMBINING_MARKS = /[\u0300-\u036f]/g;
 
+/** A word character for the Whole word boundary, in every script. */
+const WORD_CHAR = "[\\p{L}\\p{M}\\p{N}_]";
+
+/** One Han or kana letter, including the ones a reader sees as marks (ー 々). */
+export const HAN_KANA_LETTER = "(?=\\p{L})[\\p{scx=Han}\\p{scx=Hiragana}\\p{scx=Katakana}]";
+
+// Each letter may carry combining marks (decomposed が).
+const HAN_KANA_TERM = new RegExp(`^(?:${HAN_KANA_LETTER}\\p{M}*)+$`, "u");
+
+/**
+ * Wraps `pattern` so it only matches whole words. Text in Han and kana has no
+ * spaces between words, so such a term gets no boundary at all. `term` is the
+ * query the pattern came from.
+ */
+function buildWholeWordRegExp(pattern: string, term: string, flags: string): RegExp {
+  if (HAN_KANA_TERM.test(term)) return new RegExp(pattern, flags);
+  try {
+    // Compiled alone first: the group below would otherwise make `a)(b` valid.
+    new RegExp(pattern, `${flags}u`);
+    return new RegExp(`(?<!${WORD_CHAR})(?:${pattern})(?!${WORD_CHAR})`, `${flags}u`);
+  } catch {
+    // `u` is stricter than legacy syntax (`\\-`, `a{`, a lone `]`). A Regex that
+    // only compiles without it keeps the ASCII boundary it has today, and a
+    // truly invalid one still throws here.
+    return new RegExp(`\\b${pattern}\\b`, flags);
+  }
+}
+
 /**
  * `text` with its accents folded (`canción` -> `cancion`, `ñ` -> `n`), for
  * the query side of a literal match. Case is untouched: Match case still
@@ -91,11 +119,10 @@ export function buildFoldedLiteralRegExp(
 ): RegExp | null {
   const foldedTerm = foldAccents(term);
   if (!foldedTerm) return null;
-  let pattern = escapeRegExp(foldedTerm);
-  if (options.wholeWord) {
-    pattern = `\\b${pattern}\\b`;
-  }
-  return new RegExp(pattern, options.caseSensitive ? "g" : "gi");
+  const pattern = escapeRegExp(foldedTerm);
+  const flags = options.caseSensitive ? "g" : "gi";
+  if (options.wholeWord) return buildWholeWordRegExp(pattern, foldedTerm, flags);
+  return new RegExp(pattern, flags);
 }
 
 /**
@@ -109,10 +136,14 @@ export function matchFoldedRanges(regex: RegExp, text: string): MatchRange[] {
   // original: no folded copy and no offset map. Only accented blocks pay.
   if (isAscii(text)) return matchRanges(regex, text);
   const { folded, map } = foldAccentsWithMap(text);
-  return matchRanges(regex, folded).map((range) => ({
-    start: map[range.start],
-    end: range.end < map.length ? map[range.end] : text.length,
-  }));
+  // A match ending inside one decomposed character (`か` in `が`, `하` in `한`)
+  // maps to nothing: that character is not the query, so it is no match.
+  return matchRanges(regex, folded)
+    .map((range) => ({
+      start: map[range.start],
+      end: range.end < map.length ? map[range.end] : text.length,
+    }))
+    .filter((range) => range.end > range.start);
 }
 
 /**
@@ -134,11 +165,10 @@ export function foldedMatchRanges(
  * an invalid regular expression, so callers can surface the error.
  */
 export function buildSearchRegExp(term: string, options: SearchOptions): RegExp {
-  let pattern = options.regex ? term : escapeRegExp(term);
-  if (options.wholeWord) {
-    pattern = `\\b${pattern}\\b`;
-  }
-  return new RegExp(pattern, options.caseSensitive ? "g" : "gi");
+  const pattern = options.regex ? term : escapeRegExp(term);
+  const flags = options.caseSensitive ? "g" : "gi";
+  if (options.wholeWord) return buildWholeWordRegExp(pattern, term, flags);
+  return new RegExp(pattern, flags);
 }
 
 /** Every non-empty match of a compiled expression in one text block. */
@@ -150,9 +180,11 @@ export function matchRanges(regex: RegExp, text: string): MatchRange[] {
     if (match[0].length > 0) {
       ranges.push({ start: match.index, end: match.index + match[0].length });
     }
-    // Guard against zero-length matches causing an infinite loop.
+    // Guard against zero-length matches causing an infinite loop. Under `u`,
+    // a lastIndex on a trail surrogate backs up to the lead surrogate, so the
+    // step must cross the whole code point.
     if (match.index === regex.lastIndex) {
-      regex.lastIndex++;
+      regex.lastIndex += regex.unicode && (text.codePointAt(regex.lastIndex) ?? 0) > 0xffff ? 2 : 1;
     }
   }
 

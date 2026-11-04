@@ -8,6 +8,7 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Editor, type EditorHandle } from "@/components/editor/Editor";
 import { CollapsibleHeading } from "@/components/editor/extensions";
+import { countWords } from "@/features/metrics/word-count";
 import { useBookStore } from "@/features/books/store";
 import { useNoteStore } from "@/features/notes/store";
 import { attachSession, resetDictationHubForTests } from "@/features/dictation/hub";
@@ -1149,6 +1150,84 @@ describe("Editor", () => {
     expect(onUpdate.mock.calls[0][0]).toContain("Helloabcdefghij");
     expect(onWordCountChange.mock.calls).toHaveLength(1);
     expect(onStatsChange.mock.calls).toHaveLength(1);
+  });
+
+  it("counts a chapter written without spaces the way the Chapter is saved", async () => {
+    const text = "我喜欢写小说和读书";
+    expect(countWords(text)).toBe(9);
+    let editor: TiptapEditor | null = null;
+    const onWordCountChange = vi.fn();
+    const onStatsChange = vi.fn();
+
+    render(
+      <Editor
+        content={`<p>${text}</p>`}
+        onUpdate={vi.fn()}
+        onWordCountChange={onWordCountChange}
+        onStatsChange={onStatsChange}
+        onEditorReady={(instance) => {
+          editor = instance;
+        }}
+      />
+    );
+    await waitFor(() => expect(editor).not.toBeNull());
+
+    await waitFor(() =>
+      expect(onStatsChange).toHaveBeenLastCalledWith({
+        words: countWords(text),
+        characters: text.length,
+        hasSelection: false,
+      })
+    );
+
+    act(() => {
+      editor!.commands.selectAll();
+    });
+    await waitFor(() =>
+      expect(onStatsChange).toHaveBeenLastCalledWith({
+        words: countWords(text),
+        characters: text.length,
+        hasSelection: true,
+      })
+    );
+
+    act(() => {
+      editor!.chain().focus("end").insertContent("新").run();
+    });
+    await waitFor(() =>
+      expect(onWordCountChange).toHaveBeenLastCalledWith(countWords(`${text}新`))
+    );
+  });
+
+  it("separates words at a hard break in the document and selection counts alike", async () => {
+    let editor: TiptapEditor | null = null;
+    const onStatsChange = vi.fn();
+
+    render(
+      <Editor
+        content="<p>one<br>two</p>"
+        onUpdate={vi.fn()}
+        onStatsChange={onStatsChange}
+        onEditorReady={(instance) => {
+          editor = instance;
+        }}
+      />
+    );
+    await waitFor(() => expect(editor).not.toBeNull());
+    await waitFor(() =>
+      expect(onStatsChange).toHaveBeenLastCalledWith(
+        expect.objectContaining({ words: 2, hasSelection: false })
+      )
+    );
+
+    act(() => {
+      editor!.commands.selectAll();
+    });
+    await waitFor(() =>
+      expect(onStatsChange).toHaveBeenLastCalledWith(
+        expect.objectContaining({ words: 2, hasSelection: true })
+      )
+    );
   });
 
   it("restarts the coalescing wait on every keystroke", async () => {

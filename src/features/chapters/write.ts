@@ -22,6 +22,7 @@ import {
 } from "@/features/sync/change-feed";
 import { assignHeadingIds } from "@/features/links/heading-ids";
 import { reindexSource } from "@/features/links/link-index";
+import { countWords } from "@/features/metrics/word-count";
 import {
   chapterSearchStatements,
   deleteSearchChaptersStatement,
@@ -72,7 +73,7 @@ export function normalizeChapterContent(content: string): { html: string; wordCo
   const text = normalized.html.replace(/<[^>]*>/g, " ");
   return {
     html: normalized.html,
-    wordCount: text.split(/\s+/).filter((w) => w.length > 0).length,
+    wordCount: countWords(text),
   };
 }
 

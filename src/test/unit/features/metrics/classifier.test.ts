@@ -2,6 +2,7 @@ import { Schema } from "@tiptap/pm/model";
 import { EditorState, type Transaction } from "@tiptap/pm/state";
 import { describe, expect, it } from "vitest";
 import { classifyTransaction } from "@/features/metrics/classifier";
+import { countWords } from "@/features/metrics/word-count";
 import type { WritingMetricPayload } from "@/features/metrics/types";
 
 const schema = new Schema({
@@ -111,5 +112,15 @@ describe("classifyTransaction()", () => {
     const undoEvents = classify(undoPaste);
     expect(undoEvents.map((event) => event.eventType)).toEqual(["writing.deleted"]);
     expect((undoEvents[0].payload as WritingMetricPayload).words).toBe(2);
+  });
+
+  it("counts a pasted chapter written without spaces the way the Chapter is saved", () => {
+    const text = "我喜欢写小说和读书";
+    const paste = stateFromText("").tr.insertText(text, 1).setMeta("metrics:source", "paste");
+
+    const events = classify(paste);
+
+    expect(events.map((event) => event.eventType)).toEqual(["writing.pasted"]);
+    expect((events[0].payload as WritingMetricPayload).words).toBe(countWords(text));
   });
 });
