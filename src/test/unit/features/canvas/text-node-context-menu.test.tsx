@@ -71,6 +71,10 @@ vi.mock("../../../../lib/spellcheck", () => ({
   spellCheckService: { suggest: vi.fn().mockResolvedValue([]) },
 }));
 
+vi.mock("react-router-dom", () => ({
+  useNavigate: () => vi.fn(),
+}));
+
 const { LightweightNode } = await import("@/features/canvas/nodes/LightweightNode");
 
 function textNode() {

@@ -1,4 +1,12 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { flushSync } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { NodeResizeControl, ResizeControlVariant, type Node, type NodeProps } from "@xyflow/react";
@@ -11,13 +19,14 @@ import type { CanvasFlowNodeData } from "@/features/canvas/reactFlowAdapter";
 import type { LightweightCanvasNode } from "@/features/canvas/types";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 import { useEditorCommandSource } from "@/components/editor/editor-command-source";
+import { LinkActivationDialog, useLinkActivation } from "@/components/editor/LinkClickHandler";
 import { EditorContextMenu } from "@/components/editor/EditorContextMenu";
 import { MarkdownPasteDialog } from "@/components/editor/MarkdownPasteDialog";
 import { FootnoteList } from "@/components/editor/FootnoteList";
 import { ImageContextMenu } from "@/components/editor/ImageContextMenu";
 import { CanvasNodeHandles } from "@/features/canvas/nodes/CanvasNodeHandles";
 import { NodeFormatBubble } from "@/features/canvas/nodes/NodeFormatBubble";
-import { useCanvasNodeMenu } from "@/features/canvas/nodes/CanvasNodeMenu";
+import { useCanvasNodeMenu, type CanvasNodeLink } from "@/features/canvas/nodes/CanvasNodeMenu";
 import {
   isBlankTextNodeHtml,
   prepareStaticCanvasHtml,
@@ -39,6 +48,16 @@ function useNodeColorPreview(nodeId: string) {
 
 function textColorStyle(color: string | undefined) {
   return color ? { color } : undefined;
+}
+
+/** The Links a Text Node shows at rest, in document order. */
+function textNodeLinks(html: string | null): CanvasNodeLink[] {
+  if (!html) return [];
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  return Array.from(doc.querySelectorAll<HTMLAnchorElement>("a[href]")).flatMap((anchor) => {
+    const href = anchor.getAttribute("href");
+    return href ? [{ href, text: anchor.textContent ?? "" }] : [];
+  });
 }
 
 function ActiveNodeEditor({
@@ -226,12 +245,26 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
   const editingNodeId = useCanvasStore((state) => state.editingNodeId);
   const beginNodeEdit = useCanvasStore((state) => state.beginNodeEdit);
   const endNodeEdit = useCanvasStore((state) => state.endNodeEdit);
+  const updateTextNode = useCanvasStore((state) => state.updateTextNode);
   const editing = editingNodeId === node.id;
   const pristine = useCanvasStore((state) => state.pristineTextNode?.id === node.id);
+  const activateLink = useLinkActivation();
+  const [openLink, setOpenLink] = useState<{ href: string; index: number } | null>(null);
+  const [contextLink, setContextLink] = useState<CanvasNodeLink | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const linkPointerStart = useRef<{ x: number; y: number } | null>(null);
+  const html = node.kind === "text" ? node.html : null;
+  const links = useMemo(() => textNodeLinks(html), [html]);
   const nodeMenu = useCanvasNodeMenu(node.id, {
     isDisabled: editorReadOnly || interactivityLocked || editing,
+    // While editing, the editor's own menu owns the right click.
+    links: editing ? [] : links,
+    contextLink,
+    onOpenLink: (link, index) => {
+      const external = activateLink(link.href);
+      if (external) setOpenLink({ href: external, index });
+    },
   });
-  const html = node.kind === "text" ? node.html : null;
   const safeHtml = useMemo(() => (html === null ? "" : prepareStaticCanvasHtml(html)), [html]);
   const blank = useMemo(() => html !== null && isBlankTextNodeHtml(html), [html]);
 
@@ -240,9 +273,55 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
   const resizable = !editorReadOnly && !interactivityLocked && !editing;
   const backgroundColor = colorPreview?.backgroundColor ?? node.backgroundColor;
 
+  const handleStaticContentClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    const anchor = event.target instanceof Element ? event.target.closest("a[href]") : null;
+    if (!anchor) return;
+    event.preventDefault();
+    // A drag that selected the Link's text ends in a click too; keep the selection.
+    if (!(document.getSelection()?.isCollapsed ?? true)) return;
+    const start = linkPointerStart.current;
+    linkPointerStart.current = null;
+    // A press that moved dragged the node; it is not a Link activation.
+    if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4) return;
+    openStaticLink(anchor);
+  };
+
+  const handleStaticContentKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Enter") return;
+    const anchor = event.target instanceof Element ? event.target.closest("a[href]") : null;
+    if (!anchor) return;
+    // Take Enter from the browser so the anchor's own click cannot open twice.
+    event.preventDefault();
+    event.stopPropagation();
+    openStaticLink(anchor);
+  };
+
+  const openStaticLink = (anchor: Element) => {
+    const href = anchor.getAttribute("href");
+    if (!href) return;
+    const anchors = Array.from(contentRef.current?.querySelectorAll("a[href]") ?? []);
+    const external = activateLink(href);
+    if (external) setOpenLink({ href: external, index: anchors.indexOf(anchor) });
+  };
+
+  const handleStaticPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    linkPointerStart.current = { x: event.clientX, y: event.clientY };
+  };
+
+  const removeOpenLink = () => {
+    if (!openLink) return;
+    const doc = new DOMParser().parseFromString(node.html, "text/html");
+    const anchor = doc.body.querySelectorAll("a[href]")[openLink.index];
+    if (anchor) {
+      anchor.replaceWith(...Array.from(anchor.childNodes));
+      updateTextNode(node.id, { html: doc.body.innerHTML });
+    }
+    setOpenLink(null);
+  };
+
   return (
     <div
-      ref={nodeMenu.anchorRef}
+      ref={nodeMenu.setOwnerRef}
       {...nodeMenu.itemProps}
       className={`group relative min-h-24 ${blank ? "min-w-40" : "min-w-24"} transform-gpu ${node.width ? "w-full" : "max-w-72"} ${pristine ? "nodrag nopan" : ""} rounded-lg px-3 py-2 text-sm text-foreground ${
         editing ? "" : "pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]"
@@ -253,11 +332,23 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
       // A press there must keep the editor focused, or the blur would drop the node.
       onMouseDown={pristine ? (event) => event.preventDefault() : undefined}
       onContextMenu={(event) => {
+        const anchor = event.target instanceof Element ? event.target.closest("a[href]") : null;
+        setContextLink(
+          anchor
+            ? { href: anchor.getAttribute("href") ?? "", text: anchor.textContent ?? "" }
+            : null
+        );
         nodeMenu.itemProps.onContextMenu?.(event);
-        // A right click anywhere on the editing Text Node opens the editor's own
-        // menu; the browser menu never appears, including on the padding outside
-        // the text.
-        if (editing) event.preventDefault();
+        // The browser menu never appears on a Text Node: while editing the
+        // editor's own menu owns the gesture, at rest the node's menu (or, in a
+        // read-only Canvas, its Link entries) is the only one.
+        event.preventDefault();
+      }}
+      onKeyDownCapture={(event) => {
+        // A keyboard context-menu gesture never lands on a Link.
+        if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+          setContextLink(null);
+        }
       }}
     >
       <CanvasNodeHandles connectedSides={data.connectedSides} variant="text" selected={selected} />
@@ -301,11 +392,22 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
         </div>
       ) : (
         <div
+          ref={contentRef}
           className="canvas-node-content max-w-none"
           lang={writingLanguage}
           style={textColorStyle(colorPreview?.textColor ?? node.textColor)}
+          onClick={handleStaticContentClick}
+          onKeyDown={handleStaticContentKeyDown}
+          onPointerDown={handleStaticPointerDown}
           // biome-ignore lint/security/noDangerouslySetInnerHtml: canvas node HTML is sanitized with DOMPurify above
           dangerouslySetInnerHTML={{ __html: safeHtml }}
+        />
+      )}
+      {openLink && (
+        <LinkActivationDialog
+          url={openLink.href}
+          onClose={() => setOpenLink(null)}
+          onRemove={editorReadOnly || interactivityLocked ? undefined : removeOpenLink}
         />
       )}
     </div>

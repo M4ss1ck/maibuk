@@ -7,6 +7,11 @@ import { installPointerEvent, touchLongPress, touchTap } from "@/test/support/po
 
 installPointerEvent();
 
+/** A Text Node uses Link navigation, so it needs the Router the app provides. */
+function renderNode(ui: Parameters<typeof render>[0]) {
+  return render(ui, { wrapper: MemoryRouter });
+}
+
 const mocks = vi.hoisted(() => ({
   updateTextNode: vi.fn(),
   resizeTextNode: vi.fn(),
@@ -114,7 +119,7 @@ describe("Canvas custom nodes", () => {
   });
 
   it("renders horizontal resize controls on both sides of a selected writable node", () => {
-    render(
+    renderNode(
       <LightweightNode
         {...({ selected: true, data: textNodeData() } as Parameters<typeof LightweightNode>[0])}
       />
@@ -124,7 +129,7 @@ describe("Canvas custom nodes", () => {
   });
 
   it("reveals resize controls on hover when unselected", () => {
-    render(
+    renderNode(
       <LightweightNode
         {...({ selected: false, data: textNodeData() } as Parameters<typeof LightweightNode>[0])}
       />
@@ -136,7 +141,7 @@ describe("Canvas custom nodes", () => {
 
   it("hides resize controls when read-only", () => {
     mocks.editorReadOnly = true;
-    render(
+    renderNode(
       <LightweightNode
         {...({ selected: true, data: textNodeData() } as Parameters<typeof LightweightNode>[0])}
       />
@@ -146,7 +151,7 @@ describe("Canvas custom nodes", () => {
   });
 
   it("keeps connection handles above resize controls", () => {
-    render(
+    renderNode(
       <LightweightNode
         {...({ selected: true, data: textNodeData() } as Parameters<typeof LightweightNode>[0])}
       />
@@ -159,7 +164,7 @@ describe("Canvas custom nodes", () => {
   });
 
   it("shows the connection ports of a selected node on touch screens, larger", () => {
-    render(
+    renderNode(
       <LightweightNode
         {...({ selected: true, data: textNodeData() } as Parameters<typeof LightweightNode>[0])}
       />
@@ -173,7 +178,7 @@ describe("Canvas custom nodes", () => {
   });
 
   it("keeps the ports of an unselected node for hover only", () => {
-    render(
+    renderNode(
       <LightweightNode
         {...({ selected: false, data: textNodeData() } as Parameters<typeof LightweightNode>[0])}
       />
@@ -185,7 +190,7 @@ describe("Canvas custom nodes", () => {
 
   it("hides connection ports and resize grips when interactivity is locked", () => {
     mocks.interactivityLocked = true;
-    render(
+    renderNode(
       <LightweightNode
         {...({ selected: true, data: textNodeData() } as Parameters<typeof LightweightNode>[0])}
       />
@@ -280,7 +285,7 @@ describe("Canvas custom nodes", () => {
 
     it("opens on touch long-press, selects the node, and connects from it", async () => {
       vi.useFakeTimers();
-      render(
+      renderNode(
         <LightweightNode
           {...({ selected: false, data: textNodeData() } as Parameters<typeof LightweightNode>[0])}
         />
@@ -331,7 +336,7 @@ describe("Canvas custom nodes", () => {
 
     it("does not open while the canvas is locked", () => {
       mocks.interactivityLocked = true;
-      render(
+      renderNode(
         <LightweightNode
           {...({ selected: false, data: textNodeData() } as Parameters<typeof LightweightNode>[0])}
         />
@@ -345,7 +350,7 @@ describe("Canvas custom nodes", () => {
 
   it("renders text node html without a card border/background and shows a connected stub", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    render(
+    renderNode(
       <LightweightNode
         {...({
           selected: false,
@@ -385,7 +390,7 @@ describe("Canvas custom nodes", () => {
   });
 
   it("sanitizes idle html while preserving internal links", () => {
-    render(
+    renderNode(
       <LightweightNode
         {...({
           selected: false,
@@ -414,7 +419,7 @@ describe("Canvas custom nodes", () => {
   });
 
   it("preserves empty paragraphs with the shared idle content renderer", () => {
-    render(
+    renderNode(
       <LightweightNode
         {...({
           selected: false,
@@ -446,7 +451,7 @@ describe("Canvas custom nodes", () => {
   });
 
   it("renders idle tables, images, and numbered footnotes for canvas CSS parity", () => {
-    render(
+    renderNode(
       <LightweightNode
         {...({
           selected: false,

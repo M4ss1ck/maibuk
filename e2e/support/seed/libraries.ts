@@ -269,7 +269,7 @@ export async function canvasWithNodes(): Promise<void> {
         {
           id: "text-storm",
           kind: "text",
-          html: `<p>${SEED_CANVAS_NODES.storm}</p>`,
+          html: `<p>${SEED_CANVAS_NODES.storm} <a href="https://example.com/lamp">${SEED_CANVAS_NODES.stormLink}</a></p>`,
           position: { x: 0, y: 0 },
           width: 288,
         },

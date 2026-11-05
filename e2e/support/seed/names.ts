@@ -72,6 +72,7 @@ export const SEED_CANVASES = {
 
 export const SEED_CANVAS_NODES = {
   storm: "Storm watch",
+  stormLink: "lamp",
   second: "Second idea",
   note: "Keeper's Log",
   connection: "leads to",
