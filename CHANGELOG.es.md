@@ -5,6 +5,27 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 y este proyecto sigue el [Versionado Semántico](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.0] - 2026-11-04
+
+### Added
+- La exportación a PDF puede descargar e incrustar fuentes Noto Serif y Noto Serif CJK bajo demanda para texto que las fuentes integradas no pueden representar
+- La exportación a PDF advierte antes de producir texto ilegible, sugiere EPUB o Markdown cuando ninguna fuente disponible lo cubre, y ofrece continuar o cancelar
+- El Corrector ortográfico puede descargar diccionarios verificados bajo demanda para diez idiomas y los conserva en el dispositivo hasta que se eliminen
+
+### Changed
+- El Corrector ortográfico ahora usa Hunspell WASM con un manejo mejorado de palabras compuestas alemanas y neerlandesas
+- El Corrector ortográfico informa cuando un idioma no tiene diccionario y omite palabras fuera del sistema de escritura del diccionario
+- El recuento de palabras trata cada letra Han o kana como una palabra, mientras que los recuentos en inglés y español no cambian; las Métricas anteriores no se modifican y los recuentos de Capítulos almacenados se actualizan en el próximo guardado
+- La búsqueda de palabras completas tiene en cuenta Unicode para letras, marcas, números, guiones bajos, Han y kana, mientras que el modo Regex conserva su límite ASCII anterior para los patrones que lo necesitan
+- El Idioma de escritura conserva etiquetas completas de idioma del contenido, como pt-BR, para Libros y Notas, independientemente del Idioma de la aplicación
+- El Corrector ortográfico, Buscar palabra y Dictado usan la subetiqueta base del idioma del contenido, y Tipografía aplica los estilos de comillas franceses y alemanes a partir de ella
+- Los selectores de idioma del Corrector ortográfico y del libro muestran una etiqueta de idioma guardada incluso cuando no está en la lista
+
+### Fixed
+- Las exportaciones a PDF ya no imprimen un signo de copyright para los enlaces de retorno de notas finales
+- La búsqueda ya no cuenta un rango vacío dentro de caracteres kana o Hangul descompuestos, lo que inflaba los recuentos de coincidencias
+- Las Notas conservan su Idioma de escritura cuando se mueven
+
 ## [0.19.5] - 2026-11-03
 
 ### Added
