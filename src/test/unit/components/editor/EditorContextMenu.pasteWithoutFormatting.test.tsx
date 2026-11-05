@@ -35,7 +35,7 @@ function buildEditor() {
   return {
     paragraph: dom.querySelector("p") as HTMLParagraphElement,
     editor: {
-      view: { dom, posAtCoords: vi.fn(() => ({ pos: 5 })) },
+      view: { dom, posAtCoords: vi.fn(() => ({ pos: 5 })), focus: vi.fn() },
       chain,
       state: {
         selection: { empty: true, from: 5, to: 5 },

@@ -156,6 +156,40 @@ describe("resting Text Node links", () => {
     expect(screen.queryByRole("button", { name: "editor.removeLink" })).not.toBeInTheDocument();
   });
 
+  it("opens the node menu on Shift+F10 on the focused React Flow node", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      // biome-ignore lint/a11y/useSemanticElements: a Canvas node wrapper is a div, as React Flow renders it.
+      // biome-ignore lint/a11y/noNoninteractiveTabindex: React Flow makes that wrapper focusable so the keyboard drives the node.
+      <div className="react-flow__node react-flow__node-text" role="group" tabIndex={0}>
+        <LightweightNode
+          {...({
+            selected: false,
+            data: {
+              node: { id: "node", kind: "text", html: linkedHtml, position: { x: 0, y: 0 } },
+              canvasId: "canvas",
+              canvasTitle: "Map",
+              connectedSides: connectedSides(),
+            },
+          } as Parameters<typeof LightweightNode>[0])}
+        />
+      </div>
+    );
+    mockItemMenuLayout(container);
+
+    // React Flow puts focus on the node wrapper, so the keyboard gesture lands
+    // there; the node's own element never sees it.
+    const flowNode = screen.getByRole("group");
+    flowNode.focus();
+    expect(flowNode).toHaveFocus();
+
+    await user.keyboard("{Shift>}{F10}{/Shift}");
+
+    const menu = await screen.findByRole("menu", { name: "canvas.nodeActions" });
+    expect(menu).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "editor.openLink" })).toBeInTheDocument();
+  });
+
   it("opens Open link and Copy URL for the Link a right click landed on", async () => {
     const { container } = renderTextNode(linkedHtml);
     mockItemMenuLayout(container);

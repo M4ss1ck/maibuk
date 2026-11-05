@@ -146,6 +146,10 @@ export function NodeFormatBubble({
   }, [state.hasSelection, translateX, translateY, updatePosition, zoom]);
 
   useEffect(() => {
+    // A Text Node focuses its view during the commit that mounts this bubble,
+    // before the subscription below exists, so start from the editor's real
+    // state instead of waiting for the next focus event.
+    setEditorFocused(editor.isFocused);
     const onFocus = () => setEditorFocused(true);
     const onBlur = () => setEditorFocused(false);
     editor.on("focus", onFocus);

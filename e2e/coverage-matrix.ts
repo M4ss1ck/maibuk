@@ -1688,7 +1688,7 @@ export const ROWS: MatrixRow[] = [
     id: "canvas-text-node-links",
     area: "canvas",
     workflow:
-      "A resting Text Node's Link opens its Link dialog (Enter on the Link, or Open link in the node's Shift+F10 menu); F2 keeps the editor menu and the selection bubble; asserts: Dialog, menu entry, bubble; persists: no",
+      "A resting Text Node's Shift+F10 menu lists its Link, and Open link opens its Link dialog; F2 keeps the editor menu and the selection bubble; asserts: Dialog, menu entry, bubble; persists: no",
     edges: [
       "A Link right click offers Open link and Copy URL for that Link (pointer-only; the Vitest text-node-links suite owns it)",
       "A read-only Canvas keeps only the Link entries in the resting menu (Vitest text-node-links)",

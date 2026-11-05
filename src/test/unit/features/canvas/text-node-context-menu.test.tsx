@@ -120,6 +120,9 @@ function fakeEditor() {
   const focus = vi.fn(() => ({ insertContentAt, run }));
   const editor = {
     isFocused: false,
+    // TipTap's focus command defers a frame (see its `focus` command). Off by
+    // default so the mount's own focus lands before the test drives the menu.
+    deferFocusCommand: false,
     isDestroyed: false,
     isEditable: true,
     getHTML: vi.fn(() => "<p>Idea</p>"),
@@ -130,7 +133,8 @@ function fakeEditor() {
       posAtCoords: vi.fn(() => ({ pos: 2, inside: 0 })),
       posAtDOM: vi.fn(() => 1),
       coordsAtPos: vi.fn(() => ({ top: 10, bottom: 20, left: 10, right: 10 })),
-      focus: vi.fn(),
+      // ProseMirror's own focus lands at once.
+      focus: vi.fn(() => dom.focus()),
     },
     state: {
       selection: { empty: false, from: 1, to: 3 },
@@ -150,6 +154,10 @@ function fakeEditor() {
     storage: { spellCheck: {} },
     commands: {
       focus: vi.fn(() => {
+        if (editor.deferFocusCommand) {
+          requestAnimationFrame(() => dom.focus());
+          return;
+        }
         editor.isFocused = true;
       }),
       addToDictionary: vi.fn(),
@@ -232,6 +240,43 @@ describe("Text Node context menu while editing", () => {
     editor.isFocused = false;
     fireEvent.focusOut(screen.getByTestId("editor-content"));
     expect(mocks.updateTextNode).toHaveBeenCalledWith("node", { html: "<p>Idea</p>" });
+  });
+
+  it("keeps the node editing when Escape closes the editor menu", async () => {
+    const user = userEvent.setup();
+    const { editor, dom } = fakeEditor();
+    mocks.useEditor.mockReturnValue(editor);
+    renderEditingNode();
+
+    act(() => dom.focus());
+    // Let the mount's own focus settle, then make the focus command behave as
+    // TipTap's does: it lands in the next frame, not this one.
+    await nextFrame();
+    editor.deferFocusCommand = true;
+
+    const event = new MouseEvent("contextmenu", {
+      bubbles: true,
+      cancelable: true,
+      clientX: 10,
+      clientY: 10,
+    });
+    dom.dispatchEvent(event);
+
+    const menu = await screen.findByRole("menu");
+    const copy = screen.getByRole("menuitem", { name: "Copy" });
+    act(() => copy.focus());
+    expect(menu.contains(document.activeElement)).toBe(true);
+
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
+    await nextFrame();
+
+    // The Text Node decides in the frame the menu closes whether to keep
+    // editing; focus must already be back by then.
+    expect(editor.isFocused).toBe(true);
+    expect(document.activeElement).toBe(dom);
+    expect(mocks.updateTextNode).not.toHaveBeenCalled();
+    expect(mocks.endNodeEdit).not.toHaveBeenCalled();
   });
 
   it("prevents the browser menu on a right click on the Text Node padding", () => {

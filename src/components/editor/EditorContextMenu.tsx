@@ -406,7 +406,11 @@ export function EditorContextMenu({
             requestAnimationFrame(() => {
               if (editor.isDestroyed) return;
               const active = document.activeElement;
-              if (!active || active === document.body) editor.commands.focus();
+              // Focus the view synchronously: a Text Node decides in a frame of
+              // its own, scheduled when the menu closes, whether to keep
+              // editing, and it must see a focused editor. TipTap's focus
+              // command defers to the next frame.
+              if (!active || active === document.body) editor.view.focus();
             });
           }
         }}

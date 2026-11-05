@@ -75,7 +75,13 @@ export function useItemContextMenu({
   );
 
   useEffect(() => {
-    const row = owner?.closest<HTMLElement>('[role="row"]') ?? owner ?? null;
+    // The element that holds focus owns the keyboard gesture: a collection row,
+    // or the Canvas node wrapper React Flow makes focusable around the item.
+    const row =
+      owner?.closest<HTMLElement>('[role="row"]') ??
+      owner?.closest<HTMLElement>(".react-flow__node") ??
+      owner ??
+      null;
     if (!row) return;
 
     const openFromKeyboard = (event: Event) => {

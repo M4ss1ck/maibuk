@@ -2,9 +2,9 @@ import type { Page } from "@playwright/test";
 import { pressUntilFocused, tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
 
-// A resting Text Node's Links (issue #716, stage 2): keyboard activation, the
-// node's Link entries in its Item Menu, and the editing paths that must keep
-// the editor's menu and the selection bubble.
+// A resting Text Node's Links (issue #716, stage 2): the node's Link entries in
+// its Item Menu, and the editing paths that must keep the editor's menu and the
+// selection bubble. Pointer activation stays with the Vitest suites.
 
 test.use({ library: "canvasWithNodes" });
 
@@ -30,24 +30,6 @@ async function startEditingStorm(page: Page) {
 }
 
 test.describe("Text Node links @wf:canvas-text-node-links", () => {
-  test("Enter on a resting Text Node's Link opens its Link dialog", async ({ page }) => {
-    await openMap(page);
-    const link = page.getByRole("link", { name: "lamp" });
-
-    await tabTo(page, link, { max: 80 });
-    await expect(link).toBeFocused();
-    await page.keyboard.press("Enter");
-
-    const dialog = page.getByRole("dialog", { name: "Open Link" });
-    await expect(dialog).toBeVisible();
-    await expect(dialog.getByText("https://example.com/lamp")).toBeVisible();
-    // The browser never navigated away from the Canvas.
-    await expect(page).toHaveURL(/\/canvas\/[\w-]+$/);
-
-    await page.keyboard.press("Escape");
-    await expect(dialog).toBeHidden();
-  });
-
   test("Shift+F10 on a resting Text Node lists its Link and opens the dialog", async ({ page }) => {
     await openMap(page);
     await tabTo(page, flowNode(page, "text-storm"), { max: 60 });

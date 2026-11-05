@@ -1,5 +1,4 @@
 import {
-  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   useLayoutEffect,
@@ -286,16 +285,6 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
     openStaticLink(anchor);
   };
 
-  const handleStaticContentKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== "Enter") return;
-    const anchor = event.target instanceof Element ? event.target.closest("a[href]") : null;
-    if (!anchor) return;
-    // Take Enter from the browser so the anchor's own click cannot open twice.
-    event.preventDefault();
-    event.stopPropagation();
-    openStaticLink(anchor);
-  };
-
   const openStaticLink = (anchor: Element) => {
     const href = anchor.getAttribute("href");
     if (!href) return;
@@ -391,13 +380,13 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
           {t("canvas.textNodePlaceholder")}
         </div>
       ) : (
+        // biome-ignore lint/a11y/useKeyWithClickEvents: a Link at rest follows a pointer click; its keyboard route is the node's Shift+F10 menu, which lists the Links.
         <div
           ref={contentRef}
           className="canvas-node-content max-w-none"
           lang={writingLanguage}
           style={textColorStyle(colorPreview?.textColor ?? node.textColor)}
           onClick={handleStaticContentClick}
-          onKeyDown={handleStaticContentKeyDown}
           onPointerDown={handleStaticPointerDown}
           // biome-ignore lint/security/noDangerouslySetInnerHtml: canvas node HTML is sanitized with DOMPurify above
           dangerouslySetInnerHTML={{ __html: safeHtml }}

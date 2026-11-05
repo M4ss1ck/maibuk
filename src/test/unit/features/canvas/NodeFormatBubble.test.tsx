@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useLayoutEffect } from "react";
 import StarterKit from "@tiptap/starter-kit";
 import { Editor } from "@tiptap/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -106,6 +107,9 @@ function buildEditor({
       }),
       dom,
       posAtDOM: () => 1,
+      focus: () => {
+        editor.isFocused = true;
+      },
     },
     isActive: () => false,
     on: vi.fn((event: string, listener: () => void) => {
@@ -162,6 +166,22 @@ describe("NodeFormatBubble", () => {
 
     const bubble = (await screen.findByRole("button", { name: "Format selection" })).parentElement;
     expect(bubble).toHaveStyle({ top: "102px" });
+  });
+
+  it("shows its actions when the editor was focused before the bubble subscribed", async () => {
+    const editor = buildEditor({ empty: true, isFocused: false });
+
+    // A Text Node focuses its view during the commit that mounts the bubble, so
+    // the focus lands before the bubble's passive effect subscribes.
+    function FocusBeforeMount() {
+      useLayoutEffect(() => {
+        editor.view.focus();
+      }, [editor]);
+      return <NodeFormatBubble editor={editor as never} />;
+    }
+    render(<FocusBeforeMount />);
+
+    expect(await screen.findByRole("button", { name: "Format selection" })).toBeInTheDocument();
   });
 
   it("hides when the editor loses focus", async () => {
