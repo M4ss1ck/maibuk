@@ -30,7 +30,7 @@ function makeEditor() {
   const listeners = new Map<string, () => void>();
   const scrollContainer = document.createElement("div");
   Object.defineProperty(scrollContainer, "getBoundingClientRect", {
-    value: () => ({ top: 0, bottom: 500, left: 0, right: 800 }),
+    value: () => ({ top: 0, bottom: 500, left: 0, right: 800, width: 800, height: 500 }),
   });
   const dom = document.createElement("div");
   vi.spyOn(dom, "closest").mockReturnValue(scrollContainer);
@@ -78,6 +78,20 @@ describe("SelectionToolbar", () => {
     );
     act(() => listeners.get("selectionUpdate")?.());
     expect(container.querySelector(".selection-toolbar-enter")).not.toBeNull();
+  });
+
+  it("caps the bubble at the editor's width and scrolls its buttons", () => {
+    const config = setSelectionToolbarMember(DEFAULT_TOOLBAR_CONFIG, "align", true);
+    useSettingsStore.setState({ toolbarConfig: config });
+    const { editor, listeners } = makeEditor();
+    const { container } = render(
+      <SelectionToolbar editor={editor as never} onLinkClick={vi.fn()} />
+    );
+    act(() => listeners.get("selectionUpdate")?.());
+
+    const bubble = container.querySelector(".selection-toolbar-enter") as HTMLElement;
+    expect(bubble.style.maxWidth).toBe("784px");
+    expect(bubble.querySelector('[role="toolbar"]')).toHaveClass("overflow-x-auto");
   });
 
   it("does not mount the styled bubble when every floating group is disabled", () => {

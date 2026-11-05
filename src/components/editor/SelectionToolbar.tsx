@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -30,6 +31,8 @@ interface SelectionToolbarProps {
 interface Position {
   top: number;
   left: number;
+  /** The bubble's widest allowed size, so a narrow editor scrolls its buttons. */
+  maxWidth: number;
 }
 
 /**
@@ -239,6 +242,9 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
     const start = editor.view.coordsAtPos(from);
     const end = editor.view.coordsAtPos(to);
 
+    // A narrow editor (a phone) keeps every button reachable by scrolling the
+    // bubble instead of letting it run past the viewport.
+    const maxWidth = Math.max(160, containerRect.width - 16);
     const bubbleTop = start.top - 48;
 
     // Hide when the bubble would render above the editor's visible area
@@ -249,7 +255,10 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
       return;
     }
 
-    const toolbarWidth = toolbarRef.current?.offsetWidth || 320;
+    // Before the first paint the bubble is not in the DOM yet, so the cap is
+    // the safest width to centre with; the measured width follows on the next
+    // pass.
+    const toolbarWidth = Math.min(toolbarRef.current?.offsetWidth || maxWidth, maxWidth);
     const centerX = (start.left + end.left) / 2;
     const left = Math.max(
       containerRect.left + 8,
@@ -259,6 +268,7 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
     setPosition({
       top: bubbleTop,
       left,
+      maxWidth,
     });
   }, [editor, toolbarHasFocus]);
 
@@ -286,6 +296,21 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
     return () => scrollContainer.removeEventListener("scroll", updatePosition);
   }, [editor, updatePosition]);
 
+  // A window resize changes how much room the bubble has, so its width cap
+  // must follow even when the selection itself did not move.
+  useEffect(() => {
+    window.addEventListener("resize", updatePosition);
+    return () => window.removeEventListener("resize", updatePosition);
+  }, [updatePosition]);
+
+  // The first position is measured before the bubble exists. Re-measure after
+  // the DOM mutation and before paint so the width cap and the left clamp use
+  // the real size without a one-frame jump.
+  useLayoutEffect(() => {
+    if (!isVisible) return;
+    updatePosition();
+  }, [isVisible, updatePosition]);
+
   if (!isVisible) {
     return null;
   }
@@ -293,14 +318,18 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
   return (
     <div
       className="fixed z-50 selection-toolbar-enter"
-      style={{ top: `${position.top}px`, left: `${position.left}px` }}
+      style={{
+        top: `${position.top}px`,
+        left: `${position.left}px`,
+        maxWidth: `${position.maxWidth}px`,
+      }}
       {...containerProps}
     >
       <SelectionToolbarControls
         toolbarRef={toolbarRef}
         focusManagerRef={focusManagerRef}
         ariaLabel={t("editor.selectionToolbar")}
-        className="flex items-center gap-0.5 px-1.5 py-1 bg-card border border-border rounded-lg shadow-lg"
+        className="flex items-center gap-0.5 overflow-x-auto px-1.5 py-1 bg-card border border-border rounded-lg shadow-lg"
       >
         <FormattingButtons
           editor={editor}

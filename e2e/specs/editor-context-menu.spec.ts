@@ -1,6 +1,11 @@
 import type { Page } from "@playwright/test";
 import { capture } from "../support/capture";
-import { expectFocusWithin, expectTabContained, pressUntilFocused } from "../support/keyboard";
+import {
+  expectFocusWithin,
+  expectTabContained,
+  pressUntilFocused,
+  tabTo,
+} from "../support/keyboard";
 import { seedSettings } from "../support/storage";
 import { expect, test } from "../support/test";
 
@@ -270,5 +275,61 @@ test.describe("selection toolbar @wf:editor-selection-toolbar", () => {
 
     await expect(bold).toBeFocused();
     await expect(editorText(page).locator("strong")).toHaveText("The s");
+  });
+
+  test("Align can be added from the List switch and applied from the bubble @sc:editor.alignRight", async ({
+    page,
+  }) => {
+    await openEditor(page);
+
+    await page.keyboard.press("Control+Shift+,");
+    const dialog = page.getByRole("dialog", { name: "Customize toolbar" });
+    await expect(dialog).toBeVisible();
+    await tabTo(page, dialog.getByRole("radio", { name: "Toolbar" }));
+    await pressUntilFocused(page, "ArrowRight", dialog.getByRole("radio", { name: "List" }), {
+      max: 3,
+    });
+    await page.keyboard.press("Space");
+    await expect(dialog.getByRole("grid", { name: "Start" })).toBeVisible();
+
+    const alignRow = dialog.getByRole("row", { name: /^Alignment$/ });
+    await tabTo(page, dialog.getByRole("row").first());
+    await pressUntilFocused(page, "ArrowDown", alignRow, { max: 40 });
+    await capture(page, "toolbar-settings-align-row", { around: [alignRow] });
+    const addToSelection = alignRow.getByRole("switch", { name: "Show in selection menu" });
+    await expect(addToSelection).not.toBeChecked();
+    await pressUntilFocused(page, "ArrowRight", addToSelection, { max: 8 });
+    await page.keyboard.press("Space");
+    await expect(addToSelection).toBeChecked();
+    await capture(page, "toolbar-settings-align-enabled", { around: [alignRow] });
+    await pressUntilFocused(page, "Tab", dialog.getByRole("button", { name: "Close" }).last(), {
+      max: 20,
+    });
+    await page.keyboard.press("Enter");
+    await expect(dialog).toBeHidden();
+    await expect(editorText(page)).toBeFocused();
+
+    // A phone-width editor scrolls the bubble instead of letting it spill.
+    await page.setViewportSize({ width: 360, height: 800 });
+    await selectFirstWords(page, 5);
+    const floating = floatingToolbar(page);
+    await expect(floating).toBeVisible();
+    const box = await floating.boundingBox();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(360);
+
+    await page.keyboard.press("Alt+F10");
+    const alignRight = floating.getByRole("button", { name: "Align Right" });
+    await pressUntilFocused(page, "ArrowRight", alignRight, { max: 20 });
+    await expect(alignRight).toBeVisible();
+    const buttonBox = await alignRight.boundingBox();
+    expect(buttonBox!.x).toBeGreaterThanOrEqual(box!.x);
+    expect(buttonBox!.x + buttonBox!.width).toBeLessThanOrEqual(box!.x + box!.width + 1);
+    await page.keyboard.press("Enter");
+
+    await expect(alignRight).toHaveAttribute("aria-pressed", "true");
+    await expect(alignRight).toBeFocused();
+    await expect(editorText(page).locator("p").first()).toHaveCSS("text-align", "right");
+    await capture(page, "selection-toolbar-align-phone", { around: [floating] });
   });
 });

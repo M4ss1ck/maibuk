@@ -76,6 +76,19 @@ describe("the Selection Toolbar's own order (ADR 0038)", () => {
     expect(upgraded.selectionToolbar[0]).toBe("highlight");
   });
 
+  it("does not add align to an upgrading config, with or without the old flag", () => {
+    const withoutFlag = normalizeToolbarConfig({
+      start: [{ kind: "group", id: "align", toolbarVisible: true }],
+      end: [],
+    });
+    const withFlag = normalizeToolbarConfig({
+      start: [{ kind: "group", id: "align", toolbarVisible: true, floatingVisible: true }],
+      end: [],
+    });
+    expect(withoutFlag.selectionToolbar).not.toContain("align");
+    expect(withFlag.selectionToolbar).not.toContain("align");
+  });
+
   it("keeps the slot of a button whose Plugin is missing on upgrade", () => {
     const upgraded = normalizeToolbarConfig({
       start: [
@@ -95,6 +108,16 @@ describe("the Selection Toolbar's own order (ADR 0038)", () => {
       selectionToolbar: ["link-code", "history", "nope", "link-code", "basic-marks"],
     });
     expect(stored.selectionToolbar).toEqual(["link-code", "basic-marks"]);
+  });
+
+  it("keeps a stored align in the Selection Toolbar and renders it", () => {
+    const stored = normalizeToolbarConfig({
+      start: [{ kind: "group", id: "align", toolbarVisible: true }],
+      end: [],
+      selectionToolbar: ["align", "basic-marks"],
+    });
+    expect(stored.selectionToolbar).toEqual(["align", "basic-marks"]);
+    expect(liveSelectionToolbarIds(stored)).toEqual(["align", "basic-marks"]);
   });
 
   it("keeps a stored empty list empty instead of filling defaults", () => {
@@ -307,6 +330,14 @@ describe("the visual Selection layout's moves", () => {
     ]);
     expect(removeSelectionToolbarEntry(before, "basic-marks").selectionToolbar).toEqual([
       "headings",
+    ]);
+  });
+
+  it("places align in the Selection Toolbar now that it is eligible", () => {
+    const before = config([group("align")], [], ["basic-marks"]);
+    expect(placeSelectionToolbarEntry(before, "align", 1).selectionToolbar).toEqual([
+      "basic-marks",
+      "align",
     ]);
   });
 

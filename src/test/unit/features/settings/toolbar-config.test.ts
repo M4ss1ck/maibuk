@@ -35,10 +35,17 @@ describe("DEFAULT_TOOLBAR_CONFIG", () => {
   it("puts all groups in Start by default with an empty End", () => {
     expect(groupIds(DEFAULT_TOOLBAR_CONFIG.end)).toEqual([]);
   });
-  it("defaults the Selection Toolbar to every eligible group", () => {
-    expect([...DEFAULT_TOOLBAR_CONFIG.selectionToolbar].sort()).toEqual(
-      [...FLOATING_ELIGIBLE_IDS].sort()
-    );
+  it("defaults the Selection Toolbar to the four original groups, not every eligible group", () => {
+    expect(DEFAULT_TOOLBAR_CONFIG.selectionToolbar).toEqual([
+      "basic-marks",
+      "headings",
+      "highlight",
+      "link-code",
+    ]);
+  });
+  it("makes align eligible to add without making it a default", () => {
+    expect(FLOATING_ELIGIBLE_IDS.has("align")).toBe(true);
+    expect(DEFAULT_TOOLBAR_CONFIG.selectionToolbar).not.toContain("align");
   });
   it("has the exact semantic divider boundaries and is deeply frozen", () => {
     expect(
@@ -266,6 +273,9 @@ describe("mutation helpers are immutable", () => {
     expect(setSelectionToolbarMember(DEFAULT_TOOLBAR_CONFIG, "history", true)).toBe(
       DEFAULT_TOOLBAR_CONFIG
     );
+    expect(
+      setSelectionToolbarMember(DEFAULT_TOOLBAR_CONFIG, "align", true).selectionToolbar
+    ).toEqual(["basic-marks", "headings", "highlight", "link-code", "align"]);
   });
   it("inserts dividers at clamped positions and remove-missing is a no-op", () => {
     const before: ToolbarConfig = {
