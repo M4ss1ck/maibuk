@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { Editor } from "@tiptap/react";
 import { NodeSelection } from "@tiptap/pm/state";
@@ -246,7 +247,10 @@ export function ImageContextMenu({ editor }: ImageContextMenuProps) {
   return (
     <>
       {/* A zero-size anchor at the caret/image: MenuTrigger positions the menu
-          from it, and focus returns to the editor from onOpenChange below. */}
+          from it, and focus returns to the editor from onOpenChange below.
+          Portaled to the body because a Canvas node sits under a CSS transform,
+          which becomes the containing block for a fixed-position element and
+          would offset the menu. */}
       <MenuTrigger
         isOpen={isOpen}
         onOpenChange={(open) => {
@@ -262,14 +266,17 @@ export function ImageContextMenu({ editor }: ImageContextMenuProps) {
           }
         }}
       >
-        <button
-          ref={anchorRef}
-          type="button"
-          tabIndex={-1}
-          aria-label={t("editor.imageOptions")}
-          className="pointer-events-none fixed h-px w-px opacity-0"
-          style={{ top: menu?.anchor.top ?? 0, left: menu?.anchor.left ?? 0 }}
-        />
+        {createPortal(
+          <button
+            ref={anchorRef}
+            type="button"
+            tabIndex={-1}
+            aria-label={t("editor.imageOptions")}
+            className="pointer-events-none fixed h-px w-px opacity-0"
+            style={{ top: menu?.anchor.top ?? 0, left: menu?.anchor.left ?? 0 }}
+          />,
+          document.body
+        )}
         <Popover triggerRef={anchorRef} placement="bottom start" className="z-50">
           <Menu
             aria-label={t("editor.imageOptions")}

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
 import {
@@ -393,7 +394,9 @@ export function EditorContextMenu({
     <>
       {/* A zero-size anchor at the pointer/caret: MenuTrigger positions the menu
           from it, flipping or shifting it to fit the window, and focus returns
-          to the editor from onOpenChange below. */}
+          to the editor from onOpenChange below. Portaled to the body because a
+          Canvas node sits under a CSS transform, which becomes the containing
+          block for a fixed-position element and would offset the menu. */}
       <MenuTrigger
         isOpen={menu !== null}
         onOpenChange={(open) => {
@@ -415,14 +418,18 @@ export function EditorContextMenu({
           }
         }}
       >
-        <button
-          ref={anchorRef}
-          type="button"
-          tabIndex={-1}
-          aria-label={t("editor.contextMenu")}
-          className="pointer-events-none fixed h-px w-px opacity-0"
-          style={{ top: menu?.position.top ?? 0, left: menu?.position.left ?? 0 }}
-        />
+        {createPortal(
+          <button
+            ref={anchorRef}
+            type="button"
+            tabIndex={-1}
+            aria-label={t("editor.contextMenu")}
+            data-editor-context-menu-trigger
+            className="pointer-events-none fixed h-px w-px opacity-0"
+            style={{ top: menu?.position.top ?? 0, left: menu?.position.left ?? 0 }}
+          />,
+          document.body
+        )}
         <Popover triggerRef={anchorRef} placement="bottom start" className="z-50">
           <Menu
             aria-label={t("editor.contextMenu")}

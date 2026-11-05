@@ -56,8 +56,23 @@ test.describe("Text Node links @wf:canvas-text-node-links", () => {
 
     await page.keyboard.press("Shift+F10");
 
-    await expect(page.getByRole("menu", { name: "Editor options" })).toBeVisible();
+    const menu = page.getByRole("menu", { name: "Editor options" });
+    await expect(menu).toBeVisible();
     await expect(page.getByRole("menu", { name: "Node actions" })).toHaveCount(0);
+
+    // A Canvas node sits under a CSS transform, which becomes the containing
+    // block for a fixed-position anchor. The menu must still open at the text,
+    // not offset by the node's canvas position.
+    const nodeBox = await flowNode(page, "text-storm").boundingBox();
+    expect(nodeBox).not.toBeNull();
+    await expect.poll(async () => (await menu.boundingBox())?.x).toBeGreaterThanOrEqual(nodeBox!.x);
+    await expect
+      .poll(async () => (await menu.boundingBox())?.x)
+      .toBeLessThanOrEqual(nodeBox!.x + nodeBox!.width);
+    await expect
+      .poll(async () => (await menu.boundingBox())?.y)
+      .toBeLessThanOrEqual(nodeBox!.y + nodeBox!.height + 48);
+
     await capture(page, "canvas-text-node-editor-menu");
     await page.keyboard.press("Escape");
     await expect(textEditor(page)).toBeFocused();

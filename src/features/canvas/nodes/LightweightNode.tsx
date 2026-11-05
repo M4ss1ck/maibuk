@@ -152,8 +152,17 @@ function ActiveNodeEditor({
       if (overlayOpen.current || menuOpen.current || pendingMarkdownPaste !== null) return;
       const active = document.activeElement;
       // A close leaves focus on the page body, or restores it to the menu's
-      // hidden trigger: neither is the author leaving the node's editor.
-      if (!active || active === document.body || menusRef.current?.contains(active)) return;
+      // hidden trigger: neither is the author leaving the node's editor. The
+      // trigger is portaled to the body (a Canvas node's transform would offset
+      // a fixed anchor), so it is outside menusRef and matched by its marker.
+      if (
+        !active ||
+        active === document.body ||
+        menusRef.current?.contains(active) ||
+        (active instanceof Element && active.closest("[data-editor-context-menu-trigger]"))
+      ) {
+        return;
+      }
       commit();
     });
   };
