@@ -5,7 +5,6 @@
 
 import type { Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
-import { settleTextNodeFocus } from "../support/keyboard";
 import { seedSettings } from "../support/storage";
 import { expect, test } from "../support/test";
 
@@ -151,7 +150,6 @@ test.describe("phone Canvas text bubble fields @touch @wf:editor-selection-toolb
     await stormNode(page).tap();
     await page.keyboard.press("F2");
     await expect(textEditor(page)).toBeFocused();
-    await settleTextNodeFocus(page);
     await page.keyboard.press("Control+Home");
     for (let i = 0; i < 5; i++) await page.keyboard.press("Shift+ArrowRight");
     await expect(bubble(page)).toBeVisible();

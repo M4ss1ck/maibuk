@@ -1,6 +1,7 @@
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { Schema } from "@tiptap/pm/model";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useSettingsStore } from "@/features/settings/store";
@@ -92,6 +93,34 @@ function renderNode(node: Record<string, unknown> = textNode()) {
   return render(nodeElement(node));
 }
 
+/**
+ * A mock editor that can place a caret when it opens. The document is a real
+ * ProseMirror one, because the opening effect asks Selection for the end of it.
+ */
+function mockOpenEditor() {
+  const schema = new Schema({
+    nodes: {
+      doc: { content: "paragraph+" },
+      paragraph: { content: "text*" },
+      text: {},
+    },
+  });
+  const doc = schema.node("doc", null, [schema.node("paragraph", null, [schema.text("Idea")])]);
+  const transaction = { setSelection: vi.fn(), scrollIntoView: vi.fn() };
+  transaction.setSelection.mockReturnValue(transaction);
+  transaction.scrollIntoView.mockReturnValue(transaction);
+  const view = { dispatch: vi.fn(), focus: vi.fn() };
+  mocks.useEditor.mockReturnValue({
+    commands: { focus: vi.fn() },
+    on: vi.fn(),
+    off: vi.fn(),
+    state: { doc, tr: transaction },
+    view,
+    getHTML: vi.fn(() => "<p>Idea</p>"),
+  });
+  return { doc, transaction, view };
+}
+
 describe("LightweightNode editor lifecycle", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -158,41 +187,35 @@ describe("LightweightNode editor lifecycle", () => {
     expect(mocks.beginNodeEdit).toHaveBeenCalledWith("node");
   });
 
-  it("autofocuses the editor when it opens, so F2 typing lands in the node", () => {
+  it("leaves autofocus off, so TipTap's deferred focus cannot reset a selection", () => {
     mocks.state.editingNodeId = "node";
-    mocks.useEditor.mockReturnValue({
-      commands: { focus: vi.fn() },
-      on: vi.fn(),
-      off: vi.fn(),
-      getHTML: vi.fn(() => "<p>Idea</p>"),
-    });
+    mockOpenEditor();
     renderNode();
 
-    expect(mocks.useEditor).toHaveBeenCalledWith(expect.objectContaining({ autofocus: "end" }));
+    expect(mocks.useEditor).toHaveBeenCalledWith(expect.objectContaining({ autofocus: false }));
   });
 
-  it("focuses the editor view during the commit that opens it, before the next key", () => {
-    const viewFocus = vi.fn();
+  it("places the caret at the end and focuses during the commit that opens the editor", () => {
     mocks.state.editingNodeId = "node";
-    mocks.useEditor.mockReturnValue({
-      commands: { focus: vi.fn() },
-      on: vi.fn(),
-      off: vi.fn(),
-      view: { focus: viewFocus },
-      getHTML: vi.fn(() => "<p>Idea</p>"),
-    });
+    const { doc, transaction, view } = mockOpenEditor();
 
     const container = document.createElement("div");
     document.body.append(container);
     const root = createRoot(container);
     // flushSync commits synchronously; a passive effect (or TipTap's
     // requestAnimationFrame) would not have run yet. The keystroke after T or
-    // F2 arrives this early in WebKit, so the view must already hold focus.
+    // F2 arrives this early in WebKit, so the caret must already be placed and
+    // the view already focused.
     flushSync(() => {
       root.render(nodeElement());
     });
 
-    expect(viewFocus).toHaveBeenCalled();
+    expect(transaction.setSelection).toHaveBeenCalledTimes(1);
+    const selection = transaction.setSelection.mock.calls[0][0];
+    expect(selection.from).toBe(doc.content.size - 1);
+    expect(selection.to).toBe(doc.content.size - 1);
+    expect(view.dispatch).toHaveBeenCalledWith(transaction);
+    expect(view.focus).toHaveBeenCalled();
 
     flushSync(() => root.unmount());
     container.remove();

@@ -10,6 +10,7 @@ import { flushSync } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { NodeResizeControl, ResizeControlVariant, type Node, type NodeProps } from "@xyflow/react";
 import Placeholder from "@tiptap/extension-placeholder";
+import { Selection } from "@tiptap/pm/state";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { CANVAS_TEXT_NODE_MIN_WIDTH } from "@/constants";
 import { useCanvasStore } from "@/features/canvas/store";
@@ -54,6 +55,11 @@ function textColorStyle(color: string | undefined) {
 function textNodeLinks(html: string | null): CanvasNodeLink[] {
   if (!html) return [];
   return canvasLinkAnchors(html).map(({ href, text }, index) => ({ href, text, index }));
+}
+
+/** ProseMirror's internal record of the view's last focus event. */
+interface FocusedView {
+  input?: { lastFocus: number };
 }
 
 function ActiveNodeEditor({
@@ -107,27 +113,32 @@ function ActiveNodeEditor({
       if (updated.getText().trim()) hadText.current = true;
     },
     editable: true,
-    // The node opens from a keyboard shortcut (F2) or a double click; TipTap's
-    // autofocus is the reliable path that lands the caret in the new editor.
-    autofocus: "end",
+    // No autofocus: TipTap runs it from a timeout after mount, and it resets
+    // any selection the author made since (F2 then Shift+Arrow). The layout
+    // effect below places the caret instead.
+    autofocus: false,
     editorProps: {
       attributes: { class: "outline-none", lang: writingLanguage },
     },
   });
   useEditorCommandSource(editor);
 
-  // Focus during the commit that opens the editor, not in a passive effect:
-  // a keyboard author's next keystroke (T then typing, F2 then Control+a)
-  // arrives before a passive effect runs in WebKit, so the node wrapper would
-  // still hold focus and the keys would hit the canvas instead of the text.
-  // TipTap's focus command defers to requestAnimationFrame, which lands after
-  // the keyboard author's next keystroke in WebKit (T then typing, F2 then
-  // Control+a): the node wrapper would still be focused and the keys would hit
-  // the canvas instead of the text. Focus the view synchronously during the
-  // commit, then let the command's rAF settle the caret and scroll.
+  // Place the caret at the end and focus during the commit that opens the
+  // editor. A keyboard author's next keystroke (T then typing, F2 then
+  // Shift+Arrow) can arrive before a passive effect or a requestAnimationFrame
+  // in WebKit, so nothing here may be deferred: TipTap's focus command focuses
+  // in a later frame, and a deferred caret move would undo that selection.
   useLayoutEffect(() => {
-    editor?.view?.focus();
-    editor?.commands.focus("end");
+    if (!editor?.view) return;
+    const { state, view } = editor;
+    view.dispatch(state.tr.setSelection(Selection.atEnd(state.doc)).scrollIntoView());
+    view.focus();
+    // For 200ms after a focus, ProseMirror reads a caret at the start of the
+    // text as the browser resetting it and puts the old one back, so F2 then
+    // Home (or Control+Home) would leave the caret at the end. This focus
+    // placed the caret itself, so nothing needs restoring.
+    const input = (view as FocusedView).input;
+    if (input) input.lastFocus = 0;
   }, [editor]);
 
   if (!editor) return null;

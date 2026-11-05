@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { capture } from "../support/capture";
-import { pressUntilFocused, settleTextNodeFocus, tabTo } from "../support/keyboard";
+import { pressUntilFocused, tabTo } from "../support/keyboard";
 import { seedSettings } from "../support/storage";
 import { expect, test } from "../support/test";
 
@@ -142,7 +142,6 @@ test.describe("Text Node links @wf:canvas-text-node-links", () => {
     await openMap(page);
     await startEditingStorm(page);
 
-    await settleTextNodeFocus(page);
     await page.keyboard.press("Home");
     for (let index = 0; index < 5; index++) await page.keyboard.press("Shift+ArrowRight");
 

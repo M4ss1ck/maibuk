@@ -168,14 +168,3 @@ export async function caretText(page: Page): Promise<string> {
     return text !== "" ? text : (nextTextNode(node)?.data ?? "");
   });
 }
-
-/**
- * Waits out a Text Node's opening before a spec selects text in it. Something
- * in the opening (TipTap's deferred focus("end") is the suspect) resets the
- * selection after F2: two frames settle it in Chromium, WebKit needs longer, so
- * a fixed wait covers both. The race predates the Selection Toolbar fields; a
- * follow-up issue tracks finding its cause.
- */
-export async function settleTextNodeFocus(page: Page): Promise<void> {
-  await page.waitForTimeout(800);
-}

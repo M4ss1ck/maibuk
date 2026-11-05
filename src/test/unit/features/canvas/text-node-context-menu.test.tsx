@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { Schema } from "@tiptap/pm/model";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -125,6 +126,18 @@ function renderEditingNode() {
 function fakeEditor(misspelling: { word: string; from: number; to: number } | null = null) {
   const dom = document.createElement("div");
   dom.tabIndex = -1;
+  // The opening effect asks Selection for the end of a real document.
+  const schema = new Schema({
+    nodes: {
+      doc: { content: "paragraph+" },
+      paragraph: { content: "text*" },
+      text: {},
+    },
+  });
+  const doc = schema.node("doc", null, [schema.node("paragraph", null, [schema.text("Idea")])]);
+  const transaction = { setSelection: vi.fn(), scrollIntoView: vi.fn() };
+  transaction.setSelection.mockReturnValue(transaction);
+  transaction.scrollIntoView.mockReturnValue(transaction);
   const run = vi.fn();
   const insertContentAt = vi.fn(() => ({ run }));
   const focus = vi.fn(() => ({ insertContentAt, run }));
@@ -140,6 +153,7 @@ function fakeEditor(misspelling: { word: string; from: number; to: number } | nu
     off: vi.fn(),
     view: {
       dom,
+      dispatch: vi.fn(),
       posAtCoords: vi.fn(() => ({ pos: 2, inside: 0 })),
       posAtDOM: vi.fn(() => 1),
       coordsAtPos: vi.fn(() => ({ top: 10, bottom: 20, left: 10, right: 10 })),
@@ -148,18 +162,8 @@ function fakeEditor(misspelling: { word: string; from: number; to: number } | nu
     },
     state: {
       selection: { empty: false, from: 1, to: 3 },
-      doc: {
-        resolve: vi.fn(() => ({
-          depth: 0,
-          pos: 0,
-          parent: { isTextblock: false },
-          before: () => 0,
-          after: () => 5,
-        })),
-        descendants: vi.fn(),
-        textBetween: vi.fn(() => ""),
-        content: { size: 5 },
-      },
+      doc,
+      tr: transaction,
     },
     storage: { spellCheck: misspelling ? { getMisspellingAt: () => misspelling } : {} },
     commands: {

@@ -25,6 +25,14 @@ interface DomObserverView extends EditorView {
 }
 
 /**
+ * Reads a caret move the browser made but ProseMirror has not seen yet (its
+ * `selectionchange` is still pending) into the editor state.
+ */
+export function readDomSelection(view: EditorView): void {
+  if (view.hasFocus()) (view as DomObserverView).domObserver?.flush?.();
+}
+
+/**
  * Reads the DOM selection into the editor state before a key's command runs.
  * A caret move (End, Home, a click) changes the DOM selection immediately, but
  * ProseMirror only reads it on `selectionchange`, which fires a moment later;
@@ -51,9 +59,7 @@ export const DomSelectionSync = Extension.create({
         props: {
           handleDOMEvents: {
             keydown(view, event) {
-              if (!PASSIVE_KEYS.has(event.key) && view.hasFocus()) {
-                (view as DomObserverView).domObserver?.flush?.();
-              }
+              if (!PASSIVE_KEYS.has(event.key)) readDomSelection(view);
               return false;
             },
           },
