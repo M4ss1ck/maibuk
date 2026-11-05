@@ -16,7 +16,7 @@ import type {
 } from "@/lib/platform/types";
 
 import type { DictationPlatform, ModelFiles, RecognizerHost } from "@/features/dictation/types";
-import type { SpellCheckDictionaryFiles } from "@/features/spell-check-dictionaries/types";
+import type { DownloadedFiles } from "@/lib/verified-download";
 
 import { IS_WEB } from "@/lib/platform/target";
 import { IS_WINDOWS } from "@/lib/platform/windows";
@@ -378,15 +378,20 @@ export async function getModelFiles(): Promise<ModelFiles> {
   return tauriModelFiles;
 }
 
-export async function getSpellCheckDictionaryFiles(): Promise<SpellCheckDictionaryFiles> {
+export async function getSpellCheckDictionaryFiles(): Promise<DownloadedFiles> {
   if (IS_WEB) {
-    const { webSpellCheckDictionaryFiles } = await import(
-      "@/lib/platform/web/spell-check-dictionaries"
-    );
-    return webSpellCheckDictionaryFiles;
+    const { webDownloadedFiles } = await import("@/lib/platform/web/downloaded-files");
+    return webDownloadedFiles("maibuk-spellcheck-v1", "/spell-check/");
   }
-  const { tauriSpellCheckDictionaryFiles } = await import(
-    "@/lib/platform/tauri/spell-check-dictionaries"
-  );
-  return tauriSpellCheckDictionaryFiles;
+  const { tauriDownloadedFiles } = await import("@/lib/platform/tauri/downloaded-files");
+  return tauriDownloadedFiles("spell-check-dictionaries");
+}
+
+export async function getPdfFontFiles(): Promise<DownloadedFiles> {
+  if (IS_WEB) {
+    const { webDownloadedFiles } = await import("@/lib/platform/web/downloaded-files");
+    return webDownloadedFiles("maibuk-pdf-fonts-v1", "/pdf-fonts/");
+  }
+  const { tauriDownloadedFiles } = await import("@/lib/platform/tauri/downloaded-files");
+  return tauriDownloadedFiles("pdf-fonts");
 }

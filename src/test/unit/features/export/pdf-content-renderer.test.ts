@@ -311,6 +311,35 @@ describe("renderHtmlContent() inline style preservation", () => {
     expect(inlineStyle?.fontSize).toBe(12); // 16px * 0.75 = 12pt
   });
 
+  it("prepends the mapped inline font-family to the embedded families", () => {
+    const embedded = createPdfStyles(DEFAULT_PDF_OPTIONS, ["Noto Serif"]);
+    const html = '<p><span style="font-family: Georgia, serif; color: #EF4444">text</span></p>';
+
+    const inlineStyle = getFirstInlineStyle(renderHtmlContent(html, embedded));
+
+    expect(inlineStyle?.color).toBe("#EF4444");
+    expect(inlineStyle?.fontFamily).toEqual(["Times-Roman", "Noto Serif"]);
+  });
+
+  it("prepends a monospace inline font-family on marks to the embedded families", () => {
+    const embedded = createPdfStyles(DEFAULT_PDF_OPTIONS, ["Noto Serif"]);
+    const html =
+      '<p><mark style="font-family: monospace; background-color: #22C55E">text</mark></p>';
+
+    const inlineStyle = getFirstInlineStyle(renderHtmlContent(html, embedded));
+
+    expect(inlineStyle?.backgroundColor).toBe("#22C55E");
+    expect(inlineStyle?.fontFamily).toEqual(["Courier", "Noto Serif"]);
+  });
+
+  it("uses the mapped inline font-family alone when no font is embedded", () => {
+    const html = '<p><span style="font-family: monospace">text</span></p>';
+
+    const inlineStyle = getFirstInlineStyle(renderHtmlContent(html, styles));
+
+    expect(inlineStyle?.fontFamily).toBe("Courier");
+  });
+
   it("passes through spans without inline styles (no wrapper)", () => {
     const html = "<p><span>plain text</span></p>";
     const nodes = renderHtmlContent(html, styles);

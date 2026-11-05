@@ -16,10 +16,11 @@ export interface PdfDocumentProps {
   book: Book;
   chapters: Chapter[];
   options: PdfExportOptions;
+  fontFamilies?: string[];
 }
 
-export function PdfDocument({ book, chapters, options }: PdfDocumentProps) {
-  const styles = createPdfStyles(options);
+export function PdfDocument({ book, chapters, options, fontFamilies }: PdfDocumentProps) {
+  const styles = createPdfStyles(options, fontFamilies);
 
   // Chapters that have chapterType === "chapter" only (for numbering)
   const chapterTypeOnly = chapters.filter((ch) => ch.chapterType === "chapter");

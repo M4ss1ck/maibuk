@@ -1,9 +1,6 @@
-import { computeChecksum } from "@/lib/checksum";
-import type {
-  DictionaryFile,
-  SpellCheckDictionary,
-  SpellCheckDictionaryFiles,
-} from "@/features/spell-check-dictionaries/types";
+import type { DownloadedFiles } from "@/lib/verified-download";
+import { fetchVerified } from "@/lib/verified-download";
+import type { SpellCheckDictionary } from "@/features/spell-check-dictionaries/types";
 
 const AFF = "index.aff";
 const DIC = "index.dic";
@@ -13,20 +10,6 @@ function pin(entry: SpellCheckDictionary): string {
   return `${entry.aff.sha256}:${entry.dic.sha256}`;
 }
 
-async function fetchVerified(
-  file: DictionaryFile,
-  fetchFile: (url: string) => Promise<Response>
-): Promise<Uint8Array> {
-  const response = await fetchFile(file.url);
-  if (!response.ok) throw new Error(`${file.url}: HTTP ${response.status}`);
-  const data = new Uint8Array(await response.arrayBuffer());
-  if (data.byteLength !== file.bytes) throw new Error(`${file.url}: size mismatch`);
-  if ((await computeChecksum(data)) !== file.sha256) {
-    throw new Error(`${file.url}: checksum mismatch`);
-  }
-  return data;
-}
-
 /**
  * Verifies both files before touching the device: nothing is written when
  * either download is wrong. The marker goes last, so a partial install reads
@@ -34,7 +17,7 @@ async function fetchVerified(
  */
 export async function installDictionary(
   entry: SpellCheckDictionary,
-  files: SpellCheckDictionaryFiles,
+  files: DownloadedFiles,
   fetchFile: (url: string) => Promise<Response> = fetch
 ): Promise<void> {
   const aff = await fetchVerified(entry.aff, fetchFile);
@@ -53,7 +36,7 @@ export async function installDictionary(
 /** The installed pair, or null when this entry's current pins are not on disk. */
 export async function readInstalledDictionary(
   entry: SpellCheckDictionary,
-  files: SpellCheckDictionaryFiles
+  files: DownloadedFiles
 ): Promise<{ aff: Uint8Array; dic: Uint8Array } | null> {
   if (!(await isDictionaryInstalled(entry, files))) return null;
 
@@ -67,7 +50,7 @@ export async function readInstalledDictionary(
 
 export async function isDictionaryInstalled(
   entry: SpellCheckDictionary,
-  files: SpellCheckDictionaryFiles
+  files: DownloadedFiles
 ): Promise<boolean> {
   const marker = await files.read(entry.language, MARKER);
   return marker !== null && new TextDecoder().decode(marker) === pin(entry);

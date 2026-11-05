@@ -7,7 +7,7 @@ import { useSettingsStore } from "@/features/settings/store";
 import { computeChecksum } from "@/lib/checksum";
 import { dictionaryFor } from "@/features/spell-check-dictionaries/catalog";
 import { useSpellCheckDictionaries } from "@/features/spell-check-dictionaries/store";
-import type { SpellCheckDictionaryFiles } from "@/features/spell-check-dictionaries/types";
+import type { DownloadedFiles } from "@/lib/verified-download";
 
 interface ShortcutBinding {
   id: string;
@@ -240,7 +240,7 @@ const frOriginalAff = { ...frEntry.aff };
 const frOriginalDic = { ...frEntry.dic };
 
 describe("download Spell Check dictionary shortcut", () => {
-  function memoryFiles(): SpellCheckDictionaryFiles {
+  function memoryFiles(): DownloadedFiles {
     const store = new Map<string, Uint8Array>();
     return {
       read: vi.fn(async (language, name) => store.get(`${language}/${name}`) ?? null),

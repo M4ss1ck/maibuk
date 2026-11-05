@@ -404,6 +404,11 @@ The word files Spell Check uses for one language. English and Spanish come with 
 _UI_: en "Spell Check dictionary" / es "Diccionario del corrector ortográfico"
 _Avoid_: language pack
 
+**PDF Font**:
+A font a PDF export embeds when the PDF's built-in fonts cannot show the text. Downloaded on demand, kept on this device, and removable.
+_UI_: en "PDF fonts" / es "Fuentes para PDF"
+_Avoid_: font pack
+
 **Word Lookup**:
 Finding a word's definition while writing.
 _UI_: en "Look up word", "Word lookup" / es "Buscar palabra"

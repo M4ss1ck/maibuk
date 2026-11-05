@@ -5,10 +5,8 @@ import {
   isDictionaryInstalled,
   readInstalledDictionary,
 } from "@/features/spell-check-dictionaries/install";
-import type {
-  SpellCheckDictionary,
-  SpellCheckDictionaryFiles,
-} from "@/features/spell-check-dictionaries/types";
+import type { DownloadedFiles } from "@/lib/verified-download";
+import type { SpellCheckDictionary } from "@/features/spell-check-dictionaries/types";
 
 const AFF = new TextEncoder().encode("AFF");
 const DIC = new TextEncoder().encode("DIC");
@@ -37,7 +35,7 @@ function makeEntry(overrides: Partial<SpellCheckDictionary> = {}): SpellCheckDic
 
 function memoryFiles() {
   const store = new Map<string, Uint8Array>();
-  const files: SpellCheckDictionaryFiles = {
+  const files: DownloadedFiles = {
     read: vi.fn(async (language, name) => store.get(`${language}/${name}`) ?? null),
     write: vi.fn(async (language, name, data) => {
       store.set(`${language}/${name}`, data);

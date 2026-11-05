@@ -42,10 +42,15 @@ export function clearPassphrase(): void {
   sessionPassphrase = null;
 }
 
+// One argument per byte overflows the engine's argument stack on a font-sized
+// input, so the binary string is built in bounded chunks.
+const BASE64_CHUNK_SIZE = 0x8000;
+
 export function uint8ArrayToBase64(data: Uint8Array): string {
   let binary = "";
-  for (let i = 0; i < data.byteLength; i++) {
-    binary += String.fromCharCode(data[i]);
+  for (let start = 0; start < data.byteLength; start += BASE64_CHUNK_SIZE) {
+    const chunk = data.subarray(start, start + BASE64_CHUNK_SIZE);
+    binary += String.fromCharCode.apply(null, chunk as unknown as number[]);
   }
   return btoa(binary);
 }

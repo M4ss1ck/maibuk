@@ -21,9 +21,12 @@ export function getMargins(preset: PdfMarginPreset) {
   return MARGIN_PRESETS[preset];
 }
 
-export function createPdfStyles(options: PdfExportOptions) {
+export function createPdfStyles(options: PdfExportOptions, fontFamilies?: string[]) {
   const margins = MARGIN_PRESETS[options.margins];
-  const fontFamily = PDF_BASE_FONT;
+  const fontFamily = fontFamilies ?? PDF_BASE_FONT;
+  // react-pdf picks the first family that can draw each code point, so code
+  // stays monospace for ASCII while the embedded font draws the rest.
+  const codeFontFamily = fontFamilies ? ["Courier", ...fontFamilies] : "Courier";
   const baseFontSize = 12;
 
   return StyleSheet.create({
@@ -212,13 +215,13 @@ export function createPdfStyles(options: PdfExportOptions) {
       marginBottom: 12,
     },
     codeBlockText: {
-      fontFamily: "Courier",
+      fontFamily: codeFontFamily,
       fontSize: 10,
       color: "#1e1e1e",
       lineHeight: 1.5,
     },
     codeInline: {
-      fontFamily: "Courier",
+      fontFamily: codeFontFamily,
       fontSize: 10,
       backgroundColor: "#f4f4f5",
     },

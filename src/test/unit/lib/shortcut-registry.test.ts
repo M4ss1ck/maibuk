@@ -36,6 +36,7 @@ const ALL_CONTEXTS: ShortcutContext[] = [
   "bookList",
   "bookEditor",
   "coverDesigner",
+  "export",
   "notes",
   "canvas",
   "ephemeral",

@@ -9,5 +9,10 @@ export const EXPORT_SECTION = {
       labelKey: "settings.defaultFormat",
       descriptionKey: "settings.defaultFormatDescription",
     },
+    {
+      id: "pdfFonts",
+      labelKey: "settings.pdfFonts",
+      descriptionKey: "settings.pdfFontsDescription",
+    },
   ],
 } as const satisfies SettingsSectionDef;

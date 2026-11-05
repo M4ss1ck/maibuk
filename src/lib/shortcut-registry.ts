@@ -32,6 +32,7 @@ export const CORE_CONTEXTS = [
   "bookList",
   "bookEditor",
   "coverDesigner",
+  "export",
   "notes",
   "canvas",
   "ephemeral",
@@ -708,6 +709,16 @@ export const COMMANDS = {
     defaults: [],
   },
   "editor.exportPdf": { labelKey: "editor.exportPdf", contexts: ["editor"], defaults: [] },
+  "export.downloadPdfFontLatin": {
+    labelKey: "export.downloadPdfFontLatin",
+    contexts: ["export"],
+    defaults: [],
+  },
+  "export.downloadPdfFontCjk": {
+    labelKey: "export.downloadPdfFontCjk",
+    contexts: ["export"],
+    defaults: [],
+  },
   "editor.exportImage": { labelKey: "editor.exportImage", contexts: ["editor"], defaults: [] },
   "editor.bold": {
     labelKey: "editor.bold",
@@ -1836,6 +1847,7 @@ export const ROUTE_CONTEXTS: Readonly<Record<string, readonly ShortcutContext[]>
   "/notes/:noteId": [
     "notes",
     "noteItem",
+    "export",
     "editor",
     "image",
     "footnoteItem",
@@ -1854,6 +1866,7 @@ export const ROUTE_CONTEXTS: Readonly<Record<string, readonly ShortcutContext[]>
   "/embed": [],
   "/book/:bookId": [
     "bookEditor",
+    "export",
     "chapterItem",
     "noteItem",
     "editor",
@@ -1880,6 +1893,7 @@ export const SHORTCUT_SECTIONS = [
     labelKey: "shortcuts.sections.coverDesigner",
     contexts: ["coverDesigner"],
   },
+  { id: "export", labelKey: "shortcuts.sections.export", contexts: ["export"] },
   { id: "notes", labelKey: "shortcuts.sections.notes", contexts: ["notes", "noteItem"] },
   { id: "canvas", labelKey: "shortcuts.sections.canvas", contexts: ["canvas", "canvasNode"] },
   { id: "ephemeral", labelKey: "shortcuts.sections.ephemeral", contexts: ["ephemeral"] },

@@ -10,23 +10,16 @@ import { pdf, Font, Document, Page, Text, View } from "@react-pdf/renderer";
 import { createPdfStyles } from "@/features/export/pdf-styles";
 import { processChapterHtml } from "@/features/export/html-sanitizer";
 import { renderHtmlContent } from "@/features/export/pdf-content-renderer";
+import { embeddedPdfFontFamilies } from "@/features/export/pdf-font-registration";
+import { documentPdfText, hyphenateWord } from "@/features/export/pdf-text-support";
 import { sanitizePdfText } from "@/features/export/pdf-generator";
 import { DEFAULT_PDF_OPTIONS } from "@/features/export/types";
 
-const MAX_WORD_LEN = 28;
-const CHUNK_SIZE = 16;
 let hyphenationRegistered = false;
 
 function ensureHyphenation() {
   if (hyphenationRegistered) return;
-  Font.registerHyphenationCallback((word) => {
-    if (word.length <= MAX_WORD_LEN) return [word];
-    const parts: string[] = [];
-    for (let i = 0; i < word.length; i += CHUNK_SIZE) {
-      parts.push(word.slice(i, i + CHUNK_SIZE));
-    }
-    return parts;
-  });
+  Font.registerHyphenationCallback(hyphenateWord);
   hyphenationRegistered = true;
 }
 
@@ -38,7 +31,8 @@ export async function generateDocumentPdf(html: string, title: string): Promise<
   ensureHyphenation();
 
   const options = DEFAULT_PDF_OPTIONS;
-  const styles = createPdfStyles(options);
+  const fontFamilies = await embeddedPdfFontFamilies(documentPdfText(html, title));
+  const styles = createPdfStyles(options, fontFamilies);
   const content = renderHtmlContent(processChapterHtml(html), styles);
   const safeTitle = sanitizePdfText(title).trim();
 

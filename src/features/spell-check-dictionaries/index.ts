@@ -1,8 +1,6 @@
 export type {
-  DictionaryFile,
   DictionaryScript,
   SpellCheckDictionary,
-  SpellCheckDictionaryFiles,
 } from "@/features/spell-check-dictionaries/types";
 export {
   DICTIONARY_CATALOG,

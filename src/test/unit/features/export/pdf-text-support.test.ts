@@ -8,6 +8,7 @@ import {
   bookPdfText,
   builtInFontsCanRender,
   documentPdfText,
+  hyphenateWord,
 } from "@/features/export/pdf-text-support";
 import { buildBook, buildChapter } from "@/test/support/fixtures";
 
@@ -198,5 +199,24 @@ describe("bookPdfText()", () => {
     });
 
     expect(builtInFontsCanRender(bookPdfText(book, []))).toBe(true);
+  });
+});
+
+describe("hyphenateWord()", () => {
+  it("leaves a short Latin word whole", () => {
+    expect(hyphenateWord("Zażółć")).toEqual(["Zażółć"]);
+  });
+
+  it("chunks a long Latin word exactly as before", () => {
+    expect(hyphenateWord("a".repeat(30))).toEqual(["a".repeat(16), "a".repeat(14)]);
+  });
+
+  it("breaks a Han run after every character", () => {
+    expect(hyphenateWord("你好")).toEqual(["你", "", "好", ""]);
+  });
+
+  it("breaks a kana run after every character", () => {
+    expect(hyphenateWord("かな")).toEqual(["か", "", "な", ""]);
+    expect(hyphenateWord("カナ")).toEqual(["カ", "", "ナ", ""]);
   });
 });

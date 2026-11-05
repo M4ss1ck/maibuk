@@ -2158,6 +2158,24 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "export-pdf-fonts",
+    area: "library-data",
+    workflow:
+      "A Book or Note PDF whose text the built-in fonts cannot show offers a PDF font in the warning: the Download button names the alphabet and its size, Enter downloads the pinned Noto files and the export continues by itself, and the PDF reads every sample back with the font embedded (pdftotext and pdffonts). With the font installed no warning appears; Settings -> Export -> PDF fonts Remove makes the warning return, and the Command Palette downloads the font by its label",
+    edges: [
+      "A tampered font file shows the failure text, keeps the warning open, and installs nothing",
+      "Text with no covering font (an emoji) warns without a download, and Export PDF anyway downloads",
+      "Remove in Settings -> Export -> PDF fonts makes the warning return",
+      "The Command Palette runs the Latin font download Command by its label",
+    ],
+    terms: ["PDF Font", "Export", "Book", "Note"],
+    shortcuts: ["export.downloadPdfFontLatin", "export.downloadPdfFontCjk"],
+    routes: ["/book/:bookId", "/notes/:noteId", "/settings"],
+    fixture: "backupsPresent",
+    tags: ["download"],
+    status: "accepted",
+  },
+  {
     id: "web-library-locked",
     area: "library-data",
     workflow:

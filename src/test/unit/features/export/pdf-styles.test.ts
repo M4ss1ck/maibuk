@@ -79,6 +79,28 @@ describe("createPdfStyles()", () => {
     expect(styles.chapterTitle).toHaveProperty("fontFamily", "Times-Roman");
   });
 
+  it("matches today's sheet when no embedded families are given", () => {
+    const without = createPdfStyles(DEFAULT_PDF_OPTIONS);
+    const withUndefined = createPdfStyles(DEFAULT_PDF_OPTIONS, undefined);
+
+    expect(withUndefined).toEqual(without);
+    expect(without.paragraph.fontFamily).toBe("Times-Roman");
+    expect(without.codeBlockText.fontFamily).toBe("Courier");
+    expect(without.codeInline.fontFamily).toBe("Courier");
+  });
+
+  it("uses the embedded families for every text style, keeping Courier first for code", () => {
+    const families = ["Noto Serif", "Noto Serif CJK"];
+    const styles = createPdfStyles(DEFAULT_PDF_OPTIONS, families);
+
+    expect(styles.paragraph.fontFamily).toEqual(families);
+    expect(styles.coverTitle.fontFamily).toEqual(families);
+    // react-pdf picks the first family that can draw each code point, so code
+    // stays monospace for ASCII and the embedded font draws the rest.
+    expect(styles.codeBlockText.fontFamily).toEqual(["Courier", ...families]);
+    expect(styles.codeInline.fontFamily).toEqual(["Courier", ...families]);
+  });
+
   it("applies standard margins by default", () => {
     const styles = createPdfStyles(DEFAULT_PDF_OPTIONS);
 

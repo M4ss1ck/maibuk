@@ -4,8 +4,8 @@
  * pdfkit encodes standard-font text one code unit at a time through its
  * WinAnsi table and keeps the low byte of anything the table does not list, so
  * a character outside Windows-1252 renders as a different one (or not at all).
- * The export UI uses this check to warn before a PDF is generated; the encoder
- * itself stays untouched.
+ * The export UI uses this check to decide whether a PDF needs an embedded PDF
+ * font; the encoder itself stays untouched.
  */
 import type { Book } from "@/features/books/types";
 import type { Chapter } from "@/features/chapters/types";
@@ -53,4 +53,23 @@ export function bookPdfText(book: Book, chapters: Chapter[]): string {
     parts.push(chapter.title, chapterText(chapter.content ?? ""));
   }
   return parts.filter((part) => part.length > 0).join("\n");
+}
+
+const MAX_WORD_LEN = 28;
+const CHUNK_SIZE = 16;
+const CJK_WORD = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
+
+/**
+ * Splits a word too long for the page. A CJK run has no spaces to break at, so
+ * every character becomes its own syllable with a zero-width break after it;
+ * without that, the layout drops everything past the first line.
+ */
+export function hyphenateWord(word: string): string[] {
+  if (CJK_WORD.test(word)) return Array.from(word).flatMap((char) => [char, ""]);
+  if (word.length <= MAX_WORD_LEN) return [word];
+  const parts: string[] = [];
+  for (let i = 0; i < word.length; i += CHUNK_SIZE) {
+    parts.push(word.slice(i, i + CHUNK_SIZE));
+  }
+  return parts;
 }
