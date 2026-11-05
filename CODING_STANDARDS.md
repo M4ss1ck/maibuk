@@ -42,6 +42,7 @@ Why this is a hard gate: this codebase has shipped UI whose ARIA attributes and 
 
 Documented exemptions:
 
+- **A key pressed before ProseMirror reads the selection**: a test that models a browser caret move ProseMirror has not read yet (its `selectionchange` still pending) fires the key with `fireEvent.keyDown` in the same turn, because `user-event` awaits between events and jsdom delivers the `selectionchange` first. The real key presses are proven in the E2E spec for the same path (`SelectionToolbar.keyboard.test.tsx`, Alt+F10 after Shift+Arrow; `canvas-text-node-links.spec.ts`).
 - **Frame plugins** (ADR 0021, `docs/plugins/frame-ui.md`): a Frame runs no host code, so React Aria cannot reach it. A Frame Plugin implements roving focus by hand, and the host does not verify its accessibility.
 
 ## Code conventions

@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Editor } from "@tiptap/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -174,6 +174,36 @@ describe("SelectionToolbar keyboard operation", () => {
     await user.keyboard("{Alt>}{F10}{/Alt}");
 
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "Bold" }));
+    expect(toolbar().contains(document.activeElement)).toBe(true);
+    expect(editor.state.selection.from).toBe(1);
+    expect(editor.state.selection.to).toBe(6);
+  });
+
+  // #725: the Command runs in the window capture phase, before ProseMirror has
+  // read a DOM selection a Shift+Arrow just extended, so the kept range came out
+  // short ("T" instead of "The s."). The Command must read the DOM selection
+  // first: the state is behind it here, with no selectionchange dispatched.
+  it("keeps the whole selection when Alt+F10 follows a Shift+Arrow ProseMirror has not read yet", () => {
+    const { editor } = mountSelectionToolbar();
+
+    act(() => {
+      focusText(editor);
+      editor.commands.setTextSelection({ from: 1, to: 3 });
+    });
+    expect(toolbar()).toBeInTheDocument();
+
+    // The DOM selection the browser shows: "Hello", one Shift+Arrow step past
+    // what the editor state has read.
+    const text = editor.view.dom.querySelector("p")!.firstChild!;
+    document.getSelection()!.setBaseAndExtent(text, 0, text, 5);
+    expect(editor.state.selection.from).toBe(1);
+    expect(editor.state.selection.to).toBe(3);
+
+    // The keydown comes before the selectionchange, as a browser sends them, so
+    // the Command sees the state still behind the DOM. user-event waits between
+    // events and would let jsdom deliver the selectionchange first.
+    fireEvent.keyDown(editor.view.dom, { key: "F10", altKey: true });
+
     expect(toolbar().contains(document.activeElement)).toBe(true);
     expect(editor.state.selection.from).toBe(1);
     expect(editor.state.selection.to).toBe(6);

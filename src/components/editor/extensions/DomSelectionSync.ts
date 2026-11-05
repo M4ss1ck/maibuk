@@ -20,8 +20,31 @@ const PASSIVE_KEYS = new Set([
   "CapsLock",
 ]);
 
+// The ProseMirror internals this module reaches, each for the reason given
+// where it is used.
 interface DomObserverView extends EditorView {
   domObserver?: { flush?: () => void };
+  input?: { lastFocus: number };
+}
+
+/**
+ * Reads a caret move the browser made but ProseMirror has not seen yet (its
+ * `selectionchange` is still pending) into the editor state.
+ */
+export function readDomSelection(view: EditorView): void {
+  if (view.hasFocus()) (view as DomObserverView).domObserver?.flush?.();
+}
+
+/**
+ * Tells ProseMirror that the caret after the latest focus was placed on
+ * purpose. For 200ms after a focus event it reads a caret at the start of the
+ * document as the browser resetting it and puts the state's caret back, so a
+ * Home pressed in that window was undone. Clearing the focus time turns that
+ * repair off until the view is next focused.
+ */
+export function keepCaretAfterFocus(view: EditorView): void {
+  const input = (view as DomObserverView).input;
+  if (input) input.lastFocus = 0;
 }
 
 /**
@@ -51,9 +74,7 @@ export const DomSelectionSync = Extension.create({
         props: {
           handleDOMEvents: {
             keydown(view, event) {
-              if (!PASSIVE_KEYS.has(event.key) && view.hasFocus()) {
-                (view as DomObserverView).domObserver?.flush?.();
-              }
+              if (!PASSIVE_KEYS.has(event.key)) readDomSelection(view);
               return false;
             },
           },

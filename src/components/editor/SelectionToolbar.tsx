@@ -19,6 +19,7 @@ import { useToolbar } from "react-aria/useToolbar";
 import { useTranslation } from "react-i18next";
 import { useModalStore } from "@/components/ui/modal-store";
 import { FormattingButtons } from "@/components/editor/FormattingButtons";
+import { readDomSelection } from "@/components/editor/extensions/DomSelectionSync";
 import { setSelectionKept } from "@/components/editor/extensions/SelectionKept";
 import { liveSelectionToolbarIds } from "@/features/settings/toolbar-config";
 import { useSettingsStore } from "@/features/settings/store";
@@ -107,10 +108,14 @@ export function useSelectionToolbarKeyboard({
 
   // Focus the first control that can be operated, so the keyboard reaches the
   // toolbar's commands without a pointer.
+  // The Command runs in the capture phase, before DomSelectionSync's keydown
+  // flush, so the last Shift+Arrow step may still be unread: read it first, or
+  // the kept selection comes out short once focus leaves the text.
   const focusFirstControl = useCallback(() => {
     fieldPressRef.current = false;
+    if (!editor.isDestroyed) readDomSelection(editor.view);
     focusManagerRef.current?.focusFirst();
-  }, []);
+  }, [editor]);
 
   // Keys come from the Command registry and the author's Custom Shortcuts.
   useShortcuts([
