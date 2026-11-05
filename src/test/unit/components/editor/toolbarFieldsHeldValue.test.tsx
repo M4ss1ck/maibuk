@@ -35,11 +35,11 @@ afterEach(() => {
 
 interface Harness {
   editor: Editor;
-  /** Transactions dispatched since the harness was made that changed the doc. */
+  // Transactions dispatched since the harness was made that changed the doc.
   docTransactions: () => number;
 }
 
-/** A real editor over "Hello world" with "Hello" selected, as the Editor Toolbar sees it. */
+// A real editor over "Hello world" with "Hello" selected, as the Editor Toolbar sees it.
 function makeHarness(): Harness {
   const element = document.createElement("div");
   const editor = new Editor({
@@ -58,17 +58,15 @@ function makeHarness(): Harness {
   return { editor, docTransactions: () => count };
 }
 
-/**
- * Puts the editor's DOM after the rendered field, so Tab out of the field reaches
- * the sibling button first and focus assertions can see the text.
- */
+// Puts the editor's DOM after the rendered field, so Tab out of the field reaches
+// the sibling button first and focus assertions can see the text.
 function mountEditor(editor: Editor) {
   const element = editor.options.element as HTMLElement;
   document.body.appendChild(element);
   containers.push(element);
 }
 
-/** Renders a field the way the Editor Toolbar does, with a focusable sibling to Tab to. */
+// Renders a field the way the Editor Toolbar does, with a focusable sibling to Tab to.
 function renderField(field: ReactNode, editor: Editor) {
   const view = render(
     <>

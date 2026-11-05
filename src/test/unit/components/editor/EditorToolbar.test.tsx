@@ -362,7 +362,8 @@ describe("EditorToolbar Escape from a field", () => {
 
   it("returns focus to the text on the second Escape, writing nothing", async () => {
     const user = userEvent.setup();
-    const previousConfig = useSettingsStore.getState().toolbarConfig;
+    const { toolbarConfig: previousConfig, toolbarExpanded: previousExpanded } =
+      useSettingsStore.getState();
     // Only the Size and Font fields, and all of them visible: the lanes would
     // otherwise measure to zero in jsdom and hide the field.
     useSettingsStore.setState({
@@ -431,7 +432,10 @@ describe("EditorToolbar Escape from a field", () => {
     } finally {
       // Unmount the toolbar before the editor it reads, so its cleanup finds the view.
       unmountToolbar();
-      useSettingsStore.setState({ toolbarConfig: previousConfig });
+      useSettingsStore.setState({
+        toolbarConfig: previousConfig,
+        toolbarExpanded: previousExpanded,
+      });
     }
   });
 });
