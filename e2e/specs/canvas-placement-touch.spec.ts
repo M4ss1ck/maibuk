@@ -6,7 +6,7 @@
 
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "../support/test";
-import { swipe } from "../support/touch";
+import { longPress, swipe } from "../support/touch";
 
 test.use({ library: "canvasWithNodes" });
 
@@ -88,5 +88,27 @@ test.describe("phone placement @touch @wf:canvas-tools @sc:canvas.addTextNode @s
     const box = await placed.boundingBox();
     if (!box) throw new Error("swiped Text Node is not visible");
     expect(Math.abs(box.width - Math.abs(end.x - start.x))).toBeLessThanOrEqual(3);
+  });
+});
+
+// The phone route to a resting Text Node's Item Menu, and through it to its
+// Links: a long press on the node, since a phone has no right click.
+test.describe("phone Text Node menu @touch @wf:canvas-text-node-links", () => {
+  test("a long press opens the node's menu with its Link entry @touch", async ({ page }) => {
+    await openMapOnPhone(page);
+    const storm = page.getByTestId("rf__node-text-storm");
+
+    await longPress(page, storm);
+
+    const menu = page.getByRole("menu", { name: "Node actions" });
+    await expect(menu).toBeVisible();
+    // The gesture never landed on a Link, so the menu lists the Link plainly,
+    // without the pointer gesture's Copy URL pair.
+    const openLink = menu.getByRole("menuitem", { name: "Open Link" });
+    await expect(openLink).toBeVisible();
+    await expect(menu.getByRole("menuitem", { name: "Copy URL" })).toHaveCount(0);
+
+    await openLink.tap();
+    await expect(page.getByRole("dialog", { name: "Open Link" })).toBeVisible();
   });
 });

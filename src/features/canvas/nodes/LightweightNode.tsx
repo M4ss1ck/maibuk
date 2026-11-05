@@ -27,6 +27,7 @@ import { CanvasNodeHandles } from "@/features/canvas/nodes/CanvasNodeHandles";
 import { NodeFormatBubble } from "@/features/canvas/nodes/NodeFormatBubble";
 import { useCanvasNodeMenu, type CanvasNodeLink } from "@/features/canvas/nodes/CanvasNodeMenu";
 import {
+  canvasLinkAnchors,
   isBlankTextNodeHtml,
   prepareStaticCanvasHtml,
 } from "@/features/canvas/nodes/staticRichText";
@@ -52,11 +53,7 @@ function textColorStyle(color: string | undefined) {
 /** The Links a Text Node shows at rest, in document order. */
 function textNodeLinks(html: string | null): CanvasNodeLink[] {
   if (!html) return [];
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  return Array.from(doc.querySelectorAll<HTMLAnchorElement>("a[href]")).flatMap((anchor) => {
-    const href = anchor.getAttribute("href");
-    return href ? [{ href, text: anchor.textContent ?? "" }] : [];
-  });
+  return canvasLinkAnchors(html).map(({ href, text }) => ({ href, text }));
 }
 
 function ActiveNodeEditor({
@@ -83,6 +80,9 @@ function ActiveNodeEditor({
   // A right-click menu that is anchored in this node, open or closing.
   const menuOpen = useRef(false);
   const menuWasOpen = useRef(false);
+  // The Selection toolbar's portal, and the menus' own (hidden) elements.
+  const bubbleRef = useRef<HTMLDivElement>(null);
+  const menusRef = useRef<HTMLDivElement>(null);
   const [pendingMarkdownPaste, setPendingMarkdownPaste] = useState<string | null>(null);
   const hadText = useRef(false);
   const editor = useEditor({
@@ -150,6 +150,10 @@ function ActiveNodeEditor({
     requestAnimationFrame(() => {
       if (editor.isDestroyed || editor.isFocused) return;
       if (overlayOpen.current || menuOpen.current || pendingMarkdownPaste !== null) return;
+      const active = document.activeElement;
+      // A close leaves focus on the page body, or restores it to the menu's
+      // hidden trigger: neither is the author leaving the node's editor.
+      if (!active || active === document.body || menusRef.current?.contains(active)) return;
       commit();
     });
   };
@@ -183,7 +187,15 @@ function ActiveNodeEditor({
             // A menu that closed put focus back in the text; the node is live again.
             menuOpen.current = false;
           }}
-          onBlur={() => {
+          onBlur={(event) => {
+            // Focus moving into this node's Selection toolbar is not leaving
+            // the text: the toolbar acts on the selection made here.
+            if (
+              event.relatedTarget instanceof Node &&
+              bubbleRef.current?.contains(event.relatedTarget)
+            ) {
+              return;
+            }
             if (overlayOpen.current || menuOpen.current || pendingMarkdownPaste !== null) return;
             commit();
           }}
@@ -203,24 +215,27 @@ function ActiveNodeEditor({
       </div>
       <NodeFormatBubble
         editor={editor}
+        bubbleRef={bubbleRef}
         onOverlayOpenChange={(open) => {
           overlayOpen.current = open;
         }}
       />
       <ImageContextMenu editor={editor} />
-      <EditorContextMenu
-        editor={editor}
-        onOpenChange={(open) => {
-          menuOpen.current = open;
-          if (open) {
-            menuWasOpen.current = true;
-            return;
-          }
-          if (!menuWasOpen.current) return;
-          menuWasOpen.current = false;
-          commitAfterMenu();
-        }}
-      />
+      <div ref={menusRef}>
+        <EditorContextMenu
+          editor={editor}
+          onOpenChange={(open) => {
+            menuOpen.current = open;
+            if (open) {
+              menuWasOpen.current = true;
+              return;
+            }
+            if (!menuWasOpen.current) return;
+            menuWasOpen.current = false;
+            commitAfterMenu();
+          }}
+        />
+      </div>
       <MarkdownPasteDialog
         editor={editor}
         markdown={pendingMarkdownPaste}
@@ -249,7 +264,9 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
   const pristine = useCanvasStore((state) => state.pristineTextNode?.id === node.id);
   const activateLink = useLinkActivation();
   const [openLink, setOpenLink] = useState<{ href: string; index: number } | null>(null);
-  const [contextLink, setContextLink] = useState<CanvasNodeLink | null>(null);
+  // The Link under the pointer at a right click. Only a pointer gesture reads
+  // it: a keyboard or long-press menu open never landed on a Link.
+  const contextLinkRef = useRef<CanvasNodeLink | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const linkPointerStart = useRef<{ x: number; y: number } | null>(null);
   const html = node.kind === "text" ? node.html : null;
@@ -258,7 +275,7 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
     isDisabled: editorReadOnly || interactivityLocked || editing,
     // While editing, the editor's own menu owns the right click.
     links: editing ? [] : links,
-    contextLink,
+    contextLinkRef,
     onOpenLink: (link, index) => {
       const external = activateLink(link.href);
       if (external) setOpenLink({ href: external, index });
@@ -299,11 +316,15 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
 
   const removeOpenLink = () => {
     if (!openLink) return;
-    const doc = new DOMParser().parseFromString(node.html, "text/html");
-    const anchor = doc.body.querySelectorAll("a[href]")[openLink.index];
-    if (anchor) {
+    // The index came from the Links the node shows; the same sanitizer order
+    // maps it back to the stored anchor, so an href the policy rejects is
+    // skipped rather than unwrapped by mistake.
+    const link = canvasLinkAnchors(node.html)[openLink.index];
+    if (link) {
+      const { anchor } = link;
+      const body = anchor.ownerDocument.body;
       anchor.replaceWith(...Array.from(anchor.childNodes));
-      updateTextNode(node.id, { html: doc.body.innerHTML });
+      updateTextNode(node.id, { html: body.innerHTML });
     }
     setOpenLink(null);
   };
@@ -322,22 +343,15 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
       onMouseDown={pristine ? (event) => event.preventDefault() : undefined}
       onContextMenu={(event) => {
         const anchor = event.target instanceof Element ? event.target.closest("a[href]") : null;
-        setContextLink(
-          anchor
-            ? { href: anchor.getAttribute("href") ?? "", text: anchor.textContent ?? "" }
-            : null
-        );
+        // Set only here: the pointer gesture is the one that points at a Link.
+        contextLinkRef.current = anchor
+          ? { href: anchor.getAttribute("href") ?? "", text: anchor.textContent ?? "" }
+          : null;
         nodeMenu.itemProps.onContextMenu?.(event);
         // The browser menu never appears on a Text Node: while editing the
         // editor's own menu owns the gesture, at rest the node's menu (or, in a
         // read-only Canvas, its Link entries) is the only one.
         event.preventDefault();
-      }}
-      onKeyDownCapture={(event) => {
-        // A keyboard context-menu gesture never lands on a Link.
-        if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
-          setContextLink(null);
-        }
       }}
     >
       <CanvasNodeHandles connectedSides={data.connectedSides} variant="text" selected={selected} />

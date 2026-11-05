@@ -30,6 +30,38 @@ function sanitizeNodeHtml(html: string): string {
 }
 
 /**
+ * The sanitized form of one raw anchor, or null when the canvas policy drops
+ * it: a rejected href loses the attribute (or the element), so it is no Link.
+ */
+function sanitizedAnchor(anchor: HTMLAnchorElement): HTMLAnchorElement | null {
+  const doc = new DOMParser().parseFromString(sanitizeNodeHtml(anchor.outerHTML), "text/html");
+  return doc.querySelector<HTMLAnchorElement>("a[href]");
+}
+
+/** A Link a resting Text Node shows, with the anchor stored HTML holds it in. */
+export interface CanvasLinkAnchor {
+  /** The anchor in the stored HTML, for edits that keep the rest of it as it was. */
+  anchor: HTMLAnchorElement;
+  href: string;
+  text: string;
+}
+
+/**
+ * The Links a resting Text Node shows, in document order, read through the
+ * same sanitizer that renders them (`prepareStaticCanvasHtml`): an anchor whose
+ * href the policy rejects is neither listed nor opened, and removing one by
+ * this order removes the Link the author saw.
+ */
+export function canvasLinkAnchors(html: string): CanvasLinkAnchor[] {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  return Array.from(doc.querySelectorAll<HTMLAnchorElement>("a[href]")).flatMap((anchor) => {
+    const kept = sanitizedAnchor(anchor);
+    const href = kept?.getAttribute("href");
+    return href ? [{ anchor, href, text: kept?.textContent ?? "" }] : [];
+  });
+}
+
+/**
  * Prepares stored canvas node HTML for idle (non-editing) rendering so it matches
  * the active editor: sanitizes with the canvas link policy, restores hard breaks
  * inside empty paragraphs, numbers footnote references in DOM order, and appends a

@@ -11,6 +11,9 @@ function closestFrom(target: EventTarget | null, selector: string): Element | nu
 
 type AnyHandler = (event: { nativeEvent?: Event; pointerType?: string }) => void;
 
+/** How an Item Menu opened, so a caller can scope the gesture's data. */
+export type ItemMenuOpenSource = "pointer" | "keyboard" | "long-press";
+
 // usePress (inside useLongPress) cancels the surrounding press when its timer
 // fires, which would break slow mouse clicks and keyboard activation of the
 // row. Only touch pointer events reach it, so long-press stays a touch gesture.
@@ -30,7 +33,8 @@ function touchOnly(props: object): Record<string, unknown> {
 }
 
 interface UseItemContextMenuOptions {
-  onOpen: () => void;
+  /** `source` says which gesture opened the menu, for data only that gesture knows. */
+  onOpen: (source: ItemMenuOpenSource) => void;
   isDisabled?: boolean;
   /**
    * The item's visible element, kept for positioning the menu's popover. When
@@ -92,7 +96,7 @@ export function useItemContextMenu({
       if (event.target instanceof Element && closestFrom(event.target, DRAG_HANDLE_SELECTOR))
         return;
       event.preventDefault();
-      onOpenRef.current();
+      onOpenRef.current("keyboard");
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
@@ -115,7 +119,7 @@ export function useItemContextMenu({
       if (closestFrom(origin, DRAG_HANDLE_SELECTOR)) return;
       if (closestFrom(origin, EDITABLE_SELECTOR)) return;
       suppressClickRef.current = true;
-      onOpenRef.current();
+      onOpenRef.current("long-press");
     },
   });
 
@@ -141,7 +145,7 @@ export function useItemContextMenu({
           return;
         }
         event.preventDefault();
-        onOpenRef.current();
+        onOpenRef.current("pointer");
       },
       onClickCapture: (event: MouseEvent<HTMLElement>) => {
         if (!suppressClickRef.current) return;

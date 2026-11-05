@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mockItemMenuLayout } from "@/test/support/item-menu-layout";
@@ -77,6 +77,37 @@ function renderTextNode(html: string) {
 }
 
 const linkedHtml = '<p>Read <a href="https://example.com/notes">notes</a></p>';
+
+/** An anchor the canvas sanitizer rejects, before a Link it keeps. */
+const rejectedThenLiveHtml =
+  '<p><a href="javascript:alert(1)">A</a><a href="https://example.com/b">B</a></p>';
+
+function nodeElement(html: string) {
+  return (
+    <LightweightNode
+      {...({
+        selected: false,
+        data: {
+          node: { id: "node", kind: "text", html, position: { x: 0, y: 0 } },
+          canvasId: "canvas",
+          canvasTitle: "Map",
+          connectedSides: connectedSides(),
+        },
+      } as Parameters<typeof LightweightNode>[0])}
+    />
+  );
+}
+
+/** Renders the node the way React Flow does: a focusable wrapper around it. */
+function renderInFlowNode(html: string) {
+  return render(
+    // biome-ignore lint/a11y/useSemanticElements: a Canvas node wrapper is a div, as React Flow renders it.
+    // biome-ignore lint/a11y/noNoninteractiveTabindex: React Flow makes that wrapper focusable so the keyboard drives the node.
+    <div className="react-flow__node react-flow__node-text" role="group" tabIndex={0}>
+      {nodeElement(html)}
+    </div>
+  );
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -256,5 +287,68 @@ describe("resting Text Node links", () => {
 
     expect(prevented).toBe(true);
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("lists only the Links the node shows, skipping one the sanitizer rejects", async () => {
+    const { container } = renderTextNode(rejectedThenLiveHtml);
+    mockItemMenuLayout(container);
+
+    // The node renders only B as a Link: the rejected href is not one.
+    expect(screen.queryByRole("link", { name: "A" })).not.toBeInTheDocument();
+
+    fireEvent.contextMenu(screen.getByText("A").closest("p") as HTMLParagraphElement);
+
+    const menu = await screen.findByRole("menu", { name: "canvas.nodeActions" });
+    // One surviving Link gets the single Open Link entry, not a named list.
+    expect(within(menu).getByRole("menuitem", { name: "editor.openLink" })).toBeInTheDocument();
+    expect(
+      within(menu).queryByRole("menuitem", { name: "canvas.openLinkNamed:A" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("removes the Link the node showed, leaving an anchor the sanitizer rejects untouched", async () => {
+    const user = userEvent.setup();
+    renderTextNode(rejectedThenLiveHtml);
+
+    fireEvent.click(screen.getByRole("link", { name: "B" }));
+    await user.click(screen.getByRole("button", { name: "editor.removeLink" }));
+
+    expect(mocks.updateTextNode).toHaveBeenCalledWith("node", {
+      html: '<p><a href="javascript:alert(1)">A</a>B</p>',
+    });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("a keyboard menu after a Link right click lists the Links instead of that Link's actions", async () => {
+    const user = userEvent.setup();
+    const { container } = renderInFlowNode(
+      '<p><a href="https://example.com/read">Read</a> and <a href="https://example.com/write">Write</a></p>'
+    );
+    mockItemMenuLayout(container);
+
+    // The pointer gesture landed on a Link, so its menu offers that Link.
+    fireEvent.contextMenu(screen.getByRole("link", { name: "Read" }));
+    const first = await screen.findByRole("menu", { name: "canvas.nodeActions" });
+    expect(within(first).getByRole("menuitem", { name: "editor.copyUrl" })).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    await waitFor(() =>
+      expect(screen.queryByRole("menu", { name: "canvas.nodeActions" })).not.toBeInTheDocument()
+    );
+
+    // The keyboard gesture never landed on a Link: the earlier one must not linger.
+    screen.getByRole("group").focus();
+    await user.keyboard("{Shift>}{F10}{/Shift}");
+
+    const menu = await screen.findByRole("menu", { name: "canvas.nodeActions" });
+    expect(
+      within(menu).getByRole("menuitem", { name: "canvas.openLinkNamed:Read" })
+    ).toBeInTheDocument();
+    expect(
+      within(menu).getByRole("menuitem", { name: "canvas.openLinkNamed:Write" })
+    ).toBeInTheDocument();
+    expect(
+      within(menu).queryByRole("menuitem", { name: "editor.copyUrl" })
+    ).not.toBeInTheDocument();
   });
 });

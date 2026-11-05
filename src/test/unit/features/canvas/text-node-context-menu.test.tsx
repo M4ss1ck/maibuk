@@ -49,7 +49,17 @@ vi.mock("../../../../features/canvas/store", () => {
 });
 
 vi.mock("../../../../features/canvas/nodes/NodeFormatBubble", () => ({
-  NodeFormatBubble: () => null,
+  // The real bubble portals its toolbar to the body; the test needs a focusable
+  // control inside the element the node treats as the bubble.
+  NodeFormatBubble: ({ bubbleRef }: { bubbleRef?: { current: HTMLElement | null } }) => (
+    <div
+      ref={(element) => {
+        if (bubbleRef) bubbleRef.current = element;
+      }}
+    >
+      <button type="button">Format selection</button>
+    </div>
+  ),
 }));
 
 vi.mock("../../../../components/editor/FootnoteList", () => ({
@@ -112,7 +122,7 @@ function renderEditingNode() {
 }
 
 /** The parts of a Tiptap Editor the context menu reads. */
-function fakeEditor() {
+function fakeEditor(misspelling: { word: string; from: number; to: number } | null = null) {
   const dom = document.createElement("div");
   dom.tabIndex = -1;
   const run = vi.fn();
@@ -151,7 +161,7 @@ function fakeEditor() {
         content: { size: 5 },
       },
     },
-    storage: { spellCheck: {} },
+    storage: { spellCheck: misspelling ? { getMisspellingAt: () => misspelling } : {} },
     commands: {
       focus: vi.fn(() => {
         if (editor.deferFocusCommand) {
@@ -275,6 +285,81 @@ describe("Text Node context menu while editing", () => {
     // editing; focus must already be back by then.
     expect(editor.isFocused).toBe(true);
     expect(document.activeElement).toBe(dom);
+    expect(mocks.updateTextNode).not.toHaveBeenCalled();
+    expect(mocks.endNodeEdit).not.toHaveBeenCalled();
+  });
+
+  it("keeps editing after Add to Dictionary, whose action leaves focus on the menu's hidden trigger", async () => {
+    const { editor, dom } = fakeEditor({ word: "Idea", from: 1, to: 5 });
+    mocks.useEditor.mockReturnValue(editor);
+    renderEditingNode();
+    // The menu hides the page from the accessibility tree while it is open, so
+    // the trigger is taken before it opens.
+    const trigger = screen.getByRole("button", { name: "Editor options" });
+
+    act(() => dom.focus());
+    const event = new MouseEvent("contextmenu", {
+      bubbles: true,
+      cancelable: true,
+      clientX: 10,
+      clientY: 10,
+    });
+    dom.dispatchEvent(event);
+
+    const item = await screen.findByRole("menuitem", { name: "Add to Dictionary" });
+    act(() => item.focus());
+    // Synchronous, so no frame runs between the close and the focus move below.
+    fireEvent.keyDown(item, { key: "Enter" });
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+
+    // The action does not focus the text itself, so React Aria hands focus
+    // back to the menu's hidden trigger: that is not leaving the node.
+    act(() => trigger.focus());
+    await nextFrame();
+
+    expect(mocks.updateTextNode).not.toHaveBeenCalled();
+    expect(mocks.endNodeEdit).not.toHaveBeenCalled();
+  });
+
+  it("commits the text when the menu closes and an outside control takes focus", async () => {
+    const user = userEvent.setup();
+    const { editor, dom } = fakeEditor();
+    mocks.useEditor.mockReturnValue(editor);
+    renderEditingNode();
+    render(<button type="button">Elsewhere</button>);
+    // Query before the menu opens: its modal popover hides the page from the
+    // accessibility tree while it is up.
+    const elsewhere = screen.getByRole("button", { name: "Elsewhere" });
+
+    act(() => dom.focus());
+    const event = new MouseEvent("contextmenu", {
+      bubbles: true,
+      cancelable: true,
+      clientX: 10,
+      clientY: 10,
+    });
+    dom.dispatchEvent(event);
+
+    const copy = await screen.findByRole("menuitem", { name: "Copy" });
+    act(() => copy.focus());
+    // An actual press outside the menu: it dismisses the popover, and the
+    // author's control keeps the focus the press gave it.
+    await user.pointer({ target: elsewhere, keys: "[MouseLeft]" });
+    act(() => elsewhere.focus());
+    await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
+    await nextFrame();
+
+    expect(mocks.updateTextNode).toHaveBeenCalledWith("node", { html: "<p>Idea</p>" });
+  });
+
+  it("keeps editing when focus moves into the node's selection bubble", () => {
+    const { editor, dom } = fakeEditor();
+    mocks.useEditor.mockReturnValue(editor);
+    renderEditingNode();
+
+    act(() => dom.focus());
+    act(() => screen.getByRole("button", { name: "Format selection" }).focus());
+
     expect(mocks.updateTextNode).not.toHaveBeenCalled();
     expect(mocks.endNodeEdit).not.toHaveBeenCalled();
   });

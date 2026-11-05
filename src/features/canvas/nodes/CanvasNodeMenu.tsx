@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Copy, ExternalLink, Spline, Trash2 } from "lucide-react";
@@ -19,8 +19,12 @@ interface CanvasNodeMenuOptions {
   /** Disables the node's own actions; Link entries still reach the author. */
   isDisabled: boolean;
   links?: CanvasNodeLink[];
-  /** The Link the menu opened on with the context-menu gesture, if any. */
-  contextLink?: CanvasNodeLink | null;
+  /**
+   * The Link under the pointer at the context-menu gesture, set by the node
+   * before it opens the menu. Read only for a pointer open: a keyboard or
+   * long-press gesture never landed on a Link.
+   */
+  contextLinkRef?: RefObject<CanvasNodeLink | null>;
   /** Follows a Link from the menu: internal targets navigate, external ones confirm. */
   onOpenLink?: (link: CanvasNodeLink, index: number) => void;
 }
@@ -90,16 +94,14 @@ async function copyLinkToClipboard(url: string, t: TFunction) {
  */
 export function useCanvasNodeMenu(
   nodeId: string,
-  {
-    isDisabled,
-    links = [],
-    contextLink = null,
-    onOpenLink = () => undefined,
-  }: CanvasNodeMenuOptions
+  { isDisabled, links = [], contextLinkRef, onOpenLink = () => undefined }: CanvasNodeMenuOptions
 ) {
   const { t } = useTranslation();
   const anchorRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
+  // The Link the open gesture pointed at. Cleared for any open that did not
+  // come from the pointer, and when the menu closes.
+  const [contextLink, setContextLink] = useState<CanvasNodeLink | null>(null);
   const selectNode = useCanvasStore((state) => state.selectNode);
   const removeNode = useCanvasStore((state) => state.removeNode);
   const openConnectPicker = useCanvasStore((state) => state.openConnectPicker);
@@ -131,7 +133,8 @@ export function useCanvasNodeMenu(
     // Links still swallows the browser menu, but opens none of its own.
     isDisabled: actions.length === 0,
     anchorRef,
-    onOpen: () => {
+    onOpen: (source) => {
+      setContextLink(source === "pointer" ? (contextLinkRef?.current ?? null) : null);
       selectNode(nodeId);
       setIsOpen(true);
     },
@@ -143,7 +146,10 @@ export function useCanvasNodeMenu(
       triggerRef={anchorRef}
       label={t("canvas.nodeActions")}
       isOpen={isOpen}
-      onOpenChange={setIsOpen}
+      onOpenChange={(open) => {
+        setIsOpen(open);
+        if (!open) setContextLink(null);
+      }}
       actions={actions}
     />
   );

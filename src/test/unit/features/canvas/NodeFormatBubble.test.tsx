@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useLayoutEffect } from "react";
 import StarterKit from "@tiptap/starter-kit";
@@ -164,7 +164,7 @@ describe("NodeFormatBubble", () => {
     const editor = buildEditor({ empty: true, isFocused: true });
     render(<NodeFormatBubble editor={editor as never} />);
 
-    const bubble = (await screen.findByRole("button", { name: "Format selection" })).parentElement;
+    const bubble = (await screen.findByRole("toolbar")).parentElement;
     expect(bubble).toHaveStyle({ top: "102px" });
   });
 
@@ -229,7 +229,8 @@ describe("NodeFormatBubble", () => {
     const editor = buildEditor();
     render(<NodeFormatBubble editor={editor as never} />);
 
-    const bubble = (await screen.findByRole("button", { name: "Format selection" })).parentElement;
+    await screen.findByRole("button", { name: "Format selection" });
+    const bubble = screen.getByRole("toolbar").parentElement;
     expect(bubble).not.toBeNull();
     const initialTop = bubble?.style.top;
 
@@ -247,7 +248,8 @@ describe("NodeFormatBubble", () => {
     const editor = buildEditor();
     const { rerender } = render(<NodeFormatBubble editor={editor as never} />);
 
-    const bubble = (await screen.findByRole("button", { name: "Format selection" })).parentElement;
+    await screen.findByRole("button", { name: "Format selection" });
+    const bubble = screen.getByRole("toolbar").parentElement;
     await waitFor(() => expect(bubble?.style.top).toBeTruthy());
     const initialTop = bubble?.style.top;
 
@@ -264,10 +266,11 @@ describe("NodeFormatBubble", () => {
     const editor = buildEditor({ empty: true, isFocused: true });
     render(<NodeFormatBubble editor={editor as never} />);
 
-    const bubble = (await screen.findByRole("button", { name: "Format selection" })).parentElement;
-    expect(bubble).not.toBeNull();
-    expect(bubble).toHaveStyle({ maxWidth: "304px" });
-    expect(bubble).toHaveClass("overflow-x-auto");
+    const toolbar = await screen.findByRole("toolbar");
+    expect(toolbar.parentElement).toHaveStyle({ maxWidth: "304px" });
+    expect(toolbar).toHaveClass("overflow-x-auto");
+    expect(within(toolbar).getByRole("button", { name: "Format selection" })).toBeInTheDocument();
+    expect(within(toolbar).getByRole("button", { name: "Insert link" })).toBeInTheDocument();
     Object.defineProperty(window, "innerWidth", { value: originalWidth, configurable: true });
   });
 

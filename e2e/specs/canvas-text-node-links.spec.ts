@@ -73,4 +73,34 @@ test.describe("Text Node links @wf:canvas-text-node-links", () => {
 
     await expect(page.getByRole("button", { name: "Bold" })).toBeVisible();
   });
+
+  test("Alt+F10 moves focus into the formatting bubble, and Escape returns it to the text", async ({
+    page,
+  }) => {
+    await openMap(page);
+    await startEditingStorm(page);
+
+    await page.keyboard.press("Home");
+    await page.keyboard.down("Shift");
+    for (let index = 0; index < 5; index++) await page.keyboard.press("ArrowRight");
+    await page.keyboard.up("Shift");
+
+    const bubble = page.getByRole("toolbar", { name: "Selection formatting" });
+    const bold = bubble.getByRole("button", { name: "Bold" });
+    await expect(bold).toBeVisible();
+
+    await page.keyboard.press("Alt+F10");
+    await expect(bold).toBeFocused();
+
+    // The arrows walk the controls without leaving the bubble.
+    await page.keyboard.press("ArrowRight");
+    await expect(bold).not.toBeFocused();
+    await expect(bubble.locator(":focus")).toHaveCount(1);
+
+    // Escape lands back in the text, still editing the node, with the selection
+    // the bubble was acting on (so the bubble stays up).
+    await page.keyboard.press("Escape");
+    await expect(textEditor(page)).toBeFocused();
+    await expect(bold).toBeVisible();
+  });
 });

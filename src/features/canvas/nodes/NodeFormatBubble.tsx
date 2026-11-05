@@ -1,9 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { useStore } from "@xyflow/react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
 import { FormattingButtons, LinkClickHandler, LinkDialog } from "@/components/editor";
+import {
+  SelectionToolbarControls,
+  useSelectionToolbarKeyboard,
+} from "@/components/editor/SelectionToolbar";
+import { useTranslation } from "react-i18next";
 import { LinkPreviewLayer } from "@/components/editor/LinkPreviewLayer";
 import type { InternalTarget, InternalTargetChildrenLoader } from "@/components/editor/LinkDialog";
 import { useBookStore } from "@/features/books/store";
@@ -14,16 +19,29 @@ import { CanvasRichContentMenu } from "@/features/canvas/nodes/CanvasRichContent
 
 export function NodeFormatBubble({
   editor,
+  bubbleRef,
   onOverlayOpenChange,
 }: {
   editor: Editor;
+  /** The bubble's positioned element, so the node can tell its own focus from leaving. */
+  bubbleRef?: RefObject<HTMLDivElement | null>;
   onOverlayOpenChange?: (open: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const [pos, setPos] = useState<{ top: number; left: number; maxWidth: number } | null>(null);
   const [toolbarElement, setToolbarElement] = useState<HTMLDivElement | null>(null);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [menuOverlayOpen, setMenuOverlayOpen] = useState(false);
   const [editorFocused, setEditorFocused] = useState(editor.isFocused);
+  const [toolbarFocused, setToolbarFocused] = useState(false);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const measureToolbar = useCallback(
+    (element: HTMLDivElement | null) => {
+      setToolbarElement(element);
+      if (bubbleRef) bubbleRef.current = element;
+    },
+    [bubbleRef]
+  );
   const [translateX, translateY, zoom] = useStore((flowState) => flowState.transform);
   const notes = useNoteStore((state) => state.notes);
   const books = useBookStore((state) => state.books);
@@ -92,16 +110,29 @@ export function NodeFormatBubble({
     void loadBooks();
   }, [loadBooks]);
 
+  // The bubble stays up while its own toolbar holds focus: the keyboard Command
+  // moves focus out of the text, and the controls must stay reachable.
+  const visible =
+    (editorFocused || menuOverlayOpen || toolbarFocused) && !linkDialogOpen && pos !== null;
+
+  const { containerProps, focusManagerRef, shouldFocusEditor, toolbarHasFocus } =
+    useSelectionToolbarKeyboard({
+      editor,
+      toolbarRef,
+      enabled: visible && editorFocused,
+      onFocusChange: setToolbarFocused,
+    });
+
   useEffect(() => {
-    onOverlayOpenChange?.(linkDialogOpen || menuOverlayOpen);
-  }, [linkDialogOpen, menuOverlayOpen, onOverlayOpenChange]);
+    onOverlayOpenChange?.(linkDialogOpen || menuOverlayOpen || toolbarFocused);
+  }, [linkDialogOpen, menuOverlayOpen, toolbarFocused, onOverlayOpenChange]);
 
   const updatePosition = useCallback(() => {
     // A queued frame can land after the node unmounts and destroys its editor.
     if (editor.isDestroyed) return;
-    // Keep the toolbar anchored while a child overlay is open so its dialogs
-    // survive the editor losing focus.
-    if (!editorFocused && !menuOverlayOpen) {
+    // Keep the toolbar anchored while a child overlay is open, or while the
+    // toolbar itself holds focus, so its dialogs and controls survive a blur.
+    if (!editorFocused && !menuOverlayOpen && !toolbarHasFocus()) {
       setPos(null);
       return;
     }
@@ -139,7 +170,7 @@ export function NodeFormatBubble({
         : Math.min(end.bottom + gap, bounds.bottom - toolbarHeight - gap);
 
     setPos({ top, left, maxWidth });
-  }, [editor, editorFocused, menuOverlayOpen, toolbarElement]);
+  }, [editor, editorFocused, menuOverlayOpen, toolbarElement, toolbarHasFocus]);
 
   useEffect(() => {
     updatePosition();
@@ -191,21 +222,33 @@ export function NodeFormatBubble({
 
   return (
     <>
-      {(editorFocused || menuOverlayOpen) &&
+      {(editorFocused || menuOverlayOpen || toolbarFocused) &&
         !linkDialogOpen &&
         pos &&
         createPortal(
           <div
-            ref={setToolbarElement}
-            className="fixed z-50 flex items-center gap-0.5 overflow-x-auto rounded-lg border border-border bg-card px-1.5 py-1 shadow-lg"
+            ref={measureToolbar}
+            {...containerProps}
+            className="fixed z-50"
             style={{ top: pos.top, left: pos.left, maxWidth: pos.maxWidth }}
             onPointerDown={(event) => {
               event.preventDefault();
               event.stopPropagation();
             }}
           >
-            <FormattingButtons editor={editor} onLinkClick={() => setLinkDialogOpen(true)} />
-            <CanvasRichContentMenu editor={editor} onOverlayOpenChange={setMenuOverlayOpen} />
+            <SelectionToolbarControls
+              toolbarRef={toolbarRef}
+              focusManagerRef={focusManagerRef}
+              ariaLabel={t("editor.selectionToolbar")}
+              className="flex items-center gap-0.5 overflow-x-auto rounded-lg border border-border bg-card px-1.5 py-1 shadow-lg"
+            >
+              <FormattingButtons
+                editor={editor}
+                onLinkClick={() => setLinkDialogOpen(true)}
+                shouldFocusEditor={shouldFocusEditor}
+              />
+              <CanvasRichContentMenu editor={editor} onOverlayOpenChange={setMenuOverlayOpen} />
+            </SelectionToolbarControls>
           </div>,
           document.body
         )}
