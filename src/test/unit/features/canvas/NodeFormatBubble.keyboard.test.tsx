@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Editor } from "@tiptap/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -8,7 +8,7 @@ import { useBoundShortcutStore } from "@/lib/bound-shortcuts";
 import { DEFAULT_SHORTCUT_SETTINGS } from "@/lib/shortcut-resolve";
 import { useSettingsStore } from "@/features/settings/store";
 import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
-import { DEFAULT_TOOLBAR_CONFIG } from "@/features/settings/toolbar-config";
+import { DEFAULT_TOOLBAR_CONFIG, type ToolbarConfig } from "@/features/settings/toolbar-config";
 import { useTutorialStore } from "@/features/tutorial/store";
 
 vi.mock("@/components/editor/extensions/SpellCheck", async () => {
@@ -72,7 +72,7 @@ const TOOLBAR_NAME = "Selection formatting";
 const editors: Editor[] = [];
 const hosts: HTMLElement[] = [];
 
-function mountBubble() {
+function mountBubble(options: { onToolbarLeave?: () => void; withOutsideField?: boolean } = {}) {
   const host = document.createElement("div");
   host.className = "canvas-node-content";
   const element = document.createElement("div");
@@ -95,7 +95,12 @@ function mountBubble() {
   editor.view.coordsAtPos = () =>
     ({ top: 100, bottom: 120, left: 50, right: 60 }) as unknown as DOMRect;
 
-  render(<NodeFormatBubble editor={editor} />);
+  render(
+    <>
+      {options.withOutsideField ? <input aria-label="Outside field" /> : null}
+      <NodeFormatBubble editor={editor} onToolbarLeave={options.onToolbarLeave} />
+    </>
+  );
   return editor;
 }
 
@@ -186,5 +191,117 @@ describe("NodeFormatBubble keyboard operation", () => {
     expect(document.activeElement).toBe(bold);
     expect(editor.state.selection.from).toBe(1);
     expect(editor.state.selection.to).toBe(6);
+  });
+});
+
+describe("NodeFormatBubble with the Font and Line Height fields", () => {
+  const fieldsConfig = (): ToolbarConfig => ({
+    ...DEFAULT_TOOLBAR_CONFIG,
+    selectionToolbar: ["basic-marks", "font", "line-height"],
+  });
+
+  function sizeField(): HTMLInputElement {
+    return within(toolbar()).getByRole("combobox", { name: "Size" }) as HTMLInputElement;
+  }
+
+  function lineHeightField(): HTMLInputElement {
+    return within(toolbar()).getByRole("combobox", { name: "Line height" }) as HTMLInputElement;
+  }
+
+  function chevronOf(field: HTMLInputElement): HTMLElement {
+    return within(field.parentElement as HTMLElement).getByRole("button");
+  }
+
+  async function walkRightTo(
+    user: ReturnType<typeof userEvent.setup>,
+    target: HTMLElement,
+    max = 16
+  ) {
+    for (let index = 0; index < max && document.activeElement !== target; index++) {
+      await user.keyboard("{ArrowRight}");
+    }
+    expect(document.activeElement).toBe(target);
+  }
+
+  it("walks the fields with the arrows, keeps their Home and End, and returns on Escape", async () => {
+    const user = userEvent.setup();
+    useSettingsStore.setState({ toolbarConfig: fieldsConfig() });
+    const editor = mountBubble();
+    selectHello(editor);
+
+    await user.keyboard("{Alt>}{F10}{/Alt}");
+    expect(document.activeElement).toBe(within(toolbar()).getByRole("button", { name: "Bold" }));
+
+    await walkRightTo(user, sizeField());
+    expect(sizeField().selectionStart).toBe(sizeField().value.length);
+
+    // Right at the edge crosses to Line Height, skipping the chevrons.
+    await user.keyboard("{ArrowRight}{ArrowRight}");
+    expect(document.activeElement).toBe(lineHeightField());
+
+    // End inside the field is the field's own, so the caret keeps it.
+    await user.keyboard("{End}");
+    expect(document.activeElement).toBe(lineHeightField());
+
+    // Escape hands focus back to the text with the selection intact.
+    await user.keyboard("{Escape}");
+    expect(editor.view.dom.contains(document.activeElement)).toBe(true);
+    expect(editor.state.selection.from).toBe(1);
+    expect(editor.state.selection.to).toBe(6);
+  });
+
+  it("presses a list item without leaving the Text Node, and applies the pick", async () => {
+    const user = userEvent.setup();
+    useSettingsStore.setState({ toolbarConfig: fieldsConfig() });
+    const editor = mountBubble();
+    selectHello(editor);
+
+    await user.click(chevronOf(sizeField()));
+    const listbox = await screen.findByRole("listbox");
+    await user.click(within(listbox).getByRole("option", { name: "14" }));
+
+    expect(editor.getHTML()).toContain("font-size: 14px");
+    expect(toolbar()).toBeInTheDocument();
+    expect(editor.state.selection.from).toBe(1);
+    expect(editor.state.selection.to).toBe(6);
+    // The pick returned focus to the text, so the native selection paints again.
+    await waitFor(() => expect(editor.view.dom.contains(document.activeElement)).toBe(true));
+  });
+
+  it("reports leaving the bubble when a press moves focus outside a field", async () => {
+    const user = userEvent.setup();
+    useSettingsStore.setState({ toolbarConfig: fieldsConfig() });
+    const onToolbarLeave = vi.fn();
+    const editor = mountBubble({ onToolbarLeave, withOutsideField: true });
+    selectHello(editor);
+
+    await user.click(sizeField());
+    expect(document.activeElement).toBe(sizeField());
+    expect(onToolbarLeave).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("textbox", { name: "Outside field" }));
+
+    await waitFor(() => expect(onToolbarLeave).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("toolbar")).toBeNull();
+    expect(editor.getHTML()).toBe("<p>Hello world</p>");
+  });
+
+  it("does not report leaving the bubble on Escape back to the text", async () => {
+    const user = userEvent.setup();
+    useSettingsStore.setState({ toolbarConfig: fieldsConfig() });
+    const onToolbarLeave = vi.fn();
+    const editor = mountBubble({ onToolbarLeave, withOutsideField: true });
+    selectHello(editor);
+
+    await user.click(sizeField());
+    await user.keyboard("{Escape}");
+
+    expect(editor.view.dom.contains(document.activeElement)).toBe(true);
+    expect(toolbar()).toBeInTheDocument();
+
+    // The next real leave is reported once, so the Escape reported none.
+    await user.click(sizeField());
+    await user.click(screen.getByLabelText("Outside field"));
+    await waitFor(() => expect(onToolbarLeave).toHaveBeenCalledTimes(1));
   });
 });

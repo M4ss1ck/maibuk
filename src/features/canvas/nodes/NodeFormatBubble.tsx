@@ -6,6 +6,7 @@ import { useEditorState } from "@tiptap/react";
 import { FormattingButtons, LinkClickHandler, LinkDialog } from "@/components/editor";
 import {
   SelectionToolbarControls,
+  textFieldOf,
   useSelectionToolbarKeyboard,
 } from "@/components/editor/SelectionToolbar";
 import { useTranslation } from "react-i18next";
@@ -21,11 +22,18 @@ export function NodeFormatBubble({
   editor,
   bubbleRef,
   onOverlayOpenChange,
+  onToolbarLeave,
 }: {
   editor: Editor;
   /** The bubble's positioned element, so the node can tell its own focus from leaving. */
   bubbleRef?: RefObject<HTMLDivElement | null>;
   onOverlayOpenChange?: (open: boolean) => void;
+  /**
+   * Focus left the bubble for something else. The node commits here: a press on
+   * the canvas clears the selection and unmounts the editor, so text still
+   * uncommitted at that point would be lost.
+   */
+  onToolbarLeave?: () => void;
 }) {
   const { t } = useTranslation();
   const [pos, setPos] = useState<{ top: number; left: number; maxWidth: number } | null>(null);
@@ -115,13 +123,26 @@ export function NodeFormatBubble({
   const visible =
     (editorFocused || menuOverlayOpen || toolbarFocused) && !linkDialogOpen && pos !== null;
 
-  const { containerProps, focusManagerRef, shouldFocusEditor, toolbarHasFocus } =
-    useSelectionToolbarKeyboard({
-      editor,
-      toolbarRef,
-      enabled: visible && editorFocused,
-      onFocusChange: setToolbarFocused,
-    });
+  // Read during a blur, before React has rendered the latest open state.
+  const overlayOpenRef = useRef(false);
+  overlayOpenRef.current = linkDialogOpen || menuOverlayOpen;
+  const {
+    containerProps,
+    fieldPressRef,
+    focusManagerRef,
+    shouldFocusEditor,
+    toolbarHasFocus,
+    holdInView,
+  } = useSelectionToolbarKeyboard({
+    editor,
+    toolbarRef,
+    enabled: visible && editorFocused,
+    onFocusChange: setToolbarFocused,
+    // A dialog or menu opened from the bubble is still this node's edit.
+    onLeave: () => {
+      if (!overlayOpenRef.current) onToolbarLeave?.();
+    },
+  });
 
   useEffect(() => {
     onOverlayOpenChange?.(linkDialogOpen || menuOverlayOpen || toolbarFocused);
@@ -132,7 +153,7 @@ export function NodeFormatBubble({
     if (editor.isDestroyed) return;
     // Keep the toolbar anchored while a child overlay is open, or while the
     // toolbar itself holds focus, so its dialogs and controls survive a blur.
-    if (!editorFocused && !menuOverlayOpen && !toolbarHasFocus()) {
+    if (!editorFocused && !menuOverlayOpen && !toolbarFocused && !toolbarHasFocus()) {
       setPos(null);
       return;
     }
@@ -170,7 +191,7 @@ export function NodeFormatBubble({
         : Math.min(end.bottom + gap, bounds.bottom - toolbarHeight - gap);
 
     setPos({ top, left, maxWidth });
-  }, [editor, editorFocused, menuOverlayOpen, toolbarElement, toolbarHasFocus]);
+  }, [editor, editorFocused, menuOverlayOpen, toolbarElement, toolbarFocused, toolbarHasFocus]);
 
   useEffect(() => {
     updatePosition();
@@ -230,15 +251,18 @@ export function NodeFormatBubble({
             ref={measureToolbar}
             {...containerProps}
             className="fixed z-50"
-            style={{ top: pos.top, left: pos.left, maxWidth: pos.maxWidth }}
+            style={{ top: holdInView(pos.top), left: pos.left, maxWidth: pos.maxWidth }}
             onPointerDown={(event) => {
-              event.preventDefault();
+              // A press on a field must reach it, so the caret can go there; any
+              // other press keeps focus in the text the bubble acts on.
+              if (!textFieldOf(event.target)) event.preventDefault();
               event.stopPropagation();
             }}
           >
             <SelectionToolbarControls
               toolbarRef={toolbarRef}
               focusManagerRef={focusManagerRef}
+              fieldPressRef={fieldPressRef}
               ariaLabel={t("editor.selectionToolbar")}
               className="flex items-center gap-0.5 overflow-x-auto rounded-lg border border-border bg-card px-1.5 py-1 shadow-lg"
             >

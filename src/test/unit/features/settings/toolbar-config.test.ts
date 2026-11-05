@@ -47,6 +47,18 @@ describe("DEFAULT_TOOLBAR_CONFIG", () => {
     expect(FLOATING_ELIGIBLE_IDS.has("align")).toBe(true);
     expect(DEFAULT_TOOLBAR_CONFIG.selectionToolbar).not.toContain("align");
   });
+  it("makes Font and Line Height eligible to add without making them defaults", () => {
+    expect(FLOATING_ELIGIBLE_IDS.has("font")).toBe(true);
+    expect(FLOATING_ELIGIBLE_IDS.has("line-height")).toBe(true);
+    expect(DEFAULT_TOOLBAR_CONFIG.selectionToolbar).not.toContain("font");
+    expect(DEFAULT_TOOLBAR_CONFIG.selectionToolbar).not.toContain("line-height");
+    expect(
+      setSelectionToolbarMember(DEFAULT_TOOLBAR_CONFIG, "font", true).selectionToolbar
+    ).toEqual(["font", "basic-marks", "headings", "highlight", "link-code"]);
+    expect(
+      setSelectionToolbarMember(DEFAULT_TOOLBAR_CONFIG, "line-height", true).selectionToolbar
+    ).toEqual(["basic-marks", "headings", "line-height", "highlight", "link-code"]);
+  });
   it("has the exact semantic divider boundaries and is deeply frozen", () => {
     expect(
       DEFAULT_TOOLBAR_CONFIG.start.map((entry) => (entry.kind === "divider" ? "D" : entry.id))

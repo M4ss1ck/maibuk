@@ -7,15 +7,18 @@ const FONT_SIZE_OPTIONS = ["12", "14", "16", "18", "20", "24", "28", "32", "36",
 interface FontSizeSelectProps {
   editor: Editor;
   value: string;
+  /** Set only by a floating toolbar: whether this change pulls focus into the text. The Editor Toolbar always does. */
+  shouldFocusEditor?: () => boolean;
 }
 
-export function FontSizeSelect({ editor, value }: FontSizeSelectProps) {
+export function FontSizeSelect({ editor, value, shouldFocusEditor }: FontSizeSelectProps) {
   const { t } = useTranslation();
+  const chain = () => (shouldFocusEditor?.() === false ? editor.chain() : editor.chain().focus());
 
   const handleChange = (size: string) => {
     const sizeValue = size.replace(/[^0-9]/g, "");
     if (sizeValue) {
-      editor.chain().focus().setFontSize(`${sizeValue}px`).run();
+      chain().setFontSize(`${sizeValue}px`).run();
     }
   };
 
@@ -25,6 +28,7 @@ export function FontSizeSelect({ editor, value }: FontSizeSelectProps) {
       onChange={handleChange}
       options={FONT_SIZE_OPTIONS}
       placeholder={t("editor.size")}
+      explicitCommitOnly={shouldFocusEditor !== undefined}
       ariaLabel={t("editor.size")}
     />
   );

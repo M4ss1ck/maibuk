@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 import { capture } from "../support/capture";
-import { pressUntilFocused, tabTo } from "../support/keyboard";
+import { pressUntilFocused, settleTextNodeFocus, tabTo } from "../support/keyboard";
+import { seedSettings } from "../support/storage";
 import { expect, test } from "../support/test";
 
 // A resting Text Node's Links (issue #716, stage 2): the node's Link entries in
@@ -121,5 +122,50 @@ test.describe("Text Node links @wf:canvas-text-node-links", () => {
     await page.keyboard.press("Escape");
     await expect(textEditor(page)).toBeFocused();
     await expect(bold).toBeVisible();
+  });
+
+  test("the Size field's list applies to the selected text and Escape returns to it @wf:editor-selection-toolbar-comboboxes", async ({
+    page,
+  }) => {
+    // Font joins before Basic formatting, so the Command lands in the Size field.
+    await seedSettings(page, {
+      toolbarConfig: {
+        start: [
+          { kind: "group", id: "font", toolbarVisible: true },
+          { kind: "group", id: "basic-marks", toolbarVisible: true },
+          { kind: "group", id: "line-height", toolbarVisible: true },
+        ],
+        end: [],
+        selectionToolbar: ["font", "basic-marks", "line-height"],
+      },
+    });
+    await openMap(page);
+    await startEditingStorm(page);
+
+    await settleTextNodeFocus(page);
+    await page.keyboard.press("Home");
+    for (let index = 0; index < 5; index++) await page.keyboard.press("Shift+ArrowRight");
+
+    const bubble = page.getByRole("toolbar", { name: "Selection formatting" });
+    const size = bubble.getByRole("combobox", { name: "Size" });
+    await expect(bubble).toBeVisible();
+    await page.keyboard.press("Alt+F10");
+    await expect(size).toBeFocused();
+
+    await page.keyboard.press("Control+a");
+    await page.keyboard.type("24");
+    await expect(page.getByRole("listbox")).toBeVisible();
+    await page.keyboard.press("Enter");
+
+    await expect(page.getByRole("listbox")).toBeHidden();
+    await expect(size).toBeFocused();
+    const sized = textEditor(page).locator('[style*="font-size"]');
+    await expect(sized).toHaveText("Storm");
+    await expect(sized).toHaveAttribute("style", /font-size:\s*24px/);
+
+    // Escape gives the text back, still editing the node, bubble up.
+    await page.keyboard.press("Escape");
+    await expect(textEditor(page)).toBeFocused();
+    await expect(bubble).toBeVisible();
   });
 });

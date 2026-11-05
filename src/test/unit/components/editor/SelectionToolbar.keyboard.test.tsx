@@ -410,6 +410,459 @@ describe("SelectionToolbar keyboard operation", () => {
   });
 });
 
+describe("SelectionToolbar with the Font and Line Height fields", () => {
+  const fieldsConfig = (): ToolbarConfig => ({
+    ...DEFAULT_TOOLBAR_CONFIG,
+    selectionToolbar: ["basic-marks", "font", "line-height"],
+  });
+
+  function sizeField(): HTMLInputElement {
+    return within(toolbar()).getByRole("combobox", { name: "Size" }) as HTMLInputElement;
+  }
+
+  function familyField(): HTMLInputElement {
+    return within(toolbar()).getByRole("combobox", { name: "Font" }) as HTMLInputElement;
+  }
+
+  function lineHeightField(): HTMLInputElement {
+    return within(toolbar()).getByRole("combobox", { name: "Line height" }) as HTMLInputElement;
+  }
+
+  function chevronOf(field: HTMLInputElement): HTMLElement {
+    return within(field.parentElement as HTMLElement).getByRole("button");
+  }
+
+  function toolbarTop(): number {
+    return Number.parseFloat((toolbar().parentElement as HTMLElement).style.top);
+  }
+
+  async function walkRightTo(
+    user: ReturnType<typeof userEvent.setup>,
+    target: HTMLElement,
+    max = 16
+  ) {
+    for (let index = 0; index < max && document.activeElement !== target; index++) {
+      await user.keyboard("{ArrowRight}");
+    }
+    expect(document.activeElement).toBe(target);
+  }
+
+  async function enterWithFields(user: ReturnType<typeof userEvent.setup>) {
+    await user.keyboard("{Alt>}{F10}{/Alt}");
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Bold" }));
+  }
+
+  function makeVisualViewport(height: number) {
+    const listeners = new Set<EventListener>();
+    const viewport = {
+      offsetTop: 0,
+      height,
+      addEventListener: (_type: string, listener: EventListener) => listeners.add(listener),
+      removeEventListener: (_type: string, listener: EventListener) => listeners.delete(listener),
+      fire: () => {
+        for (const listener of listeners) listener(new Event("resize"));
+      },
+    };
+    vi.stubGlobal("visualViewport", viewport);
+    return viewport;
+  }
+
+  it("moves the caret inside a field with Left and Right, and keeps it for a selection or Shift", async () => {
+    const user = userEvent.setup();
+    const { editor } = mountSelectionToolbar(fieldsConfig());
+    selectHello(editor);
+
+    await enterWithFields(user);
+    await walkRightTo(user, sizeField());
+    const field = sizeField();
+    expect(field.value).toBe("18");
+
+    field.setSelectionRange(1, 1);
+    await user.keyboard("{ArrowRight}");
+    expect(document.activeElement).toBe(field);
+
+    field.setSelectionRange(1, 1);
+    await user.keyboard("{ArrowLeft}");
+    expect(document.activeElement).toBe(field);
+
+    // A range of text inside the field owns both arrows.
+    field.setSelectionRange(0, 2);
+    await user.keyboard("{ArrowRight}");
+    expect(document.activeElement).toBe(field);
+
+    // Shift extends the selection, so the arrows stay in the field.
+    field.setSelectionRange(2, 2);
+    await user.keyboard("{Shift>}{ArrowRight}{/Shift}");
+    expect(document.activeElement).toBe(field);
+  });
+
+  it("moves to the neighbouring field at the field's edge and skips its chevron", async () => {
+    const user = userEvent.setup();
+    const { editor } = mountSelectionToolbar(fieldsConfig());
+    selectHello(editor);
+    const before = editor.getHTML();
+
+    await enterWithFields(user);
+    await walkRightTo(user, sizeField());
+
+    await user.keyboard("{ArrowRight}");
+    expect(document.activeElement).toBe(familyField());
+    expect(document.activeElement).not.toBe(chevronOf(sizeField()));
+
+    await user.keyboard("{ArrowRight}");
+    expect(document.activeElement).toBe(lineHeightField());
+    expect(document.activeElement).not.toBe(chevronOf(familyField()));
+
+    // The last field has nowhere further right to go.
+    await user.keyboard("{ArrowRight}");
+    expect(document.activeElement).toBe(lineHeightField());
+
+    // Walking across the fields leaves each one's held value alone.
+    expect(editor.getHTML()).toBe(before);
+  });
+
+  it("leaves the caret on the far edge of a field the arrows walk into", async () => {
+    const user = userEvent.setup();
+    const { editor } = mountSelectionToolbar(fieldsConfig());
+    selectHello(editor);
+    const before = editor.getHTML();
+
+    await enterWithFields(user);
+    await walkRightTo(user, sizeField());
+    // Walking right into the field put the caret past its last character.
+    expect(sizeField().selectionStart).toBe(sizeField().value.length);
+
+    await walkRightTo(user, lineHeightField());
+    expect(lineHeightField().selectionStart).toBe(lineHeightField().value.length);
+
+    // Walking left into the family field puts the caret before its first character.
+    lineHeightField().setSelectionRange(0, 0);
+    await user.keyboard("{ArrowLeft}");
+    expect(document.activeElement).toBe(familyField());
+    expect(familyField().selectionStart).toBe(0);
+
+    // The walk never writes a field's held value into the text.
+    expect(editor.getHTML()).toBe(before);
+  });
+
+  it("leaves Home and End to a field, so its own caret keeps them", async () => {
+    const user = userEvent.setup();
+    const { editor } = mountSelectionToolbar(fieldsConfig());
+    selectHello(editor);
+
+    await enterWithFields(user);
+    await walkRightTo(user, sizeField());
+
+    await user.keyboard("{Home}");
+    expect(document.activeElement).toBe(sizeField());
+    expect(toolbar().contains(document.activeElement)).toBe(true);
+
+    await user.keyboard("{End}");
+    expect(document.activeElement).toBe(sizeField());
+  });
+
+  it("walks to the first and last control with Home and End from a button, skipping the chevrons", async () => {
+    const user = userEvent.setup();
+    const { editor } = mountSelectionToolbar(fieldsConfig());
+    selectHello(editor);
+
+    await enterWithFields(user);
+
+    // Home from a button walks to the first control.
+    await user.keyboard("{ArrowRight}");
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Italic" }));
+    await user.keyboard("{Home}");
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Bold" }));
+
+    // End from a button walks to the last field, past its chevron.
+    await user.keyboard("{End}");
+    expect(document.activeElement).toBe(lineHeightField());
+  });
+
+  it("opens a field's list with Down and walks it with Up and Down", async () => {
+    const user = userEvent.setup();
+    const { editor } = mountSelectionToolbar(fieldsConfig());
+    selectHello(editor);
+
+    await enterWithFields(user);
+    await walkRightTo(user, sizeField());
+
+    await user.keyboard("{ArrowDown}");
+    expect(await screen.findByRole("listbox")).toBeInTheDocument();
+
+    // Down opens on the current 18, the next Downs step to 24, Up goes back to 20.
+    await user.keyboard("{ArrowDown}{ArrowDown}{ArrowUp}{Enter}");
+
+    expect(editor.getHTML()).toContain("font-size: 20px");
+    expect(document.activeElement).toBe(sizeField());
+    expect(editor.state.selection.from).toBe(1);
+    expect(editor.state.selection.to).toBe(6);
+  });
+
+  it("discards typing on the first Escape and returns to the text on a later one", async () => {
+    const user = userEvent.setup();
+    const { editor } = mountSelectionToolbar(fieldsConfig());
+    selectHello(editor);
+
+    await enterWithFields(user);
+    await walkRightTo(user, sizeField());
+
+    await user.keyboard("{Control>}a{/Control}24");
+    expect(sizeField().value).toBe("24");
+
+    await user.keyboard("{Escape}");
+    // The list's press discards the typing and the field keeps the caret.
+    expect(document.activeElement).toBe(sizeField());
+    expect(sizeField().value).toBe("18");
+    expect(editor.getHTML()).not.toContain("24px");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+
+    // The next press is the toolbar's: back to the text.
+    await user.keyboard("{Escape}");
+    expect(editor.view.dom.contains(document.activeElement)).toBe(true);
+    expect(editor.state.selection.from).toBe(1);
+    expect(editor.state.selection.to).toBe(6);
+  });
+
+  it("commits a typed value on Enter and keeps focus in the field", async () => {
+    const user = userEvent.setup();
+    const { editor } = mountSelectionToolbar(fieldsConfig());
+    selectHello(editor);
+
+    await enterWithFields(user);
+    await walkRightTo(user, sizeField());
+
+    await user.keyboard("{Control>}a{/Control}24{Enter}");
+
+    expect(editor.getHTML()).toContain("font-size: 24px");
+    expect(document.activeElement).toBe(sizeField());
+    expect(editor.state.selection.from).toBe(1);
+    expect(editor.state.selection.to).toBe(6);
+  });
+
+  it("discards a half-typed value when it leaves by Tab", async () => {
+    const user = userEvent.setup();
+    const { editor } = mountSelectionToolbar(fieldsConfig());
+    selectHello(editor);
+    const before = editor.getHTML();
+
+    await enterWithFields(user);
+    await walkRightTo(user, sizeField());
+
+    await user.keyboard("{Control>}a{/Control}9");
+    expect(sizeField().value).toBe("9");
+
+    await user.tab();
+
+    // Neither the typed value nor the held one reaches the book: the text is
+    // exactly what it was before the toolbar took focus.
+    expect(toolbar().contains(document.activeElement)).toBe(true);
+    expect(editor.getHTML()).toBe(before);
+  });
+
+  it("discards a half-typed value when the arrows walk out of the field", async () => {
+    const user = userEvent.setup();
+    const { editor } = mountSelectionToolbar(fieldsConfig());
+    selectHello(editor);
+    const before = editor.getHTML();
+
+    await enterWithFields(user);
+    await walkRightTo(user, sizeField());
+
+    await user.keyboard("{Control>}a{/Control}9");
+    expect(sizeField().value).toBe("9");
+
+    // The caret sits past the typed character, so the arrow leaves the field.
+    await user.keyboard("{ArrowRight}");
+
+    expect(document.activeElement).toBe(familyField());
+    expect(editor.getHTML()).toBe(before);
+  });
+
+  it("leaves the text alone when Tab leaves a field holding a value", async () => {
+    const user = userEvent.setup();
+    const { editor } = mountSelectionToolbar(fieldsConfig());
+    selectHello(editor);
+    const before = editor.getHTML();
+
+    await enterWithFields(user);
+    await walkRightTo(user, sizeField());
+    // A field that shows a value and commits nothing: the author only tabbed
+    // through it, so the blur must not rewrite the selection.
+    expect(sizeField().value).toBe("18");
+
+    await user.tab();
+
+    expect(toolbar().contains(document.activeElement)).toBe(true);
+    expect(editor.getHTML()).toBe(before);
+  });
+
+  it("puts the caret in a field the pointer clicked and keeps the selection painted", async () => {
+    const user = userEvent.setup();
+    const { editor } = mountSelectionToolbar(fieldsConfig());
+    selectHello(editor);
+
+    await user.click(sizeField());
+
+    expect(document.activeElement).toBe(sizeField());
+    expect(sizeField().selectionStart).toBe(sizeField().value.length);
+    expect(editor.state.selection.from).toBe(1);
+    expect(editor.state.selection.to).toBe(6);
+    expect(editor.view.dom.querySelector(".selection-kept")).toHaveTextContent("Hello");
+  });
+
+  it("leaves the field for the text when a pointer click commits a value", async () => {
+    const user = userEvent.setup();
+    const { editor } = mountSelectionToolbar(fieldsConfig());
+    selectHello(editor);
+
+    await user.click(sizeField());
+    await user.keyboard("{Control>}a{/Control}24{Enter}");
+
+    expect(editor.getHTML()).toContain("font-size:");
+    expect(editor.view.dom.contains(document.activeElement)).toBe(true);
+    expect(editor.state.selection.from).toBe(1);
+    expect(editor.state.selection.to).toBe(6);
+  });
+
+  it("opens a field's list from its chevron and applies the pick to the selection", async () => {
+    const user = userEvent.setup();
+    // React Aria's press schedules its own frame; the synchronous stub above
+    // breaks its cleanup, so this pointer test runs on the real one.
+    vi.unstubAllGlobals();
+    const { editor } = mountSelectionToolbar(fieldsConfig());
+    selectHello(editor);
+    await screen.findByRole("toolbar", { name: "Selection formatting" });
+
+    await user.click(chevronOf(sizeField()));
+    const listbox = await screen.findByRole("listbox");
+    await user.click(within(listbox).getByRole("option", { name: "14" }));
+
+    expect(editor.getHTML()).toContain("font-size: 14px");
+    await waitFor(() => expect(editor.view.dom.contains(document.activeElement)).toBe(true));
+    expect(editor.state.selection.from).toBe(1);
+    expect(editor.state.selection.to).toBe(6);
+  });
+
+  it("discards a half-typed value when the pointer leaves the field", async () => {
+    const user = userEvent.setup();
+    const { editor } = mountSelectionToolbar(fieldsConfig());
+    selectHello(editor);
+    const before = editor.getHTML();
+
+    await user.click(sizeField());
+    await user.keyboard("{Control>}a{/Control}9");
+    expect(sizeField().value).toBe("9");
+
+    // An open list hides the rest of the page from the accessibility tree, so
+    // the outside field is found by its label.
+    const outside = screen.getByLabelText("Outside field");
+    await user.click(outside);
+
+    expect(document.activeElement).toBe(outside);
+    // Neither the typed value nor the held one reaches the book.
+    expect(editor.getHTML()).toBe(before);
+    expect(editor.state.selection.from).toBe(1);
+    expect(editor.state.selection.to).toBe(6);
+  });
+
+  it("leaves the text alone when the pointer leaves a field holding a value", async () => {
+    const user = userEvent.setup();
+    const { editor } = mountSelectionToolbar(fieldsConfig());
+    selectHello(editor);
+    const before = editor.getHTML();
+
+    await user.click(sizeField());
+    expect(document.activeElement).toBe(sizeField());
+
+    const outside = screen.getByLabelText("Outside field");
+    await user.click(outside);
+
+    expect(document.activeElement).toBe(outside);
+    expect(editor.getHTML()).toBe(before);
+  });
+
+  it("keeps focus in the Line Height field clicked after the keyboard left the Font field", async () => {
+    const user = userEvent.setup();
+    const { editor } = mountSelectionToolbar(fieldsConfig());
+    selectHello(editor);
+
+    await enterWithFields(user);
+    await walkRightTo(user, sizeField());
+    await user.keyboard("{Escape}");
+    expect(editor.view.dom.contains(document.activeElement)).toBe(true);
+
+    await user.click(lineHeightField());
+
+    expect(document.activeElement).toBe(lineHeightField());
+  });
+
+  it("keeps focus in the text for a Bold press with the pointer", async () => {
+    const user = userEvent.setup();
+    const { editor } = mountSelectionToolbar(fieldsConfig());
+    selectHello(editor);
+
+    await user.click(screen.getByRole("button", { name: "Bold" }));
+
+    expect(editor.isActive("bold")).toBe(true);
+    expect(editor.getHTML()).toContain("<strong>Hello</strong>");
+    expect(editor.view.dom.contains(document.activeElement)).toBe(true);
+  });
+
+  it("keeps the highlight picker's hex field working from the Selection Toolbar", async () => {
+    const user = userEvent.setup();
+    const { editor } = mountSelectionToolbar({
+      ...DEFAULT_TOOLBAR_CONFIG,
+      selectionToolbar: ["basic-marks", "highlight"],
+    });
+    selectHello(editor);
+
+    await enterWithFields(user);
+    const optionsTrigger = within(toolbar()).getByRole("button", { name: "{{label}} options" });
+    await walkRightTo(user, optionsTrigger, 20);
+    await user.keyboard("{Enter}");
+
+    const dialog = await screen.findByRole("dialog", { name: "{{label}} options" });
+    const hex = within(dialog).getByRole("textbox", { name: "Hex color" }) as HTMLInputElement;
+    await user.click(hex);
+    await user.keyboard("{Control>}a{/Control}#00FF00{Enter}");
+
+    expect(editor.getHTML()).toContain("#00FF00");
+    expect(document.activeElement).toBe(hex);
+  });
+
+  it("holds the toolbar above the on-screen keyboard while a field has focus", async () => {
+    const user = userEvent.setup();
+    const viewport = makeVisualViewport(300);
+    const { editor } = mountSelectionToolbar(fieldsConfig());
+    selectHello(editor);
+
+    await user.click(sizeField());
+    expect(document.activeElement).toBe(sizeField());
+    expect(toolbarTop()).toBe(52);
+
+    viewport.height = 40;
+    act(() => viewport.fire());
+
+    // The keyboard covers the bottom: the bubble rises to stay above it.
+    expect(toolbarTop()).toBe(32);
+    expect(toolbarTop() + 8).toBeLessThanOrEqual(viewport.height);
+  });
+
+  it("keeps its place while a button has focus, even with the on-screen keyboard up", async () => {
+    const user = userEvent.setup();
+    const viewport = makeVisualViewport(300);
+    const { editor } = mountSelectionToolbar(fieldsConfig());
+    selectHello(editor);
+
+    await enterWithFields(user);
+    viewport.height = 40;
+    act(() => viewport.fire());
+
+    expect(toolbarTop()).toBe(52);
+  });
+});
+
 describe("SelectionToolbar keeps the selection visible", () => {
   async function arrowUntilFocused(
     user: { keyboard: (text: string) => Promise<void> },

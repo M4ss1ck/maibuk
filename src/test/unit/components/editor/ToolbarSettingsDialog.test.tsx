@@ -211,6 +211,78 @@ it("enables the floating switch for align and adds it by keyboard Space", async 
   expect(sw).toHaveAttribute("aria-checked", "true");
 });
 
+it("enables the floating switch for Font and Line Height and adds them by keyboard Space", async () => {
+  const user = userEvent.setup();
+  useSettingsStore.setState({
+    toolbarConfig: {
+      start: [
+        ...TEST_CONFIG.start,
+        { kind: "group", id: "font", toolbarVisible: true },
+        { kind: "group", id: "line-height", toolbarVisible: true },
+      ],
+      end: [],
+      selectionToolbar: ["basic-marks"],
+    },
+  });
+  renderDialog();
+
+  const fontRow = findRowByName(/toolbar\.groups\.font/);
+  const fontSwitch = within(fontRow).getByRole("switch", {
+    name: "toolbar.settings.floatingVisible",
+  });
+  expect(fontSwitch).not.toBeDisabled();
+  await arrowToControl(user, fontRow, fontSwitch);
+  await user.keyboard(" ");
+  expect(useSettingsStore.getState().toolbarConfig.selectionToolbar).toEqual([
+    "basic-marks",
+    "font",
+  ]);
+
+  const lineHeightRow = findRowByName(/toolbar\.groups\.lineHeight/);
+  const lineHeightSwitch = within(lineHeightRow).getByRole("switch", {
+    name: "toolbar.settings.floatingVisible",
+  });
+  expect(lineHeightSwitch).not.toBeDisabled();
+  await arrowToControl(user, lineHeightRow, lineHeightSwitch);
+  await user.keyboard(" ");
+  expect(useSettingsStore.getState().toolbarConfig.selectionToolbar).toEqual([
+    "basic-marks",
+    "font",
+    "line-height",
+  ]);
+});
+
+it("offers Font and Line Height in the Selection layout's tray", async () => {
+  const user = userEvent.setup();
+  useSettingsStore.setState({
+    toolbarConfig: {
+      start: [
+        ...TEST_CONFIG.start,
+        { kind: "group", id: "font", toolbarVisible: true },
+        { kind: "group", id: "line-height", toolbarVisible: true },
+      ],
+      end: [],
+      selectionToolbar: ["basic-marks"],
+    },
+  });
+  renderDialog();
+  fireEvent.click(screen.getByRole("radio", { name: "toolbar.settings.layoutSelection" }));
+
+  const tray = screen.getByRole("listbox", { name: "toolbar.settings.traySelection" });
+  expect(within(tray).getByRole("option", { name: "toolbar.groups.font" })).toBeInTheDocument();
+  expect(
+    within(tray).getByRole("option", { name: "toolbar.groups.lineHeight" })
+  ).toBeInTheDocument();
+
+  act(() => within(tray).getByRole("option", { name: "toolbar.groups.lineHeight" }).focus());
+  await user.keyboard("{Enter}{ArrowUp}{Enter}");
+
+  expect(useSettingsStore.getState().toolbarConfig.selectionToolbar).toEqual([
+    "line-height",
+    "basic-marks",
+  ]);
+});
+
 // ─── contextual add divider controls ───────────────────────────────────
 
 describe("contextual add divider controls", () => {

@@ -11,10 +11,13 @@ const LINE_HEIGHT_OPTIONS = ["1", "1.15", "1.5", "1.75", "2", "2.5", "3"];
 interface LineHeightSelectProps {
   editor: Editor;
   value: string;
+  /** Set only by a floating toolbar: whether this change pulls focus into the text. The Editor Toolbar always does. */
+  shouldFocusEditor?: () => boolean;
 }
 
-export function LineHeightSelect({ editor, value }: LineHeightSelectProps) {
+export function LineHeightSelect({ editor, value, shouldFocusEditor }: LineHeightSelectProps) {
   const { t } = useTranslation();
+  const chain = () => (shouldFocusEditor?.() === false ? editor.chain() : editor.chain().focus());
 
   const handleChange = (lineHeight: string) => {
     const cleanValue = normalizeLineHeight(lineHeight);
@@ -22,10 +25,10 @@ export function LineHeightSelect({ editor, value }: LineHeightSelectProps) {
       return;
     }
     if (cleanValue === DEFAULT_LINE_HEIGHT) {
-      editor.chain().focus().unsetLineHeight().run();
+      chain().unsetLineHeight().run();
       return;
     }
-    editor.chain().focus().setLineHeight(cleanValue).run();
+    chain().setLineHeight(cleanValue).run();
   };
 
   return (
@@ -34,6 +37,7 @@ export function LineHeightSelect({ editor, value }: LineHeightSelectProps) {
       onChange={handleChange}
       options={LINE_HEIGHT_OPTIONS}
       placeholder={t("editor.lineHeight")}
+      explicitCommitOnly={shouldFocusEditor !== undefined}
       ariaLabel={t("editor.lineHeight")}
     />
   );
