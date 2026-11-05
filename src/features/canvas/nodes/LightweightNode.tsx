@@ -11,6 +11,7 @@ import type { CanvasFlowNodeData } from "@/features/canvas/reactFlowAdapter";
 import type { LightweightCanvasNode } from "@/features/canvas/types";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 import { useEditorCommandSource } from "@/components/editor/editor-command-source";
+import { EditorContextMenu } from "@/components/editor/EditorContextMenu";
 import { MarkdownPasteDialog } from "@/components/editor/MarkdownPasteDialog";
 import { FootnoteList } from "@/components/editor/FootnoteList";
 import { ImageContextMenu } from "@/components/editor/ImageContextMenu";
@@ -61,6 +62,9 @@ function ActiveNodeEditor({
   const openingMarksLanguage = useOpeningMarksLanguage(writingLanguage);
   const writingLanguageGetter = useWritingLanguageGetter(writingLanguage);
   const overlayOpen = useRef(false);
+  // A right-click menu that is anchored in this node, open or closing.
+  const menuOpen = useRef(false);
+  const menuWasOpen = useRef(false);
   const [pendingMarkdownPaste, setPendingMarkdownPaste] = useState<string | null>(null);
   const hadText = useRef(false);
   const editor = useEditor({
@@ -120,17 +124,50 @@ function ActiveNodeEditor({
     leave();
   };
 
+  // An action or Escape refocuses the text a frame after the menu closes: the
+  // node must stay open for both. An outside click leaves focus elsewhere, and
+  // that click clears the selection, which unmounts this editor, so its text
+  // has to be committed now or it is lost.
+  const commitAfterMenu = () => {
+    requestAnimationFrame(() => {
+      if (editor.isDestroyed || editor.isFocused) return;
+      if (overlayOpen.current || menuOpen.current || pendingMarkdownPaste !== null) return;
+      commit();
+    });
+  };
+
   return (
     <>
       <div
         className="canvas-node-content max-w-none"
         style={textColorStyle(colorPreview?.textColor ?? node.textColor)}
+        // EditorContextMenu and ImageContextMenu take focus out of the text, and
+        // the blur that follows arrives before either menu reports opening. Mark
+        // the gesture here, during the capture phase, so that blur does not
+        // commit the node. A link right click opens the Link dialog instead, and
+        // NodeFormatBubble reports that overlay on its own.
+        onContextMenuCapture={(event) => {
+          if (event.target instanceof Element && editor.view.dom.contains(event.target)) {
+            menuOpen.current = true;
+          }
+        }}
+        onKeyDownCapture={(event) => {
+          // Shift+F10 and the ContextMenu key open the same menu from the keyboard.
+          if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+            menuOpen.current = true;
+          }
+        }}
       >
         <EditorContent
           editor={editor}
           className="nodrag nopan max-w-none"
+          onFocus={() => {
+            // A menu that closed put focus back in the text; the node is live again.
+            menuOpen.current = false;
+          }}
           onBlur={() => {
-            if (!overlayOpen.current && pendingMarkdownPaste === null) commit();
+            if (overlayOpen.current || menuOpen.current || pendingMarkdownPaste !== null) return;
+            commit();
           }}
           onKeyDown={(event) => {
             event.stopPropagation();
@@ -153,6 +190,19 @@ function ActiveNodeEditor({
         }}
       />
       <ImageContextMenu editor={editor} />
+      <EditorContextMenu
+        editor={editor}
+        onOpenChange={(open) => {
+          menuOpen.current = open;
+          if (open) {
+            menuWasOpen.current = true;
+            return;
+          }
+          if (!menuWasOpen.current) return;
+          menuWasOpen.current = false;
+          commitAfterMenu();
+        }}
+      />
       <MarkdownPasteDialog
         editor={editor}
         markdown={pendingMarkdownPaste}
@@ -202,6 +252,13 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
       // The padding below a new node's first line reads as part of its text box.
       // A press there must keep the editor focused, or the blur would drop the node.
       onMouseDown={pristine ? (event) => event.preventDefault() : undefined}
+      onContextMenu={(event) => {
+        nodeMenu.itemProps.onContextMenu?.(event);
+        // A right click anywhere on the editing Text Node opens the editor's own
+        // menu; the browser menu never appears, including on the padding outside
+        // the text.
+        if (editing) event.preventDefault();
+      }}
     >
       <CanvasNodeHandles connectedSides={data.connectedSides} variant="text" selected={selected} />
       {nodeMenu.menu}

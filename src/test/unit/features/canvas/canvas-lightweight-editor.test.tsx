@@ -48,6 +48,10 @@ vi.mock("../../../../components/editor/ImageContextMenu", () => ({
   ImageContextMenu: () => null,
 }));
 
+vi.mock("../../../../components/editor/EditorContextMenu", () => ({
+  EditorContextMenu: () => null,
+}));
+
 const { LightweightNode } = await import("@/features/canvas/nodes/LightweightNode");
 
 function textNode(overrides: Record<string, unknown> = {}) {

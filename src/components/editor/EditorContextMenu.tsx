@@ -35,8 +35,10 @@ import {
 
 interface EditorContextMenuProps {
   editor: Editor;
-  onInspect: (blockIndex: number) => void;
-  onLookup: (word: string) => void;
+  /** Omit it where the menu has no HTML panel to open; the action is then hidden. */
+  onInspect?: (blockIndex: number) => void;
+  /** Omit it where the menu has no dictionary; the action is then hidden. */
+  onLookup?: (word: string) => void;
   onEditLink?: () => void;
   onOpenChange?: (open: boolean) => void;
 }
@@ -321,7 +323,7 @@ export function EditorContextMenu({
         }
         break;
       case "look-up":
-        if (menu.wordUnderCursor) {
+        if (menu.wordUnderCursor && onLookup) {
           onLookup(menu.wordUnderCursor);
         }
         break;
@@ -340,7 +342,7 @@ export function EditorContextMenu({
         if (menu.taskList) editor.chain().focus().moveCheckedToBottom(menu.taskList.pos).run();
         break;
       case "inspect-html":
-        onInspect(menu.blockIndex);
+        if (onInspect) onInspect(menu.blockIndex);
         break;
     }
     close();
@@ -366,9 +368,9 @@ export function EditorContextMenu({
     },
     {
       id: "editor.inspectInHtml",
-      enabled: !!menu,
+      enabled: !!menu && !!onInspect,
       onTrigger: () => {
-        if (menu) onInspect(menu.blockIndex);
+        if (menu && onInspect) onInspect(menu.blockIndex);
       },
     },
     {
@@ -380,9 +382,9 @@ export function EditorContextMenu({
     },
     {
       id: "editor.lookUp",
-      enabled: !!menu?.wordUnderCursor,
+      enabled: !!menu?.wordUnderCursor && !!onLookup,
       onTrigger: () => {
-        if (menu?.wordUnderCursor) onLookup(menu.wordUnderCursor);
+        if (menu?.wordUnderCursor && onLookup) onLookup(menu.wordUnderCursor);
       },
     },
   ]);
@@ -543,7 +545,7 @@ export function EditorContextMenu({
               </>
             )}
 
-            {menu?.wordUnderCursor && (
+            {onLookup && menu?.wordUnderCursor && (
               <>
                 <Separator className="my-1 border-t border-border" />
                 <MenuItem
@@ -572,16 +574,20 @@ export function EditorContextMenu({
               </MenuItem>
             )}
 
-            <Separator className="my-1 border-t border-border" />
-            <MenuItem
-              id="inspect-html"
-              data-command="editor.inspectInHtml"
-              textValue={t("editor.inspectInHtml")}
-              className={MENU_ITEM_CLASS}
-            >
-              <Code2 className="w-4 h-4 shrink-0" />
-              {t("editor.inspectInHtml")}
-            </MenuItem>
+            {onInspect && (
+              <>
+                <Separator className="my-1 border-t border-border" />
+                <MenuItem
+                  id="inspect-html"
+                  data-command="editor.inspectInHtml"
+                  textValue={t("editor.inspectInHtml")}
+                  className={MENU_ITEM_CLASS}
+                >
+                  <Code2 className="w-4 h-4 shrink-0" />
+                  {t("editor.inspectInHtml")}
+                </MenuItem>
+              </>
+            )}
           </Menu>
         </Popover>
       </MenuTrigger>

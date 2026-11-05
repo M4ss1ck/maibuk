@@ -1,5 +1,8 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import StarterKit from "@tiptap/starter-kit";
+import { Editor } from "@tiptap/core";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   coordsTop: 100,
@@ -122,6 +125,12 @@ function buildEditor({
   };
   return editor;
 }
+
+const realEditors: Editor[] = [];
+
+afterEach(() => {
+  for (const editor of realEditors.splice(0)) editor.destroy();
+});
 
 describe("NodeFormatBubble", () => {
   beforeEach(() => {
@@ -252,5 +261,29 @@ describe("NodeFormatBubble", () => {
     editor.view.dom.remove();
 
     expect(await screen.findByRole("dialog")).toHaveTextContent("Link dialog");
+  });
+
+  it("shows its actions for a Text Node selection made from the keyboard", async () => {
+    const user = userEvent.setup();
+    const host = document.createElement("div");
+    document.body.append(host);
+    const editor = new Editor({
+      extensions: [StarterKit],
+      content: "<p>Hello world</p>",
+      element: host,
+    });
+    realEditors.push(editor);
+    // jsdom has no layout: give the selection coordinates the bubble can use.
+    editor.view.coordsAtPos = () =>
+      ({ top: 100, bottom: 120, left: 50, right: 60 }) as unknown as DOMRect;
+
+    render(<NodeFormatBubble editor={editor as never} />);
+    act(() => editor.view.focus());
+
+    await user.keyboard("{Control>}a{/Control}");
+
+    // The keyboard made a non-empty selection, so the bubble offers its actions.
+    expect(editor.state.selection.empty).toBe(false);
+    expect(await screen.findByRole("button", { name: "Format selection" })).toBeInTheDocument();
   });
 });

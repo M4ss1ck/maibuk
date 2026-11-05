@@ -97,6 +97,8 @@ export function NodeFormatBubble({
   }, [linkDialogOpen, menuOverlayOpen, onOverlayOpenChange]);
 
   const updatePosition = useCallback(() => {
+    // A queued frame can land after the node unmounts and destroys its editor.
+    if (editor.isDestroyed) return;
     // Keep the toolbar anchored while a child overlay is open so its dialogs
     // survive the editor losing focus.
     if (!editorFocused && !menuOverlayOpen) {
