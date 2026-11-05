@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { capture } from "../support/capture";
 import { pressUntilFocused, tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
 
@@ -42,6 +43,7 @@ test.describe("Text Node links @wf:canvas-text-node-links", () => {
     // The keyboard gesture never landed on a Link, so it offers the single
     // Link's entry and no Copy URL.
     await expect(menu.getByRole("menuitem", { name: "Copy URL" })).toHaveCount(0);
+    await capture(page, "canvas-text-node-menu");
 
     await pressUntilFocused(page, "ArrowDown", openLink, { max: 5 });
     await page.keyboard.press("Enter");
@@ -56,6 +58,7 @@ test.describe("Text Node links @wf:canvas-text-node-links", () => {
 
     await expect(page.getByRole("menu", { name: "Editor options" })).toBeVisible();
     await expect(page.getByRole("menu", { name: "Node actions" })).toHaveCount(0);
+    await capture(page, "canvas-text-node-editor-menu");
     await page.keyboard.press("Escape");
     await expect(textEditor(page)).toBeFocused();
   });
@@ -72,6 +75,7 @@ test.describe("Text Node links @wf:canvas-text-node-links", () => {
     await page.keyboard.up("Shift");
 
     await expect(page.getByRole("button", { name: "Bold" })).toBeVisible();
+    await capture(page, "canvas-text-node-format-bubble");
   });
 
   test("Alt+F10 moves focus into the formatting bubble, and Escape returns it to the text", async ({
