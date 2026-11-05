@@ -40,7 +40,7 @@ export function FontFamilySelect({ editor, value, shouldFocusEditor }: FontFamil
       onChange={handleChange}
       options={FONT_FAMILY_OPTIONS}
       placeholder={t("editor.fontFamily")}
-      explicitCommitOnly={shouldFocusEditor !== undefined}
+      explicitCommitOnly
       ariaLabel={t("editor.fontFamily")}
       inputClasses="w-40"
     />

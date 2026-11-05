@@ -28,7 +28,7 @@ export function FontSizeSelect({ editor, value, shouldFocusEditor }: FontSizeSel
       onChange={handleChange}
       options={FONT_SIZE_OPTIONS}
       placeholder={t("editor.size")}
-      explicitCommitOnly={shouldFocusEditor !== undefined}
+      explicitCommitOnly
       ariaLabel={t("editor.size")}
     />
   );
