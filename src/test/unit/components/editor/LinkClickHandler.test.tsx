@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { Editor } from "@tiptap/core";
 import { EditorContent } from "@tiptap/react";
-import { LinkClickHandler } from "@/components/editor/LinkClickHandler";
+import { LinkClickHandler, LinkActivationDialog } from "@/components/editor/LinkClickHandler";
 import { ToastViewport } from "@/components/ui/Toast";
 import { assignHeadingIds } from "@/features/links/heading-ids";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
@@ -43,6 +43,27 @@ vi.mock("react-router-dom", () => ({
 vi.mock("../../../../lib/platform", () => ({
   openExternal: vi.fn(),
 }));
+
+describe("LinkActivationDialog", () => {
+  it("shows Remove Link only when the caller can remove the Link", async () => {
+    const user = userEvent.setup();
+    const onRemove = vi.fn();
+    const onClose = vi.fn();
+    const { rerender } = render(
+      <LinkActivationDialog url="https://example.com/read" onClose={onClose} />
+    );
+
+    expect(screen.getByRole("dialog", { name: "editor.openLink" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "editor.removeLink" })).not.toBeInTheDocument();
+
+    rerender(
+      <LinkActivationDialog url="https://example.com/read" onClose={onClose} onRemove={onRemove} />
+    );
+    await user.click(screen.getByRole("button", { name: "editor.removeLink" }));
+
+    expect(onRemove).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe("LinkClickHandler", () => {
   beforeEach(async () => {

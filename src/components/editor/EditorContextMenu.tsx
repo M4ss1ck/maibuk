@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
 import {
@@ -35,8 +36,10 @@ import {
 
 interface EditorContextMenuProps {
   editor: Editor;
-  onInspect: (blockIndex: number) => void;
-  onLookup: (word: string) => void;
+  /** Omit it where the menu has no HTML panel to open; the action is then hidden. */
+  onInspect?: (blockIndex: number) => void;
+  /** Omit it where the menu has no dictionary; the action is then hidden. */
+  onLookup?: (word: string) => void;
   onEditLink?: () => void;
   onOpenChange?: (open: boolean) => void;
 }
@@ -321,7 +324,7 @@ export function EditorContextMenu({
         }
         break;
       case "look-up":
-        if (menu.wordUnderCursor) {
+        if (menu.wordUnderCursor && onLookup) {
           onLookup(menu.wordUnderCursor);
         }
         break;
@@ -340,7 +343,7 @@ export function EditorContextMenu({
         if (menu.taskList) editor.chain().focus().moveCheckedToBottom(menu.taskList.pos).run();
         break;
       case "inspect-html":
-        onInspect(menu.blockIndex);
+        if (onInspect) onInspect(menu.blockIndex);
         break;
     }
     close();
@@ -366,9 +369,9 @@ export function EditorContextMenu({
     },
     {
       id: "editor.inspectInHtml",
-      enabled: !!menu,
+      enabled: !!menu && !!onInspect,
       onTrigger: () => {
-        if (menu) onInspect(menu.blockIndex);
+        if (menu && onInspect) onInspect(menu.blockIndex);
       },
     },
     {
@@ -380,9 +383,9 @@ export function EditorContextMenu({
     },
     {
       id: "editor.lookUp",
-      enabled: !!menu?.wordUnderCursor,
+      enabled: !!menu?.wordUnderCursor && !!onLookup,
       onTrigger: () => {
-        if (menu?.wordUnderCursor) onLookup(menu.wordUnderCursor);
+        if (menu?.wordUnderCursor && onLookup) onLookup(menu.wordUnderCursor);
       },
     },
   ]);
@@ -391,7 +394,9 @@ export function EditorContextMenu({
     <>
       {/* A zero-size anchor at the pointer/caret: MenuTrigger positions the menu
           from it, flipping or shifting it to fit the window, and focus returns
-          to the editor from onOpenChange below. */}
+          to the editor from onOpenChange below. Portaled to the body because a
+          Canvas node sits under a CSS transform, which becomes the containing
+          block for a fixed-position element and would offset the menu. */}
       <MenuTrigger
         isOpen={menu !== null}
         onOpenChange={(open) => {
@@ -404,19 +409,27 @@ export function EditorContextMenu({
             requestAnimationFrame(() => {
               if (editor.isDestroyed) return;
               const active = document.activeElement;
-              if (!active || active === document.body) editor.commands.focus();
+              // Focus the view synchronously: a Text Node decides in a frame of
+              // its own, scheduled when the menu closes, whether to keep
+              // editing, and it must see a focused editor. TipTap's focus
+              // command defers to the next frame.
+              if (!active || active === document.body) editor.view.focus();
             });
           }
         }}
       >
-        <button
-          ref={anchorRef}
-          type="button"
-          tabIndex={-1}
-          aria-label={t("editor.contextMenu")}
-          className="pointer-events-none fixed h-px w-px opacity-0"
-          style={{ top: menu?.position.top ?? 0, left: menu?.position.left ?? 0 }}
-        />
+        {createPortal(
+          <button
+            ref={anchorRef}
+            type="button"
+            tabIndex={-1}
+            aria-label={t("editor.contextMenu")}
+            data-editor-context-menu-trigger
+            className="pointer-events-none fixed h-px w-px opacity-0"
+            style={{ top: menu?.position.top ?? 0, left: menu?.position.left ?? 0 }}
+          />,
+          document.body
+        )}
         <Popover triggerRef={anchorRef} placement="bottom start" className="z-50">
           <Menu
             aria-label={t("editor.contextMenu")}
@@ -543,7 +556,7 @@ export function EditorContextMenu({
               </>
             )}
 
-            {menu?.wordUnderCursor && (
+            {onLookup && menu?.wordUnderCursor && (
               <>
                 <Separator className="my-1 border-t border-border" />
                 <MenuItem
@@ -572,16 +585,20 @@ export function EditorContextMenu({
               </MenuItem>
             )}
 
-            <Separator className="my-1 border-t border-border" />
-            <MenuItem
-              id="inspect-html"
-              data-command="editor.inspectInHtml"
-              textValue={t("editor.inspectInHtml")}
-              className={MENU_ITEM_CLASS}
-            >
-              <Code2 className="w-4 h-4 shrink-0" />
-              {t("editor.inspectInHtml")}
-            </MenuItem>
+            {onInspect && (
+              <>
+                <Separator className="my-1 border-t border-border" />
+                <MenuItem
+                  id="inspect-html"
+                  data-command="editor.inspectInHtml"
+                  textValue={t("editor.inspectInHtml")}
+                  className={MENU_ITEM_CLASS}
+                >
+                  <Code2 className="w-4 h-4 shrink-0" />
+                  {t("editor.inspectInHtml")}
+                </MenuItem>
+              </>
+            )}
           </Menu>
         </Popover>
       </MenuTrigger>

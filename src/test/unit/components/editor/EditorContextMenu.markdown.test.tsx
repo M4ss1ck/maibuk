@@ -38,7 +38,7 @@ function buildEditor(blockText: string) {
     paragraph: dom.querySelector("p") as HTMLParagraphElement,
     insertContentAt,
     editor: {
-      view: { dom, posAtCoords: vi.fn(() => ({ pos: 5 })) },
+      view: { dom, posAtCoords: vi.fn(() => ({ pos: 5 })), focus: vi.fn() },
       chain,
       state: {
         selection: { empty: true, from: 5, to: 5 },

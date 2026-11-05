@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
 import { NodeSelection } from "@tiptap/pm/state";
@@ -32,12 +41,156 @@ function FocusManagerBridge({ managerRef }: { managerRef: RefObject<FocusManager
   return null;
 }
 
+interface SelectionToolbarKeyboardOptions {
+  editor: Editor;
+  /** The React Aria Toolbar the arrows walk. */
+  toolbarRef: RefObject<HTMLDivElement | null>;
+  /** Whether the Command can reach the toolbar from the text right now. */
+  enabled: boolean;
+  /** The toolbar's own focus, so an enclosing editor can treat it as an overlay. */
+  onFocusChange?: (focused: boolean) => void;
+}
+
+/**
+ * The keyboard surface of a floating selection toolbar: the Command that moves
+ * focus into it (Alt+F10 unless remapped), Home/End and the arrows across its
+ * controls, Escape back to the text with the selection intact, and the
+ * decoration that keeps the range painted while focus is away. The editor's
+ * SelectionToolbar and a Text Node's NodeFormatBubble share it so both offer
+ * the same keys.
+ */
+export function useSelectionToolbarKeyboard({
+  editor,
+  toolbarRef,
+  enabled,
+  onFocusChange,
+}: SelectionToolbarKeyboardOptions) {
+  const focusManagerRef = useRef<FocusManager | null>(null);
+  const clearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onFocusChangeRef = useRef(onFocusChange);
+  onFocusChangeRef.current = onFocusChange;
+
+  /** Whether the toolbar itself holds focus, so a command must not move it away. */
+  const toolbarHasFocus = useCallback(
+    () => toolbarRef.current?.contains(document.activeElement) === true,
+    [toolbarRef]
+  );
+
+  // Focus the first control that can be operated, so the keyboard reaches the
+  // toolbar's commands without a pointer.
+  const focusFirstControl = useCallback(() => {
+    focusManagerRef.current?.focusFirst();
+  }, []);
+
+  // Keys come from the Command registry and the author's Custom Shortcuts.
+  useShortcuts([
+    {
+      id: "editor.focusSelectionToolbar",
+      enabled,
+      allowInInput: true,
+      onTrigger: focusFirstControl,
+    },
+  ]);
+
+  const clearKept = useCallback(() => {
+    // A dialog opened from the toolbar (Link) still acts on this range; the text regaining focus clears it.
+    if (useModalStore.getState().openCount > 0) return;
+    setSelectionKept(editor, false);
+  }, [editor]);
+
+  useEffect(() => {
+    return () => {
+      if (clearTimerRef.current !== null) {
+        clearTimeout(clearTimerRef.current);
+        clearTimerRef.current = null;
+      }
+      clearKept();
+    };
+  }, [editor, clearKept]);
+
+  // A command from the toolbar leaves focus where it is; the main toolbar's
+  // commands pull it back into the text.
+  const shouldFocusEditor = useCallback(() => !toolbarHasFocus(), [toolbarHasFocus]);
+
+  const containerProps = {
+    // The native selection is not painted while focus is in the toolbar, so
+    // the range stays visible through the selection-kept decoration instead.
+    onFocus: () => {
+      if (clearTimerRef.current !== null) {
+        clearTimeout(clearTimerRef.current);
+        clearTimerRef.current = null;
+      }
+      setSelectionKept(editor, true);
+      onFocusChangeRef.current?.(true);
+    },
+    onBlur: () => {
+      clearTimerRef.current = setTimeout(() => {
+        clearKept();
+        onFocusChangeRef.current?.(false);
+      }, 0);
+    },
+    onKeyDownCapture: (event: ReactKeyboardEvent<HTMLElement>) => {
+      // A picker portaled out of the toolbar (a color) still bubbles through
+      // React, but it owns its own keys.
+      if (!event.currentTarget.contains(event.target as Node)) return;
+      if (event.key === "Home" || event.key === "End") {
+        // React Aria's Toolbar handles the arrows but has no Home/End, so the
+        // walk goes through its focus manager, which skips disabled controls.
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.key === "Home") focusManagerRef.current?.focusFirst();
+        else focusManagerRef.current?.focusLast();
+        return;
+      }
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      // Back to the text with the selection the toolbar was acting on.
+      editor.commands.focus();
+    },
+    onMouseDown: (event: ReactMouseEvent<HTMLElement>) => {
+      // A pointer press keeps focus in the text; only the keyboard Command
+      // moves focus into the toolbar.
+      if (event.currentTarget.contains(event.target as Node)) event.preventDefault();
+    },
+  };
+
+  return { containerProps, focusManagerRef, shouldFocusEditor, toolbarHasFocus };
+}
+
+interface SelectionToolbarControlsProps {
+  toolbarRef: RefObject<HTMLDivElement | null>;
+  focusManagerRef: RefObject<FocusManager | null>;
+  ariaLabel: string;
+  className?: string;
+  children: ReactNode;
+}
+
+/**
+ * The toolbar's controls inside the Toolbar and FocusScope the keyboard
+ * surface walks. A floating toolbar puts its own positioning around this.
+ */
+export function SelectionToolbarControls({
+  toolbarRef,
+  focusManagerRef,
+  ariaLabel,
+  className,
+  children,
+}: SelectionToolbarControlsProps) {
+  return (
+    <Toolbar ref={toolbarRef} orientation="horizontal" aria-label={ariaLabel} className={className}>
+      <FocusScope>
+        <FocusManagerBridge managerRef={focusManagerRef} />
+        {children}
+      </FocusScope>
+    </Toolbar>
+  );
+}
+
 export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps) {
   const { t } = useTranslation();
   const [position, setPosition] = useState<Position | null>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
-  const focusManagerRef = useRef<FocusManager | null>(null);
-  const clearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const editorState = useEditorState({
     editor,
@@ -58,11 +211,12 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
   const isVisible =
     editorState.hasSelection && position !== null && !isAnyModalOpen && hasFloatingGroups;
 
-  /** Whether the bubble itself holds focus, so a command must not move it away. */
-  const toolbarHasFocus = useCallback(
-    () => toolbarRef.current?.contains(document.activeElement) === true,
-    []
-  );
+  const { containerProps, focusManagerRef, shouldFocusEditor, toolbarHasFocus } =
+    useSelectionToolbarKeyboard({
+      editor,
+      toolbarRef,
+      enabled: isVisible && editorState.isFocused,
+    });
 
   const updatePosition = useCallback(() => {
     if (!editor || editor.state.selection.empty) {
@@ -132,42 +286,6 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
     return () => scrollContainer.removeEventListener("scroll", updatePosition);
   }, [editor, updatePosition]);
 
-  // A command from the bubble leaves focus where it is; the main toolbar's
-  // commands pull it back into the text.
-  const shouldFocusEditor = useCallback(() => !toolbarHasFocus(), [toolbarHasFocus]);
-
-  // Focus the first control that can be operated, so the keyboard reaches the
-  // toolbar's commands without a pointer.
-  const focusFirstControl = useCallback(() => {
-    focusManagerRef.current?.focusFirst();
-  }, []);
-
-  // Keys come from the Command registry and the author's Custom Shortcuts.
-  useShortcuts([
-    {
-      id: "editor.focusSelectionToolbar",
-      enabled: isVisible && editorState.isFocused,
-      allowInInput: true,
-      onTrigger: focusFirstControl,
-    },
-  ]);
-
-  const clearKept = useCallback(() => {
-    // A dialog opened from the bubble (Link) still acts on this range; the text regaining focus clears it.
-    if (useModalStore.getState().openCount > 0) return;
-    setSelectionKept(editor, false);
-  }, [editor]);
-
-  useEffect(() => {
-    return () => {
-      if (clearTimerRef.current !== null) {
-        clearTimeout(clearTimerRef.current);
-        clearTimerRef.current = null;
-      }
-      clearKept();
-    };
-  }, [editor, clearKept]);
-
   if (!isVisible) {
     return null;
   }
@@ -176,58 +294,20 @@ export function SelectionToolbar({ editor, onLinkClick }: SelectionToolbarProps)
     <div
       className="fixed z-50 selection-toolbar-enter"
       style={{ top: `${position.top}px`, left: `${position.left}px` }}
-      // The native selection is not painted while focus is in the bubble, so
-      // the range stays visible through the selection-kept decoration instead.
-      onFocus={() => {
-        if (clearTimerRef.current !== null) {
-          clearTimeout(clearTimerRef.current);
-          clearTimerRef.current = null;
-        }
-        setSelectionKept(editor, true);
-      }}
-      onBlur={() => {
-        clearTimerRef.current = setTimeout(clearKept, 0);
-      }}
-      onKeyDownCapture={(event) => {
-        // A picker portaled out of the bubble (a color) still bubbles through
-        // React, but it owns its own keys.
-        if (!event.currentTarget.contains(event.target as Node)) return;
-        if (event.key === "Home" || event.key === "End") {
-          // React Aria's Toolbar handles the arrows but has no Home/End, so the
-          // walk goes through its focus manager, which skips disabled controls.
-          event.preventDefault();
-          event.stopPropagation();
-          if (event.key === "Home") focusManagerRef.current?.focusFirst();
-          else focusManagerRef.current?.focusLast();
-          return;
-        }
-        if (event.key !== "Escape") return;
-        event.preventDefault();
-        event.stopPropagation();
-        // Back to the text with the selection the toolbar was acting on.
-        editor.commands.focus();
-      }}
-      onMouseDown={(event) => {
-        // A pointer press keeps focus in the text; only the keyboard Command
-        // moves focus into the bubble.
-        if (event.currentTarget.contains(event.target as Node)) event.preventDefault();
-      }}
+      {...containerProps}
     >
-      <Toolbar
-        ref={toolbarRef}
-        orientation="horizontal"
-        aria-label={t("editor.selectionToolbar")}
+      <SelectionToolbarControls
+        toolbarRef={toolbarRef}
+        focusManagerRef={focusManagerRef}
+        ariaLabel={t("editor.selectionToolbar")}
         className="flex items-center gap-0.5 px-1.5 py-1 bg-card border border-border rounded-lg shadow-lg"
       >
-        <FocusScope>
-          <FocusManagerBridge managerRef={focusManagerRef} />
-          <FormattingButtons
-            editor={editor}
-            onLinkClick={onLinkClick}
-            shouldFocusEditor={shouldFocusEditor}
-          />
-        </FocusScope>
-      </Toolbar>
+        <FormattingButtons
+          editor={editor}
+          onLinkClick={onLinkClick}
+          shouldFocusEditor={shouldFocusEditor}
+        />
+      </SelectionToolbarControls>
     </div>
   );
 }

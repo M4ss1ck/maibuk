@@ -24,7 +24,7 @@ afterEach(() => {
 function renderMenu(includeTextMenu = false) {
   const editor = new Editor({ extensions: createRichTextExtensions(), content: IMAGE_HTML });
   editors.push(editor);
-  render(
+  const { container } = render(
     <>
       <EditorContent editor={editor} />
       {includeTextMenu && (
@@ -36,7 +36,7 @@ function renderMenu(includeTextMenu = false) {
   const imagePos = imageNodePos(editor);
   editor.commands.setNodeSelection(imagePos);
   editor.view.dom.focus();
-  return { editor, imagePos };
+  return { editor, imagePos, container };
 }
 
 function imageNodePos(editor: Editor): number {
@@ -65,6 +65,17 @@ describe("ImageContextMenu", () => {
     await user.keyboard("{Shift>}{F10}{/Shift}");
 
     expect(screen.getByRole("menu", { name: "editor.imageOptions" })).toBeInTheDocument();
+  });
+
+  it("anchors the menu at the viewport, outside the editor's subtree", () => {
+    // A Canvas node sits under a CSS transform, which becomes the containing
+    // block for a fixed-position anchor: the anchor has to be portaled to the
+    // body so its viewport coordinates still mean the viewport.
+    const { container } = renderMenu();
+
+    const anchor = screen.getByRole("button", { name: "editor.imageOptions" });
+    expect(container.contains(anchor)).toBe(false);
+    expect(anchor.parentElement).toBe(document.body);
   });
 
   it("runs an alignment action from the keyboard", async () => {

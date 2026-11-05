@@ -1,12 +1,13 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import type { TFunction } from "i18next";
 import type { Editor } from "@tiptap/react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { toast } from "@/components/ui";
-import { openExternal } from "@/lib/platform";
+import { getClipboard, openExternal } from "@/lib/platform";
 import { isInternalLink } from "@/features/links/link-uri";
 import { navigateToLinkTarget } from "@/features/links/navigate";
 import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
@@ -16,27 +17,107 @@ interface LinkClickDialogProps {
   editor: Editor;
 }
 
-interface LinkInfo {
+interface LinkActivationDialogProps {
   url: string;
-  position: { x: number; y: number };
+  onClose: () => void;
+  /** Shows the Remove action; omitted when the surface cannot change the Link. */
+  onRemove?: () => void;
+}
+
+/**
+ * Follows an internal Link at once, or returns an external href for the caller
+ * to confirm. Works without a TipTap editor, so a resting Text Node can use it
+ * as the editor does.
+ */
+export function useLinkActivation() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+
+  return useCallback(
+    (href: string): string | null => {
+      if (isInternalLink(href)) {
+        void navigateToLinkTarget(href, navigate, (key) => toast.error(t(key)));
+        return null;
+      }
+      return href;
+    },
+    [navigate, t]
+  );
+}
+
+/**
+ * Copies a Link's URL through the platform clipboard adapter and reports it,
+ * the one path shared by the editor's dialog and a Text Node's item menu.
+ */
+export async function copyLinkToClipboard(url: string, t: TFunction) {
+  try {
+    const clipboard = await getClipboard();
+    await clipboard.writeText(url);
+    toast.success(t("common.copied"));
+  } catch (e) {
+    console.error("Failed to copy link:", e);
+  }
+}
+
+/**
+ * Confirms an external Link: Open, Copy URL, and Remove when the surface allows
+ * it. Shared by the editor and the resting Text Node so both read the same.
+ */
+export function LinkActivationDialog({ url, onClose, onRemove }: LinkActivationDialogProps) {
+  const { t } = useTranslation();
+
+  const handleOpenLink = () => {
+    openExternal(url);
+    onClose();
+  };
+
+  const handleCopyLink = async () => {
+    await copyLinkToClipboard(url, t);
+    onClose();
+  };
+
+  return createPortal(
+    <Modal
+      isOpen
+      onClose={onClose}
+      title={t("editor.openLink")}
+      footer={
+        <div className="flex gap-2 w-full">
+          {onRemove && (
+            <Button variant="destructive" onClick={onRemove}>
+              {t("editor.removeLink")}
+            </Button>
+          )}
+          <Button variant="secondary" onClick={handleCopyLink} className="flex-1">
+            {t("editor.copyUrl")}
+          </Button>
+          <Button onClick={handleOpenLink} className="flex-1">
+            {t("editor.openLink")}
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">{t("editor.externalLinkConfirm")}</p>
+        <div className="p-3 bg-muted rounded-lg break-all">
+          <code className="text-sm text-foreground">{url}</code>
+        </div>
+      </div>
+    </Modal>,
+    document.body
+  );
 }
 
 export function LinkClickHandler({ editor }: LinkClickDialogProps) {
-  const { t } = useTranslation();
-  const navigate = useNavigate();
-  const [linkInfo, setLinkInfo] = useState<LinkInfo | null>(null);
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const activateLink = useLinkActivation();
+  const [url, setUrl] = useState<string | null>(null);
   // Mod+Enter is handled on the editor DOM, not through useShortcuts.
   useBoundShortcutIds(["editor.followLink"]);
 
   useEffect(() => {
-    const activateLink = (href: string, position: { x: number; y: number }) => {
-      if (isInternalLink(href)) {
-        void navigateToLinkTarget(href, navigate, (key) => toast.error(t(key)));
-        return;
-      }
-      setLinkInfo({ url: href, position });
-      setShowConfirmDialog(true);
+    const openLink = (href: string) => {
+      const external = activateLink(href);
+      if (external) setUrl(external);
     };
 
     const handleClick = (event: MouseEvent) => {
@@ -51,7 +132,7 @@ export function LinkClickHandler({ editor }: LinkClickDialogProps) {
 
         const href = link.getAttribute("href");
         if (href) {
-          activateLink(href, { x: event.clientX, y: event.clientY });
+          openLink(href);
         }
       }
     };
@@ -65,7 +146,7 @@ export function LinkClickHandler({ editor }: LinkClickDialogProps) {
       if (!href) return;
       event.preventDefault();
       event.stopPropagation();
-      activateLink(href, { x: 0, y: 0 });
+      openLink(href);
     };
 
     // Attach to the editor's DOM element
@@ -79,65 +160,14 @@ export function LinkClickHandler({ editor }: LinkClickDialogProps) {
       editorElement.removeEventListener("click", handleClick);
       editorElement.removeEventListener("keydown", handleKeyDown, true);
     };
-  }, [editor, navigate, t]);
-
-  const handleOpenLink = () => {
-    if (linkInfo?.url) {
-      openExternal(linkInfo.url);
-    }
-    handleClose();
-  };
-
-  const handleCopyLink = async () => {
-    if (linkInfo?.url) {
-      try {
-        await navigator.clipboard.writeText(linkInfo.url);
-        toast.success(t("common.copied"));
-      } catch (e) {
-        console.error("Failed to copy link:", e);
-      }
-    }
-    handleClose();
-  };
-
-  const handleClose = () => {
-    setShowConfirmDialog(false);
-    setLinkInfo(null);
-  };
+  }, [editor, activateLink]);
 
   const handleRemove = () => {
     editor.chain().focus().unsetLink().run();
-    handleClose();
+    setUrl(null);
   };
 
-  if (!showConfirmDialog || !linkInfo) return null;
+  if (!url) return null;
 
-  return createPortal(
-    <Modal
-      isOpen={showConfirmDialog}
-      onClose={handleClose}
-      title={t("editor.openLink")}
-      footer={
-        <div className="flex gap-2 w-full">
-          <Button variant="destructive" onClick={handleRemove}>
-            {t("editor.removeLink")}
-          </Button>
-          <Button variant="secondary" onClick={handleCopyLink} className="flex-1">
-            {t("editor.copyUrl")}
-          </Button>
-          <Button onClick={handleOpenLink} className="flex-1">
-            {t("editor.openLink")}
-          </Button>
-        </div>
-      }
-    >
-      <div className="space-y-4">
-        <p className="text-sm text-muted-foreground">{t("editor.externalLinkConfirm")}</p>
-        <div className="p-3 bg-muted rounded-lg break-all">
-          <code className="text-sm text-foreground">{linkInfo.url}</code>
-        </div>
-      </div>
-    </Modal>,
-    document.body
-  );
+  return <LinkActivationDialog url={url} onClose={() => setUrl(null)} onRemove={handleRemove} />;
 }

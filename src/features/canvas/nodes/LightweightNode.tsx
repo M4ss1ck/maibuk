@@ -1,4 +1,11 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { flushSync } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { NodeResizeControl, ResizeControlVariant, type Node, type NodeProps } from "@xyflow/react";
@@ -11,13 +18,16 @@ import type { CanvasFlowNodeData } from "@/features/canvas/reactFlowAdapter";
 import type { LightweightCanvasNode } from "@/features/canvas/types";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 import { useEditorCommandSource } from "@/components/editor/editor-command-source";
+import { LinkActivationDialog, useLinkActivation } from "@/components/editor/LinkClickHandler";
+import { EditorContextMenu } from "@/components/editor/EditorContextMenu";
 import { MarkdownPasteDialog } from "@/components/editor/MarkdownPasteDialog";
 import { FootnoteList } from "@/components/editor/FootnoteList";
 import { ImageContextMenu } from "@/components/editor/ImageContextMenu";
 import { CanvasNodeHandles } from "@/features/canvas/nodes/CanvasNodeHandles";
 import { NodeFormatBubble } from "@/features/canvas/nodes/NodeFormatBubble";
-import { useCanvasNodeMenu } from "@/features/canvas/nodes/CanvasNodeMenu";
+import { useCanvasNodeMenu, type CanvasNodeLink } from "@/features/canvas/nodes/CanvasNodeMenu";
 import {
+  canvasLinkAnchors,
   isBlankTextNodeHtml,
   prepareStaticCanvasHtml,
 } from "@/features/canvas/nodes/staticRichText";
@@ -38,6 +48,12 @@ function useNodeColorPreview(nodeId: string) {
 
 function textColorStyle(color: string | undefined) {
   return color ? { color } : undefined;
+}
+
+/** The Links a Text Node shows at rest, in document order. */
+function textNodeLinks(html: string | null): CanvasNodeLink[] {
+  if (!html) return [];
+  return canvasLinkAnchors(html).map(({ href, text }, index) => ({ href, text, index }));
 }
 
 function ActiveNodeEditor({
@@ -61,6 +77,12 @@ function ActiveNodeEditor({
   const openingMarksLanguage = useOpeningMarksLanguage(writingLanguage);
   const writingLanguageGetter = useWritingLanguageGetter(writingLanguage);
   const overlayOpen = useRef(false);
+  // A right-click menu that is anchored in this node, open or closing.
+  const menuOpen = useRef(false);
+  const menuWasOpen = useRef(false);
+  // The Selection toolbar's portal, and the menus' own (hidden) elements.
+  const bubbleRef = useRef<HTMLDivElement>(null);
+  const menusRef = useRef<HTMLDivElement>(null);
   const [pendingMarkdownPaste, setPendingMarkdownPaste] = useState<string | null>(null);
   const hadText = useRef(false);
   const editor = useEditor({
@@ -120,17 +142,71 @@ function ActiveNodeEditor({
     leave();
   };
 
+  // An action or Escape refocuses the text a frame after the menu closes: the
+  // node must stay open for both. An outside click leaves focus elsewhere, and
+  // that click clears the selection, which unmounts this editor, so its text
+  // has to be committed now or it is lost.
+  const commitAfterMenu = () => {
+    requestAnimationFrame(() => {
+      if (editor.isDestroyed || editor.isFocused) return;
+      if (overlayOpen.current || menuOpen.current || pendingMarkdownPaste !== null) return;
+      const active = document.activeElement;
+      // A close leaves focus on the page body, or restores it to the menu's
+      // hidden trigger: neither is the author leaving the node's editor. The
+      // trigger is portaled to the body (a Canvas node's transform would offset
+      // a fixed anchor), so it is outside menusRef and matched by its marker.
+      if (
+        !active ||
+        active === document.body ||
+        menusRef.current?.contains(active) ||
+        (active instanceof Element && active.closest("[data-editor-context-menu-trigger]"))
+      ) {
+        return;
+      }
+      commit();
+    });
+  };
+
   return (
     <>
       <div
         className="canvas-node-content max-w-none"
         style={textColorStyle(colorPreview?.textColor ?? node.textColor)}
+        // EditorContextMenu and ImageContextMenu take focus out of the text, and
+        // the blur that follows arrives before either menu reports opening. Mark
+        // the gesture here, during the capture phase, so that blur does not
+        // commit the node. A link right click opens the Link dialog instead, and
+        // NodeFormatBubble reports that overlay on its own.
+        onContextMenuCapture={(event) => {
+          if (event.target instanceof Element && editor.view.dom.contains(event.target)) {
+            menuOpen.current = true;
+          }
+        }}
+        onKeyDownCapture={(event) => {
+          // Shift+F10 and the ContextMenu key open the same menu from the keyboard.
+          if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+            menuOpen.current = true;
+          }
+        }}
       >
         <EditorContent
           editor={editor}
           className="nodrag nopan max-w-none"
-          onBlur={() => {
-            if (!overlayOpen.current && pendingMarkdownPaste === null) commit();
+          onFocus={() => {
+            // A menu that closed put focus back in the text; the node is live again.
+            menuOpen.current = false;
+          }}
+          onBlur={(event) => {
+            // Focus moving into this node's Selection toolbar is not leaving
+            // the text: the toolbar acts on the selection made here.
+            if (
+              event.relatedTarget instanceof Node &&
+              bubbleRef.current?.contains(event.relatedTarget)
+            ) {
+              return;
+            }
+            if (overlayOpen.current || menuOpen.current || pendingMarkdownPaste !== null) return;
+            commit();
           }}
           onKeyDown={(event) => {
             event.stopPropagation();
@@ -148,11 +224,27 @@ function ActiveNodeEditor({
       </div>
       <NodeFormatBubble
         editor={editor}
+        bubbleRef={bubbleRef}
         onOverlayOpenChange={(open) => {
           overlayOpen.current = open;
         }}
       />
       <ImageContextMenu editor={editor} />
+      <div ref={menusRef}>
+        <EditorContextMenu
+          editor={editor}
+          onOpenChange={(open) => {
+            menuOpen.current = open;
+            if (open) {
+              menuWasOpen.current = true;
+              return;
+            }
+            if (!menuWasOpen.current) return;
+            menuWasOpen.current = false;
+            commitAfterMenu();
+          }}
+        />
+      </div>
       <MarkdownPasteDialog
         editor={editor}
         markdown={pendingMarkdownPaste}
@@ -176,12 +268,28 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
   const editingNodeId = useCanvasStore((state) => state.editingNodeId);
   const beginNodeEdit = useCanvasStore((state) => state.beginNodeEdit);
   const endNodeEdit = useCanvasStore((state) => state.endNodeEdit);
+  const updateTextNode = useCanvasStore((state) => state.updateTextNode);
   const editing = editingNodeId === node.id;
   const pristine = useCanvasStore((state) => state.pristineTextNode?.id === node.id);
+  const activateLink = useLinkActivation();
+  const [openLink, setOpenLink] = useState<{ href: string; index: number } | null>(null);
+  // The Link under the pointer at a right click. Only a pointer gesture reads
+  // it: a keyboard or long-press menu open never landed on a Link.
+  const contextLinkRef = useRef<CanvasNodeLink | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const linkPointerStart = useRef<{ x: number; y: number } | null>(null);
+  const html = node.kind === "text" ? node.html : null;
+  const links = useMemo(() => textNodeLinks(html), [html]);
   const nodeMenu = useCanvasNodeMenu(node.id, {
     isDisabled: editorReadOnly || interactivityLocked || editing,
+    // While editing, the editor's own menu owns the right click.
+    links: editing ? [] : links,
+    contextLinkRef,
+    onOpenLink: (link) => {
+      const external = activateLink(link.href);
+      if (external) setOpenLink({ href: external, index: link.index });
+    },
   });
-  const html = node.kind === "text" ? node.html : null;
   const safeHtml = useMemo(() => (html === null ? "" : prepareStaticCanvasHtml(html)), [html]);
   const blank = useMemo(() => html !== null && isBlankTextNodeHtml(html), [html]);
 
@@ -190,9 +298,49 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
   const resizable = !editorReadOnly && !interactivityLocked && !editing;
   const backgroundColor = colorPreview?.backgroundColor ?? node.backgroundColor;
 
+  const handleStaticContentClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+    const anchor = event.target instanceof Element ? event.target.closest("a[href]") : null;
+    if (!anchor) return;
+    event.preventDefault();
+    // A drag that selected the Link's text ends in a click too; keep the selection.
+    if (!(document.getSelection()?.isCollapsed ?? true)) return;
+    const start = linkPointerStart.current;
+    linkPointerStart.current = null;
+    // A press that moved dragged the node; it is not a Link activation.
+    if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4) return;
+    openStaticLink(anchor);
+  };
+
+  const openStaticLink = (anchor: Element) => {
+    const href = anchor.getAttribute("href");
+    if (!href) return;
+    const anchors = Array.from(contentRef.current?.querySelectorAll("a[href]") ?? []);
+    const external = activateLink(href);
+    if (external) setOpenLink({ href: external, index: anchors.indexOf(anchor) });
+  };
+
+  const handleStaticPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    linkPointerStart.current = { x: event.clientX, y: event.clientY };
+  };
+
+  const removeOpenLink = () => {
+    if (!openLink) return;
+    // The index came from the Links the node shows; the same sanitizer order
+    // maps it back to the stored anchor, so an href the policy rejects is
+    // skipped rather than unwrapped by mistake.
+    const link = canvasLinkAnchors(node.html)[openLink.index];
+    if (link) {
+      const { anchor } = link;
+      const body = anchor.ownerDocument.body;
+      anchor.replaceWith(...Array.from(anchor.childNodes));
+      updateTextNode(node.id, { html: body.innerHTML });
+    }
+    setOpenLink(null);
+  };
+
   return (
     <div
-      ref={nodeMenu.anchorRef}
+      ref={nodeMenu.setOwnerRef}
       {...nodeMenu.itemProps}
       className={`group relative min-h-24 ${blank ? "min-w-40" : "min-w-24"} transform-gpu ${node.width ? "w-full" : "max-w-72"} ${pristine ? "nodrag nopan" : ""} rounded-lg px-3 py-2 text-sm text-foreground ${
         editing ? "" : "pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]"
@@ -202,6 +350,23 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
       // The padding below a new node's first line reads as part of its text box.
       // A press there must keep the editor focused, or the blur would drop the node.
       onMouseDown={pristine ? (event) => event.preventDefault() : undefined}
+      onContextMenu={(event) => {
+        const anchor = event.target instanceof Element ? event.target.closest("a[href]") : null;
+        // Only a pointer gesture lands on a Link. Its position among the drawn
+        // anchors carries its identity, so two Links with the same href and text
+        // stay apart.
+        const anchors = Array.from(contentRef.current?.querySelectorAll("a[href]") ?? []);
+        const index = anchor ? anchors.indexOf(anchor) : -1;
+        contextLinkRef.current =
+          anchor && index >= 0
+            ? { href: anchor.getAttribute("href") ?? "", text: anchor.textContent ?? "", index }
+            : null;
+        nodeMenu.itemProps.onContextMenu?.(event);
+        // The browser menu never appears on a Text Node: while editing the
+        // editor's own menu owns the gesture, at rest the node's menu (or, in a
+        // read-only Canvas, its Link entries) is the only one.
+        event.preventDefault();
+      }}
     >
       <CanvasNodeHandles connectedSides={data.connectedSides} variant="text" selected={selected} />
       {nodeMenu.menu}
@@ -243,12 +408,23 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
           {t("canvas.textNodePlaceholder")}
         </div>
       ) : (
+        // biome-ignore lint/a11y/useKeyWithClickEvents: a Link at rest follows a pointer click; its keyboard route is the node's Shift+F10 menu, which lists the Links.
         <div
+          ref={contentRef}
           className="canvas-node-content max-w-none"
           lang={writingLanguage}
           style={textColorStyle(colorPreview?.textColor ?? node.textColor)}
+          onClick={handleStaticContentClick}
+          onPointerDown={handleStaticPointerDown}
           // biome-ignore lint/security/noDangerouslySetInnerHtml: canvas node HTML is sanitized with DOMPurify above
           dangerouslySetInnerHTML={{ __html: safeHtml }}
+        />
+      )}
+      {openLink && (
+        <LinkActivationDialog
+          url={openLink.href}
+          onClose={() => setOpenLink(null)}
+          onRemove={editorReadOnly || interactivityLocked ? undefined : removeOpenLink}
         />
       )}
     </div>

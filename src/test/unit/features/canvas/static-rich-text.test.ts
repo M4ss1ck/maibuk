@@ -35,6 +35,17 @@ describe("prepareStaticCanvasHtml", () => {
     expect(result).not.toContain("javascript:");
   });
 
+  it("keeps anchors in document order so a Text Node's Link index matches", () => {
+    const html =
+      '<p><a href="https://example.com/a">A</a><a href="maibuk://note/n1">Note</a></p>' +
+      '<p><a href="https://example.com/c">C</a></p>';
+    const doc = new DOMParser().parseFromString(prepareStaticCanvasHtml(html), "text/html");
+
+    expect(Array.from(doc.querySelectorAll("a[href]")).map((anchor) => anchor.textContent)).toEqual(
+      ["A", "Note", "C"]
+    );
+  });
+
   it("restores a line break inside empty paragraphs", () => {
     const doc = new DOMParser().parseFromString(
       prepareStaticCanvasHtml("<p>a</p><p></p>"),

@@ -340,6 +340,7 @@
     "noConnectTargets": "Nothing else on this canvas to connect to",
     "emptyTextNode": "Empty text node",
     "nodeActions": "Node actions",
+    "openLinkNamed": "Open Link: {{text}}",
     "undo": "Undo",
     "redo": "Redo",
     "textNodePlaceholder": "Type something…",

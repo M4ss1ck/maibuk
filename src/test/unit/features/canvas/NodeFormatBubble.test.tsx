@@ -1,5 +1,9 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { useLayoutEffect } from "react";
+import StarterKit from "@tiptap/starter-kit";
+import { Editor } from "@tiptap/core";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   coordsTop: 100,
@@ -103,6 +107,9 @@ function buildEditor({
       }),
       dom,
       posAtDOM: () => 1,
+      focus: () => {
+        editor.isFocused = true;
+      },
     },
     isActive: () => false,
     on: vi.fn((event: string, listener: () => void) => {
@@ -122,6 +129,12 @@ function buildEditor({
   };
   return editor;
 }
+
+const realEditors: Editor[] = [];
+
+afterEach(() => {
+  for (const editor of realEditors.splice(0)) editor.destroy();
+});
 
 describe("NodeFormatBubble", () => {
   beforeEach(() => {
@@ -151,8 +164,24 @@ describe("NodeFormatBubble", () => {
     const editor = buildEditor({ empty: true, isFocused: true });
     render(<NodeFormatBubble editor={editor as never} />);
 
-    const bubble = (await screen.findByRole("button", { name: "Format selection" })).parentElement;
+    const bubble = (await screen.findByRole("toolbar")).parentElement;
     expect(bubble).toHaveStyle({ top: "102px" });
+  });
+
+  it("shows its actions when the editor was focused before the bubble subscribed", async () => {
+    const editor = buildEditor({ empty: true, isFocused: false });
+
+    // A Text Node focuses its view during the commit that mounts the bubble, so
+    // the focus lands before the bubble's passive effect subscribes.
+    function FocusBeforeMount() {
+      useLayoutEffect(() => {
+        editor.view.focus();
+      }, [editor]);
+      return <NodeFormatBubble editor={editor as never} />;
+    }
+    render(<FocusBeforeMount />);
+
+    expect(await screen.findByRole("button", { name: "Format selection" })).toBeInTheDocument();
   });
 
   it("hides when the editor loses focus", async () => {
@@ -200,7 +229,8 @@ describe("NodeFormatBubble", () => {
     const editor = buildEditor();
     render(<NodeFormatBubble editor={editor as never} />);
 
-    const bubble = (await screen.findByRole("button", { name: "Format selection" })).parentElement;
+    await screen.findByRole("button", { name: "Format selection" });
+    const bubble = screen.getByRole("toolbar").parentElement;
     expect(bubble).not.toBeNull();
     const initialTop = bubble?.style.top;
 
@@ -218,7 +248,8 @@ describe("NodeFormatBubble", () => {
     const editor = buildEditor();
     const { rerender } = render(<NodeFormatBubble editor={editor as never} />);
 
-    const bubble = (await screen.findByRole("button", { name: "Format selection" })).parentElement;
+    await screen.findByRole("button", { name: "Format selection" });
+    const bubble = screen.getByRole("toolbar").parentElement;
     await waitFor(() => expect(bubble?.style.top).toBeTruthy());
     const initialTop = bubble?.style.top;
 
@@ -235,10 +266,11 @@ describe("NodeFormatBubble", () => {
     const editor = buildEditor({ empty: true, isFocused: true });
     render(<NodeFormatBubble editor={editor as never} />);
 
-    const bubble = (await screen.findByRole("button", { name: "Format selection" })).parentElement;
-    expect(bubble).not.toBeNull();
-    expect(bubble).toHaveStyle({ maxWidth: "304px" });
-    expect(bubble).toHaveClass("overflow-x-auto");
+    const toolbar = await screen.findByRole("toolbar");
+    expect(toolbar.parentElement).toHaveStyle({ maxWidth: "304px" });
+    expect(toolbar).toHaveClass("overflow-x-auto");
+    expect(within(toolbar).getByRole("button", { name: "Format selection" })).toBeInTheDocument();
+    expect(within(toolbar).getByRole("button", { name: "Insert link" })).toBeInTheDocument();
     Object.defineProperty(window, "innerWidth", { value: originalWidth, configurable: true });
   });
 
@@ -252,5 +284,29 @@ describe("NodeFormatBubble", () => {
     editor.view.dom.remove();
 
     expect(await screen.findByRole("dialog")).toHaveTextContent("Link dialog");
+  });
+
+  it("shows its actions for a Text Node selection made from the keyboard", async () => {
+    const user = userEvent.setup();
+    const host = document.createElement("div");
+    document.body.append(host);
+    const editor = new Editor({
+      extensions: [StarterKit],
+      content: "<p>Hello world</p>",
+      element: host,
+    });
+    realEditors.push(editor);
+    // jsdom has no layout: give the selection coordinates the bubble can use.
+    editor.view.coordsAtPos = () =>
+      ({ top: 100, bottom: 120, left: 50, right: 60 }) as unknown as DOMRect;
+
+    render(<NodeFormatBubble editor={editor as never} />);
+    act(() => editor.view.focus());
+
+    await user.keyboard("{Control>}a{/Control}");
+
+    // The keyboard made a non-empty selection, so the bubble offers its actions.
+    expect(editor.state.selection.empty).toBe(false);
+    expect(await screen.findByRole("button", { name: "Format selection" })).toBeInTheDocument();
   });
 });
