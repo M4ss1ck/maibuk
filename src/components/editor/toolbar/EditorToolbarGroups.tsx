@@ -56,6 +56,7 @@ import { ToolbarButton } from "@/components/editor/ToolbarButton";
 import { PluginToolbarButton } from "@/components/plugins/PluginToolbarButton";
 import { Tooltip } from "@/components/ui";
 import { getEditorToolbarState } from "@/components/editor/toolbar/editor-toolbar-state";
+import { normalizeHexColor, readThemeColor } from "@/lib/color";
 import { useSettingsStore } from "@/features/settings/store";
 import { LANGUAGE_OPTIONS } from "@/features/settings/types";
 import {
@@ -341,6 +342,9 @@ export function EditorToolbarGroups({
             shortcut="editor.highlight"
             markdownHint={markdownHints("highlight")}
             icon={<Highlighter className={icon} />}
+            contrastAgainst={() =>
+              normalizeHexColor(editorState.color) ?? readThemeColor("--color-foreground")
+            }
           />
         );
       case "script":
@@ -378,6 +382,7 @@ export function EditorToolbarGroups({
             label={t("editor.textColor")}
             shortcut="editor.textColor"
             icon={<Baseline className={icon} />}
+            contrastAgainst={() => readThemeColor("--color-background")}
           />
         );
       case "link-code":

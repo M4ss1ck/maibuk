@@ -554,7 +554,9 @@ test.describe("toolbar selects @wf:editor-toolbar-selects", () => {
     const palette = page.getByRole("dialog", { name: "Text Color options" });
     await expectFocusWithin(palette);
     await expectTabContained(page, palette);
-    await expect(palette.getByRole("status")).toContainText("Contrast cannot be checked");
+    await capture(page, "editor-text-color-contrast", { around: [colorOptions, palette] });
+    // The page background is known, so the low-contrast check runs instead (#722).
+    await expect(palette.getByText("Contrast cannot be checked")).toHaveCount(0);
     await tabTo(page, palette.getByRole("option", { name: "#000000" }));
     await pressUntilFocused(page, "ArrowRight", palette.getByRole("option", { name: "#EF4444" }), {
       max: 20,

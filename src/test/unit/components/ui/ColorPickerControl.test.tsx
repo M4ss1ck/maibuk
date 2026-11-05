@@ -1,7 +1,8 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { ColorPickerControl } from "@/components/ui/ColorPickerControl";
+import { readThemeColor } from "@/lib/color";
 import { installPointerEvent, touchTap } from "@/test/support/pointer-events";
 
 vi.mock("react-i18next", () => ({
@@ -12,6 +13,10 @@ vi.mock("react-i18next", () => ({
 }));
 
 beforeAll(installPointerEvent);
+
+afterEach(() => {
+  document.documentElement.style.removeProperty("--color-background");
+});
 
 describe("ColorPickerControl", () => {
   it("previews a keyboard area adjustment and commits when it ends", async () => {
@@ -97,6 +102,40 @@ describe("ColorPickerControl", () => {
     await user.clear(field);
     await user.type(field, "#eeeeee{Enter}");
     expect(onCommit).toHaveBeenCalledWith("#EEEEEE");
+  });
+
+  it("resolves a function's contrast color each time the picker opens", async () => {
+    const user = userEvent.setup();
+    document.documentElement.style.setProperty("--color-background", "#FFFFFF");
+    render(
+      <ColorPickerControl
+        label="Text"
+        value="#000000"
+        contrastAgainst={() => readThemeColor("--color-background")}
+        onCommit={vi.fn()}
+      />
+    );
+    const trigger = screen.getByRole("button", { name: "Text" });
+    trigger.focus();
+    await user.keyboard("{Enter}");
+    const field = await screen.findByRole("textbox", { name: "colorPicker.hexValue" });
+    expect(screen.queryByText("colorPicker.unknownContrast")).not.toBeInTheDocument();
+
+    await user.clear(field);
+    await user.type(field, "#F9FAFB{Enter}");
+    expect(screen.getByRole("status")).toHaveTextContent("colorPicker.lowContrast");
+
+    await user.clear(field);
+    await user.type(field, "#000000{Enter}");
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(trigger).toHaveFocus());
+
+    document.documentElement.style.setProperty("--color-background", "#1C1917");
+    await user.keyboard("{Enter}");
+    expect(await screen.findByRole("status")).toHaveTextContent("colorPicker.lowContrast");
   });
 
   it("announces when contrast cannot be checked", async () => {
