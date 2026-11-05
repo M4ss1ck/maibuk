@@ -2,8 +2,9 @@ import { useRef, useState, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Copy, ExternalLink, Spline, Trash2 } from "lucide-react";
-import { ItemActionsPopover, toast } from "@/components/ui";
+import { ItemActionsPopover } from "@/components/ui";
 import type { ItemAction } from "@/components/ui";
+import { copyLinkToClipboard } from "@/components/editor/LinkClickHandler";
 import { useItemContextMenu } from "@/hooks/useItemContextMenu";
 import { useItemCommands } from "@/hooks/useItemCommands";
 import { usePluginItemMenuActions } from "@/hooks/usePluginItemMenuActions";
@@ -13,6 +14,8 @@ import { useCanvasStore } from "@/features/canvas/store";
 export interface CanvasNodeLink {
   href: string;
   text: string;
+  /** Its position among the Links the node shows, in document order. */
+  index: number;
 }
 
 interface CanvasNodeMenuOptions {
@@ -26,7 +29,7 @@ interface CanvasNodeMenuOptions {
    */
   contextLinkRef?: RefObject<CanvasNodeLink | null>;
   /** Follows a Link from the menu: internal targets navigate, external ones confirm. */
-  onOpenLink?: (link: CanvasNodeLink, index: number) => void;
+  onOpenLink?: (link: CanvasNodeLink) => void;
 }
 
 function linkActions(
@@ -36,16 +39,13 @@ function linkActions(
   onOpenLink: NonNullable<CanvasNodeMenuOptions["onOpenLink"]>
 ): ItemAction[] {
   if (contextLink) {
-    const index = links.findIndex(
-      (link) => link.href === contextLink.href && link.text === contextLink.text
-    );
     return [
       // command-exempt: opening a Link is a navigation, not a bindable Command.
       {
         id: "link-open",
         label: t("editor.openLink"),
         icon: ExternalLink,
-        onAction: () => onOpenLink(contextLink, index),
+        onAction: () => onOpenLink(contextLink),
       },
       // command-exempt: copying a Link's URL is a navigation aid, not a Command.
       {
@@ -64,27 +64,18 @@ function linkActions(
         id: "link-open-0",
         label: t("editor.openLink"),
         icon: ExternalLink,
-        onAction: () => onOpenLink(links[0], 0),
+        onAction: () => onOpenLink(links[0]),
       },
     ];
   }
 
   // command-exempt: opening a Link is a navigation, not a bindable Command.
-  return links.map((link, index) => ({
-    id: `link-open-${index}`,
+  return links.map((link, position) => ({
+    id: `link-open-${position}`,
     label: t("canvas.openLinkNamed", { text: link.text }),
     icon: ExternalLink,
-    onAction: () => onOpenLink(link, index),
+    onAction: () => onOpenLink(link),
   }));
-}
-
-async function copyLinkToClipboard(url: string, t: TFunction) {
-  try {
-    await navigator.clipboard.writeText(url);
-    toast.success(t("common.copied"));
-  } catch (e) {
-    console.error("Failed to copy link:", e);
-  }
 }
 
 /**

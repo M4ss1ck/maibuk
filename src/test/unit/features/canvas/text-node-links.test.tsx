@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   endNodeEdit: vi.fn(),
   navigate: vi.fn(),
   openExternal: vi.fn(),
+  getClipboard: vi.fn(),
+  writeText: vi.fn(),
   state: {} as Record<string, unknown>,
 }));
 
@@ -46,7 +48,11 @@ vi.mock("react-router-dom", () => ({
 
 vi.mock("../../../../lib/platform", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/platform")>();
-  return { ...actual, openExternal: mocks.openExternal };
+  return {
+    ...actual,
+    openExternal: mocks.openExternal,
+    getClipboard: mocks.getClipboard,
+  };
 });
 
 const { LightweightNode } = await import("@/features/canvas/nodes/LightweightNode");
@@ -111,6 +117,7 @@ function renderInFlowNode(html: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.getClipboard.mockResolvedValue({ readText: vi.fn(), writeText: mocks.writeText });
   mocks.state = {
     updateTextNode: mocks.updateTextNode,
     selectNode: mocks.selectNode,
@@ -237,6 +244,17 @@ describe("resting Text Node links", () => {
     expect(screen.getByRole("dialog", { name: "editor.openLink" })).toBeInTheDocument();
   });
 
+  it("copies a Link's URL through the clipboard adapter", async () => {
+    const user = userEvent.setup();
+    const { container } = renderTextNode(linkedHtml);
+    mockItemMenuLayout(container);
+
+    fireEvent.contextMenu(screen.getByRole("link", { name: "notes" }));
+    await user.click(await screen.findByRole("menuitem", { name: "editor.copyUrl" }));
+
+    await waitFor(() => expect(mocks.writeText).toHaveBeenCalledWith("https://example.com/notes"));
+  });
+
   it("opens one named entry per Link when the menu opens off a Link", async () => {
     const { container } = renderTextNode(
       '<p><a href="https://example.com/read">Read</a> and <a href="https://example.com/write">Write</a></p>'
@@ -317,6 +335,26 @@ describe("resting Text Node links", () => {
       html: '<p><a href="javascript:alert(1)">A</a>B</p>',
     });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("removes the Link a right click landed on when two Links share href and text", async () => {
+    const user = userEvent.setup();
+    const { container } = renderTextNode(
+      '<p><a href="https://example.com/same">Same</a> <a href="https://example.com/same">Same</a></p>'
+    );
+    mockItemMenuLayout(container);
+
+    const links = screen.getAllByRole("link", { name: "Same" });
+    expect(links).toHaveLength(2);
+    fireEvent.contextMenu(links[1]);
+
+    const menu = await screen.findByRole("menu", { name: "canvas.nodeActions" });
+    await user.click(within(menu).getByRole("menuitem", { name: "editor.openLink" }));
+    await user.click(screen.getByRole("button", { name: "editor.removeLink" }));
+
+    expect(mocks.updateTextNode).toHaveBeenCalledWith("node", {
+      html: '<p><a href="https://example.com/same">Same</a> Same</p>',
+    });
   });
 
   it("a keyboard menu after a Link right click lists the Links instead of that Link's actions", async () => {

@@ -53,7 +53,7 @@ function textColorStyle(color: string | undefined) {
 /** The Links a Text Node shows at rest, in document order. */
 function textNodeLinks(html: string | null): CanvasNodeLink[] {
   if (!html) return [];
-  return canvasLinkAnchors(html).map(({ href, text }) => ({ href, text }));
+  return canvasLinkAnchors(html).map(({ href, text }, index) => ({ href, text, index }));
 }
 
 function ActiveNodeEditor({
@@ -285,9 +285,9 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
     // While editing, the editor's own menu owns the right click.
     links: editing ? [] : links,
     contextLinkRef,
-    onOpenLink: (link, index) => {
+    onOpenLink: (link) => {
       const external = activateLink(link.href);
-      if (external) setOpenLink({ href: external, index });
+      if (external) setOpenLink({ href: external, index: link.index });
     },
   });
   const safeHtml = useMemo(() => (html === null ? "" : prepareStaticCanvasHtml(html)), [html]);
@@ -352,10 +352,15 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
       onMouseDown={pristine ? (event) => event.preventDefault() : undefined}
       onContextMenu={(event) => {
         const anchor = event.target instanceof Element ? event.target.closest("a[href]") : null;
-        // Set only here: the pointer gesture is the one that points at a Link.
-        contextLinkRef.current = anchor
-          ? { href: anchor.getAttribute("href") ?? "", text: anchor.textContent ?? "" }
-          : null;
+        // Only a pointer gesture lands on a Link. Its position among the drawn
+        // anchors carries its identity, so two Links with the same href and text
+        // stay apart.
+        const anchors = Array.from(contentRef.current?.querySelectorAll("a[href]") ?? []);
+        const index = anchor ? anchors.indexOf(anchor) : -1;
+        contextLinkRef.current =
+          anchor && index >= 0
+            ? { href: anchor.getAttribute("href") ?? "", text: anchor.textContent ?? "", index }
+            : null;
         nodeMenu.itemProps.onContextMenu?.(event);
         // The browser menu never appears on a Text Node: while editing the
         // editor's own menu owns the gesture, at rest the node's menu (or, in a

@@ -340,7 +340,7 @@
     "noConnectTargets": "No hay nada más en este lienzo con qué conectar",
     "emptyTextNode": "Nodo de texto vacío",
     "nodeActions": "Acciones del nodo",
-    "openLinkNamed": "Abrir enlace: {{text}}",
+    "openLinkNamed": "Abrir Enlace: {{text}}",
     "undo": "Deshacer",
     "redo": "Rehacer",
     "textNodePlaceholder": "Escribe algo…",

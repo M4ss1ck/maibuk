@@ -2,11 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import type { TFunction } from "i18next";
 import type { Editor } from "@tiptap/react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { toast } from "@/components/ui";
-import { openExternal } from "@/lib/platform";
+import { getClipboard, openExternal } from "@/lib/platform";
 import { isInternalLink } from "@/features/links/link-uri";
 import { navigateToLinkTarget } from "@/features/links/navigate";
 import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
@@ -45,6 +46,20 @@ export function useLinkActivation() {
 }
 
 /**
+ * Copies a Link's URL through the platform clipboard adapter and reports it,
+ * the one path shared by the editor's dialog and a Text Node's item menu.
+ */
+export async function copyLinkToClipboard(url: string, t: TFunction) {
+  try {
+    const clipboard = await getClipboard();
+    await clipboard.writeText(url);
+    toast.success(t("common.copied"));
+  } catch (e) {
+    console.error("Failed to copy link:", e);
+  }
+}
+
+/**
  * Confirms an external Link: Open, Copy URL, and Remove when the surface allows
  * it. Shared by the editor and the resting Text Node so both read the same.
  */
@@ -57,12 +72,7 @@ export function LinkActivationDialog({ url, onClose, onRemove }: LinkActivationD
   };
 
   const handleCopyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(url);
-      toast.success(t("common.copied"));
-    } catch (e) {
-      console.error("Failed to copy link:", e);
-    }
+    await copyLinkToClipboard(url, t);
     onClose();
   };
 
