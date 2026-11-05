@@ -1,5 +1,5 @@
-import { type Key, useState } from "react";
-import { ComboBox as RACComboBox } from "react-aria-components";
+import { type Key, type RefObject, useContext, useRef, useState } from "react";
+import { ComboBox as RACComboBox, ComboBoxStateContext } from "react-aria-components";
 import { Input } from "react-aria-components/Input";
 import { Button } from "react-aria-components/Button";
 import { Popover } from "react-aria-components/Popover";
@@ -26,6 +26,14 @@ interface ComboboxProps {
   ariaDescribedBy?: string;
   /** Marks the field invalid, for `aria-invalid`. */
   isInvalid?: boolean;
+  /**
+   * For a field that keeps focus after a commit (the Selection Toolbar): the held
+   * value never reaches `onChange`, so React Aria's re-commit on Enter, Escape, or
+   * blur cannot write it, and only typing or the list's own triggers open the
+   * list, so resetting the typed text does not reopen it. Picking the value the
+   * field already shows is a no-op here.
+   */
+  explicitCommitOnly?: boolean;
 }
 
 export function Combobox({
@@ -41,8 +49,10 @@ export function Combobox({
   isDisabled = false,
   ariaDescribedBy,
   isInvalid = false,
+  explicitCommitOnly = false,
 }: ComboboxProps) {
   const [query, setQuery] = useState("");
+  const openListRef = useRef<(() => void) | null>(null);
 
   const filteredOptions =
     query === ""
@@ -58,6 +68,10 @@ export function Combobox({
       return;
     }
     if (newValue !== null) {
+      if (explicitCommitOnly && String(newValue) === value) {
+        setQuery("");
+        return;
+      }
       onChange(String(newValue));
       setQuery("");
     }
@@ -79,7 +93,11 @@ export function Combobox({
     <RACComboBox
       value={value}
       inputValue={displayValue}
-      onInputChange={setQuery}
+      onInputChange={(text) => {
+        setQuery(text);
+        if (explicitCommitOnly && text !== "") openListRef.current?.();
+      }}
+      menuTrigger={explicitCommitOnly ? "manual" : undefined}
       onChange={handleSelectionChange}
       defaultFilter={() => true}
       aria-label={ariaLabel}
@@ -88,6 +106,7 @@ export function Combobox({
       aria-describedby={ariaDescribedBy}
       className={`relative ${className}`}
     >
+      <OpenListBridge openRef={openListRef} />
       <div className="relative">
         <Input
           id={id}
@@ -133,6 +152,13 @@ export function Combobox({
       </Popover>
     </RACComboBox>
   );
+}
+
+/** Hands the combobox state's open to the field: it is only reachable from inside the ComboBox. */
+function OpenListBridge({ openRef }: { openRef: RefObject<(() => void) | null> }) {
+  const state = useContext(ComboBoxStateContext);
+  openRef.current = state ? () => state.open(null, "input") : null;
+  return null;
 }
 
 function ChevronIcon({ className }: { className?: string }) {

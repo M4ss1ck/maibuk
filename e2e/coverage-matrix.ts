@@ -917,6 +917,32 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "editor-selection-toolbar-comboboxes",
+    area: "editor",
+    workflow:
+      "The List switch adds Font and Line Height to the Selection Toolbar; Shift+Arrows selects text; Alt+F10 focuses the first control, the Size field; one Right per control crosses the fields and the buttons, the chevrons never a stop, and one Left per control walks back; Home and End move a field's own caret and Left moves it inside a typed value; one Escape closes a field's open list and restores its value, the next returns to the text with the selection; a typed size applies on Enter and a Font pick applies from the list, both keeping focus and the paint; on a phone a tap on the field, its chevron and an item applies and returns focus to the text, a tap away leaves a half-typed value alone, and the bubble scrolls sideways to Line Height; a Text Node's bubble applies a pick and keeps the text its canvas tap commits; asserts: focus, caret, list, value applied, text unchanged; persists: yes",
+    edges: [
+      "the List switch adds Font and Line Height to the bubble and Alt+F10 lands in the Size field",
+      "one arrow per control crosses the fields and the buttons, skipping every chevron",
+      "Home, End and Left move the caret inside a field and never leave it",
+      "one Escape closes the open list and restores the value; the next returns to the text",
+      "a typed size applies on Enter with focus and the paint kept",
+      "a Font pick applies from the list with focus kept",
+      "a phone tap on a field, its chevron and an item applies and returns focus to the text",
+      "a phone tap away from a half-typed value leaves the text unchanged",
+      "a phone-width bubble scrolls sideways to reach Line Height",
+      "a Text Node's bubble applies a pick without leaving the node",
+      "typed Text Node text survives a canvas tap taken while its Size field had focus",
+      "a Text Node's Size field applies on Enter and Escape returns to its text",
+    ],
+    terms: [],
+    shortcuts: ["editor.focusSelectionToolbar"],
+    routes: ["/book/:bookId", "/canvas/:canvasId"],
+    fixture: "oneBookThreeChapters for the editor, canvasWithNodes for the Text Node",
+    tags: ["touch"],
+    status: "accepted",
+  },
+  {
     id: "editor-context-menu",
     area: "editor",
     workflow:

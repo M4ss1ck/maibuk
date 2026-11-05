@@ -20,14 +20,17 @@ const FONT_FAMILY_OPTIONS = [
 interface FontFamilySelectProps {
   editor: Editor;
   value: string;
+  /** Set only by a floating toolbar: whether this change pulls focus into the text. The Editor Toolbar always does. */
+  shouldFocusEditor?: () => boolean;
 }
 
-export function FontFamilySelect({ editor, value }: FontFamilySelectProps) {
+export function FontFamilySelect({ editor, value, shouldFocusEditor }: FontFamilySelectProps) {
   const { t } = useTranslation();
+  const chain = () => (shouldFocusEditor?.() === false ? editor.chain() : editor.chain().focus());
 
   const handleChange = (family: string) => {
     if (family.trim()) {
-      editor.chain().focus().setFontFamily(family).run();
+      chain().setFontFamily(family).run();
     }
   };
 
@@ -37,6 +40,7 @@ export function FontFamilySelect({ editor, value }: FontFamilySelectProps) {
       onChange={handleChange}
       options={FONT_FAMILY_OPTIONS}
       placeholder={t("editor.fontFamily")}
+      explicitCommitOnly={shouldFocusEditor !== undefined}
       ariaLabel={t("editor.fontFamily")}
       inputClasses="w-40"
     />

@@ -61,6 +61,115 @@ describe("Combobox", () => {
 
       expect(onChange).toHaveBeenCalledWith("Georgia");
     });
+
+    it("calls onChange when the value it already holds is picked from the list", async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+
+      // A pick with the field focused is the author's own change, even when it
+      // repeats the held value; only a blur re-commit is skipped (that is what
+      // `SelectionToolbar` relies on).
+      render(<Combobox value="Arial" onChange={onChange} options={options} ariaLabel="Font" />);
+
+      const input = screen.getByRole("combobox");
+      await user.click(input);
+      await user.keyboard("{ArrowDown}{Enter}");
+
+      expect(onChange).toHaveBeenCalledWith("Arial");
+    });
+  });
+
+  describe("explicit commit only", () => {
+    it("does not call onChange when Escape discards typing", async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+
+      render(
+        <Combobox
+          value="Arial"
+          onChange={onChange}
+          options={options}
+          ariaLabel="Font"
+          explicitCommitOnly
+        />
+      );
+
+      const input = screen.getByRole("combobox");
+      await user.click(input);
+      await user.keyboard("{Control>}a{/Control}Hel");
+      expect(screen.getByRole("listbox")).toBeInTheDocument();
+
+      await user.keyboard("{Escape}");
+
+      expect(onChange).not.toHaveBeenCalled();
+      expect(input).toHaveValue("Arial");
+      expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    });
+
+    it("does not call onChange when a field holding a value is blurred", async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+
+      render(
+        <>
+          <Combobox
+            value="Arial"
+            onChange={onChange}
+            options={options}
+            ariaLabel="Font"
+            explicitCommitOnly
+          />
+          <input aria-label="Elsewhere" />
+        </>
+      );
+
+      const input = screen.getByRole("combobox");
+      await user.click(input);
+      await user.keyboard("{Control>}a{/Control}Hel");
+      await user.click(screen.getByLabelText("Elsewhere"));
+
+      expect(onChange).not.toHaveBeenCalled();
+    });
+
+    it("calls onChange once on Enter and leaves the list closed", async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+
+      render(
+        <Combobox
+          value="Arial"
+          onChange={onChange}
+          options={options}
+          ariaLabel="Font"
+          explicitCommitOnly
+        />
+      );
+
+      const input = screen.getByRole("combobox");
+      await user.click(input);
+      await user.keyboard("{Control>}a{/Control}Georgia");
+      await user.keyboard("{Enter}");
+
+      expect(onChange).toHaveBeenCalledTimes(1);
+      expect(onChange).toHaveBeenCalledWith("Georgia");
+      expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    });
+
+    it("leaves the default commit behavior alone when off", async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+
+      render(<Combobox value="Arial" onChange={onChange} options={options} ariaLabel="Font" />);
+
+      const input = screen.getByRole("combobox");
+      await user.click(input);
+      await user.keyboard("{Control>}a{/Control}Hel");
+      await user.keyboard("{Escape}");
+
+      // Without explicitCommitOnly, React Aria commits the held value on the
+      // revert, as it always has.
+      expect(onChange).toHaveBeenCalledWith("Arial");
+    });
   });
 
   describe("custom value", () => {

@@ -48,6 +48,19 @@ export async function isFocusWithin(region: Locator): Promise<boolean> {
 }
 
 /**
+ * The caret a text field holds, as its own `selectionStart`/`selectionEnd`. A
+ * spec cannot read it through a programmatic call of its own, so the helper
+ * reports it: a field that owns its caret moves it, and an arrow the toolbar
+ * takes keeps it still.
+ */
+export async function fieldCaret(target: Locator): Promise<{ start: number; end: number }> {
+  return target.evaluate((el) => {
+    const field = el as HTMLInputElement | HTMLTextAreaElement;
+    return { start: field.selectionStart ?? 0, end: field.selectionEnd ?? 0 };
+  });
+}
+
+/**
  * Presses Shift+Tab until focus leaves `frameElement` for the host page. A Frame
  * keeps keyboard focus while it is mounted, so a host Command (the palette) must
  * be reached from the host after the Frame has handed focus back.
@@ -154,4 +167,15 @@ export async function caretText(page: Page): Promise<string> {
       .join("");
     return text !== "" ? text : (nextTextNode(node)?.data ?? "");
   });
+}
+
+/**
+ * Waits out a Text Node's opening before a spec selects text in it. Something
+ * in the opening (TipTap's deferred focus("end") is the suspect) resets the
+ * selection after F2: two frames settle it in Chromium, WebKit needs longer, so
+ * a fixed wait covers both. The race predates the Selection Toolbar fields; a
+ * follow-up issue tracks finding its cause.
+ */
+export async function settleTextNodeFocus(page: Page): Promise<void> {
+  await page.waitForTimeout(800);
 }

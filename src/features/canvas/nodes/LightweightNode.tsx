@@ -205,6 +205,14 @@ function ActiveNodeEditor({
             ) {
               return;
             }
+            // A combobox's list is portaled out of the bubble, and pressing an
+            // item there still acts on this Text Node's selection.
+            if (
+              event.relatedTarget instanceof Element &&
+              event.relatedTarget.closest('[role="listbox"]')
+            ) {
+              return;
+            }
             if (overlayOpen.current || menuOpen.current || pendingMarkdownPaste !== null) return;
             commit();
           }}
@@ -227,6 +235,13 @@ function ActiveNodeEditor({
         bubbleRef={bubbleRef}
         onOverlayOpenChange={(open) => {
           overlayOpen.current = open;
+        }}
+        // Focus that leaves the bubble for the canvas ends this node's edit, so
+        // the text goes in now or the unmount drops it.
+        onToolbarLeave={() => {
+          // The bubble only reports a leave with no dialog or menu of its own open.
+          if (editor.isDestroyed || menuOpen.current || pendingMarkdownPaste !== null) return;
+          commit();
         }}
       />
       <ImageContextMenu editor={editor} />

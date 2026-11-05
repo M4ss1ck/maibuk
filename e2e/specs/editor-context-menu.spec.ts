@@ -1,8 +1,9 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import {
   expectFocusWithin,
   expectTabContained,
+  fieldCaret,
   pressUntilFocused,
   tabTo,
 } from "../support/keyboard";
@@ -29,10 +30,14 @@ async function openEditor(page: Page, settings: Record<string, unknown> = {}) {
 
 async function selectFirstWords(page: Page, count: number) {
   await page.keyboard.press("Home");
-  await page.keyboard.down("Shift");
-  for (let i = 0; i < count; i++) await page.keyboard.press("ArrowRight");
-  await page.keyboard.up("Shift");
+  // Each press carries its own modifier: a held Shift can be released by the
+  // engine while the next press is still being dispatched under load, which
+  // leaves a shorter selection than the test asked for.
+  for (let i = 0; i < count; i++) await page.keyboard.press("Shift+ArrowRight");
 }
+
+/** The chapter text's HTML, decoration spans included: the bytes a field must not touch. */
+const editorHtml = (page: Page) => page.locator(".ProseMirror").first().innerHTML();
 
 test.describe("context menu @wf:editor-context-menu", () => {
   for (const width of [1280, 760]) {
@@ -331,5 +336,285 @@ test.describe("selection toolbar @wf:editor-selection-toolbar", () => {
     await expect(alignRight).toBeFocused();
     await expect(editorText(page).locator("p").first()).toHaveCSS("text-align", "right");
     await capture(page, "selection-toolbar-align-phone", { around: [floating] });
+  });
+});
+
+// The Selection Toolbar's Font and Line Height fields (#720). Everything here
+// is reached and driven by real keys; the phone's tap paths live in
+// editor-selection-toolbar-touch.spec.ts, and the Canvas bubble in
+// canvas-text-node-links.spec.ts.
+
+const sizeField = (page: Page) => floatingToolbar(page).getByRole("combobox", { name: "Size" });
+const familyField = (page: Page) => floatingToolbar(page).getByRole("combobox", { name: "Font" });
+const lineHeightField = (page: Page) =>
+  floatingToolbar(page).getByRole("combobox", { name: "Line height" });
+/** A field's list button: no accessible name, so the field's container holds it. */
+const chevronOf = (field: Locator) => field.locator("xpath=..").getByRole("button");
+
+/**
+ * The config the List switch builds from the default one: Font inserts before
+ * Basic formatting and Line Height lands between Headings and Highlight,
+ * because each joins at its own place in the editor toolbar's order.
+ */
+const comboboxesConfig = {
+  start: [
+    { kind: "group", id: "font", toolbarVisible: true },
+    { kind: "group", id: "basic-marks", toolbarVisible: true },
+    { kind: "group", id: "headings", toolbarVisible: true },
+    { kind: "group", id: "line-height", toolbarVisible: true },
+  ],
+  end: [],
+  selectionToolbar: ["font", "basic-marks", "headings", "line-height", "highlight", "link-code"],
+};
+
+/** The controls after the Size field, in that order: one arrow press per control. */
+function controlsAfterSize(page: Page): Locator[] {
+  const floating = floatingToolbar(page);
+  return [
+    familyField(page),
+    floating.getByRole("button", { name: "Bold", exact: true }),
+    floating.getByRole("button", { name: "Italic", exact: true }),
+    floating.getByRole("button", { name: "Underline", exact: true }),
+    floating.getByRole("button", { name: "Strikethrough", exact: true }),
+    floating.getByRole("button", { name: "Heading 1", exact: true }),
+    floating.getByRole("button", { name: "Heading 2", exact: true }),
+    floating.getByRole("button", { name: "Heading 3", exact: true }),
+    lineHeightField(page),
+    floating.getByRole("button", { name: "Highlight", exact: true }),
+    floating.getByRole("button", { name: "Highlight options", exact: true }),
+    floating.getByRole("button", { name: "Insert Link", exact: true }),
+    floating.getByRole("button", { name: "Inline Code", exact: true }),
+    floating.getByRole("button", { name: "Code Block", exact: true }),
+  ];
+}
+
+/** Switches one List row's Show in selection menu from its keyboard path. */
+async function showInSelectionMenu(page: Page, row: Locator) {
+  const toggle = row.getByRole("switch", { name: "Show in selection menu" });
+  await expect(toggle).not.toBeChecked();
+  await pressUntilFocused(page, "ArrowRight", toggle, { max: 8 });
+  await page.keyboard.press("Space");
+  await expect(toggle).toBeChecked();
+}
+
+test.describe("selection toolbar fields @wf:editor-selection-toolbar-comboboxes @sc:editor.focusSelectionToolbar", () => {
+  test("the List switch adds Font and Line Height, and Alt+F10 lands in the Size field", async ({
+    page,
+  }) => {
+    await openEditor(page);
+
+    await page.keyboard.press("Control+Shift+,");
+    const dialog = page.getByRole("dialog", { name: "Customize toolbar" });
+    await expect(dialog).toBeVisible();
+    await tabTo(page, dialog.getByRole("radio", { name: "Toolbar" }));
+    await pressUntilFocused(page, "ArrowRight", dialog.getByRole("radio", { name: "List" }), {
+      max: 3,
+    });
+    await page.keyboard.press("Space");
+    await expect(dialog.getByRole("grid", { name: "Start" })).toBeVisible();
+
+    const fontRow = dialog.getByRole("row", { name: /^Font$/ });
+    await tabTo(page, dialog.getByRole("row").first());
+    await pressUntilFocused(page, "ArrowDown", fontRow, { max: 40 });
+    await showInSelectionMenu(page, fontRow);
+
+    const lineHeightRow = dialog.getByRole("row", { name: /^Line height$/ });
+    await pressUntilFocused(page, "ArrowDown", lineHeightRow, { max: 40 });
+    await showInSelectionMenu(page, lineHeightRow);
+
+    await pressUntilFocused(page, "Tab", dialog.getByRole("button", { name: "Close" }).last(), {
+      max: 20,
+    });
+    await page.keyboard.press("Enter");
+    await expect(dialog).toBeHidden();
+    await expect(editorText(page)).toBeFocused();
+
+    await selectFirstWords(page, 5);
+    const floating = floatingToolbar(page);
+    await expect(floating).toBeVisible();
+    await expect(sizeField(page)).toBeVisible();
+    await expect(familyField(page)).toBeVisible();
+    await expect(lineHeightField(page)).toBeVisible();
+    await capture(page, "selection-toolbar-font-and-line-height", { around: [floating] });
+
+    // Font joins first, so the Command already puts the caret in the Size field.
+    await page.keyboard.press("Alt+F10");
+    await expect(sizeField(page)).toBeFocused();
+    await expect(chevronOf(sizeField(page))).not.toBeFocused();
+    await expect(floating).toBeVisible();
+  });
+
+  test("one arrow per control crosses the bubble and never stops on a chevron", async ({
+    page,
+  }) => {
+    await openEditor(page, { toolbarConfig: comboboxesConfig });
+    await selectFirstWords(page, 5);
+    const floating = floatingToolbar(page);
+    await expect(floating).toBeVisible();
+
+    await page.keyboard.press("Alt+F10");
+    await expect(sizeField(page)).toBeFocused();
+
+    // The bubble's buttons are the twelve controls plus one chevron per field:
+    // the walk visits the controls only, one press each, and no chevron.
+    const fields = await floating.getByRole("combobox").count();
+    const buttons = await floating.getByRole("button").count();
+    expect(fields).toBe(3);
+    expect(buttons).toBe(15);
+
+    const stops = controlsAfterSize(page);
+    expect(stops.length).toBe(14);
+    for (const stop of stops) {
+      await page.keyboard.press("ArrowRight");
+      await expect(stop).toBeFocused();
+    }
+    // The last control has nowhere further right to go.
+    await page.keyboard.press("ArrowRight");
+    await expect(stops[stops.length - 1]).toBeFocused();
+
+    // A field is one press in and one press out, both ways: Left walks the same
+    // fourteen stops back to the Size field.
+    for (let press = 0; press < stops.length; press++) await page.keyboard.press("ArrowLeft");
+    await expect(sizeField(page)).toBeFocused();
+    await expect(chevronOf(sizeField(page))).not.toBeFocused();
+  });
+
+  test("Home, End and Left move a field's caret and never leave it", async ({ page }) => {
+    await openEditor(page, { toolbarConfig: comboboxesConfig });
+    await selectFirstWords(page, 5);
+    await expect(floatingToolbar(page)).toBeVisible();
+    await page.keyboard.press("Alt+F10");
+    await expect(sizeField(page)).toBeFocused();
+    await expect(sizeField(page)).toHaveValue("18");
+
+    // The field owns Home and End: focus stays and the caret moves.
+    await page.keyboard.press("End");
+    expect(await fieldCaret(sizeField(page))).toEqual({ start: 2, end: 2 });
+    await expect(sizeField(page)).toBeFocused();
+    await page.keyboard.press("Home");
+    expect(await fieldCaret(sizeField(page))).toEqual({ start: 0, end: 0 });
+    await expect(sizeField(page)).toBeFocused();
+
+    // Right walks into the family field, leaving the caret past its last
+    // character, and the next Right walks out of it in that one press.
+    await page.keyboard.press("End");
+    await page.keyboard.press("ArrowRight");
+    await expect(familyField(page)).toBeFocused();
+    const familyLength = (await familyField(page).inputValue()).length;
+    expect(await fieldCaret(familyField(page))).toEqual({
+      start: familyLength,
+      end: familyLength,
+    });
+    await page.keyboard.press("ArrowRight");
+    await expect(
+      floatingToolbar(page).getByRole("button", { name: "Bold", exact: true })
+    ).toBeFocused();
+
+    // Walking left is symmetric: one press in with the caret at the start, one
+    // press out to the field before it.
+    await page.keyboard.press("ArrowLeft");
+    await expect(familyField(page)).toBeFocused();
+    expect(await fieldCaret(familyField(page))).toEqual({ start: 0, end: 0 });
+    await page.keyboard.press("ArrowLeft");
+    await expect(sizeField(page)).toBeFocused();
+    expect(await fieldCaret(sizeField(page))).toEqual({ start: 0, end: 0 });
+
+    // A typed value opens the list; Left moves the caret inside it and the
+    // field keeps focus.
+    await page.keyboard.press("End");
+    await page.keyboard.press("Shift+Home");
+    await page.keyboard.type("24");
+    await expect(sizeField(page)).toHaveValue("24");
+    await expect(page.getByRole("listbox")).toBeVisible();
+    await page.keyboard.press("ArrowLeft");
+    expect(await fieldCaret(sizeField(page))).toEqual({ start: 1, end: 1 });
+    await expect(sizeField(page)).toBeFocused();
+  });
+
+  test("one Escape closes the list and restores the value; the next returns to the text", async ({
+    page,
+  }) => {
+    // Spell check is off so its decorations cannot move between the two reads
+    // of the text below.
+    await openEditor(page, { spellCheckEnabled: false, toolbarConfig: comboboxesConfig });
+    await selectFirstWords(page, 5);
+    await expect(floatingToolbar(page)).toBeVisible();
+    await page.keyboard.press("Alt+F10");
+    await expect(sizeField(page)).toBeFocused();
+    const before = await editorHtml(page);
+
+    await page.keyboard.press("End");
+    await page.keyboard.press("Shift+Home");
+    await page.keyboard.type("24");
+    await expect(sizeField(page)).toHaveValue("24");
+    await expect(page.getByRole("listbox")).toBeVisible();
+
+    // The first Escape is the list's: it closes, the field shows its held value
+    // again, focus stays and the text is byte-identical.
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("listbox")).toBeHidden();
+    await expect(sizeField(page)).toBeFocused();
+    await expect(sizeField(page)).toHaveValue("18");
+    expect(await editorHtml(page)).toBe(before);
+
+    // The next one is the toolbar's: back to the text with the same selection.
+    await page.keyboard.press("Escape");
+    await expect(editorText(page)).toBeFocused();
+    await page.keyboard.type("X");
+    await expect(editorText(page)).toHaveText("Xtorm came in from the west without warning.");
+  });
+
+  test("a typed size applies on Enter and keeps focus and the paint", async ({ page }) => {
+    // Spell check is off so its decorations cannot move between the two reads
+    // of the text below.
+    await openEditor(page, { spellCheckEnabled: false, toolbarConfig: comboboxesConfig });
+    await selectFirstWords(page, 5);
+    await expect(floatingToolbar(page)).toBeVisible();
+    await page.keyboard.press("Alt+F10");
+    await expect(sizeField(page)).toBeFocused();
+
+    const prose = page.locator(".ProseMirror").first();
+    const kept = prose.locator(".selection-kept");
+    await expect(kept).toHaveText("The s");
+
+    await page.keyboard.press("End");
+    await page.keyboard.press("Shift+Home");
+    await page.keyboard.type("24");
+    await expect(page.getByRole("listbox")).toBeVisible();
+    await page.keyboard.press("Enter");
+
+    await expect(page.getByRole("listbox")).toBeHidden();
+    await expect(sizeField(page)).toBeFocused();
+    const sized = prose.locator('[style*="font-size"]');
+    await expect(sized).toHaveText("The s");
+    await expect(sized).toHaveAttribute("style", /font-size:\s*24px/);
+    // The range stays painted across the commit.
+    await expect.poll(async () => (await kept.allTextContents()).join("")).toBe("The s");
+    await capture(page, "selection-toolbar-size-applied", { around: [floatingToolbar(page)] });
+  });
+
+  test("a Font pick applies from the list and keeps focus in the field", async ({ page }) => {
+    await openEditor(page, { toolbarConfig: comboboxesConfig });
+    await selectFirstWords(page, 5);
+    await expect(floatingToolbar(page)).toBeVisible();
+    await page.keyboard.press("Alt+F10");
+    await expect(sizeField(page)).toBeFocused();
+
+    await page.keyboard.press("ArrowRight");
+    await expect(familyField(page)).toBeFocused();
+    await expect(familyField(page)).toHaveValue("Literata, serif");
+
+    // Down opens on the held family, the next Down moves to the following one.
+    await page.keyboard.press("ArrowDown");
+    await expect(page.getByRole("listbox")).toBeVisible();
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+
+    await expect(page.getByRole("listbox")).toBeHidden();
+    await expect(familyField(page)).toBeFocused();
+    await expect(familyField(page)).toHaveValue("Inter, sans-serif");
+    const styled = editorText(page).locator('[style*="font-family"]');
+    await expect(styled).toHaveText("The s");
+    await expect(styled).toHaveAttribute("style", /font-family:\s*Inter, sans-serif/);
   });
 });

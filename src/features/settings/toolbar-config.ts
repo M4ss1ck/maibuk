@@ -118,6 +118,8 @@ export const FLOATING_ELIGIBLE_IDS: ReadonlySet<string> = new Set([
   "highlight",
   "link-code",
   "align",
+  "font",
+  "line-height",
 ]);
 
 /** The Selection Toolbar's default buttons, in their default order. */

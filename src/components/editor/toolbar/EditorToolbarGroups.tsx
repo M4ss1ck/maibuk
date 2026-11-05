@@ -170,6 +170,8 @@ export function EditorToolbarGroups({
   // The floating selection toolbar keeps focus on its own controls: a command
   // started from there must not pull the caret back out of the toolbar.
   const chain = () => (shouldFocusEditor() ? editor.chain().focus() : editor.chain());
+  const fieldFocusDecision =
+    shouldFocusEditor === alwaysFocusEditor ? undefined : shouldFocusEditor;
 
   const handleHeadingToggle = (level: 1 | 2 | 3) => {
     const isCurrentlyActive =
@@ -214,8 +216,16 @@ export function EditorToolbarGroups({
       case "font":
         return (
           <>
-            <FontSizeSelect editor={editor} value={editorState.fontSize} />
-            <FontFamilySelect editor={editor} value={editorState.fontFamily} />
+            <FontSizeSelect
+              editor={editor}
+              value={editorState.fontSize}
+              shouldFocusEditor={fieldFocusDecision}
+            />
+            <FontFamilySelect
+              editor={editor}
+              value={editorState.fontFamily}
+              shouldFocusEditor={fieldFocusDecision}
+            />
           </>
         );
       case "basic-marks":
@@ -306,7 +316,13 @@ export function EditorToolbarGroups({
           </ToolbarButton>
         );
       case "line-height":
-        return <LineHeightSelect editor={editor} value={editorState.lineHeight} />;
+        return (
+          <LineHeightSelect
+            editor={editor}
+            value={editorState.lineHeight}
+            shouldFocusEditor={fieldFocusDecision}
+          />
+        );
       case "highlight":
         // Color commits leave focus in the open picker; closing it returns focus to its trigger.
         return (

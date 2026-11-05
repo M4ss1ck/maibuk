@@ -89,6 +89,34 @@ describe("the Selection Toolbar's own order (ADR 0038)", () => {
     expect(withFlag.selectionToolbar).not.toContain("align");
   });
 
+  it("does not add Font or Line Height to an upgrading config, with or without the old flag", () => {
+    for (const id of ["font", "line-height"]) {
+      const withoutFlag = normalizeToolbarConfig({
+        start: [{ kind: "group", id, toolbarVisible: true }],
+        end: [],
+      });
+      const withFlag = normalizeToolbarConfig({
+        start: [{ kind: "group", id, toolbarVisible: true, floatingVisible: true }],
+        end: [],
+      });
+      expect(withoutFlag.selectionToolbar).not.toContain(id);
+      expect(withFlag.selectionToolbar).not.toContain(id);
+    }
+  });
+
+  it("keeps a stored Font and Line Height in the Selection Toolbar and renders them", () => {
+    const stored = normalizeToolbarConfig({
+      start: [
+        { kind: "group", id: "font", toolbarVisible: true },
+        { kind: "group", id: "line-height", toolbarVisible: true },
+      ],
+      end: [],
+      selectionToolbar: ["line-height", "font"],
+    });
+    expect(stored.selectionToolbar).toEqual(["line-height", "font"]);
+    expect(liveSelectionToolbarIds(stored)).toEqual(["line-height", "font"]);
+  });
+
   it("keeps the slot of a button whose Plugin is missing on upgrade", () => {
     const upgraded = normalizeToolbarConfig({
       start: [
@@ -180,6 +208,17 @@ describe("setSelectionToolbarMember (the List switch)", () => {
   it("refuses a button the Selection Toolbar cannot hold", () => {
     const before = { ...editor, selectionToolbar: [] };
     expect(setSelectionToolbarMember(before, "history", true)).toBe(before);
+  });
+
+  it("accepts Font and Line Height now that they are eligible", () => {
+    const before = config([group("font"), group("line-height"), group("basic-marks")], []);
+    const withFont = setSelectionToolbarMember({ ...before, selectionToolbar: [] }, "font", true);
+    expect(withFont.selectionToolbar).toEqual(["font"]);
+    const withLineHeight = setSelectionToolbarMember(withFont, "line-height", true);
+    expect(withLineHeight.selectionToolbar).toEqual(["font", "line-height"]);
+    expect(setSelectionToolbarMember(withLineHeight, "font", false).selectionToolbar).toEqual([
+      "line-height",
+    ]);
   });
 });
 
@@ -338,6 +377,18 @@ describe("the visual Selection layout's moves", () => {
     expect(placeSelectionToolbarEntry(before, "align", 1).selectionToolbar).toEqual([
       "basic-marks",
       "align",
+    ]);
+  });
+
+  it("places Font and Line Height in the Selection Toolbar now that they are eligible", () => {
+    const before = config([group("font"), group("line-height")], [], ["basic-marks"]);
+    expect(placeSelectionToolbarEntry(before, "font", 1).selectionToolbar).toEqual([
+      "basic-marks",
+      "font",
+    ]);
+    expect(placeSelectionToolbarEntry(before, "line-height", 0).selectionToolbar).toEqual([
+      "line-height",
+      "basic-marks",
     ]);
   });
 
