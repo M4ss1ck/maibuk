@@ -193,7 +193,7 @@ async function nextFrame() {
 describe("Text Node context menu while editing", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // The Copy action uses the deprecated path, which jsdom does not implement.
+    // deprecated-api: stubs the Copy path EditorContextMenu calls; jsdom has none.
     document.execCommand = vi.fn(() => true);
     mocks.state = {
       updateTextNode: mocks.updateTextNode,
