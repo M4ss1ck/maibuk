@@ -14,6 +14,7 @@ interface ColorPickerProps {
   shortcut?: CommandId;
   markdownHint?: string | string[];
   icon: React.ReactNode;
+  contrastAgainst: () => string | null;
 }
 
 const PRESET_COLORS = [
@@ -50,6 +51,7 @@ export function ColorPicker({
   shortcut,
   markdownHint,
   icon,
+  contrastAgainst,
 }: ColorPickerProps) {
   const { t } = useTranslation();
   return (
@@ -82,7 +84,7 @@ export function ColorPicker({
         onClear={onClear}
         clearLabel={t("editor.clear")}
         closeOnPreset
-        showUnknownContrast
+        contrastAgainst={contrastAgainst}
         variant="split"
       />
     </div>

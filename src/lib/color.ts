@@ -9,6 +9,11 @@ export function normalizeHexColor(input: string): string | null {
   return null;
 }
 
+/** A `--color-*` theme token as currently drawn on the document root, as #RRGGBB, or null when it is not a hex color. */
+export function readThemeColor(token: string): string | null {
+  return normalizeHexColor(getComputedStyle(document.documentElement).getPropertyValue(token));
+}
+
 function luminance(hex: string): number {
   const color = normalizeHexColor(hex);
   if (!color) return 0;

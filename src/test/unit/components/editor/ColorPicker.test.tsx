@@ -12,8 +12,16 @@ vi.mock("react-i18next", async (importOriginal) => ({
 
 const { ColorPicker } = await import("@/components/editor/ColorPicker");
 
-function renderPicker(onChange = vi.fn()) {
-  render(<ColorPicker value="" onChange={onChange} label="Text color" icon={<span>icon</span>} />);
+function renderPicker(onChange = vi.fn(), contrastAgainst = () => "#FFFFFF") {
+  render(
+    <ColorPicker
+      value=""
+      onChange={onChange}
+      label="Text color"
+      icon={<span>icon</span>}
+      contrastAgainst={contrastAgainst}
+    />
+  );
   return onChange;
 }
 
@@ -38,6 +46,7 @@ describe("ColorPicker", () => {
         isActive
         label="Highlight"
         icon={<span>icon</span>}
+        contrastAgainst={() => "#1C1917"}
       />
     );
 
@@ -88,5 +97,55 @@ describe("ColorPicker", () => {
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it("never announces an unknown contrast color", async () => {
+    const user = userEvent.setup();
+    renderPicker();
+
+    screen.getByRole("button", { name: "editor.colorOptions" }).focus();
+    await user.keyboard("{Enter}");
+    await screen.findByRole("dialog", { name: "editor.colorOptions" });
+
+    expect(screen.queryByText("colorPicker.unknownContrast")).not.toBeInTheDocument();
+  });
+
+  it("warns for a text color too light for the theme background", async () => {
+    const user = userEvent.setup();
+    renderPicker(vi.fn(), () => "#FFFFFF");
+
+    screen.getByRole("button", { name: "editor.colorOptions" }).focus();
+    await user.keyboard("{Enter}");
+    const field = await screen.findByRole("textbox", { name: "colorPicker.hexValue" });
+    await user.clear(field);
+    await user.type(field, "#F9FAFB{Enter}");
+
+    expect(screen.getByRole("status")).toHaveTextContent("colorPicker.lowContrast");
+  });
+
+  it("warns for a highlight too close to the text color", async () => {
+    const user = userEvent.setup();
+    renderPicker(vi.fn(), () => "#1C1917");
+
+    screen.getByRole("button", { name: "editor.colorOptions" }).focus();
+    await user.keyboard("{Enter}");
+    const field = await screen.findByRole("textbox", { name: "colorPicker.hexValue" });
+    await user.clear(field);
+    await user.type(field, "#111111{Enter}");
+
+    expect(screen.getByRole("status")).toHaveTextContent("colorPicker.lowContrast");
+  });
+
+  it("accepts a highlight that stands out from the text color", async () => {
+    const user = userEvent.setup();
+    renderPicker(vi.fn(), () => "#1C1917");
+
+    screen.getByRole("button", { name: "editor.colorOptions" }).focus();
+    await user.keyboard("{Enter}");
+    const field = await screen.findByRole("textbox", { name: "colorPicker.hexValue" });
+    await user.clear(field);
+    await user.type(field, "#FEF08A{Enter}");
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 });

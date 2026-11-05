@@ -54,7 +54,8 @@ interface ColorPickerControlProps {
   /** A null preview clears an uncommitted change. */
   onPreview?: (color: string | null) => void;
   presets?: readonly string[];
-  contrastAgainst?: string | null;
+  /** A color to contrast against; a function is resolved when the popover opens. */
+  contrastAgainst?: string | null | (() => string | null);
   contrastKind?: "text" | "large-text" | "non-text";
   showUnknownContrast?: boolean;
   /** `split` is the narrow options half of a split button whose other half shows the color. */
@@ -83,6 +84,7 @@ export function ColorPickerControl({
   const errorId = useId();
   const displayValue = normalizeHexColor(value) ?? normalizeHexColor(fallbackColor) ?? "#000000";
   const [open, setOpen] = useState(false);
+  const [openedContrastAgainst, setOpenedContrastAgainst] = useState<string | null>(null);
   const [draft, setDraft] = useState(displayValue);
   const [hexDraft, setHexDraft] = useState(draft);
   const [invalid, setInvalid] = useState(false);
@@ -102,7 +104,10 @@ export function ColorPickerControl({
   const clearPreview = () => onPreview?.(null);
   const changeOpen = (next: boolean) => {
     setOpen(next);
-    if (next) skipBlurCommit.current = false;
+    if (next) {
+      skipBlurCommit.current = false;
+      if (typeof contrastAgainst === "function") setOpenedContrastAgainst(contrastAgainst());
+    }
     if (!next) {
       setInvalid(false);
       clearPreview();
@@ -133,9 +138,11 @@ export function ColorPickerControl({
   const swatchValue = !normalizeHexColor(value) && draft === displayValue ? NO_SWATCH : draft;
   const hue = parseColor(draft).toFormat("hsb").getChannelValue("hue");
   const threshold = contrastKind === "text" ? 4.5 : 3;
+  const resolvedContrastAgainst =
+    typeof contrastAgainst === "function" ? openedContrastAgainst : (contrastAgainst ?? null);
   const lowContrast =
-    contrastAgainst && normalizeHexColor(contrastAgainst)
-      ? contrastRatio(draft, contrastAgainst) < threshold
+    resolvedContrastAgainst && normalizeHexColor(resolvedContrastAgainst)
+      ? contrastRatio(draft, resolvedContrastAgainst) < threshold
       : false;
 
   return (
@@ -263,7 +270,7 @@ export function ColorPickerControl({
               {t("colorPicker.lowContrast")}
             </p>
           )}
-          {showUnknownContrast && contrastAgainst == null && (
+          {showUnknownContrast && resolvedContrastAgainst == null && (
             <p role="status" className="text-xs text-muted-foreground">
               {t("colorPicker.unknownContrast")}
             </p>

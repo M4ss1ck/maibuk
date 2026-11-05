@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   EditorToolbarGroups,
   type ToolbarGroupCallbacks,
@@ -275,5 +275,47 @@ describe("EditorToolbarGroups", () => {
     } finally {
       window.removeEventListener("keydown", outerEscapeSpy);
     }
+  });
+
+  describe("color contrast (#722)", () => {
+    afterEach(() => {
+      document.documentElement.style.removeProperty("--color-background");
+      document.documentElement.style.removeProperty("--color-foreground");
+    });
+
+    async function typeColor(
+      groupId: "text-color" | "highlight",
+      color: string,
+      editor = makeToolbarEditor()
+    ) {
+      const user = userEvent.setup();
+      render(<EditorToolbarGroups editor={editor} groupIds={[groupId]} callbacks={callbacks} />);
+      screen.getByRole("button", { name: "editor.colorOptions" }).focus();
+      await user.keyboard("{Enter}");
+      const field = await screen.findByRole("textbox", { name: "colorPicker.hexValue" });
+      expect(screen.queryByText("colorPicker.unknownContrast")).not.toBeInTheDocument();
+      await user.clear(field);
+      await user.type(field, `${color}{Enter}`);
+    }
+
+    it("checks Text Color against the page background", async () => {
+      document.documentElement.style.setProperty("--color-background", "#FFFFFF");
+      await typeColor("text-color", "#F9FAFB");
+      expect(screen.getByRole("status")).toHaveTextContent("colorPicker.lowContrast");
+    });
+
+    it("checks Highlight against the default text color", async () => {
+      document.documentElement.style.setProperty("--color-foreground", "#1C1917");
+      await typeColor("highlight", "#111111");
+      expect(screen.getByRole("status")).toHaveTextContent("colorPicker.lowContrast");
+    });
+
+    it("checks Highlight against the selection's text color when it has one", async () => {
+      document.documentElement.style.setProperty("--color-foreground", "#1C1917");
+      const editor = makeToolbarEditor();
+      editor.getAttributes = (name) => (name === "textStyle" ? { color: "#FFFF00" } : {});
+      await typeColor("highlight", "#FEF08A", editor);
+      expect(screen.getByRole("status")).toHaveTextContent("colorPicker.lowContrast");
+    });
   });
 });
