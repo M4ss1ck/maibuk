@@ -142,7 +142,7 @@ describe("opening a Text Node", () => {
     expect(editor.state.selection.from).toBe(editor.state.doc.content.size - 1);
   });
 
-  it("keeps a Selection the author makes right after the Text Node opens", async () => {
+  it("keeps a selection the author makes right after the Text Node opens", async () => {
     renderOpenTextNode();
 
     const editor = openTextNodeEditor();
@@ -156,14 +156,14 @@ describe("opening a Text Node", () => {
 
     // Past TipTap's opening timeout: autofocus used to run from it, and it is
     // the same callback that marks the editor initialized. Waiting for that
-    // mark proves nothing the opening defers can still touch the Selection.
+    // mark proves nothing the opening defers can still touch the selection.
     await vi.waitFor(() => expect(editor.isInitialized).toBe(true));
 
     expect(editor.state.selection.from).toBe(1);
     expect(editor.state.selection.to).toBe(3);
   });
 
-  it("moves the caret to the start when the author presses Home right after the Text Node opens", () => {
+  it("keeps the caret the browser moves to the start right after the Text Node opens (F2 then Home)", () => {
     renderOpenTextNode();
 
     const editor = openTextNodeEditor();

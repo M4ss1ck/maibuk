@@ -18,6 +18,7 @@ import { useSettingsStore } from "@/features/settings/store";
 import type { CanvasFlowNodeData } from "@/features/canvas/reactFlowAdapter";
 import type { LightweightCanvasNode } from "@/features/canvas/types";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
+import { keepCaretAfterFocus } from "@/components/editor/extensions/DomSelectionSync";
 import { useEditorCommandSource } from "@/components/editor/editor-command-source";
 import { LinkActivationDialog, useLinkActivation } from "@/components/editor/LinkClickHandler";
 import { EditorContextMenu } from "@/components/editor/EditorContextMenu";
@@ -55,11 +56,6 @@ function textColorStyle(color: string | undefined) {
 function textNodeLinks(html: string | null): CanvasNodeLink[] {
   if (!html) return [];
   return canvasLinkAnchors(html).map(({ href, text }, index) => ({ href, text, index }));
-}
-
-/** ProseMirror's internal record of the view's last focus event. */
-interface FocusedView {
-  input?: { lastFocus: number };
 }
 
 function ActiveNodeEditor({
@@ -133,12 +129,9 @@ function ActiveNodeEditor({
     const { state, view } = editor;
     view.dispatch(state.tr.setSelection(Selection.atEnd(state.doc)).scrollIntoView());
     view.focus();
-    // For 200ms after a focus, ProseMirror reads a caret at the start of the
-    // text as the browser resetting it and puts the old one back, so F2 then
-    // Home (or Control+Home) would leave the caret at the end. This focus
-    // placed the caret itself, so nothing needs restoring.
-    const input = (view as FocusedView).input;
-    if (input) input.lastFocus = 0;
+    // This focus placed the caret itself, so F2 then Home (or Control+Home)
+    // must not be repaired back to the end.
+    keepCaretAfterFocus(view);
   }, [editor]);
 
   if (!editor) return null;
