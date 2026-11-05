@@ -1,8 +1,12 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { Editor as TipTapEditor } from "@tiptap/core";
 import type { Editor } from "@tiptap/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EditorToolbar } from "@/components/editor/EditorToolbar";
+import type { ToolbarGroupCallbacks } from "@/components/editor/toolbar/EditorToolbarGroups";
+import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 import { useSettingsStore } from "@/features/settings/store";
 import { computeChecksum } from "@/lib/checksum";
 import { dictionaryFor } from "@/features/spell-check-dictionaries/catalog";
@@ -326,5 +330,112 @@ describe("download Spell Check dictionary shortcut", () => {
 
     expect(mockGetFiles).not.toHaveBeenCalled();
     expect(useSpellCheckDictionaries.getState().installed).toEqual([]);
+  });
+});
+
+const toolbarCallbacks: ToolbarGroupCallbacks = {
+  spellCheckLanguage: "en",
+  onSpellCheckLanguageChange: vi.fn(),
+  openFindReplace: vi.fn(),
+  isFindReplaceOpen: false,
+  onToggleFindReplace: vi.fn(),
+  openImageDialog: vi.fn(),
+  openFootnote: vi.fn(),
+  openLinkDialog: vi.fn(),
+  openDictionary: vi.fn(),
+  openSymbols: vi.fn(),
+  openHtmlPanel: vi.fn(),
+};
+
+describe("EditorToolbar Escape from a field", () => {
+  const editors: TipTapEditor[] = [];
+  const containers: HTMLElement[] = [];
+
+  afterEach(() => {
+    for (const editor of editors.splice(0)) {
+      editor.destroy();
+    }
+    for (const container of containers.splice(0)) {
+      container.remove();
+    }
+  });
+
+  it("returns focus to the text on the second Escape, writing nothing", async () => {
+    const user = userEvent.setup();
+    const { toolbarConfig: previousConfig, toolbarExpanded: previousExpanded } =
+      useSettingsStore.getState();
+    // Only the Size and Font fields, and all of them visible: the lanes would
+    // otherwise measure to zero in jsdom and hide the field.
+    useSettingsStore.setState({
+      toolbarExpanded: true,
+      toolbarConfig: {
+        start: [{ kind: "group", id: "font", toolbarVisible: true }],
+        end: [],
+        selectionToolbar: [],
+      },
+    });
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    containers.push(container);
+    const editor = new TipTapEditor({
+      element: container,
+      extensions: createRichTextExtensions(),
+      content: "<p>Hello world</p>",
+    });
+    editors.push(editor);
+    editor.commands.setTextSelection({ from: 1, to: 6 });
+    let docTransactions = 0;
+    editor.on("transaction", ({ transaction }) => {
+      if (transaction.docChanged) docTransactions++;
+    });
+
+    // The mock above stands in for the responsive row in the other tests; this
+    // one needs the real Escape handling that hands focus back to the text.
+    const { ResponsiveEditorToolbar: RealResponsiveEditorToolbar } = await vi.importActual<
+      typeof import("@/components/editor/toolbar/ResponsiveEditorToolbar")
+    >("@/components/editor/toolbar/ResponsiveEditorToolbar");
+
+    let unmountToolbar = () => {};
+
+    try {
+      const view = render(
+        <RealResponsiveEditorToolbar
+          editor={editor}
+          callbacks={toolbarCallbacks}
+          utilityCluster={null}
+          fixedUtilities={null}
+          onExitToolbar={() => editor.commands.focus()}
+        />
+      );
+      unmountToolbar = view.unmount;
+
+      const sizeField = screen.getByRole("combobox", { name: "editor.size" });
+      await user.click(sizeField);
+      await user.keyboard("{Control>}a{/Control}2");
+      expect(sizeField).toHaveValue("2");
+
+      // The first Escape only closes the list: the field keeps the caret and the held value.
+      await user.keyboard("{Escape}");
+      expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+      expect(sizeField).toHaveFocus();
+      expect(sizeField).toHaveValue("18");
+
+      // The next Escape is the toolbar's: back to the text, selection intact.
+      await user.keyboard("{Escape}");
+      // TipTap focuses the view on the next animation frame.
+      await waitFor(() => expect(editor.view.dom.contains(document.activeElement)).toBe(true));
+      expect(editor.state.selection.from).toBe(1);
+      expect(editor.state.selection.to).toBe(6);
+      expect(docTransactions).toBe(0);
+      expect(editor.getHTML()).toBe("<p>Hello world</p>");
+    } finally {
+      // Unmount the toolbar before the editor it reads, so its cleanup finds the view.
+      unmountToolbar();
+      useSettingsStore.setState({
+        toolbarConfig: previousConfig,
+        toolbarExpanded: previousExpanded,
+      });
+    }
   });
 });

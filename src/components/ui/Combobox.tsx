@@ -27,7 +27,9 @@ interface ComboboxProps {
   /** Marks the field invalid, for `aria-invalid`. */
   isInvalid?: boolean;
   /**
-   * For a field that keeps focus after a commit (the Selection Toolbar): the held
+   * For a field whose commit edits a document, where writing the held value back
+   * would change it (the editor's Size, Font, and Line Height fields, in every
+   * toolbar that renders them): the held
    * value never reaches `onChange`, so React Aria's re-commit on Enter, Escape, or
    * blur cannot write it, and only typing or the list's own triggers open the
    * list, so resetting the typed text does not reopen it. Picking the value the

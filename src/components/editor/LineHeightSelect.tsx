@@ -37,7 +37,7 @@ export function LineHeightSelect({ editor, value, shouldFocusEditor }: LineHeigh
       onChange={handleChange}
       options={LINE_HEIGHT_OPTIONS}
       placeholder={t("editor.lineHeight")}
-      explicitCommitOnly={shouldFocusEditor !== undefined}
+      explicitCommitOnly
       ariaLabel={t("editor.lineHeight")}
     />
   );
