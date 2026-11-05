@@ -5,6 +5,27 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.0] - 2026-11-04
+
+### Added
+- PDF export can download and embed Noto Serif and Noto Serif CJK fonts on demand for text the built-in fonts cannot render
+- PDF export warns before producing unreadable text, suggests EPUB or Markdown when no available font covers it, and offers continue or cancel
+- Spell Check can download verified dictionaries on demand for ten languages and keeps them on the device until removed
+
+### Changed
+- Spell Check now uses Hunspell WASM with improved handling for German and Dutch compound words
+- Spell Check reports when a language has no dictionary and skips words outside the dictionary's script
+- Word counts treat each Han or kana letter as one word while leaving English and Spanish counts unchanged; past Metrics are left unchanged and stored Chapter counts update on next save
+- Whole word search is Unicode-aware for letters, marks, numbers, underscores, Han, and kana, while Regex mode keeps its prior ASCII boundary for patterns that need it
+- Writing Language preserves full content language tags such as pt-BR for Books and Notes, independent of the app language
+- Spell Check, Word Lookup, and Dictation use the content language's base subtag, and Typography applies French and German quote styles from it
+- Spell Check and Book language pickers display a saved language tag even when it is not in the list
+
+### Fixed
+- PDF exports no longer print a copyright sign for endnote backlinks
+- Search no longer counts an empty range inside decomposed kana or Hangul characters, which inflated match counts
+- Notes keep their Writing Language when moved
+
 ## [0.19.5] - 2026-11-03
 
 ### Added
