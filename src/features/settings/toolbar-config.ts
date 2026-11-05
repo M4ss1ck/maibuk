@@ -107,12 +107,38 @@ export const ALL_GROUP_IDS = [
   "export",
 ] as const satisfies readonly ToolbarGroupId[];
 
+/**
+ * The Toolbar Buttons that may sit in the Selection Toolbar. Eligibility is
+ * not default membership: `DEFAULT_SELECTION_TOOLBAR_IDS` decides what a new
+ * or reset config holds, so a group can become addable without moving.
+ */
 export const FLOATING_ELIGIBLE_IDS: ReadonlySet<string> = new Set([
   "basic-marks",
   "headings",
   "highlight",
   "link-code",
+  "align",
 ]);
+
+/** The Selection Toolbar's default buttons, in their default order. */
+export const DEFAULT_SELECTION_TOOLBAR_IDS: readonly ToolbarGroupId[] = [
+  "basic-marks",
+  "headings",
+  "highlight",
+  "link-code",
+];
+
+/**
+ * The buttons the pre-ADR-0038 `floatingVisible` flag could have marked. Only
+ * those flags upgrade; a group that became eligible later never joins an
+ * existing author's Selection Toolbar.
+ */
+const LEGACY_FLOATING_ELIGIBLE_IDS: ReadonlySet<string> = new Set(DEFAULT_SELECTION_TOOLBAR_IDS);
+
+/** The old flag could mark a core default or any Plugin button. */
+function isLegacyFloatingEligible(id: string): boolean {
+  return LEGACY_FLOATING_ELIGIBLE_IDS.has(id) || isPluginToolbarButtonId(id);
+}
 
 const GROUP_ID_SET = new Set<string>(ALL_GROUP_IDS);
 
@@ -180,9 +206,7 @@ function makeDefaultConfig(): ToolbarConfig {
       ? { kind: "divider", id: makeDividerId() }
       : { kind: "group", id: token, toolbarVisible: true }
   );
-  const selectionToolbar = DEFAULT_START_LAYOUT.filter(
-    (token): token is ToolbarGroupId => token !== "D" && FLOATING_ELIGIBLE_IDS.has(token)
-  );
+  const selectionToolbar = [...DEFAULT_SELECTION_TOOLBAR_IDS];
   return { start, end: [], selectionToolbar };
 }
 
@@ -502,7 +526,7 @@ export function normalizeToolbarConfig(value: unknown): ToolbarConfig {
           continue;
         }
         seenGroups.add(resolved);
-        if (isFloatingEligible(resolved) && entry.floatingVisible !== false) {
+        if (isLegacyFloatingEligible(resolved) && entry.floatingVisible !== false) {
           legacyFloating.add(resolved);
         }
         result.push({
@@ -522,7 +546,7 @@ export function normalizeToolbarConfig(value: unknown): ToolbarConfig {
     if (entry.kind === "group" && !seenGroups.has(entry.id)) {
       start.push({ ...entry });
       seenGroups.add(entry.id);
-      if (isFloatingEligible(entry.id)) legacyFloating.add(entry.id);
+      if (isLegacyFloatingEligible(entry.id)) legacyFloating.add(entry.id);
     }
   }
 

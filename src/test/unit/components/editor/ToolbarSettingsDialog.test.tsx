@@ -187,6 +187,30 @@ it("disables the floating switch for an ineligible group and labels it according
   expect(disabledFloatingSwitch).toBeDisabled();
 });
 
+it("enables the floating switch for align and adds it by keyboard Space", async () => {
+  const user = userEvent.setup();
+  useSettingsStore.setState({
+    toolbarConfig: {
+      start: [...TEST_CONFIG.start, { kind: "group", id: "align", toolbarVisible: true }],
+      end: [],
+      selectionToolbar: ["basic-marks"],
+    },
+  });
+  renderDialog();
+  const alignRow = findRowByName(/toolbar\.groups\.align/);
+  const sw = within(alignRow).getByRole("switch", {
+    name: "toolbar.settings.floatingVisible",
+  });
+  expect(sw).not.toBeDisabled();
+  expect(sw).toHaveAttribute("aria-checked", "false");
+
+  await arrowToControl(user, alignRow, sw);
+  await user.keyboard(" ");
+
+  expect(useSettingsStore.getState().toolbarConfig.selectionToolbar).toContain("align");
+  expect(sw).toHaveAttribute("aria-checked", "true");
+});
+
 // ─── contextual add divider controls ───────────────────────────────────
 
 describe("contextual add divider controls", () => {
