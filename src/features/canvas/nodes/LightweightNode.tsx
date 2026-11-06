@@ -156,11 +156,11 @@ function ActiveNodeEditor({
 
   // The Find bar belongs to the Canvas viewport: this node sits under the zoom
   // transform, so an absolute bar inside it would scale and move with the node.
-  // With no flow ancestor (unit tests) it renders in place.
+  // The Canvas page owns the slot; without one (unit tests) it renders in place.
   const [findContainer, setFindContainer] = useState<HTMLElement | null>(null);
   useLayoutEffect(() => {
     if (!editor?.view?.dom) return;
-    setFindContainer(editor.view.dom.closest(".react-flow"));
+    setFindContainer(document.querySelector<HTMLElement>("[data-canvas-find-slot]"));
   }, [editor]);
 
   const {

@@ -78,12 +78,19 @@ test.describe("Text Node editor Commands @wf:canvas-text-node-editor-commands", 
 
     const find = findField(page);
     await expect(find).toBeFocused();
-    await capture(page, "canvas-text-node-find-bar", { around: [find] });
 
     // The bar belongs to the Canvas viewport, not to the node: a node sits
     // under the flow's zoom transform, so a bar inside it would scale and move
     // with the node instead of staying at the top of the Canvas.
     await expect.poll(() => dockedOffset(find, flowPane(page))).toBeLessThanOrEqual(40);
+    // The Tools column on the right never covers the bar's own buttons.
+    const close = page.getByRole("button", { name: "Close", exact: true });
+    const closeBox = await close.boundingBox();
+    const toolsBox = await page.getByRole("toolbar", { name: "Tools" }).boundingBox();
+    expect(closeBox && toolsBox && closeBox.x + closeBox.width).toBeLessThanOrEqual(
+      toolsBox?.x ?? 0
+    );
+    await capture(page, "canvas-text-node-find-bar", { around: [find, close, textEditor(page)] });
 
     // Zoom with the bar open. The zoom shortcut is suppressed in a text field,
     // so focus steps onto the bar's own first switch, where the Canvas still
@@ -139,7 +146,7 @@ test.describe("Text Node editor Commands @wf:canvas-text-node-editor-commands", 
 test.describe("Quick Note editor Commands @wf:canvas-text-node-editor-commands", () => {
   test.use({ library: "oneBookThreeChapters" });
 
-  test("@wf:canvas-text-node-editor-commands @sc:canvas.editTextNode @sc:common.find Mod+F docks the Find bar at the top of the Quick Note, and Escape returns to the note", async ({
+  test("@wf:canvas-text-node-editor-commands @sc:common.find Mod+F docks the Find bar at the top of the Quick Note, and Escape returns to the note", async ({
     page,
   }) => {
     await openBookPanel(page);
@@ -153,7 +160,7 @@ test.describe("Quick Note editor Commands @wf:canvas-text-node-editor-commands",
     // The bar is the Quick Note's own: the Chapter editor behind it opened none.
     await expect(panel(page).getByRole("textbox", { name: "Find..." })).toBeFocused();
     await expect(page.getByRole("textbox", { name: "Find..." })).toHaveCount(1);
-    await capture(page, "quick-note-find-bar", { around: [find] });
+    await capture(page, "quick-note-find-bar", { around: [panel(page)] });
 
     // Docked to the Quick Note editor, outside its scrolling area.
     await expect.poll(() => dockedOffset(find, quickNote(page))).toBeLessThanOrEqual(40);

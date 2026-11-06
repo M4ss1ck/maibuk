@@ -377,11 +377,12 @@ export function FindReplace({
     <TooltipGroup>
       <div
         ref={panelRef}
-        className="absolute top-2 right-2 z-50 flex w-[min(28rem,calc(100%_-_1rem))] flex-col gap-1 rounded-md border border-border bg-card p-1.5 shadow-lg"
+        className="@container absolute top-2 right-2 z-50 flex w-[min(28rem,calc(100%_-_1rem))] flex-col gap-1 rounded-md border border-border bg-card p-1.5 shadow-lg"
       >
-        {/* Find row */}
-        <div className="flex items-center gap-1">
-          <div className="relative min-w-0 flex-1">
+        {/* Find row. In a narrow host (Quick Note's side panel) the field takes
+            its own line, so its switches never squeeze out the typing room. */}
+        <div className="flex flex-wrap items-center gap-1">
+          <div className="relative min-w-0 flex-1 basis-full @xs:basis-0">
             <input
               ref={findInputRef}
               type="text"
