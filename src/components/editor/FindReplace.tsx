@@ -337,6 +337,8 @@ export function FindReplace({
   const handleFindKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (handleUndoRedo(e)) return;
     if (e.key === "Escape") {
+      // The bar owns this Escape: an enclosing panel must not also close.
+      e.stopPropagation();
       closeAndReturnFocus();
     } else if (e.key === "Enter") {
       e.preventDefault();
@@ -348,6 +350,8 @@ export function FindReplace({
   const handleReplaceKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (handleUndoRedo(e)) return;
     if (e.key === "Escape") {
+      // The bar owns this Escape: an enclosing panel must not also close.
+      e.stopPropagation();
       closeAndReturnFocus();
     } else if (e.key === "Enter") {
       e.preventDefault();

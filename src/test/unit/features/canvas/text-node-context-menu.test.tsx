@@ -149,6 +149,8 @@ function fakeEditor(misspelling: { word: string; from: number; to: number } | nu
     isDestroyed: false,
     isEditable: true,
     getHTML: vi.fn(() => "<p>Idea</p>"),
+    // The shared surface reads these while its Find bar is closed.
+    getAttributes: () => ({}),
     on: vi.fn(),
     off: vi.fn(),
     view: {
@@ -175,6 +177,7 @@ function fakeEditor(misspelling: { word: string; from: number; to: number } | nu
         editor.isFocused = true;
       }),
       addToDictionary: vi.fn(),
+      clearSearchHighlights: vi.fn(),
     },
     chain: vi.fn(() => ({
       focus,

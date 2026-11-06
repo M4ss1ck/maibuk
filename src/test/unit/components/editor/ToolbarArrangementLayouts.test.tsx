@@ -330,7 +330,7 @@ describe("the Selection layout by keyboard", () => {
       within(selectionTray)
         .getAllByRole("option")
         .map((el) => el.dataset.key)
-    ).toEqual(["font", "line-height", "highlight", "link-code", "align"]);
+    ).toEqual(["font", "line-height", "highlight", "text-color", "link-code", "align"]);
     act(() => option(selectionTray, "toolbar.groups.highlight").focus());
 
     await user.keyboard("{Enter}{ArrowUp}{Enter}");

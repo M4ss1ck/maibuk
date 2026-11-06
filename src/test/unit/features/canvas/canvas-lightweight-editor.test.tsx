@@ -111,7 +111,8 @@ function mockOpenEditor() {
   transaction.scrollIntoView.mockReturnValue(transaction);
   const view = { dispatch: vi.fn(), focus: vi.fn() };
   mocks.useEditor.mockReturnValue({
-    commands: { focus: vi.fn() },
+    commands: { focus: vi.fn(), clearSearchHighlights: vi.fn() },
+    getAttributes: () => ({}),
     on: vi.fn(),
     off: vi.fn(),
     state: { doc, tr: transaction },
@@ -147,7 +148,8 @@ describe("LightweightNode editor lifecycle", () => {
     useSettingsStore.setState({ language: "es" });
     mocks.state.editingNodeId = "node";
     mocks.useEditor.mockReturnValue({
-      commands: { focus: vi.fn() },
+      commands: { focus: vi.fn(), clearSearchHighlights: vi.fn() },
+      getAttributes: () => ({}),
       on: vi.fn(),
       off: vi.fn(),
       getHTML: vi.fn(() => "<p>Idea</p>"),
@@ -224,7 +226,8 @@ describe("LightweightNode editor lifecycle", () => {
   it("scopes node colors to the node and content while editing", async () => {
     mocks.state.editingNodeId = "node";
     mocks.useEditor.mockReturnValue({
-      commands: { focus: vi.fn() },
+      commands: { focus: vi.fn(), clearSearchHighlights: vi.fn() },
+      getAttributes: () => ({}),
       on: vi.fn(),
       off: vi.fn(),
       getHTML: vi.fn(() => "<p>Idea</p>"),
@@ -252,7 +255,8 @@ describe("LightweightNode editor lifecycle", () => {
   it("builds the editor from the shared rich-text factory with a markdown callback", async () => {
     mocks.state.editingNodeId = "node";
     mocks.useEditor.mockReturnValue({
-      commands: { focus: vi.fn() },
+      commands: { focus: vi.fn(), clearSearchHighlights: vi.fn() },
+      getAttributes: () => ({}),
       on: vi.fn(),
       off: vi.fn(),
       getHTML: vi.fn(() => "<p>Idea</p>"),
@@ -273,7 +277,8 @@ describe("LightweightNode editor lifecycle", () => {
   it("does not name headings on open, so leaving an unedited node writes nothing new", async () => {
     mocks.state.editingNodeId = "node";
     mocks.useEditor.mockReturnValue({
-      commands: { focus: vi.fn() },
+      commands: { focus: vi.fn(), clearSearchHighlights: vi.fn() },
+      getAttributes: () => ({}),
       on: vi.fn(),
       off: vi.fn(),
       getHTML: vi.fn(() => "<p>Idea</p>"),
@@ -293,7 +298,8 @@ describe("LightweightNode editor lifecycle", () => {
     useSettingsStore.setState({ editorAutoClose: true });
     mocks.state.editingNodeId = "node";
     mocks.useEditor.mockReturnValue({
-      commands: { focus: vi.fn() },
+      commands: { focus: vi.fn(), clearSearchHighlights: vi.fn() },
+      getAttributes: () => ({}),
       on: vi.fn(),
       off: vi.fn(),
       getHTML: vi.fn(() => "<p>Idea</p>"),
@@ -309,7 +315,8 @@ describe("LightweightNode editor lifecycle", () => {
   it("Escape leaves text editing through the store", async () => {
     mocks.state.editingNodeId = "node";
     mocks.useEditor.mockReturnValue({
-      commands: { focus: vi.fn() },
+      commands: { focus: vi.fn(), clearSearchHighlights: vi.fn() },
+      getAttributes: () => ({}),
       on: vi.fn(),
       off: vi.fn(),
       getHTML: vi.fn(() => "<p>Idea</p>"),
@@ -325,7 +332,8 @@ describe("LightweightNode editor lifecycle", () => {
   it("Escape commits the typed HTML before leaving editing", async () => {
     mocks.state.editingNodeId = "node";
     mocks.useEditor.mockReturnValue({
-      commands: { focus: vi.fn() },
+      commands: { focus: vi.fn(), clearSearchHighlights: vi.fn() },
+      getAttributes: () => ({}),
       on: vi.fn(),
       off: vi.fn(),
       getHTML: vi.fn(() => "<p>Idea edited</p>"),
@@ -345,7 +353,8 @@ describe("LightweightNode editor lifecycle", () => {
     mocks.state.editingNodeId = "node";
     mocks.state.pristineTextNode = { id: "node", revision: 0 };
     mocks.useEditor.mockReturnValue({
-      commands: { focus: vi.fn() },
+      commands: { focus: vi.fn(), clearSearchHighlights: vi.fn() },
+      getAttributes: () => ({}),
       on: vi.fn(),
       off: vi.fn(),
       getHTML: vi.fn(() => "<p></p>"),
@@ -363,7 +372,8 @@ describe("LightweightNode editor lifecycle", () => {
     mocks.state.editingNodeId = "node";
     mocks.state.pristineTextNode = null;
     mocks.useEditor.mockReturnValue({
-      commands: { focus: vi.fn() },
+      commands: { focus: vi.fn(), clearSearchHighlights: vi.fn() },
+      getAttributes: () => ({}),
       on: vi.fn(),
       off: vi.fn(),
       getHTML: vi.fn(() => "<p></p>"),

@@ -19,14 +19,16 @@ Element.prototype.scrollIntoView ??= function scrollIntoView() {};
 
 const editors: Editor[] = [];
 
-function renderFindReplace(onClose: () => void, content = "") {
+function renderFindReplace(onClose: () => void, content = "", onParentKeyDown?: () => void) {
   const editor = new Editor({
     content,
     extensions: [...createRichTextExtensions(), SearchReplace],
   });
   editors.push(editor);
+  // The parent stands in for the surface that encloses the bar (the Book side
+  // panel), whose own Escape handler dismisses it.
   const result = render(
-    <div>
+    <div onKeyDown={onParentKeyDown}>
       <EditorContent editor={editor} />
       <FindReplace editor={editor} isOpen onClose={onClose} />
     </div>
@@ -166,6 +168,34 @@ describe("FindReplace", () => {
 
     expect(onClose).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(document.activeElement).toBe(editor.view.dom));
+  });
+
+  it("keeps Escape from the find input inside the bar", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const onParentKeyDown = vi.fn();
+    const { editor } = renderFindReplace(onClose, "", onParentKeyDown);
+
+    await user.click(screen.getByPlaceholderText("editor.find"));
+    await user.keyboard("{Escape}");
+
+    // The bar owns this Escape: an enclosing panel must not also close.
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onParentKeyDown).not.toHaveBeenCalled();
+    await waitFor(() => expect(document.activeElement).toBe(editor.view.dom));
+  });
+
+  it("keeps Escape from the replace input inside the bar", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const onParentKeyDown = vi.fn();
+    renderFindReplace(onClose, "", onParentKeyDown);
+
+    await user.click(screen.getByPlaceholderText("editor.replaceWith"));
+    await user.keyboard("{Escape}");
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onParentKeyDown).not.toHaveBeenCalled();
   });
 
   it("sizes inputs from available panel width instead of fixed 224px, keeping every action", () => {

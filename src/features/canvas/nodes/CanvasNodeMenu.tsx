@@ -1,4 +1,4 @@
-import { useRef, useState, type RefObject } from "react";
+import { useMemo, useRef, useState, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { Copy, ExternalLink, Spline, Trash2 } from "lucide-react";
@@ -89,6 +89,19 @@ export function useCanvasNodeMenu(
 ) {
   const { t } = useTranslation();
   const anchorRef = useRef<HTMLDivElement>(null);
+  // React Flow puts keyboard focus on the `.react-flow__node` wrapper, an
+  // ancestor of the element this menu is anchored to. Resolving to that
+  // wrapper is what lets the focused node's Commands fire from the keyboard;
+  // another node's wrapper never contains the focused element.
+  const commandFocusRef = useMemo<RefObject<HTMLElement | null>>(
+    () => ({
+      get current() {
+        const anchor = anchorRef.current;
+        return anchor?.closest<HTMLElement>(".react-flow__node") ?? anchor;
+      },
+    }),
+    []
+  );
   const [isOpen, setIsOpen] = useState(false);
   // The Link the open gesture pointed at. Cleared for any open that did not
   // come from the pointer, and when the menu closes.
@@ -130,7 +143,7 @@ export function useCanvasNodeMenu(
       setIsOpen(true);
     },
   });
-  useItemCommands(anchorRef, actions, { enabled: !isDisabled });
+  useItemCommands(commandFocusRef, actions, { enabled: !isDisabled });
 
   const menu = (
     <ItemActionsPopover

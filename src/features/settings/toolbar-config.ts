@@ -116,6 +116,7 @@ export const FLOATING_ELIGIBLE_IDS: ReadonlySet<string> = new Set([
   "basic-marks",
   "headings",
   "highlight",
+  "text-color",
   "link-code",
   "align",
   "font",
