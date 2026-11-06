@@ -181,6 +181,61 @@ describe("resting Text Node links", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  it("keeps focus on content inside a resting node: a re-render never rewrites its HTML", async () => {
+    const { rerender } = renderInFlowNode(linkedHtml);
+    const link = screen.getByRole("link", { name: "notes" });
+
+    // Focus inside the node re-renders it (the node menu tracks focus within).
+    link.focus();
+    await waitFor(() => expect(link).toHaveFocus());
+    rerender(
+      // biome-ignore lint/a11y/useSemanticElements: a Canvas node wrapper is a div, as React Flow renders it.
+      // biome-ignore lint/a11y/noNoninteractiveTabindex: React Flow makes that wrapper focusable so the keyboard drives the node.
+      <div className="react-flow__node react-flow__node-text" role="group" tabIndex={0}>
+        {nodeElement(linkedHtml)}
+      </div>
+    );
+
+    expect(screen.getByRole("link", { name: "notes" })).toBe(link);
+    expect(link).toHaveFocus();
+  });
+
+  it("keeps resting Links out of the Tab order, so Tab and Shift+Tab pass the node", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        {/* biome-ignore lint/a11y/useSemanticElements: a Canvas node wrapper is a div, as React Flow renders it. */}
+        {/* biome-ignore lint/a11y/noNoninteractiveTabindex: React Flow makes that wrapper focusable so the keyboard drives the node. */}
+        <div className="react-flow__node" role="group" aria-label="storm" tabIndex={0}>
+          {nodeElement(linkedHtml)}
+        </div>
+        <button type="button">next</button>
+      </>
+    );
+    const wrapper = screen.getByRole("group", { name: "storm" });
+
+    wrapper.focus();
+    await user.tab();
+    expect(screen.getByRole("button", { name: "next" })).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(wrapper).toHaveFocus();
+  });
+
+  it("saves the stored HTML without the Tab order marker the resting view adds", async () => {
+    const user = userEvent.setup();
+    renderTextNode(
+      '<p><a href="https://example.com/a">a</a> <a href="https://example.com/b">b</a></p>'
+    );
+    expect(screen.getByRole("link", { name: "b" })).toHaveAttribute("tabindex", "-1");
+
+    fireEvent.click(screen.getByRole("link", { name: "a" }));
+    await user.click(screen.getByRole("button", { name: "editor.removeLink" }));
+
+    expect(mocks.updateTextNode).toHaveBeenCalledWith("node", {
+      html: '<p>a <a href="https://example.com/b">b</a></p>',
+    });
+  });
+
   it.each([
     ["read-only", { editorReadOnly: true }],
     ["locked", { interactivityLocked: true }],

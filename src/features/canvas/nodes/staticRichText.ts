@@ -73,6 +73,12 @@ export function prepareStaticCanvasHtml(html: string): string {
   const doc = new DOMParser().parseFromString(sanitizeNodeHtml(html), "text/html");
   const body = doc.body;
 
+  // A resting Link is no Tab stop: its keyboard route is the node's Shift+F10
+  // menu, and a focusable anchor inside a React Flow node traps Tab (#729).
+  body.querySelectorAll("a[href]").forEach((anchor) => {
+    anchor.setAttribute("tabindex", "-1");
+  });
+
   body.querySelectorAll("p").forEach((paragraph) => {
     if (paragraph.childNodes.length === 0) {
       paragraph.appendChild(doc.createElement("br"));
