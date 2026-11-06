@@ -439,7 +439,7 @@ describe("resetAllSettings", () => {
         code: "permission-denied",
       });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });

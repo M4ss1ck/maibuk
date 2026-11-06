@@ -208,9 +208,9 @@ describe("Echoes report page", () => {
         expect.stringContaining("shore"),
       ]);
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -254,9 +254,9 @@ describe("Echoes report page", () => {
       await screen.findByRole("option", { name: /The harbor was/ });
       expect(new Set(names()).size).toBe(names().length);
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -280,9 +280,9 @@ describe("Echoes report page", () => {
       expect(await screen.findByRole("option", { name: /The harbor was/ })).toBeInTheDocument();
       expect(screen.queryByText(en["empty.overused"])).not.toBeInTheDocument();
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -304,9 +304,9 @@ describe("Echoes report page", () => {
       await pickOption(user, en["report.book"], "Emma");
       expect(await screen.findByRole("option", { name: /garden/ })).toBeInTheDocument();
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -338,9 +338,9 @@ describe("Echoes report page", () => {
         ])
       );
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -379,9 +379,9 @@ describe("Echoes report page", () => {
         shoreOccurrences.length
       );
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -416,9 +416,9 @@ describe("Echoes report page", () => {
       const names = screen.getAllByRole("option").map((option) => option.textContent);
       expect(new Set(names).size).toBe(names.length);
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -451,9 +451,9 @@ describe("Echoes report page", () => {
       );
       expect(row).toHaveTextContent(/, \+\d+ more$/);
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -490,9 +490,9 @@ describe("Echoes report page", () => {
       expect(within(listbox).getAllByRole("option")).toHaveLength(251);
       expect(within(listbox).getByRole("option", { name: "Day 250" })).toBeInTheDocument();
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -520,9 +520,9 @@ describe("Echoes report page", () => {
       );
       expect(screen.queryByRole("option", { name: /harbor/ })).not.toBeInTheDocument();
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -553,9 +553,9 @@ describe("Echoes report page", () => {
       await user.keyboard("{Enter}");
       await waitFor(() => expect(screen.queryByText(en.stale)).not.toBeInTheDocument());
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -577,9 +577,9 @@ describe("Echoes report page", () => {
       );
       expect(screen.queryByText(en.stale)).not.toBeInTheDocument();
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -598,9 +598,9 @@ describe("Echoes report page", () => {
       expect(await screen.findByRole("option", { name: /harbor/ })).toBeInTheDocument();
       expect(screen.queryByRole("option", { name: /shore/ })).not.toBeInTheDocument();
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -625,9 +625,9 @@ describe("Echoes report page", () => {
       // Its panel says the check is off rather than showing an empty list.
       expect(await screen.findByText(en["kind.off"])).toBeInTheDocument();
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -645,9 +645,9 @@ describe("Echoes report page", () => {
         const page = await host.renderPage(REPORT_PAGE_ID);
         await screen.findByRole("option", { name: /harbor/ });
         expect(screen.queryByText(/Limited support/)).not.toBeInTheDocument();
-        page.unmount();
+        await page.unmount();
       } finally {
-        host.stop();
+        await host.stop();
       }
     }
 
@@ -662,9 +662,9 @@ describe("Echoes report page", () => {
     try {
       const page = await host.renderPage(REPORT_PAGE_ID);
       expect(await screen.findByText("Limited support for fr")).toBeInTheDocument();
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -678,9 +678,9 @@ describe("Echoes report page", () => {
       expect(await screen.findByRole("option", { name: /shore/ })).toBeInTheDocument();
       expect(screen.queryByRole("option", { name: /harbor/ })).not.toBeInTheDocument();
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -698,9 +698,9 @@ describe("Echoes report page", () => {
       await waitFor(() => host.setLanguage("es"));
       expect(await screen.findByRole("tab", { name: es["tab.nearby"] })).toBeInTheDocument();
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -729,9 +729,9 @@ describe("Echoes report page", () => {
       await waitFor(() => expect(listOptions()).toHaveLength(Math.min(400, total)));
       expect(screen.queryByRole("button", { name: /left\)$/ })).not.toBeInTheDocument();
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -781,9 +781,9 @@ describe("Echoes report page", () => {
       await waitFor(() => expect(listOptions()).toHaveLength(301));
       expect(optionNamed(secondMore)).toBeInTheDocument();
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -822,9 +822,9 @@ describe("Echoes report page", () => {
       await waitFor(() => expect(listOptions()).toHaveLength(200));
       expect(showMoreButton()).toBeDefined();
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -836,7 +836,7 @@ describe("Echoes report page", () => {
       const before = screen.getAllByRole("option").map((row) => row.textContent);
       const computedReads = reads.mock.calls.length;
       expect(computedReads).toBeGreaterThan(0);
-      first.unmount();
+      await first.unmount();
 
       const second = await host.renderPage(REPORT_PAGE_ID);
       expect(await screen.findByRole("option", { name: /harbor/ })).toBeInTheDocument();
@@ -845,9 +845,9 @@ describe("Echoes report page", () => {
       // No Chapter was read again: the kept report answered the page.
       expect(reads.mock.calls.length).toBe(computedReads);
 
-      second.unmount();
+      await second.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -857,7 +857,7 @@ describe("Echoes report page", () => {
       const first = await host.renderPage(REPORT_PAGE_ID);
       await screen.findByRole("option", { name: /harbor/ });
       const computedReads = reads.mock.calls.length;
-      first.unmount();
+      await first.unmount();
 
       await waitFor(() =>
         expect(
@@ -885,9 +885,9 @@ describe("Echoes report page", () => {
       await waitFor(() => expect(reads.mock.calls.length).toBeGreaterThan(computedReads));
       expect(await screen.findByRole("option", { name: /harbor/ })).toBeInTheDocument();
 
-      second.unmount();
+      await second.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -917,14 +917,14 @@ describe("Echoes report page", () => {
       );
       release();
       await screen.findByRole("option", { name: /harbor/ });
-      first.unmount();
+      await first.unmount();
 
       // The kept report remembers the change it missed.
       const second = await host.renderPage(REPORT_PAGE_ID);
       expect(await screen.findByText(en.stale)).toBeInTheDocument();
-      second.unmount();
+      await second.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -946,16 +946,16 @@ describe("Echoes report page", () => {
       );
       expect(item).not.toBeInTheDocument();
       const readsAfterIgnore = reads.mock.calls.length;
-      first.unmount();
+      await first.unmount();
 
       const second = await host.renderPage(REPORT_PAGE_ID);
       expect(await screen.findByRole("option", { name: /shore/ })).toBeInTheDocument();
       expect(screen.queryByRole("option", { name: /harbor/ })).not.toBeInTheDocument();
       expect(reads.mock.calls.length).toBe(readsAfterIgnore);
 
-      second.unmount();
+      await second.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -967,7 +967,7 @@ describe("Echoes report page", () => {
       await screen.findByRole("option", { name: /harbor/ });
       const before = screen.getAllByRole("option").map((row) => row.textContent);
       const computedReads = reads.mock.calls.length;
-      first.unmount();
+      await first.unmount();
 
       // The host draws asynchronously, so the DOM is watched across the whole
       // second mount: the loading screen and the compute bar must never appear,
@@ -990,10 +990,10 @@ describe("Echoes report page", () => {
       // No Chapter was read again: the kept report answered the page.
       expect(reads.mock.calls.length).toBe(computedReads);
 
-      second.unmount();
+      await second.unmount();
     } finally {
       observer?.disconnect();
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1002,7 +1002,7 @@ describe("Echoes report page", () => {
     try {
       const first = await host.renderPage(REPORT_PAGE_ID);
       await screen.findByRole("option", { name: /harbor/ });
-      first.unmount();
+      await first.unmount();
 
       await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, {
         id: FIND_ECHOES,
@@ -1016,9 +1016,9 @@ describe("Echoes report page", () => {
       expect(await screen.findByRole("option", { name: /harbor/ })).toBeInTheDocument();
       expect(screen.queryByRole("option", { name: /shore/ })).not.toBeInTheDocument();
 
-      second.unmount();
+      await second.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1029,7 +1029,7 @@ describe("Echoes report page", () => {
       const first = await host.renderPage(REPORT_PAGE_ID);
       await screen.findByRole("option", { name: /harbor/ });
       const computedReads = reads.mock.calls.length;
-      first.unmount();
+      await first.unmount();
 
       storage.set(ECHOES_SETTINGS_KEY, { ignore: ["harbor"] });
 
@@ -1042,9 +1042,9 @@ describe("Echoes report page", () => {
       );
       expect(reads.mock.calls.length).toBeGreaterThan(computedReads);
 
-      second.unmount();
+      await second.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1068,7 +1068,7 @@ describe("Echoes report page", () => {
       const first = await host.renderPage(REPORT_PAGE_ID);
       await screen.findByRole("option", { name: /harbor/ });
       expect(screen.getByLabelText(en["report.book"])).toHaveTextContent("Dune");
-      first.unmount();
+      await first.unmount();
 
       const second = await host.renderPage(REPORT_PAGE_ID);
       await waitFor(() =>
@@ -1076,9 +1076,9 @@ describe("Echoes report page", () => {
       );
       expect(await screen.findByRole("option", { name: /garden/ })).toBeInTheDocument();
 
-      second.unmount();
+      await second.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1103,15 +1103,15 @@ describe("Echoes report page", () => {
     try {
       const first = await host.renderPage(REPORT_PAGE_ID);
       await screen.findByRole("option", { name: /harbor/ });
-      first.unmount();
+      await first.unmount();
 
       const second = await host.renderPage(REPORT_PAGE_ID);
       await waitFor(() =>
         expect(screen.getByLabelText(en["report.book"])).toHaveTextContent("Dune Messiah")
       );
-      second.unmount();
+      await second.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1137,9 +1137,9 @@ describe("Echoes report page", () => {
 
       release();
       await screen.findByRole("option", { name: /harbor/ });
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });

@@ -121,7 +121,7 @@ describe("edit_chapter", () => {
       const reread = await callTool(host, key, "read_chapter", { chapter: "chapteralpha" });
       expect(lastEditedOf(textOf(reread))).toBe(lines[1]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -145,7 +145,7 @@ describe("edit_chapter", () => {
         "<p>First.</p><p>A new scene &amp; more<br>same paragraph</p><p>Second paragraph</p>"
       );
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -168,7 +168,7 @@ describe("edit_chapter", () => {
       expect(textOf(answer).split("\n")[0]).toBe("Appended to Chapter The Chapter.");
       expect(chapters[0].content.html).toBe("<p>First.</p><h2>Scene</h2><p>Body</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -192,7 +192,7 @@ describe("edit_chapter", () => {
       expect(textOf(answer)).toContain("format html");
       expect(chapters[0].content.html).toBe("<p>The quick fox.</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -216,7 +216,7 @@ describe("edit_chapter", () => {
       expect(textOf(answer)).toContain("read the Chapter as HTML");
       expect(chapters[0].content.html).toBe("<p>hello <em>world</em></p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -240,7 +240,7 @@ describe("edit_chapter", () => {
       expect(textOf(answer)).toContain("surrounding");
       expect(chapters[0].content.html).toBe("<p>fox and fox</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -264,7 +264,7 @@ describe("edit_chapter", () => {
       expect(textOf(answer)).toContain("format html");
       expect(chapters[0].content.html).toBe("<p>hello <em>world</em></p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -287,7 +287,7 @@ describe("edit_chapter", () => {
       expect(textOf(answer)).toContain("No match");
       expect(chapters[0].content.html).toBe('<p class="lead" title="a>b">hello</p>');
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -310,7 +310,7 @@ describe("edit_chapter", () => {
       expect(textOf(answer)).toContain("No match");
       expect(chapters[0].content.html).toBe("<p>salt &amp; pepper</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -333,7 +333,7 @@ describe("edit_chapter", () => {
       expect(textOf(answer).split("\n")[0]).toBe("Replaced 1 match in Chapter The Chapter.");
       expect(chapters[0].content.html).toBe("<p>hoP</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -355,7 +355,7 @@ describe("edit_chapter", () => {
       expect(isError(answer)).toBe(false);
       expect(chapters[0].content.html).toBe("<p>Second <em>word</em></p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -377,7 +377,7 @@ describe("edit_chapter", () => {
       expect(isError(answer)).toBe(false);
       expect(chapters[0].content.html).toBe("<p>salt &amp; sugar</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -407,7 +407,7 @@ describe("edit_chapter", () => {
       expect(isError(angle)).toBe(false);
       expect(chapters[0].content.html).toBe("<p>Tom and Jerry &lt;4</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -429,7 +429,7 @@ describe("edit_chapter", () => {
       expect(isError(answer)).toBe(false);
       expect(chapters[0].content.html).toBe("<p>text</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -456,7 +456,7 @@ describe("edit_chapter", () => {
       expect(textOf(answer)).toMatch(message);
       expect(chapters[0].content.html).toBe("<p>a</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -479,7 +479,7 @@ describe("edit_chapter", () => {
         "No Chapter has the id zzzzzzzz; call get_book to see the Chapters."
       );
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -500,7 +500,7 @@ describe("edit_chapter", () => {
       });
       expect(answer.status).toBe(503);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
@@ -533,7 +533,7 @@ describe("write_chapter", () => {
       expect(textOf(answer).startsWith("Replaced the whole of Chapter")).toBe(true);
       expect(chapters[0].content.html).toBe("<p>new content</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -563,7 +563,7 @@ describe("write_chapter", () => {
       expect(isError(answer)).toBe(false);
       expect(chapters[0].content.html).toBe("<p>One</p><p>Two</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -593,7 +593,7 @@ describe("write_chapter", () => {
       expect(isError(answer)).toBe(false);
       expect(chapters[0].content.html).toBe("<p>Hello <strong>world</strong></p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -619,7 +619,7 @@ describe("write_chapter", () => {
       expect(textOf(answer)).toContain("changed since you read it");
       expect(chapters[0].content.html).toBe("<p>old</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -662,7 +662,7 @@ describe("write_chapter", () => {
       });
       expect(isError(ok)).toBe(false);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -695,7 +695,7 @@ describe("write_chapter", () => {
       expect(isError(neither)).toBe(true);
       expect(textOf(neither)).toContain("Give the new content as text or as html");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
@@ -784,7 +784,7 @@ describe("write_chapter create mode", () => {
       );
       expect(await orderTitles(host, key)).toEqual(["Alpha", "Bravo", "Charlie", "Delta"]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -803,7 +803,7 @@ describe("write_chapter create mode", () => {
       );
       expect(await orderTitles(host, key)).toEqual(["Opening", "Alpha", "Bravo", "Charlie"]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -822,7 +822,7 @@ describe("write_chapter create mode", () => {
       );
       expect(await orderTitles(host, key)).toEqual(["Alpha", "Middle", "Bravo", "Charlie"]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -841,7 +841,7 @@ describe("write_chapter create mode", () => {
       );
       expect(await orderTitles(host, key)).toEqual(["Alpha", "Bravo", "Charlie", "Finale"]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -862,7 +862,7 @@ describe("write_chapter create mode", () => {
       expect(isError(reread)).toBe(false);
       expect(reread.json.result.content[1].text).toBe("<p>One</p><p>Two</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -883,7 +883,7 @@ describe("write_chapter create mode", () => {
       expect(isError(reread)).toBe(false);
       expect(reread.json.result.content[1].text).toBe("<h2>Scene</h2><p>Body</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -902,7 +902,7 @@ describe("write_chapter create mode", () => {
       expect(isError(reread)).toBe(false);
       expect(reread.json.result.content[1].text).toBe("");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -924,7 +924,7 @@ describe("write_chapter create mode", () => {
       expect(reread.json.result.content[0].text).toContain("Found");
       expect(reread.json.result.content[1].text).toBe("Hello.");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -998,7 +998,7 @@ describe("write_chapter create mode", () => {
       expect(JSON.stringify(chapters)).toBe(beforeRows);
       expect(host.checkpoints).toEqual([]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1045,7 +1045,7 @@ describe("write_chapter create mode", () => {
       expect(host.checkpoints).toHaveLength(1);
       expect(await orderTitles(host, key)).toEqual(["Alpha", "Bravo", "Charlie", "Renamed"]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
@@ -1084,7 +1084,7 @@ describe("write_note", () => {
       expect(reread.json.result.content[1].text).toBe("One\n\nTwo");
       expect(lastEditedOf(reread.json.result.content[0].text)).toBe(lastEditedOf(textOf(answer)));
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1103,7 +1103,7 @@ describe("write_note", () => {
       });
       expect(reread.json.result.content[0].text).toContain("Book: Unfiled");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1118,7 +1118,7 @@ describe("write_note", () => {
       });
       expect(reread.json.result.content[0].text).toContain("Book: Unfiled");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1136,7 +1136,7 @@ describe("write_note", () => {
       expect(reread.json.result.content[0].text).toContain(": Untitled");
       expect(reread.json.result.content[1].text).toBe("");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1154,7 +1154,7 @@ describe("write_note", () => {
       });
       expect(reread.json.result.content[0].text).toContain("Tags: alpha, Beta");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1175,7 +1175,7 @@ describe("write_note", () => {
       const after = await callTool(host, key, "read_note", { note: "notealpha1" });
       expect(lastEditedOf(textOf(after))).toBe(lastEditedOf(textOf(answer)));
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1194,7 +1194,7 @@ describe("write_note", () => {
       expect(notes[0].content.html).toBe("<p>Old body.</p>");
       expect(host.checkpoints).toEqual([]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1213,7 +1213,7 @@ describe("write_note", () => {
       expect(notes[0].content.html).toBe("<p>Old body.</p>");
       expect(host.checkpoints).toEqual([]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1232,7 +1232,7 @@ describe("write_note", () => {
       expect(notes[0].content.html).toBe("<p>Old body.</p>");
       expect(textOf(answer).split("\n")[0]).toBe("Replaced the whole of Note Renamed.");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1249,7 +1249,7 @@ describe("write_note", () => {
       expect(isError(answer)).toBe(false);
       expect(notes[0].tags).toEqual(["plot", "idea"]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1269,7 +1269,7 @@ describe("write_note", () => {
         "Replaced the whole of Note The Note. It is now in Book Other Book."
       );
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1289,7 +1289,7 @@ describe("write_note", () => {
         "Replaced the whole of Note The Note. It is now an Unfiled Note."
       );
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1326,7 +1326,7 @@ describe("write_note", () => {
       expect(JSON.stringify(notes)).toBe(before);
       expect(host.checkpoints).toEqual([]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
@@ -1368,7 +1368,7 @@ describe("edit_note", () => {
       const reread = await callTool(host, key, "read_note", { note: "notealpha1" });
       expect(lastEditedOf(textOf(reread))).toBe(lines[1]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1386,7 +1386,7 @@ describe("edit_note", () => {
         "<p>Old body.</p><p>A new scene &amp; more<br>same paragraph</p><p>Second paragraph</p>"
       );
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1403,7 +1403,7 @@ describe("edit_note", () => {
       expect(textOf(answer).split("\n")[0]).toBe("Appended to Note The Note.");
       expect(notes[0].content.html).toBe("<p>Old body.</p><h2>Scene</h2><p>Body</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1423,7 +1423,7 @@ describe("edit_note", () => {
       expect(notes[0].content.html).toBe("<p>Old body.</p>");
       expect(host.checkpoints).toEqual([]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1443,7 +1443,7 @@ describe("edit_note", () => {
       );
       expect(notes[0].content.html).toBe("<p>hello <em>world</em></p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1464,7 +1464,7 @@ describe("edit_note", () => {
       expect(notes[0].content.html).toBe("<p>fox and fox</p>");
       expect(host.checkpoints).toEqual([]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1507,7 +1507,7 @@ describe("edit_note", () => {
       expect(notes[0].content.html).toBe("<p>Old body.</p>");
       expect(host.checkpoints).toEqual([]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1522,7 +1522,7 @@ describe("edit_note", () => {
       expect(isError(answer)).toBe(true);
       expect(textOf(answer)).toBe("No Note has the id zzzzzzzz; call list_notes to see the Notes.");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1540,7 +1540,7 @@ describe("edit_note", () => {
       expect(notes[0].content.html).toBe("<p>Loose body.</p>");
       expect(host.checkpoints).toEqual([]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1555,7 +1555,7 @@ describe("edit_note", () => {
       });
       expect(answer.status).toBe(503);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });

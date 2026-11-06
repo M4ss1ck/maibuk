@@ -10,7 +10,7 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useState, createElement, Fragment } from "react";
+import { useEffect, useState, createElement, Fragment } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { hashPluginDirectory } from "@/features/plugins/directory-hash";
 import { parsePluginManifest } from "@/features/plugins/manifest-validate";
@@ -76,7 +76,7 @@ describe("createTestHost()", () => {
       });
       expect(fetchImpl).toHaveBeenCalledWith(LEAK_URL);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -95,7 +95,7 @@ describe("createTestHost()", () => {
       await expect(client.library.books.get({ bookId: "b1" })).resolves.toEqual(BOOK);
       await expect(client.library.books.get({ bookId: "absent" })).resolves.toBeNull();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -114,11 +114,11 @@ describe("createTestHost()", () => {
         code: "permission-denied",
       });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
-  it("carries the locale overrides the host renderer will apply", () => {
+  it("carries the locale overrides the host renderer will apply", async () => {
     const host = createTestHost({
       manifest: fixtureManifest(),
       locale: { "commands.hello.label": "Hola" },
@@ -126,7 +126,7 @@ describe("createTestHost()", () => {
     try {
       expect(host.locale).toEqual({ "commands.hello.label": "Hola" });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -206,7 +206,7 @@ describe("createTestHost()", () => {
       });
       await expect(client.library.canvases.get({ canvasId: "absent" })).resolves.toBeNull();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -222,7 +222,7 @@ describe("createTestHost()", () => {
       await client.storage.delete({ key: "b" });
       await expect(client.storage.keys({})).resolves.toEqual(["a"]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -254,7 +254,7 @@ describe("createTestHost()", () => {
       await expect(client.secrets.delete({ name: "token" })).resolves.toBeNull();
       await expect(client.secrets.listNames()).resolves.toEqual([]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -272,7 +272,7 @@ describe("createTestHost()", () => {
         { entity: { kind: "book", id: "b1" }, reveal: { from: 3, to: 9 } },
       ]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -299,7 +299,7 @@ describe("createTestHost()", () => {
         { pluginId: "other", pageId: "panel" },
       ]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -318,7 +318,7 @@ describe("createTestHost()", () => {
       await client.navigation.openEntity({ entity: { kind: "book", id: "b1" } });
       expect(host.navigations).toEqual([{ entity: { kind: "book", id: "b1" } }]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -341,7 +341,7 @@ describe("createTestHost()", () => {
       host.setLibraryAvailable(true);
       await expect(client.library.books.list()).resolves.toEqual([BOOK]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -358,7 +358,7 @@ describe("createTestHost()", () => {
         })
       ).rejects.toMatchObject({ code: "invalid-params" });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -372,7 +372,7 @@ describe("createTestHost()", () => {
       ).rejects.toMatchObject({ code: "rate-limited" });
       expect(host.notifications).toEqual([{ variant: "info", message: "one" }]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
@@ -394,7 +394,7 @@ describe("createTestHost() events and language", () => {
       await vi.waitFor(() => expect(seen).toEqual(["en", "es", "en", "es"]));
       await off();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -409,7 +409,7 @@ describe("createTestHost() events and language", () => {
       await vi.waitFor(() => expect(seen).toEqual(["es"]));
       await expect(client.language.get({})).resolves.toEqual({ language: "es" });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -421,7 +421,7 @@ describe("createTestHost() events and language", () => {
       await expect(client.language.get({})).resolves.toEqual({ language: "es" });
       expect(host.broker.stopped).toBe(false);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -464,7 +464,7 @@ describe("createTestHost() events and language", () => {
       host.stopWorker();
       expect(host.broker.emit("library.availabilityChanged", { available: true })).toBe(false);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
@@ -489,7 +489,7 @@ describe("createTestHost() permissions", () => {
         permissions: ["library:read", "editor:read"],
       });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -519,7 +519,7 @@ describe("createTestHost() permissions", () => {
       expect(seen).toEqual([["library:read"], ["library:read", "editor:read"]]);
       await off();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
@@ -578,12 +578,39 @@ describe("renderPage", () => {
       });
       expect(page.violations).toEqual([]);
 
-      page.unmount();
+      await page.unmount();
       await waitFor(() => {
         expect(screen.queryByRole("heading", { name: "Find" })).not.toBeInTheDocument();
       });
     } finally {
-      host.stop();
+      await host.stop();
+    }
+  });
+
+  it("unmount resolves after the Plugin's page has unmounted", async () => {
+    const host = createTestHost({ manifest: fixtureManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      const cleanups: string[] = [];
+
+      /** A Plugin page that records when its React tree unmounts. */
+      function Page() {
+        useEffect(
+          () => () => {
+            cleanups.push("unmounted");
+          },
+          []
+        );
+        return createElement(ui.Text, null, "hi");
+      }
+
+      servePluginUi(client, { pages: { main: Page } });
+
+      const page = await host.renderPage("main");
+      await page.unmount();
+      expect(cleanups).toEqual(["unmounted"]);
+    } finally {
+      await host.stop();
     }
   });
 
@@ -625,7 +652,7 @@ describe("renderPage", () => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
       expect(document.activeElement).toBe(trigger);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -637,7 +664,7 @@ describe("renderPage", () => {
 
       await expect(host.renderPage("missing")).rejects.toThrow("Unknown page missing");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -666,9 +693,9 @@ describe("renderPage", () => {
       await user.keyboard(" ");
       expect(control).toBeChecked();
 
-      row.unmount();
+      await row.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -682,11 +709,11 @@ describe("renderPage", () => {
         "Unknown Settings row missing"
       );
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
-  it("applies the locale override to the manifest it carries", () => {
+  it("applies the locale override to the manifest it carries", async () => {
     const host = createTestHost({
       manifest: fixtureManifest(),
       locale: { "commands.openReport.label": "Abrir informe" },
@@ -694,7 +721,7 @@ describe("renderPage", () => {
     try {
       expect(host.manifest.contributes?.commands?.[0]?.label).toBe("Abrir informe");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
@@ -708,7 +735,7 @@ describe("createTestHost() activation", () => {
         expect(client.activation).toEqual({ startReason: "restore" });
       });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -720,7 +747,7 @@ describe("createTestHost() activation", () => {
         expect(client.activation).toEqual({ startReason: "enable" });
       });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
@@ -767,7 +794,7 @@ describe("createTestHost() toolbar.setPressed", () => {
       await client.toolbar.setPressed({ button: "toggleHighlights", pressed: false });
       expect(host.toolbarPressed("toggleHighlights")).toBe(false);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -787,7 +814,7 @@ describe("createTestHost() toolbar.setPressed", () => {
       expect(host.toolbarPressed("missing")).toBe(false);
       expect(host.toolbarPressed("plain")).toBe(false);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
@@ -817,7 +844,7 @@ describe("createTestHost() endpoint", () => {
       expect(Array.from(answer.body)).toEqual([112, 111, 110, 103]);
       expect(answer.text()).toBe("pong");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -846,7 +873,7 @@ describe("createTestHost() endpoint", () => {
       expect(new TextDecoder().decode(answer.body)).toBe("one two three");
       expect(answer.text()).toBe("one two three");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -870,7 +897,7 @@ describe("createTestHost() endpoint", () => {
       expect(Array.from(answer.body)).toEqual(Array.from(bytes));
       expect(answer.text()).toBe("é");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -906,7 +933,7 @@ describe("createTestHost() endpoint", () => {
       expect(second.headers).toEqual([]);
       expect(second.body.length).toBe(0);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -928,7 +955,7 @@ describe("createTestHost() endpoint", () => {
       await expect(host.endpoint({ path: "/mcp" })).resolves.toMatchObject({ status: 200 });
       expect(handler).toHaveBeenCalledTimes(1);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -943,7 +970,7 @@ describe("createTestHost() endpoint", () => {
       expect(answer.streamed).toBe(false);
       expect(answer.text()).toBe("");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -960,7 +987,7 @@ describe("createTestHost() endpoint", () => {
       expect(answer.status).toBe(500);
       expect(answer.text()).toBe("");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -997,7 +1024,7 @@ describe("createTestHost() endpoint", () => {
       ]);
       stream.close();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
@@ -1023,7 +1050,7 @@ describe("createTestHost() endpoint address", () => {
       host.setEndpointAddress(null);
       await expect(client.endpoint.address()).resolves.toEqual({ url: null });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1038,7 +1065,7 @@ describe("createTestHost() endpoint address", () => {
         permission: "serve",
       });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1057,7 +1084,7 @@ describe("createTestHost() endpoint address", () => {
       await vi.waitFor(() => expect(seen).toEqual([null, addressOf(host, 41000)]));
       await off();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1072,7 +1099,7 @@ describe("createTestHost() endpoint address", () => {
 
       await vi.waitFor(() => expect(seen).toEqual([addressOf(host, 42000)]));
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
@@ -1131,7 +1158,7 @@ describe("createTestHost() Library writes", () => {
         updatedAt: chapter.updatedAt,
       });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1148,7 +1175,7 @@ describe("createTestHost() Library writes", () => {
 
       expect(chapter.content?.html).toBe("<p>Hi</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1165,7 +1192,7 @@ describe("createTestHost() Library writes", () => {
 
       expect(chapter.content?.html).toBe("<p>One &amp; two<br>three</p><p>Four &lt;five&gt;</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1187,7 +1214,7 @@ describe("createTestHost() Library writes", () => {
       });
       expect(chapter.content).toEqual(before);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1207,7 +1234,7 @@ describe("createTestHost() Library writes", () => {
       ).rejects.toMatchObject({ code: "permission-denied", permission: "library:write" });
       expect(chapter.content).toEqual(before);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1242,7 +1269,7 @@ describe("createTestHost() Library writes", () => {
         { bookId: "b1", label: "After edits", versionId: third.versionId },
       ]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1264,7 +1291,7 @@ describe("createTestHost() Library writes", () => {
       });
       expect(host.checkpoints).toEqual([]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1283,7 +1310,7 @@ describe("createTestHost() Library writes", () => {
       // The pending typing landed first, then the write replaced it.
       expect(chapter.content).toEqual({ html: "<p>Written</p>", text: "Written" });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1304,7 +1331,7 @@ describe("createTestHost() Library writes", () => {
       ).rejects.toMatchObject({ code: "conflict" });
       expect(chapter.content).toEqual(before);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1327,7 +1354,7 @@ describe("createTestHost() Library writes", () => {
       // The flush landed the typing, and the refused write left it alone.
       expect(chapter.content).toEqual({ html: "<p>Typed</p>", text: "Typed" });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1344,7 +1371,7 @@ describe("createTestHost() Library writes", () => {
         content: { html: "<p>Typed</p>", text: "Typed" },
       });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1389,7 +1416,7 @@ describe("createTestHost() Library writes", () => {
       expect(chapter).toMatchObject({ title: "Renamed", chapterType: "prologue", status: "final" });
       expect(chapter.updatedAt).toBeGreaterThan(1_000);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1411,7 +1438,7 @@ describe("createTestHost() Library writes", () => {
       expect(chapter.title).toBe("One");
       expect(chapter.updatedAt).toBe(1_000);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1430,7 +1457,7 @@ describe("createTestHost() Library writes", () => {
       ]);
       expect(chapters.map((chapter) => chapter.order)).toEqual([1, 2, 0]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1456,7 +1483,7 @@ describe("createTestHost() Library writes", () => {
       });
       expect(chapters.map((chapter) => chapter.order)).toEqual(before);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1481,7 +1508,7 @@ describe("createTestHost() Library writes", () => {
         content: { text: "Two words", html: "<p>Two words</p>" },
       });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1501,7 +1528,7 @@ describe("createTestHost() Library writes", () => {
         { id: chapterId, order: 3 },
       ]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1523,7 +1550,7 @@ describe("createTestHost() Library writes", () => {
       });
       await expect(client.library.chapters.list({ bookId: "b1" })).resolves.toHaveLength(3);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1539,7 +1566,7 @@ describe("createTestHost() Library writes", () => {
         { id: "c3" },
       ]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1552,7 +1579,7 @@ describe("createTestHost() Library writes", () => {
         message: "Chapter absent does not exist",
       });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1576,7 +1603,7 @@ describe("createTestHost() Library writes", () => {
       expect(book.genre).toBeNull();
       expect(book.targetWordCount).toBeNull();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1599,7 +1626,7 @@ describe("createTestHost() Library writes", () => {
         message: "Book absent does not exist",
       });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1623,7 +1650,7 @@ describe("createTestHost() Library writes", () => {
         client.library.books.checkpoint({ bookId: "b1", label: "After" })
       ).resolves.toMatchObject({ versionId: expect.any(String) });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1672,7 +1699,7 @@ describe("createTestHost() Library writes", () => {
       });
       await expect(client.library.notes.list({ bookId: "b1" })).resolves.toHaveLength(2);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1690,7 +1717,7 @@ describe("createTestHost() Library writes", () => {
         tags: ["a", "b"],
       });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1710,7 +1737,7 @@ describe("createTestHost() Library writes", () => {
         { id: explicit, bookId: null },
       ]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1735,7 +1762,7 @@ describe("createTestHost() Library writes", () => {
       });
       expect(note.updatedAt).toBeGreaterThan(2_000);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1754,7 +1781,7 @@ describe("createTestHost() Library writes", () => {
       expect(note.bookId).toBeNull();
       await expect(client.library.notes.list({ bookId: "b2" })).resolves.toEqual([]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1777,7 +1804,7 @@ describe("createTestHost() Library writes", () => {
       expect(note.title).toBe("Note");
       expect(note.bookId).toBe("b1");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1805,7 +1832,7 @@ describe("createTestHost() Library writes", () => {
       ).resolves.toBeNull();
       expect(note.title).toBe("Right");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1827,7 +1854,7 @@ describe("createTestHost() Library writes", () => {
       // The flush landed the author's typing, and the refused write left it alone.
       expect(note.content).toEqual({ html: "<p>Typed</p>", text: "Typed" });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1845,7 +1872,7 @@ describe("createTestHost() Library writes", () => {
       // The pending typing landed first, then the write replaced it.
       expect(note.content).toEqual({ html: "<p>Written</p>", text: "Written" });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1862,7 +1889,7 @@ describe("createTestHost() Library writes", () => {
         message: "Note absent does not exist",
       });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
@@ -1905,7 +1932,7 @@ describe("createTestHost() File Grants", () => {
         client.files.read({ grant: picked.grant, offset: 0, length: 1 })
       ).rejects.toMatchObject({ code: "file-missing" });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1927,7 +1954,7 @@ describe("createTestHost() File Grants", () => {
         code: "file-missing",
       });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -1946,7 +1973,7 @@ describe("createTestHost() File Grants", () => {
       });
       await expect(host.files.grants()).resolves.toEqual([]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });

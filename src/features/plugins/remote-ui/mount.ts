@@ -23,8 +23,13 @@ export interface PluginUiMount {
   surface: string;
   /** Resolves once the Plugin accepts the mount; rejects with the broker's error. */
   mounted: Promise<void>;
-  /** Tears the mount down; idempotent, and a no-op request once the Plugin stopped. */
-  unmount(): void;
+  /**
+   * Tears the mount down; idempotent, and a no-op request once the Plugin
+   * stopped. Resolves once the Plugin answers the unmount, or at once when it
+   * cannot (already closed or stopped); never rejects. A live broker whose
+   * Plugin never answers leaves it pending: stop the broker to settle it.
+   */
+  unmount(): Promise<void>;
 }
 
 let nextSurface = 0;
@@ -49,14 +54,18 @@ export function openPluginUiMount(
     surface,
     mounted,
     unmount() {
-      if (closed) return;
+      if (closed) return Promise.resolve();
       closed = true;
       // A stopped Plugin cannot answer the request, so it is skipped; a live one
       // settles on its own reply or is abandoned when it never comes.
-      if (!broker.stopped) {
-        void broker.request(PLUGIN_UI_UNMOUNT_REQUEST, { surface }).catch(() => {});
-      }
+      const settled = broker.stopped
+        ? Promise.resolve()
+        : broker.request(PLUGIN_UI_UNMOUNT_REQUEST, { surface }).then(
+            () => undefined,
+            () => undefined
+          );
       channel.port1.close();
+      return settled;
     },
   };
 }

@@ -113,9 +113,9 @@ describe("MCP Server page", () => {
         expect(await screen.findByText(en.copied)).toBeInTheDocument();
       }
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -147,9 +147,9 @@ describe("MCP Server page", () => {
       const accepted = await mcpRequest(host, freshKey, initializeBody(2));
       expect(accepted.status).toBe(200);
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -175,9 +175,9 @@ describe("MCP Server page", () => {
       expect(screen.getByText(en.connectionsEmpty)).toBeInTheDocument();
       await waitFor(() => expect(storage.get("connections")).toEqual([]));
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -220,9 +220,9 @@ describe("MCP Server page", () => {
       );
       expect(screen.queryByText(en.reconnect)).toBeNull();
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -234,9 +234,9 @@ describe("MCP Server page", () => {
       expect(await screen.findByText(en.unavailable)).toBeInTheDocument();
       expect(screen.queryAllByRole("button", { name: en.copy })).toHaveLength(0);
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -256,9 +256,9 @@ describe("MCP Server page", () => {
       expect(await findSnippet(claudeCodeSnippet({ url: MCP_URL, key }))).toBeInTheDocument();
       expect(screen.queryByText(en.snippetsUnavailable)).toBeNull();
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -273,9 +273,9 @@ describe("MCP Server page", () => {
       expect(screen.getByRole("button", { name: es.newKey })).toBeInTheDocument();
       expect(screen.getAllByRole("button", { name: es.copy })).toHaveLength(4);
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });

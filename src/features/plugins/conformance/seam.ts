@@ -502,7 +502,7 @@ export async function createRuntimeSeam(
         }
       }
     } finally {
-      mount.unmount();
+      void mount.unmount();
       thread.close();
       created.dispose();
     }

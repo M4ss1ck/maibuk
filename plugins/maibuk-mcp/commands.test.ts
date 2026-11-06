@@ -34,7 +34,7 @@ describe("MCP Server page Commands", () => {
       await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: OPEN_CONNECT });
       expect(host.pageNavigations).toEqual([{ pluginId: "maibuk-mcp", pageId: CONNECT_PAGE_ID }]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -47,7 +47,7 @@ describe("MCP Server page Commands", () => {
         expect(host.clipboard, id).toBe(snippet(kind, { url: MCP_URL, key }));
       }
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });

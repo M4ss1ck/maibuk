@@ -73,7 +73,7 @@ describe("Echoes runtime", () => {
         "previousEcho",
       ]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -93,9 +93,9 @@ describe("Echoes runtime", () => {
 
       const page = await host.renderPage(REPORT_PAGE_ID);
       expect(await screen.findByRole("button", { name: /Chapter One/ })).toBeInTheDocument();
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -109,9 +109,9 @@ describe("Echoes runtime", () => {
       const page = await host.renderPage(REPORT_PAGE_ID);
       expect(await screen.findByLabelText(en["report.book"])).toHaveTextContent(BOOK.title);
       expect(await screen.findByRole("tab", { name: en["tab.nearby"] })).toBeInTheDocument();
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -131,9 +131,9 @@ describe("Echoes runtime", () => {
         host.setLanguage("es");
       });
       expect(await screen.findByRole("tab", { name: es["tab.nearby"] })).toBeInTheDocument();
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
@@ -183,9 +183,9 @@ describe("Echoes detection settings", () => {
         expect(storage.get(ECHOES_SETTINGS_KEY)).toMatchObject({ stemming: false })
       );
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -207,9 +207,9 @@ describe("Echoes detection settings", () => {
 
       await user.keyboard(" ");
       await waitFor(() => expect(storage.get(ECHOES_EDITOR_KEY)).toEqual(["nearby"]));
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -232,9 +232,9 @@ describe("Echoes detection settings", () => {
 
       await user.keyboard(" ");
       await waitFor(() => expect(storage.get(ECHOES_COLOR_KEY)).toBe(false));
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -262,9 +262,9 @@ describe("Echoes detection settings", () => {
       await user.keyboard("{ArrowDown}{Enter}");
       await waitFor(() => expect(storage.get(ECHOES_PALETTE_KEY)).toBe("vivid"));
       expect(palette).toHaveTextContent("Vivid, 8 colors");
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -276,9 +276,9 @@ describe("Echoes detection settings", () => {
     try {
       const page = await host.renderSettingsRow(SETTINGS_ROW_ID);
       await waitFor(() => expect(screen.getByRole("button", { name: /Palette/ })).toBeEnabled());
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -304,9 +304,9 @@ describe("Echoes detection settings", () => {
       );
       expect(screen.getByRole("textbox", { name: "Nearby window" })).toHaveValue("10");
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -331,9 +331,9 @@ describe("Echoes detection settings", () => {
       await user.keyboard("{Enter}");
       await waitFor(() => expect(storage.get(ECHOES_SETTINGS_KEY)).toMatchObject({ ignore: [] }));
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -365,8 +365,8 @@ describe("Echoes detection settings", () => {
         })
       );
     } finally {
-      page1.unmount();
-      first.stop();
+      await page1.unmount();
+      await first.stop();
     }
 
     const second = settingsHost(storage);
@@ -377,9 +377,9 @@ describe("Echoes detection settings", () => {
       );
       expect(screen.getByRole("textbox", { name: "Nearby window" })).toHaveValue("120");
       expect(screen.getByRole("button", { name: "Remove harbor" })).toBeInTheDocument();
-      page2.unmount();
+      await page2.unmount();
     } finally {
-      second.stop();
+      await second.stop();
     }
   });
 
@@ -402,9 +402,9 @@ describe("Echoes detection settings", () => {
       expect(screen.getByRole("switch", { name: "Nearby echo" })).toBeChecked();
       expect(screen.getByRole("switch", { name: "Match word forms" })).toBeChecked();
       expect(screen.getByRole("textbox", { name: "Nearby window" })).toHaveValue("50");
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
@@ -494,9 +494,9 @@ describe("Echoes editor highlight kinds from Settings", () => {
           fake.highlights.some((call) => call.kind === "info" && call.ranges.length === 5)
         ).toBe(true)
       );
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });

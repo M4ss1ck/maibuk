@@ -48,7 +48,7 @@ export interface EvalLibrary {
   handle(request: EvalRequest, sink: EvalAnswerSink): Promise<void>;
   /** Reads the Library back: Books, every Chapter in order, Notes, Checkpoints. */
   snapshot(): Promise<LibrarySnapshot>;
-  stop(): void;
+  stop(): Promise<void>;
 }
 
 const READ_ONLY_PERMISSIONS = ["serve", "library:read", "clipboard"] as const;

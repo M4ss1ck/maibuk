@@ -85,7 +85,7 @@ describe("MCP Server protocol", () => {
       expect(instructions).toContain("Library");
       expect(instructions).toContain("Book");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -122,7 +122,7 @@ describe("MCP Server protocol", () => {
         "delete_note",
       ]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -139,7 +139,7 @@ describe("MCP Server protocol", () => {
       expect(answer.json.result.ttlMs).toBe(0);
       expect(answer.json.result.cacheScope).toBe("private");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -156,7 +156,7 @@ describe("MCP Server protocol", () => {
       expect(answer.json.result.ttlMs).toBe(0);
       expect(answer.json.result.cacheScope).toBe("private");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -332,7 +332,7 @@ describe("MCP Server protocol", () => {
         ]
       `);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -346,7 +346,7 @@ describe("MCP Server protocol", () => {
       });
       expect(answer.status).toBe(404);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
@@ -357,7 +357,7 @@ describe("MCP Server Key", () => {
     try {
       expect(key).toMatch(/^[0-9a-f]{64}$/);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -377,7 +377,7 @@ describe("MCP Server Key", () => {
         },
       });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -389,7 +389,7 @@ describe("MCP Server Key", () => {
       expect(answerHeader(answer, "www-authenticate")).toBe("Bearer");
       expect(answer.json.error.code).toBe(-32001);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -409,7 +409,7 @@ describe("MCP Server Key", () => {
       expect(accepted.status).toBe(200);
       expect(accepted.json.result.serverInfo.name).toBe("maibuk");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -428,10 +428,10 @@ describe("MCP Server Key", () => {
         expect(accepted.status).toBe(200);
         expect(accepted.json.result.serverInfo.name).toBe("maibuk");
       } finally {
-        second.host.stop();
+        await second.host.stop();
       }
     } finally {
-      first.host.stop();
+      await first.host.stop();
     }
   });
 
@@ -450,7 +450,7 @@ describe("MCP Server Key", () => {
       expect(accepted.status).toBe(200);
       expect(accepted.json.result.serverInfo.name).toBe("maibuk");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
@@ -471,7 +471,7 @@ describe("MCP Server Tutorial refusal", () => {
       const after = await mcpRequest(host, key, toolsListBody());
       expect(after.status).toBe(200);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
@@ -533,7 +533,7 @@ describe("MCP Server Connections", () => {
         { name: "Claude Code", startedAt: START, lastActivityAt: START },
       ]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -553,7 +553,7 @@ describe("MCP Server Connections", () => {
         { name: "Codex", startedAt: START, lastActivityAt: START },
       ]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -568,7 +568,7 @@ describe("MCP Server Connections", () => {
       await vi.advanceTimersByTimeAsync(1_001);
       await untilWritten(() => connectionsOf(storage).length === 0);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -589,7 +589,7 @@ describe("MCP Server Connections", () => {
       await vi.advanceTimersByTimeAsync(1_001);
       await untilWritten(() => connectionsOf(storage).length === 0);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -610,7 +610,7 @@ describe("MCP Server Connections", () => {
       await vi.advanceTimersByTimeAsync(2);
       await untilWritten(() => connectionsOf(storage).length === 0);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -625,7 +625,7 @@ describe("MCP Server Connections", () => {
       expect(refused.status).toBe(401);
       expect(connectionsOf(storage)).toEqual([]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -647,7 +647,7 @@ describe("MCP Server Connections", () => {
       await vi.advanceTimersByTimeAsync(1_001);
       await untilWritten(() => connectionsOf(storage).length === 0);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -662,7 +662,7 @@ describe("MCP Server Connections", () => {
       await mcpRequest(host, key, toolsListBody());
       expect(connectionsOf(storage)).toEqual([]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
@@ -765,7 +765,7 @@ describe("MCP Server read-only mode", () => {
         ]);
       });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -810,7 +810,7 @@ describe("MCP Server read-only mode", () => {
       const blocks = reread.json.result.content.map((block: any) => block.text).join("\n");
       expect(blocks).toContain("Alpha body.");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -838,7 +838,7 @@ describe("MCP Server read-only mode", () => {
       expect(JSON.stringify(library)).toBe(before);
       expect(host.checkpoints).toEqual([]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -867,7 +867,7 @@ describe("MCP Server read-only mode", () => {
       expect(library.chapters[0].content.html).toBe("<p>Alpha body.</p>");
       expect(host.checkpoints).toEqual([]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -917,7 +917,7 @@ describe("MCP Server read-only mode", () => {
       await stream.waitForText("notifications/tools/list_changed");
       stream.close();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
@@ -959,7 +959,7 @@ describe("MCP Server in the sandbox Worker", () => {
       expect(refused(listed)).toBe(false);
       expect(Array.isArray(listed.json.result.content)).toBe(true);
     } finally {
-      host.stop();
+      await host.stop();
       restore();
     }
   });

@@ -80,6 +80,13 @@ function inAct(step: () => void): void {
   else step();
 }
 
+/** `inAct` for an async step: awaits it inside `act()` where the act environment is on. */
+async function inActAsync(step: () => Promise<void>): Promise<void> {
+  if ((globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT) {
+    await act(step);
+  } else await step();
+}
+
 /**
  * The approval record the Plugin Endpoint dispatcher reads in a test: enabled,
  * holding the grants this host has right now. The pinned hash and the approved
@@ -1028,10 +1035,14 @@ export function createTestHost(options: TestHostOptions): TestHost {
     const testPage: TestPage = {
       container,
       violations,
-      unmount() {
+      async unmount() {
         if (!openPages.delete(testPage)) return;
         openMounts.delete(testPage);
-        mount.unmount();
+        // The thread stays open until the Plugin answers: its React root
+        // unmounts on a later task, which would otherwise escape act and can
+        // outlive the test environment.
+        const settled = mount.unmount();
+        await inActAsync(() => settled);
         thread.close();
         inAct(() => {
           root.unmount();
@@ -1047,8 +1058,8 @@ export function createTestHost(options: TestHostOptions): TestHost {
         openMounts.set(testPage, { mount, thread });
         return testPage;
       },
-      (error: unknown) => {
-        testPage.unmount();
+      async (error: unknown) => {
+        await testPage.unmount();
         throw error;
       }
     );
@@ -1139,8 +1150,9 @@ export function createTestHost(options: TestHostOptions): TestHost {
         mount.port.close();
       }
     },
-    stop() {
-      for (const page of [...openPages]) page.unmount();
+    async stop() {
+      // One at a time: each unmount awaits inside act(), and act() calls must not overlap.
+      for (const page of [...openPages]) await page.unmount();
       broker.stop("requested");
       channel.port1.close();
       channel.port2.close();

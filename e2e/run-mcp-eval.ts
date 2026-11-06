@@ -221,7 +221,7 @@ async function runTask(
     return outcome;
   } finally {
     listener.close();
-    served.stop();
+    await served.stop();
     rmSync(cwd, { recursive: true, force: true });
   }
 }

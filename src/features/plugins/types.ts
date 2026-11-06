@@ -857,8 +857,11 @@ export interface TestPage {
   container: HTMLElement;
   /** Every declaration the validator refused while this page was open. */
   violations: PluginUiViolation[];
-  /** Unmounts the host renderer and closes the mount; idempotent. */
-  unmount(): void;
+  /**
+   * Unmounts the host renderer and closes the mount; idempotent. Resolves once
+   * the Plugin's React tree has unmounted.
+   */
+  unmount(): Promise<void>;
 }
 
 /** One request `endpoint()` hands the Plugin on its Plugin Endpoint. */
@@ -1015,7 +1018,8 @@ export interface TestHost {
    * for the Worker.
    */
   stopWorker(): void;
-  stop(): void;
+  /** Unmounts every open page, then stops the broker; resolves once each page's Plugin tree has unmounted. */
+  stop(): Promise<void>;
 }
 
 /** Why a Plugin rename map was refused; the caller maps it to a field path. */

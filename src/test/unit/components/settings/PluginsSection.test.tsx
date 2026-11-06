@@ -1832,8 +1832,8 @@ function installReadyLifecycle(pluginId: string, runtime: PluginRuntime): void {
 describe("Plugin Settings row body (#450)", () => {
   let host: ReturnType<typeof createTestHost> | null = null;
 
-  afterEach(() => {
-    host?.stop();
+  afterEach(async () => {
+    await host?.stop();
     host = null;
     resetPluginLifecycleForTests();
   });

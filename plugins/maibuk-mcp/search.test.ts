@@ -124,7 +124,7 @@ describe("search_library", () => {
       );
       expect(answer.json?.result?.structuredContent).toBeUndefined();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -167,7 +167,7 @@ describe("search_library", () => {
       expect(isError(read)).toBe(false);
       expect(textOf(read)).toContain("Atlas");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -204,7 +204,7 @@ describe("search_library", () => {
       expect(pages).toBe(3);
       expect(seen.size).toBe(5);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -221,7 +221,7 @@ describe("search_library", () => {
       expect(lines[0]).toBe('Results 1-50 for "common"');
       expect(lines[lines.length - 1]).toMatch(/^More:/);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -251,7 +251,7 @@ describe("search_library", () => {
       expect(lines.some((line) => line.startsWith("book "))).toBe(true);
       expect(lines.some((line) => line.startsWith("chapter "))).toBe(true);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -274,7 +274,7 @@ describe("search_library", () => {
         expect(line.startsWith("note ")).toBe(true);
       }
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -318,7 +318,7 @@ describe("search_library", () => {
       expect(isError(pattern)).toBe(false);
       expect(textOf(pattern)).toContain("Pattern  3 matches");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -334,7 +334,7 @@ describe("search_library", () => {
       expect(isToolError(answer)).toBe(true);
       expect(textOf(answer).length).toBeGreaterThan(0);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -346,7 +346,7 @@ describe("search_library", () => {
       expect(isError(answer)).toBe(false);
       expect(textOf(answer)).toBe('No matches for "zxqv".');
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -367,7 +367,7 @@ describe("search_library", () => {
       const short = await callTool(host, key, "search_library", { query: "x", book: "abc" });
       expect(isToolError(short)).toBe(true);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -386,7 +386,7 @@ describe("search_library", () => {
         expect(textOf(answer)).toContain("Invalid arguments");
       }
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -398,7 +398,7 @@ describe("search_library", () => {
       const answer = await callTool(host, key, "search_library", { query: "x" });
       expect(answer.status).toBe(503);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });

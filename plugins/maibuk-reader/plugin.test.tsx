@@ -60,9 +60,9 @@ describe("Reader Shelf", () => {
       await waitFor(() =>
         expect(host.pageNavigations).toEqual([{ pluginId: "maibuk-reader", pageId: "document" }])
       );
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -87,9 +87,9 @@ describe("Reader Shelf", () => {
       await waitFor(async () => expect(await host.files.grants()).toEqual([]));
       expect(storage.get(SHELF_KEY)).toEqual([]);
       expect(storage.has(positionKey("doc-1"))).toBe(false);
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -113,9 +113,9 @@ describe("Reader Shelf", () => {
       await waitFor(() =>
         expect(host.pageNavigations).toEqual([{ pluginId: "maibuk-reader", pageId: "document" }])
       );
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -148,9 +148,9 @@ describe("Reader Shelf", () => {
       expect(shelf).toHaveLength(1);
       expect(shelf[0]).toMatchObject({ id: "doc-1", state: "ok", grant: "grant-1" });
       expect(storage.get(positionKey("doc-1"))).toEqual({ page: 42, pageCount: 210 });
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -160,7 +160,7 @@ describe("Reader Shelf", () => {
       await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: OPEN_READER });
       expect(host.pageNavigations).toEqual([{ pluginId: "maibuk-reader", pageId: SHELF_PAGE_ID }]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });

@@ -146,7 +146,7 @@ describe("write checkpoints", () => {
       ]);
       expect(chapters[0].content.html).toContain("More.");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -181,7 +181,7 @@ describe("write checkpoints", () => {
       expect(host.checkpoints).toHaveLength(1);
       expect(host.checkpoints[0].bookId).toBe("bookalpha1");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -209,7 +209,7 @@ describe("write checkpoints", () => {
       });
       expect(chapters[1].content.html).toContain("More.");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -237,7 +237,7 @@ describe("write checkpoints", () => {
         versionId: expect.any(String),
       });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -273,7 +273,7 @@ describe("write checkpoints", () => {
         versionId: expect.any(String),
       });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -305,7 +305,7 @@ describe("write checkpoints", () => {
       expect(host.checkpoints).toHaveLength(1);
       expect(chapters[0].content.html).toContain("More.");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -332,7 +332,7 @@ describe("write checkpoints", () => {
       expect(host.checkpoints).toEqual([]);
       expect(chapters[0].content.html).toBe("<p>Alpha body.</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -356,7 +356,7 @@ describe("write checkpoints", () => {
       expect(host.checkpoints).toEqual([]);
       expect(chapters[0].content.html).toBe("<p>Alpha body.</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -376,7 +376,7 @@ describe("write checkpoints", () => {
       ]);
       expect(chapters[0].content.html).toContain("More.");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -420,7 +420,7 @@ describe("write checkpoints", () => {
       });
       expect(chapters[0].content.html).toContain("Three.");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -447,7 +447,7 @@ describe("write checkpoints", () => {
       ]);
       expect(chapters[0].content.html).toContain("More.");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -470,7 +470,7 @@ describe("write checkpoints", () => {
       const reread = await mcpRequest(host, key, toolsCall("read_note", { note: created }, 3));
       expect(isError(reread)).toBe(false);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -524,7 +524,7 @@ describe("write checkpoints", () => {
       expect(host.checkpoints).toHaveLength(1);
       expect(host.checkpoints[0].bookId).toBe("bookalpha1");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -555,7 +555,7 @@ describe("write checkpoints", () => {
         { bookId: "bookbeta12", label: "Before Claude Code edits", versionId: expect.any(String) },
       ]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -593,7 +593,7 @@ describe("write checkpoints", () => {
       expect(after.json.result.content[1].text).toBe("Replaced.");
       expect(host.checkpoints).toEqual([]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -618,7 +618,7 @@ describe("write checkpoints", () => {
       expect(host.checkpoints).toEqual([]);
       expect(notes).toHaveLength(1);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -639,7 +639,7 @@ describe("write checkpoints", () => {
       ]);
       expect(notes[0].content.html).toBe("<p>Old body.</p><p>More.</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -658,7 +658,7 @@ describe("write checkpoints", () => {
       expect(notes[0].content.html).toBe("<p>Old body.</p><p>More.</p>");
       expect(host.checkpoints).toEqual([]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -678,7 +678,7 @@ describe("write checkpoints", () => {
       expect(host.checkpoints).toEqual([]);
       expect(notes[0].content.html).toBe("<p>Old body.</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -703,7 +703,7 @@ describe("write checkpoints", () => {
       expect(host.checkpoints).toEqual([]);
       expect(notes[0].content.html).toBe("<p>Old body.</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -722,7 +722,7 @@ describe("write checkpoints", () => {
       expect(isError(answer)).toBe(false);
       expect(chapters[0].content.html).toBe("<p>Original</p><p>Mine</p><p>More.</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -750,7 +750,7 @@ describe("write checkpoints", () => {
       expect(chapters[0].content.html).toBe("<p>Original</p><p>Mine</p><p>More.</p>");
       expect(host.checkpoints).toHaveLength(1);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -774,7 +774,7 @@ describe("write checkpoints", () => {
       expect(textOf(answer)).toContain("read the Chapter as HTML");
       expect(chapters[0].content.html).toBe("<p>Original</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -805,7 +805,7 @@ describe("write checkpoints", () => {
       expect(textOf(answer)).toContain("changed since you read it");
       expect(notes[0].content.html).toBe("<p>Typed</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -829,7 +829,7 @@ describe("write checkpoints", () => {
       expect(isError(answer)).toBe(false);
       expect(notes[0].content.html).toBe("<p>Original</p><p>Mine</p><p>More.</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -859,7 +859,7 @@ describe("write checkpoints", () => {
       expect(textOf(answer)).toContain("changed since you read it");
       expect(chapters[0].content.html).toBe("<p>Typed</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });

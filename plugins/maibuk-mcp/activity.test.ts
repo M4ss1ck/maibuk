@@ -145,7 +145,7 @@ describe("MCP Server Activity log", () => {
         },
       ]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -169,7 +169,7 @@ describe("MCP Server Activity log", () => {
         { at: START, agent: null, tool: "list_books", item: null, result: "ok" },
       ]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -190,7 +190,7 @@ describe("MCP Server Activity log", () => {
         },
       ]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -238,7 +238,7 @@ describe("MCP Server Activity log", () => {
         expect(serialized).not.toContain("Old body.");
       }
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -266,7 +266,7 @@ describe("MCP Server Activity log", () => {
       await untilStored(storage, ACTIVITY_LIMIT);
       expect((storedEntries(storage)[0] as { at: number }).at).toBe(START + 1);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -279,7 +279,7 @@ describe("MCP Server Activity log", () => {
       await mcpRequest(first.host, first.key, toolsCall("read_note", { note: "notealpha1" }));
       await untilStored(storage, 1);
     } finally {
-      first.host.stop();
+      await first.host.stop();
       vi.useRealTimers();
     }
 
@@ -297,7 +297,7 @@ describe("MCP Server Activity log", () => {
         },
       ]);
     } finally {
-      second.host.stop();
+      await second.host.stop();
     }
   });
 
@@ -327,7 +327,7 @@ describe("MCP Server Activity log", () => {
         { at: START, agent: null, tool: "list_books", item: null, result: "error" },
       ]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -342,7 +342,7 @@ describe("MCP Server Activity log", () => {
       await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: "newKey" });
       expect(activityEntries()).toEqual(before);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -363,7 +363,7 @@ describe("MCP Server Activity log", () => {
         unsubscribe();
       }
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });

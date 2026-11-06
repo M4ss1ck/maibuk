@@ -80,7 +80,7 @@ describe("list_notes", () => {
       expect(lines[2]).toContain("Middle");
       expect(lines[3]).toContain("Oldest");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -98,7 +98,7 @@ describe("list_notes", () => {
       const betaLine = lines.find((l) => l.includes("Beta"))!;
       expect(betaLine).not.toContain("Tags:");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -115,7 +115,7 @@ describe("list_notes", () => {
       expect(text).toContain("InBook");
       expect(text).not.toContain("Other");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -131,7 +131,7 @@ describe("list_notes", () => {
       expect(text).toContain("Loose");
       expect(text).not.toContain("Filed");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -147,7 +147,7 @@ describe("list_notes", () => {
       expect(text).toContain("Loose");
       expect(text).not.toContain("Filed");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -164,7 +164,7 @@ describe("list_notes", () => {
       const text = textOf(answer);
       expect(text).toContain("matches several Books");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -177,7 +177,7 @@ describe("list_notes", () => {
       expect(isError(answer)).toBe(true);
       expect(textOf(answer)).toBe("No Book has the id zzzzzzzz; call list_books to see the Books.");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -193,7 +193,7 @@ describe("list_notes", () => {
       expect(text).toContain("Tagged");
       expect(text).not.toContain("Other");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -212,7 +212,7 @@ describe("list_notes", () => {
       expect(text).not.toContain("NoTag");
       expect(text).not.toContain("UnfiledTagged");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -236,7 +236,7 @@ describe("list_notes", () => {
       expect(secondLines[0]).toBe("Notes 21-25 of 25");
       expect(textOf(second)).not.toContain("More:");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -250,7 +250,7 @@ describe("list_notes", () => {
         "The cursor is not valid; call list_notes without a cursor to start again."
       );
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -260,7 +260,7 @@ describe("list_notes", () => {
       const answer = await callTool(host, key, "list_notes", {});
       expect(textOf(answer)).toBe("No Notes match.");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -278,7 +278,7 @@ describe("list_notes", () => {
       expect(lines[0]).toBe("Notes 1-1 of 1");
       expect(lines[2]).toBe("  Hello world");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -295,7 +295,7 @@ describe("list_notes", () => {
       const lines = textOf(answer).split("\n");
       expect(lines).toHaveLength(2);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -306,7 +306,7 @@ describe("list_notes", () => {
       const answer = await callTool(host, key, "list_notes", {});
       expect(answer.status).toBe(503);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
@@ -347,7 +347,7 @@ describe("delete_note", () => {
         { bookId: "bookalpha1", label: "Before mcp-test edits", versionId: expect.any(String) },
       ]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -371,7 +371,7 @@ describe("delete_note", () => {
       expect(textOf(listed)).toBe("No Notes match.");
       expect(host.checkpoints).toEqual([]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -392,7 +392,7 @@ describe("delete_note", () => {
       expect(textOf(listed)).toContain("The Note");
       expect(host.checkpoints).toEqual([]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -408,7 +408,7 @@ describe("delete_note", () => {
       expect(textOf(listed)).toContain("The Note");
       expect(host.checkpoints).toEqual([]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });

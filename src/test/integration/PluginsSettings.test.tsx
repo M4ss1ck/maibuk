@@ -312,7 +312,7 @@ describe("Plugins Settings section", () => {
       await waitFor(() => expect(document.activeElement).toBe(control));
       expect(useSettingsRevealStore.getState().pendingRowId).toBeNull();
     } finally {
-      host.stop();
+      await host.stop();
       resetPluginLifecycleForTests();
     }
   });
@@ -373,7 +373,7 @@ describe("Plugins Settings section", () => {
       expect(useSettingsRevealStore.getState().pendingRowId).toBeNull();
     } finally {
       vi.useRealTimers();
-      host.stop();
+      await host.stop();
       resetPluginLifecycleForTests();
     }
   });
@@ -410,10 +410,10 @@ describe("Plugins Settings section", () => {
       });
     });
 
-    afterEach(() => {
+    afterEach(async () => {
       vi.restoreAllMocks();
       vi.useRealTimers();
-      host.stop();
+      await host.stop();
       resetPluginLifecycleForTests();
     });
 

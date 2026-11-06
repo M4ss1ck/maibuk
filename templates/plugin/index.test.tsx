@@ -40,7 +40,7 @@ describe("Hello Plugin", () => {
       await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: OPEN_COMMAND });
       expect(host.pageNavigations).toEqual([{ pluginId: manifest.id, pageId: PAGE_ID }]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -60,9 +60,9 @@ describe("Hello Plugin", () => {
       await user.keyboard("{Enter}");
       await waitFor(() => expect(screen.getByText("Greetings: 1")).toBeInTheDocument());
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
