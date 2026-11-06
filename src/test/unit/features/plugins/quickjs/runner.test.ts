@@ -139,7 +139,7 @@ describe("runQuickJsPlugin()", () => {
       await expect(host.broker.request("health.check", {})).resolves.toBe("pong");
     } finally {
       run.dispose();
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -158,7 +158,7 @@ describe("runQuickJsPlugin()", () => {
       expect(result).toMatchObject({ ok: true, value: [BOOK] });
     } finally {
       run.dispose();
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -177,7 +177,7 @@ describe("runQuickJsPlugin()", () => {
       expect(result).toMatchObject({ ok: false, code: "permission-denied" });
     } finally {
       run.dispose();
-      host.stop();
+      await host.stop();
     }
   });
 

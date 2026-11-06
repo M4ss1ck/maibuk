@@ -62,7 +62,7 @@ export function usePluginRemoteUi(
     );
     return () => {
       cancelled = true;
-      mount.unmount();
+      void mount.unmount();
       thread.close();
       created.dispose();
       setUi(null);

@@ -63,7 +63,7 @@ interface Harness {
   /** Sends one Frame -> Worker message. */
   send(message: unknown): void;
   navigateToShelf: ReturnType<typeof vi.fn>;
-  stop(): void;
+  stop(): Promise<void>;
 }
 
 function setup(
@@ -107,10 +107,10 @@ function setup(
       channel.port2.postMessage(message);
     },
     navigateToShelf,
-    stop() {
+    async stop() {
       session.dispose();
       channel.port2.close();
-      host.stop();
+      await host.stop();
     },
   };
 }
@@ -168,7 +168,7 @@ describe("open", () => {
       expect(pdf.css).toContain(".textLayer");
       expect(open.pdfPort).toBeInstanceOf(MessagePort);
     } finally {
-      harness.stop();
+      await harness.stop();
     }
   });
 
@@ -181,7 +181,7 @@ describe("open", () => {
       expect(open.pdfPort).toBeUndefined();
       expect(workers).toHaveLength(0);
     } finally {
-      harness.stop();
+      await harness.stop();
     }
   });
 
@@ -193,7 +193,7 @@ describe("open", () => {
       expect(open.position).toBeNull();
       expect(open.size).toBe(0);
     } finally {
-      harness.stop();
+      await harness.stop();
     }
   });
 });
@@ -234,7 +234,7 @@ describe("read", () => {
         expect(args.length).toBeLessThanOrEqual(FILE_READ_MAX_BYTES);
       }
     } finally {
-      harness.stop();
+      await harness.stop();
     }
   });
 
@@ -249,7 +249,7 @@ describe("read", () => {
       const answer = await messageOf(harness, "read-error");
       expect(answer).toMatchObject({ kind: "read-error", id: 7, code: "file-missing" });
     } finally {
-      harness.stop();
+      await harness.stop();
     }
   });
 });
@@ -297,7 +297,7 @@ describe("archive", () => {
       const container = entries.find(({ name }) => name === "META-INF/container.xml");
       expect(container?.size).toBeGreaterThan(0);
     } finally {
-      harness.stop();
+      await harness.stop();
     }
   });
 
@@ -326,7 +326,7 @@ describe("archive", () => {
       expect(image.id).toBe(3);
       expect((image.buffer as ArrayBuffer).byteLength).toBe(83);
     } finally {
-      harness.stop();
+      await harness.stop();
     }
   });
 
@@ -340,7 +340,7 @@ describe("archive", () => {
       const error = await messageOf(harness, "zip-error");
       expect(error).toMatchObject({ kind: "zip-error", id: 4, code: "missing" });
     } finally {
-      harness.stop();
+      await harness.stop();
     }
   });
 
@@ -354,7 +354,7 @@ describe("archive", () => {
       const error = await messageOf(harness, "zip-error");
       expect(error).toMatchObject({ kind: "zip-error", id: 5, code: "corrupt" });
     } finally {
-      harness.stop();
+      await harness.stop();
     }
   });
 
@@ -368,7 +368,7 @@ describe("archive", () => {
       const error = await messageOf(harness, "zip-error");
       expect(error).toMatchObject({ kind: "zip-error", id: 6, code: "drm" });
     } finally {
-      harness.stop();
+      await harness.stop();
     }
   });
 });
@@ -397,7 +397,7 @@ describe("position", () => {
       expect(shelf[0].lastReadAt).toBeGreaterThan(1_000);
       expect(harness.messages.some((message) => message.kind === "position")).toBe(false);
     } finally {
-      harness.stop();
+      await harness.stop();
     }
   });
 });
@@ -443,7 +443,7 @@ describe("meta", () => {
       shelf = storage.get(SHELF_KEY) as ShelfEntry[];
       expect(shelf[0].title).toBe("Dune (1965)");
     } finally {
-      harness.stop();
+      await harness.stop();
     }
   });
 
@@ -469,7 +469,7 @@ describe("meta", () => {
       const shelf = storage.get(SHELF_KEY) as ShelfEntry[];
       expect(shelf[0].coverDataUrl).toBe("data:image/jpeg;base64,OLD");
     } finally {
-      harness.stop();
+      await harness.stop();
     }
   });
 });
@@ -487,7 +487,7 @@ describe("load-error", () => {
         expect(shelf[0]).toMatchObject({ state: "unreadable", reason: "This PDF is damaged." });
       });
     } finally {
-      harness.stop();
+      await harness.stop();
     }
   });
 });
@@ -502,7 +502,7 @@ describe("commands", () => {
       const command = await messageOf(harness, "command");
       expect(command).toEqual({ kind: "command", id: "nextPage" });
     } finally {
-      harness.stop();
+      await harness.stop();
     }
   });
 });
@@ -533,7 +533,7 @@ describe("back", () => {
       harness.send({ kind: "back" });
       await vi.waitFor(() => expect(harness.navigateToShelf).toHaveBeenCalledTimes(1));
     } finally {
-      harness.stop();
+      await harness.stop();
     }
   });
 
@@ -550,7 +550,7 @@ describe("back", () => {
       harness.session.command("nextPage");
       expect(harness.messages.some((message) => message.kind === "command")).toBe(false);
     } finally {
-      harness.stop();
+      await harness.stop();
     }
   });
 
@@ -569,7 +569,7 @@ describe("back", () => {
       expect(onDispose).toHaveBeenCalledTimes(1);
       expect(harness.navigateToShelf).not.toHaveBeenCalled();
     } finally {
-      harness.stop();
+      await harness.stop();
     }
   });
 
@@ -585,7 +585,7 @@ describe("back", () => {
       expect(workers[0].terminate).toHaveBeenCalledTimes(1);
       expect(onDispose).toHaveBeenCalledTimes(1);
     } finally {
-      harness.stop();
+      await harness.stop();
     }
   });
 
@@ -603,7 +603,7 @@ describe("back", () => {
         expect(harness.messages.filter((message) => message.kind === "open")).toHaveLength(2)
       );
     } finally {
-      harness.stop();
+      await harness.stop();
     }
   });
 });

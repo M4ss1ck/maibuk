@@ -67,7 +67,7 @@ describe("Echoes on the QuickJS runner (Android, #517)", () => {
       expect(endpoint.messages).toContainEqual(PLUGIN_READY_MESSAGE);
     } finally {
       run.dispose();
-      host.stop();
+      await host.stop();
     }
   });
 

@@ -117,7 +117,7 @@ describe("read_chapter", () => {
       ]);
       expect(windowOf(answer)).toBe("Hello world");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -140,7 +140,7 @@ describe("read_chapter", () => {
       expect(lines).toContain("Characters 0-18 of 18");
       expect(windowOf(answer)).toBe("<p>Hello world</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -182,7 +182,7 @@ describe("read_chapter", () => {
       expect(headerOf(last).split("\n")).toContain("Characters 40000-45000 of 45000");
       expect(windows.join("")).toBe(text);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -204,7 +204,7 @@ describe("read_chapter", () => {
       expect(headerOf(answer).split("\n")).toContain("Next offset: 50000");
       expect(windowOf(answer)).toHaveLength(50000);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -235,7 +235,7 @@ describe("read_chapter", () => {
         "The offset 4 is past the end of the Chapter (3 characters); call read_chapter with a smaller offset."
       );
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -262,7 +262,7 @@ describe("read_chapter", () => {
       expect(isError(rest)).toBe(false);
       expect(windowOf(first) + windowOf(rest)).toBe(text);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -283,7 +283,7 @@ describe("read_chapter", () => {
       expect(isError(byFull)).toBe(false);
       expect(headerOf(byFull)).toContain("The Chapter");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -308,7 +308,7 @@ describe("read_chapter", () => {
       expect(headerOf(answer)).toContain("in BookA");
       expect(headerOf(answer)).toContain("in BookB");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -327,7 +327,7 @@ describe("read_chapter", () => {
         "No Chapter has the id zzzzzzzz; call get_book to see the Chapters."
       );
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -344,7 +344,7 @@ describe("read_chapter", () => {
       const answer = await callTool(host, key, "read_chapter", { chapter: "chapteralpha" });
       expect(answer.status).toBe(503);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
@@ -377,7 +377,7 @@ describe("read_note", () => {
       ]);
       expect(windowOf(answer)).toBe("Note body text");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -396,7 +396,7 @@ describe("read_note", () => {
       expect(lines).toContain("Book: Unfiled");
       expect(lines).toContain("Tags: none");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -417,7 +417,7 @@ describe("read_note", () => {
       expect(headerOf(answer).split("\n")).toContain("Format: html");
       expect(windowOf(answer)).toBe("<p>rich</p>");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -443,7 +443,7 @@ describe("read_note", () => {
       expect(headerOf(second).split("\n")).toContain("End of Note.");
       expect(windowOf(first) + windowOf(second)).toBe(text);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -461,7 +461,7 @@ describe("read_note", () => {
         "The offset 4 is past the end of the Note (3 characters); call read_note with a smaller offset."
       );
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -483,7 +483,7 @@ describe("read_note", () => {
       expect(headerOf(answer)).toContain("First");
       expect(headerOf(answer)).toContain("Second");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -501,7 +501,7 @@ describe("read_note", () => {
         "No Note has the id zzzzzzzz; call list_notes to see the Notes."
       );
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -517,7 +517,7 @@ describe("read_note", () => {
       const answer = await callTool(host, key, "read_note", { note: "notealpha1" });
       expect(answer.status).toBe(503);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -533,7 +533,7 @@ describe("read_note", () => {
       expect(isError(answer)).toBe(false);
       expect(headerOf(answer).split("\n")[1]).toBe("Book: book-gone-0001");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });

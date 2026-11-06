@@ -59,7 +59,7 @@ describe("openFileFlow()", () => {
       expect(shelf[0].grant).toBe(entry?.grant);
       expect(shelf[0].fingerprint).toMatch(/^\d+:[0-9a-f]{64}$/);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -70,7 +70,7 @@ describe("openFileFlow()", () => {
       await expect(library.openFileFlow()).resolves.toBeNull();
       expect(storage.has(SHELF_KEY)).toBe(false);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -86,7 +86,7 @@ describe("openFileFlow()", () => {
       expect(second?.fingerprint).toBe(first?.fingerprint);
       expect(storage.get(SHELF_KEY)).toHaveLength(1);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -124,7 +124,7 @@ describe("openFileFlow()", () => {
       expect(entry).toMatchObject({ title: "Empty", format: "pdf", state: "ok" });
       expect(storage.get(SHELF_KEY)).toHaveLength(1);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -213,7 +213,7 @@ describe("refreshStates()", () => {
       expect(shelf[0]).toMatchObject({ id: entry?.id, state: "missing" });
       expect((storage.get(SHELF_KEY) as ShelfEntry[])[0].state).toBe("missing");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -272,7 +272,7 @@ describe("removeFromShelf()", () => {
       expect(storage.has(positionKey(entry?.id as string))).toBe(false);
       await expect(host.files.grants()).resolves.toEqual([]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
@@ -296,7 +296,7 @@ describe("locateAgain()", () => {
       expect(storage.get(positionKey(entry?.id as string))).toEqual({ page: 42, pageCount: 210 });
       expect((storage.get(SHELF_KEY) as ShelfEntry[])[0].state).toBe("ok");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -317,7 +317,7 @@ describe("locateAgain()", () => {
       expect(shelf[0].state).toBe("missing");
       expect(shelf).toHaveLength(1);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -334,7 +334,7 @@ describe("locateAgain()", () => {
         reason: "cancelled",
       });
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 

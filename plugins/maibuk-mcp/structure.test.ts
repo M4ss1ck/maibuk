@@ -119,7 +119,7 @@ describe("manage_chapter", () => {
       expect(textOf(answer)).toBe("Chapter The Opening is now chapter 1 of 3.");
       expect(chapters[0].title).toBe("The Opening");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -134,7 +134,7 @@ describe("manage_chapter", () => {
       expect(isError(answer)).toBe(false);
       expect(chapters[1].chapterType).toBe("prologue");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -149,7 +149,7 @@ describe("manage_chapter", () => {
       expect(isError(answer)).toBe(false);
       expect(chapters[2].status).toBe("final");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -169,7 +169,7 @@ describe("manage_chapter", () => {
         ["chapterbravo", "chaptercharl", "chapteralpha"].map(short)
       );
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -200,7 +200,7 @@ describe("manage_chapter", () => {
       );
       expect([...chapters].map((entry) => entry.order).sort((a, b) => a - b)).toEqual([0, 1, 2]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -219,7 +219,7 @@ describe("manage_chapter", () => {
       expect(await orderInLibrary(host, key)).toEqual(["chapteralpha", "chaptercharl"].map(short));
       expect(host.checkpoints).toHaveLength(1);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -249,7 +249,7 @@ describe("manage_chapter", () => {
       expect(isError(second)).toBe(false);
       expect(host.checkpoints).toHaveLength(1);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -300,7 +300,7 @@ describe("manage_chapter", () => {
       ).toEqual(before);
       expect(host.checkpoints).toEqual([]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
@@ -339,7 +339,7 @@ describe("update_book", () => {
       expect(textOf(answer)).toBe("Updated Book New Title: title.");
       expect(books[0].title).toBe("New Title");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -355,7 +355,7 @@ describe("update_book", () => {
       expect(textOf(answer)).toBe("Updated Book The Book: Author Name.");
       expect(books[0].authorName).toBe("New Author");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -371,7 +371,7 @@ describe("update_book", () => {
       expect(textOf(answer)).toBe("Updated Book The Book: Genre.");
       expect(books[0].genre).toBe("sci-fi");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -387,7 +387,7 @@ describe("update_book", () => {
       expect(textOf(answer)).toBe("Updated Book The Book: Book Status.");
       expect(books[0].status).toBe("completed");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -403,7 +403,7 @@ describe("update_book", () => {
       expect(textOf(answer)).toBe("Updated Book The Book: Target Word Count.");
       expect(books[0].targetWordCount).toBe(500);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -419,7 +419,7 @@ describe("update_book", () => {
       expect(textOf(answer)).toBe("Updated Book The Book: Genre.");
       expect(books[0].genre).toBeNull();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -435,7 +435,7 @@ describe("update_book", () => {
       expect(textOf(answer)).toBe("Updated Book The Book: Target Word Count.");
       expect(books[0].targetWordCount).toBeNull();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -455,7 +455,7 @@ describe("update_book", () => {
       expect(bookState(books[0])).toEqual(before);
       expect(host.checkpoints).toEqual([]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -485,7 +485,7 @@ describe("update_book", () => {
       expect(isError(second)).toBe(false);
       expect(host.checkpoints).toHaveLength(1);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -528,7 +528,7 @@ describe("update_book", () => {
       expect(books[0].title).toBe("The Book");
       expect(host.checkpoints).toEqual([]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -594,7 +594,7 @@ describe("update_book", () => {
       expect(bookState(books[0])).toEqual(before);
       expect(host.checkpoints).toEqual([]);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });

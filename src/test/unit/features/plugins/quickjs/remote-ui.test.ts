@@ -160,10 +160,11 @@ describe("Remote UI under the QuickJS runner", () => {
 
       expect(await screen.findByText("You typed: dune")).toBeInTheDocument();
       expect(page.violations).toEqual([]);
-      page.unmount();
+      await page.unmount();
     } finally {
+      // Stop first: the host asks the live Plugin to unmount each open page.
+      await host.stop();
       run.dispose();
-      host.stop();
     }
   });
 
@@ -181,10 +182,11 @@ describe("Remote UI under the QuickJS runner", () => {
 
       expect(await screen.findByRole("switch", { name: "Threshold" })).toBeChecked();
       expect(row.violations).toEqual([]);
-      row.unmount();
+      await row.unmount();
     } finally {
+      // Stop first: the host asks the live Plugin to unmount each open page.
+      await host.stop();
       run.dispose();
-      host.stop();
     }
   });
 
@@ -201,8 +203,9 @@ describe("Remote UI under the QuickJS runner", () => {
 
       expect(await screen.findByText("Runs: 1")).toBeInTheDocument();
     } finally {
+      // Stop first: the host asks the live Plugin to unmount each open page.
+      await host.stop();
       run.dispose();
-      host.stop();
     }
   });
 
@@ -224,8 +227,9 @@ describe("Remote UI under the QuickJS runner", () => {
       expect(textOf(recording.receiver, "maibuk-text")).toContain("right:1");
       expect(recording.batches.length - before).toBe(1);
     } finally {
+      // Stop first: the host asks the live Plugin to unmount each open page.
+      await host.stop();
       run.dispose();
-      host.stop();
     }
   });
 });

@@ -98,7 +98,7 @@ describe("list_books", () => {
       expect(secondLines).toHaveLength(6); // header + 5
       expect(secondText).not.toContain("More:");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -119,7 +119,7 @@ describe("list_books", () => {
       expect(overLines[0]).toBe("Books 1-50 of 60");
       expect(overLines.filter((l) => /\d+ words/.test(l))).toHaveLength(50);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -137,7 +137,7 @@ describe("list_books", () => {
       expect(lines[2]).toContain("Middle");
       expect(lines[3]).toContain("Oldest");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -156,7 +156,7 @@ describe("list_books", () => {
       expect(text).toContain("Done2");
       expect(text).not.toContain("Draft1");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -166,7 +166,7 @@ describe("list_books", () => {
       const answer = await callTool(host, key, "list_books", {});
       expect(textOf(answer)).toBe("No Books match.");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -180,7 +180,7 @@ describe("list_books", () => {
         "The cursor is not valid; call list_books without a cursor to start again."
       );
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -198,7 +198,7 @@ describe("list_books", () => {
       expect(text).toContain("abcdefghi1  ");
       expect(text).toContain("zbcdefgh  ");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -220,7 +220,7 @@ describe("list_books", () => {
       expect(isError(byPrefix)).toBe(false);
       expect(textOf(byPrefix)).toContain("Gamma");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
@@ -238,7 +238,7 @@ describe("get_book", () => {
       expect(isError(byFull)).toBe(false);
       expect(textOf(byFull)).toContain("MyBook");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -256,7 +256,7 @@ describe("get_book", () => {
       expect(text).toContain("Book0");
       expect(text).toContain("Book1");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -267,7 +267,7 @@ describe("get_book", () => {
       const answer = await callTool(host, key, "get_book", { book: "abcdefg" });
       expect(isError(answer)).toBe(true);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -279,7 +279,7 @@ describe("get_book", () => {
       expect(isError(answer)).toBe(true);
       expect(textOf(answer)).toBe("No Book has the id zzzzzzzz; call list_books to see the Books.");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -325,7 +325,7 @@ describe("get_book", () => {
       expect(text).toContain("Note One");
       expect(text).toContain("Note Two");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -336,7 +336,7 @@ describe("get_book", () => {
       const answer = await callTool(host, key, "list_books", {});
       expect(answer.status).toBe(503);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
@@ -366,7 +366,7 @@ describe("list_books detail", () => {
       expect(lines[1]).toContain("ExcerptBook");
       expect(lines[2]).toBe("  Once upon a time");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -380,7 +380,7 @@ describe("list_books detail", () => {
       const lines = textOf(answer).split("\n");
       expect(lines[2]).toBe(`  ${"a".repeat(150)}…`);
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -395,7 +395,7 @@ describe("list_books detail", () => {
       expect(lines[0]).toBe("Books 1-1 of 1");
       expect(lines[1]).toContain("LonelyBook");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -410,7 +410,7 @@ describe("list_books detail", () => {
       expect(lines).toHaveLength(2);
       expect(textOf(answer)).not.toContain("Chapter body here");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
@@ -440,7 +440,7 @@ describe("get_book detail", () => {
       expect(text).toContain("  Chapter body here");
       expect(text).toContain("  Note body here");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -466,7 +466,7 @@ describe("get_book detail", () => {
       expect(text).not.toContain("Chapter body here");
       expect(text).not.toContain("Note body here");
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });

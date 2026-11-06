@@ -162,9 +162,12 @@ describe("MCP Server live page", () => {
       });
       expect(screen.getByText(en.connectionsEmpty)).toBeInTheDocument();
 
-      page.unmount();
+      // The Plugin's teardown waits on a real task, which a fake clock never runs.
+      vi.useRealTimers();
+      await page.unmount();
     } finally {
-      host.stop();
+      vi.useRealTimers();
+      await host.stop();
     }
   });
 
@@ -190,9 +193,12 @@ describe("MCP Server live page", () => {
       expect(within(connections).getByText(relativeLabel(-1, "minute"))).toBeInTheDocument();
       expect(within(connections).queryByText(relativeLabel(0, "second"))).toBeNull();
 
-      page.unmount();
+      // The Plugin's teardown waits on a real task, which a fake clock never runs.
+      vi.useRealTimers();
+      await page.unmount();
     } finally {
-      host.stop();
+      vi.useRealTimers();
+      await host.stop();
     }
   });
 
@@ -218,9 +224,12 @@ describe("MCP Server live page", () => {
       });
       expect(screen.queryByText(relativeLabel(5, "second"))).toBeNull();
 
-      page.unmount();
+      // The Plugin's teardown waits on a real task, which a fake clock never runs.
+      vi.useRealTimers();
+      await page.unmount();
     } finally {
-      host.stop();
+      vi.useRealTimers();
+      await host.stop();
     }
   });
 
@@ -274,9 +283,9 @@ describe("MCP Server live page", () => {
       const unnamed = await within(fresh).findByText(en.unnamedAgent);
       expect(unnamed.closest("tr")?.textContent).toContain(en.emptyValue);
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -312,9 +321,9 @@ describe("MCP Server live page", () => {
         []
       );
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -344,9 +353,9 @@ describe("MCP Server live page", () => {
       expect(page.container.textContent).not.toContain("ZEBRA-SENTINEL-TEXT");
       expect(page.container.textContent).not.toContain("ZEBRA-TITLE-SENTINEL");
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 
@@ -372,9 +381,9 @@ describe("MCP Server live page", () => {
       expect(within(log).getByText(es.resultColumn)).toBeInTheDocument();
       expect(within(log).getByText(es.resultOk)).toBeInTheDocument();
 
-      page.unmount();
+      await page.unmount();
     } finally {
-      host.stop();
+      await host.stop();
     }
   });
 });
