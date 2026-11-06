@@ -5,6 +5,33 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 y este proyecto sigue el [Versionado Semántico](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.0] - 2026-11-06
+
+### Added
+- Añadir atajos del editor y comandos de la Paleta de comandos a los nodos de texto del lienzo y a Nota rápida, incluidos Buscar y Reemplazar, Insertar enlace, imágenes, notas al pie, símbolos, Buscar palabra, reglas horizontales, sangría de primera línea, quitar formato, Corrector ortográfico, descarga de diccionario y color de texto
+- Añadir Color de texto, Fuente, Altura de línea y alineación como controles disponibles en la barra de herramientas de selección
+- Añadir menús contextuales del editor, diálogos de enlace y acciones de enlace a los nodos de texto del lienzo, con compatibilidad de pulsación larga para pantallas táctiles
+- Añadir acceso por teclado a los menús de nodo de los nodos de texto mediante Shift+F10 y navegación por la burbuja de formato mediante Alt+F10, las flechas y Escape
+
+### Changed
+- Hacer que los atajos del editor y los comandos de la Paleta de comandos se dirijan al último editor enfocado
+- Mantener los nodos de texto del lienzo en modo de edición mientras la barra de búsqueda o un diálogo estén abiertos
+- Acoplar la barra de búsqueda de Nota rápida en la parte superior del editor y darle una línea dedicada en los paneles laterales estrechos
+- Colocar la barra de búsqueda del lienzo encima del lienzo y fuera de la columna de Herramientas
+- Permitir que la barra de herramientas de selección del editor se desplace horizontalmente cuando los controles superen su ancho
+- Hacer que los campos Fuente y Altura de línea de la barra de herramientas solo se confirmen con Enter o al seleccionar de la lista, y mantener predecible el foco del teclado
+
+### Fixed
+- Evitar que los enlaces de los nodos de texto en reposo capturen Tab
+- Conservar las selecciones hechas inmediatamente después de abrir un nodo de texto, incluidas las selecciones con Inicio y Mayús+flecha
+- Hacer que los comandos Conectar y Eliminar de los nodos del lienzo funcionen desde un nodo enfocado y hacer que un nodo de texto abierto sea el editor activo para los comandos de la Paleta de comandos
+- Evitar que Escape en la barra de búsqueda también cierre el panel lateral del libro
+- Evitar que los campos Tamaño, Fuente y Altura de línea de la barra de herramientas del editor vuelvan a aplicar un valor mantenido al perder el foco, con Escape o con Enter
+- Comprobar el contraste de Color de texto, Resaltado y el lápiz del lienzo frente a los colores del tema actual y el fondo del lienzo
+- Mantener enfocadas las burbujas de formato de los nodos de texto al pulsar un campo y confirmar el texto al salir de la burbuja hacia el lienzo
+- Anclar los menús del editor en el cursor dentro de los nodos de texto y eliminar el enlace duplicado correcto al desvincular
+- Evitar los menús contextuales del navegador en el relleno de los nodos de texto y ocultar Inspeccionar y Buscar palabra de los menús de nodos de texto
+
 ## [0.20.0] - 2026-11-04
 
 ### Added

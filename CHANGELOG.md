@@ -5,6 +5,33 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.0] - 2026-11-06
+
+### Added
+- Add editor shortcuts and Command palette commands to Canvas Text Nodes and Quick Note, including Find and Replace, Insert Link, images, footnotes, symbols, Look up, horizontal rules, first-line indent, remove formatting, spell check, dictionary download, and text color
+- Add Text Color, Font, Line Height, and alignment as available Selection Toolbar controls
+- Add editor context menus, link dialogs, and link actions to Canvas Text Nodes, with long-press support for touch
+- Add keyboard access to Text Node node menus via Shift+F10 and format-bubble navigation via Alt+F10, arrows, and Escape
+
+### Changed
+- Make editor shortcuts and Command palette commands target the editor focused last
+- Keep Canvas Text Nodes in editing mode while the Find bar or a dialog is open
+- Dock Quick Note's Find bar at the top of the editor and give it a dedicated line in narrow side panels
+- Position the Canvas Find bar above the canvas and clear of the Tools column
+- Let the editor Selection Toolbar scroll horizontally when controls exceed its width
+- Make Font and Line Height toolbar fields commit only on Enter or list selection and keep keyboard focus predictable
+
+### Fixed
+- Stop links in resting Text Nodes from trapping Tab
+- Preserve selections made immediately after opening a Text Node, including Home and Shift+Arrow selections
+- Make Canvas node Connect and Delete commands work from a focused node and make an opened Text Node the active editor for Command palette commands
+- Stop Escape in the Find bar from also closing the Book side panel
+- Stop Editor Toolbar Size, Font, and Line Height fields from re-applying a held value on blur, Escape, or Enter
+- Check Text Color, Highlight, and Canvas pen contrast against current theme colors and Canvas background
+- Keep Text Node format bubbles focused when pressing a field and commit text when leaving the bubble for the canvas
+- Anchor editor menus at the caret inside Text Nodes and remove the correct duplicate link when unlinking
+- Prevent browser context menus on Text Node padding and hide Inspect and Look up from Text Node menus
+
 ## [0.20.0] - 2026-11-04
 
 ### Added
