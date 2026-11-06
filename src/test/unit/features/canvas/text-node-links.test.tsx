@@ -104,15 +104,19 @@ function nodeElement(html: string) {
   );
 }
 
-/** Renders the node the way React Flow does: a focusable wrapper around it. */
-function renderInFlowNode(html: string) {
-  return render(
+/** The node the way React Flow renders it: a focusable wrapper around it. */
+function inFlowNode(html: string) {
+  return (
     // biome-ignore lint/a11y/useSemanticElements: a Canvas node wrapper is a div, as React Flow renders it.
     // biome-ignore lint/a11y/noNoninteractiveTabindex: React Flow makes that wrapper focusable so the keyboard drives the node.
     <div className="react-flow__node react-flow__node-text" role="group" tabIndex={0}>
       {nodeElement(html)}
     </div>
   );
+}
+
+function renderInFlowNode(html: string) {
+  return render(inFlowNode(html));
 }
 
 beforeEach(() => {
@@ -188,13 +192,7 @@ describe("resting Text Node links", () => {
     // Focus inside the node re-renders it (the node menu tracks focus within).
     link.focus();
     await waitFor(() => expect(link).toHaveFocus());
-    rerender(
-      // biome-ignore lint/a11y/useSemanticElements: a Canvas node wrapper is a div, as React Flow renders it.
-      // biome-ignore lint/a11y/noNoninteractiveTabindex: React Flow makes that wrapper focusable so the keyboard drives the node.
-      <div className="react-flow__node react-flow__node-text" role="group" tabIndex={0}>
-        {nodeElement(linkedHtml)}
-      </div>
-    );
+    rerender(inFlowNode(linkedHtml));
 
     expect(screen.getByRole("link", { name: "notes" })).toBe(link);
     expect(link).toHaveFocus();
@@ -202,17 +200,14 @@ describe("resting Text Node links", () => {
 
   it("keeps resting Links out of the Tab order, so Tab and Shift+Tab pass the node", async () => {
     const user = userEvent.setup();
-    render(
+    const { container } = render(
       <>
-        {/* biome-ignore lint/a11y/useSemanticElements: a Canvas node wrapper is a div, as React Flow renders it. */}
-        {/* biome-ignore lint/a11y/noNoninteractiveTabindex: React Flow makes that wrapper focusable so the keyboard drives the node. */}
-        <div className="react-flow__node" role="group" aria-label="storm" tabIndex={0}>
-          {nodeElement(linkedHtml)}
-        </div>
+        {inFlowNode(linkedHtml)}
         <button type="button">next</button>
       </>
     );
-    const wrapper = screen.getByRole("group", { name: "storm" });
+    const wrapper = container.querySelector<HTMLElement>(".react-flow__node");
+    if (!wrapper) throw new Error("no node wrapper");
 
     wrapper.focus();
     await user.tab();
@@ -221,12 +216,11 @@ describe("resting Text Node links", () => {
     expect(wrapper).toHaveFocus();
   });
 
-  it("saves the stored HTML without the Tab order marker the resting view adds", async () => {
+  it("saves the stored HTML untouched by the resting view when a Link is removed", async () => {
     const user = userEvent.setup();
     renderTextNode(
       '<p><a href="https://example.com/a">a</a> <a href="https://example.com/b">b</a></p>'
     );
-    expect(screen.getByRole("link", { name: "b" })).toHaveAttribute("tabindex", "-1");
 
     fireEvent.click(screen.getByRole("link", { name: "a" }));
     await user.click(screen.getByRole("button", { name: "editor.removeLink" }));

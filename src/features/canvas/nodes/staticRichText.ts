@@ -63,7 +63,8 @@ export function canvasLinkAnchors(html: string): CanvasLinkAnchor[] {
 
 /**
  * Prepares stored canvas node HTML for idle (non-editing) rendering so it matches
- * the active editor: sanitizes with the canvas link policy, restores hard breaks
+ * the active editor: sanitizes with the canvas link policy, takes Links out of the
+ * Tab order (their keyboard route is the Item Menu), restores hard breaks
  * inside empty paragraphs, numbers footnote references in DOM order, and appends a
  * footnote definition section. Footnote definitions are assigned through
  * `textContent`, never interpolated as HTML. Stored HTML remains canonical TipTap
@@ -73,8 +74,8 @@ export function prepareStaticCanvasHtml(html: string): string {
   const doc = new DOMParser().parseFromString(sanitizeNodeHtml(html), "text/html");
   const body = doc.body;
 
-  // A resting Link is no Tab stop: its keyboard route is the node's Shift+F10
-  // menu, and a focusable anchor inside a React Flow node traps Tab (#729).
+  // A resting Link is no Tab stop: its keyboard route is the node's Item Menu
+  // (Shift+F10), which lists the node's Links.
   body.querySelectorAll("a[href]").forEach((anchor) => {
     anchor.setAttribute("tabindex", "-1");
   });

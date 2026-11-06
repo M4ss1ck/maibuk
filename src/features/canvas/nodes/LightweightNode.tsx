@@ -312,7 +312,7 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
   // One object per stored HTML: React 19 rewrites innerHTML whenever this prop
   // is a new object, which would replace the content (and drop focus inside
   // it) on every re-render, such as the one focus moving into the node causes.
-  const staticHtml = useMemo(
+  const staticContent = useMemo(
     () => ({ __html: html === null ? "" : prepareStaticCanvasHtml(html) }),
     [html]
   );
@@ -442,7 +442,7 @@ export function LightweightNode({ data, selected }: NodeProps<LightweightFlowNod
           onClick={handleStaticContentClick}
           onPointerDown={handleStaticPointerDown}
           // biome-ignore lint/security/noDangerouslySetInnerHtml: canvas node HTML is sanitized with DOMPurify above
-          dangerouslySetInnerHTML={staticHtml}
+          dangerouslySetInnerHTML={staticContent}
         />
       )}
       {openLink && (
