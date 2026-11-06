@@ -104,15 +104,19 @@ function nodeElement(html: string) {
   );
 }
 
-/** Renders the node the way React Flow does: a focusable wrapper around it. */
-function renderInFlowNode(html: string) {
-  return render(
+/** The node the way React Flow renders it: a focusable wrapper around it. */
+function inFlowNode(html: string) {
+  return (
     // biome-ignore lint/a11y/useSemanticElements: a Canvas node wrapper is a div, as React Flow renders it.
     // biome-ignore lint/a11y/noNoninteractiveTabindex: React Flow makes that wrapper focusable so the keyboard drives the node.
     <div className="react-flow__node react-flow__node-text" role="group" tabIndex={0}>
       {nodeElement(html)}
     </div>
   );
+}
+
+function renderInFlowNode(html: string) {
+  return render(inFlowNode(html));
 }
 
 beforeEach(() => {
@@ -179,6 +183,51 @@ describe("resting Text Node links", () => {
       html: "<p>Read notes</p>",
     });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("keeps focus on content inside a resting node: a re-render never rewrites its HTML", async () => {
+    const { rerender } = renderInFlowNode(linkedHtml);
+    const link = screen.getByRole("link", { name: "notes" });
+
+    // Focus inside the node re-renders it (the node menu tracks focus within).
+    link.focus();
+    await waitFor(() => expect(link).toHaveFocus());
+    rerender(inFlowNode(linkedHtml));
+
+    expect(screen.getByRole("link", { name: "notes" })).toBe(link);
+    expect(link).toHaveFocus();
+  });
+
+  it("keeps resting Links out of the Tab order, so Tab and Shift+Tab pass the node", async () => {
+    const user = userEvent.setup();
+    const { container } = render(
+      <>
+        {inFlowNode(linkedHtml)}
+        <button type="button">next</button>
+      </>
+    );
+    const wrapper = container.querySelector<HTMLElement>(".react-flow__node");
+    if (!wrapper) throw new Error("no node wrapper");
+
+    wrapper.focus();
+    await user.tab();
+    expect(screen.getByRole("button", { name: "next" })).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(wrapper).toHaveFocus();
+  });
+
+  it("saves the stored HTML untouched by the resting view when a Link is removed", async () => {
+    const user = userEvent.setup();
+    renderTextNode(
+      '<p><a href="https://example.com/a">a</a> <a href="https://example.com/b">b</a></p>'
+    );
+
+    fireEvent.click(screen.getByRole("link", { name: "a" }));
+    await user.click(screen.getByRole("button", { name: "editor.removeLink" }));
+
+    expect(mocks.updateTextNode).toHaveBeenCalledWith("node", {
+      html: '<p>a <a href="https://example.com/b">b</a></p>',
+    });
   });
 
   it.each([

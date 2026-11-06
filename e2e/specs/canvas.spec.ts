@@ -468,10 +468,13 @@ test.describe("selecting and moving @wf:canvas-node-select-move", () => {
       .poll(async () => (await storm.boundingBox())?.x ?? 0)
       .toBeGreaterThan(before?.x ?? 0);
 
-    // Tab moves focus to the next node in the collection.
+    // Tab moves focus to the next node in the collection. The storm node holds
+    // a Link, which is no Tab stop at rest, so one Tab passes it (#729).
     const second = flowNode(page, "text-second");
-    await tabTo(page, second, { max: 10 });
+    await page.keyboard.press("Tab");
     await expect(second).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(storm).toBeFocused();
 
     await expect(page.getByText("Saved", { exact: true })).toBeVisible();
     await page.reload();
