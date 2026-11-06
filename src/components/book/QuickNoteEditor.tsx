@@ -6,7 +6,9 @@ import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { TaskListOrder } from "@/components/editor/extensions/TaskListOrder";
 import { TaskListMenus } from "@/components/editor/TaskListMenus";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
+import { SearchReplace } from "@/components/editor/extensions/SearchReplace";
 import { useEditorCommandSource } from "@/components/editor/editor-command-source";
+import { useEditorSurface } from "@/components/editor/EditorSurface";
 import {
   useOpeningMarksLanguage,
   useWritingLanguageGetter,
@@ -53,6 +55,10 @@ export function QuickNoteEditor({
   const [pendingMarkdownPaste, setPendingMarkdownPaste] = useState<string | null>(null);
   const onEscapeRef = useRef(onEscape);
   onEscapeRef.current = onEscape;
+  // The editor's keymap is created once, so the Find bar's state reaches it
+  // through refs.
+  const isFindReplaceOpenRef = useRef(false);
+  const closeFindReplaceRef = useRef<() => void>(() => {});
   const spellCheckEnabled = useSettingsStore((state) => state.spellCheckEnabled);
   const language = useSettingsStore((state) => state.language);
   const editorAutoClose = useSettingsStore((state) => state.editorAutoClose);
@@ -73,6 +79,8 @@ export function QuickNoteEditor({
       TaskItem.configure({ nested: true }),
       TaskListOrder,
       Placeholder.configure({ placeholder: placeholder ?? "" }),
+      // The shared Find bar searches this Note's document and marks the matches.
+      SearchReplace,
     ],
     content: "",
     editorProps: {
@@ -86,6 +94,12 @@ export function QuickNoteEditor({
       },
       handleKeyDown: (_view, event) => {
         if (event.key !== "Escape") return false;
+        // The Find bar owns the first Escape: close it and keep writing.
+        if (isFindReplaceOpenRef.current) {
+          event.stopPropagation();
+          closeFindReplaceRef.current();
+          return true;
+        }
         const handler = onEscapeRef.current;
         if (!handler) return false;
         // Escape is the editor's own key: stop it here so an enclosing panel
@@ -103,6 +117,12 @@ export function QuickNoteEditor({
   );
   useBoundShortcutIds(keymapShortcutIds);
   useEditorCommandSource(editor);
+
+  const { surface, isFindReplaceOpen, closeFindReplace } = useEditorSurface(editor, {
+    spellCheckLanguage: writingLanguage,
+  });
+  isFindReplaceOpenRef.current = isFindReplaceOpen;
+  closeFindReplaceRef.current = closeFindReplace;
 
   const toolbarButton = (
     label: string,
@@ -181,9 +201,14 @@ export function QuickNoteEditor({
           </button>
         </Tooltip>
       </div>
-      <div className="max-h-64 overflow-y-auto px-2">
-        <EditorContent editor={editor} />
-        <TaskListMenus editor={editor} />
+      {/* The Find bar docks at the top of this wrapper, outside the scrolling
+          area, so it stays visible while the Note scrolls. */}
+      <div className="relative">
+        <div className="max-h-64 overflow-y-auto px-2">
+          <EditorContent editor={editor} />
+          <TaskListMenus editor={editor} />
+        </div>
+        {surface}
       </div>
       {editor && (
         <MarkdownPasteDialog

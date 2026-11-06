@@ -59,6 +59,13 @@ describe("DEFAULT_TOOLBAR_CONFIG", () => {
       setSelectionToolbarMember(DEFAULT_TOOLBAR_CONFIG, "line-height", true).selectionToolbar
     ).toEqual(["basic-marks", "headings", "line-height", "highlight", "link-code"]);
   });
+  it("makes Text Color eligible to add without making it a default", () => {
+    expect(FLOATING_ELIGIBLE_IDS.has("text-color")).toBe(true);
+    expect(DEFAULT_TOOLBAR_CONFIG.selectionToolbar).not.toContain("text-color");
+    expect(
+      setSelectionToolbarMember(DEFAULT_TOOLBAR_CONFIG, "text-color", true).selectionToolbar
+    ).toEqual(["basic-marks", "headings", "highlight", "text-color", "link-code"]);
+  });
   it("has the exact semantic divider boundaries and is deeply frozen", () => {
     expect(
       DEFAULT_TOOLBAR_CONFIG.start.map((entry) => (entry.kind === "divider" ? "D" : entry.id))

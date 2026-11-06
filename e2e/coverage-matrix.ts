@@ -1731,6 +1731,21 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "canvas-text-node-editor-commands",
+    area: "canvas",
+    workflow:
+      "An editing Text Node opens Find and Replace with Mod+F, fixed at the top of the Canvas viewport and staying there while the Canvas zooms; Escape closes it and returns to the text, a second Escape leaves the node with its text saved; Ctrl+K opens the Link dialog and Escape returns to the caret with the node still editing; a Quick Note's Mod+F docks its Find bar at the top of its editor and Escape returns to the note; the Text Node's other shared surface Commands (formatting, Footnote, Symbols, dictionary) stay with the Vitest suites (src/test/unit/features/canvas/canvas-text-node-surface.test.tsx, CanvasNodeCommands.keyboard.test.tsx, and QuickNoteEditor.test.tsx); asserts: focus, bar position, Dialog, node editing; persists: yes",
+    edges: [
+      "Quick Note: Mod+F docks the Find bar at the top of the Quick Note editor, the Chapter editor opens none, and Escape returns to the note (book side panel; same spec)",
+    ],
+    terms: ["Text Node", "Canvas", "Link"],
+    shortcuts: ["common.find", "editor.insertLink", "canvas.editTextNode", "common.zoomIn"],
+    routes: ["/canvas/:canvasId", "/book/:bookId"],
+    fixture: "canvasWithNodes",
+    tags: [],
+    status: "accepted",
+  },
+  {
     id: "canvas-note-ref",
     area: "canvas",
     workflow:
@@ -1795,7 +1810,7 @@ export const ROWS: MatrixRow[] = [
     area: "canvas",
     workflow: "Node color panel by keyboard: color pair, custom colors, transparent; persists: yes",
     edges: [],
-    terms: ["Canvas", "Text Node"],
+    terms: ["Canvas", "Text Node", "Node Colors"],
     shortcuts: [],
     routes: ["/canvas/:canvasId"],
     fixture: "canvasWithNodes",

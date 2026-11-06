@@ -44,7 +44,7 @@ vi.mock("@/hooks", () => ({
 
 vi.mock("@/lib/shortcuts", () => ({
   useShortcuts: (bindings: ShortcutBinding[]) => {
-    shortcutBindings.splice(0, shortcutBindings.length, ...bindings);
+    shortcutBindings.push(...bindings);
   },
 }));
 

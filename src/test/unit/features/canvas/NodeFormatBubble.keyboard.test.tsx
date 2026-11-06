@@ -192,6 +192,42 @@ describe("NodeFormatBubble keyboard operation", () => {
     expect(editor.state.selection.from).toBe(1);
     expect(editor.state.selection.to).toBe(6);
   });
+
+  it("colors the selection from a swatch picked by keyboard, and the Text Node stays editing", async () => {
+    const user = userEvent.setup();
+    useSettingsStore.setState({
+      toolbarConfig: {
+        ...DEFAULT_TOOLBAR_CONFIG,
+        selectionToolbar: ["basic-marks", "text-color"],
+      },
+    });
+    const editor = mountBubble();
+
+    selectHello(editor);
+    await user.keyboard("{Alt>}{F10}{/Alt}");
+    const optionsTrigger = within(toolbar()).getByRole("button", { name: "{{label}} options" });
+    for (let index = 0; index < 24 && document.activeElement !== optionsTrigger; index++) {
+      await user.keyboard("{ArrowRight}");
+    }
+    expect(document.activeElement).toBe(optionsTrigger);
+
+    await user.keyboard("{Enter}");
+    const dialog = await screen.findByRole("dialog", { name: "{{label}} options" });
+    // The fifth preset is red (#EF4444); the labels all interpolate the same
+    // unresolved mock string, so the swatch is chosen by its place in the list.
+    const swatch = within(dialog).getAllByRole("option")[5];
+    swatch.focus();
+    await user.keyboard("{Enter}");
+
+    expect(editor.getHTML()).toContain("rgb(239, 68, 68)");
+    expect(editor.state.selection.from).toBe(1);
+    expect(editor.state.selection.to).toBe(6);
+    // A Text Node shows its bubble only while it is being edited: the bubble
+    // and the editor it edits are both still mounted.
+    expect(toolbar()).toBeInTheDocument();
+    expect(editor.isDestroyed).toBe(false);
+    expect(editor.view.dom.isConnected).toBe(true);
+  });
 });
 
 describe("NodeFormatBubble with the Font and Line Height fields", () => {

@@ -803,6 +803,12 @@ function CanvasEditor() {
         </ReactFlow>
         <DrawingCaptureOverlay surfaceRef={surfaceRef} />
         <PlacementCaptureOverlay surfaceRef={surfaceRef} onPlace={handlePlace} />
+        {/* An editing Text Node's Find bar: at the top of the viewport, outside
+            the zoom transform, and clear of the tool column on the right. */}
+        <div
+          data-canvas-find-slot
+          className="pointer-events-none absolute top-0 right-16 left-0 z-30 *:pointer-events-auto"
+        />
         {/* Right-side column bounded by the canvas edges: the tool stack scrolls
             in short landscape heights while the edge inspector stays visible
             below it (shrink-0), so the two never overlap. */}

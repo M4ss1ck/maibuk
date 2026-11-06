@@ -176,6 +176,10 @@ _Avoid_: mind map, board, and "canvas" for the Cover Designer
 A block of rich text placed on a Canvas.
 _Avoid_: lightweight node, idea, card
 
+**Node Colors**:
+The text and background color of a whole Text Node, set from its Item Menu. A text color set inside the Text Node colors only the selected text and shows over the Node Colors.
+_UI_: en "Node colors" / es "Colores del nodo"
+
 **Note Reference**:
 An item on a Canvas that stands for a Note and opens it.
 _Avoid_: note node, embed

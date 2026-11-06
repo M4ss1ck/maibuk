@@ -1,6 +1,7 @@
 import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -18,10 +19,12 @@ import { useSettingsStore } from "@/features/settings/store";
 import type { CanvasFlowNodeData } from "@/features/canvas/reactFlowAdapter";
 import type { LightweightCanvasNode } from "@/features/canvas/types";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
+import { SearchReplace } from "@/components/editor/extensions/SearchReplace";
 import { keepCaretAfterFocus } from "@/components/editor/extensions/DomSelectionSync";
 import { useEditorCommandSource } from "@/components/editor/editor-command-source";
 import { LinkActivationDialog, useLinkActivation } from "@/components/editor/LinkClickHandler";
 import { EditorContextMenu } from "@/components/editor/EditorContextMenu";
+import { useEditorSurface } from "@/components/editor/EditorSurface";
 import { MarkdownPasteDialog } from "@/components/editor/MarkdownPasteDialog";
 import { FootnoteList } from "@/components/editor/FootnoteList";
 import { ImageContextMenu } from "@/components/editor/ImageContextMenu";
@@ -79,6 +82,9 @@ function ActiveNodeEditor({
   const openingMarksLanguage = useOpeningMarksLanguage(writingLanguage);
   const writingLanguageGetter = useWritingLanguageGetter(writingLanguage);
   const overlayOpen = useRef(false);
+  // The shared surface's Find bar and dialogs. Read through a ref so the blur
+  // that moves focus into the bar in the same tick it opens sees it open.
+  const surfaceOverlayOpen = useRef(false);
   // A right-click menu that is anchored in this node, open or closing.
   const menuOpen = useRef(false);
   const menuWasOpen = useRef(false);
@@ -87,6 +93,16 @@ function ActiveNodeEditor({
   const menusRef = useRef<HTMLDivElement>(null);
   const [pendingMarkdownPaste, setPendingMarkdownPaste] = useState<string | null>(null);
   const hadText = useRef(false);
+
+  // Writes the editor's HTML under the same pristine rule as leaving: a node
+  // that has never had text stays uncommitted.
+  const save = (html: string) => {
+    const pristine = useCanvasStore.getState().pristineTextNode?.id === node.id;
+    if (!pristine || hadText.current || !isBlankTextNodeHtml(html)) {
+      updateTextNode(node.id, { html });
+    }
+  };
+
   const editor = useEditor({
     extensions: [
       ...createRichTextExtensions({
@@ -103,10 +119,14 @@ function ActiveNodeEditor({
         placeholder: t("canvas.textNodePlaceholder"),
         emptyEditorClass: "is-editor-empty",
       }),
+      // The shared Find bar searches this node's document and marks the matches.
+      SearchReplace,
     ],
     content: node.html,
     onUpdate: ({ editor: updated }) => {
       if (updated.getText().trim()) hadText.current = true;
+      // Replace in the Find bar edits the document while focus is in the bar.
+      if (surfaceOverlayOpen.current) save(updated.getHTML());
     },
     editable: true,
     // No autofocus: TipTap runs it from a timeout after mount, and it resets
@@ -134,15 +154,28 @@ function ActiveNodeEditor({
     keepCaretAfterFocus(view);
   }, [editor]);
 
-  if (!editor) return null;
+  // The Find bar belongs to the Canvas viewport: this node sits under the zoom
+  // transform, so an absolute bar inside it would scale and move with the node.
+  // The Canvas page owns the slot; without one (unit tests) it renders in place.
+  const [findContainer, setFindContainer] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    if (!editor?.view?.dom) return;
+    setFindContainer(document.querySelector<HTMLElement>("[data-canvas-find-slot]"));
+  }, [editor]);
+
+  const {
+    surface,
+    isOverlayOpen,
+    isFindReplaceOpen,
+    closeFindReplace,
+    lookupWord,
+    openLinkDialog,
+  } = useEditorSurface(editor, { spellCheckLanguage: writingLanguage, findContainer });
+  surfaceOverlayOpen.current = isOverlayOpen;
 
   const commit = (leave: () => void = onDone) => {
-    const html = editor.getHTML();
-    // A node that has never had text stays uncommitted, and leaving drops it.
-    const pristine = useCanvasStore.getState().pristineTextNode?.id === node.id;
-    if (!pristine || hadText.current || !isBlankTextNodeHtml(html)) {
-      updateTextNode(node.id, { html });
-    }
+    if (!editor) return;
+    save(editor.getHTML());
     leave();
   };
 
@@ -152,8 +185,15 @@ function ActiveNodeEditor({
   // has to be committed now or it is lost.
   const commitAfterMenu = () => {
     requestAnimationFrame(() => {
-      if (editor.isDestroyed || editor.isFocused) return;
-      if (overlayOpen.current || menuOpen.current || pendingMarkdownPaste !== null) return;
+      if (!editor || editor.isDestroyed || editor.isFocused) return;
+      if (
+        overlayOpen.current ||
+        menuOpen.current ||
+        surfaceOverlayOpen.current ||
+        pendingMarkdownPaste !== null
+      ) {
+        return;
+      }
       const active = document.activeElement;
       // A close leaves focus on the page body, or restores it to the menu's
       // hidden trigger: neither is the author leaving the node's editor. The
@@ -170,6 +210,16 @@ function ActiveNodeEditor({
       commit();
     });
   };
+
+  // The Find bar's Escape and every dialog restore focus to the editor. When
+  // one closes without doing that, the author left the node: save and leave.
+  const wasOverlayOpen = useRef(false);
+  useEffect(() => {
+    if (wasOverlayOpen.current && !isOverlayOpen) commitAfterMenu();
+    wasOverlayOpen.current = isOverlayOpen;
+  }, [isOverlayOpen]);
+
+  if (!editor) return null;
 
   return (
     <>
@@ -217,6 +267,12 @@ function ActiveNodeEditor({
             ) {
               return;
             }
+            // A surface overlay (the Find bar, a dialog) keeps the node editing:
+            // its focus is still the author writing here, so save but stay.
+            if (surfaceOverlayOpen.current) {
+              save(editor.getHTML());
+              return;
+            }
             if (overlayOpen.current || menuOpen.current || pendingMarkdownPaste !== null) return;
             commit();
           }}
@@ -224,6 +280,14 @@ function ActiveNodeEditor({
             event.stopPropagation();
             if (event.key === "Escape") {
               event.preventDefault();
+              // The bar's Search field has its own Escape; this is the path when
+              // focus is still in the text. Close the bar and stay, so a second
+              // Escape leaves the node.
+              if (isFindReplaceOpen) {
+                closeFindReplace();
+                editor.commands.focus();
+                return;
+              }
               // Tab indents inside the editor and a pointer is the only way to
               // blur, so a keyboard-only author could never save their text.
               // Escape is the commit path: persist, then leave editing and
@@ -249,9 +313,25 @@ function ActiveNodeEditor({
         }}
       />
       <ImageContextMenu editor={editor} />
+      {/* Find bar and dialogs: a ContextMenu key typed there must not open this
+          node's own menu through React's portal bubbling. A blanket
+          stopPropagation would also swallow the window-level Escape that closes
+          a dialog, so only the keys this node reads are stopped. */}
+      <div
+        className="nodrag nopan nowheel"
+        onKeyDown={(event) => {
+          if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+            event.stopPropagation();
+          }
+        }}
+      >
+        {surface}
+      </div>
       <div ref={menusRef}>
         <EditorContextMenu
           editor={editor}
+          onLookup={lookupWord}
+          onEditLink={openLinkDialog}
           onOpenChange={(open) => {
             menuOpen.current = open;
             if (open) {
