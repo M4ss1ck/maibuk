@@ -1151,7 +1151,8 @@ export function createTestHost(options: TestHostOptions): TestHost {
       }
     },
     async stop() {
-      await Promise.all([...openPages].map((page) => page.unmount()));
+      // One at a time: each unmount awaits inside act(), and act() calls must not overlap.
+      for (const page of [...openPages]) await page.unmount();
       broker.stop("requested");
       channel.port1.close();
       channel.port2.close();
