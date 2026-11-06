@@ -109,8 +109,10 @@ describe("openPluginUiMount", () => {
     expect(requests.map((request) => request.method)).toEqual([PLUGIN_UI_MOUNT_REQUEST]);
 
     const close = vi.spyOn(mount.port, "close");
-    mount.unmount();
-    mount.unmount();
+    const first = mount.unmount();
+    // A repeated unmount is already settled: there is nothing to wait for.
+    await expect(mount.unmount()).resolves.toBeUndefined();
+    await expect(first).resolves.toBeUndefined();
 
     // The second unmount sends nothing. The witness is queued behind any unmount
     // that was sent, so once it resolves the host has seen every request.
@@ -136,11 +138,12 @@ describe("openPluginUiMount", () => {
     await mount.mounted;
     const close = vi.spyOn(mount.port, "close");
     // A stopped broker takes no messages, so no event could witness a skipped send.
-    // unmount() decides synchronously, and the send is the broker's request call.
+    // unmount() decides synchronously, and the send is the broker's request call;
+    // it still resolves, since nothing can answer.
     const send = vi.spyOn(broker, "request");
     broker.stop("requested");
 
-    expect(() => mount.unmount()).not.toThrow();
+    await expect(mount.unmount()).resolves.toBeUndefined();
 
     expect(send).not.toHaveBeenCalled();
     expect(close).toHaveBeenCalledTimes(1);

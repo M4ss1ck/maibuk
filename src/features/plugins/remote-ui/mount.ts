@@ -26,7 +26,8 @@ export interface PluginUiMount {
   /**
    * Tears the mount down; idempotent, and a no-op request once the Plugin
    * stopped. Resolves once the Plugin answers the unmount, or at once when it
-   * cannot (already closed or stopped); never rejects.
+   * cannot (already closed or stopped); never rejects. A live broker whose
+   * Plugin never answers leaves it pending: stop the broker to settle it.
    */
   unmount(): Promise<void>;
 }

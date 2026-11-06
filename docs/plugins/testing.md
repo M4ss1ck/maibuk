@@ -71,7 +71,7 @@ await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: OPEN_COMMAND });
 expect(host.pageNavigations).toEqual([{ pluginId: manifest.id, pageId: PAGE_ID }]);
 ```
 
-The second test renders the page, finds the heading and the button by role, tabs to the button, presses Enter, and asserts the greeting changed. It awaits `page.unmount()`, and each test ends in an awaited `host.stop()` so no mount is left behind:
+The second test renders the page, finds the heading and the button by role, tabs to the button, presses Enter, and asserts the greeting changed. It awaits `page.unmount()`, which resolves once the Plugin's own React tree has unmounted, and each test ends in an awaited `host.stop()` in a `finally` block so no mount is left behind:
 
 ```ts
 const page = await host.renderPage(PAGE_ID);
@@ -83,6 +83,8 @@ await user.keyboard("{Enter}");
 await waitFor(() => expect(screen.getByText("Greetings: 1")).toBeInTheDocument());
 await page.unmount();
 ```
+
+The Plugin's side of an unmount waits one real task, so a test that fakes `setTimeout` calls `vi.useRealTimers()` before it awaits `page.unmount()` or `host.stop()`; with the clock still fake, the unmount never finishes and the test times out.
 
 Actions are proven by `user-event` key presses that assert behavior, never by checking attributes. Only an enabled Plugin is scanned at launch, so a test that wants a Plugin's surfaces reachable goes through the same host the app uses rather than a stand-in.
 

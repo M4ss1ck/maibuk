@@ -141,7 +141,7 @@ async function runScripted(
     const outcome = judgeTask(evalTask, mcpTokensOf(library.wire), SESSION, checks);
     return { run, checks, outcome };
   } finally {
-    library.stop();
+    await library.stop();
   }
 }
 
