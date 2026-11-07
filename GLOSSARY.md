@@ -642,6 +642,52 @@ How much processor time, memory, and disk space Maibuk itself takes on this devi
 _UI_: en "Show resource usage in tray" / es "Mostrar uso de recursos en la bandeja"
 _Avoid_: stats, metrics (reserved for writing data), system usage
 
+## Maps
+
+**Map**:
+A picture of the author's world or one of its regions, made in the Maps Built-in Plugin to be placed in a Chapter or Note or saved as an image. A Map belongs to zero or one Book; it is kept with the Library and its Backups but is not a Synced Item.
+_Avoid_: world map (that is one kind of Map), atlas, canvas, drawing
+
+**Map Template**:
+A ready-made Map the author starts a new Map from.
+_Avoid_: preset, base map
+
+**Map Style**:
+The named set of colors and fonts a Map is drawn in: land, water, each terrain, ink, and labels. Any single element can override its color.
+_Avoid_: theme (that is the app's light and dark), palette, skin
+
+**Stamp**:
+A single picture placed on a Map at one spot, such as a city, a castle, a lone mountain, or a ship.
+_Avoid_: icon (that is a Plugin UI component), symbol (that is the Symbol inserter), marker, pin
+
+**Custom Stamp**:
+A Stamp made from an image the author uploaded. It belongs to the Library, so every Map can use it.
+_Avoid_: uploaded icon, custom icon
+
+**Terrain Area**:
+An outline on a Map that fills itself with one terrain, such as forest, mountains, sea, or desert.
+_Avoid_: region (reads as a political area), zone, biome, shape
+
+**Custom Terrain**:
+A terrain the author defined, from a texture image or a set of their Stamps scattered inside each Terrain Area that uses it. It belongs to the Library.
+_Avoid_: custom biome, custom topology
+
+**Map Line**:
+A line drawn on a Map that is a river, a road, or a border.
+_Avoid_: path, route, stroke
+
+**Map Label**:
+A name written on a Map, straight or along a curve.
+_Avoid_: text, caption, title (that is a Book's)
+
+**Decoration**:
+A part of a Map that frames or explains it rather than showing the world: a compass rose, a title cartouche, a scale bar, or a border.
+_Avoid_: ornament, widget, legend
+
+**Map Image**:
+An image the author places on a Map as its own layer, such as a scanned sketch to trace over; it can be dimmed or left out of the exported picture.
+_Avoid_: background, overlay, Custom Stamp (that is placed as a Stamp)
+
 ## Decided, not built
 
 Accepted in `docs/adr/`; the app does not work this way yet. ADR 0004 also widens Reading Position to cover the Last Opened Chapter.
@@ -711,6 +757,7 @@ A Custom Shortcut or custom Voice Command under `plugin.<pluginId>.` kept on thi
 - A **Dictation Session** uses one **Dictation Model** and inserts into whichever editor or text field has the caret.
 - A **Command** may also have **Voice Commands**; **Spoken Punctuation** and the **Dictation Vocabulary** are not Commands, and all three are kept per **Dictation Language**.
 - A **Plugin** is loaded from the **Plugin Directory** and reaches the **Library** only through its **Plugin Permissions**; the data it keeps is in the **Library** and its **Backups**, but it is not a **Synced Item**.
+- A **Map** belongs to zero or one **Book**, starts from a **Map Template** or blank, is drawn in one **Map Style**, and holds **Terrain Areas**, **Map Lines**, **Stamps**, **Map Labels**, **Decorations**, and **Map Images**; **Custom Stamps** and **Custom Terrains** belong to the **Library** and any **Map** can use them.
 
 ## Anticipated
 
