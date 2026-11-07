@@ -6,8 +6,10 @@
  * Plugin to host messages are JSON strings so the broker can refuse an
  * oversized message by its length before decoding it. Each one starts with
  * `kind`, `id`, then `method` or `event`, so a refusal can name the call
- * without decoding the rest. Host to Plugin messages are plain objects and
- * uncapped.
+ * without decoding the rest. The one exception is the `blob` message that
+ * follows a `files.save` call: a plain object carrying a cloned `Blob`, whose
+ * bytes the broker never decodes (ADR 0040). Host to Plugin messages are plain
+ * objects and uncapped.
  */
 
 export const PLUGIN_API_ERROR_CODES = [
