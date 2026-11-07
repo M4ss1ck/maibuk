@@ -6,7 +6,7 @@ status: accepted
 
 A Map, its Custom Stamps, and its Custom Terrains are stored in the Maps Built-in Plugin's own storage (ADR 0023), not as a Library item with its own table the way a Cover is. So a Map is in the Library, its Backups, and a Database File, but it is not a Synced Item: an author who draws a Map on the desktop does not see it on the web. We chose this so Maps ship on the generic Plugin capabilities (a Frame, `files.pick`, `files.save`, `editor.insert`) without schema, Sync, Version, or Export work in the host, and so the editor's dependencies (SVG scene, rough.js, d3-delaunay, bundled fonts, Stamp art) load only for authors who turn the Plugin on.
 
-Decided in [Maps Built-in Plugin](https://github.com/M4ss1ck/maibuk/issues/737).
+Decided in [Maps Built-in Plugin](https://github.com/M4ss1ck/maibuk/issues/737). The Map terms bind inside the Plugin (`plugins/maibuk-maps/GLOSSARY.md`), not in the root glossary.
 
 ## Considered Options
 
