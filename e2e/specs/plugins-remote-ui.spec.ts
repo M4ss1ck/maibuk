@@ -99,6 +99,7 @@ test.describe("Host-rendered Plugin UI @wf:plugins-remote-ui", () => {
     await expect(trigger).toBeVisible({ timeout: 15_000 });
     // The Plugin's own value, echoed before any pick.
     await expect(page.getByText("Accent: #3B82F6")).toBeVisible();
+    await capture(page, "plugin-color-picker-panel");
 
     await tabTo(page, trigger);
     await page.keyboard.press("Enter");
@@ -106,6 +107,7 @@ test.describe("Host-rendered Plugin UI @wf:plugins-remote-ui", () => {
     await expect(picker).toBeVisible();
     await expectFocusWithin(picker);
     await expectTabContained(page, picker);
+    await capture(page, "plugin-color-picker-open");
 
     // The dialog starts on the Plugin's own value; arrows move between presets.
     const presets = picker.getByRole("listbox", { name: "Preset colors" });
