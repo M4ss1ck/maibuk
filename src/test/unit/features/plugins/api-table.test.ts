@@ -34,6 +34,7 @@ import type {
   PluginPermissionId,
 } from "@/features/plugins/types";
 import {
+  PLUGIN_API_BLOB_METHODS,
   PLUGIN_API_EVENT_IDS,
   PLUGIN_API_METHODS,
   PLUGIN_API_STREAMING_METHODS,
@@ -162,6 +163,24 @@ describe("PLUGIN_API_TABLE", () => {
     expect(properties).toHaveProperty("genre");
     expect(properties).toHaveProperty("targetWordCount");
   });
+
+  it("gates files.save by files:save, needs the author's action, and takes one blob message", () => {
+    const row = PLUGIN_API_TABLE.find((entry) => entry.id === "files.save");
+    if (!row) throw new Error("files.save is missing from the table");
+
+    expect(row.permission).toBe("files:save");
+    expect(row.effect).toBe("write");
+    expect(row.requiresUserAction).toBe(true);
+    expect(row.acceptsBlob).toBe(true);
+    expect(inputJsonSchema(row).required).toEqual(["name", "mimeType"]);
+  });
+
+  it("returns either saved or cancelled from files.save", () => {
+    const row = PLUGIN_API_TABLE.find((entry) => entry.id === "files.save");
+    expect(row?.output.safeParse({ status: "saved" }).success).toBe(true);
+    expect(row?.output.safeParse({ status: "cancelled" }).success).toBe(true);
+    expect(row?.output.safeParse({ status: "failed" }).success).toBe(false);
+  });
 });
 
 /** Every property name anywhere in a JSON Schema. */
@@ -256,7 +275,22 @@ describe("generated SDK files", () => {
   it("lists every table method, streaming method, and event at runtime for the SDK client", () => {
     expect([...PLUGIN_API_METHODS]).toEqual(PLUGIN_API_TABLE.map((r) => r.id));
     expect([...PLUGIN_API_STREAMING_METHODS]).toEqual(["network.fetch"]);
+    expect([...PLUGIN_API_BLOB_METHODS]).toEqual(["files.save"]);
     expect([...PLUGIN_API_EVENT_IDS]).toEqual(PLUGIN_API_EVENTS.map((e) => e.id));
+  });
+
+  it("gives the SDK input an extra bytes field for a blob method, and names it in the docs", () => {
+    const row = PLUGIN_API_TABLE.find((entry) => entry.id === "files.save")!;
+    const types = renderPluginApiTypes(PLUGIN_API_TABLE);
+    expect(types).toContain("bytes: Uint8Array | Blob | AsyncIterable<Uint8Array>;");
+    expect(types).toContain("name: string;");
+    expect(types).toContain("mimeType: string;");
+    // The wire input stays name and mimeType: the bytes never travel as JSON.
+    expect(inputJsonSchema(row).properties).not.toHaveProperty("bytes");
+
+    const docs = renderPluginApiDocs(PLUGIN_API_TABLE);
+    expect(docs).toContain("### `files.save`");
+    expect(docs).toContain("AsyncIterable<Uint8Array>");
   });
 });
 
@@ -450,11 +484,14 @@ describe("jsonSchemaToTypeScript()", () => {
 // Type-level: the generated SDK types say exactly what the Zod rows accept and return.
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 type RowOf<M extends PluginApiMethodId> = Extract<PluginApiTable[number], { id: M }>;
+type BlobMethodId = (typeof PLUGIN_API_BLOB_METHODS)[number];
+/** The SDK input a row generates: the wire input, plus `bytes` for a blob row (ADR 0040). */
+type SdkInput<M extends PluginApiMethodId> = M extends BlobMethodId
+  ? z.input<RowOf<M>["input"]> & { bytes: Uint8Array | Blob | AsyncIterable<Uint8Array> }
+  : z.input<RowOf<M>["input"]>;
+
 type InputMismatch = {
-  [M in PluginApiMethodId]: Same<
-    PluginApiMethods[M]["input"],
-    z.input<RowOf<M>["input"]>
-  > extends true
+  [M in PluginApiMethodId]: Same<PluginApiMethods[M]["input"], SdkInput<M>> extends true
     ? never
     : M;
 }[PluginApiMethodId];
@@ -491,6 +528,7 @@ describe("generated types", () => {
     expectTypeOf<ChunkMismatch>().toEqualTypeOf<never>();
     expectTypeOf<EventMismatch>().toEqualTypeOf<never>();
     expectTypeOf<PluginApiStreamingMethodId>().toEqualTypeOf<"network.fetch">();
+    expectTypeOf<BlobMethodId>().toEqualTypeOf<"files.save">();
   });
 
   it("pass the Change Feed's own shapes through library.changed, so they cannot drift", () => {

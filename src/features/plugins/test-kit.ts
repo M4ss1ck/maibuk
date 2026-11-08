@@ -25,6 +25,7 @@ import {
   dispatchEndpointRequest,
   endpointUrlFor,
 } from "@/features/plugins/endpoint";
+import { createMemoryPluginFileSaver, savePluginFile } from "@/features/plugins/file-save";
 import { createMemoryPluginFileGrantStore } from "@/features/plugins/file-grants";
 import { assertToggleButton } from "@/features/plugins/handlers";
 import { fragmentToHtml, htmlToPlainText } from "@/features/plugins/library";
@@ -416,6 +417,9 @@ export function createTestHost(options: TestHostOptions): TestHost {
   const fileGrants = createMemoryPluginFileGrantStore(
     (options.files ?? []).map((file) => ({ pluginId: options.manifest.id, ...file }))
   );
+  // The files the Plugin saved (ADR 0040): the same memory saver and save flow
+  // the app wires, so a test asserts the bytes the host received.
+  const fileSaver = createMemoryPluginFileSaver();
 
   const networkHandler: PluginApiHandlers = testFetch
     ? {
@@ -756,6 +760,11 @@ export function createTestHost(options: TestHostOptions): TestHost {
     // user action here because the kit runs the Plugin's Commands and clicks
     // synthetically (`hasUserActivation` below).
     "files.pick": ({ extensions }) => fileGrants.pick(options.manifest.id, extensions),
+    // The bytes arrive as the broker's checked `blob` message; the save flow is
+    // the app's own, over the memory saver above (ADR 0040).
+    "files.save": async ({ name, mimeType }, { blob }) => ({
+      status: await savePluginFile(fileSaver, { name, mimeType, blob }),
+    }),
     "files.read": ({ grant, offset, length }) =>
       fileGrants.read(options.manifest.id, grant, offset, length),
     "files.stat": ({ grant }) => fileGrants.stat(options.manifest.id, grant),
@@ -794,8 +803,9 @@ export function createTestHost(options: TestHostOptions): TestHost {
     handlers,
     isLibraryAvailable: () => libraryAvailable,
     // Every call this host serves answers a Command run or a click the test
-    // made, so the rows that need one (`files.pick`, `files.requestAccess`)
-    // are accepted rather than refused `user-action-required`.
+    // made, so the rows that need one (`files.pick`, `files.save`,
+    // `files.requestAccess`) are accepted rather than refused
+    // `user-action-required`.
     hasUserActivation: () => true,
     eventSnapshot: (event) => {
       if (event === "language.changed") return { language };
@@ -1098,6 +1108,12 @@ export function createTestHost(options: TestHostOptions): TestHost {
       },
       grants() {
         return fileGrants.list(options.manifest.id);
+      },
+      get saves() {
+        return fileSaver.saves;
+      },
+      queueSaveCancel() {
+        fileSaver.queueCancel();
       },
     },
     setGranted(permissions) {

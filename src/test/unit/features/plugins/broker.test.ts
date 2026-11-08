@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Blob as NodeBlob } from "node:buffer";
 import {
   CALL_BURST,
   COMMAND_RUN_EXEMPTION_MS,
@@ -7,6 +8,7 @@ import {
   createPluginBroker,
 } from "@/features/plugins/broker";
 import { pluginFetch } from "@/features/plugins/network";
+import { createMemoryPluginFileSaver, savePluginFile } from "@/features/plugins/file-save";
 import {
   type MemoryPluginFileGrantStore,
   createMemoryPluginFileGrantStore,
@@ -1564,5 +1566,168 @@ describe("open work", () => {
     release();
     await keys;
     expect(broker.hasOpenWork()).toBe(false);
+  });
+});
+
+describe("files.save (ADR 0040)", () => {
+  const BYTES = new Uint8Array([0, 1, 2, 253, 254, 255]);
+
+  /** The host side of `files.save`: the app's save flow over an in-memory saver. */
+  function saveSetup(options: Partial<SetupOptions> = {}) {
+    const saver = createMemoryPluginFileSaver();
+    const handlers: PluginApiHandlers = {
+      "files.save": ({ name, mimeType }, { blob }) =>
+        savePluginFile(saver, { name, mimeType, blob }).then((status) => ({ status })),
+    };
+    return {
+      saver,
+      ...setup({
+        declared: ["files:save"],
+        hasUserActivation: () => true,
+        handlers,
+        ...options,
+      }),
+    };
+  }
+
+  // jsdom's own Blob is a stand-in class the in-process MessageChannel turns
+  // into a plain object; Node's real Blob crosses the port the way a browser's
+  // does, so the bytes are asserted after a real structured clone.
+  beforeEach(() => {
+    vi.stubGlobal("Blob", NodeBlob);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("refuses files.save without files:save", async () => {
+    const { saver, client } = saveSetup({ grantedAtStart: [] });
+
+    const error = await refusal(
+      client.files.save({ name: "a.txt", mimeType: "text/plain", bytes: BYTES })
+    );
+
+    expect(error.code).toBe("permission-denied");
+    expect(error.permission).toBe("files:save");
+    expect(error.method).toBe("files.save");
+    expect(saver.saves).toEqual([]);
+  });
+
+  it("refuses files.save with user-action-required outside the author's action", async () => {
+    const { saver, client } = saveSetup({ hasUserActivation: () => false });
+
+    const error = await refusal(
+      client.files.save({ name: "a.txt", mimeType: "text/plain", bytes: BYTES })
+    );
+
+    expect(error.code).toBe("user-action-required");
+    expect(saver.saves).toEqual([]);
+  });
+
+  it("saves a Uint8Array byte for byte", async () => {
+    const { saver, client } = saveSetup();
+
+    await expect(
+      client.files.save({ name: "export.bin", mimeType: "application/octet-stream", bytes: BYTES })
+    ).resolves.toEqual({ status: "saved" });
+
+    expect(saver.saves).toHaveLength(1);
+    expect(saver.saves[0].name).toBe("export.bin");
+    expect(saver.saves[0].mimeType).toBe("application/octet-stream");
+    expect([...saver.saves[0].bytes]).toEqual([...BYTES]);
+  });
+
+  it("saves a Blob byte for byte", async () => {
+    const { saver, client } = saveSetup();
+
+    await expect(
+      client.files.save({
+        name: "map.png",
+        mimeType: "image/png",
+        bytes: new Blob([BYTES], { type: "image/png" }),
+      })
+    ).resolves.toEqual({ status: "saved" });
+
+    expect(saver.saves[0].mimeType).toBe("image/png");
+    expect([...saver.saves[0].bytes]).toEqual([...BYTES]);
+  });
+
+  it("collects an AsyncIterable into one Blob and saves it byte for byte", async () => {
+    const { saver, client } = saveSetup();
+    const bytes = (async function* () {
+      yield BYTES.subarray(0, 2);
+      yield BYTES.subarray(2, 4);
+      yield BYTES.subarray(4);
+    })();
+
+    await expect(
+      client.files.save({ name: "parts.bin", mimeType: "text/plain", bytes })
+    ).resolves.toEqual({ status: "saved" });
+
+    expect([...saver.saves[0].bytes]).toEqual([...BYTES]);
+  });
+
+  it("returns cancelled when the author cancels, saving nothing", async () => {
+    const { saver, client } = saveSetup();
+    saver.queueCancel();
+
+    await expect(
+      client.files.save({ name: "a.txt", mimeType: "text/plain", bytes: BYTES })
+    ).resolves.toEqual({ status: "cancelled" });
+
+    expect(saver.saves).toEqual([]);
+  });
+
+  it("drops a blob message with no pending call and one with an unknown id", async () => {
+    const { saver, client, port } = saveSetup();
+
+    // No `files.save` waits on either id, so both are dropped silently.
+    port.postMessage({ kind: "blob", id: 99, blob: new Blob([new Uint8Array([9])]) });
+    port.postMessage({ kind: "blob", id: 1_000, blob: new Blob([new Uint8Array([8])]) });
+
+    await expect(
+      client.files.save({ name: "after.txt", mimeType: "text/plain", bytes: BYTES })
+    ).resolves.toEqual({ status: "saved" });
+
+    expect(saver.saves.map((save) => save.name)).toEqual(["after.txt"]);
+    expect([...saver.saves[0].bytes]).toEqual([...BYTES]);
+  });
+
+  it("refuses a blob message whose payload is not a Blob with invalid-params", async () => {
+    const { saver, port } = saveSetup();
+    const head = JSON.stringify({
+      kind: "call",
+      id: 41,
+      method: "files.save",
+      params: { name: "a.txt", mimeType: "text/plain" },
+    });
+
+    const reply = raw(port, head);
+    port.postMessage({ kind: "blob", id: 41, blob: "not a blob" });
+
+    expect(await reply).toMatchObject({
+      kind: "result",
+      id: 41,
+      ok: false,
+      error: { code: "invalid-params", method: "files.save" },
+    });
+    expect(saver.saves).toEqual([]);
+  });
+
+  it("refuses a blob message carrying a plain object with invalid-params", async () => {
+    const { saver, port } = saveSetup();
+    const head = JSON.stringify({
+      kind: "call",
+      id: 42,
+      method: "files.save",
+      params: { name: "a.txt", mimeType: "text/plain" },
+    });
+
+    const reply = raw(port, head);
+    port.postMessage({ kind: "blob", id: 42, blob: { bytes: [1, 2, 3] } });
+
+    expect(await reply).toMatchObject({ ok: false, error: { code: "invalid-params" } });
+    expect(saver.saves).toEqual([]);
   });
 });

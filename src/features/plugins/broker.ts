@@ -234,6 +234,13 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
   const inFlightCommandRuns = new Map<number, number>();
   /** Endpoint requests whose answer has not finished, by host request id. */
   const endpoints = new Map<number, OpenEndpoint>();
+  /**
+   * The `files.save` calls waiting for their one `blob` message, by the call's
+   * id (ADR 0040). A slot is registered when the call head is parsed, before the
+   * async checks, so a blob that arrives first is never lost; the slot goes when
+   * the call ends, whether it used the blob or was refused.
+   */
+  const pendingBlobs = new Map<number, (blob: unknown) => void>();
   /** Plugin calls whose handler (and any streamed body) has not finished. */
   let openCalls = 0;
 
@@ -287,6 +294,9 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
     pending.clear();
     pendingMethods.clear();
     inFlightCommandRuns.clear();
+    // A `files.save` still waiting for its bytes never reaches its handler: the
+    // resolver is dropped, so a blob arriving after the stop does nothing.
+    pendingBlobs.clear();
     subscriptions.clear();
     // Cancels each open body, so the network connection behind it closes now
     // instead of at its next chunk.
@@ -477,7 +487,51 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
     else if (message.kind === "end") handleEndpointEnd(message.id);
   }
 
-  async function handleCall(id: number, method: string, params: unknown) {
+  /** Registers the slot the one `blob` message of an accepted call will fill. */
+  function waitForBlob(id: number): Promise<unknown> {
+    return new Promise((resolve) => {
+      pendingBlobs.set(id, resolve);
+    });
+  }
+
+  /**
+   * Hands one `blob` message to the call waiting on its id (ADR 0040). A stray
+   * one, an id no call holds, or anything that is not a `blob` object is dropped
+   * silently: the message already took a rate-limit token like every other.
+   */
+  function deliverBlob(data: unknown) {
+    if (typeof data !== "object" || data === null) return;
+    const message = data as { kind?: unknown; id?: unknown; blob?: unknown };
+    if (message.kind !== "blob" || typeof message.id !== "number") return;
+    const deliver = pendingBlobs.get(message.id);
+    if (!deliver) return;
+    pendingBlobs.delete(message.id);
+    deliver(message.blob);
+  }
+
+  /**
+   * Runs one Plugin call, and always releases its `blob` slot: a blob for a
+   * refused or finished call finds no pending entry and is dropped (ADR 0040).
+   */
+  async function handleCall(
+    id: number,
+    method: string,
+    params: unknown,
+    blobRequest?: Promise<unknown>
+  ) {
+    try {
+      await runCall(id, method, params, blobRequest);
+    } finally {
+      pendingBlobs.delete(id);
+    }
+  }
+
+  async function runCall(
+    id: number,
+    method: string,
+    params: unknown,
+    blobRequest: Promise<unknown> | undefined
+  ) {
     onCall?.(method);
     const namespace = method.split(".")[0];
     if (reserved.includes(namespace)) {
@@ -537,6 +591,29 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
       fail(id, refusal("not-implemented", `${method} is not available yet`, { method }));
       return;
     }
+    // A row that takes one `blob` message waits for it here, after every check
+    // that can refuse the call: the bytes are handed to the handler only once
+    // the call is accepted, and a payload that is not a Blob is refused without
+    // the handler ever running (ADR 0040).
+    let blob: Blob | undefined;
+    if (row.acceptsBlob) {
+      if (blobRequest === undefined) {
+        fail(id, refusal("internal-error", `${method} was called without a blob slot`, { method }));
+        return;
+      }
+      const received = await blobRequest;
+      if (stopped) return;
+      if (!(received instanceof Blob)) {
+        fail(
+          id,
+          refusal("invalid-params", "blob: the call must be followed by one Blob message", {
+            method,
+          })
+        );
+        return;
+      }
+      blob = received;
+    }
     if (row.minIntervalMs !== undefined && !solicited) lastAcceptedAt.set(method, now());
 
     let outcome: unknown;
@@ -546,7 +623,10 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
       // switching, and the re-check below keeps a late result from crossing
       // into the replacement Library (ADR 0008, #398).
       const executed = Promise.resolve(
-        (handler as (p: unknown, c: PluginHandlerContext) => unknown)(parsed.data, { pluginId })
+        (handler as (p: unknown, c: PluginHandlerContext) => unknown)(parsed.data, {
+          pluginId,
+          ...(blob === undefined ? {} : { blob }),
+        })
       );
       outcome = await (row.requiresLibrary ? trackLibraryWork(executed) : executed);
     } catch (error) {
@@ -659,7 +739,13 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
       }
       return;
     }
-    if (text === null) return;
+    if (text === null) {
+      // The one non-string message a Plugin may send: the bytes of a
+      // `files.save` call (ADR 0040). It never counts as awaited work, so it
+      // took a token above like any other message.
+      deliverBlob(data);
+      return;
+    }
     // Cheap bound first: a UTF-16 unit is at most 3 UTF-8 bytes.
     if (
       text.length * 3 > PLUGIN_MESSAGE_MAX_BYTES &&
@@ -715,7 +801,11 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
     if (typeof record.id !== "number") return;
     if (record.kind === "call" && typeof record.method === "string") {
       openCalls += 1;
-      void handleCall(record.id, record.method, record.params).finally(() => {
+      // A call whose bytes follow as one `blob` message gets its slot here,
+      // synchronously, before the async checks run: the blob may already be in
+      // flight and must not be lost while the call is being decided (ADR 0040).
+      const blobRequest = rows.get(record.method)?.acceptsBlob ? waitForBlob(record.id) : undefined;
+      void handleCall(record.id, record.method, record.params, blobRequest).finally(() => {
         openCalls -= 1;
       });
     } else if (

@@ -9,6 +9,7 @@
  */
 
 import {
+  PLUGIN_API_BLOB_METHODS,
   PLUGIN_API_METHODS,
   PLUGIN_API_STREAMING_METHODS,
   type PluginApi,
@@ -29,6 +30,7 @@ import {
   type PluginFrameMessage,
   type PluginMessagePort,
   type PluginStartReason,
+  type PluginToHostMessage,
   type PendingReplies,
   type PluginStreamListener,
   base64ToBytes,
@@ -138,14 +140,18 @@ export function createPluginClient(port: PluginMessagePort): PluginClient {
   // sees it; the host never parses the Frame<->Worker traffic that follows.
   const frameHandlers = new Set<(frame: PluginFrame) => void>();
   const streaming: ReadonlySet<string> = new Set(PLUGIN_API_STREAMING_METHODS);
+  const blobMethods: ReadonlySet<string> = new Set(PLUGIN_API_BLOB_METHODS);
 
   // `kind` and `id` lead, then `method` or `event`, so the broker can answer a
-  // refused message without decoding it.
+  // refused message without decoding it. A `blob` method posts its one Blob
+  // (`{ kind: "blob", id, blob }`) right after this JSON head, with the same id
+  // (ADR 0040).
   function send(
     head:
       | { kind: "call"; method: string; params: unknown }
       | { kind: "subscribe" | "unsubscribe"; event: string },
-    listener?: PluginStreamListener<unknown>
+    listener?: PluginStreamListener<unknown>,
+    blob?: Blob
   ): Promise<unknown> {
     if (stopReason !== null) return Promise.reject(stoppedError(stopReason));
     const id = nextId++;
@@ -166,7 +172,46 @@ export function createPluginClient(port: PluginMessagePort): PluginClient {
         reject,
       });
       port.postMessage(text);
+      if (blob) port.postMessage({ kind: "blob", id, blob } satisfies PluginToHostMessage);
     });
+  }
+
+  /** Folds the three accepted `bytes` shapes into the one Blob the host takes. */
+  async function foldBytes(bytes: unknown, mimeType: string, method: string): Promise<Blob> {
+    if (bytes instanceof Blob) {
+      return bytes.type === mimeType ? bytes : new Blob([bytes], { type: mimeType });
+    }
+    if (bytes instanceof Uint8Array) return new Blob([bytes as BlobPart], { type: mimeType });
+    if (isAsyncIterable(bytes)) {
+      const parts: BlobPart[] = [];
+      for await (const part of bytes) {
+        if (!(part instanceof Uint8Array)) {
+          throw new PluginApiError({
+            code: "invalid-params",
+            message: "bytes: every piece of the stream must be a Uint8Array",
+            method,
+          });
+        }
+        parts.push(part as BlobPart);
+      }
+      return new Blob(parts, { type: mimeType });
+    }
+    throw new PluginApiError({
+      code: "invalid-params",
+      message: "bytes: give a Uint8Array, a Blob, or an AsyncIterable<Uint8Array>",
+      method,
+    });
+  }
+
+  /**
+   * A call whose bytes follow as one `blob` message: the `bytes` field is folded
+   * into a Blob and stripped, so the JSON head carries only the wire shape.
+   */
+  async function sendBlobCall(method: string, params: unknown): Promise<unknown> {
+    const { bytes, ...head } = (params ?? {}) as { bytes?: unknown; mimeType?: unknown };
+    const mimeType = typeof head.mimeType === "string" ? head.mimeType : "";
+    const blob = await foldBytes(bytes, mimeType, method);
+    return send({ kind: "call", method, params: head }, undefined, blob);
   }
 
   // One host subscription per event, shared by every listener on it.
@@ -437,7 +482,9 @@ export function createPluginClient(port: PluginMessagePort): PluginClient {
     node[parts[parts.length - 1]] = streaming.has(method)
       ? (params?: unknown, listener?: PluginStreamListener<unknown>) =>
           send({ kind: "call", method, params }, listener)
-      : (params?: unknown) => send({ kind: "call", method, params });
+      : blobMethods.has(method)
+        ? (params?: unknown) => sendBlobCall(method, params)
+        : (params?: unknown) => send({ kind: "call", method, params });
   }
   return client as unknown as PluginClient;
 }

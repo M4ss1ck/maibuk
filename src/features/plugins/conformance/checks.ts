@@ -35,6 +35,9 @@
  *     file's mid-file range whole and its past-EOF read short, `files.stat`
  *     named and sized that file, and `files.release` ended the grant. A
  *     disagreement fails with every drifted field named.
+ *   - `files.save` (ADR 0040) passes when the call reported `saved` and the
+ *     host's saver received the exact name, MIME type, and bytes the probe
+ *     sent; every drifted field is named.
  */
 
 import {
@@ -47,11 +50,13 @@ import {
   CONFORMANCE_FILE_RANGE,
   CONFORMANCE_FILE_TAIL,
 } from "@/features/plugins/conformance/file-grants";
+import { CONFORMANCE_SAVE, CONFORMANCE_SAVE_HEX } from "@/features/plugins/conformance/file-save";
 import {
   type CommandObservation,
   type ConformanceCheck,
   type ConformanceSeam,
   type FileGrantObservation,
+  type FileSaveObservation,
   T8_ALLOCATION_CAP_MB,
 } from "@/features/plugins/conformance/types";
 
@@ -66,6 +71,9 @@ export const ESCAPE_ALLOCATE_CHECK_ID = "escape-allocate";
 
 /** The File Grant rows (#653): read ranges, stat, and release over one seeded file. */
 export const FILE_GRANTS_CHECK_ID = "files-read-stat-release";
+
+/** The `files.save` row (ADR 0040): one Blob reaches the host byte for byte. */
+export const FILE_SAVE_CHECK_ID = "files-save";
 
 /** T7's only acceptable stop: the heartbeat missed until the Plugin was closed. */
 export const T7_STOP_REASON = "unresponsive";
@@ -238,10 +246,34 @@ function fileGrantsCheck(observation: FileGrantObservation): ConformanceCheck {
 }
 
 /**
+ * `files.save` agreed with the file that was sent (ADR 0040): the call reported
+ * `saved`, and the saver received that name, MIME type, and bytes. A
+ * disagreement names every field that drifted.
+ */
+function fileSaveCheck(observation: FileSaveObservation): ConformanceCheck {
+  const problems: string[] = [];
+  if (observation.status !== "saved") {
+    problems.push(`files.save returned ${observation.status}, expected saved`);
+  }
+  if (observation.name !== CONFORMANCE_SAVE.name) {
+    problems.push(`the saver named ${observation.name}, expected ${CONFORMANCE_SAVE.name}`);
+  }
+  if (observation.mimeType !== CONFORMANCE_SAVE.mimeType) {
+    problems.push(`the saver got ${observation.mimeType}, expected ${CONFORMANCE_SAVE.mimeType}`);
+  }
+  if (observation.hex !== CONFORMANCE_SAVE_HEX) {
+    problems.push(`the host received ${observation.hex}, expected ${CONFORMANCE_SAVE_HEX}`);
+  }
+  return problems.length > 0
+    ? fail(FILE_SAVE_CHECK_ID, problems.join("; "))
+    : pass(FILE_SAVE_CHECK_ID, "the host received the Plugin's bytes under its name");
+}
+
+/**
  * Runs every check, in schema order (T2 frame, T2 worker, the fixture Commands,
- * T7, the tight allocation, T8, the File Grant rows), and hands each result to
- * `onCheck` as soon as it is known, so the route can POST `/progress` before the
- * run ends.
+ * T7, the tight allocation, T8, the File Grant rows, then `files.save`), and
+ * hands each result to `onCheck` as soon as it is known, so the route can POST
+ * `/progress` before the run ends.
  */
 export interface RunConformanceOptions {
   /**
@@ -356,6 +388,10 @@ export async function runConformanceChecks(
 
   await record(
     await measure(FILE_GRANTS_CHECK_ID, async () => fileGrantsCheck(await seam.probeFileGrants()))
+  );
+
+  await record(
+    await measure(FILE_SAVE_CHECK_ID, async () => fileSaveCheck(await seam.probeFileSave()))
   );
 
   return checks;

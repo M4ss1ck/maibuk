@@ -10,6 +10,7 @@
 
 import {
   ARRAY_BUFFER_SCHEMA_DESCRIPTION,
+  BLOB_BYTES_SCHEMA_DESCRIPTION,
   PLUGIN_API_EVENTS,
   PLUGIN_API_RESERVED_NAMESPACES,
   PLUGIN_API_VERSION,
@@ -53,6 +54,9 @@ const TYPE_KEYWORDS = new Set([
 ]);
 
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+
+/** The SDK input type of the bytes an `acceptsBlob` method takes (ADR 0040). */
+const BLOB_BYTES_TYPE = "Uint8Array | Blob | AsyncIterable<Uint8Array>";
 
 function docComment(text: string, indent: string): string {
   return `${indent}/** ${text.replace(/\*\//g, "*\\/")} */\n`;
@@ -106,6 +110,9 @@ export function jsonSchemaToTypeScript(schema: JsonSchema, indent: string): stri
   if (schema.type === "object" && schema.description === ARRAY_BUFFER_SCHEMA_DESCRIPTION) {
     return "ArrayBuffer";
   }
+  // `files.save` takes bytes the SDK folds into one Blob, which JSON Schema has
+  // no type for either (ADR 0040).
+  if (schema.description === BLOB_BYTES_SCHEMA_DESCRIPTION) return BLOB_BYTES_TYPE;
   for (const keyword of Object.keys(schema)) {
     if (!IGNORED_KEYWORDS.has(keyword) && !TYPE_KEYWORDS.has(keyword)) {
       throw new Error(`JSON Schema keyword "${keyword}" is not translated to TypeScript`);
@@ -149,6 +156,29 @@ export function jsonSchemaToTypeScript(schema: JsonSchema, indent: string): stri
 function hasRequiredInput(row: PluginApiRow): boolean {
   const required = inputJsonSchema(row).required;
   return Array.isArray(required) && required.length > 0;
+}
+
+/**
+ * A row's SDK input type. A row with `acceptsBlob` also takes `bytes`, which
+ * never appears in the wire schema: the SDK folds it into one Blob and sends it
+ * right after the call (ADR 0040).
+ */
+function inputTypeOf(row: PluginApiRow, indent: string): string {
+  const schema = inputJsonSchema(row);
+  if (row.acceptsBlob !== true) return jsonSchemaToTypeScript(schema, indent);
+  const properties = (schema.properties ?? {}) as JsonSchema;
+  const required = (schema.required ?? []) as string[];
+  return jsonSchemaToTypeScript(
+    {
+      ...schema,
+      properties: {
+        ...properties,
+        bytes: { type: "object", description: BLOB_BYTES_SCHEMA_DESCRIPTION },
+      },
+      required: [...required, "bytes"],
+    },
+    indent
+  );
 }
 
 interface NamespaceNode {
@@ -208,7 +238,7 @@ export function renderPluginApiTypes(
 ): string {
   const methods = table
     .map((row) => {
-      const input = jsonSchemaToTypeScript(inputJsonSchema(row), "    ");
+      const input = inputTypeOf(row, "    ");
       const output = jsonSchemaToTypeScript(outputJsonSchema(row), "    ");
       const chunkSchema = chunkJsonSchema(row);
       const chunk = chunkSchema
@@ -238,6 +268,11 @@ export type PluginApiMethodId = (typeof PLUGIN_API_METHODS)[number];
 /** Methods whose response body arrives as chunks after the call resolves. */
 export const PLUGIN_API_STREAMING_METHODS = [
 ${idList(table.filter((row) => row.chunk).map((row) => row.id))}
+] as const;
+
+/** Methods followed by one \`blob\` message carrying the file's bytes (ADR 0040). */
+export const PLUGIN_API_BLOB_METHODS = [
+${idList(table.filter((row) => row.acceptsBlob).map((row) => row.id))}
 ] as const;
 
 export interface PluginApiMethods {
@@ -303,6 +338,11 @@ export function renderPluginApiDocs(
       `- Effect: ${row.effect}`,
       ...(row.requiresLibrary
         ? ["- Refused with `library-unavailable` while the Library cannot be read or written"]
+        : []),
+      ...(row.acceptsBlob
+        ? [
+            "- Followed by one `blob` message carrying the bytes, never by JSON: pass `bytes` as a `Uint8Array`, a `Blob`, or an `AsyncIterable<Uint8Array>` and the SDK folds it into one `Blob` (ADR 0040)",
+          ]
         : []),
       ...(row.minIntervalMs
         ? [

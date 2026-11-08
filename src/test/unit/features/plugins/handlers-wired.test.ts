@@ -36,6 +36,9 @@ const { createMemoryPluginSecretStore, registerPluginSecretStore } = await impor
 const { createMemoryPluginFileGrantStore, registerPluginFileGrantStore } = await import(
   "@/features/plugins/file-grants"
 );
+const { createMemoryPluginFileSaver, registerPluginFileSaver } = await import(
+  "@/features/plugins/file-save"
+);
 
 const context = { pluginId: "tracer" };
 
@@ -417,6 +420,95 @@ describe("createPluginHandlers(): File Grants", () => {
     await expect(list({}, context)).rejects.toMatchObject({
       name: "PluginApiError",
       code: "internal-error",
+    });
+  });
+});
+
+describe("createPluginHandlers(): files.save (ADR 0040)", () => {
+  const BYTES = new Uint8Array([1, 2, 3, 4, 5]);
+  let saver: ReturnType<typeof createMemoryPluginFileSaver>;
+
+  beforeEach(() => {
+    saver = createMemoryPluginFileSaver();
+    registerPluginFileSaver(saver);
+  });
+
+  afterEach(() => {
+    registerPluginFileSaver(null);
+  });
+
+  function saveHandler() {
+    const save = createPluginHandlers(PLUGIN_MANIFEST)["files.save"];
+    if (!save) throw new Error("files.save is not wired");
+    return save;
+  }
+
+  it("cleans the name and hands the saver the MIME type and the caller's bytes", async () => {
+    const save = saveHandler();
+
+    await expect(
+      save(
+        { name: "../../maps/export.png", mimeType: "image/png" },
+        { pluginId: "tracer", blob: new Blob([BYTES]) }
+      )
+    ).resolves.toEqual({ status: "saved" });
+
+    expect(saver.saves).toEqual([{ name: "export.png", mimeType: "image/png", bytes: BYTES }]);
+  });
+
+  it("reports cancelled when the author cancels the save dialog", async () => {
+    const save = saveHandler();
+    saver.queueCancel();
+
+    await expect(
+      save(
+        { name: "export.png", mimeType: "image/png" },
+        { pluginId: "tracer", blob: new Blob([BYTES]) }
+      )
+    ).resolves.toEqual({ status: "cancelled" });
+    expect(saver.saves).toEqual([]);
+  });
+
+  it("refuses a name with no extension and one on the executable blocklist", async () => {
+    const save = saveHandler();
+
+    for (const name of ["README", "payload", "setup.exe", "installer.MSI", "app.jar"]) {
+      await expect(
+        save({ name, mimeType: "text/plain" }, { pluginId: "tracer", blob: new Blob([BYTES]) })
+      ).rejects.toMatchObject({ name: "PluginApiError", code: "invalid-params" });
+    }
+    expect(saver.saves).toEqual([]);
+  });
+
+  it("refuses not-implemented while no platform saver is registered", async () => {
+    registerPluginFileSaver(null);
+    const save = saveHandler();
+
+    await expect(
+      save(
+        { name: "export.png", mimeType: "image/png" },
+        { pluginId: "tracer", blob: new Blob([BYTES]) }
+      )
+    ).rejects.toMatchObject({ name: "PluginApiError", code: "not-implemented" });
+  });
+
+  it("reports a saver failure as internal-error carrying its message", async () => {
+    registerPluginFileSaver({
+      save: async () => {
+        throw new Error("the disk is full");
+      },
+    });
+    const save = saveHandler();
+
+    await expect(
+      save(
+        { name: "export.png", mimeType: "image/png" },
+        { pluginId: "tracer", blob: new Blob([BYTES]) }
+      )
+    ).rejects.toMatchObject({
+      name: "PluginApiError",
+      code: "internal-error",
+      message: "the disk is full",
     });
   });
 });

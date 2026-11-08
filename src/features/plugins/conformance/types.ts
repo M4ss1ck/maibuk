@@ -113,6 +113,19 @@ export interface FileGrantObservation {
 }
 
 /**
+ * What the file-save probe observed (ADR 0040): the status `files.save`
+ * returned, and the name, MIME type, and hex bytes the memory saver received.
+ * Every field is a fact; `checks.ts` compares them with the file the probe sent.
+ */
+export interface FileSaveObservation {
+  status: "saved" | "cancelled";
+  name: string;
+  mimeType: string;
+  /** The bytes the host received, as lowercase hex. */
+  hex: string;
+}
+
+/**
  * T8's allocation cap (MB). A Worker that reaches it unstopped, with the host
  * still answering, has shown the engine sets no per-Worker memory limit below
  * the cap; the lane stops there rather than take the test machine to its limit.
@@ -172,6 +185,11 @@ export interface ConformanceSeam {
    * reported, and whether `files.release` ended the grant.
    */
   probeFileGrants(): Promise<FileGrantObservation>;
+  /**
+   * `files.save` (ADR 0040) over a memory saver: the status it returned and the
+   * name, MIME type, and bytes the host received for a known Blob.
+   */
+  probeFileSave(): Promise<FileSaveObservation>;
   /** A host heartbeat posted after T8; false when the renderer no longer answers. */
   heartbeat(): Promise<boolean>;
   /**

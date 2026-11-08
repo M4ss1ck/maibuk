@@ -17,7 +17,7 @@ import type { McpToolProjection, PluginApiEventRow, PluginApiRow } from "@/featu
 import { FILE_READ_MAX_BYTES } from "@/plugin-sdk/protocol";
 
 /** The Plugin API's own semver, separate from Maibuk's release number. */
-export const PLUGIN_API_VERSION = "0.1.9";
+export const PLUGIN_API_VERSION = "0.1.10";
 
 export const PLUGIN_API_NAMESPACES = [
   "library",
@@ -69,6 +69,16 @@ export const ARRAY_BUFFER_SCHEMA_DESCRIPTION =
 const arrayBuffer = z
   .custom<ArrayBuffer>((value) => value instanceof ArrayBuffer, "ArrayBuffer")
   .describe(ARRAY_BUFFER_SCHEMA_DESCRIPTION);
+
+/**
+ * The file bytes an `acceptsBlob` method takes. They never travel in the JSON
+ * input (the wire shape is the call head alone): the SDK folds the three
+ * accepted shapes into one `Blob` and sends it right after the call, so JSON
+ * Schema has no type for them and `api-codegen` adds this description's field
+ * to the SDK's input type only (ADR 0040).
+ */
+export const BLOB_BYTES_SCHEMA_DESCRIPTION =
+  "The file's bytes: a Uint8Array, a Blob, or an AsyncIterable of Uint8Array pieces. The SDK folds them into one Blob and sends it right after the call (ADR 0040).";
 
 const content = z.strictObject({
   text: z.string().describe("Plain text."),
@@ -700,6 +710,25 @@ export const PLUGIN_API_TABLE = [
     permission: "files:pick",
     effect: "read",
     requiresUserAction: true,
+  }),
+  defineApiRow({
+    id: "files.save",
+    description:
+      "Saves a file under the name and MIME type you give: Maibuk asks the author where to save it and writes the bytes you send as one Blob right after this call. Maibuk keeps only the base name (no folders, no leading dots, at most 255 bytes) and refuses a name that names no file type or one an executable uses. Refused with user-action-required unless the author's own click, key press, or Command run caused the call, and not-implemented on a device that cannot save yet.",
+    input: z.strictObject({
+      name: z.string().describe("The file name the dialog is prefilled with, such as map.png."),
+      mimeType: z.string().describe("The file's MIME type, such as image/png."),
+    }),
+    output: z
+      .union([
+        z.strictObject({ status: z.literal("saved") }),
+        z.strictObject({ status: z.literal("cancelled") }),
+      ])
+      .describe("saved once Maibuk wrote the file; cancelled when the author closed the dialog."),
+    permission: "files:save",
+    effect: "write",
+    requiresUserAction: true,
+    acceptsBlob: true,
   }),
   defineApiRow({
     id: "files.read",

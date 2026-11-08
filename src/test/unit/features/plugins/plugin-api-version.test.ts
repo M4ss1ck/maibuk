@@ -29,6 +29,9 @@ import type { PluginManifest } from "@/features/plugins/types";
 // 0.1.9 adds the `files` namespace and its `files:pick` Plugin Permission, so a
 // Plugin reads files the author picks (ADR 0036, #653), additive: a ^0.1.8
 // Plugin keeps loading.
+// 0.1.10 adds files.save and its `files:save` Plugin Permission, so a Plugin
+// hands the host a file to save as one cloned Blob (ADR 0040, #735), additive:
+// a ^0.1.9 Plugin keeps loading.
 
 function manifestWith(apiVersion: string): PluginManifest {
   const result = validateManifestValue({
@@ -52,8 +55,28 @@ function manifestWith(apiVersion: string): PluginManifest {
 const APP = "0.12.0";
 
 describe("Plugin API patch compatibility (ADR 0029)", () => {
-  it("the host reports Plugin API 0.1.9", () => {
-    expect(PLUGIN_API_VERSION).toBe("0.1.9");
+  it("the host reports Plugin API 0.1.10", () => {
+    expect(PLUGIN_API_VERSION).toBe("0.1.10");
+  });
+
+  it("a ^0.1.9 Plugin still loads against the 0.1.10 host", () => {
+    const verdict = checkPluginCompatibility(manifestWith("^0.1.9"), {
+      apiVersion: "0.1.10",
+      appVersion: APP,
+    });
+    expect(verdict.verdict).toBe("ok");
+  });
+
+  it("a ^0.1.10 Plugin is refused by a 0.1.9 host with the usual message", () => {
+    const verdict = checkPluginCompatibility(manifestWith("^0.1.10"), {
+      apiVersion: "0.1.9",
+      appVersion: APP,
+    });
+    expect(verdict).toEqual({
+      verdict: "needs-newer-app",
+      reason: "api-version",
+      message: "Needs Plugin API ^0.1.10; this app provides 0.1.9",
+    });
   });
 
   it("a ^0.1.7 Plugin still loads against the 0.1.9 host", () => {
