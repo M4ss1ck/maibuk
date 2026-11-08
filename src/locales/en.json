@@ -2374,6 +2374,8 @@
       "clipboardDetail": "Read from and write to your clipboard when you copy or paste.",
       "filesPick": "Open files you pick",
       "filesPickDetail": "Read only the files you choose in Maibuk's file dialog. Maibuk keeps access on this device and never copies them into your Library.",
+      "filesSave": "Save files you ask for",
+      "filesSaveDetail": "Write a file you asked this Plugin for, such as an export or an image. Maibuk asks you where to put it and never writes anywhere you did not choose.",
       "serve": "Answer requests from apps on this computer",
       "serveDetail": "Apps on this computer can send requests to this Plugin while it runs. Desktop only."
     },

@@ -32,6 +32,10 @@ import {
   FILE_GRANT_PROBE_PLUGIN_ID,
   toHex,
 } from "@/features/plugins/conformance/file-grants";
+import {
+  CONFORMANCE_SAVE,
+  FILE_SAVE_PROBE_PLUGIN_ID,
+} from "@/features/plugins/conformance/file-save";
 import { waitForReasonWithinGrace } from "@/features/plugins/conformance/oom-grace";
 import {
   type CommandObservation,
@@ -39,13 +43,20 @@ import {
   type ConformancePlatform,
   type ConformanceSeam,
   type FileGrantObservation,
+  type FileSaveObservation,
   type IpcObservation,
   type OomObservation,
   type QuickJsTimings,
   type StopObservation,
   T8_ALLOCATION_CAP_MB,
 } from "@/features/plugins/conformance/types";
+import {
+  getPluginFileSaver,
+  createMemoryPluginFileSaver,
+  registerPluginFileSaver,
+} from "@/features/plugins/file-save";
 import { createMemoryPluginFileGrantStore } from "@/features/plugins/file-grants";
+import { createPluginHandlers } from "@/features/plugins/handlers";
 import { createPluginLifecycle, HEARTBEAT_INTERVAL_MS } from "@/features/plugins/lifecycle";
 import { QUICKJS_ENGINE_ENABLED } from "@/features/plugins/quickjs/engine-flag";
 import { openPluginUiMount } from "@/features/plugins/remote-ui/mount";
@@ -58,6 +69,7 @@ import type {
   PluginApiHandlers,
   PluginFolder,
   PluginLifecycle,
+  PluginManifest,
   PluginRuntime,
 } from "@/features/plugins/types";
 import { IS_ANDROID, IS_DESKTOP } from "@/lib/platform";
@@ -73,6 +85,16 @@ const FIXTURE_HEALTHY_ID = "fixture-healthy";
 const PAGE_SETTLE_MS = 4_000;
 /** How long a terminal command (T7/T8) may take to stop the Plugin. */
 const TERMINAL_BUDGET_MS = 20_000;
+
+/**
+ * The manifest the `files.save` probe hands the app's handler factory. The row
+ * it exercises reads neither field; the factory needs a manifest for the rows
+ * the probe never calls, so this carries only what those rows read.
+ */
+const FILE_SAVE_PROBE_MANIFEST: Pick<PluginManifest, "id" | "name"> = {
+  id: FILE_SAVE_PROBE_PLUGIN_ID,
+  name: "Conformance file save",
+};
 
 /**
  * The fixture Command T8 runs: allocation in chunks with a yield between them,
@@ -644,6 +666,39 @@ export async function createRuntimeSeam(
     };
   }
 
+  /**
+   * `files.save` (ADR 0040) through the app's own handler and a memory saver:
+   * the handler is what a Plugin's call reaches once the broker has taken its
+   * blob, so the probe proves the bytes, the cleaned name, and the MIME type
+   * arrive whole. The saver is registered for the call only, and the app's own
+   * saver (when this build has one) is put back afterwards.
+   */
+  async function probeFileSave(): Promise<FileSaveObservation> {
+    const previous = getPluginFileSaver();
+    const saver = createMemoryPluginFileSaver();
+    registerPluginFileSaver(saver);
+    try {
+      const save = createPluginHandlers(FILE_SAVE_PROBE_MANIFEST)["files.save"];
+      if (!save) throw new Error("the app wires no files.save handler");
+      const { status } = await save(
+        { name: CONFORMANCE_SAVE.name, mimeType: CONFORMANCE_SAVE.mimeType },
+        {
+          pluginId: FILE_SAVE_PROBE_PLUGIN_ID,
+          blob: new Blob([CONFORMANCE_SAVE.bytes], { type: CONFORMANCE_SAVE.mimeType }),
+        }
+      );
+      const written = saver.saves[0];
+      return {
+        status,
+        name: written?.name ?? "",
+        mimeType: written?.mimeType ?? "",
+        hex: written ? toHex(written.bytes) : "",
+      };
+    } finally {
+      registerPluginFileSaver(previous);
+    }
+  }
+
   async function probeFrameIpc(): Promise<IpcObservation> {
     return new Promise<IpcObservation>((resolve, reject) => {
       let iframe: HTMLIFrameElement;
@@ -714,6 +769,7 @@ export async function createRuntimeSeam(
     probeAllocate: () => terminal("escapeAllocate"),
     probeOom,
     probeFileGrants,
+    probeFileSave,
     heartbeat,
     leaks,
     dispose() {

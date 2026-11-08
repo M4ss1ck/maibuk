@@ -88,6 +88,18 @@ const loadPlugins = async () => {
   } else {
     registerPluginFileGrantStore(createMemoryPluginFileGrantStore());
   }
+  // A Plugin File Saver is present where the device can write one (ADR 0040).
+  // The desktop saver writes a sibling `.part` file in Rust; the web saver uses
+  // the browser's save picker, falling back to a download. Android registers
+  // none, so `files.save` stays not-implemented there (#740).
+  const { registerPluginFileSaver } = await import("@/features/plugins/file-save");
+  if (IS_DESKTOP) {
+    const { createTauriPluginFileSaver } = await import("@/lib/platform/tauri/file-save");
+    registerPluginFileSaver(createTauriPluginFileSaver());
+  } else if (IS_WEB) {
+    const { createWebPluginFileSaver } = await import("@/lib/platform/web/file-save");
+    registerPluginFileSaver(createWebPluginFileSaver());
+  }
   if (BENCH_DRIVER_ENABLED) {
     const { preparePluginsBench } = await import("@/features/plugins/bench");
     await preparePluginsBench();

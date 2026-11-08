@@ -8,7 +8,7 @@ A **Plugin** is a packaged addition to Maibuk that adds its own Commands, pages,
 2. [Host-rendered UI](host-rendered-ui.md): the default path, where Maibuk draws your interface.
 3. [Frame UI](frame-ui.md): the custom-UI path, where the Plugin draws its own document.
 4. [Testing](testing.md): the test kit and what it runs for real.
-5. [Reading files](files.md): picking a file from outside the Library, reading it in ranges, and when a File Grant ends.
+5. [Reading and saving files](files.md): picking a file from outside the Library, reading it in ranges, saving a file the author asks for, and when a File Grant ends.
 6. [Plugin Endpoint](endpoint.md): the local HTTP address an outside program reaches the Plugin on, desktop only.
 7. [Development mode](development-mode.md): reload on a build, and troubleshooting.
 8. [Packaging](packaging.md): the built folder, the zip, and versions.

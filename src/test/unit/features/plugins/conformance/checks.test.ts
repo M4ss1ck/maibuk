@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   ESCAPE_ALLOCATE_CHECK_ID,
   FILE_GRANTS_CHECK_ID,
+  FILE_SAVE_CHECK_ID,
   RENDERER_DIED_DETAIL,
   T2_FRAME_CHECK_ID,
   T2_WORKER_CHECK_ID,
@@ -23,12 +24,14 @@ import {
   CONFORMANCE_FILE_RANGE,
   CONFORMANCE_FILE_TAIL,
 } from "@/features/plugins/conformance/file-grants";
+import { CONFORMANCE_SAVE, CONFORMANCE_SAVE_HEX } from "@/features/plugins/conformance/file-save";
 import type {
   CommandObservation,
   CommandOutcome,
   ConformanceCheck,
   ConformanceSeam,
   FileGrantObservation,
+  FileSaveObservation,
 } from "@/features/plugins/conformance/types";
 
 /** The first Command whose safe outcome is a typed refusal. */
@@ -73,6 +76,14 @@ const FILE_GRANT_OBSERVATION: FileGrantObservation = {
   liveAfterRelease: false,
 };
 
+/** The observation a working saver reports for a `files.save` of known bytes. */
+const FILE_SAVE_OBSERVATION: FileSaveObservation = {
+  status: "saved",
+  name: CONFORMANCE_SAVE.name,
+  mimeType: CONFORMANCE_SAVE.mimeType,
+  hex: CONFORMANCE_SAVE_HEX,
+};
+
 /** The seam the runner sees, with every check passing unless overridden. */
 function makeSeam(overrides: Partial<ConformanceSeam> = {}): ConformanceSeam {
   return {
@@ -90,6 +101,7 @@ function makeSeam(overrides: Partial<ConformanceSeam> = {}): ConformanceSeam {
       neighbourAlive: true,
     }),
     probeFileGrants: async () => FILE_GRANT_OBSERVATION,
+    probeFileSave: async () => FILE_SAVE_OBSERVATION,
     heartbeat: async () => true,
     leaks: async () => 0,
     ...overrides,
@@ -559,6 +571,53 @@ describe("runConformanceChecks File Grants", () => {
   });
 });
 
+describe("runConformanceChecks File Save", () => {
+  it("passes when the host receives the Plugin's bytes under the cleaned name", async () => {
+    const checks = await runConformanceChecks(makeSeam());
+    const check = byId(checks, FILE_SAVE_CHECK_ID);
+    expect(check.status).toBe("pass");
+    expect(check.detail).toContain("bytes");
+  });
+
+  it("fails when the host received other bytes than the Plugin sent", async () => {
+    const checks = await runConformanceChecks(
+      makeSeam({
+        probeFileSave: async () => ({
+          ...FILE_SAVE_OBSERVATION,
+          hex: `${CONFORMANCE_SAVE_HEX}00`,
+        }),
+      })
+    );
+    const check = byId(checks, FILE_SAVE_CHECK_ID);
+    expect(check.status).toBe("fail");
+    expect(check.detail).toContain("the host received");
+    expect(check.detail).toContain(CONFORMANCE_SAVE_HEX);
+  });
+
+  it("fails when the save did not report saved", async () => {
+    const checks = await runConformanceChecks(
+      makeSeam({ probeFileSave: async () => ({ ...FILE_SAVE_OBSERVATION, status: "cancelled" }) })
+    );
+    expect(byId(checks, FILE_SAVE_CHECK_ID).status).toBe("fail");
+  });
+
+  it("names the name and the MIME type that drifted", async () => {
+    const checks = await runConformanceChecks(
+      makeSeam({
+        probeFileSave: async () => ({
+          ...FILE_SAVE_OBSERVATION,
+          name: "other.txt",
+          mimeType: "text/csv",
+        }),
+      })
+    );
+    const check = byId(checks, FILE_SAVE_CHECK_ID);
+    expect(check.status).toBe("fail");
+    expect(check.detail).toContain("named other.txt");
+    expect(check.detail).toContain("text/csv");
+  });
+});
+
 describe("runConformanceChecks reporting", () => {
   it("hands every check to onCheck in run order, before returning", async () => {
     const streamed: string[] = [];
@@ -567,7 +626,7 @@ describe("runConformanceChecks reporting", () => {
     });
     expect(streamed).toEqual(checks.map((check) => check.id));
     expect(streamed[0]).toBe(T2_FRAME_CHECK_ID);
-    expect(streamed.at(-1)).toBe(FILE_GRANTS_CHECK_ID);
+    expect(streamed.at(-1)).toBe(FILE_SAVE_CHECK_ID);
   });
 });
 

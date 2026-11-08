@@ -2386,6 +2386,8 @@
       "clipboardDetail": "Leer y escribir en tu portapapeles cuando copies o pegues.",
       "filesPick": "Abrir archivos que elijas",
       "filesPickDetail": "Leer solo los archivos que elijas en el selector de archivos de Maibuk. Maibuk conserva el acceso en este dispositivo y nunca los copia en tu Biblioteca.",
+      "filesSave": "Guardar los archivos que pidas",
+      "filesSaveDetail": "Escribir un archivo que le hayas pedido a este Plugin, como una exportación o una imagen. Maibuk te pregunta dónde guardarlo y nunca escribe fuera del lugar que elijas.",
       "serve": "Responder a solicitudes de aplicaciones de este equipo",
       "serveDetail": "Las aplicaciones de este equipo pueden enviar solicitudes a este Plugin mientras está activo. Solo en escritorio."
     },

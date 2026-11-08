@@ -4,7 +4,8 @@
  * `editor:decorate`, `secrets`, `network:<host>`, and `process`; the
  * remaining names (`library:write`, `editor:write`, `clipboard`, `serve`) carry
  * authored copy in the same voice, flagged as new in the PR. `files:pick` is
- * the File Grants capability (ADR 0036).
+ * the File Grants capability (ADR 0036) and `files:save` the save hand-off
+ * (ADR 0040).
  */
 
 /** A translation function narrowed to the keys and options this module uses. */
@@ -22,6 +23,7 @@ const PERMISSION_COPY_KEYS: Record<string, string> = {
   process: "process",
   serve: "serve",
   "files:pick": "filesPick",
+  "files:save": "filesSave",
 };
 
 /** The title and detail of one Plugin Permission, in the author's language. */

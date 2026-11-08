@@ -6,12 +6,13 @@
  */
 
 import { readFileSync } from "node:fs";
+import { Blob as NodeBlob } from "node:buffer";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect, useState, createElement, Fragment } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { hashPluginDirectory } from "@/features/plugins/directory-hash";
 import { parsePluginManifest } from "@/features/plugins/manifest-validate";
 import { createTestHost } from "@/features/plugins/test-kit";
@@ -1972,6 +1973,110 @@ describe("createTestHost() File Grants", () => {
         permission: "files:pick",
       });
       await expect(host.files.grants()).resolves.toEqual([]);
+    } finally {
+      await host.stop();
+    }
+  });
+});
+
+describe("createTestHost() file saves (ADR 0040)", () => {
+  const BYTES = new Uint8Array([0, 9, 8, 7, 253, 254, 255]);
+
+  function saveManifest(): PluginManifest {
+    return { ...fixtureManifest(), permissions: { required: ["files:save"], optional: [] } };
+  }
+
+  // jsdom's Blob is a stand-in class the in-process MessageChannel turns into a
+  // plain object; Node's real Blob crosses the port the way a browser's does, so
+  // the bytes are asserted after a real structured clone.
+  beforeEach(() => {
+    vi.stubGlobal("Blob", NodeBlob);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("saves a Uint8Array and records the bytes on the host", async () => {
+    const host = createTestHost({ manifest: saveManifest() });
+    try {
+      const client = createPluginClient(host.port);
+
+      await expect(
+        client.files.save({
+          name: "export.bin",
+          mimeType: "application/octet-stream",
+          bytes: BYTES,
+        })
+      ).resolves.toEqual({ status: "saved" });
+
+      expect(host.files.saves).toHaveLength(1);
+      expect(host.files.saves[0].name).toBe("export.bin");
+      expect(host.files.saves[0].mimeType).toBe("application/octet-stream");
+      expect([...host.files.saves[0].bytes]).toEqual([...BYTES]);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("saves a Blob and an AsyncIterable byte for byte too", async () => {
+    const host = createTestHost({ manifest: saveManifest() });
+    try {
+      const client = createPluginClient(host.port);
+
+      await expect(
+        client.files.save({
+          name: "map.png",
+          mimeType: "image/png",
+          bytes: new Blob([BYTES], { type: "image/png" }),
+        })
+      ).resolves.toEqual({ status: "saved" });
+
+      const parts = (async function* () {
+        yield BYTES.subarray(0, 3);
+        yield BYTES.subarray(3);
+      })();
+      await expect(
+        client.files.save({ name: "parts.png", mimeType: "image/png", bytes: parts })
+      ).resolves.toEqual({ status: "saved" });
+
+      expect(host.files.saves.map((save) => save.name)).toEqual(["map.png", "parts.png"]);
+      for (const save of host.files.saves) {
+        expect([...save.bytes]).toEqual([...BYTES]);
+      }
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("reports cancelled when the test queues a cancel, recording nothing", async () => {
+    const host = createTestHost({ manifest: saveManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      host.files.queueSaveCancel();
+
+      await expect(
+        client.files.save({ name: "export.bin", mimeType: "text/plain", bytes: BYTES })
+      ).resolves.toEqual({ status: "cancelled" });
+
+      expect(host.files.saves).toEqual([]);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("refuses files.save with permission-denied while the permission is not held", async () => {
+    const host = createTestHost({
+      manifest: { ...fixtureManifest(), permissions: { required: [], optional: ["files:save"] } },
+      permissions: [],
+    });
+    try {
+      const client = createPluginClient(host.port);
+
+      await expect(
+        client.files.save({ name: "export.bin", mimeType: "text/plain", bytes: BYTES })
+      ).rejects.toMatchObject({ code: "permission-denied", permission: "files:save" });
+      expect(host.files.saves).toEqual([]);
     } finally {
       await host.stop();
     }

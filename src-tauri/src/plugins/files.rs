@@ -9,9 +9,16 @@
 //! every error carries one of the two stable prefixes below plus a fixed
 //! sentence, so a Plugin can tell a gone file from bad arguments without
 //! learning where the file lives.
+//!
+//! A Plugin File Save (ADR 0040) is the write side: the native dialog picks a
+//! place, the host streams the bytes into a sibling `.part` file, and one rename
+//! puts it in place. A save that fails partway never destroys the file the
+//! author chose to replace, and the webview holds only a token.
 
-use std::io::{Read, Seek, SeekFrom};
+use std::collections::HashMap;
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
 
 use serde::{Deserialize, Serialize};
@@ -318,6 +325,124 @@ impl GrantStore {
     }
 }
 
+/// One save in progress: the file the author chose, the sibling `.part` file
+/// receiving the bytes, and the handle open on it. Every field stays in Rust.
+struct PendingSave {
+    target: PathBuf,
+    part: PathBuf,
+    file: std::fs::File,
+}
+
+/// The Plugin File Saves this device is writing right now, by token. A token
+/// names one save to the webview; the paths never cross IPC.
+#[derive(Default)]
+pub struct SaveStore {
+    saves: Mutex<HashMap<u64, PendingSave>>,
+}
+
+/// The header that names a save on each raw write.
+const SAVE_TOKEN_HEADER: &str = "x-save-token";
+
+/// Tokens only move up, so no save ever reuses another's.
+static NEXT_SAVE_TOKEN: AtomicU64 = AtomicU64::new(0);
+
+impl SaveStore {
+    fn lock(&self) -> MutexGuard<'_, HashMap<u64, PendingSave>> {
+        // A poisoned lock still holds the saves: there is nothing to undo.
+        self.saves
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// Opens the `.part` file beside `target` and keeps it until a commit or an
+    /// abort. The target itself is untouched until the commit.
+    fn begin(&self, target: PathBuf) -> Result<u64, String> {
+        let part = part_path(&target);
+        let file = match std::fs::File::create(&part) {
+            Ok(file) => file,
+            Err(error) => {
+                let _ = std::fs::remove_file(&part);
+                return Err(error.to_string());
+            }
+        };
+        let token = NEXT_SAVE_TOKEN.fetch_add(1, Ordering::Relaxed);
+        self.lock().insert(
+            token,
+            PendingSave {
+                target,
+                part,
+                file,
+            },
+        );
+        Ok(token)
+    }
+
+    /// Appends one chunk. A failed write ends the save and removes its part, so
+    /// a half-written file never takes the target's place.
+    fn write(&self, token: u64, bytes: &[u8]) -> Result<(), String> {
+        let mut saves = self.lock();
+        let Some(save) = saves.get_mut(&token) else {
+            return Err(invalid_params("this save has no open file"));
+        };
+        if let Err(error) = save.file.write_all(bytes) {
+            let save = saves.remove(&token).expect("the save was just found");
+            let _ = std::fs::remove_file(&save.part);
+            return Err(error.to_string());
+        }
+        Ok(())
+    }
+
+    /// Finishes the save: the part reaches the disk, then takes the target's
+    /// place. A failure removes the part and leaves the old file whole.
+    fn commit(&self, token: u64) -> Result<(), String> {
+        let Some(save) = self.lock().remove(&token) else {
+            return Err(invalid_params("this save has no open file"));
+        };
+        commit_save(save.file, &save.part, &save.target).map_err(|error| {
+            let _ = std::fs::remove_file(&save.part);
+            error.to_string()
+        })
+    }
+
+    /// Gives up the save: the part goes, and the target keeps what it had.
+    fn abort(&self, token: u64) -> Result<(), String> {
+        let Some(save) = self.lock().remove(&token) else {
+            return Err(invalid_params("this save has no open file"));
+        };
+        abort_save(save.file, &save.part).map_err(|error| error.to_string())
+    }
+}
+
+/// The sibling a save writes before it replaces `target`: the target's own name
+/// with `.part` appended, so the rename never crosses a file system.
+fn part_path(target: &Path) -> PathBuf {
+    let mut name = target
+        .file_name()
+        .map(|name| name.to_os_string())
+        .unwrap_or_default();
+    name.push(".part");
+    target.with_file_name(name)
+}
+
+/// Ends a save: the bytes reach the disk, then one rename puts the part in the
+/// target's place. A failure leaves the target file whole.
+fn commit_save(mut file: std::fs::File, part: &Path, target: &Path) -> std::io::Result<()> {
+    file.flush()?;
+    file.sync_all()?;
+    drop(file);
+    std::fs::rename(part, target)
+}
+
+/// Gives up a save: drop the handle, then remove the part. A part that is
+/// already gone is the state this asks for.
+fn abort_save(file: std::fs::File, part: &Path) -> std::io::Result<()> {
+    drop(file);
+    match std::fs::remove_file(part) {
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error),
+        _ => Ok(()),
+    }
+}
+
 /// Whether every extension is lowercase letters and digits, 1 to 16 long: the
 /// shape a dialog filter takes, and nothing that could widen what it shows.
 pub fn validate_extensions(extensions: &[String]) -> Result<(), String> {
@@ -460,6 +585,73 @@ pub fn plugin_files_clear_plugin(
 #[tauri::command]
 pub fn plugin_files_clear_all(state: tauri::State<'_, GrantStore>) -> Result<(), String> {
     state.clear_all()
+}
+
+/// Open the native save dialog prefilled with `name`, filtered to its own
+/// extension, then open the sibling `.part` file the Plugin's bytes will fill.
+/// Resolves to `None` when the author cancels; the chosen path never leaves
+/// Rust, and the target file is untouched until the commit.
+#[tauri::command]
+pub async fn plugin_files_save_begin<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    window: tauri::WebviewWindow<R>,
+    state: tauri::State<'_, SaveStore>,
+    name: String,
+) -> Result<Option<u64>, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let extension = Path::new(&name)
+        .extension()
+        .map(|extension| extension.to_string_lossy().to_lowercase())
+        .filter(|extension| !extension.is_empty());
+    let mut picker = app.dialog().file().set_parent(&window).set_file_name(&name);
+    if let Some(extension) = extension.as_deref() {
+        picker = picker.add_filter(extension.to_uppercase(), &[extension]);
+    }
+    let Some(picked) = picker.blocking_save_file() else {
+        return Ok(None);
+    };
+    let target = picked
+        .into_path()
+        .map_err(|_| internal_error("the chosen place is not a path on this device"))?;
+    state.begin(target).map(Some)
+}
+
+/// Append one chunk to the save `token` names. The bytes cross as raw IPC, so
+/// the webview never holds the file's path, and the body is not parsed.
+#[tauri::command]
+pub fn plugin_files_save_write(
+    state: tauri::State<'_, SaveStore>,
+    request: tauri::ipc::Request<'_>,
+) -> Result<(), String> {
+    let token = request
+        .headers()
+        .get(SAVE_TOKEN_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<u64>().ok())
+        .ok_or_else(|| invalid_params("the save token header is missing"))?;
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err(invalid_params("a save write carries raw bytes"));
+    };
+    state.write(token, bytes)
+}
+
+/// Put the finished part in the target's place.
+#[tauri::command]
+pub fn plugin_files_save_commit(
+    state: tauri::State<'_, SaveStore>,
+    token: u64,
+) -> Result<(), String> {
+    state.commit(token)
+}
+
+/// Give the save up: the part goes and the target keeps what it had.
+#[tauri::command]
+pub fn plugin_files_save_abort(
+    state: tauri::State<'_, SaveStore>,
+    token: u64,
+) -> Result<(), String> {
+    state.abort(token)
 }
 
 #[cfg(test)]
@@ -788,6 +980,131 @@ mod tests {
         for output in outputs {
             assert!(!output.contains(&folder), "{output}");
         }
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_part_is_a_sibling_with_part_appended() {
+        assert_eq!(
+            part_path(Path::new("/home/author/map.png")),
+            Path::new("/home/author/map.png.part")
+        );
+        assert_eq!(
+            part_path(Path::new("map.svg")),
+            Path::new("map.svg.part"),
+            "a relative target keeps its folder"
+        );
+    }
+
+    #[test]
+    fn a_commit_puts_the_part_in_the_targets_place() {
+        let dir = temp_dir("save-commit");
+        let target = file_in(&dir, "map.png", b"old");
+        let part = part_path(&target);
+        let mut file = std::fs::File::create(&part).unwrap();
+        file.write_all(b"new").unwrap();
+
+        commit_save(file, &part, &target).unwrap();
+
+        assert_eq!(std::fs::read(&target).unwrap(), b"new");
+        assert!(!part.exists(), "the part is gone once it took the target's place");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn an_abort_removes_the_part_and_leaves_the_target_intact() {
+        let dir = temp_dir("save-abort");
+        let target = file_in(&dir, "map.png", b"old");
+        let part = part_path(&target);
+        let mut file = std::fs::File::create(&part).unwrap();
+        file.write_all(b"half").unwrap();
+
+        abort_save(file, &part).unwrap();
+
+        assert!(!part.exists(), "a failed save leaves no part");
+        assert_eq!(
+            std::fs::read(&target).unwrap(),
+            b"old",
+            "the target still holds what it held"
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn an_abort_of_a_part_that_is_already_gone_is_fine() {
+        let dir = temp_dir("save-abort-gone");
+        let part = dir.join("map.png.part");
+        let file = std::fs::File::create(&part).unwrap();
+        std::fs::remove_file(&part).unwrap();
+
+        abort_save(file, &part).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_save_store_writes_every_chunk_then_commits() {
+        let dir = temp_dir("save-store");
+        let target = dir.join("map.png");
+        let store = SaveStore::default();
+
+        let token = store.begin(target.clone()).unwrap();
+        // The target is untouched while the bytes are still in flight.
+        assert!(!target.exists());
+        store.write(token, b"0123").unwrap();
+        store.write(token, b"4567").unwrap();
+        store.commit(token).unwrap();
+
+        assert_eq!(std::fs::read(&target).unwrap(), b"01234567");
+        assert!(!part_path(&target).exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_save_store_begin_leaves_an_existing_target_alone() {
+        let dir = temp_dir("save-existing");
+        let target = file_in(&dir, "map.png", b"old");
+        let store = SaveStore::default();
+
+        let token = store.begin(target.clone()).unwrap();
+
+        assert_eq!(
+            std::fs::read(&target).unwrap(),
+            b"old",
+            "the target is untouched until the commit"
+        );
+        assert!(part_path(&target).exists());
+        store.abort(token).unwrap();
+        assert!(!part_path(&target).exists());
+        assert_eq!(std::fs::read(&target).unwrap(), b"old");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_save_store_refuses_a_token_it_does_not_hold() {
+        let store = SaveStore::default();
+
+        let write = store.write(404, b"abc").unwrap_err();
+        assert!(write.starts_with("invalid-params:"), "{write}");
+        let commit = store.commit(404).unwrap_err();
+        assert!(commit.starts_with("invalid-params:"), "{commit}");
+        let abort = store.abort(404).unwrap_err();
+        assert!(abort.starts_with("invalid-params:"), "{abort}");
+    }
+
+    #[test]
+    fn a_commit_or_abort_ends_its_token() {
+        let dir = temp_dir("save-ended");
+        let target = dir.join("map.png");
+        let store = SaveStore::default();
+
+        let token = store.begin(target).unwrap();
+        store.commit(token).unwrap();
+        assert!(store.commit(token).is_err(), "a committed save is gone");
+        assert!(store.abort(token).is_err());
+
+        let token = store.begin(dir.join("other.png")).unwrap();
+        store.abort(token).unwrap();
+        assert!(store.write(token, b"late").is_err(), "an aborted save is gone");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

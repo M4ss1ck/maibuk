@@ -72,7 +72,13 @@ export type PluginToHostMessage =
   | { kind: "reply"; id: number; ok: true; result: unknown }
   | { kind: "reply"; id: number; ok: false; error: PluginApiErrorData }
   | { kind: "chunk"; id: number; chunk: string }
-  | { kind: "end"; id: number };
+  | { kind: "end"; id: number }
+  /**
+   * The one non-JSON message: the bytes of a `files.save` call, sent right
+   * after its `call` head with the same id, as a cloned `Blob` the broker never
+   * decodes (ADR 0040). The method's table row must say `acceptsBlob`.
+   */
+  | { kind: "blob"; id: number; blob: Blob };
 
 /**
  * `result` settles a call, subscribe, or unsubscribe. A streaming call's

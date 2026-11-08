@@ -924,7 +924,8 @@ export interface TestEndpointStream {
 /**
  * The File Grants a test host holds for its Plugin (#653), over the memory
  * store the app registers. A test seeds files with `TestHostOptions.files`,
- * queues what the next `files.pick` returns, and reads what is left.
+ * queues what the next `files.pick` returns, and reads what is left. It also
+ * holds the files the Plugin saved (ADR 0040).
  */
 export interface TestHostFiles {
   /** Queues the file the Plugin's next `files.pick` returns; null means the author cancelled. */
@@ -933,6 +934,10 @@ export interface TestHostFiles {
   setMissing(grant: string): void;
   /** The live File Grants the host holds for this Plugin right now. */
   grants(): Promise<PluginFileGrant[]>;
+  /** Every `files.save` the host wrote, in order, with the bytes it received. */
+  readonly saves: ReadonlyArray<PluginFileSaveRecord>;
+  /** Queues the author cancelling the Plugin's next `files.save`. */
+  queueSaveCancel(): void;
 }
 
 export interface TestHost {
@@ -940,7 +945,7 @@ export interface TestHost {
   port: MessagePort;
   /** The real broker over the in-process channel. */
   broker: PluginBroker;
-  /** The File Grants the host holds for the Plugin, and the test hooks that drive them. */
+  /** The File Grants and saved files the host holds for the Plugin, and the test hooks that drive them. */
   files: TestHostFiles;
   /** The activation start reason the host delivers to the Plugin. */
   startReason: PluginStartReason;
@@ -1088,7 +1093,7 @@ export type PluginToolbarButtonContribution = NonNullable<Contributions["toolbar
 export type PluginItemMenuEntryContribution = NonNullable<Contributions["itemMenuEntries"]>[number];
 export type PluginDeclaredLifecycle = PluginManifest["lifecycle"];
 
-/** One of the nine exact Plugin Permission names. */
+/** One of the eleven exact Plugin Permission names. */
 export type PluginPermissionName = (typeof PLUGIN_PERMISSION_NAMES)[number];
 
 /** A Plugin Permission as a manifest declares it: an exact name or `network:<host>`. */
@@ -1159,6 +1164,12 @@ export interface PluginApiRow<
    * caused it.
    */
   requiresUserAction?: true;
+  /**
+   * True when the call is followed by one `blob` message carrying the file's
+   * bytes as a cloned `Blob` (ADR 0040). The row's input schema is the JSON
+   * call head only.
+   */
+  acceptsBlob?: true;
   /** At most one accepted call per this many milliseconds, per Plugin. */
   minIntervalMs?: number;
 }
@@ -1324,6 +1335,21 @@ export type PluginStopReason = "throttled" | "requested";
 
 export interface PluginHandlerContext {
   pluginId: string;
+  /**
+   * The bytes a row with `acceptsBlob` was followed by, checked to be a real
+   * `Blob` before the handler runs (ADR 0040). Absent for every other row.
+   */
+  blob?: Blob;
+}
+
+/**
+ * One file a Plugin File Saver wrote, as the test kit reads it back (ADR 0040):
+ * the cleaned name, the MIME type the Plugin gave, and the bytes it received.
+ */
+export interface PluginFileSaveRecord {
+  name: string;
+  mimeType: string;
+  bytes: Uint8Array;
 }
 
 /** What a streaming method's handler returns: the response, then its body. */

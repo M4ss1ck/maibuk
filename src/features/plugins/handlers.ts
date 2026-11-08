@@ -17,7 +17,8 @@
  * on a granted host and streams the body, injecting a named secret into a
  * declared header; `clipboard.*` reads and writes the platform clipboard;
  * `files.*` picks, reads, and releases File Grants through the registered
- * store (ADR 0036); and
+ * store (ADR 0036), and saves a file the Plugin hands over as one `Blob`
+ * (ADR 0040); and
  * `toolbar.setPressed` sets one of the Plugin's Toggle Buttons on or off.
  * The broker already enforces each row's Plugin Permission, input schema,
  * Library availability, user action, and rate limit, so a handler only does its work.
@@ -34,6 +35,7 @@ import {
   setPluginEditorHighlights,
 } from "@/features/plugins/editor-host";
 import { endpointUrlFor } from "@/features/plugins/endpoint";
+import { getPluginFileSaver, savePluginFile } from "@/features/plugins/file-save";
 import { getPluginFileGrantStore, type PluginFileGrantStore } from "@/features/plugins/file-grants";
 import { currentPluginLanguage } from "@/features/plugins/language";
 import {
@@ -125,10 +127,19 @@ async function runClipboard<T>(
 }
 
 /**
+ * What the handlers read from a manifest: the Plugin's id, its name for a
+ * Toast, and its declared contributions for `toolbar.setPressed`.
+ */
+export type PluginHandlersManifest = Pick<PluginManifest, "id" | "name" | "contributes">;
+
+/**
  * Refuses a `toolbar.setPressed` the manifest cannot back: the Plugin must
  * declare a toolbar button with that id, and the button must be a Toggle Button.
  */
-export function assertToggleButton(manifest: PluginManifest, button: string): void {
+export function assertToggleButton(
+  manifest: Pick<PluginManifest, "contributes">,
+  button: string
+): void {
   const declared = manifest.contributes?.toolbarButtons?.find((entry) => entry.id === button);
   if (declared === undefined) {
     throw new PluginApiError({ code: "invalid-params", message: `No toolbar button ${button}` });
@@ -141,7 +152,7 @@ export function assertToggleButton(manifest: PluginManifest, button: string): vo
   }
 }
 
-export function createPluginHandlers(manifest: PluginManifest): PluginApiHandlers {
+export function createPluginHandlers(manifest: PluginHandlersManifest): PluginApiHandlers {
   return {
     "notifications.show": ({ variant, message }) => {
       const text = `${manifest.name}: ${message}`;
@@ -235,6 +246,11 @@ export function createPluginHandlers(manifest: PluginManifest): PluginApiHandler
     // store a rejected promise, the way every other host failure arrives.
     "files.pick": async ({ extensions }, { pluginId }) =>
       pluginFileGrantStore().pick(pluginId, extensions),
+    // The bytes arrived as one `blob` message the broker checked; the name the
+    // author sees is the cleaned one, never the Plugin's path or dots.
+    "files.save": async ({ name, mimeType }, { blob }) => ({
+      status: await savePluginFile(getPluginFileSaver(), { name, mimeType, blob }),
+    }),
     "files.read": async ({ grant, offset, length }, { pluginId }) =>
       pluginFileGrantStore().read(pluginId, grant, offset, length),
     "files.stat": async ({ grant }, { pluginId }) => pluginFileGrantStore().stat(pluginId, grant),

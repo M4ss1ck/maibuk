@@ -241,6 +241,16 @@ export interface PluginFileStat {
   modified: number;
 }
 
+/** Where a Plugin's file goes: the host's platform saving, behind one call (ADR 0040). */
+export interface PluginFileSaver {
+  /**
+   * Writes one file under the cleaned base name. `saved` means the host wrote
+   * it (on the web, once it is handed to the browser); `cancelled` means the
+   * author closed the dialog without choosing a place.
+   */
+  save(name: string, mimeType: string, blob: Blob): Promise<"saved" | "cancelled">;
+}
+
 export interface PluginFileGrantStore {
   /**
    * Shows the host's file dialog filtered to `extensions`, returning the picked

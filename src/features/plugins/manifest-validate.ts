@@ -62,7 +62,7 @@ export const CONTRIBUTION_LIMITS = {
 
 const LUCIDE_ICON_NAMES_SET: ReadonlySet<string> = new Set(LUCIDE_ICON_NAMES);
 
-/** The ten exact Plugin Permission strings; `network:<host>` is the eleventh. */
+/** The eleven exact Plugin Permission strings; `network:<host>` is the twelfth. */
 export const PLUGIN_PERMISSION_NAMES = [
   "library:read",
   "library:write",
@@ -74,6 +74,7 @@ export const PLUGIN_PERMISSION_NAMES = [
   "process",
   "serve",
   "files:pick",
+  "files:save",
 ] as const;
 
 const PERMISSION_NAMES: ReadonlySet<string> = new Set(PLUGIN_PERMISSION_NAMES);
