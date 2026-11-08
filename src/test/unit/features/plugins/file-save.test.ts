@@ -5,6 +5,7 @@ import {
   getPluginFileSaver,
   registerPluginFileSaver,
   saveNameError,
+  savePluginFile,
 } from "@/features/plugins/file-save";
 
 const encoder = new TextEncoder();
@@ -122,6 +123,18 @@ describe("saveNameError()", () => {
     expect(saveNameError("payload.EXE")).toMatch(/executable/);
     expect(saveNameError("payload.Bat")).toMatch(/executable/);
     expect(saveNameError("payload.appimage")).toMatch(/executable/);
+  });
+});
+
+describe("savePluginFile()", () => {
+  it("refuses not-implemented before validating the name when no saver is registered", async () => {
+    await expect(
+      savePluginFile(null, {
+        name: "README",
+        mimeType: "text/plain",
+        blob: new Blob([new Uint8Array([1])]),
+      })
+    ).rejects.toMatchObject({ name: "PluginApiError", code: "not-implemented" });
   });
 });
 

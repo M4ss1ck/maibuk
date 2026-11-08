@@ -208,6 +208,15 @@ export function createPluginClient(port: PluginMessagePort): PluginClient {
    * into a Blob and stripped, so the JSON head carries only the wire shape.
    */
   async function sendBlobCall(method: string, params: unknown): Promise<unknown> {
+    // The Android QuickJS engine has no Blob, so a device without one cannot
+    // carry the `blob` message: refuse before touching the bytes.
+    if (typeof Blob === "undefined") {
+      throw new PluginApiError({
+        code: "not-implemented",
+        message: "files.save is not available on this device",
+        method,
+      });
+    }
     const { bytes, ...head } = (params ?? {}) as { bytes?: unknown; mimeType?: unknown };
     const mimeType = typeof head.mimeType === "string" ? head.mimeType : "";
     const blob = await foldBytes(bytes, mimeType, method);

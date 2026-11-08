@@ -5,15 +5,17 @@
  * host refuses, and the registry the `files.save` handler reads. The bytes never
  * reach a Plugin again, and a save creates no File Grant.
  *
- * The app registers a platform saver at startup (the desktop and web savers
- * come later); until one is registered a `files.save` call refuses
- * `not-implemented`, which is what Android answers in this phase (#740). The
- * memory saver records what it was handed, so a Plugin's own test can assert
- * the bytes the host received.
+ * The app registers a platform saver at startup (the desktop and web savers);
+ * until one is registered a `files.save` call refuses `not-implemented`, which
+ * is what Android answers (#740). The memory saver records what it was handed,
+ * so a Plugin's own test can assert the bytes the host received.
  */
 
 import type { PluginFileSaveRecord } from "@/features/plugins/types";
-import { PluginApiError } from "@/plugin-sdk/protocol";
+import type { PluginFileSaver } from "@/lib/platform/types";
+import { PluginApiError, utf8ByteLength } from "@/plugin-sdk/protocol";
+
+export type { PluginFileSaver } from "@/lib/platform/types";
 
 /** Longest file name the host keeps, in UTF-8 bytes, extension included. */
 export const MAX_SAVE_NAME_BYTES = 255;
@@ -56,16 +58,6 @@ export function getPluginFileSaver(): PluginFileSaver | null {
   return installedSaver;
 }
 
-/** Where a Plugin's file goes: the host's platform saving, behind one call. */
-export interface PluginFileSaver {
-  /**
-   * Writes one file under the cleaned base name. `saved` means the host wrote
-   * it (on the web, once it is handed to the browser); `cancelled` means the
-   * author closed the dialog without choosing a place.
-   */
-  save(name: string, mimeType: string, blob: Blob): Promise<"saved" | "cancelled">;
-}
-
 /** The memory saver, with the test-only hooks a Plugin test drives it with. */
 export interface MemoryPluginFileSaver extends PluginFileSaver {
   /** Every save this saver wrote, in order, with the bytes it received. */
@@ -96,16 +88,12 @@ export function createMemoryPluginFileSaver(): MemoryPluginFileSaver {
   };
 }
 
-function utf8Length(text: string): number {
-  return new TextEncoder().encode(text).length;
-}
-
 /** Cuts `text` to at most `bytes` UTF-8 bytes without splitting a code point. */
 function cutToBytes(text: string, bytes: number): string {
   let out = "";
   let used = 0;
   for (const character of text) {
-    const size = utf8Length(character);
+    const size = utf8ByteLength(character);
     if (used + size > bytes) break;
     out += character;
     used += size;
@@ -122,12 +110,12 @@ export function cleanSaveName(name: string): string {
   const base = name.slice(Math.max(name.lastIndexOf("/"), name.lastIndexOf("\\")) + 1);
   const withoutControls = base.replace(CONTROL_CHARACTERS, "").trim();
   const visible = withoutControls.replace(/^\.+/, "").trim();
-  if (utf8Length(visible) <= MAX_SAVE_NAME_BYTES) return visible;
+  if (utf8ByteLength(visible) <= MAX_SAVE_NAME_BYTES) return visible;
 
   const dot = visible.lastIndexOf(".");
   const extension = dot > 0 ? visible.slice(dot) : "";
   const stem = extension === "" ? visible : visible.slice(0, dot);
-  const extensionBytes = utf8Length(extension);
+  const extensionBytes = utf8ByteLength(extension);
   if (extensionBytes >= MAX_SAVE_NAME_BYTES) return cutToBytes(visible, MAX_SAVE_NAME_BYTES);
   return `${cutToBytes(stem, MAX_SAVE_NAME_BYTES - extensionBytes)}${extension}`;
 }
@@ -159,15 +147,15 @@ export async function savePluginFile(
   saver: PluginFileSaver | null,
   request: { name: string; mimeType: string; blob: Blob | undefined }
 ): Promise<"saved" | "cancelled"> {
-  const cleaned = cleanSaveName(request.name);
-  const problem = saveNameError(cleaned);
-  if (problem !== null) throw new PluginApiError({ code: "invalid-params", message: problem });
   if (saver === null) {
     throw new PluginApiError({
       code: "not-implemented",
       message: "Saving a file is not available on this device yet",
     });
   }
+  const cleaned = cleanSaveName(request.name);
+  const problem = saveNameError(cleaned);
+  if (problem !== null) throw new PluginApiError({ code: "invalid-params", message: problem });
   if (request.blob === undefined) {
     throw new PluginApiError({
       code: "invalid-params",

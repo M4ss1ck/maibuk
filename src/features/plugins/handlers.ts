@@ -127,10 +127,19 @@ async function runClipboard<T>(
 }
 
 /**
+ * What the handlers read from a manifest: the Plugin's id, its name for a
+ * Toast, and its declared contributions for `toolbar.setPressed`.
+ */
+export type PluginHandlersManifest = Pick<PluginManifest, "id" | "name" | "contributes">;
+
+/**
  * Refuses a `toolbar.setPressed` the manifest cannot back: the Plugin must
  * declare a toolbar button with that id, and the button must be a Toggle Button.
  */
-export function assertToggleButton(manifest: PluginManifest, button: string): void {
+export function assertToggleButton(
+  manifest: Pick<PluginManifest, "contributes">,
+  button: string
+): void {
   const declared = manifest.contributes?.toolbarButtons?.find((entry) => entry.id === button);
   if (declared === undefined) {
     throw new PluginApiError({ code: "invalid-params", message: `No toolbar button ${button}` });
@@ -143,7 +152,7 @@ export function assertToggleButton(manifest: PluginManifest, button: string): vo
   }
 }
 
-export function createPluginHandlers(manifest: PluginManifest): PluginApiHandlers {
+export function createPluginHandlers(manifest: PluginHandlersManifest): PluginApiHandlers {
   return {
     "notifications.show": ({ variant, message }) => {
       const text = `${manifest.name}: ${message}`;

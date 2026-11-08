@@ -3,8 +3,8 @@
 // clone rather than as a JSON string. This spec proves the transport only: a
 // 3 MiB Blob built on the Plugin side — in a Worker, and in the sandboxed
 // frame's Worker — arrives in the host realm as a real Blob with the same
-// size, type, and bytes. It changes no product code and does not exercise
-// `files.save`; the broker that consumes the message lands separately.
+// size, type, and bytes. The broker now consumes this message for
+// `files.save`; this spec still exercises the transport alone.
 //
 // Both sides derive the payload from the same fixed seed, so the host can
 // compare what it received against the bytes it derives itself, byte for byte.

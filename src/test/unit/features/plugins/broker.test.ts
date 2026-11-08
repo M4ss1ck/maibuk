@@ -1730,4 +1730,41 @@ describe("files.save (ADR 0040)", () => {
     expect(await reply).toMatchObject({ ok: false, error: { code: "invalid-params" } });
     expect(saver.saves).toEqual([]);
   });
+
+  it("rejects not-implemented when the device has no Blob", async () => {
+    const { saver, client } = saveSetup();
+    vi.stubGlobal("Blob", undefined);
+
+    const error = await refusal(
+      client.files.save({ name: "a.txt", mimeType: "text/plain", bytes: BYTES })
+    );
+
+    expect(error.code).toBe("not-implemented");
+    expect(error.message).toBe("files.save is not available on this device");
+    expect(saver.saves).toEqual([]);
+  });
+
+  it("fails a call waiting for its blob when the blob is refused a rate-limit token", async () => {
+    const { saver, broker, client, port } = saveSetup();
+    // Leave exactly one token: the call head takes it, the blob message finds none.
+    await Promise.allSettled(Array.from({ length: CALL_BURST - 1 }, () => client.storage.keys()));
+    const head = JSON.stringify({
+      kind: "call",
+      id: 77,
+      method: "files.save",
+      params: { name: "a.txt", mimeType: "text/plain" },
+    });
+
+    const reply = raw(port, head);
+    port.postMessage({ kind: "blob", id: 77, blob: new Blob([BYTES]) });
+
+    expect(await reply).toMatchObject({
+      kind: "result",
+      id: 77,
+      ok: false,
+      error: { code: "rate-limited", method: "files.save" },
+    });
+    await vi.waitFor(() => expect(broker.hasOpenWork()).toBe(false));
+    expect(saver.saves).toEqual([]);
+  });
 });

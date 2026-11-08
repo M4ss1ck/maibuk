@@ -6,7 +6,7 @@
  * bytes leave the host and a Plugin never sees a path.
  */
 
-import type { PluginFileSaver } from "@/features/plugins/file-save";
+import type { PluginFileSaver } from "@/lib/platform/types";
 
 // Only the slice of the File System Access API this saver uses: the project has
 // no @types package for it.

@@ -8,7 +8,7 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
-import type { PluginFileSaver } from "@/features/plugins/file-save";
+import type { PluginFileSaver } from "@/lib/platform/types";
 
 /** The header that ties each raw write to the save Rust opened. */
 export const SAVE_TOKEN_HEADER = "x-save-token";

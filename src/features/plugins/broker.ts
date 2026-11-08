@@ -97,6 +97,14 @@ function malformedReply(): PluginApiErrorData {
   return { code: "internal-error", message: "The Plugin's reply was malformed" };
 }
 
+/**
+ * Marks a `files.save` whose `blob` message was refused a rate-limit token, so
+ * its waiting call fails with the same refusal instead of hanging (ADR 0040).
+ */
+class RateLimitedBlob {
+  constructor(readonly method: string) {}
+}
+
 function refusal(
   code: PluginApiErrorCode,
   message: string,
@@ -240,7 +248,7 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
    * async checks, so a blob that arrives first is never lost; the slot goes when
    * the call ends, whether it used the blob or was refused.
    */
-  const pendingBlobs = new Map<number, (blob: unknown) => void>();
+  const pendingBlobs = new Map<number, { resolve: (blob: unknown) => void; method: string }>();
   /** Plugin calls whose handler (and any streamed body) has not finished. */
   let openCalls = 0;
 
@@ -488,9 +496,9 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
   }
 
   /** Registers the slot the one `blob` message of an accepted call will fill. */
-  function waitForBlob(id: number): Promise<unknown> {
+  function waitForBlob(id: number, method: string): Promise<unknown> {
     return new Promise((resolve) => {
-      pendingBlobs.set(id, resolve);
+      pendingBlobs.set(id, { resolve, method });
     });
   }
 
@@ -503,10 +511,25 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
     if (typeof data !== "object" || data === null) return;
     const message = data as { kind?: unknown; id?: unknown; blob?: unknown };
     if (message.kind !== "blob" || typeof message.id !== "number") return;
-    const deliver = pendingBlobs.get(message.id);
-    if (!deliver) return;
+    const pending = pendingBlobs.get(message.id);
+    if (!pending) return;
     pendingBlobs.delete(message.id);
-    deliver(message.blob);
+    pending.resolve(message.blob);
+  }
+
+  /**
+   * Refuses the call waiting on a `blob` message that found no rate-limit token
+   * (ADR 0040): the call fails with the broker's usual `rate-limited` refusal
+   * and its slot is released, so the call settles and `hasOpenWork()` is false.
+   */
+  function refuseBlobForRateLimit(data: unknown) {
+    if (typeof data !== "object" || data === null) return;
+    const message = data as { kind?: unknown; id?: unknown };
+    if (message.kind !== "blob" || typeof message.id !== "number") return;
+    const pending = pendingBlobs.get(message.id);
+    if (!pending) return;
+    pendingBlobs.delete(message.id);
+    pending.resolve(new RateLimitedBlob(pending.method));
   }
 
   /**
@@ -603,6 +626,10 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
       }
       const received = await blobRequest;
       if (stopped) return;
+      if (received instanceof RateLimitedBlob) {
+        fail(id, refusal("rate-limited", "Too many calls", { method: received.method }));
+        return;
+      }
       if (!(received instanceof Blob)) {
         fail(
           id,
@@ -736,6 +763,10 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
       }
       if (refusable) {
         fail(refusable.id, refusal("rate-limited", "Too many calls", { method: refusable.method }));
+      } else if (text === null) {
+        // A `blob` message found no token while its call waits on it: refuse
+        // that call and free its slot, or the call would hang open forever.
+        refuseBlobForRateLimit(data);
       }
       return;
     }
@@ -804,7 +835,9 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
       // A call whose bytes follow as one `blob` message gets its slot here,
       // synchronously, before the async checks run: the blob may already be in
       // flight and must not be lost while the call is being decided (ADR 0040).
-      const blobRequest = rows.get(record.method)?.acceptsBlob ? waitForBlob(record.id) : undefined;
+      const blobRequest = rows.get(record.method)?.acceptsBlob
+        ? waitForBlob(record.id, record.method)
+        : undefined;
       void handleCall(record.id, record.method, record.params, blobRequest).finally(() => {
         openCalls -= 1;
       });

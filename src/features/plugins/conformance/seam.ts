@@ -89,12 +89,12 @@ const TERMINAL_BUDGET_MS = 20_000;
 /**
  * The manifest the `files.save` probe hands the app's handler factory. The row
  * it exercises reads neither field; the factory needs a manifest for the rows
- * the probe never calls.
+ * the probe never calls, so this carries only what those rows read.
  */
-const FILE_SAVE_PROBE_MANIFEST = {
+const FILE_SAVE_PROBE_MANIFEST: Pick<PluginManifest, "id" | "name"> = {
   id: FILE_SAVE_PROBE_PLUGIN_ID,
   name: "Conformance file save",
-} as PluginManifest;
+};
 
 /**
  * The fixture Command T8 runs: allocation in chunks with a yield between them,
