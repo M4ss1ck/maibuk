@@ -5,10 +5,10 @@
  * host refuses, and the registry the `files.save` handler reads. The bytes never
  * reach a Plugin again, and a save creates no File Grant.
  *
- * The app registers a platform saver at startup (the desktop and web savers);
- * until one is registered a `files.save` call refuses `not-implemented`, which
- * is what Android answers (#740). The memory saver records what it was handed,
- * so a Plugin's own test can assert the bytes the host received.
+ * The app registers a platform saver at startup (the Tauri saver on desktop and
+ * Android, the browser saver on the web); until one is registered a
+ * `files.save` call refuses `not-implemented`. The memory saver records what it
+ * was handed, so a Plugin's own test can assert the bytes the host received.
  */
 
 import type { PluginFileSaveRecord } from "@/features/plugins/types";

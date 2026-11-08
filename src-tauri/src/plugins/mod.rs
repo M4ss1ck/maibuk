@@ -8,7 +8,6 @@ pub mod archive;
 pub mod directory;
 #[cfg(desktop)]
 pub mod endpoint;
-#[cfg(desktop)]
 pub mod files;
 pub mod hash;
 #[cfg(any(target_os = "linux", target_os = "windows"))]

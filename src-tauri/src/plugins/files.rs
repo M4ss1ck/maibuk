@@ -17,6 +17,10 @@
 //! document, so there is no existing file to protect and the save writes that
 //! open file in place. Either way the webview holds only a token.
 
+// Grants are desktop only for now: on mobile their commands are not
+// registered, so everything a save does not reach is allowed to sit unused.
+#![cfg_attr(mobile, allow(dead_code))]
+
 use std::collections::HashMap;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -582,8 +586,14 @@ pub async fn plugin_files_pick<R: tauri::Runtime>(
 ) -> Result<Option<GrantInfo>, String> {
     use tauri_plugin_dialog::DialogExt;
 
+    #[cfg(mobile)]
+    let _ = &window;
     validate_extensions(&extensions)?;
-    let mut picker = app.dialog().file().set_parent(&window);
+    let mut picker = app.dialog().file();
+    #[cfg(desktop)]
+    {
+        picker = picker.set_parent(&window);
+    }
     if !extensions.is_empty() {
         let filters: Vec<&str> = extensions.iter().map(String::as_str).collect();
         picker = picker.add_filter("Documents", &filters);
@@ -656,9 +666,10 @@ pub fn plugin_files_clear_all(state: tauri::State<'_, GrantStore>) -> Result<(),
 }
 
 /// Open the native save dialog prefilled with `name`, filtered to its own
-/// extension, then open the sibling `.part` file the Plugin's bytes will fill.
+/// extension, then open the file the Plugin's bytes will fill: the sibling
+/// `.part` file on desktop, the document the picker created on Android.
 /// Resolves to `None` when the author cancels; the chosen path never leaves
-/// Rust, and the target file is untouched until the commit.
+/// Rust, and on desktop the target file is untouched until the commit.
 #[tauri::command]
 pub async fn plugin_files_save_begin<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
@@ -672,17 +683,43 @@ pub async fn plugin_files_save_begin<R: tauri::Runtime>(
         .extension()
         .map(|extension| extension.to_string_lossy().to_lowercase())
         .filter(|extension| !extension.is_empty());
-    let mut picker = app.dialog().file().set_parent(&window).set_file_name(&name);
+    #[cfg(mobile)]
+    let _ = &window;
+    let mut picker = app.dialog().file().set_file_name(&name);
+    #[cfg(desktop)]
+    {
+        picker = picker.set_parent(&window);
+    }
     if let Some(extension) = extension.as_deref() {
         picker = picker.add_filter(extension.to_uppercase(), &[extension]);
     }
     let Some(picked) = picker.blocking_save_file() else {
         return Ok(None);
     };
-    let target = picked
-        .into_path()
-        .map_err(|_| internal_error("the chosen place is not a path on this device"))?;
-    state.begin(target).map(Some)
+    // A desktop dialog hands back a path to write beside; Android hands back
+    // the document its picker just created, which the save writes in place.
+    #[cfg(desktop)]
+    {
+        let target = picked
+            .into_path()
+            .map_err(|_| internal_error("the chosen place is not a path on this device"))?;
+        state.begin(target).map(Some)
+    }
+    #[cfg(mobile)]
+    {
+        use tauri_plugin_fs::{FsExt, OpenOptions};
+
+        // Write, truncate and create, no read and no append: Android turns
+        // that into the mode "wt", which is all a freshly created document
+        // needs.
+        let mut options = OpenOptions::new();
+        options.write(true).truncate(true).create(true);
+        let file = app
+            .fs()
+            .open(picked, options)
+            .map_err(|_| internal_error("the chosen document could not be opened"))?;
+        Ok(Some(state.begin_in_place(file)))
+    }
 }
 
 /// Append one chunk to the save `token` names. The bytes cross as raw IPC, so

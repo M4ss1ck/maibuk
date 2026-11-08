@@ -81,7 +81,7 @@ if (status === "saved") {
 | `invalid-params`        | a `files.save` name has no file type or one the host refuses, or a `files.read` length exceeds `FILE_READ_MAX_BYTES` | Pick a name with a file type Maibuk may write, and read in smaller ranges |
 | `user-action-required`  | `files.pick`, `files.save`, or `files.requestAccess` ran without the author's click, key press, or Command run       | Move the call into the author's action                                    |
 | `permission-denied`     | the Plugin does not hold `files:pick`, or `files:save` for `files.save`                                              | Ask the author to grant it; there is nothing to retry until then          |
-| `not-implemented`       | `files.save` on a device with no saver yet, such as Android                                                          | Save on desktop or the web; nothing to retry on this device               |
+| `not-implemented`       | `files.save` on a device with no saver                                                                               | Save on desktop or the web; nothing to retry on this device               |
 | `internal-error`        | the save failed, such as on a full disk                                                                              | Report the failure to the author and try again                            |
 
 ## Desktop, web, and Android
@@ -90,7 +90,7 @@ On desktop, Rust keeps the grant's path in its own store and reads the file only
 
 In the web build the grant is a browser file handle kept in IndexedDB. The browser may ask the author for access again, inside a click, before the bytes can be read; that is the `file-needs-permission` refusal. Where the browser has no such handles, the grant lasts only for the session, and the Plugin picks the file again after a reload. Saving uses the browser's save picker where there is one; a browser without it, or one that refuses the picker because the page is insecure or the click window ran out, downloads the file instead, and `saved` then means the browser took it.
 
-On Android no native store is registered yet, so grants live in memory and last for the session, and no saver is registered either: `files.save` is refused with `not-implemented`.
+On Android no native grant store is registered yet, so grants live in memory and last for the session. Saving works there through the same Tauri saver: the picker always creates a new document, so there is no earlier file to protect and Rust writes that document in place, emptying it when a save fails partway.
 
 ## When a grant ends, and when it survives
 

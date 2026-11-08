@@ -1,10 +1,13 @@
 /**
- * The desktop Plugin File Saver (ADR 0040): Rust shows the save dialog, opens a
- * sibling `.part` file, and renames it over the target once every byte arrived
- * (ADR 0010 keeps the webview `fs` scope as narrow as it was). The webview only
- * holds a token, so each chunk crosses IPC as raw bytes and no path is ever
- * sent. A save that fails partway is aborted before the error reaches the
- * Plugin, which the `files.save` handler reports as `internal-error`.
+ * The Tauri Plugin File Saver (ADR 0040), registered on desktop and Android:
+ * Rust shows the save dialog and opens the file the bytes go to, so the
+ * webview only holds a token and each chunk crosses IPC as raw bytes with no
+ * path ever sent (ADR 0010 keeps the webview `fs` scope as narrow as it was).
+ * On desktop Rust renames a sibling `.part` file over the target on commit, so
+ * a save that fails partway leaves the old file as it was; on Android it
+ * writes the document the picker just created in place. A failed save is
+ * aborted before the error reaches the Plugin, which the `files.save` handler
+ * reports as `internal-error`.
  */
 
 import { invoke } from "@tauri-apps/api/core";
@@ -17,7 +20,7 @@ function osMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** The Rust-backed saver the app registers on desktop. */
+/** The Rust-backed saver the app registers on desktop and Android. */
 export function createTauriPluginFileSaver(): PluginFileSaver {
   return {
     async save(name, _mimeType, blob): Promise<"saved" | "cancelled"> {

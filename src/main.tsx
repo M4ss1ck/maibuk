@@ -5,7 +5,7 @@ import App from "@/App";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AppSettingsProvider } from "@/features/settings";
 import { seedPluginSidebarFromSnapshot } from "@/features/plugins/sidebar-snapshot";
-import { IS_DESKTOP, IS_WEB } from "@/lib/platform";
+import { IS_ANDROID, IS_DESKTOP, IS_WEB } from "@/lib/platform";
 import { endBooting, captureStartupScreen } from "@/lib/startup-screen";
 import "@/index.css";
 
@@ -89,11 +89,11 @@ const loadPlugins = async () => {
     registerPluginFileGrantStore(createMemoryPluginFileGrantStore());
   }
   // A Plugin File Saver is present where the device can write one (ADR 0040).
-  // The desktop saver writes a sibling `.part` file in Rust; the web saver uses
-  // the browser's save picker, falling back to a download. Android registers
-  // none, so `files.save` stays not-implemented there (#740).
+  // Desktop and Android both use the Tauri saver: Rust writes a sibling `.part`
+  // file on desktop and the picked document in place on Android. The web saver
+  // uses the browser's save picker, falling back to a download.
   const { registerPluginFileSaver } = await import("@/features/plugins/file-save");
-  if (IS_DESKTOP) {
+  if (IS_DESKTOP || IS_ANDROID) {
     const { createTauriPluginFileSaver } = await import("@/lib/platform/tauri/file-save");
     registerPluginFileSaver(createTauriPluginFileSaver());
   } else if (IS_WEB) {
