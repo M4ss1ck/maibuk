@@ -21,6 +21,7 @@ export const PLUGIN_UI_TAGS = [
   "maibuk-combobox",
   "maibuk-multi-select-combobox",
   "maibuk-radio-group",
+  "maibuk-color-picker",
   "maibuk-button",
   "maibuk-icon-button",
   "maibuk-link",
@@ -222,6 +223,17 @@ export interface PluginUiElementProps {
     isDisabled?: boolean;
     onChange?: (event: { detail: string }) => void;
   };
+  /** A color swatch that opens the app's accessible color picker. Keyboard-interactive. */
+  "maibuk-color-picker": {
+    label: string;
+    /** A `#rrggbb` color; an empty or invalid value shows the picker's default. */
+    value?: string;
+    /** Up to 12 `#rrggbb` colors drawn as preset swatches, in order; malformed entries are not drawn. */
+    swatches?: readonly string[];
+    isDisabled?: boolean;
+    /** Fires with the committed `#RRGGBB` color. */
+    onChange?: (event: { detail: string }) => void;
+  };
   /** A button. Keyboard-interactive. */
   "maibuk-button": {
     variant?: "primary" | "secondary" | "ghost" | "destructive";
@@ -416,6 +428,7 @@ export interface PluginUiComponents {
   Combobox: ComponentType<PluginUiElementProps["maibuk-combobox"]>;
   MultiSelectCombobox: ComponentType<PluginUiElementProps["maibuk-multi-select-combobox"]>;
   RadioGroup: ComponentType<PluginUiElementProps["maibuk-radio-group"]>;
+  ColorPicker: ComponentType<PluginUiElementProps["maibuk-color-picker"]>;
   Button: ComponentType<PluginUiElementProps["maibuk-button"]>;
   IconButton: ComponentType<PluginUiElementProps["maibuk-icon-button"]>;
   Link: ComponentType<PluginUiElementProps["maibuk-link"]>;

@@ -66,6 +66,7 @@ import {
 } from "@remote-dom/react/host";
 import { Button } from "@/components/ui/Button";
 import { Checkbox } from "@/components/ui/Checkbox";
+import { ColorPickerControl } from "@/components/ui/ColorPickerControl";
 import { Combobox } from "@/components/ui/Combobox";
 import { ItemActionsMenu } from "@/components/ui/ItemActionsMenu";
 import { Modal } from "@/components/ui/Modal";
@@ -78,6 +79,7 @@ import { PluginFrame, type PluginFrameHost } from "@/components/plugins/PluginFr
 import { scopePluginCss } from "@/features/plugins/remote-ui/css-scope";
 import { createEchoTracker, type PluginEchoTracker } from "@/features/plugins/remote-ui/echo";
 import { useItemContextMenu, useRestoreFocus } from "@/hooks";
+import { normalizeHexColor } from "@/lib/color";
 import { openExternal } from "@/lib/platform";
 import { PLUGIN_UI_TABLE } from "@/plugin-sdk/ui-table";
 import type { PluginUiOption } from "@/plugin-sdk/ui.generated";
@@ -636,6 +638,36 @@ function RadioGroupHost({
         <FieldError className="mt-1 text-sm text-destructive">{errorMessage}</FieldError>
       )}
     </AriaRadioGroup>
+  );
+}
+
+interface ColorPickerHostProps {
+  label: string;
+  value?: string;
+  swatches?: readonly string[];
+  isDisabled?: boolean;
+  onChange?: (color: string) => void;
+}
+
+function ColorPickerHost({ label, value, swatches, isDisabled, onChange }: ColorPickerHostProps) {
+  // The picker parses every preset it draws, so a malformed entry would break
+  // the whole control: keep the well-formed colors, normalized. The validator
+  // caps the list at 12. Without `swatches` the picker keeps its own default set.
+  const presets =
+    swatches === undefined
+      ? undefined
+      : swatches.map(normalizeHexColor).filter((color): color is string => color !== null);
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-sm font-medium text-foreground">{label}</span>
+      <ColorPickerControl
+        label={label}
+        value={value ?? ""}
+        presets={presets}
+        isDisabled={isDisabled}
+        onCommit={(color) => onChange?.(color)}
+      />
+    </div>
   );
 }
 
@@ -1652,6 +1684,7 @@ export function createPluginUiComponents(host?: PluginFrameHost): RemoteComponen
     Combobox: ComboboxHost,
     MultiSelectCombobox: MultiSelectComboboxHost,
     RadioGroup: RadioGroupHost,
+    ColorPicker: ColorPickerHost,
     Button: ButtonHost,
     IconButton: IconButtonHost,
     Link: LinkHost,

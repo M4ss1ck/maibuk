@@ -186,6 +186,20 @@ describe("ColorPickerControl", () => {
     await waitFor(() => expect(trigger).toHaveFocus());
   });
 
+  it("keeps a disabled trigger from opening the picker", async () => {
+    const user = userEvent.setup();
+    const onCommit = vi.fn();
+    render(<ColorPickerControl label="Accent" value="#3B82F6" isDisabled onCommit={onCommit} />);
+    const trigger = screen.getByRole("button", { name: "Accent" });
+    await user.tab();
+    expect(trigger).not.toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await user.click(trigger);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(onCommit).not.toHaveBeenCalled();
+  });
+
   it("commits valid hex on blur and clears the area preview on Escape", async () => {
     const user = userEvent.setup();
     const onPreview = vi.fn();

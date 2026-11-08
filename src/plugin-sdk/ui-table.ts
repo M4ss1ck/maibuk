@@ -26,7 +26,7 @@ export interface PluginUiProp {
   kind: PluginUiPropKind;
   /** The prop is required for the element to render correctly. */
   required?: boolean;
-  /** A `string` prop is capped at this many UTF-16 units. */
+  /** A `string` prop is capped at this many UTF-16 units, a `keys` prop at this many entries. */
   maxLength?: number;
   /** An `enum` prop's exact allowed values. */
   values?: readonly string[];
@@ -485,6 +485,38 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
       isDisabled: { kind: "boolean" },
     },
     events: [{ prop: "onChange", event: "change", detail: "string" }],
+    methods: [],
+  },
+  {
+    tag: "maibuk-color-picker",
+    component: "ColorPicker",
+    category: "forms",
+    host: "ColorPicker",
+    interactive: true,
+    summary: "A color swatch that opens the app's accessible color picker.",
+    props: {
+      label: { kind: "string", required: true, maxLength: 512 },
+      value: {
+        kind: "string",
+        maxLength: 64,
+        description: "A `#rrggbb` color; an empty or invalid value shows the picker's default.",
+      },
+      swatches: {
+        kind: "keys",
+        maxLength: 12,
+        description:
+          "Up to 12 `#rrggbb` colors drawn as preset swatches, in order; malformed entries are not drawn.",
+      },
+      isDisabled: { kind: "boolean" },
+    },
+    events: [
+      {
+        prop: "onChange",
+        event: "change",
+        detail: "string",
+        description: "Fires with the committed `#RRGGBB` color.",
+      },
+    ],
     methods: [],
   },
 

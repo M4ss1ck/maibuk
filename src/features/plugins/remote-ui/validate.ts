@@ -207,7 +207,8 @@ function propertyProblem(prop: PluginUiProp, value: unknown, maxOptions: number)
     }
     case "keys": {
       if (!Array.isArray(value)) return "is not a valid key list";
-      if (value.length > maxOptions) return `has more than ${maxOptions} entries`;
+      const maxKeys = Math.min(prop.maxLength ?? maxOptions, maxOptions);
+      if (value.length > maxKeys) return `has more than ${maxKeys} entries`;
       return value.every((key) => typeof key === "string") ? null : "is not a valid key list";
     }
     case "node":

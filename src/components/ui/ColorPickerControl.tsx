@@ -63,6 +63,8 @@ interface ColorPickerControlProps {
   onClear?: () => void;
   clearLabel?: string;
   closeOnPreset?: boolean;
+  /** Disables the trigger, so the picker cannot be opened. */
+  isDisabled?: boolean;
 }
 
 export function ColorPickerControl({
@@ -79,6 +81,7 @@ export function ColorPickerControl({
   onClear,
   clearLabel,
   closeOnPreset = false,
+  isDisabled = false,
 }: ColorPickerControlProps) {
   const { t } = useTranslation();
   const errorId = useId();
@@ -149,7 +152,8 @@ export function ColorPickerControl({
     <DialogTrigger isOpen={open} onOpenChange={changeOpen}>
       <Button
         aria-label={label}
-        className={`${TRIGGER_CLASSES[variant]} outline-none focus-visible:ring-2 focus-visible:ring-primary ${open && variant === "split" ? "bg-muted" : ""}`}
+        isDisabled={isDisabled}
+        className={`${TRIGGER_CLASSES[variant]} outline-none focus-visible:ring-2 focus-visible:ring-primary data-disabled:cursor-not-allowed data-disabled:opacity-50 ${open && variant === "split" ? "bg-muted" : ""}`}
       >
         {variant === "split" ? (
           <ChevronDownIcon className="size-2" />
