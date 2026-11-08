@@ -198,6 +198,53 @@ describe("the connection validator", () => {
     expect(receiver.root.children).toHaveLength(0);
   });
 
+  it("accepts 12 color picker swatches and refuses 13", () => {
+    const swatches = Array.from(
+      { length: 13 },
+      (_, i) => `#0000${i.toString(16).padStart(2, "0")}`
+    );
+    const atCap = setup();
+    atCap.connection.mutate([
+      insert(
+        element("1", "maibuk-color-picker", {
+          properties: { label: "Fill", swatches: swatches.slice(0, 12) },
+        })
+      ),
+    ]);
+    expect(atCap.violations).toEqual([]);
+    expect(atCap.receiver.root.children).toHaveLength(1);
+
+    const { receiver, violations, connection } = setup();
+    connection.mutate([
+      insert(element("1", "maibuk-color-picker", { properties: { label: "Line", swatches } })),
+    ]);
+    expect(violations[0]).toMatchObject({
+      code: "invalid-prop",
+      tag: "maibuk-color-picker",
+      prop: "swatches",
+      message: "The prop maibuk-color-picker.swatches has more than 12 entries",
+    });
+    expect(receiver.root.children).toHaveLength(0);
+  });
+
+  it("refuses a color picker swatch that is not a hex color", () => {
+    const { receiver, violations, connection } = setup();
+    connection.mutate([
+      insert(
+        element("1", "maibuk-color-picker", {
+          properties: { label: "Fill", swatches: ["#3B82F6", "nope"] },
+        })
+      ),
+    ]);
+    expect(violations[0]).toMatchObject({
+      code: "invalid-prop",
+      tag: "maibuk-color-picker",
+      prop: "swatches",
+      message: "The prop maibuk-color-picker.swatches has an entry that is not a hex color",
+    });
+    expect(receiver.root.children).toHaveLength(0);
+  });
+
   it("accepts the internal openSeq count on a modal", () => {
     const { receiver, violations, connection } = setup();
     connection.mutate([

@@ -35,6 +35,15 @@ describe("generated Plugin UI reference", () => {
     expect(headings).toEqual(PLUGIN_UI_TABLE.map((element) => element.tag));
   });
 
+  it("counts a keys prop's maxLength in entries, not characters", () => {
+    const element: PluginUiElement = {
+      ...PLUGIN_UI_TABLE[0],
+      tag: "maibuk-keys-fixture",
+      props: { keys: { kind: "keys", maxLength: 3 } },
+    };
+    expect(renderPluginUiReference([element])).toContain("At most 3 entries.");
+  });
+
   it("changes when a row changes, so the stale check fires (add a prop to one element)", () => {
     const [first, ...rest] = PLUGIN_UI_TABLE;
     const mutated: readonly PluginUiElement[] = [

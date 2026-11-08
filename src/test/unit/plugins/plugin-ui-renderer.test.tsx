@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { createElement, useState } from "react";
 import { RouterProvider } from "react-aria-components";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import "@/i18n";
 import { ui } from "@/plugin-sdk/ui";
 import { renderRemoteUi, type RemoteUiHarness } from "@/test/support/plugin-remote-ui";
 
@@ -602,6 +603,85 @@ describe("the Remote UI renderer", () => {
       await userEvent.tab();
       await userEvent.keyboard("{ArrowDown}");
       expect(seen).toEqual(["library"]);
+    });
+
+    it("commits a hex color typed with the keyboard @ui-kbd:maibuk-color-picker", async () => {
+      const seen: string[] = [];
+      harness = renderRemoteUi();
+      await harness.mount(
+        <ui.ColorPicker
+          label="Accent"
+          value="#3B82F6"
+          onChange={(event) => seen.push(event.detail)}
+        />
+      );
+      await userEvent.tab();
+      await userEvent.keyboard("{Enter}");
+      const field = await screen.findByRole("textbox", { name: "Hex color" });
+      await userEvent.clear(field);
+      await userEvent.type(field, "#12ab34");
+      await userEvent.keyboard("{Enter}");
+      expect(seen).toEqual(["#12AB34"]);
+    });
+
+    it("draws the Plugin's swatches as presets and commits the chosen one @ui:maibuk-color-picker", async () => {
+      const seen: string[] = [];
+      harness = renderRemoteUi();
+      await harness.mount(
+        <ui.ColorPicker
+          label="Accent"
+          value="#EF4444"
+          swatches={["#EF4444", "#22C55E"]}
+          onChange={(event) => seen.push(event.detail)}
+        />
+      );
+      await userEvent.click(screen.getByRole("button", { name: "Accent" }));
+      const presets = await screen.findAllByRole("option");
+      expect(presets).toHaveLength(2);
+      screen.getByRole("option", { name: "Preset color #EF4444" });
+      screen.getByRole("option", { name: "Preset color #22C55E" });
+      presets[0].focus();
+      await userEvent.keyboard("{ArrowRight}");
+      await userEvent.keyboard("{Enter}");
+      expect(seen).toEqual(["#22C55E"]);
+    });
+
+    it("draws one preset for two spellings of the same swatch @ui:maibuk-color-picker", async () => {
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        harness = renderRemoteUi();
+        await harness.mount(
+          <ui.ColorPicker label="Accent" value="#FFFFFF" swatches={["#fff", "#FFFFFF"]} />
+        );
+        await userEvent.click(screen.getByRole("button", { name: "Accent" }));
+        // "#fff" normalizes to "#FFFFFF", so the picker keys one preset, not two.
+        const presets = await screen.findAllByRole("option");
+        expect(presets).toHaveLength(1);
+        screen.getByRole("option", { name: "Preset color #FFFFFF" });
+        // A duplicate key would make React warn and render an unstable item.
+        expect(error.mock.calls.filter((call) => String(call[0]).includes("the same key"))).toEqual(
+          []
+        );
+      } finally {
+        error.mockRestore();
+      }
+    });
+
+    it("keeps a disabled color picker closed @ui:maibuk-color-picker", async () => {
+      const seen: string[] = [];
+      harness = renderRemoteUi();
+      await harness.mount(
+        <ui.ColorPicker
+          label="Accent"
+          value="#3B82F6"
+          isDisabled
+          onChange={(event) => seen.push(event.detail)}
+        />
+      );
+      await userEvent.tab();
+      await userEvent.keyboard("{Enter}");
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(seen).toEqual([]);
     });
   });
 

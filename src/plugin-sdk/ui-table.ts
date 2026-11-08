@@ -26,7 +26,7 @@ export interface PluginUiProp {
   kind: PluginUiPropKind;
   /** The prop is required for the element to render correctly. */
   required?: boolean;
-  /** A `string` prop is capped at this many UTF-16 units. */
+  /** A `string` prop is capped at this many UTF-16 units, a `keys` prop at this many entries. */
   maxLength?: number;
   /** An `enum` prop's exact allowed values. */
   values?: readonly string[];
@@ -39,9 +39,10 @@ export interface PluginUiProp {
    * A `string` prop that must use this format; `data-url` keeps images offline,
    * `url` keeps links safe, `plugin-path` keeps a Frame's `src` a relative
    * `.html` file inside the Plugin folder (the same rules the manifest's `entry`
-   * and page `frame` paths obey).
+   * and page `frame` paths obey), and `hex-color` makes every entry of a `keys`
+   * prop a `#rgb`/`#rrggbb` color.
    */
-  format?: "data-url" | "url" | "plugin-path";
+  format?: "data-url" | "url" | "plugin-path" | "hex-color";
   /**
    * Set by the SDK, never by a Plugin; omitted from the generated public types.
    * The validator and the host still accept it, because the SDK sends it.
@@ -485,6 +486,39 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
       isDisabled: { kind: "boolean" },
     },
     events: [{ prop: "onChange", event: "change", detail: "string" }],
+    methods: [],
+  },
+  {
+    tag: "maibuk-color-picker",
+    component: "ColorPicker",
+    category: "forms",
+    host: "ColorPicker",
+    interactive: true,
+    summary: "A color swatch that opens the app's accessible color picker.",
+    props: {
+      label: { kind: "string", required: true, maxLength: 512 },
+      value: {
+        kind: "string",
+        maxLength: 64,
+        description: "A `#rrggbb` color; an empty or invalid value shows the picker's default.",
+      },
+      swatches: {
+        kind: "keys",
+        maxLength: 12,
+        format: "hex-color",
+        description:
+          "Up to 12 `#rrggbb` colors drawn as preset swatches, in order; equal colors collapse to one.",
+      },
+      isDisabled: { kind: "boolean" },
+    },
+    events: [
+      {
+        prop: "onChange",
+        event: "change",
+        detail: "string",
+        description: "Fires with the committed `#RRGGBB` color.",
+      },
+    ],
     methods: [],
   },
 

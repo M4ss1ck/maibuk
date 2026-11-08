@@ -1,10 +1,11 @@
-// The remote-ui fixture Plugin (issues #446, #439): the UI lane's Plugin pages
-// over the SDK's Worker Remote UI entry. `panel` draws part 1's kit (a heading,
-// a search field, a counter button) and one element the kit never declares, so a
-// spec can prove the host renders the tree, keeps typing host-owned, and stops
-// the Plugin when a declaration leaves the UI kit. `gallery` draws part 2's kit
-// (organization, overlays, feedback, and Plugin CSS) for the keyboard specs and
-// the light/dark gallery screenshots.
+// The remote-ui fixture Plugin (issues #446, #439, #736): the UI lane's Plugin
+// pages over the SDK's Worker Remote UI entry. `panel` draws part 1's kit (a
+// heading, a search field, a counter button, a color picker with its own
+// swatches) and one element the kit never declares, so a spec can prove the host
+// renders the tree, keeps typing host-owned, commits a color from the keyboard,
+// and stops the Plugin when a declaration leaves the UI kit. `gallery` draws
+// part 2's kit (organization, overlays, feedback, and Plugin CSS) for the
+// keyboard specs and the light/dark gallery screenshots.
 //
 // Built from this source into e2e/.output/plugins/remote-ui by the E2E global
 // setup; the bundle is never committed. The Worker attaches through
@@ -30,6 +31,7 @@ function Panel() {
   const [value, setValue] = useState("");
   const [runs, setRuns] = useState(0);
   const [broken, setBroken] = useState(false);
+  const [accent, setAccent] = useState("#3B82F6");
 
   return (
     <ui.View direction="column" gap="md">
@@ -43,6 +45,13 @@ function Panel() {
       <ui.Text>{`Searching: ${value}`}</ui.Text>
       <ui.Button onPress={() => setRuns((count) => count + 1)}>Run</ui.Button>
       <ui.Text>{`Runs: ${runs}`}</ui.Text>
+      <ui.ColorPicker
+        label="Accent"
+        value={accent}
+        swatches={["#3B82F6", "#EF4444", "#22C55E"]}
+        onChange={(event) => setAccent(event.detail)}
+      />
+      <ui.Text>{`Accent: ${accent}`}</ui.Text>
       <ui.Button onPress={() => setBroken(true)}>Break</ui.Button>
       {broken ? <Evil /> : null}
     </ui.View>
