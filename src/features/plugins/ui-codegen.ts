@@ -100,7 +100,11 @@ function propNotes(prop: PluginUiProp): string {
     parts.push(`One of ${prop.values.map((value) => `\`${value}\``).join(", ")}.`);
   }
   if (prop.maxLength !== undefined) {
-    parts.push(`At most ${prop.maxLength} characters.`);
+    parts.push(
+      prop.kind === "keys"
+        ? `At most ${prop.maxLength} entries.`
+        : `At most ${prop.maxLength} characters.`
+    );
   }
   if (prop.minimum !== undefined && prop.maximum !== undefined) {
     parts.push(`Between ${prop.minimum} and ${prop.maximum}.`);

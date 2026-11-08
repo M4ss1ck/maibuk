@@ -631,20 +631,40 @@ describe("the Remote UI renderer", () => {
         <ui.ColorPicker
           label="Accent"
           value="#EF4444"
-          swatches={["#EF4444", "#abc", "not-a-color"]}
+          swatches={["#EF4444", "#22C55E"]}
           onChange={(event) => seen.push(event.detail)}
         />
       );
       await userEvent.click(screen.getByRole("button", { name: "Accent" }));
-      // Only the well-formed colors are drawn; the 3-digit one is normalized.
       const presets = await screen.findAllByRole("option");
       expect(presets).toHaveLength(2);
       screen.getByRole("option", { name: "Preset color #EF4444" });
-      screen.getByRole("option", { name: "Preset color #AABBCC" });
+      screen.getByRole("option", { name: "Preset color #22C55E" });
       presets[0].focus();
       await userEvent.keyboard("{ArrowRight}");
       await userEvent.keyboard("{Enter}");
-      expect(seen).toEqual(["#AABBCC"]);
+      expect(seen).toEqual(["#22C55E"]);
+    });
+
+    it("draws one preset for two spellings of the same swatch @ui:maibuk-color-picker", async () => {
+      const error = vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        harness = renderRemoteUi();
+        await harness.mount(
+          <ui.ColorPicker label="Accent" value="#FFFFFF" swatches={["#fff", "#FFFFFF"]} />
+        );
+        await userEvent.click(screen.getByRole("button", { name: "Accent" }));
+        // "#fff" normalizes to "#FFFFFF", so the picker keys one preset, not two.
+        const presets = await screen.findAllByRole("option");
+        expect(presets).toHaveLength(1);
+        screen.getByRole("option", { name: "Preset color #FFFFFF" });
+        // A duplicate key would make React warn and render an unstable item.
+        expect(error.mock.calls.filter((call) => String(call[0]).includes("the same key"))).toEqual(
+          []
+        );
+      } finally {
+        error.mockRestore();
+      }
     });
 
     it("keeps a disabled color picker closed @ui:maibuk-color-picker", async () => {

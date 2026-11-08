@@ -528,7 +528,7 @@ Props:
 | --- | --- | --- | --- |
 | `label` | `string` | yes | At most 512 characters. |
 | `value` | `string` | no | At most 64 characters. A `#rrggbb` color; an empty or invalid value shows the picker's default. |
-| `swatches` | `readonly string[]` | no | At most 12 characters. Up to 12 `#rrggbb` colors drawn as preset swatches, in order; malformed entries are not drawn. |
+| `swatches` | `readonly string[]` | no | At most 12 entries. Format: `hex-color`. Up to 12 `#rrggbb` colors drawn as preset swatches, in order; equal colors collapse to one. |
 | `isDisabled` | `boolean` | no |  |
 
 Events:

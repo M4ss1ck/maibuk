@@ -143,6 +143,15 @@ function unindexSubtree(id: string, shadow: TreeShadow, tracking: BatchTracking)
 /** Most swatches one Select option carries (#533). */
 export const MAX_OPTION_SWATCHES = 12;
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+const HEX_COLOR_SHORT = /^#[0-9a-fA-F]{3}$/;
+
+/**
+ * A `hex-color` entry: the Select swatch rule (`#rrggbb`) plus the `#rgb`
+ * shorthand the app's picker normalizes.
+ */
+function isHexColor(value: unknown): boolean {
+  return typeof value === "string" && (HEX_COLOR.test(value) || HEX_COLOR_SHORT.test(value));
+}
 
 function propertyProblem(prop: PluginUiProp, value: unknown, maxOptions: number): string | null {
   if (value === null || value === undefined) return null;
@@ -209,7 +218,11 @@ function propertyProblem(prop: PluginUiProp, value: unknown, maxOptions: number)
       if (!Array.isArray(value)) return "is not a valid key list";
       const maxKeys = Math.min(prop.maxLength ?? maxOptions, maxOptions);
       if (value.length > maxKeys) return `has more than ${maxKeys} entries`;
-      return value.every((key) => typeof key === "string") ? null : "is not a valid key list";
+      if (!value.every((key) => typeof key === "string")) return "is not a valid key list";
+      if (prop.format === "hex-color" && !value.every(isHexColor)) {
+        return "has an entry that is not a hex color";
+      }
+      return null;
     }
     case "node":
       return "is a child slot, not a value";

@@ -228,7 +228,7 @@ export interface PluginUiElementProps {
     label: string;
     /** A `#rrggbb` color; an empty or invalid value shows the picker's default. */
     value?: string;
-    /** Up to 12 `#rrggbb` colors drawn as preset swatches, in order; malformed entries are not drawn. */
+    /** Up to 12 `#rrggbb` colors drawn as preset swatches, in order; equal colors collapse to one. */
     swatches?: readonly string[];
     isDisabled?: boolean;
     /** Fires with the committed `#RRGGBB` color. */

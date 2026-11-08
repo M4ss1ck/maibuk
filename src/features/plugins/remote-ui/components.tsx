@@ -650,13 +650,13 @@ interface ColorPickerHostProps {
 }
 
 function ColorPickerHost({ label, value, swatches, isDisabled, onChange }: ColorPickerHostProps) {
-  // The picker parses every preset it draws, so a malformed entry would break
-  // the whole control: keep the well-formed colors, normalized. The validator
-  // caps the list at 12. Without `swatches` the picker keeps its own default set.
+  // The validator refuses a malformed swatch, so every entry is a hex color; the
+  // picker keys its presets by color, so normalize and drop the repeats that
+  // `#fff` and `#FFFFFF` become. Without `swatches` the picker keeps its default set.
   const presets =
     swatches === undefined
       ? undefined
-      : swatches.map(normalizeHexColor).filter((color): color is string => color !== null);
+      : [...new Set(swatches.map((color) => normalizeHexColor(color)!))];
   return (
     <div className="flex items-center gap-2">
       <span className="text-sm font-medium text-foreground">{label}</span>

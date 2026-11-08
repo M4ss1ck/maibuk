@@ -227,6 +227,24 @@ describe("the connection validator", () => {
     expect(receiver.root.children).toHaveLength(0);
   });
 
+  it("refuses a color picker swatch that is not a hex color", () => {
+    const { receiver, violations, connection } = setup();
+    connection.mutate([
+      insert(
+        element("1", "maibuk-color-picker", {
+          properties: { label: "Fill", swatches: ["#3B82F6", "nope"] },
+        })
+      ),
+    ]);
+    expect(violations[0]).toMatchObject({
+      code: "invalid-prop",
+      tag: "maibuk-color-picker",
+      prop: "swatches",
+      message: "The prop maibuk-color-picker.swatches has an entry that is not a hex color",
+    });
+    expect(receiver.root.children).toHaveLength(0);
+  });
+
   it("accepts the internal openSeq count on a modal", () => {
     const { receiver, violations, connection } = setup();
     connection.mutate([

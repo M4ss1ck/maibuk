@@ -39,9 +39,10 @@ export interface PluginUiProp {
    * A `string` prop that must use this format; `data-url` keeps images offline,
    * `url` keeps links safe, `plugin-path` keeps a Frame's `src` a relative
    * `.html` file inside the Plugin folder (the same rules the manifest's `entry`
-   * and page `frame` paths obey).
+   * and page `frame` paths obey), and `hex-color` makes every entry of a `keys`
+   * prop a `#rgb`/`#rrggbb` color.
    */
-  format?: "data-url" | "url" | "plugin-path";
+  format?: "data-url" | "url" | "plugin-path" | "hex-color";
   /**
    * Set by the SDK, never by a Plugin; omitted from the generated public types.
    * The validator and the host still accept it, because the SDK sends it.
@@ -504,8 +505,9 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
       swatches: {
         kind: "keys",
         maxLength: 12,
+        format: "hex-color",
         description:
-          "Up to 12 `#rrggbb` colors drawn as preset swatches, in order; malformed entries are not drawn.",
+          "Up to 12 `#rrggbb` colors drawn as preset swatches, in order; equal colors collapse to one.",
       },
       isDisabled: { kind: "boolean" },
     },

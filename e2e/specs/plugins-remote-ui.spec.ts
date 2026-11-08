@@ -6,12 +6,11 @@
 // back to its trigger, and a declaration the UI kit never carries stops the
 // Plugin with the remote-ui-limit copy. Each matrix edge gets its own test.
 
-import type { Locator, Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import {
   expectFocusWithin,
   expectTabContained,
-  isFocusWithin,
   pressUntilFocused,
   tabTo,
 } from "../support/keyboard";
@@ -35,18 +34,6 @@ async function openPanel(page: Page): Promise<void> {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/remote-ui\/panel$/);
   await expect(page.getByRole("heading", { name: PAGE_TITLE, level: 1 })).toBeVisible();
-}
-
-/**
- * Tabs into the picker's preset list. The list is one Tab stop whose entry
- * option is the selected one, so the spec steps in without naming it.
- */
-async function tabToPresets(page: Page, presets: Locator): Promise<void> {
-  for (let i = 0; i < 6; i++) {
-    if (await isFocusWithin(presets)) return;
-    await page.keyboard.press("Tab");
-  }
-  throw new Error("Tab never reached the picker's preset colors");
 }
 
 test.describe("Host-rendered Plugin UI @wf:plugins-remote-ui", () => {
@@ -111,12 +98,11 @@ test.describe("Host-rendered Plugin UI @wf:plugins-remote-ui", () => {
 
     // The dialog starts on the Plugin's own value; arrows move between presets.
     const presets = picker.getByRole("listbox", { name: "Preset colors" });
-    await tabToPresets(page, presets);
+    await tabTo(page, presets.getByRole("option", { name: "Preset color #3B82F6" }));
     await pressUntilFocused(
       page,
       "ArrowRight",
-      presets.getByRole("option", { name: "Preset color #EF4444" }),
-      { max: 4 }
+      presets.getByRole("option", { name: "Preset color #EF4444" })
     );
     await page.keyboard.press("Enter");
 
