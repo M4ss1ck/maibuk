@@ -2613,7 +2613,7 @@ export const ROWS: MatrixRow[] = [
     id: "plugins-sandbox",
     area: "plugins",
     workflow:
-      "The Plugin sandbox refuses an escape and the host shows a typed refusal or stop reason, proven by the @sandbox lane on Chromium, WebKit, and Firefox: the fixed host prelude boots a Plugin exactly once whichever way it registers its message handler, and the frame bootstrap forwards only the first ready (and error) message, so a Plugin's own posts are not a side channel to the host window; asserts: the boot count and the forwarded-message counts; persists: no",
+      "The Plugin sandbox refuses an escape and the host shows a typed refusal or stop reason, proven by the @sandbox lane on Chromium, WebKit, and Firefox: the fixed host prelude boots a Plugin exactly once whichever way it registers its message handler, and the frame bootstrap forwards only the first ready (and error) message, so a Plugin's own posts are not a side channel to the host window; the lane also proves the Blob transport ADR 0040 relies on, a 3 MiB Blob a Plugin posts over its MessagePort by structured clone arriving in the host realm as a real Blob with the same size and type and matching the bytes the host derives byte-for-byte, from a Worker and from the sandboxed frame's Worker; asserts: the boot count, the forwarded-message counts, and the blob's identity and bytes; persists: no",
     edges: [],
     terms: ["Plugin"],
     shortcuts: [],
