@@ -13,7 +13,9 @@
 //! A Plugin File Save (ADR 0040) is the write side: the native dialog picks a
 //! place, the host streams the bytes into a sibling `.part` file, and one rename
 //! puts it in place. A save that fails partway never destroys the file the
-//! author chose to replace, and the webview holds only a token.
+//! author chose to replace. On Android the picker always creates a new
+//! document, so there is no existing file to protect and the save writes that
+//! open file in place. Either way the webview holds only a token.
 
 use std::collections::HashMap;
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -325,16 +327,25 @@ impl GrantStore {
     }
 }
 
-/// One save in progress: the file the author chose, the sibling `.part` file
-/// receiving the bytes, and the handle open on it. Every field stays in Rust.
+/// One save in progress: the handle the bytes go to, plus how the save puts
+/// them in place. Every field stays in Rust.
 struct PendingSave {
-    target: PathBuf,
-    part: PathBuf,
     file: std::fs::File,
+    finish: Finish,
+}
+
+/// How a save finishes. A desktop save writes a sibling `.part` file that one
+/// rename swaps in. An Android save writes the document in place, because the
+/// picker created it and there is no earlier file to protect.
+enum Finish {
+    Rename { part: PathBuf, target: PathBuf },
+    InPlace,
 }
 
 /// The Plugin File Saves this device is writing right now, by token. A token
-/// names one save to the webview; the paths never cross IPC.
+/// names one save to the webview; the paths never cross IPC. A desktop save
+/// goes through a sibling `.part` file; an Android save writes its document in
+/// place.
 #[derive(Default)]
 pub struct SaveStore {
     saves: Mutex<HashMap<u64, PendingSave>>,
@@ -369,16 +380,31 @@ impl SaveStore {
         self.lock().insert(
             token,
             PendingSave {
-                target,
-                part,
                 file,
+                finish: Finish::Rename { part, target },
             },
         );
         Ok(token)
     }
 
-    /// Appends one chunk. A failed write ends the save and removes its part, so
-    /// a half-written file never takes the target's place.
+    /// Keeps an already-open file until a commit or an abort, for a platform
+    /// whose picker hands back a handle and no path to rename.
+    #[cfg_attr(not(mobile), allow(dead_code))]
+    fn begin_in_place(&self, file: std::fs::File) -> u64 {
+        let token = NEXT_SAVE_TOKEN.fetch_add(1, Ordering::Relaxed);
+        self.lock().insert(
+            token,
+            PendingSave {
+                file,
+                finish: Finish::InPlace,
+            },
+        );
+        token
+    }
+
+    /// Appends one chunk. A failed write ends the save: a part is removed, and
+    /// an in-place document is emptied, so a half-written file never looks
+    /// finished.
     fn write(&self, token: u64, bytes: &[u8]) -> Result<(), String> {
         let mut saves = self.lock();
         let Some(save) = saves.get_mut(&token) else {
@@ -386,30 +412,52 @@ impl SaveStore {
         };
         if let Err(error) = save.file.write_all(bytes) {
             let save = saves.remove(&token).expect("the save was just found");
-            let _ = std::fs::remove_file(&save.part);
+            match save.finish {
+                Finish::Rename { part, .. } => {
+                    let _ = std::fs::remove_file(&part);
+                }
+                Finish::InPlace => {
+                    let _ = save.file.set_len(0);
+                }
+            }
             return Err(error.to_string());
         }
         Ok(())
     }
 
-    /// Finishes the save: the part reaches the disk, then takes the target's
-    /// place. A failure removes the part and leaves the old file whole.
+    /// Finishes the save: the bytes reach the disk, then either the part takes
+    /// the target's place or the in-place document is closed. A failed rename
+    /// removes the part and leaves the old file whole.
     fn commit(&self, token: u64) -> Result<(), String> {
         let Some(save) = self.lock().remove(&token) else {
             return Err(invalid_params("this save has no open file"));
         };
-        commit_save(save.file, &save.part, &save.target).map_err(|error| {
-            let _ = std::fs::remove_file(&save.part);
-            error.to_string()
-        })
+        match save.finish {
+            Finish::Rename { part, target } => {
+                commit_save(save.file, &part, &target).map_err(|error| {
+                    let _ = std::fs::remove_file(&part);
+                    error.to_string()
+                })
+            }
+            Finish::InPlace => commit_in_place(save.file).map_err(|error| error.to_string()),
+        }
     }
 
-    /// Gives up the save: the part goes, and the target keeps what it had.
+    /// Gives up the save: the part goes and the target keeps what it had, while
+    /// an in-place document is emptied.
     fn abort(&self, token: u64) -> Result<(), String> {
         let Some(save) = self.lock().remove(&token) else {
             return Err(invalid_params("this save has no open file"));
         };
-        abort_save(save.file, &save.part).map_err(|error| error.to_string())
+        match save.finish {
+            Finish::Rename { part, .. } => {
+                abort_save(save.file, &part).map_err(|error| error.to_string())
+            }
+            Finish::InPlace => {
+                abort_in_place(save.file);
+                Ok(())
+            }
+        }
     }
 }
 
@@ -441,6 +489,26 @@ fn abort_save(file: std::fs::File, part: &Path) -> std::io::Result<()> {
         Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error),
         _ => Ok(()),
     }
+}
+
+/// Ends an in-place save: the bytes reach the document, then the handle closes.
+/// A content provider can hand out a pipe, where there is nothing to sync, so
+/// that error is ignored. A failed flush empties the document instead.
+fn commit_in_place(mut file: std::fs::File) -> std::io::Result<()> {
+    if let Err(error) = file.flush() {
+        let _ = file.set_len(0);
+        return Err(error);
+    }
+    let _ = file.sync_all();
+    drop(file);
+    Ok(())
+}
+
+/// Gives up an in-place save: empty the document, so no half-written file looks
+/// finished, then drop the handle.
+fn abort_in_place(file: std::fs::File) {
+    let _ = file.set_len(0);
+    drop(file);
 }
 
 /// Whether every extension is lowercase letters and digits, 1 to 16 long: the
@@ -1105,6 +1173,56 @@ mod tests {
         let token = store.begin(dir.join("other.png")).unwrap();
         store.abort(token).unwrap();
         assert!(store.write(token, b"late").is_err(), "an aborted save is gone");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn an_in_place_save_writes_every_chunk_then_commits() {
+        let dir = temp_dir("save-in-place");
+        let path = dir.join("map.png");
+        let store = SaveStore::default();
+
+        let token = store.begin_in_place(std::fs::File::create(&path).unwrap());
+        store.write(token, b"0123").unwrap();
+        store.write(token, b"4567").unwrap();
+        store.commit(token).unwrap();
+
+        assert_eq!(std::fs::read(&path).unwrap(), b"01234567");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn an_in_place_abort_empties_the_file_and_ends_the_token() {
+        let dir = temp_dir("save-in-place-abort");
+        let path = dir.join("map.png");
+        let store = SaveStore::default();
+
+        let token = store.begin_in_place(std::fs::File::create(&path).unwrap());
+        store.write(token, b"half").unwrap();
+        store.abort(token).unwrap();
+
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            b"",
+            "a half-written file is emptied, never left looking finished"
+        );
+        let again = store.commit(token).unwrap_err();
+        assert!(again.starts_with("invalid-params:"), "{again}");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn an_in_place_commit_refuses_a_token_it_does_not_hold() {
+        let dir = temp_dir("save-in-place-unknown");
+        let path = dir.join("map.png");
+        let store = SaveStore::default();
+        let token = store.begin_in_place(std::fs::File::create(&path).unwrap());
+
+        let error = store.commit(token + 1).unwrap_err();
+        assert!(error.starts_with("invalid-params:"), "{error}");
+
+        // The save the store does hold still commits.
+        store.commit(token).unwrap();
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }
