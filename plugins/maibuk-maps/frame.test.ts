@@ -11,6 +11,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { MAP_FRAME_SRC } from "./map-page";
+import { sceneMessage } from "./frame-protocol";
+import { sceneToSvg } from "./scene";
 
 const HTML = readFileSync(join(__dirname, "assets/ui/map.html"), "utf8");
 const LIBRARY = readFileSync(join(__dirname, "assets/ui/lib/htm-preact-standalone.umd.js"), "utf8");
@@ -62,6 +64,7 @@ function loadFrame(): Frame {
         widthMm: 200,
         heightMm: 100,
         background: "#d7e6ec",
+        ink: "#1f2933",
         elements: [],
         tool: "select",
         zoom: 1,
@@ -132,8 +135,20 @@ describe("drawing the scene", () => {
     expect(groups.map((group) => group.getAttribute("data-element-id"))).toEqual(["e1"]);
     const line = groups[0].querySelector("path.map-line");
     expect(line?.getAttribute("d")).toBe("M 10 10 L 20 20");
+    expect(line?.getAttribute("stroke")).toBe("#1f2933");
     expect(groups[0].getAttribute("data-selected")).toBe("true");
     expect(groups[0].querySelector("path.map-selection")).not.toBeNull();
+  });
+
+  it("draws the scene's own ink, and falls back to the text colour when it is missing", () => {
+    frame = loadFrame();
+    frame.scene({ ink: "#8b1a1a", elements: [sceneElement()] });
+    expect(document.querySelector("path.map-line")?.getAttribute("stroke")).toBe("#8b1a1a");
+
+    // A scene without a usable ink falls back to the current text colour
+    // instead of dropping the whole scene, like a missing background does.
+    frame.scene({ ink: 7, elements: [sceneElement()] });
+    expect(document.querySelector("path.map-line")?.getAttribute("stroke")).toBe("currentColor");
   });
 
   it("draws a selected Element without an outline once the Worker clears it", () => {
@@ -157,6 +172,35 @@ describe("drawing the scene", () => {
     frame.port.deliver({ kind: "scene", widthMm: 0, heightMm: 100 });
     frame.port.deliver("nonsense");
     expect(document.querySelector("svg")).toBeNull();
+  });
+});
+
+describe("the scene message", () => {
+  it("sends the ink the list preview draws a Map Line in", () => {
+    const map = {
+      page: { preset: "square" as const, widthMm: 200, heightMm: 100 },
+      elements: [
+        {
+          id: "e1",
+          kind: "line" as const,
+          name: "Coast",
+          hidden: false,
+          locked: false,
+          points: [
+            [0, 0],
+            [10, 10],
+          ] as [number, number][],
+        },
+      ],
+    };
+    const message = sceneMessage(map, {
+      selectedId: null,
+      tool: "select",
+      zoom: 1,
+      panX: 0,
+      panY: 0,
+    });
+    expect(sceneToSvg(map)).toContain(`stroke="${message.ink}"`);
   });
 });
 

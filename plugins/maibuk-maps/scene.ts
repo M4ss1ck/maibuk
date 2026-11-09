@@ -20,7 +20,7 @@ export const SMOOTH_TOLERANCE_MM = 0.5;
 const DUPLICATE_DISTANCE_MM = 0.05;
 
 /** The ink a Map Line is drawn in until Map Styles choose another. */
-const LINE_STROKE = "#1f2933";
+export const LINE_STROKE = "#1f2933";
 
 /** A Map Line's width in page millimetres. */
 const LINE_STROKE_WIDTH_MM = 0.6;

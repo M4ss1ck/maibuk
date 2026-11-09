@@ -7,7 +7,7 @@
     <style>
       /* The Map drawing surface (#745). Every colour comes from the host's
          public theme tokens, so the Frame follows a light/dark flip; the Map's
-         own water colour arrives with the scene, as Map Style data. */
+         own water and ink colours arrive with the scene, as Map Style data. */
       :root {
         color-scheme: var(--maibuk-color-scheme, light dark);
       }
@@ -54,12 +54,12 @@
       /* A Map Line is page ink: its width is page millimetres, so zooming in
          shows a thicker line, exactly as the Maps list preview does. The Map's
          paper is the Map Style's light water in both themes (a printed map, like
-         a Reader page), so the ink is the one token that stays dark in either
-         scheme; the theme's foreground would draw near-white ink on light paper
-         in the dark theme. */
+         a Reader page), so the ink stays the Map Style's own dark colour in
+         either scheme and arrives with the scene, on each line's `stroke`
+         attribute; the theme's foreground would draw near-white ink on light
+         paper in the dark theme. */
       .map-line {
         fill: none;
-        stroke: var(--maibuk-color-primary-foreground);
         stroke-width: 0.6;
         stroke-linecap: round;
         stroke-linejoin: round;

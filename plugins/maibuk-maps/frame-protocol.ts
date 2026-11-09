@@ -14,7 +14,7 @@
  */
 
 import type { MapDocument, MapPoint } from "./maps";
-import { EMPTY_MAP_COLOR, linePath } from "./scene";
+import { EMPTY_MAP_COLOR, LINE_STROKE, linePath } from "./scene";
 
 /** The editor tool the Frame should honour. */
 export type MapTool = "select" | "pencil";
@@ -36,6 +36,8 @@ export interface FrameSceneMessage {
   heightMm: number;
   /** The page background colour. */
   background: string;
+  /** The ink a Map Line is drawn in, the same colour the list preview uses. */
+  ink: string;
   elements: FrameSceneElement[];
   tool: MapTool;
   zoom: number;
@@ -105,6 +107,7 @@ export function sceneMessage(
     widthMm: map.page.widthMm,
     heightMm: map.page.heightMm,
     background: EMPTY_MAP_COLOR,
+    ink: LINE_STROKE,
     elements: map.elements.map((element) => ({
       id: element.id,
       d: element.kind === "line" ? linePath(element.points) : "",

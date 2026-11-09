@@ -62,6 +62,8 @@ export interface PluginUiElementProps {
     align?: "start" | "center" | "end" | "stretch";
     justify?: "start" | "center" | "end" | "between";
     wrap?: boolean;
+    /** Takes the remaining space along the parent View's main axis. */
+    grow?: boolean;
     padding?: "none" | "sm" | "md" | "lg";
     children?: ReactNode;
   };

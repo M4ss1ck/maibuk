@@ -778,6 +778,7 @@ function ViewHost({
   align = "stretch",
   justify = "start",
   wrap,
+  grow,
   padding = "none",
   children,
 }: {
@@ -786,12 +787,13 @@ function ViewHost({
   align?: keyof typeof ALIGN;
   justify?: keyof typeof JUSTIFY;
   wrap?: boolean;
+  grow?: boolean;
   padding?: keyof typeof PADDING;
   children?: ReactNode;
 }) {
   return (
     <div
-      className={`flex ${direction === "row" ? "flex-row" : "flex-col"} ${GAP[gap]} ${ALIGN[align]} ${JUSTIFY[justify]} ${PADDING[padding]} ${wrap ? "flex-wrap" : ""}`}
+      className={`flex ${direction === "row" ? "flex-row" : "flex-col"} ${GAP[gap]} ${ALIGN[align]} ${JUSTIFY[justify]} ${PADDING[padding]} ${wrap ? "flex-wrap" : ""} ${grow ? "min-h-0 min-w-0 flex-1" : ""}`}
     >
       {children}
     </div>

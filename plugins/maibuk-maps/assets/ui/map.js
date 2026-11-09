@@ -22,7 +22,7 @@
    * @typedef {[number, number]} MapPoint
    * @typedef {"select" | "pencil"} MapTool
    * @typedef {{ id: string, d: string, hidden: boolean, locked: boolean, selected: boolean }} FrameSceneElement
-   * @typedef {{ kind: "scene", widthMm: number, heightMm: number, background: string, elements: FrameSceneElement[], tool: MapTool, zoom: number, panX: number, panY: number }} FrameSceneMessage
+   * @typedef {{ kind: "scene", widthMm: number, heightMm: number, background: string, ink: string, elements: FrameSceneElement[], tool: MapTool, zoom: number, panX: number, panY: number }} FrameSceneMessage
    * @typedef {{ kind: "stroke", points: MapPoint[] }} FrameStrokeMessage
    * @typedef {{ kind: "select", id: string | null }} FrameSelectMessage
    * @typedef {FrameSceneMessage} WorkerToFrameMessage
@@ -95,6 +95,7 @@
       widthMm: message.widthMm,
       heightMm: message.heightMm,
       background: typeof message.background === "string" ? message.background : "transparent",
+      ink: typeof message.ink === "string" ? message.ink : "currentColor",
       elements,
       tool: message.tool === "pencil" ? "pencil" : "select",
       zoom: isNumber(message.zoom) && message.zoom > 0 ? message.zoom : 1,
@@ -173,7 +174,7 @@
             >
               <path class="map-hit" d="${element.d}" />
               ${element.selected ? html`<path class="map-selection" d="${element.d}" />` : null}
-              <path class="map-line" d="${element.d}" />
+              <path class="map-line" d="${element.d}" stroke="${current.ink}" />
             </g>`
           )}
         ${drawing === null ? null : html`<path class="map-live" d="${polyline(drawing.points)}" />`}

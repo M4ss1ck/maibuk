@@ -22,6 +22,7 @@ Props:
 | `align` | `"start" \| "center" \| "end" \| "stretch"` | no | One of `start`, `center`, `end`, `stretch`. |
 | `justify` | `"start" \| "center" \| "end" \| "between"` | no | One of `start`, `center`, `end`, `between`. |
 | `wrap` | `boolean` | no |  |
+| `grow` | `boolean` | no | Takes the remaining space along the parent View's main axis. |
 | `padding` | `"none" \| "sm" \| "md" \| "lg"` | no | One of `none`, `sm`, `md`, `lg`. |
 | `children` | `ReactNode` | no |  |
 

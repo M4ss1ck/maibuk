@@ -137,7 +137,7 @@ function MapEditorView({
   const rows = [...snapshot.elements].reverse();
 
   return (
-    <ui.View direction="column" gap="md">
+    <ui.View direction="column" gap="md" grow>
       <ui.View direction="row" gap="md" align="center" justify="between" wrap>
         <ui.Text weight="semibold">{snapshot.doc.name}</ui.Text>
         <ui.Button variant="secondary" icon="arrow-left" onPress={() => void backToMaps()}>
@@ -147,7 +147,7 @@ function MapEditorView({
 
       {snapshot.saveFailed ? <ui.Status tone="warning">{t("map.saveFailed")}</ui.Status> : null}
 
-      <ui.View direction="row" gap="md" align="stretch" wrap>
+      <ui.View direction="row" gap="md" align="stretch" wrap grow>
         <ui.View direction="column" gap="sm">
           <ui.RadioGroup
             label={t("tools.label")}

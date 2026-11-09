@@ -132,6 +132,10 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
       align: { kind: "enum", values: ["start", "center", "end", "stretch"] },
       justify: { kind: "enum", values: ["start", "center", "end", "between"] },
       wrap: { kind: "boolean" },
+      grow: {
+        kind: "boolean",
+        description: "Takes the remaining space along the parent View's main axis.",
+      },
       padding: { kind: "enum", values: ["none", "sm", "md", "lg"] },
       children: { kind: "node" },
     },

@@ -245,6 +245,27 @@ describe("the connection validator", () => {
     expect(receiver.root.children).toHaveLength(0);
   });
 
+  it("accepts a View grow boolean and refuses a non-boolean grow", () => {
+    const accepted = setup();
+    accepted.connection.mutate([
+      insert(element("1", "maibuk-view", { properties: { direction: "row", grow: true } })),
+    ]);
+    expect(accepted.violations).toEqual([]);
+    expect(accepted.receiver.root.children).toHaveLength(1);
+
+    const { receiver, violations, connection } = setup();
+    connection.mutate([
+      insert(element("1", "maibuk-view", { properties: { direction: "row", grow: "yes" } })),
+    ]);
+    expect(violations[0]).toMatchObject({
+      code: "invalid-prop",
+      tag: "maibuk-view",
+      prop: "grow",
+      message: "The prop maibuk-view.grow must be a boolean",
+    });
+    expect(receiver.root.children).toHaveLength(0);
+  });
+
   it("accepts a Frame fill boolean and refuses a non-boolean fill", () => {
     const accepted = setup();
     accepted.connection.mutate([
