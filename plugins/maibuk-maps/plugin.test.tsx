@@ -197,6 +197,13 @@ describe("Maps page", () => {
       const rename = await screen.findByRole("button", { name: `${en["list.rename"]} Isles` });
       await tabTo(user, rename);
       await user.keyboard("{Enter}");
+      await screen.findByRole("dialog", { name: en["rename.title"] });
+      await user.keyboard("{Escape}");
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      await waitFor(() => expect(rename).toHaveFocus());
+      expect(index(storage).find((row) => row.id === "m2")?.name).toBe("Isles");
+
+      await user.keyboard("{Enter}");
       const dialog = await screen.findByRole("dialog", { name: en["rename.title"] });
       const field = within(dialog).getByRole("textbox", { name: en["create.name"] });
       expect(field).toHaveValue("Isles");
@@ -227,6 +234,7 @@ describe("Maps page", () => {
 
       await user.keyboard("{Escape}");
       await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+      await waitFor(() => expect(remove).toHaveFocus());
       expect(names()).toEqual(["Coast", "Isles", "Loose"]);
 
       await tabTo(user, screen.getByRole("button", { name: `${en["list.delete"]} Coast` }));
@@ -297,6 +305,46 @@ describe("Maps Commands and host requests", () => {
       const page = await host.renderPage(MAPS_PAGE_ID);
       await waitFor(() => expect(names()).toEqual(["Coast", "Isles"]));
       expect(screen.getByLabelText(en["list.filter"])).toHaveTextContent("Tides of Ash");
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("the next visit after a Book's entry starts at All again", async () => {
+    const host = hostFor(seededStorage());
+    try {
+      await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, {
+        id: BOOK_MAPS,
+        target: { kind: "book", id: "b1" },
+      });
+      const first = await host.renderPage(MAPS_PAGE_ID);
+      await waitFor(() => expect(names()).toEqual(["Coast", "Isles"]));
+      await first.unmount();
+
+      const second = await host.renderPage(MAPS_PAGE_ID);
+      await waitFor(() => expect(names()).toEqual(["Coast", "Isles", "Loose"]));
+      await second.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("keeps a Book's filter when the Library read fails, rather than showing every Map", async () => {
+    const host = createTestHost({
+      manifest: mapsManifest(),
+      library: { books: BOOKS },
+      storage: seededStorage(),
+      permissions: ["editor:write", "files:pick", "files:save"],
+    });
+    startMaps(createPluginClient(host.port), servePluginUi);
+    try {
+      await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, {
+        id: BOOK_MAPS,
+        target: { kind: "book", id: "b1" },
+      });
+      const page = await host.renderPage(MAPS_PAGE_ID);
+      await waitFor(() => expect(names()).toEqual(["Coast", "Isles"]));
       await page.unmount();
     } finally {
       await host.stop();

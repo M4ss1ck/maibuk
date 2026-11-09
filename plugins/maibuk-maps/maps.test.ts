@@ -176,6 +176,24 @@ describe("createMapStore", () => {
     expect(memory.values.size).toBe(0);
   });
 
+  it("refuses to rename a stored Map it cannot index, instead of dropping it from the list", async () => {
+    const entry = {
+      id: "m1",
+      bookId: null,
+      name: "Old",
+      preset: "square",
+      updatedAt: 1,
+      preview: "data:,",
+    };
+    const { storage } = memoryStorage([
+      [INDEX_KEY, [entry]],
+      [mapKey("m1"), { id: "m1", name: "Old", elements: [], page: { widthMm: 1, heightMm: 1 } }],
+    ]);
+    const store = storeOver(storage);
+    await expect(store.rename("m1", "New")).rejects.toThrow("not-found");
+    expect(await store.list()).toEqual([entry]);
+  });
+
   it("reads a damaged index as empty and skips malformed rows", async () => {
     const { storage } = memoryStorage([[INDEX_KEY, "garbage"]]);
     expect(await storeOver(storage).list()).toEqual([]);

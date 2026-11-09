@@ -33,16 +33,6 @@ vi.mock("@/hooks/usePluginSurface", async (importOriginal) => {
 let lifecycleStatus: "ready" | "stopped" = "ready";
 let brokerRequest = vi.fn(async () => null);
 
-vi.mock("@/hooks/usePluginSurface", async (importOriginal) => {
-  const mod = await importOriginal<typeof import("@/hooks/usePluginSurface")>();
-  return {
-    ...mod,
-    useInstalledPluginLifecycle: () => stubLifecycle,
-    usePluginLifecycleRevision: () => 0,
-    usePluginSurface: () => undefined,
-  };
-});
-
 const stubLifecycle = {
   installed: () => [{ pluginId: "sample", manifest: {} }],
   state: (pluginId: string) =>

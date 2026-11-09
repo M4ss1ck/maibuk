@@ -2799,12 +2799,13 @@ export const ROWS: MatrixRow[] = [
     edges: [
       "Create, rename, reload, and delete a Map by keyboard alone",
       "The Book Item Menu entry opens Maps filtered to that Book; All also shows a Map with no Book",
+      "On a phone, a long-press or the ⋯ button opens the Book Item Menu, and Maps opens filtered to that Book",
     ],
     terms: ["Item Menu"],
     shortcuts: ["plugin.maibuk-maps.openMaps", "plugin.maibuk-maps.bookMaps"],
     routes: ["/", "/plugin/:pluginId/:pageId"],
     fixture: "bookShelf",
-    tags: ["sandbox"],
+    tags: ["sandbox", "touch"],
     status: "accepted",
   },
   {

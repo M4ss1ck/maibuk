@@ -107,6 +107,13 @@ type Dialog =
   | { kind: "delete"; entry: MapIndexEntry }
   | null;
 
+type FormDialog = Extract<NonNullable<Dialog>, { kind: "create" | "rename" }>;
+
+/** Whether the open dialog is the New Map or Rename form. */
+function isForm(dialog: Dialog): dialog is FormDialog {
+  return dialog?.kind === "create" || dialog?.kind === "rename";
+}
+
 export function createMapsPage(deps: MapsPageDeps): ComponentType {
   const { client, store, filter } = deps;
 
@@ -114,7 +121,7 @@ export function createMapsPage(deps: MapsPageDeps): ComponentType {
     const language = useLanguage(client);
     const t = (key: MapsKey) => translate(language, key);
     const [maps, setMaps] = useState<MapIndexEntry[] | null>(null);
-    const [books, setBooks] = useState<LibraryBook[]>([]);
+    const [books, setBooks] = useState<LibraryBook[] | null>(null);
     const [bookFilter, setBookFilter] = useState(filter.get());
     const [dialog, setDialog] = useState<Dialog>(null);
     const [notice, setNotice] = useState<MapsKey | null>(null);
@@ -123,7 +130,15 @@ export function createMapsPage(deps: MapsPageDeps): ComponentType {
     // disabling the focused button would drop focus out of the dialog.
     const writing = useRef(false);
 
-    useEffect(() => filter.subscribe(setBookFilter), []);
+    // The filter a Book Item Menu entry set lasts while the page is open; the
+    // next visit from the sidebar starts at All again.
+    useEffect(() => {
+      const unsubscribe = filter.subscribe(setBookFilter);
+      return () => {
+        unsubscribe();
+        filter.set(ALL_BOOKS);
+      };
+    }, []);
 
     useEffect(() => {
       let active = true;
@@ -148,10 +163,14 @@ export function createMapsPage(deps: MapsPageDeps): ComponentType {
       };
     }, []);
 
-    const bookTitles = new Map(books.map((book) => [book.id, book.title]));
-    // A filter naming a Book that is gone shows every Map rather than none.
+    const bookList = books ?? [];
+    const bookTitles = new Map(bookList.map((book) => [book.id, book.title]));
+    // A filter naming a Book the Library read no longer lists shows every Map
+    // rather than none. Until that read lands (or if it fails), the filter holds.
     const activeFilter =
-      bookFilter !== ALL_BOOKS && bookTitles.has(bookFilter) ? bookFilter : ALL_BOOKS;
+      bookFilter !== ALL_BOOKS && books !== null && !bookTitles.has(bookFilter)
+        ? ALL_BOOKS
+        : bookFilter;
     const shown =
       maps === null
         ? []
@@ -195,9 +214,7 @@ export function createMapsPage(deps: MapsPageDeps): ComponentType {
       if (dialog === null) return;
       const emptyName = () =>
         setDialog((current) =>
-          current?.kind === "create" || current?.kind === "rename"
-            ? { ...current, error: t("dialog.emptyName") }
-            : current
+          isForm(current) ? { ...current, error: t("dialog.emptyName") } : current
         );
       if (dialog.kind === "create") {
         const { name, bookKey, preset } = dialog;
@@ -249,11 +266,11 @@ export function createMapsPage(deps: MapsPageDeps): ComponentType {
 
     const filterOptions = [
       { value: ALL_BOOKS, label: t("list.filter.all") },
-      ...books.map((book) => ({ value: book.id, label: book.title })),
+      ...bookList.map((book) => ({ value: book.id, label: book.title })),
     ];
     const bookOptions = [
       { value: NO_BOOK, label: t("create.noBook") },
-      ...books.map((book) => ({ value: book.id, label: book.title })),
+      ...bookList.map((book) => ({ value: book.id, label: book.title })),
     ];
     const pageOptions = PAGE_PRESETS.map((preset) => ({
       value: preset,
@@ -317,12 +334,12 @@ export function createMapsPage(deps: MapsPageDeps): ComponentType {
 
         <ui.Modal
           title={t(dialog?.kind === "rename" ? "rename.title" : "create.title")}
-          isOpen={dialog?.kind === "create" || dialog?.kind === "rename"}
+          isOpen={isForm(dialog)}
           onOpenChange={(event) => {
             if (!event.detail) setDialog(null);
           }}
         >
-          {dialog?.kind === "create" || dialog?.kind === "rename" ? (
+          {isForm(dialog) ? (
             <ui.View direction="column" gap="md">
               <ui.TextField
                 label={t("create.name")}
@@ -332,9 +349,7 @@ export function createMapsPage(deps: MapsPageDeps): ComponentType {
                 errorMessage={dialog.error ?? undefined}
                 onInput={(event) =>
                   setDialog((current) =>
-                    current?.kind === "create" || current?.kind === "rename"
-                      ? { ...current, name: event.detail, error: null }
-                      : current
+                    isForm(current) ? { ...current, name: event.detail, error: null } : current
                   )
                 }
               />

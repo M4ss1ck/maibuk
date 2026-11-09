@@ -657,7 +657,10 @@ describe("renderPage", () => {
     }
   });
 
-  it("gives a Modal's autoFocus field the focus when the dialog opens (#744)", async () => {
+  it.each([
+    ["TextField", "textbox"],
+    ["TextArea", "textbox"],
+  ] as const)("gives a Modal's autoFocus %s the focus when the dialog opens (#744)", async (component, role) => {
     const host = createTestHost({ manifest: fixtureManifest() });
     try {
       const client = createPluginClient(host.port);
@@ -677,7 +680,7 @@ describe("renderPage", () => {
               onOpenChange: (event: { detail: boolean }) => setOpen(event.detail),
             },
             createElement(ui.Button, { onPress: () => {} }, "Before"),
-            createElement(ui.TextField, { label: "Name", autoFocus: true })
+            createElement(ui[component], { label: "Name", autoFocus: true })
           )
         );
       }
@@ -691,9 +694,7 @@ describe("renderPage", () => {
       await user.keyboard("{Enter}");
       const dialog = await screen.findByRole("dialog", { name: "New thing" });
       // The field, not the dialog's first control, takes focus.
-      await waitFor(() =>
-        expect(within(dialog).getByRole("textbox", { name: "Name" })).toHaveFocus()
-      );
+      await waitFor(() => expect(within(dialog).getByRole(role, { name: "Name" })).toHaveFocus());
     } finally {
       await host.stop();
     }

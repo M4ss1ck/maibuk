@@ -171,9 +171,11 @@ function isMapDocument(value: unknown): value is MapDocument {
   return (
     typeof map.id === "string" &&
     typeof map.name === "string" &&
+    (map.bookId === null || typeof map.bookId === "string") &&
     Array.isArray(map.elements) &&
     typeof page === "object" &&
     page !== null &&
+    isPagePreset(page.preset) &&
     typeof page.widthMm === "number" &&
     typeof page.heightMm === "number"
   );
