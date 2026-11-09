@@ -106,7 +106,7 @@ export function PluginPage() {
       className={
         isFrame
           ? `flex h-full min-h-0 flex-col overflow-hidden px-4 sm:px-6 ${hideTitle ? "py-4" : "py-6"}`
-          : `h-full overflow-y-auto px-4 sm:px-6 ${hideTitle ? "py-4" : "py-6"}`
+          : `flex h-full min-h-0 flex-col overflow-y-auto px-4 sm:px-6 ${hideTitle ? "py-4" : "py-6"}`
       }
     >
       <h1
@@ -146,9 +146,14 @@ export function PluginPage() {
           variant="page"
         />
       ) : (
-        <Suspense fallback={null}>
-          <PluginRemoteUiBoundary pluginId={pluginId} pageId={pageId} />
-        </Suspense>
+        // The host-rendered tree is a flex item so a `fill` embedded Frame can
+        // take the remaining page height: the page is a column and the tree's
+        // single root fills it before its own panels hand the rest to the Frame.
+        <div data-plugin-page-body className="flex flex-1 flex-col [&>*:only-child]:flex-1">
+          <Suspense fallback={null}>
+            <PluginRemoteUiBoundary pluginId={pluginId} pageId={pageId} />
+          </Suspense>
+        </div>
       )}
     </div>
   );

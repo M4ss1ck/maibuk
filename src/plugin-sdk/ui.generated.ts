@@ -405,6 +405,8 @@ export interface PluginUiElementProps {
     src: string;
     /** Accessible name of the Frame's iframe. */
     title: string;
+    /** Grows to fill the remaining height of the Plugin page, with a 16rem minimum. */
+    fill?: boolean;
   };
 }
 

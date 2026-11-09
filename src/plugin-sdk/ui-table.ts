@@ -988,6 +988,10 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
         maxLength: 512,
         description: "Accessible name of the Frame's iframe.",
       },
+      fill: {
+        kind: "boolean",
+        description: "Grows to fill the remaining height of the Plugin page, with a 16rem minimum.",
+      },
     },
     events: [],
     methods: [],

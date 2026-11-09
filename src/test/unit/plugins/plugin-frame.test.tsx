@@ -100,6 +100,33 @@ describe("PluginFrame", () => {
     expect(answers).toHaveBeenLastCalledWith({ kind: "frame-fullscreen-state", on: false }, "*");
   });
 
+  it("keeps an embedded Frame in its fixed 16rem box without fill", () => {
+    const { container } = renderFrame(frameHost());
+    const box = container.querySelector("[aria-busy]") as HTMLElement;
+    expect(box.classList.contains("h-64")).toBe(true);
+    expect(box.classList.contains("min-h-64")).toBe(false);
+    expect(box.classList.contains("flex-1")).toBe(false);
+  });
+
+  it("lets an embedded Frame fill the remaining page height with fill", () => {
+    const { container } = render(
+      <PluginFrame
+        runtime={frameHost()}
+        src="ui/index.html"
+        title="Custom report"
+        variant="embedded"
+        fill
+      />
+    );
+    const wrapper = container.querySelector('[data-plugin-frame="embedded"]') as HTMLElement;
+    const box = wrapper.querySelector("[aria-busy]") as HTMLElement;
+    expect(box.classList.contains("h-64")).toBe(false);
+    expect(box.classList.contains("min-h-64")).toBe(true);
+    expect(box.classList.contains("flex-1")).toBe(true);
+    expect(wrapper.classList.contains("flex-1")).toBe(true);
+    expect(wrapper.classList.contains("min-h-0")).toBe(true);
+  });
+
   it("renders a named iframe that can only run scripts", () => {
     const { container } = renderFrame(frameHost());
     const iframe = container.querySelector("iframe");

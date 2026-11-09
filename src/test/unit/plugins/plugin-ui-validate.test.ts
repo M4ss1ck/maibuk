@@ -245,6 +245,35 @@ describe("the connection validator", () => {
     expect(receiver.root.children).toHaveLength(0);
   });
 
+  it("accepts a Frame fill boolean and refuses a non-boolean fill", () => {
+    const accepted = setup();
+    accepted.connection.mutate([
+      insert(
+        element("1", "maibuk-frame", {
+          properties: { src: "ui/report.html", title: "Report", fill: true },
+        })
+      ),
+    ]);
+    expect(accepted.violations).toEqual([]);
+    expect(accepted.receiver.root.children).toHaveLength(1);
+
+    const { receiver, violations, connection } = setup();
+    connection.mutate([
+      insert(
+        element("1", "maibuk-frame", {
+          properties: { src: "ui/report.html", title: "Report", fill: "yes" },
+        })
+      ),
+    ]);
+    expect(violations[0]).toMatchObject({
+      code: "invalid-prop",
+      tag: "maibuk-frame",
+      prop: "fill",
+      message: "The prop maibuk-frame.fill must be a boolean",
+    });
+    expect(receiver.root.children).toHaveLength(0);
+  });
+
   it("accepts the internal openSeq count on a modal", () => {
     const { receiver, violations, connection } = setup();
     connection.mutate([
