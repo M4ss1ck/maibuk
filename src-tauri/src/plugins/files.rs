@@ -13,7 +13,9 @@
 //! A Plugin File Save (ADR 0040) is the write side: the native dialog picks a
 //! place, the host streams the bytes into a sibling `.part` file, and one rename
 //! puts it in place. A save that fails partway never destroys the file the
-//! author chose to replace, and the webview holds only a token.
+//! author chose to replace. On Android the picker always creates a new
+//! document, so there is no existing file to protect and the save writes that
+//! open file in place. Either way the webview holds only a token.
 
 use std::collections::HashMap;
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -25,20 +27,24 @@ use serde::{Deserialize, Serialize};
 
 /// The app data file the grant record lives in, next to the other device-local
 /// Plugin records.
+#[cfg_attr(mobile, allow(dead_code))]
 pub const GRANTS_FILE: &str = "plugin-file-grants.json";
 
 /// Largest byte range one read returns: the Plugin message cap (4 MB) with room
 /// for the reply envelope, the same limit `FILE_READ_MAX_BYTES` sets on the
 /// TypeScript side (`src/plugin-sdk/protocol.ts`).
+#[cfg_attr(mobile, allow(dead_code))]
 pub const MAX_READ_BYTES: u32 = 4 * 1024 * 1024 - 64 * 1024;
 
 /// A gone or unknown grant's prefix; `file-missing` on the TypeScript side.
+#[cfg_attr(mobile, allow(dead_code))]
 const FILE_MISSING: &str = "file-missing";
 /// Bad arguments' prefix; `invalid-params` on the TypeScript side.
 const INVALID_PARAMS: &str = "invalid-params";
 /// A failure of Maibuk's own device-local record, never the Plugin's fault.
 const INTERNAL_ERROR: &str = "internal-error";
 
+#[cfg_attr(mobile, allow(dead_code))]
 fn file_missing(detail: &str) -> String {
     format!("{FILE_MISSING}: {detail}")
 }
@@ -55,6 +61,7 @@ fn internal_error(detail: &str) -> String {
 /// the file it points at. The path never leaves this module.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(mobile, allow(dead_code))]
 struct GrantRecord {
     plugin_id: String,
     grant_id: String,
@@ -64,6 +71,7 @@ struct GrantRecord {
 /// What `files.pick` returns and `files.list` lists: a live grant, named and
 /// sized. The name is the file's own name, never its folder.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(mobile, allow(dead_code))]
 pub struct GrantInfo {
     pub grant: String,
     pub name: String,
@@ -72,6 +80,7 @@ pub struct GrantInfo {
 
 /// What `files.stat` reads without opening the file's bytes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(mobile, allow(dead_code))]
 pub struct GrantStat {
     pub name: String,
     pub size: u64,
@@ -82,6 +91,7 @@ pub struct GrantStat {
 /// The File Grants this device holds, per Plugin. Loaded from `path` on first
 /// use and written back after every change, so grants survive a restart while
 /// staying out of the Library.
+#[cfg_attr(mobile, allow(dead_code))]
 pub struct GrantStore {
     /// The JSON record; `None` keeps grants for this run only, which is what a
     /// device with no app data folder and every test get.
@@ -100,6 +110,7 @@ impl Default for GrantStore {
     }
 }
 
+#[cfg_attr(mobile, allow(dead_code))]
 impl GrantStore {
     /// Keeps grants in `path` across launches.
     pub fn new(path: PathBuf) -> Self {
@@ -325,16 +336,29 @@ impl GrantStore {
     }
 }
 
-/// One save in progress: the file the author chose, the sibling `.part` file
-/// receiving the bytes, and the handle open on it. Every field stays in Rust.
+/// One save in progress: the handle the bytes go to, plus how the save puts
+/// them in place. Every field stays in Rust.
 struct PendingSave {
-    target: PathBuf,
-    part: PathBuf,
     file: std::fs::File,
+    finish: Finish,
+}
+
+/// How a save finishes. A desktop save writes a sibling `.part` file that one
+/// rename swaps in. An Android save writes the document in place, because the
+/// picker created it and there is no earlier file to protect.
+enum Finish {
+    #[cfg_attr(mobile, allow(dead_code))]
+    Rename {
+        part: PathBuf,
+        target: PathBuf,
+    },
+    InPlace,
 }
 
 /// The Plugin File Saves this device is writing right now, by token. A token
-/// names one save to the webview; the paths never cross IPC.
+/// names one save to the webview; the paths never cross IPC. A desktop save
+/// goes through a sibling `.part` file; an Android save writes its document in
+/// place.
 #[derive(Default)]
 pub struct SaveStore {
     saves: Mutex<HashMap<u64, PendingSave>>,
@@ -356,6 +380,7 @@ impl SaveStore {
 
     /// Opens the `.part` file beside `target` and keeps it until a commit or an
     /// abort. The target itself is untouched until the commit.
+    #[cfg_attr(mobile, allow(dead_code))]
     fn begin(&self, target: PathBuf) -> Result<u64, String> {
         let part = part_path(&target);
         let file = match std::fs::File::create(&part) {
@@ -369,16 +394,31 @@ impl SaveStore {
         self.lock().insert(
             token,
             PendingSave {
-                target,
-                part,
                 file,
+                finish: Finish::Rename { part, target },
             },
         );
         Ok(token)
     }
 
-    /// Appends one chunk. A failed write ends the save and removes its part, so
-    /// a half-written file never takes the target's place.
+    /// Keeps an already-open file until a commit or an abort, for a platform
+    /// whose picker hands back a handle and no path to rename.
+    #[cfg_attr(not(mobile), allow(dead_code))]
+    fn begin_in_place(&self, file: std::fs::File) -> u64 {
+        let token = NEXT_SAVE_TOKEN.fetch_add(1, Ordering::Relaxed);
+        self.lock().insert(
+            token,
+            PendingSave {
+                file,
+                finish: Finish::InPlace,
+            },
+        );
+        token
+    }
+
+    /// Appends one chunk. A failed write ends the save: a part is removed, and
+    /// an in-place document is emptied, so a half-written file never looks
+    /// finished.
     fn write(&self, token: u64, bytes: &[u8]) -> Result<(), String> {
         let mut saves = self.lock();
         let Some(save) = saves.get_mut(&token) else {
@@ -386,35 +426,58 @@ impl SaveStore {
         };
         if let Err(error) = save.file.write_all(bytes) {
             let save = saves.remove(&token).expect("the save was just found");
-            let _ = std::fs::remove_file(&save.part);
+            match save.finish {
+                Finish::Rename { part, .. } => {
+                    let _ = std::fs::remove_file(&part);
+                }
+                Finish::InPlace => {
+                    let _ = save.file.set_len(0);
+                }
+            }
             return Err(error.to_string());
         }
         Ok(())
     }
 
-    /// Finishes the save: the part reaches the disk, then takes the target's
-    /// place. A failure removes the part and leaves the old file whole.
+    /// Finishes the save: the bytes reach the disk, then either the part takes
+    /// the target's place or the in-place document is closed. A failed rename
+    /// removes the part and leaves the old file whole.
     fn commit(&self, token: u64) -> Result<(), String> {
         let Some(save) = self.lock().remove(&token) else {
             return Err(invalid_params("this save has no open file"));
         };
-        commit_save(save.file, &save.part, &save.target).map_err(|error| {
-            let _ = std::fs::remove_file(&save.part);
-            error.to_string()
-        })
+        match save.finish {
+            Finish::Rename { part, target } => {
+                commit_save(save.file, &part, &target).map_err(|error| {
+                    let _ = std::fs::remove_file(&part);
+                    error.to_string()
+                })
+            }
+            Finish::InPlace => commit_in_place(save.file).map_err(|error| error.to_string()),
+        }
     }
 
-    /// Gives up the save: the part goes, and the target keeps what it had.
+    /// Gives up the save: the part goes and the target keeps what it had, while
+    /// an in-place document is emptied.
     fn abort(&self, token: u64) -> Result<(), String> {
         let Some(save) = self.lock().remove(&token) else {
             return Err(invalid_params("this save has no open file"));
         };
-        abort_save(save.file, &save.part).map_err(|error| error.to_string())
+        match save.finish {
+            Finish::Rename { part, .. } => {
+                abort_save(save.file, &part).map_err(|error| error.to_string())
+            }
+            Finish::InPlace => {
+                abort_in_place(save.file);
+                Ok(())
+            }
+        }
     }
 }
 
 /// The sibling a save writes before it replaces `target`: the target's own name
 /// with `.part` appended, so the rename never crosses a file system.
+#[cfg_attr(mobile, allow(dead_code))]
 fn part_path(target: &Path) -> PathBuf {
     let mut name = target
         .file_name()
@@ -443,8 +506,40 @@ fn abort_save(file: std::fs::File, part: &Path) -> std::io::Result<()> {
     }
 }
 
+/// Ends an in-place save: the bytes reach the document, then the handle closes.
+/// A failed flush empties the document and returns the error. A content
+/// provider can hand out a pipe, where there is nothing to sync, so the
+/// `InvalidInput` and `Unsupported` a sync reports for one are ignored; every
+/// other sync failure empties the document and is returned too, so no
+/// half-written document looks finished.
+fn commit_in_place(mut file: std::fs::File) -> std::io::Result<()> {
+    if let Err(error) = file.flush() {
+        let _ = file.set_len(0);
+        return Err(error);
+    }
+    if let Err(error) = file.sync_all() {
+        match error.kind() {
+            std::io::ErrorKind::InvalidInput | std::io::ErrorKind::Unsupported => {}
+            _ => {
+                let _ = file.set_len(0);
+                return Err(error);
+            }
+        }
+    }
+    drop(file);
+    Ok(())
+}
+
+/// Gives up an in-place save: empty the document, so no half-written file looks
+/// finished, then drop the handle.
+fn abort_in_place(file: std::fs::File) {
+    let _ = file.set_len(0);
+    drop(file);
+}
+
 /// Whether every extension is lowercase letters and digits, 1 to 16 long: the
 /// shape a dialog filter takes, and nothing that could widen what it shows.
+#[cfg_attr(mobile, allow(dead_code))]
 pub fn validate_extensions(extensions: &[String]) -> Result<(), String> {
     for extension in extensions {
         let valid = (1..=16).contains(&extension.len())
@@ -460,6 +555,7 @@ pub fn validate_extensions(extensions: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg_attr(mobile, allow(dead_code))]
 fn validate_plugin_id(plugin_id: &str) -> Result<(), String> {
     if plugin_id.is_empty() {
         return Err(invalid_params("the Plugin id is empty"));
@@ -468,6 +564,7 @@ fn validate_plugin_id(plugin_id: &str) -> Result<(), String> {
 }
 
 /// The file's own name, never its folder.
+#[cfg_attr(mobile, allow(dead_code))]
 fn file_name(path: &Path) -> String {
     path.file_name()
         .map(|name| name.to_string_lossy().into_owned())
@@ -475,6 +572,7 @@ fn file_name(path: &Path) -> String {
 }
 
 /// Milliseconds since the Unix epoch; 0 when the platform reports no time.
+#[cfg_attr(mobile, allow(dead_code))]
 fn modified_ms(metadata: &std::fs::Metadata) -> u64 {
     metadata
         .modified()
@@ -486,6 +584,7 @@ fn modified_ms(metadata: &std::fs::Metadata) -> u64 {
 /// A fresh 128-bit grant id, hex. No crate: `RandomState` seeds from the OS and
 /// advances per value, so a counter and the clock are enough for an id no
 /// Plugin needs to predict (the same rule `random_port` follows).
+#[cfg_attr(mobile, allow(dead_code))]
 fn new_grant_id() -> String {
     use std::hash::BuildHasher;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -504,6 +603,7 @@ fn new_grant_id() -> String {
 /// Open Maibuk's file dialog filtered to `extensions` and grant the author's
 /// pick to `plugin_id`. Resolves to `None` when the author cancels. The path
 /// stays in Rust: the webview only ever sees a grant id.
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn plugin_files_pick<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
@@ -531,6 +631,7 @@ pub async fn plugin_files_pick<R: tauri::Runtime>(
 
 /// Read a byte range through a grant. The bytes cross as raw IPC, so the
 /// webview receives an `ArrayBuffer`.
+#[cfg(desktop)]
 #[tauri::command]
 pub fn plugin_files_read(
     state: tauri::State<'_, GrantStore>,
@@ -544,6 +645,7 @@ pub fn plugin_files_read(
 }
 
 /// The grant's name, size, and last-modified time; cheap enough for a Shelf.
+#[cfg(desktop)]
 #[tauri::command]
 pub fn plugin_files_stat(
     state: tauri::State<'_, GrantStore>,
@@ -554,6 +656,7 @@ pub fn plugin_files_stat(
 }
 
 /// End one grant.
+#[cfg(desktop)]
 #[tauri::command]
 pub fn plugin_files_release(
     state: tauri::State<'_, GrantStore>,
@@ -564,6 +667,7 @@ pub fn plugin_files_release(
 }
 
 /// Every live grant the Plugin holds on this device.
+#[cfg(desktop)]
 #[tauri::command]
 pub fn plugin_files_list(
     state: tauri::State<'_, GrantStore>,
@@ -573,6 +677,7 @@ pub fn plugin_files_list(
 }
 
 /// End every grant the Plugin holds, and no other Plugin's.
+#[cfg(desktop)]
 #[tauri::command]
 pub fn plugin_files_clear_plugin(
     state: tauri::State<'_, GrantStore>,
@@ -582,15 +687,17 @@ pub fn plugin_files_clear_plugin(
 }
 
 /// End every File Grant on this device.
+#[cfg(desktop)]
 #[tauri::command]
 pub fn plugin_files_clear_all(state: tauri::State<'_, GrantStore>) -> Result<(), String> {
     state.clear_all()
 }
 
 /// Open the native save dialog prefilled with `name`, filtered to its own
-/// extension, then open the sibling `.part` file the Plugin's bytes will fill.
+/// extension, then open the file the Plugin's bytes will fill: the sibling
+/// `.part` file on desktop, the document the picker created on Android.
 /// Resolves to `None` when the author cancels; the chosen path never leaves
-/// Rust, and the target file is untouched until the commit.
+/// Rust, and on desktop the target file is untouched until the commit.
 #[tauri::command]
 pub async fn plugin_files_save_begin<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
@@ -604,17 +711,43 @@ pub async fn plugin_files_save_begin<R: tauri::Runtime>(
         .extension()
         .map(|extension| extension.to_string_lossy().to_lowercase())
         .filter(|extension| !extension.is_empty());
-    let mut picker = app.dialog().file().set_parent(&window).set_file_name(&name);
+    #[cfg(mobile)]
+    let _ = &window;
+    let mut picker = app.dialog().file().set_file_name(&name);
+    #[cfg(desktop)]
+    {
+        picker = picker.set_parent(&window);
+    }
     if let Some(extension) = extension.as_deref() {
         picker = picker.add_filter(extension.to_uppercase(), &[extension]);
     }
     let Some(picked) = picker.blocking_save_file() else {
         return Ok(None);
     };
-    let target = picked
-        .into_path()
-        .map_err(|_| internal_error("the chosen place is not a path on this device"))?;
-    state.begin(target).map(Some)
+    // A desktop dialog hands back a path to write beside; Android hands back
+    // the document its picker just created, which the save writes in place.
+    #[cfg(desktop)]
+    {
+        let target = picked
+            .into_path()
+            .map_err(|_| internal_error("the chosen place is not a path on this device"))?;
+        state.begin(target).map(Some)
+    }
+    #[cfg(mobile)]
+    {
+        use tauri_plugin_fs::{FsExt, OpenOptions};
+
+        // Write, truncate and create, no read and no append: Android turns
+        // that into the mode "wt", which is all a freshly created document
+        // needs.
+        let mut options = OpenOptions::new();
+        options.write(true).truncate(true).create(true);
+        let file = app
+            .fs()
+            .open(picked, options)
+            .map_err(|_| internal_error("the chosen document could not be opened"))?;
+        Ok(Some(state.begin_in_place(file)))
+    }
 }
 
 /// Append one chunk to the save `token` names. The bytes cross as raw IPC, so
@@ -1105,6 +1238,56 @@ mod tests {
         let token = store.begin(dir.join("other.png")).unwrap();
         store.abort(token).unwrap();
         assert!(store.write(token, b"late").is_err(), "an aborted save is gone");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn an_in_place_save_writes_every_chunk_then_commits() {
+        let dir = temp_dir("save-in-place");
+        let path = dir.join("map.png");
+        let store = SaveStore::default();
+
+        let token = store.begin_in_place(std::fs::File::create(&path).unwrap());
+        store.write(token, b"0123").unwrap();
+        store.write(token, b"4567").unwrap();
+        store.commit(token).unwrap();
+
+        assert_eq!(std::fs::read(&path).unwrap(), b"01234567");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn an_in_place_abort_empties_the_file_and_ends_the_token() {
+        let dir = temp_dir("save-in-place-abort");
+        let path = dir.join("map.png");
+        let store = SaveStore::default();
+
+        let token = store.begin_in_place(std::fs::File::create(&path).unwrap());
+        store.write(token, b"half").unwrap();
+        store.abort(token).unwrap();
+
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            b"",
+            "a half-written file is emptied, never left looking finished"
+        );
+        let again = store.commit(token).unwrap_err();
+        assert!(again.starts_with("invalid-params:"), "{again}");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn an_in_place_commit_refuses_a_token_it_does_not_hold() {
+        let dir = temp_dir("save-in-place-unknown");
+        let path = dir.join("map.png");
+        let store = SaveStore::default();
+        let token = store.begin_in_place(std::fs::File::create(&path).unwrap());
+
+        let error = store.commit(token + 1).unwrap_err();
+        assert!(error.starts_with("invalid-params:"), "{error}");
+
+        // The save the store does hold still commits.
+        store.commit(token).unwrap();
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

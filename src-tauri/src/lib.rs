@@ -50,7 +50,6 @@ pub fn run() {
     let builder = builder
         .manage(window_restore::PendingWindowRestore::default())
         .manage(plugins::watch::PluginWatcher::default())
-        .manage(plugins::files::SaveStore::default())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             window_restore::show_main_window(app);
         }))
@@ -75,7 +74,9 @@ pub fn run() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_http::init())
-        .plugin(tauri_plugin_clipboard_manager::init());
+        .plugin(tauri_plugin_clipboard_manager::init())
+        // A Plugin File Save writes on desktop and Android alike (ADR 0040).
+        .manage(plugins::files::SaveStore::default());
 
     #[cfg(desktop)]
     let builder = builder
@@ -154,13 +155,9 @@ pub fn run() {
             plugins::files::plugin_files_clear_plugin,
             #[cfg(desktop)]
             plugins::files::plugin_files_clear_all,
-            #[cfg(desktop)]
             plugins::files::plugin_files_save_begin,
-            #[cfg(desktop)]
             plugins::files::plugin_files_save_write,
-            #[cfg(desktop)]
             plugins::files::plugin_files_save_commit,
-            #[cfg(desktop)]
             plugins::files::plugin_files_save_abort,
             #[cfg(any(target_os = "linux", target_os = "windows"))]
             plugins::secrets::plugin_secret_set,
