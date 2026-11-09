@@ -1,0 +1,7 @@
+{
+  "name": "Mapas",
+  "description": "Diseña mapas de tu mundo, de una región o de un país y sus provincias, en color o en tinta lista para imprimir.",
+  "commands.openMaps.label": "Abrir Mapas",
+  "commands.bookMaps.label": "Mapas",
+  "pages.maps.title": "Mapas"
+}

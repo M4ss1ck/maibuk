@@ -1,0 +1,7 @@
+{
+  "name": "Maps",
+  "description": "Design maps of your world, a region, or a country and its provinces, in color or print-ready ink.",
+  "commands.openMaps.label": "Open Maps",
+  "commands.bookMaps.label": "Maps",
+  "pages.maps.title": "Maps"
+}
