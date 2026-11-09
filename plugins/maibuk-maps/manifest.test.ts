@@ -58,21 +58,69 @@ describe("Maps manifest", () => {
     expect(contributes?.itemMenuEntries).toEqual([{ command: "bookMaps" }]);
   });
 
+  it("declares the Map editor page as custom UI behind its own Command", () => {
+    const parsed = manifest();
+    expect(parsed.customUi).toBe(true);
+    const page = parsed.contributes?.pages?.find((candidate) => candidate.id === "map");
+    expect(page).toMatchObject({ title: "Map", command: "openMap", hideTitle: true });
+    expect(
+      parsed.contributes?.commands?.find((command) => command.id === "openMap")?.navigates
+    ).toBe(true);
+  });
+
+  it("binds every Map editor Command on the Map page", () => {
+    const commands = manifest().contributes?.commands ?? [];
+    const onMap = [
+      "undo",
+      "redo",
+      "zoomIn",
+      "zoomOut",
+      "zoomReset",
+      "panLeft",
+      "panRight",
+      "panUp",
+      "panDown",
+      "moveLeft",
+      "moveRight",
+      "moveUp",
+      "moveDown",
+      "moveLeftFar",
+      "moveRightFar",
+      "moveUpFar",
+      "moveDownFar",
+      "selectTool",
+      "pencilTool",
+      "deleteElement",
+    ];
+    for (const id of onMap) {
+      const command = commands.find((candidate) => candidate.id === id);
+      expect(command, id).toBeDefined();
+      expect(command?.contexts, id).toEqual(["map"]);
+      expect(command?.defaults?.length ?? 0, id).toBeGreaterThan(0);
+    }
+    expect(commands.find((command) => command.id === "undo")?.defaults).toEqual([["Mod+z"]]);
+    expect(commands.find((command) => command.id === "moveLeft")?.defaults).toEqual([
+      ["ArrowLeft"],
+    ]);
+    expect(commands.find((command) => command.id === "moveDownFar")?.defaults).toEqual([
+      ["Shift+ArrowDown"],
+    ]);
+  });
+
   it("localizes its host-visible strings in English and Spanish", () => {
     const parsed = manifest();
+    const contributes = parsed.contributes;
+    const expected = [
+      "name",
+      "description",
+      ...(contributes?.commands ?? []).map((command) => `commands.${command.id}.label`),
+      ...(contributes?.pages ?? []).map((page) => `pages.${page.id}.title`),
+    ].sort();
     for (const language of ["en", "es"] as const) {
       const locale = readFileSync(join(__dirname, "locales", `${language}.json`), "utf8");
       const result = parsePluginLocale(locale, language, parsed);
       expect(result.ok ? [] : result.problems).toEqual([]);
-      expect(Object.keys(JSON.parse(locale)).sort()).toEqual(
-        [
-          "name",
-          "description",
-          "commands.openMaps.label",
-          "commands.bookMaps.label",
-          "pages.maps.title",
-        ].sort()
-      );
+      expect(Object.keys(JSON.parse(locale)).sort()).toEqual(expected);
     }
   });
 

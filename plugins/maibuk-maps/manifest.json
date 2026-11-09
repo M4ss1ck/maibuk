@@ -10,6 +10,7 @@
   "platforms": ["web", "desktop"],
   "lifecycle": "on-demand",
   "warmStart": "intent",
+  "customUi": true,
   "dataVersion": 1,
   "defaultLanguage": "en",
   "permissions": {
@@ -29,9 +30,138 @@
         "label": "Maps",
         "contexts": ["bookEditor"],
         "targets": ["book"]
+      },
+      {
+        "id": "openMap",
+        "label": "Open Map",
+        "contexts": ["maps"],
+        "navigates": true
+      },
+      {
+        "id": "undo",
+        "label": "Undo",
+        "contexts": ["map"],
+        "defaults": [["Mod+z"]]
+      },
+      {
+        "id": "redo",
+        "label": "Redo",
+        "contexts": ["map"],
+        "defaults": [["Mod+Shift+z"], ["Mod+y"]]
+      },
+      {
+        "id": "zoomIn",
+        "label": "Zoom in",
+        "contexts": ["map"],
+        "defaults": [["Mod+="], ["Mod++"]]
+      },
+      {
+        "id": "zoomOut",
+        "label": "Zoom out",
+        "contexts": ["map"],
+        "defaults": [["Mod+-"]]
+      },
+      {
+        "id": "zoomReset",
+        "label": "Reset zoom",
+        "contexts": ["map"],
+        "defaults": [["Mod+0"]]
+      },
+      {
+        "id": "panLeft",
+        "label": "Pan left",
+        "contexts": ["map"],
+        "defaults": [["Alt+ArrowLeft"]]
+      },
+      {
+        "id": "panRight",
+        "label": "Pan right",
+        "contexts": ["map"],
+        "defaults": [["Alt+ArrowRight"]]
+      },
+      {
+        "id": "panUp",
+        "label": "Pan up",
+        "contexts": ["map"],
+        "defaults": [["Alt+ArrowUp"]]
+      },
+      {
+        "id": "panDown",
+        "label": "Pan down",
+        "contexts": ["map"],
+        "defaults": [["Alt+ArrowDown"]]
+      },
+      {
+        "id": "moveLeft",
+        "label": "Move left",
+        "contexts": ["map"],
+        "defaults": [["ArrowLeft"]]
+      },
+      {
+        "id": "moveRight",
+        "label": "Move right",
+        "contexts": ["map"],
+        "defaults": [["ArrowRight"]]
+      },
+      {
+        "id": "moveUp",
+        "label": "Move up",
+        "contexts": ["map"],
+        "defaults": [["ArrowUp"]]
+      },
+      {
+        "id": "moveDown",
+        "label": "Move down",
+        "contexts": ["map"],
+        "defaults": [["ArrowDown"]]
+      },
+      {
+        "id": "moveLeftFar",
+        "label": "Move left 10 mm",
+        "contexts": ["map"],
+        "defaults": [["Shift+ArrowLeft"]]
+      },
+      {
+        "id": "moveRightFar",
+        "label": "Move right 10 mm",
+        "contexts": ["map"],
+        "defaults": [["Shift+ArrowRight"]]
+      },
+      {
+        "id": "moveUpFar",
+        "label": "Move up 10 mm",
+        "contexts": ["map"],
+        "defaults": [["Shift+ArrowUp"]]
+      },
+      {
+        "id": "moveDownFar",
+        "label": "Move down 10 mm",
+        "contexts": ["map"],
+        "defaults": [["Shift+ArrowDown"]]
+      },
+      {
+        "id": "selectTool",
+        "label": "Select tool",
+        "contexts": ["map"],
+        "defaults": [["v"]]
+      },
+      {
+        "id": "pencilTool",
+        "label": "Pencil tool",
+        "contexts": ["map"],
+        "defaults": [["p"]]
+      },
+      {
+        "id": "deleteElement",
+        "label": "Delete element",
+        "contexts": ["map"],
+        "defaults": [["Delete"]]
       }
     ],
-    "pages": [{ "id": "maps", "title": "Maps", "command": "openMaps" }],
+    "pages": [
+      { "id": "maps", "title": "Maps", "command": "openMaps" },
+      { "id": "map", "title": "Map", "command": "openMap", "hideTitle": true }
+    ],
     "sidebarEntries": [{ "page": "maps", "icon": "map" }],
     "itemMenuEntries": [{ "command": "bookMaps" }]
   }
