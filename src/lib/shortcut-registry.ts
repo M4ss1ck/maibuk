@@ -1671,6 +1671,12 @@ export function registerPluginCommands(
   }
 
   const declared = new Set<string>();
+  // The bare Arrows already lifted by an earlier Command of this Plugin, per
+  // page Context. Two Commands claiming the same Arrow in overlapping page
+  // Contexts would both fire on one press; the first keeps the Fixed Arrow and
+  // the later keeps an ordinary Default, which the conflict guard reports
+  // inactive (ADR 0024).
+  const liftedArrows = new Map<string, Set<string>>();
   const defs: PluginCommandDef[] = [];
   for (const declaration of registration.commands) {
     const raw = declaration as unknown as Record<string, unknown>;
@@ -1704,8 +1710,21 @@ export function registerPluginCommands(
     const fixed: Shortcut[] = [];
     const defaults: Shortcut[] = [];
     for (const shortcut of validateShortcuts(declaration.id, declaration.defaults)) {
-      if (pageOnly && isBareArrowShortcut(shortcut)) fixed.push(shortcut);
-      else defaults.push(shortcut);
+      const key = shortcutKey(shortcut);
+      const claimed = contexts.some((context) => liftedArrows.get(context)?.has(key) === true);
+      if (pageOnly && isBareArrowShortcut(shortcut) && !claimed) {
+        fixed.push(shortcut);
+      } else {
+        defaults.push(shortcut);
+      }
+    }
+    for (const shortcut of fixed) {
+      const key = shortcutKey(shortcut);
+      for (const context of contexts) {
+        const claimed = liftedArrows.get(context) ?? new Set<string>();
+        claimed.add(key);
+        liftedArrows.set(context, claimed);
+      }
     }
 
     defs.push({
@@ -1860,6 +1879,18 @@ export function commandLabel(
  */
 export function fixedShortcuts(id: CommandId): readonly Shortcut[] {
   return getCommand(id).fixed ?? [];
+}
+
+/**
+ * The i18n key explaining why a Command's Fixed Shortcuts cannot change, or
+ * null. A Plugin Command's only Fixed Shortcuts are the bare Arrows the host
+ * lifted for its page, so they carry the same navigation reason as the Cover
+ * Designer nudges.
+ */
+export function fixedReasonKey(id: CommandId): string | null {
+  const definition = getCommand(id);
+  if (!isPluginCommandDef(definition)) return definition.fixedReasonKey ?? null;
+  return definition.fixed !== undefined && definition.fixed.length > 0 ? FIXED_NAVIGATION : null;
 }
 
 export function isSealedCommand(id: CommandId): boolean {

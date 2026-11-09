@@ -166,6 +166,26 @@ describe("createAutosave", () => {
     expect(attempts).toBe(2);
   });
 
+  it("reports whether a document is still pending after a flush", async () => {
+    let fail = true;
+    const timers = manualTimers();
+    const autosave = createAutosave<string>({
+      save: async () => {
+        if (fail) throw new Error("storage-full");
+      },
+      setTimer: timers.setTimer,
+      clearTimer: timers.clearTimer,
+    });
+
+    autosave.schedule("kept");
+    await autosave.flush();
+    expect(autosave.hasPending).toBe(true);
+
+    fail = false;
+    await autosave.flush();
+    expect(autosave.hasPending).toBe(false);
+  });
+
   it("uses a 600 ms timer when none is injected", async () => {
     vi.useFakeTimers();
     try {

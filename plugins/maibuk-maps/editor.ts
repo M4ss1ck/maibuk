@@ -88,6 +88,8 @@ export interface MapEditor {
   panDown(): void;
   /** Writes a pending autosave now. */
   flush(): Promise<void>;
+  /** Whether a failed or scheduled save still holds an unwritten document. */
+  hasPendingSave(): boolean;
   /** Drops every Frame and listener; the runtime does this when the Map closes. */
   dispose(): void;
 }
@@ -106,7 +108,9 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
   let panX = 0;
   let panY = 0;
   let saveFailed = false;
-  const frames = new Set<MessagePort>();
+  // The Map page embeds one Frame at a time. A remount hands a new port, which
+  // replaces the old one, so a detached Frame stops receiving scenes (#745).
+  let frame: MessagePort | null = null;
   const listeners = new Set<() => void>();
 
   let snapshot = buildSnapshot();
@@ -137,9 +141,8 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
   }
 
   function sendScene(): void {
-    if (frames.size === 0) return;
-    const message = sceneMessage(doc, { selectedId, tool, zoom, panX, panY });
-    for (const port of frames) port.postMessage(message);
+    if (frame === null) return;
+    frame.postMessage(sceneMessage(doc, { selectedId, tool, zoom, panX, panY }));
   }
 
   function schedule(): void {
@@ -160,6 +163,9 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
   function afterHistory(): void {
     elements = history.current;
     doc = { ...doc, elements };
+    // Undo can bring back a document without the selected Element (undoing a
+    // stroke, or a delete): the selection must not point at a ghost.
+    if (selectedId !== null && elementById(selectedId) === undefined) selectedId = null;
     publish();
     schedule();
     sendScene();
@@ -218,7 +224,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     },
 
     attachFrame(port) {
-      frames.add(port);
+      frame = port;
       port.postMessage(sceneMessage(doc, { selectedId, tool, zoom, panX, panY }));
     },
 
@@ -266,13 +272,13 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     moveUp(id) {
       const index = elements.findIndex((element) => element.id === id);
       if (index === -1 || index === elements.length - 1) return;
-      edit(reorder(elements, id, "down"));
+      edit(reorder(elements, id, "forward"));
     },
 
     moveDown(id) {
       const index = elements.findIndex((element) => element.id === id);
       if (index <= 0) return;
-      edit(reorder(elements, id, "up"));
+      edit(reorder(elements, id, "backward"));
     },
 
     move(dx, dy) {
@@ -329,8 +335,12 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       return autosave.flush();
     },
 
+    hasPendingSave() {
+      return autosave.hasPending;
+    },
+
     dispose() {
-      frames.clear();
+      frame = null;
       listeners.clear();
     },
   };

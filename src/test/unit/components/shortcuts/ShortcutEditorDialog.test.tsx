@@ -750,6 +750,26 @@ describe("Plugin Commands in the Shortcut Editor", () => {
     expect(screen.queryByText("shortcuts.sections.plugins")).not.toBeInTheDocument();
   });
 
+  it("shows the Fixed navigation reason on a page Command's lifted Arrow", async () => {
+    const unregister = registerPluginCommands("echoes", {
+      defaultLanguage: "en",
+      pages: ["report"],
+      commands: [
+        {
+          id: "nudge",
+          label: "Nudge selection",
+          contexts: ["report"],
+          defaults: [["ArrowDown"]],
+        },
+      ],
+    });
+    unregisters.push(unregister);
+    const { user } = await openEditor();
+    await focusRow(user, "Nudge selection");
+
+    expect(screen.getByText("shortcuts.fixed.navigation")).toBeInTheDocument();
+  });
+
   it("shows a conflicting Plugin Default Shortcut as inactive", async () => {
     // The core binding is a Custom Shortcut: an existing binding, so the
     // Plugin's Default stays inactive (a core Default would be the newcomer).

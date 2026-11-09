@@ -261,20 +261,22 @@ describe("element operations", () => {
     expect(elements[0]).toBe(first);
   });
 
-  it("reorders one step up or down, and stays put at the ends", () => {
-    expect(reorder([first, second], "second", "up").map((element) => element.id)).toEqual([
+  it("reorders one step forward or backward, and stays put at the ends", () => {
+    // "forward" walks toward the array's end, which is the top of the list.
+    expect(reorder([first, second], "first", "forward").map((element) => element.id)).toEqual([
       "second",
       "first",
     ]);
-    expect(reorder([first, second], "first", "down").map((element) => element.id)).toEqual([
+    // "backward" walks toward the array's start, the bottom of the list.
+    expect(reorder([first, second], "second", "backward").map((element) => element.id)).toEqual([
       "second",
       "first",
     ]);
-    expect(reorder([first, second], "first", "up").map((element) => element.id)).toEqual([
+    expect(reorder([first, second], "second", "forward").map((element) => element.id)).toEqual([
       "first",
       "second",
     ]);
-    expect(reorder([first, second], "second", "down").map((element) => element.id)).toEqual([
+    expect(reorder([first, second], "first", "backward").map((element) => element.id)).toEqual([
       "first",
       "second",
     ]);

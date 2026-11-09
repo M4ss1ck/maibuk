@@ -82,8 +82,12 @@ export interface MapsRuntime {
 export function startMaps(client: PluginClient, serve: MapsServe): MapsRuntime {
   const store = createMapStore(client.storage);
   const filter = createBookFilter();
-  /** Every mounted Frame's port, by the host's frame id. */
-  const frames = new Map<string, MessagePort>();
+  /**
+   * The Map page's embedded Frame port. The page draws one Frame at a time, so
+   * a remount replaces the old port instead of keeping both: the detached one
+   * stops receiving scenes (#745).
+   */
+  let framePort: MessagePort | null = null;
 
   const runtime: MapsRuntime = {
     currentMapId: null,
@@ -119,25 +123,29 @@ export function startMaps(client: PluginClient, serve: MapsServe): MapsRuntime {
     runtime.currentMapId = id;
     const editor = createMapEditor({ store, doc, language: () => runtime.language });
     runtime.editor = editor;
-    for (const port of frames.values()) editor.attachFrame(port);
+    if (framePort !== null) editor.attachFrame(framePort);
     await client.navigation.openPage({ pageId: MAP_PAGE_ID });
     return true;
   }
 
   async function backToMaps(): Promise<void> {
     const editor = runtime.editor;
-    runtime.editor = null;
-    runtime.currentMapId = null;
     if (editor !== null) {
       await editor.flush();
+      // A failed save leaves the document pending. Stay on the Map so the page
+      // shows its saveFailed Status and the next Back retries the write rather
+      // than silently losing the last edit (#745).
+      if (editor.hasPendingSave()) return;
       editor.dispose();
     }
+    runtime.editor = null;
+    runtime.currentMapId = null;
     await client.navigation.openPage({ pageId: MAPS_PAGE_ID });
   }
 
   /** One mounted Frame: keep its port, and route its messages to the open editor. */
   function handoff(frame: PluginFrame): void {
-    frames.set(frame.id, frame.port);
+    framePort = frame.port;
     frame.port.onmessage = (event: MessageEvent) => runtime.editor?.handleFrameMessage(event.data);
     frame.port.start();
     runtime.editor?.attachFrame(frame.port);

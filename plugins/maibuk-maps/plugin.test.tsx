@@ -20,7 +20,7 @@ import {
 } from "@/lib/shortcut-registry";
 import { effectiveShortcuts } from "@/lib/shortcut-resolve";
 import { useShortcuts } from "@/lib/shortcuts";
-import { createPluginClient } from "@/plugin-sdk";
+import { createPluginClient, type PluginClient, type PluginFrame } from "@/plugin-sdk";
 import { PLUGIN_COMMAND_RUN_REQUEST, PLUGIN_MIGRATE_DATA_REQUEST } from "@/plugin-sdk/protocol";
 import { servePluginUi } from "@/plugin-sdk/ui-serve";
 import en from "./locales/runtime/en.json";
@@ -116,6 +116,48 @@ function hostFor(storage = new Map<string, unknown>(), language = "en") {
   });
   startMaps(createPluginClient(host.port), servePluginUi);
   return host;
+}
+
+/** A host, its runtime, and the Frame handoff handler the Plugin registered. */
+function frameHostFor(storage: Map<string, unknown>) {
+  const host = createTestHost({
+    manifest: mapsManifest(),
+    library: { books: BOOKS },
+    storage,
+    language: "en",
+  });
+  const handlers: Array<(frame: PluginFrame) => void> = [];
+  const client = createPluginClient(host.port);
+  const wrapped = new Proxy(client, {
+    get(target, property, receiver) {
+      if (property === "onFrame") {
+        return (handler: (frame: PluginFrame) => void) => {
+          handlers.push(handler);
+          return target.onFrame(handler);
+        };
+      }
+      return Reflect.get(target, property, receiver);
+    },
+  }) as PluginClient;
+  const runtime = startMaps(wrapped, servePluginUi);
+  return {
+    host,
+    runtime,
+    handoff(frameId: string, port: MessagePort): void {
+      for (const handler of handlers) handler({ id: frameId, src: "", port });
+    },
+  };
+}
+
+/** A MessagePort stand-in that records every scene posted to it. */
+function recordingPort(): { port: MessagePort; messages: unknown[] } {
+  const messages: unknown[] = [];
+  const port = {
+    onmessage: null,
+    start: () => {},
+    postMessage: (message: unknown) => messages.push(message),
+  } as unknown as MessagePort;
+  return { port, messages };
 }
 
 /** A host and the runtime that owns the open Map, for the editor tests. */
@@ -807,6 +849,188 @@ describe("Map editor page", () => {
 
       runtime.editor?.handleFrameMessage({ kind: "stroke", points: "not-points" });
       expect(runtime.editor?.getSnapshot().elements).toHaveLength(1);
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("takes a Frame select for a known Element, clears on null, and drops the rest", async () => {
+    const storage = mapStorage([
+      line("e1", "Line one", [
+        [10, 10],
+        [20, 20],
+      ]),
+      line("e2", "Line two", [
+        [30, 30],
+        [40, 40],
+      ]),
+    ]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      runtime.editor?.handleFrameMessage({ kind: "select", id: "e2" });
+      expect(runtime.editor?.getSnapshot().selectedId).toBe("e2");
+
+      runtime.editor?.handleFrameMessage({ kind: "select", id: null });
+      expect(runtime.editor?.getSnapshot().selectedId).toBeNull();
+
+      runtime.editor?.handleFrameMessage({ kind: "select", id: "e1" });
+      expect(runtime.editor?.getSnapshot().selectedId).toBe("e1");
+
+      // An id no Element has selects nothing, like an unknown pick.
+      runtime.editor?.handleFrameMessage({ kind: "select", id: "missing" });
+      expect(runtime.editor?.getSnapshot().selectedId).toBeNull();
+
+      // A malformed select is dropped and leaves the selection alone.
+      runtime.editor?.handleFrameMessage({ kind: "select", id: "e1" });
+      runtime.editor?.handleFrameMessage({ kind: "select", id: 7 });
+      runtime.editor?.handleFrameMessage({ kind: "select" });
+      expect(runtime.editor?.getSnapshot().selectedId).toBe("e1");
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("Properties selects the row and moves focus to the Name field even when it is already selected", async () => {
+    const storage = mapStorage([
+      line("e1", "Line one", [
+        [10, 10],
+        [20, 20],
+      ]),
+    ]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await selectRow(user, "Line one");
+      expect(runtime.editor?.getSnapshot().selectedId).toBe("e1");
+
+      await chooseRowMenu(user, "Properties");
+
+      await waitFor(() =>
+        expect(screen.getByRole("textbox", { name: en["properties.name"] })).toHaveFocus()
+      );
+      expect(runtime.editor?.getSnapshot().selectedId).toBe("e1");
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("drops the selection when undo removes the selected Element", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      runtime.editor?.handleFrameMessage({
+        kind: "stroke",
+        points: [
+          [10, 10],
+          [20, 20],
+        ],
+      });
+      expect(runtime.editor?.getSnapshot().selectedId).not.toBeNull();
+
+      runtime.editor?.undo();
+      const snapshot = runtime.editor?.getSnapshot();
+      expect(snapshot?.elements).toHaveLength(0);
+      expect(snapshot?.selectedId).toBeNull();
+      // The properties panel says what it says with no Element selected.
+      expect(await screen.findByText(en["properties.empty"])).toBeInTheDocument();
+
+      // Redo restores the Element, but a pruned selection stays cleared.
+      runtime.editor?.redo();
+      expect(runtime.editor?.getSnapshot().elements).toHaveLength(1);
+      expect(runtime.editor?.getSnapshot().selectedId).toBeNull();
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("keeps only the newest Frame port, so a remounted Frame stops receiving scenes", async () => {
+    const storage = mapStorage([
+      line("e1", "Line one", [
+        [10, 10],
+        [20, 20],
+      ]),
+    ]);
+    const { host, runtime, handoff } = frameHostFor(storage);
+    try {
+      expect(await runtime.openMap("m1")).toBe(true);
+
+      const first = recordingPort();
+      handoff("frame-1", first.port);
+      const second = recordingPort();
+      handoff("frame-2", second.port);
+
+      // Each Frame gets one scene when it connects; only the newest is kept.
+      expect(first.messages).toHaveLength(1);
+      expect(second.messages).toHaveLength(1);
+
+      runtime.editor?.select("e1");
+      runtime.editor?.move(1, 0);
+
+      expect(first.messages).toHaveLength(1);
+      expect(second.messages.length).toBeGreaterThan(1);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("stays on the Map with a warning when Back to Maps cannot save, then leaves once it can", async () => {
+    const storage = mapStorage([
+      line("e1", "Line one", [
+        [10, 10],
+        [20, 20],
+      ]),
+    ]);
+    const setEntry = storage.set.bind(storage);
+    let failSaves = false;
+    storage.set = ((key: string, value: unknown) => {
+      if (failSaves && key === mapKey("m1")) throw new Error("storage-full");
+      return setEntry(key, value);
+    }) as typeof storage.set;
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await selectRow(user, "Line one");
+      await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: MOVE_RIGHT });
+      await waitFor(() =>
+        expect((runtime.editor?.getSnapshot().elements[0] as MapLineElement).points[0][0]).toBe(11)
+      );
+      expect(linePoints(storage)[0][0]).toBe(10);
+
+      failSaves = true;
+      await focusPanelButton(user);
+      await user.keyboard("{Enter}");
+
+      // The write failed: the editor stays open and the page says so.
+      expect(await screen.findByText(en["map.saveFailed"])).toBeInTheDocument();
+      expect(runtime.currentMapId).toBe("m1");
+      expect(host.pageNavigations).not.toContainEqual({
+        pluginId: "maibuk-maps",
+        pageId: MAPS_PAGE_ID,
+      });
+
+      // The next Back retries the pending document and leaves once it lands.
+      failSaves = false;
+      await user.keyboard("{Enter}");
+      await waitFor(() =>
+        expect(host.pageNavigations).toContainEqual({
+          pluginId: "maibuk-maps",
+          pageId: MAPS_PAGE_ID,
+        })
+      );
+      expect(linePoints(storage)[0][0]).toBe(11);
+      expect(runtime.currentMapId).toBeNull();
 
       await page.unmount();
     } finally {

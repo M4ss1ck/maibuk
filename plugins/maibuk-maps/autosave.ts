@@ -30,6 +30,8 @@ export interface Autosave<Doc> {
   schedule(doc: Doc): void;
   /** Writes a pending document now, after any save already in flight. */
   flush(): Promise<void>;
+  /** Whether a document is still waiting to be written (a failed save stays pending). */
+  readonly hasPending: boolean;
 }
 
 export function createAutosave<Doc>(options: AutosaveOptions<Doc>): Autosave<Doc> {
@@ -88,6 +90,10 @@ export function createAutosave<Doc>(options: AutosaveOptions<Doc>): Autosave<Doc
     flush() {
       stopTimer();
       return enqueue();
+    },
+
+    get hasPending() {
+      return pending !== null;
     },
   };
 }

@@ -267,14 +267,18 @@ export function moveElement(
   });
 }
 
-/** Moves one Element one place up or down the z-order. */
+/**
+ * Moves one Element one place along the array: "forward" toward its end, which
+ * the Elements list draws at the top, and "backward" toward its start, the
+ * bottom. Naming the array direction leaves the editor no compensation.
+ */
 export function reorder(
   elements: readonly MapElement[],
   id: string,
-  direction: "up" | "down"
+  direction: "forward" | "backward"
 ): MapElement[] {
   const index = elements.findIndex((element) => element.id === id);
-  const target = direction === "up" ? index - 1 : index + 1;
+  const target = direction === "forward" ? index + 1 : index - 1;
   if (index === -1 || target < 0 || target >= elements.length) return [...elements];
   const reordered = [...elements];
   [reordered[index], reordered[target]] = [reordered[target], reordered[index]];

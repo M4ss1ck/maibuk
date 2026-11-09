@@ -38,6 +38,7 @@ import {
   commandIds,
   commandLabel,
   commandSection,
+  fixedReasonKey,
   fixedShortcuts,
   getCommand,
   isCommandId,
@@ -179,10 +180,7 @@ export function ShortcutEditorDialog({ isOpen, onClose }: ShortcutEditorDialogPr
 
   const clearFocusTarget = useCallback(() => setFocusTarget(null), []);
   const label = (id: CommandId) => commandLabel(id, t, dictationLanguageFor(null, i18n?.language));
-  const fixedReason = (id: CommandId): string | null => {
-    const definition = getCommand(id);
-    return isPluginCommandDef(definition) ? null : (definition.fixedReasonKey ?? null);
-  };
+  const fixedReason = (id: CommandId): string | null => fixedReasonKey(id);
 
   const customizedCount = new Set([...Object.keys(settings.custom), ...Object.keys(settings.voice)])
     .size;

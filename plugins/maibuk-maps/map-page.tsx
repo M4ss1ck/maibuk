@@ -68,6 +68,10 @@ function MapEditorView({
 }) {
   const snapshot = useSyncExternalStore(editor.subscribe, editor.getSnapshot);
   const [dialog, setDialog] = useState<RenameDialog | null>(null);
+  // Each Properties request remounts the Name field with `autoFocus`, so the
+  // menu entry visibly lands focus on the panel even when the row already is
+  // the selection (#745).
+  const [propertiesFocus, setPropertiesFocus] = useState(0);
   const selected =
     snapshot.selectedId === null
       ? null
@@ -123,6 +127,7 @@ function MapEditorView({
         break;
       case PROPERTIES:
         editor.select(element.id);
+        setPropertiesFocus((count) => count + 1);
         break;
     }
   }
@@ -188,9 +193,11 @@ function MapEditorView({
           ) : (
             <>
               <ui.TextField
+                key={`properties-name-${propertiesFocus}`}
                 label={t("properties.name")}
                 value={selected.name}
                 isRequired
+                autoFocus={propertiesFocus > 0}
                 onChange={(event) => editor.rename(selected.id, event.detail)}
               />
               <ui.Switch
