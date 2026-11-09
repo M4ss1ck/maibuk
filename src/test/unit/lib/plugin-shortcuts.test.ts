@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { renderHook } from "@testing-library/react";
 import { useShortcutSettingsStore, SHORTCUT_STORAGE_KEY } from "@/features/settings/shortcut-store";
 import { findPhraseConflict } from "@/features/dictation/phrase-conflicts";
 import { normalizeCustomVoiceCommands } from "@/features/dictation/voice-commands";
@@ -8,12 +9,14 @@ import {
   findConflicts,
   findResetConflicts,
   inactiveBindings,
+  isFixedShortcut,
   normalizeShortcuts,
   parseShortcutFile,
   serializeShortcutFile,
   type CustomShortcuts,
 } from "@/lib/shortcut-resolve";
 import { registerPluginCommands, type PluginRegistration } from "@/lib/shortcut-registry";
+import { useShortcuts } from "@/lib/shortcuts";
 
 const unregisters: Array<() => void> = [];
 afterEach(() => {
@@ -515,5 +518,132 @@ describe("no write path lets a core binding take an active Plugin key", () => {
       collision: "same",
       withId: "editor.insertLink",
     });
+  });
+});
+
+/**
+ * The host decision behind #745: a Command scoped only to its own page contexts
+ * may take a bare Arrow, and on that page it is Fixed navigation like
+ * `coverDesigner.nudge*`, so the sealed global `focus.*` arrows cannot take it.
+ */
+describe("a Plugin page's bare Arrow navigation", () => {
+  const moveRightId = "plugin.maps.moveRight" as const;
+
+  function registerOnMap(
+    commands: PluginRegistration["commands"],
+    pages: readonly string[] = ["map"]
+  ) {
+    register("maps", { defaultLanguage: "en", pages: [...pages], commands: [...commands] });
+  }
+
+  it("is Fixed on the page and wins ArrowRight over focus.right there", () => {
+    registerOnMap([
+      { id: "moveRight", label: "Move right", contexts: ["map"], defaults: [["ArrowRight"]] },
+    ]);
+
+    expect(effectiveShortcuts(moveRightId, {}, false)).toEqual([["ArrowRight"]]);
+    expect(isFixedShortcut(moveRightId, ["ArrowRight"])).toBe(true);
+    // focus.right still owns ArrowRight everywhere else.
+    expect(effectiveShortcuts("focus.right", {}, false)).toEqual([["ArrowRight"]]);
+    expect(inactiveBindings({}, false)).toEqual([]);
+  });
+
+  it("keeps a Command that also names a core Context losing to the core Fixed bindings", () => {
+    registerOnMap([
+      {
+        id: "moveRight",
+        label: "Move right",
+        contexts: ["map", "global"],
+        defaults: [["ArrowRight"]],
+      },
+    ]);
+
+    expect(isFixedShortcut(moveRightId, ["ArrowRight"])).toBe(false);
+    expect(effectiveShortcuts(moveRightId, {}, false)).toEqual([]);
+    // A core Fixed binding holds ArrowRight (the report names the first in
+    // registry order); the Plugin binding is inactive either way.
+    expect(inactiveBindings({}, false)).toContainEqual(
+      expect.objectContaining({
+        kind: "shortcut",
+        id: moveRightId,
+        shortcut: ["ArrowRight"],
+        collision: "same",
+      })
+    );
+  });
+
+  it("keeps a global Plugin Command's bare Arrow an ordinary Default", () => {
+    register("echoes", echoesRegistration({ defaults: [["ArrowRight"]] }));
+
+    expect(isFixedShortcut(echoesId, ["ArrowRight"])).toBe(false);
+    expect(effectiveShortcuts(echoesId, {}, false)).toEqual([]);
+    expect(inactiveBindings({}, false)).toContainEqual(
+      expect.objectContaining({
+        kind: "shortcut",
+        id: echoesId,
+        shortcut: ["ArrowRight"],
+        collision: "same",
+      })
+    );
+  });
+
+  it("takes no other bare key as Fixed: Enter and Escape are not recordable Shortcuts", () => {
+    expect(() =>
+      registerOnMap([
+        { id: "activate", label: "Activate", contexts: ["map"], defaults: [["Enter"]] },
+      ])
+    ).toThrow(/Shortcut/);
+    expect(() =>
+      registerOnMap([{ id: "close", label: "Close", contexts: ["map"], defaults: [["Escape"]] }])
+    ).toThrow(/Shortcut/);
+  });
+
+  it("keeps an Arrow with a modifier an editable Default on the page", () => {
+    registerOnMap([
+      {
+        id: "moveRightFar",
+        label: "Move right far",
+        contexts: ["map"],
+        defaults: [["Shift+ArrowRight"], ["Alt+ArrowLeft"]],
+      },
+    ]);
+
+    expect(isFixedShortcut("plugin.maps.moveRightFar", ["Shift+ArrowRight"])).toBe(false);
+    expect(effectiveShortcuts("plugin.maps.moveRightFar", {}, false)).toEqual([
+      ["Shift+ArrowRight"],
+      ["Alt+ArrowLeft"],
+    ]);
+  });
+
+  it("dispatches the Fixed Arrow through useShortcuts, and not while the author types", () => {
+    registerOnMap([
+      { id: "moveRight", label: "Move right", contexts: ["map"], defaults: [["ArrowRight"]] },
+    ]);
+    const onTrigger = vi.fn();
+    renderHook(() => useShortcuts([{ id: moveRightId, onTrigger }]));
+
+    const press = (target: EventTarget = window) => {
+      const event = new KeyboardEvent("keydown", {
+        key: "ArrowRight",
+        bubbles: true,
+        cancelable: true,
+      });
+      target.dispatchEvent(event);
+      return event;
+    };
+
+    expect(press().defaultPrevented).toBe(true);
+    expect(onTrigger).toHaveBeenCalledTimes(1);
+
+    // The Cover Designer nudge also leaves the arrow to a text field.
+    onTrigger.mockClear();
+    const field = document.createElement("input");
+    document.body.append(field);
+    try {
+      press(field);
+      expect(onTrigger).not.toHaveBeenCalled();
+    } finally {
+      field.remove();
+    }
   });
 });

@@ -103,7 +103,9 @@ const commandContribution = strictObject({
     .array(z.string().min(1))
     .min(1)
     .describe("Core Shortcut Context names plus this Plugin's own page ids."),
-  defaults: shortcutList("Default Shortcuts, empty when the Command has none."),
+  defaults: shortcutList(
+    "Default Shortcuts, empty when the Command has none. A bare Arrow default on a Command scoped only to its own page ids becomes a Fixed navigation Shortcut there, like the Cover Designer nudges."
+  ),
   web: shortcutList("Shortcuts that replace the defaults on the web build."),
   voice: voiceSpec.optional(),
   targets: z.array(z.enum(PLUGIN_TARGETS)).min(1).optional(),

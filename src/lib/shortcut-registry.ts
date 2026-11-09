@@ -94,8 +94,10 @@ export interface CommandDef {
 /**
  * One Command contributed by a Plugin, after the host has derived its full id.
  * It carries the ordinary `CommandDef` fields minus the core-only ones: a
- * Plugin cannot declare Fixed or Sealed Commands, an i18n label key, or an
- * editor-keymap source (ADR 0022).
+ * Plugin still cannot declare Fixed or Sealed Commands, an i18n label key, or
+ * an editor-keymap source (ADR 0022). The one Fixed Shortcut the host gives it
+ * is a bare Arrow the host lifts from `defaults` on a Command scoped only to
+ * the Plugin's own page (see `registerPluginCommands`).
  */
 export interface PluginCommandDef {
   /** The full id: `plugin.<pluginId>.<localId>`. */
@@ -111,6 +113,12 @@ export interface PluginCommandDef {
   keywords?: readonly string[];
   contexts: readonly ShortcutContext[];
   defaults: readonly Shortcut[];
+  /**
+   * Bare Arrows the host lifted from `defaults`: on the Plugin's own page they
+   * are Fixed navigation, like the Cover Designer nudges, so the global
+   * `focus.*` Commands cannot take them there (ADR 0022).
+   */
+  fixed?: readonly Shortcut[];
   web?: readonly Shortcut[];
   voice?: VoiceCommandSpec;
   navigates?: true;
@@ -1577,6 +1585,19 @@ function validateShortcuts(
   });
 }
 
+/** The four bare Arrows: the only keys a Plugin page may take as Fixed navigation. */
+const NAVIGATION_ARROWS: ReadonlySet<Step> = new Set([
+  "ArrowUp",
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+]);
+
+/** A Shortcut that is one Arrow key and no modifier. */
+function isBareArrowShortcut(shortcut: Shortcut): boolean {
+  return shortcut.length === 1 && NAVIGATION_ARROWS.has(shortcut[0]);
+}
+
 /**
  * The conflict ranks of a registration's Commands and declared bindings. A
  * Command or binding that existed in the previous registration of the same
@@ -1623,8 +1644,13 @@ function bindingRanksFor(
  * owner; the host derives every full id as `plugin.<pluginId>.<localId>`, so a
  * declaration can never name another owner's Command. Refuses what a Plugin
  * Command may not be: Fixed, Sealed, a label key, or an editor-keymap source.
- * Registering the same Plugin again updates it in place, keeping its place in
- * the conflict order. Returns unregister.
+ * A bare Arrow in `defaults` of a Command scoped only to the Plugin's own page
+ * ids is the one exception: the host lifts it into a Fixed navigation Shortcut,
+ * as the Cover Designer nudges do, so it wins over the global `focus.*` arrows
+ * on that page. On a Command that also names a core Context it stays an
+ * ordinary Default, which the conflict guard reports inactive. Registering the
+ * same Plugin again updates it in place, keeping its place in the conflict
+ * order. Returns unregister.
  */
 export function registerPluginCommands(
   pluginId: string,
@@ -1669,6 +1695,19 @@ export function registerPluginCommands(
       throw new Error(`Plugin Command "${declaration.id}" declares unknown Context "${context}"`);
     });
 
+    // A Command scoped only to its own page contexts may take a bare Arrow as
+    // Fixed navigation: on that page the arrow belongs to the page, exactly as
+    // `coverDesigner.nudge*` own the arrows in the Cover Designer. Every other
+    // Plugin Command keeps the arrow as an ordinary Default, which loses to the
+    // sealed global `focus.*` Command and is reported inactive (ADR 0024).
+    const pageOnly = contexts.every((context) => !isCoreContextName(context));
+    const fixed: Shortcut[] = [];
+    const defaults: Shortcut[] = [];
+    for (const shortcut of validateShortcuts(declaration.id, declaration.defaults)) {
+      if (pageOnly && isBareArrowShortcut(shortcut)) fixed.push(shortcut);
+      else defaults.push(shortcut);
+    }
+
     defs.push({
       id: `${PLUGIN_COMMAND_PREFIX}${pluginId}.${declaration.id}` as PluginCommandId,
       pluginId,
@@ -1677,7 +1716,8 @@ export function registerPluginCommands(
       labels: declaration.labels ?? {},
       defaultLanguage: registration.defaultLanguage,
       contexts,
-      defaults: validateShortcuts(declaration.id, declaration.defaults),
+      defaults,
+      ...(fixed.length > 0 ? { fixed } : {}),
       ...(declaration.keywords !== undefined ? { keywords: declaration.keywords } : {}),
       ...(declaration.web !== undefined
         ? { web: validateShortcuts(declaration.id, declaration.web) }
@@ -1814,10 +1854,12 @@ export function commandLabel(
   return definition.label;
 }
 
-/** A Command's Fixed Shortcuts; Plugin Commands never have any (ADR 0022). */
+/**
+ * A Command's Fixed Shortcuts: the core ones it declares, or the bare Arrows the
+ * host lifted from a page-scoped Plugin Command's `defaults` (ADR 0022).
+ */
 export function fixedShortcuts(id: CommandId): readonly Shortcut[] {
-  const definition = getCommand(id);
-  return isPluginCommandDef(definition) ? [] : (definition.fixed ?? []);
+  return getCommand(id).fixed ?? [];
 }
 
 export function isSealedCommand(id: CommandId): boolean {
