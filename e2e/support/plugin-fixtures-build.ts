@@ -94,6 +94,13 @@ const FIXTURE_PLUGINS: readonly FixturePlugin[] = [
     manifest: "manifest.json",
     output: "maibuk-reader",
   },
+  // Maps (#744) ships `desktop` and `web`; its list page is Remote UI.
+  {
+    source: "plugins/maibuk-maps",
+    repoSource: true,
+    manifest: "manifest.json",
+    output: "maibuk-maps",
+  },
   // MCP Server ships desktop-only; the E2E web lane runs the real source with
   // "web" added to its manifest `platforms` here, in the built copy alone. The
   // shipped `plugins/maibuk-mcp/manifest.json` is never changed.

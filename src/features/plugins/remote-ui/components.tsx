@@ -176,6 +176,10 @@ function TextFieldHost({
       <AriaInput
         type={type}
         placeholder={placeholder}
+        // The app Modal hands focus to a field marked this way after its own
+        // container focus (Modal.tsx), as Input.tsx marks it; without it, a
+        // Plugin dialog's autoFocus field lost focus to the dialog (#744).
+        data-autofocus={autoFocus ? "" : undefined}
         className={INPUT_CLASS}
         onKeyDown={(event) => {
           if (event.key === "Enter") onChange?.(local);
@@ -237,6 +241,7 @@ function TextAreaHost({
       <AriaTextArea
         rows={rows}
         placeholder={placeholder}
+        data-autofocus={autoFocus ? "" : undefined}
         className={INPUT_CLASS}
         onBlur={() => onChange?.(local)}
       />
