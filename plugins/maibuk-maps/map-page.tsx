@@ -19,6 +19,13 @@ import type { MapElement } from "./maps";
 /** The editor page id, exactly as the manifest declares it. */
 export const MAP_PAGE_ID = "map";
 
+/**
+ * The drawing Frame's HTML, relative to the Plugin folder. The build copies
+ * `assets/` verbatim, so the path the Frame loader looks up keeps that prefix,
+ * exactly as a page's `frame` contribution does (`docs/plugins/frame-ui.md`).
+ */
+export const MAP_FRAME_SRC = "assets/ui/map.html";
+
 export interface MapPageDeps {
   client: PluginClient;
   runtime: Pick<MapsRuntime, "editor" | "currentMapId">;
@@ -172,7 +179,7 @@ function MapEditorView({
           </ui.Collection>
         </ui.View>
 
-        <ui.Frame src="ui/map.html" title={t("map.frameTitle")} fill />
+        <ui.Frame src={MAP_FRAME_SRC} title={t("map.frameTitle")} fill />
 
         <ui.View direction="column" gap="sm">
           <ui.Text weight="semibold">{t("properties.label")}</ui.Text>
