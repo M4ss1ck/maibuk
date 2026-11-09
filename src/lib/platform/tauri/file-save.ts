@@ -42,8 +42,9 @@ export function createTauriPluginFileSaver(): PluginFileSaver {
         await invoke("plugin_files_save_commit", { token });
         return "saved";
       } catch (error) {
-        // Rust removes the `.part`; the abort only ends the token's entry, so a
-        // failure here must not hide the reason the save stopped.
+        // Rust removes the desktop `.part` or empties the Android document; the
+        // abort only ends the token's entry, so a failure here must not hide
+        // the reason the save stopped.
         await invoke("plugin_files_save_abort", { token }).catch(() => undefined);
         throw new Error(osMessage(error));
       }

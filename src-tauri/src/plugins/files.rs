@@ -17,10 +17,6 @@
 //! document, so there is no existing file to protect and the save writes that
 //! open file in place. Either way the webview holds only a token.
 
-// Grants are desktop only for now: on mobile their commands are not
-// registered, so everything a save does not reach is allowed to sit unused.
-#![cfg_attr(mobile, allow(dead_code))]
-
 use std::collections::HashMap;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -31,20 +27,24 @@ use serde::{Deserialize, Serialize};
 
 /// The app data file the grant record lives in, next to the other device-local
 /// Plugin records.
+#[cfg_attr(mobile, allow(dead_code))]
 pub const GRANTS_FILE: &str = "plugin-file-grants.json";
 
 /// Largest byte range one read returns: the Plugin message cap (4 MB) with room
 /// for the reply envelope, the same limit `FILE_READ_MAX_BYTES` sets on the
 /// TypeScript side (`src/plugin-sdk/protocol.ts`).
+#[cfg_attr(mobile, allow(dead_code))]
 pub const MAX_READ_BYTES: u32 = 4 * 1024 * 1024 - 64 * 1024;
 
 /// A gone or unknown grant's prefix; `file-missing` on the TypeScript side.
+#[cfg_attr(mobile, allow(dead_code))]
 const FILE_MISSING: &str = "file-missing";
 /// Bad arguments' prefix; `invalid-params` on the TypeScript side.
 const INVALID_PARAMS: &str = "invalid-params";
 /// A failure of Maibuk's own device-local record, never the Plugin's fault.
 const INTERNAL_ERROR: &str = "internal-error";
 
+#[cfg_attr(mobile, allow(dead_code))]
 fn file_missing(detail: &str) -> String {
     format!("{FILE_MISSING}: {detail}")
 }
@@ -61,6 +61,7 @@ fn internal_error(detail: &str) -> String {
 /// the file it points at. The path never leaves this module.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(mobile, allow(dead_code))]
 struct GrantRecord {
     plugin_id: String,
     grant_id: String,
@@ -70,6 +71,7 @@ struct GrantRecord {
 /// What `files.pick` returns and `files.list` lists: a live grant, named and
 /// sized. The name is the file's own name, never its folder.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(mobile, allow(dead_code))]
 pub struct GrantInfo {
     pub grant: String,
     pub name: String,
@@ -78,6 +80,7 @@ pub struct GrantInfo {
 
 /// What `files.stat` reads without opening the file's bytes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(mobile, allow(dead_code))]
 pub struct GrantStat {
     pub name: String,
     pub size: u64,
@@ -88,6 +91,7 @@ pub struct GrantStat {
 /// The File Grants this device holds, per Plugin. Loaded from `path` on first
 /// use and written back after every change, so grants survive a restart while
 /// staying out of the Library.
+#[cfg_attr(mobile, allow(dead_code))]
 pub struct GrantStore {
     /// The JSON record; `None` keeps grants for this run only, which is what a
     /// device with no app data folder and every test get.
@@ -106,6 +110,7 @@ impl Default for GrantStore {
     }
 }
 
+#[cfg_attr(mobile, allow(dead_code))]
 impl GrantStore {
     /// Keeps grants in `path` across launches.
     pub fn new(path: PathBuf) -> Self {
@@ -342,7 +347,11 @@ struct PendingSave {
 /// rename swaps in. An Android save writes the document in place, because the
 /// picker created it and there is no earlier file to protect.
 enum Finish {
-    Rename { part: PathBuf, target: PathBuf },
+    #[cfg_attr(mobile, allow(dead_code))]
+    Rename {
+        part: PathBuf,
+        target: PathBuf,
+    },
     InPlace,
 }
 
@@ -371,6 +380,7 @@ impl SaveStore {
 
     /// Opens the `.part` file beside `target` and keeps it until a commit or an
     /// abort. The target itself is untouched until the commit.
+    #[cfg_attr(mobile, allow(dead_code))]
     fn begin(&self, target: PathBuf) -> Result<u64, String> {
         let part = part_path(&target);
         let file = match std::fs::File::create(&part) {
@@ -467,6 +477,7 @@ impl SaveStore {
 
 /// The sibling a save writes before it replaces `target`: the target's own name
 /// with `.part` appended, so the rename never crosses a file system.
+#[cfg_attr(mobile, allow(dead_code))]
 fn part_path(target: &Path) -> PathBuf {
     let mut name = target
         .file_name()
@@ -496,14 +507,25 @@ fn abort_save(file: std::fs::File, part: &Path) -> std::io::Result<()> {
 }
 
 /// Ends an in-place save: the bytes reach the document, then the handle closes.
-/// A content provider can hand out a pipe, where there is nothing to sync, so
-/// that error is ignored. A failed flush empties the document instead.
+/// A failed flush empties the document and returns the error. A content
+/// provider can hand out a pipe, where there is nothing to sync, so the
+/// `InvalidInput` and `Unsupported` a sync reports for one are ignored; every
+/// other sync failure empties the document and is returned too, so no
+/// half-written document looks finished.
 fn commit_in_place(mut file: std::fs::File) -> std::io::Result<()> {
     if let Err(error) = file.flush() {
         let _ = file.set_len(0);
         return Err(error);
     }
-    let _ = file.sync_all();
+    if let Err(error) = file.sync_all() {
+        match error.kind() {
+            std::io::ErrorKind::InvalidInput | std::io::ErrorKind::Unsupported => {}
+            _ => {
+                let _ = file.set_len(0);
+                return Err(error);
+            }
+        }
+    }
     drop(file);
     Ok(())
 }
@@ -517,6 +539,7 @@ fn abort_in_place(file: std::fs::File) {
 
 /// Whether every extension is lowercase letters and digits, 1 to 16 long: the
 /// shape a dialog filter takes, and nothing that could widen what it shows.
+#[cfg_attr(mobile, allow(dead_code))]
 pub fn validate_extensions(extensions: &[String]) -> Result<(), String> {
     for extension in extensions {
         let valid = (1..=16).contains(&extension.len())
@@ -532,6 +555,7 @@ pub fn validate_extensions(extensions: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg_attr(mobile, allow(dead_code))]
 fn validate_plugin_id(plugin_id: &str) -> Result<(), String> {
     if plugin_id.is_empty() {
         return Err(invalid_params("the Plugin id is empty"));
@@ -540,6 +564,7 @@ fn validate_plugin_id(plugin_id: &str) -> Result<(), String> {
 }
 
 /// The file's own name, never its folder.
+#[cfg_attr(mobile, allow(dead_code))]
 fn file_name(path: &Path) -> String {
     path.file_name()
         .map(|name| name.to_string_lossy().into_owned())
@@ -547,6 +572,7 @@ fn file_name(path: &Path) -> String {
 }
 
 /// Milliseconds since the Unix epoch; 0 when the platform reports no time.
+#[cfg_attr(mobile, allow(dead_code))]
 fn modified_ms(metadata: &std::fs::Metadata) -> u64 {
     metadata
         .modified()
@@ -558,6 +584,7 @@ fn modified_ms(metadata: &std::fs::Metadata) -> u64 {
 /// A fresh 128-bit grant id, hex. No crate: `RandomState` seeds from the OS and
 /// advances per value, so a counter and the clock are enough for an id no
 /// Plugin needs to predict (the same rule `random_port` follows).
+#[cfg_attr(mobile, allow(dead_code))]
 fn new_grant_id() -> String {
     use std::hash::BuildHasher;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -576,6 +603,7 @@ fn new_grant_id() -> String {
 /// Open Maibuk's file dialog filtered to `extensions` and grant the author's
 /// pick to `plugin_id`. Resolves to `None` when the author cancels. The path
 /// stays in Rust: the webview only ever sees a grant id.
+#[cfg(desktop)]
 #[tauri::command]
 pub async fn plugin_files_pick<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
@@ -586,14 +614,8 @@ pub async fn plugin_files_pick<R: tauri::Runtime>(
 ) -> Result<Option<GrantInfo>, String> {
     use tauri_plugin_dialog::DialogExt;
 
-    #[cfg(mobile)]
-    let _ = &window;
     validate_extensions(&extensions)?;
-    let mut picker = app.dialog().file();
-    #[cfg(desktop)]
-    {
-        picker = picker.set_parent(&window);
-    }
+    let mut picker = app.dialog().file().set_parent(&window);
     if !extensions.is_empty() {
         let filters: Vec<&str> = extensions.iter().map(String::as_str).collect();
         picker = picker.add_filter("Documents", &filters);
@@ -609,6 +631,7 @@ pub async fn plugin_files_pick<R: tauri::Runtime>(
 
 /// Read a byte range through a grant. The bytes cross as raw IPC, so the
 /// webview receives an `ArrayBuffer`.
+#[cfg(desktop)]
 #[tauri::command]
 pub fn plugin_files_read(
     state: tauri::State<'_, GrantStore>,
@@ -622,6 +645,7 @@ pub fn plugin_files_read(
 }
 
 /// The grant's name, size, and last-modified time; cheap enough for a Shelf.
+#[cfg(desktop)]
 #[tauri::command]
 pub fn plugin_files_stat(
     state: tauri::State<'_, GrantStore>,
@@ -632,6 +656,7 @@ pub fn plugin_files_stat(
 }
 
 /// End one grant.
+#[cfg(desktop)]
 #[tauri::command]
 pub fn plugin_files_release(
     state: tauri::State<'_, GrantStore>,
@@ -642,6 +667,7 @@ pub fn plugin_files_release(
 }
 
 /// Every live grant the Plugin holds on this device.
+#[cfg(desktop)]
 #[tauri::command]
 pub fn plugin_files_list(
     state: tauri::State<'_, GrantStore>,
@@ -651,6 +677,7 @@ pub fn plugin_files_list(
 }
 
 /// End every grant the Plugin holds, and no other Plugin's.
+#[cfg(desktop)]
 #[tauri::command]
 pub fn plugin_files_clear_plugin(
     state: tauri::State<'_, GrantStore>,
@@ -660,6 +687,7 @@ pub fn plugin_files_clear_plugin(
 }
 
 /// End every File Grant on this device.
+#[cfg(desktop)]
 #[tauri::command]
 pub fn plugin_files_clear_all(state: tauri::State<'_, GrantStore>) -> Result<(), String> {
     state.clear_all()
