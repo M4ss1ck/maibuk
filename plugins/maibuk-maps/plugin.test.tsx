@@ -660,7 +660,7 @@ describe("Map editor page", () => {
     }
   });
 
-  it("keeps the Elements list's own ArrowDown navigation", async () => {
+  it("leaves the Elements list's handled arrows to the list", async () => {
     const storage = mapStorage([
       line("e1", "Line one", [
         [10, 10],
@@ -680,14 +680,26 @@ describe("Map editor page", () => {
       await selectRow(user, "Line two");
       const list = screen.getByRole("listbox", { name: en["elements.label"] });
       const first = within(list).getByRole("option", { name: /^Line one/ });
-      await user.keyboard("{ArrowDown}");
 
-      // The list moves focus; the Map selection stays where Space left it, and
-      // the Map's own ArrowDown Command also moves that Element (reported).
+      // ArrowDown is the list's own: focus moves, and the selected Map Line
+      // stays where it was.
+      await user.keyboard("{ArrowDown}");
       await waitFor(() => expect(document.activeElement).toBe(first));
       expect(runtime.editor?.getSnapshot().selectedId).toBe("e2");
       await runtime.editor?.flush();
-      expect(linePoints(storage, 1)[0][1]).toBe(31);
+      expect(linePoints(storage, 1)).toEqual([
+        [30, 30],
+        [40, 40],
+      ]);
+
+      // A vertical list does not handle the horizontal arrows, so those still
+      // reach the Map Command and move the selected Element.
+      await user.keyboard("{ArrowRight}");
+      await waitFor(() =>
+        expect((runtime.editor?.getSnapshot().elements[1] as MapLineElement).points[0][0]).toBe(31)
+      );
+      await runtime.editor?.flush();
+      expect(linePoints(storage, 1)[0][0]).toBe(31);
 
       keys.unmount();
       await page.unmount();
