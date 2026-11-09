@@ -17,7 +17,7 @@ The browsable list of an author's Books, Notes, or Canvases.
 _Avoid_: dashboard, home (for the Book Gallery)
 
 **Item Menu**:
-The actions for one Note, Chapter, Text Node, Note Reference, Symbol in the picker, or Task List, opened from its ⋯ button (lists and Task Lists only), a long-press on touch, or a right click. On a Task List, a long-press or right click shows them inside the editor's own menu.
+The actions for one Book, Note, Chapter, Text Node, Note Reference, Symbol in the picker, or Task List, opened from its ⋯ button (lists and Task Lists only), a long-press on touch, or a right click. On a Task List, a long-press or right click shows them inside the editor's own menu.
 _Avoid_: context menu, kebab menu, overflow menu
 
 **Tutorial**:

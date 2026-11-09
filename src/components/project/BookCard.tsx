@@ -3,9 +3,12 @@ import { useTranslation } from "react-i18next";
 import { GridListItem } from "react-aria-components/GridList";
 import { Button, Dialog, ListBox, ListBoxItem, Popover } from "react-aria-components";
 import { Archive, Check, ChevronDown, CircleCheck, Loader, PencilLine } from "lucide-react";
-import { KeyboardShortcut } from "@/components/ui";
+import { ItemActionsMenu, KeyboardShortcut } from "@/components/ui";
 import { MaibukLogo } from "@/components/icons";
 import { BOOK_STATUSES, type Book, type BookStatus } from "@/features/books/types";
+import { useItemCommands } from "@/hooks/useItemCommands";
+import { useItemContextMenu } from "@/hooks/useItemContextMenu";
+import { usePluginItemMenuActions } from "@/hooks/usePluginItemMenuActions";
 
 interface BookCardProps {
   book: Book;
@@ -31,6 +34,20 @@ export function BookCard({ book, index = 0, onPress, onStatusChange }: BookCardP
     setStatusAnchor(anchor);
     setIsStatusOpen(true);
   };
+  // The Book Item Menu holds the Plugins' Book entries (#744); with none it
+  // stays hidden and the card keeps no context-menu gesture.
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const buildPluginActions = usePluginItemMenuActions("book");
+  const actions = buildPluginActions({ kind: "book", id: book.id });
+  const hasActions = actions.length > 0;
+  const cardRef = useRef<HTMLDivElement>(null);
+  const menuAnchorRef = useRef<HTMLDivElement>(null);
+  const { itemProps, setOwnerRef } = useItemContextMenu({
+    onOpen: () => setIsMenuOpen(true),
+    isDisabled: !hasActions,
+    anchorRef: menuAnchorRef,
+  });
+  useItemCommands(cardRef, actions);
   const isArchived = book.status === "archived";
   const StatusIcon = statusIcons[book.status];
   const statusLabel = t(`common.${book.status}`);
@@ -55,6 +72,7 @@ export function BookCard({ book, index = 0, onPress, onStatusChange }: BookCardP
   return (
     <GridListItem
       id={book.id}
+      ref={cardRef}
       textValue={book.title}
       onPress={onPress}
       style={{ "--delay": `${index * 60}ms` } as React.CSSProperties}
@@ -138,48 +156,68 @@ export function BookCard({ book, index = 0, onPress, onStatusChange }: BookCardP
       </Popover>
 
       <div
-        className={`aspect-2/3 bg-linear-to-br from-muted/80 via-muted/40 to-background flex items-center justify-center ${
-          isArchived ? "opacity-60" : ""
-        }`}
+        ref={setOwnerRef}
+        {...itemProps}
+        className="flex flex-col pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]"
       >
-        {book.coverImagePath ? (
-          <img src={book.coverImagePath} alt={book.title} className="w-full h-full object-cover" />
-        ) : (
-          <MaibukLogo className="w-16 h-16 text-primary opacity-85" />
-        )}
-      </div>
-
-      <div className="p-4">
-        <h2 className="font-semibold text-lg truncate text-foreground">{book.title}</h2>
-        <p className="text-sm text-muted-foreground truncate">{book.authorName}</p>
-
-        <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
-          {/* Touch has no hover to reveal the corner button: the pill itself opens the menu. */}
-          <Button
-            ref={pillRef}
-            // Starts with the visible status so voice control can target it by what it shows.
-            aria-label={`${statusLabel}, ${t("books.changeStatus", { title: book.title })}`}
-            onPress={() => openStatus("pill")}
-            className={`hidden items-center gap-1 rounded-full px-2 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary pointer-coarse:inline-flex ${statusColors[book.status]}`}
-          >
-            <StatusIcon className="h-3 w-3" aria-hidden="true" />
-            <span className="capitalize">{statusLabel}</span>
-            <ChevronDown className="h-3 w-3" aria-hidden="true" />
-          </Button>
-          <span
-            className={`text-xs px-2 py-1 rounded-full capitalize pointer-coarse:hidden ${statusColors[book.status]}`}
-          >
-            {statusLabel}
-          </span>
-          <span className="text-xs text-muted-foreground">
-            {book.wordCount.toLocaleString()} {t("common.words")}
-          </span>
+        <div
+          className={`aspect-2/3 bg-linear-to-br from-muted/80 via-muted/40 to-background flex items-center justify-center ${
+            isArchived ? "opacity-60" : ""
+          }`}
+        >
+          {book.coverImagePath ? (
+            <img
+              src={book.coverImagePath}
+              alt={book.title}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <MaibukLogo className="w-16 h-16 text-primary opacity-85" />
+          )}
         </div>
 
-        <p className="text-xs text-muted-foreground mt-2">
-          {t("books.lastEdited")} {formatDate(book.contentUpdatedAt ?? book.updatedAt)}
-        </p>
+        <div className="p-4">
+          <h2 className="font-semibold text-lg truncate text-foreground">{book.title}</h2>
+          <p className="text-sm text-muted-foreground truncate">{book.authorName}</p>
+
+          <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
+            {/* Touch has no hover to reveal the corner button: the pill itself opens the menu. */}
+            <Button
+              ref={pillRef}
+              // Starts with the visible status so voice control can target it by what it shows.
+              aria-label={`${statusLabel}, ${t("books.changeStatus", { title: book.title })}`}
+              onPress={() => openStatus("pill")}
+              className={`hidden items-center gap-1 rounded-full px-2 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary pointer-coarse:inline-flex ${statusColors[book.status]}`}
+            >
+              <StatusIcon className="h-3 w-3" aria-hidden="true" />
+              <span className="capitalize">{statusLabel}</span>
+              <ChevronDown className="h-3 w-3" aria-hidden="true" />
+            </Button>
+            <span
+              className={`text-xs px-2 py-1 rounded-full capitalize pointer-coarse:hidden ${statusColors[book.status]}`}
+            >
+              {statusLabel}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {book.wordCount.toLocaleString()} {t("common.words")}
+            </span>
+          </div>
+
+          <p className="text-xs text-muted-foreground mt-2">
+            {t("books.lastEdited")} {formatDate(book.contentUpdatedAt ?? book.updatedAt)}
+          </p>
+        </div>
       </div>
+      {hasActions && (
+        <ItemActionsMenu
+          anchorRef={menuAnchorRef}
+          label={t("common.moreActionsFor", { title: book.title })}
+          actions={actions}
+          isOpen={isMenuOpen}
+          onOpenChange={setIsMenuOpen}
+          className="absolute right-2 top-2 z-10 hidden bg-card/80 backdrop-blur-sm pointer-coarse:inline-flex"
+        />
+      )}
     </GridListItem>
   );
 }

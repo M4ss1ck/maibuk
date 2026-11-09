@@ -2792,6 +2792,22 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-maps-list",
+    area: "plugins",
+    workflow:
+      "Maps, the Built-in Plugin for designing Maps of the author's world (#744): open its page from the sidebar, create a Map from the New Map dialog by keyboard (name, Book, page size), rename it, reload, and delete it after a confirmation; the Book Gallery card's Item Menu (Shift+F10) carries the Plugin's Maps entry, which opens the page filtered to that Book, and the filter's All shows the Map with no Book too; asserts: the dialog's focus entry, Tab containment, Escape, and focus back on New Map, the card names and Book · page size line, the empty state after delete, the filtered and unfiltered card counts; persists: yes (the Map and its index in Plugin storage)",
+    edges: [
+      "Create, rename, reload, and delete a Map by keyboard alone",
+      "The Book Item Menu entry opens Maps filtered to that Book; All also shows a Map with no Book",
+    ],
+    terms: ["Item Menu"],
+    shortcuts: ["plugin.maibuk-maps.openMaps", "plugin.maibuk-maps.bookMaps"],
+    routes: ["/", "/plugin/:pluginId/:pageId"],
+    fixture: "bookShelf",
+    tags: ["sandbox"],
+    status: "accepted",
+  },
+  {
     id: "reader-open-reopen",
     area: "plugins",
     workflow:

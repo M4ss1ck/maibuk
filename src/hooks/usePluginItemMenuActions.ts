@@ -37,8 +37,8 @@ export function pluginTargetIsLive(target: PluginItemTarget): boolean {
       return useBookStore.getState().books.some((book) => book.id === target.id);
     case "canvas":
       return useCanvasStore.getState().canvases.some((canvas) => canvas.id === target.id);
-    // Book and Canvas-gallery rows have no Item Menu today, so this default is
-    // here for future kinds: unverifiable is never blocked.
+    // A kind with no live store to check is never blocked: unverifiable is
+    // not the same as gone.
     default:
       return true;
   }

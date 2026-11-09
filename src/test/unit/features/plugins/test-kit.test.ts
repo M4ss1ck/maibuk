@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 import { Blob as NodeBlob } from "node:buffer";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect, useState, createElement, Fragment } from "react";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
@@ -652,6 +652,48 @@ describe("renderPage", () => {
       await user.keyboard("{Escape}");
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
       expect(document.activeElement).toBe(trigger);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("gives a Modal's autoFocus field the focus when the dialog opens (#744)", async () => {
+    const host = createTestHost({ manifest: fixtureManifest() });
+    try {
+      const client = createPluginClient(host.port);
+
+      /** A Plugin page whose Modal holds a name field that asks for focus. */
+      function FormPage() {
+        const [open, setOpen] = useState(false);
+        return createElement(
+          Fragment,
+          null,
+          createElement(ui.Button, { onPress: () => setOpen(true) }, "New"),
+          createElement(
+            ui.Modal,
+            {
+              title: "New thing",
+              isOpen: open,
+              onOpenChange: (event: { detail: boolean }) => setOpen(event.detail),
+            },
+            createElement(ui.Button, { onPress: () => {} }, "Before"),
+            createElement(ui.TextField, { label: "Name", autoFocus: true })
+          )
+        );
+      }
+
+      servePluginUi(client, { pages: { main: FormPage } });
+      await host.renderPage("main");
+      const user = userEvent.setup();
+
+      const trigger = await screen.findByRole("button", { name: "New" });
+      for (let i = 0; i < 10 && document.activeElement !== trigger; i++) await user.tab();
+      await user.keyboard("{Enter}");
+      const dialog = await screen.findByRole("dialog", { name: "New thing" });
+      // The field, not the dialog's first control, takes focus.
+      await waitFor(() =>
+        expect(within(dialog).getByRole("textbox", { name: "Name" })).toHaveFocus()
+      );
     } finally {
       await host.stop();
     }

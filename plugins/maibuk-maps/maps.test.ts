@@ -155,6 +155,7 @@ describe("createMapStore", () => {
       store.create({ name: "B", bookId: null, preset: "square" }),
       store.create({ name: "C", bookId: null, preset: "square" }),
     ]);
+    expect((await store.list()).map((entry) => entry.name).sort()).toEqual(["A", "B", "C"]);
     await Promise.all([store.rename("m1", "A2"), store.remove("m2")]);
     expect((await store.list()).map((entry) => entry.name).sort()).toEqual(["A2", "C"]);
   });
