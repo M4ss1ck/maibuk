@@ -90,6 +90,9 @@ describe("Maps manifest", () => {
       "moveDownFar",
       "selectTool",
       "pencilTool",
+      "penTool",
+      "eraserTool",
+      "roughen",
       "deleteElement",
     ];
     for (const id of onMap) {
@@ -104,6 +107,11 @@ describe("Maps manifest", () => {
     ]);
     expect(commands.find((command) => command.id === "moveDownFar")?.defaults).toEqual([
       ["Shift+ArrowDown"],
+    ]);
+    expect(commands.find((command) => command.id === "penTool")?.defaults).toEqual([["n"]]);
+    expect(commands.find((command) => command.id === "eraserTool")?.defaults).toEqual([["e"]]);
+    expect(commands.find((command) => command.id === "roughen")?.defaults).toEqual([
+      ["Mod+Shift+r"],
     ]);
   });
 

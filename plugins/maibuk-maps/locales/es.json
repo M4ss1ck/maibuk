@@ -23,6 +23,9 @@
   "commands.moveDownFar.label": "Mover abajo 10 mm",
   "commands.selectTool.label": "Herramienta de selección",
   "commands.pencilTool.label": "Herramienta de lápiz",
+  "commands.penTool.label": "Herramienta de pluma",
+  "commands.eraserTool.label": "Herramienta de goma de borrar",
+  "commands.roughen.label": "Aplicar rugosidad",
   "commands.deleteElement.label": "Eliminar elemento",
   "pages.maps.title": "Mapas",
   "pages.map.title": "Mapa"

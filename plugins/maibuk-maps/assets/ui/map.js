@@ -24,7 +24,7 @@
    * @typedef {"select" | "pencil" | "pen" | "eraser"} MapTool
    * @typedef {{ d: string, stroke: string | null, strokeWidth: number, dash: string | null, fill: string | null, opacity: number }} LineShape
    * @typedef {{ id: string, shapes: LineShape[], hidden: boolean, locked: boolean, selected: boolean }} FrameSceneElement
-   * @typedef {{ kind: "scene", widthMm: number, heightMm: number, background: string, elements: FrameSceneElement[], tool: MapTool, zoom: number, panX: number, panY: number }} FrameSceneMessage
+   * @typedef {{ kind: "scene", widthMm: number, heightMm: number, background: string, elements: FrameSceneElement[], tool: MapTool, zoom: number, panX: number, panY: number, penLabel: string }} FrameSceneMessage
    * @typedef {{ kind: "stroke", points: MapPoint[] }} FrameStrokeMessage
    * @typedef {{ kind: "line", points: MapPoint[], curves: boolean[], closed: boolean }} FrameLineMessage
    * @typedef {{ kind: "erase", points: MapPoint[], radiusMm: number }} FrameEraseMessage
@@ -161,6 +161,9 @@
       zoom: isNumber(message.zoom) && message.zoom > 0 ? message.zoom : 1,
       panX: isNumber(message.panX) ? message.panX : 0,
       panY: isNumber(message.panY) ? message.panY : 0,
+      // The Worker sends the label in the app's language; the Frame has no
+      // access to the Plugin's catalogs, so it fills in the count alone.
+      penLabel: typeof message.penLabel === "string" ? message.penLabel : "",
     };
   }
 
@@ -228,16 +231,21 @@
   }
 
   /**
-   * The surface's accessible name while a Pen line is in progress. The svg is
-   * `aria-hidden`, so this is the only count a screen reader gets.
+   * The surface's accessible name while a Pen line is in progress, from the
+   * localized label the Worker sends with the scene. The svg is `aria-hidden`,
+   * so this is the only count a screen reader gets. A scene without a label
+   * leaves the surface unnamed rather than falling back to English.
    */
   function updateLabel() {
     if (surface === null) return;
-    if (penDraft === null) {
+    if (penDraft === null || scene === null || scene.penLabel === "") {
       surface.removeAttribute("aria-label");
       return;
     }
-    surface.setAttribute("aria-label", `Pen line, ${penDraft.points.length} points`);
+    surface.setAttribute(
+      "aria-label",
+      scene.penLabel.replace("{{count}}", String(penDraft.points.length))
+    );
   }
 
   /** Drops every gesture in progress and the crosshair, on a tool change. */

@@ -56,11 +56,31 @@ _Avoid_: background, overlay, Custom Stamp (that is placed as a Stamp)
 
 **Pencil**:
 The editor tool that draws a Map Line freehand and smooths the stroke as the author draws.
-_Avoid_: brush, pen, freehand tool
+_Avoid_: brush, freehand tool
 
 **Select**:
 The editor tool that picks one Element on the Map, to move, rename, hide, lock, or delete it.
 _Avoid_: pointer, arrow, cursor
+
+**Pen**:
+The editor tool that draws a Map Line point by point: each click adds a straight point, Shift+click adds a curved point, and clicking the first point again closes the line. Its keyboard form moves a crosshair with the arrows and adds points with Enter.
+_Avoid_: polyline tool, path tool, polygon tool
+
+**Eraser**:
+The editor tool that removes the parts of Map Lines a drag passes over, cutting a Map Line into pieces where the drag crosses it.
+_Avoid_: rubber, delete tool, cutting tool
+
+**Line style**:
+The kind of Map Line a line is drawn as: a coast, a river, a road, a border, a coast ripple, or a plain line. Each kind has its own look and its own default for Encloses Fills.
+_Avoid_: preset, brush, line type, stroke style
+
+**Encloses Fills**:
+A Map Line property: when it is set, a Fill inside the area the line encloses follows the line when it moves.
+_Avoid_: closed shape, fill boundary, auto fill
+
+**Roughen**:
+The edit that redraws a Map Line in the rough.js hand-inked look, pushed off its path by the Roughen strength so it reads as drawn by hand.
+_Avoid_: jitter (that is a defect, not an effect), wobble, noise, sketch
 
 ## Relationships
 
@@ -68,3 +88,5 @@ _Avoid_: pointer, arrow, cursor
 - A **Fill** covers an area enclosed by **Map Lines** or an outline of its own; a **Fill** or **Map Line** can have a **Soft Edge**.
 - **Custom Stamps** and **Custom Fills** belong to the **Library**; any **Map** can use them.
 - Every **Map Line**, **Fill**, **Stamp**, **Map Label**, and **Map Image** is an **Element**; order in the **Elements list** is z-order.
+- The **Pen** and the **Pencil** draw **Map Lines**; the **Eraser** cuts them into pieces, and **Roughen** redraws one in the rough.js ink look.
+- A **Map Line** has one **Line style**, which decides its look and its default **Encloses Fills**.

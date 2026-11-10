@@ -69,6 +69,7 @@ function loadFrame(): Frame {
         zoom: 1,
         panX: 0,
         panY: 0,
+        penLabel: "Pen line, {{count}} points",
         ...overrides,
       });
     },
@@ -267,6 +268,7 @@ describe("the scene message", () => {
       zoom: 1,
       panX: 0,
       panY: 0,
+      penLabel: "Pen line, {{count}} points",
     });
     expect(message.elements[0].shapes).toEqual([
       {
@@ -309,6 +311,7 @@ describe("the scene message", () => {
       zoom: 1,
       panX: 0,
       panY: 0,
+      penLabel: "Pen line, {{count}} points",
     });
     expect(message.elements[0].shapes).toEqual([
       {
@@ -406,6 +409,26 @@ describe("the Pen", () => {
       },
     ]);
     expect(document.querySelector("path.map-crosshair")).not.toBeNull();
+  });
+
+  it("names the surface from the label the Worker sends, not from English in the Frame", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "pen", penLabel: "Línea de pluma: {{count}}" });
+    const surface = document.getElementById("surface");
+    if (surface === null) throw new Error("the Frame has no surface");
+
+    key("Enter");
+    expect(surface.getAttribute("aria-label")).toBe("Línea de pluma: 1");
+    key("ArrowRight");
+    key("Enter");
+    expect(surface.getAttribute("aria-label")).toBe("Línea de pluma: 2");
+    key("Escape");
+    expect(surface.hasAttribute("aria-label")).toBe(false);
+
+    // A scene with no label leaves the surface unnamed rather than in English.
+    frame.scene({ tool: "pen", penLabel: "" });
+    key("Enter");
+    expect(surface.hasAttribute("aria-label")).toBe(false);
   });
 
   it("keeps the arrow keys out of the host and forwards the rest", () => {

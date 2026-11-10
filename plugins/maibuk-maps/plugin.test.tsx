@@ -587,6 +587,9 @@ describe("Map editor Commands", () => {
     "moveDownFar",
     "selectTool",
     "pencilTool",
+    "penTool",
+    "eraserTool",
+    "roughen",
     "deleteElement",
   ];
 
@@ -604,6 +607,13 @@ describe("Map editor Commands", () => {
     ]);
     expect(effectiveShortcuts("plugin.maibuk-maps.moveDownFar", {}, false)).toContainEqual([
       "Shift+ArrowDown",
+    ]);
+    expect(effectiveShortcuts("plugin.maibuk-maps.penTool", {}, false)).toContainEqual(["n"]);
+    expect(effectiveShortcuts("plugin.maibuk-maps.eraserTool", {}, false)).toContainEqual(["e"]);
+    // Mod+Shift+r is core `editor.alignRight` in the editor, which no route
+    // shows beside the Map page, so the binding is live here.
+    expect(effectiveShortcuts("plugin.maibuk-maps.roughen", {}, false)).toContainEqual([
+      "Mod+Shift+r",
     ]);
   });
 });
@@ -633,7 +643,9 @@ describe("Map editor page", () => {
       await mapsPage.unmount();
 
       const editorPage = await host.renderPage(MAP_PAGE_ID);
-      expect(await screen.findByText("Coast")).toBeInTheDocument();
+      // The Line style select also offers "Coast", so the page title is the
+      // paragraph, not any text of that name.
+      expect(await screen.findByText("Coast", { selector: "p" })).toBeInTheDocument();
       expect(screen.getByRole("listbox", { name: en["elements.label"] })).toBeInTheDocument();
       expect(screen.getByRole("radiogroup", { name: en["tools.label"] })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: en["map.backToMaps"] })).toBeInTheDocument();
@@ -1100,6 +1112,133 @@ describe("Map editor page", () => {
       runtime.editor?.select(null);
       runtime.editor?.roughen();
       expect(runtime.editor?.getSnapshot().elements).toHaveLength(1);
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("selects the Pen by its key, Roughens by its Shortcut, and undo restores the exact points", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    registerMapCommands();
+    const keys = render(<CommandKeys host={host} />);
+    try {
+      const user = userEvent.setup();
+      // The page commits after `renderPage` returns; wait for its first control.
+      await screen.findByRole("radiogroup", { name: en["tools.label"] });
+      await focusPanelButton(user);
+
+      // The Pen tool's own key selects it, and the picker follows.
+      await user.keyboard("n");
+      await waitFor(() => expect(runtime.editor?.getSnapshot().tool).toBe("pen"));
+      expect(screen.getByRole("radio", { name: en["tools.pen"] })).toBeChecked();
+
+      // The keyboard pen draws a closed outline in the Frame; the Frame stand-in
+      // hands the editor the line message the real Frame posts for it.
+      const outline: [number, number][] = [
+        [20, 20],
+        [60, 20],
+        [60, 50],
+        [20, 50],
+      ];
+      runtime.editor?.handleFrameMessage({
+        kind: "line",
+        points: outline,
+        curves: [false, false, false, false],
+        closed: true,
+      });
+      await runtime.editor?.flush();
+
+      const drawn = storedMap(storage).elements[0] as MapLineElement;
+      expect(drawn).toMatchObject({ style: "plain", closed: true, roughened: false });
+      expect(drawn.points).toEqual(outline);
+      expect(runtime.editor?.getSnapshot().selectedId).toBe(drawn.id);
+
+      // Roughen by its Shortcut resamples the line off its path, as one step.
+      await user.keyboard("{Control>}{Shift>}r{/Shift}{/Control}");
+      await waitFor(() =>
+        expect((runtime.editor?.getSnapshot().elements[0] as MapLineElement).roughened).toBe(true)
+      );
+      const roughened = runtime.editor?.getSnapshot().elements[0] as MapLineElement;
+      expect(roughened.points.length).toBeGreaterThan(outline.length);
+      expect(roughened.points).not.toEqual(outline);
+      await runtime.editor?.flush();
+      expect((storedMap(storage).elements[0] as MapLineElement).roughened).toBe(true);
+
+      // Undo puts the exact points back.
+      await user.keyboard("{Control>}z{/Control}");
+      await waitFor(() =>
+        expect((runtime.editor?.getSnapshot().elements[0] as MapLineElement).roughened).toBe(false)
+      );
+      expect((runtime.editor?.getSnapshot().elements[0] as MapLineElement).points).toEqual(outline);
+      await runtime.editor?.flush();
+      expect(linePoints(storage)).toEqual(outline);
+
+      keys.unmount();
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("changes the selected line's Line style and Encloses Fills from the properties panel", async () => {
+    const storage = mapStorage([
+      line(
+        "e1",
+        "Road",
+        [
+          [10, 10],
+          [20, 20],
+        ],
+        { style: "road", enclosesFills: false }
+      ),
+    ]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await screen.findByRole("radiogroup", { name: en["tools.label"] });
+      // With no Map Line selected the select shows the current style.
+      expect(screen.getByLabelText(en["properties.lineStyle"])).toHaveTextContent(
+        en["properties.style.plain"]
+      );
+
+      await selectRow(user, "Road");
+      expect(screen.getByLabelText(en["properties.lineStyle"])).toHaveTextContent(
+        en["properties.style.road"]
+      );
+
+      // Picking a style changes the selected line and takes its Encloses Fills default.
+      await pickOption(user, en["properties.lineStyle"], en["properties.style.coast"]);
+      await waitFor(() =>
+        expect((runtime.editor?.getSnapshot().elements[0] as MapLineElement).style).toBe("coast")
+      );
+      expect((runtime.editor?.getSnapshot().elements[0] as MapLineElement).enclosesFills).toBe(
+        true
+      );
+      expect(screen.getByLabelText(en["properties.lineStyle"])).toHaveTextContent(
+        en["properties.style.coast"]
+      );
+
+      // The switch turns Encloses Fills off again, by the keyboard.
+      const encloses = screen.getByRole("switch", { name: en["properties.enclosesFills"] });
+      expect(encloses).toBeChecked();
+      await tabTo(user, encloses);
+      expect(encloses).toHaveFocus();
+      await user.keyboard(" ");
+      await waitFor(() =>
+        expect((runtime.editor?.getSnapshot().elements[0] as MapLineElement).enclosesFills).toBe(
+          false
+        )
+      );
+      await runtime.editor?.flush();
+      expect(storedMap(storage).elements[0]).toMatchObject({
+        style: "coast",
+        enclosesFills: false,
+      });
 
       await page.unmount();
     } finally {

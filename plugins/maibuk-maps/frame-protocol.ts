@@ -41,6 +41,12 @@ export interface FrameSceneMessage {
   zoom: number;
   panX: number;
   panY: number;
+  /**
+   * The surface's accessible name while a Pen line is in progress, in the app
+   * language, with `{{count}}` where the point count goes. The Frame cannot
+   * read the Plugin's catalogs, so the Worker sends the wording with the scene.
+   */
+  penLabel: string;
 }
 
 /** Frame -> Worker: a finished Pencil stroke, in page millimetres. */
@@ -157,6 +163,8 @@ export function sceneMessage(
     zoom: number;
     panX: number;
     panY: number;
+    /** The localized Pen draft label, with `{{count}}` for the point count. */
+    penLabel: string;
   }
 ): FrameSceneMessage {
   return {
@@ -175,5 +183,6 @@ export function sceneMessage(
     zoom: view.zoom,
     panX: view.panX,
     panY: view.panY,
+    penLabel: view.penLabel,
   };
 }

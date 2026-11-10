@@ -178,9 +178,23 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     for (const listener of listeners) listener();
   }
 
+  /** The Pen draft label the Frame puts on its surface, in the app language. */
+  function penDraftLabel(): string {
+    return translate(options.language(), "map.penPoints");
+  }
+
   function sendScene(): void {
     if (frame === null) return;
-    frame.postMessage(sceneMessage(doc, { selectedId, tool, zoom, panX, panY }));
+    frame.postMessage(
+      sceneMessage(doc, {
+        selectedId,
+        tool,
+        zoom,
+        panX,
+        panY,
+        penLabel: penDraftLabel(),
+      })
+    );
   }
 
   function schedule(): void {
@@ -345,7 +359,16 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
 
     attachFrame(port) {
       frame = port;
-      port.postMessage(sceneMessage(doc, { selectedId, tool, zoom, panX, panY }));
+      port.postMessage(
+        sceneMessage(doc, {
+          selectedId,
+          tool,
+          zoom,
+          panX,
+          panY,
+          penLabel: penDraftLabel(),
+        })
+      );
     },
 
     handleFrameMessage(data) {
