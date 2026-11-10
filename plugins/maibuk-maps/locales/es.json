@@ -24,6 +24,7 @@
   "commands.selectTool.label": "Herramienta de selección",
   "commands.pencilTool.label": "Herramienta de lápiz",
   "commands.penTool.label": "Herramienta de pluma",
+  "commands.bucketTool.label": "Herramienta de bote de pintura",
   "commands.ellipseTool.label": "Herramienta de elipse",
   "commands.rectangleTool.label": "Herramienta de rectángulo",
   "commands.polygonTool.label": "Herramienta de polígono",

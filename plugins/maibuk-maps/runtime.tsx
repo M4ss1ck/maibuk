@@ -50,6 +50,7 @@ export const MOVE_DOWN_FAR = "moveDownFar";
 export const SELECT_TOOL = "selectTool";
 export const PENCIL_TOOL = "pencilTool";
 export const PEN_TOOL = "penTool";
+export const BUCKET_TOOL = "bucketTool";
 export const ELLIPSE_TOOL = "ellipseTool";
 export const RECTANGLE_TOOL = "rectangleTool";
 export const POLYGON_TOOL = "polygonTool";
@@ -260,6 +261,9 @@ function runEditorCommand(editor: MapEditor | null, id: string): void {
       break;
     case PEN_TOOL:
       editor.setTool("pen");
+      break;
+    case BUCKET_TOOL:
+      editor.setTool("bucket");
       break;
     case ELLIPSE_TOOL:
       editor.setTool("ellipse");

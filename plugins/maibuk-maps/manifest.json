@@ -158,6 +158,12 @@
         "defaults": [["n"]]
       },
       {
+        "id": "bucketTool",
+        "label": "Bucket tool",
+        "contexts": ["map"],
+        "defaults": [["b"]]
+      },
+      {
         "id": "ellipseTool",
         "label": "Ellipse tool",
         "contexts": ["map"],
