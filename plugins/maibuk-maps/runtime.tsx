@@ -49,6 +49,9 @@ export const MOVE_UP_FAR = "moveUpFar";
 export const MOVE_DOWN_FAR = "moveDownFar";
 export const SELECT_TOOL = "selectTool";
 export const PENCIL_TOOL = "pencilTool";
+export const PEN_TOOL = "penTool";
+export const ERASER_TOOL = "eraserTool";
+export const ROUGHEN = "roughen";
 export const DELETE_ELEMENT = "deleteElement";
 
 /** One step of an arrow-key move, in page millimetres; Shift moves ten. */
@@ -251,6 +254,15 @@ function runEditorCommand(editor: MapEditor | null, id: string): void {
       break;
     case PENCIL_TOOL:
       editor.setTool("pencil");
+      break;
+    case PEN_TOOL:
+      editor.setTool("pen");
+      break;
+    case ERASER_TOOL:
+      editor.setTool("eraser");
+      break;
+    case ROUGHEN:
+      editor.roughen();
       break;
     case DELETE_ELEMENT: {
       const selected = editor.getSnapshot().selectedId;

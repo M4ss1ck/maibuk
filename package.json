@@ -156,6 +156,8 @@
     "react-i18next": "^16.5.1",
     "react-joyride": "3.2.0",
     "react-router-dom": "^7.1.1",
+    "roughjs": "^4.6.6",
+    "simplex-noise": "^4.0.3",
     "turndown": "^7.2.4",
     "turndown-plugin-gfm": "^1.0.2",
     "zod": "^4.6.5",

@@ -10,11 +10,12 @@
 
 import { useEffect, useState, useSyncExternalStore, type ComponentType } from "react";
 import { ui, type PluginClient } from "@/plugin-sdk";
-import type { MapEditor } from "./editor";
+import { MAX_ROUGHEN_STRENGTH_MM, MIN_ROUGHEN_STRENGTH_MM, type MapEditor } from "./editor";
+import type { MapTool } from "./frame-protocol";
 import type { MapsRuntime } from "./runtime";
 import { translate, type MapsKey } from "./i18n";
 import { useLanguage } from "./maps-page";
-import type { MapElement } from "./maps";
+import { LINE_STYLE_IDS, type LineStyleId, type MapElement } from "./maps";
 
 /** The editor page id, exactly as the manifest declares it. */
 export const MAP_PAGE_ID = "map";
@@ -43,6 +44,16 @@ const LOCK = "lock";
 const UNLOCK = "unlock";
 const DELETE = "delete";
 const PROPERTIES = "properties";
+
+/** The Line style select's label for each style the model accepts, in its order. */
+const LINE_STYLE_KEYS: Readonly<Record<LineStyleId, MapsKey>> = {
+  coast: "properties.style.coast",
+  river: "properties.style.river",
+  road: "properties.style.road",
+  border: "properties.style.border",
+  coastRipple: "properties.style.coastRipple",
+  plain: "properties.style.plain",
+};
 
 interface RenameDialog {
   id: string;
@@ -160,9 +171,11 @@ function MapEditorView({
             options={[
               { value: "select", label: t("tools.select") },
               { value: "pencil", label: t("tools.pencil") },
+              { value: "pen", label: t("tools.pen") },
+              { value: "eraser", label: t("tools.eraser") },
             ]}
             selectedKey={snapshot.tool}
-            onChange={(event) => editor.setTool(event.detail as "select" | "pencil")}
+            onChange={(event) => editor.setTool(event.detail as MapTool)}
           />
           <ui.Text weight="semibold">{t("elements.label")}</ui.Text>
           <ui.Collection
@@ -188,6 +201,17 @@ function MapEditorView({
 
         <ui.View direction="column" gap="sm">
           <ui.Text weight="semibold">{t("properties.label")}</ui.Text>
+          {/* With no Map Line selected the select shows the style a new Pen line
+              takes; picking one then only sets that current style (#746). */}
+          <ui.Select
+            label={t("properties.lineStyle")}
+            options={LINE_STYLE_IDS.map((style) => ({
+              value: style,
+              label: t(LINE_STYLE_KEYS[style]),
+            }))}
+            selectedKey={snapshot.selectedLineStyle ?? snapshot.currentLineStyle}
+            onChange={(event) => editor.setLineStyle(event.detail as LineStyleId)}
+          />
           {selected === null ? (
             <ui.Text tone="muted">{t("properties.empty")}</ui.Text>
           ) : (
@@ -210,6 +234,28 @@ function MapEditorView({
                 isSelected={selected.locked}
                 onChange={(event) => editor.setLocked(selected.id, event.detail)}
               />
+              {snapshot.selectedIsLine ? (
+                <ui.Switch
+                  label={t("properties.enclosesFills")}
+                  isSelected={snapshot.selectedEnclosesFills ?? false}
+                  onChange={(event) => editor.setEnclosesFills(selected.id, event.detail)}
+                />
+              ) : null}
+              {snapshot.selectedIsLine ? (
+                <>
+                  <ui.Slider
+                    label={t("properties.roughenStrength")}
+                    value={snapshot.roughenStrength}
+                    minValue={MIN_ROUGHEN_STRENGTH_MM}
+                    maxValue={MAX_ROUGHEN_STRENGTH_MM}
+                    step={0.1}
+                    onChange={(event) => editor.setRoughenStrength(event.detail)}
+                  />
+                  <ui.Button variant="secondary" onPress={() => editor.roughen()}>
+                    {t("properties.roughen")}
+                  </ui.Button>
+                </>
+              ) : null}
             </>
           )}
         </ui.View>

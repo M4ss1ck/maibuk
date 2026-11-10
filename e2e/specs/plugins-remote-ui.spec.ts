@@ -3,7 +3,8 @@
 // with its own React Aria controls. Keyboard only: typing into the Plugin's
 // text field stays host-owned, its button runs from the keyboard, its color
 // picker opens from the keyboard, commits a swatch, and dismisses with Escape
-// back to its trigger, and a declaration the UI kit never carries stops the
+// back to its trigger, its slider moves with the arrow and Home keys and hands
+// the Plugin each value, and a declaration the UI kit never carries stops the
 // Plugin with the remote-ui-limit copy. Each matrix edge gets its own test.
 
 import type { Page } from "@playwright/test";
@@ -126,6 +127,24 @@ test.describe("Host-rendered Plugin UI @wf:plugins-remote-ui", () => {
     await expect(trigger).toBeFocused();
     // A cancelled pick commits nothing: the Plugin still echoes its own value.
     await expect(page.getByText("Accent: #3B82F6")).toBeVisible();
+  });
+
+  test("the slider moves with the keyboard and the Plugin receives each value", async ({
+    page,
+  }) => {
+    await openPanel(page);
+    const slider = page.getByRole("slider", { name: "Strength" });
+    await expect(slider).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Strength: 1.5")).toBeVisible();
+    await capture(page, "plugin-slider-panel");
+
+    await tabTo(page, slider);
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByText("Strength: 1.6")).toBeVisible();
+
+    // Home jumps to the slider's own minimum, and the Plugin hears it too.
+    await page.keyboard.press("Home");
+    await expect(page.getByText("Strength: 0.5")).toBeVisible();
   });
 
   test("a declaration outside the kit stops the Plugin", async ({ page }) => {

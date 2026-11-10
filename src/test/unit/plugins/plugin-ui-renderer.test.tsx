@@ -300,6 +300,26 @@ describe("the Remote UI renderer", () => {
       expect(commits.at(-1)).toBe(120);
     });
 
+    it("moves a slider value with the keyboard @ui-kbd:maibuk-slider", async () => {
+      const seen: number[] = [];
+      harness = renderRemoteUi();
+      await harness.mount(
+        <ui.Slider
+          label="Strength"
+          value={1.5}
+          minValue={0.5}
+          maxValue={5}
+          step={0.1}
+          onChange={(event) => seen.push(event.detail)}
+        />
+      );
+      const slider = screen.getByRole("slider", { name: "Strength" });
+      await userEvent.tab();
+      expect(slider).toHaveFocus();
+      await userEvent.keyboard("{ArrowRight}");
+      expect(seen.at(-1)).toBeCloseTo(1.6);
+    });
+
     it("links a text field's description and error @ui:maibuk-text-field", async () => {
       harness = renderRemoteUi();
       await harness.mount(

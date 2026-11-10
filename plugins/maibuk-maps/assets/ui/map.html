@@ -43,7 +43,10 @@
         touch-action: none;
       }
 
-      #surface svg[data-tool="pencil"] {
+      /* Every drawing tool shows a crosshair; Select shows the pointer. */
+      #surface svg[data-tool="pencil"],
+      #surface svg[data-tool="pen"],
+      #surface svg[data-tool="eraser"] {
         cursor: crosshair;
       }
 
@@ -54,13 +57,11 @@
       /* A Map Line is page ink: its width is page millimetres, so zooming in
          shows a thicker line, exactly as the Maps list preview does. The Map's
          paper is the Map Style's light water in both themes (a printed map, like
-         a Reader page), so the ink stays the Map Style's own dark colour in
-         either scheme and arrives with the scene, on each line's `stroke`
-         attribute; the theme's foreground would draw near-white ink on light
-         paper in the dark theme. */
+         a Reader page), so each shape's own stroke and fill stay the Map
+         Style's colours in either scheme and arrive with the scene, on the
+         shape's `stroke` and `fill` attributes; the theme's foreground would
+         draw near-white ink on light paper in the dark theme. */
       .map-line {
-        fill: none;
-        stroke-width: 0.6;
         stroke-linecap: round;
         stroke-linejoin: round;
       }
@@ -77,13 +78,18 @@
       }
 
       /* An invisible, wide, constant-pixel target: a 0.6 mm line is too thin to
-         hit with a finger or a mouse at page scale. */
+         hit with a finger or a mouse at page scale. A filled shape such as a
+         river is picked by its area instead of only by its outline. */
       .map-hit {
         fill: none;
         stroke: transparent;
         stroke-width: 12px;
         vector-effect: non-scaling-stroke;
         pointer-events: stroke;
+      }
+
+      .map-hit[data-fill="true"] {
+        pointer-events: fill;
       }
 
       /* The stroke being drawn, before the Worker answers with the smoothed
@@ -94,6 +100,16 @@
         stroke-width: 0.6;
         stroke-linecap: round;
         stroke-linejoin: round;
+      }
+
+      /* The keyboard Pen's crosshair, where the next point lands: the same
+         accent, thin enough to read as a guide rather than ink. */
+      .map-crosshair {
+        fill: none;
+        stroke: var(--maibuk-color-primary-hover);
+        stroke-width: 0.4;
+        stroke-linecap: round;
+        opacity: 0.8;
       }
     </style>
   </head>

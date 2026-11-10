@@ -33,6 +33,8 @@ export interface PluginUiProp {
   /** A `number` prop's bounds. */
   minimum?: number;
   maximum?: number;
+  /** A `number` prop that must be greater than this value. */
+  exclusiveMinimum?: number;
   /** A `number` prop that must be a whole number. */
   integer?: boolean;
   /**
@@ -66,6 +68,17 @@ export interface PluginUiEvent {
   description?: string;
 }
 
+/**
+ * A relation between two numeric props the validator refuses when both are
+ * set, such as a range whose minimum must stay below its maximum.
+ */
+export interface PluginUiPropRelation {
+  /** The prop whose value must be smaller. */
+  smaller: string;
+  /** The prop whose value must be larger. */
+  larger: string;
+}
+
 export type PluginUiCategory =
   | "structure"
   | "forms"
@@ -88,6 +101,8 @@ export interface PluginUiElement {
   summary: string;
   props: Readonly<Record<string, PluginUiProp>>;
   events: readonly PluginUiEvent[];
+  /** Numeric props that must keep an order whenever both are set. */
+  relations?: readonly PluginUiPropRelation[];
   /** Remote methods the Plugin may call on the host element; empty in v1 part 1. */
   methods: readonly string[];
 }
@@ -368,6 +383,45 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
         detail: "number",
         description:
           "Fires with the parsed number when the value is committed; an empty field does not report 0.",
+      },
+    ],
+    methods: [],
+  },
+  {
+    tag: "maibuk-slider",
+    component: "Slider",
+    category: "forms",
+    host: "Slider",
+    interactive: true,
+    summary: "A slider that picks one number within a range.",
+    props: {
+      label: { kind: "string", required: true, maxLength: 512 },
+      value: {
+        kind: "number",
+        description: "The current value; defaults to `minValue`.",
+      },
+      minValue: {
+        kind: "number",
+        description: "The lowest value; defaults to `0`, and must stay below `maxValue`.",
+      },
+      maxValue: {
+        kind: "number",
+        description: "The highest value; defaults to `100`, and must stay above `minValue`.",
+      },
+      step: {
+        kind: "number",
+        exclusiveMinimum: 0,
+        description: "The amount one key press moves the value; defaults to `1`.",
+      },
+      isDisabled: { kind: "boolean" },
+    },
+    relations: [{ smaller: "minValue", larger: "maxValue" }],
+    events: [
+      {
+        prop: "onChange",
+        event: "change",
+        detail: "number",
+        description: "Fires with the new value as the thumb moves.",
       },
     ],
     methods: [],

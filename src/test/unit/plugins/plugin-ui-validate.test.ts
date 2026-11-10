@@ -245,6 +245,98 @@ describe("the connection validator", () => {
     expect(receiver.root.children).toHaveLength(0);
   });
 
+  it("accepts a Slider and refuses a missing label, a non-finite number, a reversed range, and a zero step", () => {
+    const valid = setup();
+    valid.connection.mutate([
+      insert(
+        element("1", "maibuk-slider", {
+          properties: { label: "Strength", value: 1.5, minValue: 0.5, maxValue: 5, step: 0.1 },
+        })
+      ),
+    ]);
+    expect(valid.violations).toEqual([]);
+    expect(valid.receiver.root.children).toHaveLength(1);
+
+    const missingLabel = setup();
+    missingLabel.connection.mutate([
+      insert(element("1", "maibuk-slider", { properties: { value: 1.5 } })),
+    ]);
+    expect(missingLabel.violations[0]).toMatchObject({
+      code: "invalid-prop",
+      tag: "maibuk-slider",
+      prop: "label",
+      message: "maibuk-slider is missing the required prop label",
+    });
+    expect(missingLabel.receiver.root.children).toHaveLength(0);
+
+    const nonFinite = setup();
+    nonFinite.connection.mutate([
+      insert(
+        element("1", "maibuk-slider", {
+          properties: { label: "Strength", value: Number.POSITIVE_INFINITY },
+        })
+      ),
+    ]);
+    expect(nonFinite.violations[0]).toMatchObject({
+      code: "invalid-prop",
+      tag: "maibuk-slider",
+      prop: "value",
+      message: "The prop maibuk-slider.value must be a number",
+    });
+
+    const reversedRange = setup();
+    reversedRange.connection.mutate([
+      insert(
+        element("1", "maibuk-slider", {
+          properties: { label: "Strength", minValue: 5, maxValue: 5 },
+        })
+      ),
+    ]);
+    expect(reversedRange.violations[0]).toMatchObject({
+      code: "invalid-prop",
+      tag: "maibuk-slider",
+      prop: "minValue",
+      message: "The prop maibuk-slider.minValue must be smaller than maxValue",
+    });
+    expect(reversedRange.receiver.root.children).toHaveLength(0);
+
+    const zeroStep = setup();
+    zeroStep.connection.mutate([
+      insert(
+        element("1", "maibuk-slider", {
+          properties: { label: "Strength", step: 0 },
+        })
+      ),
+    ]);
+    expect(zeroStep.violations[0]).toMatchObject({
+      code: "invalid-prop",
+      tag: "maibuk-slider",
+      prop: "step",
+      message: "The prop maibuk-slider.step must be greater than 0",
+    });
+    expect(zeroStep.receiver.root.children).toHaveLength(0);
+  });
+
+  it("refuses a Slider update that reverses the range", () => {
+    const { receiver, violations, connection } = setup();
+    connection.mutate([
+      insert(
+        element("1", "maibuk-slider", {
+          properties: { label: "Strength", minValue: 0, maxValue: 5 },
+        })
+      ),
+    ]);
+    expect(violations).toEqual([]);
+    connection.mutate([[MUTATION_TYPE_UPDATE_PROPERTY, "1", "maxValue", -1]]);
+    expect(violations[0]).toMatchObject({
+      code: "invalid-prop",
+      tag: "maibuk-slider",
+      prop: "minValue",
+      message: "The prop maibuk-slider.minValue must be smaller than maxValue",
+    });
+    expect(receiver.root.children).toHaveLength(1);
+  });
+
   it("accepts a View grow boolean and refuses a non-boolean grow", () => {
     const accepted = setup();
     accepted.connection.mutate([

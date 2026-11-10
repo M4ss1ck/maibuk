@@ -82,6 +82,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 interface TreeShadow {
   tags: Map<string, string>;
   children: Map<string, string[]>;
+  props: Map<string, Record<string, unknown>>;
   nodes: number;
 }
 
@@ -107,11 +108,19 @@ function rememberProp(tracking: BatchTracking, id: string, name: string): void {
 }
 
 function buildShadow(root: RemoteReceiverRoot): TreeShadow {
-  const shadow: TreeShadow = { tags: new Map(), children: new Map(), nodes: 0 };
+  const shadow: TreeShadow = {
+    tags: new Map(),
+    children: new Map(),
+    props: new Map(),
+    nodes: 0,
+  };
   function visit(node: RemoteReceiverRoot | RemoteReceiverNode): void {
     shadow.nodes += 1;
     const ids: string[] = [];
-    if (node.type === NODE_TYPE_ELEMENT) shadow.tags.set(node.id, node.element);
+    if (node.type === NODE_TYPE_ELEMENT) {
+      shadow.tags.set(node.id, node.element);
+      shadow.props.set(node.id, { ...node.properties });
+    }
     for (const child of "children" in node ? node.children : []) {
       ids.push(child.id);
       visit(child);
@@ -135,6 +144,7 @@ function unindexSubtree(id: string, shadow: TreeShadow, tracking: BatchTracking)
   for (const child of children) unindexSubtree(child, shadow, tracking);
   shadow.children.delete(id);
   shadow.tags.delete(id);
+  shadow.props.delete(id);
   tracking.inserted.delete(id);
   tracking.setProps.delete(id);
   shadow.nodes -= 1;
@@ -181,6 +191,9 @@ function propertyProblem(prop: PluginUiProp, value: unknown, maxOptions: number)
       if (prop.integer === true && !Number.isInteger(value)) return "must be a whole number";
       if (prop.minimum !== undefined && value < prop.minimum) return "is below its minimum";
       if (prop.maximum !== undefined && value > prop.maximum) return "is above its maximum";
+      if (prop.exclusiveMinimum !== undefined && value <= prop.exclusiveMinimum) {
+        return `must be greater than ${prop.exclusiveMinimum}`;
+      }
       return null;
     }
     case "boolean":
@@ -260,6 +273,7 @@ export function createValidatedConnection(options: PluginUiValidatorOptions): Re
         });
       }
       shadow.tags.set(serialization.id, serialization.element);
+      shadow.props.set(serialization.id, { ...serialization.properties });
       tracking.inserted.add(serialization.id);
       for (const name of Object.keys(serialization.attributes ?? {})) {
         return refuse({
@@ -415,6 +429,10 @@ export function createValidatedConnection(options: PluginUiValidatorOptions): Re
           } else {
             rememberProp(tracking, id, name);
           }
+          const props = shadow.props.get(id) ?? {};
+          if (value === undefined) delete props[name];
+          else props[name] = value;
+          shadow.props.set(id, props);
           break;
         }
       }
@@ -439,6 +457,31 @@ export function createValidatedConnection(options: PluginUiValidatorOptions): Re
           message: `${tag} is missing the required prop ${name}`,
           tag,
           prop: name,
+        });
+        return;
+      }
+    }
+
+    // Relations pair numeric props, so they are checked once the batch has set
+    // everything it is going to: an update to either side is refused the same
+    // way an insert is.
+    for (const id of tracking.setProps.keys()) {
+      const tag = shadow.tags.get(id);
+      if (tag === undefined) continue;
+      const element = getPluginUiElement(tag);
+      if (element?.relations === undefined) continue;
+      const props = shadow.props.get(id) ?? {};
+      for (const relation of element.relations) {
+        const smaller = props[relation.smaller];
+        const larger = props[relation.larger];
+        if (typeof smaller !== "number" || typeof larger !== "number") continue;
+        if (!Number.isFinite(smaller) || !Number.isFinite(larger)) continue;
+        if (smaller < larger) continue;
+        refuse({
+          code: "invalid-prop",
+          message: `The prop ${tag}.${relation.smaller} must be smaller than ${relation.larger}`,
+          tag,
+          prop: relation.smaller,
         });
         return;
       }

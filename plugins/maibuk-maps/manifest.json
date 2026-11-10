@@ -152,6 +152,24 @@
         "defaults": [["p"]]
       },
       {
+        "id": "penTool",
+        "label": "Pen tool",
+        "contexts": ["map"],
+        "defaults": [["n"]]
+      },
+      {
+        "id": "eraserTool",
+        "label": "Eraser tool",
+        "contexts": ["map"],
+        "defaults": [["e"]]
+      },
+      {
+        "id": "roughen",
+        "label": "Roughen",
+        "contexts": ["map"],
+        "defaults": [["Mod+Shift+r"]]
+      },
+      {
         "id": "deleteElement",
         "label": "Delete element",
         "contexts": ["map"],
