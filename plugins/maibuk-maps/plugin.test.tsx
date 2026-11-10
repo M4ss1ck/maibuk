@@ -176,9 +176,22 @@ function line(
   id: string,
   name: string,
   points: [number, number][],
-  extra: Partial<Pick<MapLineElement, "hidden" | "locked">> = {}
+  extra: Partial<MapLineElement> = {}
 ): MapLineElement {
-  return { id, kind: "line", name, hidden: false, locked: false, points, ...extra };
+  return {
+    id,
+    kind: "line",
+    name,
+    hidden: false,
+    locked: false,
+    points,
+    style: "plain",
+    enclosesFills: true,
+    closed: false,
+    curves: points.slice(1).map(() => true),
+    roughened: false,
+    ...extra,
+  };
 }
 
 /** One Map, `m1`, holding `elements`. */
@@ -840,12 +853,17 @@ describe("Map editor page", () => {
         name: "Map Line 1",
         hidden: false,
         locked: false,
+        style: "plain",
+        enclosesFills: true,
+        closed: false,
+        roughened: false,
       });
       expect(element.points).toEqual(smoothStroke(raw));
+      expect(element.curves).toEqual(element.points.slice(1).map(() => true));
       expect(runtime.editor?.getSnapshot().selectedId).toBe(element.id);
 
       const preview = decodeURIComponent((storage.get(INDEX_KEY) as MapIndexEntry[])[0].preview);
-      expect(preview).toContain(linePath(element.points));
+      expect(preview).toContain(linePath(element));
 
       runtime.editor?.handleFrameMessage({ kind: "stroke", points: "not-points" });
       expect(runtime.editor?.getSnapshot().elements).toHaveLength(1);

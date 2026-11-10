@@ -114,24 +114,39 @@ function number(value: number): string {
   return String(Math.round(value * 100) / 100);
 }
 
-/**
- * The SVG path `d` through `points`: a straight `L` for two points, and a
- * Catmull-Rom spline written as cubic Beziers beyond that.
- */
-export function linePath(points: readonly MapPoint[]): string {
-  if (points.length < 2) return "";
-  if (points.length === 2) {
-    return `M ${number(points[0][0])} ${number(points[0][1])} L ${number(points[1][0])} ${number(
-      points[1][1]
-    )}`;
-  }
+/** What `linePath` needs from a Map Line: its points, one flag per segment, and whether it closes. */
+export interface LinePathInput {
+  points: readonly MapPoint[];
+  curves: readonly boolean[];
+  closed: boolean;
+}
 
+/**
+ * The SVG path `d` through a Map Line: a straight `L` for a segment its flag
+ * marks straight, and a Catmull-Rom spline written as cubic Beziers for a
+ * curved one, using the neighbours across the seam of a closed line. A closed
+ * line ends with `Z`. Two points make a straight line whatever their flag says,
+ * which keeps every Pencil line from #745 drawing exactly as it did.
+ */
+export function linePath(line: LinePathInput): string {
+  const { points, curves, closed } = line;
+  if (points.length < 2) return "";
+
+  const count = points.length;
+  const segments = count - 1 + (closed ? 1 : 0);
   let path = `M ${number(points[0][0])} ${number(points[0][1])}`;
-  for (let index = 0; index < points.length - 1; index++) {
-    const previous = points[index - 1] ?? points[index];
+  for (let index = 0; index < segments; index++) {
     const start = points[index];
-    const end = points[index + 1];
-    const next = points[index + 2] ?? end;
+    const end = points[(index + 1) % count];
+    if (curves[index] !== true || count === 2) {
+      // A straight closing segment is what `Z` draws, so it is not written twice.
+      if (!(closed && index === segments - 1)) {
+        path += ` L ${number(end[0])} ${number(end[1])}`;
+      }
+      continue;
+    }
+    const previous = closed ? points[(index - 1 + count) % count] : (points[index - 1] ?? start);
+    const next = closed ? points[(index + 2) % count] : (points[index + 2] ?? end);
     const controlOne: MapPoint = [
       start[0] + (end[0] - previous[0]) / 6,
       start[1] + (end[1] - previous[1]) / 6,
@@ -144,7 +159,7 @@ export function linePath(points: readonly MapPoint[]): string {
       controlTwo[0]
     )} ${number(controlTwo[1])} ${number(end[0])} ${number(end[1])}`;
   }
-  return path;
+  return closed ? `${path} Z` : path;
 }
 
 /** Escapes text for an XML attribute. */
@@ -165,7 +180,7 @@ function escapeAttribute(value: string): string {
 /** One Map Line as a path, marked when it is the selection. */
 function lineElement(element: Extract<MapElement, { kind: "line" }>, selected: boolean): string {
   const attributes = [
-    `d="${escapeAttribute(linePath(element.points))}"`,
+    `d="${escapeAttribute(linePath(element))}"`,
     `stroke="${LINE_STROKE}"`,
     `stroke-width="${LINE_STROKE_WIDTH_MM}"`,
     'fill="none"',

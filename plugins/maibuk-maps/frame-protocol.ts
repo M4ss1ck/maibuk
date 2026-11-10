@@ -110,7 +110,7 @@ export function sceneMessage(
     ink: LINE_STROKE,
     elements: map.elements.map((element) => ({
       id: element.id,
-      d: element.kind === "line" ? linePath(element.points) : "",
+      d: element.kind === "line" ? linePath(element) : "",
       hidden: element.hidden,
       locked: element.locked,
       selected: element.id === view.selectedId,

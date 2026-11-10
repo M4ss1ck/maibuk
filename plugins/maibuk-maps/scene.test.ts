@@ -26,7 +26,20 @@ function line(
   points: [number, number][],
   extra: Partial<MapLineElement> = {}
 ): MapLineElement {
-  return { id, kind: "line", name: id, hidden: false, locked: false, points, ...extra };
+  return {
+    id,
+    kind: "line",
+    name: id,
+    hidden: false,
+    locked: false,
+    points,
+    style: "plain",
+    enclosesFills: true,
+    closed: false,
+    curves: points.slice(1).map(() => true),
+    roughened: false,
+    ...extra,
+  };
 }
 
 function mapWith(
@@ -107,9 +120,18 @@ describe("smoothStroke", () => {
 });
 
 describe("linePath", () => {
+  /** The path of a line whose segments are curved unless `curves` says otherwise. */
+  function path(
+    points: [number, number][],
+    curves: boolean[] = points.slice(1).map(() => true),
+    closed = false
+  ): string {
+    return linePath({ points, curves, closed });
+  }
+
   it("draws a straight line through two points", () => {
     expect(
-      linePath([
+      path([
         [0, 0],
         [10, 5],
       ])
@@ -118,7 +140,7 @@ describe("linePath", () => {
 
   it("converts Catmull-Rom points to cubic Beziers and rounds to two decimals", () => {
     expect(
-      linePath([
+      path([
         [0, 0],
         [10, 10],
         [20, 0],
@@ -128,7 +150,7 @@ describe("linePath", () => {
 
   it("rounds the start point too", () => {
     expect(
-      linePath([
+      path([
         [0.1234, 0.5678],
         [10.9876, 20.4444],
       ])
@@ -136,8 +158,47 @@ describe("linePath", () => {
   });
 
   it("has no path for fewer than two points", () => {
-    expect(linePath([])).toBe("");
-    expect(linePath([[1, 2]])).toBe("");
+    expect(linePath({ points: [], curves: [], closed: false })).toBe("");
+    expect(linePath({ points: [[1, 2]], curves: [], closed: false })).toBe("");
+  });
+
+  it("draws a straight segment as L between curved ones", () => {
+    expect(
+      path(
+        [
+          [0, 0],
+          [10, 10],
+          [20, 0],
+        ],
+        [true, false]
+      )
+    ).toBe("M 0 0 C 1.67 1.67 6.67 10 10 10 L 20 0");
+  });
+
+  it("ends a closed line with Z and wraps its spline across the seam", () => {
+    expect(
+      path(
+        [
+          [0, 0],
+          [10, 0],
+          [10, 10],
+        ],
+        [true, true, true],
+        true
+      )
+    ).toBe("M 0 0 C 0 -1.67 8.33 -1.67 10 0 C 11.67 1.67 11.67 10 10 10 C 8.33 10 0 1.67 0 0 Z");
+    expect(
+      path(
+        [
+          [0, 0],
+          [10, 0],
+          [10, 10],
+          [0, 10],
+        ],
+        [false, false, false, false],
+        true
+      )
+    ).toBe("M 0 0 L 10 0 L 10 10 L 0 10 Z");
   });
 });
 

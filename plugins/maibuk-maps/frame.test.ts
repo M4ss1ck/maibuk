@@ -190,6 +190,11 @@ describe("the scene message", () => {
             [0, 0],
             [10, 10],
           ] as [number, number][],
+          style: "plain" as const,
+          enclosesFills: true,
+          closed: false,
+          curves: [true],
+          roughened: false,
         },
       ],
     };

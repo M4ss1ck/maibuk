@@ -11,8 +11,8 @@
  * undoable. This module imports only its own files.
  */
 
-import type { MapDocument, MapElement, MapPoint, MapStore } from "./maps";
-import { MAX_NAME_LENGTH, randomMapId } from "./maps";
+import type { MapDocument, MapElement, MapLineElement, MapPoint, MapStore } from "./maps";
+import { LINE_STYLE_DEFAULT_ENCLOSES, MAX_NAME_LENGTH, curvedSegments, randomMapId } from "./maps";
 import { createAutosave } from "./autosave";
 import {
   parseFrameMessage,
@@ -185,13 +185,18 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     const points = smoothStroke(raw);
     if (points.length < 2) return;
     const number = elements.filter((element) => element.kind === "line").length + 1;
-    const element: MapElement = {
+    const element: MapLineElement = {
       id: randomMapId(),
       kind: "line",
       name: format(translate(options.language(), "element.lineName"), { number }),
       hidden: false,
       locked: false,
       points,
+      style: "plain",
+      enclosesFills: LINE_STYLE_DEFAULT_ENCLOSES.plain,
+      closed: false,
+      curves: curvedSegments(points.length, false),
+      roughened: false,
     };
     selectedId = element.id;
     edit(addElement(elements, element));

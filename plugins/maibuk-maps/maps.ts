@@ -71,10 +71,39 @@ export interface MapElementBase {
   locked: boolean;
 }
 
-/** A Map Line: the points a Pencil stroke was simplified to (#745). */
+/** A Map Line: the points a Pencil stroke was simplified to (#745), and its line style (#746). */
 export interface MapLineElement extends MapElementBase {
   kind: "line";
   points: MapPoint[];
+  /** What the line is: a coast, a river, a road, a border, a ripple, or plain ink. */
+  style: LineStyleId;
+  /** Whether the area the line encloses takes the Fills of the Map. */
+  enclosesFills: boolean;
+  /** Whether the last point joins back to the first. */
+  closed: boolean;
+  /** One flag per segment: `true` curves it, `false` draws it straight. */
+  curves: boolean[];
+  /** Whether the line is drawn with the rough ink look. */
+  roughened: boolean;
+}
+
+/** The line styles a Map Line can take (#746); the render primitives arrive with the Frame slice. */
+export const LINE_STYLE_IDS = ["coast", "river", "road", "border", "coastRipple", "plain"] as const;
+export type LineStyleId = (typeof LINE_STYLE_IDS)[number];
+
+/** The Encloses Fills a style gives a Map Line when the author picks it. */
+export const LINE_STYLE_DEFAULT_ENCLOSES: Readonly<Record<LineStyleId, boolean>> = {
+  coast: true,
+  river: false,
+  road: false,
+  border: true,
+  coastRipple: false,
+  plain: true,
+};
+
+/** The curve flags of a line with `pointCount` points, every segment curved. */
+export function curvedSegments(pointCount: number, closed: boolean): boolean[] {
+  return Array.from({ length: pointCount - 1 + (closed ? 1 : 0) }, () => true);
 }
 
 /** Every other Element kind, whose geometry lands with its own ticket. */
@@ -172,6 +201,10 @@ function isMapElementKind(value: unknown): value is MapElementKind {
   return typeof value === "string" && (MAP_ELEMENT_KINDS as readonly string[]).includes(value);
 }
 
+function isLineStyleId(value: unknown): value is LineStyleId {
+  return typeof value === "string" && (LINE_STYLE_IDS as readonly string[]).includes(value);
+}
+
 function isMapPoint(value: unknown): value is MapPoint {
   return (
     Array.isArray(value) &&
@@ -181,6 +214,28 @@ function isMapPoint(value: unknown): value is MapPoint {
     typeof value[1] === "number" &&
     Number.isFinite(value[1])
   );
+}
+
+function isCurveFlags(value: unknown, length: number): value is boolean[] {
+  return (
+    Array.isArray(value) &&
+    value.length === length &&
+    value.every((flag) => typeof flag === "boolean")
+  );
+}
+
+/** Whether a line's style fields are present and well formed; a missing one is normalized on load. */
+function isLineStyleFields(element: Record<string, unknown>, pointCount: number): boolean {
+  if (element.style !== undefined && !isLineStyleId(element.style)) return false;
+  if (element.enclosesFills !== undefined && typeof element.enclosesFills !== "boolean")
+    return false;
+  if (element.closed !== undefined && typeof element.closed !== "boolean") return false;
+  if (element.roughened !== undefined && typeof element.roughened !== "boolean") return false;
+  if (element.curves !== undefined) {
+    const segments = pointCount - 1 + (element.closed === true ? 1 : 0);
+    if (!isCurveFlags(element.curves, segments)) return false;
+  }
+  return true;
 }
 
 function isMapElement(value: unknown): value is MapElement {
@@ -196,11 +251,9 @@ function isMapElement(value: unknown): value is MapElement {
     return false;
   }
   if (element.kind === "line") {
-    return (
-      Array.isArray(element.points) &&
-      element.points.length >= 2 &&
-      element.points.every(isMapPoint)
-    );
+    if (!Array.isArray(element.points) || element.points.length < 2) return false;
+    if (!element.points.every(isMapPoint)) return false;
+    return isLineStyleFields(element, element.points.length);
   }
   return true;
 }
@@ -243,6 +296,34 @@ function cleanName(name: string): string {
   return trimmed;
 }
 
+/**
+ * A Map Line read from a document written before line styles existed (#745):
+ * a Pencil line is plain, encloses Fills, open, all curves, and not roughened.
+ */
+function normalizeLine(line: MapLineElement): MapLineElement {
+  const stored = line as Partial<MapLineElement>;
+  const style = stored.style ?? "plain";
+  const closed = stored.closed ?? false;
+  return {
+    ...line,
+    style,
+    enclosesFills: stored.enclosesFills ?? LINE_STYLE_DEFAULT_ENCLOSES[style],
+    closed,
+    curves: stored.curves ?? curvedSegments(line.points.length, closed),
+    roughened: stored.roughened ?? false,
+  };
+}
+
+/** A whole document with every Element in its current shape, for reading old Maps. */
+function normalizeDocument(map: MapDocument): MapDocument {
+  return {
+    ...map,
+    elements: map.elements.map((element) =>
+      element.kind === "line" ? normalizeLine(element) : element
+    ),
+  };
+}
+
 function newestFirst(entries: MapIndexEntry[]): MapIndexEntry[] {
   return [...entries].sort((a, b) => b.updatedAt - a.updatedAt);
 }
@@ -279,7 +360,7 @@ export function createMapStore(
     load(id) {
       return serial(async () => {
         const stored = await storage.get({ key: mapKey(id) });
-        return isMapDocument(stored) ? stored : null;
+        return isMapDocument(stored) ? normalizeDocument(stored) : null;
       });
     },
 
@@ -317,7 +398,7 @@ export function createMapStore(
         const name = cleanName(nextName);
         const stored = await storage.get({ key: mapKey(id) });
         if (!isMapDocument(stored)) throw new Error("not-found");
-        const map: MapDocument = { ...stored, name, updatedAt: now() };
+        const map: MapDocument = { ...normalizeDocument(stored), name, updatedAt: now() };
         const entry = indexEntryFor(map);
         const index = await readIndex();
         await storage.set({ key: mapKey(id), value: map });

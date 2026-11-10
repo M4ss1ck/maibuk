@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import {
   DATA_VERSION,
   INDEX_KEY,
+  LINE_STYLE_DEFAULT_ENCLOSES,
   createMapStore,
   mapKey,
   mapPreview,
@@ -51,7 +52,19 @@ function storeOver(storage: MapStorage) {
 }
 
 function line(id: string, points: [number, number][]): MapLineElement {
-  return { id, kind: "line", name: id, hidden: false, locked: false, points };
+  return {
+    id,
+    kind: "line",
+    name: id,
+    hidden: false,
+    locked: false,
+    points,
+    style: "plain",
+    enclosesFills: LINE_STYLE_DEFAULT_ENCLOSES.plain,
+    closed: false,
+    curves: points.slice(1).map(() => true),
+    roughened: false,
+  };
 }
 
 describe("createMapStore", () => {
@@ -356,6 +369,112 @@ describe("createMapStore", () => {
     ]);
 
     expect(await store.load("m1")).toMatchObject({ name: "Second", updatedAt: 1002 });
+  });
+});
+
+describe("Map Line styles", () => {
+  it("gives each style its Encloses Fills default", () => {
+    expect(LINE_STYLE_DEFAULT_ENCLOSES).toEqual({
+      coast: true,
+      river: false,
+      road: false,
+      border: true,
+      coastRipple: false,
+      plain: true,
+    });
+  });
+
+  /** A Map as #745 stored it: a Pencil line with no style fields at all. */
+  async function oldMap(elements: unknown[]) {
+    const memory = memoryStorage();
+    const store = storeOver(memory.storage);
+    await store.create({ name: "Old", bookId: null, preset: "square" });
+    const created = memory.values.get(mapKey("m1")) as MapDocument;
+    await memory.storage.set({ key: mapKey("m1"), value: { ...created, elements } });
+    return { ...memory, store };
+  }
+
+  it("reads a Pencil line from before line styles as a plain, curved line", async () => {
+    const { store } = await oldMap([
+      {
+        id: "pencil",
+        kind: "line",
+        name: "Pencil",
+        hidden: false,
+        locked: false,
+        points: [
+          [0, 0],
+          [10, 0],
+          [10, 10],
+        ],
+      },
+    ]);
+
+    expect(await store.load("m1")).toMatchObject({
+      elements: [
+        {
+          id: "pencil",
+          style: "plain",
+          enclosesFills: true,
+          closed: false,
+          curves: [true, true],
+          roughened: false,
+        },
+      ],
+    });
+  });
+
+  it("fills a missing Encloses Fills from the line's own style", async () => {
+    const { store } = await oldMap([
+      {
+        id: "river",
+        kind: "line",
+        name: "River",
+        hidden: false,
+        locked: false,
+        points: [
+          [0, 0],
+          [10, 0],
+        ],
+        style: "river",
+      },
+    ]);
+
+    expect((await store.load("m1"))?.elements[0]).toMatchObject({
+      style: "river",
+      enclosesFills: false,
+      curves: [true],
+    });
+  });
+
+  it("rejects a line whose style or curve flags are malformed", async () => {
+    const base = {
+      id: "broken",
+      kind: "line",
+      name: "Broken",
+      hidden: false,
+      locked: false,
+      points: [
+        [0, 0],
+        [10, 0],
+      ],
+      style: "plain",
+      enclosesFills: true,
+      closed: false,
+      roughened: false,
+    };
+
+    for (const element of [
+      { ...base, style: "scribble" },
+      { ...base, enclosesFills: "yes" },
+      { ...base, closed: "no" },
+      { ...base, curves: [true, false] },
+      { ...base, curves: "curved" },
+      { ...base, roughened: 1 },
+    ]) {
+      const { store } = await oldMap([element]);
+      expect(await store.load("m1")).toBeNull();
+    }
   });
 });
 
