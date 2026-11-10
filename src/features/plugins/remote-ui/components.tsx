@@ -72,6 +72,7 @@ import { ItemActionsMenu } from "@/components/ui/ItemActionsMenu";
 import { Modal } from "@/components/ui/Modal";
 import { MultiSelectCombobox } from "@/components/ui/MultiSelectCombobox";
 import { Select } from "@/components/ui/Select";
+import { Slider } from "@/components/ui/Slider";
 import { Switch } from "@/components/ui/Switch";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { PluginIcon } from "@/components/plugins/PluginIcon";
@@ -349,6 +350,38 @@ function NumberFieldHost({
       )}
       <FieldError className="mt-1 block text-sm text-destructive">{errorMessage}</FieldError>
     </AriaNumberField>
+  );
+}
+
+interface SliderHostProps {
+  label: string;
+  value?: number;
+  minValue?: number;
+  maxValue?: number;
+  step?: number;
+  isDisabled?: boolean;
+  onChange?: (value: number) => void;
+}
+
+function SliderHost({
+  label,
+  value,
+  minValue,
+  maxValue,
+  step,
+  isDisabled,
+  onChange,
+}: SliderHostProps) {
+  return (
+    <Slider
+      label={label}
+      value={value ?? minValue ?? 0}
+      minValue={minValue}
+      maxValue={maxValue}
+      step={step}
+      isDisabled={isDisabled}
+      onChange={(next) => onChange?.(next)}
+    />
   );
 }
 
@@ -1687,6 +1720,7 @@ export function createPluginUiComponents(host?: PluginFrameHost): RemoteComponen
     TextField: TextFieldHost,
     TextArea: TextAreaHost,
     NumberField: NumberFieldHost,
+    Slider: SliderHost,
     Checkbox: CheckboxHost,
     Switch: SwitchHost,
     Select: SelectHost,

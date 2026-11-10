@@ -334,6 +334,36 @@ Methods:
 
 None.
 
+## `maibuk-slider`
+
+A slider that picks one number within a range.
+
+- Component: `Slider`
+- Category: `forms`
+- Host: `Slider`
+- Keyboard-interactive: yes
+
+Props:
+
+| Name | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `label` | `string` | yes | At most 512 characters. |
+| `value` | `number` | no | The current value; defaults to `minValue`. |
+| `minValue` | `number` | no | The lowest value; defaults to `0`, and must stay below `maxValue`. |
+| `maxValue` | `number` | no | The highest value; defaults to `100`, and must stay above `minValue`. |
+| `step` | `number` | no | The amount one key press moves the value; defaults to `1`. |
+| `isDisabled` | `boolean` | no |  |
+
+Events:
+
+| Prop | Event | Detail | Notes |
+| --- | --- | --- | --- |
+| `onChange` | `change` | `number` | Fires with the new value as the thumb moves. |
+
+Methods:
+
+None.
+
 ## `maibuk-checkbox`
 
 A checkbox with a label.

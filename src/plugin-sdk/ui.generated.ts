@@ -15,6 +15,7 @@ export const PLUGIN_UI_TAGS = [
   "maibuk-text-field",
   "maibuk-text-area",
   "maibuk-number-field",
+  "maibuk-slider",
   "maibuk-checkbox",
   "maibuk-switch",
   "maibuk-select",
@@ -161,6 +162,21 @@ export interface PluginUiElementProps {
     /** Fires with the parsed number; it does not fire while the field is empty or holds a partial value such as `-`. */
     onInput?: (event: { detail: number }) => void;
     /** Fires with the parsed number when the value is committed; an empty field does not report 0. */
+    onChange?: (event: { detail: number }) => void;
+  };
+  /** A slider that picks one number within a range. Keyboard-interactive. */
+  "maibuk-slider": {
+    label: string;
+    /** The current value; defaults to `minValue`. */
+    value?: number;
+    /** The lowest value; defaults to `0`, and must stay below `maxValue`. */
+    minValue?: number;
+    /** The highest value; defaults to `100`, and must stay above `minValue`. */
+    maxValue?: number;
+    /** The amount one key press moves the value; defaults to `1`. */
+    step?: number;
+    isDisabled?: boolean;
+    /** Fires with the new value as the thumb moves. */
     onChange?: (event: { detail: number }) => void;
   };
   /** A checkbox with a label. Keyboard-interactive. */
@@ -426,6 +442,7 @@ export interface PluginUiComponents {
   TextField: ComponentType<PluginUiElementProps["maibuk-text-field"]>;
   TextArea: ComponentType<PluginUiElementProps["maibuk-text-area"]>;
   NumberField: ComponentType<PluginUiElementProps["maibuk-number-field"]>;
+  Slider: ComponentType<PluginUiElementProps["maibuk-slider"]>;
   Checkbox: ComponentType<PluginUiElementProps["maibuk-checkbox"]>;
   Switch: ComponentType<PluginUiElementProps["maibuk-switch"]>;
   Select: ComponentType<PluginUiElementProps["maibuk-select"]>;

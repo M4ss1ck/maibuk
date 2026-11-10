@@ -11,6 +11,7 @@ export { MultiSelectCombobox } from "@/components/ui/MultiSelectCombobox";
 export { ResponsiveToggleGroup } from "@/components/ui/ResponsiveToggleGroup";
 export type { ResponsiveToggleOption } from "@/components/ui/ResponsiveToggleGroup";
 export { Select } from "@/components/ui/Select";
+export { Slider } from "@/components/ui/Slider";
 export { SortSelect } from "@/components/ui/SortSelect";
 export type { SortSelectOption } from "@/components/ui/SortSelect";
 export { Switch } from "@/components/ui/Switch";

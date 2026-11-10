@@ -43,6 +43,7 @@ import {
   type MapsRuntime,
 } from "./runtime";
 import { linePath, smoothStroke } from "./scene";
+import { roughen, seedFor } from "./geometry";
 
 type User = ReturnType<typeof userEvent.setup>;
 
@@ -1177,6 +1178,45 @@ describe("Map editor page", () => {
       runtime.editor?.select(null);
       runtime.editor?.roughen();
       expect(runtime.editor?.getSnapshot().elements).toHaveLength(1);
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("raises the Roughen strength with ArrowRight and Roughens the line with it", async () => {
+    const points: [number, number][] = [
+      [0, 0],
+      [30, 0],
+      [30, 30],
+    ];
+    const storage = mapStorage([line("e1", "Coast", points, { curves: [false, false] })]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await selectRow(user, "Coast");
+      expect(runtime.editor?.getSnapshot().roughenStrength).toBe(1.5);
+
+      const slider = screen.getByRole("slider", { name: en["properties.roughenStrength"] });
+      await tabTo(user, slider, 80);
+      await user.keyboard("{ArrowRight}");
+      await waitFor(() => expect(runtime.editor?.getSnapshot().roughenStrength).toBeCloseTo(1.6));
+      const raised = runtime.editor?.getSnapshot().roughenStrength ?? 0;
+      expect(raised).toBeGreaterThan(1.5);
+
+      const roughenButton = screen.getByRole("button", { name: en["properties.roughen"] });
+      await tabTo(user, roughenButton, 10);
+      await user.keyboard("{Enter}");
+      await waitFor(() =>
+        expect((runtime.editor?.getSnapshot().elements[0] as MapLineElement).roughened).toBe(true)
+      );
+      await runtime.editor?.flush();
+
+      // The path is the one Roughen draws at the strength the author picked.
+      const stored = storedMap(storage).elements[0] as MapLineElement;
+      expect(stored.points).toEqual(roughen(points, false, raised, seedFor("e1")));
 
       await page.unmount();
     } finally {

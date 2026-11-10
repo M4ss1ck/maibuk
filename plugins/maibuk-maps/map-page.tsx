@@ -243,7 +243,7 @@ function MapEditorView({
               ) : null}
               {snapshot.selectedIsLine ? (
                 <>
-                  <ui.NumberField
+                  <ui.Slider
                     label={t("properties.roughenStrength")}
                     value={snapshot.roughenStrength}
                     minValue={MIN_ROUGHEN_STRENGTH_MM}

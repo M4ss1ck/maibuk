@@ -1,11 +1,12 @@
 // The remote-ui fixture Plugin (issues #446, #439, #736): the UI lane's Plugin
 // pages over the SDK's Worker Remote UI entry. `panel` draws part 1's kit (a
 // heading, a search field, a counter button, a color picker with its own
-// swatches) and one element the kit never declares, so a spec can prove the host
-// renders the tree, keeps typing host-owned, commits a color from the keyboard,
-// and stops the Plugin when a declaration leaves the UI kit. `gallery` draws
-// part 2's kit (organization, overlays, feedback, and Plugin CSS) for the
-// keyboard specs and the light/dark gallery screenshots.
+// swatches, and a strength slider) and one element the kit never declares, so a
+// spec can prove the host renders the tree, keeps typing host-owned, commits a
+// color and a slider value from the keyboard, and stops the Plugin when a
+// declaration leaves the UI kit. `gallery` draws part 2's kit (organization,
+// overlays, feedback, and Plugin CSS) for the keyboard specs and the light/dark
+// gallery screenshots.
 //
 // Built from this source into e2e/.output/plugins/remote-ui by the E2E global
 // setup; the bundle is never committed. The Worker attaches through
@@ -32,6 +33,7 @@ function Panel() {
   const [runs, setRuns] = useState(0);
   const [broken, setBroken] = useState(false);
   const [accent, setAccent] = useState("#3B82F6");
+  const [strength, setStrength] = useState(1.5);
 
   return (
     <ui.View direction="column" gap="md">
@@ -52,6 +54,15 @@ function Panel() {
         onChange={(event) => setAccent(event.detail)}
       />
       <ui.Text>{`Accent: ${accent}`}</ui.Text>
+      <ui.Slider
+        label="Strength"
+        value={strength}
+        minValue={0.5}
+        maxValue={5}
+        step={0.1}
+        onChange={(event) => setStrength(event.detail)}
+      />
+      <ui.Text>{`Strength: ${strength.toFixed(1)}`}</ui.Text>
       <ui.Button onPress={() => setBroken(true)}>Break</ui.Button>
       {broken ? <Evil /> : null}
     </ui.View>
