@@ -10,8 +10,9 @@
  */
 
 import { RoughGenerator } from "roughjs/bin/generator.js";
+import { faceAt, findFaces, type Face } from "./faces";
 import { cumulativeLengths, seedFor } from "./geometry";
-import type { MapDocument, MapElement, MapLineElement, MapPoint } from "./maps";
+import type { MapDocument, MapElement, MapFillElement, MapLineElement, MapPoint } from "./maps";
 
 /** The Atlas Map Style's water, which an empty Map shows. */
 export const EMPTY_MAP_COLOR = "#d7e6ec";
@@ -177,6 +178,8 @@ export interface LineShape {
   dash: string | null;
   /** The fill colour, or null for an unfilled line. */
   fill: string | null;
+  /** How the fill treats a path that doubles back, such as a face with holes. */
+  fillRule?: "evenodd";
   /** How opaque the whole shape is, 0 to 1. */
   opacity: number;
 }
@@ -375,6 +378,68 @@ export function lineShapes(element: MapLineElement): LineShape[] {
     : shapes;
 }
 
+/** The faces the Map Lines of one scene enclose, computed once for all its Fills. */
+function sceneFaces(elements: readonly MapElement[]): Face[] {
+  return findFaces(
+    elements.filter((element): element is MapLineElement => element.kind === "line")
+  );
+}
+
+/** Whether a point is the same corner it closed a ring back to. */
+function samePoint(a: MapPoint, b: MapPoint): boolean {
+  return a[0] === b[0] && a[1] === b[1];
+}
+
+/** One closed ring as a path, without writing its repeated first point twice. */
+function ringPath(ring: readonly MapPoint[]): string {
+  const points =
+    ring.length > 1 && samePoint(ring[0], ring[ring.length - 1]) ? ring.slice(0, -1) : ring;
+  if (points.length === 0) return "";
+  let path = `M ${number(points[0][0])} ${number(points[0][1])}`;
+  for (const point of points.slice(1)) path += ` L ${number(point[0])} ${number(point[1])}`;
+  return `${path} Z`;
+}
+
+/** A face's outline as one path: the ring around it, then each hole cut out. */
+function fillPath(face: Face): string {
+  return [face.outer, ...face.holes].map(ringPath).join(" ");
+}
+
+/**
+ * The shape one Fill draws: the path of the face its anchor lies in, filled
+ * with its colour and evenodd, so the holes in that face show the page through.
+ * A Fill whose anchor is in no face draws nothing.
+ */
+function fillShape(element: MapFillElement, faces: readonly Face[]): LineShape[] {
+  const face = faceAt(faces, element.anchor);
+  if (face === null) return [];
+  return [
+    {
+      d: fillPath(face),
+      stroke: null,
+      strokeWidth: 0,
+      dash: null,
+      fill: element.content.color,
+      fillRule: "evenodd",
+      opacity: 1,
+    },
+  ];
+}
+
+/** The render primitives one Element is drawn from, beside a Map Line's. */
+function elementShapes(element: MapElement, faces: readonly Face[]): LineShape[] {
+  if (element.kind === "line") return lineShapes(element);
+  if (element.kind === "fill") return fillShape(element, faces);
+  return [];
+}
+
+/** Every Element's render primitives, in array order, from one pass over the faces. */
+export function sceneShapes(elements: readonly MapElement[]): LineShape[][] {
+  const needsFaces = elements.some((element) => element.kind === "fill");
+  const faces = needsFaces ? sceneFaces(elements) : [];
+  return elements.map((element) => elementShapes(element, faces));
+}
+
 /** Escapes text for an XML attribute. */
 function escapeAttribute(value: string): string {
   return value.replace(
@@ -400,17 +465,22 @@ function shapePath(shape: LineShape): string {
     attributes.push(`stroke-width="${number(shape.strokeWidth)}"`);
   }
   attributes.push(shape.fill === null ? 'fill="none"' : `fill="${escapeAttribute(shape.fill)}"`);
+  if (shape.fillRule !== undefined) attributes.push(`fill-rule="${shape.fillRule}"`);
   if (shape.dash !== null) attributes.push(`stroke-dasharray="${escapeAttribute(shape.dash)}"`);
   if (shape.opacity !== 1) attributes.push(`opacity="${number(shape.opacity)}"`);
   attributes.push('stroke-linecap="round"', 'stroke-linejoin="round"');
   return `<path ${attributes.join(" ")}/>`;
 }
 
-/** One Map Line as a group of paths, marked when it is the selection. */
-function lineElement(element: Extract<MapElement, { kind: "line" }>, selected: boolean): string {
+/** One Element as a group of paths, marked when it is the selection. */
+function elementGroup(
+  element: MapElement,
+  shapes: readonly LineShape[],
+  selected: boolean
+): string {
   const attributes = [`data-element-id="${escapeAttribute(element.id)}"`];
   if (selected) attributes.push('data-selected="true"');
-  const paths = lineShapes(element).map(shapePath).join("");
+  const paths = shapes.map(shapePath).join("");
   return `<g ${attributes.join(" ")}>${paths}</g>`;
 }
 
@@ -440,12 +510,14 @@ export function sceneToSvg(
     background(widthMm, heightMm),
   ];
 
-  for (const element of map.elements) {
-    if (element.hidden) continue;
-    if (element.kind === "line") {
-      parts.push(lineElement(element, options.selectedId === element.id));
-    }
-  }
+  const shapes = sceneShapes(map.elements);
+  map.elements.forEach((element, index) => {
+    if (element.hidden) return;
+    if (element.kind !== "line" && element.kind !== "fill") return;
+    // A Fill in no face draws nothing, not even an empty group.
+    if (element.kind === "fill" && shapes[index].length === 0) return;
+    parts.push(elementGroup(element, shapes[index], options.selectedId === element.id));
+  });
 
   parts.push("</svg>");
   return parts.join("");

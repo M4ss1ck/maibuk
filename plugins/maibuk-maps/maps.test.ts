@@ -8,6 +8,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DATA_VERSION,
+  DEFAULT_FILL_COLOR,
   INDEX_KEY,
   LINE_STYLE_DEFAULT_ENCLOSES,
   createMapStore,
@@ -15,10 +16,11 @@ import {
   mapPreview,
   migrateMapsData,
   type MapDocument,
+  type MapFillElement,
   type MapLineElement,
   type MapStorage,
 } from "./maps";
-import { sceneToSvg } from "./scene";
+import { EMPTY_MAP_COLOR, sceneToSvg } from "./scene";
 
 /** An in-memory storage that remembers every key read. */
 function memoryStorage(seed: Iterable<[string, unknown]> = []) {
@@ -475,6 +477,60 @@ describe("Map Line styles", () => {
       const { store } = await oldMap([element]);
       expect(await store.load("m1")).toBeNull();
     }
+  });
+});
+
+describe("Map Fills", () => {
+  /** A Fill at (10, 10), in the default land colour unless the test says otherwise. */
+  function fill(id: string, overrides: Partial<MapFillElement> = {}): MapFillElement {
+    return {
+      id,
+      kind: "fill",
+      name: id,
+      hidden: false,
+      locked: false,
+      anchor: [10, 10],
+      content: { color: DEFAULT_FILL_COLOR },
+      ...overrides,
+    };
+  }
+
+  /** The Map holding `elements` as written to storage and read back. */
+  async function loadMap(elements: unknown[]) {
+    const memory = memoryStorage();
+    const store = storeOver(memory.storage);
+    await store.create({ name: "Fills", bookId: null, preset: "square" });
+    const created = memory.values.get(mapKey("m1")) as MapDocument;
+    await memory.storage.set({ key: mapKey("m1"), value: { ...created, elements } });
+    return store.load("m1");
+  }
+
+  it("keeps a Fill's anchor and colour", async () => {
+    const stored = fill("land", { anchor: [20.5, 30.25], content: { color: "#a0522d" } });
+
+    expect(await loadMap([stored])).toMatchObject({ elements: [stored] });
+  });
+
+  it("rejects a Fill whose anchor or colour is malformed", async () => {
+    const base = fill("broken");
+
+    for (const element of [
+      { ...base, anchor: undefined },
+      { ...base, anchor: [10] },
+      { ...base, anchor: [10, Number.NaN] },
+      { ...base, anchor: "10,10" },
+      { ...base, content: undefined },
+      { ...base, content: null },
+      { ...base, content: { color: 7 } },
+      { ...base, content: { color: null } },
+    ]) {
+      expect(await loadMap([element])).toBeNull();
+    }
+  });
+
+  it("gives the default Fill colour a land tone that differs from the water", () => {
+    expect(DEFAULT_FILL_COLOR).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(DEFAULT_FILL_COLOR).not.toBe(EMPTY_MAP_COLOR);
   });
 });
 

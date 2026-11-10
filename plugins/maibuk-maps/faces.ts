@@ -176,6 +176,21 @@ function crossing(
   return { t, u, point: [a[0] + runX * t, a[1] + runY * t] };
 }
 
+/** A segment's range on each axis, widened so two ranges that only touch still meet. */
+interface Bounds {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+}
+
+/** Whether two widened ranges overlap on both axes, so their segments can cross or touch. */
+function rangesOverlap(one: Bounds, two: Bounds): boolean {
+  return (
+    one.minX <= two.maxX && two.minX <= one.maxX && one.minY <= two.maxY && two.minY <= one.maxY
+  );
+}
+
 /**
  * The Map Lines that enclose Fills, split into segments that meet only at their
  * ends. An open line's dangling end that lies within `toleranceMm` of another
@@ -241,10 +256,23 @@ export function nodeLines(
     }
   });
 
+  // Every segment's range, for the cheap reject the two pair loops below take
+  // before their geometry: reconcileFills runs this on every edit.
+  const bounds = segments.map((segment): Bounds => {
+    const [a, b] = ends(segment);
+    return {
+      minX: Math.min(a[0], b[0]) - EPSILON_MM,
+      maxX: Math.max(a[0], b[0]) + EPSILON_MM,
+      minY: Math.min(a[1], b[1]) - EPSILON_MM,
+      maxY: Math.max(a[1], b[1]) + EPSILON_MM,
+    };
+  });
+
   const cuts: Cut[][] = segments.map(() => []);
   for (let one = 0; one < segments.length; one++) {
     const [a, b] = ends(segments[one]);
     for (let two = one + 1; two < segments.length; two++) {
+      if (!rangesOverlap(bounds[one], bounds[two])) continue;
       const [c, d] = ends(segments[two]);
       const hit = crossing(a, b, c, d);
       if (hit === null) continue;
@@ -259,6 +287,15 @@ export function nodeLines(
     for (const vertex of ends(segment)) {
       for (let other = 0; other < segments.length; other++) {
         if (segments[other] === segment) continue;
+        const box = bounds[other];
+        if (
+          vertex[0] < box.minX ||
+          vertex[0] > box.maxX ||
+          vertex[1] < box.minY ||
+          vertex[1] > box.maxY
+        ) {
+          continue;
+        }
         const [a, b] = ends(segments[other]);
         const near = nearestOnSegment(vertex, a, b);
         if (near.t > 0 && near.t < 1 && distance(vertex, near.point) <= EPSILON_MM) {

@@ -15,7 +15,7 @@
 
 import type { MapDocument, MapPoint, ShapeKind } from "./maps";
 import { isShapeKind } from "./maps";
-import { EMPTY_MAP_COLOR, type LineShape, lineShapes } from "./scene";
+import { EMPTY_MAP_COLOR, type LineShape, sceneShapes } from "./scene";
 
 /** The editor tool the Frame should honour. */
 export type MapTool = "select" | "pencil" | "pen" | "eraser" | ShapeKind;
@@ -202,14 +202,15 @@ export function sceneMessage(
     penLabel: PenDraftLabel;
   }
 ): FrameSceneMessage {
+  const shapes = sceneShapes(map.elements);
   return {
     kind: "scene",
     widthMm: map.page.widthMm,
     heightMm: map.page.heightMm,
     background: EMPTY_MAP_COLOR,
-    elements: map.elements.map((element) => ({
+    elements: map.elements.map((element, index) => ({
       id: element.id,
-      shapes: element.kind === "line" ? lineShapes(element) : [],
+      shapes: shapes[index],
       hidden: element.hidden,
       locked: element.locked,
       selected: element.id === view.selectedId,

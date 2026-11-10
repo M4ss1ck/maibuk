@@ -349,6 +349,60 @@ describe("the scene message", () => {
       },
     ]);
   });
+
+  it("sends a Fill's face path as one filled, evenodd shape", () => {
+    const map = {
+      page: { preset: "square" as const, widthMm: 200, heightMm: 100 },
+      elements: [
+        {
+          id: "ring",
+          kind: "line" as const,
+          name: "Coast",
+          hidden: false,
+          locked: false,
+          points: [
+            [0, 0],
+            [40, 0],
+            [40, 40],
+            [0, 40],
+          ] as [number, number][],
+          style: "plain" as const,
+          enclosesFills: true,
+          closed: true,
+          curves: [false, false, false, false],
+          roughened: false,
+        },
+        {
+          id: "land",
+          kind: "fill" as const,
+          name: "Land",
+          hidden: false,
+          locked: false,
+          anchor: [20, 20] as [number, number],
+          content: { color: "#c8d5a3" },
+        },
+      ],
+    };
+    const message = sceneMessage(map, {
+      selectedId: null,
+      tool: "select",
+      zoom: 1,
+      panX: 0,
+      panY: 0,
+      penLabel: PEN_LABEL,
+    });
+
+    expect(message.elements[1].shapes).toHaveLength(1);
+    expect(message.elements[1].shapes[0]).toMatchObject({
+      stroke: null,
+      strokeWidth: 0,
+      dash: null,
+      fill: "#c8d5a3",
+      fillRule: "evenodd",
+      opacity: 1,
+    });
+    expect(message.elements[1].shapes[0].d).toMatch(/^M .+ Z$/);
+  });
 });
 
 describe("the shape message", () => {

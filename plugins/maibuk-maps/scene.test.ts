@@ -5,7 +5,13 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { type MapDocument, type MapElement, type MapLineElement, type PagePreset } from "./maps";
+import {
+  type MapDocument,
+  type MapElement,
+  type MapFillElement,
+  type MapLineElement,
+  type PagePreset,
+} from "./maps";
 import {
   EMPTY_MAP_COLOR,
   LINE_STROKE,
@@ -42,6 +48,37 @@ function line(
     roughened: false,
     ...extra,
   };
+}
+
+function fill(
+  id: string,
+  anchor: [number, number],
+  extra: Partial<MapFillElement> = {}
+): MapFillElement {
+  return {
+    id,
+    kind: "fill",
+    name: id,
+    hidden: false,
+    locked: false,
+    anchor,
+    content: { color: "#c8d5a3" },
+    ...extra,
+  };
+}
+
+/** A closed square Map Line, `sizeMm` across, with its top-left corner at `offsetMm`. */
+function ring(id: string, sizeMm = 40, offsetMm = 0): MapLineElement {
+  return line(
+    id,
+    [
+      [offsetMm, offsetMm],
+      [offsetMm + sizeMm, offsetMm],
+      [offsetMm + sizeMm, offsetMm + sizeMm],
+      [offsetMm, offsetMm + sizeMm],
+    ],
+    { closed: true, curves: [false, false, false, false] }
+  );
 }
 
 function mapWith(
@@ -551,9 +588,51 @@ describe("sceneToSvg", () => {
 
   it("ignores an element kind that has no geometry yet", () => {
     const svg = sceneToSvg(
-      mapWith([{ id: "fill-1", kind: "fill", name: "Sea", hidden: false, locked: false }])
+      mapWith([{ id: "stamp-1", kind: "stamp", name: "Castle", hidden: false, locked: false }])
     );
-    expect(svg).not.toContain("fill-1");
+    expect(svg).not.toContain("stamp-1");
+  });
+});
+
+describe("Fill rendering", () => {
+  it("draws a Fill as one filled, unstroked path of its face, under its Map Line", () => {
+    const svg = sceneToSvg(mapWith([fill("land", [20, 20]), ring("coast")]));
+
+    const start = svg.indexOf('<g data-element-id="land">');
+    const end = svg.indexOf("</g>", start);
+    expect(start).toBeGreaterThan(-1);
+    const group = svg.slice(start, end);
+    expect(group.match(/<path /g)).toHaveLength(1);
+    expect(group).toContain('stroke="none"');
+    expect(group).toContain('fill="#c8d5a3"');
+    expect(group).toContain('fill-rule="evenodd"');
+    expect(group).not.toContain('stroke-width="');
+    expect(/d="M [^"]+ Z"/.test(group)).toBe(true);
+    // The Fill is drawn before the Map Line it sits under.
+    expect(start).toBeLessThan(svg.indexOf('data-element-id="coast"'));
+  });
+
+  it("cuts a face's holes out of the Fill's path", () => {
+    const svg = sceneToSvg(
+      mapWith([fill("land", [10, 10]), ring("outer", 60), ring("inner", 20, 20)])
+    );
+
+    const start = svg.indexOf('<g data-element-id="land">');
+    const group = svg.slice(start, svg.indexOf("</g>", start));
+    expect(group.match(/M /g)).toHaveLength(2);
+    expect(group).toContain('fill-rule="evenodd"');
+  });
+
+  it("does not draw a hidden Fill", () => {
+    const svg = sceneToSvg(mapWith([fill("land", [20, 20], { hidden: true }), ring("coast")]));
+
+    expect(svg).not.toContain('data-element-id="land"');
+  });
+
+  it("draws nothing for a Fill whose anchor is in no face", () => {
+    const svg = sceneToSvg(mapWith([fill("land", [200, 200]), ring("coast")]));
+
+    expect(svg).not.toContain('data-element-id="land"');
   });
 });
 
