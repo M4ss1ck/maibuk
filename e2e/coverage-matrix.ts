@@ -51,13 +51,6 @@ export const EXCLUSIONS: Exclusion[] = [
     owner: "#653 reader E2E rows; plugins/maibuk-reader/session.test.ts for the forwarded Commands",
   },
   {
-    kind: "shortcut",
-    items: ["plugin.maibuk-maps.bucketTool"],
-    reason:
-      "The Bucket's keyboard pour is proven by the Map editor's Keyboard and accessibility test gate in plugins/maibuk-maps/plugin.test.tsx (pick the tool, pour at the crosshair, undo the Fill). #748 lands the Bucket in the editor first and its Maps Fills E2E row and tagged spec second, which owns this exclusion until then",
-    owner: "#748 unit 4 (plugins-maps-fills row); plugins/maibuk-maps/plugin.test.tsx",
-  },
-  {
     kind: "term",
     items: ["Drawing"],
     reason: "Creating a Drawing and erasing are pointer gestures by nature (documented exemption)",
@@ -2894,6 +2887,23 @@ export const ROWS: MatrixRow[] = [
       "plugin.maibuk-maps.polygonTool",
       "plugin.maibuk-maps.roughen",
     ],
+    routes: ["/plugin/:pluginId/:pageId"],
+    fixture: "bookShelf",
+    tags: ["sandbox"],
+    status: "accepted",
+  },
+  {
+    id: "plugins-maps-fills",
+    area: "plugins",
+    workflow:
+      "The Maps editor's Bucket and Fills (#748): a Rectangle placed in the Frame from its Place button is poured into with the Bucket, whose click fills the face under the pointer with the Fill color the properties panel shows, and the Frame draws the Fill as a filled path behind the Map Lines while the Elements list lists it as a Fill; from the keyboard alone the author picks the Bucket with its key, Tabs into the Frame, and presses Enter to pour at the keyboard crosshair, which rests inside the shape, then Mod+Z removes the Fill; asserts: the Fill row in the Elements list, the filled path in the Frame, the Fill color control, the Fill's return and removal under undo, and the Fill after a reload; persists: yes (every pour autosaves to Plugin storage)",
+    edges: [
+      "The Bucket pours a Fill into a placed Rectangle at a click, which the Elements list lists and the Frame draws filled",
+      "The Bucket's key and Enter pour at the Frame's crosshair, and Mod+Z removes the Fill",
+      "A poured Fill is still listed and drawn after a reload and reopening the Map",
+    ],
+    terms: ["Command", "Shortcut"],
+    shortcuts: ["plugin.maibuk-maps.bucketTool"],
     routes: ["/plugin/:pluginId/:pageId"],
     fixture: "bookShelf",
     tags: ["sandbox"],

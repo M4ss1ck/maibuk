@@ -120,6 +120,25 @@ function fitToBox(
 }
 
 /**
+ * Clicks a Frame's drawing surface at one page point in millimetres: the
+ * Bucket's pointer pour (#748). The Frame's Bucket tool must already be
+ * selected; the caller waits for the scene with `svg[data-tool="bucket"]`
+ * before calling this, and reads the point off the shape it means to fill.
+ */
+export async function clickPagePoint(
+  page: Page,
+  surface: Locator,
+  point: PagePoint
+): Promise<void> {
+  const box = await surface.boundingBox();
+  if (box === null) throw new Error("the Frame's drawing surface has no box to draw on");
+  const viewBox = await surface.getAttribute("viewBox");
+  if (viewBox === null) throw new Error("the Frame's drawing surface has no viewBox");
+  const at = fitToBox(box, viewBox.split(" ").map(Number))(point);
+  await page.mouse.click(at.x, at.y);
+}
+
+/**
  * Drags the Eraser across a Frame's drawing surface, between two page points in
  * millimetres. The Frame's Eraser tool must already be selected; the caller
  * waits for the scene with `svg[data-tool="eraser"]` before calling this, and
