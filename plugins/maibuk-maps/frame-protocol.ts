@@ -14,16 +14,16 @@
  */
 
 import type { MapDocument, MapPoint } from "./maps";
-import { EMPTY_MAP_COLOR, LINE_STROKE, linePath } from "./scene";
+import { EMPTY_MAP_COLOR, type LineShape, lineShapes } from "./scene";
 
 /** The editor tool the Frame should honour. */
 export type MapTool = "select" | "pencil";
 
-/** One Element as the Frame draws it: the path, its flags, and its selection. */
+/** One Element as the Frame draws it: its render primitives, its flags, and its selection. */
 export interface FrameSceneElement {
   id: string;
-  /** The SVG path `d`, from `linePath`; empty for an Element with no path yet. */
-  d: string;
+  /** The paths the Frame strokes and fills, from `lineShapes`; empty for an Element with no path yet. */
+  shapes: LineShape[];
   hidden: boolean;
   locked: boolean;
   selected: boolean;
@@ -36,8 +36,6 @@ export interface FrameSceneMessage {
   heightMm: number;
   /** The page background colour. */
   background: string;
-  /** The ink a Map Line is drawn in, the same colour the list preview uses. */
-  ink: string;
   elements: FrameSceneElement[];
   tool: MapTool;
   zoom: number;
@@ -107,10 +105,9 @@ export function sceneMessage(
     widthMm: map.page.widthMm,
     heightMm: map.page.heightMm,
     background: EMPTY_MAP_COLOR,
-    ink: LINE_STROKE,
     elements: map.elements.map((element) => ({
       id: element.id,
-      d: element.kind === "line" ? linePath(element) : "",
+      shapes: element.kind === "line" ? lineShapes(element) : [],
       hidden: element.hidden,
       locked: element.locked,
       selected: element.id === view.selectedId,

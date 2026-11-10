@@ -64,7 +64,6 @@ function loadFrame(): Frame {
         widthMm: 200,
         heightMm: 100,
         background: "#d7e6ec",
-        ink: "#1f2933",
         elements: [],
         tool: "select",
         zoom: 1,
@@ -81,9 +80,19 @@ function pointer(target: Element, type: string, x: number, y: number): void {
   target.dispatchEvent(new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0 }));
 }
 
+const shape = (overrides: Record<string, unknown> = {}) => ({
+  d: "M 10 10 L 20 20",
+  stroke: "#1f2933",
+  strokeWidth: 0.6,
+  dash: null,
+  fill: null,
+  opacity: 1,
+  ...overrides,
+});
+
 const sceneElement = (overrides: Record<string, unknown> = {}) => ({
   id: "e1",
-  d: "M 10 10 L 20 20",
+  shapes: [shape()],
   hidden: false,
   locked: false,
   selected: false,
@@ -120,8 +129,8 @@ describe("drawing the scene", () => {
     frame.scene({
       elements: [
         sceneElement({ id: "e1", selected: true }),
-        sceneElement({ id: "e2", hidden: true, d: "M 30 30 L 40 40" }),
-        sceneElement({ id: "e3", locked: true, d: "" }),
+        sceneElement({ id: "e2", hidden: true, shapes: [shape({ d: "M 30 30 L 40 40" })] }),
+        sceneElement({ id: "e3", locked: true, shapes: [] }),
       ],
     });
 
@@ -130,7 +139,7 @@ describe("drawing the scene", () => {
     expect(page.getAttribute("data-tool")).toBe("select");
     expect(document.querySelector("rect")?.getAttribute("fill")).toBe("#d7e6ec");
 
-    // A hidden Element and one with no path yet are not drawn; a locked one is.
+    // A hidden Element and one with no shape yet are not drawn; a locked one is.
     const groups = Array.from(document.querySelectorAll("[data-element-id]"));
     expect(groups.map((group) => group.getAttribute("data-element-id"))).toEqual(["e1"]);
     const line = groups[0].querySelector("path.map-line");
@@ -140,15 +149,49 @@ describe("drawing the scene", () => {
     expect(groups[0].querySelector("path.map-selection")).not.toBeNull();
   });
 
-  it("draws the scene's own ink, and falls back to the text colour when it is missing", () => {
+  it("draws each shape's stroke, width, dash, fill, and opacity", () => {
     frame = loadFrame();
-    frame.scene({ ink: "#8b1a1a", elements: [sceneElement()] });
-    expect(document.querySelector("path.map-line")?.getAttribute("stroke")).toBe("#8b1a1a");
+    frame.scene({
+      elements: [
+        sceneElement({
+          shapes: [
+            shape({ d: "M 1 1 L 2 2", stroke: "#8b1a1a", strokeWidth: 0.9, opacity: 0.6 }),
+            shape({ d: "M 3 3 L 4 4", stroke: null, strokeWidth: 0, fill: "#3b6e8f" }),
+            shape({ d: "M 5 5 L 6 6", strokeWidth: 0.5, dash: "2 1.2" }),
+          ],
+        }),
+      ],
+    });
 
-    // A scene without a usable ink falls back to the current text colour
-    // instead of dropping the whole scene, like a missing background does.
-    frame.scene({ ink: 7, elements: [sceneElement()] });
-    expect(document.querySelector("path.map-line")?.getAttribute("stroke")).toBe("currentColor");
+    const lines = Array.from(document.querySelectorAll("path.map-line"));
+    expect(lines).toHaveLength(3);
+    expect(lines[0].getAttribute("stroke")).toBe("#8b1a1a");
+    expect(lines[0].getAttribute("stroke-width")).toBe("0.9");
+    expect(lines[0].getAttribute("opacity")).toBe("0.6");
+    expect(lines[1].getAttribute("stroke")).toBe("none");
+    expect(lines[1].getAttribute("fill")).toBe("#3b6e8f");
+    expect(lines[1].getAttribute("stroke-width")).toBeNull();
+    expect(lines[2].getAttribute("stroke-dasharray")).toBe("2 1.2");
+    expect(lines[2].getAttribute("opacity")).toBeNull();
+  });
+
+  it("hit-tests a filled river by its area, and a stroke by its line", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [
+        sceneElement({
+          shapes: [
+            shape({ d: "M 3 3 L 4 4", stroke: null, strokeWidth: 0, fill: "#3b6e8f" }),
+            shape({ d: "M 5 5 L 6 6" }),
+          ],
+        }),
+      ],
+    });
+
+    const hits = Array.from(document.querySelectorAll("path.map-hit"));
+    expect(hits).toHaveLength(2);
+    expect(hits[0].getAttribute("data-fill")).toBe("true");
+    expect(hits[1].getAttribute("data-fill")).toBeNull();
   });
 
   it("draws a selected Element without an outline once the Worker clears it", () => {
@@ -176,7 +219,7 @@ describe("drawing the scene", () => {
 });
 
 describe("the scene message", () => {
-  it("sends the ink the list preview draws a Map Line in", () => {
+  it("sends the shapes the list preview draws a Map Line from", () => {
     const map = {
       page: { preset: "square" as const, widthMm: 200, heightMm: 100 },
       elements: [
@@ -205,7 +248,58 @@ describe("the scene message", () => {
       panX: 0,
       panY: 0,
     });
-    expect(sceneToSvg(map)).toContain(`stroke="${message.ink}"`);
+    expect(message.elements[0].shapes).toEqual([
+      {
+        d: "M 0 0 L 10 10",
+        stroke: "#1f2933",
+        strokeWidth: 0.6,
+        dash: null,
+        fill: null,
+        opacity: 1,
+      },
+    ]);
+    expect(sceneToSvg(map)).toContain('stroke="#1f2933"');
+  });
+
+  it("carries a river's filled polygon, which has no single path to send", () => {
+    const map = {
+      page: { preset: "square" as const, widthMm: 200, heightMm: 100 },
+      elements: [
+        {
+          id: "river",
+          kind: "line" as const,
+          name: "River",
+          hidden: false,
+          locked: false,
+          points: [
+            [0, 0],
+            [10, 0],
+          ] as [number, number][],
+          style: "river" as const,
+          enclosesFills: false,
+          closed: false,
+          curves: [false],
+          roughened: false,
+        },
+      ],
+    };
+    const message = sceneMessage(map, {
+      selectedId: null,
+      tool: "select",
+      zoom: 1,
+      panX: 0,
+      panY: 0,
+    });
+    expect(message.elements[0].shapes).toEqual([
+      {
+        d: "M 0 0.1 L 10 0.7 L 10 -0.7 L 0 -0.1 Z",
+        stroke: null,
+        strokeWidth: 0,
+        dash: null,
+        fill: "#3b6e8f",
+        opacity: 1,
+      },
+    ]);
   });
 });
 

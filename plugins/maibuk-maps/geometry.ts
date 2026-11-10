@@ -18,7 +18,7 @@ export interface ErasedLine {
 }
 
 /** The shape both functions need: its points, one flag per segment, and whether it closes. */
-export interface LineShape {
+export interface LineGeometry {
   points: readonly MapPoint[];
   curves: readonly boolean[];
   closed: boolean;
@@ -183,7 +183,7 @@ function joins(previous: Survivor, next: Survivor, segmentCount: number): boolea
  * drawn straight and an untouched one keeps its curve flag.
  */
 export function eraseLines(
-  line: LineShape,
+  line: LineGeometry,
   eraserPath: readonly MapPoint[],
   radiusMm: number
 ): ErasedLine[] | null {
