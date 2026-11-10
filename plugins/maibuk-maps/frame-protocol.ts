@@ -8,16 +8,17 @@
  *
  * The Worker sends the whole scene on every change and when a Frame connects;
  * the Frame reports a finished Pencil stroke, a finished Pen line, an Eraser
- * drag, and a picked Element. Points are page millimetres, the same space as
- * `page.widthMm/heightMm`. Every inbound message is validated here, and a
- * malformed one is dropped. This module imports only its own files.
+ * drag, a drawn Shape, and a picked Element. Points are page millimetres, the
+ * same space as `page.widthMm/heightMm`. Every inbound message is validated
+ * here, and a malformed one is dropped. This module imports only its own files.
  */
 
-import type { MapDocument, MapPoint } from "./maps";
+import type { MapDocument, MapPoint, ShapeKind } from "./maps";
+import { isShapeKind } from "./maps";
 import { EMPTY_MAP_COLOR, type LineShape, lineShapes } from "./scene";
 
 /** The editor tool the Frame should honour. */
-export type MapTool = "select" | "pencil" | "pen" | "eraser";
+export type MapTool = "select" | "pencil" | "pen" | "eraser" | ShapeKind;
 
 /** One Element as the Frame draws it: its render primitives, its flags, and its selection. */
 export interface FrameSceneElement {
@@ -88,12 +89,25 @@ export interface FrameSelectMessage {
   id: string | null;
 }
 
+/**
+ * Frame -> Worker: a Shape drawn by dragging between two page-millimetre
+ * corners (#747). `constrain` is Shift, which squares the box on its longer side.
+ */
+export interface FrameShapeMessage {
+  kind: "shape";
+  shape: ShapeKind;
+  start: MapPoint;
+  end: MapPoint;
+  constrain: boolean;
+}
+
 /** Every message a Frame may send the Worker. */
 export type FrameToWorkerMessage =
   | FrameStrokeMessage
   | FrameLineMessage
   | FrameEraseMessage
-  | FrameSelectMessage;
+  | FrameSelectMessage
+  | FrameShapeMessage;
 
 function isPoint(value: unknown): value is MapPoint {
   return (
@@ -111,7 +125,8 @@ function isPoint(value: unknown): value is MapPoint {
  * must be dropped. A stroke needs a list of finite `[x, y]` pairs; a stroke of
  * fewer than two points is still well formed, and the editor simply draws no
  * line from it. A Pen line also needs a flag per segment and a boolean
- * `closed`; an Eraser drag needs at least one point and a finite reach.
+ * `closed`; an Eraser drag needs at least one point and a finite reach; a Shape
+ * needs a known kind, two finite corners, and a boolean `constrain`.
  */
 export function parseFrameMessage(data: unknown): FrameToWorkerMessage | null {
   if (typeof data !== "object" || data === null) return null;
@@ -158,6 +173,18 @@ export function parseFrameMessage(data: unknown): FrameToWorkerMessage | null {
   if (message.kind === "select") {
     if (message.id !== null && typeof message.id !== "string") return null;
     return { kind: "select", id: message.id };
+  }
+  if (message.kind === "shape") {
+    if (!isShapeKind(message.shape)) return null;
+    if (!isPoint(message.start) || !isPoint(message.end)) return null;
+    if (typeof message.constrain !== "boolean") return null;
+    return {
+      kind: "shape",
+      shape: message.shape,
+      start: [message.start[0], message.start[1]],
+      end: [message.end[0], message.end[1]],
+      constrain: message.constrain,
+    };
   }
   return null;
 }

@@ -478,6 +478,103 @@ describe("Map Line styles", () => {
   });
 });
 
+describe("Map Shapes", () => {
+  /** A rectangle Shape (#747) 40 by 20 mm centred on (30, 20), its outline drawn out. */
+  const RECTANGLE = {
+    kind: "rectangle",
+    cx: 30,
+    cy: 20,
+    width: 40,
+    height: 20,
+    rotation: 0,
+    sides: 6,
+    cornerRadius: 0,
+  };
+
+  /** A Map Line carrying `shape`, as #747 stores it. */
+  function shapeLine(shape: unknown) {
+    return {
+      id: "shape",
+      kind: "line",
+      name: "Rectangle 1",
+      hidden: false,
+      locked: false,
+      points: [
+        [10, 10],
+        [50, 10],
+        [50, 30],
+        [10, 30],
+      ],
+      style: "plain",
+      enclosesFills: true,
+      closed: true,
+      curves: [false, false, false, false],
+      roughened: false,
+      shape,
+    };
+  }
+
+  /** The lines a stored Map holding `elements` loads, as written to storage and read back. */
+  async function loadLines(elements: unknown[]): Promise<MapLineElement[]> {
+    const memory = memoryStorage();
+    const store = storeOver(memory.storage);
+    await store.create({ name: "Shapes", bookId: null, preset: "square" });
+    const created = memory.values.get(mapKey("m1")) as MapDocument;
+    await memory.storage.set({ key: mapKey("m1"), value: { ...created, elements } });
+    const doc = await store.load("m1");
+    if (doc === null) throw new Error("the Map did not load");
+    return doc.elements as MapLineElement[];
+  }
+
+  it("keeps the exact Shape a line stores", async () => {
+    const exact = { ...RECTANGLE, kind: "ellipse", rotation: 15 };
+    const [line] = await loadLines([shapeLine(exact)]);
+
+    expect(line.shape).toEqual(exact);
+    expect(line.convertedFrom).toBeUndefined();
+  });
+
+  it("clamps the numbers of a Shape it can keep", async () => {
+    const [sides, radius, fraction] = await loadLines([
+      shapeLine({ ...RECTANGLE, kind: "polygon", sides: 20 }),
+      shapeLine({ ...RECTANGLE, cornerRadius: 100 }),
+      shapeLine({ ...RECTANGLE, kind: "polygon", sides: 2.6, cornerRadius: -4 }),
+    ]);
+
+    expect(sides.shape?.sides).toBe(12);
+    // Half the shorter side of a 40 by 20 mm rectangle.
+    expect(radius.shape?.cornerRadius).toBe(10);
+    expect(fraction.shape).toMatchObject({ sides: 3, cornerRadius: 0 });
+  });
+
+  it("drops a Shape that cannot be one, and keeps the line", async () => {
+    const lines = await loadLines(
+      [
+        { ...RECTANGLE, kind: "star" },
+        { ...RECTANGLE, width: 0 },
+        { ...RECTANGLE, height: -5 },
+        { ...RECTANGLE, cx: "30" },
+        { ...RECTANGLE, rotation: null },
+        { ...RECTANGLE, sides: null },
+        "rectangle",
+      ].map((shape) => shapeLine(shape))
+    );
+
+    expect(lines).toHaveLength(7);
+    for (const line of lines) expect(line.shape).toBeUndefined();
+  });
+
+  it("keeps the kind a line was converted from, and drops an unknown one", async () => {
+    const [converted, junk] = await loadLines([
+      { ...shapeLine(undefined), convertedFrom: "rectangle" },
+      { ...shapeLine(undefined), convertedFrom: "star" },
+    ]);
+
+    expect(converted.convertedFrom).toBe("rectangle");
+    expect(junk.convertedFrom).toBeUndefined();
+  });
+});
+
 describe("migrateMapsData", () => {
   it("leaves version 1 data exactly as it was", async () => {
     const { storage, values } = memoryStorage();

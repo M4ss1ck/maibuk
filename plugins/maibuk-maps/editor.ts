@@ -1,5 +1,5 @@
 /**
- * The open Map's editor state (#745, #746): its Elements, selection, tool,
+ * The open Map's editor state (#745, #746, #747): its Elements, selection, tool,
  * view, undo history, and autosave. The host renders the panels and the Frame
  * draws the scene, so this module owns everything that must outlive a page
  * render yet stay inside the Worker. One editor is created when a Map opens and
@@ -18,9 +18,19 @@ import type {
   MapElement,
   MapLineElement,
   MapPoint,
+  MapShape,
   MapStore,
+  ShapeKind,
 } from "./maps";
-import { LINE_STYLE_DEFAULT_ENCLOSES, MAX_NAME_LENGTH, curvedSegments, randomMapId } from "./maps";
+import {
+  DEFAULT_POLYGON_SIDES,
+  DEFAULT_SHAPE_SIZE_MM,
+  LINE_STYLE_DEFAULT_ENCLOSES,
+  MAX_NAME_LENGTH,
+  curvedSegments,
+  normalizeShape,
+  randomMapId,
+} from "./maps";
 import { createAutosave } from "./autosave";
 import {
   parseFrameMessage,
@@ -30,9 +40,16 @@ import {
   type MapTool,
   type PenDraftLabel,
 } from "./frame-protocol";
-import { eraseLines, roughen as roughenPoints, seedFor } from "./geometry";
+import {
+  convertShapeLine,
+  eraseLines,
+  roughen as roughenPoints,
+  seedFor,
+  shapeFromCorners,
+  shapeOutline,
+} from "./geometry";
 import { createHistory } from "./history";
-import { format, translate } from "./i18n";
+import { format, translate, type MapsKey } from "./i18n";
 import {
   addElement,
   moveElement,
@@ -56,6 +73,13 @@ export const DEFAULT_ROUGHEN_STRENGTH_MM = 1.5;
 export const MIN_ROUGHEN_STRENGTH_MM = 0.5;
 export const MAX_ROUGHEN_STRENGTH_MM = 5;
 
+/** The catalog key of the line name each Shape kind takes (#747). */
+const SHAPE_NAME_KEYS: Readonly<Record<ShapeKind, MapsKey>> = {
+  ellipse: "element.ellipseName",
+  rectangle: "element.rectangleName",
+  polygon: "element.polygonName",
+};
+
 /** What the page draws: the document, its Elements, and the editor flags. */
 export interface MapEditorSnapshot {
   doc: MapDocument;
@@ -75,6 +99,10 @@ export interface MapEditorSnapshot {
   selectedLineStyle: LineStyleId | null;
   /** Whether the selected Map Line encloses Fills, or null when it is not a Map Line. */
   selectedEnclosesFills: boolean | null;
+  /** The selected Map Line's exact Shape, or null when it carries none. */
+  selectedShape: MapShape | null;
+  /** The Shape kind the selected line was converted from, or null when it never was a Shape. */
+  selectedConvertedFrom: ShapeKind | null;
 }
 
 export interface MapEditorOptions {
@@ -104,6 +132,10 @@ export interface MapEditor {
   setRoughenStrength(strengthMm: number): void;
   /** Roughens the selected unlocked Map Line as one undo step. */
   roughen(): void;
+  /** Adds a Shape of `kind` at the view centre, at the default size, as one undo step. */
+  placeShape(kind: ShapeKind): void;
+  /** Reshapes one unlocked exact Shape line from its number fields, as one undo step. */
+  setShapeGeometry(id: string, patch: Partial<Omit<MapShape, "kind">>): void;
   deleteElement(id: string): void;
   /** Moves one Element one place towards the top of the Elements list. */
   moveUp(id: string): void;
@@ -130,6 +162,20 @@ export interface MapEditor {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+/** Whether two Shapes draw the same outline, so a repeated edit is not an undo step. */
+function sameShape(one: MapShape, two: MapShape): boolean {
+  return (
+    one.kind === two.kind &&
+    one.cx === two.cx &&
+    one.cy === two.cy &&
+    one.width === two.width &&
+    one.height === two.height &&
+    one.rotation === two.rotation &&
+    one.sides === two.sides &&
+    one.cornerRadius === two.cornerRadius
+  );
 }
 
 export function createMapEditor(options: MapEditorOptions): MapEditor {
@@ -175,6 +221,8 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       selectedIsLine: selectedLine !== null,
       selectedLineStyle: selectedLine === null ? null : selectedLine.style,
       selectedEnclosesFills: selectedLine === null ? null : selectedLine.enclosesFills,
+      selectedShape: selectedLine === null ? null : (selectedLine.shape ?? null),
+      selectedConvertedFrom: selectedLine === null ? null : (selectedLine.convertedFrom ?? null),
     };
   }
 
@@ -297,6 +345,46 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     edit(addElement(elements, element));
   }
 
+  /** The name a newly drawn Shape takes: the next free "Ellipse N" for its kind. */
+  function newShapeName(kind: ShapeKind): string {
+    const sameKind = elements.filter(
+      (element) => element.kind === "line" && element.shape?.kind === kind
+    ).length;
+    return format(translate(options.language(), SHAPE_NAME_KEYS[kind]), { number: sameKind + 1 });
+  }
+
+  /**
+   * A new exact Shape line (#747): plain, closed, enclosing Fills, and holding
+   * the outline its numbers draw, which the Frame, the preview, the Eraser, and
+   * fills all read as the line's points.
+   */
+  function newShapeLine(shape: MapShape): MapLineElement {
+    const outline = shapeOutline(shape);
+    return {
+      id: randomMapId(),
+      kind: "line",
+      name: newShapeName(shape.kind),
+      hidden: false,
+      locked: false,
+      points: outline.points,
+      style: "plain",
+      enclosesFills: true,
+      closed: true,
+      curves: outline.curves,
+      roughened: false,
+      shape,
+    };
+  }
+
+  /** Adds the Shape a drag between two corners drew, as one undo step. */
+  function addShape(kind: ShapeKind, start: MapPoint, end: MapPoint, constrain: boolean): void {
+    const shape = shapeFromCorners(kind, start, end, constrain);
+    if (shape === null) return;
+    const element = newShapeLine(shape);
+    selectedId = element.id;
+    edit(addElement(elements, element));
+  }
+
   /**
    * Applies one Eraser drag to every visible, unlocked Map Line as one undo
    * step. A cut line's first piece keeps its id and name; each further piece
@@ -320,20 +408,23 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       }
       touched = true;
       pieces.forEach((piece, index) => {
-        next.push({
-          ...element,
-          id: index === 0 ? element.id : randomMapId(),
-          name:
-            index === 0
-              ? element.name
-              : format(translate(language, "element.lineSplitName"), {
-                  name: element.name,
-                  number: index + 1,
-                }),
-          points: piece.points,
-          curves: piece.curves,
-          closed: false,
-        });
+        // A cut Shape is no longer exact, so every piece remembers what it was.
+        next.push(
+          convertShapeLine({
+            ...element,
+            id: index === 0 ? element.id : randomMapId(),
+            name:
+              index === 0
+                ? element.name
+                : format(translate(language, "element.lineSplitName"), {
+                    name: element.name,
+                    number: index + 1,
+                  }),
+            points: piece.points,
+            curves: piece.curves,
+            closed: false,
+          })
+        );
       });
     }
     if (!touched) return;
@@ -352,6 +443,9 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
         break;
       case "erase":
         erase(message.points, message.radiusMm);
+        break;
+      case "shape":
+        addShape(message.shape, message.start, message.end, message.constrain);
         break;
       case "select":
         selectElement(message.id);
@@ -472,22 +566,56 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     roughen() {
       const target = elementById(selectedId);
       if (target === undefined || target.kind !== "line" || target.locked) return;
-      const points = roughenPoints(
-        target.points,
-        target.closed,
-        roughenStrength,
-        seedFor(target.id)
-      );
-      const segments = points.length - 1 + (target.closed ? 1 : 0);
+      // Roughen resamples the points, so an exact Shape stops being one.
+      const base = convertShapeLine(target);
+      const points = roughenPoints(base.points, base.closed, roughenStrength, seedFor(base.id));
+      const segments = points.length - 1 + (base.closed ? 1 : 0);
       edit(
         elements.map((element) =>
           element.id === target.id && element.kind === "line"
             ? {
-                ...element,
+                ...base,
                 points,
                 curves: Array.from({ length: segments }, () => false),
                 roughened: true,
               }
+            : element
+        )
+      );
+    },
+
+    placeShape(kind) {
+      const element = newShapeLine({
+        kind,
+        cx: doc.page.widthMm / 2 + panX,
+        cy: doc.page.heightMm / 2 + panY,
+        width: DEFAULT_SHAPE_SIZE_MM,
+        height: DEFAULT_SHAPE_SIZE_MM,
+        rotation: 0,
+        sides: DEFAULT_POLYGON_SIDES,
+        cornerRadius: 0,
+      });
+      selectedId = element.id;
+      edit(addElement(elements, element));
+    },
+
+    setShapeGeometry(id, patch) {
+      const target = elementById(id);
+      if (
+        target === undefined ||
+        target.kind !== "line" ||
+        target.locked ||
+        target.shape === undefined
+      ) {
+        return;
+      }
+      const shape = normalizeShape({ ...target.shape, ...patch });
+      if (shape === null || sameShape(shape, target.shape)) return;
+      const outline = shapeOutline(shape);
+      edit(
+        elements.map((element) =>
+          element.id === id && element.kind === "line"
+            ? { ...element, shape, points: outline.points, curves: outline.curves, closed: true }
             : element
         )
       );

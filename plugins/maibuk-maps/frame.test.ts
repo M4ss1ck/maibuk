@@ -11,7 +11,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { MAP_FRAME_SRC } from "./map-page";
-import { sceneMessage } from "./frame-protocol";
+import { parseFrameMessage, sceneMessage } from "./frame-protocol";
 import { sceneToSvg } from "./scene";
 
 const HTML = readFileSync(join(__dirname, "assets/ui/map.html"), "utf8");
@@ -348,6 +348,47 @@ describe("the scene message", () => {
         opacity: 1,
       },
     ]);
+  });
+});
+
+describe("the shape message", () => {
+  it("reads a Shape drawn between two drag corners", () => {
+    expect(
+      parseFrameMessage({
+        kind: "shape",
+        shape: "ellipse",
+        start: [10, 10],
+        end: [50, 30],
+        constrain: false,
+      })
+    ).toEqual({
+      kind: "shape",
+      shape: "ellipse",
+      start: [10, 10],
+      end: [50, 30],
+      constrain: false,
+    });
+  });
+
+  it("drops a Shape message with an unknown kind or a malformed corner", () => {
+    const valid = {
+      kind: "shape",
+      shape: "polygon",
+      start: [10, 10],
+      end: [50, 30],
+      constrain: true,
+    };
+    for (const message of [
+      { ...valid, shape: "circle" },
+      { ...valid, shape: undefined },
+      { ...valid, start: [10] },
+      { ...valid, end: [10, "30"] },
+      { ...valid, constrain: "yes" },
+      { ...valid, constrain: undefined },
+      { kind: "shape", shape: "ellipse" },
+    ]) {
+      expect(parseFrameMessage(message)).toBeNull();
+    }
   });
 });
 

@@ -593,6 +593,49 @@ describe("element operations", () => {
     expect(elements[0]).toBe(first);
   });
 
+  it("moves a Shape's centre with its outline", () => {
+    const shaped = line(
+      "shaped",
+      [
+        [80, 40],
+        [120, 40],
+        [120, 60],
+        [80, 60],
+      ],
+      {
+        closed: true,
+        curves: [false, false, false, false],
+        shape: {
+          kind: "rectangle",
+          cx: 100,
+          cy: 50,
+          width: 40,
+          height: 20,
+          rotation: 0,
+          sides: 6,
+          cornerRadius: 0,
+        },
+      }
+    );
+
+    const moved = moveElement([shaped], "shaped", 5, -10)[0] as MapLineElement;
+    expect(moved.shape).toMatchObject({ cx: 105, cy: 40 });
+    expect(moved.points).toEqual([
+      [85, 30],
+      [125, 30],
+      [125, 50],
+      [85, 50],
+    ]);
+    // A locked Shape line keeps its centre where it was.
+    const locked = moveElement(
+      [{ ...shaped, locked: true }],
+      "shaped",
+      5,
+      -10
+    )[0] as MapLineElement;
+    expect(locked.shape).toMatchObject({ cx: 100, cy: 50 });
+  });
+
   it("reorders one step forward or backward, and stays put at the ends", () => {
     // "forward" walks toward the array's end, which is the top of the list.
     expect(reorder([first, second], "first", "forward").map((element) => element.id)).toEqual([

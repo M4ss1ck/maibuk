@@ -497,10 +497,15 @@ export function moveElement(
 ): MapElement[] {
   return elements.map((element) => {
     if (element.id !== id || element.locked || element.kind !== "line") return element;
-    return {
+    const moved: MapLineElement = {
       ...element,
       points: element.points.map(([x, y]): MapPoint => [x + dx, y + dy]),
     };
+    // A Shape's outline follows its own numbers, so its centre moves with it.
+    if (element.shape !== undefined) {
+      moved.shape = { ...element.shape, cx: element.shape.cx + dx, cy: element.shape.cy + dy };
+    }
+    return moved;
   });
 }
 
