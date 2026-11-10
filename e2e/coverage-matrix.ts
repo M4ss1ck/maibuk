@@ -2848,6 +2848,23 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-maps-frame-keys",
+    area: "plugins",
+    workflow:
+      "The Maps editor's drawing Frame forwards every key its own code does not handle to the host's Commands (#760): with focus still inside the Frame after a Pencil stroke, Mod+Z undoes the stroke and Alt+ArrowRight pans the view, and a bare ArrowRight from the properties panel's Hidden Switch moves the selected Map Line because a checkbox is not a typing target; asserts: the Frame redraws without the undone Map Line and the Elements list loses its row, the Frame's viewBox slides 20 mm, and the selected Map Line's first point moves 1 mm while the Switch keeps focus; persists: yes (each Command runs the same autosaving edit a host key press would)",
+    edges: ["A bare Arrow from a focused Switch runs the page's move Command instead of typing"],
+    terms: ["Command", "Shortcut"],
+    shortcuts: [
+      "plugin.maibuk-maps.undo",
+      "plugin.maibuk-maps.panRight",
+      "plugin.maibuk-maps.moveRight",
+    ],
+    routes: ["/plugin/:pluginId/:pageId"],
+    fixture: "empty",
+    tags: ["sandbox"],
+    status: "accepted",
+  },
+  {
     id: "reader-open-reopen",
     area: "plugins",
     workflow:
