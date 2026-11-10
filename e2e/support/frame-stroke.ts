@@ -67,12 +67,14 @@ export async function drawStroke(page: Page, surface: Locator): Promise<void> {
  * Frame's Shape tool must already be selected; the caller waits for the scene
  * with `svg[data-tool="ellipse"]` (or its own kind) before calling this.
  * `constrain` holds Shift for the drag, which squares the box on its longer
- * side, so an Ellipse becomes a circle.
+ * side, so an Ellipse becomes a circle. `during` runs with the button still
+ * down, on the drag's last point, which is where the live preview is worth a
+ * screenshot.
  */
 export async function dragShape(
   page: Page,
   surface: Locator,
-  { constrain = false }: { constrain?: boolean } = {}
+  { constrain = false, during }: { constrain?: boolean; during?: () => Promise<void> } = {}
 ): Promise<void> {
   const box = await surface.boundingBox();
   if (box === null) throw new Error("the Frame's drawing surface has no box to draw on");
@@ -92,6 +94,7 @@ export async function dragShape(
         from.y + ((to.y - from.y) * step) / STEPS
       );
     }
+    if (during !== undefined) await during();
     await page.mouse.up();
   } finally {
     if (constrain) await page.keyboard.up("Shift");

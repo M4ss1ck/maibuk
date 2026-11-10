@@ -14,6 +14,7 @@
 // Chromium, WebKit, and Firefox.
 
 import type { FrameLocator, Locator, Page } from "@playwright/test";
+import { capture } from "../support/capture";
 import { dragShape } from "../support/frame-stroke";
 import { pressUntilFocused, tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
@@ -133,8 +134,13 @@ test.describe("Maps Shape tools, Place buttons, and Shape number fields @wf:plug
     await openEditorWithMap(page);
     await pickShapeTool(page, "o", "Ellipse");
 
-    // Shift squares the drag's box, so the stored Ellipse is a circle.
-    await dragShape(page, surface(page), { constrain: true });
+    // Shift squares the drag's box, so the stored Ellipse is a circle. The
+    // capture point runs with the button still down, so the preview is on screen;
+    // it takes the whole page because the preview lives inside the Frame.
+    await dragShape(page, surface(page), {
+      constrain: true,
+      during: () => capture(page, "shapes-drag-preview"),
+    });
 
     // The finished drag named the Shape and selected it: the Elements list and
     // the properties panel show what the Worker stored.
@@ -171,6 +177,13 @@ test.describe("Maps Shape tools, Place buttons, and Shape number fields @wf:plug
     const height = numberField(page, "Height (mm)");
     await expect(width).toHaveValue("40");
     await expect(height).toHaveValue("40");
+    await capture(page, "shapes-number-fields", {
+      around: [
+        numberField(page, "Center X (mm)"),
+        numberField(page, "Width (mm)"),
+        numberField(page, "Corner radius (mm)"),
+      ],
+    });
 
     // A number field reshapes the exact Shape; the Frame draws what it stored.
     await tabTo(page, width, { max: 60 });
@@ -202,6 +215,9 @@ test.describe("Maps Shape tools, Place buttons, and Shape number fields @wf:plug
     await page.keyboard.press("ControlOrMeta+Shift+r");
     const converted = page.getByText("Converted from an ellipse to a point-by-point line");
     await expect(converted).toBeVisible();
+    await capture(page, "shapes-converted", {
+      around: [page.getByRole("textbox", { name: "Name" }), converted],
+    });
     // The line is point by point now, so its Shape number fields are gone.
     await expect(width).toHaveCount(0);
 

@@ -20,7 +20,7 @@ import {
   type MapShape,
 } from "./maps";
 
-/** An editor over a square 200 by 100 mm Map, with a store that keeps what it saves. */
+/** An editor over a square 200 by 100 mm Map, with a store that drops its saves. */
 function openEditor(elements: MapElement[] = []) {
   const doc: MapDocument = {
     id: "map-1",
@@ -34,17 +34,16 @@ function openEditor(elements: MapElement[] = []) {
     updatedAt: 0,
     dataVersion: DATA_VERSION,
   };
-  const saved: MapDocument[] = [];
   const editor = createMapEditor({
     store: {
-      save: async (next) => {
-        saved.push(next);
+      save: async () => {
+        /* These tests read the editor's snapshot, not what it writes. */
       },
     },
     doc,
     language: () => "en",
   });
-  return { editor, saved };
+  return { editor };
 }
 
 /** The one Map Line the editor holds, which every Shape edit leaves a line. */

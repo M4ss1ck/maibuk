@@ -201,7 +201,7 @@ function MapEditorView({
         <ui.View direction="column" gap="sm">
           <ui.RadioGroup
             label={t("tools.label")}
-            orientation="horizontal"
+            orientation="vertical"
             options={[
               { value: "select", label: t("tools.select") },
               { value: "pencil", label: t("tools.pencil") },

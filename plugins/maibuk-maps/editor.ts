@@ -368,7 +368,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       locked: false,
       points: outline.points,
       style: "plain",
-      enclosesFills: true,
+      enclosesFills: LINE_STYLE_DEFAULT_ENCLOSES.plain,
       closed: true,
       curves: outline.curves,
       roughened: false,

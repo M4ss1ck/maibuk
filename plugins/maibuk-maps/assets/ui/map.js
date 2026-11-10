@@ -702,9 +702,9 @@
 
   /**
    * Ends the Shape drag (#747). A drag the Worker can make a Shape from goes to
-   * it as one Shape message, with Shift squaring the box; a drag shorter than
-   * `MIN_SHAPE_SIZE_MM` on either side draws no Shape at all, exactly as
-   * `shapeFromCorners` refuses it.
+   * it as one Shape message, with the Shift the last preview recorded squaring
+   * the box; a drag shorter than `MIN_SHAPE_SIZE_MM` on either side draws no
+   * Shape at all, exactly as `shapeFromCorners` refuses it.
    * @param {PointerEvent} event
    * @param {boolean} send
    */
@@ -714,7 +714,10 @@
     shapeDraft = null;
     releasePointer(event);
     draw();
-    const constrain = event.shiftKey === true;
+    // The pointerup's own Shift state is not what the author saw: the draft
+    // keeps the one every pointerdown and pointermove recorded, so a Shift
+    // released just before the button lifts still squares the stored Shape.
+    const constrain = draft.constrain;
     if (!send) return;
     const { width, height } = shapeBox(draft.start, draft.end, constrain);
     if (width < MIN_SHAPE_SIZE_MM || height < MIN_SHAPE_SIZE_MM) return;

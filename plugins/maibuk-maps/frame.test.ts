@@ -686,6 +686,21 @@ describe("the Shape tools", () => {
     ]);
   });
 
+  it("posts the Shift the preview used, even when it lifts before the pointerup", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "ellipse" });
+
+    // Shift is down for the move, which squares the preview, and up again
+    // before the button lifts: the stored Shape follows the draft's Shift.
+    pointer(svg(), "pointerdown", 10, 10);
+    pointer(svg(), "pointermove", 50, 30, { shiftKey: true });
+    pointer(svg(), "pointerup", 50, 30);
+
+    expect(frame.port.messages).toEqual([
+      { kind: "shape", shape: "ellipse", start: [10, 10], end: [50, 30], constrain: true },
+    ]);
+  });
+
   it("draws no Shape for a drag shorter than a millimetre on either side", () => {
     frame = loadFrame();
     frame.scene({ tool: "ellipse" });

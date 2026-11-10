@@ -416,7 +416,7 @@ function rectanglePoints(shape: MapShape): MapPoint[] {
   return points;
 }
 
-/** A regular polygon inscribed in the shape's box, the first vertex at the top. */
+/** A regular polygon scaled to the shape's box, the first vertex at the top. */
 function polygonPoints(shape: MapShape): MapPoint[] {
   const radiusX = shape.width / 2;
   const radiusY = shape.height / 2;
