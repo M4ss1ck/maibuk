@@ -5,17 +5,22 @@
 // get no accessibility test beyond the tab-order test (#402).
 
 import { act, render } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import "@/i18n";
 import { PluginFrame, type PluginFrameHost } from "@/components/plugins/PluginFrame";
 import {
   FRAME_HOST_FOCUS_MESSAGE,
+  FRAME_KEY_MESSAGE,
   FRAME_LOAD_MESSAGE,
   FRAME_READY_MESSAGE,
   FRAME_THEME_MESSAGE,
 } from "@/features/plugins/frame";
 import { isPluginFrameAvailable } from "@/features/plugins/host-platform";
+import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
+import { DEFAULT_SHORTCUT_SETTINGS } from "@/lib/shortcut-resolve";
+import { registerPluginCommands, type CommandId } from "@/lib/shortcut-registry";
+import { useShortcuts } from "@/lib/shortcuts";
 import type { PluginManifest } from "@/features/plugins/types";
 
 vi.mock("@/features/plugins/host-platform", async (importOriginal) => {
@@ -401,5 +406,117 @@ describe("PluginFrame theme tokens", () => {
     });
 
     expect(postMessage.mock.calls.length).toBe(afterLoad);
+  });
+});
+
+// The Frame-to-host key bridge (#760): the shim forwards every key its document
+// did not handle, and the host replays it on the iframe so the ordinary
+// `useShortcuts` dispatcher runs it like a host key. A Frame is simulated by
+// dispatching a window message from its own contentWindow, as above.
+describe("PluginFrame forwarded keys", () => {
+  const PLUGIN_ID = "maps-test";
+  const undoId = `plugin.${PLUGIN_ID}.undo` as CommandId;
+  const pencilId = `plugin.${PLUGIN_ID}.pencilTool` as CommandId;
+  const globalId = `plugin.${PLUGIN_ID}.globalReport` as CommandId;
+
+  let unregister: (() => void) | null = null;
+
+  beforeEach(() => {
+    useShortcutSettingsStore.setState({ shortcuts: structuredClone(DEFAULT_SHORTCUT_SETTINGS) });
+    unregister = registerPluginCommands(PLUGIN_ID, {
+      defaultLanguage: "en",
+      pages: ["map"],
+      commands: [
+        { id: "undo", label: "Undo", contexts: ["map"], defaults: [["Mod+z"]] },
+        { id: "pencilTool", label: "Pencil tool", contexts: ["map"], defaults: [["p"]] },
+        { id: "globalReport", label: "Report", contexts: ["global"], defaults: [["Mod+Alt+g"]] },
+      ],
+    });
+  });
+
+  afterEach(() => {
+    unregister?.();
+    unregister = null;
+  });
+
+  function ShortcutFrame({ id, onTrigger }: { id: CommandId; onTrigger: () => void }) {
+    useShortcuts([{ id, onTrigger }]);
+    return (
+      <PluginFrame runtime={frameHost()} src="ui/index.html" title="Custom report" variant="page" />
+    );
+  }
+
+  function forwardKey(
+    iframe: HTMLIFrameElement,
+    data: Record<string, unknown>,
+    source: Window | null = iframe.contentWindow
+  ) {
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", { data: { kind: FRAME_KEY_MESSAGE, ...data }, source })
+      );
+    });
+  }
+
+  it("runs a bound map Command once for a forwarded Mod+Z", () => {
+    const onTrigger = vi.fn();
+    const { container } = render(<ShortcutFrame id={undoId} onTrigger={onTrigger} />);
+    const iframe = container.querySelector("iframe") as HTMLIFrameElement;
+
+    forwardKey(iframe, { key: "z", code: "KeyZ", ctrlKey: true });
+
+    expect(onTrigger).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs a forwarded global Command", () => {
+    const onTrigger = vi.fn();
+    const { container } = render(<ShortcutFrame id={globalId} onTrigger={onTrigger} />);
+    const iframe = container.querySelector("iframe") as HTMLIFrameElement;
+
+    forwardKey(iframe, { key: "g", code: "KeyG", ctrlKey: true, altKey: true });
+
+    expect(onTrigger).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs no bare page Command for a forwarded key marked typing", () => {
+    const onTrigger = vi.fn();
+    const { container } = render(<ShortcutFrame id={pencilId} onTrigger={onTrigger} />);
+    const iframe = container.querySelector("iframe") as HTMLIFrameElement;
+
+    forwardKey(iframe, { key: "p", code: "KeyP", typing: false });
+    expect(onTrigger).toHaveBeenCalledTimes(1);
+
+    forwardKey(iframe, { key: "p", code: "KeyP", typing: true });
+    expect(onTrigger).toHaveBeenCalledTimes(1);
+  });
+
+  it("still leaves Frame fullscreen on a forwarded Escape", () => {
+    const { container } = render(<ShortcutFrame id={undoId} onTrigger={vi.fn()} />);
+    const iframe = container.querySelector("iframe") as HTMLIFrameElement;
+    const wrapper = container.querySelector('[data-plugin-frame="page"]') as HTMLElement;
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: { kind: "frame-fullscreen", on: true },
+          source: iframe.contentWindow,
+        })
+      );
+    });
+    expect(wrapper.dataset.fullscreen).toBe("true");
+
+    forwardKey(iframe, { key: "Escape", code: "Escape" });
+
+    expect(wrapper.dataset.fullscreen).toBeUndefined();
+  });
+
+  it("ignores a frame-key message from another window", () => {
+    const onTrigger = vi.fn();
+    const { container } = render(<ShortcutFrame id={undoId} onTrigger={onTrigger} />);
+    const iframe = container.querySelector("iframe") as HTMLIFrameElement;
+
+    forwardKey(iframe, { key: "z", code: "KeyZ", ctrlKey: true }, window);
+
+    expect(onTrigger).not.toHaveBeenCalled();
   });
 });

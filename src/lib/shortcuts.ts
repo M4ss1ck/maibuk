@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { isTypingTarget } from "@/lib/keyboard";
+import { isTypingEvent } from "@/lib/keyboard";
 import { isMac } from "@/lib/platform/detect";
 import { useModalStore } from "@/components/ui/modal-store";
 import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
@@ -162,7 +162,7 @@ export function useShortcuts(shortcuts: ShortcutBinding[], options: UseShortcuts
       const steps = stepsFromEvent(event, mac);
       if (steps.length === 0) return;
 
-      const isTyping = isTypingTarget(event.target);
+      const isTyping = isTypingEvent(event);
       const now = Date.now();
       const candidates: Candidate[] = shortcutsRef.current
         .filter(

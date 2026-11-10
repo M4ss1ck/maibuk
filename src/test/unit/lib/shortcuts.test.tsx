@@ -1,8 +1,10 @@
-import { render, renderHook, act } from "@testing-library/react";
+import { useState } from "react";
+import { render, renderHook, act, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ListBox, ListBoxItem } from "react-aria-components";
 import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
 
+import { Switch } from "@/components/ui/Switch";
 import { useModalStore } from "@/components/ui/modal-store";
 import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
 import { useTutorialStore } from "@/features/tutorial/store";
@@ -336,6 +338,38 @@ describe("useShortcuts leaves a focused widget's own bare keys alone", () => {
     } finally {
       button.remove();
     }
+  });
+});
+
+describe("useShortcuts beside a focused Switch", () => {
+  beforeEach(() => {
+    useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
+  });
+
+  it("runs a bare ArrowRight page Command once while a Switch has focus, and leaves Space to the Switch", async () => {
+    const { useShortcuts } = await import("@/lib/shortcuts");
+    const onTrigger = vi.fn();
+    setShortcuts({ "bookList.newBook": [["ArrowRight"]] });
+
+    function Harness() {
+      const [checked, setChecked] = useState(false);
+      useShortcuts([{ id: "bookList.newBook", onTrigger }]);
+      return <Switch checked={checked} onChange={setChecked} label="Sync metrics" />;
+    }
+
+    const user = userEvent.setup();
+    render(<Harness />);
+    const control = screen.getByRole("switch", { name: "Sync metrics" });
+
+    await user.tab();
+    expect(control).toHaveFocus();
+
+    await user.keyboard("{ArrowRight}");
+    expect(onTrigger).toHaveBeenCalledTimes(1);
+
+    await user.keyboard(" ");
+    expect(control).toHaveAttribute("aria-checked", "true");
+    expect(onTrigger).toHaveBeenCalledTimes(1);
   });
 });
 

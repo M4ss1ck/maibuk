@@ -4,9 +4,12 @@
 // Pencil stroke landing in the Frame as a Map Line (and reaching the Maps list
 // preview and the reopened Map), and the keyboard the Elements list owns: select
 // the line, move it 1 mm and 10 mm, undo and redo, then delete it through the
-// row's Item Menu. The pointer gesture itself is `support/frame-stroke.ts`,
-// which explains why it sits outside the spec. Tagged @sandbox because Maps runs
-// in the Plugin sandbox: the lane runs it on Chromium, WebKit, and Firefox.
+// row's Item Menu. It also proves the Frame forwards a key its own code does
+// not handle to the host's Commands (#760): undo, pan, and a bare Arrow from
+// the properties panel's Hidden Switch. The pointer gesture itself is
+// `support/frame-stroke.ts`, which explains why it sits outside the spec.
+// Tagged @sandbox because Maps runs in the Plugin sandbox: the lane runs it on
+// Chromium, WebKit, and Firefox.
 
 import type { FrameLocator, Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
@@ -389,5 +392,66 @@ test.describe("Maps editor @wf:plugins-maps-editor @sc:plugin.maibuk-maps.openMa
       .poll(async () => firstPoint(await pathData(drawnLine(page)))[0])
       .toBeCloseTo(moved[0] - 1, 2);
     await expect(page.getByRole("button", { name: "Back to Maps" })).toBeFocused();
+  });
+
+  test("keys the Frame does not handle reach the host Commands, and a bare Arrow from the Hidden Switch moves the selection @wf:plugins-maps-frame-keys", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await openMaps(page);
+    await createMap(page, "Coastline Map");
+    await openMap(page, "Coastline Map");
+    await pickPencil(page);
+    await drawStroke(page, mapFrame(page).locator("svg"));
+    await expect(drawnElements(page)).toHaveCount(1);
+
+    // Visit the host properties panel first: in Firefox a Frame whose drawing
+    // has no focusable element traps Tab and Shift+Tab once focus is inside it,
+    // so the test ends inside the Frame rather than leaving it.
+    //
+    // The properties panel's Hidden Switch is a checkbox, not a typing target:
+    // a bare ArrowRight runs the host's move Command and leaves focus on it.
+    // Properties selects the Map Line and lands focus on the panel's Name field.
+    await runRowMenu(page, "Map Line 1", "Properties");
+    await expect(page.getByRole("textbox", { name: "Name" })).toBeFocused();
+    const hidden = page.getByRole("switch", { name: "Hidden" });
+    await tabTo(page, hidden, { max: 5 });
+    const start = firstPoint(await pathData(drawnLine(page)));
+    await page.keyboard.press("ArrowRight");
+    await expect
+      .poll(async () => firstPoint(await pathData(drawnLine(page)))[0])
+      .toBeCloseTo(start[0] + 1, 2);
+    await expect(hidden).toBeFocused();
+
+    // Undo that 1 mm move so the Pencil stroke is the newest edit the Frame's
+    // undo below reverses.
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect
+      .poll(async () => firstPoint(await pathData(drawnLine(page)))[0])
+      .toBeCloseTo(start[0], 2);
+
+    // The Pencil's pointerdown calls preventDefault, so the mouse never focuses
+    // the Frame; Tab into it the way an author would. The Frame handles no
+    // keys, so the host's undo Command runs with the author on the drawing
+    // (#760).
+    await tabTo(page, frameElement(page), { max: 20, backwards: true });
+    await expect(frameElement(page)).toBeFocused();
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect(drawnElements(page)).toHaveCount(0);
+    await expect(elementRow(page, "Map Line 1")).toHaveCount(0);
+
+    // Redo brings the line back (and selects it again) for the pan below, from
+    // inside the Frame like the undo.
+    await page.keyboard.press("ControlOrMeta+Shift+z");
+    await expect(drawnElements(page)).toHaveCount(1);
+    await expect(elementRow(page, "Map Line 1")).toBeVisible();
+
+    // Redo can land focus on the Elements list, so Tab back into the Frame:
+    // Alt+ArrowRight is a host pan Command the Frame does not handle either.
+    await tabTo(page, frameElement(page), { max: 60 });
+    await expect(frameElement(page)).toBeFocused();
+    const base = await viewBox(page);
+    await page.keyboard.press("Alt+ArrowRight");
+    await expect.poll(async () => (await viewBox(page))[0]).toBeCloseTo(base[0] + 20, 1);
   });
 });

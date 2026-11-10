@@ -20,10 +20,12 @@ import {
   FRAME_FULLSCREEN_MESSAGE,
   FRAME_FULLSCREEN_STATE_MESSAGE,
   FRAME_HOST_FOCUS_MESSAGE,
+  FRAME_KEY_MESSAGE,
   FRAME_READY_MESSAGE,
   FRAME_THEME_MESSAGE,
 } from "@/features/plugins/frame";
 import { setWindowFullscreen } from "@/lib/platform";
+import { markTypingEvent } from "@/lib/keyboard";
 import { isPluginFrameAvailable } from "@/features/plugins/host-platform";
 import { useFrameThemeTokens } from "@/components/plugins/useFrameThemeTokens";
 import { pluginRunKey } from "@/components/plugins/plugin-run-key";
@@ -142,6 +144,28 @@ export function PluginFrame({
       const kind = (data as { kind?: unknown }).kind;
       if (kind === FRAME_FULLSCREEN_MESSAGE) {
         setFullscreen((data as { on?: unknown }).on === true);
+        return;
+      }
+      if (kind === FRAME_KEY_MESSAGE) {
+        const message = data as Record<string, unknown>;
+        if (typeof message.key !== "string") return;
+        // Replay the forwarded key on the iframe: every host listener (the
+        // `useShortcuts` capture and bubble paths, sequences, the Tutorial
+        // filter, and this Frame's fullscreen Escape) then handles it as if the
+        // key had been pressed on a host control (#760).
+        const keydown = new KeyboardEvent("keydown", {
+          key: message.key,
+          code: typeof message.code === "string" ? message.code : "",
+          altKey: message.altKey === true,
+          ctrlKey: message.ctrlKey === true,
+          metaKey: message.metaKey === true,
+          shiftKey: message.shiftKey === true,
+          repeat: message.repeat === true,
+          bubbles: true,
+          cancelable: true,
+        });
+        if (message.typing === true) markTypingEvent(keydown);
+        iframe.dispatchEvent(keydown);
         return;
       }
       if (kind !== FRAME_READY_MESSAGE.kind) return;
