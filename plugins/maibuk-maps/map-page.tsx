@@ -234,14 +234,14 @@ function MapEditorView({
                 isSelected={selected.locked}
                 onChange={(event) => editor.setLocked(selected.id, event.detail)}
               />
-              {snapshot.selectedEnclosesFills === null ? null : (
+              {snapshot.selectedIsLine ? (
                 <ui.Switch
                   label={t("properties.enclosesFills")}
-                  isSelected={snapshot.selectedEnclosesFills}
+                  isSelected={snapshot.selectedEnclosesFills ?? false}
                   onChange={(event) => editor.setEnclosesFills(selected.id, event.detail)}
                 />
-              )}
-              {snapshot.selectedEnclosesFills === null ? null : (
+              ) : null}
+              {snapshot.selectedIsLine ? (
                 <>
                   <ui.NumberField
                     label={t("properties.roughenStrength")}
@@ -255,7 +255,7 @@ function MapEditorView({
                     {t("properties.roughen")}
                   </ui.Button>
                 </>
-              )}
+              ) : null}
             </>
           )}
         </ui.View>

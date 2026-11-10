@@ -29,6 +29,18 @@ export interface FrameSceneElement {
   selected: boolean;
 }
 
+/**
+ * The surface's accessible name while a Pen line is in progress, in the app
+ * language, with `{{count}}` where the point count goes. The Frame cannot read
+ * the Plugin's catalogs and counts its own draft, so the Worker sends both
+ * plural forms and the Frame picks by count: `one` for a count of 1, `other` for
+ * everything else, the categories both shipped languages use.
+ */
+export interface PenDraftLabel {
+  one: string;
+  other: string;
+}
+
 /** Worker -> Frame: the whole scene to draw, plus the view the author is using. */
 export interface FrameSceneMessage {
   kind: "scene";
@@ -41,12 +53,8 @@ export interface FrameSceneMessage {
   zoom: number;
   panX: number;
   panY: number;
-  /**
-   * The surface's accessible name while a Pen line is in progress, in the app
-   * language, with `{{count}}` where the point count goes. The Frame cannot
-   * read the Plugin's catalogs, so the Worker sends the wording with the scene.
-   */
-  penLabel: string;
+  /** The surface's accessible name while a Pen line is in progress. */
+  penLabel: PenDraftLabel;
 }
 
 /** Frame -> Worker: a finished Pencil stroke, in page millimetres. */
@@ -163,8 +171,8 @@ export function sceneMessage(
     zoom: number;
     panX: number;
     panY: number;
-    /** The localized Pen draft label, with `{{count}}` for the point count. */
-    penLabel: string;
+    /** The localized Pen draft label's plural forms, with `{{count}}` for the point count. */
+    penLabel: PenDraftLabel;
   }
 ): FrameSceneMessage {
   return {

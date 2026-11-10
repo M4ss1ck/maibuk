@@ -385,6 +385,30 @@ describe("lineShapes", () => {
     });
   });
 
+  it("keeps a closed roughened line closed, its path returning to where it started", () => {
+    const closed: MapLineElement = line(
+      "closed",
+      [
+        [0, 0],
+        [10, 0],
+        [10, 10],
+        [0, 10],
+      ],
+      { closed: true, curves: [false, false, false, false], roughened: true }
+    );
+    const shapes = lineShapes(closed);
+    expect(shapes).toHaveLength(1);
+    const d = shapes[0].d;
+    const start = /^M\s*(-?[\d.]+)\s+(-?[\d.]+)/.exec(d);
+    expect(start).not.toBeNull();
+    // The last coordinate pair the path draws is the first point again, so the
+    // ink loop meets itself instead of leaving a break at the seam.
+    const end = /(-?[\d.]+)\s+(-?[\d.]+)\s*$/.exec(d);
+    expect(end).not.toBeNull();
+    expect(Number(end?.[1])).toBeCloseTo(Number(start?.[1]), 5);
+    expect(Number(end?.[2])).toBeCloseTo(Number(start?.[2]), 5);
+  });
+
   it("roughens every stroke of a ripple", () => {
     const shapes = lineShapes(straight({ style: "coastRipple", roughened: true }));
     expect(shapes).toHaveLength(4);

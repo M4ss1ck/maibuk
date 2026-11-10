@@ -12,6 +12,7 @@
 // Chromium, WebKit, and Firefox.
 
 import type { FrameLocator, Locator, Page } from "@playwright/test";
+import { capture } from "../support/capture";
 import { eraseAcross } from "../support/frame-stroke";
 import { isFocusWithin, leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
@@ -88,8 +89,11 @@ async function drawClosedOutline(page: Page): Promise<void> {
   await expect(frameElement(page)).toBeFocused();
 
   await page.keyboard.press("Enter");
-  // The surface's accessible name counts the points the Frame took.
-  await expect(surface(page)).toHaveAttribute("aria-label", /Pen line, 1 point/);
+  // The surface's accessible name counts the points the Frame took, in the
+  // singular for the first one.
+  await expect(surface(page)).toHaveAttribute("aria-label", "Pen line, 1 point");
+  // The crosshair and the one-point draft are what the author sees while drawing.
+  await capture(page, "pen-draft");
 
   await page.keyboard.press("Shift+ArrowRight");
   await page.keyboard.press("Enter");
@@ -247,6 +251,7 @@ test.describe("Maps Pen, Eraser, line styles, and Roughen @wf:plugins-maps-pen @
     // Coast's preset encloses Fills, so the switch follows the style.
     const encloses = page.getByRole("switch", { name: "Encloses Fills" });
     await expect(encloses).toBeChecked();
+    await capture(page, "pen-styles");
 
     await pickLineStyle(page, "Plain");
     await expect(drawnLine(page).first()).toHaveAttribute("stroke-width", "0.6");
@@ -269,6 +274,7 @@ test.describe("Maps Pen, Eraser, line styles, and Roughen @wf:plugins-maps-pen @
 
     await page.keyboard.press("ControlOrMeta+Shift+r");
     await expect.poll(async () => (await pathList(page)).join("|")).not.toBe(before.join("|"));
+    await capture(page, "pen-roughen");
 
     // One undo step puts the exact path back.
     await page.keyboard.press("ControlOrMeta+z");

@@ -43,14 +43,9 @@
         touch-action: none;
       }
 
-      #surface svg[data-tool="pencil"] {
-        cursor: crosshair;
-      }
-
-      #surface svg[data-tool="pen"] {
-        cursor: crosshair;
-      }
-
+      /* Every drawing tool shows a crosshair; Select shows the pointer. */
+      #surface svg[data-tool="pencil"],
+      #surface svg[data-tool="pen"],
       #surface svg[data-tool="eraser"] {
         cursor: crosshair;
       }

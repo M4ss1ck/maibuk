@@ -10,7 +10,7 @@
  */
 
 import { RoughGenerator } from "roughjs/bin/generator.js";
-import { seedFor } from "./geometry";
+import { cumulativeLengths, seedFor } from "./geometry";
 import type { MapDocument, MapElement, MapLineElement, MapPoint } from "./maps";
 
 /** The Atlas Map Style's water, which an empty Map shows. */
@@ -271,15 +271,8 @@ function offsetPoints(points: readonly MapPoint[], closed: boolean, offsetMm: nu
  */
 function taperedRiverPath(points: readonly MapPoint[]): string {
   const normals = vertexNormals(points, false);
-  const lengths: number[] = [0];
-  let total = 0;
-  for (let index = 1; index < points.length; index++) {
-    total += Math.hypot(
-      points[index][0] - points[index - 1][0],
-      points[index][1] - points[index - 1][1]
-    );
-    lengths.push(total);
-  }
+  const lengths = cumulativeLengths(points);
+  const total = lengths[lengths.length - 1];
 
   const left: MapPoint[] = [];
   const right: MapPoint[] = [];
@@ -342,12 +335,17 @@ function styleShapes(element: MapLineElement, d: string): LineShape[] {
   }
 }
 
+/** The first point a path `d` starts at, which a closed outline must come back to. */
+const PATH_START = /^M\s*(-?[\d.]+)\s+(-?[\d.]+)/;
+
 /**
  * The `d`s rough.js draws a stroke as, from the same seed for the same Element,
  * so a roughened line keeps its wobble between renders. Only strokes roughen: a
- * river's filled polygon is left alone.
+ * river's filled polygon is left alone. Rough.js offsets both ends of every
+ * stroke, so a closed outline comes back just short of where it started; the
+ * last drawn point returns to the first one, so the ink loop meets itself.
  */
-function roughenShape(shape: LineShape, id: string): LineShape[] {
+function roughenShape(shape: LineShape, id: string, closed: boolean): LineShape[] {
   if (shape.stroke === null || shape.d === "") return [shape];
   const drawable = roughGenerator.path(shape.d, {
     seed: seedFor(id) || 1,
@@ -355,7 +353,12 @@ function roughenShape(shape: LineShape, id: string): LineShape[] {
     bowing: ROUGH_BOWING,
     disableMultiStroke: true,
   });
-  return roughGenerator.toPaths(drawable).map((path) => ({ ...shape, d: path.d }));
+  const paths = roughGenerator.toPaths(drawable).map((path) => ({ ...shape, d: path.d }));
+  if (paths.length === 0) return paths;
+  const start = PATH_START.exec(paths[0].d);
+  if (!closed || start === null) return paths;
+  const last = paths[paths.length - 1];
+  return [...paths.slice(0, -1), { ...last, d: `${last.d} L ${start[1]} ${start[2]}` }];
 }
 
 /**
@@ -367,7 +370,9 @@ export function lineShapes(element: MapLineElement): LineShape[] {
   const d = linePath(element);
   if (d === "") return [];
   const shapes = styleShapes(element, d);
-  return element.roughened ? shapes.flatMap((shape) => roughenShape(shape, element.id)) : shapes;
+  return element.roughened
+    ? shapes.flatMap((shape) => roughenShape(shape, element.id, element.closed))
+    : shapes;
 }
 
 /** Escapes text for an XML attribute. */

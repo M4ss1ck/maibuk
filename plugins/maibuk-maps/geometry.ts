@@ -247,16 +247,28 @@ export function eraseLines(
   return pieces;
 }
 
-/** The length of a polyline, for the arc length Roughen's noise follows. */
-function polylineLength(points: readonly MapPoint[]): number {
+/**
+ * The distance along a polyline to each of its points: the first entry is 0 and
+ * the last is the whole length. One pass, so a tapered shape reads every point's
+ * place without walking the line again.
+ */
+export function cumulativeLengths(points: readonly MapPoint[]): number[] {
+  const lengths: number[] = [0];
   let total = 0;
   for (let index = 1; index < points.length; index++) {
     total += Math.hypot(
       points[index][0] - points[index - 1][0],
       points[index][1] - points[index - 1][1]
     );
+    lengths.push(total);
   }
-  return total;
+  return lengths;
+}
+
+/** The length of a polyline, for the arc length Roughen's noise follows. */
+export function polylineLength(points: readonly MapPoint[]): number {
+  const lengths = cumulativeLengths(points);
+  return lengths[lengths.length - 1];
 }
 
 /** Three layers of simplex noise, each half as loud and twice as fine as the one before. */

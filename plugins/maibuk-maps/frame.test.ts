@@ -69,7 +69,7 @@ function loadFrame(): Frame {
         zoom: 1,
         panX: 0,
         panY: 0,
-        penLabel: "Pen line, {{count}} points",
+        penLabel: PEN_LABEL,
         ...overrides,
       });
     },
@@ -100,6 +100,9 @@ function key(name: string, init: KeyboardEventInit = {}): KeyboardEvent {
   document.body.dispatchEvent(event);
   return event;
 }
+
+/** The Pen draft label the Worker sends: both plural forms, `{{count}}` to fill. */
+const PEN_LABEL = { one: "Pen line, {{count}} point", other: "Pen line, {{count}} points" };
 
 const shape = (overrides: Record<string, unknown> = {}) => ({
   d: "M 10 10 L 20 20",
@@ -196,6 +199,28 @@ describe("drawing the scene", () => {
     expect(lines[2].getAttribute("opacity")).toBeNull();
   });
 
+  it("draws no shape the Worker sent without a usable stroke width", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [
+        sceneElement({
+          shapes: [
+            shape({ d: "M 1 1 L 2 2", strokeWidth: undefined }),
+            shape({ d: "M 3 3 L 4 4", strokeWidth: -1 }),
+            shape({ d: "M 5 5 L 6 6", stroke: null, strokeWidth: 0, fill: "#3b6e8f" }),
+          ],
+        }),
+      ],
+    });
+
+    // Every shape the Worker sends carries its width, so a missing one is a
+    // malformed primitive and not a guess at 0.6 mm.
+    const lines = Array.from(document.querySelectorAll("path.map-line"));
+    expect(lines).toHaveLength(1);
+    expect(lines[0].getAttribute("d")).toBe("M 5 5 L 6 6");
+    expect(lines[0].getAttribute("fill")).toBe("#3b6e8f");
+  });
+
   it("hit-tests a filled river by its area, and a stroke by its line", () => {
     frame = loadFrame();
     frame.scene({
@@ -268,7 +293,7 @@ describe("the scene message", () => {
       zoom: 1,
       panX: 0,
       panY: 0,
-      penLabel: "Pen line, {{count}} points",
+      penLabel: PEN_LABEL,
     });
     expect(message.elements[0].shapes).toEqual([
       {
@@ -311,7 +336,7 @@ describe("the scene message", () => {
       zoom: 1,
       panX: 0,
       panY: 0,
-      penLabel: "Pen line, {{count}} points",
+      penLabel: PEN_LABEL,
     });
     expect(message.elements[0].shapes).toEqual([
       {
@@ -413,20 +438,27 @@ describe("the Pen", () => {
 
   it("names the surface from the label the Worker sends, not from English in the Frame", () => {
     frame = loadFrame();
-    frame.scene({ tool: "pen", penLabel: "Línea de pluma: {{count}}" });
+    frame.scene({
+      tool: "pen",
+      penLabel: {
+        one: "Línea de pluma: {{count}} punto",
+        other: "Línea de pluma: {{count}} puntos",
+      },
+    });
     const surface = document.getElementById("surface");
     if (surface === null) throw new Error("the Frame has no surface");
 
+    // The Worker sends both plural forms; the Frame picks by the count it holds.
     key("Enter");
-    expect(surface.getAttribute("aria-label")).toBe("Línea de pluma: 1");
+    expect(surface.getAttribute("aria-label")).toBe("Línea de pluma: 1 punto");
     key("ArrowRight");
     key("Enter");
-    expect(surface.getAttribute("aria-label")).toBe("Línea de pluma: 2");
+    expect(surface.getAttribute("aria-label")).toBe("Línea de pluma: 2 puntos");
     key("Escape");
     expect(surface.hasAttribute("aria-label")).toBe(false);
 
     // A scene with no label leaves the surface unnamed rather than in English.
-    frame.scene({ tool: "pen", penLabel: "" });
+    frame.scene({ tool: "pen", penLabel: { one: "", other: "" } });
     key("Enter");
     expect(surface.hasAttribute("aria-label")).toBe(false);
   });

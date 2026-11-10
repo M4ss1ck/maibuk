@@ -1001,6 +1001,28 @@ describe("Map editor page", () => {
     }
   });
 
+  it("tells the Frame both plural forms of the Pen draft label, in the app language", async () => {
+    const { host, runtime } = await openEditor(mapStorage([]), "es");
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      // The Frame counts its own draft but cannot read the catalogs, so both
+      // forms ship with the scene: "1 punto", "2 puntos".
+      const sent: Array<Record<string, unknown>> = [];
+      const port = {
+        postMessage: (message: Record<string, unknown>) => sent.push(message),
+      } as unknown as MessagePort;
+      runtime.editor?.attachFrame(port);
+      expect(sent.at(-1)?.penLabel).toEqual({
+        one: "Línea de pluma, {{count}} punto",
+        other: "Línea de pluma, {{count}} puntos",
+      });
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
   it("changes the selected line's style, resets Encloses Fills, and undoes in one step", async () => {
     const storage = mapStorage([
       line(
@@ -1017,6 +1039,7 @@ describe("Map editor page", () => {
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
       runtime.editor?.select("e1");
+      expect(runtime.editor?.getSnapshot().selectedIsLine).toBe(true);
       expect(runtime.editor?.getSnapshot().selectedLineStyle).toBe("river");
       expect(runtime.editor?.getSnapshot().selectedEnclosesFills).toBe(false);
       expect(runtime.editor?.getSnapshot().currentLineStyle).toBe("plain");
@@ -1036,6 +1059,7 @@ describe("Map editor page", () => {
 
       // With no Map Line selected, the pick only becomes the current style.
       runtime.editor?.select(null);
+      expect(runtime.editor?.getSnapshot().selectedIsLine).toBe(false);
       expect(runtime.editor?.getSnapshot().selectedLineStyle).toBeNull();
       runtime.editor?.setLineStyle("road");
       expect(runtime.editor?.getSnapshot().currentLineStyle).toBe("road");
@@ -1070,6 +1094,47 @@ describe("Map editor page", () => {
       expect((runtime.editor?.getSnapshot().elements[0] as MapLineElement).enclosesFills).toBe(
         true
       );
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("changes neither style nor Encloses Fills of a locked line", async () => {
+    const storage = mapStorage([
+      line(
+        "e1",
+        "Coast",
+        [
+          [0, 0],
+          [10, 10],
+        ],
+        { style: "coast", enclosesFills: true, locked: true }
+      ),
+    ]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      runtime.editor?.select("e1");
+      // Roughen and drag already refuse a locked Element; so do these two, and
+      // a refused edit is not an undo step.
+      runtime.editor?.setLineStyle("road");
+      runtime.editor?.setEnclosesFills("e1", false);
+      const locked = runtime.editor?.getSnapshot().elements[0] as MapLineElement;
+      expect(locked.style).toBe("coast");
+      expect(locked.enclosesFills).toBe(true);
+      expect(runtime.editor?.getSnapshot().currentLineStyle).toBe("plain");
+      expect(runtime.editor?.getSnapshot().canUndo).toBe(false);
+      await runtime.editor?.flush();
+      expect((storedMap(storage).elements[0] as MapLineElement).style).toBe("coast");
+
+      // Unlocking lets the same pick through, as one undo step.
+      runtime.editor?.setLocked("e1", false);
+      runtime.editor?.setLineStyle("road");
+      const unlocked = runtime.editor?.getSnapshot().elements[0] as MapLineElement;
+      expect(unlocked.style).toBe("road");
+      expect(unlocked.enclosesFills).toBe(false);
+
       await page.unmount();
     } finally {
       await host.stop();

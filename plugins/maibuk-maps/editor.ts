@@ -25,8 +25,10 @@ import { createAutosave } from "./autosave";
 import {
   parseFrameMessage,
   sceneMessage,
+  type FrameSceneMessage,
   type FrameToWorkerMessage,
   type MapTool,
+  type PenDraftLabel,
 } from "./frame-protocol";
 import { eraseLines, roughen as roughenPoints, seedFor } from "./geometry";
 import { createHistory } from "./history";
@@ -67,6 +69,8 @@ export interface MapEditorSnapshot {
   currentLineStyle: LineStyleId;
   /** How hard Roughen pushes the selected line, in page millimetres. */
   roughenStrength: number;
+  /** Whether the selected Element is a Map Line. */
+  selectedIsLine: boolean;
   /** The selected Map Line's style, or null when the selection is not a Map Line. */
   selectedLineStyle: LineStyleId | null;
   /** Whether the selected Map Line encloses Fills, or null when it is not a Map Line. */
@@ -92,9 +96,9 @@ export interface MapEditor {
   rename(id: string, name: string): void;
   setHidden(id: string, hidden: boolean): void;
   setLocked(id: string, locked: boolean): void;
-  /** Picks a line style for new Pen lines, and for the selected Map Line when it has one. */
+  /** Picks a line style for new Pen lines; a selected unlocked Map Line takes it too. */
   setLineStyle(style: LineStyleId): void;
-  /** Sets whether one Map Line encloses Fills. */
+  /** Sets whether one unlocked Map Line encloses Fills. */
   setEnclosesFills(id: string, enclosesFills: boolean): void;
   /** Sets how hard Roughen pushes the selected line, in page millimetres. */
   setRoughenStrength(strengthMm: number): void;
@@ -168,6 +172,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       saveFailed,
       currentLineStyle,
       roughenStrength,
+      selectedIsLine: selectedLine !== null,
       selectedLineStyle: selectedLine === null ? null : selectedLine.style,
       selectedEnclosesFills: selectedLine === null ? null : selectedLine.enclosesFills,
     };
@@ -178,23 +183,34 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     for (const listener of listeners) listener();
   }
 
-  /** The Pen draft label the Frame puts on its surface, in the app language. */
-  function penDraftLabel(): string {
-    return translate(options.language(), "map.penPoints");
+  /**
+   * The Pen draft label the Frame puts on its surface, in the app language:
+   * both plural forms, because the Frame counts its own draft. A count of 1
+   * reads the singular and a larger count the plural, as both languages count.
+   */
+  function penDraftLabel(): PenDraftLabel {
+    const language = options.language();
+    return {
+      one: translate(language, "map.penPoints", 1),
+      other: translate(language, "map.penPoints", 2),
+    };
+  }
+
+  /** The scene message the Frame draws, from the editor's current state. */
+  function sceneForFrame(): FrameSceneMessage {
+    return sceneMessage(doc, {
+      selectedId,
+      tool,
+      zoom,
+      panX,
+      panY,
+      penLabel: penDraftLabel(),
+    });
   }
 
   function sendScene(): void {
     if (frame === null) return;
-    frame.postMessage(
-      sceneMessage(doc, {
-        selectedId,
-        tool,
-        zoom,
-        panX,
-        panY,
-        penLabel: penDraftLabel(),
-      })
-    );
+    frame.postMessage(sceneForFrame());
   }
 
   function schedule(): void {
@@ -239,32 +255,12 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     return format(translate(options.language(), "element.lineName"), { number });
   }
 
-  function addStroke(raw: readonly MapPoint[]): void {
-    const points = smoothStroke(raw);
-    if (points.length < 2) return;
-    const element: MapLineElement = {
-      id: randomMapId(),
-      kind: "line",
-      name: newLineName(),
-      hidden: false,
-      locked: false,
-      points,
-      style: currentLineStyle,
-      enclosesFills: LINE_STYLE_DEFAULT_ENCLOSES[currentLineStyle],
-      closed: false,
-      curves: curvedSegments(points.length, false),
-      roughened: false,
-    };
-    selectedId = element.id;
-    edit(addElement(elements, element));
-  }
-
-  /** Keeps a finished Pen line: its points, its segment curves, and whether it closes. */
-  function addLine(raw: readonly MapPoint[], curves: readonly boolean[], closed: boolean): void {
-    if (raw.length < 2) return;
-    const points = raw.map(([x, y]): MapPoint => [x, y]);
-    const segments = points.length - 1 + (closed ? 1 : 0);
-    const element: MapLineElement = {
+  /**
+   * A new Map Line in the current style: what both the Pencil and the Pen make,
+   * from the points they gather and the segments those points draw.
+   */
+  function newLine(points: MapPoint[], curves: boolean[], closed: boolean): MapLineElement {
+    return {
       id: randomMapId(),
       kind: "line",
       name: newLineName(),
@@ -274,9 +270,29 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       style: currentLineStyle,
       enclosesFills: LINE_STYLE_DEFAULT_ENCLOSES[currentLineStyle],
       closed,
-      curves: Array.from({ length: segments }, (_flag, index) => curves[index] === true),
+      curves,
       roughened: false,
     };
+  }
+
+  function addStroke(raw: readonly MapPoint[]): void {
+    const points = smoothStroke(raw);
+    if (points.length < 2) return;
+    const element = newLine(points, curvedSegments(points.length, false), false);
+    selectedId = element.id;
+    edit(addElement(elements, element));
+  }
+
+  /** Keeps a finished Pen line: its points, its segment curves, and whether it closes. */
+  function addLine(raw: readonly MapPoint[], curves: readonly boolean[], closed: boolean): void {
+    if (raw.length < 2) return;
+    const points = raw.map(([x, y]): MapPoint => [x, y]);
+    const segments = points.length - 1 + (closed ? 1 : 0);
+    const segmentCurves = Array.from(
+      { length: segments },
+      (_flag, index) => curves[index] === true
+    );
+    const element = newLine(points, segmentCurves, closed);
     selectedId = element.id;
     edit(addElement(elements, element));
   }
@@ -289,6 +305,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
    */
   function erase(raw: readonly MapPoint[], radiusMm: number): void {
     if (raw.length === 0) return;
+    const language = options.language();
     const next: MapElement[] = [];
     let touched = false;
     for (const element of elements) {
@@ -306,7 +323,13 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
         next.push({
           ...element,
           id: index === 0 ? element.id : randomMapId(),
-          name: index === 0 ? element.name : `${element.name} ${index + 1}`,
+          name:
+            index === 0
+              ? element.name
+              : format(translate(language, "element.lineSplitName"), {
+                  name: element.name,
+                  number: index + 1,
+                }),
           points: piece.points,
           curves: piece.curves,
           closed: false,
@@ -359,16 +382,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
 
     attachFrame(port) {
       frame = port;
-      port.postMessage(
-        sceneMessage(doc, {
-          selectedId,
-          tool,
-          zoom,
-          panX,
-          panY,
-          penLabel: penDraftLabel(),
-        })
-      );
+      port.postMessage(sceneForFrame());
     },
 
     handleFrameMessage(data) {
@@ -407,8 +421,11 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     },
 
     setLineStyle(style) {
-      currentLineStyle = style;
       const target = elementById(selectedId);
+      // A locked Map Line keeps its look, as it keeps its place and its
+      // Roughen, and a refused change is not an undo step.
+      if (target !== undefined && target.kind === "line" && target.locked) return;
+      currentLineStyle = style;
       if (target === undefined || target.kind !== "line") {
         publish();
         return;
@@ -432,6 +449,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       if (
         target === undefined ||
         target.kind !== "line" ||
+        target.locked ||
         target.enclosesFills === enclosesFills
       ) {
         return;

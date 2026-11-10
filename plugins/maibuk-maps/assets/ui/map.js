@@ -24,7 +24,8 @@
    * @typedef {"select" | "pencil" | "pen" | "eraser"} MapTool
    * @typedef {{ d: string, stroke: string | null, strokeWidth: number, dash: string | null, fill: string | null, opacity: number }} LineShape
    * @typedef {{ id: string, shapes: LineShape[], hidden: boolean, locked: boolean, selected: boolean }} FrameSceneElement
-   * @typedef {{ kind: "scene", widthMm: number, heightMm: number, background: string, elements: FrameSceneElement[], tool: MapTool, zoom: number, panX: number, panY: number, penLabel: string }} FrameSceneMessage
+   * @typedef {{ one: string, other: string }} PenDraftLabel
+   * @typedef {{ kind: "scene", widthMm: number, heightMm: number, background: string, elements: FrameSceneElement[], tool: MapTool, zoom: number, panX: number, panY: number, penLabel: PenDraftLabel }} FrameSceneMessage
    * @typedef {{ kind: "stroke", points: MapPoint[] }} FrameStrokeMessage
    * @typedef {{ kind: "line", points: MapPoint[], curves: boolean[], closed: boolean }} FrameLineMessage
    * @typedef {{ kind: "erase", points: MapPoint[], radiusMm: number }} FrameEraseMessage
@@ -87,6 +88,7 @@
   /**
    * Reads one render primitive, or null when it has no path to draw. A shape
    * without a usable stroke colour is a fill; without a usable fill, a stroke.
+   * The Worker sends every shape's width, so one without it is malformed.
    * @param {unknown} raw
    * @returns {LineShape | null}
    */
@@ -94,19 +96,29 @@
     if (typeof raw !== "object" || raw === null) return null;
     const shape = /** @type {Record<string, unknown>} */ (raw);
     if (typeof shape.d !== "string" || shape.d === "") return null;
-    const stroke = typeof shape.stroke === "string" ? shape.stroke : null;
+    if (!isNumber(shape.strokeWidth) || shape.strokeWidth < 0) return null;
     return {
       d: shape.d,
-      stroke,
-      strokeWidth:
-        isNumber(shape.strokeWidth) && shape.strokeWidth >= 0
-          ? shape.strokeWidth
-          : stroke === null
-            ? 0
-            : 0.6,
+      stroke: typeof shape.stroke === "string" ? shape.stroke : null,
+      strokeWidth: shape.strokeWidth,
       dash: typeof shape.dash === "string" ? shape.dash : null,
       fill: typeof shape.fill === "string" ? shape.fill : null,
       opacity: isNumber(shape.opacity) ? Math.max(0, Math.min(1, shape.opacity)) : 1,
+    };
+  }
+
+  /**
+   * Reads the Pen draft label's two forms; an unreadable one leaves both empty,
+   * which keeps the surface unnamed instead of falling back to English.
+   * @param {unknown} raw
+   * @returns {PenDraftLabel}
+   */
+  function readLabel(raw) {
+    const label =
+      typeof raw === "object" && raw !== null ? /** @type {Record<string, unknown>} */ (raw) : {};
+    return {
+      one: typeof label.one === "string" ? label.one : "",
+      other: typeof label.other === "string" ? label.other : "",
     };
   }
 
@@ -162,8 +174,9 @@
       panX: isNumber(message.panX) ? message.panX : 0,
       panY: isNumber(message.panY) ? message.panY : 0,
       // The Worker sends the label in the app's language; the Frame has no
-      // access to the Plugin's catalogs, so it fills in the count alone.
-      penLabel: typeof message.penLabel === "string" ? message.penLabel : "",
+      // access to the Plugin's catalogs, so it picks the plural form and fills
+      // in the count alone.
+      penLabel: readLabel(message.penLabel),
     };
   }
 
@@ -232,20 +245,24 @@
 
   /**
    * The surface's accessible name while a Pen line is in progress, from the
-   * localized label the Worker sends with the scene. The svg is `aria-hidden`,
-   * so this is the only count a screen reader gets. A scene without a label
-   * leaves the surface unnamed rather than falling back to English.
+   * localized label the Worker sends with the scene: the plural form the count
+   * selects, with the count filled in. The svg is `aria-hidden`, so this is the
+   * only count a screen reader gets. A scene without a label leaves the surface
+   * unnamed rather than falling back to English.
    */
   function updateLabel() {
     if (surface === null) return;
-    if (penDraft === null || scene === null || scene.penLabel === "") {
+    if (penDraft === null || scene === null) {
       surface.removeAttribute("aria-label");
       return;
     }
-    surface.setAttribute(
-      "aria-label",
-      scene.penLabel.replace("{{count}}", String(penDraft.points.length))
-    );
+    const count = penDraft.points.length;
+    const label = count === 1 ? scene.penLabel.one : scene.penLabel.other;
+    if (label === "") {
+      surface.removeAttribute("aria-label");
+      return;
+    }
+    surface.setAttribute("aria-label", label.replace("{{count}}", String(count)));
   }
 
   /** Drops every gesture in progress and the crosshair, on a tool change. */
