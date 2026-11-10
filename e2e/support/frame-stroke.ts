@@ -1,5 +1,6 @@
-// Pointer gestures for the Maps editor's drawing Frame (#745, #746): a straight
-// Pencil stroke and an Eraser drag across the Frame's svg.
+// Pointer gestures for the Maps editor's drawing Frame (#745, #746, #747): a
+// straight Pencil stroke, an Eraser drag across the Frame's svg, and a Shape
+// tool's drag.
 //
 // Drawing a Map Line has no keyboard path in this slice (the keyboard acts on a
 // selected Map Line: the move Commands, the Elements list, undo), and the E2E
@@ -29,6 +30,9 @@ type PagePoint = readonly [number, number];
 /** Where the stroke starts and ends, as fractions of the svg's box. */
 const FROM: readonly [number, number] = [0.3, 0.35];
 const TO: readonly [number, number] = [0.6, 0.55];
+/** Where a Shape drag starts and ends, as fractions of the svg's box. */
+const SHAPE_FROM: readonly [number, number] = [0.3, 0.3];
+const SHAPE_TO: readonly [number, number] = [0.55, 0.45];
 /** How many moves the stroke is split into. */
 const STEPS = 12;
 
@@ -55,6 +59,46 @@ export async function drawStroke(page: Page, surface: Locator): Promise<void> {
     );
   }
   await page.mouse.up();
+}
+
+/**
+ * Drags one of the Shape tools across a Frame's drawing surface with the mouse,
+ * the pointer path the Ellipse, Rectangle, and Polygon tools take (#747). The
+ * Frame's Shape tool must already be selected; the caller waits for the scene
+ * with `svg[data-tool="ellipse"]` (or its own kind) before calling this.
+ * `constrain` holds Shift for the drag, which squares the box on its longer
+ * side, so an Ellipse becomes a circle. `during` runs with the button still
+ * down, on the drag's last point, which is where the live preview is worth a
+ * screenshot.
+ */
+export async function dragShape(
+  page: Page,
+  surface: Locator,
+  { constrain = false, during }: { constrain?: boolean; during?: () => Promise<void> } = {}
+): Promise<void> {
+  const box = await surface.boundingBox();
+  if (box === null) throw new Error("the Frame's drawing surface has no box to draw on");
+  const at = (fraction: readonly [number, number]) => ({
+    x: box.x + box.width * fraction[0],
+    y: box.y + box.height * fraction[1],
+  });
+  const from = at(SHAPE_FROM);
+  const to = at(SHAPE_TO);
+  if (constrain) await page.keyboard.down("Shift");
+  try {
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    for (let step = 1; step <= STEPS; step += 1) {
+      await page.mouse.move(
+        from.x + ((to.x - from.x) * step) / STEPS,
+        from.y + ((to.y - from.y) * step) / STEPS
+      );
+    }
+    if (during !== undefined) await during();
+    await page.mouse.up();
+  } finally {
+    if (constrain) await page.keyboard.up("Shift");
+  }
 }
 
 /**

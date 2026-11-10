@@ -1,14 +1,22 @@
 /**
- * The Maps geometry (#746): the Eraser's split of a Map Line and the Roughen
- * pass that gives a line the rough ink look. Both are pure functions over page
- * millimetres, so the editor can test a cut and a roughened line without a
- * Frame, and the same seed always draws the same wobble.
+ * The Maps geometry (#746, #747): the Eraser's split of a Map Line, the Roughen
+ * pass that gives a line the rough ink look, and the outline an exact Shape
+ * draws. All pure functions over page millimetres, so the editor can test a cut,
+ * a roughened line, and a Shape without a Frame, and the same seed always draws
+ * the same wobble.
  *
  * This module imports only `./maps` and npm packages.
  */
 
 import { createNoise2D } from "simplex-noise";
-import type { MapPoint } from "./maps";
+import {
+  DEFAULT_POLYGON_SIDES,
+  MIN_SHAPE_SIZE_MM,
+  type MapLineElement,
+  type MapPoint,
+  type MapShape,
+  type ShapeKind,
+} from "./maps";
 
 /** One piece of a Map Line the Eraser left behind; a cut always opens a line. */
 export interface ErasedLine {
@@ -38,6 +46,12 @@ const SEARCH_STEPS = 48;
 
 /** Bisection steps that place a cut on the boundary of the eraser; more than enough. */
 const BISECT_STEPS = 40;
+
+/** How many samples an ellipse's outline takes. */
+const ELLIPSE_SAMPLES = 64;
+
+/** How many samples one rounded rectangle corner takes. */
+const CORNER_SAMPLES = 8;
 
 /** A stable number for one Element id, so Roughen and the rough ink look never drift. */
 export function seedFor(id: string): number {
@@ -338,4 +352,134 @@ export function roughen(
     if (!closed || index < vertices.length - 2) roughened.push([end[0], end[1]]);
   }
   return roughened;
+}
+
+/** One Shape's outline: its points, and one straight-segment flag per segment. */
+export interface ShapeOutline {
+  points: MapPoint[];
+  curves: boolean[];
+}
+
+/** A point turned `degrees` clockwise about `center`, in page millimetres. */
+function rotateAbout(point: MapPoint, center: MapPoint, degrees: number): MapPoint {
+  if (degrees === 0) return point;
+  const radians = (degrees * Math.PI) / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  const dx = point[0] - center[0];
+  const dy = point[1] - center[1];
+  return [center[0] + dx * cos - dy * sin, center[1] + dx * sin + dy * cos];
+}
+
+/** An ellipse sampled round its box, the first sample at the top. */
+function ellipsePoints(shape: MapShape): MapPoint[] {
+  const radiusX = shape.width / 2;
+  const radiusY = shape.height / 2;
+  return Array.from({ length: ELLIPSE_SAMPLES }, (_sample, index): MapPoint => {
+    const angle = -Math.PI / 2 + (2 * Math.PI * index) / ELLIPSE_SAMPLES;
+    return [shape.cx + radiusX * Math.cos(angle), shape.cy + radiusY * Math.sin(angle)];
+  });
+}
+
+/** The corners of a rectangle in drawing order, as their signs from the centre. */
+const CORNER_SIGNS: ReadonlyArray<MapPoint> = [
+  [-1, -1],
+  [1, -1],
+  [1, 1],
+  [-1, 1],
+];
+
+/**
+ * A rectangle's four corners, or one eight-sample arc per corner when it is
+ * rounded: each arc turns about a centre inset by the radius, so the straight
+ * edges between arcs join the inset points.
+ */
+function rectanglePoints(shape: MapShape): MapPoint[] {
+  const halfWidth = shape.width / 2;
+  const halfHeight = shape.height / 2;
+  const radius = Math.max(0, shape.cornerRadius);
+  if (radius === 0) {
+    return CORNER_SIGNS.map(
+      ([signX, signY]): MapPoint => [shape.cx + signX * halfWidth, shape.cy + signY * halfHeight]
+    );
+  }
+  const points: MapPoint[] = [];
+  CORNER_SIGNS.forEach(([signX, signY], corner) => {
+    const arcX = shape.cx + signX * (halfWidth - radius);
+    const arcY = shape.cy + signY * (halfHeight - radius);
+    for (let sample = 0; sample < CORNER_SAMPLES; sample++) {
+      const turned = 180 + 90 * corner + (90 * sample) / (CORNER_SAMPLES - 1);
+      const angle = (turned * Math.PI) / 180;
+      points.push([arcX + radius * Math.cos(angle), arcY + radius * Math.sin(angle)]);
+    }
+  });
+  return points;
+}
+
+/** A regular polygon scaled to the shape's box, the first vertex at the top. */
+function polygonPoints(shape: MapShape): MapPoint[] {
+  const radiusX = shape.width / 2;
+  const radiusY = shape.height / 2;
+  return Array.from({ length: shape.sides }, (_side, index): MapPoint => {
+    const angle = -Math.PI / 2 + (2 * Math.PI * index) / shape.sides;
+    return [shape.cx + radiusX * Math.cos(angle), shape.cy + radiusY * Math.sin(angle)];
+  });
+}
+
+/**
+ * The outline of an exact Shape (#747), straight segments only and turned about
+ * its centre. A Map Line that carries a Shape keeps these points, so the Frame,
+ * the preview, the Eraser, and fills all read one outline.
+ */
+export function shapeOutline(shape: MapShape): ShapeOutline {
+  const center: MapPoint = [shape.cx, shape.cy];
+  const corners =
+    shape.kind === "ellipse"
+      ? ellipsePoints(shape)
+      : shape.kind === "rectangle"
+        ? rectanglePoints(shape)
+        : polygonPoints(shape);
+  return {
+    points: corners.map((point) => rotateAbout(point, center, shape.rotation)),
+    curves: corners.map(() => false),
+  };
+}
+
+/**
+ * The Shape a drag from `start` to `end` draws (#747). `constrain` (Shift)
+ * squares the box on its longer side, growing the way the drag went. A drag
+ * smaller than `MIN_SHAPE_SIZE_MM` on either side draws no Shape at all.
+ */
+export function shapeFromCorners(
+  kind: ShapeKind,
+  start: MapPoint,
+  end: MapPoint,
+  constrain: boolean
+): MapShape | null {
+  const dx = end[0] - start[0];
+  const dy = end[1] - start[1];
+  const side = Math.max(Math.abs(dx), Math.abs(dy));
+  const width = constrain ? side : Math.abs(dx);
+  const height = constrain ? side : Math.abs(dy);
+  if (width < MIN_SHAPE_SIZE_MM || height < MIN_SHAPE_SIZE_MM) return null;
+  return {
+    kind,
+    cx: constrain ? start[0] + (dx < 0 ? -width : width) / 2 : start[0] + dx / 2,
+    cy: constrain ? start[1] + (dy < 0 ? -height : height) / 2 : start[1] + dy / 2,
+    width,
+    height,
+    rotation: 0,
+    sides: DEFAULT_POLYGON_SIDES,
+    cornerRadius: 0,
+  };
+}
+
+/**
+ * A Map Line that stops being an exact Shape (#747): the Eraser cut it or
+ * Roughen redrew it, so it keeps the points it had and remembers what it was.
+ * A line that never was a Shape comes back exactly as it is.
+ */
+export function convertShapeLine(line: MapLineElement): MapLineElement {
+  const { shape, ...rest } = line;
+  return shape === undefined ? line : { ...rest, convertedFrom: shape.kind };
 }

@@ -46,7 +46,10 @@
       /* Every drawing tool shows a crosshair; Select shows the pointer. */
       #surface svg[data-tool="pencil"],
       #surface svg[data-tool="pen"],
-      #surface svg[data-tool="eraser"] {
+      #surface svg[data-tool="eraser"],
+      #surface svg[data-tool="ellipse"],
+      #surface svg[data-tool="rectangle"],
+      #surface svg[data-tool="polygon"] {
         cursor: crosshair;
       }
 
@@ -110,6 +113,18 @@
         stroke-width: 0.4;
         stroke-linecap: round;
         opacity: 0.8;
+      }
+
+      /* A Shape tool's drag preview: the outline the drag would draw, dashed so
+         it reads as a guide rather than ink until the Worker keeps the Shape. */
+      .map-shape-preview {
+        fill: none;
+        stroke: var(--maibuk-color-primary-hover);
+        stroke-width: 0.6;
+        stroke-dasharray: 1.5 1;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        pointer-events: none;
       }
     </style>
   </head>

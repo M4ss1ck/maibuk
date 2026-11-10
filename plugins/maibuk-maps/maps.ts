@@ -85,6 +85,47 @@ export interface MapLineElement extends MapElementBase {
   curves: boolean[];
   /** Whether the line is drawn with the rough ink look. */
   roughened: boolean;
+  /**
+   * The exact Shape the line is, when it is one (#747). `points` and `curves`
+   * then hold the outline its numbers draw, so render, erase, and fills read
+   * them unchanged; the outline is always recomputed from here, never edited.
+   */
+  shape?: MapShape;
+  /** The Shape kind a line was, once the Eraser or Roughen made it point by point. */
+  convertedFrom?: ShapeKind;
+}
+
+/** The exact Shapes a Map Line can be (#747). */
+export const SHAPE_KINDS = ["ellipse", "rectangle", "polygon"] as const;
+export type ShapeKind = (typeof SHAPE_KINDS)[number];
+
+/** The smallest Shape a drag draws, on either side, in page millimetres. */
+export const MIN_SHAPE_SIZE_MM = 1;
+
+/** The Shape the Place command draws with no drag, in page millimetres. */
+export const DEFAULT_SHAPE_SIZE_MM = 40;
+
+/** The sides a new polygon takes, and the range a polygon keeps. */
+export const DEFAULT_POLYGON_SIDES = 6;
+export const MIN_POLYGON_SIDES = 3;
+export const MAX_POLYGON_SIDES = 12;
+
+/**
+ * An exact Shape a Map Line carries (#747): its outline is drawn from these
+ * numbers alone, so a resize or a turn never loses it to rounding. Points are
+ * page millimetres, and the angle is degrees clockwise about (cx, cy).
+ */
+export interface MapShape {
+  kind: ShapeKind;
+  cx: number;
+  cy: number;
+  width: number;
+  height: number;
+  rotation: number;
+  /** A polygon's side count, from `MIN_POLYGON_SIDES` to `MAX_POLYGON_SIDES`. */
+  sides: number;
+  /** A rectangle's corner radius in page millimetres, up to half its shorter side. */
+  cornerRadius: number;
 }
 
 /** The line styles a Map Line can take (#746); the render primitives arrive with the Frame slice. */
@@ -205,6 +246,15 @@ function isLineStyleId(value: unknown): value is LineStyleId {
   return typeof value === "string" && (LINE_STYLE_IDS as readonly string[]).includes(value);
 }
 
+/** Whether a value names one of the Shapes a Map Line can be. */
+export function isShapeKind(value: unknown): value is ShapeKind {
+  return typeof value === "string" && (SHAPE_KINDS as readonly string[]).includes(value);
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
 function isMapPoint(value: unknown): value is MapPoint {
   return (
     Array.isArray(value) &&
@@ -296,21 +346,65 @@ function cleanName(name: string): string {
   return trimmed;
 }
 
+/** The largest corner radius a rectangle of `width` by `height` takes. */
+function maxCornerRadius(width: number, height: number): number {
+  return Math.min(width, height) / 2;
+}
+
+/**
+ * A stored Shape with its numbers brought inside the ranges the model allows, or
+ * null when it cannot be a Shape at all: an unknown kind, a size with no area, or
+ * a number that is not finite. A Shape an older or a broken build wrote still
+ * draws instead of being lost.
+ */
+export function normalizeShape(value: unknown): MapShape | null {
+  if (typeof value !== "object" || value === null) return null;
+  const stored = value as Record<string, unknown>;
+  if (!isShapeKind(stored.kind)) return null;
+  const { cx, cy, width, height } = stored;
+  if (!isFiniteNumber(cx) || !isFiniteNumber(cy)) return null;
+  if (!isFiniteNumber(width) || !isFiniteNumber(height)) return null;
+  if (width <= 0 || height <= 0) return null;
+  const rotation = stored.rotation === undefined ? 0 : stored.rotation;
+  const sides = stored.sides === undefined ? DEFAULT_POLYGON_SIDES : stored.sides;
+  const cornerRadius = stored.cornerRadius === undefined ? 0 : stored.cornerRadius;
+  if (!isFiniteNumber(rotation) || !isFiniteNumber(sides) || !isFiniteNumber(cornerRadius)) {
+    return null;
+  }
+  return {
+    kind: stored.kind,
+    cx,
+    cy,
+    width,
+    height,
+    rotation,
+    sides: Math.min(MAX_POLYGON_SIDES, Math.max(MIN_POLYGON_SIDES, Math.round(sides))),
+    cornerRadius: Math.min(maxCornerRadius(width, height), Math.max(0, cornerRadius)),
+  };
+}
+
 /**
  * A Map Line read from a document written before line styles existed (#745):
  * a Pencil line is plain, encloses Fills, open, all curves, and not roughened.
+ * A Shape it carries is kept when it still makes one, and dropped when it does
+ * not (#747), and an unknown Shape kind a line was converted from is dropped too.
  */
 function normalizeLine(line: MapLineElement): MapLineElement {
-  const stored = line as Partial<MapLineElement>;
+  const { shape: storedShape, convertedFrom: storedConvertedFrom, ...lineFields } = line;
+  const stored = lineFields as Partial<MapLineElement>;
   const style = stored.style ?? "plain";
   const closed = stored.closed ?? false;
+  const shape = normalizeShape(storedShape);
+  const convertedFrom = isShapeKind(storedConvertedFrom) ? storedConvertedFrom : null;
   return {
-    ...line,
+    ...lineFields,
     style,
     enclosesFills: stored.enclosesFills ?? LINE_STYLE_DEFAULT_ENCLOSES[style],
     closed,
     curves: stored.curves ?? curvedSegments(line.points.length, closed),
     roughened: stored.roughened ?? false,
+    ...(shape === null ? {} : { shape }),
+    ...(convertedFrom === null ? {} : { convertedFrom }),
   };
 }
 

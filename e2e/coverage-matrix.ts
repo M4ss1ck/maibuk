@@ -2871,6 +2871,28 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-maps-shapes",
+    area: "plugins",
+    workflow:
+      "The Maps editor's Shape tools (#747): the author picks the Ellipse with its key and Shift+drags in the Frame, which squares the box into a circle the Elements list names Ellipse 1 and whose Width and Height number fields read back equal; from the keyboard alone the author picks Ellipse, Rectangle, and Polygon by their keys, each opening its own Place button, and places a Rectangle at the view centre, whose Width number field takes a new value the drawn outline follows (and a Rectangle keeps a Corner radius where a Polygon keeps Sides); Roughen (Mod+Shift+R) converts the Shape to a point-by-point line, the properties panel says which Shape it was converted from, and Mod+Z brings the Shape's number fields back; asserts: the stored Width and Height of the Shift+dragged Shape, the Rectangle's number fields and its drawn outline's size, the Corner radius field and the missing Sides field, the Converted from text, and the number fields' return; persists: yes (every edit autosaves to Plugin storage)",
+    edges: [
+      "Shift+dragging the Ellipse in the Frame draws a circle whose Width and Height match",
+      "Each Shape tool opens its Place button by its key, and a placed Rectangle takes a new Width from its number field",
+      "Roughen converts the Shape and names what it was, and Mod+Z brings its number fields back",
+    ],
+    terms: ["Command", "Shortcut"],
+    shortcuts: [
+      "plugin.maibuk-maps.ellipseTool",
+      "plugin.maibuk-maps.rectangleTool",
+      "plugin.maibuk-maps.polygonTool",
+      "plugin.maibuk-maps.roughen",
+    ],
+    routes: ["/plugin/:pluginId/:pageId"],
+    fixture: "bookShelf",
+    tags: ["sandbox"],
+    status: "accepted",
+  },
+  {
     id: "plugins-maps-frame-keys",
     area: "plugins",
     workflow:
