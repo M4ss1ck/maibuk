@@ -2848,6 +2848,28 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-maps-pen",
+    area: "plugins",
+    workflow:
+      "The Maps editor's Pen, Eraser, Line style, Encloses Fills, and Roughen (#746): the author picks the Pen with its key, focuses the drawing Frame, and draws a closed outline with the keyboard pen (the arrows move the crosshair, Enter adds a point, Enter on the first point closes the line), which the Elements list then lists as a Map Line; from the properties panel the Line style select moves that line to Coast and back to Plain and the Encloses Fills switch turns its fills off, Roughen (Mod+Shift+R) redraws the path with the rough ink look, Mod+Z restores it, and an Eraser drag across the line splits it into two Map Lines; asserts: the drawn path closes with Z, the coast and plain stroke widths, the switch's state, a changed and then restored path, and two Map Lines in the Elements list; persists: yes (every edit autosaves to Plugin storage)",
+    edges: [
+      "The keyboard pen draws a closed outline in the Frame and the Elements list gains a Map Line",
+      "The Line style select changes the selected Map Line to Coast and back, and Encloses Fills turns off",
+      "Roughen (Mod+Shift+R) changes the drawn path and Mod+Z restores it",
+      "An Eraser drag across a Map Line splits it into two Map Lines in the Elements list",
+    ],
+    terms: ["Command", "Shortcut"],
+    shortcuts: [
+      "plugin.maibuk-maps.penTool",
+      "plugin.maibuk-maps.eraserTool",
+      "plugin.maibuk-maps.roughen",
+    ],
+    routes: ["/plugin/:pluginId/:pageId"],
+    fixture: "bookShelf",
+    tags: ["sandbox"],
+    status: "accepted",
+  },
+  {
     id: "plugins-maps-frame-keys",
     area: "plugins",
     workflow:

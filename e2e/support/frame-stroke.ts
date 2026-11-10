@@ -1,5 +1,5 @@
-// One pointer gesture for the Maps editor's drawing Frame (#745): a straight
-// stroke drawn with the mouse across the Frame's svg.
+// Pointer gestures for the Maps editor's drawing Frame (#745, #746): a straight
+// Pencil stroke and an Eraser drag across the Frame's svg.
 //
 // Drawing a Map Line has no keyboard path in this slice (the keyboard acts on a
 // selected Map Line: the move Commands, the Elements list, undo), and the E2E
@@ -14,12 +14,17 @@
 // still enters by keyboard, drives the editor by keyboard, and names this one
 // gesture for what it is.
 //
-// Coordinates are fractions of the Frame's svg box, well inside the page area
-// `preserveAspectRatio="xMidYMid meet"` letterboxes: the Frame maps them to page
-// millimetres through its own `getScreenCTM`, so the helper never guesses at the
-// page's geometry.
+// A stroke's coordinates are fractions of the Frame's svg box, well inside the
+// page area `preserveAspectRatio="xMidYMid meet"` letterboxes: the Frame maps
+// them to page millimetres through its own `getScreenCTM`, so the helper never
+// guesses at the page's geometry. An Eraser drag names page millimetres instead,
+// because the caller reads them off the Map Line it means to cut, and this
+// helper maps them through the svg's viewBox.
 
 import type { Locator, Page } from "@playwright/test";
+
+/** A page point, in millimetres, the same space as a Map Line's points. */
+type PagePoint = readonly [number, number];
 
 /** Where the stroke starts and ends, as fractions of the svg's box. */
 const FROM: readonly [number, number] = [0.3, 0.35];
@@ -47,6 +52,54 @@ export async function drawStroke(page: Page, surface: Locator): Promise<void> {
     await page.mouse.move(
       from.x + ((to.x - from.x) * step) / STEPS,
       from.y + ((to.y - from.y) * step) / STEPS
+    );
+  }
+  await page.mouse.up();
+}
+
+/**
+ * The svg's box and viewBox, as the two mappings a page millimetre needs.
+ * `preserveAspectRatio="xMidYMid meet"` fits the whole viewBox inside the box
+ * and centres it, so one scale serves both axes.
+ */
+function fitToBox(
+  box: { x: number; y: number; width: number; height: number },
+  viewBox: readonly number[]
+): (point: PagePoint) => { x: number; y: number } {
+  const [viewX, viewY, viewWidth, viewHeight] = viewBox;
+  if (viewWidth <= 0 || viewHeight <= 0)
+    throw new Error(`unexpected viewBox: ${viewBox.join(" ")}`);
+  const scale = Math.min(box.width / viewWidth, box.height / viewHeight);
+  const left = box.x + (box.width - viewWidth * scale) / 2;
+  const top = box.y + (box.height - viewHeight * scale) / 2;
+  return ([x, y]) => ({ x: left + (x - viewX) * scale, y: top + (y - viewY) * scale });
+}
+
+/**
+ * Drags the Eraser across a Frame's drawing surface, between two page points in
+ * millimetres. The Frame's Eraser tool must already be selected; the caller
+ * waits for the scene with `svg[data-tool="eraser"]` before calling this, and
+ * reads the two points off the Map Line it means to cut.
+ */
+export async function eraseAcross(
+  page: Page,
+  surface: Locator,
+  from: PagePoint,
+  to: PagePoint
+): Promise<void> {
+  const box = await surface.boundingBox();
+  if (box === null) throw new Error("the Frame's drawing surface has no box to draw on");
+  const viewBox = await surface.getAttribute("viewBox");
+  if (viewBox === null) throw new Error("the Frame's drawing surface has no viewBox");
+  const toScreen = fitToBox(box, viewBox.split(" ").map(Number));
+  const start = toScreen(from);
+  const end = toScreen(to);
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  for (let step = 1; step <= STEPS; step += 1) {
+    await page.mouse.move(
+      start.x + ((end.x - start.x) * step) / STEPS,
+      start.y + ((end.y - start.y) * step) / STEPS
     );
   }
   await page.mouse.up();
