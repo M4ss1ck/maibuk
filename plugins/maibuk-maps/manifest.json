@@ -158,6 +158,24 @@
         "defaults": [["n"]]
       },
       {
+        "id": "ellipseTool",
+        "label": "Ellipse tool",
+        "contexts": ["map"],
+        "defaults": [["o"]]
+      },
+      {
+        "id": "rectangleTool",
+        "label": "Rectangle tool",
+        "contexts": ["map"],
+        "defaults": [["r"]]
+      },
+      {
+        "id": "polygonTool",
+        "label": "Polygon tool",
+        "contexts": ["map"],
+        "defaults": [["s"]]
+      },
+      {
         "id": "eraserTool",
         "label": "Eraser tool",
         "contexts": ["map"],

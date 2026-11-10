@@ -15,7 +15,17 @@ import type { MapTool } from "./frame-protocol";
 import type { MapsRuntime } from "./runtime";
 import { translate, type MapsKey } from "./i18n";
 import { useLanguage } from "./maps-page";
-import { LINE_STYLE_IDS, type LineStyleId, type MapElement } from "./maps";
+import {
+  LINE_STYLE_IDS,
+  MAX_POLYGON_SIDES,
+  MIN_POLYGON_SIDES,
+  MIN_SHAPE_SIZE_MM,
+  SHAPE_KINDS,
+  isShapeKind,
+  type LineStyleId,
+  type MapElement,
+  type ShapeKind,
+} from "./maps";
 
 /** The editor page id, exactly as the manifest declares it. */
 export const MAP_PAGE_ID = "map";
@@ -55,6 +65,27 @@ const LINE_STYLE_KEYS: Readonly<Record<LineStyleId, MapsKey>> = {
   plain: "properties.style.plain",
 };
 
+/** The tool picker's label for each Shape it offers, in the order it offers them. */
+const SHAPE_TOOL_KEYS: Readonly<Record<ShapeKind, MapsKey>> = {
+  ellipse: "tools.ellipse",
+  rectangle: "tools.rectangle",
+  polygon: "tools.polygon",
+};
+
+/** The Place button's label for each Shape tool. */
+const PLACE_SHAPE_KEYS: Readonly<Record<ShapeKind, MapsKey>> = {
+  ellipse: "properties.placeShape.ellipse",
+  rectangle: "properties.placeShape.rectangle",
+  polygon: "properties.placeShape.polygon",
+};
+
+/** What a line converted from a Shape says it was, one string per kind. */
+const CONVERTED_KEYS: Readonly<Record<ShapeKind, MapsKey>> = {
+  ellipse: "properties.convertedFrom.ellipse",
+  rectangle: "properties.convertedFrom.rectangle",
+  polygon: "properties.convertedFrom.polygon",
+};
+
 interface RenameDialog {
   id: string;
   name: string;
@@ -87,6 +118,9 @@ function MapEditorView({
     snapshot.selectedId === null
       ? null
       : (snapshot.elements.find((element) => element.id === snapshot.selectedId) ?? null);
+  // The Shape tool whose Place button the picker shows, or null for any other tool.
+  const shapeTool = isShapeKind(snapshot.tool) ? snapshot.tool : null;
+  const shape = snapshot.selectedShape;
 
   // Leaving the page writes whatever the quiet period still holds; the Back
   // button already flushed, so this is a no-op there.
@@ -172,11 +206,19 @@ function MapEditorView({
               { value: "select", label: t("tools.select") },
               { value: "pencil", label: t("tools.pencil") },
               { value: "pen", label: t("tools.pen") },
+              ...SHAPE_KINDS.map((kind) => ({ value: kind, label: t(SHAPE_TOOL_KEYS[kind]) })),
               { value: "eraser", label: t("tools.eraser") },
             ]}
             selectedKey={snapshot.tool}
             onChange={(event) => editor.setTool(event.detail as MapTool)}
           />
+          {/* With a Shape tool active the Frame draws a preview from a pointer
+              drag; this button is the keyboard path that places one (#747). */}
+          {shapeTool === null ? null : (
+            <ui.Button variant="secondary" onPress={() => editor.placeShape(shapeTool)}>
+              {t(PLACE_SHAPE_KEYS[shapeTool])}
+            </ui.Button>
+          )}
           <ui.Text weight="semibold">{t("elements.label")}</ui.Text>
           <ui.Collection
             label={t("elements.label")}
@@ -234,6 +276,75 @@ function MapEditorView({
                 isSelected={selected.locked}
                 onChange={(event) => editor.setLocked(selected.id, event.detail)}
               />
+              {shape === null ? null : (
+                <>
+                  <ui.NumberField
+                    label={t("properties.shape.centerX")}
+                    value={shape.cx}
+                    isDisabled={selected.locked}
+                    onChange={(event) => editor.setShapeGeometry(selected.id, { cx: event.detail })}
+                  />
+                  <ui.NumberField
+                    label={t("properties.shape.centerY")}
+                    value={shape.cy}
+                    isDisabled={selected.locked}
+                    onChange={(event) => editor.setShapeGeometry(selected.id, { cy: event.detail })}
+                  />
+                  <ui.NumberField
+                    label={t("properties.shape.width")}
+                    value={shape.width}
+                    minValue={MIN_SHAPE_SIZE_MM}
+                    isDisabled={selected.locked}
+                    onChange={(event) =>
+                      editor.setShapeGeometry(selected.id, { width: event.detail })
+                    }
+                  />
+                  <ui.NumberField
+                    label={t("properties.shape.height")}
+                    value={shape.height}
+                    minValue={MIN_SHAPE_SIZE_MM}
+                    isDisabled={selected.locked}
+                    onChange={(event) =>
+                      editor.setShapeGeometry(selected.id, { height: event.detail })
+                    }
+                  />
+                  <ui.NumberField
+                    label={t("properties.shape.rotation")}
+                    value={shape.rotation}
+                    isDisabled={selected.locked}
+                    onChange={(event) =>
+                      editor.setShapeGeometry(selected.id, { rotation: event.detail })
+                    }
+                  />
+                  {shape.kind === "polygon" ? (
+                    <ui.NumberField
+                      label={t("properties.shape.sides")}
+                      value={shape.sides}
+                      minValue={MIN_POLYGON_SIDES}
+                      maxValue={MAX_POLYGON_SIDES}
+                      step={1}
+                      isDisabled={selected.locked}
+                      onChange={(event) =>
+                        editor.setShapeGeometry(selected.id, { sides: event.detail })
+                      }
+                    />
+                  ) : null}
+                  {shape.kind === "rectangle" ? (
+                    <ui.NumberField
+                      label={t("properties.shape.cornerRadius")}
+                      value={shape.cornerRadius}
+                      minValue={0}
+                      isDisabled={selected.locked}
+                      onChange={(event) =>
+                        editor.setShapeGeometry(selected.id, { cornerRadius: event.detail })
+                      }
+                    />
+                  ) : null}
+                </>
+              )}
+              {snapshot.selectedConvertedFrom === null ? null : (
+                <ui.Text tone="muted">{t(CONVERTED_KEYS[snapshot.selectedConvertedFrom])}</ui.Text>
+              )}
               {snapshot.selectedIsLine ? (
                 <ui.Switch
                   label={t("properties.enclosesFills")}

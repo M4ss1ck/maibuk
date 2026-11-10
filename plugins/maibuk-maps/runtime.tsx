@@ -50,6 +50,9 @@ export const MOVE_DOWN_FAR = "moveDownFar";
 export const SELECT_TOOL = "selectTool";
 export const PENCIL_TOOL = "pencilTool";
 export const PEN_TOOL = "penTool";
+export const ELLIPSE_TOOL = "ellipseTool";
+export const RECTANGLE_TOOL = "rectangleTool";
+export const POLYGON_TOOL = "polygonTool";
 export const ERASER_TOOL = "eraserTool";
 export const ROUGHEN = "roughen";
 export const DELETE_ELEMENT = "deleteElement";
@@ -257,6 +260,15 @@ function runEditorCommand(editor: MapEditor | null, id: string): void {
       break;
     case PEN_TOOL:
       editor.setTool("pen");
+      break;
+    case ELLIPSE_TOOL:
+      editor.setTool("ellipse");
+      break;
+    case RECTANGLE_TOOL:
+      editor.setTool("rectangle");
+      break;
+    case POLYGON_TOOL:
+      editor.setTool("polygon");
       break;
     case ERASER_TOOL:
       editor.setTool("eraser");

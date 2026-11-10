@@ -91,6 +91,9 @@ describe("Maps manifest", () => {
       "selectTool",
       "pencilTool",
       "penTool",
+      "ellipseTool",
+      "rectangleTool",
+      "polygonTool",
       "eraserTool",
       "roughen",
       "deleteElement",
@@ -109,6 +112,9 @@ describe("Maps manifest", () => {
       ["Shift+ArrowDown"],
     ]);
     expect(commands.find((command) => command.id === "penTool")?.defaults).toEqual([["n"]]);
+    expect(commands.find((command) => command.id === "ellipseTool")?.defaults).toEqual([["o"]]);
+    expect(commands.find((command) => command.id === "rectangleTool")?.defaults).toEqual([["r"]]);
+    expect(commands.find((command) => command.id === "polygonTool")?.defaults).toEqual([["s"]]);
     expect(commands.find((command) => command.id === "eraserTool")?.defaults).toEqual([["e"]]);
     expect(commands.find((command) => command.id === "roughen")?.defaults).toEqual([
       ["Mod+Shift+r"],

@@ -51,6 +51,17 @@ export const EXCLUSIONS: Exclusion[] = [
     owner: "#653 reader E2E rows; plugins/maibuk-reader/session.test.ts for the forwarded Commands",
   },
   {
+    kind: "shortcut",
+    items: [
+      "plugin.maibuk-maps.ellipseTool",
+      "plugin.maibuk-maps.rectangleTool",
+      "plugin.maibuk-maps.polygonTool",
+    ],
+    reason:
+      "The Shape tools (#747) place through the Tool radio group and its Place button, and their geometry edits go through number fields; the Plugin's Vitest keyboard spec drives Ellipse, Rectangle, and Polygon end to end, but no E2E spec reaches them yet",
+    owner: "plugins/maibuk-maps/plugin.test.tsx keyboard tests",
+  },
+  {
     kind: "term",
     items: ["Drawing"],
     reason: "Creating a Drawing and erasing are pointer gestures by nature (documented exemption)",

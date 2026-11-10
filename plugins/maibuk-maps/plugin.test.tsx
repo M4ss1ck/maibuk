@@ -43,7 +43,7 @@ import {
   type MapsRuntime,
 } from "./runtime";
 import { linePath, smoothStroke } from "./scene";
-import { roughen, seedFor } from "./geometry";
+import { roughen, seedFor, shapeOutline } from "./geometry";
 
 type User = ReturnType<typeof userEvent.setup>;
 
@@ -292,6 +292,25 @@ function linePoints(storage: Map<string, unknown>, index = 0): [number, number][
 
 async function tabTo(user: User, element: HTMLElement, max = 40): Promise<void> {
   for (let i = 0; i < max && document.activeElement !== element; i++) await user.tab();
+}
+
+/** Focuses the Tool radio group and arrows to `name`, from wherever it stands. */
+async function pickTool(user: User, name: string): Promise<HTMLElement> {
+  const tools = await screen.findByRole("radiogroup", { name: en["tools.label"] });
+  for (let i = 0; i < 60 && !tools.contains(document.activeElement); i++) await user.tab();
+  const radio = screen.getByRole("radio", { name });
+  for (let i = 0; i < 8 && !(radio as HTMLInputElement).checked; i++)
+    await user.keyboard("{ArrowRight}");
+  await waitFor(() => expect(radio).toBeChecked());
+  return radio;
+}
+
+/** Picks a Shape tool by keyboard, then places one with its Place button. */
+async function placeShape(user: User, tool: "ellipse" | "rectangle" | "polygon"): Promise<void> {
+  await pickTool(user, en[`tools.${tool}`]);
+  const place = await screen.findByRole("button", { name: en[`properties.placeShape.${tool}`] });
+  await tabTo(user, place, 10);
+  await user.keyboard("{Enter}");
 }
 
 /** Focuses a select's trigger and picks an option by arrow keys. */
@@ -589,6 +608,9 @@ describe("Map editor Commands", () => {
     "selectTool",
     "pencilTool",
     "penTool",
+    "ellipseTool",
+    "rectangleTool",
+    "polygonTool",
     "eraserTool",
     "roughen",
     "deleteElement",
@@ -610,6 +632,9 @@ describe("Map editor Commands", () => {
       "Shift+ArrowDown",
     ]);
     expect(effectiveShortcuts("plugin.maibuk-maps.penTool", {}, false)).toContainEqual(["n"]);
+    expect(effectiveShortcuts("plugin.maibuk-maps.ellipseTool", {}, false)).toContainEqual(["o"]);
+    expect(effectiveShortcuts("plugin.maibuk-maps.rectangleTool", {}, false)).toContainEqual(["r"]);
+    expect(effectiveShortcuts("plugin.maibuk-maps.polygonTool", {}, false)).toContainEqual(["s"]);
     expect(effectiveShortcuts("plugin.maibuk-maps.eraserTool", {}, false)).toContainEqual(["e"]);
     // Mod+Shift+r is core `editor.alignRight` in the editor, which no route
     // shows beside the Map page, so the binding is live here.
@@ -1206,7 +1231,9 @@ describe("Map editor page", () => {
       const raised = runtime.editor?.getSnapshot().roughenStrength ?? 0;
       expect(raised).toBeGreaterThan(1.5);
 
-      const roughenButton = screen.getByRole("button", { name: en["properties.roughen"] });
+      const roughenButton = await screen.findByRole("button", {
+        name: en["properties.roughen"],
+      });
       await tabTo(user, roughenButton, 10);
       await user.keyboard("{Enter}");
       await waitFor(() =>
@@ -1281,6 +1308,191 @@ describe("Map editor page", () => {
       expect((runtime.editor?.getSnapshot().elements[0] as MapLineElement).points).toEqual(outline);
       await runtime.editor?.flush();
       expect(linePoints(storage)).toEqual(outline);
+
+      keys.unmount();
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("places an ellipse by keyboard and makes it a circle through Width and Height", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await placeShape(user, "ellipse");
+      expect(runtime.editor?.getSnapshot().elements).toHaveLength(1);
+
+      // The Frame's drag is the pointer path; the number fields are the keyboard's.
+      const width = await screen.findByRole("textbox", { name: en["properties.shape.width"] });
+      await tabTo(user, width, 60);
+      await user.keyboard("{Control>}a{/Control}60{Tab}");
+      const height = screen.getByRole("textbox", { name: en["properties.shape.height"] });
+      await tabTo(user, height, 10);
+      await user.keyboard("{Control>}a{/Control}60{Tab}");
+
+      await waitFor(() =>
+        expect((runtime.editor?.getSnapshot().elements[0] as MapLineElement).shape).toMatchObject({
+          kind: "ellipse",
+          width: 60,
+          height: 60,
+        })
+      );
+      await runtime.editor?.flush();
+
+      const stored = storedMap(storage).elements[0] as MapLineElement;
+      expect(stored.shape).toEqual({
+        kind: "ellipse",
+        cx: 76.2,
+        cy: 114.3,
+        width: 60,
+        height: 60,
+        rotation: 0,
+        sides: 6,
+        cornerRadius: 0,
+      });
+      if (stored.shape === undefined) throw new Error("the line kept no Shape");
+      expect(stored.points).toEqual(shapeOutline(stored.shape).points);
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("shows Sides only for a polygon and Corner radius only for a rectangle", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      const sides = () => screen.queryByRole("textbox", { name: en["properties.shape.sides"] });
+      const cornerRadius = () =>
+        screen.queryByRole("textbox", { name: en["properties.shape.cornerRadius"] });
+
+      await placeShape(user, "polygon");
+      const sidesField = await screen.findByRole("textbox", {
+        name: en["properties.shape.sides"],
+      });
+      expect(cornerRadius()).not.toBeInTheDocument();
+
+      // ArrowUp steps the side count, and the Shape follows.
+      await tabTo(user, sidesField, 60);
+      await user.keyboard("{ArrowUp}");
+      await waitFor(() => expect(runtime.editor?.getSnapshot().selectedShape?.sides).toBe(7));
+
+      // Shift+Tab walks back to the Tool group, where the next Shape is one ArrowLeft away.
+      const tools = screen.getByRole("radiogroup", { name: en["tools.label"] });
+      for (let i = 0; i < 60 && !tools.contains(document.activeElement); i++)
+        await user.tab({ shift: true });
+      const rectangle = screen.getByRole("radio", { name: en["tools.rectangle"] });
+      for (let i = 0; i < 8 && !(rectangle as HTMLInputElement).checked; i++)
+        await user.keyboard("{ArrowRight}");
+      await waitFor(() => expect(rectangle).toBeChecked());
+      const place = await screen.findByRole("button", {
+        name: en["properties.placeShape.rectangle"],
+      });
+      await tabTo(user, place, 10);
+      await user.keyboard("{Enter}");
+
+      const radiusField = await screen.findByRole("textbox", {
+        name: en["properties.shape.cornerRadius"],
+      });
+      expect(sides()).not.toBeInTheDocument();
+      await tabTo(user, radiusField, 60);
+      await user.keyboard("{Control>}a{/Control}2{Enter}");
+      await waitFor(() =>
+        expect(runtime.editor?.getSnapshot().selectedShape?.cornerRadius).toBe(2)
+      );
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("says which Shape a line was converted from after Roughen", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await placeShape(user, "ellipse");
+      expect(screen.queryByText(en["properties.convertedFrom.ellipse"])).not.toBeInTheDocument();
+
+      const roughenButton = screen.getByRole("button", { name: en["properties.roughen"] });
+      await tabTo(user, roughenButton, 60);
+      await user.keyboard("{Enter}");
+
+      expect(await screen.findByText(en["properties.convertedFrom.ellipse"])).toBeInTheDocument();
+      expect(runtime.editor?.getSnapshot().selectedConvertedFrom).toBe("ellipse");
+      // The line is point by point now, so its number fields are gone.
+      expect(
+        screen.queryByRole("textbox", { name: en["properties.shape.width"] })
+      ).not.toBeInTheDocument();
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("disables the Shape number fields while the line is locked", async () => {
+    const storage = mapStorage([]);
+    const { host } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await placeShape(user, "ellipse");
+      const width = await screen.findByRole("textbox", {
+        name: en["properties.shape.width"],
+      });
+      expect(width).toBeEnabled();
+
+      const locked = screen.getByRole("switch", { name: en["properties.locked"] });
+      await tabTo(user, locked, 60);
+      await user.keyboard(" ");
+      await waitFor(() =>
+        expect(screen.getByRole("textbox", { name: en["properties.shape.width"] })).toBeDisabled()
+      );
+
+      await user.keyboard(" ");
+      await waitFor(() =>
+        expect(screen.getByRole("textbox", { name: en["properties.shape.width"] })).toBeEnabled()
+      );
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("selects each Shape tool by its key and its Place button appears", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    registerMapCommands();
+    const keys = render(<CommandKeys host={host} />);
+    try {
+      const user = userEvent.setup();
+      await screen.findByRole("radiogroup", { name: en["tools.label"] });
+      await focusPanelButton(user);
+
+      const tools = [
+        ["o", "ellipse", en["tools.ellipse"]],
+        ["r", "rectangle", en["tools.rectangle"]],
+        ["s", "polygon", en["tools.polygon"]],
+      ] as const;
+      for (const [key, tool, label] of tools) {
+        await user.keyboard(key);
+        await waitFor(() => expect(runtime.editor?.getSnapshot().tool).toBe(tool));
+        expect(screen.getByRole("radio", { name: label })).toBeChecked();
+        expect(
+          await screen.findByRole("button", { name: en[`properties.placeShape.${tool}`] })
+        ).toBeInTheDocument();
+      }
 
       keys.unmount();
       await page.unmount();
