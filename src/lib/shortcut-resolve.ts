@@ -120,6 +120,12 @@ interface BindingCandidate {
   contexts: readonly ShortcutContext[];
   shortcut: Shortcut;
   plugin: boolean;
+  /**
+   * A Plugin page's Fixed navigation Shortcut (a bare Arrow): it never yields
+   * and nothing may take its keys. Core Fixed Shortcuts arrive through the
+   * core list, which is accepted whole.
+   */
+  fixed: boolean;
   rank: number;
   index: number;
 }
@@ -127,7 +133,8 @@ interface BindingCandidate {
 /**
  * Every binding in conflict order: core first (their list supplied by the
  * caller), Plugin bindings by rank, equal ranks in registry and declaration
- * order.
+ * order. A Plugin page's Fixed navigation Arrows come before its editable
+ * bindings: like the core ones they always hold their key.
  */
 function orderedCandidates(
   custom: CustomShortcuts,
@@ -136,19 +143,35 @@ function orderedCandidates(
 ): BindingCandidate[] {
   const candidates: BindingCandidate[] = [];
   let index = 0;
+  const push = (
+    id: CommandId,
+    contexts: readonly ShortcutContext[],
+    shortcut: Shortcut,
+    plugin: boolean,
+    fixed: boolean,
+    rank: number
+  ) => {
+    candidates.push({
+      id,
+      contexts,
+      shortcut,
+      plugin,
+      fixed,
+      rank,
+      index: index++,
+    });
+  };
   for (const id of commandIds()) {
     const command = def(id);
-    const plugin = isPluginCommandId(id);
-    const list = plugin ? editableShortcuts(id, custom, web) : coreList(id);
-    for (const shortcut of list) {
-      candidates.push({
-        id,
-        contexts: command.contexts,
-        shortcut,
-        plugin,
-        rank: plugin ? pluginBindingRank(id, shortcut) : -1,
-        index: index++,
-      });
+    if (!isPluginCommandId(id)) {
+      for (const shortcut of coreList(id)) push(id, command.contexts, shortcut, false, false, -1);
+      continue;
+    }
+    for (const shortcut of fixedShortcuts(id)) {
+      push(id, command.contexts, shortcut, true, true, pluginBindingRank(id, shortcut));
+    }
+    for (const shortcut of editableShortcuts(id, custom, web)) {
+      push(id, command.contexts, shortcut, true, false, pluginBindingRank(id, shortcut));
     }
   }
   // Lower rank runs first; equal ranks keep registry and declaration order.
@@ -161,11 +184,12 @@ function orderedCandidates(
  * a core binding take a key from an active Plugin binding without Replace, and
  * a core Default counts as an existing binding even when an app update added
  * it; at resolution time a core binding is therefore always the existing one
- * and wins without yielding. Plugin bindings then run in their conflict rank,
- * which an update keeps for a binding the Command already held and assigns
- * fresh to a binding new in the update. A binding whose keys are already owned
- * by an active binding in an overlapping Context stays inactive and does not
- * reserve its key.
+ * and wins without yielding. A Plugin page's Fixed navigation Arrow is equally
+ * Fixed: it holds its key on its own page. Plugin bindings then run in their
+ * conflict rank, which an update keeps for a binding the Command already held
+ * and assigns fresh to a binding new in the update. A binding whose keys are
+ * already owned by an active binding in an overlapping Context stays inactive
+ * and does not reserve its key.
  */
 function activityFor(custom: CustomShortcuts, web: boolean): Activity {
   const revision = commandRegistryRevision();
@@ -185,7 +209,8 @@ function activityFor(custom: CustomShortcuts, web: boolean): Activity {
   }> = [];
   for (const candidate of candidates) {
     // A core binding is an existing active binding: it wins and never yields.
-    if (!candidate.plugin) {
+    // A Plugin page's Fixed navigation Arrow holds its key the same way.
+    if (!candidate.plugin || candidate.fixed) {
       accepted.push(candidate);
       continue;
     }
@@ -244,7 +269,11 @@ export function effectiveShortcuts(
 ): Shortcut[] {
   const editable = editableShortcuts(id, custom, web);
   if (!isPluginCommandId(id)) return [...fixedShortcuts(id), ...editable];
-  return editable.filter((shortcut) => isBindingActive(id, shortcut, custom, web));
+  // A Fixed Arrow never goes inactive: it is the page's own navigation key.
+  return [
+    ...fixedShortcuts(id),
+    ...editable.filter((shortcut) => isBindingActive(id, shortcut, custom, web)),
+  ];
 }
 
 export function isFixedShortcut(id: CommandId, shortcut: Shortcut): boolean {

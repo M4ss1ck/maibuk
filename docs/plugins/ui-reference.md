@@ -22,6 +22,7 @@ Props:
 | `align` | `"start" \| "center" \| "end" \| "stretch"` | no | One of `start`, `center`, `end`, `stretch`. |
 | `justify` | `"start" \| "center" \| "end" \| "between"` | no | One of `start`, `center`, `end`, `between`. |
 | `wrap` | `boolean` | no |  |
+| `grow` | `boolean` | no | Takes the remaining space along the parent View's main axis. |
 | `padding` | `"none" \| "sm" \| "md" \| "lg"` | no | One of `none`, `sm`, `md`, `lg`. |
 | `children` | `ReactNode` | no |  |
 
@@ -1017,6 +1018,7 @@ Props:
 | --- | --- | --- | --- |
 | `src` | `string` | yes | At most 1024 characters. Format: `plugin-path`. A relative path to an .html file in the Plugin folder. |
 | `title` | `string` | yes | At most 512 characters. Accessible name of the Frame's iframe. |
+| `fill` | `boolean` | no | Grows to fill the remaining height of the Plugin page, with a 16rem minimum. |
 
 Events:
 

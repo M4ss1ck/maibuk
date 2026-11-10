@@ -56,20 +56,24 @@ function FramePlaceholder({ variant, message }: { variant: "page" | "embedded"; 
 
 /**
  * One mounted Frame. `variant: "page"` fills the page content area; `"embedded"`
- * is a kit `Frame` with a sensible default height. The iframe is created on
- * mount, appended to the surface's own container, and torn down on unmount (both
- * ports closed, the element removed); a different runtime key remounts it.
+ * is a kit `Frame` with a sensible default height, or, with `fill`, one that
+ * grows to fill the remaining height of the Plugin page. The iframe is created
+ * on mount, appended to the surface's own container, and torn down on unmount
+ * (both ports closed, the element removed); a different runtime key remounts it.
  */
 export function PluginFrame({
   runtime,
   src,
   title,
   variant,
+  fill = false,
 }: {
   runtime: PluginFrameHost;
   src: string;
   title: string;
   variant: "page" | "embedded";
+  /** Grows an embedded Frame to fill the remaining page height, with a 16rem minimum. */
+  fill?: boolean;
 }) {
   const { t } = useTranslation();
   const available = isPluginFrameAvailable();
@@ -221,12 +225,16 @@ export function PluginFrame({
     ? "fixed inset-0 z-50 flex flex-col bg-background"
     : variant === "page"
       ? "flex min-h-0 flex-1 flex-col"
-      : "flex w-full flex-col";
+      : fill
+        ? "flex min-h-0 flex-1 flex-col"
+        : "flex w-full flex-col";
   const frameClass = fullscreen
     ? "relative min-h-0 flex-1 overflow-hidden bg-card"
     : variant === "page"
       ? "relative min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-card"
-      : "relative h-64 w-full overflow-hidden rounded-lg border border-border bg-card";
+      : fill
+        ? "relative min-h-64 w-full flex-1 overflow-hidden rounded-lg border border-border bg-card"
+        : "relative h-64 w-full overflow-hidden rounded-lg border border-border bg-card";
 
   return (
     <div

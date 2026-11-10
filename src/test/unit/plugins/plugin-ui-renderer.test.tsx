@@ -34,6 +34,27 @@ describe("the Remote UI renderer", () => {
       expect(screen.getByText("Two")).toBeInTheDocument();
     });
 
+    it("keeps a view at its content size without grow, and grows it with grow", async () => {
+      harness = renderRemoteUi();
+      await harness.mount(
+        <ui.View>
+          <ui.Text>Plain</ui.Text>
+        </ui.View>
+      );
+      const plain = screen.getByText("Plain").parentElement as HTMLElement;
+      expect(plain.classList.contains("flex-1")).toBe(false);
+
+      await harness.mount(
+        <ui.View grow>
+          <ui.Text>Growing</ui.Text>
+        </ui.View>
+      );
+      const growing = screen.getByText("Growing").parentElement as HTMLElement;
+      expect(growing.classList.contains("flex-1")).toBe(true);
+      expect(growing.classList.contains("min-h-0")).toBe(true);
+      expect(growing.classList.contains("min-w-0")).toBe(true);
+    });
+
     it("renders a heading at its level @ui:maibuk-heading", async () => {
       harness = renderRemoteUi();
       await harness.mount(<ui.Heading level={3}>Report</ui.Heading>);

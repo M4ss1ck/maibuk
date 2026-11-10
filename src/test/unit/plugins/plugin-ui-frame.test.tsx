@@ -71,6 +71,16 @@ describe("the Frame kit component", () => {
     expect(harness.violations).toEqual([]);
   });
 
+  it("passes a Frame fill through to an embedded Frame that fills its page", async () => {
+    harness = renderRemoteUi({ frameHost: frameHost(true) });
+    await harness.mount(<ui.Frame src="ui/report.html" title="Custom report" fill />);
+    expect(harness.violations).toEqual([]);
+    const wrapper = document.querySelector('[data-plugin-frame="embedded"]') as HTMLElement;
+    const box = wrapper.querySelector("[aria-busy]") as HTMLElement;
+    expect(box.classList.contains("h-64")).toBe(false);
+    expect(box.classList.contains("min-h-64")).toBe(true);
+  });
+
   it("shows the customUi placeholder, and keeps the Plugin running, when the manifest lacks customUi", async () => {
     harness = renderRemoteUi({ frameHost: frameHost(false) });
     await harness.mount(<ui.Frame src="ui/report.html" title="Custom report" />);

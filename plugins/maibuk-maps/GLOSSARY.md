@@ -14,6 +14,14 @@ _Avoid_: preset, base map
 The named set of colors and fonts a Map is drawn in: land, water, each kind of Fill, ink, and labels. Any single element can override its color.
 _Avoid_: theme (that is the app's light and dark), palette, skin
 
+**Element**:
+Any one of the five kinds placed on a Map: a Map Line, a Fill, a Stamp, a Map Label, or a Map Image. Hidden and locked are Element properties, and an Element's order in the Elements list is its z-order.
+_Avoid_: layer, shape, object
+
+**Elements list**:
+The editor panel that lists every Element of the open Map in z-order, where the author selects, renames, reorders, hides, locks, and deletes Elements.
+_Avoid_: layer list, object list, outline
+
 **Map Line**:
 Any line drawn on a Map. Its style makes it a coast, a river, a road, a border, or a plain line, and decides whether it encloses Fills.
 _Avoid_: path, route, stroke, shape (that is a Canvas Shape)
@@ -46,8 +54,17 @@ _Avoid_: text, caption, title (that is a Book's)
 An image the author places on a Map as its own layer, such as a scanned map to trace over; it can be dimmed or left out of the exported picture.
 _Avoid_: background, overlay, Custom Stamp (that is placed as a Stamp)
 
+**Pencil**:
+The editor tool that draws a Map Line freehand and smooths the stroke as the author draws.
+_Avoid_: brush, pen, freehand tool
+
+**Select**:
+The editor tool that picks one Element on the Map, to move, rename, hide, lock, or delete it.
+_Avoid_: pointer, arrow, cursor
+
 ## Relationships
 
 - A **Map** belongs to zero or one **Book**, starts from a **Map Template** or blank, is drawn in one **Map Style**, and holds **Map Lines**, **Fills**, **Stamps**, **Map Labels**, and **Map Images**.
 - A **Fill** covers an area enclosed by **Map Lines** or an outline of its own; a **Fill** or **Map Line** can have a **Soft Edge**.
 - **Custom Stamps** and **Custom Fills** belong to the **Library**; any **Map** can use them.
+- Every **Map Line**, **Fill**, **Stamp**, **Map Label**, and **Map Image** is an **Element**; order in the **Elements list** is z-order.

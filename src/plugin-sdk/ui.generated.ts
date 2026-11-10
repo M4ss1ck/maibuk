@@ -62,6 +62,8 @@ export interface PluginUiElementProps {
     align?: "start" | "center" | "end" | "stretch";
     justify?: "start" | "center" | "end" | "between";
     wrap?: boolean;
+    /** Takes the remaining space along the parent View's main axis. */
+    grow?: boolean;
     padding?: "none" | "sm" | "md" | "lg";
     children?: ReactNode;
   };
@@ -405,6 +407,8 @@ export interface PluginUiElementProps {
     src: string;
     /** Accessible name of the Frame's iframe. */
     title: string;
+    /** Grows to fill the remaining height of the Plugin page, with a 16rem minimum. */
+    fill?: boolean;
   };
 }
 

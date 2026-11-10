@@ -13,6 +13,7 @@
       "!!**/src/features/symbols/data",
       "!src/plugin-sdk/api.generated.ts",
       "!!plugins/*/vendor",
+      "!!plugins/*/assets/ui/lib",
       "!!templates"
     ]
   },

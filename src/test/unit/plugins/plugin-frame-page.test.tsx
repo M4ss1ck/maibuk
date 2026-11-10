@@ -124,6 +124,16 @@ describe("the page around its content", () => {
     expect(container.textContent).not.toContain("Custom UI");
   });
 
+  it("gives a host-rendered page the flex column a fill Frame grows in", () => {
+    const { container } = renderPage("home");
+    const page = container.querySelector("[data-route-heading]")?.parentElement;
+    expect(page?.className).toContain("flex-col");
+    expect(page?.className).toContain("min-h-0");
+    const body = page?.querySelector("[data-plugin-page-body]");
+    expect(body?.className).toContain("flex-1");
+    expect(body?.className).not.toContain("min-h-0");
+  });
+
   it("shows the title above a page by default", () => {
     const { getByRole } = renderPage("home");
     expect(getByRole("heading", { level: 1, name: "Home" }).className).not.toContain("sr-only");

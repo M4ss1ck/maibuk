@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
 import { PluginFrameSurface } from "@/components/plugins/PluginFrame";
 import { PluginStoppedPanel } from "@/components/plugins/PluginStoppedPanel";
-import { pluginPageCommandBindings } from "@/features/plugins/commands";
+import { pluginPageCommandBindings, pluginPageCommands } from "@/features/plugins/commands";
 import { getPluginPage, getPluginSidebarEntries } from "@/features/plugins/contributions-registry";
 import { useCommandRegistryRevision } from "@/hooks/useCommandRegistryRevision";
 import {
@@ -13,6 +13,7 @@ import {
   usePluginSurface,
   useStoppedPlugin,
 } from "@/hooks/usePluginSurface";
+import { fixedShortcuts, isCommandId } from "@/lib/shortcut-registry";
 import { useShortcuts } from "@/lib/shortcuts";
 
 /**
@@ -58,6 +59,17 @@ export function PluginPage() {
     [lifecycle, pluginId, pageId, revision, lifecycleRevision, scanned]
   );
   useShortcuts(bindings);
+  // A Command scoped only to this page may take a bare Arrow as Fixed
+  // navigation (`registerPluginCommands`). That Arrow belongs to the page, not
+  // to spatial arrow-navigation, so the host-rendered body owns its arrows and
+  // the page's own lists and menus still keep theirs inside it (#745).
+  const ownsArrows = useMemo(
+    () =>
+      (lifecycle ? pluginPageCommands(pluginId, pageId) : []).some(
+        ({ id }) => isCommandId(id) && fixedShortcuts(id).length > 0
+      ),
+    [lifecycle, pluginId, pageId, revision, lifecycleRevision, scanned]
+  );
 
   // A Plugin the launch scan refused registered no page; the sidebar entry
   // the last launch saved still names it, so its page can say why (#618).
@@ -106,7 +118,7 @@ export function PluginPage() {
       className={
         isFrame
           ? `flex h-full min-h-0 flex-col overflow-hidden px-4 sm:px-6 ${hideTitle ? "py-4" : "py-6"}`
-          : `h-full overflow-y-auto px-4 sm:px-6 ${hideTitle ? "py-4" : "py-6"}`
+          : `flex h-full min-h-0 flex-col overflow-y-auto px-4 sm:px-6 ${hideTitle ? "py-4" : "py-6"}`
       }
     >
       <h1
@@ -146,9 +158,18 @@ export function PluginPage() {
           variant="page"
         />
       ) : (
-        <Suspense fallback={null}>
-          <PluginRemoteUiBoundary pluginId={pluginId} pageId={pageId} />
-        </Suspense>
+        // The host-rendered tree is a flex item so a `fill` embedded Frame can
+        // take the remaining page height: the page is a column and the tree's
+        // single root fills it before its own panels hand the rest to the Frame.
+        <div
+          data-plugin-page-body
+          {...(ownsArrows ? { "data-owns-arrows": "" } : {})}
+          className="flex flex-1 flex-col [&>*:only-child]:flex-1"
+        >
+          <Suspense fallback={null}>
+            <PluginRemoteUiBoundary pluginId={pluginId} pageId={pageId} />
+          </Suspense>
+        </div>
       )}
     </div>
   );

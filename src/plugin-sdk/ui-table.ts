@@ -132,6 +132,10 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
       align: { kind: "enum", values: ["start", "center", "end", "stretch"] },
       justify: { kind: "enum", values: ["start", "center", "end", "between"] },
       wrap: { kind: "boolean" },
+      grow: {
+        kind: "boolean",
+        description: "Takes the remaining space along the parent View's main axis.",
+      },
       padding: { kind: "enum", values: ["none", "sm", "md", "lg"] },
       children: { kind: "node" },
     },
@@ -987,6 +991,10 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
         required: true,
         maxLength: 512,
         description: "Accessible name of the Frame's iframe.",
+      },
+      fill: {
+        kind: "boolean",
+        description: "Grows to fill the remaining height of the Plugin page, with a 16rem minimum.",
       },
     },
     events: [],

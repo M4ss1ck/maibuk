@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Map</title>
+    <style>
+      /* The Map drawing surface (#745). Every colour comes from the host's
+         public theme tokens, so the Frame follows a light/dark flip; the Map's
+         own water and ink colours arrive with the scene, as Map Style data. */
+      :root {
+        color-scheme: var(--maibuk-color-scheme, light dark);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: var(--maibuk-color-muted);
+        color: var(--maibuk-color-foreground);
+        font-family: var(--maibuk-font-sans, system-ui, sans-serif);
+      }
+
+      #surface {
+        position: absolute;
+        inset: 0;
+      }
+
+      /* The svg covers the Frame and owns every pointer gesture the surface
+         accepts: touch scrolling and pinch-zoom must never take over a stroke. */
+      #surface svg {
+        display: block;
+        width: 100%;
+        height: 100%;
+        touch-action: none;
+      }
+
+      #surface svg[data-tool="pencil"] {
+        cursor: crosshair;
+      }
+
+      #surface svg[data-tool="select"] {
+        cursor: default;
+      }
+
+      /* A Map Line is page ink: its width is page millimetres, so zooming in
+         shows a thicker line, exactly as the Maps list preview does. The Map's
+         paper is the Map Style's light water in both themes (a printed map, like
+         a Reader page), so the ink stays the Map Style's own dark colour in
+         either scheme and arrives with the scene, on each line's `stroke`
+         attribute; the theme's foreground would draw near-white ink on light
+         paper in the dark theme. */
+      .map-line {
+        fill: none;
+        stroke-width: 0.6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      /* The selection outline sits under the ink, wider and in the accent, so
+         it reads in both themes without hiding the stroke it marks. */
+      .map-selection {
+        fill: none;
+        stroke: var(--maibuk-color-primary);
+        stroke-width: 2.4;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-opacity: 0.55;
+      }
+
+      /* An invisible, wide, constant-pixel target: a 0.6 mm line is too thin to
+         hit with a finger or a mouse at page scale. */
+      .map-hit {
+        fill: none;
+        stroke: transparent;
+        stroke-width: 12px;
+        vector-effect: non-scaling-stroke;
+        pointer-events: stroke;
+      }
+
+      /* The stroke being drawn, before the Worker answers with the smoothed
+         Map Line it keeps: an accent darker than the paper in both themes. */
+      .map-live {
+        fill: none;
+        stroke: var(--maibuk-color-primary-hover);
+        stroke-width: 0.6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="surface"></div>
+    <script src="lib/htm-preact-standalone.umd.js"></script>
+    <script src="map.js"></script>
+  </body>
+</html>

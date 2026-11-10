@@ -107,6 +107,36 @@ describe("registerPluginCommands", () => {
     );
   });
 
+  it("lifts a bare Arrow on a page-scoped Command into a Fixed Shortcut", () => {
+    register("echoes", {
+      defaultLanguage: "en",
+      pages: ["report"],
+      commands: [
+        {
+          ...base,
+          contexts: ["report"],
+          defaults: [["ArrowUp"], ["Shift+ArrowDown"], ["Mod+Alt+r"]],
+        },
+      ],
+    });
+
+    const definition = getCommand("plugin.echoes.showReport");
+    expect(isPluginCommandDef(definition) && definition.fixed).toEqual([["ArrowUp"]]);
+    expect(definition.defaults).toEqual([["Shift+ArrowDown"], ["Mod+Alt+r"]]);
+  });
+
+  it("keeps a bare Arrow an ordinary Default when the Command names a core Context", () => {
+    register("echoes", {
+      defaultLanguage: "en",
+      pages: ["report"],
+      commands: [{ ...base, contexts: ["report", "global"], defaults: [["ArrowUp"]] }],
+    });
+
+    const definition = getCommand("plugin.echoes.showReport");
+    expect(isPluginCommandDef(definition) && definition.fixed).toBeUndefined();
+    expect(definition.defaults).toEqual([["ArrowUp"]]);
+  });
+
   it("resolves a page id to the Plugin's own Context", () => {
     register("echoes", {
       defaultLanguage: "en",

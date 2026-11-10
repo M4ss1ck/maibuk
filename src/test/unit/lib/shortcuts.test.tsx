@@ -1,4 +1,6 @@
-import { renderHook, act } from "@testing-library/react";
+import { render, renderHook, act } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { ListBox, ListBoxItem } from "react-aria-components";
 import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
 
 import { useModalStore } from "@/components/ui/modal-store";
@@ -296,6 +298,44 @@ describe("useShortcuts capture phase and typing targets", () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true }));
 
     expect(onTrigger).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("useShortcuts leaves a focused widget's own bare keys alone", () => {
+  beforeEach(() => {
+    useModalStore.setState({ modalIds: [], openCount: 0, closers: {} });
+  });
+
+  it("does not fire a bare key a focused ListBox handled, and still fires on a plain button", async () => {
+    const { useShortcuts } = await import("@/lib/shortcuts");
+    const onTrigger = vi.fn();
+    setShortcuts({ "bookList.newBook": [["ArrowDown"]] });
+    renderHook(() => useShortcuts([{ id: "bookList.newBook", onTrigger }]));
+
+    const { getByRole } = render(
+      <ListBox aria-label="Elements" selectionMode="single">
+        <ListBoxItem id="first">First</ListBoxItem>
+        <ListBoxItem id="second">Second</ListBoxItem>
+      </ListBox>
+    );
+    const first = getByRole("option", { name: "First" });
+    first.focus();
+    const user = userEvent.setup();
+
+    // The ListBox keeps propagation but preventDefault()s the arrow it owns.
+    await user.keyboard("{ArrowDown}");
+    expect(onTrigger).not.toHaveBeenCalled();
+
+    const button = document.createElement("button");
+    button.textContent = "Plain";
+    document.body.append(button);
+    try {
+      button.focus();
+      await user.keyboard("{ArrowDown}");
+      expect(onTrigger).toHaveBeenCalledTimes(1);
+    } finally {
+      button.remove();
+    }
   });
 });
 

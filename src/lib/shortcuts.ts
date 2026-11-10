@@ -48,6 +48,12 @@ type Candidate = { binding: ShortcutBinding; steps: readonly Step[] };
 // two requests. Keyed by the event, so entries live only as long as the event.
 const handledCommandIds = new WeakMap<KeyboardEvent, Set<CommandId>>();
 
+// Keydowns a `useShortcuts` instance has claimed by calling preventDefault()
+// (a sequence starter or a triggered binding). Another instance's listener
+// sees the same event with `defaultPrevented` true; that is our own claim, not
+// a focused widget's, so it must still resolve its own sequence.
+const shortcutPrevented = new WeakSet<KeyboardEvent>();
+
 /** One mounted `useShortcuts` instance's live bindings, in mount order. */
 type MountedShortcutSource = { getBindings: () => readonly ShortcutBinding[] };
 const mountedSources: MountedShortcutSource[] = [];
@@ -130,13 +136,28 @@ export function useShortcuts(shortcuts: ShortcutBinding[], options: UseShortcuts
       if (alreadyRun) alreadyRun.add(binding.id);
       else handledCommandIds.set(event, new Set([binding.id]));
       handled.add(event);
-      if (binding.preventDefault !== false) event.preventDefault();
+      if (binding.preventDefault !== false) {
+        event.preventDefault();
+        shortcutPrevented.add(event);
+      }
       binding.onTrigger(event);
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (handled.has(event)) return;
       if (isIgnoredKeyEvent(event)) return;
+      // React Aria collections keep propagation but call preventDefault() on a
+      // bare key they handled (a ListBox arrow, a Menu typeahead). That key
+      // belongs to the focused control, not to a page Command; modifier combos
+      // and function keys are handled in the capture phase above.
+      if (
+        event.defaultPrevented &&
+        !shortcutPrevented.has(event) &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey
+      )
+        return;
 
       const steps = stepsFromEvent(event, mac);
       if (steps.length === 0) return;
@@ -183,7 +204,10 @@ export function useShortcuts(shortcuts: ShortcutBinding[], options: UseShortcuts
         (candidate, step) => candidate.steps.length === 2 && candidate.steps[0] === step
       );
       if (starter) {
-        if (starter.match.binding.preventDefault !== false) event.preventDefault();
+        if (starter.match.binding.preventDefault !== false) {
+          event.preventDefault();
+          shortcutPrevented.add(event);
+        }
         sequenceRef.current = { step: starter.step, time: now };
         return;
       }
@@ -200,7 +224,8 @@ export function useShortcuts(shortcuts: ShortcutBinding[], options: UseShortcuts
     // Pane's control and must still move on), are handled in the capture
     // phase, where that cannot reach. Other bare keys stay on the bubble
     // listener so those controls keep their arrow, Enter, Space, and
-    // typeahead keys.
+    // typeahead keys; a bare key such a control already prevented is skipped
+    // there (see `handleKeyDown`).
     const handleCaptureKeyDown = (event: KeyboardEvent) => {
       const functionKey = /^F\d{1,2}$/.test(event.key);
       if (!event.ctrlKey && !event.metaKey && !event.altKey && !functionKey) return;

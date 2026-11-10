@@ -22,6 +22,8 @@ An embedded Frame uses the kit's `Frame` component inside a host-rendered tree, 
 <ui.Frame src="ui/report.html" title="Report" />
 ```
 
+An embedded Frame keeps a fixed 16rem box unless `fill` is set. With `fill`, it grows to fill the remaining height of the Plugin page, never below 16rem, so host-rendered panels can sit around a full-height drawing surface. The page must be able to give the Frame that height: the Plugin's root `View` fills the page, and the Frame takes what its sibling panels leave. A `fill` Frame inside a `row` View needs that row to `grow` too, so the row takes the remaining page height: the Frame then takes the remaining width, and the sibling panels keep their content width.
+
 The page's `frame` and the component's `src` both name a relative path to an .html file inside your Plugin folder. The page `frame` field carries no length cap of its own; the manifest as a whole is capped at 64 KB (src/features/plugins/manifest-validate.ts, `MAX_MANIFEST_BYTES`). The kit `Frame` component is stricter: its `src` prop is capped at 1024 characters, and its `title` prop, the iframe's accessible name, is required and capped at 512 characters (src/plugin-sdk/ui-table.ts).
 
 ## Theme tokens

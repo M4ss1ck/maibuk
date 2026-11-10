@@ -4,20 +4,22 @@
  * what the list page draws (Book, name, page size, last change, a small
  * preview), so the list never loads a whole Map.
  *
- * Every write goes through one queue, so overlapping creates, renames, and
- * deletes never read a stale index. The index is the list's source of truth;
+ * Every write goes through one queue, so overlapping creates, renames, saves,
+ * and deletes never read a stale index. The index is the list's source of truth;
  * each write orders its two keys so a failure in the middle never lists a Map
  * that cannot be loaded:
  *
  * - create writes the Map, then the index, and removes the Map if the index
  *   write fails;
- * - rename writes the Map, then the index, and restores the old Map if the
- *   index write fails;
+ * - rename and save write the Map, then the index, and restore the old Map if
+ *   the index write fails;
  * - delete removes the index entry first, then the Map. A failure between the
  *   two leaves an unlisted key, never a listed Map with no data.
  *
  * This module imports only its own files.
  */
+
+import { sceneToSvg } from "./scene";
 
 /** The Plugin's data format version; `migrateData` owns every change to it. */
 export const DATA_VERSION = 1;
@@ -52,19 +54,35 @@ export interface MapPage {
 }
 
 /** The five element kinds a Map holds (#737 Decision 6). */
-export type MapElementKind = "line" | "fill" | "stamp" | "label" | "image";
+export const MAP_ELEMENT_KINDS = ["line", "fill", "stamp", "label", "image"] as const;
+export type MapElementKind = (typeof MAP_ELEMENT_KINDS)[number];
+
+/** A point on the page, in millimetres from its top-left corner. */
+export type MapPoint = [number, number];
 
 /**
- * What every element shares. Each kind's own fields (points, anchor, stamp,
- * text, asset) arrive with the tickets that draw it; z-order is array order.
+ * What every element shares. A kind's own fields (points, anchor, stamp, text,
+ * asset) arrive with the ticket that draws it; z-order is array order.
  */
-export interface MapElement {
+export interface MapElementBase {
   id: string;
-  kind: MapElementKind;
   name: string;
   hidden: boolean;
   locked: boolean;
 }
+
+/** A Map Line: the points a Pencil stroke was simplified to (#745). */
+export interface MapLineElement extends MapElementBase {
+  kind: "line";
+  points: MapPoint[];
+}
+
+/** Every other Element kind, whose geometry lands with its own ticket. */
+export interface MapOtherElement extends MapElementBase {
+  kind: Exclude<MapElementKind, "line">;
+}
+
+export type MapElement = MapLineElement | MapOtherElement;
 
 /** One stored Map, exactly as `map:<id>` holds it. */
 export interface MapDocument {
@@ -94,9 +112,6 @@ export interface MapIndexEntry {
 /** The Map Style a new Map starts in. */
 export const DEFAULT_STYLE_ID = "atlas";
 
-/** The Atlas Map Style's water, which an empty Map shows. */
-const EMPTY_MAP_COLOR = "#d7e6ec";
-
 /** The longest Map name the store keeps. */
 export const MAX_NAME_LENGTH = 120;
 
@@ -116,8 +131,12 @@ export interface NewMap {
 export interface MapStore {
   /** Every Map, most recently changed first, from the index alone. */
   list(): Promise<MapIndexEntry[]>;
+  /** One whole Map, or null when it is absent or damaged. */
+  load(id: string): Promise<MapDocument | null>;
   create(input: NewMap): Promise<MapIndexEntry>;
   rename(id: string, name: string): Promise<MapIndexEntry>;
+  /** Writes an edited Map and its index entry; refuses a document that fails validation. */
+  save(doc: MapDocument): Promise<void>;
   /** Deletes a Map; deleting one that is gone does nothing. */
   remove(id: string): Promise<void>;
 }
@@ -129,11 +148,9 @@ export function randomMapId(): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-/** The picture the index carries for a Map. Elements join it as their tickets land. */
-export function mapPreview(map: Pick<MapDocument, "page">): string {
-  const { widthMm, heightMm } = map.page;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${widthMm} ${heightMm}"><rect width="${widthMm}" height="${heightMm}" fill="${EMPTY_MAP_COLOR}"/></svg>`;
-  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+/** The picture the index carries for a Map: the drawn scene, at page size. */
+export function mapPreview(map: Pick<MapDocument, "page" | "elements">): string {
+  return `data:image/svg+xml,${encodeURIComponent(sceneToSvg(map))}`;
 }
 
 function indexEntryFor(map: MapDocument): MapIndexEntry {
@@ -149,6 +166,43 @@ function indexEntryFor(map: MapDocument): MapIndexEntry {
 
 function isPagePreset(value: unknown): value is PagePreset {
   return typeof value === "string" && (PAGE_PRESETS as readonly string[]).includes(value);
+}
+
+function isMapElementKind(value: unknown): value is MapElementKind {
+  return typeof value === "string" && (MAP_ELEMENT_KINDS as readonly string[]).includes(value);
+}
+
+function isMapPoint(value: unknown): value is MapPoint {
+  return (
+    Array.isArray(value) &&
+    value.length === 2 &&
+    typeof value[0] === "number" &&
+    Number.isFinite(value[0]) &&
+    typeof value[1] === "number" &&
+    Number.isFinite(value[1])
+  );
+}
+
+function isMapElement(value: unknown): value is MapElement {
+  if (typeof value !== "object" || value === null) return false;
+  const element = value as Record<string, unknown>;
+  if (
+    typeof element.id !== "string" ||
+    !isMapElementKind(element.kind) ||
+    typeof element.name !== "string" ||
+    typeof element.hidden !== "boolean" ||
+    typeof element.locked !== "boolean"
+  ) {
+    return false;
+  }
+  if (element.kind === "line") {
+    return (
+      Array.isArray(element.points) &&
+      element.points.length >= 2 &&
+      element.points.every(isMapPoint)
+    );
+  }
+  return true;
 }
 
 function isIndexEntry(value: unknown): value is MapIndexEntry {
@@ -173,6 +227,7 @@ function isMapDocument(value: unknown): value is MapDocument {
     typeof map.name === "string" &&
     (map.bookId === null || typeof map.bookId === "string") &&
     Array.isArray(map.elements) &&
+    map.elements.every(isMapElement) &&
     typeof page === "object" &&
     page !== null &&
     isPagePreset(page.preset) &&
@@ -221,6 +276,13 @@ export function createMapStore(
       return newestFirst(await readIndex());
     },
 
+    load(id) {
+      return serial(async () => {
+        const stored = await storage.get({ key: mapKey(id) });
+        return isMapDocument(stored) ? stored : null;
+      });
+    },
+
     create(input) {
       return serial(async () => {
         const name = cleanName(input.name);
@@ -266,6 +328,24 @@ export function createMapStore(
           throw error;
         }
         return entry;
+      });
+    },
+
+    save(doc) {
+      return serial(async () => {
+        if (!isMapDocument(doc)) throw new Error("invalid-map");
+        const stored = await storage.get({ key: mapKey(doc.id) });
+        if (!isMapDocument(stored)) throw new Error("not-found");
+        const map: MapDocument = { ...doc, updatedAt: now() };
+        const entry = indexEntryFor(map);
+        const index = await readIndex();
+        await storage.set({ key: mapKey(map.id), value: map });
+        try {
+          await writeIndex([...index.filter((row) => row.id !== map.id), entry]);
+        } catch (error) {
+          await storage.set({ key: mapKey(map.id), value: stored }).catch(() => null);
+          throw error;
+        }
       });
     },
 

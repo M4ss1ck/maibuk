@@ -778,6 +778,7 @@ function ViewHost({
   align = "stretch",
   justify = "start",
   wrap,
+  grow,
   padding = "none",
   children,
 }: {
@@ -786,12 +787,13 @@ function ViewHost({
   align?: keyof typeof ALIGN;
   justify?: keyof typeof JUSTIFY;
   wrap?: boolean;
+  grow?: boolean;
   padding?: keyof typeof PADDING;
   children?: ReactNode;
 }) {
   return (
     <div
-      className={`flex ${direction === "row" ? "flex-row" : "flex-col"} ${GAP[gap]} ${ALIGN[align]} ${JUSTIFY[justify]} ${PADDING[padding]} ${wrap ? "flex-wrap" : ""}`}
+      className={`flex ${direction === "row" ? "flex-row" : "flex-col"} ${GAP[gap]} ${ALIGN[align]} ${JUSTIFY[justify]} ${PADDING[padding]} ${wrap ? "flex-wrap" : ""} ${grow ? "min-h-0 min-w-0 flex-1" : ""}`}
     >
       {children}
     </div>
@@ -1657,14 +1659,16 @@ function SurfaceHost({
 function FrameHost({
   src,
   title,
+  fill,
   host,
 }: {
   src: string;
   title: string;
+  fill?: boolean;
   host?: PluginFrameHost;
 }): ReactNode {
   if (host === undefined) return null;
-  return <PluginFrame runtime={host} src={src} title={title} variant="embedded" />;
+  return <PluginFrame runtime={host} src={src} title={title} variant="embedded" fill={fill} />;
 }
 
 /** Every table tag's host renderer, built once. */
@@ -1708,8 +1712,10 @@ export function createPluginUiComponents(host?: PluginFrameHost): RemoteComponen
     EmptyState: EmptyStateHost,
     Surface: SurfaceHost,
     // The Frame host closes over the mount's runtime: the Plugin tree carries
-    // only `src` and `title` (see FrameHost).
-    Frame: (props: { src: string; title: string }) => <FrameHost {...props} host={host} />,
+    // only `src`, `title`, and `fill` (see FrameHost).
+    Frame: (props: { src: string; title: string; fill?: boolean }) => (
+      <FrameHost {...props} host={host} />
+    ),
   };
   for (const element of PLUGIN_UI_TABLE) {
     const Host = hosts[element.host];

@@ -50,6 +50,8 @@ export interface MapsPageDeps {
   client: PluginClient;
   store: MapStore;
   filter: BookFilter;
+  /** Loads one Map and opens its editor; false when it cannot be loaded. */
+  openMap(id: string): Promise<boolean>;
 }
 
 /** A Book as the Library read returns it. */
@@ -63,7 +65,7 @@ const PAGE_KEYS: Readonly<Record<PagePreset, MapsKey>> = {
 };
 
 /** The app language: the current value at mount, then every change. */
-function useLanguage(client: PluginClient): string {
+export function useLanguage(client: PluginClient): string {
   const [language, setLanguage] = useState("en");
   useEffect(() => {
     let active = true;
@@ -115,7 +117,7 @@ function isForm(dialog: Dialog): dialog is FormDialog {
 }
 
 export function createMapsPage(deps: MapsPageDeps): ComponentType {
-  const { client, store, filter } = deps;
+  const { client, store, filter, openMap } = deps;
 
   return function MapsPage() {
     const language = useLanguage(client);
@@ -208,6 +210,19 @@ export function createMapsPage(deps: MapsPageDeps): ComponentType {
         preset: "landscape",
         error: null,
       });
+    }
+
+    async function open(id: string): Promise<void> {
+      if (busy) return;
+      setBusy(true);
+      setNotice(null);
+      try {
+        if (!(await openMap(id))) setNotice("list.loadFailed");
+      } catch {
+        setNotice("list.loadFailed");
+      } finally {
+        setBusy(false);
+      }
     }
 
     function submit(): void {
@@ -319,6 +334,11 @@ export function createMapsPage(deps: MapsPageDeps): ComponentType {
                     </ui.Text>
                   </ui.View>
                   <ui.View direction="row" align="center">
+                    {action(
+                      `${t("list.open")} ${entry.name}`,
+                      "external-link",
+                      () => void open(entry.id)
+                    )}
                     {action(`${t("list.rename")} ${entry.name}`, "pencil", () =>
                       setDialog({ kind: "rename", entry, name: entry.name, error: null })
                     )}

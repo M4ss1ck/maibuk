@@ -13,6 +13,8 @@ import {
   ROUTE_CONTEXTS,
   SHORTCUT_SECTIONS,
   commandSection,
+  fixedShortcuts,
+  getCommand,
   registerPluginCommands,
   type CommandDef,
   type ShortcutContext,
@@ -23,6 +25,7 @@ import {
   effectiveShortcuts,
   findConflicts,
   findDefaultConflicts,
+  isBindingActive,
 } from "@/lib/shortcut-resolve";
 
 function lookup(messages: unknown, key: string): unknown {
@@ -235,5 +238,74 @@ describe("built-in Plugin manifest Default Shortcuts", () => {
     // Echoes' three editor Commands each ship one Default Shortcut on both builds.
     expect(checked).toBeGreaterThanOrEqual(6);
     expect(conflicts).toEqual([]);
+  });
+});
+
+describe("Plugin page navigation Arrows", () => {
+  const unregisters: Array<() => void> = [];
+  afterEach(() => {
+    while (unregisters.length > 0) unregisters.pop()?.();
+  });
+
+  function registerClash(commands: {
+    first: { contexts: string[]; defaults: string[][] };
+    second: { contexts: string[]; defaults: string[][] };
+  }): void {
+    unregisters.push(
+      registerPluginCommands("clash", {
+        defaultLanguage: "en",
+        pages: ["map", "other"],
+        commands: [
+          {
+            id: "first",
+            label: "First",
+            contexts: commands.first.contexts,
+            defaults: commands.first.defaults as [string][],
+          },
+          {
+            id: "second",
+            label: "Second",
+            contexts: commands.second.contexts,
+            defaults: commands.second.defaults as [string][],
+          },
+        ],
+      })
+    );
+  }
+
+  it("lifts the first of two Commands claiming the same Arrow on one page, and the second stays a Default", () => {
+    registerClash({
+      first: { contexts: ["map"], defaults: [["ArrowRight"]] },
+      second: { contexts: ["map"], defaults: [["ArrowRight"]] },
+    });
+
+    expect(fixedShortcuts("plugin.clash.first")).toEqual([["ArrowRight"]]);
+    expect(fixedShortcuts("plugin.clash.second")).toEqual([]);
+    expect(getCommand("plugin.clash.second")).toMatchObject({
+      defaults: [["ArrowRight"]],
+    });
+    // The later Command's Arrow loses to the first and is reported inactive.
+    expect(isBindingActive("plugin.clash.second", ["ArrowRight"], {}, false)).toBe(false);
+    expect(effectiveShortcuts("plugin.clash.second", {}, false)).toEqual([]);
+  });
+
+  it("lifts both when their page Contexts do not overlap", () => {
+    registerClash({
+      first: { contexts: ["map"], defaults: [["ArrowRight"]] },
+      second: { contexts: ["other"], defaults: [["ArrowRight"]] },
+    });
+
+    expect(fixedShortcuts("plugin.clash.first")).toEqual([["ArrowRight"]]);
+    expect(fixedShortcuts("plugin.clash.second")).toEqual([["ArrowRight"]]);
+  });
+
+  it("lifts a different Arrow on the same page", () => {
+    registerClash({
+      first: { contexts: ["map"], defaults: [["ArrowRight"]] },
+      second: { contexts: ["map"], defaults: [["ArrowLeft"]] },
+    });
+
+    expect(fixedShortcuts("plugin.clash.first")).toEqual([["ArrowRight"]]);
+    expect(fixedShortcuts("plugin.clash.second")).toEqual([["ArrowLeft"]]);
   });
 });
