@@ -338,7 +338,7 @@ Any change that adds or modifies interactive UI is **not done** until behavioral
    - Dialogs: Escape closes, and focus returns to the trigger element.
    - Lists / menus / toolbars: arrow keys move focus — assert `document.activeElement` changed, not that a handler is attached.
    - Reordering / drag-and-drop: the keyboard reorder path is tested end-to-end.
-3. **New shortcuts** are tested through their `useShortcuts` binding: they fire when expected, are suppressed in typing targets (`isTypingTarget()` in `src/lib/keyboard.ts`), and the screen's test asserts its id is bound (`useBoundShortcutStore`).
+3. **New shortcuts** are tested through their `useShortcuts` binding: they fire when expected, are suppressed in typing targets (`isTypingEvent()` in `src/lib/keyboard.ts`, which also honors a key a Frame forwarded from one of its fields), and the screen's test asserts its id is bound (`useBoundShortcutStore`).
 
 ### E2E (keyboard-first Playwright suite)
 

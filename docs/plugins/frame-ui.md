@@ -68,7 +68,7 @@ When focus leaves the Frame for another Maibuk control, the Frame drops its focu
 
 ## Keyboard Commands
 
-A key pressed in a Frame that the Frame's own code does not handle reaches the host's Commands as if it had been pressed on a host control: undo, zoom, pan, arrow moves, custom Shortcuts, two-key sequences, and global Commands all run. A key typed into a Frame field counts as typing, so bare keys do not run page Commands there. A Frame keeps a key for itself by calling `event.preventDefault()` in its own `keydown` handler; the host never sees that key.
+A key pressed in a Frame that the Frame's own code does not handle reaches the host's Commands as if it had been pressed on a host control: undo, zoom, pan, arrow moves, custom Shortcuts, two-key sequences, and global Commands all run. A key typed into a Frame field counts as typing, so bare keys do not run page Commands there. A Frame keeps a key for itself by calling `event.preventDefault()` in its own `keydown` handler; the host never sees that key. The Frame shim forwards keys on its own; a Frame needs no code for this.
 
 ## The custom-UI notice
 
@@ -76,7 +76,7 @@ When the author reviews or manages a Plugin that uses a Frame, Maibuk shows this
 
 ## Messaging with the host
 
-A Frame's only channel is `window.maibuk.port`, the MessagePort that connects it to your Plugin's Worker. The host hands the Frame's port to the Plugin through `client.onFrame`, once per mounted Frame; the Plugin and the Frame then exchange raw messages over that port, and the host never parses them. Raw messages are the supported path: the Frame's port speaks to your Worker, not to the host broker, so the SDK client is not available inside a Frame.
+A Frame's only message channel is `window.maibuk.port`, the MessagePort that connects it to your Plugin's Worker. The host hands the Frame's port to the Plugin through `client.onFrame`, once per mounted Frame; the Plugin and the Frame then exchange raw messages over that port, and the host never parses them. Raw messages are the supported path: the Frame's port speaks to your Worker, not to the host broker, so the SDK client is not available inside a Frame.
 
 On the Plugin side, keep each port and answer what the Frame sends:
 
