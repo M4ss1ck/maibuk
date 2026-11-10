@@ -1,3 +1,5 @@
+const NON_TYPING_INPUT_TYPES = new Set(["checkbox", "button", "submit", "reset", "color", "file"]);
+
 export function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
     return false;
@@ -8,7 +10,10 @@ export function isTypingTarget(target: EventTarget | null): boolean {
   }
 
   const tagName = target.tagName;
-  if (tagName === "INPUT" || tagName === "TEXTAREA" || tagName === "SELECT") {
+  if (tagName === "INPUT") {
+    return !NON_TYPING_INPUT_TYPES.has((target as HTMLInputElement).type);
+  }
+  if (tagName === "TEXTAREA" || tagName === "SELECT") {
     return true;
   }
 
