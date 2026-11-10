@@ -86,6 +86,16 @@ const CONVERTED_KEYS: Readonly<Record<ShapeKind, MapsKey>> = {
   polygon: "properties.convertedFrom.polygon",
 };
 
+/**
+ * The Elements list's kind label, for the kinds a Map can hold (#748: a Fill
+ * joins a Map Line). A kind with no label of its own says nothing, so the row
+ * falls back to its flags alone rather than calling itself a Map Line.
+ */
+const ELEMENT_KIND_KEYS: Readonly<Partial<Record<MapElement["kind"], MapsKey>>> = {
+  line: "element.kind.line",
+  fill: "element.kind.fill",
+};
+
 interface RenameDialog {
   id: string;
   name: string;
@@ -93,7 +103,9 @@ interface RenameDialog {
 
 /** The element's kind, then the flags it carries, for the row's description. */
 function describe(element: MapElement, t: (key: MapsKey) => string): string {
-  const parts = [t("element.kind.line")];
+  const parts: string[] = [];
+  const kindKey = ELEMENT_KIND_KEYS[element.kind];
+  if (kindKey !== undefined) parts.push(t(kindKey));
   if (element.hidden) parts.push(t("elements.hidden"));
   if (element.locked) parts.push(t("elements.locked"));
   return parts.join(" · ");
@@ -121,6 +133,11 @@ function MapEditorView({
   // The Shape tool whose Place button the picker shows, or null for any other tool.
   const shapeTool = isShapeKind(snapshot.tool) ? snapshot.tool : null;
   const shape = snapshot.selectedShape;
+  // The Bucket's colour is what the next pour uses, so it wins while the Bucket
+  // is active; with any other tool the one control edits the selected Fill.
+  const pouring = snapshot.tool === "bucket";
+  const fillColor = pouring ? snapshot.currentFillColor : snapshot.selectedFillColor;
+  const showFillColor = pouring || snapshot.selectedIsFill;
 
   // Leaving the page writes whatever the quiet period still holds; the Back
   // button already flushed, so this is a no-op there.
@@ -206,6 +223,7 @@ function MapEditorView({
               { value: "select", label: t("tools.select") },
               { value: "pencil", label: t("tools.pencil") },
               { value: "pen", label: t("tools.pen") },
+              { value: "bucket", label: t("tools.bucket") },
               ...SHAPE_KINDS.map((kind) => ({ value: kind, label: t(SHAPE_TOOL_KEYS[kind]) })),
               { value: "eraser", label: t("tools.eraser") },
             ]}
@@ -254,6 +272,21 @@ function MapEditorView({
             selectedKey={snapshot.selectedLineStyle ?? snapshot.currentLineStyle}
             onChange={(event) => editor.setLineStyle(event.detail as LineStyleId)}
           />
+          {/* One Fill color control (#748): while the Bucket is active it holds
+              the colour the next pour uses, and otherwise it edits the selected
+              Fill, which a locked Fill refuses. */}
+          {showFillColor ? (
+            <ui.ColorPicker
+              label={t("properties.fillColor")}
+              value={fillColor ?? snapshot.currentFillColor}
+              isDisabled={!pouring && selected?.locked === true}
+              onChange={(event) =>
+                pouring || selected === null
+                  ? editor.setFillColor(event.detail)
+                  : editor.setElementFillColor(selected.id, event.detail)
+              }
+            />
+          ) : null}
           {selected === null ? (
             <ui.Text tone="muted">{t("properties.empty")}</ui.Text>
           ) : (

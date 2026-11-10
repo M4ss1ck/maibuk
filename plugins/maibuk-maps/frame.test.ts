@@ -446,6 +446,26 @@ describe("the shape message", () => {
   });
 });
 
+describe("the pour message", () => {
+  it("reads a pour at one page point", () => {
+    expect(parseFrameMessage({ kind: "pour", point: [10, 20] })).toEqual({
+      kind: "pour",
+      point: [10, 20],
+    });
+  });
+
+  it("drops a pour without a finite point", () => {
+    for (const message of [
+      { kind: "pour" },
+      { kind: "pour", point: [Number.NaN, 20] },
+      { kind: "pour", point: [10] },
+      { kind: "pour", point: [10, "20"] },
+    ]) {
+      expect(parseFrameMessage(message)).toBeNull();
+    }
+  });
+});
+
 describe("the Pencil", () => {
   it("reports a finished stroke in page millimetres and shows it live", () => {
     frame = loadFrame();
@@ -788,6 +808,65 @@ describe("the Shape tools", () => {
     pointer(svg(), "pointerup", 50, 40);
 
     expect(frame.port.messages).toEqual([]);
+  });
+});
+
+describe("the Bucket", () => {
+  it("posts a pour at the page point of a click or tap", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "bucket" });
+    expect(svg().getAttribute("data-tool")).toBe("bucket");
+
+    pointer(svg(), "pointerdown", 40, 30);
+    expect(frame.port.messages).toEqual([{ kind: "pour", point: [40, 30] }]);
+  });
+
+  it("moves the keyboard crosshair and pours at it with Enter", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "bucket" });
+
+    // The crosshair starts where the Pen's does: the page centre, 100 by 50 mm.
+    expect(document.querySelector("path.map-crosshair")?.getAttribute("d")).toBe(
+      "M 98.5 50 L 101.5 50 M 100 48.5 L 100 51.5"
+    );
+
+    // The Bucket keeps the keys it handles, so the host's Commands never see them.
+    expect(key("ArrowRight").defaultPrevented).toBe(true);
+    expect(document.querySelector("path.map-crosshair")?.getAttribute("d")).toBe(
+      "M 99.5 50 L 102.5 50 M 101 48.5 L 101 51.5"
+    );
+    expect(key("Enter").defaultPrevented).toBe(true);
+    expect(frame.port.messages).toEqual([{ kind: "pour", point: [101, 50] }]);
+
+    // A key the Bucket does not handle still forwards as before (#760).
+    expect(key("Backspace").defaultPrevented).toBe(false);
+    expect(key("p").defaultPrevented).toBe(false);
+  });
+
+  it("draws a shape's fill-rule, so a face with a hole shows the hole", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [
+        sceneElement({
+          shapes: [
+            shape({
+              d: "M 0 0 L 40 0 L 40 40 L 0 40 Z M 10 10 L 30 10 L 30 30 L 10 30 Z",
+              stroke: null,
+              strokeWidth: 0,
+              fill: "#c8d5a3",
+              fillRule: "evenodd",
+            }),
+          ],
+        }),
+      ],
+    });
+
+    expect(document.querySelector("path.map-line")?.getAttribute("fill-rule")).toBe("evenodd");
+    expect(document.querySelector("path.map-hit")?.getAttribute("fill-rule")).toBe("evenodd");
+
+    // A shape without one carries no attribute at all.
+    frame.scene({ elements: [sceneElement()] });
+    expect(document.querySelector("path.map-line")?.getAttribute("fill-rule")).toBeNull();
   });
 });
 

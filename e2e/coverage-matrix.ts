@@ -51,6 +51,13 @@ export const EXCLUSIONS: Exclusion[] = [
     owner: "#653 reader E2E rows; plugins/maibuk-reader/session.test.ts for the forwarded Commands",
   },
   {
+    kind: "shortcut",
+    items: ["plugin.maibuk-maps.bucketTool"],
+    reason:
+      "The Bucket's keyboard pour is proven by the Map editor's Keyboard and accessibility test gate in plugins/maibuk-maps/plugin.test.tsx (pick the tool, pour at the crosshair, undo the Fill). #748 lands the Bucket in the editor first and its Maps Fills E2E row and tagged spec second, which owns this exclusion until then",
+    owner: "#748 unit 4 (plugins-maps-fills row); plugins/maibuk-maps/plugin.test.tsx",
+  },
+  {
     kind: "term",
     items: ["Drawing"],
     reason: "Creating a Drawing and erasing are pointer gestures by nature (documented exemption)",
