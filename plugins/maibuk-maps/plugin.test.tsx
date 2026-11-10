@@ -874,6 +874,239 @@ describe("Map editor page", () => {
     }
   });
 
+  it("keeps a finished Pen line with its curves, closure, and current style", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      runtime.editor?.setLineStyle("coast");
+      runtime.editor?.handleFrameMessage({
+        kind: "line",
+        points: [
+          [10, 10],
+          [20, 10],
+          [20, 20],
+        ],
+        curves: [false, false, false],
+        closed: true,
+      });
+      await runtime.editor?.flush();
+
+      const elements = storedMap(storage).elements;
+      expect(elements).toHaveLength(1);
+      const element = elements[0] as MapLineElement;
+      expect(element).toMatchObject({
+        kind: "line",
+        name: "Map Line 1",
+        hidden: false,
+        locked: false,
+        style: "coast",
+        enclosesFills: true,
+        closed: true,
+        roughened: false,
+      });
+      expect(element.curves).toEqual([false, false, false]);
+      expect(runtime.editor?.getSnapshot().selectedId).toBe(element.id);
+
+      // A malformed line is dropped and changes nothing.
+      runtime.editor?.handleFrameMessage({
+        kind: "line",
+        points: [
+          [0, 0],
+          [1, 1],
+        ],
+        curves: [],
+        closed: false,
+      });
+      runtime.editor?.handleFrameMessage({ kind: "line", points: [[0, 0]], curves: [] });
+      expect(runtime.editor?.getSnapshot().elements).toHaveLength(1);
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("splits a Map Line with one Eraser drag as a single undo step", async () => {
+    const storage = mapStorage([
+      line(
+        "e1",
+        "Coastline",
+        [
+          [0, 0],
+          [10, 0],
+          [20, 0],
+          [30, 0],
+        ],
+        { curves: [false, false, false] }
+      ),
+    ]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const before = runtime.editor?.getSnapshot().elements;
+
+      runtime.editor?.handleFrameMessage({
+        kind: "erase",
+        points: [
+          [15, 5],
+          [15, -5],
+        ],
+        radiusMm: 2,
+      });
+      await runtime.editor?.flush();
+
+      const pieces = storedMap(storage).elements as MapLineElement[];
+      expect(pieces).toHaveLength(2);
+      // The first piece keeps the id and name; the second takes a new id and
+      // the name plus its number, right after the original in z-order.
+      expect(pieces[0].id).toBe("e1");
+      expect(pieces[0].name).toBe("Coastline");
+      expect(pieces[1].id).not.toBe("e1");
+      expect(pieces[1].name).toBe("Coastline 2");
+      expect(pieces[0].closed).toBe(false);
+      expect(pieces[1].closed).toBe(false);
+      expect(pieces[0].points[pieces[0].points.length - 1][0]).toBeCloseTo(13, 0);
+      expect(pieces[1].points[0][0]).toBeCloseTo(17, 0);
+
+      runtime.editor?.undo();
+      const restored = runtime.editor?.getSnapshot().elements;
+      expect(restored).toEqual(before);
+      expect(restored).toHaveLength(1);
+
+      // An erase that touches nothing, or a malformed one, is not an edit.
+      runtime.editor?.handleFrameMessage({
+        kind: "erase",
+        points: [[60, 60]],
+        radiusMm: 2,
+      });
+      runtime.editor?.handleFrameMessage({ kind: "erase", points: [], radiusMm: 2 });
+      expect(runtime.editor?.getSnapshot().elements).toHaveLength(1);
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("changes the selected line's style, resets Encloses Fills, and undoes in one step", async () => {
+    const storage = mapStorage([
+      line(
+        "e1",
+        "River",
+        [
+          [0, 0],
+          [10, 10],
+        ],
+        { style: "river", enclosesFills: false }
+      ),
+    ]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      runtime.editor?.select("e1");
+      expect(runtime.editor?.getSnapshot().selectedLineStyle).toBe("river");
+      expect(runtime.editor?.getSnapshot().selectedEnclosesFills).toBe(false);
+      expect(runtime.editor?.getSnapshot().currentLineStyle).toBe("plain");
+
+      runtime.editor?.setLineStyle("coast");
+      const changed = runtime.editor?.getSnapshot().elements[0] as MapLineElement;
+      expect(changed.style).toBe("coast");
+      expect(changed.enclosesFills).toBe(true);
+      expect(runtime.editor?.getSnapshot().currentLineStyle).toBe("coast");
+      await runtime.editor?.flush();
+      expect((storedMap(storage).elements[0] as MapLineElement).style).toBe("coast");
+
+      runtime.editor?.undo();
+      const restored = runtime.editor?.getSnapshot().elements[0] as MapLineElement;
+      expect(restored.style).toBe("river");
+      expect(restored.enclosesFills).toBe(false);
+
+      // With no Map Line selected, the pick only becomes the current style.
+      runtime.editor?.select(null);
+      expect(runtime.editor?.getSnapshot().selectedLineStyle).toBeNull();
+      runtime.editor?.setLineStyle("road");
+      expect(runtime.editor?.getSnapshot().currentLineStyle).toBe("road");
+      expect((runtime.editor?.getSnapshot().elements[0] as MapLineElement).style).toBe("river");
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("sets Encloses Fills on one line as its own undo step", async () => {
+    const storage = mapStorage([
+      line(
+        "e1",
+        "Coast",
+        [
+          [0, 0],
+          [10, 10],
+        ],
+        { style: "coast", enclosesFills: true }
+      ),
+    ]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      runtime.editor?.setEnclosesFills("e1", false);
+      expect((runtime.editor?.getSnapshot().elements[0] as MapLineElement).enclosesFills).toBe(
+        false
+      );
+      runtime.editor?.undo();
+      expect((runtime.editor?.getSnapshot().elements[0] as MapLineElement).enclosesFills).toBe(
+        true
+      );
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("roughens the selected line as one undo step, and undo restores its exact points", async () => {
+    const points: [number, number][] = [
+      [0, 0],
+      [30, 0],
+      [30, 30],
+    ];
+    const storage = mapStorage([line("e1", "Coast", points, { curves: [false, false] })]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      runtime.editor?.select("e1");
+      runtime.editor?.setRoughenStrength(3);
+      expect(runtime.editor?.getSnapshot().roughenStrength).toBe(3);
+      // The slider's own range clamps a value from outside it.
+      runtime.editor?.setRoughenStrength(10);
+      expect(runtime.editor?.getSnapshot().roughenStrength).toBe(5);
+      runtime.editor?.setRoughenStrength(3);
+
+      runtime.editor?.roughen();
+      const roughened = runtime.editor?.getSnapshot().elements[0] as MapLineElement;
+      expect(roughened.roughened).toBe(true);
+      expect(roughened.points.length).toBeGreaterThan(points.length);
+      expect(roughened.curves).toHaveLength(roughened.points.length - 1);
+      expect(roughened.curves.every((flag) => flag === false)).toBe(true);
+      await runtime.editor?.flush();
+      expect((storedMap(storage).elements[0] as MapLineElement).roughened).toBe(true);
+
+      runtime.editor?.undo();
+      const restored = runtime.editor?.getSnapshot().elements[0] as MapLineElement;
+      expect(restored.points).toEqual(points);
+      expect(restored.roughened).toBe(false);
+
+      // No selected line is a no-op.
+      runtime.editor?.select(null);
+      runtime.editor?.roughen();
+      expect(runtime.editor?.getSnapshot().elements).toHaveLength(1);
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
   it("takes a Frame select for a known Element, clears on null, and drops the rest", async () => {
     const storage = mapStorage([
       line("e1", "Line one", [

@@ -47,6 +47,14 @@
         cursor: crosshair;
       }
 
+      #surface svg[data-tool="pen"] {
+        cursor: crosshair;
+      }
+
+      #surface svg[data-tool="eraser"] {
+        cursor: crosshair;
+      }
+
       #surface svg[data-tool="select"] {
         cursor: default;
       }
@@ -97,6 +105,16 @@
         stroke-width: 0.6;
         stroke-linecap: round;
         stroke-linejoin: round;
+      }
+
+      /* The keyboard Pen's crosshair, where the next point lands: the same
+         accent, thin enough to read as a guide rather than ink. */
+      .map-crosshair {
+        fill: none;
+        stroke: var(--maibuk-color-primary-hover);
+        stroke-width: 0.4;
+        stroke-linecap: round;
+        opacity: 0.8;
       }
     </style>
   </head>

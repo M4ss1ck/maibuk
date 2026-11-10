@@ -76,8 +76,28 @@ function loadFrame(): Frame {
 }
 
 /** One pointer event; jsdom has no PointerEvent, and the script reads no more. */
-function pointer(target: Element, type: string, x: number, y: number): void {
-  target.dispatchEvent(new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0 }));
+function pointer(
+  target: Element,
+  type: string,
+  x: number,
+  y: number,
+  init: MouseEventInit = {}
+): void {
+  target.dispatchEvent(
+    new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0, ...init })
+  );
+}
+
+/** One keydown on the Frame's document, which answers whether the Frame kept it. */
+function key(name: string, init: KeyboardEventInit = {}): KeyboardEvent {
+  const event = new KeyboardEvent("keydown", {
+    key: name,
+    bubbles: true,
+    cancelable: true,
+    ...init,
+  });
+  document.body.dispatchEvent(event);
+  return event;
 }
 
 const shape = (overrides: Record<string, unknown> = {}) => ({
@@ -342,6 +362,191 @@ describe("the Pencil", () => {
     pointer(svg(), "pointercancel", 30, 40);
     expect(frame.port.messages).toEqual([]);
     expect(document.querySelector("path.map-live")).toBeNull();
+  });
+});
+
+describe("the Pen", () => {
+  it("draws an outline with the keyboard and closes it on the first point", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "pen" });
+    expect(svg().getAttribute("data-tool")).toBe("pen");
+
+    // The crosshair starts at the page centre, 100 by 50 mm.
+    expect(document.querySelector("path.map-crosshair")?.getAttribute("d")).toBe(
+      "M 98.5 50 L 101.5 50 M 100 48.5 L 100 51.5"
+    );
+
+    // The Pen keeps every key it handles, so the host's Commands never see it.
+    expect(key("Enter").defaultPrevented).toBe(true);
+    expect(key("ArrowRight").defaultPrevented).toBe(true);
+    expect(key("ArrowRight", { shiftKey: true }).defaultPrevented).toBe(true);
+    expect(document.querySelector("path.map-crosshair")?.getAttribute("d")).toBe(
+      "M 109.5 50 L 112.5 50 M 111 48.5 L 111 51.5"
+    );
+    key("Enter");
+    key("ArrowDown");
+    key("Enter");
+
+    // Back on the first point, Enter closes the line.
+    key("ArrowLeft", { shiftKey: true });
+    key("ArrowLeft");
+    key("ArrowUp");
+    expect(key("Enter").defaultPrevented).toBe(true);
+
+    expect(frame.port.messages).toEqual([
+      {
+        kind: "line",
+        points: [
+          [100, 50],
+          [111, 50],
+          [111, 51],
+        ],
+        curves: [false, false, false],
+        closed: true,
+      },
+    ]);
+    expect(document.querySelector("path.map-crosshair")).not.toBeNull();
+  });
+
+  it("keeps the arrow keys out of the host and forwards the rest", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "pen" });
+    expect(key("ArrowUp").defaultPrevented).toBe(true);
+    // A key the Pen does not handle still forwards as before (#760).
+    expect(key("p").defaultPrevented).toBe(false);
+    expect(key("z", { ctrlKey: true }).defaultPrevented).toBe(false);
+  });
+
+  it("removes the last point with Backspace and finishes open with Escape", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "pen" });
+    key("Enter");
+    key("ArrowRight");
+    key("Enter");
+    key("ArrowRight");
+    key("Enter");
+    expect(key("Backspace").defaultPrevented).toBe(true);
+    key("Escape");
+
+    expect(frame.port.messages).toEqual([
+      {
+        kind: "line",
+        points: [
+          [100, 50],
+          [101, 50],
+        ],
+        curves: [false],
+        closed: false,
+      },
+    ]);
+  });
+
+  it("drops a draft of one point when Escape finishes it", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "pen" });
+    key("Enter");
+    key("Escape");
+    expect(frame.port.messages).toEqual([]);
+    expect(document.querySelector("path.map-live")).toBeNull();
+  });
+
+  it("draws straight points, curves a Shift+click, and finishes on a double click", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "pen" });
+
+    pointer(svg(), "pointerdown", 10, 20);
+    pointer(svg(), "pointermove", 20, 30);
+    expect(document.querySelector("path.map-live")?.getAttribute("d")).toBe("M 10 20 L 20 30");
+
+    pointer(svg(), "pointerdown", 30, 40, { shiftKey: true });
+    pointer(svg(), "pointerdown", 50, 20);
+    pointer(svg(), "dblclick", 50, 20);
+
+    expect(frame.port.messages).toEqual([
+      {
+        kind: "line",
+        points: [
+          [10, 20],
+          [30, 40],
+          [50, 20],
+        ],
+        curves: [true, false],
+        closed: false,
+      },
+    ]);
+    expect(document.querySelector("path.map-live")).toBeNull();
+  });
+
+  it("closes a pointer line on its first point and drops the double click's repeat", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "pen" });
+
+    pointer(svg(), "pointerdown", 10, 10);
+    pointer(svg(), "pointerdown", 40, 10);
+    pointer(svg(), "pointerdown", 40, 40);
+    pointer(svg(), "pointerdown", 11, 11);
+
+    expect(frame.port.messages).toEqual([
+      {
+        kind: "line",
+        points: [
+          [10, 10],
+          [40, 10],
+          [40, 40],
+        ],
+        curves: [false, false, false],
+        closed: true,
+      },
+    ]);
+
+    // A double click lands its second point on the first; only one is kept.
+    pointer(svg(), "pointerdown", 60, 60);
+    pointer(svg(), "pointerdown", 70, 70);
+    pointer(svg(), "pointerdown", 70, 70);
+    pointer(svg(), "dblclick", 70, 70);
+    expect(frame.port.messages[1]).toEqual({
+      kind: "line",
+      points: [
+        [60, 60],
+        [70, 70],
+      ],
+      curves: [false],
+      closed: false,
+    });
+  });
+});
+
+describe("the Eraser", () => {
+  it("sends one erase message for the whole drag, its reach scaled by zoom", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "eraser", zoom: 2 });
+    expect(svg().getAttribute("data-tool")).toBe("eraser");
+
+    pointer(svg(), "pointerdown", 10, 10);
+    pointer(svg(), "pointermove", 20, 20);
+    expect(document.querySelector("path.map-live")?.getAttribute("d")).toBe("M 10 10 L 20 20");
+    pointer(svg(), "pointerup", 20, 20);
+
+    expect(frame.port.messages).toEqual([
+      {
+        kind: "erase",
+        points: [
+          [10, 10],
+          [20, 20],
+        ],
+        radiusMm: 1,
+      },
+    ]);
+    expect(document.querySelector("path.map-live")).toBeNull();
+  });
+
+  it("drops a cancelled drag", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "eraser" });
+    pointer(svg(), "pointerdown", 10, 10);
+    pointer(svg(), "pointermove", 20, 20);
+    pointer(svg(), "pointercancel", 20, 20);
+    expect(frame.port.messages).toEqual([]);
   });
 });
 
