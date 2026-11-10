@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isTypingTarget } from "@/lib/keyboard";
+import { isTypingEvent, isTypingTarget, markTypingEvent } from "@/lib/keyboard";
 
 function input(type?: string): HTMLInputElement {
   const element = document.createElement("input");
@@ -40,5 +40,23 @@ describe("isTypingTarget()", () => {
     const editable = document.createElement("div");
     editable.setAttribute("contenteditable", "true");
     expect(isTypingTarget(editable)).toBe(true);
+  });
+});
+
+describe("isTypingEvent()", () => {
+  it("is false for a key event with no typing target", () => {
+    expect(isTypingEvent(new KeyboardEvent("keydown"))).toBe(false);
+  });
+
+  it("is true once the host marks a replayed key event", () => {
+    const event = new KeyboardEvent("keydown");
+    markTypingEvent(event);
+    expect(isTypingEvent(event)).toBe(true);
+  });
+
+  it("falls back to the event's own target", () => {
+    const event = new KeyboardEvent("keydown");
+    Object.defineProperty(event, "target", { value: document.createElement("textarea") });
+    expect(isTypingEvent(event)).toBe(true);
   });
 });

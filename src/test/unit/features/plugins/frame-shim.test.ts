@@ -7,7 +7,13 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { FRAME_HOST_FOCUS_MESSAGE, FRAME_READY_MESSAGE, frameShim } from "@/features/plugins/frame";
+import {
+  FRAME_HOST_FOCUS_MESSAGE,
+  FRAME_KEY_MESSAGE,
+  FRAME_READY_MESSAGE,
+  frameShim,
+} from "@/features/plugins/frame";
+import { isTypingTarget } from "@/lib/keyboard";
 
 const encoder = new TextEncoder();
 
@@ -31,24 +37,27 @@ interface FakeWindow {
 interface Harness {
   win: FakeWindow;
   listeners: Array<(event: MessageEvent) => void>;
+  keydowns: Array<(event: KeyboardEvent) => void>;
   posted: unknown[];
 }
 
 function makeWindow(): Harness {
   const listeners: Array<(event: MessageEvent) => void> = [];
+  const keydowns: Array<(event: KeyboardEvent) => void> = [];
   const posted: unknown[] = [];
   const win = {
     parent: null as unknown as FakeWindow,
     document,
     addEventListener: (type: string, listener: (event: MessageEvent) => void) => {
       if (type === "message") listeners.push(listener);
+      if (type === "keydown") keydowns.push(listener as unknown as (event: KeyboardEvent) => void);
     },
     postMessage: (message: unknown) => {
       posted.push(message);
     },
   };
   win.parent = win;
-  return { win, listeners, posted };
+  return { win, listeners, keydowns, posted };
 }
 
 function dispatch(
@@ -277,5 +286,119 @@ describe("frameShim() focus leaving the Frame", () => {
     dispatch(harness, { kind: FRAME_HOST_FOCUS_MESSAGE.kind }, [], makeWindow().win);
 
     expect(document.activeElement).toBe(button);
+  });
+});
+
+describe("frameShim() key bridge", () => {
+  function pressKey(
+    harness: Harness,
+    init: KeyboardEventInit,
+    target: EventTarget | null
+  ): KeyboardEvent {
+    const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init });
+    Object.defineProperty(event, "target", { value: target });
+    for (const listener of harness.keydowns) listener(event);
+    return event;
+  }
+
+  it("posts an unhandled keydown with its fields", () => {
+    const harness = makeWindow();
+    frameShim(harness.win as unknown as Window);
+
+    pressKey(
+      harness,
+      { key: "z", code: "KeyZ", ctrlKey: true, shiftKey: true, repeat: true },
+      document.body
+    );
+
+    expect(harness.posted).toEqual([
+      {
+        kind: FRAME_KEY_MESSAGE,
+        key: "z",
+        code: "KeyZ",
+        altKey: false,
+        ctrlKey: true,
+        metaKey: false,
+        shiftKey: true,
+        repeat: true,
+        typing: false,
+      },
+    ]);
+  });
+
+  it("posts nothing for a key the Frame's own code handled", () => {
+    const harness = makeWindow();
+    frameShim(harness.win as unknown as Window);
+    const event = new KeyboardEvent("keydown", { key: "z", cancelable: true });
+    event.preventDefault();
+
+    for (const listener of harness.keydowns) listener(event);
+
+    expect(harness.posted).toEqual([]);
+  });
+
+  it("marks an <input type=text> as typing", () => {
+    const harness = makeWindow();
+    frameShim(harness.win as unknown as Window);
+    const input = document.createElement("input");
+    input.type = "text";
+    document.body.appendChild(input);
+
+    pressKey(harness, { key: "a" }, input);
+
+    expect(harness.posted).toEqual([expect.objectContaining({ typing: true })]);
+  });
+
+  it.each([
+    ["a button", () => document.createElement("button")],
+    ["a canvas", () => document.createElement("canvas")],
+  ])("does not mark %s as typing", (_name, makeElement) => {
+    const harness = makeWindow();
+    frameShim(harness.win as unknown as Window);
+    const element = makeElement();
+    document.body.appendChild(element);
+
+    pressKey(harness, { key: "a" }, element);
+
+    expect(harness.posted).toEqual([expect.objectContaining({ typing: false })]);
+  });
+
+  it("computes typing by the same rule as isTypingTarget()", () => {
+    const cases: Array<[string, () => HTMLElement]> = [
+      ...["checkbox", "button", "submit", "reset", "color", "file", "text", "radio", "range"].map(
+        (type): [string, () => HTMLElement] => [
+          `input[type=${type}]`,
+          () => {
+            const input = document.createElement("input");
+            input.type = type;
+            return input;
+          },
+        ]
+      ),
+      ["textarea", () => document.createElement("textarea")],
+      ["select", () => document.createElement("select")],
+      [
+        "contenteditable",
+        () => {
+          const div = document.createElement("div");
+          div.setAttribute("contenteditable", "true");
+          return div;
+        },
+      ],
+      ["button", () => document.createElement("button")],
+      ["div", () => document.createElement("div")],
+    ];
+
+    for (const [name, makeElement] of cases) {
+      const harness = makeWindow();
+      frameShim(harness.win as unknown as Window);
+      const element = makeElement();
+      document.body.appendChild(element);
+
+      pressKey(harness, { key: "a" }, element);
+
+      const [message] = harness.posted as Array<{ typing: boolean }>;
+      expect(`${name}: ${message.typing}`).toBe(`${name}: ${isTypingTarget(element)}`);
+    }
   });
 });

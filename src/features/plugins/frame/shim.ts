@@ -53,6 +53,15 @@ export const FRAME_FULLSCREEN_MESSAGE = "frame-fullscreen";
 export const FRAME_FULLSCREEN_STATE_MESSAGE = "frame-fullscreen-state";
 
 /**
+ * Frame -> host: `{ kind: "frame-key", key, code, altKey, ctrlKey, metaKey,
+ * shiftKey, repeat, typing }` for a keydown the Frame's own code did not
+ * handle. The host replays it on the iframe so every host Command runs as if
+ * the key were pressed on a host control; `typing` says the key came from a
+ * Frame field, by the same rule as `isTypingTarget()`.
+ */
+export const FRAME_KEY_MESSAGE = "frame-key";
+
+/**
  * The shim the Frame document runs. It accepts messages only from
  * `window.parent`, one `frame-load` and any later `frame-theme`; creates the
  * Plugin's `blob:` URLs in-frame; rewrites relative CSS and HTML references;
@@ -68,6 +77,20 @@ export function frameShim(win: Window): void {
 
   function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null;
+  }
+
+  // The typing rule of src/lib/keyboard.ts, copied inline because the shim is
+  // serialized into the Frame and cannot import anything.
+  function isTypingTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) return false;
+    if (target.isContentEditable) return true;
+    const tagName = target.tagName;
+    if (tagName === "INPUT") {
+      const type = (target as HTMLInputElement).type;
+      return ["checkbox", "button", "submit", "reset", "color", "file"].indexOf(type) === -1;
+    }
+    if (tagName === "TEXTAREA" || tagName === "SELECT") return true;
+    return Boolean(target.closest("[contenteditable='true']"));
   }
 
   // A reference the Frame must neither rewrite nor load: an inline `data:` URL
@@ -262,6 +285,27 @@ export function frameShim(win: Window): void {
     if (message.kind !== "frame-load" || loaded) return;
     loaded = true;
     load(event, message);
+  });
+
+  // Every keydown the Frame's own code did not handle reaches the host as a
+  // Command key (#760). Bubble phase on the window, so the Frame's handlers run
+  // first: one that calls `preventDefault()` keeps the key inside the Frame.
+  win.addEventListener("keydown", (event: KeyboardEvent) => {
+    if (event.defaultPrevented) return;
+    parent.postMessage(
+      {
+        kind: "frame-key",
+        key: event.key,
+        code: event.code,
+        altKey: event.altKey,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
+        repeat: event.repeat,
+        typing: isTypingTarget(event.target),
+      },
+      "*"
+    );
   });
 }
 

@@ -18,7 +18,7 @@ import { getDialog, getFileSystem, getWebDialog, IS_WEB } from "@/lib/platform";
 import { displayNameFromPath } from "@/lib/platform/uri";
 import { DOWNLOAD_PAGE } from "@/constants";
 import { KeyboardShortcut, toast } from "@/components/ui";
-import { isTypingTarget } from "@/lib/keyboard";
+import { isTypingEvent } from "@/lib/keyboard";
 import { useShortcuts } from "@/lib/shortcuts";
 import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
 import { useCommandHint } from "@/lib/command-keys";
@@ -182,7 +182,7 @@ export function Home() {
     {
       id: "bookList.newBook",
       onTrigger: (event) => {
-        if (event && isTypingTarget(event.target)) return;
+        if (event && isTypingEvent(event)) return;
         setIsNewBookOpen(true);
       },
       allowInInput: true,
