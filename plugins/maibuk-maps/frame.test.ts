@@ -646,6 +646,82 @@ describe("the Eraser", () => {
   });
 });
 
+describe("the Shape tools", () => {
+  for (const tool of ["ellipse", "rectangle", "polygon"] as const) {
+    it(`previews a ${tool} drag and posts it between its two corners`, () => {
+      frame = loadFrame();
+      frame.scene({ tool });
+      expect(svg().getAttribute("data-tool")).toBe(tool);
+
+      pointer(svg(), "pointerdown", 10, 20);
+      pointer(svg(), "pointermove", 50, 40);
+      const preview = document.querySelector("path.map-shape-preview");
+      // The outline the Worker would draw, closed: a 40 by 20 mm box around (30, 30).
+      expect(preview?.getAttribute("d")).toMatch(/^M /);
+      expect(preview?.getAttribute("d")).toMatch(/ Z$/);
+
+      pointer(svg(), "pointerup", 50, 40);
+      expect(document.querySelector("path.map-shape-preview")).toBeNull();
+      expect(frame.port.messages).toEqual([
+        { kind: "shape", shape: tool, start: [10, 20], end: [50, 40], constrain: false },
+      ]);
+    });
+  }
+
+  it("squares the box from the start corner while Shift is held", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "rectangle" });
+
+    pointer(svg(), "pointerdown", 10, 10);
+    pointer(svg(), "pointermove", 50, 30, { shiftKey: true });
+    // The drag is 40 mm wide and 20 mm tall, so Shift makes a 40 mm square
+    // growing the way the drag went, exactly as `shapeFromCorners` does.
+    expect(document.querySelector("path.map-shape-preview")?.getAttribute("d")).toBe(
+      "M 10 10 L 50 10 L 50 50 L 10 50 Z"
+    );
+
+    pointer(svg(), "pointerup", 50, 30, { shiftKey: true });
+    expect(frame.port.messages).toEqual([
+      { kind: "shape", shape: "rectangle", start: [10, 10], end: [50, 30], constrain: true },
+    ]);
+  });
+
+  it("draws no Shape for a drag shorter than a millimetre on either side", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "ellipse" });
+
+    pointer(svg(), "pointerdown", 10, 10);
+    pointer(svg(), "pointermove", 50, 10.5);
+    pointer(svg(), "pointerup", 50, 10.5);
+
+    // A drag a little short on both sides draws nothing either.
+    pointer(svg(), "pointerdown", 60, 10);
+    pointer(svg(), "pointermove", 60.5, 10.5);
+    pointer(svg(), "pointerup", 60.5, 10.5);
+
+    expect(frame.port.messages).toEqual([]);
+  });
+
+  it("drops the draft on pointer cancel and on Escape", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "polygon" });
+
+    pointer(svg(), "pointerdown", 10, 10);
+    pointer(svg(), "pointermove", 50, 40);
+    pointer(svg(), "pointercancel", 50, 40);
+    expect(document.querySelector("path.map-shape-preview")).toBeNull();
+    pointer(svg(), "pointerup", 50, 40);
+
+    pointer(svg(), "pointerdown", 10, 10);
+    pointer(svg(), "pointermove", 50, 40);
+    expect(key("Escape").defaultPrevented).toBe(true);
+    expect(document.querySelector("path.map-shape-preview")).toBeNull();
+    pointer(svg(), "pointerup", 50, 40);
+
+    expect(frame.port.messages).toEqual([]);
+  });
+});
+
 describe("the Select tool", () => {
   it("reports the Element under the pointer, locked ones included", () => {
     frame = loadFrame();

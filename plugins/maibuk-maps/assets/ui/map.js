@@ -2,7 +2,8 @@
 /* The Map Frame's drawing surface (#745, #746). The Frame's only host channel
    is `window.maibuk.port`: the Worker sends the whole `scene` on every change
    and when the Frame connects, and the Frame answers a finished Pencil stroke,
-   a finished Pen line, an Eraser drag, and the Element the author picked.
+   a finished Pen line, an Eraser drag, a drawn Shape, and the Element the
+   author picked.
    Points cross the port in page millimetres, the same space as the page's
    `widthMm`/`heightMm`, so the pointer's own screen pixels are converted
    through the svg's `getScreenCTM`.
@@ -21,7 +22,8 @@
 
   /**
    * @typedef {[number, number]} MapPoint
-   * @typedef {"select" | "pencil" | "pen" | "eraser"} MapTool
+   * @typedef {"ellipse" | "rectangle" | "polygon"} ShapeKind
+   * @typedef {"select" | "pencil" | "pen" | "eraser" | ShapeKind} MapTool
    * @typedef {{ d: string, stroke: string | null, strokeWidth: number, dash: string | null, fill: string | null, opacity: number }} LineShape
    * @typedef {{ id: string, shapes: LineShape[], hidden: boolean, locked: boolean, selected: boolean }} FrameSceneElement
    * @typedef {{ one: string, other: string }} PenDraftLabel
@@ -30,9 +32,11 @@
    * @typedef {{ kind: "line", points: MapPoint[], curves: boolean[], closed: boolean }} FrameLineMessage
    * @typedef {{ kind: "erase", points: MapPoint[], radiusMm: number }} FrameEraseMessage
    * @typedef {{ kind: "select", id: string | null }} FrameSelectMessage
+   * @typedef {{ kind: "shape", shape: ShapeKind, start: MapPoint, end: MapPoint, constrain: boolean }} FrameShapeMessage
    * @typedef {FrameSceneMessage} WorkerToFrameMessage
    * @typedef {{ pointerId: number, points: MapPoint[] }} Drawing
    * @typedef {{ points: MapPoint[], curves: boolean[] }} PenDraft
+   * @typedef {{ pointerId: number, kind: ShapeKind, start: MapPoint, end: MapPoint, constrain: boolean }} ShapeDraft
    */
 
   const hooks = /** @type {any} */ (globalThis).__mapTestHooks || null;
@@ -56,6 +60,28 @@
   /** The crosshair's arm length, in page millimetres. */
   const CROSSHAIR_ARM_MM = 1.5;
 
+  /**
+   * How many points the Shape preview samples an ellipse at, and how many
+   * sides its polygon has: `geometry.ts` draws 64 samples and
+   * `DEFAULT_POLYGON_SIDES` sides, and the preview only has to agree with it.
+   */
+  const PREVIEW_ELLIPSE_SAMPLES = 64;
+  const PREVIEW_POLYGON_SIDES = 6;
+
+  /** A Shape drag is too small to keep when either side is under this, in mm. */
+  const MIN_SHAPE_SIZE_MM = 1;
+
+  /** The Shape tools, which draw an exact Shape by dragging (#747). */
+  const SHAPE_KINDS = ["ellipse", "rectangle", "polygon"];
+
+  /** The preview rectangle's four corners, as their signs from the box's centre. @type {MapPoint[]} */
+  const PREVIEW_CORNER_SIGNS = [
+    [-1, -1],
+    [1, -1],
+    [1, 1],
+    [-1, 1],
+  ];
+
   /** The scene the Worker last sent, or null before the first one. @type {FrameSceneMessage | null} */
   let scene = null;
   /** The stroke in progress, or null. @type {Drawing | null} */
@@ -68,6 +94,8 @@
   let penPointer = null;
   /** The Eraser drag in progress, or null. @type {Drawing | null} */
   let erasing = null;
+  /** The Shape drag in progress, or null. @type {ShapeDraft | null} */
+  let shapeDraft = null;
 
   /** The rendered svg, which Preact keeps across draws. @returns {SVGSVGElement | null} */
   function svgElement() {
@@ -78,6 +106,23 @@
   /** @param {unknown} value @returns {value is number} */
   function isNumber(value) {
     return typeof value === "number" && Number.isFinite(value);
+  }
+
+  /** @param {unknown} value @returns {value is ShapeKind} */
+  function isShapeKind(value) {
+    return typeof value === "string" && SHAPE_KINDS.includes(value);
+  }
+
+  /**
+   * The tool the author picked, or Select when the Worker sent one this Frame
+   * does not know: a Frame drawn with a stale tool beats one drawn with none.
+   * @param {unknown} raw
+   * @returns {MapTool}
+   */
+  function readTool(raw) {
+    if (raw === "pencil" || raw === "pen" || raw === "eraser") return raw;
+    if (isShapeKind(raw)) return raw;
+    return "select";
   }
 
   /** A number for SVG, with two decimals at most. @param {number} value @returns {string} */
@@ -166,10 +211,7 @@
       heightMm: message.heightMm,
       background: typeof message.background === "string" ? message.background : "transparent",
       elements,
-      tool:
-        message.tool === "pencil" || message.tool === "pen" || message.tool === "eraser"
-          ? message.tool
-          : "select",
+      tool: readTool(message.tool),
       zoom: isNumber(message.zoom) && message.zoom > 0 ? message.zoom : 1,
       panX: isNumber(message.panX) ? message.panX : 0,
       panY: isNumber(message.panY) ? message.panY : 0,
@@ -244,6 +286,60 @@
   }
 
   /**
+   * The box a Shape drag makes, mirroring `shapeFromCorners` in `geometry.ts`:
+   * the drag's two corners, or with Shift a square on the longer side, growing
+   * the way the drag went.
+   * @param {MapPoint} start
+   * @param {MapPoint} end
+   * @param {boolean} constrain
+   * @returns {{ cx: number, cy: number, width: number, height: number }}
+   */
+  function shapeBox(start, end, constrain) {
+    const dx = end[0] - start[0];
+    const dy = end[1] - start[1];
+    const side = Math.max(Math.abs(dx), Math.abs(dy));
+    const width = constrain ? side : Math.abs(dx);
+    const height = constrain ? side : Math.abs(dy);
+    return {
+      cx: constrain ? start[0] + (dx < 0 ? -width : width) / 2 : start[0] + dx / 2,
+      cy: constrain ? start[1] + (dy < 0 ? -height : height) / 2 : start[1] + dy / 2,
+      width,
+      height,
+    };
+  }
+
+  /**
+   * The outline the Shape drag would draw, as one closed path: the ellipse, the
+   * rectangle, or a six-sided polygon inscribed in its box, unrotated and with
+   * square corners, which is what the Worker's `shapeOutline` starts from. The
+   * box maths mirrors `shapeFromCorners`, which the Frame cannot import; the
+   * Worker builds the Shape itself, so this only shows where its ink will land.
+   * @returns {string}
+   */
+  function shapePreviewPath() {
+    if (shapeDraft === null) return "";
+    const { kind, start, end, constrain } = shapeDraft;
+    const { cx, cy, width, height } = shapeBox(start, end, constrain);
+    if (width <= 0 || height <= 0) return "";
+    const radiusX = width / 2;
+    const radiusY = height / 2;
+    /** @type {MapPoint[]} */
+    const points = [];
+    if (kind === "rectangle") {
+      for (const [signX, signY] of PREVIEW_CORNER_SIGNS) {
+        points.push([cx + signX * radiusX, cy + signY * radiusY]);
+      }
+    } else {
+      const sides = kind === "ellipse" ? PREVIEW_ELLIPSE_SAMPLES : PREVIEW_POLYGON_SIDES;
+      for (let index = 0; index < sides; index += 1) {
+        const angle = -Math.PI / 2 + (2 * Math.PI * index) / sides;
+        points.push([cx + radiusX * Math.cos(angle), cy + radiusY * Math.sin(angle)]);
+      }
+    }
+    return `${polyline(points)} Z`;
+  }
+
+  /**
    * The surface's accessible name while a Pen line is in progress, from the
    * localized label the Worker sends with the scene: the plural form the count
    * selects, with the count filled in. The svg is `aria-hidden`, so this is the
@@ -272,6 +368,7 @@
     penPointer = null;
     crosshair = null;
     erasing = null;
+    shapeDraft = null;
   }
 
   /** Keeps the keyboard crosshair at the page centre while the Pen is active. */
@@ -352,6 +449,11 @@
         ${penDraft === null ? null : html`<path class="map-live" d="${penDraftPath()}" />`}
         ${crosshair === null ? null : html`<path class="map-crosshair" d="${crosshairPath()}" />`}
         ${erasing === null ? null : html`<path class="map-live" d="${polyline(erasing.points)}" />`}
+        ${
+          shapeDraft === null
+            ? null
+            : html`<path class="map-shape-preview" d="${shapePreviewPath()}" />`
+        }
       </svg>`,
       surface
     );
@@ -480,6 +582,23 @@
       return;
     }
 
+    if (isShapeKind(scene.tool)) {
+      if (shapeDraft !== null) return;
+      const point = pagePoint(event);
+      if (point === null) return;
+      shapeDraft = {
+        pointerId: event.pointerId,
+        kind: scene.tool,
+        start: point,
+        end: point,
+        constrain: event.shiftKey === true,
+      };
+      capturePointer(event);
+      event.preventDefault();
+      draw();
+      return;
+    }
+
     const target =
       event.target instanceof Element ? event.target.closest("[data-element-id]") : null;
     post({ kind: "select", id: target === null ? null : target.getAttribute("data-element-id") });
@@ -508,6 +627,15 @@
       if (hovered === null) return;
       penPointer = hovered;
       if (penDraft !== null) draw();
+      return;
+    }
+
+    if (shapeDraft !== null && event.pointerId === shapeDraft.pointerId) {
+      const point = pagePoint(event);
+      if (point === null) return;
+      shapeDraft.end = point;
+      shapeDraft.constrain = event.shiftKey === true;
+      draw();
       return;
     }
 
@@ -572,6 +700,40 @@
     }
   }
 
+  /**
+   * Ends the Shape drag (#747). A drag the Worker can make a Shape from goes to
+   * it as one Shape message, with Shift squaring the box; a drag shorter than
+   * `MIN_SHAPE_SIZE_MM` on either side draws no Shape at all, exactly as
+   * `shapeFromCorners` refuses it.
+   * @param {PointerEvent} event
+   * @param {boolean} send
+   */
+  function endShape(event, send) {
+    if (shapeDraft === null || event.pointerId !== shapeDraft.pointerId) return;
+    const draft = shapeDraft;
+    shapeDraft = null;
+    releasePointer(event);
+    draw();
+    const constrain = event.shiftKey === true;
+    if (!send) return;
+    const { width, height } = shapeBox(draft.start, draft.end, constrain);
+    if (width < MIN_SHAPE_SIZE_MM || height < MIN_SHAPE_SIZE_MM) return;
+    post({
+      kind: "shape",
+      shape: draft.kind,
+      start: draft.start,
+      end: draft.end,
+      constrain,
+    });
+  }
+
+  /** Drops the Shape drag in progress, and its preview, without reporting it. */
+  function cancelShape() {
+    if (shapeDraft === null) return;
+    shapeDraft = null;
+    draw();
+  }
+
   /** Moves the keyboard crosshair, dropping the pointer preview it replaces. */
   function moveCrosshair(dx, dy) {
     if (crosshair === null) return;
@@ -588,6 +750,13 @@
    * @param {KeyboardEvent} event
    */
   function onKeyDown(event) {
+    // Escape drops a Shape drag in progress (#747); every key the Frame does
+    // not handle forwards to the host as before (#760).
+    if (event.key === "Escape" && shapeDraft !== null) {
+      event.preventDefault();
+      cancelShape();
+      return;
+    }
     if (scene === null || scene.tool !== "pen" || crosshair === null) return;
     const step = event.shiftKey ? CROSSHAIR_FAR_STEP_MM : CROSSHAIR_STEP_MM;
     if (event.key === "ArrowLeft") {
@@ -656,12 +825,14 @@
   function onPointerUp(event) {
     endStroke(event, true);
     endErase(event, true);
+    endShape(event, true);
   }
 
   /** @param {PointerEvent} event */
   function onPointerCancel(event) {
     endStroke(event, false);
     endErase(event, false);
+    endShape(event, false);
   }
 
   draw();
