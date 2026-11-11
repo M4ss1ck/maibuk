@@ -643,10 +643,10 @@ describe("Stamp rendering", () => {
       dash: null,
       fill: LINE_STROKE,
       opacity: 1,
-      // A 10 by 14 mm art box at a 12 mm width, its centre on the Stamp's point.
-      transform: "translate(100 50) scale(1.2) translate(-5 -7)",
+      // The marker's own 10.8mm-wide art box at a 12 mm width, centred.
+      transform: "translate(100 50) scale(1.111) translate(0 0)",
     });
-    expect(shape.d).toMatch(/^M 5 0 /);
+    expect(shape.d).toMatch(/^M -5 0 /);
   });
 
   it("turns and resizes the art with the Stamp's own numbers", () => {
@@ -654,7 +654,73 @@ describe("Stamp rendering", () => {
       sceneShapes([stamp({ transform: { x: 40, y: 30, size: 5, rotation: 90 } })], 152.4)[0]
     );
 
-    expect(shape.transform).toBe("translate(40 30) rotate(90) scale(0.5) translate(-5 -7)");
+    expect(shape.transform).toBe("translate(40 30) rotate(90) scale(0.463) translate(0 0)");
+  });
+
+  it("paints every one-colour Stamp in the Stamp's own colour", () => {
+    const oneColour = [
+      "town",
+      "village",
+      "ruin",
+      "tower",
+      "cave",
+      "bridge",
+      "battle",
+      "cartouche",
+      "border-frame",
+      "sea-monster",
+      "ship",
+      "port",
+      "marker",
+    ];
+    for (const id of oneColour) {
+      const first = pathsOf(
+        sceneShapes([stamp({ stampRef: `base:${id}`, color: "#2779a8" })], 152.4)[0]
+      );
+      expect(first.length, id).toBeGreaterThan(0);
+      for (const shape of first) {
+        expect(shape.fill, id).toBe("#2779a8");
+      }
+      const second = pathsOf(
+        sceneShapes([stamp({ stampRef: `base:${id}`, color: "#a82779" })], 152.4)[0]
+      );
+      for (const shape of second) {
+        expect(shape.fill, id).toBe("#a82779");
+      }
+    }
+  });
+
+  it("keeps the multi-colour art's own paint whatever colour the Stamp carries", () => {
+    const multiColour = [
+      "capital",
+      "city",
+      "castle",
+      "temple",
+      "volcano",
+      "mountain",
+      "tree",
+      "compass-rose",
+    ];
+    for (const id of multiColour) {
+      const ink = pathsOf(sceneShapes([stamp({ stampRef: `base:${id}` })], 152.4)[0]);
+      const other = pathsOf(
+        sceneShapes([stamp({ stampRef: `base:${id}`, color: "#a82779" })], 152.4)[0]
+      );
+      expect(ink.length, id).toBeGreaterThan(0);
+      // The art keeps every colour it owns: no shape takes the Stamp's ink.
+      expect(
+        other.map((shape) => shape.fill),
+        id
+      ).toEqual(ink.map((shape) => shape.fill));
+      expect(
+        other.map((shape) => shape.stroke),
+        id
+      ).toEqual(ink.map((shape) => shape.stroke));
+      expect(
+        other.map((shape) => shape.fill),
+        id
+      ).not.toContain("#a82779");
+    }
   });
 
   it("draws nothing for a Stamp whose art is unknown", () => {
@@ -705,7 +771,7 @@ describe("Stamp rendering", () => {
     const svg = sceneToSvg(mapWith([stamp()], "portrait"));
 
     expect(svg).toContain('<g data-element-id="stamp">');
-    expect(svg).toContain('transform="translate(100 50) scale(1.2) translate(-5 -7)"');
+    expect(svg).toContain('transform="translate(100 50) scale(1.111) translate(0 0)"');
 
     const bar = sceneToSvg(mapWith([scaleBar()], "portrait"));
     expect(bar).toContain("<text ");

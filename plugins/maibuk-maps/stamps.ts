@@ -7,16 +7,30 @@
  * the Stamp's colour, so one-colour art recolours with the Element. The scale
  * bar has no art: it is drawn from the page's scale, by `scaleBarLayout`.
  *
- * Pure functions and data, with no imports, so the model, the scene, and the
- * Frame's protocol can all read them.
+ * The pictures live in `stamp-art.ts`; this module orders and resolves them.
+ *
+ * Pure functions and data, with no imports beside its own art file, so the
+ * model, the scene, and the Frame's protocol can all read them.
  */
+
+import { STAMP_ART } from "./stamp-art";
 
 /** One path of a Stamp's art, in the art's own viewBox. */
 export interface StampPart {
   /** The SVG path `d`. */
   d: string;
-  /** The part's own colour, or null to paint it in the Stamp's colour. */
+  /**
+   * The part's own colour, `"none"` for a stroke-only detail with no fill, or
+   * null to paint it in the Stamp's colour.
+   */
   fill: string | null;
+  /**
+   * A detail stroke's own colour, or null to draw it in the Stamp's colour;
+   * absent when the part has no stroke. Strokes scale with the art.
+   */
+  stroke?: string | null;
+  /** A detail stroke's width, in the art's own units; 0 or absent draws none. */
+  strokeWidth?: number;
 }
 
 /** The art one built-in Stamp draws. */
@@ -33,23 +47,11 @@ const BASE_REF_PREFIX = "base:";
 /** The scale bar Stamp's ref: its picture comes from the page's scale, not from a path. */
 export const SCALE_BAR_STAMP_REF = `${BASE_REF_PREFIX}scale-bar`;
 
-/** A map pin: a round head on a point, drawn in one colour. */
-const MARKER: StampArt = {
-  id: "marker",
-  viewBox: [0, 0, 10, 14],
-  parts: [
-    {
-      d: "M 5 0 C 2.24 0 0 2.6 0 5.4 C 0 9.4 5 14 5 14 C 5 14 10 9.4 10 5.4 C 10 2.6 7.76 0 5 0 Z",
-      fill: null,
-    },
-  ],
-};
-
 /** The scale bar: the scene draws it from `scaleBarLayout`, so it carries no art. */
 const SCALE_BAR: StampArt = { id: "scale-bar", viewBox: [0, 0, 100, 20], parts: [] };
 
 /** The built-in Stamps, in the order the art set lists them. */
-const ARTS: readonly StampArt[] = [MARKER, SCALE_BAR];
+const ARTS: readonly StampArt[] = [...STAMP_ART, SCALE_BAR];
 
 /** The ids of the built-in Stamps, in the order the art set lists them. */
 export const BASE_STAMP_IDS: readonly string[] = ARTS.map((art) => art.id);

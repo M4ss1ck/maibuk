@@ -443,8 +443,8 @@ function artShapes(element: MapStampElement, art: StampArt): SceneShape[] {
   const transform = artTransform(element, art);
   return art.parts.map((part) => ({
     d: part.d,
-    stroke: null,
-    strokeWidth: 0,
+    stroke: part.stroke === undefined ? null : (part.stroke ?? element.color),
+    strokeWidth: part.strokeWidth ?? 0,
     dash: null,
     fill: part.fill ?? element.color,
     opacity: 1,

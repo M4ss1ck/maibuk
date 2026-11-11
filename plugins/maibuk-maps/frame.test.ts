@@ -500,7 +500,12 @@ describe("the scene message", () => {
       expect.objectContaining({
         stroke: null,
         fill: "#1f2933",
-        transform: "translate(100 50) scale(1.2) translate(-5 -7)",
+        transform: "translate(100 50) scale(1.111) translate(0 0)",
+      }),
+      expect.objectContaining({
+        stroke: null,
+        fill: "#1f2933",
+        transform: "translate(100 50) scale(1.111) translate(0 0)",
       }),
     ]);
     const labels = message.elements[1].shapes
