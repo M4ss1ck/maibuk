@@ -25,8 +25,8 @@
    * @typedef {[number, number]} MapPoint
    * @typedef {"ellipse" | "rectangle" | "polygon"} ShapeKind
    * @typedef {"select" | "pencil" | "pen" | "bucket" | "area" | "eraser" | "insert" | ShapeKind} MapTool
-   * @typedef {{ d: string, stroke: string | null, strokeWidth: number, dash: string | null, fill: string | null, fillRule?: "evenodd", opacity: number, transform?: string, clip?: string }} LineShape
-   * @typedef {{ text: string, x: number, y: number, size: number, fill: string, font?: string, anchor: "start" | "middle" | "end", transform?: string }} TextShape
+   * @typedef {{ d: string, stroke: string | null, strokeWidth: number, dash: string | null, fill: string | null, fillRule?: "evenodd", opacity: number, transform?: string, clip?: string, hitOnly?: true }} LineShape
+   * @typedef {{ text: string, x: number, y: number, size: number, fill: string, font?: string, letterSpacing?: number, halo?: { color: string, width: number }, path?: { id: string, d: string }, anchor: "start" | "middle" | "end", transform?: string }} TextShape
    * @typedef {LineShape | TextShape} SceneShape
    * @typedef {{ id: string, shapes: SceneShape[], filter: string | null, hidden: boolean, locked: boolean, selected: boolean, movable: boolean }} FrameSceneElement
    * @typedef {{ one: string, other: string }} PenDraftLabel
@@ -179,10 +179,40 @@
   }
 
   /**
+   * Reads the baseline a piece of text follows, or null when it follows none.
+   * Its id has to be as safe as a definitions id, because the text names it in
+   * an href, and it needs a path lines can follow.
+   * @param {unknown} raw
+   * @returns {{ id: string, d: string } | null}
+   */
+  function readTextPath(raw) {
+    if (typeof raw !== "object" || raw === null) return null;
+    const path = /** @type {Record<string, unknown>} */ (raw);
+    if (typeof path.id !== "string" || !FILTER_ID.test(path.id)) return null;
+    if (typeof path.d !== "string" || path.d === "") return null;
+    return { id: path.id, d: path.d };
+  }
+
+  /**
+   * Reads the halo behind a piece of text, or null when it draws none: no
+   * colour or no width is no halo, not an invisible stroke.
+   * @param {unknown} raw
+   * @returns {{ color: string, width: number } | null}
+   */
+  function readTextHalo(raw) {
+    if (typeof raw !== "object" || raw === null) return null;
+    const halo = /** @type {Record<string, unknown>} */ (raw);
+    if (typeof halo.color !== "string" || halo.color === "") return null;
+    if (!isNumber(halo.width) || halo.width <= 0) return null;
+    return { color: halo.color, width: halo.width };
+  }
+
+  /**
    * Reads one piece of text, or null when it cannot be drawn: one with no
    * place, no height, or no colour would paint an invisible nothing. The font
    * arrives with the shape, so the Frame draws the face an export does rather
-   * than whatever the renderer defaults to.
+   * than whatever the renderer defaults to, and the baseline it follows travels
+   * with it too, so a Map Label reads along its own curve.
    * @param {Record<string, unknown>} shape
    * @returns {TextShape | null}
    */
@@ -194,6 +224,8 @@
       shape.anchor === "start" || shape.anchor === "middle" || shape.anchor === "end"
         ? shape.anchor
         : "start";
+    const path = readTextPath(shape.path);
+    const halo = readTextHalo(shape.halo);
     return {
       text: String(shape.text),
       x: shape.x,
@@ -201,6 +233,9 @@
       size: shape.size,
       fill: shape.fill,
       ...(typeof shape.font === "string" && shape.font !== "" ? { font: shape.font } : {}),
+      ...(isNumber(shape.letterSpacing) ? { letterSpacing: shape.letterSpacing } : {}),
+      ...(path === null ? {} : { path }),
+      ...(halo === null ? {} : { halo }),
       anchor,
       ...(typeof shape.transform === "string" ? { transform: shape.transform } : {}),
     };
@@ -231,6 +266,8 @@
       ...(typeof shape.transform === "string" ? { transform: shape.transform } : {}),
       // A Clip Path id is only as safe as a definitions id, so it takes the same check.
       ...(typeof shape.clip === "string" && FILTER_ID.test(shape.clip) ? { clip: shape.clip } : {}),
+      // A hit-only path marks where its Element can be picked; it paints no ink.
+      ...(shape.hitOnly === true ? { hitOnly: /** @type {true} */ (true) } : {}),
     };
   }
 
@@ -534,6 +571,41 @@
   }
 
   /**
+   * The nodes one piece of text draws (#751): its halo first, when it has one,
+   * and then the text itself. Both run along the baseline the shape carries, so
+   * a Map Label's halo follows the same curve its ink does, and both sit at the
+   * shape's own point when it carries no baseline.
+   * @param {TextShape} shape
+   * @returns {any[]}
+   */
+  function textNodes(shape) {
+    const { html } = lib;
+    const content = () =>
+      shape.path === undefined
+        ? shape.text
+        : html`<textPath href="#${shape.path.id}" startOffset="50%">${shape.text}</textPath>`;
+    /** @param {{ color: string, width: number } | undefined} halo */
+    const node = (halo) => html`<text
+      class="map-line"
+      x="${n(shape.x)}"
+      y="${n(shape.y)}"
+      font-size="${n(shape.size)}"
+      font-family="${shape.font ?? undefined}"
+      letter-spacing="${shape.letterSpacing === undefined ? undefined : n(shape.letterSpacing)}"
+      fill="${halo === undefined ? shape.fill : "none"}"
+      stroke="${halo === undefined ? undefined : halo.color}"
+      stroke-width="${halo === undefined ? undefined : n(halo.width)}"
+      stroke-linejoin="${halo === undefined ? undefined : "round"}"
+      text-anchor="${shape.anchor}"
+      transform="${shape.transform ?? undefined}"
+    >
+      ${content()}
+    </text>`;
+    if (shape.halo === undefined) return [node(undefined)];
+    return [node(shape.halo), node(undefined)];
+  }
+
+  /**
    * The paths and text one Element draws, under the Soft Edge filter the scene
    * gave it (#750). The selection outline stays outside the filter, so it keeps
    * its crisp edge while the art fades.
@@ -553,21 +625,14 @@
           transform="${shape.transform ?? undefined}"
         />`
       ),
-      ...clippedArt(element.shapes, (shape) =>
-        isTextShape(shape)
-          ? html`<text
-              class="map-line"
-              x="${n(shape.x)}"
-              y="${n(shape.y)}"
-              font-size="${n(shape.size)}"
-              font-family="${shape.font ?? undefined}"
-              fill="${shape.fill}"
-              text-anchor="${shape.anchor}"
-              transform="${shape.transform ?? undefined}"
-            >
-              ${shape.text}
-            </text>`
-          : html`<path
+      // The ink: every path the Element paints, then its text. A hit-only path,
+      // such as a Map Label's baseline, is a target and never ink of its own.
+      ...clippedArt(
+        element.shapes.filter((shape) => isTextShape(shape) || !shape.hitOnly),
+        (shape) =>
+          isTextShape(shape)
+            ? textNodes(shape)
+            : html`<path
               class="map-line"
               d="${shape.d}"
               stroke="${shape.stroke ?? "none"}"

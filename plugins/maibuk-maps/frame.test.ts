@@ -480,6 +480,87 @@ describe("Stamp shapes", () => {
   });
 });
 
+describe("Map Label shapes", () => {
+  /** The baseline the test's label follows: 40 mm wide, its middle lifted 8 mm. */
+  const BASELINE = "M 0 30 Q 20 14 40 30";
+
+  /** The label's selectable area, which paints no ink of its own. */
+  const labelHit = () =>
+    shape({ d: BASELINE, stroke: null, strokeWidth: 0, fill: null, hitOnly: true });
+
+  /** The label's text, following `BASELINE`, with the halo it is drawn over. */
+  const labelText = (overrides: Record<string, unknown> = {}) => ({
+    text: "The Reach",
+    x: 20,
+    y: 30,
+    size: 6,
+    fill: "#1f2933",
+    font: "IM Fell English",
+    anchor: "middle",
+    letterSpacing: 0.4,
+    halo: { color: "#d7e6ec", width: 0.8 },
+    path: { id: "label-path-a1", d: BASELINE },
+    ...overrides,
+  });
+
+  it("draws a label's text along its baseline, which the defs define", () => {
+    frame = loadFrame();
+    frame.scene({
+      defs: [`<path id="label-path-a1" d="${BASELINE}"/>`],
+      elements: [sceneElement({ shapes: [labelHit(), labelText()] })],
+    });
+
+    expect(document.querySelector("defs path#label-path-a1")?.getAttribute("d")).toBe(BASELINE);
+    const text = document.querySelector("text.map-line");
+    expect(text?.getAttribute("text-anchor")).toBe("middle");
+    expect(text?.getAttribute("font-family")).toBe("IM Fell English");
+    expect(text?.getAttribute("letter-spacing")).toBe("0.4");
+    expect(text?.querySelector("textPath")?.getAttribute("href")).toBe("#label-path-a1");
+    expect(text?.querySelector("textPath")?.getAttribute("startOffset")).toBe("50%");
+    expect(text?.textContent).toBe("The Reach");
+  });
+
+  it("draws the halo first, a stroked copy of the same text with no fill", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [sceneElement({ shapes: [labelHit(), labelText()] })] });
+
+    const texts = Array.from(document.querySelectorAll("text.map-line"));
+    expect(texts).toHaveLength(2);
+    expect(texts[0].getAttribute("stroke")).toBe("#d7e6ec");
+    expect(texts[0].getAttribute("fill")).toBe("none");
+    expect(texts[0].getAttribute("stroke-width")).toBe("0.8");
+    expect(texts[0].querySelector("textPath")).not.toBeNull();
+    expect(texts[1].getAttribute("stroke")).toBeNull();
+    expect(texts[1].getAttribute("fill")).toBe("#1f2933");
+  });
+
+  it("hit-tests a label by its baseline, which the selection outlines", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [sceneElement({ selected: true, shapes: [labelHit(), labelText()] })],
+    });
+
+    expect(document.querySelector("path.map-hit")?.getAttribute("d")).toBe(BASELINE);
+    // The hit path is a pointer target, not ink: the label's art is its text.
+    expect(document.querySelectorAll("path.map-line")).toHaveLength(0);
+    expect(document.querySelector("path.map-selection")?.getAttribute("d")).toBe(BASELINE);
+  });
+
+  it("draws a label without its baseline when the scene names an id it could write into", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [
+        sceneElement({
+          shapes: [labelText({ path: { id: 'x" onload="alert(1)', d: BASELINE } })],
+        }),
+      ],
+    });
+
+    expect(document.querySelector("textPath")).toBeNull();
+    expect(document.querySelector("text.map-line")?.textContent).toBe("The Reach");
+  });
+});
+
 describe("the scene message", () => {
   it("sends the shapes the list preview draws a Map Line from", () => {
     const map = {

@@ -212,6 +212,79 @@ export const DEFAULT_STAMP_COLOR = LINE_STROKE;
 /** The reading a new scale bar takes: the page's full width stands for 1000 km. */
 export const DEFAULT_STAMP_SCALE: MapStampScale = { unit: "km", span: 1000 };
 
+/**
+ * The bundled fonts a Map Label can take, by id (#751); every one is a SIL OFL
+ * face the Plugin ships, so the Frame and an export draw the same letterforms
+ * with nothing loaded from the network.
+ */
+export const MAP_LABEL_FONTS = [
+  "im-fell-english",
+  "cinzel",
+  "uncial-antiqua",
+  "medieval-sharp",
+] as const;
+
+/** The font ids a Map Label takes: the bundled ones, plus `pdf` for the author's PDF Font. */
+export type MapLabelFont = (typeof MAP_LABEL_FONTS)[number] | "pdf";
+
+/** The family name each font id draws in, so the Frame and an export ask for the same face. */
+export const MAP_LABEL_FONT_FAMILIES: Readonly<Record<MapLabelFont, string>> = {
+  "im-fell-english": "IM Fell English",
+  cinzel: "Cinzel",
+  "uncial-antiqua": "Uncial Antiqua",
+  "medieval-sharp": "MedievalSharp",
+  pdf: "Maibuk PDF Font",
+};
+
+/** Every font id a Map Label takes, bundled and PDF alike. */
+const LABEL_FONT_IDS: readonly string[] = [...MAP_LABEL_FONTS, "pdf"];
+
+/** The font a new Map Label takes, and the one an id this build does not know reads as. */
+export const DEFAULT_LABEL_FONT: MapLabelFont = "im-fell-english";
+
+/** The baseline a new Map Label starts with, in page millimetres. */
+export const DEFAULT_LABEL_WIDTH_MM = 40;
+
+/** The cap size a new Map Label starts at, in page millimetres. */
+export const DEFAULT_LABEL_SIZE_MM = 6;
+
+/** The halo a new Map Label starts with, as a stroke width in page millimetres. */
+export const DEFAULT_LABEL_HALO_MM = 0.8;
+
+/**
+ * A Map Label (#751): a name written on the Map. Its text runs along a baseline
+ * `width` millimetres long, centred on (x, y) and turned by `rotation`; `bend`
+ * lifts the middle of that baseline toward the top of the page, so a name can
+ * arch over the land it names.
+ */
+export interface MapLabelElement extends MapElementBase {
+  kind: "label";
+  /** The name as the author wrote it. */
+  text: string;
+  /** The centre of the baseline, in page millimetres. */
+  x: number;
+  y: number;
+  /** How far the baseline turns, in degrees clockwise about (x, y). */
+  rotation: number;
+  /** The baseline chord's length, in page millimetres. */
+  width: number;
+  /**
+   * The signed sagitta of the baseline, in page millimetres: how far its middle
+   * leaves the chord, toward the top of the page when positive.
+   */
+  bend: number;
+  /** The font id it draws in, from `MAP_LABEL_FONTS`, or `pdf` for the PDF Font. */
+  font: string;
+  /** The cap size, which is the text's font size, in page millimetres. */
+  size: number;
+  /** The room each letter takes beyond its own width, in page millimetres. */
+  letterSpacing: number;
+  /** The ink it draws in; absent takes the Map Style's label colour, else the map ink. */
+  color?: string;
+  /** The halo behind the text, as a stroke width in page millimetres; 0 draws none. */
+  halo: number;
+}
+
 /** The exact Shapes a Map Line can be (#747). */
 export const SHAPE_KINDS = ["ellipse", "rectangle", "polygon"] as const;
 export type ShapeKind = (typeof SHAPE_KINDS)[number];
@@ -269,10 +342,15 @@ export function curvedSegments(pointCount: number, closed: boolean): boolean[] {
 
 /** Every other Element kind, whose geometry lands with its own ticket. */
 export interface MapOtherElement extends MapElementBase {
-  kind: Exclude<MapElementKind, "line" | "fill" | "stamp">;
+  kind: Exclude<MapElementKind, "line" | "fill" | "stamp" | "label">;
 }
 
-export type MapElement = MapLineElement | MapFillElement | MapStampElement | MapOtherElement;
+export type MapElement =
+  | MapLineElement
+  | MapFillElement
+  | MapStampElement
+  | MapLabelElement
+  | MapOtherElement;
 
 /**
  * Whether an Element is a Fill that covers its own outline (#750), rather than
@@ -386,6 +464,16 @@ export function isShapeKind(value: unknown): value is ShapeKind {
   return typeof value === "string" && (SHAPE_KINDS as readonly string[]).includes(value);
 }
 
+/** Whether a value names a font a Map Label can take. */
+export function isLabelFont(value: unknown): value is MapLabelFont {
+  return typeof value === "string" && LABEL_FONT_IDS.includes(value);
+}
+
+/** The family name a font id draws in; an id this build does not know draws IM Fell English. */
+export function labelFontFamily(font: string): string {
+  return MAP_LABEL_FONT_FAMILIES[isLabelFont(font) ? font : DEFAULT_LABEL_FONT];
+}
+
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
@@ -483,6 +571,24 @@ function isFillContent(value: unknown): boolean {
   );
 }
 
+/**
+ * Whether a Map Label's fields are all present and well formed. A font id this
+ * build does not know is not malformed: it reads back as IM Fell English, so a
+ * document written by a build with more fonts still opens.
+ */
+function isLabelFields(element: Record<string, unknown>): boolean {
+  if (typeof element.text !== "string") return false;
+  if (!isFiniteNumber(element.x) || !isFiniteNumber(element.y)) return false;
+  if (!isFiniteNumber(element.rotation)) return false;
+  if (!isFiniteNumber(element.width) || element.width <= 0) return false;
+  if (!isFiniteNumber(element.bend)) return false;
+  if (element.font !== undefined && typeof element.font !== "string") return false;
+  if (!isFiniteNumber(element.size) || element.size <= 0) return false;
+  if (!isFiniteNumber(element.letterSpacing)) return false;
+  if (!isFiniteNumber(element.halo) || element.halo < 0) return false;
+  return element.color === undefined || typeof element.color === "string";
+}
+
 function isMapElement(value: unknown): value is MapElement {
   if (typeof value !== "object" || value === null) return false;
   const element = value as Record<string, unknown>;
@@ -514,6 +620,7 @@ function isMapElement(value: unknown): value is MapElement {
       (element.scale === undefined || isStampScale(element.scale))
     );
   }
+  if (element.kind === "label") return isLabelFields(element);
   return true;
 }
 
@@ -587,6 +694,78 @@ export function newStamp(input: NewStamp): MapStampElement {
     color: input.color ?? DEFAULT_STAMP_COLOR,
     ...(scale === undefined ? {} : { scale }),
   };
+}
+
+/** A new Map Label's fields; its id and name belong to whoever places it. */
+export interface NewLabel {
+  id: string;
+  name: string;
+  /** The name to write, in the caller's language: the model supplies no wording. */
+  text: string;
+  /** The centre of the baseline. */
+  point: MapPoint;
+  width?: number;
+  bend?: number;
+  rotation?: number;
+  font?: string;
+  size?: number;
+  letterSpacing?: number;
+  color?: string;
+  halo?: number;
+}
+
+/**
+ * A Map Label writing `text` along a baseline centred on `point`: upright and
+ * straight, 40 mm long, with a halo, in the bundled IM Fell English.
+ */
+export function newLabel(input: NewLabel): MapLabelElement {
+  return {
+    id: input.id,
+    kind: "label",
+    name: input.name,
+    hidden: false,
+    locked: false,
+    text: input.text,
+    x: input.point[0],
+    y: input.point[1],
+    rotation: input.rotation ?? 0,
+    width: input.width ?? DEFAULT_LABEL_WIDTH_MM,
+    bend: input.bend ?? 0,
+    font: input.font ?? DEFAULT_LABEL_FONT,
+    size: input.size ?? DEFAULT_LABEL_SIZE_MM,
+    letterSpacing: input.letterSpacing ?? 0,
+    halo: input.halo ?? DEFAULT_LABEL_HALO_MM,
+    ...(input.color === undefined ? {} : { color: input.color }),
+  };
+}
+
+/** A coordinate for an SVG path, with two decimals at most. */
+function roundedPathCoordinate(value: number): string {
+  return String(Math.round(value * 100) / 100);
+}
+
+/**
+ * The baseline a Map Label's text follows (#751), as one quadratic SVG path in
+ * page millimetres: the chord, `width` long, centred on (x, y) and turned by
+ * `rotation`, with its middle bowed `bend` millimetres toward the top of the
+ * page. A quadratic reaches only half way to its control point, so the control
+ * sits twice the bend off the chord and the apex lands where the author put it.
+ * A bend of 0 keeps the control on the chord's middle, which draws straight, so
+ * a straight label and a curved one take the same path.
+ */
+export function labelBaselinePath(label: MapLabelElement): string {
+  const half = label.width / 2;
+  const angle = (label.rotation * Math.PI) / 180;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const place = (dx: number, dy: number): MapPoint => [
+    label.x + dx * cos - dy * sin,
+    label.y + dx * sin + dy * cos,
+  ];
+  const start = place(-half, 0);
+  const control = place(0, -2 * label.bend);
+  const end = place(half, 0);
+  return `M ${roundedPathCoordinate(start[0])} ${roundedPathCoordinate(start[1])} Q ${roundedPathCoordinate(control[0])} ${roundedPathCoordinate(control[1])} ${roundedPathCoordinate(end[0])} ${roundedPathCoordinate(end[1])}`;
 }
 
 /** The trimmed name, or a throw the page shows as "Give the Map a name". */
@@ -669,6 +848,15 @@ export function normalizeSoftEdge<T extends MapLineElement | MapFillElement>(ele
   return sharp;
 }
 
+/**
+ * A Map Label read from a document: a font id this build does not know draws
+ * IM Fell English, and every other field reads as it was stored.
+ */
+function normalizeLabel(label: MapLabelElement): MapLabelElement {
+  if (isLabelFont(label.font)) return label;
+  return { ...label, font: DEFAULT_LABEL_FONT };
+}
+
 /** A whole document with every Element in its current shape, for reading old Maps. */
 function normalizeDocument(map: MapDocument): MapDocument {
   return {
@@ -676,6 +864,7 @@ function normalizeDocument(map: MapDocument): MapDocument {
     elements: map.elements.map((element) => {
       if (element.kind === "line") return normalizeSoftEdge(normalizeLine(element));
       if (element.kind === "fill") return normalizeSoftEdge(element);
+      if (element.kind === "label") return normalizeLabel(element);
       return element;
     }),
   };

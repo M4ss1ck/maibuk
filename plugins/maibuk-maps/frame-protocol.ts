@@ -37,7 +37,9 @@ export interface FrameSceneElement {
   /**
    * The paths and text the Frame draws, from `sceneShapes`; empty for an
    * Element with nothing to draw yet. A path carries the Clip Path id that
-   * keeps it inside its Fill's area when it is a scattered Stamp.
+   * keeps it inside its Fill's area when it is a scattered Stamp, and a
+   * hit-only path, such as a Map Label's baseline, only marks where its Element
+   * can be picked.
    */
   shapes: SceneShape[];
   /** The Soft Edge filter the Element draws with, or null for a sharp edge. */

@@ -24,11 +24,14 @@ import {
   DEFAULT_STAMP_SCALE,
   LINE_STROKE,
   isAreaFill,
+  labelBaselinePath,
+  labelFontFamily,
   type MapDocument,
   type MapElement,
   type MapFillElement,
   type MapFillOutline,
   type MapFillScatter,
+  type MapLabelElement,
   type MapLineElement,
   type MapPoint,
   type MapStampElement,
@@ -154,6 +157,11 @@ export interface LineShape {
   transform?: string;
   /** The Clip Path id that keeps the shape inside its Element's area, when it has one. */
   clip?: string;
+  /**
+   * Whether the shape only marks where its Element can be picked, painting no
+   * ink: a Map Label's baseline, whose text sits on top of it.
+   */
+  hitOnly?: true;
 }
 
 /**
@@ -176,6 +184,24 @@ export interface TextShape {
   anchor: "start" | "middle" | "end";
   /** An SVG transform, when the text turns with its Element. */
   transform?: string;
+  /** The baseline the text runs along, as a Map Label's does; absent draws it at `x`, `y`. */
+  path?: TextPathShape;
+  /** The room each letter takes beyond its own width, in page millimetres. */
+  letterSpacing?: number;
+  /** The halo drawn behind the text, so it reads over drawn land and water. */
+  halo?: TextHalo;
+}
+
+/** The path a piece of text follows, and the definitions id it is drawn under. */
+export interface TextPathShape {
+  id: string;
+  d: string;
+}
+
+/** The stroke drawn behind a piece of text: its colour and its width in page millimetres. */
+export interface TextHalo {
+  color: string;
+  width: number;
 }
 
 /** One primitive an Element draws: a path to stroke or fill, or a piece of text. */
@@ -673,6 +699,46 @@ function stampShapes(element: MapStampElement, pageWidthMm: number): SceneShape[
   return artShapes(art, artTransform(element.transform, art), element.color);
 }
 
+/** The id a Map Label's baseline path takes, from the Element's own id. */
+function labelPathId(elementId: string): string {
+  return `label-path-${seedFor(elementId).toString(16)}`;
+}
+
+/**
+ * The colour a Map Label's halo is drawn in: the paper the page is drawn on, so
+ * the halo hides the land and water behind the text instead of adding a colour
+ * of its own.
+ */
+const LABEL_HALO_COLOR = EMPTY_MAP_COLOR;
+
+/**
+ * The primitives one Map Label draws (#751): its text running along the
+ * baseline, the halo behind that text, and the baseline itself as a hit path the
+ * Frame picks the Element by. Both serializers draw the text over the baseline
+ * the definitions hold, so a straight label and a curved one take one path.
+ */
+function labelShapes(element: MapLabelElement, collector: SceneCollector): SceneShape[] {
+  const d = labelBaselinePath(element);
+  const id = labelPathId(element.id);
+  collector.defs.push(`<path id="${id}" d="${escapeAttribute(d)}"/>`);
+  const text: TextShape = {
+    text: element.text,
+    x: element.x,
+    y: element.y,
+    size: element.size,
+    fill: element.color ?? LINE_STROKE,
+    font: labelFontFamily(element.font),
+    anchor: "middle",
+    path: { id, d },
+    ...(element.letterSpacing === 0 ? {} : { letterSpacing: element.letterSpacing }),
+    ...(element.halo > 0 ? { halo: { color: LABEL_HALO_COLOR, width: element.halo } } : {}),
+  };
+  return [
+    { d, stroke: null, strokeWidth: 0, dash: null, fill: null, opacity: 1, hitOnly: true },
+    text,
+  ];
+}
+
 /** The render primitives one Element is drawn from: a line's, a fill's content, or a Stamp's picture. */
 function elementShapes(
   element: MapElement,
@@ -686,6 +752,7 @@ function elementShapes(
     return area === null ? [] : fillShapes(element, area, pageWidthMm, pageHeightMm, collector);
   }
   if (element.kind === "stamp") return stampShapes(element, pageWidthMm);
+  if (element.kind === "label") return labelShapes(element, collector);
   return [];
 }
 
@@ -827,6 +894,19 @@ function shapePath(shape: LineShape): string {
   return shape.clip === undefined ? path : `<g clip-path="url(#${shape.clip})">${path}</g>`;
 }
 
+/** Whether a shape only marks where its Element can be picked, painting no ink. */
+function isHitOnlyShape(shape: SceneShape): boolean {
+  return !isTextShape(shape) && shape.hitOnly === true;
+}
+
+/** The text's own markup, and the baseline path it follows when it has one. */
+function textContent(shape: TextShape): string {
+  if (shape.path === undefined) return escapeAttribute(shape.text);
+  return `<textPath href="#${escapeAttribute(shape.path.id)}" startOffset="50%">${escapeAttribute(
+    shape.text
+  )}</textPath>`;
+}
+
 /** One piece of text as SVG, with only the attributes it needs. */
 function shapeText(shape: TextShape): string {
   const attributes = [
@@ -834,13 +914,29 @@ function shapeText(shape: TextShape): string {
     `y="${roundedMm(shape.y)}"`,
     `font-size="${roundedMm(shape.size)}"`,
     `font-family="${escapeAttribute(shape.font)}"`,
-    `fill="${escapeAttribute(shape.fill)}"`,
-    `text-anchor="${shape.anchor}"`,
   ];
+  if (shape.letterSpacing !== undefined) {
+    attributes.push(`letter-spacing="${roundedMm(shape.letterSpacing)}"`);
+  }
+  attributes.push(`text-anchor="${shape.anchor}"`);
   if (shape.transform !== undefined) {
     attributes.push(`transform="${escapeAttribute(shape.transform)}"`);
   }
-  return `<text ${attributes.join(" ")}>${escapeAttribute(shape.text)}</text>`;
+  const body = textContent(shape);
+  const fill = `fill="${escapeAttribute(shape.fill)}"`;
+  // The halo is a copy of the text, written first and stroked alone, so the ink
+  // sits on top of it in the same place, with the same letterforms.
+  const halo =
+    shape.halo === undefined
+      ? ""
+      : `<text ${[
+          ...attributes,
+          'fill="none"',
+          `stroke="${escapeAttribute(shape.halo.color)}"`,
+          `stroke-width="${roundedMm(shape.halo.width)}"`,
+          'stroke-linejoin="round"',
+        ].join(" ")}>${body}</text>`;
+  return `${halo}<text ${[...attributes, fill].join(" ")}>${body}</text>`;
 }
 
 /** One Element as a group of primitives, marked when it is the selection and blurred when it has a Soft Edge. */
@@ -853,9 +949,9 @@ function elementGroup(
   const attributes = [`data-element-id="${escapeAttribute(element.id)}"`];
   if (selected) attributes.push('data-selected="true"');
   if (softEdgeFilterId !== null) attributes.push(`filter="url(#${softEdgeFilterId})"`);
-  const primitives = shapes.map((shape) =>
-    isTextShape(shape) ? shapeText(shape) : shapePath(shape)
-  );
+  const primitives = shapes
+    .filter((shape) => !isHitOnlyShape(shape))
+    .map((shape) => (isTextShape(shape) ? shapeText(shape) : shapePath(shape)));
   return `<g ${attributes.join(" ")}>${primitives.join("")}</g>`;
 }
 
@@ -944,12 +1040,17 @@ export function setLocked(
 
 /**
  * Whether the move Commands may move an Element: an unlocked Map Line, Stamp,
- * or Area Fill, the Elements `moveElement` knows how to shift. A Select drag
- * also needs it shown (#766), since a hidden Element is never drawn to press.
+ * Map Label, or Area Fill, the Elements `moveElement` knows how to shift. A
+ * Select drag also needs it shown (#766), since a hidden Element is never drawn
+ * to press.
  */
 export function canMove(element: MapElement): boolean {
   return (
-    !element.locked && (element.kind === "line" || element.kind === "stamp" || isAreaFill(element))
+    !element.locked &&
+    (element.kind === "line" ||
+      element.kind === "stamp" ||
+      element.kind === "label" ||
+      isAreaFill(element))
   );
 }
 
@@ -977,6 +1078,9 @@ export function moveElement(
         },
       };
     }
+    // A Map Label's baseline is centred on its own point, so the point is all
+    // that moves: its width, bend, and turn stay as the author set them.
+    if (element.kind === "label") return { ...element, x: element.x + dx, y: element.y + dy };
     if (element.kind === "fill") {
       const { outline } = element;
       if (outline === undefined) return element;

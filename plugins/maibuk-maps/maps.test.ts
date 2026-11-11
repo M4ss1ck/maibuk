@@ -9,20 +9,29 @@ import { describe, expect, it } from "vitest";
 import {
   DATA_VERSION,
   DEFAULT_FILL_COLOR,
+  DEFAULT_LABEL_FONT,
+  DEFAULT_LABEL_HALO_MM,
+  DEFAULT_LABEL_SIZE_MM,
+  DEFAULT_LABEL_WIDTH_MM,
   DEFAULT_SCALE_BAR_SIZE_MM,
   DEFAULT_STAMP_COLOR,
   DEFAULT_STAMP_SIZE_MM,
   INDEX_KEY,
   LINE_STROKE,
   LINE_STYLE_DEFAULT_ENCLOSES,
+  MAP_LABEL_FONTS,
+  MAP_LABEL_FONT_FAMILIES,
   createMapStore,
+  labelBaselinePath,
   mapKey,
   mapPreview,
   migrateMapsData,
+  newLabel,
   newStamp,
   type MapDocument,
   type MapElement,
   type MapFillElement,
+  type MapLabelElement,
   type MapLineElement,
   type MapStampElement,
   type MapStorage,
@@ -861,6 +870,148 @@ describe("Map Stamps", () => {
     ]) {
       expect(await loadElements([element])).toBeNull();
     }
+  });
+});
+
+describe("Map Labels", () => {
+  /** A Map Label reading "The Reach" at (20, 30), 40 mm wide, upright, and flat. */
+  function label(overrides: Partial<MapLabelElement> = {}): MapLabelElement {
+    return {
+      id: "reach",
+      kind: "label",
+      name: "The Reach",
+      hidden: false,
+      locked: false,
+      text: "The Reach",
+      x: 20,
+      y: 30,
+      rotation: 0,
+      width: DEFAULT_LABEL_WIDTH_MM,
+      bend: 0,
+      font: DEFAULT_LABEL_FONT,
+      size: DEFAULT_LABEL_SIZE_MM,
+      letterSpacing: 0,
+      halo: DEFAULT_LABEL_HALO_MM,
+      ...overrides,
+    };
+  }
+
+  /** The Elements a stored Map holding `elements` loads, or null when it refuses them. */
+  async function loadElements(elements: unknown[]): Promise<MapElement[] | null> {
+    const memory = memoryStorage();
+    const store = storeOver(memory.storage);
+    await store.create({ name: "Labels", bookId: null, preset: "square" });
+    const created = memory.values.get(mapKey("m1")) as MapDocument;
+    await memory.storage.set({ key: mapKey("m1"), value: { ...created, elements } });
+    const doc = await store.load("m1");
+    return doc === null ? null : doc.elements;
+  }
+
+  it("gives a new Label the text its caller localized, and the default shape", () => {
+    const created = newLabel({
+      id: "reach",
+      name: "The Reach",
+      text: "El Alcance",
+      point: [20, 30],
+    });
+
+    // The model never names the label in English: the caller supplies the text.
+    expect(created).toEqual(label({ text: "El Alcance" }));
+  });
+
+  it("keeps a Label's text, shape, font, spacing, halo, and colour through a save", async () => {
+    const stored = label({
+      id: "curved",
+      text: "The Whisperwood",
+      x: 60,
+      y: 90,
+      rotation: 15,
+      width: 60,
+      bend: 6,
+      font: "cinzel",
+      size: 4,
+      letterSpacing: 0.4,
+      halo: 1.5,
+      color: "#8b1a1a",
+    });
+
+    expect(await loadElements([stored])).toEqual([stored]);
+  });
+
+  it("keeps a Label with no colour override and no halo", async () => {
+    const plain = label({ halo: 0 });
+
+    const [loaded] = (await loadElements([plain])) as MapLabelElement[];
+    expect(loaded.color).toBeUndefined();
+    expect(loaded.halo).toBe(0);
+  });
+
+  it("rejects a Label with no text, no width, or a bend that is not a number", async () => {
+    const base = label();
+
+    for (const element of [
+      { ...base, text: undefined },
+      { ...base, text: null },
+      { ...base, text: 7 },
+      { ...base, width: 0 },
+      { ...base, width: -10 },
+      { ...base, width: "40" },
+      { ...base, bend: null },
+      { ...base, bend: "6" },
+      { ...base, bend: Number.NaN },
+      { ...base, x: Number.NaN },
+      { ...base, y: "30" },
+      { ...base, rotation: "15" },
+      { ...base, size: 0 },
+      { ...base, letterSpacing: null },
+      { ...base, halo: -1 },
+      { ...base, color: 7 },
+      { ...base, font: 7 },
+    ]) {
+      expect(await loadElements([element])).toBeNull();
+    }
+  });
+
+  it("normalizes an unknown font to IM Fell English, and keeps the PDF Font", async () => {
+    const [unknown, pdf] = (await loadElements([
+      label({ font: "papyrus" }),
+      label({ id: "pdf", font: "pdf" }),
+    ])) as MapLabelElement[];
+
+    expect(unknown.font).toBe(DEFAULT_LABEL_FONT);
+    expect(pdf.font).toBe("pdf");
+  });
+
+  it("names the family each font id draws in", () => {
+    expect(MAP_LABEL_FONTS).toEqual([
+      "im-fell-english",
+      "cinzel",
+      "uncial-antiqua",
+      "medieval-sharp",
+    ]);
+    expect(MAP_LABEL_FONT_FAMILIES).toEqual({
+      "im-fell-english": "IM Fell English",
+      cinzel: "Cinzel",
+      "uncial-antiqua": "Uncial Antiqua",
+      "medieval-sharp": "MedievalSharp",
+      pdf: "Maibuk PDF Font",
+    });
+  });
+
+  it("draws a label's baseline as a quadratic, bowed by its bend", () => {
+    expect(labelBaselinePath(label())).toBe("M 0 30 Q 20 30 40 30");
+    // A bend of 8 lifts the apex 8 mm above the chord, so the control point,
+    // which a quadratic only reaches half way to, sits 16 mm above it.
+    expect(labelBaselinePath(label({ bend: 8 }))).toBe("M 0 30 Q 20 14 40 30");
+    expect(labelBaselinePath(label({ bend: -3 }))).toBe("M 0 30 Q 20 36 40 30");
+  });
+
+  it("turns the baseline about the label's centre", () => {
+    // A quarter turn clockwise: the chord runs down the page from the centre,
+    // the label's right-hand end becomes its bottom end, and its arch, which
+    // lifts toward -y upright, now lifts toward +x.
+    expect(labelBaselinePath(label({ rotation: 90 }))).toBe("M 20 10 Q 20 30 20 50");
+    expect(labelBaselinePath(label({ rotation: 90, bend: 8 }))).toBe("M 20 10 Q 36 30 20 50");
   });
 });
 

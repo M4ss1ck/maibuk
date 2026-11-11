@@ -6,11 +6,16 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_LABEL_FONT,
+  DEFAULT_LABEL_HALO_MM,
+  DEFAULT_LABEL_SIZE_MM,
+  DEFAULT_LABEL_WIDTH_MM,
   LINE_STROKE,
   type MapDocument,
   type MapElement,
   type MapFillElement,
   type MapFillOutline,
+  type MapLabelElement,
   type MapLineElement,
   type MapPoint,
   type MapStampElement,
@@ -620,9 +625,9 @@ describe("sceneToSvg", () => {
 
   it("ignores an element kind that has no geometry yet", () => {
     const svg = sceneToSvg(
-      mapWith([{ id: "label-1", kind: "label", name: "The Reach", hidden: false, locked: false }])
+      mapWith([{ id: "image-1", kind: "image", name: "Scan", hidden: false, locked: false }])
     );
-    expect(svg).not.toContain("label-1");
+    expect(svg).not.toContain("image-1");
   });
 });
 
@@ -820,6 +825,136 @@ describe("Stamp rendering", () => {
     // The one font constant, escaped for the attribute it lands in, so an
     // exported SVG draws the frame's face instead of the renderer's default.
     expect(bar).toContain(`font-family="${TEXT_FONT_FAMILY.replace(/'/g, "&apos;")}"`);
+  });
+});
+
+describe("Map Label rendering", () => {
+  /** A Map Label reading "The Reach" 40 mm wide at (20, 30), upright and flat. */
+  function label(overrides: Partial<MapLabelElement> = {}): MapLabelElement {
+    return {
+      id: "reach",
+      kind: "label",
+      name: "The Reach",
+      hidden: false,
+      locked: false,
+      text: "The Reach",
+      x: 20,
+      y: 30,
+      rotation: 0,
+      width: DEFAULT_LABEL_WIDTH_MM,
+      bend: 0,
+      font: DEFAULT_LABEL_FONT,
+      size: DEFAULT_LABEL_SIZE_MM,
+      letterSpacing: 0,
+      halo: DEFAULT_LABEL_HALO_MM,
+      ...overrides,
+    };
+  }
+
+  /** The baseline path an SVG defines for a label, and the id its text follows it by. */
+  function baselineOf(svg: string): { id: string; d: string } {
+    const match = /<path id="(label-path-[0-9a-f]+)" d="([^"]+)"\/>/.exec(svg);
+    if (match === null) throw new Error("the label wrote no baseline path");
+    return { id: match[1], d: match[2] };
+  }
+
+  it("writes a curved label's baseline as a quadratic and its text along it", () => {
+    const svg = sceneToSvg(mapWith([label({ bend: 8 })]));
+    const baseline = baselineOf(svg);
+
+    // The bend of 8 lifts the middle of the chord 8 mm, so the curve's control
+    // point, which it only reaches half way to, sits 16 mm up.
+    expect(baseline.d).toBe("M 0 30 Q 20 14 40 30");
+    expect(svg).toContain(
+      `<textPath href="#${baseline.id}" startOffset="50%">The Reach</textPath>`
+    );
+  });
+
+  it("puts a straight label on its baseline path too", () => {
+    const svg = sceneToSvg(mapWith([label()]));
+    const baseline = baselineOf(svg);
+
+    // A bend of 0 keeps the control point on the chord's middle, so the curve
+    // draws straight, and one code path draws every label.
+    expect(baseline.d).toBe("M 0 30 Q 20 30 40 30");
+    expect(svg).toContain(`href="#${baseline.id}"`);
+  });
+
+  it("names each label's baseline after its own Element", () => {
+    const svg = sceneToSvg(mapWith([label({ id: "one" }), label({ id: "two", x: 100 })]));
+    const ids = [...svg.matchAll(/<path id="(label-path-[0-9a-f]+)"/g)].map(([, id]) => id);
+
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).not.toBe(ids[1]);
+    for (const id of ids) expect(svg).toContain(`href="#${id}"`);
+  });
+
+  it("draws the label in its font, its colour, and its letter spacing", () => {
+    const svg = sceneToSvg(
+      mapWith([label({ font: "cinzel", color: "#8b1a1a", letterSpacing: 0.4 })])
+    );
+
+    expect(svg).toContain('font-family="Cinzel"');
+    expect(svg).toContain('fill="#8b1a1a"');
+    expect(svg).toContain('letter-spacing="0.4"');
+    expect(svg).toContain('text-anchor="middle"');
+
+    // With no colour of its own a label draws in the map ink, and no spacing
+    // is written at all.
+    const plain = sceneToSvg(mapWith([label()]));
+    expect(plain).toContain('font-family="IM Fell English"');
+    expect(plain).toContain(`fill="${LINE_STROKE}"`);
+    expect(plain).not.toContain("letter-spacing");
+  });
+
+  it("draws the PDF Font by its family name", () => {
+    const svg = sceneToSvg(mapWith([label({ font: "pdf" })]));
+
+    expect(svg).toContain('font-family="Maibuk PDF Font"');
+  });
+
+  it("draws a halo copy of the text behind it, in the page colour", () => {
+    const svg = sceneToSvg(mapWith([label({ halo: 0.8 })]));
+
+    expect(svg.match(/<text /g)).toHaveLength(2);
+    expect(svg).toContain(`stroke="${EMPTY_MAP_COLOR}"`);
+    expect(svg).toContain('stroke-width="0.8"');
+    expect(svg).toContain('stroke-linejoin="round"');
+    // The halo is written first, unfilled, so the ink sits on top of it.
+    expect(svg.indexOf('fill="none"')).toBeLessThan(svg.indexOf(`fill="${LINE_STROKE}"`));
+    expect((sceneToSvg(mapWith([label({ halo: 0 })])).match(/<text /g) ?? []).length).toBe(1);
+  });
+
+  it("keeps the label's hit path for the Frame, and out of the picture", () => {
+    const [hit, text] = sceneShapes([label({ bend: 8 })], 203.2, 203.2)[0];
+
+    expect(hit).toMatchObject({
+      d: "M 0 30 Q 20 14 40 30",
+      hitOnly: true,
+      stroke: null,
+      fill: null,
+    });
+    expect(text).toMatchObject({ text: "The Reach", anchor: "middle", size: 6 });
+    // The exported picture holds the baseline definition alone: the hit path is
+    // a pointer target for the Frame, never ink on the page.
+    expect(sceneToSvg(mapWith([label()])).match(/<path /g)).toHaveLength(1);
+  });
+
+  it("moves a Label by shifting its centre", () => {
+    const reach = label();
+
+    expect(canMove(reach)).toBe(true);
+    expect(moveElement([reach], "reach", 3, -2)[0]).toMatchObject({ x: 23, y: 28 });
+
+    const locked = { ...reach, locked: true };
+    expect(canMove(locked)).toBe(false);
+    expect(moveElement([locked], "reach", 3, -2)[0]).toBe(locked);
+  });
+
+  it("XML-escapes a label's text", () => {
+    const svg = sceneToSvg(mapWith([label({ text: 'Ash & <Iron> "Keep"' })]));
+
+    expect(svg).toContain(">Ash &amp; &lt;Iron&gt; &quot;Keep&quot;</textPath>");
   });
 });
 

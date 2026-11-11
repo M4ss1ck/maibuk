@@ -26,6 +26,7 @@ import {
   DEFAULT_STAMP_COLOR,
   DEFAULT_STAMP_SIZE_MM,
   MIN_STAMP_SIZE_MM,
+  newLabel,
   type MapDocument,
   type MapElement,
   type MapFillContent,
@@ -659,7 +660,7 @@ describe("drawing an Area Fill with the Area tool", () => {
         transform: { x: 100, y: 50, size: 12, rotation: 0 },
         color: DEFAULT_STAMP_COLOR,
       },
-      { id: "label", kind: "label", name: "The Reach", hidden: false, locked: false },
+      newLabel({ id: "label", name: "The Reach", text: "The Reach", point: [100, 20] }),
     ]);
 
     editor.handleFrameMessage({
@@ -890,18 +891,18 @@ describe("moving a Stamp", () => {
   it("leaves a locked Stamp, and an Element with no centre of its own, where it is", () => {
     const { editor } = openEditor([
       stamp({ locked: true }),
-      { id: "label", kind: "label", name: "The Reach", hidden: false, locked: false },
+      { id: "scan", kind: "image", name: "The Reach", hidden: false, locked: false },
     ]);
 
     editor.select("marker");
     editor.move(1, 0);
     expect(editor.getSnapshot().elements[0]).toEqual(stamp({ locked: true }));
 
-    editor.select("label");
+    editor.select("scan");
     editor.move(1, 0);
     expect(editor.getSnapshot().elements[1]).toEqual({
-      id: "label",
-      kind: "label",
+      id: "scan",
+      kind: "image",
       name: "The Reach",
       hidden: false,
       locked: false,

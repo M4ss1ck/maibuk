@@ -8,7 +8,13 @@
 import { describe, expect, it } from "vitest";
 import { type Face, deepestPoint, faceAt, findFaces, GAP_TOLERANCE_MM } from "./faces";
 import { type MakeFill, pourFill, reconcileFills } from "./fills";
-import type { MapElement, MapFillElement, MapLineElement, MapPoint } from "./maps";
+import {
+  newLabel,
+  type MapElement,
+  type MapFillElement,
+  type MapLineElement,
+  type MapPoint,
+} from "./maps";
 
 /** A Map Line that encloses Fills, which is what a face is built from. */
 function line(
@@ -125,7 +131,7 @@ describe("pourFill", () => {
         transform: { x: 20, y: 20, size: 12, rotation: 0 },
         color: "#1f2933",
       },
-      { id: "label", kind: "label", name: "The Reach", hidden: false, locked: false },
+      newLabel({ id: "label", name: "The Reach", text: "The Reach", point: [20, 20] }),
     ];
 
     const poured = pourFill(elements, [10, 10], "#c8d5a3", fillMaker());
