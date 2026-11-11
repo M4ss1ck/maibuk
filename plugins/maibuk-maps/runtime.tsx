@@ -20,6 +20,8 @@ import {
   type PluginFrame,
 } from "@/plugin-sdk";
 import { createMapEditor, type MapEditor } from "./editor";
+import type { ExportFont } from "./export";
+import { bundledFonts } from "./font-bytes";
 import type { FrameFontMessage } from "./frame-protocol";
 import { MAP_PAGE_ID, createMapPage } from "./map-page";
 import { MAP_LABEL_FONT_FAMILIES, createMapStore, migrateMapsData } from "./maps";
@@ -88,6 +90,12 @@ export interface MapsRuntime {
   openMap(id: string): Promise<boolean>;
   /** Flushes autosave, closes the open Map, and opens the Maps list. */
   backToMaps(): Promise<void>;
+  /**
+   * The fonts an SVG export embeds (#753): the bundled Map Label faces, plus
+   * the author's PDF Font when this device has one, under the family a label
+   * set to `pdf` draws in.
+   */
+  exportFonts(): Promise<readonly ExportFont[]>;
 }
 
 /** One installed PDF Font the Frame can draw with, and its family for the select. */
@@ -121,6 +129,7 @@ export function startMaps(client: PluginClient, serve: MapsServe): MapsRuntime {
     language: "en",
     openMap,
     backToMaps,
+    exportFonts,
   };
 
   void client.language
@@ -171,6 +180,23 @@ export function startMaps(client: PluginClient, serve: MapsServe): MapsRuntime {
     runtime.editor = null;
     runtime.currentMapId = null;
     await client.navigation.openPage({ pageId: MAPS_PAGE_ID });
+  }
+
+  /** The fonts an SVG export embeds: the bundled faces plus the PDF Font, if held. */
+  async function exportFonts(): Promise<readonly ExportFont[]> {
+    const bundled = bundledFonts();
+    const pdf = await loadPdfFont();
+    if (pdf === null) return bundled;
+    return [
+      ...bundled,
+      {
+        family: MAP_LABEL_FONT_FAMILIES.pdf,
+        bytes: new Uint8Array(pdf.bytes),
+        // `fonts.read` gives the file's bytes alone, with no MIME type; a
+        // TrueType or OpenType face both open from this one.
+        mime: "font/ttf",
+      },
+    ];
   }
 
   /** One mounted Frame: keep its port, and route its messages to the open editor. */

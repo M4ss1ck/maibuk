@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { parsePluginManifest } from "@/features/plugins/manifest-validate";
 import { createTestHost } from "@/features/plugins/test-kit";
 import type { TestHost, TestPdfFont } from "@/features/plugins/types";
@@ -24,6 +24,7 @@ import { createPluginClient, type PluginClient, type PluginFrame } from "@/plugi
 import { PLUGIN_COMMAND_RUN_REQUEST, PLUGIN_MIGRATE_DATA_REQUEST } from "@/plugin-sdk/protocol";
 import { servePluginUi } from "@/plugin-sdk/ui-serve";
 import { DEFAULT_SOFT_EDGE_MM, SOFT_EDGE_STEP_MM } from "./editor";
+import { exportLogLine, printPixelSize, svgPixelSize } from "./export";
 import type { FrameFontMessage } from "./frame-protocol";
 import en from "./locales/runtime/en.json";
 import es from "./locales/runtime/es.json";
@@ -193,6 +194,28 @@ function isFontMessage(message: unknown): message is FrameFontMessage {
 }
 
 /**
+ * A mounted Frame stand-in for the export (#753): it answers every rasterize
+ * request with `bytes`, the way the real Frame draws the SVG into a canvas and
+ * hands the encoded picture back. Scene and font messages are only recorded.
+ */
+function rasterReplyPort(bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47])) {
+  const messages: Array<Record<string, unknown>> = [];
+  const port = {
+    onmessage: null as ((event: MessageEvent) => void) | null,
+    start: () => {},
+    postMessage: (message: Record<string, unknown>) => {
+      messages.push(message);
+      if (message.kind !== "rasterize") return;
+      const copy = bytes.slice();
+      port.onmessage?.({
+        data: { kind: "rasterized", requestId: message.requestId, bytes: copy.buffer },
+      } as MessageEvent);
+    },
+  };
+  return { port: port as unknown as MessagePort, messages };
+}
+
+/**
  * The real Map Frame (#750), loaded into this document so a keyboard test can
  * drive its crosshair with real key presses and read what it posts. The two
  * ports stand for the ends of the Frame's MessageChannel: every message the
@@ -234,6 +257,75 @@ function loadMapFrame(runtime: MapsRuntime): MessagePort {
     delete (globalThis as Record<string, unknown>).__mapTestHooks;
   }
   return workerPort;
+}
+
+/**
+ * A host and runtime whose `files.save` is recorded at the SDK seam (#753).
+ * jsdom's MessageChannel clones a Blob into a plain object, so the real host's
+ * save flow cannot run under the test kit (its own unit tests cover it); this
+ * records the call the Plugin makes and answers with `saved`, or `cancelled`
+ * when the test queued a cancel. The Frame handoff still runs, so the export
+ * reaches the real editor.
+ */
+function exportHostFor(storage: Map<string, unknown>) {
+  const host = createTestHost({
+    manifest: mapsManifest(),
+    library: { books: BOOKS },
+    storage,
+    language: "en",
+  });
+  const handlers: Array<(frame: PluginFrame) => void> = [];
+  const saves: Array<{ name: string; mimeType: string; bytes: Uint8Array }> = [];
+  let cancelNext = false;
+  const base = createPluginClient(host.port);
+  const client = new Proxy(base, {
+    get(target, property, receiver) {
+      if (property === "onFrame") {
+        return (handler: (frame: PluginFrame) => void) => {
+          handlers.push(handler);
+          return target.onFrame(handler);
+        };
+      }
+      if (property === "files") {
+        return new Proxy(target.files, {
+          get(files, key, inner) {
+            if (key === "save") {
+              return async ({
+                name,
+                mimeType,
+                bytes,
+              }: {
+                name: string;
+                mimeType: string;
+                bytes: Uint8Array;
+              }) => {
+                if (cancelNext) {
+                  cancelNext = false;
+                  return { status: "cancelled" as const };
+                }
+                saves.push({ name, mimeType, bytes: new Uint8Array(bytes) });
+                return { status: "saved" as const };
+              };
+            }
+            return Reflect.get(files, key, inner);
+          },
+        });
+      }
+      return Reflect.get(target, property, receiver);
+    },
+  }) as PluginClient;
+  const runtime = startMaps(client, servePluginUi);
+  return {
+    host,
+    runtime,
+    saves,
+    cancelSaves(): void {
+      cancelNext = true;
+    },
+    handoff(frameId: string, port: MessagePort): void {
+      for (const handler of handlers) handler({ id: frameId, src: "", port });
+    },
+  };
 }
 
 /** A host and the runtime that owns the open Map, for the editor tests. */
@@ -2702,6 +2794,163 @@ describe("Map editor page", () => {
 
       await page.unmount();
     } finally {
+      await host.stop();
+    }
+  });
+});
+
+describe("Map editor Export panel", () => {
+  /** The portrait page `mapStorage` gives its Map: 6 by 9 inches. */
+  const PAGE = { preset: "portrait" as const, widthMm: 152.4, heightMm: 228.6 };
+
+  it("saves a PNG at the print size and DPI typed by keyboard, and logs one line", async () => {
+    const storage = mapStorage([
+      line("e1", "Coastline", [
+        [10, 10],
+        [20, 20],
+      ]),
+    ]);
+    const { host, runtime, handoff, saves } = exportHostFor(storage);
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      expect(await runtime.openMap("m1")).toBe(true);
+      const frame = rasterReplyPort();
+      handoff("frame-1", frame.port);
+      const page = await host.renderPage(MAP_PAGE_ID);
+      const user = userEvent.setup();
+
+      // PNG is the panel's default, and the page is 6 in wide.
+      const png = await screen.findByRole("radio", { name: en["export.format.png"] });
+      expect(png).toBeChecked();
+      expect(screen.getByRole("textbox", { name: en["export.printWidth"] })).toHaveValue("6");
+
+      // Tab to the DPI field, type 150, and press Enter on Save.
+      const dpi = screen.getByRole("textbox", { name: en["export.dpi"] });
+      await tabTo(user, dpi, 80);
+      await user.keyboard("{Control>}a{/Control}150{Enter}");
+      await waitFor(() => expect(dpi).toHaveValue("150"));
+
+      const save = screen.getByRole("button", { name: en["export.save"] });
+      await tabTo(user, save, 20);
+      await user.keyboard("{Enter}");
+
+      await waitFor(() => expect(saves).toHaveLength(1));
+      const [saved] = saves;
+      expect(saved.name).toBe("Coast.png");
+      expect(saved.mimeType).toBe("image/png");
+      expect(saved.bytes).toEqual(new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+
+      // The Frame was asked to draw the 6 in page at 150 DPI.
+      const size = printPixelSize(PAGE, 6, 150);
+      const request = frame.messages.find((message) => message.kind === "rasterize");
+      expect(request).toMatchObject({
+        widthPx: size.widthPx,
+        heightPx: size.heightPx,
+        format: "png",
+      });
+
+      expect(info).toHaveBeenCalledTimes(1);
+      expect(info).toHaveBeenCalledWith(
+        exportLogLine({
+          action: "save",
+          format: "png",
+          widthPx: size.widthPx,
+          heightPx: size.heightPx,
+          bytes: 4,
+        })
+      );
+
+      await page.unmount();
+    } finally {
+      info.mockRestore();
+      await host.stop();
+    }
+  });
+
+  it("saves an SVG that embeds only the fonts it uses and no editor marks", async () => {
+    const storage = mapStorage([
+      newLabel({
+        id: "l1",
+        name: "Map Label 1",
+        text: "The Reach",
+        point: [76.2, 114.3],
+        font: "cinzel",
+      }),
+    ]);
+    const { host, runtime, handoff, saves } = exportHostFor(storage);
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      expect(await runtime.openMap("m1")).toBe(true);
+      handoff("frame-1", rasterReplyPort().port);
+      const page = await host.renderPage(MAP_PAGE_ID);
+      const user = userEvent.setup();
+
+      // Tab into the Format group and pick SVG with the arrow key.
+      const group = await screen.findByRole("radiogroup", { name: en["export.format"] });
+      for (let i = 0; i < 80 && !group.contains(document.activeElement); i++) await user.tab();
+      await user.keyboard("{ArrowRight}");
+      await waitFor(() =>
+        expect(screen.getByRole("radio", { name: en["export.format.svg"] })).toBeChecked()
+      );
+
+      const save = screen.getByRole("button", { name: en["export.save"] });
+      await tabTo(user, save, 20);
+      await user.keyboard("{Enter}");
+
+      await waitFor(() => expect(saves).toHaveLength(1));
+      const [saved] = saves;
+      expect(saved.name).toBe("Coast.svg");
+      expect(saved.mimeType).toBe("image/svg+xml");
+
+      const svg = new TextDecoder().decode(saved.bytes);
+      expect(svg).not.toContain("data-element-id");
+      expect(svg.match(/@font-face/g)).toHaveLength(1);
+      expect(svg).toContain(`@font-face{font-family:"${MAP_LABEL_FONT_FAMILIES.cinzel}"`);
+      expect(svg).not.toContain(MAP_LABEL_FONT_FAMILIES["medieval-sharp"]);
+
+      // The SVG log names the size a browser draws it at, 96 DPI.
+      const size = svgPixelSize(PAGE);
+      expect(info).toHaveBeenCalledTimes(1);
+      expect(info).toHaveBeenCalledWith(
+        exportLogLine({
+          action: "save",
+          format: "svg",
+          widthPx: size.widthPx,
+          heightPx: size.heightPx,
+          bytes: saved.bytes.length,
+        })
+      );
+
+      await page.unmount();
+    } finally {
+      info.mockRestore();
+      await host.stop();
+    }
+  });
+
+  it("logs nothing when the author cancels the save", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime, handoff, saves, cancelSaves } = exportHostFor(storage);
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      expect(await runtime.openMap("m1")).toBe(true);
+      handoff("frame-1", rasterReplyPort().port);
+      const page = await host.renderPage(MAP_PAGE_ID);
+      const user = userEvent.setup();
+      cancelSaves();
+
+      const save = await screen.findByRole("button", { name: en["export.save"] });
+      await tabTo(user, save, 80);
+      await user.keyboard("{Enter}");
+
+      // A later request settles after the save the host answered with a cancel.
+      await expect(host.broker.request("health.check", null)).resolves.toBe("pong");
+      expect(saves).toHaveLength(0);
+      expect(info).not.toHaveBeenCalled();
+
+      await page.unmount();
+    } finally {
+      info.mockRestore();
       await host.stop();
     }
   });

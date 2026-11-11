@@ -121,6 +121,21 @@ export function defaultPrintWidthIn(page: MapPage): number {
   return Math.round((page.widthMm / MM_PER_INCH) * 1000) / 1000;
 }
 
+/** The DPI a browser draws an SVG at, which its log line reads as pixels. */
+export const SVG_DPI = 96;
+
+/**
+ * The pixel size an exported SVG is read at, for its log line: the page's
+ * millimetres at {@link SVG_DPI}, since an SVG itself has no fixed pixels. The
+ * line still names a size, so every export's log line can be compared alike.
+ */
+export function svgPixelSize(page: MapPage): PixelSize {
+  return {
+    widthPx: Math.round((page.widthMm / MM_PER_INCH) * SVG_DPI),
+    heightPx: Math.round((page.heightMm / MM_PER_INCH) * SVG_DPI),
+  };
+}
+
 /**
  * The pixel size a placed Map is drawn at: {@link PLACE_LONG_SIDE_PX} on the
  * long side, the short side following the page's aspect.
@@ -238,6 +253,19 @@ export function exportSvg(map: ExportMap, fonts: readonly ExportFont[]): string 
     .replace(/ data-selected="true"/g, "")
     .replace(/<g >/g, "<g>");
   return embedFonts(withPrintSize(picture, map.page), fonts);
+}
+
+/**
+ * The same SVG with its root width and height in pixels, which a rasterizer
+ * draws at full resolution (#753). The viewBox stays in page millimetres, so
+ * every shape keeps its page-space size; only the frame it fills changes.
+ */
+export function svgAtPixelSize(svg: string, size: PixelSize): string {
+  return svg.replace(SVG_OPEN_TAG, (tag) =>
+    tag
+      .replace(/\swidth="[^"]*"/, ` width="${size.widthPx}"`)
+      .replace(/\sheight="[^"]*"/, ` height="${size.heightPx}"`)
+  );
 }
 
 /**

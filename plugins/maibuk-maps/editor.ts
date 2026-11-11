@@ -52,11 +52,15 @@ import { createAutosave } from "./autosave";
 import { type FillTranslation, insertFill, pourFill, reconcileFills } from "./fills";
 import {
   parseFrameMessage,
+  rasterizeMessage,
   sceneMessage,
+  type FrameRasterizeErrorMessage,
+  type FrameRasterizedMessage,
   type FrameSceneMessage,
   type FrameToWorkerMessage,
   type MapTool,
   type PenDraftLabel,
+  type RasterFormat,
 } from "./frame-protocol";
 import {
   convertShapeLine,
@@ -211,6 +215,16 @@ export interface MapEditor {
   attachFrame(port: MessagePort): void;
   /** Handles one validated Frame message; a malformed one is dropped. */
   handleFrameMessage(data: unknown): void;
+  /**
+   * Rasterizes an export SVG into a picture in the Frame, which alone has a
+   * canvas (#753): a PNG, or a JPEG at a quality. Rejects when no Frame is
+   * mounted, when its reply reports an error, or when it goes away first.
+   */
+  rasterize(
+    svg: string,
+    size: { widthPx: number; heightPx: number },
+    format: RasterFormat
+  ): Promise<Uint8Array>;
   select(id: string | null): void;
   setTool(tool: MapTool): void;
   rename(id: string, name: string): void;
@@ -380,6 +394,17 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
   // replaces the old one, so a detached Frame stops receiving scenes (#745).
   let frame: MessagePort | null = null;
   const listeners = new Set<() => void>();
+
+  /**
+   * The rasterize requests the Frame has not answered yet (#753), by the id the
+   * Worker sent. A reply settles its own request, so two exports in flight
+   * never swap pictures.
+   */
+  const rasterRequests = new Map<
+    number,
+    { resolve(value: Uint8Array): void; reject(reason: Error): void }
+  >();
+  let nextRasterRequestId = 1;
 
   let snapshot = buildSnapshot();
 
@@ -813,6 +838,24 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     edit(moveElement(elements, target.id, dx, dy), target.kind === "line" ? { dx, dy } : undefined);
   }
 
+  /**
+   * Answers the rasterize request a Frame reply names (#753): the bytes when it
+   * carries them, else a rejection with its error.
+   */
+  function settleRasterize(message: FrameRasterizedMessage | FrameRasterizeErrorMessage): void {
+    const pending = rasterRequests.get(message.requestId);
+    if (pending === undefined) return;
+    rasterRequests.delete(message.requestId);
+    if ("error" in message) pending.reject(new Error(message.error));
+    else pending.resolve(new Uint8Array(message.bytes));
+  }
+
+  /** Rejects every rasterize request a Frame that is gone will never answer. */
+  function rejectRasterRequests(reason: string): void {
+    for (const { reject } of rasterRequests.values()) reject(new Error(reason));
+    rasterRequests.clear();
+  }
+
   function applyMessage(message: FrameToWorkerMessage): void {
     switch (message.kind) {
       case "stroke":
@@ -926,13 +969,40 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     },
 
     attachFrame(port) {
+      // A new Frame replaces the old one (#745): whatever the old one was
+      // drawing will never answer, so its pending exports fail instead of
+      // hanging.
+      if (frame !== null && frame !== port) rejectRasterRequests("the Frame was replaced");
       frame = port;
       port.postMessage(sceneForFrame());
     },
 
     handleFrameMessage(data) {
       const message = parseFrameMessage(data);
-      if (message !== null) applyMessage(message);
+      if (message === null) return;
+      if (message.kind === "rasterized") {
+        settleRasterize(message);
+        return;
+      }
+      applyMessage(message);
+    },
+
+    rasterize(svg, size, format) {
+      const port = frame;
+      if (port === null) {
+        return Promise.reject(new Error("no Frame is mounted to rasterize in"));
+      }
+      const requestId = nextRasterRequestId;
+      nextRasterRequestId += 1;
+      return new Promise<Uint8Array>((resolve, reject) => {
+        rasterRequests.set(requestId, { resolve, reject });
+        try {
+          port.postMessage(rasterizeMessage(requestId, svg, size, format));
+        } catch (error) {
+          rasterRequests.delete(requestId);
+          reject(error instanceof Error ? error : new Error(String(error)));
+        }
+      });
     },
 
     select(id) {
@@ -1463,6 +1533,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     },
 
     dispose() {
+      rejectRasterRequests("the Frame is gone");
       frame = null;
       listeners.clear();
     },

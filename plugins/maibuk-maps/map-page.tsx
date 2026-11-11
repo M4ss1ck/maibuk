@@ -19,6 +19,17 @@ import {
   SOFT_EDGE_STEP_MM,
   type MapEditor,
 } from "./editor";
+import {
+  DEFAULT_DPI,
+  defaultPrintWidthIn,
+  exportFileName,
+  exportLogLine,
+  exportSvg,
+  printPixelSize,
+  svgAtPixelSize,
+  svgPixelSize,
+  type ExportFont,
+} from "./export";
 import type { MapTool } from "./frame-protocol";
 import { format, translate, type MapsKey } from "./i18n";
 import type { MapsRuntime } from "./runtime";
@@ -65,9 +76,78 @@ export const MAP_FRAME_SRC = "assets/ui/map.html";
 
 export interface MapPageDeps {
   client: PluginClient;
-  runtime: Pick<MapsRuntime, "editor" | "currentMapId">;
+  runtime: Pick<MapsRuntime, "editor" | "currentMapId" | "exportFonts">;
   /** Flushes autosave and opens the Maps list. */
   backToMaps(): Promise<void>;
+}
+
+/** What the Export panel asks for: the format, and a PNG's print size and DPI. */
+interface SaveImageOptions {
+  format: "png" | "svg";
+  printWidthIn: number;
+  dpi: number;
+}
+
+/** The host calls and fonts one Save needs, so the panel stays presentational. */
+interface SaveImageDeps {
+  client: PluginClient;
+  editor: MapEditor;
+  exportFonts(): Promise<readonly ExportFont[]>;
+}
+
+/**
+ * Saves the open Map through `files.save` (#753): an SVG of the page with its
+ * fonts embedded, or a PNG rasterized in the Frame at the chosen print size and
+ * DPI. A save the author cancels writes nothing and logs nothing; a saved
+ * picture logs exactly one line with its format, pixel size, and bytes.
+ */
+async function saveMapImage(
+  { client, editor, exportFonts }: SaveImageDeps,
+  { format: pictureFormat, printWidthIn, dpi }: SaveImageOptions
+): Promise<void> {
+  const doc = editor.getSnapshot().doc;
+  const fonts = await exportFonts();
+
+  if (pictureFormat === "svg") {
+    const bytes = new TextEncoder().encode(exportSvg(doc, fonts));
+    const result = await client.files.save({
+      name: exportFileName(doc.name, "svg"),
+      mimeType: "image/svg+xml",
+      bytes,
+    });
+    if (result.status !== "saved") return;
+    // An SVG itself has no pixels; the log names the size a browser draws it.
+    const size = svgPixelSize(doc.page);
+    console.info(
+      exportLogLine({
+        action: "save",
+        format: "svg",
+        widthPx: size.widthPx,
+        heightPx: size.heightPx,
+        bytes: bytes.length,
+      })
+    );
+    return;
+  }
+
+  const size = printPixelSize(doc.page, printWidthIn, dpi);
+  const svg = svgAtPixelSize(exportSvg(doc, fonts), size);
+  const bytes = await editor.rasterize(svg, size, "png");
+  const result = await client.files.save({
+    name: exportFileName(doc.name, "png"),
+    mimeType: "image/png",
+    bytes,
+  });
+  if (result.status !== "saved") return;
+  console.info(
+    exportLogLine({
+      action: "save",
+      format: "png",
+      widthPx: size.widthPx,
+      heightPx: size.heightPx,
+      bytes: bytes.length,
+    })
+  );
 }
 
 /** One Element's row menu values. */
@@ -204,13 +284,23 @@ function MapEditorView({
   editor,
   t,
   backToMaps,
+  save,
 }: {
   editor: MapEditor;
   t: (key: MapsKey) => string;
   backToMaps: () => Promise<void>;
+  save(options: SaveImageOptions): Promise<void>;
 }) {
   const snapshot = useSyncExternalStore(editor.subscribe, editor.getSnapshot);
   const [dialog, setDialog] = useState<RenameDialog | null>(null);
+  // The Export panel's own state (#753): a new Map opens on PNG at its own
+  // physical width and the default print DPI.
+  const [exportFormat, setExportFormat] = useState<"png" | "svg">("png");
+  const [printWidthIn, setPrintWidthIn] = useState(() =>
+    defaultPrintWidthIn(editor.getSnapshot().doc.page)
+  );
+  const [dpi, setDpi] = useState(DEFAULT_DPI);
+  const [exportFailed, setExportFailed] = useState(false);
   // Each Properties request remounts the Name field with `autoFocus`, so the
   // menu entry visibly lands focus on the panel even when the row already is
   // the selection (#745).
@@ -298,6 +388,21 @@ function MapEditorView({
     if (dialog === null) return;
     editor.rename(dialog.id, dialog.name);
     setDialog(null);
+  }
+
+  // The pixel size the PNG will be, and the print height it comes to, so the
+  // author sees both before saving.
+  const exportSize = printPixelSize(snapshot.doc.page, printWidthIn, dpi);
+  const printHeightIn = Math.round((exportSize.heightPx / Math.max(dpi, 1)) * 10) / 10;
+
+  async function saveExport(): Promise<void> {
+    setExportFailed(false);
+    try {
+      await save({ format: exportFormat, printWidthIn, dpi });
+    } catch {
+      // A refused save or a Frame that could not draw shows one localized line.
+      setExportFailed(true);
+    }
   }
 
   // Top of the list is the topmost Element; the document array grows upward.
@@ -842,6 +947,52 @@ function MapEditorView({
               ) : null}
             </>
           )}
+
+          {/* Export (#753): PNG at a chosen print size and DPI, drawn by the
+              Frame which alone has a canvas, or the SVG itself. The panel is
+              the keyboard path that saves either picture. */}
+          <ui.Text weight="semibold">{t("export.label")}</ui.Text>
+          <ui.RadioGroup
+            label={t("export.format")}
+            orientation="horizontal"
+            options={[
+              { value: "png", label: t("export.format.png") },
+              { value: "svg", label: t("export.format.svg") },
+            ]}
+            selectedKey={exportFormat}
+            onChange={(event) => setExportFormat(event.detail as "png" | "svg")}
+          />
+          {exportFormat === "png" ? (
+            <>
+              <ui.NumberField
+                label={t("export.printWidth")}
+                value={printWidthIn}
+                minValue={1}
+                maxValue={40}
+                step={0.1}
+                onChange={(event) => setPrintWidthIn(event.detail)}
+              />
+              <ui.NumberField
+                label={t("export.dpi")}
+                value={dpi}
+                minValue={72}
+                maxValue={1200}
+                step={1}
+                onChange={(event) => setDpi(event.detail)}
+              />
+              <ui.Text tone="muted">
+                {format(t("export.size"), {
+                  width: exportSize.widthPx,
+                  height: exportSize.heightPx,
+                  heightIn: printHeightIn,
+                })}
+              </ui.Text>
+            </>
+          ) : null}
+          <ui.Button variant="secondary" onPress={() => void saveExport()}>
+            {t("export.save")}
+          </ui.Button>
+          {exportFailed ? <ui.Status tone="warning">{t("export.failed")}</ui.Status> : null}
         </ui.View>
       </ui.View>
 
@@ -900,6 +1051,15 @@ export function createMapPage(deps: MapPageDeps): ComponentType {
         </ui.EmptyState>
       );
     }
-    return <MapEditorView editor={editor} t={t} backToMaps={backToMaps} />;
+    return (
+      <MapEditorView
+        editor={editor}
+        t={t}
+        backToMaps={backToMaps}
+        save={(options) =>
+          saveMapImage({ client, editor, exportFonts: runtime.exportFonts }, options)
+        }
+      />
+    );
   };
 }

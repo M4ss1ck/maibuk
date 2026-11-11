@@ -2077,3 +2077,101 @@ describe("Map Styles in the editor", () => {
     expect(editor.getSnapshot().canUndo).toBe(false);
   });
 });
+
+describe("rasterizing the export SVG in the Frame", () => {
+  /** A Frame port that records what the editor sends and answers nothing. */
+  function framePort(): { port: MessagePort; messages: Array<Record<string, unknown>> } {
+    const messages: Array<Record<string, unknown>> = [];
+    const port = {
+      onmessage: null,
+      start: () => {},
+      postMessage: (message: Record<string, unknown>) => messages.push(message),
+    } as unknown as MessagePort;
+    return { port, messages };
+  }
+
+  it("sends the rasterize request and resolves the reply by requestId", async () => {
+    const { editor } = openEditor();
+    const { port, messages } = framePort();
+    editor.attachFrame(port);
+
+    const pending = editor.rasterize("<svg/>", { widthPx: 900, heightPx: 1350 }, "png");
+    const request = messages.find((message) => message.kind === "rasterize");
+    expect(request).toMatchObject({
+      kind: "rasterize",
+      svg: "<svg/>",
+      widthPx: 900,
+      heightPx: 1350,
+      format: "png",
+    });
+    if (request === undefined) throw new Error("no rasterize request");
+
+    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]).buffer;
+    editor.handleFrameMessage({ kind: "rasterized", requestId: request.requestId, bytes });
+
+    await expect(pending).resolves.toEqual(new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+  });
+
+  it("answers each of two pending requests by its own id", async () => {
+    const { editor } = openEditor();
+    const { port, messages } = framePort();
+    editor.attachFrame(port);
+
+    const first = editor.rasterize("<svg id='one'/>", { widthPx: 10, heightPx: 10 }, "png");
+    const second = editor.rasterize(
+      "<svg id='two'/>",
+      { widthPx: 20, heightPx: 20 },
+      {
+        jpeg: 0.6,
+      }
+    );
+    const requests = messages.filter((message) => message.kind === "rasterize");
+    expect(requests).toHaveLength(2);
+
+    // The second reply lands first; each promise still gets its own bytes.
+    editor.handleFrameMessage({
+      kind: "rasterized",
+      requestId: requests[1].requestId,
+      bytes: new Uint8Array([2]).buffer,
+    });
+    editor.handleFrameMessage({
+      kind: "rasterized",
+      requestId: requests[0].requestId,
+      bytes: new Uint8Array([1]).buffer,
+    });
+
+    await expect(first).resolves.toEqual(new Uint8Array([1]));
+    await expect(second).resolves.toEqual(new Uint8Array([2]));
+  });
+
+  it("rejects the request when the Frame reports an error", async () => {
+    const { editor } = openEditor();
+    const { port, messages } = framePort();
+    editor.attachFrame(port);
+
+    const pending = editor.rasterize("<svg/>", { widthPx: 10, heightPx: 10 }, "png");
+    const request = messages.find((message) => message.kind === "rasterize");
+    if (request === undefined) throw new Error("no rasterize request");
+    editor.handleFrameMessage({ kind: "rasterized", requestId: request.requestId, error: "boom" });
+
+    await expect(pending).rejects.toThrow("boom");
+  });
+
+  it("rejects at once when no Frame is mounted to draw in", async () => {
+    const { editor } = openEditor();
+    await expect(
+      editor.rasterize("<svg/>", { widthPx: 10, heightPx: 10 }, "png")
+    ).rejects.toThrow();
+  });
+
+  it("rejects a pending request when its Frame goes away", async () => {
+    const { editor } = openEditor();
+    const { port } = framePort();
+    editor.attachFrame(port);
+
+    const pending = editor.rasterize("<svg/>", { widthPx: 10, heightPx: 10 }, "png");
+    editor.dispose();
+
+    await expect(pending).rejects.toThrow();
+  });
+});

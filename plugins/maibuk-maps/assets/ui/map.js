@@ -1,11 +1,13 @@
 // @ts-check
 /* The Map Frame's drawing surface (#745, #746, #748, #749, #750, #766, #751). The
    Frame's only host channel is `window.maibuk.port`: the Worker sends the whole
-   `scene` on every change and when the Frame connects, and the Frame answers a
-   finished Pencil stroke, a finished Pen line, a finished Area Fill outline, an
+   `scene` on every change and when the Frame connects, and asks it to
+   `rasterize` an export SVG, since only this document has a canvas. The Frame
+   answers a finished Pencil stroke, a finished Pen line, a finished Area Fill
+   outline, an
    Eraser drag, a drawn Shape, a Bucket pour, a dropped Stamp, the Element the
-   author picked, a Select drag that moved one, and a Map Label's bend dragged
-   from its handle.
+   author picked, a Select drag that moved one, a Map Label's bend dragged
+   from its handle, and the encoded picture an export asked for.
    Points cross the port in page millimetres, the same space as the page's
    `widthMm`/`heightMm`, so the pointer's own screen pixels are converted
    through the svg's `getScreenCTM`.
@@ -44,7 +46,9 @@
    * @typedef {{ kind: "move", id: string, dx: number, dy: number }} FrameMoveMessage
    * @typedef {{ kind: "bendLabel", id: string, bend: number }} FrameBendMessage
    * @typedef {{ kind: "font", family: string, bytes: ArrayBuffer }} FrameFontMessage
-   * @typedef {FrameSceneMessage | FrameFontMessage} WorkerToFrameMessage
+   * @typedef {{ kind: "rasterize", requestId: number, svg: string, widthPx: number, heightPx: number, format: "png" | { jpeg: number } }} FrameRasterizeMessage
+   * @typedef {{ kind: "rasterized", requestId: number, bytes?: ArrayBuffer, error?: string }} FrameRasterizedMessage
+   * @typedef {FrameSceneMessage | FrameFontMessage | FrameRasterizeMessage} WorkerToFrameMessage
    * @typedef {{ pointerId: number, points: MapPoint[] }} Drawing
    * @typedef {{ points: MapPoint[], curves: boolean[] }} PenDraft
    * @typedef {{ pointerId: number, kind: ShapeKind, start: MapPoint, end: MapPoint, constrain: boolean }} ShapeDraft
@@ -345,6 +349,43 @@
       rotation: label.rotation,
       width: label.width,
       bend: label.bend,
+    };
+  }
+
+  /**
+   * Reads one rasterize request (#753), or null when it is malformed and must
+   * be dropped: a request with no id, no SVG, no positive pixel size, or an
+   * unknown format would draw nothing or answer a reply nobody asked for.
+   * @param {unknown} data
+   * @returns {FrameRasterizeMessage | null}
+   */
+  function readRasterize(data) {
+    if (typeof data !== "object" || data === null) return null;
+    const message = /** @type {Record<string, unknown>} */ (data);
+    if (message.kind !== "rasterize") return null;
+    if (!isNumber(message.requestId)) return null;
+    if (typeof message.svg !== "string" || message.svg === "") return null;
+    if (!isNumber(message.widthPx) || message.widthPx <= 0) return null;
+    if (!isNumber(message.heightPx) || message.heightPx <= 0) return null;
+    /** @type {"png" | { jpeg: number }} */
+    let format;
+    if (message.format === "png") {
+      format = "png";
+    } else if (typeof message.format === "object" && message.format !== null) {
+      const jpeg = /** @type {Record<string, unknown>} */ (message.format).jpeg;
+      if (!isNumber(jpeg) || jpeg < 0 || jpeg > 1) return null;
+      format = { jpeg };
+    } else {
+      return null;
+    }
+    return {
+      kind: "rasterize",
+      requestId: message.requestId,
+      svg: message.svg,
+      // A canvas takes whole pixels only.
+      widthPx: Math.round(message.widthPx),
+      heightPx: Math.round(message.heightPx),
+      format,
     };
   }
 
@@ -1114,10 +1155,17 @@
     draw();
   }
 
-  /** Posts one validated message to the Worker; a missing port drops it. */
-  function post(message) {
+  /**
+   * Posts one validated message to the Worker; a missing port drops it. A
+   * rasterize reply hands its bytes over as a transfer, so a full-size picture
+   * is not copied.
+   * @param {unknown} message
+   * @param {Transferable[]} [transfer]
+   */
+  function post(message, transfer) {
     if (port === null) return;
-    port.postMessage(message);
+    if (transfer === undefined) port.postMessage(message);
+    else port.postMessage(message, transfer);
   }
 
   /**
@@ -1613,9 +1661,97 @@
     return true;
   }
 
+  /**
+   * Loads one image, so a rasterize request can wait for the SVG to draw.
+   * @param {string} url
+   * @returns {Promise<HTMLImageElement>}
+   */
+  function loadImage(url) {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error("the SVG could not be loaded"));
+      image.src = url;
+    });
+  }
+
+  /**
+   * Encodes one canvas as a Blob, so the picture crosses the port as bytes.
+   * @param {HTMLCanvasElement} canvas
+   * @param {string} mime
+   * @param {number} [quality]
+   * @returns {Promise<Blob>}
+   */
+  function canvasBlob(canvas, mime, quality) {
+    return new Promise((resolve, reject) => {
+      canvas.toBlob(
+        (blob) => (blob === null ? reject(new Error("the canvas encoded nothing")) : resolve(blob)),
+        mime,
+        quality
+      );
+    });
+  }
+
+  /**
+   * Draws one export SVG into a canvas of the requested pixel size and encodes
+   * it (#753). The SVG carries its fonts as data URIs, so nothing here reaches
+   * the network; a JPEG gets white paper behind it, since it has no alpha.
+   * @param {FrameRasterizeMessage} request
+   * @returns {Promise<ArrayBuffer>}
+   */
+  async function rasterize(request) {
+    const canvas = document.createElement("canvas");
+    canvas.width = request.widthPx;
+    canvas.height = request.heightPx;
+    const context = canvas.getContext("2d");
+    if (context === null) throw new Error("this Frame cannot draw a canvas");
+    const url = URL.createObjectURL(new Blob([request.svg], { type: "image/svg+xml" }));
+    try {
+      const image = await loadImage(url);
+      if (request.format !== "png") {
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+      }
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const quality = request.format === "png" ? undefined : request.format.jpeg;
+      const blob = await canvasBlob(
+        canvas,
+        request.format === "png" ? "image/png" : "image/jpeg",
+        quality
+      );
+      return await blob.arrayBuffer();
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  /**
+   * Answers one rasterize request: the encoded bytes, or an error when the
+   * engine refuses the canvas or the image. The bytes are transferred, not
+   * copied, so a 3600 px picture costs one buffer.
+   * @param {FrameRasterizeMessage} request
+   */
+  async function answerRasterize(request) {
+    try {
+      const bytes = await rasterize(request);
+      post({ kind: "rasterized", requestId: request.requestId, bytes }, [bytes]);
+    } catch {
+      post({
+        kind: "rasterized",
+        requestId: request.requestId,
+        error: "the SVG could not be drawn",
+      });
+    }
+  }
+
   /** @param {MessageEvent} event */
   function onMessage(event) {
     if (registerFont(event.data)) return;
+    const rasterizeRequest = readRasterize(event.data);
+    if (rasterizeRequest !== null) {
+      void answerRasterize(rasterizeRequest);
+      return;
+    }
     const next = readScene(event.data);
     if (next === null) return;
     const previousTool = scene === null ? null : scene.tool;

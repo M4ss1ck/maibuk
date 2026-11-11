@@ -20,6 +20,8 @@ import {
   fitUnderCap,
   placePixelSize,
   printPixelSize,
+  svgAtPixelSize,
+  svgPixelSize,
 } from "./export";
 import { bundledFonts } from "./font-bytes";
 import {
@@ -334,5 +336,25 @@ describe("the bundled font bytes", () => {
     const [first] = bundledFonts();
     const [second] = bundledFonts();
     expect(second.bytes).toBe(first.bytes);
+  });
+});
+
+describe("svgPixelSize()", () => {
+  it("reads the page's millimetres as pixels at 96 DPI, for the SVG log line", () => {
+    // A 6x9 in page is 152.4x228.6 mm, which a browser draws at 576x864 px.
+    expect(svgPixelSize(PAGES.portrait)).toEqual({ widthPx: 576, heightPx: 864 });
+  });
+});
+
+describe("svgAtPixelSize()", () => {
+  it("replaces the millimetre print size with the pixel size a rasterizer draws at", () => {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 152.4 228.6" width="152.4mm" height="228.6mm"><g/></svg>';
+    const out = svgAtPixelSize(svg, { widthPx: 900, heightPx: 1350 });
+
+    expect(out).toContain('width="900"');
+    expect(out).toContain('height="1350"');
+    expect(out).not.toContain("mm");
+    expect(out).toContain('viewBox="0 0 152.4 228.6"');
   });
 });
