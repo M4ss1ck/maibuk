@@ -1,9 +1,10 @@
 // Pointer gestures for the Maps editor's drawing Frame (#745, #746, #747,
-// #766, #750): a straight Pencil stroke, an Area tool outline, an Eraser drag
-// across the Frame's svg, a Shape tool's drag, and a Select drag that moves an
-// Element. Moving has a keyboard path (the arrow Commands), and so does the
-// Area tool's outline (its arrows and Enter); the drag here is the pointer form
-// of each.
+// #766, #750, #751): a straight Pencil stroke, an Area tool outline, an Eraser
+// drag across the Frame's svg, a Shape tool's drag, a Select drag that moves an
+// Element, and a Map Label's bend handle. Moving has a keyboard path (the arrow
+// Commands), so does the Area tool's outline (its arrows and Enter), and so
+// does a label's bend (the panel's Bend field); the drag here is the pointer
+// form of each.
 //
 // Drawing a Map Line has no keyboard path in this slice (the keyboard acts on a
 // selected Map Line: the move Commands, the Elements list, undo), and the E2E
@@ -252,6 +253,42 @@ export async function dragPagePoint(
   } finally {
     if (constrain) await page.keyboard.up("Shift");
   }
+}
+
+/**
+ * Drags a Map Label's bend handle (#751) to the page point the pointer asks
+ * for, both in millimetres: the Select tool must be picked and the label
+ * selected, which is when the Frame draws the handle. The caller hands the
+ * handle itself, and its apex is read off the circle's own `cx`/`cy`, so the
+ * drag starts where the Frame draws it rather than where the label's fields
+ * say. The panel's Bend field is the keyboard path to the same curve; this is
+ * its pointer form, the same exemption as the other drags here.
+ */
+export async function dragBendHandle(
+  page: Page,
+  surface: Locator,
+  handle: Locator,
+  to: PagePoint
+): Promise<void> {
+  const box = await surface.boundingBox();
+  if (box === null) throw new Error("the Frame's drawing surface has no box to draw on");
+  const viewBox = await surface.getAttribute("viewBox");
+  if (viewBox === null) throw new Error("the Frame's drawing surface has no viewBox");
+  const cx = await handle.getAttribute("cx");
+  const cy = await handle.getAttribute("cy");
+  if (cx === null || cy === null) throw new Error("the bend handle has no apex to drag from");
+  const toScreen = fitToBox(box, viewBox.split(" ").map(Number));
+  const start = toScreen([Number(cx), Number(cy)]);
+  const end = toScreen(to);
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  for (let step = 1; step <= STEPS; step += 1) {
+    await page.mouse.move(
+      start.x + ((end.x - start.x) * step) / STEPS,
+      start.y + ((end.y - start.y) * step) / STEPS
+    );
+  }
+  await page.mouse.up();
 }
 
 /** A box in a Frame's own pixels, from its screen matrix. */
