@@ -9,8 +9,8 @@
  * The Worker sends the whole scene on every change and when a Frame connects;
  * the Frame reports a finished Pencil stroke, a finished Pen line, a finished
  * Area Fill outline, an Eraser
- * drag, a drawn Shape, a Bucket pour, a dropped Stamp, a picked Element, and a
- * Select drag that moved one.
+ * drag, a drawn Shape, a Bucket pour, a dropped Stamp, a picked Element, a
+ * Select drag that moved one, and a Map Label's bend dragged from its handle.
  * Points are page millimetres, the same space as `page.widthMm/heightMm`. Every
  * inbound message is validated here, and a malformed one is dropped. This
  * module imports only its own files.
@@ -53,6 +53,24 @@ export interface FrameSceneElement {
    * drag only for these, so it never shows a move the Worker would refuse.
    */
   movable: boolean;
+  /**
+   * The fields a Map Label's bend handle needs (#751): where its baseline sits,
+   * how long and how turned it is, and the sagitta it arches by. Absent on
+   * every other Element.
+   */
+  label?: FrameLabelLayout;
+}
+
+/** The baseline a Map Label's bend handle is placed on and dragged against. */
+export interface FrameLabelLayout {
+  x: number;
+  y: number;
+  /** The baseline's turn, in degrees clockwise about (x, y). */
+  rotation: number;
+  /** The baseline chord's length, in page millimetres. */
+  width: number;
+  /** The signed sagitta the baseline bows by, in page millimetres. */
+  bend: number;
 }
 
 /**
@@ -180,6 +198,18 @@ export interface FrameMoveMessage {
   dy: number;
 }
 
+/**
+ * Frame -> Worker: a Map Label's bend dragged from its handle (#751). `bend` is
+ * the signed sagitta the pointer asks for, in page millimetres, so the whole
+ * drag is one message and one undo step. A press that leaves the bend where it
+ * was sends none.
+ */
+export interface FrameBendMessage {
+  kind: "bendLabel";
+  id: string;
+  bend: number;
+}
+
 /** Every message a Frame may send the Worker. */
 export type FrameToWorkerMessage =
   | FrameStrokeMessage
@@ -190,7 +220,8 @@ export type FrameToWorkerMessage =
   | FrameShapeMessage
   | FramePourMessage
   | FrameInsertMessage
-  | FrameMoveMessage;
+  | FrameMoveMessage
+  | FrameBendMessage;
 
 function isPoint(value: unknown): value is MapPoint {
   return (
@@ -213,7 +244,7 @@ function isPoint(value: unknown): value is MapPoint {
  * Eraser drag needs at least one point and a finite reach; a Shape
  * needs a known kind, two finite corners, and a boolean `constrain`; a pour or
  * an insert needs one finite page point; a move needs an Element id and a
- * finite offset.
+ * finite offset; a bend needs an Element id and a finite bend.
  */
 export function parseFrameMessage(data: unknown): FrameToWorkerMessage | null {
   if (typeof data !== "object" || data === null) return null;
@@ -306,6 +337,11 @@ export function parseFrameMessage(data: unknown): FrameToWorkerMessage | null {
     if (typeof message.dy !== "number" || !Number.isFinite(message.dy)) return null;
     return { kind: "move", id: message.id, dx: message.dx, dy: message.dy };
   }
+  if (message.kind === "bendLabel") {
+    if (typeof message.id !== "string" || message.id === "") return null;
+    if (typeof message.bend !== "number" || !Number.isFinite(message.bend)) return null;
+    return { kind: "bendLabel", id: message.id, bend: message.bend };
+  }
   return null;
 }
 
@@ -336,6 +372,19 @@ export function sceneMessage(
       locked: element.locked,
       selected: element.id === view.selectedId,
       movable: !element.hidden && canMove(element),
+      // A Map Label carries the baseline its bend handle is placed on; no other
+      // Element has a curve to drag.
+      ...(element.kind === "label"
+        ? {
+            label: {
+              x: element.x,
+              y: element.y,
+              rotation: element.rotation,
+              width: element.width,
+              bend: element.bend,
+            },
+          }
+        : {}),
     })),
     defs: render.defs,
     tool: view.tool,

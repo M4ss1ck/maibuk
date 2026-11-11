@@ -1,10 +1,11 @@
 // @ts-check
-/* The Map Frame's drawing surface (#745, #746, #748, #749, #750, #766). The
+/* The Map Frame's drawing surface (#745, #746, #748, #749, #750, #766, #751). The
    Frame's only host channel is `window.maibuk.port`: the Worker sends the whole
    `scene` on every change and when the Frame connects, and the Frame answers a
    finished Pencil stroke, a finished Pen line, a finished Area Fill outline, an
    Eraser drag, a drawn Shape, a Bucket pour, a dropped Stamp, the Element the
-   author picked, and a Select drag that moved one.
+   author picked, a Select drag that moved one, and a Map Label's bend dragged
+   from its handle.
    Points cross the port in page millimetres, the same space as the page's
    `widthMm`/`heightMm`, so the pointer's own screen pixels are converted
    through the svg's `getScreenCTM`.
@@ -28,7 +29,8 @@
    * @typedef {{ d: string, stroke: string | null, strokeWidth: number, dash: string | null, fill: string | null, fillRule?: "evenodd", opacity: number, transform?: string, clip?: string, hitOnly?: true }} LineShape
    * @typedef {{ text: string, x: number, y: number, size: number, fill: string, font?: string, letterSpacing?: number, halo?: { color: string, width: number }, path?: { id: string, d: string }, anchor: "start" | "middle" | "end", transform?: string }} TextShape
    * @typedef {LineShape | TextShape} SceneShape
-   * @typedef {{ id: string, shapes: SceneShape[], filter: string | null, hidden: boolean, locked: boolean, selected: boolean, movable: boolean }} FrameSceneElement
+   * @typedef {{ x: number, y: number, rotation: number, width: number, bend: number }} FrameLabelLayout
+   * @typedef {{ id: string, shapes: SceneShape[], filter: string | null, hidden: boolean, locked: boolean, selected: boolean, movable: boolean, label?: FrameLabelLayout }} FrameSceneElement
    * @typedef {{ one: string, other: string }} PenDraftLabel
    * @typedef {{ kind: "scene", widthMm: number, heightMm: number, background: string, elements: FrameSceneElement[], defs: string, tool: MapTool, zoom: number, panX: number, panY: number, penLabel: PenDraftLabel }} FrameSceneMessage
    * @typedef {{ kind: "stroke", points: MapPoint[] }} FrameStrokeMessage
@@ -40,6 +42,7 @@
    * @typedef {{ kind: "pour", point: MapPoint }} FramePourMessage
    * @typedef {{ kind: "insert", point: MapPoint }} FrameInsertMessage
    * @typedef {{ kind: "move", id: string, dx: number, dy: number }} FrameMoveMessage
+   * @typedef {{ kind: "bendLabel", id: string, bend: number }} FrameBendMessage
    * @typedef {FrameSceneMessage} WorkerToFrameMessage
    * @typedef {{ pointerId: number, points: MapPoint[] }} Drawing
    * @typedef {{ points: MapPoint[], curves: boolean[] }} PenDraft
@@ -47,6 +50,9 @@
    * @typedef {{ clientX: number, clientY: number }} ClientPoint
    * @typedef {{ pointerId: number, id: string, press: ClientPoint, client: ClientPoint, travel: MapPoint, constrain: boolean, moved: boolean, offset: MapPoint }} MoveDrag
    * @typedef {{ id: string, offset: MapPoint }} PendingMove
+   * @typedef {{ pointerId: number, id: string, label: FrameLabelLayout, bend: number }} BendDrag
+   * @typedef {{ id: string, bend: number }} PendingBend
+   * @typedef {{ start: MapPoint, control: MapPoint, apex: MapPoint, end: MapPoint }} BendGeometry
    */
 
   const hooks = /** @type {any} */ (globalThis).__mapTestHooks || null;
@@ -89,6 +95,14 @@
   /** A Shape drag is too small to keep when either side is under this, in mm. */
   const MIN_SHAPE_SIZE_MM = 1;
 
+  /**
+   * A Map Label's bend handle (#751), in page millimetres: the radius of the
+   * circle the pointer grips, and the smallest bend that is not snapped back
+   * to straight, which mirrors `BEND_SNAP_MM` in `maps.ts`.
+   */
+  const BEND_HANDLE_RADIUS_MM = 2;
+  const BEND_SNAP_MM = 0.5;
+
   /** The characters a definitions id may hold, so a scene cannot write an attribute of its own. */
   const FILTER_ID = /^[A-Za-z0-9_-]+$/;
 
@@ -126,6 +140,18 @@
    * answers every move with a scene, a refused one included. @type {PendingMove | null}
    */
   let pendingMove = null;
+  /**
+   * The bend handle drag in progress, or null (#751): the label whose curve is
+   * being shaped and the bend the pointer asks for right now.
+   * @type {BendDrag | null}
+   */
+  let bendDrag = null;
+  /**
+   * A finished bend drag the Worker has not answered yet, or null. Its preview
+   * stays until the next scene, as a move's does, so the curve never jumps back
+   * between the release and the Worker's redraw. @type {PendingBend | null}
+   */
+  let pendingBend = null;
 
   /** The rendered svg, which Preact keeps across draws. @returns {SVGSVGElement | null} */
   function svgElement() {
@@ -300,6 +326,28 @@
   }
 
   /**
+   * Reads a Map Label's baseline fields (#751), or null when it carries none or
+   * they are malformed: a handle with no known curve to sit on would be a grip
+   * that shapes nothing.
+   * @param {unknown} raw
+   * @returns {FrameLabelLayout | null}
+   */
+  function readLabelLayout(raw) {
+    if (typeof raw !== "object" || raw === null) return null;
+    const label = /** @type {Record<string, unknown>} */ (raw);
+    if (!isNumber(label.x) || !isNumber(label.y) || !isNumber(label.rotation)) return null;
+    if (!isNumber(label.width) || label.width <= 0) return null;
+    if (!isNumber(label.bend)) return null;
+    return {
+      x: label.x,
+      y: label.y,
+      rotation: label.rotation,
+      width: label.width,
+      bend: label.bend,
+    };
+  }
+
+  /**
    * Reads one scene message, or null when it is malformed and must be dropped.
    * A message needs a positive page size; everything else falls back to a
    * usable default, because a Frame with no picture is worse than one drawn
@@ -327,6 +375,7 @@
           const shape = readShape(rawShape);
           if (shape !== null) shapes.push(shape);
         }
+        const label = readLabelLayout(element.label);
         elements.push({
           id: element.id,
           shapes,
@@ -339,6 +388,7 @@
           selected: element.selected === true,
           // A locked Element never moves, whatever else the scene says.
           movable: element.movable === true && element.locked !== true,
+          ...(label === null ? {} : { label }),
         });
       }
     }
@@ -512,6 +562,8 @@
     shapeDraft = null;
     moveDrag = null;
     pendingMove = null;
+    bendDrag = null;
+    pendingBend = null;
   }
 
   /**
@@ -673,6 +725,111 @@
   }
 
   /**
+   * The baseline a label of these fields and this bend draws, mirroring
+   * `labelBaselinePath` in `maps.ts`: its chord's two ends, the quadratic's
+   * control point, and its apex, the middle of the curve, where the bend handle
+   * sits. A quadratic reaches only half way to its control point, so the
+   * control sits twice the bend off the chord.
+   * @param {FrameLabelLayout} label
+   * @param {number} bend
+   * @returns {BendGeometry}
+   */
+  function bendGeometry(label, bend) {
+    const angle = (label.rotation * Math.PI) / 180;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const half = label.width / 2;
+    return {
+      start: [label.x - half * cos, label.y - half * sin],
+      control: [label.x + 2 * bend * sin, label.y - 2 * bend * cos],
+      apex: [label.x + bend * sin, label.y - bend * cos],
+      end: [label.x + half * cos, label.y + half * sin],
+    };
+  }
+
+  /**
+   * The bend a pointer at `point` asks for, mirroring `bendFromPoint` in
+   * `maps.ts`: how far the point sits from the chord toward the label's top, in
+   * page millimetres, rounded to a tenth of one, with anything under
+   * `BEND_SNAP_MM` snapped straight.
+   * @param {FrameLabelLayout} label
+   * @param {MapPoint} point
+   * @returns {number}
+   */
+  function bendAt(label, point) {
+    const angle = (label.rotation * Math.PI) / 180;
+    const dx = point[0] - label.x;
+    const dy = point[1] - label.y;
+    const bend = dx * Math.sin(angle) - dy * Math.cos(angle);
+    const rounded = Math.round(bend * 10) / 10;
+    return Math.abs(rounded) < BEND_SNAP_MM ? 0 : rounded;
+  }
+
+  /** One quadratic baseline as an SVG path. @param {BendGeometry} geometry @returns {string} */
+  function quadraticPath(geometry) {
+    const { start, control, end } = geometry;
+    return `M ${n(start[0])} ${n(start[1])} Q ${n(control[0])} ${n(control[1])} ${n(end[0])} ${n(
+      end[1]
+    )}`;
+  }
+
+  /**
+   * The selected Map Label whose bend handle the Frame shows, or null: one
+   * shown, unlocked label, under the Select tool, since every other tool's
+   * press draws a new thing rather than shaping the label under it.
+   * @returns {FrameSceneElement | null}
+   */
+  function bendTarget() {
+    if (scene === null || scene.tool !== "select") return null;
+    const selected = scene.elements.find((element) => element.selected);
+    if (selected === undefined || selected.label === undefined) return null;
+    if (selected.hidden || selected.locked) return null;
+    return selected;
+  }
+
+  /**
+   * The bend a label draws with right now: the one a drag in progress previews,
+   * or the one the Worker has yet to answer for, else the one the scene holds.
+   * @param {FrameSceneElement} element
+   * @returns {number}
+   */
+  function liveBend(element) {
+    if (bendDrag !== null && bendDrag.id === element.id) return bendDrag.bend;
+    if (pendingBend !== null && pendingBend.id === element.id) return pendingBend.bend;
+    return element.label === undefined ? 0 : element.label.bend;
+  }
+
+  /**
+   * The bend handle a selected Map Label draws (#751): a circle at the apex of
+   * its baseline, which the pointer drags to bow or straighten the name. A drag
+   * previews the curve it would draw, dashed, so the author sees the shape
+   * before the whole drag reaches the Worker as one message.
+   * @returns {any}
+   */
+  function bendOverlay() {
+    const target = bendTarget();
+    if (target === null || target.label === undefined) return null;
+    const { html } = lib;
+    const label = target.label;
+    const bend = liveBend(target);
+    const geometry = bendGeometry(label, bend);
+    return html`<g transform="${dragTransform(target.id)}">
+      ${
+        bend === label.bend
+          ? null
+          : html`<path class="map-bend-preview" d="${quadraticPath(geometry)}" />`
+      }
+      <circle
+        class="map-bend-handle"
+        data-bend-handle="${target.id}"
+        cx="${n(geometry.apex[0])}"
+        cy="${n(geometry.apex[1])}"
+        r="${n(BEND_HANDLE_RADIUS_MM)}"
+      />
+    </g>`;
+  }
+
+  /**
    * Draws the current scene and any live stroke into the Frame. The drawing is
    * `aria-hidden`: a Frame's contents sit outside Maibuk's accessibility gate
    * (`docs/plugins/frame-ui.md`), and the Elements list is the drawing's
@@ -734,6 +891,7 @@
               }
             </g>`
           )}
+        ${bendOverlay()}
         ${drawing === null ? null : html`<path class="map-live" d="${polyline(drawing.points)}" />`}
         ${penDraft === null ? null : html`<path class="map-live" d="${penDraftPath()}" />`}
         ${crosshair === null ? null : html`<path class="map-crosshair" d="${crosshairPath()}" />`}
@@ -859,6 +1017,77 @@
     if (moveDrag === null) return;
     const pointerId = moveDrag.pointerId;
     moveDrag = null;
+    releasePointerId(pointerId);
+    draw();
+  }
+
+  /**
+   * Starts a bend drag when the press lands on a Map Label's bend handle
+   * (#751), and reports whether it did, so the press neither picks an Element
+   * nor starts a move.
+   * @param {PointerEvent} event
+   * @returns {boolean}
+   */
+  function startBend(event) {
+    const handle =
+      event.target instanceof Element ? event.target.closest("[data-bend-handle]") : null;
+    if (handle === null || scene === null) return false;
+    const id = handle.getAttribute("data-bend-handle");
+    const target = id === null ? undefined : scene.elements.find((element) => element.id === id);
+    if (target === undefined || target.label === undefined) return false;
+    const point = pagePoint(event);
+    if (point === null) return false;
+    event.preventDefault();
+    bendDrag = {
+      pointerId: event.pointerId,
+      id: target.id,
+      label: target.label,
+      bend: bendAt(target.label, point),
+    };
+    capturePointer(event);
+    draw();
+    return true;
+  }
+
+  /**
+   * Follows the pointer with the bend drag: the handle and the curve preview
+   * the bend the pointer asks for, live, in this Frame only.
+   * @param {PointerEvent} event
+   */
+  function followBend(event) {
+    if (bendDrag === null) return;
+    const point = pagePoint(event);
+    if (point === null) return;
+    bendDrag.bend = bendAt(bendDrag.label, point);
+    draw();
+  }
+
+  /**
+   * Ends the bend drag. A drag that changed the bend goes to the Worker as one
+   * bend message, which is one undo step, and its preview holds until the
+   * Worker answers; a drag that left the curve as it was sends nothing.
+   * @param {PointerEvent} event
+   * @param {boolean} send
+   */
+  function endBend(event, send) {
+    if (bendDrag === null || event.pointerId !== bendDrag.pointerId) return;
+    const drag = bendDrag;
+    bendDrag = null;
+    releasePointer(event);
+    if (!send || drag.bend === drag.label.bend) {
+      draw();
+      return;
+    }
+    pendingBend = { id: drag.id, bend: drag.bend };
+    draw();
+    post({ kind: "bendLabel", id: drag.id, bend: drag.bend });
+  }
+
+  /** Drops the bend drag in progress, and its preview, without reporting it. */
+  function cancelBend() {
+    if (bendDrag === null) return;
+    const pointerId = bendDrag.pointerId;
+    bendDrag = null;
     releasePointerId(pointerId);
     draw();
   }
@@ -1066,7 +1295,10 @@
     }
 
     // A second finger while one drag is under way neither picks nor drags.
-    if (moveDrag !== null) return;
+    if (moveDrag !== null || bendDrag !== null) return;
+    // A press on the bend handle shapes the curve (#751) and never picks or
+    // moves the label it belongs to, so a bend drag posts no move.
+    if (startBend(event)) return;
     const target =
       event.target instanceof Element ? event.target.closest("[data-element-id]") : null;
     const id = target === null ? null : target.getAttribute("data-element-id");
@@ -1106,6 +1338,11 @@
 
   /** @param {PointerEvent} event */
   function onPointerMove(event) {
+    if (bendDrag !== null && event.pointerId === bendDrag.pointerId) {
+      followBend(event);
+      return;
+    }
+
     if (moveDrag !== null && event.pointerId === moveDrag.pointerId) {
       followDrag(event);
       return;
@@ -1338,14 +1575,25 @@
     const previousTool = scene === null ? null : scene.tool;
     scene = next;
     // Any scene after a release draws the moved Element where the Worker put
-    // it, or back at its start when the Worker refused the move.
+    // it, or back at its start when the Worker refused the move, and the
+    // bent label by the bend the Worker kept.
     pendingMove = null;
+    pendingBend = null;
     if (next.tool !== previousTool) resetGestures();
     // An Element locked, deleted, or undone away mid-drag stops moving.
     if (moveDrag !== null) {
       const dragged = moveDrag.id;
       if (!next.elements.some((element) => element.id === dragged && element.movable)) {
         cancelMove();
+        return;
+      }
+    }
+    // A label locked, hidden, or undone away mid-drag stops bending.
+    if (bendDrag !== null) {
+      const bent = bendDrag.id;
+      const bentBy = next.elements.find((element) => element.id === bent);
+      if (bentBy === undefined || bentBy.label === undefined || bentBy.locked || bentBy.hidden) {
+        cancelBend();
         return;
       }
     }
@@ -1371,6 +1619,7 @@
     endErase(event, true);
     endShape(event, true);
     endMove(event, true);
+    endBend(event, true);
   }
 
   /** @param {PointerEvent} event */
@@ -1379,17 +1628,19 @@
     endErase(event, false);
     endShape(event, false);
     endMove(event, false);
+    endBend(event, false);
   }
 
   /**
-   * The engine took a Select drag's capture away with no pointerup (#766): the
-   * drag is dropped like a cancel, so the next press is not ignored as a
-   * second finger. After a pointerup the drag is already over and this is a
-   * no-op.
+   * The engine took a Select drag's or a bend drag's capture away with no
+   * pointerup (#766, #751): the drag is dropped like a cancel, so the next press
+   * is not ignored as a second finger. After a pointerup the drag is already
+   * over and this is a no-op.
    * @param {PointerEvent} event
    */
   function onLostPointerCapture(event) {
     endMove(event, false);
+    endBend(event, false);
   }
 
   draw();

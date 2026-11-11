@@ -258,6 +258,13 @@ export const MIN_LABEL_SIZE_MM = 1;
 export const DEFAULT_LABEL_HALO_MM = 0.8;
 
 /**
+ * How small a bend the bend handle treats as straight, in page millimetres: a
+ * drag that lands this close to the chord leaves the name flat instead of
+ * almost flat.
+ */
+export const BEND_SNAP_MM = 0.5;
+
+/**
  * A Map Label (#751): a name written on the Map. Its text runs along a baseline
  * `width` millimetres long, centred on (x, y) and turned by `rotation`; `bend`
  * lifts the middle of that baseline toward the top of the page, so a name can
@@ -772,6 +779,29 @@ export function labelBaselinePath(label: MapLabelElement): string {
   const control = place(0, -2 * label.bend);
   const end = place(half, 0);
   return `M ${roundedPathCoordinate(start[0])} ${roundedPathCoordinate(start[1])} Q ${roundedPathCoordinate(control[0])} ${roundedPathCoordinate(control[1])} ${roundedPathCoordinate(end[0])} ${roundedPathCoordinate(end[1])}`;
+}
+
+/**
+ * The bend a pointer at `point` asks for (#751): how far the point sits from
+ * the label's chord line, toward the top of the label, in page millimetres.
+ * This is the inverse of `labelBaselinePath`: a bend of 0 says the point is on
+ * the chord, so dragging the curve's handle back to the chord straightens the
+ * name. The drag reports the distance rounded to a tenth of a millimetre, and
+ * snaps anything under half a millimetre to straight. The Frame mirrors this
+ * arithmetic, since a Frame script cannot import this module.
+ */
+export function bendFromPoint(
+  label: Pick<MapLabelElement, "x" | "y" | "rotation">,
+  point: MapPoint
+): number {
+  const angle = (label.rotation * Math.PI) / 180;
+  const dx = point[0] - label.x;
+  const dy = point[1] - label.y;
+  // The label's own frame turns clockwise with the page, so the distance
+  // toward its top is the page offset projected on that turned normal.
+  const bend = dx * Math.sin(angle) - dy * Math.cos(angle);
+  const rounded = Math.round(bend * 10) / 10;
+  return Math.abs(rounded) < BEND_SNAP_MM ? 0 : rounded;
 }
 
 /** The trimmed name, or a throw the page shows as "Give the Map a name". */

@@ -591,6 +591,131 @@ describe("Map Label shapes", () => {
   });
 });
 
+describe("the Map Label bend handle", () => {
+  /** The baseline a label at (100, 50), 40 mm wide, arching 8 mm draws. */
+  const bendLabel = (overrides: Record<string, unknown> = {}) => ({
+    x: 100,
+    y: 50,
+    rotation: 0,
+    width: 40,
+    bend: 8,
+    ...overrides,
+  });
+
+  /** The one bend handle the Frame drew. */
+  const handle = (): Element => {
+    const circle = document.querySelector("circle.map-bend-handle");
+    if (circle === null) throw new Error("the Frame drew no bend handle");
+    return circle;
+  };
+
+  /** Where the handle sits, in page millimetres. */
+  const apex = (): [string | null, string | null] => [
+    handle().getAttribute("cx"),
+    handle().getAttribute("cy"),
+  ];
+
+  it("draws one handle at the apex of the selected label's curve", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [sceneElement({ selected: true, label: bendLabel() })] });
+
+    // The label sits at (100, 50) and arches 8 mm toward the top of the page,
+    // so its apex, which the quadratic reaches at its middle, is (100, 42).
+    expect(handle().getAttribute("data-bend-handle")).toBe("e1");
+    expect(apex()).toEqual(["100", "42"]);
+  });
+
+  it("places the handle on the turned curve, and hides it on a locked or hidden label", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [sceneElement({ selected: true, label: bendLabel({ rotation: 90 }) })],
+    });
+    // A quarter turn clockwise makes the label's arch lift toward page +x.
+    expect(apex()).toEqual(["108", "50"]);
+
+    for (const overrides of [{ locked: true }, { hidden: true }]) {
+      frame.scene({
+        elements: [sceneElement({ selected: true, label: bendLabel(), ...overrides })],
+      });
+      expect(document.querySelector("circle.map-bend-handle")).toBeNull();
+    }
+
+    frame.scene({ elements: [sceneElement({ label: bendLabel() })] });
+    expect(document.querySelector("circle.map-bend-handle")).toBeNull();
+  });
+
+  it("drags the handle into a new bend, previews it, and posts one bendLabel", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [sceneElement({ selected: true, movable: true, label: bendLabel() })],
+    });
+
+    pointer(handle(), "pointerdown", 100, 42);
+    pointer(svg(), "pointermove", 100, 36);
+    // The drag previews live: the handle and the curve follow the pointer.
+    expect(apex()).toEqual(["100", "36"]);
+    expect(document.querySelector("path.map-bend-preview")?.getAttribute("d")).toBe(
+      "M 80 50 Q 100 22 120 50"
+    );
+    pointer(svg(), "pointerup", 100, 36);
+
+    // The press shaped the curve: it never picked or moved the label, and the
+    // whole drag is one message, so the Worker can make it one undo step.
+    expect(frame.port.messages).toEqual([{ kind: "bendLabel", id: "e1", bend: 14 }]);
+    // The preview holds until the Worker answers, so the curve never jumps back.
+    expect(apex()).toEqual(["100", "36"]);
+    frame.scene({
+      elements: [sceneElement({ selected: true, movable: true, label: bendLabel() })],
+    });
+    expect(apex()).toEqual(["100", "42"]);
+  });
+
+  it("straightens the label when the handle is dragged back to the chord", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [sceneElement({ selected: true, movable: true, label: bendLabel() })],
+    });
+
+    pointer(handle(), "pointerdown", 100, 42);
+    // A third of a millimetre off the chord is too small to see: it snaps to 0.
+    pointer(svg(), "pointermove", 100, 50.3);
+    pointer(svg(), "pointerup", 100, 50.3);
+
+    expect(frame.port.messages).toEqual([{ kind: "bendLabel", id: "e1", bend: 0 }]);
+  });
+
+  it("still picks and moves the label when the press lands off the handle", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [sceneElement({ selected: true, movable: true, label: bendLabel() })],
+    });
+    const label = document.querySelector('g[data-element-id="e1"] path.map-line');
+    if (label === null) throw new Error("the Element drew no line");
+
+    pointer(label, "pointerdown", 100, 50);
+    pointer(svg(), "pointermove", 110, 50);
+    pointer(svg(), "pointerup", 110, 50);
+
+    expect(frame.port.messages).toEqual([
+      { kind: "select", id: "e1" },
+      { kind: "move", id: "e1", dx: 10, dy: 0 },
+    ]);
+  });
+
+  it("drops a bend drag the pointer cancels without posting it", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [sceneElement({ selected: true, movable: true, label: bendLabel() })],
+    });
+
+    pointer(handle(), "pointerdown", 100, 42);
+    pointer(svg(), "pointermove", 100, 36);
+    pointer(svg(), "pointercancel", 100, 36);
+
+    expect(frame.port.messages).toEqual([]);
+  });
+});
+
 describe("the scene message", () => {
   it("sends the shapes the list preview draws a Map Line from", () => {
     const map = {
@@ -1122,6 +1247,88 @@ describe("the move message", () => {
       ["stamp", true],
       ["fill", false],
     ]);
+  });
+});
+
+describe("the bendLabel message", () => {
+  it("reads the bend a drag on a Map Label's curve asks for", () => {
+    expect(parseFrameMessage({ kind: "bendLabel", id: "e1", bend: 6.4 })).toEqual({
+      kind: "bendLabel",
+      id: "e1",
+      bend: 6.4,
+    });
+  });
+
+  it("drops a bend without an Element id or a finite bend", () => {
+    for (const message of [
+      { kind: "bendLabel", bend: 6 },
+      { kind: "bendLabel", id: "", bend: 6 },
+      { kind: "bendLabel", id: 7, bend: 6 },
+      { kind: "bendLabel", id: "e1" },
+      { kind: "bendLabel", id: "e1", bend: Number.NaN },
+      { kind: "bendLabel", id: "e1", bend: Number.POSITIVE_INFINITY },
+      { kind: "bendLabel", id: "e1", bend: "6" },
+    ]) {
+      expect(parseFrameMessage(message)).toBeNull();
+    }
+  });
+
+  it("carries a Map Label's baseline fields, and no other Element's", () => {
+    const map = {
+      page: { preset: "square" as const, widthMm: 200, heightMm: 100 },
+      elements: [
+        {
+          id: "reach",
+          kind: "label" as const,
+          name: "The Reach",
+          hidden: false,
+          locked: false,
+          text: "The Reach",
+          x: 100,
+          y: 50,
+          rotation: 90,
+          width: 40,
+          bend: 8,
+          font: "im-fell-english",
+          size: 6,
+          letterSpacing: 0,
+          halo: 0.8,
+        },
+        {
+          id: "coast",
+          kind: "line" as const,
+          name: "Coast",
+          hidden: false,
+          locked: false,
+          points: [
+            [0, 0],
+            [10, 10],
+          ] as [number, number][],
+          style: "plain" as const,
+          enclosesFills: true,
+          closed: false,
+          curves: [false],
+          roughened: false,
+        },
+      ],
+    };
+    const message = sceneMessage(map, {
+      selectedId: "reach",
+      tool: "select",
+      zoom: 1,
+      panX: 0,
+      panY: 0,
+      penLabel: PEN_LABEL,
+    });
+
+    expect(message.elements[0].label).toEqual({
+      x: 100,
+      y: 50,
+      rotation: 90,
+      width: 40,
+      bend: 8,
+    });
+    expect(message.elements[1].label).toBeUndefined();
   });
 });
 

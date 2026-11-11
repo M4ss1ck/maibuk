@@ -21,6 +21,7 @@ import {
   LINE_STYLE_DEFAULT_ENCLOSES,
   MAP_LABEL_FONTS,
   MAP_LABEL_FONT_FAMILIES,
+  bendFromPoint,
   createMapStore,
   labelBaselinePath,
   mapKey,
@@ -1012,6 +1013,46 @@ describe("Map Labels", () => {
     // lifts toward -y upright, now lifts toward +x.
     expect(labelBaselinePath(label({ rotation: 90 }))).toBe("M 20 10 Q 20 30 20 50");
     expect(labelBaselinePath(label({ rotation: 90, bend: 8 }))).toBe("M 20 10 Q 36 30 20 50");
+  });
+
+  it("reads a pointer's distance from the chord as the bend it asks for", () => {
+    const flat = label();
+    // Eight millimetres straight above the chord's middle is a bend of 8: the
+    // same sagitta `labelBaselinePath` bows the name by.
+    expect(bendFromPoint(flat, [20, 22])).toBe(8);
+    // The other side of the chord bows the name the other way.
+    expect(bendFromPoint(flat, [20, 38])).toBe(-8);
+    // A point on the chord's line is a straight name, whether it sits between
+    // the ends or past them: the handle measures the chord's line, not its ends.
+    expect(bendFromPoint(flat, [20, 30])).toBe(0);
+    expect(bendFromPoint(flat, [60, 22])).toBe(8);
+  });
+
+  it("reads the bend in the label's own turned frame, not the page's", () => {
+    // A quarter turn clockwise makes the label's top face page +x, so eight
+    // millimetres that way is the bend, exactly as the baseline bows it.
+    const turned = label({ rotation: 90 });
+    expect(bendFromPoint(turned, [28, 30])).toBe(8);
+    expect(bendFromPoint(turned, [12, 30])).toBe(-8);
+    expect(bendFromPoint(turned, [20, 30])).toBe(0);
+    // The apex the baseline draws reads back as the bend it was drawn from.
+    const angle = (turned.rotation * Math.PI) / 180;
+    const apex: [number, number] = [turned.x + 8 * Math.sin(angle), turned.y - 8 * Math.cos(angle)];
+    expect(bendFromPoint(turned, apex)).toBe(8);
+  });
+
+  it("rounds the bend to a tenth of a millimetre", () => {
+    const flat = label();
+    expect(bendFromPoint(flat, [20, 30 - 15.37])).toBe(15.4);
+    expect(bendFromPoint(flat, [20, 30 + 15.34])).toBe(-15.3);
+  });
+
+  it("snaps a bend too small to see back to straight", () => {
+    const flat = label();
+    expect(bendFromPoint(flat, [20, 30 - 0.4])).toBe(0);
+    expect(bendFromPoint(flat, [20, 30 + 0.4])).toBe(0);
+    // Half a millimetre is already a bend the author asked for.
+    expect(bendFromPoint(flat, [20, 30 - 0.5])).toBe(0.5);
   });
 });
 

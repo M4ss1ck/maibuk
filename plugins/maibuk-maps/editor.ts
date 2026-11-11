@@ -249,7 +249,10 @@ export interface MapEditor {
   setLabelFont(id: string, font: string): void;
   /** Recolours one unlocked Map Label's text, as one undo step. */
   setLabelColor(id: string, color: string): void;
-  /** Moves, turns, or reshapes one unlocked Map Label from its number fields, as one undo step. */
+  /**
+   * Moves, turns, or reshapes one unlocked Map Label from its number fields or
+   * its bend handle, as one undo step.
+   */
   setLabelLayout(id: string, patch: MapLabelLayout): void;
   deleteElement(id: string): void;
   /** Moves one Element one place towards the top of the Elements list. */
@@ -781,7 +784,80 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       case "move":
         moveDragged(message.id, message.dx, message.dy);
         break;
+      case "bendLabel":
+        bendDragged(message.id, message.bend);
+        break;
     }
+  }
+
+  /**
+   * Moves, turns, or reshapes one unlocked Map Label's baseline as one undo
+   * step (#751): what the properties panel's number fields set, and what a bend
+   * handle drag commits. A locked or missing label keeps every field, and an
+   * edit that changes nothing is not an undo step.
+   */
+  function setLabelLayout(id: string, patch: MapLabelLayout): void {
+    const target = elementById(id);
+    if (target === undefined || target.kind !== "label" || target.locked) return;
+    const x = patch.x ?? target.x;
+    const y = patch.y ?? target.y;
+    const rotation = patch.rotation ?? target.rotation;
+    const width = patch.width ?? target.width;
+    const bend = patch.bend ?? target.bend;
+    const size = patch.size ?? target.size;
+    const letterSpacing = patch.letterSpacing ?? target.letterSpacing;
+    const halo = patch.halo ?? target.halo;
+    if (![x, y, rotation, width, bend, size, letterSpacing, halo].every(Number.isFinite)) return;
+    const layout: MapLabelLayout = {
+      x,
+      y,
+      // The turn reads in one circle, as a Stamp's does.
+      rotation: normalizeRotation(rotation),
+      // A baseline or a cap size too small draws no name at all.
+      width: Math.max(MIN_LABEL_WIDTH_MM, width),
+      bend,
+      size: Math.max(MIN_LABEL_SIZE_MM, size),
+      letterSpacing,
+      // A halo of none is no halo at all.
+      halo: Math.max(0, halo),
+    };
+    if (
+      layout.x === target.x &&
+      layout.y === target.y &&
+      layout.rotation === target.rotation &&
+      layout.width === target.width &&
+      layout.bend === target.bend &&
+      layout.size === target.size &&
+      layout.letterSpacing === target.letterSpacing &&
+      layout.halo === target.halo
+    ) {
+      return;
+    }
+    updateElement(id, (element) =>
+      element.kind === "label" ? { ...element, ...layout } : element
+    );
+  }
+
+  /**
+   * Commits one bend handle drag (#751) through the same setter the panel's
+   * Bend field uses, so the whole drag is one undo step. A drag the Worker
+   * refuses (a locked, hidden, or missing label, or the bend it already has)
+   * still answers with a scene: the Frame keeps its preview until then, and
+   * that scene draws the curve the label really has.
+   */
+  function bendDragged(id: string, bend: number): void {
+    const target = elementById(id);
+    if (
+      target === undefined ||
+      target.kind !== "label" ||
+      target.locked ||
+      target.hidden ||
+      target.bend === bend
+    ) {
+      sendScene();
+      return;
+    }
+    setLabelLayout(id, { bend });
   }
 
   function setZoom(next: number): void {
@@ -1130,47 +1206,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       updateElement(id, (element) => (element.kind === "label" ? { ...element, color } : element));
     },
 
-    setLabelLayout(id, patch) {
-      const target = elementById(id);
-      if (target === undefined || target.kind !== "label" || target.locked) return;
-      const x = patch.x ?? target.x;
-      const y = patch.y ?? target.y;
-      const rotation = patch.rotation ?? target.rotation;
-      const width = patch.width ?? target.width;
-      const bend = patch.bend ?? target.bend;
-      const size = patch.size ?? target.size;
-      const letterSpacing = patch.letterSpacing ?? target.letterSpacing;
-      const halo = patch.halo ?? target.halo;
-      if (![x, y, rotation, width, bend, size, letterSpacing, halo].every(Number.isFinite)) return;
-      const layout: MapLabelLayout = {
-        x,
-        y,
-        // The turn reads in one circle, as a Stamp's does.
-        rotation: normalizeRotation(rotation),
-        // A baseline or a cap size too small draws no name at all.
-        width: Math.max(MIN_LABEL_WIDTH_MM, width),
-        bend,
-        size: Math.max(MIN_LABEL_SIZE_MM, size),
-        letterSpacing,
-        // A halo of none is no halo at all.
-        halo: Math.max(0, halo),
-      };
-      if (
-        layout.x === target.x &&
-        layout.y === target.y &&
-        layout.rotation === target.rotation &&
-        layout.width === target.width &&
-        layout.bend === target.bend &&
-        layout.size === target.size &&
-        layout.letterSpacing === target.letterSpacing &&
-        layout.halo === target.halo
-      ) {
-        return;
-      }
-      updateElement(id, (element) =>
-        element.kind === "label" ? { ...element, ...layout } : element
-      );
-    },
+    setLabelLayout,
 
     setStampTransform(id, patch) {
       const target = elementById(id);

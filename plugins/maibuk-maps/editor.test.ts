@@ -1821,3 +1821,73 @@ describe("a Map Label's properties", () => {
     expect(editor.getSnapshot().canUndo).toBe(false);
   });
 });
+
+describe("dragging a Map Label's bend handle", () => {
+  /** The one Map Label the editor holds. */
+  function labelOf(editor: MapEditor): MapLabelElement {
+    const [element] = editor.getSnapshot().elements;
+    if (element === undefined || element.kind !== "label") throw new Error("no Map Label");
+    return element;
+  }
+
+  it("applies the dragged bend as one undo step, through the layout setter", () => {
+    const { editor } = openEditor();
+    editor.insertLabel();
+    const { id } = labelOf(editor);
+
+    editor.handleFrameMessage({ kind: "bendLabel", id, bend: 6.4 });
+
+    expect(labelOf(editor).bend).toBe(6.4);
+    // A drag is one edit, not one per pointer step the Frame previewed.
+    editor.undo();
+    expect(labelOf(editor).bend).toBe(0);
+    editor.redo();
+    expect(labelOf(editor).bend).toBe(6.4);
+  });
+
+  it("refuses a bend on a locked Map Label, and takes no undo step for it", () => {
+    const locked: MapLabelElement = {
+      ...newLabel({ id: "label", name: "Map Label 1", text: "The Reach", point: [100, 50] }),
+      locked: true,
+    };
+    const { editor } = openEditor([locked]);
+
+    editor.handleFrameMessage({ kind: "bendLabel", id: "label", bend: 5 });
+
+    expect(editor.getSnapshot().elements[0]).toEqual(locked);
+    expect(editor.getSnapshot().canUndo).toBe(false);
+  });
+
+  it("leaves an Element that is not a Map Label, and a bend it already has, unedited", () => {
+    const line: MapLineElement = {
+      id: "coast",
+      kind: "line",
+      name: "Coast",
+      hidden: false,
+      locked: false,
+      points: [
+        [0, 0],
+        [10, 0],
+      ],
+      style: "plain",
+      enclosesFills: true,
+      closed: false,
+      curves: [false],
+      roughened: false,
+    };
+    const { editor } = openEditor([
+      line,
+      newLabel({ id: "reach", name: "Map Label 2", text: "The Reach", point: [100, 50] }),
+    ]);
+
+    editor.handleFrameMessage({ kind: "bendLabel", id: "coast", bend: 5 });
+    editor.handleFrameMessage({ kind: "bendLabel", id: "gone", bend: 5 });
+    editor.handleFrameMessage({ kind: "bendLabel", id: "reach", bend: 0 });
+
+    expect(editor.getSnapshot().elements).toEqual([
+      line,
+      newLabel({ id: "reach", name: "Map Label 2", text: "The Reach", point: [100, 50] }),
+    ]);
+    expect(editor.getSnapshot().canUndo).toBe(false);
+  });
+});
