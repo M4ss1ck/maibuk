@@ -408,7 +408,7 @@ describe("pouring a Fill with the Bucket", () => {
       name: "Fill 1",
       hidden: false,
       locked: false,
-      content: { color: DEFAULT_FILL_COLOR },
+      content: { color: "land" },
     });
     expect(elements[1].id).toBe("ring");
     const [fill] = fills(editor);
@@ -419,8 +419,8 @@ describe("pouring a Fill with the Bucket", () => {
     expect(fill.anchor[1]).toBeLessThan(90);
     expect(editor.getSnapshot().selectedId).toBe(fill.id);
     expect(editor.getSnapshot().selectedIsFill).toBe(true);
-    expect(editor.getSnapshot().selectedFillColor).toBe(DEFAULT_FILL_COLOR);
-    expect(editor.getSnapshot().currentFillColor).toBe(DEFAULT_FILL_COLOR);
+    expect(editor.getSnapshot().selectedFillColor).toBe("land");
+    expect(editor.getSnapshot().currentFillColor).toBe("land");
   });
 
   it("commits nothing for a pour outside every face", () => {
@@ -572,15 +572,15 @@ describe("a Fill's own colour", () => {
     // The same colour again is not a step.
     editor.setElementFillColor(fill.id, "#445566");
     editor.undo();
-    expect(fills(editor)[0].content.color).toBe(DEFAULT_FILL_COLOR);
+    expect(fills(editor)[0].content.color).toBe("land");
 
     editor.setLocked(fill.id, true);
     editor.setElementFillColor(fill.id, "#000000");
-    expect(fills(editor)[0].content.color).toBe(DEFAULT_FILL_COLOR);
+    expect(fills(editor)[0].content.color).toBe("land");
     // The refused change is not a step either: undo unlocks the Fill.
     editor.undo();
     expect(fills(editor)[0].locked).toBe(false);
-    expect(fills(editor)[0].content.color).toBe(DEFAULT_FILL_COLOR);
+    expect(fills(editor)[0].content.color).toBe("land");
   });
 });
 
@@ -984,8 +984,8 @@ describe("placing a Stamp with the Insert tool", () => {
       locked: false,
       stampRef: "base:castle",
       transform: { x: 30, y: 40, size: DEFAULT_STAMP_SIZE_MM, rotation: 0 },
-      color: DEFAULT_STAMP_COLOR,
     });
+    expect(stamp.color).toBeUndefined();
     expect(stamp.scale).toBeUndefined();
     expect(editor.getSnapshot().selectedId).toBe(stamp.id);
 
@@ -1211,7 +1211,7 @@ describe("a one-colour Stamp's colour", () => {
     // The colour it already has is not a step.
     editor.setStampColor(stamp.id, "#8b1a1a");
     editor.undo();
-    expect((editor.getSnapshot().elements[0] as MapStampElement).color).toBe(DEFAULT_STAMP_COLOR);
+    expect((editor.getSnapshot().elements[0] as MapStampElement).color).toBeUndefined();
   });
 
   it("leaves art that keeps its own colours, and a locked Stamp, alone", () => {
@@ -1221,14 +1221,14 @@ describe("a one-colour Stamp's colour", () => {
     const [castle] = editor.getSnapshot().elements as MapStampElement[];
 
     editor.setStampColor(castle.id, "#8b1a1a");
-    expect((editor.getSnapshot().elements[0] as MapStampElement).color).toBe(DEFAULT_STAMP_COLOR);
+    expect((editor.getSnapshot().elements[0] as MapStampElement).color).toBeUndefined();
 
     editor.setStamp("marker");
     editor.insertStamp();
     const marker = editor.getSnapshot().elements[1] as MapStampElement;
     editor.setLocked(marker.id, true);
     editor.setStampColor(marker.id, "#8b1a1a");
-    expect((editor.getSnapshot().elements[1] as MapStampElement).color).toBe(DEFAULT_STAMP_COLOR);
+    expect((editor.getSnapshot().elements[1] as MapStampElement).color).toBeUndefined();
   });
 });
 

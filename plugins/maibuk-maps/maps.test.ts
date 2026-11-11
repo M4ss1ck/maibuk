@@ -17,7 +17,6 @@ import {
   DEFAULT_STAMP_COLOR,
   DEFAULT_STAMP_SIZE_MM,
   INDEX_KEY,
-  LINE_STROKE,
   LINE_STYLE_DEFAULT_ENCLOSES,
   MAP_LABEL_FONTS,
   MAP_LABEL_FONT_FAMILIES,
@@ -273,6 +272,19 @@ describe("createMapStore", () => {
     expect(await store.load("m1")).toBeNull();
   });
 
+  it("reads an unknown Map Style as Atlas, and keeps a known one", async () => {
+    const { storage, values } = memoryStorage();
+    const store = storeOver(storage);
+    await store.create({ name: "Styled", bookId: null, preset: "square" });
+    const created = values.get(mapKey("m1")) as MapDocument;
+
+    await storage.set({ key: mapKey("m1"), value: { ...created, styleId: "night" } });
+    expect((await store.load("m1"))?.styleId).toBe("night");
+
+    await storage.set({ key: mapKey("m1"), value: { ...created, styleId: "dusk" } });
+    expect((await store.load("m1"))?.styleId).toBe("atlas");
+  });
+
   it("saves the Map and its index entry, with the line in the preview and a new time", async () => {
     const { storage, values } = memoryStorage();
     const store = storeOver(storage);
@@ -404,6 +416,34 @@ describe("Map Line styles", () => {
     });
   });
 
+  it("keeps a Map Line's colour role or hex override, and refuses anything else", async () => {
+    const base = {
+      id: "line",
+      kind: "line",
+      name: "Line",
+      hidden: false,
+      locked: false,
+      points: [
+        [0, 0],
+        [10, 0],
+      ],
+      style: "plain",
+      enclosesFills: true,
+      closed: false,
+      curves: [false],
+      roughened: false,
+    };
+
+    const role = await oldMap([{ ...base, color: "river" }]);
+    expect((await role.store.load("m1"))?.elements[0]).toMatchObject({ color: "river" });
+
+    const hex = await oldMap([{ ...base, color: "#123456" }]);
+    expect((await hex.store.load("m1"))?.elements[0]).toMatchObject({ color: "#123456" });
+
+    const named = await oldMap([{ ...base, color: "blue" }]);
+    expect(await named.store.load("m1")).toBeNull();
+  });
+
   /** A Map as #745 stored it: a Pencil line with no style fields at all. */
   async function oldMap(elements: unknown[]) {
     const memory = memoryStorage();
@@ -529,6 +569,13 @@ describe("Map Fills", () => {
     expect(await loadMap([stored])).toMatchObject({ elements: [stored] });
   });
 
+  it("normalizes the old default land colour to the land role", async () => {
+    const stored = fill("land", { content: { color: DEFAULT_FILL_COLOR } });
+
+    const loaded = await loadMap([stored]);
+    expect((loaded?.elements[0] as MapFillElement).content.color).toBe("land");
+  });
+
   it("rejects a Fill whose anchor or colour is malformed", async () => {
     const base = fill("broken");
 
@@ -567,7 +614,9 @@ describe("Map Fills", () => {
       content: { color: "#c8d5a3", texture: "grass" },
     });
 
-    expect(await loadMap([area])).toMatchObject({ elements: [area] });
+    expect(await loadMap([area])).toMatchObject({
+      elements: [{ ...area, content: { ...area.content, color: "land" } }],
+    });
   });
 
   it("keeps a Fill of scattered Stamps, or of a texture alone, with no colour", async () => {
@@ -815,8 +864,8 @@ describe("Map Stamps", () => {
       locked: false,
       stampRef: "base:marker",
       transform: { x: 30, y: 40, size: DEFAULT_STAMP_SIZE_MM, rotation: 0 },
-      color: LINE_STROKE,
     });
+    expect(marker.color).toBeUndefined();
     expect(marker.scale).toBeUndefined();
 
     const bar = newStamp({
@@ -847,6 +896,12 @@ describe("Map Stamps", () => {
     expect(await loadElements([stored])).toEqual([stored]);
   });
 
+  it("drops the old atlas ink from a Stamp, so it follows the Map Style", async () => {
+    const [legacy] = (await loadElements([stamp({ color: "#1f2933" })])) as MapStampElement[];
+
+    expect(legacy.color).toBeUndefined();
+  });
+
   it("rejects a Stamp whose ref, transform, colour, or scale is malformed", async () => {
     const base = stamp();
 
@@ -854,7 +909,6 @@ describe("Map Stamps", () => {
       { ...base, stampRef: undefined },
       { ...base, stampRef: "" },
       { ...base, stampRef: 7 },
-      { ...base, color: undefined },
       { ...base, color: null },
       { ...base, transform: undefined },
       { ...base, transform: null },

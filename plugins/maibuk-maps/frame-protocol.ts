@@ -19,7 +19,8 @@
 
 import type { MapDocument, MapPoint, ShapeKind } from "./maps";
 import { isShapeKind } from "./maps";
-import { canMove, EMPTY_MAP_COLOR, type SceneShape, sceneRender } from "./scene";
+import { canMove, type SceneShape, sceneRender } from "./scene";
+import { resolveColor, styleOf } from "./styles";
 
 /** The editor tool the Frame should honour. */
 export type MapTool =
@@ -364,7 +365,7 @@ export function parseFrameMessage(data: unknown): FrameToWorkerMessage | null {
 
 /** The scene one open Map sends its Frame. */
 export function sceneMessage(
-  map: Pick<MapDocument, "page" | "elements">,
+  map: Pick<MapDocument, "page" | "elements"> & { styleId?: string },
   view: {
     selectedId: string | null;
     tool: MapTool;
@@ -375,12 +376,13 @@ export function sceneMessage(
     penLabel: PenDraftLabel;
   }
 ): FrameSceneMessage {
-  const render = sceneRender(map.elements, map.page.widthMm, map.page.heightMm);
+  const style = styleOf(map.styleId);
+  const render = sceneRender(map.elements, map.page.widthMm, map.page.heightMm, style);
   return {
     kind: "scene",
     widthMm: map.page.widthMm,
     heightMm: map.page.heightMm,
-    background: EMPTY_MAP_COLOR,
+    background: resolveColor(style, undefined, "water"),
     elements: map.elements.map((element, index) => ({
       id: element.id,
       shapes: render.shapes[index],

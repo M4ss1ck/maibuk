@@ -31,7 +31,6 @@ import type {
   ShapeKind,
 } from "./maps";
 import {
-  DEFAULT_FILL_COLOR,
   DEFAULT_POLYGON_SIDES,
   DEFAULT_SHAPE_SIZE_MM,
   LINE_STYLE_DEFAULT_ENCLOSES,
@@ -340,7 +339,9 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
   let selectedId: string | null = null;
   let tool: MapTool = "select";
   let currentLineStyle: LineStyleId = "plain";
-  let currentFillColor = DEFAULT_FILL_COLOR;
+  // A new Fill takes the `land` role, so it follows the Map Style until the
+  // author overrides it.
+  let currentFillColor = "land";
   let currentStampId: BaseStampId = DEFAULT_STAMP_ID;
   let roughenStrength = DEFAULT_ROUGHEN_STRENGTH_MM;
   let pdfFontFamily: string | null = null;

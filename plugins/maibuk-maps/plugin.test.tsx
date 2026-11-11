@@ -1501,7 +1501,7 @@ describe("Map editor page", () => {
       expect(drawn).toMatchObject({
         kind: "fill",
         name: "Fill 1",
-        content: { color: DEFAULT_FILL_COLOR },
+        content: { color: "land" },
       });
       expect(drawn.outline?.points).toEqual([
         [startX, startY],
@@ -1560,7 +1560,7 @@ describe("Map editor page", () => {
       const poured = storedMap(storage).elements.find(
         (element): element is MapFillElement => element.kind === "fill"
       );
-      expect(poured).toMatchObject({ name: "Fill 1", content: { color: DEFAULT_FILL_COLOR } });
+      expect(poured).toMatchObject({ name: "Fill 1", content: { color: "land" } });
       expect(runtime.editor?.getSnapshot().selectedId).toBe(poured?.id);
       expect(screen.getByRole("listbox", { name: en["elements.label"] })).toHaveTextContent(
         en["element.kind.fill"]
@@ -2549,7 +2549,7 @@ describe("Map editor page", () => {
       await waitFor(() => expect(fillNow(runtime).content.texture).toBeUndefined());
       await runtime.editor?.flush();
       expect(storedFill(storage).content).toMatchObject({
-        color: DEFAULT_FILL_COLOR,
+        color: "land",
         scatter: { stamp: "base:castle" },
       });
       expect(storedFill(storage).content.texture).toBeUndefined();

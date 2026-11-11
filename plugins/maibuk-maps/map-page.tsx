@@ -505,7 +505,7 @@ function MapEditorView({
                   {stampTakesColour(stamp.stampRef) ? (
                     <ui.ColorPicker
                       label={t("properties.stamp.color")}
-                      value={stamp.color}
+                      value={stamp.color ?? LINE_STROKE}
                       isDisabled={selected.locked}
                       onChange={(event) => editor.setStampColor(selected.id, event.detail)}
                     />

@@ -20,9 +20,7 @@ import {
   seedFor,
 } from "./geometry";
 import {
-  DEFAULT_STAMP_COLOR,
   DEFAULT_STAMP_SCALE,
-  LINE_STROKE,
   isAreaFill,
   labelBaselinePath,
   labelFontFamily,
@@ -39,6 +37,7 @@ import {
 } from "./maps";
 import { scatterPoints } from "./scatter";
 import { SCALE_BAR_STAMP_REF, type StampArt, scaleBarLayout, stampArt } from "./stamps";
+import { resolveColor, styleOf, type MapStyleId } from "./styles";
 import { TEXTURE_IDS, texturePattern, texturePatternId, type TextureId } from "./textures";
 
 /** The Atlas Map Style's water, which an empty Map shows. */
@@ -53,9 +52,13 @@ const DUPLICATE_DISTANCE_MM = 0.05;
 /** A Map Line's width in page millimetres. */
 const LINE_STROKE_WIDTH_MM = 0.6;
 
-/** The background a Map is drawn on; the Atlas Map Style's water. */
-function background(widthMm: number, heightMm: number): string {
-  return `<rect width="${roundedMm(widthMm)}" height="${roundedMm(heightMm)}" fill="${EMPTY_MAP_COLOR}"/>`;
+/** The background a Map is drawn on; a Map Style's water. */
+function background(widthMm: number, heightMm: number, style: MapStyleId): string {
+  return `<rect width="${roundedMm(widthMm)}" height="${roundedMm(heightMm)}" fill="${resolveColor(
+    style,
+    undefined,
+    "water"
+  )}"/>`;
 }
 
 /** A point-to-point distance, for dropping near-duplicate Pencil points. */
@@ -208,9 +211,6 @@ export interface TextHalo {
 /** One primitive an Element draws: a path to stroke or fill, or a piece of text. */
 export type SceneShape = LineShape | TextShape;
 
-/** A river's water-blue ink. */
-const RIVER_INK = "#3b6e8f";
-
 /** A river's width at its start and its end, in page millimetres. */
 const RIVER_START_WIDTH_MM = 0.2;
 const RIVER_END_WIDTH_MM = 1.4;
@@ -237,15 +237,16 @@ const ROUGH_BOWING = 1;
 /** The rough.js generator, which needs no DOM and shares no state between calls. */
 const roughGenerator = new RoughGenerator();
 
-/** One stroke-only shape in the Map Style's ink. */
+/** One stroke-only shape in the given ink. */
 function strokeShape(
   d: string,
   strokeWidth: number,
-  options: { stroke?: string; dash?: string; opacity?: number } = {}
+  stroke: string,
+  options: { dash?: string; opacity?: number } = {}
 ): LineShape {
   return {
     d,
-    stroke: options.stroke ?? LINE_STROKE,
+    stroke,
     strokeWidth,
     dash: options.dash ?? null,
     fill: null,
@@ -321,30 +322,33 @@ function taperedRiverPath(points: readonly MapPoint[]): string {
   return `${path} Z`;
 }
 
-/** A line's shapes before Roughen touches them, by its line style. */
-function styleShapes(element: MapLineElement, d: string): LineShape[] {
+/** A line's shapes before Roughen touches them, by its line style and the Map Style's ink. */
+function styleShapes(element: MapLineElement, d: string, style: MapStyleId): LineShape[] {
+  // A river follows the river role unless the line overrides it; every other
+  // line style draws in the ink role.
+  const ink = resolveColor(style, element.color, element.style === "river" ? "river" : "ink");
   switch (element.style) {
     case "coast":
-      return [strokeShape(d, COAST_STROKE_WIDTH_MM)];
+      return [strokeShape(d, COAST_STROKE_WIDTH_MM, ink)];
     case "river":
       return element.closed
-        ? [strokeShape(d, RIVER_CLOSED_WIDTH_MM, { stroke: RIVER_INK })]
+        ? [strokeShape(d, RIVER_CLOSED_WIDTH_MM, ink)]
         : [
             {
               d: taperedRiverPath(element.points),
               stroke: null,
               strokeWidth: 0,
               dash: null,
-              fill: RIVER_INK,
+              fill: ink,
               opacity: 1,
             },
           ];
     case "road":
-      return [strokeShape(d, ROAD_STROKE_WIDTH_MM, { dash: ROAD_DASH })];
+      return [strokeShape(d, ROAD_STROKE_WIDTH_MM, ink, { dash: ROAD_DASH })];
     case "border":
-      return [strokeShape(d, BORDER_STROKE_WIDTH_MM, { dash: BORDER_DASH })];
+      return [strokeShape(d, BORDER_STROKE_WIDTH_MM, ink, { dash: BORDER_DASH })];
     case "coastRipple": {
-      const shapes = [strokeShape(d, COAST_STROKE_WIDTH_MM)];
+      const shapes = [strokeShape(d, COAST_STROKE_WIDTH_MM, ink)];
       RIPPLE_OFFSETS_MM.forEach((offset, index) => {
         const offsetPath = linePath({
           points: offsetPoints(element.points, element.closed, offset),
@@ -352,13 +356,15 @@ function styleShapes(element: MapLineElement, d: string): LineShape[] {
           closed: element.closed,
         });
         shapes.push(
-          strokeShape(offsetPath, RIPPLE_STROKE_WIDTH_MM, { opacity: RIPPLE_OPACITIES[index] })
+          strokeShape(offsetPath, RIPPLE_STROKE_WIDTH_MM, ink, {
+            opacity: RIPPLE_OPACITIES[index],
+          })
         );
       });
       return shapes;
     }
     case "plain":
-      return [strokeShape(d, LINE_STROKE_WIDTH_MM)];
+      return [strokeShape(d, LINE_STROKE_WIDTH_MM, ink)];
   }
 }
 
@@ -393,10 +399,10 @@ function roughenShape(shape: LineShape, id: string, closed: boolean): LineShape[
  * Frame draws and `sceneToSvg` writes, so the preview and the Frame cannot
  * drift. A roughened line's strokes come from rough.js instead of `linePath`.
  */
-export function lineShapes(element: MapLineElement): LineShape[] {
+export function lineShapes(element: MapLineElement, styleId?: string): LineShape[] {
   const d = linePath(element);
   if (d === "") return [];
-  const shapes = styleShapes(element, d);
+  const shapes = styleShapes(element, d, styleOf(styleId));
   return element.roughened
     ? shapes.flatMap((shape) => roughenShape(shape, element.id, element.closed))
     : shapes;
@@ -521,11 +527,13 @@ function scatteredShapes(
   scatter: MapFillScatter,
   pageWidthMm: number,
   pageHeightMm: number,
+  style: MapStyleId,
   collector: SceneCollector
 ): LineShape[] {
   const clip = scatterClipId(element.id);
   const shapes: LineShape[] = [];
   const art = stampArt(scatter.stamp);
+  const ink = resolveColor(style, undefined, "ink");
   if (art !== undefined) {
     for (const point of scatterPoints(
       area.rings,
@@ -538,7 +546,7 @@ function scatteredShapes(
         { x: point[0], y: point[1], size: scatter.spacing, rotation: 0 },
         art
       );
-      for (const shape of artShapes(art, transform, DEFAULT_STAMP_COLOR)) {
+      for (const shape of artShapes(art, transform, ink)) {
         shapes.push({ ...shape, clip });
       }
     }
@@ -561,17 +569,20 @@ function fillShapes(
   area: FillArea,
   pageWidthMm: number,
   pageHeightMm: number,
+  style: MapStyleId,
   collector: SceneCollector
 ): LineShape[] {
   const { color, texture, scatter } = element.content;
   const shapes: LineShape[] = [];
-  if (color !== undefined) shapes.push(areaPaint(area, color));
+  if (color !== undefined) shapes.push(areaPaint(area, resolveColor(style, color, "land")));
   if (texture !== undefined) {
     collector.textures.add(texture);
     shapes.push(areaPaint(area, `url(#${texturePatternId(texture)})`));
   }
   if (scatter !== undefined) {
-    shapes.push(...scatteredShapes(element, area, scatter, pageWidthMm, pageHeightMm, collector));
+    shapes.push(
+      ...scatteredShapes(element, area, scatter, pageWidthMm, pageHeightMm, style, collector)
+    );
   }
   return shapes;
 }
@@ -638,7 +649,7 @@ function scaleBarSegments(distance: number): number {
  * segments in the Stamp's colour, with its distance written at the right end.
  * The bar straddles the Stamp's point and turns with it.
  */
-function scaleBarShapes(element: MapStampElement, pageWidthMm: number): SceneShape[] {
+function scaleBarShapes(element: MapStampElement, pageWidthMm: number, ink: string): SceneShape[] {
   const scale = element.scale ?? DEFAULT_STAMP_SCALE;
   const { distance, lengthMm } = scaleBarLayout(pageWidthMm, scale.span, element.transform.size);
   if (!(lengthMm > 0)) return [];
@@ -664,13 +675,13 @@ function scaleBarShapes(element: MapStampElement, pageWidthMm: number): SceneSha
             stroke: null,
             strokeWidth: 0,
             dash: null,
-            fill: element.color,
+            fill: ink,
             opacity: 1,
             transform,
           }
         : {
             d,
-            stroke: element.color,
+            stroke: ink,
             strokeWidth: SCALE_BAR_STROKE_WIDTH_MM,
             dash: null,
             fill: null,
@@ -683,7 +694,7 @@ function scaleBarShapes(element: MapStampElement, pageWidthMm: number): SceneSha
   const label = {
     y: top + height + height * SCALE_BAR_LABEL_RATIO,
     size: height * SCALE_BAR_LABEL_RATIO,
-    fill: element.color,
+    fill: ink,
     font: TEXT_FONT_FAMILY,
     transform,
   };
@@ -693,11 +704,16 @@ function scaleBarShapes(element: MapStampElement, pageWidthMm: number): SceneSha
 }
 
 /** The shapes one Stamp draws: its built-in art, or the scale bar its reading lays out. */
-function stampShapes(element: MapStampElement, pageWidthMm: number): SceneShape[] {
-  if (element.stampRef === SCALE_BAR_STAMP_REF) return scaleBarShapes(element, pageWidthMm);
+function stampShapes(
+  element: MapStampElement,
+  pageWidthMm: number,
+  style: MapStyleId
+): SceneShape[] {
+  const ink = resolveColor(style, element.color, "ink");
+  if (element.stampRef === SCALE_BAR_STAMP_REF) return scaleBarShapes(element, pageWidthMm, ink);
   const art = stampArt(element.stampRef);
   if (art === undefined || !(element.transform.size > 0)) return [];
-  return artShapes(art, artTransform(element.transform, art), element.color);
+  return artShapes(art, artTransform(element.transform, art), ink);
 }
 
 /** The id a Map Label's baseline path takes, from the Element's own id. */
@@ -706,19 +722,16 @@ function labelPathId(elementId: string): string {
 }
 
 /**
- * The colour a Map Label's halo is drawn in: the paper the page is drawn on, so
- * the halo hides the land and water behind the text instead of adding a colour
- * of its own.
- */
-const LABEL_HALO_COLOR = EMPTY_MAP_COLOR;
-
-/**
  * The primitives one Map Label draws (#751): its text running along the
  * baseline, the halo behind that text, and the baseline itself as a hit path the
  * Frame picks the Element by. Both serializers draw the text over the baseline
  * the definitions hold, so a straight label and a curved one take one path.
  */
-function labelShapes(element: MapLabelElement, collector: SceneCollector): SceneShape[] {
+function labelShapes(
+  element: MapLabelElement,
+  style: MapStyleId,
+  collector: SceneCollector
+): SceneShape[] {
   const d = labelBaselinePath(element);
   const id = labelPathId(element.id);
   collector.defs.push(`<path id="${id}" d="${escapeAttribute(d)}"/>`);
@@ -727,12 +740,14 @@ function labelShapes(element: MapLabelElement, collector: SceneCollector): Scene
     x: element.x,
     y: element.y,
     size: element.size,
-    fill: element.color ?? LINE_STROKE,
+    fill: resolveColor(style, element.color, "label"),
     font: labelFontFamily(element.font),
     anchor: "middle",
     path: { id, d },
     ...(element.letterSpacing === 0 ? {} : { letterSpacing: element.letterSpacing }),
-    ...(element.halo > 0 ? { halo: { color: LABEL_HALO_COLOR, width: element.halo } } : {}),
+    ...(element.halo > 0
+      ? { halo: { color: resolveColor(style, undefined, "halo"), width: element.halo } }
+      : {}),
   };
   return [
     { d, stroke: null, strokeWidth: 0, dash: null, fill: null, opacity: 1, hitOnly: true },
@@ -746,14 +761,17 @@ function elementShapes(
   area: FillArea | null,
   pageWidthMm: number,
   pageHeightMm: number,
+  style: MapStyleId,
   collector: SceneCollector
 ): SceneShape[] {
-  if (element.kind === "line") return lineShapes(element);
+  if (element.kind === "line") return lineShapes(element, style);
   if (element.kind === "fill") {
-    return area === null ? [] : fillShapes(element, area, pageWidthMm, pageHeightMm, collector);
+    return area === null
+      ? []
+      : fillShapes(element, area, pageWidthMm, pageHeightMm, style, collector);
   }
-  if (element.kind === "stamp") return stampShapes(element, pageWidthMm);
-  if (element.kind === "label") return labelShapes(element, collector);
+  if (element.kind === "stamp") return stampShapes(element, pageWidthMm, style);
+  if (element.kind === "label") return labelShapes(element, style, collector);
   return [];
 }
 
@@ -808,8 +826,10 @@ export interface SceneRender {
 export function sceneRender(
   elements: readonly MapElement[],
   pageWidthMm: number,
-  pageHeightMm: number
+  pageHeightMm: number,
+  styleId?: string
 ): SceneRender {
+  const style = styleOf(styleId);
   const needsFaces = elements.some((element) => element.kind === "fill");
   const faces = needsFaces ? sceneFaces(elements) : [];
   const collector: SceneCollector = { defs: [], textures: new Set() };
@@ -818,7 +838,7 @@ export function sceneRender(
 
   for (const element of elements) {
     const area = element.kind === "fill" ? fillArea(element, faces) : null;
-    shapes.push(elementShapes(element, area, pageWidthMm, pageHeightMm, collector));
+    shapes.push(elementShapes(element, area, pageWidthMm, pageHeightMm, style, collector));
 
     const softEdge = softEdgeOf(element);
     const outline = element.kind === "line" ? element.points : (area?.rings.flat() ?? []);
@@ -848,9 +868,10 @@ export function sceneRender(
 export function sceneShapes(
   elements: readonly MapElement[],
   pageWidthMm: number,
-  pageHeightMm: number
+  pageHeightMm: number,
+  styleId?: string
 ): SceneShape[][] {
-  return sceneRender(elements, pageWidthMm, pageHeightMm).shapes;
+  return sceneRender(elements, pageWidthMm, pageHeightMm, styleId).shapes;
 }
 
 /** Escapes text for an XML attribute. */
@@ -969,12 +990,13 @@ export interface SceneOptions {
   widthPx?: number;
 }
 
-/** A whole Map as SVG: the page in its background, then every visible Element. */
+/** A whole Map as SVG: the page in its Style's water, then every visible Element. */
 export function sceneToSvg(
-  map: Pick<MapDocument, "page" | "elements">,
+  map: Pick<MapDocument, "page" | "elements"> & { styleId?: string },
   options: SceneOptions = {}
 ): string {
   const { widthMm, heightMm } = map.page;
+  const style = styleOf(map.styleId);
   const pixelSize =
     options.widthPx !== undefined && Number.isFinite(options.widthPx) && options.widthPx > 0
       ? ` width="${roundedMm(options.widthPx)}" height="${roundedMm(
@@ -985,10 +1007,10 @@ export function sceneToSvg(
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${roundedMm(widthMm)} ${roundedMm(
       heightMm
     )}"${pixelSize}>`,
-    background(widthMm, heightMm),
+    background(widthMm, heightMm, style),
   ];
 
-  const render = sceneRender(map.elements, widthMm, heightMm);
+  const render = sceneRender(map.elements, widthMm, heightMm, style);
   if (render.defs.length > 0) parts.push(`<defs>${render.defs.join("")}</defs>`);
   map.elements.forEach((element, index) => {
     // An Element with nothing to draw writes no group: a hidden one, a Fill in
