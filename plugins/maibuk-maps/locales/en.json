@@ -25,6 +25,7 @@
   "commands.pencilTool.label": "Pencil tool",
   "commands.penTool.label": "Pen tool",
   "commands.bucketTool.label": "Bucket tool",
+  "commands.insertTool.label": "Insert tool",
   "commands.ellipseTool.label": "Ellipse tool",
   "commands.rectangleTool.label": "Rectangle tool",
   "commands.polygonTool.label": "Polygon tool",

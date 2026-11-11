@@ -12,20 +12,24 @@ import { useEffect, useState, useSyncExternalStore, type ComponentType } from "r
 import { ui, type PluginClient } from "@/plugin-sdk";
 import { MAX_ROUGHEN_STRENGTH_MM, MIN_ROUGHEN_STRENGTH_MM, type MapEditor } from "./editor";
 import type { MapTool } from "./frame-protocol";
+import { format, translate, type MapsKey } from "./i18n";
 import type { MapsRuntime } from "./runtime";
-import { translate, type MapsKey } from "./i18n";
 import { useLanguage } from "./maps-page";
 import {
   LINE_STYLE_IDS,
   MAX_POLYGON_SIDES,
   MIN_POLYGON_SIDES,
   MIN_SHAPE_SIZE_MM,
+  MIN_STAMP_SIZE_MM,
   SHAPE_KINDS,
+  STAMP_SCALE_UNITS,
   isShapeKind,
   type LineStyleId,
   type MapElement,
   type ShapeKind,
+  type StampScaleUnit,
 } from "./maps";
+import { BASE_STAMP_IDS, stampNameKey, stampTakesColour } from "./stamps";
 
 /** The editor page id, exactly as the manifest declares it. */
 export const MAP_PAGE_ID = "map";
@@ -86,14 +90,22 @@ const CONVERTED_KEYS: Readonly<Record<ShapeKind, MapsKey>> = {
   polygon: "properties.convertedFrom.polygon",
 };
 
+/** The scale bar's unit picker's label for each unit it reads in. */
+const STAMP_UNIT_KEYS: Readonly<Record<StampScaleUnit, MapsKey>> = {
+  km: "properties.stamp.unit.km",
+  mi: "properties.stamp.unit.mi",
+};
+
 /**
  * The Elements list's kind label, for the kinds a Map can hold (#748: a Fill
- * joins a Map Line). A kind with no label of its own says nothing, so the row
- * falls back to its flags alone rather than calling itself a Map Line.
+ * joins a Map Line; #749: a Stamp joins them). A kind with no label of its own
+ * says nothing, so the row falls back to its flags alone rather than calling
+ * itself a Map Line.
  */
 const ELEMENT_KIND_KEYS: Readonly<Partial<Record<MapElement["kind"], MapsKey>>> = {
   line: "element.kind.line",
   fill: "element.kind.fill",
+  stamp: "element.kind.stamp",
 };
 
 interface RenameDialog {
@@ -133,6 +145,7 @@ function MapEditorView({
   // The Shape tool whose Place button the picker shows, or null for any other tool.
   const shapeTool = isShapeKind(snapshot.tool) ? snapshot.tool : null;
   const shape = snapshot.selectedShape;
+  const stamp = snapshot.selectedStamp;
   // The Bucket's colour is what the next pour uses, so it wins while the Bucket
   // is active; with any other tool the one control edits the selected Fill.
   const pouring = snapshot.tool === "bucket";
@@ -224,6 +237,7 @@ function MapEditorView({
               { value: "pencil", label: t("tools.pencil") },
               { value: "pen", label: t("tools.pen") },
               { value: "bucket", label: t("tools.bucket") },
+              { value: "insert", label: t("tools.insert") },
               ...SHAPE_KINDS.map((kind) => ({ value: kind, label: t(SHAPE_TOOL_KEYS[kind]) })),
               { value: "eraser", label: t("tools.eraser") },
             ]}
@@ -237,6 +251,27 @@ function MapEditorView({
               {t(PLACE_SHAPE_KEYS[shapeTool])}
             </ui.Button>
           )}
+          {/* Insert picks one Stamp and drops it where the pointer lands; the
+              Place button is the keyboard path that lands it at the view
+              centre (#749). Custom Stamps and Upload join this picker later. */}
+          {snapshot.tool === "insert" ? (
+            <>
+              <ui.Select
+                label={t("properties.stamp")}
+                options={BASE_STAMP_IDS.map((id) => ({
+                  value: id,
+                  label: t(stampNameKey(id)),
+                }))}
+                selectedKey={snapshot.currentStampId}
+                onChange={(event) => editor.setStamp(event.detail)}
+              />
+              <ui.Button variant="secondary" onPress={() => editor.insertStamp()}>
+                {format(t("properties.placeStamp"), {
+                  stamp: t(stampNameKey(snapshot.currentStampId)),
+                })}
+              </ui.Button>
+            </>
+          ) : null}
           <ui.Text weight="semibold">{t("elements.label")}</ui.Text>
           <ui.Collection
             label={t("elements.label")}
@@ -377,6 +412,84 @@ function MapEditorView({
               )}
               {snapshot.selectedConvertedFrom === null ? null : (
                 <ui.Text tone="muted">{t(CONVERTED_KEYS[snapshot.selectedConvertedFrom])}</ui.Text>
+              )}
+              {stamp === null ? null : (
+                <>
+                  <ui.NumberField
+                    label={t("properties.stamp.x")}
+                    value={stamp.transform.x}
+                    isDisabled={selected.locked}
+                    onChange={(event) => editor.setStampTransform(selected.id, { x: event.detail })}
+                  />
+                  <ui.NumberField
+                    label={t("properties.stamp.y")}
+                    value={stamp.transform.y}
+                    isDisabled={selected.locked}
+                    onChange={(event) => editor.setStampTransform(selected.id, { y: event.detail })}
+                  />
+                  {/* The scale bar's size is the room its bar may draw in, so
+                      that field reads as the longest bar it can label. */}
+                  <ui.NumberField
+                    label={
+                      stamp.scale === undefined
+                        ? t("properties.stamp.size")
+                        : t("properties.stamp.maxLength")
+                    }
+                    value={stamp.transform.size}
+                    minValue={MIN_STAMP_SIZE_MM}
+                    isDisabled={selected.locked}
+                    onChange={(event) =>
+                      editor.setStampTransform(selected.id, { size: event.detail })
+                    }
+                  />
+                  <ui.NumberField
+                    label={t("properties.stamp.rotation")}
+                    value={stamp.transform.rotation}
+                    isDisabled={selected.locked}
+                    onChange={(event) =>
+                      editor.setStampTransform(selected.id, { rotation: event.detail })
+                    }
+                  />
+                  {/* Only art that leaves its fill to the Stamp recolours. */}
+                  {stampTakesColour(stamp.stampRef) ? (
+                    <ui.ColorPicker
+                      label={t("properties.stamp.color")}
+                      value={stamp.color}
+                      isDisabled={selected.locked}
+                      onChange={(event) => editor.setStampColor(selected.id, event.detail)}
+                    />
+                  ) : null}
+                  {stamp.scale === undefined ? null : (
+                    <>
+                      <ui.RadioGroup
+                        label={t("properties.stamp.unit")}
+                        orientation="horizontal"
+                        options={STAMP_SCALE_UNITS.map((unit) => ({
+                          value: unit,
+                          label: t(STAMP_UNIT_KEYS[unit]),
+                        }))}
+                        selectedKey={stamp.scale.unit}
+                        isDisabled={selected.locked}
+                        onChange={(event) =>
+                          editor.setStampScale(selected.id, {
+                            unit: event.detail as StampScaleUnit,
+                          })
+                        }
+                      />
+                      {/* A page width standing for no distance reads no bar, so
+                          the field's minimum is the smallest span the model keeps. */}
+                      <ui.NumberField
+                        label={t("properties.stamp.span")}
+                        value={stamp.scale.span}
+                        minValue={1}
+                        isDisabled={selected.locked}
+                        onChange={(event) =>
+                          editor.setStampScale(selected.id, { span: event.detail })
+                        }
+                      />
+                    </>
+                  )}
+                </>
               )}
               {snapshot.selectedIsLine ? (
                 <ui.Switch

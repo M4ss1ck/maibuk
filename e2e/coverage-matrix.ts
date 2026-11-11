@@ -2910,6 +2910,28 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-maps-stamps",
+    area: "plugins",
+    workflow:
+      "The Maps editor's Insert tool and Stamps (#749): the Insert tool's key opens the Stamp picker, which lists every built-in Stamp beside a Place button named after the pick. From the keyboard alone the author picks a Stamp by its name in the picker, presses Place, and the Stamp lands at the view centre, listed in the Elements list and drawn in the Frame; an arrow moves the selected Stamp 1 mm, and Delete removes it. A click in the Frame places the picked Stamp where the pointer landed, and the scale bar inserted from the picker draws its distance label in the Frame; a one-colour Stamp takes a new colour from the Stamp color picker, which the burg art with its own fills does not offer; asserts: the drawn Stamp's page point before and after the move, its row in the Elements list, its removal, the clicked Stamp's landing point, the scale bar's \"0\" and distance labels, and the recoloured fill; persists: yes (each placement is one autosaving, undoable edit)",
+    edges: [
+      "The Insert tool's key opens the Stamp picker, and the Stamp it picks places at the view centre, moves 1 mm with an arrow, and deletes with Delete",
+      "A click in the Frame with the Insert tool places the picked Stamp where the pointer landed",
+      "The scale bar inserted from the picker draws its distance label in the Frame",
+      "A one-colour Stamp takes a new colour from the Stamp color picker",
+    ],
+    terms: ["Command", "Shortcut"],
+    shortcuts: [
+      "plugin.maibuk-maps.insertTool",
+      "plugin.maibuk-maps.moveRight",
+      "plugin.maibuk-maps.deleteElement",
+    ],
+    routes: ["/plugin/:pluginId/:pageId"],
+    fixture: "bookShelf",
+    tags: ["sandbox"],
+    status: "accepted",
+  },
+  {
     id: "plugins-maps-frame-keys",
     area: "plugins",
     workflow:

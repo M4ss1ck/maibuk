@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { MAP_FRAME_SRC } from "./map-page";
 import { parseFrameMessage, sceneMessage } from "./frame-protocol";
-import { sceneToSvg } from "./scene";
+import { TEXT_FONT_FAMILY, sceneToSvg } from "./scene";
 
 const HTML = readFileSync(join(__dirname, "assets/ui/map.html"), "utf8");
 const LIBRARY = readFileSync(join(__dirname, "assets/ui/lib/htm-preact-standalone.umd.js"), "utf8");
@@ -264,6 +264,62 @@ describe("drawing the scene", () => {
   });
 });
 
+describe("Stamp shapes", () => {
+  it("draws a text shape as SVG text and honours a shape's own transform", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [
+        sceneElement({
+          shapes: [
+            shape({ transform: "translate(100 50) scale(1.2)" }),
+            {
+              text: "200 km",
+              x: 40,
+              y: 60,
+              size: 3,
+              fill: "#1f2933",
+              font: TEXT_FONT_FAMILY,
+              anchor: "end",
+              transform: "translate(100 50)",
+            },
+          ],
+        }),
+      ],
+    });
+
+    const line = document.querySelector("path.map-line");
+    expect(line?.getAttribute("transform")).toBe("translate(100 50) scale(1.2)");
+
+    const text = document.querySelector("text");
+    expect(text?.textContent).toBe("200 km");
+    expect(text?.getAttribute("x")).toBe("40");
+    expect(text?.getAttribute("y")).toBe("60");
+    expect(text?.getAttribute("font-size")).toBe("3");
+    expect(text?.getAttribute("font-family")).toBe(TEXT_FONT_FAMILY);
+    expect(text?.getAttribute("fill")).toBe("#1f2933");
+    expect(text?.getAttribute("text-anchor")).toBe("end");
+    expect(text?.getAttribute("transform")).toBe("translate(100 50)");
+  });
+
+  it("drops a text shape with no place, no size, or no colour", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [
+        sceneElement({
+          shapes: [
+            { text: "0", y: 10, size: 2, fill: "#1f2933", anchor: "start" },
+            { text: "0", x: 1, y: 10, size: 0, fill: "#1f2933", anchor: "start" },
+            { text: "0", x: 1, y: 10, size: 2, anchor: "start" },
+          ],
+        }),
+      ],
+    });
+
+    expect(document.querySelector("text")).toBeNull();
+    expect(document.querySelector("[data-element-id]")).toBeNull();
+  });
+});
+
 describe("the scene message", () => {
   it("sends the shapes the list preview draws a Map Line from", () => {
     const map = {
@@ -392,8 +448,10 @@ describe("the scene message", () => {
       penLabel: PEN_LABEL,
     });
 
+    const shape = message.elements[1].shapes[0];
+    if (!("d" in shape)) throw new Error("the Fill drew no path");
     expect(message.elements[1].shapes).toHaveLength(1);
-    expect(message.elements[1].shapes[0]).toMatchObject({
+    expect(shape).toMatchObject({
       stroke: null,
       strokeWidth: 0,
       dash: null,
@@ -401,7 +459,61 @@ describe("the scene message", () => {
       fillRule: "evenodd",
       opacity: 1,
     });
-    expect(message.elements[1].shapes[0].d).toMatch(/^M .+ Z$/);
+    expect(shape.d).toMatch(/^M .+ Z$/);
+  });
+
+  it("carries a Stamp's art and its scale bar's labels", () => {
+    const map = {
+      page: { preset: "portrait" as const, widthMm: 152.4, heightMm: 228.6 },
+      elements: [
+        {
+          id: "marker",
+          kind: "stamp" as const,
+          name: "City",
+          hidden: false,
+          locked: false,
+          stampRef: "base:marker",
+          transform: { x: 100, y: 50, size: 12, rotation: 0 },
+          color: "#1f2933",
+        },
+        {
+          id: "bar",
+          kind: "stamp" as const,
+          name: "Scale",
+          hidden: false,
+          locked: false,
+          stampRef: "base:scale-bar",
+          transform: { x: 100, y: 200, size: 40, rotation: 0 },
+          color: "#1f2933",
+          scale: { unit: "km" as const, span: 1000 },
+        },
+      ],
+    };
+    const message = sceneMessage(map, {
+      selectedId: null,
+      tool: "select",
+      zoom: 1,
+      panX: 0,
+      panY: 0,
+      penLabel: PEN_LABEL,
+    });
+
+    expect(message.elements[0].shapes).toEqual([
+      expect.objectContaining({
+        stroke: null,
+        fill: "#1f2933",
+        transform: "translate(100 50) scale(1.111) translate(0 0)",
+      }),
+      expect.objectContaining({
+        stroke: null,
+        fill: "#1f2933",
+        transform: "translate(100 50) scale(1.111) translate(0 0)",
+      }),
+    ]);
+    const labels = message.elements[1].shapes.filter((shape) => "text" in shape);
+    expect(labels.map((shape) => ("text" in shape ? shape.text : ""))).toEqual(["0", "200 km"]);
+    // The font travels with the label, so the Frame and an export agree.
+    for (const label of labels) expect(label).toMatchObject({ font: TEXT_FONT_FAMILY });
   });
 });
 
@@ -463,6 +575,59 @@ describe("the pour message", () => {
     ]) {
       expect(parseFrameMessage(message)).toBeNull();
     }
+  });
+});
+
+describe("the insert message", () => {
+  it("reads a Stamp dropped at one page point", () => {
+    expect(parseFrameMessage({ kind: "insert", point: [10, 20] })).toEqual({
+      kind: "insert",
+      point: [10, 20],
+    });
+  });
+
+  it("drops an insert without a finite point", () => {
+    for (const message of [
+      { kind: "insert" },
+      { kind: "insert", point: [Number.NaN, 20] },
+      { kind: "insert", point: [10] },
+      { kind: "insert", point: [10, "20"] },
+    ]) {
+      expect(parseFrameMessage(message)).toBeNull();
+    }
+  });
+});
+
+describe("the Insert tool", () => {
+  it("posts the page point of a click as one insert message", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "insert" });
+    expect(svg().getAttribute("data-tool")).toBe("insert");
+
+    pointer(svg(), "pointerdown", 40, 30);
+    expect(frame.port.messages).toEqual([{ kind: "insert", point: [40, 30] }]);
+  });
+
+  it("keeps the tool's keys out of the Frame, so the host still moves the selection", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "insert" });
+
+    // Insert places with a pointer only; the arrows stay the host's Commands.
+    expect(key("ArrowRight").defaultPrevented).toBe(false);
+    expect(key("Enter").defaultPrevented).toBe(false);
+    expect(frame.port.messages).toEqual([]);
+  });
+
+  it("shows the crosshair every placing tool shows, and only Select shows the pointer", () => {
+    frame = loadFrame();
+    const placing = ["pencil", "pen", "bucket", "insert", "ellipse", "rectangle", "polygon"];
+    for (const tool of placing) {
+      frame.scene({ tool });
+      expect(getComputedStyle(svg()).cursor, tool).toBe("crosshair");
+    }
+
+    frame.scene({ tool: "select" });
+    expect(getComputedStyle(svg()).cursor).toBe("default");
   });
 });
 

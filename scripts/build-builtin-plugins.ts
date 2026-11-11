@@ -57,6 +57,10 @@ export const BUNDLE_SIZE_LIMIT_OVERRIDES: Readonly<Record<string, number>> = {
   // under plugins/maibuk-reader/vendor/): about 653 KB gzip on their own, and
   // 668,642 bytes with the Plugin and SDK. Rounded up to the next 50 KB.
   "maibuk-reader": 700 * 1024,
+  // Maps carries @turf/polygonize for the Bucket's faces and its base Stamp
+  // art as path data (plugins/maibuk-maps/stamp-art.ts, about 5 KB gzip):
+  // 150.5 KB gzip with the SDK, rounded up to the next 50 KB.
+  "maibuk-maps": 200 * 1024,
 };
 
 export interface BuildBuiltInPluginsOptions {

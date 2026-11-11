@@ -63,7 +63,8 @@ interface BuildPluginManifest {
 
 /**
  * Builds one Plugin source into `outDir` as one self-contained ESM file, then
- * copies the manifest, `assets/`, and `locales/` beside it. The bundle is named
+ * copies the manifest, `assets/`, `locales/`, and a `LICENSES` notice when the
+ * Plugin carries one, beside it. The bundle is named
  * exactly what the manifest's `entry` declares, and nothing is left external or
  * code-split, so the host module loader can read it.
  */
@@ -114,4 +115,7 @@ export async function buildPlugin(options: BuildPluginOptions): Promise<void> {
     const from = join(sourceDir, folder);
     if (existsSync(from)) await cp(from, join(outDir, folder), { recursive: true });
   }
+  // Third-party art the Plugin derives from ships its notice beside the bundle.
+  const licenses = join(sourceDir, "LICENSES");
+  if (existsSync(licenses)) await cp(licenses, join(outDir, "LICENSES"));
 }

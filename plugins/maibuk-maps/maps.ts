@@ -20,6 +20,7 @@
  */
 
 import { sceneToSvg } from "./scene";
+import { SCALE_BAR_STAMP_REF } from "./stamps";
 
 /** The Plugin's data format version; `migrateData` owns every change to it. */
 export const DATA_VERSION = 1;
@@ -107,6 +108,69 @@ export interface MapFillElement extends MapElementBase {
   content: { color: string };
 }
 
+/** The units a scale bar reads in. */
+export const STAMP_SCALE_UNITS = ["km", "mi"] as const;
+export type StampScaleUnit = (typeof STAMP_SCALE_UNITS)[number];
+
+/**
+ * A scale bar's reading: the distance the Map page's full width stands for, in
+ * `unit`. Only the scale bar Stamp carries one.
+ */
+export interface MapStampScale {
+  unit: StampScaleUnit;
+  span: number;
+}
+
+/** Where a Stamp sits and how big it is: its centre in page millimetres, its art box's width, and its turn in degrees. */
+export interface MapStampTransform {
+  x: number;
+  y: number;
+  size: number;
+  rotation: number;
+}
+
+/**
+ * A Stamp: one picture at one spot on the page (#749). Its art comes from the
+ * built-in set by `stampRef`, `base:<id>`, or from a Custom Stamp's image; an
+ * art part with no colour of its own draws in `color`.
+ */
+export interface MapStampElement extends MapElementBase {
+  kind: "stamp";
+  /** The art it draws, such as `base:marker`; a ref this build does not know draws nothing. */
+  stampRef: string;
+  transform: MapStampTransform;
+  /** The ink a one-colour part of the art takes. */
+  color: string;
+  /** The scale bar's reading; no other Stamp carries one. */
+  scale?: MapStampScale;
+}
+
+/** The width a new Stamp's art box starts at, in page millimetres. */
+export const DEFAULT_STAMP_SIZE_MM = 12;
+
+/**
+ * The room a new scale bar starts with, in page millimetres: the longest bar it
+ * may draw, which `scaleBarLayout` turns into the round distance it labels.
+ */
+export const DEFAULT_SCALE_BAR_SIZE_MM = 40;
+
+/** The smallest art box a Stamp keeps, in page millimetres. */
+export const MIN_STAMP_SIZE_MM = 1;
+
+/**
+ * The ink a Map Line is drawn in until Map Styles choose another. It lives here,
+ * beside the Elements that carry it, so the model never reads the scene for it:
+ * `scene.ts` imports this module, and a cycle back would leave the default
+ * Stamp colour undefined on the way in.
+ */
+export const LINE_STROKE = "#1f2933";
+
+/** The ink a new Stamp takes until the author or the Map Style picks another. */
+export const DEFAULT_STAMP_COLOR = LINE_STROKE;
+
+/** The reading a new scale bar takes: the page's full width stands for 1000 km. */
+export const DEFAULT_STAMP_SCALE: MapStampScale = { unit: "km", span: 1000 };
+
 /** The exact Shapes a Map Line can be (#747). */
 export const SHAPE_KINDS = ["ellipse", "rectangle", "polygon"] as const;
 export type ShapeKind = (typeof SHAPE_KINDS)[number];
@@ -164,10 +228,10 @@ export function curvedSegments(pointCount: number, closed: boolean): boolean[] {
 
 /** Every other Element kind, whose geometry lands with its own ticket. */
 export interface MapOtherElement extends MapElementBase {
-  kind: Exclude<MapElementKind, "line" | "fill">;
+  kind: Exclude<MapElementKind, "line" | "fill" | "stamp">;
 }
 
-export type MapElement = MapLineElement | MapFillElement | MapOtherElement;
+export type MapElement = MapLineElement | MapFillElement | MapStampElement | MapOtherElement;
 
 /** One stored Map, exactly as `map:<id>` holds it. */
 export interface MapDocument {
@@ -261,6 +325,11 @@ function isLineStyleId(value: unknown): value is LineStyleId {
   return typeof value === "string" && (LINE_STYLE_IDS as readonly string[]).includes(value);
 }
 
+/** Whether a value names one of the units a scale bar reads in. */
+export function isStampScaleUnit(value: unknown): value is StampScaleUnit {
+  return typeof value === "string" && (STAMP_SCALE_UNITS as readonly string[]).includes(value);
+}
+
 /** Whether a value names one of the Shapes a Map Line can be. */
 export function isShapeKind(value: unknown): value is ShapeKind {
   return typeof value === "string" && (SHAPE_KINDS as readonly string[]).includes(value);
@@ -303,6 +372,26 @@ function isLineStyleFields(element: Record<string, unknown>, pointCount: number)
   return true;
 }
 
+/** Whether a Stamp's scale is present and well formed, or absent. */
+function isStampScale(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const scale = value as Record<string, unknown>;
+  return isStampScaleUnit(scale.unit) && isFiniteNumber(scale.span) && scale.span > 0;
+}
+
+/** Whether a Stamp's place and size are present and well formed. */
+function isStampTransform(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const transform = value as Record<string, unknown>;
+  return (
+    isFiniteNumber(transform.x) &&
+    isFiniteNumber(transform.y) &&
+    isFiniteNumber(transform.size) &&
+    transform.size > 0 &&
+    isFiniteNumber(transform.rotation)
+  );
+}
+
 function isMapElement(value: unknown): value is MapElement {
   if (typeof value !== "object" || value === null) return false;
   const element = value as Record<string, unknown>;
@@ -327,6 +416,15 @@ function isMapElement(value: unknown): value is MapElement {
       typeof content === "object" &&
       content !== null &&
       typeof (content as Record<string, unknown>).color === "string"
+    );
+  }
+  if (element.kind === "stamp") {
+    return (
+      typeof element.stampRef === "string" &&
+      element.stampRef !== "" &&
+      typeof element.color === "string" &&
+      isStampTransform(element.transform) &&
+      (element.scale === undefined || isStampScale(element.scale))
     );
   }
   return true;
@@ -361,6 +459,47 @@ function isMapDocument(value: unknown): value is MapDocument {
     typeof page.widthMm === "number" &&
     typeof page.heightMm === "number"
   );
+}
+
+/** A new Stamp's fields; its id and name belong to whoever places it. */
+export interface NewStamp {
+  id: string;
+  name: string;
+  stampRef: string;
+  /** The page point the art is centred on. */
+  point: MapPoint;
+  size?: number;
+  rotation?: number;
+  color?: string;
+  scale?: MapStampScale;
+}
+
+/**
+ * A Stamp of `stampRef` centred on `point`: upright, at the default size, in the
+ * map ink, and, when it is the scale bar, reading the default scale.
+ */
+export function newStamp(input: NewStamp): MapStampElement {
+  const scale =
+    input.scale ?? (input.stampRef === SCALE_BAR_STAMP_REF ? DEFAULT_STAMP_SCALE : undefined);
+  const size =
+    input.size ??
+    (input.stampRef === SCALE_BAR_STAMP_REF ? DEFAULT_SCALE_BAR_SIZE_MM : DEFAULT_STAMP_SIZE_MM);
+  return {
+    id: input.id,
+    kind: "stamp",
+    name: input.name,
+    hidden: false,
+    locked: false,
+    stampRef: input.stampRef,
+    transform: {
+      x: input.point[0],
+      y: input.point[1],
+      size,
+      rotation: input.rotation ?? 0,
+    },
+    color: input.color ?? DEFAULT_STAMP_COLOR,
+    ...(scale === undefined ? {} : { scale }),
+  };
 }
 
 /** The trimmed name, or a throw the page shows as "Give the Map a name". */

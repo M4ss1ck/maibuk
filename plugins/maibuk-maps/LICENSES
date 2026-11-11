@@ -1,0 +1,52 @@
+Maps Stamp art: what it derives from
+=========================================
+
+Some of the built-in Maps Stamps derive from the art of Azgaar's Fantasy Map
+Generator (https://github.com/Azgaar/Fantasy-Map-Generator), which is MIT
+licensed. Its license text, with its copyright line, follows below. The
+derived Stamps, and the source file each one was converted from, are:
+
+- capital: src/assets/icons/burgs/illustrated/nordic-capital.svg
+- city: src/assets/icons/burgs/illustrated/nordic-city.svg
+- castle: src/assets/icons/burgs/illustrated/castle.svg
+- temple: src/assets/icons/burgs/illustrated/greek-temple.svg
+- volcano: src/assets/icons/relief/illustrated/vulcan-1.svg
+- mountain: src/assets/icons/relief/illustrated/mount-1.svg
+- tree: src/assets/icons/relief/illustrated/deciduous-1.svg (one tree of three)
+- port: src/assets/icons/ports/anchor.svg (redrawn one-colour)
+- marker: src/assets/icons/burgs/atlas/circled.svg (redrawn one-colour)
+
+The compass-rose Stamp derives from
+src/assets/icons/charges/conventional/compassRose.svg, whose own <metadata>
+dedicates it to the public domain under CC0
+(https://creativecommons.org/publicdomain/zero/1.0/).
+
+The remaining Stamps (town, village, ruin, tower, cave, bridge, battle,
+cartouche, border-frame, sea-monster, ship) are original to Maibuk, drawn
+in-house for this Plugin under the Plugin's license.
+
+MIT License
+
+Copyright 2017-2024 Max Haniyeu (Azgaar), azgaar.fmg@yandex.com
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+You can produce, without restrictions, any derivative works from the original
+software and even reap commercial benefits from the sale of the secondary product.
+The derivates include created maps, map images, screenshots, videos, and other materials.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

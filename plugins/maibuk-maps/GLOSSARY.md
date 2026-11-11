@@ -43,7 +43,7 @@ A Fill the author defined, from a texture image or a set of their Stamps to scat
 _Avoid_: custom terrain, custom biome, custom texture
 
 **Stamp**:
-A single picture placed on a Map at one spot, such as a city, a castle, a lone mountain, a compass rose, or a ship.
+A single picture placed on a Map at one spot, such as a city, a castle, a lone mountain, a compass rose, or a ship. It can also be the scale bar, which reads the distance the Map's full width stands for.
 _Avoid_: icon (that is a Plugin UI component), symbol (that is the Symbol inserter), marker, pin, decoration
 
 **Custom Stamp**:
@@ -69,6 +69,10 @@ _Avoid_: pointer, arrow, cursor
 **Pen**:
 The editor tool that draws a Map Line point by point: each click adds a straight point, Shift+click adds a curved point, and clicking the first point again closes the line. Its keyboard form moves a crosshair with the arrows and adds points with Enter.
 _Avoid_: polyline tool, path tool, polygon tool
+
+**Insert**:
+The editor tool that places a Stamp chosen from one picker where the author clicks, or at the view center from the keyboard.
+_Avoid_: stamp tool
 
 **Ellipse**:
 The editor tool that draws a Shape as a closed oval: a drag sets its box, and Shift squares that box into a circle. Its keyboard form is its key and the Place button, which lands one at the view center.

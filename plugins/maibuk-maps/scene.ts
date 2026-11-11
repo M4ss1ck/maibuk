@@ -12,7 +12,17 @@
 import { RoughGenerator } from "roughjs/bin/generator.js";
 import { faceAt, findFaces, type Face } from "./faces";
 import { cumulativeLengths, linePath, roundedMm, seedFor } from "./geometry";
-import type { MapDocument, MapElement, MapFillElement, MapLineElement, MapPoint } from "./maps";
+import {
+  DEFAULT_STAMP_SCALE,
+  LINE_STROKE,
+  type MapDocument,
+  type MapElement,
+  type MapFillElement,
+  type MapLineElement,
+  type MapPoint,
+  type MapStampElement,
+} from "./maps";
+import { SCALE_BAR_STAMP_REF, type StampArt, scaleBarLayout, stampArt } from "./stamps";
 
 /** The Atlas Map Style's water, which an empty Map shows. */
 export const EMPTY_MAP_COLOR = "#d7e6ec";
@@ -22,9 +32,6 @@ export const SMOOTH_TOLERANCE_MM = 0.5;
 
 /** Consecutive Pencil points closer than this are the same point. */
 const DUPLICATE_DISTANCE_MM = 0.05;
-
-/** The ink a Map Line is drawn in until Map Styles choose another. */
-export const LINE_STROKE = "#1f2933";
 
 /** A Map Line's width in page millimetres. */
 const LINE_STROKE_WIDTH_MM = 0.6;
@@ -129,7 +136,34 @@ export interface LineShape {
   fillRule?: "evenodd";
   /** How opaque the whole shape is, 0 to 1. */
   opacity: number;
+  /** An SVG transform, when the shape is placed or turned rather than drawn in page coordinates. */
+  transform?: string;
 }
+
+/**
+ * The font family drawn text takes: a system sans stack, so the Frame (whose
+ * body font is the host's sans) and an exported SVG, which has no host theme,
+ * draw the same face. The Frame's script and an export both read this one.
+ */
+export const TEXT_FONT_FAMILY = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+
+/** One piece of text the Frame draws, in page millimetres. */
+export interface TextShape {
+  text: string;
+  x: number;
+  y: number;
+  /** The text's height in page millimetres. */
+  size: number;
+  fill: string;
+  /** The font family the text is drawn in, so a Frame and an export agree. */
+  font: string;
+  anchor: "start" | "middle" | "end";
+  /** An SVG transform, when the text turns with its Element. */
+  transform?: string;
+}
+
+/** One primitive an Element draws: a path to stroke or fill, or a piece of text. */
+export type SceneShape = LineShape | TextShape;
 
 /** A river's water-blue ink. */
 const RIVER_INK = "#3b6e8f";
@@ -373,18 +407,148 @@ function fillShape(element: MapFillElement, faces: readonly Face[]): LineShape[]
   ];
 }
 
-/** The render primitives one Element is drawn from, beside a Map Line's. */
-function elementShapes(element: MapElement, faces: readonly Face[]): LineShape[] {
+/** The scale bar's bar height, as a fraction of its length. */
+const SCALE_BAR_HEIGHT_RATIO = 0.12;
+
+/** The scale bar's label height, as a fraction of the bar's height. */
+const SCALE_BAR_LABEL_RATIO = 0.9;
+
+/** The scale bar's segment outline width, in page millimetres. */
+const SCALE_BAR_STROKE_WIDTH_MM = 0.2;
+
+/** A number for an SVG transform, with three decimals at most. */
+function roundedTransform(value: number): string {
+  return String(Math.round(value * 1000) / 1000);
+}
+
+/** A rectangle as a closed path, in the space its transform places. */
+function rectanglePath(x: number, y: number, width: number, height: number): string {
+  return `M ${roundedMm(x)} ${roundedMm(y)} L ${roundedMm(x + width)} ${roundedMm(y)} L ${roundedMm(
+    x + width
+  )} ${roundedMm(y + height)} L ${roundedMm(x)} ${roundedMm(y + height)} Z`;
+}
+
+/**
+ * The SVG transform that puts an art box on the page: moved to the Stamp's
+ * point, turned, scaled so the box is `size` wide, and centred on the box's
+ * middle, so the art's own coordinates never move.
+ */
+function artTransform(element: MapStampElement, art: StampArt): string {
+  const [minX, minY, width, height] = art.viewBox;
+  const { x, y, size, rotation } = element.transform;
+  return [
+    `translate(${roundedMm(x)} ${roundedMm(y)})`,
+    ...(rotation === 0 ? [] : [`rotate(${roundedMm(rotation)})`]),
+    `scale(${roundedTransform(size / width)})`,
+    `translate(${roundedMm(-minX - width / 2)} ${roundedMm(-minY - height / 2)})`,
+  ].join(" ");
+}
+
+/** The shapes built-in art draws: one per part, a part with no colour of its own taking the Stamp's. */
+function artShapes(element: MapStampElement, art: StampArt): SceneShape[] {
+  if (!(element.transform.size > 0)) return [];
+  const transform = artTransform(element, art);
+  return art.parts.map((part) => ({
+    d: part.d,
+    stroke: part.stroke === undefined ? null : (part.stroke ?? element.color),
+    strokeWidth: part.strokeWidth ?? 0,
+    dash: null,
+    fill: part.fill ?? element.color,
+    opacity: 1,
+    transform,
+  }));
+}
+
+/** How many segments a scale bar splits into: five when the distance starts with a five, else four. */
+function scaleBarSegments(distance: number): number {
+  const leading = Math.round(distance / 10 ** Math.floor(Math.log10(distance)));
+  return leading === 5 ? 5 : 4;
+}
+
+/**
+ * The scale bar (#749): `size` millimetres of room turned into the longest round
+ * distance the page's scale can label, drawn as alternating filled and empty
+ * segments in the Stamp's colour, with its distance written at the right end.
+ * The bar straddles the Stamp's point and turns with it.
+ */
+function scaleBarShapes(element: MapStampElement, pageWidthMm: number): SceneShape[] {
+  const scale = element.scale ?? DEFAULT_STAMP_SCALE;
+  const { distance, lengthMm } = scaleBarLayout(pageWidthMm, scale.span, element.transform.size);
+  if (!(lengthMm > 0)) return [];
+
+  const height = lengthMm * SCALE_BAR_HEIGHT_RATIO;
+  const segments = scaleBarSegments(distance);
+  const segmentWidth = lengthMm / segments;
+  const left = -lengthMm / 2;
+  const top = -height / 2;
+  const { x, y, rotation } = element.transform;
+  const transform = [
+    `translate(${roundedMm(x)} ${roundedMm(y)})`,
+    ...(rotation === 0 ? [] : [`rotate(${roundedMm(rotation)})`]),
+  ].join(" ");
+
+  const shapes: SceneShape[] = [];
+  for (let index = 0; index < segments; index++) {
+    const d = rectanglePath(left + index * segmentWidth, top, segmentWidth, height);
+    shapes.push(
+      index % 2 === 0
+        ? {
+            d,
+            stroke: null,
+            strokeWidth: 0,
+            dash: null,
+            fill: element.color,
+            opacity: 1,
+            transform,
+          }
+        : {
+            d,
+            stroke: element.color,
+            strokeWidth: SCALE_BAR_STROKE_WIDTH_MM,
+            dash: null,
+            fill: null,
+            opacity: 1,
+            transform,
+          }
+    );
+  }
+
+  const label = {
+    y: top + height + height * SCALE_BAR_LABEL_RATIO,
+    size: height * SCALE_BAR_LABEL_RATIO,
+    fill: element.color,
+    font: TEXT_FONT_FAMILY,
+    transform,
+  };
+  shapes.push({ text: "0", x: left, anchor: "start", ...label });
+  shapes.push({ text: `${distance} ${scale.unit}`, x: left + lengthMm, anchor: "end", ...label });
+  return shapes;
+}
+
+/** The shapes one Stamp draws: its built-in art, or the scale bar its reading lays out. */
+function stampShapes(element: MapStampElement, pageWidthMm: number): SceneShape[] {
+  if (element.stampRef === SCALE_BAR_STAMP_REF) return scaleBarShapes(element, pageWidthMm);
+  const art = stampArt(element.stampRef);
+  return art === undefined ? [] : artShapes(element, art);
+}
+
+/** The render primitives one Element is drawn from: a line's, a fill's face, or a Stamp's picture. */
+function elementShapes(
+  element: MapElement,
+  faces: readonly Face[],
+  pageWidthMm: number
+): SceneShape[] {
   if (element.kind === "line") return lineShapes(element);
   if (element.kind === "fill") return fillShape(element, faces);
+  if (element.kind === "stamp") return stampShapes(element, pageWidthMm);
   return [];
 }
 
 /** Every Element's render primitives, in array order, from one pass over the faces. */
-export function sceneShapes(elements: readonly MapElement[]): LineShape[][] {
+export function sceneShapes(elements: readonly MapElement[], pageWidthMm: number): SceneShape[][] {
   const needsFaces = elements.some((element) => element.kind === "fill");
   const faces = needsFaces ? sceneFaces(elements) : [];
-  return elements.map((element) => elementShapes(element, faces));
+  return elements.map((element) => elementShapes(element, faces, pageWidthMm));
 }
 
 /** Escapes text for an XML attribute. */
@@ -402,9 +566,16 @@ function escapeAttribute(value: string): string {
   );
 }
 
+/** Whether a shape is text rather than a path. */
+function isTextShape(shape: SceneShape): shape is TextShape {
+  return "text" in shape;
+}
+
 /** One drawn primitive as an SVG path, with only the attributes it needs. */
 function shapePath(shape: LineShape): string {
   const attributes = [`d="${escapeAttribute(shape.d)}"`];
+  if (shape.transform !== undefined)
+    attributes.push(`transform="${escapeAttribute(shape.transform)}"`);
   if (shape.stroke === null) {
     attributes.push('stroke="none"');
   } else {
@@ -419,16 +590,34 @@ function shapePath(shape: LineShape): string {
   return `<path ${attributes.join(" ")}/>`;
 }
 
-/** One Element as a group of paths, marked when it is the selection. */
+/** One piece of text as SVG, with only the attributes it needs. */
+function shapeText(shape: TextShape): string {
+  const attributes = [
+    `x="${roundedMm(shape.x)}"`,
+    `y="${roundedMm(shape.y)}"`,
+    `font-size="${roundedMm(shape.size)}"`,
+    `font-family="${escapeAttribute(shape.font)}"`,
+    `fill="${escapeAttribute(shape.fill)}"`,
+    `text-anchor="${shape.anchor}"`,
+  ];
+  if (shape.transform !== undefined) {
+    attributes.push(`transform="${escapeAttribute(shape.transform)}"`);
+  }
+  return `<text ${attributes.join(" ")}>${escapeAttribute(shape.text)}</text>`;
+}
+
+/** One Element as a group of primitives, marked when it is the selection. */
 function elementGroup(
   element: MapElement,
-  shapes: readonly LineShape[],
+  shapes: readonly SceneShape[],
   selected: boolean
 ): string {
   const attributes = [`data-element-id="${escapeAttribute(element.id)}"`];
   if (selected) attributes.push('data-selected="true"');
-  const paths = shapes.map(shapePath).join("");
-  return `<g ${attributes.join(" ")}>${paths}</g>`;
+  const primitives = shapes.map((shape) =>
+    isTextShape(shape) ? shapeText(shape) : shapePath(shape)
+  );
+  return `<g ${attributes.join(" ")}>${primitives.join("")}</g>`;
 }
 
 export interface SceneOptions {
@@ -457,12 +646,11 @@ export function sceneToSvg(
     background(widthMm, heightMm),
   ];
 
-  const shapes = sceneShapes(map.elements);
+  const shapes = sceneShapes(map.elements, widthMm);
   map.elements.forEach((element, index) => {
-    if (element.hidden) return;
-    if (element.kind !== "line" && element.kind !== "fill") return;
-    // A Fill in no face draws nothing, not even an empty group.
-    if (element.kind === "fill" && shapes[index].length === 0) return;
+    // An Element with nothing to draw writes no group: a hidden one, a Fill in
+    // no face, or a Stamp whose art this build does not know.
+    if (element.hidden || shapes[index].length === 0) return;
     parts.push(elementGroup(element, shapes[index], options.selectedId === element.id));
   });
 
@@ -515,7 +703,18 @@ export function moveElement(
   dy: number
 ): MapElement[] {
   return elements.map((element) => {
-    if (element.id !== id || element.locked || element.kind !== "line") return element;
+    if (element.id !== id || element.locked) return element;
+    if (element.kind === "stamp") {
+      return {
+        ...element,
+        transform: {
+          ...element.transform,
+          x: element.transform.x + dx,
+          y: element.transform.y + dy,
+        },
+      };
+    }
+    if (element.kind !== "line") return element;
     const moved: MapLineElement = {
       ...element,
       points: element.points.map(([x, y]): MapPoint => [x + dx, y + dy]),

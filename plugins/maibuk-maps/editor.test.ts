@@ -14,12 +14,18 @@ import {
   DATA_VERSION,
   DEFAULT_FILL_COLOR,
   DEFAULT_POLYGON_SIDES,
+  DEFAULT_SCALE_BAR_SIZE_MM,
   DEFAULT_SHAPE_SIZE_MM,
+  DEFAULT_STAMP_COLOR,
+  DEFAULT_STAMP_SIZE_MM,
+  MIN_STAMP_SIZE_MM,
   type MapDocument,
   type MapElement,
   type MapFillElement,
   type MapLineElement,
   type MapShape,
+  type MapStampElement,
+  type StampScaleUnit,
 } from "./maps";
 
 /** An editor over a square 200 by 100 mm Map, with a store that drops its saves. */
@@ -552,5 +558,339 @@ describe("a Fill's own colour", () => {
     editor.undo();
     expect(fills(editor)[0].locked).toBe(false);
     expect(fills(editor)[0].content.color).toBe(DEFAULT_FILL_COLOR);
+  });
+});
+
+describe("moving a Stamp", () => {
+  /** A marker Stamp centred on (100, 50), 12 mm wide, upright, in the map ink. */
+  function stamp(overrides: Partial<MapStampElement> = {}): MapStampElement {
+    return {
+      id: "marker",
+      kind: "stamp",
+      name: "City",
+      hidden: false,
+      locked: false,
+      stampRef: "base:marker",
+      transform: { x: 100, y: 50, size: 12, rotation: 0 },
+      color: DEFAULT_STAMP_COLOR,
+      ...overrides,
+    };
+  }
+
+  it("shifts the selected Stamp's centre as one undo step", () => {
+    const { editor } = openEditor([stamp()]);
+    editor.select("marker");
+
+    editor.move(-1, 2);
+
+    expect(editor.getSnapshot().elements).toEqual([
+      stamp({ transform: { x: 99, y: 52, size: 12, rotation: 0 } }),
+    ]);
+    editor.undo();
+    expect(editor.getSnapshot().elements).toEqual([stamp()]);
+  });
+
+  it("leaves a locked Stamp, and an Element with no centre of its own, where it is", () => {
+    const { editor } = openEditor([
+      stamp({ locked: true }),
+      { id: "label", kind: "label", name: "The Reach", hidden: false, locked: false },
+    ]);
+
+    editor.select("marker");
+    editor.move(1, 0);
+    expect(editor.getSnapshot().elements[0]).toEqual(stamp({ locked: true }));
+
+    editor.select("label");
+    editor.move(1, 0);
+    expect(editor.getSnapshot().elements[1]).toEqual({
+      id: "label",
+      kind: "label",
+      name: "The Reach",
+      hidden: false,
+      locked: false,
+    });
+  });
+});
+
+describe("placing a Stamp with the Insert tool", () => {
+  /** The one Stamp an editor holds, which every Insert test starts from. */
+  function onlyStamp(editor: MapEditor): MapStampElement {
+    const [element] = editor.getSnapshot().elements;
+    if (element === undefined || element.kind !== "stamp") throw new Error("no Stamp");
+    return element;
+  }
+
+  it("places the picked Stamp where the Frame reported the point", () => {
+    const { editor } = openEditor();
+    editor.setStamp("castle");
+
+    editor.handleFrameMessage({ kind: "insert", point: [30, 40] });
+
+    const stamp = onlyStamp(editor);
+    expect(stamp).toMatchObject({
+      kind: "stamp",
+      name: "Castle",
+      hidden: false,
+      locked: false,
+      stampRef: "base:castle",
+      transform: { x: 30, y: 40, size: DEFAULT_STAMP_SIZE_MM, rotation: 0 },
+      color: DEFAULT_STAMP_COLOR,
+    });
+    expect(stamp.scale).toBeUndefined();
+    expect(editor.getSnapshot().selectedId).toBe(stamp.id);
+
+    editor.undo();
+    expect(editor.getSnapshot().elements).toEqual([]);
+    expect(editor.getSnapshot().selectedId).toBeNull();
+  });
+
+  it("places the picked Stamp at the view centre, selected, from the keyboard", () => {
+    const { editor } = openEditor();
+    expect(editor.getSnapshot().currentStampId).toBe("capital");
+
+    editor.insertStamp();
+
+    const stamp = onlyStamp(editor);
+    expect(stamp.name).toBe("Capital");
+    expect(stamp.stampRef).toBe("base:capital");
+    expect(stamp.transform).toEqual({ x: 100, y: 50, size: DEFAULT_STAMP_SIZE_MM, rotation: 0 });
+    expect(editor.getSnapshot().selectedId).toBe(stamp.id);
+
+    // The view centre follows the pan, exactly as a placed Shape's does.
+    editor.panRight();
+    editor.insertStamp();
+    const [first, second] = editor.getSnapshot().elements as MapStampElement[];
+    expect(first.transform.x).toBe(100);
+    expect(second.transform.x).toBe(120);
+  });
+
+  it("gives the scale bar its own default size and reading", () => {
+    const { editor } = openEditor();
+    editor.setStamp("scale-bar");
+
+    editor.insertStamp();
+
+    const bar = onlyStamp(editor);
+    expect(bar.stampRef).toBe("base:scale-bar");
+    expect(bar.transform.size).toBe(DEFAULT_SCALE_BAR_SIZE_MM);
+    expect(bar.scale).toEqual({ unit: "km", span: 1000 });
+  });
+
+  it("keeps its pick to the Stamps this build knows", () => {
+    const { editor } = openEditor();
+    editor.setStamp("nope");
+    expect(editor.getSnapshot().currentStampId).toBe("capital");
+  });
+
+  it("drops an insert message with no finite point", () => {
+    const { editor } = openEditor();
+    for (const message of [
+      { kind: "insert" },
+      { kind: "insert", point: [10] },
+      { kind: "insert", point: ["10", "10"] },
+      { kind: "insert", point: [Number.NaN, 20] },
+    ]) {
+      expect(parseFrameMessage(message)).toBeNull();
+      editor.handleFrameMessage(message);
+    }
+
+    expect(editor.getSnapshot().elements).toEqual([]);
+    expect(editor.getSnapshot().canUndo).toBe(false);
+  });
+});
+
+describe("setStampTransform", () => {
+  /** An editor holding one inserted marker Stamp, centred on the view centre. */
+  function inserted() {
+    const { editor } = openEditor();
+    editor.setStamp("marker");
+    editor.insertStamp();
+    const [element] = editor.getSnapshot().elements as MapStampElement[];
+    return { editor, id: element.id };
+  }
+
+  it("moves, sizes, and turns a Stamp, one undo step each", () => {
+    const { editor, id } = inserted();
+
+    editor.setStampTransform(id, { x: 20, y: 30 });
+    expect((editor.getSnapshot().elements[0] as MapStampElement).transform).toEqual({
+      x: 20,
+      y: 30,
+      size: DEFAULT_STAMP_SIZE_MM,
+      rotation: 0,
+    });
+
+    editor.setStampTransform(id, { size: 20, rotation: 30 });
+    expect((editor.getSnapshot().elements[0] as MapStampElement).transform).toEqual({
+      x: 20,
+      y: 30,
+      size: 20,
+      rotation: 30,
+    });
+
+    editor.undo();
+    expect((editor.getSnapshot().elements[0] as MapStampElement).transform).toEqual({
+      x: 20,
+      y: 30,
+      size: DEFAULT_STAMP_SIZE_MM,
+      rotation: 0,
+    });
+
+    editor.undo();
+    expect((editor.getSnapshot().elements[0] as MapStampElement).transform).toEqual({
+      x: 100,
+      y: 50,
+      size: DEFAULT_STAMP_SIZE_MM,
+      rotation: 0,
+    });
+  });
+
+  it("keeps the art box above zero and the turn inside one full circle", () => {
+    const { editor, id } = inserted();
+    const transform = () => (editor.getSnapshot().elements[0] as MapStampElement).transform;
+
+    editor.setStampTransform(id, { size: 0 });
+    expect(transform().size).toBe(MIN_STAMP_SIZE_MM);
+    editor.setStampTransform(id, { size: -5 });
+    expect(transform().size).toBe(MIN_STAMP_SIZE_MM);
+
+    editor.setStampTransform(id, { rotation: -90 });
+    expect(transform().rotation).toBe(270);
+    editor.setStampTransform(id, { rotation: 450 });
+    expect(transform().rotation).toBe(90);
+    editor.setStampTransform(id, { rotation: 360 });
+    expect(transform().rotation).toBe(0);
+  });
+
+  it("takes no undo step when the numbers would change nothing", () => {
+    const { editor, id } = inserted();
+
+    editor.setStampTransform(id, { x: 100, y: 50, size: DEFAULT_STAMP_SIZE_MM });
+    // A full turn lands back where the Stamp already stands.
+    editor.setStampTransform(id, { rotation: 360 });
+    editor.undo();
+
+    expect(editor.getSnapshot().elements).toEqual([]);
+  });
+
+  it("ignores a locked Stamp, an Element that is not a Stamp, and a number it cannot use", () => {
+    const { editor } = openEditor([squareLine("ring", "Ring", 10, 10, 80)]);
+    editor.setStamp("marker");
+    editor.insertStamp();
+    const stamp = editor.getSnapshot().elements[1] as MapStampElement;
+    const before = stamp.transform;
+
+    editor.setStampTransform(stamp.id, { x: Number.NaN });
+    expect((editor.getSnapshot().elements[1] as MapStampElement).transform).toEqual(before);
+
+    editor.setLocked(stamp.id, true);
+    editor.setStampTransform(stamp.id, { x: 10, size: 40 });
+    expect(editor.getSnapshot().elements[1]).toMatchObject({ transform: before, locked: true });
+
+    // A Map Line has no place of its own to stamp on.
+    editor.setStampTransform("ring", { x: 10 });
+    expect(editor.getSnapshot().elements[0].kind).toBe("line");
+    expect((editor.getSnapshot().elements[1] as MapStampElement).transform).toEqual(before);
+  });
+});
+
+describe("setStampScale", () => {
+  /** An editor holding one inserted scale bar. */
+  function insertedBar() {
+    const { editor } = openEditor();
+    editor.setStamp("scale-bar");
+    editor.insertStamp();
+    const [element] = editor.getSnapshot().elements as MapStampElement[];
+    return { editor, id: element.id };
+  }
+
+  it("changes the scale bar's unit and span, one undo step each", () => {
+    const { editor, id } = insertedBar();
+    const scale = () => (editor.getSnapshot().elements[0] as MapStampElement).scale;
+
+    editor.setStampScale(id, { unit: "mi" });
+    expect(scale()).toEqual({ unit: "mi", span: 1000 });
+
+    editor.setStampScale(id, { span: 500 });
+    expect(scale()).toEqual({ unit: "mi", span: 500 });
+
+    editor.undo();
+    expect(scale()).toEqual({ unit: "mi", span: 1000 });
+    editor.undo();
+    expect(scale()).toEqual({ unit: "km", span: 1000 });
+  });
+
+  it("refuses a span with no room and a unit it does not know", () => {
+    const { editor, id } = insertedBar();
+
+    editor.setStampScale(id, { span: 0 });
+    editor.setStampScale(id, { span: -5 });
+    editor.setStampScale(id, { span: Number.NaN });
+    editor.setStampScale(id, { unit: "leagues" as StampScaleUnit });
+
+    expect((editor.getSnapshot().elements[0] as MapStampElement).scale).toEqual({
+      unit: "km",
+      span: 1000,
+    });
+    // None of those took a step: one undo takes the insertion back.
+    editor.undo();
+    expect(editor.getSnapshot().elements).toEqual([]);
+  });
+
+  it("leaves a Stamp that carries no scale alone", () => {
+    const { editor } = openEditor();
+    editor.insertStamp();
+    const before = editor.getSnapshot().elements[0] as MapStampElement;
+
+    editor.setStampScale(before.id, { span: 500 });
+
+    expect(editor.getSnapshot().elements[0]).toEqual(before);
+  });
+});
+
+describe("a one-colour Stamp's colour", () => {
+  it("recolours one-colour art as one undo step", () => {
+    const { editor } = openEditor();
+    editor.setStamp("marker");
+    editor.insertStamp();
+    const [stamp] = editor.getSnapshot().elements as MapStampElement[];
+
+    editor.setStampColor(stamp.id, "#8b1a1a");
+    expect((editor.getSnapshot().elements[0] as MapStampElement).color).toBe("#8b1a1a");
+
+    // The colour it already has is not a step.
+    editor.setStampColor(stamp.id, "#8b1a1a");
+    editor.undo();
+    expect((editor.getSnapshot().elements[0] as MapStampElement).color).toBe(DEFAULT_STAMP_COLOR);
+  });
+
+  it("leaves art that keeps its own colours, and a locked Stamp, alone", () => {
+    const { editor } = openEditor();
+    editor.setStamp("castle");
+    editor.insertStamp();
+    const [castle] = editor.getSnapshot().elements as MapStampElement[];
+
+    editor.setStampColor(castle.id, "#8b1a1a");
+    expect((editor.getSnapshot().elements[0] as MapStampElement).color).toBe(DEFAULT_STAMP_COLOR);
+
+    editor.setStamp("marker");
+    editor.insertStamp();
+    const marker = editor.getSnapshot().elements[1] as MapStampElement;
+    editor.setLocked(marker.id, true);
+    editor.setStampColor(marker.id, "#8b1a1a");
+    expect((editor.getSnapshot().elements[1] as MapStampElement).color).toBe(DEFAULT_STAMP_COLOR);
+  });
+});
+
+describe("the snapshot of a selected Stamp", () => {
+  it("carries the Stamp itself, and nothing once it lets the Stamp go", () => {
+    const { editor } = openEditor();
+    editor.insertStamp();
+    const [stamp] = editor.getSnapshot().elements as MapStampElement[];
+
+    expect(editor.getSnapshot().selectedStamp).toEqual(stamp);
+
+    editor.select(null);
+    expect(editor.getSnapshot().selectedStamp).toBeNull();
   });
 });
