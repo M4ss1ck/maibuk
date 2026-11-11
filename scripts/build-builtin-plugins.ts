@@ -58,9 +58,14 @@ export const BUNDLE_SIZE_LIMIT_OVERRIDES: Readonly<Record<string, number>> = {
   // 668,642 bytes with the Plugin and SDK. Rounded up to the next 50 KB.
   "maibuk-reader": 700 * 1024,
   // Maps carries @turf/polygonize for the Bucket's faces and its base Stamp
-  // art as path data (plugins/maibuk-maps/stamp-art.ts, about 5 KB gzip):
-  // 150.5 KB gzip with the SDK, rounded up to the next 50 KB.
-  "maibuk-maps": 200 * 1024,
+  // art as path data (plugins/maibuk-maps/stamp-art.ts, about 5 KB gzip). It
+  // also carries its four bundled Map Label fonts, imported as `?inline` data
+  // URIs (plugins/maibuk-maps/font-bytes.ts) so SVG and PNG export can embed
+  // the letterforms the Frame draws, since a Worker cannot fetch a file the way
+  // the Frame's stylesheet does (about 342 KB gzip of base64 fonts). Measured
+  // 506.9 KB gzip with the SDK and the export core; ~10% headroom (557 KB)
+  // rounded up to the next 50 KB.
+  "maibuk-maps": 600 * 1024,
 };
 
 export interface BuildBuiltInPluginsOptions {
