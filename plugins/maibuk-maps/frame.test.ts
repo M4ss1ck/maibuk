@@ -35,6 +35,12 @@ class FakePort {
 interface Frame {
   port: FakePort;
   cleanups: (() => void)[];
+  /**
+   * Where page point 0,0 sits on screen. The fake screen matrix maps a client
+   * point to page millimetres by subtracting it, so moving it mid-gesture is a
+   * host layout shift that moves the Frame under a still pointer.
+   */
+  origin: [number, number];
   /** Sends one scene, with the defaults a Select-tool, unzoomed view has. */
   scene(overrides?: Record<string, unknown>): void;
 }
@@ -45,8 +51,9 @@ function loadFrame(): Frame {
   const port = new FakePort();
   (window as unknown as { maibuk: unknown }).maibuk = { port };
   const cleanups: (() => void)[] = [];
+  const origin: [number, number] = [0, 0];
   (globalThis as Record<string, unknown>).__mapTestHooks = {
-    pagePoint: (event: MouseEvent) => [event.clientX, event.clientY],
+    pagePoint: (event: MouseEvent) => [event.clientX - origin[0], event.clientY - origin[1]],
     onReady: (cleanup: () => void) => cleanups.push(cleanup),
   };
   try {
@@ -58,6 +65,7 @@ function loadFrame(): Frame {
   return {
     port,
     cleanups,
+    origin,
     scene(overrides = {}) {
       port.deliver({
         kind: "scene",
@@ -598,6 +606,90 @@ describe("the insert message", () => {
   });
 });
 
+describe("the move message", () => {
+  it("reads a Select drag of one Element by a page-millimetre offset", () => {
+    expect(parseFrameMessage({ kind: "move", id: "e1", dx: 12.5, dy: -3 })).toEqual({
+      kind: "move",
+      id: "e1",
+      dx: 12.5,
+      dy: -3,
+    });
+  });
+
+  it("drops a move without an Element id or a finite offset", () => {
+    for (const message of [
+      { kind: "move", dx: 1, dy: 1 },
+      { kind: "move", id: "", dx: 1, dy: 1 },
+      { kind: "move", id: 7, dx: 1, dy: 1 },
+      { kind: "move", id: "e1", dx: Number.NaN, dy: 1 },
+      { kind: "move", id: "e1", dx: 1, dy: Number.POSITIVE_INFINITY },
+      { kind: "move", id: "e1", dx: "1", dy: 1 },
+      { kind: "move", id: "e1", dx: 1 },
+    ]) {
+      expect(parseFrameMessage(message)).toBeNull();
+    }
+  });
+
+  it("marks only a shown, unlocked Map Line or Stamp as movable in the scene", () => {
+    const line = {
+      kind: "line" as const,
+      hidden: false,
+      locked: false,
+      points: [
+        [0, 0],
+        [10, 10],
+      ] as [number, number][],
+      style: "plain" as const,
+      enclosesFills: true,
+      closed: false,
+      curves: [false],
+      roughened: false,
+    };
+    const map = {
+      page: { preset: "square" as const, widthMm: 200, heightMm: 100 },
+      elements: [
+        { ...line, id: "free", name: "Free" },
+        { ...line, id: "pinned", name: "Pinned", locked: true },
+        { ...line, id: "veiled", name: "Veiled", hidden: true },
+        {
+          id: "stamp",
+          kind: "stamp" as const,
+          name: "City",
+          hidden: false,
+          locked: false,
+          stampRef: "base:marker",
+          transform: { x: 50, y: 50, size: 12, rotation: 0 },
+          color: "#1f2933",
+        },
+        {
+          id: "fill",
+          kind: "fill" as const,
+          name: "Fill 1",
+          hidden: false,
+          locked: false,
+          anchor: [5, 5] as [number, number],
+          content: { color: "#88aa66" },
+        },
+      ],
+    };
+    const message = sceneMessage(map, {
+      selectedId: null,
+      tool: "select",
+      zoom: 1,
+      panX: 0,
+      panY: 0,
+      penLabel: PEN_LABEL,
+    });
+    expect(message.elements.map((element) => [element.id, element.movable])).toEqual([
+      ["free", true],
+      ["pinned", false],
+      ["veiled", false],
+      ["stamp", true],
+      ["fill", false],
+    ]);
+  });
+});
+
 describe("the Insert tool", () => {
   it("posts the page point of a click as one insert message", () => {
     frame = loadFrame();
@@ -1050,6 +1142,210 @@ describe("the Select tool", () => {
     frame.scene({ elements: [sceneElement()] });
     pointer(svg(), "pointerdown", 150, 80);
     expect(frame.port.messages).toEqual([{ kind: "select", id: null }]);
+  });
+
+  /** The drawn group of one Element, whose transform carries the live drag. */
+  const group = (id = "e1"): Element => {
+    const element = document.querySelector(`g[data-element-id="${id}"]`);
+    if (element === null) throw new Error(`the Frame drew no ${id}`);
+    return element;
+  };
+  const lineOf = (id = "e1"): Element => {
+    const line = group(id).querySelector("path.map-line");
+    if (line === null) throw new Error(`${id} drew no line`);
+    return line;
+  };
+
+  it("drags a movable Element live and posts one move on release", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [sceneElement({ movable: true })] });
+
+    pointer(lineOf(), "pointerdown", 12, 12);
+    pointer(svg(), "pointermove", 20, 15);
+    expect(group().getAttribute("transform")).toBe("translate(8 3)");
+    expect(group().getAttribute("data-dragging")).toBe("true");
+    pointer(svg(), "pointermove", 30, 10);
+    expect(group().getAttribute("transform")).toBe("translate(18 -2)");
+    pointer(svg(), "pointerup", 30, 10);
+
+    expect(frame.port.messages).toEqual([
+      { kind: "select", id: "e1" },
+      { kind: "move", id: "e1", dx: 18, dy: -2 },
+    ]);
+    // The preview holds until the Worker's answer, so the line never jumps back.
+    expect(group().getAttribute("transform")).toBe("translate(18 -2)");
+    frame.scene({ elements: [sceneElement({ movable: true })] });
+    expect(group().getAttribute("transform")).toBeNull();
+    expect(group().getAttribute("data-dragging")).toBeNull();
+  });
+
+  it("follows the pointer's travel when the host moves the Frame mid-drag", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [sceneElement({ movable: true })] });
+
+    pointer(lineOf(), "pointerdown", 12, 12);
+    pointer(svg(), "pointermove", 20, 15);
+    expect(group().getAttribute("transform")).toBe("translate(8 3)");
+    // The press selected the Element, the host's Properties panel grew, and
+    // the Frame now sits 23 px lower under the same pointer: the Element must
+    // keep following the pointer, not jump by the shift.
+    frame.origin[1] = 23;
+    pointer(svg(), "pointermove", 30, 10);
+    expect(group().getAttribute("transform")).toBe("translate(18 -2)");
+    pointer(svg(), "pointerup", 30, 10);
+
+    expect(frame.port.messages.at(-1)).toEqual({ kind: "move", id: "e1", dx: 18, dy: -2 });
+  });
+
+  it("only selects on a press that never passes the drag threshold", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [sceneElement({ movable: true })] });
+
+    pointer(lineOf(), "pointerdown", 12, 12);
+    pointer(svg(), "pointermove", 12.5, 12.5);
+    expect(group().getAttribute("transform")).toBeNull();
+    pointer(svg(), "pointerup", 12.5, 12.5);
+
+    expect(frame.port.messages).toEqual([{ kind: "select", id: "e1" }]);
+  });
+
+  it("measures the drag threshold in screen pixels, whatever the zoom", () => {
+    for (const zoom of [1, 4]) {
+      for (const cleanup of frame?.cleanups ?? []) cleanup();
+      frame = loadFrame();
+      frame.scene({ elements: [sceneElement({ movable: true })], zoom });
+
+      // Three pixels is a shaky press; five is a drag, and the Element jumps
+      // to the pointer's whole travel so it stays under the pointer.
+      pointer(lineOf(), "pointerdown", 12, 12);
+      pointer(svg(), "pointermove", 15, 12);
+      expect(group().getAttribute("transform")).toBeNull();
+      pointer(svg(), "pointermove", 17, 12);
+      expect(group().getAttribute("transform")).toBe("translate(5 0)");
+      pointer(svg(), "pointerup", 17, 12);
+
+      expect(frame.port.messages).toEqual([
+        { kind: "select", id: "e1" },
+        { kind: "move", id: "e1", dx: 5, dy: 0 },
+      ]);
+    }
+  });
+
+  it("ignores a second pointer, and drops the drag when its capture is lost", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [sceneElement({ movable: true })] });
+    const withId = (type: string, x: number, y: number, pointerId: number, target: Element) => {
+      const event = new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0 });
+      Object.defineProperty(event, "pointerId", { value: pointerId });
+      target.dispatchEvent(event);
+    };
+
+    withId("pointerdown", 12, 12, 1, lineOf());
+    withId("pointermove", 30, 30, 1, svg());
+    // A second finger neither picks nor drags, nor moves the first one's drag.
+    withId("pointerdown", 40, 40, 2, lineOf());
+    withId("pointermove", 60, 60, 2, svg());
+    expect(group().getAttribute("transform")).toBe("translate(18 18)");
+
+    // The engine took the capture away with no pointerup: the drag ends, and
+    // the next press drags again instead of being ignored.
+    withId("lostpointercapture", 30, 30, 1, svg());
+    expect(group().getAttribute("transform")).toBeNull();
+    withId("pointerdown", 12, 12, 3, lineOf());
+    withId("pointermove", 20, 12, 3, svg());
+    withId("pointerup", 20, 12, 3, svg());
+
+    expect(frame.port.messages).toEqual([
+      { kind: "select", id: "e1" },
+      { kind: "select", id: "e1" },
+      { kind: "move", id: "e1", dx: 8, dy: 0 },
+    ]);
+  });
+
+  it("constrains the drag to its longer axis while Shift is held, even mid-drag", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [sceneElement({ movable: true })] });
+
+    pointer(lineOf(), "pointerdown", 12, 12);
+    pointer(svg(), "pointermove", 20, 15, { shiftKey: true });
+    expect(group().getAttribute("transform")).toBe("translate(8 0)");
+    pointer(svg(), "pointermove", 14, 25, { shiftKey: true });
+    expect(group().getAttribute("transform")).toBe("translate(0 13)");
+
+    // Letting go of Shift with the pointer still frees the drag at once.
+    document.body.dispatchEvent(new KeyboardEvent("keyup", { key: "Shift", bubbles: true }));
+    expect(group().getAttribute("transform")).toBe("translate(2 13)");
+    // Pressing it again constrains it again, before the pointer moves.
+    const shift = key("Shift", { shiftKey: true });
+    expect(shift.defaultPrevented).toBe(false);
+    expect(group().getAttribute("transform")).toBe("translate(0 13)");
+
+    pointer(svg(), "pointerup", 14, 25, { shiftKey: true });
+    expect(frame.port.messages.at(-1)).toEqual({ kind: "move", id: "e1", dx: 0, dy: 13 });
+  });
+
+  it("cancels the drag on Escape, restoring the start position and posting no move", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [sceneElement({ movable: true })] });
+
+    pointer(lineOf(), "pointerdown", 12, 12);
+    pointer(svg(), "pointermove", 30, 30);
+    const cancel = key("Escape");
+    expect(cancel.defaultPrevented).toBe(true);
+    expect(group().getAttribute("transform")).toBeNull();
+    pointer(svg(), "pointermove", 40, 40);
+    pointer(svg(), "pointerup", 40, 40);
+
+    expect(frame.port.messages).toEqual([{ kind: "select", id: "e1" }]);
+    // With no drag in progress, Escape is the host's again.
+    expect(key("Escape").defaultPrevented).toBe(false);
+  });
+
+  it("drops the drag on pointer cancel", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [sceneElement({ movable: true })] });
+
+    pointer(lineOf(), "pointerdown", 12, 12);
+    pointer(svg(), "pointermove", 30, 30);
+    pointer(svg(), "pointercancel", 30, 30);
+
+    expect(group().getAttribute("transform")).toBeNull();
+    expect(frame.port.messages).toEqual([{ kind: "select", id: "e1" }]);
+  });
+
+  it("never drags a locked or unmovable Element, though a press still selects it", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [
+        sceneElement({ locked: true, movable: true }),
+        sceneElement({ id: "fill", movable: false }),
+      ],
+    });
+
+    for (const id of ["e1", "fill"]) {
+      pointer(lineOf(id), "pointerdown", 12, 12);
+      pointer(svg(), "pointermove", 30, 30);
+      expect(group(id).getAttribute("transform")).toBeNull();
+      pointer(svg(), "pointerup", 30, 30);
+    }
+
+    expect(frame.port.messages).toEqual([
+      { kind: "select", id: "e1" },
+      { kind: "select", id: "fill" },
+    ]);
+  });
+
+  it("drops a drag whose Element a new scene no longer offers to move", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [sceneElement({ movable: true })] });
+
+    pointer(lineOf(), "pointerdown", 12, 12);
+    pointer(svg(), "pointermove", 30, 30);
+    frame.scene({ elements: [sceneElement({ locked: true, movable: false })] });
+    expect(group().getAttribute("transform")).toBeNull();
+    pointer(svg(), "pointerup", 30, 30);
+
+    expect(frame.port.messages).toEqual([{ kind: "select", id: "e1" }]);
   });
 
   it("needs a scene before it answers a pointer", () => {

@@ -695,6 +695,15 @@ export function setLocked(
   return elements.map((element) => (element.id === id ? { ...element, locked } : element));
 }
 
+/**
+ * Whether the move Commands may move an Element: an unlocked Map Line or
+ * Stamp, the Elements `moveElement` knows how to shift. A Select drag also
+ * needs it shown (#766), since a hidden Element is never drawn to press.
+ */
+export function canMove(element: MapElement): boolean {
+  return !element.locked && (element.kind === "line" || element.kind === "stamp");
+}
+
 /** Moves one Element by a page-millimetre offset; a locked Element stays put. */
 export function moveElement(
   elements: readonly MapElement[],

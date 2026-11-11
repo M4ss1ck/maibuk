@@ -894,3 +894,225 @@ describe("the snapshot of a selected Stamp", () => {
     expect(editor.getSnapshot().selectedStamp).toBeNull();
   });
 });
+
+describe("dragging an Element with the Select tool", () => {
+  /** An editor that counts its saves and the scenes it sends its Frame. */
+  function openWatched(elements: MapElement[]) {
+    let saves = 0;
+    const scenes: unknown[] = [];
+    const editor = createMapEditor({
+      store: {
+        save: async () => {
+          saves += 1;
+        },
+      },
+      doc: {
+        id: "map-1",
+        bookId: null,
+        name: "Map",
+        page: { preset: "square", widthMm: 200, heightMm: 100 },
+        styleId: "atlas",
+        overrides: {},
+        elements,
+        createdAt: 0,
+        updatedAt: 0,
+        dataVersion: DATA_VERSION,
+      },
+      language: () => "en",
+    });
+    editor.attachFrame({
+      postMessage: (message: unknown) => scenes.push(message),
+    } as unknown as MessagePort);
+    scenes.length = 0;
+    return { editor, saves: () => saves, scenes };
+  }
+
+  const marker: MapStampElement = {
+    id: "marker",
+    kind: "stamp",
+    name: "City",
+    hidden: false,
+    locked: false,
+    stampRef: "base:marker",
+    transform: { x: 100, y: 50, size: 12, rotation: 0 },
+    color: DEFAULT_STAMP_COLOR,
+  };
+
+  it("commits a dragged Map Line as one undo step, selected, and autosaves it", async () => {
+    const { editor, saves } = openWatched([squareLine("ring", "Ring", 10, 10, 20)]);
+
+    editor.handleFrameMessage({ kind: "select", id: "ring" });
+    editor.handleFrameMessage({ kind: "move", id: "ring", dx: 5, dy: -2 });
+
+    expect(onlyLine(editor).points).toEqual([
+      [15, 8],
+      [35, 8],
+      [35, 28],
+      [15, 28],
+    ]);
+    expect(editor.getSnapshot().selectedId).toBe("ring");
+    await editor.flush();
+    expect(saves()).toBe(1);
+
+    editor.undo();
+    expect(onlyLine(editor).points[0]).toEqual([10, 10]);
+    expect(editor.getSnapshot().canUndo).toBe(false);
+  });
+
+  it("moves a dragged Shape's centre with its outline, and a dragged Stamp's centre", () => {
+    const { editor } = openWatched([marker]);
+    editor.handleFrameMessage({ kind: "move", id: "marker", dx: -10, dy: 4 });
+    expect(editor.getSnapshot().elements[0]).toMatchObject({
+      transform: { x: 90, y: 54, size: 12, rotation: 0 },
+    });
+
+    const shaped = openEditor().editor;
+    shaped.placeShape("ellipse");
+    const before = onlyShape(shaped);
+    shaped.handleFrameMessage({ kind: "move", id: onlyLine(shaped).id, dx: 3, dy: 3 });
+    expect(onlyShape(shaped)).toEqual({ ...before, cx: before.cx + 3, cy: before.cy + 3 });
+  });
+
+  it("takes the same path as the arrow Commands, so a Fill on the moved line's face follows", () => {
+    const divider = (): MapLineElement => ({
+      id: "divider",
+      kind: "line",
+      name: "Divider",
+      hidden: false,
+      locked: false,
+      points: [
+        [40, 0],
+        [40, 100],
+      ],
+      style: "plain",
+      enclosesFills: true,
+      closed: false,
+      curves: [false],
+      roughened: false,
+    });
+    const dragged = openEditor([squareLine("ring", "Ring", 10, 10, 80), divider()]).editor;
+    const arrowed = openEditor([squareLine("ring", "Ring", 10, 10, 80), divider()]).editor;
+    for (const editor of [dragged, arrowed]) {
+      editor.handleFrameMessage({ kind: "pour", point: [25, 50] });
+      editor.handleFrameMessage({ kind: "pour", point: [70, 50] });
+    }
+    const leftBefore = fills(dragged)[0].anchor;
+
+    dragged.handleFrameMessage({ kind: "move", id: "divider", dx: 20, dy: 0 });
+    arrowed.select("divider");
+    arrowed.move(20, 0);
+
+    // The left face grew 20 mm to the right, so its Fill's deepest point moved with it.
+    expect(fills(dragged)[0].anchor[0]).toBeGreaterThan(leftBefore[0]);
+    expect(fills(dragged).map((fill) => fill.anchor)).toEqual(
+      fills(arrowed).map((fill) => fill.anchor)
+    );
+
+    // The line and both Fills come back in one undo.
+    dragged.undo();
+    expect(fills(dragged)[0].anchor).toEqual(leftBefore);
+    expect(dragged.getSnapshot().elements.find((element) => element.id === "divider")).toEqual(
+      divider()
+    );
+  });
+
+  it("carries a Fill with a Map Line dragged further than its own size, and so does an arrow", () => {
+    for (const moveBy of [
+      (editor: MapEditor) => editor.handleFrameMessage({ kind: "move", id: "ring", dx: 60, dy: 0 }),
+      (editor: MapEditor) => {
+        editor.select("ring");
+        for (let step = 0; step < 6; step += 1) editor.move(10, 0);
+      },
+    ]) {
+      const { editor } = openEditor([squareLine("ring", "Ring", 10, 10, 8)]);
+      editor.handleFrameMessage({ kind: "pour", point: [14, 14] });
+      const [fill] = fills(editor);
+
+      moveBy(editor);
+
+      expect(fills(editor)).toHaveLength(1);
+      expect(fills(editor)[0].id).toBe(fill.id);
+      expect(fills(editor)[0].anchor[0]).toBeCloseTo(74, 5);
+      expect(fills(editor)[0].anchor[1]).toBeCloseTo(14, 5);
+    }
+  });
+
+  it("never carries a Fill with a dragged Stamp, even onto a face just like its own", () => {
+    // Two equal squares 30 mm apart: a Fill in the left one would follow a
+    // Map Line moved 30 mm right, but a Stamp moved 30 mm right is no line.
+    const { editor } = openEditor([
+      squareLine("left", "Left", 10, 10, 8),
+      squareLine("right", "Right", 40, 10, 8),
+      marker,
+    ]);
+    editor.handleFrameMessage({ kind: "pour", point: [14, 14] });
+    const [fill] = fills(editor);
+
+    editor.handleFrameMessage({ kind: "move", id: marker.id, dx: 30, dy: 0 });
+
+    expect(fills(editor)).toEqual([fill]);
+  });
+
+  it("carries the Fill of a curved Shape dragged by an offset the faces round", () => {
+    const { editor } = openEditor();
+    editor.placeShape("ellipse");
+    const ellipse = onlyLine(editor);
+    const { cx, cy } = onlyShape(editor);
+    editor.handleFrameMessage({ kind: "pour", point: [cx, cy] });
+    const [fill] = fills(editor);
+
+    editor.handleFrameMessage({ kind: "move", id: ellipse.id, dx: 37.123, dy: -12.857 });
+
+    expect(fills(editor)).toHaveLength(1);
+    expect(fills(editor)[0].id).toBe(fill.id);
+    expect(fills(editor)[0].anchor[0]).toBeCloseTo(cx + 37.123, 0);
+    expect(fills(editor)[0].anchor[1]).toBeCloseTo(cy - 12.857, 0);
+  });
+
+  it("refuses a locked, hidden, unmovable, unknown, or zero drag, and answers with a scene", async () => {
+    const { editor, saves, scenes } = openWatched([
+      squareLine("ring", "Ring", 10, 10, 20),
+      { ...marker, id: "locked", locked: true },
+      { ...marker, id: "hidden", hidden: true },
+      {
+        id: "fill",
+        kind: "fill",
+        name: "Fill 1",
+        hidden: false,
+        locked: false,
+        anchor: [5, 5],
+        content: { color: DEFAULT_FILL_COLOR },
+      },
+    ]);
+    const before = editor.getSnapshot().elements;
+
+    for (const move of [
+      { id: "locked", dx: 4, dy: 4 },
+      { id: "hidden", dx: 4, dy: 4 },
+      { id: "fill", dx: 4, dy: 4 },
+      { id: "ghost", dx: 4, dy: 4 },
+      { id: "ring", dx: 0, dy: 0 },
+    ]) {
+      editor.handleFrameMessage({ kind: "move", ...move });
+    }
+
+    expect(editor.getSnapshot().elements).toBe(before);
+    expect(editor.getSnapshot().canUndo).toBe(false);
+    await editor.flush();
+    expect(saves()).toBe(0);
+    // The Frame keeps its drag preview until a scene arrives, so a refusal
+    // still sends one, which puts the Element back where it was.
+    expect(scenes).toHaveLength(5);
+  });
+
+  it("leaves no undo step and no save for a press that only selects", async () => {
+    const { editor, saves } = openWatched([squareLine("ring", "Ring", 10, 10, 20)]);
+
+    editor.handleFrameMessage({ kind: "select", id: "ring" });
+
+    expect(editor.getSnapshot().selectedId).toBe("ring");
+    expect(editor.getSnapshot().canUndo).toBe(false);
+    await editor.flush();
+    expect(saves()).toBe(0);
+  });
+});

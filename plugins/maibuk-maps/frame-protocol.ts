@@ -8,7 +8,8 @@
  *
  * The Worker sends the whole scene on every change and when a Frame connects;
  * the Frame reports a finished Pencil stroke, a finished Pen line, an Eraser
- * drag, a drawn Shape, a Bucket pour, a dropped Stamp, and a picked Element.
+ * drag, a drawn Shape, a Bucket pour, a dropped Stamp, a picked Element, and a
+ * Select drag that moved one.
  * Points are page millimetres, the same space as `page.widthMm/heightMm`. Every
  * inbound message is validated here, and a malformed one is dropped. This
  * module imports only its own files.
@@ -16,7 +17,7 @@
 
 import type { MapDocument, MapPoint, ShapeKind } from "./maps";
 import { isShapeKind } from "./maps";
-import { EMPTY_MAP_COLOR, type SceneShape, sceneShapes } from "./scene";
+import { canMove, EMPTY_MAP_COLOR, type SceneShape, sceneShapes } from "./scene";
 
 /** The editor tool the Frame should honour. */
 export type MapTool = "select" | "pencil" | "pen" | "bucket" | "eraser" | "insert" | ShapeKind;
@@ -32,6 +33,12 @@ export interface FrameSceneElement {
   hidden: boolean;
   locked: boolean;
   selected: boolean;
+  /**
+   * Whether a Select drag may move it (#766): a shown, unlocked Map Line or
+   * Stamp, the same rule the Worker applies to a drag. The Frame previews a
+   * drag only for these, so it never shows a move the Worker would refuse.
+   */
+  movable: boolean;
 }
 
 /**
@@ -125,6 +132,19 @@ export interface FrameInsertMessage {
   point: MapPoint;
 }
 
+/**
+ * Frame -> Worker: a Select drag that moved one Element by `dx`, `dy` page
+ * millimetres (#766). The Frame previews the drag itself and sends this once,
+ * on release, so the whole drag is one undo step; a press that never passed
+ * the drag threshold, or one Escape cancelled, sends none.
+ */
+export interface FrameMoveMessage {
+  kind: "move";
+  id: string;
+  dx: number;
+  dy: number;
+}
+
 /** Every message a Frame may send the Worker. */
 export type FrameToWorkerMessage =
   | FrameStrokeMessage
@@ -133,7 +153,8 @@ export type FrameToWorkerMessage =
   | FrameSelectMessage
   | FrameShapeMessage
   | FramePourMessage
-  | FrameInsertMessage;
+  | FrameInsertMessage
+  | FrameMoveMessage;
 
 function isPoint(value: unknown): value is MapPoint {
   return (
@@ -153,7 +174,8 @@ function isPoint(value: unknown): value is MapPoint {
  * line from it. A Pen line also needs a flag per segment and a boolean
  * `closed`; an Eraser drag needs at least one point and a finite reach; a Shape
  * needs a known kind, two finite corners, and a boolean `constrain`; a pour or
- * an insert needs one finite page point.
+ * an insert needs one finite page point; a move needs an Element id and a
+ * finite offset.
  */
 export function parseFrameMessage(data: unknown): FrameToWorkerMessage | null {
   if (typeof data !== "object" || data === null) return null;
@@ -221,6 +243,12 @@ export function parseFrameMessage(data: unknown): FrameToWorkerMessage | null {
     if (!isPoint(message.point)) return null;
     return { kind: "insert", point: [message.point[0], message.point[1]] };
   }
+  if (message.kind === "move") {
+    if (typeof message.id !== "string" || message.id === "") return null;
+    if (typeof message.dx !== "number" || !Number.isFinite(message.dx)) return null;
+    if (typeof message.dy !== "number" || !Number.isFinite(message.dy)) return null;
+    return { kind: "move", id: message.id, dx: message.dx, dy: message.dy };
+  }
   return null;
 }
 
@@ -249,6 +277,7 @@ export function sceneMessage(
       hidden: element.hidden,
       locked: element.locked,
       selected: element.id === view.selectedId,
+      movable: !element.hidden && canMove(element),
     })),
     tool: view.tool,
     zoom: view.zoom,

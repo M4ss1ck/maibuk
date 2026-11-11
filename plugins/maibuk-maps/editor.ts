@@ -1,5 +1,5 @@
 /**
- * The open Map's editor state (#745, #746, #747): its Elements, selection, tool,
+ * The open Map's editor state (#745, #746, #747, #766): its Elements, selection, tool,
  * view, undo history, and autosave. The host renders the panels and the Frame
  * draws the scene, so this module owns everything that must outlive a page
  * render yet stay inside the Worker. One editor is created when a Map opens and
@@ -40,7 +40,7 @@ import {
   randomMapId,
 } from "./maps";
 import { createAutosave } from "./autosave";
-import { pourFill, reconcileFills } from "./fills";
+import { type FillTranslation, pourFill, reconcileFills } from "./fills";
 import {
   parseFrameMessage,
   sceneMessage,
@@ -61,6 +61,7 @@ import { createHistory } from "./history";
 import { format, translate, type MapsKey } from "./i18n";
 import {
   addElement,
+  canMove,
   moveElement,
   removeElement,
   renameElement,
@@ -326,10 +327,12 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
    * committed edit goes through the live-Fill rule first, so moving, erasing,
    * roughening, deleting, or adding a Map Line reshapes, merges, or splits the
    * Fills in the same undo step the lines changed in (#748). Undo and redo
-   * restore whole history states as they are and never reconcile.
+   * restore whole history states as they are and never reconcile. A move of
+   * one Map Line passes its offset, so a Fill goes with a face that moved
+   * whole however far the move carried it (#766).
    */
-  function edit(next: MapElement[]): void {
-    history.commit(reconcileFills(elements, next));
+  function edit(next: MapElement[], offset?: FillTranslation): void {
+    history.commit(reconcileFills(elements, next, offset));
     elements = history.current;
     doc = { ...doc, elements };
     // A Fill the edit merged away, or one whose face went with a deleted line,
@@ -552,6 +555,34 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     edit(addElement(elements, element));
   }
 
+  /**
+   * Commits one Select drag (#766) as one undo step, through the same
+   * `moveElement` the arrow Commands use, so `edit` reconciles the Fills on a
+   * moved Map Line's face exactly as an arrow move does. The dragged Element
+   * becomes the selection. A drag the Worker refuses (a locked, hidden, or
+   * unmovable Element, an id that is gone, or no offset at all) is not an edit,
+   * but it still answers with a scene: the Frame keeps its drag preview until a
+   * scene arrives, and that scene puts the Element back where it was.
+   */
+  function moveDragged(id: string, dx: number, dy: number): void {
+    const target = elementById(id);
+    if (target === undefined || target.hidden || !canMove(target) || (dx === 0 && dy === 0)) {
+      sendScene();
+      return;
+    }
+    selectedId = id;
+    moveBy(target, dx, dy);
+  }
+
+  /**
+   * Moves one Element as one undo step: the arrow Commands' path and the
+   * Select drag's (#766). Only a Map Line passes its offset to the Fill rule;
+   * a Stamp encloses no face, so no Fill may follow it.
+   */
+  function moveBy(target: MapElement, dx: number, dy: number): void {
+    edit(moveElement(elements, target.id, dx, dy), target.kind === "line" ? { dx, dy } : undefined);
+  }
+
   function applyMessage(message: FrameToWorkerMessage): void {
     switch (message.kind) {
       case "stroke":
@@ -574,6 +605,9 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
         break;
       case "select":
         selectElement(message.id);
+        break;
+      case "move":
+        moveDragged(message.id, message.dx, message.dy);
         break;
     }
   }
@@ -877,9 +911,8 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
 
     move(dx, dy) {
       const target = elementById(selectedId);
-      if (target === undefined || target.locked) return;
-      if (target.kind !== "line" && target.kind !== "stamp") return;
-      edit(moveElement(elements, target.id, dx, dy));
+      if (target === undefined || !canMove(target)) return;
+      moveBy(target, dx, dy);
     },
 
     undo() {

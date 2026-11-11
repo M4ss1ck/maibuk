@@ -402,3 +402,94 @@ describe("reconcileFills", () => {
     expect(reconcileFills(before, after)).toBe(after);
   });
 });
+
+describe("reconcileFills after a move", () => {
+  /** The Elements with one Map Line shifted by `dx`, `dy`, as `moveElement` shifts it. */
+  function shifted(elements: MapElement[], id: string, dx: number, dy: number): MapElement[] {
+    return elements.map((element) =>
+      element.id === id && element.kind === "line"
+        ? { ...element, points: element.points.map(([x, y]): MapPoint => [x + dx, y + dy]) }
+        : element
+    );
+  }
+
+  it("carries a Fill along with a closed Map Line moved further than its own size", () => {
+    let elements: MapElement[] = [rectangle("ring", 10, 10, 30, 30)];
+    elements = pourFill(elements, [20, 20], "#c8d5a3", fillMaker());
+    const [poured] = fillsOf(elements);
+
+    // 50 mm is more than the 20 mm square, so the old anchor lies outside it.
+    const reconciled = reconcileFills(elements, shifted(elements, "ring", 50, 5), {
+      dx: 50,
+      dy: 5,
+    });
+
+    const fills = fillsOf(reconciled);
+    expect(fills).toHaveLength(1);
+    expect(fills[0]).toMatchObject({ id: poured.id, content: { color: "#c8d5a3" } });
+    expect(fills[0].anchor[0]).toBeCloseTo(70, 5);
+    expect(fills[0].anchor[1]).toBeCloseTo(25, 5);
+  });
+
+  it("carries a Fill however the faces round the moved corners", () => {
+    // A drag lands on any offset, and faces are built from paths written to
+    // the hundredth of a millimetre, so the moved ring is a rounding away.
+    let elements: MapElement[] = [rectangle("ring", 94.3, 56.2, 134.3, 96.2)];
+    elements = pourFill(elements, [114.3, 76.2], "#c8d5a3", fillMaker());
+
+    const reconciled = reconcileFills(elements, shifted(elements, "ring", 30.004, -12.857), {
+      dx: 30.004,
+      dy: -12.857,
+    });
+
+    const fills = fillsOf(reconciled);
+    expect(fills).toHaveLength(1);
+    expect(fills[0].anchor[0]).toBeCloseTo(144.3, 1);
+    expect(fills[0].anchor[1]).toBeCloseTo(63.34, 1);
+  });
+
+  it("keeps the land's Fill on the land when a lake is moved over the land's anchor", () => {
+    let elements: MapElement[] = [
+      rectangle("land", 10, 10, 190, 90),
+      rectangle("lake", 20, 40, 40, 60),
+    ];
+    const maker = fillMaker();
+    elements = pourFill(elements, [100, 20], "#c8d5a3", maker);
+    elements = pourFill(elements, [30, 50], "#4a90c2", maker);
+    const land = fillsOf(elements).find((fill) => fill.content.color === "#c8d5a3");
+    if (land === undefined) throw new Error("no land Fill");
+    // Centre the lake on the land Fill's anchor.
+    const dx = land.anchor[0] - 30;
+    const dy = land.anchor[1] - 50;
+
+    const after = shifted(elements, "lake", dx, dy);
+    const reconciled = reconcileFills(elements, after, { dx, dy });
+
+    const fills = fillsOf(reconciled);
+    expect(fills.map((fill) => fill.content.color).sort()).toEqual(["#4a90c2", "#c8d5a3"]);
+    const faces = findFaces(linesOf(after));
+    const lakeFace = faceAt(faces, [land.anchor[0], land.anchor[1]]);
+    for (const fill of fills) expectAtDeepest(fill, faceAt(faces, fill.anchor));
+    const lake = fills.find((fill) => fill.content.color === "#4a90c2");
+    const movedLand = fills.find((fill) => fill.content.color === "#c8d5a3");
+    expect(faceAt(faces, lake?.anchor ?? [0, 0])).toBe(lakeFace);
+    expect(faceAt(faces, movedLand?.anchor ?? [0, 0])).not.toBe(lakeFace);
+  });
+
+  it("reshapes the Fills on both sides of a moved border just as without the offset", () => {
+    const ring = rectangle("ring", 0, 0, 40, 40);
+    const divider = line("divider", [
+      [20, 0],
+      [20, 40],
+    ]);
+    const maker = fillMaker();
+    let elements: MapElement[] = [ring, divider];
+    elements = pourFill(elements, [10, 20], "#c8d5a3", maker);
+    elements = pourFill(elements, [30, 20], "#a0522d", maker);
+    const after = shifted(elements, "divider", 4, 0);
+
+    expect(reconcileFills(elements, after, { dx: 4, dy: 0 })).toEqual(
+      reconcileFills(elements, after)
+    );
+  });
+});
