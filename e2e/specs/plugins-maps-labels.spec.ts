@@ -14,7 +14,7 @@
 
 import type { FrameLocator, Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
-import { dragBendHandle, fontLoaded } from "../support/frame-stroke";
+import { dragBendHandle, fontLoaded, type LabelInk, labelInk } from "../support/frame-stroke";
 import { leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
 
@@ -98,6 +98,22 @@ async function baselineData(page: Page): Promise<string> {
   const d = await baselinePaths(page).first().getAttribute("d");
   if (d === null) throw new Error("the Frame draws no label baseline");
   return d;
+}
+
+/**
+ * Asserts the Frame laid the label's text out along its baseline, so the word
+ * is painted on the page rather than only written into the markup. A text
+ * length alone proves nothing: an engine that drops the textPath still reports
+ * the run's length (#751), so the glyph box must also sit where the baseline
+ * runs.
+ */
+function expectInkOnBaseline({ lengths, ink, baseline: line }: LabelInk): void {
+  expect(lengths.length).toBeGreaterThan(0);
+  for (const length of lengths) expect(length).toBeGreaterThan(0);
+  expect(ink.right - ink.left).toBeGreaterThan(0);
+  expect(ink.bottom - ink.top).toBeGreaterThan(0);
+  expect(ink.left).toBeGreaterThanOrEqual(line.left - 2);
+  expect(ink.right).toBeLessThanOrEqual(line.right + 2);
 }
 
 /** Opens Maps from the sidebar, waiting for the Plugin's launch scan. */
@@ -209,14 +225,17 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.in
 
     // The Frame draws the default text along the label's baseline.
     await expect(drawnLabelPaths(page).first()).toHaveText("Label");
-    const ink = drawnLabelText(page).last();
-    await expect(ink).toHaveAttribute("x", String(PAGE_CENTRE_MM[0]));
-    await expect(ink).toHaveAttribute("y", String(PAGE_CENTRE_MM[1]));
+    // The baseline runs through the page centre: a text on a path starts from
+    // the path's startOffset, never from an x and y of its own (#751).
+    expect(baseline(await baselineData(page)).control).toEqual(PAGE_CENTRE_MM);
 
     // A new label bends 0, which the Frame draws as a quadratic whose control
     // point sits on the chord: straight.
     expect(offChord(baseline(await baselineData(page)))).toBe(0);
     await capture(page, "labels-placed-straight");
+
+    // The glyphs are laid out along that baseline, not collapsed at the origin.
+    expectInkOnBaseline(await labelInk(surface(page)));
   });
 
   test("the Text field rewrites the drawn label's text", async ({ page }) => {
@@ -284,6 +303,8 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.in
     await expect(drawnLabelPaths(page).first()).toHaveAttribute("href", `#${pathId}`);
     await expect(drawnLabelPaths(page).first()).toHaveText("Label");
     await capture(page, "labels-curved");
+    // A curved label is painted too: its glyph box follows the bowed baseline.
+    expectInkOnBaseline(await labelInk(surface(page)));
 
     // The handle sits on the curve's apex; a pointer drag away from the chord
     // deepens the bend the panel reports.

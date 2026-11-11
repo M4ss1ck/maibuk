@@ -637,11 +637,17 @@
       shape.path === undefined
         ? shape.text
         : html`<textPath href="#${shape.path.id}" startOffset="50%">${shape.text}</textPath>`;
+    // A text on a path starts where its textPath's startOffset puts it: Chromium
+    // drops the textPath when the same <text> also carries an `x`, lays the run
+    // out at the origin, and paints nothing (#751). So only a text drawn at a
+    // point writes them.
+    const point = shape.path === undefined ? n(shape.x) : undefined;
+    const baseline = shape.path === undefined ? n(shape.y) : undefined;
     /** @param {{ color: string, width: number } | undefined} halo */
     const node = (halo) => html`<text
       class="map-line"
-      x="${n(shape.x)}"
-      y="${n(shape.y)}"
+      x="${point}"
+      y="${baseline}"
       font-size="${n(shape.size)}"
       font-family="${shape.font ?? undefined}"
       letter-spacing="${shape.letterSpacing === undefined ? undefined : n(shape.letterSpacing)}"

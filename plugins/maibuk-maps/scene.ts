@@ -174,6 +174,7 @@ export const TEXT_FONT_FAMILY = "system-ui, -apple-system, 'Segoe UI', Roboto, s
 /** One piece of text the Frame draws, in page millimetres. */
 export interface TextShape {
   text: string;
+  /** Where the text starts; unused when `path` places it along a baseline. */
   x: number;
   y: number;
   /** The text's height in page millimetres. */
@@ -909,12 +910,18 @@ function textContent(shape: TextShape): string {
 
 /** One piece of text as SVG, with only the attributes it needs. */
 function shapeText(shape: TextShape): string {
-  const attributes = [
-    `x="${roundedMm(shape.x)}"`,
-    `y="${roundedMm(shape.y)}"`,
+  const attributes: string[] = [];
+  // A text on a path starts where its textPath's startOffset puts it, never at
+  // an `x` and `y` of its own: Chromium drops the textPath outright when the
+  // same <text> also carries an `x`, lays the run out at the origin, and paints
+  // nothing (#751). So only a text drawn at a point writes x and y.
+  if (shape.path === undefined) {
+    attributes.push(`x="${roundedMm(shape.x)}"`, `y="${roundedMm(shape.y)}"`);
+  }
+  attributes.push(
     `font-size="${roundedMm(shape.size)}"`,
-    `font-family="${escapeAttribute(shape.font)}"`,
-  ];
+    `font-family="${escapeAttribute(shape.font)}"`
+  );
   if (shape.letterSpacing !== undefined) {
     attributes.push(`letter-spacing="${roundedMm(shape.letterSpacing)}"`);
   }

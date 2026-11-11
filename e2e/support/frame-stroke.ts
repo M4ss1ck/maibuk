@@ -30,7 +30,9 @@
 // for a Fill's scatter (#750), measured by the browser in the Frame's own
 // pixels, so a spec can prove the Stamps stay inside the area without reading
 // attributes. `fontLoaded` reads a bundled face's status in `document.fonts`
-// (#751), so a spec proves the bytes arrived instead of only the CSS name.
+// (#751), so a spec proves the bytes arrived instead of only the CSS name, and
+// `labelInk` reads where a Map Label's glyphs landed, so a spec proves the text
+// is drawn along its baseline rather than only that the SVG holds a textPath.
 
 import type { Locator, Page } from "@playwright/test";
 
@@ -315,6 +317,53 @@ export interface FrameBox {
   top: number;
   right: number;
   bottom: number;
+}
+
+/** What a Frame lays out for a Map Label's text (#751), in its own pixels. */
+export interface LabelInk {
+  /** The length of each drawn copy's text, in the Frame's own user units. */
+  lengths: number[];
+  /** The ink copy's glyph box: the text the author reads. */
+  ink: FrameBox;
+  /** The baseline path's box, whose middle the text is centred on. */
+  baseline: FrameBox;
+}
+
+/**
+ * What a Frame actually lays a Map Label's text out as (#751), measured by the
+ * browser rather than read off the markup. A `<text>` whose `<textPath>` the
+ * engine refused to apply reports a text length all the same, so the glyph
+ * box's place against the baseline is what proves the run is drawn along it.
+ * The label draws its halo first, so the ink copy is the last `text.map-line`.
+ */
+export async function labelInk(surface: Locator): Promise<LabelInk> {
+  return surface.evaluate((element) => {
+    if (!(element instanceof SVGSVGElement)) throw new Error("the Frame's surface is no svg");
+    const svg = element;
+    const texts = Array.from(
+      svg.querySelectorAll<SVGTextElement>("g[data-element-id] text.map-line")
+    );
+    const ink = texts[texts.length - 1];
+    if (ink === undefined) throw new Error("the Frame drew no Map Label text");
+    // The baseline the text follows is the label's hit path, the only path its
+    // group draws. It is in the scene, unlike the `<defs>` copy the textPath
+    // names, so every engine lays it out and reports its box.
+    const baseline = ink.closest("g[data-element-id]")?.querySelector("path.map-hit");
+    if (!(baseline instanceof SVGGraphicsElement)) {
+      throw new Error("the Frame drew no Map Label baseline");
+    }
+    const box = (rect: DOMRect) => ({
+      left: rect.left,
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+    });
+    return {
+      lengths: texts.map((text) => text.getComputedTextLength()),
+      ink: box(ink.getBoundingClientRect()),
+      baseline: box(baseline.getBoundingClientRect()),
+    };
+  });
 }
 
 /** What a Frame paints for a Fill's scatter, and where its Stamps answer a hit. */

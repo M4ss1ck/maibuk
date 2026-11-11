@@ -647,6 +647,11 @@ describe("Map Label shapes", () => {
     expect(text?.querySelector("textPath")?.getAttribute("href")).toBe("#label-path-a1");
     expect(text?.querySelector("textPath")?.getAttribute("startOffset")).toBe("50%");
     expect(text?.textContent).toBe("The Reach");
+    // A text on a path starts from its startOffset. Chromium drops the textPath
+    // when the same <text> also carries an x, laying the run out at the origin
+    // with nothing painted (#751), so neither copy writes x or y.
+    expect(text?.hasAttribute("x")).toBe(false);
+    expect(text?.hasAttribute("y")).toBe(false);
   });
 
   it("draws the halo first, a stroked copy of the same text with no fill", () => {

@@ -819,6 +819,9 @@ describe("Stamp rendering", () => {
 
     const bar = sceneToSvg(mapWith([scaleBar()], "portrait"));
     expect(bar).toContain("<text ");
+    // A text drawn at a point still carries the point it starts at; only a
+    // text following a baseline leaves x and y off (#751).
+    expect(bar).toMatch(/<text x="/);
     expect(bar).toContain(">0</text>");
     expect(bar).toContain(">200 km</text>");
     expect(bar).toContain('text-anchor="end"');
@@ -878,6 +881,21 @@ describe("Map Label rendering", () => {
     // draws straight, and one code path draws every label.
     expect(baseline.d).toBe("M 0 30 Q 20 30 40 30");
     expect(svg).toContain(`href="#${baseline.id}"`);
+  });
+
+  it("writes no x or y on text that follows a baseline (#751)", () => {
+    const svg = sceneToSvg(mapWith([label()]));
+
+    // Chromium drops the textPath when the same <text> also carries an x, so
+    // the run lays out at the origin and paints nothing. The baseline's
+    // startOffset places the label; x and y must stay off both copies of it,
+    // since the halo is the same text written first.
+    const texts = [...svg.matchAll(/<text ([^>]*)>/g)].map(([, attributes]) => attributes);
+    expect(texts).toHaveLength(2);
+    for (const attributes of texts) {
+      expect(attributes).not.toMatch(/(?:^|\s)x="/);
+      expect(attributes).not.toMatch(/(?:^|\s)y="/);
+    }
   });
 
   it("names each label's baseline after its own Element", () => {
