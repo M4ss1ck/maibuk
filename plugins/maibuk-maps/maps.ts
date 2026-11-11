@@ -21,6 +21,7 @@
 
 import { sceneToSvg } from "./scene";
 import { SCALE_BAR_STAMP_REF } from "./stamps";
+import { isMapColor, isMapStyleId } from "./styles";
 import { isTextureId, type TextureId } from "./textures";
 
 /** The Plugin's data format version; `migrateData` owns every change to it. */
@@ -97,11 +98,19 @@ export interface MapLineElement extends MapElementBase {
   convertedFrom?: ShapeKind;
   /** How far the line's edge fades out, in page millimetres; absent or 0 draws a sharp edge. */
   softEdge?: number;
+  /**
+   * The ink it draws in: a Map Style role name, which follows the Style, or a
+   * `#rrggbb` override; absent uses the line's default role.
+   */
+  color?: string;
 }
 
 /** What covers a Fill's area: its colour, its texture, or the Stamps it scatters. */
 export interface MapFillContent {
-  /** The flat colour, under a texture or a scatter when the Fill has one of them. */
+  /**
+   * The flat colour, under a texture or a scatter when the Fill has one of
+   * them: a Map Style role name or a `#rrggbb` override.
+   */
   color?: string;
   /** The texture painted over the area, from `textures.ts`. */
   texture?: TextureId;
@@ -180,8 +189,8 @@ export interface MapStampElement extends MapElementBase {
   /** The art it draws, such as `base:marker`; a ref this build does not know draws nothing. */
   stampRef: string;
   transform: MapStampTransform;
-  /** The ink a one-colour part of the art takes. */
-  color: string;
+  /** The ink a one-colour part of the art takes: a role name or a `#rrggbb` override. */
+  color?: string;
   /** The scale bar's reading; no other Stamp carries one. */
   scale?: MapStampScale;
 }
@@ -199,15 +208,14 @@ export const DEFAULT_SCALE_BAR_SIZE_MM = 40;
 export const MIN_STAMP_SIZE_MM = 1;
 
 /**
- * The ink a Map Line is drawn in until Map Styles choose another. It lives here,
- * beside the Elements that carry it, so the model never reads the scene for it:
- * `scene.ts` imports this module, and a cycle back would leave the default
- * Stamp colour undefined on the way in.
+ * The Atlas ink: the colour Maps drew their lines and Stamps in before Map
+ * Styles existed. It lives here, beside the Elements that carry it, so the model
+ * never reads the scene for it: `scene.ts` imports this module, and a cycle back
+ * would leave the legacy value undefined on the way in. Production reads it only
+ * as the legacy Stamp colour `normalizeStamp` drops when it reads an old
+ * document; every current ink comes from the Map Style.
  */
 export const LINE_STROKE = "#1f2933";
-
-/** The ink a new Stamp takes until the author or the Map Style picks another. */
-export const DEFAULT_STAMP_COLOR = LINE_STROKE;
 
 /** The reading a new scale bar takes: the page's full width stands for 1000 km. */
 export const DEFAULT_STAMP_SCALE: MapStampScale = { unit: "km", span: 1000 };
@@ -345,7 +353,11 @@ export const LINE_STYLE_DEFAULT_ENCLOSES: Readonly<Record<LineStyleId, boolean>>
   plain: true,
 };
 
-/** The land colour a new Fill takes, chosen to read against the page's water. */
+/**
+ * The Atlas land colour. A new Fill stores the `land` role instead, so it
+ * follows the Map Style; this is also the old stored value `normalizeFill`
+ * rewrites.
+ */
 export const DEFAULT_FILL_COLOR = "#c8d5a3";
 
 /** The curve flags of a line with `pointCount` points, every segment curved. */
@@ -440,7 +452,9 @@ export function randomMapId(): string {
 }
 
 /** The picture the index carries for a Map: the drawn scene, at page size. */
-export function mapPreview(map: Pick<MapDocument, "page" | "elements">): string {
+export function mapPreview(
+  map: Pick<MapDocument, "page" | "elements"> & { styleId?: string }
+): string {
   return `data:image/svg+xml,${encodeURIComponent(sceneToSvg(map))}`;
 }
 
@@ -513,6 +527,7 @@ function isCurveFlags(value: unknown, length: number): value is boolean[] {
 /** Whether a line's style fields are present and well formed; a missing one is normalized on load. */
 function isLineStyleFields(element: Record<string, unknown>, pointCount: number): boolean {
   if (element.style !== undefined && !isLineStyleId(element.style)) return false;
+  if (element.color !== undefined && !isMapColor(element.color)) return false;
   if (element.enclosesFills !== undefined && typeof element.enclosesFills !== "boolean")
     return false;
   if (element.closed !== undefined && typeof element.closed !== "boolean") return false;
@@ -576,7 +591,7 @@ function isFillScatter(value: unknown): boolean {
 function isFillContent(value: unknown): boolean {
   if (typeof value !== "object" || value === null) return false;
   const content = value as Record<string, unknown>;
-  if (content.color !== undefined && typeof content.color !== "string") return false;
+  if (content.color !== undefined && !isMapColor(content.color)) return false;
   if (content.texture !== undefined && !isTextureId(content.texture)) return false;
   if (content.scatter !== undefined && !isFillScatter(content.scatter)) return false;
   return (
@@ -599,7 +614,7 @@ function isLabelFields(element: Record<string, unknown>): boolean {
   if (!isFiniteNumber(element.size) || element.size <= 0) return false;
   if (!isFiniteNumber(element.letterSpacing)) return false;
   if (!isFiniteNumber(element.halo) || element.halo < 0) return false;
-  return element.color === undefined || typeof element.color === "string";
+  return element.color === undefined || isMapColor(element.color);
 }
 
 function isMapElement(value: unknown): value is MapElement {
@@ -628,7 +643,7 @@ function isMapElement(value: unknown): value is MapElement {
     return (
       typeof element.stampRef === "string" &&
       element.stampRef !== "" &&
-      typeof element.color === "string" &&
+      (element.color === undefined || isMapColor(element.color)) &&
       isStampTransform(element.transform) &&
       (element.scale === undefined || isStampScale(element.scale))
     );
@@ -682,8 +697,9 @@ export interface NewStamp {
 }
 
 /**
- * A Stamp of `stampRef` centred on `point`: upright, at the default size, in the
- * map ink, and, when it is the scale bar, reading the default scale.
+ * A Stamp of `stampRef` centred on `point`: upright, at the default size, in
+ * the Map Style's ink unless the caller names a colour, and, when it is the
+ * scale bar, reading the default scale.
  */
 export function newStamp(input: NewStamp): MapStampElement {
   const scale =
@@ -704,7 +720,7 @@ export function newStamp(input: NewStamp): MapStampElement {
       size,
       rotation: input.rotation ?? 0,
     },
-    color: input.color ?? DEFAULT_STAMP_COLOR,
+    ...(input.color === undefined ? {} : { color: input.color }),
     ...(scale === undefined ? {} : { scale }),
   };
 }
@@ -893,13 +909,36 @@ function normalizeLabel(label: MapLabelElement): MapLabelElement {
   return { ...label, font: DEFAULT_LABEL_FONT };
 }
 
+/**
+ * A Stamp read from a document: the Map Style now supplies the ink, so a
+ * Stamp that stored the old atlas ink stores no colour and follows the Style.
+ */
+function normalizeStamp(stamp: MapStampElement): MapStampElement {
+  if (stamp.color !== LINE_STROKE) return stamp;
+  const styled = { ...stamp };
+  delete styled.color;
+  return styled;
+}
+
+/**
+ * A Fill read from a document: the old default land colour becomes the `land`
+ * role, so a Style switch recolours it along with the rest of the land.
+ */
+function normalizeFill(fill: MapFillElement): MapFillElement {
+  if (fill.content.color !== DEFAULT_FILL_COLOR) return fill;
+  return { ...fill, content: { ...fill.content, color: "land" } };
+}
+
 /** A whole document with every Element in its current shape, for reading old Maps. */
 function normalizeDocument(map: MapDocument): MapDocument {
+  const styleId = isMapStyleId(map.styleId) ? map.styleId : DEFAULT_STYLE_ID;
   return {
     ...map,
+    styleId,
     elements: map.elements.map((element) => {
       if (element.kind === "line") return normalizeSoftEdge(normalizeLine(element));
-      if (element.kind === "fill") return normalizeSoftEdge(element);
+      if (element.kind === "fill") return normalizeSoftEdge(normalizeFill(element));
+      if (element.kind === "stamp") return normalizeStamp(element);
       if (element.kind === "label") return normalizeLabel(element);
       return element;
     }),

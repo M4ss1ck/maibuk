@@ -2951,6 +2951,24 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-maps-styles",
+    area: "plugins",
+    workflow:
+      "The Maps editor's Map Styles and colour overrides (#752): the header carries a Map Style picker with four Styles (Atlas, Parchment, Ink, Night), and every colour an Element holds either follows one of the Style's roles or overrides it with a hex of its own. From the keyboard the author places a Rectangle and moves the Map from Atlas to Night, and the Frame repaints the page in the new Style's water and the Rectangle's plain line in its ink; a Map Line given a hex from its colour picker keeps that hex across a Style switch while the page follows the Style, and \"Use Map Style color\" hands the line back to the Style, which recolours it on the next switch. The Style and the override both survive a reload and reopening the Map; asserts: the Frame's page background and the drawn line's colour under each Style, the line's override across a switch, the control's disabled state once the line follows the Style again, and the Style and the override after the reload; persists: yes (the Style and every colour are saved with the Map, and a Style switch is one undoable edit)",
+    edges: [
+      "Picking a Map Style from the header recolours the Frame's page background and the Map Line that follows it",
+      "A Map Line's own colour stays an override across a Map Style switch",
+      "Use Map Style color hands the line back to the Style, which then recolours it",
+      "The Map Style and the override survive a reload and reopening the Map",
+    ],
+    terms: ["Shortcut"],
+    shortcuts: ["plugin.maibuk-maps.rectangleTool", "plugin.maibuk-maps.nextMapStyle"],
+    routes: ["/plugin/:pluginId/:pageId"],
+    fixture: "bookShelf",
+    tags: ["sandbox"],
+    status: "accepted",
+  },
+  {
     id: "plugins-maps-move",
     area: "plugins",
     workflow:

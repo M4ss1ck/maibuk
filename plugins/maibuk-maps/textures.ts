@@ -2,28 +2,32 @@
  * The Maps textures (#750): the few base textures a Fill can paint its area
  * with, drawn by us in code as one-colour SVG `<pattern>`s.
  *
- * A texture repeats one tile over the Fill's area, and every mark of it takes
- * the texture's own ink, so a Fill with a texture and no colour reads on a blank
- * page. A Fill that carries a colour too paints it under the pattern, so the
- * ground shows between the marks.
+ * A texture repeats one tile over the Fill's area. In Atlas every mark takes
+ * the texture's own ink, so an Atlas Fill with a texture and no colour reads on
+ * a blank page exactly as it always has; in every other Map Style the marks
+ * take that Style's `ink` role, so a textured Fill belongs to the Map it is
+ * drawn in (#752). A Fill that carries a colour too paints it under the
+ * pattern, so the ground shows between the marks.
  *
  * The patterns are plain strings: `sceneToSvg` writes them into the SVG's
- * `<defs>`, and the pattern id a Fill references comes from the texture id alone,
- * so the same texture is defined once however many Fills use it. These textures
+ * `<defs>`, and the pattern id a Fill references comes from the Style and the
+ * texture, so two Fills of one texture in one Style share it. These textures
  * are original to Maibuk, drawn in-house for this Plugin.
  *
- * This module imports nothing.
+ * This module imports only its own files.
  */
+
+import { MAP_STYLES, type MapStyleId } from "./styles";
 
 /** Every base texture a Fill's content can take. */
 export const TEXTURE_IDS = ["grass", "sand", "marsh", "hatching", "dots"] as const;
 export type TextureId = (typeof TEXTURE_IDS)[number];
 
-/** One texture's art: the tile it repeats and the ink its marks draw in. */
+/** One texture's art: the tile it repeats and the ink its marks draw in in Atlas. */
 interface TextureArt {
   /** The tile's width and height on the page, in millimetres. */
   tileMm: number;
-  /** The ink every mark of the texture takes. */
+  /** The ink every mark of the texture takes in Atlas. */
   ink: string;
   /** One tile's marks, in the tile's own millimetre coordinates. */
   marks: (ink: string) => string;
@@ -73,17 +77,20 @@ export function isTextureId(value: unknown): value is TextureId {
 }
 
 /**
- * The id a texture's `<pattern>` takes, which a Fill's paint references. It
- * comes from the texture id alone, so two Fills of one texture share it.
+ * The id a texture's `<pattern>` takes in `style`, which a Fill's paint
+ * references. It comes from the Style and the texture, so two Fills of one
+ * texture in one Style share it. Atlas keeps the texture id alone, the id every
+ * texture had before Map Styles existed, so an Atlas Map's markup is unchanged.
  */
-export function texturePatternId(id: TextureId): string {
-  return `texture-${id}`;
+export function texturePatternId(id: TextureId, style: MapStyleId): string {
+  return style === "atlas" ? `texture-${id}` : `texture-${id}-${style}`;
 }
 
-/** One texture as an SVG `<pattern>` definition, in page millimetres and its own ink. */
-export function texturePattern(id: TextureId): string {
+/** One texture as an SVG `<pattern>` definition, in page millimetres and the Style's ink. */
+export function texturePattern(id: TextureId, style: MapStyleId): string {
   const art = TEXTURES[id];
-  return `<pattern id="${texturePatternId(id)}" patternUnits="userSpaceOnUse" width="${String(
+  const ink = style === "atlas" ? art.ink : MAP_STYLES[style].ink;
+  return `<pattern id="${texturePatternId(id, style)}" patternUnits="userSpaceOnUse" width="${String(
     art.tileMm
-  )}" height="${String(art.tileMm)}">${art.marks(art.ink)}</pattern>`;
+  )}" height="${String(art.tileMm)}">${art.marks(ink)}</pattern>`;
 }

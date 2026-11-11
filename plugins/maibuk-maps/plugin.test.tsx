@@ -49,6 +49,7 @@ import {
   MAP_PAGE_ID,
   MAPS_PAGE_ID,
   MOVE_RIGHT,
+  NEXT_MAP_STYLE,
   OPEN_MAPS,
   startMaps,
   type MapsRuntime,
@@ -56,6 +57,7 @@ import {
 import { DEFAULT_SCATTER_SPACING_MM } from "./scatter";
 import { smoothStroke } from "./scene";
 import { linePath, roughen, seedFor, shapeOutline } from "./geometry";
+import { MAP_STYLES } from "./styles";
 
 type User = ReturnType<typeof userEvent.setup>;
 
@@ -650,6 +652,26 @@ describe("Maps Commands and host requests", () => {
     try {
       await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: OPEN_MAPS });
       expect(host.pageNavigations).toEqual([{ pluginId: "maibuk-maps", pageId: MAPS_PAGE_ID }]);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("Next Map Style cycles every Style, each switch one undo step", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    try {
+      expect(runtime.editor?.getSnapshot().styleId).toBe("atlas");
+      for (const style of ["parchment", "ink", "night", "atlas"] as const) {
+        await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: NEXT_MAP_STYLE });
+        expect(runtime.editor?.getSnapshot().styleId).toBe(style);
+      }
+
+      // Each switch is one history step, so undo walks back through them.
+      runtime.editor?.undo();
+      expect(runtime.editor?.getSnapshot().styleId).toBe("night");
+      runtime.editor?.undo();
+      expect(runtime.editor?.getSnapshot().styleId).toBe("ink");
     } finally {
       await host.stop();
     }
@@ -1501,7 +1523,7 @@ describe("Map editor page", () => {
       expect(drawn).toMatchObject({
         kind: "fill",
         name: "Fill 1",
-        content: { color: DEFAULT_FILL_COLOR },
+        content: { color: "land" },
       });
       expect(drawn.outline?.points).toEqual([
         [startX, startY],
@@ -1560,7 +1582,7 @@ describe("Map editor page", () => {
       const poured = storedMap(storage).elements.find(
         (element): element is MapFillElement => element.kind === "fill"
       );
-      expect(poured).toMatchObject({ name: "Fill 1", content: { color: DEFAULT_FILL_COLOR } });
+      expect(poured).toMatchObject({ name: "Fill 1", content: { color: "land" } });
       expect(runtime.editor?.getSnapshot().selectedId).toBe(poured?.id);
       expect(screen.getByRole("listbox", { name: en["elements.label"] })).toHaveTextContent(
         en["element.kind.fill"]
@@ -2549,7 +2571,7 @@ describe("Map editor page", () => {
       await waitFor(() => expect(fillNow(runtime).content.texture).toBeUndefined());
       await runtime.editor?.flush();
       expect(storedFill(storage).content).toMatchObject({
-        color: DEFAULT_FILL_COLOR,
+        color: "land",
         scatter: { stamp: "base:castle" },
       });
       expect(storedFill(storage).content.texture).toBeUndefined();
@@ -2580,6 +2602,103 @@ describe("Map editor page", () => {
       expect(screen.getByLabelText(en["properties.fillTexture"])).toHaveTextContent(
         en["properties.texture.hatching"]
       );
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("switches the Map Style and clears a Map Line colour, both from the keyboard", async () => {
+    const storage = mapStorage([
+      line("e1", "Coast", [
+        [10, 10],
+        [20, 20],
+      ]),
+    ]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await screen.findByRole("radiogroup", { name: en["tools.label"] });
+      expect(runtime.editor?.getSnapshot().styleId).toBe("atlas");
+
+      // The Map Style picker sits with the Map-level controls; its own arrow
+      // keys reach Night, and the Map takes it.
+      await pickOption(user, en["properties.mapStyle"], en["properties.mapStyle.night"]);
+      await waitFor(() => expect(runtime.editor?.getSnapshot().styleId).toBe("night"));
+      await runtime.editor?.flush();
+      expect(storedMap(storage).styleId).toBe("night");
+
+      await selectRow(user, "Coast");
+      // The line follows the Style, so there is no override to clear yet.
+      expect(
+        screen.getByRole("button", { name: en["properties.useMapStyleColor"] })
+      ).toBeDisabled();
+
+      /** Opens the Map Line colour picker and commits one hex colour by keyboard. */
+      async function pickLineColor(hex: string): Promise<void> {
+        const trigger = screen.getByRole("button", { name: en["properties.mapLine.color"] });
+        await tabTo(user, trigger, 80);
+        await user.keyboard("{Enter}");
+        const dialog = await screen.findByRole("dialog", { name: en["properties.mapLine.color"] });
+        const field = within(dialog).getByRole("textbox");
+        await user.clear(field);
+        await user.type(field, hex);
+        await user.keyboard("{Enter}");
+        await user.keyboard("{Escape}");
+        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      }
+
+      // A pick of one of Night's own colours stores the role name, so the line
+      // keeps following the Style and still has no override to clear.
+      await pickLineColor(MAP_STYLES.night.forest);
+      await waitFor(() => expect(lineNow(runtime).color).toBe("forest"));
+      expect(
+        screen.getByRole("button", { name: en["properties.useMapStyleColor"] })
+      ).toBeDisabled();
+
+      // Any other hex is an override, which the clear button takes away.
+      await pickLineColor("#123456");
+      await waitFor(() => expect(lineNow(runtime).color).toBe("#123456"));
+      await runtime.editor?.flush();
+      expect(storedLine(storage).color).toBe("#123456");
+
+      const clear = screen.getByRole("button", { name: en["properties.useMapStyleColor"] });
+      await waitFor(() => expect(clear).toBeEnabled());
+      await tabTo(user, clear, 20);
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(lineNow(runtime).color).toBeUndefined());
+      await runtime.editor?.flush();
+      expect(storedLine(storage).color).toBeUndefined();
+      await waitFor(() =>
+        expect(
+          screen.getByRole("button", { name: en["properties.useMapStyleColor"] })
+        ).toBeDisabled()
+      );
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("shows the picker's default, not land, for a Fill that only paints a texture", async () => {
+    const storage = mapStorage([areaFill({ texture: "dots" })]);
+    const { host } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await selectRow(user, "Fill 1");
+
+      const trigger = await screen.findByRole("button", { name: en["properties.fillColor"] });
+      await tabTo(user, trigger, 60);
+      await user.keyboard("{Enter}");
+      const dialog = await screen.findByRole("dialog", { name: en["properties.fillColor"] });
+
+      // No flat colour paints the Fill, so its picker shows the host's default
+      // instead of claiming the Fill is painted land.
+      expect(within(dialog).getByRole("textbox")).toHaveValue("#000000");
 
       await page.unmount();
     } finally {

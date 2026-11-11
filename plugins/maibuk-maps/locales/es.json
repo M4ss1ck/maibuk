@@ -32,6 +32,7 @@
   "commands.polygonTool.label": "Herramienta de polígono",
   "commands.eraserTool.label": "Herramienta de goma de borrar",
   "commands.roughen.label": "Aplicar rugosidad",
+  "commands.nextMapStyle.label": "Siguiente estilo de mapa",
   "commands.deleteElement.label": "Eliminar elemento",
   "pages.maps.title": "Mapas",
   "pages.map.title": "Mapa"

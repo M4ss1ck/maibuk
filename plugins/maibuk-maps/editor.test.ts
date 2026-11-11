@@ -27,7 +27,6 @@ import {
   DEFAULT_POLYGON_SIDES,
   DEFAULT_SCALE_BAR_SIZE_MM,
   DEFAULT_SHAPE_SIZE_MM,
-  DEFAULT_STAMP_COLOR,
   DEFAULT_STAMP_SIZE_MM,
   MIN_LABEL_SIZE_MM,
   MIN_LABEL_WIDTH_MM,
@@ -50,6 +49,7 @@ import {
   MAX_SCATTER_SPACING_MM,
   MIN_SCATTER_SPACING_MM,
 } from "./scatter";
+import { MAP_STYLES, resolveColor, type MapStyleId } from "./styles";
 
 /** An editor over a square 200 by 100 mm Map, with a store that drops its saves. */
 function openEditor(elements: MapElement[] = []) {
@@ -408,7 +408,7 @@ describe("pouring a Fill with the Bucket", () => {
       name: "Fill 1",
       hidden: false,
       locked: false,
-      content: { color: DEFAULT_FILL_COLOR },
+      content: { color: "land" },
     });
     expect(elements[1].id).toBe("ring");
     const [fill] = fills(editor);
@@ -419,8 +419,8 @@ describe("pouring a Fill with the Bucket", () => {
     expect(fill.anchor[1]).toBeLessThan(90);
     expect(editor.getSnapshot().selectedId).toBe(fill.id);
     expect(editor.getSnapshot().selectedIsFill).toBe(true);
-    expect(editor.getSnapshot().selectedFillColor).toBe(DEFAULT_FILL_COLOR);
-    expect(editor.getSnapshot().currentFillColor).toBe(DEFAULT_FILL_COLOR);
+    expect(editor.getSnapshot().selectedFillColor).toBe("land");
+    expect(editor.getSnapshot().currentFillColor).toBe("land");
   });
 
   it("commits nothing for a pour outside every face", () => {
@@ -572,15 +572,15 @@ describe("a Fill's own colour", () => {
     // The same colour again is not a step.
     editor.setElementFillColor(fill.id, "#445566");
     editor.undo();
-    expect(fills(editor)[0].content.color).toBe(DEFAULT_FILL_COLOR);
+    expect(fills(editor)[0].content.color).toBe("land");
 
     editor.setLocked(fill.id, true);
     editor.setElementFillColor(fill.id, "#000000");
-    expect(fills(editor)[0].content.color).toBe(DEFAULT_FILL_COLOR);
+    expect(fills(editor)[0].content.color).toBe("land");
     // The refused change is not a step either: undo unlocks the Fill.
     editor.undo();
     expect(fills(editor)[0].locked).toBe(false);
-    expect(fills(editor)[0].content.color).toBe(DEFAULT_FILL_COLOR);
+    expect(fills(editor)[0].content.color).toBe("land");
   });
 });
 
@@ -666,7 +666,7 @@ describe("drawing an Area Fill with the Area tool", () => {
         locked: false,
         stampRef: "base:castle",
         transform: { x: 100, y: 50, size: 12, rotation: 0 },
-        color: DEFAULT_STAMP_COLOR,
+        color: MAP_STYLES.atlas.ink,
       },
       newLabel({ id: "label", name: "The Reach", text: "The Reach", point: [100, 20] }),
     ]);
@@ -878,7 +878,7 @@ describe("moving a Stamp", () => {
       locked: false,
       stampRef: "base:marker",
       transform: { x: 100, y: 50, size: 12, rotation: 0 },
-      color: DEFAULT_STAMP_COLOR,
+      color: MAP_STYLES.atlas.ink,
       ...overrides,
     };
   }
@@ -984,8 +984,8 @@ describe("placing a Stamp with the Insert tool", () => {
       locked: false,
       stampRef: "base:castle",
       transform: { x: 30, y: 40, size: DEFAULT_STAMP_SIZE_MM, rotation: 0 },
-      color: DEFAULT_STAMP_COLOR,
     });
+    expect(stamp.color).toBeUndefined();
     expect(stamp.scale).toBeUndefined();
     expect(editor.getSnapshot().selectedId).toBe(stamp.id);
 
@@ -1211,7 +1211,7 @@ describe("a one-colour Stamp's colour", () => {
     // The colour it already has is not a step.
     editor.setStampColor(stamp.id, "#8b1a1a");
     editor.undo();
-    expect((editor.getSnapshot().elements[0] as MapStampElement).color).toBe(DEFAULT_STAMP_COLOR);
+    expect((editor.getSnapshot().elements[0] as MapStampElement).color).toBeUndefined();
   });
 
   it("leaves art that keeps its own colours, and a locked Stamp, alone", () => {
@@ -1221,14 +1221,14 @@ describe("a one-colour Stamp's colour", () => {
     const [castle] = editor.getSnapshot().elements as MapStampElement[];
 
     editor.setStampColor(castle.id, "#8b1a1a");
-    expect((editor.getSnapshot().elements[0] as MapStampElement).color).toBe(DEFAULT_STAMP_COLOR);
+    expect((editor.getSnapshot().elements[0] as MapStampElement).color).toBeUndefined();
 
     editor.setStamp("marker");
     editor.insertStamp();
     const marker = editor.getSnapshot().elements[1] as MapStampElement;
     editor.setLocked(marker.id, true);
     editor.setStampColor(marker.id, "#8b1a1a");
-    expect((editor.getSnapshot().elements[1] as MapStampElement).color).toBe(DEFAULT_STAMP_COLOR);
+    expect((editor.getSnapshot().elements[1] as MapStampElement).color).toBeUndefined();
   });
 });
 
@@ -1285,7 +1285,7 @@ describe("dragging an Element with the Select tool", () => {
     locked: false,
     stampRef: "base:marker",
     transform: { x: 100, y: 50, size: 12, rotation: 0 },
-    color: DEFAULT_STAMP_COLOR,
+    color: MAP_STYLES.atlas.ink,
   };
 
   it("commits a dragged Map Line as one undo step, selected, and autosaves it", async () => {
@@ -1889,6 +1889,191 @@ describe("dragging a Map Label's bend handle", () => {
       line,
       newLabel({ id: "reach", name: "Map Label 2", text: "The Reach", point: [100, 50] }),
     ]);
+    expect(editor.getSnapshot().canUndo).toBe(false);
+  });
+});
+
+describe("Map Styles in the editor", () => {
+  /** A marker Stamp in a colour of its own, which the clear tests start from. */
+  function markerStamp(overrides: Partial<MapStampElement> = {}): MapStampElement {
+    return {
+      id: "marker",
+      kind: "stamp",
+      name: "City",
+      hidden: false,
+      locked: false,
+      stampRef: "base:marker",
+      transform: { x: 50, y: 50, size: 12, rotation: 0 },
+      ...overrides,
+    };
+  }
+
+  /** An editor over a fresh document, counting the saves it writes. */
+  function watchedEditor(elements: MapElement[] = []) {
+    const saved: MapDocument[] = [];
+    const editor = createMapEditor({
+      store: {
+        save: async (doc) => {
+          saved.push(doc);
+        },
+      },
+      doc: {
+        id: "map-1",
+        bookId: null,
+        name: "Map",
+        page: { preset: "square", widthMm: 200, heightMm: 100 },
+        styleId: "atlas",
+        overrides: {},
+        elements,
+        createdAt: 0,
+        updatedAt: 0,
+        dataVersion: DATA_VERSION,
+      },
+      language: () => "en",
+    });
+    return { editor, saved };
+  }
+
+  it("switches the Map Style as one undo step and reports it in the snapshot", () => {
+    const { editor } = openEditor();
+    expect(editor.getSnapshot().styleId).toBe("atlas");
+
+    editor.setMapStyle("night");
+    expect(editor.getSnapshot().styleId).toBe("night");
+
+    editor.undo();
+    expect(editor.getSnapshot().styleId).toBe("atlas");
+    editor.redo();
+    expect(editor.getSnapshot().styleId).toBe("night");
+
+    // A Style this build does not know, or the one already on, is no step:
+    // one undo still lands on Atlas.
+    editor.setMapStyle("dusk" as MapStyleId);
+    editor.setMapStyle("night");
+    editor.undo();
+    expect(editor.getSnapshot().styleId).toBe("atlas");
+  });
+
+  it("autosaves the new Map Style like any other edit", async () => {
+    const { editor, saved } = watchedEditor();
+    editor.setMapStyle("ink");
+    await editor.flush();
+
+    expect(saved).toHaveLength(1);
+    expect(saved[0].styleId).toBe("ink");
+  });
+
+  it("sets a Map Line's own colour, and stores a Style role for a role colour", () => {
+    const { editor } = openEditor([squareLine("ring", "Ring", 10, 10, 80)]);
+
+    editor.setLineColor("ring", "#123456");
+    expect(onlyLine(editor).color).toBe("#123456");
+    // The colour the line already has is not a step.
+    editor.setLineColor("ring", "#123456");
+    editor.undo();
+    expect(onlyLine(editor).color).toBeUndefined();
+
+    // A pick equal to one of the Style's own colours stores the role name, so
+    // a Style switch recolours the line too.
+    editor.setLineColor("ring", MAP_STYLES.atlas.forest.toUpperCase());
+    expect(onlyLine(editor).color).toBe("forest");
+    editor.setMapStyle("night");
+    expect(resolveColor("night", onlyLine(editor).color, "ink")).toBe(MAP_STYLES.night.forest);
+
+    // A locked Map Line keeps the colour it has.
+    editor.setLocked("ring", true);
+    editor.setLineColor("ring", "#abcdef");
+    expect(onlyLine(editor).color).toBe("forest");
+  });
+
+  it("stores a role name whenever a pick equals one of the current Style's colours", () => {
+    const [fill] = bucketFill({ color: "land" });
+    const label = newLabel({
+      id: "reach",
+      name: "Map Label 1",
+      text: "The Reach",
+      point: [50, 50],
+    });
+    const { editor } = openEditor([
+      squareLine("ring", "Ring", 10, 10, 80),
+      fill,
+      markerStamp(),
+      label,
+    ]);
+
+    editor.setLineColor("ring", MAP_STYLES.atlas.desert);
+    editor.setElementFillColor("fill", MAP_STYLES.atlas.forest);
+    editor.setStampColor("marker", MAP_STYLES.atlas.river);
+    editor.setLabelColor("reach", MAP_STYLES.atlas.water);
+
+    const [line, styledFill, stamp, styledLabel] = editor.getSnapshot().elements as [
+      MapLineElement,
+      MapFillElement,
+      MapStampElement,
+      MapLabelElement,
+    ];
+    expect(line.color).toBe("desert");
+    expect(styledFill.content.color).toBe("forest");
+    expect(stamp.color).toBe("river");
+    expect(styledLabel.color).toBe("water");
+  });
+
+  it("stores the land role for a Bucket colour that is one of the Style's own", () => {
+    const { editor } = openEditor();
+    editor.setFillColor(MAP_STYLES.atlas.land.toUpperCase());
+    expect(editor.getSnapshot().currentFillColor).toBe("land");
+    // Any other hex is an override the next Fill takes as it is.
+    editor.setFillColor("#123456");
+    expect(editor.getSnapshot().currentFillColor).toBe("#123456");
+  });
+
+  it("clears a Map Line's, Stamp's, or Map Label's override, and gives a Fill the land role", () => {
+    const [fill] = bucketFill({ color: "#123456" });
+    const label: MapLabelElement = {
+      ...newLabel({ id: "reach", name: "Map Label 1", text: "The Reach", point: [50, 50] }),
+      color: "#123456",
+    };
+    const { editor } = openEditor([
+      { ...squareLine("ring", "Ring", 10, 10, 80), color: "#123456" },
+      fill,
+      markerStamp({ color: "#123456" }),
+      label,
+    ]);
+
+    editor.clearElementColor("ring");
+    editor.clearElementColor("marker");
+    editor.clearElementColor("reach");
+    editor.clearElementColor("fill");
+
+    const [line, clearedFill, stamp, clearedLabel] = editor.getSnapshot().elements as [
+      MapLineElement,
+      MapFillElement,
+      MapStampElement,
+      MapLabelElement,
+    ];
+    expect(line.color).toBeUndefined();
+    expect(clearedFill.content.color).toBe("land");
+    expect(stamp.color).toBeUndefined();
+    expect(clearedLabel.color).toBeUndefined();
+
+    // Each clear is its own undo step: the Fill's colour comes back first.
+    editor.undo();
+    expect((editor.getSnapshot().elements[1] as MapFillElement).content.color).toBe("#123456");
+  });
+
+  it("takes no step for an Element that already follows the Style, or a locked one", () => {
+    const [fill] = bucketFill({ color: "land" });
+    const { editor } = openEditor([
+      { ...squareLine("ring", "Ring", 10, 10, 80), color: "forest" },
+      fill,
+      markerStamp({ id: "locked", color: "#123456", locked: true }),
+    ]);
+
+    editor.clearElementColor("ring");
+    editor.clearElementColor("fill");
+    editor.clearElementColor("locked");
+    editor.clearElementColor("ghost");
+
     expect(editor.getSnapshot().canUndo).toBe(false);
   });
 });
