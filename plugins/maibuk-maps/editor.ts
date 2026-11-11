@@ -273,7 +273,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       roughenStrength,
       selectedIsLine: selectedLine !== null,
       selectedIsFill: selectedFill !== null,
-      selectedFillColor: selectedFill === null ? null : selectedFill.content.color,
+      selectedFillColor: selectedFill === null ? null : (selectedFill.content.color ?? null),
       selectedLineStyle: selectedLine === null ? null : selectedLine.style,
       selectedEnclosesFills: selectedLine === null ? null : selectedLine.enclosesFills,
       selectedShape: selectedLine === null ? null : (selectedLine.shape ?? null),

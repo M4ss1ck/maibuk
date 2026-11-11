@@ -612,6 +612,50 @@ describe("moving a Stamp", () => {
   });
 });
 
+describe("moving an Area Fill", () => {
+  /** An Area Fill over a 20 mm square at (0, 0), its selection point in its middle. */
+  const AREA_FILL: MapFillElement = {
+    id: "forest",
+    kind: "fill",
+    name: "Forest",
+    hidden: false,
+    locked: false,
+    anchor: [10, 10],
+    outline: {
+      points: [
+        [0, 0],
+        [20, 0],
+        [20, 20],
+        [0, 20],
+      ],
+      curves: [false, false, false, false],
+      roughened: false,
+    },
+    content: { color: DEFAULT_FILL_COLOR },
+  };
+
+  it("shifts the Area Fill's anchor and its own outline as one undo step", () => {
+    const { editor } = openEditor([AREA_FILL]);
+    editor.select("forest");
+
+    editor.move(5, -3);
+
+    expect(editor.getSnapshot().elements[0]).toMatchObject({
+      anchor: [15, 7],
+      outline: {
+        points: [
+          [5, -3],
+          [25, -3],
+          [25, 17],
+          [5, 17],
+        ],
+      },
+    });
+    editor.undo();
+    expect(editor.getSnapshot().elements).toEqual([AREA_FILL]);
+  });
+});
+
 describe("placing a Stamp with the Insert tool", () => {
   /** The one Stamp an editor holds, which every Insert test starts from. */
   function onlyStamp(editor: MapEditor): MapStampElement {

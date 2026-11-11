@@ -63,8 +63,12 @@ export function seedFor(id: string): number {
   return hash >>> 0;
 }
 
-/** An alea-like seeded PRNG, which `createNoise2D` wants in place of `Math.random`. */
-function seededRandom(seed: number): () => number {
+/**
+ * A seeded PRNG (mulberry32), which `createNoise2D` wants in place of
+ * `Math.random` and `scatterPoints` wants in place of it too: the same seed
+ * always draws the same noise, and scatters the same points.
+ */
+export function seededRandom(seed: number): () => number {
   let state = seed >>> 0 || 1;
   return () => {
     state = (state + 0x6d2b79f5) >>> 0;

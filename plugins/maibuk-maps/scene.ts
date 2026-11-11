@@ -13,16 +13,23 @@ import { RoughGenerator } from "roughjs/bin/generator.js";
 import { faceAt, findFaces, type Face } from "./faces";
 import { cumulativeLengths, linePath, roundedMm, seedFor } from "./geometry";
 import {
+  DEFAULT_STAMP_COLOR,
   DEFAULT_STAMP_SCALE,
+  DEFAULT_STAMP_SIZE_MM,
   LINE_STROKE,
   type MapDocument,
   type MapElement,
   type MapFillElement,
+  type MapFillOutline,
+  type MapFillScatter,
   type MapLineElement,
   type MapPoint,
   type MapStampElement,
+  type MapStampTransform,
 } from "./maps";
+import { scatterPoints } from "./scatter";
 import { SCALE_BAR_STAMP_REF, type StampArt, scaleBarLayout, stampArt } from "./stamps";
+import { TEXTURE_IDS, texturePattern, texturePatternId, type TextureId } from "./textures";
 
 /** The Atlas Map Style's water, which an empty Map shows. */
 export const EMPTY_MAP_COLOR = "#d7e6ec";
@@ -138,6 +145,8 @@ export interface LineShape {
   opacity: number;
   /** An SVG transform, when the shape is placed or turned rather than drawn in page coordinates. */
   transform?: string;
+  /** The Clip Path id that keeps the shape inside its Element's area, when it has one. */
+  clip?: string;
 }
 
 /**
@@ -386,25 +395,138 @@ function fillPath(face: Face): string {
   return [face.outer, ...face.holes].map(ringPath).join(" ");
 }
 
+/** What one pass over a scene collects: the definitions an SVG needs, and the textures it paints. */
+interface SceneCollector {
+  /** The Clip Path and filter definitions, in Element order. */
+  defs: string[];
+  /** The textures the scene paints with, so each one is defined once. */
+  textures: Set<TextureId>;
+}
+
+/** The area one Fill covers: the exact path it paints, and the rings that bound it. */
+interface FillArea {
+  /** The SVG path `d` of the area, ready to fill and to clip against. */
+  d: string;
+  /** The rings the area covers, which scatter samples its points inside. */
+  rings: MapPoint[][];
+}
+
+/** The paint rough.js is asked for only so that it draws a filled outline; the Fill applies its own. */
+const ROUGH_FILL_PLACEHOLDER = "#000000";
+
 /**
- * The shape one Fill draws: the path of the face its anchor lies in, filled
- * with its colour and evenodd, so the holes in that face show the page through.
- * A Fill whose anchor is in no face draws nothing.
+ * An Area Fill's outline as rough.js draws it: the hand-inked wobble a Roughened
+ * Map Line gets, from the same seed, as one closed outline the Fill paints
+ * inside. Rough.js answers a filled path with a single shape that has no stroke,
+ * so the Fill stays unstroked, and the placeholder paint is never written.
  */
-function fillShape(element: MapFillElement, faces: readonly Face[]): LineShape[] {
+function roughenedFillPath(d: string, id: string): string {
+  const drawable = roughGenerator.path(d, {
+    seed: seedFor(id) || 1,
+    roughness: ROUGH_ROUGHNESS,
+    bowing: ROUGH_BOWING,
+    fill: ROUGH_FILL_PLACEHOLDER,
+    fillStyle: "solid",
+    stroke: "none",
+  });
+  const [path] = roughGenerator.toPaths(drawable);
+  return path === undefined ? d : path.d;
+}
+
+/** The area an Area Fill's own outline covers, curved or roughened as the outline asks. */
+function outlineArea(outline: MapFillOutline, id: string): FillArea | null {
+  const d = linePath({ points: outline.points, curves: outline.curves, closed: true });
+  if (d === "") return null;
+  return {
+    d: outline.roughened ? roughenedFillPath(d, id) : d,
+    // Scatter samples the outline's own points: its clipped edge cuts whatever a
+    // curve or the ink wobble draws past them, so no Stamp lands outside.
+    rings: [[...outline.points]],
+  };
+}
+
+/**
+ * The area one Fill covers (#750): its own outline when it is an Area Fill, or
+ * the face its anchor lies in when it is a Bucket Fill. A Bucket Fill whose
+ * anchor is in no face draws nothing.
+ */
+function fillArea(element: MapFillElement, faces: readonly Face[]): FillArea | null {
+  if (element.outline !== undefined) return outlineArea(element.outline, element.id);
   const face = faceAt(faces, element.anchor);
-  if (face === null) return [];
-  return [
-    {
-      d: fillPath(face),
-      stroke: null,
-      strokeWidth: 0,
-      dash: null,
-      fill: element.content.color,
-      fillRule: "evenodd",
-      opacity: 1,
-    },
-  ];
+  if (face === null) return null;
+  return { d: fillPath(face), rings: [face.outer, ...face.holes] };
+}
+
+/** One paint of a Fill's area: unstroked, in `fill`, with the area's holes cut out. */
+function areaPaint(area: FillArea, fill: string): LineShape {
+  return {
+    d: area.d,
+    stroke: null,
+    strokeWidth: 0,
+    dash: null,
+    fill,
+    fillRule: "evenodd",
+    opacity: 1,
+  };
+}
+
+/** The id the Clip Path that keeps a Fill's scattered Stamps inside its area takes. */
+function scatterClipId(elementId: string): string {
+  return `fill-clip-${seedFor(elementId).toString(16)}`;
+}
+
+/**
+ * The Stamps a Fill scatters over its area (#750), drawn exactly as Stamp
+ * Elements are and clipped to the area, so the ones near its edge are cut off
+ * cleanly. The Stamps cycle over the sampled points in order, so a Fill of two
+ * kinds alternates them.
+ */
+function scatteredShapes(
+  element: MapFillElement,
+  area: FillArea,
+  scatter: MapFillScatter,
+  collector: SceneCollector
+): LineShape[] {
+  const clip = scatterClipId(element.id);
+  const shapes: LineShape[] = [];
+  scatterPoints(area.rings, scatter.spacing, scatter.seed).forEach((point, index) => {
+    const art = stampArt(scatter.stamps[index % scatter.stamps.length]);
+    if (art === undefined) return;
+    const transform = artTransform(
+      { x: point[0], y: point[1], size: DEFAULT_STAMP_SIZE_MM, rotation: 0 },
+      art
+    );
+    for (const shape of artShapes(art, transform, DEFAULT_STAMP_COLOR)) {
+      shapes.push({ ...shape, clip });
+    }
+  });
+  if (shapes.length === 0) return shapes;
+  collector.defs.push(
+    `<clipPath id="${clip}"><path d="${escapeAttribute(area.d)}" clip-rule="evenodd"/></clipPath>`
+  );
+  return shapes;
+}
+
+/**
+ * The shapes one Fill's content draws (#750): its colour, the texture painted
+ * over it, and the Stamps it scatters, in that order, each one clipped to the
+ * area. A Fill of an old `{color}` document draws the one filled path it always
+ * did.
+ */
+function fillShapes(
+  element: MapFillElement,
+  area: FillArea,
+  collector: SceneCollector
+): LineShape[] {
+  const { color, texture, scatter } = element.content;
+  const shapes: LineShape[] = [];
+  if (color !== undefined) shapes.push(areaPaint(area, color));
+  if (texture !== undefined) {
+    collector.textures.add(texture);
+    shapes.push(areaPaint(area, `url(#${texturePatternId(texture)})`));
+  }
+  if (scatter !== undefined) shapes.push(...scatteredShapes(element, area, scatter, collector));
+  return shapes;
 }
 
 /** The scale bar's bar height, as a fraction of its length. */
@@ -433,9 +555,9 @@ function rectanglePath(x: number, y: number, width: number, height: number): str
  * point, turned, scaled so the box is `size` wide, and centred on the box's
  * middle, so the art's own coordinates never move.
  */
-function artTransform(element: MapStampElement, art: StampArt): string {
+function artTransform(transform: MapStampTransform, art: StampArt): string {
   const [minX, minY, width, height] = art.viewBox;
-  const { x, y, size, rotation } = element.transform;
+  const { x, y, size, rotation } = transform;
   return [
     `translate(${roundedMm(x)} ${roundedMm(y)})`,
     ...(rotation === 0 ? [] : [`rotate(${roundedMm(rotation)})`]),
@@ -444,16 +566,14 @@ function artTransform(element: MapStampElement, art: StampArt): string {
   ].join(" ");
 }
 
-/** The shapes built-in art draws: one per part, a part with no colour of its own taking the Stamp's. */
-function artShapes(element: MapStampElement, art: StampArt): SceneShape[] {
-  if (!(element.transform.size > 0)) return [];
-  const transform = artTransform(element, art);
+/** The shapes built-in art draws: one per part, a part with no colour of its own taking `color`. */
+function artShapes(art: StampArt, transform: string, color: string): LineShape[] {
   return art.parts.map((part) => ({
     d: part.d,
-    stroke: part.stroke === undefined ? null : (part.stroke ?? element.color),
+    stroke: part.stroke === undefined ? null : (part.stroke ?? color),
     strokeWidth: part.strokeWidth ?? 0,
     dash: null,
-    fill: part.fill ?? element.color,
+    fill: part.fill ?? color,
     opacity: 1,
     transform,
   }));
@@ -529,26 +649,127 @@ function scaleBarShapes(element: MapStampElement, pageWidthMm: number): SceneSha
 function stampShapes(element: MapStampElement, pageWidthMm: number): SceneShape[] {
   if (element.stampRef === SCALE_BAR_STAMP_REF) return scaleBarShapes(element, pageWidthMm);
   const art = stampArt(element.stampRef);
-  return art === undefined ? [] : artShapes(element, art);
+  if (art === undefined || !(element.transform.size > 0)) return [];
+  return artShapes(art, artTransform(element.transform, art), element.color);
 }
 
-/** The render primitives one Element is drawn from: a line's, a fill's face, or a Stamp's picture. */
+/** The render primitives one Element is drawn from: a line's, a fill's content, or a Stamp's picture. */
 function elementShapes(
   element: MapElement,
-  faces: readonly Face[],
-  pageWidthMm: number
+  area: FillArea | null,
+  pageWidthMm: number,
+  collector: SceneCollector
 ): SceneShape[] {
   if (element.kind === "line") return lineShapes(element);
-  if (element.kind === "fill") return fillShape(element, faces);
+  if (element.kind === "fill") return area === null ? [] : fillShapes(element, area, collector);
   if (element.kind === "stamp") return stampShapes(element, pageWidthMm);
   return [];
 }
 
-/** Every Element's render primitives, in array order, from one pass over the faces. */
-export function sceneShapes(elements: readonly MapElement[], pageWidthMm: number): SceneShape[][] {
+/** How far a Soft Edge's blur reaches, in standard deviations, so its region can hold all of it. */
+const SOFT_EDGE_REACH = 3;
+
+/** Room a Soft Edge's filter region keeps beyond the blur, for a stroke, a ripple, or a curve, in mm. */
+const SOFT_EDGE_PADDING_MM = 6;
+
+/** The blur amount that makes an Element's edge fade, in page millimetres, or null for a sharp edge. */
+function softEdgeOf(element: MapElement): number | null {
+  const softEdge =
+    element.kind === "line" || element.kind === "fill" ? element.softEdge : undefined;
+  return softEdge !== undefined && softEdge > 0 ? softEdge : null;
+}
+
+/** The id an Element's Soft Edge filter takes, from the Element's own id. */
+function softEdgeFilterId(elementId: string): string {
+  return `soft-edge-${seedFor(elementId).toString(16)}`;
+}
+
+/** The smallest and largest coordinate of `points`, in page millimetres. */
+function pointsBounds(points: readonly MapPoint[]): {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+} {
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  for (const [x, y] of points) {
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+/**
+ * The `<filter>` one Element's Soft Edge draws: a Gaussian blur of `softEdgeMm`
+ * whose region is widened to hold the whole blur, in page space with explicit
+ * bounds, so a browser and Inkscape cut nothing off it.
+ */
+function softEdgeFilter(id: string, softEdgeMm: number, points: readonly MapPoint[]): string {
+  const { minX, minY, maxX, maxY } = pointsBounds(points);
+  const padding = softEdgeMm * SOFT_EDGE_REACH + SOFT_EDGE_PADDING_MM;
+  const x = minX - padding;
+  const y = minY - padding;
+  const width = maxX - minX + padding * 2;
+  const height = maxY - minY + padding * 2;
+  return `<filter id="${id}" filterUnits="userSpaceOnUse" x="${roundedMm(x)}" y="${roundedMm(
+    y
+  )}" width="${roundedMm(width)}" height="${roundedMm(height)}"><feGaussianBlur stdDeviation="${roundedMm(
+    softEdgeMm
+  )}"/></filter>`;
+}
+
+/** One whole scene, ready to draw: the primitives, the Soft Edges, and the definitions they use. */
+interface SceneRender {
+  shapes: SceneShape[][];
+  /** The Soft Edge filter each Element draws with, by array index; null for a sharp edge. */
+  filters: (string | null)[];
+  /** The SVG definitions the shapes reference: texture patterns, Clip Paths, and filters. */
+  defs: string[];
+}
+
+/** Every Element's primitives, its Soft Edge, and the definitions its SVG needs, in one pass. */
+function renderScene(elements: readonly MapElement[], pageWidthMm: number): SceneRender {
   const needsFaces = elements.some((element) => element.kind === "fill");
   const faces = needsFaces ? sceneFaces(elements) : [];
-  return elements.map((element) => elementShapes(element, faces, pageWidthMm));
+  const collector: SceneCollector = { defs: [], textures: new Set() };
+  const shapes: SceneShape[][] = [];
+  const filters: (string | null)[] = [];
+
+  for (const element of elements) {
+    const area = element.kind === "fill" ? fillArea(element, faces) : null;
+    shapes.push(elementShapes(element, area, pageWidthMm, collector));
+
+    const softEdge = softEdgeOf(element);
+    const outline = element.kind === "line" ? element.points : (area?.rings.flat() ?? []);
+    if (softEdge === null || outline.length === 0) {
+      filters.push(null);
+      continue;
+    }
+    const id = softEdgeFilterId(element.id);
+    collector.defs.push(softEdgeFilter(id, softEdge, outline));
+    filters.push(id);
+  }
+
+  return {
+    shapes,
+    filters,
+    defs: [
+      ...TEXTURE_IDS.filter((texture) => collector.textures.has(texture)).map((texture) =>
+        texturePattern(texture)
+      ),
+      ...collector.defs,
+    ],
+  };
+}
+
+/** Every Element's render primitives, in array order, from one pass over the faces. */
+export function sceneShapes(elements: readonly MapElement[], pageWidthMm: number): SceneShape[][] {
+  return renderScene(elements, pageWidthMm).shapes;
 }
 
 /** Escapes text for an XML attribute. */
@@ -586,6 +807,7 @@ function shapePath(shape: LineShape): string {
   if (shape.fillRule !== undefined) attributes.push(`fill-rule="${shape.fillRule}"`);
   if (shape.dash !== null) attributes.push(`stroke-dasharray="${escapeAttribute(shape.dash)}"`);
   if (shape.opacity !== 1) attributes.push(`opacity="${roundedMm(shape.opacity)}"`);
+  if (shape.clip !== undefined) attributes.push(`clip-path="url(#${shape.clip})"`);
   attributes.push('stroke-linecap="round"', 'stroke-linejoin="round"');
   return `<path ${attributes.join(" ")}/>`;
 }
@@ -606,14 +828,16 @@ function shapeText(shape: TextShape): string {
   return `<text ${attributes.join(" ")}>${escapeAttribute(shape.text)}</text>`;
 }
 
-/** One Element as a group of primitives, marked when it is the selection. */
+/** One Element as a group of primitives, marked when it is the selection and blurred when it has a Soft Edge. */
 function elementGroup(
   element: MapElement,
   shapes: readonly SceneShape[],
-  selected: boolean
+  selected: boolean,
+  softEdgeFilterId: string | null
 ): string {
   const attributes = [`data-element-id="${escapeAttribute(element.id)}"`];
   if (selected) attributes.push('data-selected="true"');
+  if (softEdgeFilterId !== null) attributes.push(`filter="url(#${softEdgeFilterId})"`);
   const primitives = shapes.map((shape) =>
     isTextShape(shape) ? shapeText(shape) : shapePath(shape)
   );
@@ -646,12 +870,20 @@ export function sceneToSvg(
     background(widthMm, heightMm),
   ];
 
-  const shapes = sceneShapes(map.elements, widthMm);
+  const render = renderScene(map.elements, widthMm);
+  if (render.defs.length > 0) parts.push(`<defs>${render.defs.join("")}</defs>`);
   map.elements.forEach((element, index) => {
     // An Element with nothing to draw writes no group: a hidden one, a Fill in
     // no face, or a Stamp whose art this build does not know.
-    if (element.hidden || shapes[index].length === 0) return;
-    parts.push(elementGroup(element, shapes[index], options.selectedId === element.id));
+    if (element.hidden || render.shapes[index].length === 0) return;
+    parts.push(
+      elementGroup(
+        element,
+        render.shapes[index],
+        options.selectedId === element.id,
+        render.filters[index]
+      )
+    );
   });
 
   parts.push("</svg>");
@@ -696,15 +928,27 @@ export function setLocked(
 }
 
 /**
- * Whether the move Commands may move an Element: an unlocked Map Line or
- * Stamp, the Elements `moveElement` knows how to shift. A Select drag also
- * needs it shown (#766), since a hidden Element is never drawn to press.
+ * Whether the move Commands may move an Element: an unlocked Map Line, Stamp,
+ * or Area Fill, the Elements `moveElement` knows how to shift. A Select drag
+ * also needs it shown (#766), since a hidden Element is never drawn to press.
  */
 export function canMove(element: MapElement): boolean {
-  return !element.locked && (element.kind === "line" || element.kind === "stamp");
+  return (
+    !element.locked && (element.kind === "line" || element.kind === "stamp" || isAreaFill(element))
+  );
 }
 
-/** Moves one Element by a page-millimetre offset; a locked Element stays put. */
+/** Whether a Fill covers its own outline (#750), which no move of a Map Line carries it along. */
+function isAreaFill(element: MapElement): element is MapFillElement {
+  return element.kind === "fill" && element.outline !== undefined;
+}
+
+/**
+ * Moves one Element by a page-millimetre offset; a locked Element stays put. An
+ * Area Fill moves with its outline, so it keeps covering the same shape at its
+ * new place; a Bucket Fill follows the Map Lines that enclose it instead, and
+ * never moves on its own.
+ */
 export function moveElement(
   elements: readonly MapElement[],
   id: string,
@@ -720,6 +964,18 @@ export function moveElement(
           ...element.transform,
           x: element.transform.x + dx,
           y: element.transform.y + dy,
+        },
+      };
+    }
+    if (element.kind === "fill") {
+      const { outline } = element;
+      if (outline === undefined) return element;
+      return {
+        ...element,
+        anchor: [element.anchor[0] + dx, element.anchor[1] + dy],
+        outline: {
+          ...outline,
+          points: outline.points.map(([x, y]): MapPoint => [x + dx, y + dy]),
         },
       };
     }

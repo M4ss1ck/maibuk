@@ -21,6 +21,7 @@
 
 import { sceneToSvg } from "./scene";
 import { SCALE_BAR_STAMP_REF } from "./stamps";
+import { isTextureId, type TextureId } from "./textures";
 
 /** The Plugin's data format version; `migrateData` owns every change to it. */
 export const DATA_VERSION = 1;
@@ -94,18 +95,58 @@ export interface MapLineElement extends MapElementBase {
   shape?: MapShape;
   /** The Shape kind a line was, once the Eraser or Roughen made it point by point. */
   convertedFrom?: ShapeKind;
+  /** How far the line's edge fades out, in page millimetres; absent or 0 draws a sharp edge. */
+  softEdge?: number;
+}
+
+/** What covers a Fill's area: its colour, its texture, or the Stamps it scatters. */
+export interface MapFillContent {
+  /** The flat colour, under a texture or a scatter when the Fill has one of them. */
+  color?: string;
+  /** The texture painted over the area, from `textures.ts`. */
+  texture?: TextureId;
+  /** The Stamps scattered over the area. */
+  scatter?: MapFillScatter;
+}
+
+/** The Stamps a Fill scatters over its area, how far apart they sit, and the seed that places them. */
+export interface MapFillScatter {
+  /** One `stampRef` per kind of Stamp scattered, cycled in order over the points. */
+  stamps: string[];
+  /** The smallest distance between two scattered Stamps, in page millimetres. */
+  spacing: number;
+  /** The seed the points are sampled from, so the same Fill scatters the same way each render. */
+  seed: number;
 }
 
 /**
- * A Fill: one colour over the face the Map Lines enclose (#748). Its anchor
- * keeps it on that face when the lines move.
+ * An Area Fill's own outline (#750): the closed area it covers instead of the
+ * face its anchor sits in. `points`, `curves`, and `roughened` read exactly as a
+ * Map Line's, with one flag per segment and the closing segment included, so
+ * `curves.length` is `points.length`, and the first point is not repeated.
+ */
+export interface MapFillOutline {
+  points: MapPoint[];
+  curves: boolean[];
+  roughened: boolean;
+}
+
+/**
+ * A Fill (#748, #750): what covers one area of the Map. It is an Area Fill when
+ * it carries an `outline`, covering that outline and never stroked; otherwise it
+ * is a Bucket Fill, covering the face its anchor lies in and following that face
+ * when the Map Lines around it move.
  */
 export interface MapFillElement extends MapElementBase {
   kind: "fill";
-  /** The point the Fill sits on, kept at the deepest point of its face. */
+  /** The point the Fill sits on: a Bucket Fill's face, and an Area Fill's selection point. */
   anchor: MapPoint;
-  /** What covers the face. */
-  content: { color: string };
+  /** The Area Fill's own outline; a Bucket Fill carries none. */
+  outline?: MapFillOutline;
+  /** What covers the area: a colour, a texture, scattered Stamps, or any combination. */
+  content: MapFillContent;
+  /** How far the Fill's edge fades out, in page millimetres; absent or 0 draws a sharp edge. */
+  softEdge?: number;
 }
 
 /** The units a scale bar reads in. */
@@ -392,6 +433,47 @@ function isStampTransform(value: unknown): boolean {
   );
 }
 
+/** Whether a Soft Edge is absent, or a blur amount that draws one. */
+function isSoftEdge(value: unknown): boolean {
+  return value === undefined || (isFiniteNumber(value) && value >= 0);
+}
+
+/** Whether an Area Fill's outline is present and well formed, or absent. */
+function isFillOutline(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const outline = value as Record<string, unknown>;
+  if (!Array.isArray(outline.points) || outline.points.length < 3) return false;
+  if (!outline.points.every(isMapPoint)) return false;
+  if (!isCurveFlags(outline.curves, outline.points.length)) return false;
+  return typeof outline.roughened === "boolean";
+}
+
+/** Whether the Stamps a Fill scatters are present and well formed, or absent. */
+function isFillScatter(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const scatter = value as Record<string, unknown>;
+  return (
+    Array.isArray(scatter.stamps) &&
+    scatter.stamps.length > 0 &&
+    scatter.stamps.every((ref) => typeof ref === "string" && ref !== "") &&
+    isFiniteNumber(scatter.spacing) &&
+    scatter.spacing > 0 &&
+    isFiniteNumber(scatter.seed)
+  );
+}
+
+/** Whether a Fill's content covers something: at least one of a colour, a texture, or a scatter. */
+function isFillContent(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const content = value as Record<string, unknown>;
+  if (content.color !== undefined && typeof content.color !== "string") return false;
+  if (content.texture !== undefined && !isTextureId(content.texture)) return false;
+  if (content.scatter !== undefined && !isFillScatter(content.scatter)) return false;
+  return (
+    content.color !== undefined || content.texture !== undefined || content.scatter !== undefined
+  );
+}
+
 function isMapElement(value: unknown): value is MapElement {
   if (typeof value !== "object" || value === null) return false;
   const element = value as Record<string, unknown>;
@@ -407,16 +489,12 @@ function isMapElement(value: unknown): value is MapElement {
   if (element.kind === "line") {
     if (!Array.isArray(element.points) || element.points.length < 2) return false;
     if (!element.points.every(isMapPoint)) return false;
-    return isLineStyleFields(element, element.points.length);
+    return isLineStyleFields(element, element.points.length) && isSoftEdge(element.softEdge);
   }
   if (element.kind === "fill") {
     if (!isMapPoint(element.anchor)) return false;
-    const content = element.content;
-    return (
-      typeof content === "object" &&
-      content !== null &&
-      typeof (content as Record<string, unknown>).color === "string"
-    );
+    if (element.outline !== undefined && !isFillOutline(element.outline)) return false;
+    return isFillContent(element.content) && isSoftEdge(element.softEdge);
   }
   if (element.kind === "stamp") {
     return (
@@ -571,13 +649,26 @@ function normalizeLine(line: MapLineElement): MapLineElement {
   };
 }
 
+/**
+ * An Element stored with a Soft Edge of 0 reads back sharp, which is what it
+ * draws: absent and 0 are the same edge, so one of them is enough to store.
+ */
+function normalizeSoftEdge<T extends MapLineElement | MapFillElement>(element: T): T {
+  if (element.softEdge === undefined || element.softEdge > 0) return element;
+  const sharp = { ...element };
+  delete sharp.softEdge;
+  return sharp;
+}
+
 /** A whole document with every Element in its current shape, for reading old Maps. */
 function normalizeDocument(map: MapDocument): MapDocument {
   return {
     ...map,
-    elements: map.elements.map((element) =>
-      element.kind === "line" ? normalizeLine(element) : element
-    ),
+    elements: map.elements.map((element) => {
+      if (element.kind === "line") return normalizeSoftEdge(normalizeLine(element));
+      if (element.kind === "fill") return normalizeSoftEdge(element);
+      return element;
+    }),
   };
 }
 

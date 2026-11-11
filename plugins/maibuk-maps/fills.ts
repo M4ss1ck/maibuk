@@ -23,6 +23,11 @@ function isFill(element: MapElement): element is MapFillElement {
   return element.kind === "fill";
 }
 
+/** Whether a Fill covers its own outline (#750), so no face decides where it sits. */
+function isAreaFill(fill: MapFillElement): boolean {
+  return fill.outline !== undefined;
+}
+
 /** The Map Lines of an elements array, which are what faces are built from. */
 function linesOf(elements: readonly MapElement[]): MapLineElement[] {
   return elements.filter((element): element is MapLineElement => element.kind === "line");
@@ -38,7 +43,8 @@ function insertionIndex(elements: readonly MapElement[]): number {
  * Pours `color` into the face `point` falls in. The Fill already in that face
  * takes the new colour and keeps its place; otherwise a new Fill appears at the
  * face's deepest point, behind every Map Line, Stamp, and Map Label. A point
- * outside every face leaves the Elements exactly as they were.
+ * outside every face leaves the Elements exactly as they were. An Area Fill
+ * covers its own outline, so a pour never recolours one.
  */
 export function pourFill(
   elements: MapElement[],
@@ -51,7 +57,7 @@ export function pourFill(
   if (face === null) return elements;
 
   const existing = elements.findIndex(
-    (element) => isFill(element) && faceAt(faces, element.anchor) === face
+    (element) => isFill(element) && !isAreaFill(element) && faceAt(faces, element.anchor) === face
   );
   if (existing !== -1) {
     // A locked Fill refuses the Bucket as it refuses the colour control.
@@ -174,8 +180,10 @@ function copyId(originalId: string, used: Set<string>): string {
  * after it. Each Fill follows its new face to that face's deepest point, two
  * Fills merged into one face leave the larger face's Fill, a face a new line
  * splits gives each half a copy, and a Fill whose face disappears is removed.
- * An edit that leaves every Fill where it was returns `edited` itself, with each
- * unchanged Fill object kept, so history and autosave see no phantom edit.
+ * An Area Fill covers its own outline, so the face rules leave it exactly where
+ * it is. An edit that leaves every Fill where it was returns `edited` itself,
+ * with each unchanged Fill object kept, so history and autosave see no phantom
+ * edit.
  *
  * `offset` is the shift of an edit that only moved one Map Line (an arrow move
  * or a Select drag, #766). With it, a Fill whose face moved whole goes with
@@ -191,10 +199,13 @@ export function reconcileFills(
 
   const facesBefore = findFaces(linesOf(before));
   const facesAfter = findFaces(linesOf(edited));
-  const beforeFills = before.filter(isFill).map((fill) => ({
-    fill,
-    face: faceAt(facesBefore, fill.anchor),
-  }));
+  const beforeFills = before
+    .filter(isFill)
+    .filter((fill) => !isAreaFill(fill))
+    .map((fill) => ({
+      fill,
+      face: faceAt(facesBefore, fill.anchor),
+    }));
   // The face each Fill held before the edit, by id: a moved anchor no longer
   // points into it, and the merge rule weighs the face the Fill came from.
   const beforeFaces = new Map(beforeFills.map((entry) => [entry.fill.id, entry.face]));
@@ -203,7 +214,7 @@ export function reconcileFills(
   if (offset !== undefined) {
     let carried = false;
     const next = edited.map((element) => {
-      if (!isFill(element)) return element;
+      if (!isFill(element) || isAreaFill(element)) return element;
       const anchor = followMove(element.anchor, facesBefore, facesAfter, offset);
       if (samePoint(anchor, element.anchor)) return element;
       carried = true;
@@ -213,10 +224,11 @@ export function reconcileFills(
   }
 
   // Follow each Fill to the after-face its anchor lies in; a Fill whose anchor
-  // lies in no after-face is left out, which removes it.
+  // lies in no after-face is left out, which removes it. An Area Fill answers to
+  // its own outline, so it is never left out.
   const moves: FillMove[] = [];
   for (const element of after) {
-    if (!isFill(element)) continue;
+    if (!isFill(element) || isAreaFill(element)) continue;
     const afterFace = faceAt(facesAfter, element.anchor);
     if (afterFace === null) continue;
     const beforeFace = beforeFaces.has(element.id)
@@ -248,7 +260,7 @@ export function reconcileFills(
 
   const result: MapElement[] = [];
   for (const element of after) {
-    if (!isFill(element)) {
+    if (!isFill(element) || isAreaFill(element)) {
       result.push(element);
       continue;
     }
