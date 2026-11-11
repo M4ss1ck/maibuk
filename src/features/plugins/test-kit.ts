@@ -312,6 +312,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
   let nextCreatedNote = 1;
   const storage = options.storage ?? new Map<string, unknown>();
   const secrets = options.secrets ?? new Map<string, string>();
+  const pdfFonts = options.pdfFonts ?? [];
   const testFetch = options.fetch;
   let clipboard = options.clipboard ?? "";
   // The pressed state of each Toggle Button the Plugin set, by its local id.
@@ -783,6 +784,20 @@ export function createTestHost(options: TestHostOptions): TestHost {
       return { status: "opened" };
     },
     "language.get": () => ({ language }),
+    // The PDF Fonts the test declared as installed (#751): `fonts.read` gives
+    // back the byte array the test seeded, and an id it did not seed is refused
+    // the way the app's handler refuses an uninstalled font.
+    "fonts.list": () => pdfFonts.map(({ id, family }) => ({ id, family })),
+    "fonts.read": ({ id }) => {
+      const font = pdfFonts.find((entry) => entry.id === id);
+      if (font === undefined) {
+        throw new PluginApiError({
+          code: "invalid-params",
+          message: `PDF Font ${id} is not installed`,
+        });
+      }
+      return font.bytes;
+    },
     "endpoint.address": (_params, { pluginId }) => ({
       url: endpointUrlFor(endpointState, pluginId),
     }),

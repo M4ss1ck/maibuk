@@ -12,7 +12,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import { parsePluginManifest } from "@/features/plugins/manifest-validate";
 import { createTestHost } from "@/features/plugins/test-kit";
-import type { TestHost } from "@/features/plugins/types";
+import type { TestHost, TestPdfFont } from "@/features/plugins/types";
 import {
   registerPluginCommands,
   type CommandId,
@@ -24,18 +24,23 @@ import { createPluginClient, type PluginClient, type PluginFrame } from "@/plugi
 import { PLUGIN_COMMAND_RUN_REQUEST, PLUGIN_MIGRATE_DATA_REQUEST } from "@/plugin-sdk/protocol";
 import { servePluginUi } from "@/plugin-sdk/ui-serve";
 import { DEFAULT_SOFT_EDGE_MM, SOFT_EDGE_STEP_MM } from "./editor";
+import type { FrameFontMessage } from "./frame-protocol";
 import en from "./locales/runtime/en.json";
 import es from "./locales/runtime/es.json";
 import { format } from "./i18n";
 import {
   DEFAULT_FILL_COLOR,
+  DEFAULT_LABEL_FONT,
   INDEX_KEY,
+  MAP_LABEL_FONT_FAMILIES,
   mapKey,
+  newLabel,
   type MapDocument,
   type MapElement,
   type MapFillContent,
   type MapFillElement,
   type MapIndexEntry,
+  type MapLabelElement,
   type MapLineElement,
   type MapStampElement,
 } from "./maps";
@@ -138,12 +143,13 @@ function hostFor(storage = new Map<string, unknown>(), language = "en") {
 }
 
 /** A host, its runtime, and the Frame handoff handler the Plugin registered. */
-function frameHostFor(storage: Map<string, unknown>) {
+function frameHostFor(storage: Map<string, unknown>, pdfFonts: TestPdfFont[] = []) {
   const host = createTestHost({
     manifest: mapsManifest(),
     library: { books: BOOKS },
     storage,
     language: "en",
+    pdfFonts,
   });
   const handlers: Array<(frame: PluginFrame) => void> = [];
   const client = createPluginClient(host.port);
@@ -177,6 +183,11 @@ function recordingPort(): { port: MessagePort; messages: unknown[] } {
     postMessage: (message: unknown) => messages.push(message),
   } as unknown as MessagePort;
   return { port, messages };
+}
+
+/** Whether one recorded Frame message carries the author's PDF Font. */
+function isFontMessage(message: unknown): message is FrameFontMessage {
+  return (message as { kind?: unknown } | null)?.kind === "font";
 }
 
 /**
@@ -2019,6 +2030,43 @@ describe("Map editor page", () => {
     }
   });
 
+  it("hands the Frame the installed PDF Font, so a pdf label draws in it", async () => {
+    const bytes = new TextEncoder().encode("FONT BYTES");
+    const { host, runtime, handoff } = frameHostFor(mapStorage([]), [
+      { id: "latin", family: "Noto Serif", bytes },
+    ]);
+    try {
+      expect(await runtime.openMap("m1")).toBe(true);
+      const frame = recordingPort();
+      handoff("frame-1", frame.port);
+
+      const fonts = () => frame.messages.filter(isFontMessage);
+      await waitFor(() => expect(fonts()).toHaveLength(1));
+      expect(fonts()[0].family).toBe(MAP_LABEL_FONT_FAMILIES.pdf);
+      expect(Array.from(new Uint8Array(fonts()[0].bytes))).toEqual(Array.from(bytes));
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("sends no font when no PDF Font is installed, so a pdf label stays a serif", async () => {
+    const { host, runtime, handoff } = frameHostFor(mapStorage([]));
+    try {
+      expect(await runtime.openMap("m1")).toBe(true);
+      const frame = recordingPort();
+      handoff("frame-1", frame.port);
+
+      // The host answers this request only after the font read it served first,
+      // so a font message would already be here.
+      await expect(host.broker.request("health.check", null)).resolves.toBe("pong");
+      expect(frame.messages.filter(isFontMessage)).toEqual([]);
+      // The Frame still drew the scene it was handed.
+      expect(frame.messages).toHaveLength(1);
+    } finally {
+      await host.stop();
+    }
+  });
+
   it("stays on the Map with a warning when Back to Maps cannot save, then leaves once it can", async () => {
     const storage = mapStorage([
       line("e1", "Line one", [
@@ -2273,6 +2321,128 @@ describe("Map editor page", () => {
       await page.unmount();
     } finally {
       await host.stop();
+    }
+  });
+
+  it("adds a Map Label at the view centre by keyboard, then writes, fonts, and bends it", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    registerMapCommands();
+    const keys = render(<CommandKeys host={host} />);
+    try {
+      const user = userEvent.setup();
+
+      // The Insert tool offers a Map Label beside the Stamp picker; the button
+      // is the keyboard path that lands it at the view centre.
+      await pickTool(user, en["tools.insert"]);
+      const place = await screen.findByRole("button", { name: en["properties.mapLabel.place"] });
+      await tabTo(user, place, 10);
+      await user.keyboard("{Enter}");
+
+      // A Map Label at the centre of the portrait page, writing the default
+      // text, and selected.
+      await waitFor(() => expect(runtime.editor?.getSnapshot().elements).toHaveLength(1));
+      const inserted = runtime.editor?.getSnapshot().elements[0] as MapLabelElement;
+      expect(inserted).toMatchObject({
+        kind: "label",
+        name: "Map Label 1",
+        text: "Label",
+        x: 76.2,
+        y: 114.3,
+        rotation: 0,
+        font: DEFAULT_LABEL_FONT,
+        bend: 0,
+      });
+      expect(runtime.editor?.getSnapshot().selectedId).toBe(inserted.id);
+      await runtime.editor?.flush();
+      expect(storedMap(storage).elements[0]).toMatchObject({ x: 76.2, y: 114.3 });
+
+      // The Elements list calls the row a Map Label.
+      await waitFor(() =>
+        expect(screen.getByRole("listbox", { name: en["elements.label"] })).toHaveTextContent(
+          en["element.kind.label"]
+        )
+      );
+
+      // One arrow moves the selected label one page millimetre.
+      await focusPanelButton(user);
+      await user.keyboard("{ArrowRight}");
+      await waitFor(() =>
+        expect((runtime.editor?.getSnapshot().elements[0] as MapLabelElement).x).toBe(77.2)
+      );
+
+      // The Text field writes what the author commits.
+      const text = await screen.findByRole("textbox", { name: en["properties.mapLabel.text"] });
+      await tabTo(user, text, 60);
+      await user.keyboard("{Control>}a{/Control}Northern Reach{Enter}");
+      await waitFor(() =>
+        expect((runtime.editor?.getSnapshot().elements[0] as MapLabelElement).text).toBe(
+          "Northern Reach"
+        )
+      );
+      await runtime.editor?.flush();
+      expect(storedMap(storage).elements[0]).toMatchObject({ text: "Northern Reach" });
+
+      // The Font select offers the bundled faces by family name.
+      await pickOption(user, en["properties.mapLabel.font"], "Cinzel");
+      await waitFor(() =>
+        expect((runtime.editor?.getSnapshot().elements[0] as MapLabelElement).font).toBe("cinzel")
+      );
+      await runtime.editor?.flush();
+      expect(storedMap(storage).elements[0]).toMatchObject({ font: "cinzel" });
+
+      // Bend curves the baseline; 0 draws it straight.
+      const bend = await screen.findByRole("textbox", { name: en["properties.mapLabel.bend"] });
+      await tabTo(user, bend, 60);
+      await user.keyboard("{Control>}a{/Control}5{Enter}");
+      await waitFor(() =>
+        expect((runtime.editor?.getSnapshot().elements[0] as MapLabelElement).bend).toBe(5)
+      );
+      await runtime.editor?.flush();
+      expect(storedMap(storage).elements[0]).toMatchObject({ bend: 5 });
+
+      keys.unmount();
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("names an installed PDF Font in the Font select, and says when none is installed", async () => {
+    const storageLabel = () =>
+      newLabel({
+        id: "l1",
+        name: "Map Label 1",
+        text: "Label",
+        point: [76.2, 114.3],
+        font: "pdf",
+      });
+
+    const installed = frameHostFor(mapStorage([storageLabel()]), [
+      { id: "latin", family: "Noto Serif", bytes: new TextEncoder().encode("FONT") },
+    ]);
+    try {
+      expect(await installed.runtime.openMap("m1")).toBe(true);
+      installed.runtime.editor?.select("l1");
+      const page = await installed.host.renderPage(MAP_PAGE_ID);
+      const font = await screen.findByLabelText(en["properties.mapLabel.font"]);
+      await waitFor(() => expect(font).toHaveTextContent("PDF Font (Noto Serif)"));
+      await page.unmount();
+    } finally {
+      await installed.host.stop();
+    }
+
+    const missing = frameHostFor(mapStorage([storageLabel()]));
+    try {
+      expect(await missing.runtime.openMap("m1")).toBe(true);
+      missing.runtime.editor?.select("l1");
+      const page = await missing.host.renderPage(MAP_PAGE_ID);
+      const font = await screen.findByLabelText(en["properties.mapLabel.font"]);
+      await waitFor(() => expect(font).toHaveTextContent(en["font.pdfNotInstalled"]));
+      await page.unmount();
+    } finally {
+      await missing.host.stop();
     }
   });
 

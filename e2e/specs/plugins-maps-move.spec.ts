@@ -234,7 +234,10 @@ test.describe("Maps Select drag @wf:plugins-maps-move @sc:plugin.maibuk-maps.sel
   }) => {
     await openEditorWithMap(page);
     await pickTool(page, "i", "Insert", "insert");
-    const place = page.getByRole("button", { name: /^Place / });
+    // The Insert tool offers a Place button per Stamp, named after the pick,
+    // beside the Map Label's own "Place Map Label" (#751); this test means the
+    // Stamp one, whose name follows "Place " with the pick.
+    const place = page.getByRole("button", { name: /^Place (?!Map Label$)/ });
     await tabTo(page, place, { max: 60 });
     const stamp = ((await place.textContent()) ?? "").replace(/^Place /, "");
     await page.keyboard.press("Enter");

@@ -24,8 +24,12 @@ import { format, translate, type MapsKey } from "./i18n";
 import type { MapsRuntime } from "./runtime";
 import { useLanguage } from "./maps-page";
 import {
+  LABEL_FONT_IDS,
+  LINE_STROKE,
   LINE_STYLE_IDS,
   MAX_POLYGON_SIDES,
+  MIN_LABEL_SIZE_MM,
+  MIN_LABEL_WIDTH_MM,
   MIN_POLYGON_SIDES,
   MIN_SHAPE_SIZE_MM,
   MIN_STAMP_SIZE_MM,
@@ -34,6 +38,7 @@ import {
   isShapeKind,
   type LineStyleId,
   type MapElement,
+  type MapLabelFont,
   type ShapeKind,
   type StampScaleUnit,
 } from "./maps";
@@ -118,16 +123,25 @@ const TEXTURE_KEYS: Readonly<Record<TextureId, MapsKey>> = {
   dots: "properties.texture.dots",
 };
 
+/** The Font select's label for each bundled face a Map Label takes, in the order it offers them. */
+const LABEL_FONT_KEYS: Readonly<Record<Exclude<MapLabelFont, "pdf">, MapsKey>> = {
+  "im-fell-english": "font.imFellEnglish",
+  cinzel: "font.cinzel",
+  "uncial-antiqua": "font.uncialAntiqua",
+  "medieval-sharp": "font.medievalSharp",
+};
+
 /**
  * The Elements list's kind label, for the kinds a Map can hold (#748: a Fill
- * joins a Map Line; #749: a Stamp joins them). A kind with no label of its own
- * says nothing, so the row falls back to its flags alone rather than calling
- * itself a Map Line.
+ * joins a Map Line; #749: a Stamp joins them; #751: a Map Label joins them). A
+ * kind with no label of its own says nothing, so the row falls back to its
+ * flags alone rather than calling itself a Map Line.
  */
 const ELEMENT_KIND_KEYS: Readonly<Partial<Record<MapElement["kind"], MapsKey>>> = {
   line: "element.kind.line",
   fill: "element.kind.fill",
   stamp: "element.kind.stamp",
+  label: "element.kind.label",
 };
 
 interface RenameDialog {
@@ -168,6 +182,7 @@ function MapEditorView({
   const shapeTool = isShapeKind(snapshot.tool) ? snapshot.tool : null;
   const shape = snapshot.selectedShape;
   const stamp = snapshot.selectedStamp;
+  const label = selected?.kind === "label" ? selected : null;
   const scatter = snapshot.selectedFillScatter;
   // The scatter select offers the base Stamps, so it reads the one the Fill
   // scatters back from its art ref.
@@ -299,6 +314,12 @@ function MapEditorView({
                 {format(t("properties.placeStamp"), {
                   stamp: t(stampNameKey(snapshot.currentStampId)),
                 })}
+              </ui.Button>
+              {/* A Map Label is not a Stamp, so it takes its own button beside
+                  the Stamp picker; this is its keyboard path to the view
+                  centre (#751). */}
+              <ui.Button variant="secondary" onPress={() => editor.insertLabel()}>
+                {t("properties.mapLabel.place")}
               </ui.Button>
             </>
           ) : null}
@@ -519,6 +540,99 @@ function MapEditorView({
                       />
                     </>
                   )}
+                </>
+              )}
+              {label === null ? null : (
+                <>
+                  <ui.TextField
+                    label={t("properties.mapLabel.text")}
+                    value={label.text}
+                    isDisabled={selected.locked}
+                    onChange={(event) => editor.setLabelText(selected.id, event.detail)}
+                  />
+                  <ui.Select
+                    label={t("properties.mapLabel.font")}
+                    options={LABEL_FONT_IDS.map((font) => ({
+                      value: font,
+                      label:
+                        font === "pdf"
+                          ? snapshot.pdfFontFamily === null
+                            ? t("font.pdfNotInstalled")
+                            : format(t("font.pdfInstalled"), { family: snapshot.pdfFontFamily })
+                          : t(LABEL_FONT_KEYS[font]),
+                    }))}
+                    selectedKey={label.font}
+                    isDisabled={selected.locked}
+                    onChange={(event) =>
+                      editor.setLabelFont(selected.id, event.detail as MapLabelFont)
+                    }
+                  />
+                  <ui.NumberField
+                    label={t("properties.mapLabel.size")}
+                    value={label.size}
+                    minValue={MIN_LABEL_SIZE_MM}
+                    isDisabled={selected.locked}
+                    onChange={(event) => editor.setLabelLayout(selected.id, { size: event.detail })}
+                  />
+                  <ui.NumberField
+                    label={t("properties.mapLabel.letterSpacing")}
+                    value={label.letterSpacing}
+                    isDisabled={selected.locked}
+                    onChange={(event) =>
+                      editor.setLabelLayout(selected.id, { letterSpacing: event.detail })
+                    }
+                  />
+                  <ui.NumberField
+                    label={t("properties.mapLabel.halo")}
+                    value={label.halo}
+                    minValue={0}
+                    isDisabled={selected.locked}
+                    onChange={(event) => editor.setLabelLayout(selected.id, { halo: event.detail })}
+                  />
+                  {/* With no colour of its own the label draws in the map ink,
+                      which is what the picker shows until the author picks. */}
+                  <ui.ColorPicker
+                    label={t("properties.mapLabel.color")}
+                    value={label.color ?? LINE_STROKE}
+                    isDisabled={selected.locked}
+                    onChange={(event) => editor.setLabelColor(selected.id, event.detail)}
+                  />
+                  <ui.NumberField
+                    label={t("properties.mapLabel.x")}
+                    value={label.x}
+                    isDisabled={selected.locked}
+                    onChange={(event) => editor.setLabelLayout(selected.id, { x: event.detail })}
+                  />
+                  <ui.NumberField
+                    label={t("properties.mapLabel.y")}
+                    value={label.y}
+                    isDisabled={selected.locked}
+                    onChange={(event) => editor.setLabelLayout(selected.id, { y: event.detail })}
+                  />
+                  <ui.NumberField
+                    label={t("properties.mapLabel.rotation")}
+                    value={label.rotation}
+                    isDisabled={selected.locked}
+                    onChange={(event) =>
+                      editor.setLabelLayout(selected.id, { rotation: event.detail })
+                    }
+                  />
+                  <ui.NumberField
+                    label={t("properties.mapLabel.width")}
+                    value={label.width}
+                    minValue={MIN_LABEL_WIDTH_MM}
+                    isDisabled={selected.locked}
+                    onChange={(event) =>
+                      editor.setLabelLayout(selected.id, { width: event.detail })
+                    }
+                  />
+                  {/* Bend is the curve: 0 draws the baseline straight. */}
+                  <ui.NumberField
+                    label={t("properties.mapLabel.bend")}
+                    value={label.bend}
+                    isDisabled={selected.locked}
+                    onChange={(event) => editor.setLabelLayout(selected.id, { bend: event.detail })}
+                  />
                 </>
               )}
               {snapshot.selectedIsLine ? (

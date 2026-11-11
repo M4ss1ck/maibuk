@@ -2932,6 +2932,25 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-maps-labels",
+    area: "plugins",
+    workflow:
+      "The Maps editor's Map Labels (#751): the Insert tool's Place Map Label button adds a label at the view centre, the Elements list lists it selected, and the Frame draws its text along a baseline. From the properties panel the Text field rewrites the label, the Font select moves the drawn text to a bundled face the Frame's own folder declares with no request leaving the app for a font, and the Bend field bows the baseline into a quadratic whose control point leaves the chord; with the Select tool the label's bend handle drags that curve with the pointer, which changes the Bend value. The label, its text, font, and bend survive a reload and reopening the Map; asserts: the row and its selection, the drawn textPath's text and page point, the baseline's quadratic control point straight then bowed, the text element's font-family and computed family, the Bend value after the handle drag, and every one of them after the reload; persists: yes (each edit autosaves to Plugin storage)",
+    edges: [
+      "Place Map Label adds a label at the view centre, listed, selected, and drawn along its straight baseline",
+      "The Text field rewrites the drawn label's text",
+      "The Font select changes the drawn label's face to a bundled one the Frame declares, with no font request leaving the app",
+      "The Bend field bows the baseline off the chord, and dragging its handle with the pointer changes the Bend value",
+      "The label, its text, font, and bend survive a reload and reopening the Map",
+    ],
+    terms: ["Command", "Shortcut"],
+    shortcuts: ["plugin.maibuk-maps.insertTool", "plugin.maibuk-maps.selectTool"],
+    routes: ["/plugin/:pluginId/:pageId"],
+    fixture: "bookShelf",
+    tags: ["sandbox"],
+    status: "accepted",
+  },
+  {
     id: "plugins-maps-move",
     area: "plugins",
     workflow:

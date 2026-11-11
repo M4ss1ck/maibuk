@@ -19,6 +19,8 @@ import type {
   MapFillContent,
   MapFillElement,
   MapFillScatter,
+  MapLabelElement,
+  MapLabelFont,
   MapLineElement,
   MapPoint,
   MapShape,
@@ -34,10 +36,14 @@ import {
   DEFAULT_SHAPE_SIZE_MM,
   LINE_STYLE_DEFAULT_ENCLOSES,
   MAX_NAME_LENGTH,
+  MIN_LABEL_SIZE_MM,
+  MIN_LABEL_WIDTH_MM,
   MIN_STAMP_SIZE_MM,
   curvedSegments,
   isAreaFill,
+  isLabelFont,
   isStampScaleUnit,
+  newLabel,
   newStamp,
   normalizeShape,
   normalizeSoftEdge,
@@ -159,6 +165,11 @@ export interface MapEditorSnapshot {
   currentStampId: BaseStampId;
   /** The selected Stamp, or null when the selection is not a Stamp. */
   selectedStamp: MapStampElement | null;
+  /**
+   * The installed PDF Font's family, which the Font select names beside the
+   * `pdf` option, or null when this device has none installed.
+   */
+  pdfFontFamily: string | null;
 }
 
 export interface MapEditorOptions {
@@ -166,6 +177,21 @@ export interface MapEditorOptions {
   doc: MapDocument;
   /** The app language at call time, for the names a new Map Line takes. */
   language: () => string;
+}
+
+/**
+ * The numbers a Map Label's properties panel edits: where its baseline sits,
+ * how long and how curved it is, and the type that runs along it.
+ */
+export interface MapLabelLayout {
+  x?: number;
+  y?: number;
+  rotation?: number;
+  width?: number;
+  bend?: number;
+  size?: number;
+  letterSpacing?: number;
+  halo?: number;
 }
 
 export interface MapEditor {
@@ -222,6 +248,21 @@ export interface MapEditor {
   setStampScale(id: string, patch: Partial<MapStampScale>): void;
   /** Recolours one unlocked one-colour Stamp, as one undo step. */
   setStampColor(id: string, color: string): void;
+  /** Adds a Map Label at the view centre, writing the localized default, selected, as one undo step. */
+  insertLabel(): void;
+  /** Writes one unlocked Map Label's text; a blank text is refused. */
+  setLabelText(id: string, text: string): void;
+  /** Sets one unlocked Map Label's font, one of the bundled faces or the PDF Font. */
+  setLabelFont(id: string, font: MapLabelFont): void;
+  /** Recolours one unlocked Map Label's text, as one undo step. */
+  setLabelColor(id: string, color: string): void;
+  /**
+   * Moves, turns, or reshapes one unlocked Map Label from its number fields or
+   * its bend handle, as one undo step.
+   */
+  setLabelLayout(id: string, patch: MapLabelLayout): void;
+  /** Reports the installed PDF Font's family, or null, for the Font select's label. */
+  setPdfFontFamily(family: string | null): void;
   deleteElement(id: string): void;
   /** Moves one Element one place towards the top of the Elements list. */
   moveUp(id: string): void;
@@ -302,6 +343,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
   let currentFillColor = DEFAULT_FILL_COLOR;
   let currentStampId: BaseStampId = DEFAULT_STAMP_ID;
   let roughenStrength = DEFAULT_ROUGHEN_STRENGTH_MM;
+  let pdfFontFamily: string | null = null;
   let zoom = 1;
   let panX = 0;
   let panY = 0;
@@ -351,6 +393,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       selectedConvertedFrom: selectedLine === null ? null : (selectedLine.convertedFrom ?? null),
       currentStampId,
       selectedStamp,
+      pdfFontFamily,
     };
   }
 
@@ -437,6 +480,16 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
 
   function elementById(id: string | null): MapElement | undefined {
     return id === null ? undefined : elements.find((element) => element.id === id);
+  }
+
+  /**
+   * The Map Label an edit may change: the Element with this id when it exists,
+   * is a label, and is unlocked. A missing, other-kind, or locked Element keeps
+   * every field, so a caller that gets null simply returns.
+   */
+  function labelForEdit(id: string): MapLabelElement | null {
+    const target = elementById(id);
+    return target !== undefined && target.kind === "label" && !target.locked ? target : null;
   }
 
   function selectElement(id: string | null): void {
@@ -673,6 +726,28 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     edit(addElement(elements, element));
   }
 
+  /** The name a newly placed Map Label takes: the next free "Map Label N". */
+  function newLabelName(): string {
+    const number = elements.filter((element) => element.kind === "label").length + 1;
+    return format(translate(options.language(), "element.labelName"), { number });
+  }
+
+  /**
+   * Places a Map Label at the view centre (#751), writing the localized
+   * "Label" so the author has a word to replace. The new label becomes the
+   * selection, and the whole placement is one undo step.
+   */
+  function insertLabel(): void {
+    const element = newLabel({
+      id: randomMapId(),
+      name: newLabelName(),
+      text: translate(options.language(), "element.labelText"),
+      point: [doc.page.widthMm / 2 + panX, doc.page.heightMm / 2 + panY],
+    });
+    selectedId = element.id;
+    edit(addElement(elements, element));
+  }
+
   /**
    * Commits one Select drag (#766) as one undo step, through the same
    * `moveElement` the arrow Commands use, so `edit` reconciles the Fills on a
@@ -730,7 +805,66 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       case "move":
         moveDragged(message.id, message.dx, message.dy);
         break;
+      case "bendLabel":
+        bendDragged(message.id, message.bend);
+        break;
     }
+  }
+
+  /**
+   * Moves, turns, or reshapes one unlocked Map Label's baseline as one undo
+   * step (#751): what the properties panel's number fields set, and what a bend
+   * handle drag commits. A locked or missing label keeps every field, and an
+   * edit that changes nothing is not an undo step.
+   */
+  function setLabelLayout(id: string, patch: MapLabelLayout): void {
+    const target = labelForEdit(id);
+    if (target === null) return;
+    const base: Required<MapLabelLayout> = {
+      x: target.x,
+      y: target.y,
+      rotation: target.rotation,
+      width: target.width,
+      bend: target.bend,
+      size: target.size,
+      letterSpacing: target.letterSpacing,
+      halo: target.halo,
+    };
+    const layout: Required<MapLabelLayout> = {
+      x: patch.x ?? base.x,
+      y: patch.y ?? base.y,
+      // The turn reads in one circle, as a Stamp's does.
+      rotation: normalizeRotation(patch.rotation ?? base.rotation),
+      // A baseline or a cap size too small draws no name at all.
+      width: Math.max(MIN_LABEL_WIDTH_MM, patch.width ?? base.width),
+      bend: patch.bend ?? base.bend,
+      size: Math.max(MIN_LABEL_SIZE_MM, patch.size ?? base.size),
+      letterSpacing: patch.letterSpacing ?? base.letterSpacing,
+      // A halo of none is no halo at all.
+      halo: Math.max(0, patch.halo ?? base.halo),
+    };
+    if (!Object.values(layout).every(Number.isFinite)) return;
+    const keys = Object.keys(layout) as (keyof MapLabelLayout)[];
+    if (keys.every((key) => layout[key] === base[key])) return;
+    updateElement(id, (element) =>
+      element.kind === "label" ? { ...element, ...layout } : element
+    );
+  }
+
+  /**
+   * Commits one bend handle drag (#751) through the same setter the panel's
+   * Bend field uses, so the whole drag is one undo step. A drag the Worker
+   * refuses (a locked, hidden, or missing label, or the bend it already has)
+   * still answers with a scene: the Frame keeps its preview until then, and
+   * that scene draws the curve the label really has.
+   */
+  function bendDragged(id: string, bend: number): void {
+    const target = labelForEdit(id);
+    if (target === null || target.hidden || target.bend === bend) {
+      sendScene();
+      return;
+    }
+    setLabelLayout(id, { bend });
   }
 
   function setZoom(next: number): void {
@@ -1049,6 +1183,43 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     },
 
     insertStamp,
+
+    insertLabel,
+
+    setLabelText(id, text) {
+      const target = labelForEdit(id);
+      if (target === null) return;
+      // A Map Label always writes a word, so a blank text keeps the old one.
+      const trimmed = text.trim();
+      if (trimmed === "" || trimmed === target.text) return;
+      updateElement(id, (element) =>
+        element.kind === "label" ? { ...element, text: trimmed } : element
+      );
+    },
+
+    setLabelFont(id, font) {
+      const target = labelForEdit(id);
+      // A font id this build has no face for would draw the browser's fallback,
+      // so only the bundled faces and the PDF Font are picks.
+      if (target === null) return;
+      if (!isLabelFont(font) || target.font === font) return;
+      updateElement(id, (element) => (element.kind === "label" ? { ...element, font } : element));
+    },
+
+    setLabelColor(id, color) {
+      const target = labelForEdit(id);
+      if (target === null) return;
+      if (color === "" || target.color === color) return;
+      updateElement(id, (element) => (element.kind === "label" ? { ...element, color } : element));
+    },
+
+    setLabelLayout,
+
+    setPdfFontFamily(family) {
+      if (family === pdfFontFamily) return;
+      pdfFontFamily = family;
+      publish();
+    },
 
     setStampTransform(id, patch) {
       const target = elementById(id);

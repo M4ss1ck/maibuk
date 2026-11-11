@@ -6,11 +6,12 @@
  * import this module: a Frame script is a classic script in an opaque origin,
  * so a relative import would fail closed.
  *
- * The Worker sends the whole scene on every change and when a Frame connects;
- * the Frame reports a finished Pencil stroke, a finished Pen line, a finished
- * Area Fill outline, an Eraser
- * drag, a drawn Shape, a Bucket pour, a dropped Stamp, a picked Element, and a
- * Select drag that moved one.
+ * The Worker sends the whole scene on every change and when a Frame connects,
+ * and the author's PDF Font once as the Frame connects; the Frame reports a
+ * finished Pencil stroke, a finished Pen line, a finished Area Fill outline, an
+ * Eraser
+ * drag, a drawn Shape, a Bucket pour, a dropped Stamp, a picked Element, a
+ * Select drag that moved one, and a Map Label's bend dragged from its handle.
  * Points are page millimetres, the same space as `page.widthMm/heightMm`. Every
  * inbound message is validated here, and a malformed one is dropped. This
  * module imports only its own files.
@@ -37,7 +38,9 @@ export interface FrameSceneElement {
   /**
    * The paths and text the Frame draws, from `sceneShapes`; empty for an
    * Element with nothing to draw yet. A path carries the Clip Path id that
-   * keeps it inside its Fill's area when it is a scattered Stamp.
+   * keeps it inside its Fill's area when it is a scattered Stamp, and a
+   * hit-only path, such as a Map Label's baseline, only marks where its Element
+   * can be picked.
    */
   shapes: SceneShape[];
   /** The Soft Edge filter the Element draws with, or null for a sharp edge. */
@@ -51,6 +54,24 @@ export interface FrameSceneElement {
    * drag only for these, so it never shows a move the Worker would refuse.
    */
   movable: boolean;
+  /**
+   * The fields a Map Label's bend handle needs (#751): where its baseline sits,
+   * how long and how turned it is, and the sagitta it arches by. Absent on
+   * every other Element.
+   */
+  label?: FrameLabelLayout;
+}
+
+/** The baseline a Map Label's bend handle is placed on and dragged against. */
+export interface FrameLabelLayout {
+  x: number;
+  y: number;
+  /** The baseline's turn, in degrees clockwise about (x, y). */
+  rotation: number;
+  /** The baseline chord's length, in page millimetres. */
+  width: number;
+  /** The signed sagitta the baseline bows by, in page millimetres. */
+  bend: number;
 }
 
 /**
@@ -86,6 +107,22 @@ export interface FrameSceneMessage {
   /** The surface's accessible name while a Pen line is in progress. */
   penLabel: PenDraftLabel;
 }
+
+/**
+ * Worker -> Frame: the author's PDF Font (#751), sent once when the Frame
+ * connects. `bytes` is the installed font's regular style file, read through the
+ * Plugin API's `fonts.read`; the Frame registers it as `family`, which is the
+ * family a Map Label set to `pdf` asks for. A device with no PDF Font installed
+ * sends none, and the label draws in a serif.
+ */
+export interface FrameFontMessage {
+  kind: "font";
+  family: string;
+  bytes: ArrayBuffer;
+}
+
+/** Every message the Worker may send the Frame. */
+export type WorkerToFrameMessage = FrameSceneMessage | FrameFontMessage;
 
 /** Frame -> Worker: a finished Pencil stroke, in page millimetres. */
 export interface FrameStrokeMessage {
@@ -178,6 +215,18 @@ export interface FrameMoveMessage {
   dy: number;
 }
 
+/**
+ * Frame -> Worker: a Map Label's bend dragged from its handle (#751). `bend` is
+ * the signed sagitta the pointer asks for, in page millimetres, so the whole
+ * drag is one message and one undo step. A press that leaves the bend where it
+ * was sends none.
+ */
+export interface FrameBendMessage {
+  kind: "bendLabel";
+  id: string;
+  bend: number;
+}
+
 /** Every message a Frame may send the Worker. */
 export type FrameToWorkerMessage =
   | FrameStrokeMessage
@@ -188,7 +237,8 @@ export type FrameToWorkerMessage =
   | FrameShapeMessage
   | FramePourMessage
   | FrameInsertMessage
-  | FrameMoveMessage;
+  | FrameMoveMessage
+  | FrameBendMessage;
 
 function isPoint(value: unknown): value is MapPoint {
   return (
@@ -211,7 +261,7 @@ function isPoint(value: unknown): value is MapPoint {
  * Eraser drag needs at least one point and a finite reach; a Shape
  * needs a known kind, two finite corners, and a boolean `constrain`; a pour or
  * an insert needs one finite page point; a move needs an Element id and a
- * finite offset.
+ * finite offset; a bend needs an Element id and a finite bend.
  */
 export function parseFrameMessage(data: unknown): FrameToWorkerMessage | null {
   if (typeof data !== "object" || data === null) return null;
@@ -304,6 +354,11 @@ export function parseFrameMessage(data: unknown): FrameToWorkerMessage | null {
     if (typeof message.dy !== "number" || !Number.isFinite(message.dy)) return null;
     return { kind: "move", id: message.id, dx: message.dx, dy: message.dy };
   }
+  if (message.kind === "bendLabel") {
+    if (typeof message.id !== "string" || message.id === "") return null;
+    if (typeof message.bend !== "number" || !Number.isFinite(message.bend)) return null;
+    return { kind: "bendLabel", id: message.id, bend: message.bend };
+  }
   return null;
 }
 
@@ -334,6 +389,19 @@ export function sceneMessage(
       locked: element.locked,
       selected: element.id === view.selectedId,
       movable: !element.hidden && canMove(element),
+      // A Map Label carries the baseline its bend handle is placed on; no other
+      // Element has a curve to drag.
+      ...(element.kind === "label"
+        ? {
+            label: {
+              x: element.x,
+              y: element.y,
+              rotation: element.rotation,
+              width: element.width,
+              bend: element.bend,
+            },
+          }
+        : {}),
     })),
     defs: render.defs,
     tool: view.tool,

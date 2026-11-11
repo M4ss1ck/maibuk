@@ -4,6 +4,10 @@
     <meta charset="utf-8" />
     <meta name="color-scheme" content="light dark" />
     <title>Map</title>
+    <!-- The bundled Map Label faces (#751) live in a linked stylesheet, which
+         the Frame shim rewrites and loads; an inline style's url() is not
+         rewritten and would never load. -->
+    <link rel="stylesheet" href="fonts.css" />
     <style>
       /* The Map drawing surface (#745). Every colour comes from the host's
          public theme tokens, so the Frame follows a light/dark flip; the Map's
@@ -138,6 +142,29 @@
         stroke-dasharray: 1.5 1;
         stroke-linecap: round;
         stroke-linejoin: round;
+        pointer-events: none;
+      }
+
+      /* A selected Map Label's bend handle (#751): the pointer's grip on the
+         curve, at the apex of its baseline, in the same accent as the selection
+         it belongs to. It is a pointer affordance only; the panel's Bend field
+         is the keyboard path. */
+      .map-bend-handle {
+        fill: var(--maibuk-color-primary);
+        fill-opacity: 0.2;
+        stroke: var(--maibuk-color-primary);
+        stroke-width: 0.5;
+        pointer-events: all;
+        cursor: grab;
+      }
+
+      /* The curve a bend drag would draw, until the Worker keeps it. */
+      .map-bend-preview {
+        fill: none;
+        stroke: var(--maibuk-color-primary-hover);
+        stroke-width: 0.4;
+        stroke-dasharray: 1.5 1;
+        stroke-linecap: round;
         pointer-events: none;
       }
     </style>

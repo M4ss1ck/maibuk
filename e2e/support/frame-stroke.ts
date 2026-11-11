@@ -1,9 +1,10 @@
 // Pointer gestures for the Maps editor's drawing Frame (#745, #746, #747,
-// #766, #750): a straight Pencil stroke, an Area tool outline, an Eraser drag
-// across the Frame's svg, a Shape tool's drag, and a Select drag that moves an
-// Element. Moving has a keyboard path (the arrow Commands), and so does the
-// Area tool's outline (its arrows and Enter); the drag here is the pointer form
-// of each.
+// #766, #750, #751): a straight Pencil stroke, an Area tool outline, an Eraser
+// drag across the Frame's svg, a Shape tool's drag, a Select drag that moves an
+// Element, and a Map Label's bend handle. Moving has a keyboard path (the arrow
+// Commands), so does the Area tool's outline (its arrows and Enter), and so
+// does a label's bend (the panel's Bend field); the drag here is the pointer
+// form of each.
 //
 // Drawing a Map Line has no keyboard path in this slice (the keyboard acts on a
 // selected Map Line: the move Commands, the Elements list, undo), and the E2E
@@ -28,7 +29,10 @@
 // `scatterPaint` reads the other way round: what the Frame actually paints
 // for a Fill's scatter (#750), measured by the browser in the Frame's own
 // pixels, so a spec can prove the Stamps stay inside the area without reading
-// attributes.
+// attributes. `fontLoaded` reads a bundled face's status in `document.fonts`
+// (#751), so a spec proves the bytes arrived instead of only the CSS name, and
+// `labelInk` reads where a Map Label's glyphs landed, so a spec proves the text
+// is drawn along its baseline rather than only that the SVG holds a textPath.
 
 import type { Locator, Page } from "@playwright/test";
 
@@ -254,12 +258,112 @@ export async function dragPagePoint(
   }
 }
 
+/**
+ * Drags a Map Label's bend handle (#751) to the page point the pointer asks
+ * for, both in millimetres: the Select tool must be picked and the label
+ * selected, which is when the Frame draws the handle. The caller hands the
+ * handle itself, and its apex is read off the circle's own `cx`/`cy`, so the
+ * drag starts where the Frame draws it rather than where the label's fields
+ * say. The panel's Bend field is the keyboard path to the same curve; this is
+ * its pointer form, the same exemption as the other drags here.
+ */
+export async function dragBendHandle(
+  page: Page,
+  surface: Locator,
+  handle: Locator,
+  to: PagePoint
+): Promise<void> {
+  const box = await surface.boundingBox();
+  if (box === null) throw new Error("the Frame's drawing surface has no box to draw on");
+  const viewBox = await surface.getAttribute("viewBox");
+  if (viewBox === null) throw new Error("the Frame's drawing surface has no viewBox");
+  const cx = await handle.getAttribute("cx");
+  const cy = await handle.getAttribute("cy");
+  if (cx === null || cy === null) throw new Error("the bend handle has no apex to drag from");
+  const toScreen = fitToBox(box, viewBox.split(" ").map(Number));
+  const start = toScreen([Number(cx), Number(cy)]);
+  const end = toScreen(to);
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  for (let step = 1; step <= STEPS; step += 1) {
+    await page.mouse.move(
+      start.x + ((end.x - start.x) * step) / STEPS,
+      start.y + ((end.y - start.y) * step) / STEPS
+    );
+  }
+  await page.mouse.up();
+}
+
+/**
+ * Whether a Frame has actually loaded the named font family (#751): asks the
+ * Frame's own `document.fonts` to load it, then reads the matched face's
+ * status. A stylesheet that merely names the family would pass a CSS
+ * assertion; this proves the bundled bytes arrived and the face is usable.
+ */
+export async function fontLoaded(surface: Locator, family: string): Promise<boolean> {
+  return surface.evaluate(async (_element, wanted) => {
+    await document.fonts.load(`12px "${wanted}"`);
+    let loaded = false;
+    document.fonts.forEach((face) => {
+      if (face.family.replace(/["']/g, "") === wanted && face.status === "loaded") loaded = true;
+    });
+    return loaded;
+  }, family);
+}
+
 /** A box in a Frame's own pixels, from its screen matrix. */
 export interface FrameBox {
   left: number;
   top: number;
   right: number;
   bottom: number;
+}
+
+/** What a Frame lays out for a Map Label's text (#751), in its own pixels. */
+export interface LabelInk {
+  /** The length of each drawn copy's text, in the Frame's own user units. */
+  lengths: number[];
+  /** The ink copy's glyph box: the text the author reads. */
+  ink: FrameBox;
+  /** The baseline path's box, whose middle the text is centred on. */
+  baseline: FrameBox;
+}
+
+/**
+ * What a Frame actually lays a Map Label's text out as (#751), measured by the
+ * browser rather than read off the markup. A `<text>` whose `<textPath>` the
+ * engine refused to apply reports a text length all the same, so the glyph
+ * box's place against the baseline is what proves the run is drawn along it.
+ * The label draws its halo first, so the ink copy is the last `text.map-line`.
+ */
+export async function labelInk(surface: Locator): Promise<LabelInk> {
+  return surface.evaluate((element) => {
+    if (!(element instanceof SVGSVGElement)) throw new Error("the Frame's surface is no svg");
+    const svg = element;
+    const texts = Array.from(
+      svg.querySelectorAll<SVGTextElement>("g[data-element-id] text.map-line")
+    );
+    const ink = texts[texts.length - 1];
+    if (ink === undefined) throw new Error("the Frame drew no Map Label text");
+    // The baseline the text follows is the label's hit path, the only path its
+    // group draws. It is in the scene, unlike the `<defs>` copy the textPath
+    // names, so every engine lays it out and reports its box.
+    const baseline = ink.closest("g[data-element-id]")?.querySelector("path.map-hit");
+    if (!(baseline instanceof SVGGraphicsElement)) {
+      throw new Error("the Frame drew no Map Label baseline");
+    }
+    const box = (rect: DOMRect) => ({
+      left: rect.left,
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+    });
+    return {
+      lengths: texts.map((text) => text.getComputedTextLength()),
+      ink: box(ink.getBoundingClientRect()),
+      baseline: box(baseline.getBoundingClientRect()),
+    };
+  });
 }
 
 /** What a Frame paints for a Fill's scatter, and where its Stamps answer a hit. */

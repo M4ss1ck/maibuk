@@ -799,6 +799,16 @@ export interface TestCheckpoint {
   versionId: string;
 }
 
+/**
+ * One PDF Font the test host serves as installed (#751): what `fonts.list`
+ * reports and the regular style file's bytes `fonts.read` returns.
+ */
+export interface TestPdfFont {
+  id: string;
+  family: string;
+  bytes: Uint8Array;
+}
+
 export interface TestHostOptions {
   manifest: PluginManifest;
   /** Granted Plugin Permissions; defaults to every declared one. */
@@ -826,6 +836,12 @@ export interface TestHostOptions {
    * same grant id; the bytes stay in memory, so a test opens no real dialog.
    */
   files?: readonly MemoryPluginFileGrantFile[];
+  /**
+   * The PDF Fonts the host serves as installed (#751): `fonts.list` returns
+   * their ids and families in this order and `fonts.read` returns these bytes.
+   * Omit it for a device with no PDF Font installed.
+   */
+  pdfFonts?: readonly TestPdfFont[];
   /**
    * Makes `library.books.checkpoint` reject with `internal-error` carrying
    * this message (#591): proves a Plugin refuses its write when no Checkpoint

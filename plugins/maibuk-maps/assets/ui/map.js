@@ -1,10 +1,11 @@
 // @ts-check
-/* The Map Frame's drawing surface (#745, #746, #748, #749, #750, #766). The
+/* The Map Frame's drawing surface (#745, #746, #748, #749, #750, #766, #751). The
    Frame's only host channel is `window.maibuk.port`: the Worker sends the whole
    `scene` on every change and when the Frame connects, and the Frame answers a
    finished Pencil stroke, a finished Pen line, a finished Area Fill outline, an
    Eraser drag, a drawn Shape, a Bucket pour, a dropped Stamp, the Element the
-   author picked, and a Select drag that moved one.
+   author picked, a Select drag that moved one, and a Map Label's bend dragged
+   from its handle.
    Points cross the port in page millimetres, the same space as the page's
    `widthMm`/`heightMm`, so the pointer's own screen pixels are converted
    through the svg's `getScreenCTM`.
@@ -25,10 +26,11 @@
    * @typedef {[number, number]} MapPoint
    * @typedef {"ellipse" | "rectangle" | "polygon"} ShapeKind
    * @typedef {"select" | "pencil" | "pen" | "bucket" | "area" | "eraser" | "insert" | ShapeKind} MapTool
-   * @typedef {{ d: string, stroke: string | null, strokeWidth: number, dash: string | null, fill: string | null, fillRule?: "evenodd", opacity: number, transform?: string, clip?: string }} LineShape
-   * @typedef {{ text: string, x: number, y: number, size: number, fill: string, font?: string, anchor: "start" | "middle" | "end", transform?: string }} TextShape
+   * @typedef {{ d: string, stroke: string | null, strokeWidth: number, dash: string | null, fill: string | null, fillRule?: "evenodd", opacity: number, transform?: string, clip?: string, hitOnly?: true }} LineShape
+   * @typedef {{ text: string, x: number, y: number, size: number, fill: string, font?: string, letterSpacing?: number, halo?: { color: string, width: number }, path?: { id: string, d: string }, anchor: "start" | "middle" | "end", transform?: string }} TextShape
    * @typedef {LineShape | TextShape} SceneShape
-   * @typedef {{ id: string, shapes: SceneShape[], filter: string | null, hidden: boolean, locked: boolean, selected: boolean, movable: boolean }} FrameSceneElement
+   * @typedef {{ x: number, y: number, rotation: number, width: number, bend: number }} FrameLabelLayout
+   * @typedef {{ id: string, shapes: SceneShape[], filter: string | null, hidden: boolean, locked: boolean, selected: boolean, movable: boolean, label?: FrameLabelLayout }} FrameSceneElement
    * @typedef {{ one: string, other: string }} PenDraftLabel
    * @typedef {{ kind: "scene", widthMm: number, heightMm: number, background: string, elements: FrameSceneElement[], defs: string, tool: MapTool, zoom: number, panX: number, panY: number, penLabel: PenDraftLabel }} FrameSceneMessage
    * @typedef {{ kind: "stroke", points: MapPoint[] }} FrameStrokeMessage
@@ -40,13 +42,18 @@
    * @typedef {{ kind: "pour", point: MapPoint }} FramePourMessage
    * @typedef {{ kind: "insert", point: MapPoint }} FrameInsertMessage
    * @typedef {{ kind: "move", id: string, dx: number, dy: number }} FrameMoveMessage
-   * @typedef {FrameSceneMessage} WorkerToFrameMessage
+   * @typedef {{ kind: "bendLabel", id: string, bend: number }} FrameBendMessage
+   * @typedef {{ kind: "font", family: string, bytes: ArrayBuffer }} FrameFontMessage
+   * @typedef {FrameSceneMessage | FrameFontMessage} WorkerToFrameMessage
    * @typedef {{ pointerId: number, points: MapPoint[] }} Drawing
    * @typedef {{ points: MapPoint[], curves: boolean[] }} PenDraft
    * @typedef {{ pointerId: number, kind: ShapeKind, start: MapPoint, end: MapPoint, constrain: boolean }} ShapeDraft
    * @typedef {{ clientX: number, clientY: number }} ClientPoint
    * @typedef {{ pointerId: number, id: string, press: ClientPoint, client: ClientPoint, travel: MapPoint, constrain: boolean, moved: boolean, offset: MapPoint }} MoveDrag
    * @typedef {{ id: string, offset: MapPoint }} PendingMove
+   * @typedef {{ pointerId: number, id: string, press: ClientPoint, label: FrameLabelLayout, moved: boolean, bend: number }} BendDrag
+   * @typedef {{ id: string, bend: number }} PendingBend
+   * @typedef {{ start: MapPoint, control: MapPoint, apex: MapPoint, end: MapPoint }} BendGeometry
    */
 
   const hooks = /** @type {any} */ (globalThis).__mapTestHooks || null;
@@ -89,6 +96,14 @@
   /** A Shape drag is too small to keep when either side is under this, in mm. */
   const MIN_SHAPE_SIZE_MM = 1;
 
+  /**
+   * A Map Label's bend handle (#751), in page millimetres: the radius of the
+   * circle the pointer grips, and the smallest bend that is not snapped back
+   * to straight, which mirrors `BEND_SNAP_MM` in `maps.ts`.
+   */
+  const BEND_HANDLE_RADIUS_MM = 2;
+  const BEND_SNAP_MM = 0.5;
+
   /** The characters a definitions id may hold, so a scene cannot write an attribute of its own. */
   const FILTER_ID = /^[A-Za-z0-9_-]+$/;
 
@@ -126,6 +141,18 @@
    * answers every move with a scene, a refused one included. @type {PendingMove | null}
    */
   let pendingMove = null;
+  /**
+   * The bend handle drag in progress, or null (#751): the label whose curve is
+   * being shaped and the bend the pointer asks for right now.
+   * @type {BendDrag | null}
+   */
+  let bendDrag = null;
+  /**
+   * A finished bend drag the Worker has not answered yet, or null. Its preview
+   * stays until the next scene, as a move's does, so the curve never jumps back
+   * between the release and the Worker's redraw. @type {PendingBend | null}
+   */
+  let pendingBend = null;
 
   /** The rendered svg, which Preact keeps across draws. @returns {SVGSVGElement | null} */
   function svgElement() {
@@ -179,10 +206,40 @@
   }
 
   /**
+   * Reads the baseline a piece of text follows, or null when it follows none.
+   * Its id has to be as safe as a definitions id, because the text names it in
+   * an href, and it needs a path lines can follow.
+   * @param {unknown} raw
+   * @returns {{ id: string, d: string } | null}
+   */
+  function readTextPath(raw) {
+    if (typeof raw !== "object" || raw === null) return null;
+    const path = /** @type {Record<string, unknown>} */ (raw);
+    if (typeof path.id !== "string" || !FILTER_ID.test(path.id)) return null;
+    if (typeof path.d !== "string" || path.d === "") return null;
+    return { id: path.id, d: path.d };
+  }
+
+  /**
+   * Reads the halo behind a piece of text, or null when it draws none: no
+   * colour or no width is no halo, not an invisible stroke.
+   * @param {unknown} raw
+   * @returns {{ color: string, width: number } | null}
+   */
+  function readTextHalo(raw) {
+    if (typeof raw !== "object" || raw === null) return null;
+    const halo = /** @type {Record<string, unknown>} */ (raw);
+    if (typeof halo.color !== "string" || halo.color === "") return null;
+    if (!isNumber(halo.width) || halo.width <= 0) return null;
+    return { color: halo.color, width: halo.width };
+  }
+
+  /**
    * Reads one piece of text, or null when it cannot be drawn: one with no
    * place, no height, or no colour would paint an invisible nothing. The font
    * arrives with the shape, so the Frame draws the face an export does rather
-   * than whatever the renderer defaults to.
+   * than whatever the renderer defaults to, and the baseline it follows travels
+   * with it too, so a Map Label reads along its own curve.
    * @param {Record<string, unknown>} shape
    * @returns {TextShape | null}
    */
@@ -194,6 +251,8 @@
       shape.anchor === "start" || shape.anchor === "middle" || shape.anchor === "end"
         ? shape.anchor
         : "start";
+    const path = readTextPath(shape.path);
+    const halo = readTextHalo(shape.halo);
     return {
       text: String(shape.text),
       x: shape.x,
@@ -201,6 +260,9 @@
       size: shape.size,
       fill: shape.fill,
       ...(typeof shape.font === "string" && shape.font !== "" ? { font: shape.font } : {}),
+      ...(isNumber(shape.letterSpacing) ? { letterSpacing: shape.letterSpacing } : {}),
+      ...(path === null ? {} : { path }),
+      ...(halo === null ? {} : { halo }),
       anchor,
       ...(typeof shape.transform === "string" ? { transform: shape.transform } : {}),
     };
@@ -231,6 +293,8 @@
       ...(typeof shape.transform === "string" ? { transform: shape.transform } : {}),
       // A Clip Path id is only as safe as a definitions id, so it takes the same check.
       ...(typeof shape.clip === "string" && FILTER_ID.test(shape.clip) ? { clip: shape.clip } : {}),
+      // A hit-only path marks where its Element can be picked; it paints no ink.
+      ...(shape.hitOnly === true ? { hitOnly: /** @type {true} */ (true) } : {}),
     };
   }
 
@@ -263,6 +327,28 @@
   }
 
   /**
+   * Reads a Map Label's baseline fields (#751), or null when it carries none or
+   * they are malformed: a handle with no known curve to sit on would be a grip
+   * that shapes nothing.
+   * @param {unknown} raw
+   * @returns {FrameLabelLayout | null}
+   */
+  function readLabelLayout(raw) {
+    if (typeof raw !== "object" || raw === null) return null;
+    const label = /** @type {Record<string, unknown>} */ (raw);
+    if (!isNumber(label.x) || !isNumber(label.y) || !isNumber(label.rotation)) return null;
+    if (!isNumber(label.width) || label.width <= 0) return null;
+    if (!isNumber(label.bend)) return null;
+    return {
+      x: label.x,
+      y: label.y,
+      rotation: label.rotation,
+      width: label.width,
+      bend: label.bend,
+    };
+  }
+
+  /**
    * Reads one scene message, or null when it is malformed and must be dropped.
    * A message needs a positive page size; everything else falls back to a
    * usable default, because a Frame with no picture is worse than one drawn
@@ -290,6 +376,7 @@
           const shape = readShape(rawShape);
           if (shape !== null) shapes.push(shape);
         }
+        const label = readLabelLayout(element.label);
         elements.push({
           id: element.id,
           shapes,
@@ -302,6 +389,7 @@
           selected: element.selected === true,
           // A locked Element never moves, whatever else the scene says.
           movable: element.movable === true && element.locked !== true,
+          ...(label === null ? {} : { label }),
         });
       }
     }
@@ -475,6 +563,8 @@
     shapeDraft = null;
     moveDrag = null;
     pendingMove = null;
+    bendDrag = null;
+    pendingBend = null;
   }
 
   /**
@@ -534,6 +624,47 @@
   }
 
   /**
+   * The nodes one piece of text draws (#751): its halo first, when it has one,
+   * and then the text itself. Both run along the baseline the shape carries, so
+   * a Map Label's halo follows the same curve its ink does, and both sit at the
+   * shape's own point when it carries no baseline.
+   * @param {TextShape} shape
+   * @returns {any[]}
+   */
+  function textNodes(shape) {
+    const { html } = lib;
+    const content = () =>
+      shape.path === undefined
+        ? shape.text
+        : html`<textPath href="#${shape.path.id}" startOffset="50%">${shape.text}</textPath>`;
+    // A text on a path starts where its textPath's startOffset puts it: Chromium
+    // drops the textPath when the same <text> also carries an `x`, lays the run
+    // out at the origin, and paints nothing (#751). So only a text drawn at a
+    // point writes them.
+    const point = shape.path === undefined ? n(shape.x) : undefined;
+    const baseline = shape.path === undefined ? n(shape.y) : undefined;
+    /** @param {{ color: string, width: number } | undefined} halo */
+    const node = (halo) => html`<text
+      class="map-line"
+      x="${point}"
+      y="${baseline}"
+      font-size="${n(shape.size)}"
+      font-family="${shape.font ?? undefined}"
+      letter-spacing="${shape.letterSpacing === undefined ? undefined : n(shape.letterSpacing)}"
+      fill="${halo === undefined ? shape.fill : "none"}"
+      stroke="${halo === undefined ? undefined : halo.color}"
+      stroke-width="${halo === undefined ? undefined : n(halo.width)}"
+      stroke-linejoin="${halo === undefined ? undefined : "round"}"
+      text-anchor="${shape.anchor}"
+      transform="${shape.transform ?? undefined}"
+    >
+      ${content()}
+    </text>`;
+    if (shape.halo === undefined) return [node(undefined)];
+    return [node(shape.halo), node(undefined)];
+  }
+
+  /**
    * The paths and text one Element draws, under the Soft Edge filter the scene
    * gave it (#750). The selection outline stays outside the filter, so it keeps
    * its crisp edge while the art fades.
@@ -553,21 +684,14 @@
           transform="${shape.transform ?? undefined}"
         />`
       ),
-      ...clippedArt(element.shapes, (shape) =>
-        isTextShape(shape)
-          ? html`<text
-              class="map-line"
-              x="${n(shape.x)}"
-              y="${n(shape.y)}"
-              font-size="${n(shape.size)}"
-              font-family="${shape.font ?? undefined}"
-              fill="${shape.fill}"
-              text-anchor="${shape.anchor}"
-              transform="${shape.transform ?? undefined}"
-            >
-              ${shape.text}
-            </text>`
-          : html`<path
+      // The ink: every path the Element paints, then its text. A hit-only path,
+      // such as a Map Label's baseline, is a target and never ink of its own.
+      ...clippedArt(
+        element.shapes.filter((shape) => isTextShape(shape) || !shape.hitOnly),
+        (shape) =>
+          isTextShape(shape)
+            ? textNodes(shape)
+            : html`<path
               class="map-line"
               d="${shape.d}"
               stroke="${shape.stroke ?? "none"}"
@@ -605,6 +729,111 @@
       shapes.push(shape);
     }
     return shapes;
+  }
+
+  /**
+   * The baseline a label of these fields and this bend draws, mirroring
+   * `labelBaselinePath` in `maps.ts`: its chord's two ends, the quadratic's
+   * control point, and its apex, the middle of the curve, where the bend handle
+   * sits. A quadratic reaches only half way to its control point, so the
+   * control sits twice the bend off the chord.
+   * @param {FrameLabelLayout} label
+   * @param {number} bend
+   * @returns {BendGeometry}
+   */
+  function bendGeometry(label, bend) {
+    const angle = (label.rotation * Math.PI) / 180;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const half = label.width / 2;
+    return {
+      start: [label.x - half * cos, label.y - half * sin],
+      control: [label.x + 2 * bend * sin, label.y - 2 * bend * cos],
+      apex: [label.x + bend * sin, label.y - bend * cos],
+      end: [label.x + half * cos, label.y + half * sin],
+    };
+  }
+
+  /**
+   * The bend a pointer at `point` asks for, mirroring `bendFromPoint` in
+   * `maps.ts`: how far the point sits from the chord toward the label's top, in
+   * page millimetres, rounded to a tenth of one, with anything under
+   * `BEND_SNAP_MM` snapped straight.
+   * @param {FrameLabelLayout} label
+   * @param {MapPoint} point
+   * @returns {number}
+   */
+  function bendAt(label, point) {
+    const angle = (label.rotation * Math.PI) / 180;
+    const dx = point[0] - label.x;
+    const dy = point[1] - label.y;
+    const bend = dx * Math.sin(angle) - dy * Math.cos(angle);
+    const rounded = Math.round(bend * 10) / 10;
+    return Math.abs(rounded) < BEND_SNAP_MM ? 0 : rounded;
+  }
+
+  /** One quadratic baseline as an SVG path. @param {BendGeometry} geometry @returns {string} */
+  function quadraticPath(geometry) {
+    const { start, control, end } = geometry;
+    return `M ${n(start[0])} ${n(start[1])} Q ${n(control[0])} ${n(control[1])} ${n(end[0])} ${n(
+      end[1]
+    )}`;
+  }
+
+  /**
+   * The selected Map Label whose bend handle the Frame shows, or null: one
+   * shown, unlocked label, under the Select tool, since every other tool's
+   * press draws a new thing rather than shaping the label under it.
+   * @returns {FrameSceneElement | null}
+   */
+  function bendTarget() {
+    if (scene === null || scene.tool !== "select") return null;
+    const selected = scene.elements.find((element) => element.selected);
+    if (selected === undefined || selected.label === undefined) return null;
+    if (selected.hidden || selected.locked) return null;
+    return selected;
+  }
+
+  /**
+   * The bend a label draws with right now: the one a drag in progress previews,
+   * or the one the Worker has yet to answer for, else the one the scene holds.
+   * @param {FrameSceneElement} element
+   * @returns {number}
+   */
+  function liveBend(element) {
+    if (bendDrag !== null && bendDrag.id === element.id) return bendDrag.bend;
+    if (pendingBend !== null && pendingBend.id === element.id) return pendingBend.bend;
+    return element.label === undefined ? 0 : element.label.bend;
+  }
+
+  /**
+   * The bend handle a selected Map Label draws (#751): a circle at the apex of
+   * its baseline, which the pointer drags to bow or straighten the name. A drag
+   * previews the curve it would draw, dashed, so the author sees the shape
+   * before the whole drag reaches the Worker as one message.
+   * @returns {any}
+   */
+  function bendOverlay() {
+    const target = bendTarget();
+    if (target === null || target.label === undefined) return null;
+    const { html } = lib;
+    const label = target.label;
+    const bend = liveBend(target);
+    const geometry = bendGeometry(label, bend);
+    return html`<g transform="${dragTransform(target.id)}">
+      ${
+        bend === label.bend
+          ? null
+          : html`<path class="map-bend-preview" d="${quadraticPath(geometry)}" />`
+      }
+      <circle
+        class="map-bend-handle"
+        data-bend-handle="${target.id}"
+        cx="${n(geometry.apex[0])}"
+        cy="${n(geometry.apex[1])}"
+        r="${n(BEND_HANDLE_RADIUS_MM)}"
+      />
+    </g>`;
   }
 
   /**
@@ -669,6 +898,7 @@
               }
             </g>`
           )}
+        ${bendOverlay()}
         ${drawing === null ? null : html`<path class="map-live" d="${polyline(drawing.points)}" />`}
         ${penDraft === null ? null : html`<path class="map-live" d="${penDraftPath()}" />`}
         ${crosshair === null ? null : html`<path class="map-crosshair" d="${crosshairPath()}" />`}
@@ -794,6 +1024,92 @@
     if (moveDrag === null) return;
     const pointerId = moveDrag.pointerId;
     moveDrag = null;
+    releasePointerId(pointerId);
+    draw();
+  }
+
+  /**
+   * Starts a bend drag when the press lands on a Map Label's bend handle
+   * (#751), and reports whether it did, so the press neither picks an Element
+   * nor starts a move.
+   * @param {PointerEvent} event
+   * @returns {boolean}
+   */
+  function startBend(event) {
+    const handle =
+      event.target instanceof Element ? event.target.closest("[data-bend-handle]") : null;
+    if (handle === null || scene === null) return false;
+    const id = handle.getAttribute("data-bend-handle");
+    const target = id === null ? undefined : scene.elements.find((element) => element.id === id);
+    if (target === undefined || target.label === undefined) return false;
+    const point = pagePoint(event);
+    if (point === null) return false;
+    event.preventDefault();
+    bendDrag = {
+      pointerId: event.pointerId,
+      id: target.id,
+      press: { clientX: event.clientX, clientY: event.clientY },
+      label: target.label,
+      // The press alone does not shape the curve: a click on the handle's edge
+      // leaves it as it was, and only travel past the drag threshold bends it.
+      moved: false,
+      bend: target.label.bend,
+    };
+    capturePointer(event);
+    draw();
+    return true;
+  }
+
+  /**
+   * Follows the pointer with the bend drag: once the press has travelled past
+   * the Select drag's threshold, the handle and the curve preview the bend the
+   * pointer asks for, live, in this Frame only. A press that never travels
+   * leaves the bend untouched, so a click on the handle's edge posts nothing.
+   * @param {PointerEvent} event
+   */
+  function followBend(event) {
+    if (bendDrag === null) return;
+    const point = pagePoint(event);
+    if (point === null) return;
+    if (!bendDrag.moved) {
+      const travelled = Math.hypot(
+        event.clientX - bendDrag.press.clientX,
+        event.clientY - bendDrag.press.clientY
+      );
+      if (travelled < DRAG_THRESHOLD_PX) return;
+      bendDrag.moved = true;
+    }
+    bendDrag.bend = bendAt(bendDrag.label, point);
+    draw();
+  }
+
+  /**
+   * Ends the bend drag. A drag that moved the pointer and changed the bend goes
+   * to the Worker as one bend message, which is one undo step, and its preview
+   * holds until the Worker answers; a press that never passed the threshold, or
+   * one that left the curve as it was, sends nothing.
+   * @param {PointerEvent} event
+   * @param {boolean} send
+   */
+  function endBend(event, send) {
+    if (bendDrag === null || event.pointerId !== bendDrag.pointerId) return;
+    const drag = bendDrag;
+    bendDrag = null;
+    releasePointer(event);
+    if (!send || !drag.moved || drag.bend === drag.label.bend) {
+      draw();
+      return;
+    }
+    pendingBend = { id: drag.id, bend: drag.bend };
+    draw();
+    post({ kind: "bendLabel", id: drag.id, bend: drag.bend });
+  }
+
+  /** Drops the bend drag in progress, and its preview, without reporting it. */
+  function cancelBend() {
+    if (bendDrag === null) return;
+    const pointerId = bendDrag.pointerId;
+    bendDrag = null;
     releasePointerId(pointerId);
     draw();
   }
@@ -1001,7 +1317,10 @@
     }
 
     // A second finger while one drag is under way neither picks nor drags.
-    if (moveDrag !== null) return;
+    if (moveDrag !== null || bendDrag !== null) return;
+    // A press on the bend handle shapes the curve (#751) and never picks or
+    // moves the label it belongs to, so a bend drag posts no move.
+    if (startBend(event)) return;
     const target =
       event.target instanceof Element ? event.target.closest("[data-element-id]") : null;
     const id = target === null ? null : target.getAttribute("data-element-id");
@@ -1041,6 +1360,11 @@
 
   /** @param {PointerEvent} event */
   function onPointerMove(event) {
+    if (bendDrag !== null && event.pointerId === bendDrag.pointerId) {
+      followBend(event);
+      return;
+    }
+
     if (moveDrag !== null && event.pointerId === moveDrag.pointerId) {
       followDrag(event);
       return;
@@ -1266,21 +1590,56 @@
     if (event.key === "Shift") constrainDrag(false);
   }
 
+  /**
+   * Registers the author's PDF Font the Worker sends (#751) as a FontFace, so a
+   * Map Label set to `pdf` draws in the face an export embeds. Where the engine
+   * has no FontFace, or refuses the bytes, the label keeps its serif fallback.
+   * @param {unknown} data
+   * @returns {boolean} whether the message was a font message
+   */
+  function registerFont(data) {
+    if (typeof data !== "object" || data === null) return false;
+    const message = /** @type {Record<string, unknown>} */ (data);
+    if (message.kind !== "font") return false;
+    if (typeof message.family !== "string" || message.family === "") return true;
+    const bytes = message.bytes;
+    if (!(bytes instanceof ArrayBuffer)) return true;
+    if (typeof FontFace !== "function" || document.fonts === undefined) return true;
+    try {
+      document.fonts.add(new FontFace(message.family, bytes));
+    } catch {
+      // A face the engine will not take leaves the text in the fallback serif.
+    }
+    return true;
+  }
+
   /** @param {MessageEvent} event */
   function onMessage(event) {
+    if (registerFont(event.data)) return;
     const next = readScene(event.data);
     if (next === null) return;
     const previousTool = scene === null ? null : scene.tool;
     scene = next;
     // Any scene after a release draws the moved Element where the Worker put
-    // it, or back at its start when the Worker refused the move.
+    // it, or back at its start when the Worker refused the move, and the
+    // bent label by the bend the Worker kept.
     pendingMove = null;
+    pendingBend = null;
     if (next.tool !== previousTool) resetGestures();
     // An Element locked, deleted, or undone away mid-drag stops moving.
     if (moveDrag !== null) {
       const dragged = moveDrag.id;
       if (!next.elements.some((element) => element.id === dragged && element.movable)) {
         cancelMove();
+        return;
+      }
+    }
+    // A label locked, hidden, or undone away mid-drag stops bending.
+    if (bendDrag !== null) {
+      const bent = bendDrag.id;
+      const bentBy = next.elements.find((element) => element.id === bent);
+      if (bentBy === undefined || bentBy.label === undefined || bentBy.locked || bentBy.hidden) {
+        cancelBend();
         return;
       }
     }
@@ -1306,6 +1665,7 @@
     endErase(event, true);
     endShape(event, true);
     endMove(event, true);
+    endBend(event, true);
   }
 
   /** @param {PointerEvent} event */
@@ -1314,17 +1674,19 @@
     endErase(event, false);
     endShape(event, false);
     endMove(event, false);
+    endBend(event, false);
   }
 
   /**
-   * The engine took a Select drag's capture away with no pointerup (#766): the
-   * drag is dropped like a cancel, so the next press is not ignored as a
-   * second finger. After a pointerup the drag is already over and this is a
-   * no-op.
+   * The engine took a Select drag's or a bend drag's capture away with no
+   * pointerup (#766, #751): the drag is dropped like a cancel, so the next press
+   * is not ignored as a second finger. After a pointerup the drag is already
+   * over and this is a no-op.
    * @param {PointerEvent} event
    */
   function onLostPointerCapture(event) {
     endMove(event, false);
+    endBend(event, false);
   }
 
   draw();

@@ -14,6 +14,7 @@ import {
   PLUGIN_API_EVENTS,
   PLUGIN_API_RESERVED_NAMESPACES,
   PLUGIN_API_VERSION,
+  UINT8_ARRAY_SCHEMA_DESCRIPTION,
   chunkJsonSchema,
   inputJsonSchema,
   outputJsonSchema,
@@ -109,6 +110,11 @@ export function jsonSchemaToTypeScript(schema: JsonSchema, indent: string): stri
   // emitter writes the marker object this description names.
   if (schema.type === "object" && schema.description === ARRAY_BUFFER_SCHEMA_DESCRIPTION) {
     return "ArrayBuffer";
+  }
+  // `fonts.read` hands back bytes the same way, kept as a typed array the
+  // Plugin can pass straight to a FontFace.
+  if (schema.type === "object" && schema.description === UINT8_ARRAY_SCHEMA_DESCRIPTION) {
+    return "Uint8Array";
   }
   // `files.save` takes bytes the SDK folds into one Blob, which JSON Schema has
   // no type for either (ADR 0040).

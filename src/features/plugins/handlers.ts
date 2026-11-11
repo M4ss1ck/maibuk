@@ -10,7 +10,8 @@
  * Library namespace; `navigation.openEntity` opens an entity through the app
  * shell;
  * `navigation.openPage` opens a Plugin page;
- * `language.get` reads the app language; `endpoint.address` reads this Plugin's
+ * `language.get` reads the app language; `fonts.*` lists and reads the PDF
+ * Fonts installed on this device; `endpoint.address` reads this Plugin's
  * Plugin Endpoint address; `permissions.granted` lists the calling Plugin's own
  * Plugin Permissions; `secrets.*` writes the calling
  * Plugin's credentials through the registered store; `network.fetch` fetches
@@ -37,6 +38,7 @@ import {
 import { endpointUrlFor } from "@/features/plugins/endpoint";
 import { getPluginFileSaver, savePluginFile } from "@/features/plugins/file-save";
 import { getPluginFileGrantStore, type PluginFileGrantStore } from "@/features/plugins/file-grants";
+import { listPluginPdfFonts, readPluginPdfFont } from "@/features/plugins/fonts";
 import { currentPluginLanguage } from "@/features/plugins/language";
 import {
   checkpointPluginBook,
@@ -212,6 +214,8 @@ export function createPluginHandlers(manifest: PluginHandlersManifest): PluginAp
     "navigation.openPage": ({ pageId, pluginId }, context) =>
       openPluginPage(pluginId ?? context.pluginId, pageId),
     "language.get": async () => ({ language: currentPluginLanguage() }),
+    "fonts.list": () => listPluginPdfFonts(),
+    "fonts.read": ({ id }) => readPluginPdfFont(id),
     "endpoint.address": (_params, { pluginId }) => ({
       url: endpointUrlFor(usePluginManagementStore.getState().endpoint, pluginId),
     }),

@@ -7,14 +7,22 @@
  * to the Worker.
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { MAP_FRAME_SRC } from "./map-page";
 import { parseFrameMessage, sceneMessage } from "./frame-protocol";
+import {
+  MAP_LABEL_FONT_FAMILIES,
+  MAP_LABEL_FONTS,
+  bendFromPoint,
+  labelBaselinePath,
+  type MapLabelElement,
+} from "./maps";
 import { TEXT_FONT_FAMILY, sceneToSvg } from "./scene";
 
 const HTML = readFileSync(join(__dirname, "assets/ui/map.html"), "utf8");
+const CSS = readFileSync(join(__dirname, "assets/ui/fonts.css"), "utf8");
 const LIBRARY = readFileSync(join(__dirname, "assets/ui/lib/htm-preact-standalone.umd.js"), "utf8");
 const SCRIPT = readFileSync(join(__dirname, "assets/ui/map.js"), "utf8");
 
@@ -143,6 +151,8 @@ afterEach(() => {
   for (const cleanup of frame?.cleanups ?? []) cleanup();
   frame = null;
   delete (window as unknown as { maibuk?: unknown }).maibuk;
+  delete (globalThis as Record<string, unknown>).FontFace;
+  delete (document as unknown as { fonts?: unknown }).fonts;
   document.documentElement.innerHTML = "";
 });
 
@@ -152,6 +162,125 @@ describe("the Map Frame page", () => {
     expect(existsSync(join(__dirname, MAP_FRAME_SRC))).toBe(true);
     expect(HTML).toContain('src="lib/htm-preact-standalone.umd.js"');
     expect(HTML).toContain('src="map.js"');
+  });
+});
+
+describe("the Map Label fonts", () => {
+  it("declares one bundled face per shipped file, under the family the scene asks for", () => {
+    // The whole point of bundling the faces is that the Frame draws a Map Label
+    // in the same letterforms an export does, with nothing loaded from the
+    // network: a family the scene names but the page never declares would
+    // silently draw the browser's fallback.
+    const files = readdirSync(join(__dirname, "assets/ui/fonts"))
+      .filter((file) => file.endsWith(".ttf"))
+      .sort();
+    expect(files).toEqual([
+      "Cinzel-wght.ttf",
+      "IMFeENrm28P.ttf",
+      "MedievalSharp.ttf",
+      "UncialAntiqua-Regular.ttf",
+    ]);
+    // The faces live in a linked stylesheet: the Frame shim rewrites a
+    // stylesheet's relative url() to the file's blob URL, while an inline
+    // style's url() is never rewritten, so an inline @font-face would not load.
+    expect(HTML).toContain('href="fonts.css"');
+    for (const file of files) expect(CSS).toContain(`url("fonts/${file}")`);
+
+    expect(CSS.match(/@font-face/g)).toHaveLength(MAP_LABEL_FONTS.length);
+    expect(CSS.match(/font-display: block;/g)).toHaveLength(MAP_LABEL_FONTS.length);
+    for (const font of MAP_LABEL_FONTS) {
+      expect(CSS).toContain(`font-family: "${MAP_LABEL_FONT_FAMILIES[font]}"`);
+    }
+
+    // The PDF Font is the author's own installed face: the Worker sends its
+    // bytes over the Frame's port and map.js registers the face, so the page
+    // itself declares no family for it.
+    expect(CSS).not.toContain(`"${MAP_LABEL_FONT_FAMILIES.pdf}"`);
+  });
+});
+
+/**
+ * jsdom implements neither FontFace nor document.fonts, so the registration is
+ * proven against a stub that records what the Frame handed it.
+ */
+function stubFontFace(): { family: string; source: unknown }[] {
+  const registered: { family: string; source: unknown }[] = [];
+  (globalThis as Record<string, unknown>).FontFace = class {
+    family: string;
+    source: unknown;
+    constructor(family: string, source: unknown) {
+      this.family = family;
+      this.source = source;
+    }
+  };
+  (document as unknown as { fonts: unknown }).fonts = {
+    add: (face: { family: string; source: unknown }) => registered.push(face),
+  };
+  return registered;
+}
+
+describe("the author's PDF Font", () => {
+  const BYTES = new ArrayBuffer(8);
+
+  it("registers the bytes the Worker sends as the family a pdf label asks for", () => {
+    const registered = stubFontFace();
+    frame = loadFrame();
+
+    frame.port.deliver({
+      kind: "font",
+      family: MAP_LABEL_FONT_FAMILIES.pdf,
+      bytes: BYTES,
+    });
+
+    expect(registered.map((face) => face.family)).toEqual([MAP_LABEL_FONT_FAMILIES.pdf]);
+    expect(registered[0].source).toBe(BYTES);
+  });
+
+  it("registers it without disturbing the scene already drawn", () => {
+    const registered = stubFontFace();
+    frame = loadFrame();
+    frame.scene({ elements: [sceneElement({ id: "e1" })] });
+
+    frame.port.deliver({
+      kind: "font",
+      family: MAP_LABEL_FONT_FAMILIES.pdf,
+      bytes: BYTES,
+    });
+
+    // A font message is not a scene: the face arrives and the picture stays.
+    expect(registered).toHaveLength(1);
+    expect(document.querySelectorAll("[data-element-id]")).toHaveLength(1);
+  });
+
+  it("registers nothing for a malformed font message", () => {
+    const registered = stubFontFace();
+    frame = loadFrame();
+
+    for (const message of [
+      { kind: "font", family: "", bytes: BYTES },
+      { kind: "font", family: MAP_LABEL_FONT_FAMILIES.pdf },
+      { kind: "font", family: MAP_LABEL_FONT_FAMILIES.pdf, bytes: "not bytes" },
+      { kind: "font", bytes: BYTES },
+    ]) {
+      frame.port.deliver(message);
+    }
+
+    expect(registered).toEqual([]);
+  });
+
+  it("keeps drawing where the engine has no FontFace at all", () => {
+    frame = loadFrame();
+
+    // No stub: document.fonts is undefined, what an engine without the
+    // FontFace API looks like. The label keeps its serif fallback.
+    frame.port.deliver({
+      kind: "font",
+      family: MAP_LABEL_FONT_FAMILIES.pdf,
+      bytes: BYTES,
+    });
+    frame.scene({ elements: [sceneElement()] });
+
+    expect(document.querySelector("svg")).not.toBeNull();
   });
 });
 
@@ -477,6 +606,307 @@ describe("Stamp shapes", () => {
 
     expect(document.querySelector("text")).toBeNull();
     expect(document.querySelector("[data-element-id]")).toBeNull();
+  });
+});
+
+describe("Map Label shapes", () => {
+  /** The baseline the test's label follows: 40 mm wide, its middle lifted 8 mm. */
+  const BASELINE = "M 0 30 Q 20 14 40 30";
+
+  /** The label's selectable area, which paints no ink of its own. */
+  const labelHit = () =>
+    shape({ d: BASELINE, stroke: null, strokeWidth: 0, fill: null, hitOnly: true });
+
+  /** The label's text, following `BASELINE`, with the halo it is drawn over. */
+  const labelText = (overrides: Record<string, unknown> = {}) => ({
+    text: "The Reach",
+    x: 20,
+    y: 30,
+    size: 6,
+    fill: "#1f2933",
+    font: "IM Fell English",
+    anchor: "middle",
+    letterSpacing: 0.4,
+    halo: { color: "#d7e6ec", width: 0.8 },
+    path: { id: "label-path-a1", d: BASELINE },
+    ...overrides,
+  });
+
+  it("draws a label's text along its baseline, which the defs define", () => {
+    frame = loadFrame();
+    frame.scene({
+      defs: [`<path id="label-path-a1" d="${BASELINE}"/>`],
+      elements: [sceneElement({ shapes: [labelHit(), labelText()] })],
+    });
+
+    expect(document.querySelector("defs path#label-path-a1")?.getAttribute("d")).toBe(BASELINE);
+    const text = document.querySelector("text.map-line");
+    expect(text?.getAttribute("text-anchor")).toBe("middle");
+    expect(text?.getAttribute("font-family")).toBe("IM Fell English");
+    expect(text?.getAttribute("letter-spacing")).toBe("0.4");
+    expect(text?.querySelector("textPath")?.getAttribute("href")).toBe("#label-path-a1");
+    expect(text?.querySelector("textPath")?.getAttribute("startOffset")).toBe("50%");
+    expect(text?.textContent).toBe("The Reach");
+    // A text on a path starts from its startOffset. Chromium drops the textPath
+    // when the same <text> also carries an x, laying the run out at the origin
+    // with nothing painted (#751), so neither copy writes x or y.
+    expect(text?.hasAttribute("x")).toBe(false);
+    expect(text?.hasAttribute("y")).toBe(false);
+  });
+
+  it("draws the halo first, a stroked copy of the same text with no fill", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [sceneElement({ shapes: [labelHit(), labelText()] })] });
+
+    const texts = Array.from(document.querySelectorAll("text.map-line"));
+    expect(texts).toHaveLength(2);
+    expect(texts[0].getAttribute("stroke")).toBe("#d7e6ec");
+    expect(texts[0].getAttribute("fill")).toBe("none");
+    expect(texts[0].getAttribute("stroke-width")).toBe("0.8");
+    expect(texts[0].querySelector("textPath")).not.toBeNull();
+    expect(texts[1].getAttribute("stroke")).toBeNull();
+    expect(texts[1].getAttribute("fill")).toBe("#1f2933");
+  });
+
+  it("hit-tests a label by its baseline, which the selection outlines", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [sceneElement({ selected: true, shapes: [labelHit(), labelText()] })],
+    });
+
+    expect(document.querySelector("path.map-hit")?.getAttribute("d")).toBe(BASELINE);
+    // The hit path is a pointer target, not ink: the label's art is its text.
+    expect(document.querySelectorAll("path.map-line")).toHaveLength(0);
+    expect(document.querySelector("path.map-selection")?.getAttribute("d")).toBe(BASELINE);
+  });
+
+  it("draws a label without its baseline when the scene names an id it could write into", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [
+        sceneElement({
+          shapes: [labelText({ path: { id: 'x" onload="alert(1)', d: BASELINE } })],
+        }),
+      ],
+    });
+
+    expect(document.querySelector("textPath")).toBeNull();
+    expect(document.querySelector("text.map-line")?.textContent).toBe("The Reach");
+  });
+});
+
+describe("the Map Label bend handle", () => {
+  /** The baseline a label at (100, 50), 40 mm wide, arching 8 mm draws. */
+  const bendLabel = (overrides: Record<string, unknown> = {}) => ({
+    x: 100,
+    y: 50,
+    rotation: 0,
+    width: 40,
+    bend: 8,
+    ...overrides,
+  });
+
+  /** The one bend handle the Frame drew. */
+  const handle = (): Element => {
+    const circle = document.querySelector("circle.map-bend-handle");
+    if (circle === null) throw new Error("the Frame drew no bend handle");
+    return circle;
+  };
+
+  /** Where the handle sits, in page millimetres. */
+  const apex = (): [string | null, string | null] => [
+    handle().getAttribute("cx"),
+    handle().getAttribute("cy"),
+  ];
+
+  it("draws one handle at the apex of the selected label's curve", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [sceneElement({ selected: true, label: bendLabel() })] });
+
+    // The label sits at (100, 50) and arches 8 mm toward the top of the page,
+    // so its apex, which the quadratic reaches at its middle, is (100, 42).
+    expect(handle().getAttribute("data-bend-handle")).toBe("e1");
+    expect(apex()).toEqual(["100", "42"]);
+  });
+
+  it("places the handle on the turned curve, and hides it on a locked or hidden label", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [sceneElement({ selected: true, label: bendLabel({ rotation: 90 }) })],
+    });
+    // A quarter turn clockwise makes the label's arch lift toward page +x.
+    expect(apex()).toEqual(["108", "50"]);
+
+    for (const overrides of [{ locked: true }, { hidden: true }]) {
+      frame.scene({
+        elements: [sceneElement({ selected: true, label: bendLabel(), ...overrides })],
+      });
+      expect(document.querySelector("circle.map-bend-handle")).toBeNull();
+    }
+
+    frame.scene({ elements: [sceneElement({ label: bendLabel() })] });
+    expect(document.querySelector("circle.map-bend-handle")).toBeNull();
+  });
+
+  it("drags the handle into a new bend, previews it, and posts one bendLabel", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [sceneElement({ selected: true, movable: true, label: bendLabel() })],
+    });
+
+    pointer(handle(), "pointerdown", 100, 42);
+    pointer(svg(), "pointermove", 100, 36);
+    // The drag previews live: the handle and the curve follow the pointer.
+    expect(apex()).toEqual(["100", "36"]);
+    expect(document.querySelector("path.map-bend-preview")?.getAttribute("d")).toBe(
+      "M 80 50 Q 100 22 120 50"
+    );
+    pointer(svg(), "pointerup", 100, 36);
+
+    // The press shaped the curve: it never picked or moved the label, and the
+    // whole drag is one message, so the Worker can make it one undo step.
+    expect(frame.port.messages).toEqual([{ kind: "bendLabel", id: "e1", bend: 14 }]);
+    // The preview holds until the Worker answers, so the curve never jumps back.
+    expect(apex()).toEqual(["100", "36"]);
+    frame.scene({
+      elements: [sceneElement({ selected: true, movable: true, label: bendLabel() })],
+    });
+    expect(apex()).toEqual(["100", "42"]);
+  });
+
+  it("straightens the label when the handle is dragged back to the chord", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [sceneElement({ selected: true, movable: true, label: bendLabel() })],
+    });
+
+    pointer(handle(), "pointerdown", 100, 42);
+    // A third of a millimetre off the chord is too small to see: it snaps to 0.
+    pointer(svg(), "pointermove", 100, 50.3);
+    pointer(svg(), "pointerup", 100, 50.3);
+
+    expect(frame.port.messages).toEqual([{ kind: "bendLabel", id: "e1", bend: 0 }]);
+  });
+
+  it("still picks and moves the label when the press lands off the handle", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [sceneElement({ selected: true, movable: true, label: bendLabel() })],
+    });
+    const label = document.querySelector('g[data-element-id="e1"] path.map-line');
+    if (label === null) throw new Error("the Element drew no line");
+
+    pointer(label, "pointerdown", 100, 50);
+    pointer(svg(), "pointermove", 110, 50);
+    pointer(svg(), "pointerup", 110, 50);
+
+    expect(frame.port.messages).toEqual([
+      { kind: "select", id: "e1" },
+      { kind: "move", id: "e1", dx: 10, dy: 0 },
+    ]);
+  });
+
+  it("drops a bend drag the pointer cancels without posting it", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [sceneElement({ selected: true, movable: true, label: bendLabel() })],
+    });
+
+    pointer(handle(), "pointerdown", 100, 42);
+    pointer(svg(), "pointermove", 100, 36);
+    pointer(svg(), "pointercancel", 100, 36);
+
+    expect(frame.port.messages).toEqual([]);
+  });
+
+  it("posts nothing when the handle is pressed and released without moving", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [sceneElement({ selected: true, movable: true, label: bendLabel() })],
+    });
+
+    // A press on the handle's edge is not a drag: the pointer never travelled
+    // past the same threshold a Select drag uses, so the bend stays as it was.
+    pointer(handle(), "pointerdown", 100, 44);
+    pointer(svg(), "pointerup", 100, 44);
+
+    expect(frame.port.messages).toEqual([]);
+  });
+});
+
+describe("the Map Label bend arithmetic", () => {
+  /** One label writing on a page centred baseline; only its layout varies. */
+  const label = (overrides: Partial<MapLabelElement>): MapLabelElement => ({
+    id: "label",
+    kind: "label",
+    name: "Label",
+    hidden: false,
+    locked: false,
+    text: "Label",
+    x: 100,
+    y: 50,
+    rotation: 0,
+    width: 40,
+    bend: 8,
+    font: "im-fell-english",
+    size: 6,
+    letterSpacing: 0,
+    halo: 0.8,
+    ...overrides,
+  });
+
+  /** The middle of a quadratic baseline's three points, in page millimetres. */
+  function midpoint(d: string): [number, number] {
+    const match = /^M (-?[\d.]+) (-?[\d.]+) Q (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+)$/.exec(d);
+    if (match === null) throw new Error(`unexpected baseline: ${d}`);
+    const [sx, sy, cx, cy, ex, ey] = match.slice(1).map(Number);
+    return [(sx + 2 * cx + ex) / 4, (sy + 2 * cy + ey) / 4];
+  }
+
+  /** The handle's place, in page millimetres. */
+  function apex(): [string | null, string | null] {
+    const circle = document.querySelector("circle.map-bend-handle");
+    if (circle === null) throw new Error("the Frame drew no bend handle");
+    return [circle.getAttribute("cx"), circle.getAttribute("cy")];
+  }
+
+  /** The one bend handle the Frame drew. */
+  function handle(): Element {
+    const circle = document.querySelector("circle.map-bend-handle");
+    if (circle === null) throw new Error("the Frame drew no bend handle");
+    return circle;
+  }
+
+  it("puts the handle at maps.ts's apex and posts the bend maps.ts computes from a point", () => {
+    const cases = [
+      label({}),
+      label({ id: "turned", x: 60, y: 80, rotation: 37, width: 55, bend: -4.5 }),
+      label({ id: "leaned", x: 20, y: 20, rotation: -120, width: 30, bend: 12 }),
+    ];
+
+    for (const one of cases) {
+      frame = loadFrame();
+      frame.scene({
+        elements: [sceneElement({ id: one.id, selected: true, movable: true, label: one })],
+      });
+
+      // The handle sits on the midpoint of the baseline `maps.ts` draws.
+      const [mx, my] = midpoint(labelBaselinePath(one));
+      expect(Number(apex()[0])).toBeCloseTo(mx, 1);
+      expect(Number(apex()[1])).toBeCloseTo(my, 1);
+
+      // Dragging to a point posts the bend `bendFromPoint` computes for it.
+      const point: [number, number] = [one.x + 13, one.y - 6];
+      pointer(handle(), "pointerdown", Number(apex()[0]), Number(apex()[1]));
+      pointer(svg(), "pointermove", point[0], point[1]);
+      pointer(svg(), "pointerup", point[0], point[1]);
+      expect(frame.port.messages).toEqual([
+        { kind: "bendLabel", id: one.id, bend: bendFromPoint(one, point) },
+      ]);
+
+      for (const cleanup of frame.cleanups) cleanup();
+      frame = null;
+    }
   });
 });
 
@@ -1011,6 +1441,88 @@ describe("the move message", () => {
       ["stamp", true],
       ["fill", false],
     ]);
+  });
+});
+
+describe("the bendLabel message", () => {
+  it("reads the bend a drag on a Map Label's curve asks for", () => {
+    expect(parseFrameMessage({ kind: "bendLabel", id: "e1", bend: 6.4 })).toEqual({
+      kind: "bendLabel",
+      id: "e1",
+      bend: 6.4,
+    });
+  });
+
+  it("drops a bend without an Element id or a finite bend", () => {
+    for (const message of [
+      { kind: "bendLabel", bend: 6 },
+      { kind: "bendLabel", id: "", bend: 6 },
+      { kind: "bendLabel", id: 7, bend: 6 },
+      { kind: "bendLabel", id: "e1" },
+      { kind: "bendLabel", id: "e1", bend: Number.NaN },
+      { kind: "bendLabel", id: "e1", bend: Number.POSITIVE_INFINITY },
+      { kind: "bendLabel", id: "e1", bend: "6" },
+    ]) {
+      expect(parseFrameMessage(message)).toBeNull();
+    }
+  });
+
+  it("carries a Map Label's baseline fields, and no other Element's", () => {
+    const map = {
+      page: { preset: "square" as const, widthMm: 200, heightMm: 100 },
+      elements: [
+        {
+          id: "reach",
+          kind: "label" as const,
+          name: "The Reach",
+          hidden: false,
+          locked: false,
+          text: "The Reach",
+          x: 100,
+          y: 50,
+          rotation: 90,
+          width: 40,
+          bend: 8,
+          font: "im-fell-english" as const,
+          size: 6,
+          letterSpacing: 0,
+          halo: 0.8,
+        },
+        {
+          id: "coast",
+          kind: "line" as const,
+          name: "Coast",
+          hidden: false,
+          locked: false,
+          points: [
+            [0, 0],
+            [10, 10],
+          ] as [number, number][],
+          style: "plain" as const,
+          enclosesFills: true,
+          closed: false,
+          curves: [false],
+          roughened: false,
+        },
+      ],
+    };
+    const message = sceneMessage(map, {
+      selectedId: "reach",
+      tool: "select",
+      zoom: 1,
+      panX: 0,
+      panY: 0,
+      penLabel: PEN_LABEL,
+    });
+
+    expect(message.elements[0].label).toEqual({
+      x: 100,
+      y: 50,
+      rotation: 90,
+      width: 40,
+      bend: 8,
+    });
+    expect(message.elements[1].label).toBeUndefined();
   });
 });
 

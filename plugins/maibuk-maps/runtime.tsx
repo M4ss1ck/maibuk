@@ -20,8 +20,9 @@ import {
   type PluginFrame,
 } from "@/plugin-sdk";
 import { createMapEditor, type MapEditor } from "./editor";
+import type { FrameFontMessage } from "./frame-protocol";
 import { MAP_PAGE_ID, createMapPage } from "./map-page";
-import { createMapStore, migrateMapsData } from "./maps";
+import { MAP_LABEL_FONT_FAMILIES, createMapStore, migrateMapsData } from "./maps";
 import { MAPS_PAGE_ID, createBookFilter, createMapsPage } from "./maps-page";
 
 export { MAPS_PAGE_ID, MAP_PAGE_ID };
@@ -87,6 +88,12 @@ export interface MapsRuntime {
   backToMaps(): Promise<void>;
 }
 
+/** One installed PDF Font the Frame can draw with, and its family for the select. */
+interface InstalledPdfFont {
+  bytes: ArrayBuffer;
+  family: string;
+}
+
 /** Wires the client to both pages, the Commands, the Frame handoff, and `migrateData`. */
 export function startMaps(client: PluginClient, serve: MapsServe): MapsRuntime {
   const store = createMapStore(client.storage);
@@ -97,6 +104,14 @@ export function startMaps(client: PluginClient, serve: MapsServe): MapsRuntime {
    * stops receiving scenes (#745).
    */
   let framePort: MessagePort | null = null;
+  /**
+   * The author's PDF Font, loaded once per activation (#751): the first listed
+   * font's regular style file, or null when none is installed on this device.
+   * The family rides along, so the Font select can name the installed face.
+   */
+  let pdfFont: Promise<InstalledPdfFont | null> | null = null;
+  /** The installed PDF Font's family, or null when this device has none. */
+  let pdfFontFamily: string | null = null;
 
   const runtime: MapsRuntime = {
     currentMapId: null,
@@ -120,6 +135,9 @@ export function startMaps(client: PluginClient, serve: MapsServe): MapsRuntime {
 
   client.onFrame(handoff);
 
+  // Read the PDF Font once at activation, so the Font select can name it.
+  void loadPdfFont();
+
   async function openMap(id: string): Promise<boolean> {
     if (runtime.editor !== null) {
       await runtime.editor.flush();
@@ -131,6 +149,7 @@ export function startMaps(client: PluginClient, serve: MapsServe): MapsRuntime {
     if (doc === null) return false;
     runtime.currentMapId = id;
     const editor = createMapEditor({ store, doc, language: () => runtime.language });
+    editor.setPdfFontFamily(pdfFontFamily);
     runtime.editor = editor;
     if (framePort !== null) editor.attachFrame(framePort);
     await client.navigation.openPage({ pageId: MAP_PAGE_ID });
@@ -158,6 +177,59 @@ export function startMaps(client: PluginClient, serve: MapsServe): MapsRuntime {
     frame.port.onmessage = (event: MessageEvent) => runtime.editor?.handleFrameMessage(event.data);
     frame.port.start();
     runtime.editor?.attachFrame(frame.port);
+    void sendPdfFont(frame.port);
+  }
+
+  /**
+   * Hands the Frame the author's PDF Font, so a Map Label set to `pdf` draws in
+   * the face an export embeds (#751). The first installed font wins, and the
+   * catalog puts Noto Serif first; a device with none installed, or a refused
+   * call, sends nothing and the label keeps its serif fallback.
+   */
+  async function sendPdfFont(port: MessagePort): Promise<void> {
+    const font = await loadPdfFont();
+    if (font === null) return;
+    const message: FrameFontMessage = {
+      kind: "font",
+      family: MAP_LABEL_FONT_FAMILIES.pdf,
+      bytes: font.bytes,
+    };
+    port.postMessage(message);
+  }
+
+  /**
+   * Reads the installed PDF Font once, keeping its family for the Font select.
+   * Reading it when the runtime starts rather than when a Frame first asks lets
+   * the page name the installed face before any Frame connects.
+   */
+  function loadPdfFont(): Promise<InstalledPdfFont | null> {
+    if (pdfFont === null) {
+      pdfFont = readPdfFont().then((font) => {
+        pdfFontFamily = font?.family ?? null;
+        runtime.editor?.setPdfFontFamily(pdfFontFamily);
+        return font;
+      });
+    }
+    return pdfFont;
+  }
+
+  /** The regular style file of the first PDF Font this device has installed. */
+  async function readPdfFont(): Promise<InstalledPdfFont | null> {
+    try {
+      const installed = await client.fonts.list();
+      const first = installed[0];
+      if (first === undefined) return null;
+      const bytes = await client.fonts.read({ id: first.id });
+      // A buffer of its own rather than a view into the SDK's array, so every
+      // Frame the page mounts gets the whole file.
+      const copy = new Uint8Array(bytes.byteLength);
+      copy.set(bytes);
+      return { bytes: copy.buffer, family: first.family };
+    } catch {
+      // No PDF Font, no Plugin API, or bytes that will not arrive: the label
+      // falls back to a serif, and the Map still draws.
+      return null;
+    }
   }
 
   async function runCommand(params: unknown): Promise<null> {
