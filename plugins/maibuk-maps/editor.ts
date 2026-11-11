@@ -20,6 +20,9 @@ import type {
   MapLineElement,
   MapPoint,
   MapShape,
+  MapStampElement,
+  MapStampScale,
+  MapStampTransform,
   MapStore,
   ShapeKind,
 } from "./maps";
@@ -29,7 +32,10 @@ import {
   DEFAULT_SHAPE_SIZE_MM,
   LINE_STYLE_DEFAULT_ENCLOSES,
   MAX_NAME_LENGTH,
+  MIN_STAMP_SIZE_MM,
   curvedSegments,
+  isStampScaleUnit,
+  newStamp,
   normalizeShape,
   randomMapId,
 } from "./maps";
@@ -63,6 +69,7 @@ import {
   setLocked,
   smoothStroke,
 } from "./scene";
+import { BASE_STAMP_IDS, baseStampRef, stampTakesColour } from "./stamps";
 
 /** How much one zoom step changes the view. */
 const ZOOM_STEP = 1.25;
@@ -82,6 +89,17 @@ const SHAPE_NAME_KEYS: Readonly<Record<ShapeKind, MapsKey>> = {
   rectangle: "element.rectangleName",
   polygon: "element.polygonName",
 };
+
+/** The base Stamp the Insert tool places until the author picks another. */
+export const DEFAULT_STAMP_ID = "capital";
+
+/**
+ * The catalog key of a built-in Stamp's name, which every art carries a string
+ * for in both shipped languages.
+ */
+export function stampNameKey(id: string): MapsKey {
+  return `stamp.${id}` as MapsKey;
+}
 
 /** What the page draws: the document, its Elements, and the editor flags. */
 export interface MapEditorSnapshot {
@@ -112,6 +130,10 @@ export interface MapEditorSnapshot {
   selectedShape: MapShape | null;
   /** The Shape kind the selected line was converted from, or null when it never was a Shape. */
   selectedConvertedFrom: ShapeKind | null;
+  /** The base Stamp the Insert tool places next. */
+  currentStampId: string;
+  /** The selected Stamp, or null when the selection is not a Stamp. */
+  selectedStamp: MapStampElement | null;
 }
 
 export interface MapEditorOptions {
@@ -149,6 +171,16 @@ export interface MapEditor {
   placeShape(kind: ShapeKind): void;
   /** Reshapes one unlocked exact Shape line from its number fields, as one undo step. */
   setShapeGeometry(id: string, patch: Partial<Omit<MapShape, "kind">>): void;
+  /** Picks the base Stamp the Insert tool places next. */
+  setStamp(id: string): void;
+  /** Drops the picked Stamp at `point`, or at the view centre, selected, as one undo step. */
+  insertStamp(point?: MapPoint): void;
+  /** Moves, sizes, or turns one unlocked Stamp from its number fields, as one undo step. */
+  setStampTransform(id: string, patch: Partial<MapStampTransform>): void;
+  /** Sets the scale bar's unit or the distance its page width stands for, as one undo step. */
+  setStampScale(id: string, patch: Partial<MapStampScale>): void;
+  /** Recolours one unlocked one-colour Stamp, as one undo step. */
+  setStampColor(id: string, color: string): void;
   deleteElement(id: string): void;
   /** Moves one Element one place towards the top of the Elements list. */
   moveUp(id: string): void;
@@ -191,6 +223,12 @@ function sameShape(one: MapShape, two: MapShape): boolean {
   );
 }
 
+/** A Stamp's turn brought into one full circle: -90 degrees reads 270. */
+function normalizeRotation(rotation: number): number {
+  const turned = rotation % 360;
+  return turned < 0 ? turned + 360 : turned;
+}
+
 export function createMapEditor(options: MapEditorOptions): MapEditor {
   let doc = options.doc;
   let elements: MapElement[] = doc.elements;
@@ -199,6 +237,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
   let tool: MapTool = "select";
   let currentLineStyle: LineStyleId = "plain";
   let currentFillColor = DEFAULT_FILL_COLOR;
+  let currentStampId = DEFAULT_STAMP_ID;
   let roughenStrength = DEFAULT_ROUGHEN_STRENGTH_MM;
   let zoom = 1;
   let panX = 0;
@@ -223,6 +262,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     const selected = elementById(selectedId);
     const selectedLine = selected !== undefined && selected.kind === "line" ? selected : null;
     const selectedFill = selected !== undefined && selected.kind === "fill" ? selected : null;
+    const selectedStamp = selected !== undefined && selected.kind === "stamp" ? selected : null;
     return {
       doc,
       elements,
@@ -241,6 +281,8 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       selectedEnclosesFills: selectedLine === null ? null : selectedLine.enclosesFills,
       selectedShape: selectedLine === null ? null : (selectedLine.shape ?? null),
       selectedConvertedFrom: selectedLine === null ? null : (selectedLine.convertedFrom ?? null),
+      currentStampId,
+      selectedStamp,
     };
   }
 
@@ -496,6 +538,24 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     edit(next);
   }
 
+  /**
+   * Drops the picked Stamp at `point` (#749), or at the view centre with no
+   * point: the art's own default size, in the map ink, named after the art in
+   * the app language. The new Stamp becomes the selection, and the whole
+   * placement is one undo step.
+   */
+  function placeStamp(point?: MapPoint): void {
+    const at: MapPoint = point ?? [doc.page.widthMm / 2 + panX, doc.page.heightMm / 2 + panY];
+    const element = newStamp({
+      id: randomMapId(),
+      name: translate(options.language(), stampNameKey(currentStampId)),
+      stampRef: baseStampRef(currentStampId),
+      point: at,
+    });
+    selectedId = element.id;
+    edit(addElement(elements, element));
+  }
+
   function applyMessage(message: FrameToWorkerMessage): void {
     switch (message.kind) {
       case "stroke":
@@ -512,6 +572,9 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
         break;
       case "pour":
         pour(message.point);
+        break;
+      case "insert":
+        placeStamp(message.point);
         break;
       case "select":
         selectElement(message.id);
@@ -710,6 +773,92 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
           element.id === id && element.kind === "line"
             ? { ...element, shape, points: outline.points, curves: outline.curves, closed: true }
             : element
+        )
+      );
+    },
+
+    setStamp(id) {
+      // A pick this build has no art for would place a Stamp that draws
+      // nothing, so only the built-in Stamps are picks.
+      if (!BASE_STAMP_IDS.includes(id) || id === currentStampId) return;
+      currentStampId = id;
+      publish();
+    },
+
+    insertStamp(point) {
+      placeStamp(point);
+    },
+
+    setStampTransform(id, patch) {
+      const target = elementById(id);
+      if (target === undefined || target.kind !== "stamp" || target.locked) return;
+      const before = target.transform;
+      const x = patch.x ?? before.x;
+      const y = patch.y ?? before.y;
+      const size = patch.size ?? before.size;
+      const rotation = patch.rotation ?? before.rotation;
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+      if (!Number.isFinite(size) || !Number.isFinite(rotation)) return;
+      const transform: MapStampTransform = {
+        x,
+        y,
+        // A Stamp with no art box draws nothing, so the size keeps some room.
+        size: Math.max(MIN_STAMP_SIZE_MM, size),
+        // The turn reads in one circle, so a whole turn is no turn at all.
+        rotation: normalizeRotation(rotation),
+      };
+      if (
+        transform.x === before.x &&
+        transform.y === before.y &&
+        transform.size === before.size &&
+        transform.rotation === before.rotation
+      ) {
+        return;
+      }
+      edit(
+        elements.map((element) =>
+          element.id === id && element.kind === "stamp" ? { ...element, transform } : element
+        )
+      );
+    },
+
+    setStampScale(id, patch) {
+      const target = elementById(id);
+      if (target === undefined || target.kind !== "stamp" || target.locked) return;
+      const before = target.scale;
+      // Only the scale bar carries a reading to change.
+      if (before === undefined) return;
+      const unit = patch.unit ?? before.unit;
+      const span = patch.span ?? before.span;
+      if (!isStampScaleUnit(unit)) return;
+      // A page width standing for no distance reads no scale bar.
+      if (!Number.isFinite(span) || span <= 0) return;
+      if (unit === before.unit && span === before.span) return;
+      edit(
+        elements.map((element) =>
+          element.id === id && element.kind === "stamp"
+            ? { ...element, scale: { unit, span } }
+            : element
+        )
+      );
+    },
+
+    setStampColor(id, color) {
+      const target = elementById(id);
+      // Art that keeps its own colours has none to take, and a locked Stamp
+      // keeps the colour it has.
+      if (
+        target === undefined ||
+        target.kind !== "stamp" ||
+        target.locked ||
+        !stampTakesColour(target.stampRef) ||
+        target.color === color
+      ) {
+        return;
+      }
+      edit(
+        elements.map((element) =>
+          element.id === id && element.kind === "stamp" ? { ...element, color } : element
         )
       );
     },

@@ -9,7 +9,14 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import en from "./locales/runtime/en.json";
 import es from "./locales/runtime/es.json";
-import { BASE_STAMP_IDS, SCALE_BAR_STAMP_REF, scaleBarLayout, stampArt } from "./stamps";
+import {
+  BASE_STAMP_IDS,
+  SCALE_BAR_STAMP_REF,
+  baseStampRef,
+  scaleBarLayout,
+  stampArt,
+  stampTakesColour,
+} from "./stamps";
 
 /** The built-in Stamps, in the order the art set lists them. */
 const ORDERED_IDS = [
@@ -346,6 +353,21 @@ describe("the base Stamp art", () => {
       expect(english[`stamp.${id}`]?.length ?? 0, `en stamp.${id}`).toBeGreaterThan(0);
       expect(spanish[`stamp.${id}`]?.length ?? 0, `es stamp.${id}`).toBeGreaterThan(0);
     }
+  });
+
+  it("tells which art takes the Stamp's colour, and names a base ref", () => {
+    expect(baseStampRef("marker")).toBe("base:marker");
+    expect(baseStampRef("scale-bar")).toBe(SCALE_BAR_STAMP_REF);
+    for (const id of ONE_COLOUR_IDS) {
+      expect(stampTakesColour(baseStampRef(id)), id).toBe(true);
+    }
+    for (const id of MULTI_COLOUR_IDS) {
+      expect(stampTakesColour(baseStampRef(id)), id).toBe(false);
+    }
+    // The scale bar draws in the Stamp's colour; a ref this build does not
+    // know draws nothing, so nothing of it could recolour.
+    expect(stampTakesColour(SCALE_BAR_STAMP_REF)).toBe(true);
+    expect(stampTakesColour("custom:portrait")).toBe(false);
   });
 
   it("credits the Azgaar art in LICENSES", () => {

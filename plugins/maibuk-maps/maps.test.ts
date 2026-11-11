@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import {
   DATA_VERSION,
   DEFAULT_FILL_COLOR,
+  DEFAULT_SCALE_BAR_SIZE_MM,
   DEFAULT_STAMP_COLOR,
   DEFAULT_STAMP_SIZE_MM,
   INDEX_KEY,
@@ -689,6 +690,14 @@ describe("Map Stamps", () => {
       name: "Scale",
       stampRef: SCALE_BAR_STAMP_REF,
       point: [0, 0],
+    });
+    // The scale bar's size is the room its bar may take, so it starts wider
+    // than a picture at the same spot.
+    expect(bar.transform).toEqual({
+      x: 0,
+      y: 0,
+      size: DEFAULT_SCALE_BAR_SIZE_MM,
+      rotation: 0,
     });
     expect(bar.scale).toEqual({ unit: "km", span: 1000 });
   });

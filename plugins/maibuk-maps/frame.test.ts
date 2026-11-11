@@ -576,6 +576,47 @@ describe("the pour message", () => {
   });
 });
 
+describe("the insert message", () => {
+  it("reads a Stamp dropped at one page point", () => {
+    expect(parseFrameMessage({ kind: "insert", point: [10, 20] })).toEqual({
+      kind: "insert",
+      point: [10, 20],
+    });
+  });
+
+  it("drops an insert without a finite point", () => {
+    for (const message of [
+      { kind: "insert" },
+      { kind: "insert", point: [Number.NaN, 20] },
+      { kind: "insert", point: [10] },
+      { kind: "insert", point: [10, "20"] },
+    ]) {
+      expect(parseFrameMessage(message)).toBeNull();
+    }
+  });
+});
+
+describe("the Insert tool", () => {
+  it("posts the page point of a click as one insert message", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "insert" });
+    expect(svg().getAttribute("data-tool")).toBe("insert");
+
+    pointer(svg(), "pointerdown", 40, 30);
+    expect(frame.port.messages).toEqual([{ kind: "insert", point: [40, 30] }]);
+  });
+
+  it("keeps the tool's keys out of the Frame, so the host still moves the selection", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "insert" });
+
+    // Insert places with a pointer only; the arrows stay the host's Commands.
+    expect(key("ArrowRight").defaultPrevented).toBe(false);
+    expect(key("Enter").defaultPrevented).toBe(false);
+    expect(frame.port.messages).toEqual([]);
+  });
+});
+
 describe("the Pencil", () => {
   it("reports a finished stroke in page millimetres and shows it live", () => {
     frame = loadFrame();

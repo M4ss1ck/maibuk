@@ -25,6 +25,7 @@ import { PLUGIN_COMMAND_RUN_REQUEST, PLUGIN_MIGRATE_DATA_REQUEST } from "@/plugi
 import { servePluginUi } from "@/plugin-sdk/ui-serve";
 import en from "./locales/runtime/en.json";
 import es from "./locales/runtime/es.json";
+import { format } from "./i18n";
 import {
   DEFAULT_FILL_COLOR,
   INDEX_KEY,
@@ -34,6 +35,7 @@ import {
   type MapFillElement,
   type MapIndexEntry,
   type MapLineElement,
+  type MapStampElement,
 } from "./maps";
 import {
   BOOK_MAPS,
@@ -328,7 +330,8 @@ async function pickOption(
   const listbox = await screen.findByRole("listbox");
   const target = within(listbox).getByRole("option", { name: option });
   await user.keyboard("{Home}");
-  for (let i = 0; i < 20 && document.activeElement !== target; i++)
+  // One step per option, so the picker of 22 Stamps reaches its last one.
+  for (let i = 0; i < 30 && document.activeElement !== target; i++)
     await user.keyboard("{ArrowDown}");
   await user.keyboard("{Enter}");
 }
@@ -614,6 +617,7 @@ describe("Map editor Commands", () => {
     "ellipseTool",
     "rectangleTool",
     "polygonTool",
+    "insertTool",
     "eraserTool",
     "roughen",
     "deleteElement",
@@ -636,6 +640,7 @@ describe("Map editor Commands", () => {
     ]);
     expect(effectiveShortcuts("plugin.maibuk-maps.penTool", {}, false)).toContainEqual(["n"]);
     expect(effectiveShortcuts("plugin.maibuk-maps.bucketTool", {}, false)).toContainEqual(["b"]);
+    expect(effectiveShortcuts("plugin.maibuk-maps.insertTool", {}, false)).toContainEqual(["i"]);
     expect(effectiveShortcuts("plugin.maibuk-maps.ellipseTool", {}, false)).toContainEqual(["o"]);
     expect(effectiveShortcuts("plugin.maibuk-maps.rectangleTool", {}, false)).toContainEqual(["r"]);
     expect(effectiveShortcuts("plugin.maibuk-maps.polygonTool", {}, false)).toContainEqual(["s"]);
@@ -1905,6 +1910,150 @@ describe("Map editor page", () => {
       );
       await waitFor(() => expect(linePoints(storage)[0][0]).toBe(11));
       expect(runtime.currentMapId).toBeNull();
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("inserts a castle Stamp from the picker by keyboard, then moves, resizes, and deletes it", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    registerMapCommands();
+    const keys = render(<CommandKeys host={host} />);
+    try {
+      const user = userEvent.setup();
+
+      // The Insert tool by its place in the tool picker, and the Stamp picker it shows.
+      await pickTool(user, en["tools.insert"]);
+      expect(runtime.editor?.getSnapshot().tool).toBe("insert");
+      expect(runtime.editor?.getSnapshot().currentStampId).toBe("capital");
+
+      await pickOption(user, en["properties.stamp"], en["stamp.castle"]);
+      await waitFor(() => expect(runtime.editor?.getSnapshot().currentStampId).toBe("castle"));
+
+      const place = await screen.findByRole("button", {
+        name: format(en["properties.placeStamp"], { stamp: en["stamp.castle"] }),
+      });
+      await tabTo(user, place, 10);
+      await user.keyboard("{Enter}");
+
+      // A Castle Stamp at the page centre of the portrait page, and selected.
+      await waitFor(() => expect(runtime.editor?.getSnapshot().elements).toHaveLength(1));
+      const inserted = runtime.editor?.getSnapshot().elements[0] as MapStampElement;
+      expect(inserted).toMatchObject({
+        kind: "stamp",
+        name: en["stamp.castle"],
+        stampRef: "base:castle",
+        transform: { x: 76.2, y: 114.3, size: 12, rotation: 0 },
+      });
+      expect(runtime.editor?.getSnapshot().selectedId).toBe(inserted.id);
+      await runtime.editor?.flush();
+      expect(storedMap(storage).elements[0]).toMatchObject({
+        id: inserted.id,
+        stampRef: "base:castle",
+      });
+
+      // One arrow moves the selected Stamp one page millimetre.
+      await focusPanelButton(user);
+      await user.keyboard("{ArrowRight}");
+      await waitFor(() =>
+        expect((runtime.editor?.getSnapshot().elements[0] as MapStampElement).transform.x).toBe(
+          77.2
+        )
+      );
+      await runtime.editor?.flush();
+      expect((storedMap(storage).elements[0] as MapStampElement).transform.x).toBe(77.2);
+
+      // The number fields size and turn it.
+      const size = await screen.findByRole("textbox", { name: en["properties.stamp.size"] });
+      await tabTo(user, size, 60);
+      await user.keyboard("{Control>}a{/Control}20{Enter}");
+      await waitFor(() =>
+        expect((runtime.editor?.getSnapshot().elements[0] as MapStampElement).transform.size).toBe(
+          20
+        )
+      );
+      const rotation = screen.getByRole("textbox", { name: en["properties.stamp.rotation"] });
+      await tabTo(user, rotation, 60);
+      await user.keyboard("{Control>}a{/Control}30{Enter}");
+      await waitFor(() =>
+        expect(
+          (runtime.editor?.getSnapshot().elements[0] as MapStampElement).transform.rotation
+        ).toBe(30)
+      );
+      await runtime.editor?.flush();
+      expect((storedMap(storage).elements[0] as MapStampElement).transform).toEqual({
+        x: 77.2,
+        y: 114.3,
+        size: 20,
+        rotation: 30,
+      });
+
+      // Delete takes the Stamp off the Map and off the Elements list.
+      await focusPanelButton(user);
+      await user.keyboard("{Delete}");
+      await waitFor(() => expect(runtime.editor?.getSnapshot().elements).toHaveLength(0));
+      expect(screen.queryByRole("option", { name: en["stamp.castle"] })).not.toBeInTheDocument();
+      await runtime.editor?.flush();
+      expect(storedMap(storage).elements).toEqual([]);
+
+      keys.unmount();
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("inserts the scale bar and sets its unit and span from the properties panel by keyboard", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+
+      await pickTool(user, en["tools.insert"]);
+      await pickOption(user, en["properties.stamp"], en["stamp.scale-bar"]);
+      const place = await screen.findByRole("button", {
+        name: format(en["properties.placeStamp"], { stamp: en["stamp.scale-bar"] }),
+      });
+      await tabTo(user, place, 10);
+      await user.keyboard("{Enter}");
+
+      // The scale bar starts at 40 mm, reading the page's width in kilometres.
+      await waitFor(() => expect(runtime.editor?.getSnapshot().elements).toHaveLength(1));
+      expect(runtime.editor?.getSnapshot().elements[0]).toMatchObject({
+        stampRef: "base:scale-bar",
+        transform: { size: 40 },
+        scale: { unit: "km", span: 1000 },
+      });
+
+      // The unit is a two-choice group: one arrow picks the other choice.
+      const unit = await screen.findByRole("radiogroup", { name: en["properties.stamp.unit"] });
+      for (let i = 0; i < 60 && !unit.contains(document.activeElement); i++) await user.tab();
+      await user.keyboard("{ArrowRight}");
+      await waitFor(() =>
+        expect((runtime.editor?.getSnapshot().elements[0] as MapStampElement).scale?.unit).toBe(
+          "mi"
+        )
+      );
+
+      const span = await screen.findByRole("textbox", { name: en["properties.stamp.span"] });
+      await tabTo(user, span, 60);
+      await user.keyboard("{Control>}a{/Control}500{Enter}");
+      await waitFor(() =>
+        expect((runtime.editor?.getSnapshot().elements[0] as MapStampElement).scale).toEqual({
+          unit: "mi",
+          span: 500,
+        })
+      );
+      await runtime.editor?.flush();
+      expect((storedMap(storage).elements[0] as MapStampElement).scale).toEqual({
+        unit: "mi",
+        span: 500,
+      });
 
       await page.unmount();
     } finally {

@@ -164,6 +164,12 @@
         "defaults": [["b"]]
       },
       {
+        "id": "insertTool",
+        "label": "Insert tool",
+        "contexts": ["map"],
+        "defaults": [["i"]]
+      },
+      {
         "id": "ellipseTool",
         "label": "Ellipse tool",
         "contexts": ["map"],

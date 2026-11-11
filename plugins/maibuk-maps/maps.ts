@@ -148,6 +148,15 @@ export interface MapStampElement extends MapElementBase {
 /** The width a new Stamp's art box starts at, in page millimetres. */
 export const DEFAULT_STAMP_SIZE_MM = 12;
 
+/**
+ * The room a new scale bar starts with, in page millimetres: the longest bar it
+ * may draw, which `scaleBarLayout` turns into the round distance it labels.
+ */
+export const DEFAULT_SCALE_BAR_SIZE_MM = 40;
+
+/** The smallest art box a Stamp keeps, in page millimetres. */
+export const MIN_STAMP_SIZE_MM = 1;
+
 /** The ink a new Stamp takes until the author or the Map Style picks another. */
 export const DEFAULT_STAMP_COLOR = LINE_STROKE;
 
@@ -308,7 +317,8 @@ function isLineStyleId(value: unknown): value is LineStyleId {
   return typeof value === "string" && (LINE_STYLE_IDS as readonly string[]).includes(value);
 }
 
-function isStampScaleUnit(value: unknown): value is StampScaleUnit {
+/** Whether a value names one of the units a scale bar reads in. */
+export function isStampScaleUnit(value: unknown): value is StampScaleUnit {
   return typeof value === "string" && (STAMP_SCALE_UNITS as readonly string[]).includes(value);
 }
 
@@ -463,6 +473,9 @@ export interface NewStamp {
 export function newStamp(input: NewStamp): MapStampElement {
   const scale =
     input.scale ?? (input.stampRef === SCALE_BAR_STAMP_REF ? DEFAULT_STAMP_SCALE : undefined);
+  const size =
+    input.size ??
+    (input.stampRef === SCALE_BAR_STAMP_REF ? DEFAULT_SCALE_BAR_SIZE_MM : DEFAULT_STAMP_SIZE_MM);
   return {
     id: input.id,
     kind: "stamp",
@@ -473,7 +486,7 @@ export function newStamp(input: NewStamp): MapStampElement {
     transform: {
       x: input.point[0],
       y: input.point[1],
-      size: input.size ?? DEFAULT_STAMP_SIZE_MM,
+      size,
       rotation: input.rotation ?? 0,
     },
     color: input.color ?? DEFAULT_STAMP_COLOR,

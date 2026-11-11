@@ -63,6 +63,22 @@ export function stampArt(ref: string): StampArt | undefined {
   return ARTS.find((art) => art.id === id);
 }
 
+/** The ref a built-in Stamp's id names, such as `base:castle`. */
+export function baseStampRef(id: string): string {
+  return `${BASE_REF_PREFIX}${id}`;
+}
+
+/**
+ * Whether the art `ref` names draws in the Stamp's colour: every part of it
+ * leaves its fill to the Stamp, so one colour recolours the whole picture. The
+ * scale bar has no art parts and is drawn in the Stamp's colour too, while a
+ * ref this build does not know draws nothing to recolour.
+ */
+export function stampTakesColour(ref: string): boolean {
+  const art = stampArt(ref);
+  return art === undefined ? false : art.parts.every((part) => part.fill === null);
+}
+
 /** One scale bar's reading: the distance it labels and its length on the page. */
 export interface ScaleBarLayout {
   distance: number;

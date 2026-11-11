@@ -1,9 +1,9 @@
 // @ts-check
-/* The Map Frame's drawing surface (#745, #746, #748). The Frame's only host
-   channel is `window.maibuk.port`: the Worker sends the whole `scene` on every
-   change and when the Frame connects, and the Frame answers a finished Pencil
-   stroke, a finished Pen line, an Eraser drag, a drawn Shape, a Bucket pour, and
-   the Element the author picked.
+/* The Map Frame's drawing surface (#745, #746, #748, #749). The Frame's only
+   host channel is `window.maibuk.port`: the Worker sends the whole `scene` on
+   every change and when the Frame connects, and the Frame answers a finished
+   Pencil stroke, a finished Pen line, an Eraser drag, a drawn Shape, a Bucket
+   pour, a dropped Stamp, and the Element the author picked.
    Points cross the port in page millimetres, the same space as the page's
    `widthMm`/`heightMm`, so the pointer's own screen pixels are converted
    through the svg's `getScreenCTM`.
@@ -23,7 +23,7 @@
   /**
    * @typedef {[number, number]} MapPoint
    * @typedef {"ellipse" | "rectangle" | "polygon"} ShapeKind
-   * @typedef {"select" | "pencil" | "pen" | "bucket" | "eraser" | ShapeKind} MapTool
+   * @typedef {"select" | "pencil" | "pen" | "bucket" | "eraser" | "insert" | ShapeKind} MapTool
    * @typedef {{ d: string, stroke: string | null, strokeWidth: number, dash: string | null, fill: string | null, fillRule?: "evenodd", opacity: number, transform?: string }} LineShape
    * @typedef {{ text: string, x: number, y: number, size: number, fill: string, anchor: "start" | "middle" | "end", transform?: string }} TextShape
    * @typedef {LineShape | TextShape} SceneShape
@@ -36,6 +36,7 @@
    * @typedef {{ kind: "select", id: string | null }} FrameSelectMessage
    * @typedef {{ kind: "shape", shape: ShapeKind, start: MapPoint, end: MapPoint, constrain: boolean }} FrameShapeMessage
    * @typedef {{ kind: "pour", point: MapPoint }} FramePourMessage
+   * @typedef {{ kind: "insert", point: MapPoint }} FrameInsertMessage
    * @typedef {FrameSceneMessage} WorkerToFrameMessage
    * @typedef {{ pointerId: number, points: MapPoint[] }} Drawing
    * @typedef {{ points: MapPoint[], curves: boolean[] }} PenDraft
@@ -123,7 +124,15 @@
    * @returns {MapTool}
    */
   function readTool(raw) {
-    if (raw === "pencil" || raw === "pen" || raw === "bucket" || raw === "eraser") return raw;
+    if (
+      raw === "pencil" ||
+      raw === "pen" ||
+      raw === "bucket" ||
+      raw === "eraser" ||
+      raw === "insert"
+    ) {
+      return raw;
+    }
     if (isShapeKind(raw)) return raw;
     return "select";
   }
@@ -646,6 +655,16 @@
       if (point === null) return;
       event.preventDefault();
       post({ kind: "pour", point });
+      return;
+    }
+
+    // Insert drops the Stamp the Worker has picked at the clicked or tapped
+    // point: the Frame knows no Stamp, so it only reports where one landed.
+    if (scene.tool === "insert") {
+      const point = pagePoint(event);
+      if (point === null) return;
+      event.preventDefault();
+      post({ kind: "insert", point });
       return;
     }
 
