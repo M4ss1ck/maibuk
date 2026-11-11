@@ -47,8 +47,12 @@ const drawnLabels = (page: Page) => mapFrame(page).locator("g[data-element-id] t
 const recolouredPaths = (page: Page) =>
   mapFrame(page).locator('g[data-element-id] path.map-line[fill="#EF4444"]');
 
-/** The Insert tool's Stamp picker: its trigger button, its list, and one option. */
-const stampTrigger = (page: Page) => page.getByRole("button", { name: "Stamp", exact: true });
+/**
+ * The Insert tool's Stamp picker: its trigger button, its list, and one option.
+ * The control names its trigger after the label and the picked value
+ * ("Capital Stamp"); the list it opens in a dialog is named by the label alone.
+ */
+const stampTrigger = (page: Page) => page.getByRole("button", { name: /Stamp$/ });
 const stampList = (page: Page) => page.getByRole("listbox", { name: "Stamp", exact: true });
 const stampOption = (page: Page, name: string) =>
   stampList(page).getByRole("option", { name, exact: true });
@@ -250,8 +254,11 @@ test.describe("Maps Insert tool and Stamps @wf:plugins-maps-stamps @sc:plugin.ma
     await page.keyboard.press("Enter");
     const picker = page.getByRole("dialog", { name: "Stamp color" });
     await expect(picker).toBeVisible();
-    const presets = picker.getByRole("listbox", { name: "Preset colors" });
-    await tabTo(page, presets.getByRole("option", { name: "Preset color #EF4444" }));
+    // The hex field is the picker's precise keyboard path, and Enter commits it.
+    const hex = picker.getByRole("textbox", { name: "Hex color" });
+    await tabTo(page, hex, { max: 25 });
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type("#EF4444");
     await page.keyboard.press("Enter");
 
     const row = elementRow(page, "Town");
@@ -273,12 +280,12 @@ test.describe("Maps Insert tool and Stamps @wf:plugins-maps-stamps @sc:plugin.ma
     // bar, spread over the landscape page.
     for (const [stamp, point] of [
       ["Capital", [55, 45]],
-      ["Castle", [165, 40]],
+      ["Castle", [160, 40]],
       ["Lone mountain", [150, 105]],
-      ["Lone tree", [195, 95]],
-      ["Compass rose", [45, 115]],
-      ["Ship", [195, 55]],
-      ["Scale bar", [114, 140]],
+      ["Lone tree", [175, 95]],
+      ["Compass rose", [50, 115]],
+      ["Ship", [175, 55]],
+      ["Scale bar", [114, 112]],
       ["Town", [90, 100]],
     ] as const) {
       await pickStamp(page, stamp);
@@ -295,14 +302,20 @@ test.describe("Maps Insert tool and Stamps @wf:plugins-maps-stamps @sc:plugin.ma
     await page.keyboard.press("Enter");
     const picker = page.getByRole("dialog", { name: "Stamp color" });
     await expect(picker).toBeVisible();
-    const presets = picker.getByRole("listbox", { name: "Preset colors" });
-    await tabTo(page, presets.getByRole("option", { name: "Preset color #EF4444" }));
+    const hex = picker.getByRole("textbox", { name: "Hex color" });
+    await tabTo(page, hex, { max: 25 });
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type("#EF4444");
     await page.keyboard.press("Enter");
     await page.keyboard.press("Escape");
     await expect(picker).toBeHidden();
 
     await expect(drawnElements(page)).toHaveCount(8);
     await expect(recolouredPaths(page)).toHaveCount(1);
+    // Two zoom steps fill the Frame with the scene, so the picture shows the art
+    // at the size an author works at rather than the whole page at once.
+    await page.keyboard.press("ControlOrMeta+=");
+    await page.keyboard.press("ControlOrMeta+=");
     await capture(page, "stamps-scene");
   });
 });
