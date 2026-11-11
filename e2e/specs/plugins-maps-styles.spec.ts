@@ -206,6 +206,7 @@ test.describe("Maps Map Styles @wf:plugins-maps-styles @sc:plugin.maibuk-maps.re
     // An Atlas Map is drawn on the Style's water, and a plain line in its ink.
     await expect(pageBackground(page)).toHaveAttribute("fill", hex(STYLE_COLORS.atlas.water));
     await expect(drawnLine(page)).toHaveAttribute("stroke", hex(STYLE_COLORS.atlas.ink));
+    await capture(page, "styles-atlas");
 
     await pickMapStyle(page, "Night");
 
