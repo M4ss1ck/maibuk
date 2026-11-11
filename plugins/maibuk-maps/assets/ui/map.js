@@ -494,6 +494,46 @@
   }
 
   /**
+   * The nodes `shapes` draw, with each run of shapes that share a Clip Path
+   * drawn inside one `<g clip-path="url(#…)">` (#750).
+   *
+   * The Clip Path belongs on the group, never on the shape: SVG applies a Clip
+   * Path in the user space of the element that references it, so a scattered
+   * Stamp's own `transform` would carry the clip off with the art it should
+   * cut, and the Stamp would vanish outside the page. The group has no
+   * transform, so the clip keeps the page millimetres `scene.ts` wrote, and
+   * cuts whichever Stamp it holds.
+   * @param {readonly SceneShape[]} shapes
+   * @param {(shape: SceneShape) => any} draw
+   * @returns {any[]}
+   */
+  function clippedArt(shapes, draw) {
+    const { html } = lib;
+    /** @type {any[]} */
+    const nodes = [];
+    /** @type {any[]} */
+    let run = [];
+    /** @type {string | undefined} */
+    let clip;
+    const flush = () => {
+      if (run.length === 0) return;
+      if (clip === undefined) nodes.push(...run);
+      else nodes.push(html`<g clip-path="url(#${clip})">${run}</g>`);
+      run = [];
+    };
+    for (const shape of shapes) {
+      const next = isTextShape(shape) ? undefined : shape.clip;
+      if (next !== clip) {
+        flush();
+        clip = next;
+      }
+      run.push(draw(shape));
+    }
+    flush();
+    return nodes;
+  }
+
+  /**
    * The paths and text one Element draws, under the Soft Edge filter the scene
    * gave it (#750). The selection outline stays outside the filter, so it keeps
    * its crisp edge while the art fades.
@@ -503,19 +543,17 @@
   function elementArt(element) {
     const { html } = lib;
     const art = [
-      ...element.shapes
-        .filter((shape) => !isTextShape(shape))
-        .map(
-          (shape) => html`<path
-            class="map-hit"
-            d="${shape.d}"
-            fill-rule="${shape.fillRule ?? undefined}"
-            data-fill="${shape.fill === null ? undefined : "true"}"
-            transform="${shape.transform ?? undefined}"
-            clip-path="${shape.clip === undefined ? undefined : `url(#${shape.clip})`}"
-          />`
-        ),
-      ...element.shapes.map((shape) =>
+      ...clippedArt(
+        element.shapes.filter((shape) => !isTextShape(shape)),
+        (shape) => html`<path
+          class="map-hit"
+          d="${shape.d}"
+          fill-rule="${shape.fillRule ?? undefined}"
+          data-fill="${shape.fill === null ? undefined : "true"}"
+          transform="${shape.transform ?? undefined}"
+        />`
+      ),
+      ...clippedArt(element.shapes, (shape) =>
         isTextShape(shape)
           ? html`<text
               class="map-line"
@@ -539,12 +577,34 @@
               stroke-dasharray="${shape.dash ?? undefined}"
               opacity="${shape.opacity === 1 ? undefined : n(shape.opacity)}"
               transform="${shape.transform ?? undefined}"
-              clip-path="${shape.clip === undefined ? undefined : `url(#${shape.clip})`}"
             />`
       ),
     ];
     if (element.filter === null) return art;
     return html`<g filter="url(#${element.filter})">${art}</g>`;
+  }
+
+  /**
+   * The shapes a selected Element's highlight traces (#750): the ink it drew,
+   * without the Stamps a Fill scatters, which are content painted inside its
+   * area rather than the outline that marks it. Shapes that draw the same path,
+   * such as a Fill's colour and the texture laid over it, trace one outline.
+   * @param {FrameSceneElement} element
+   * @returns {LineShape[]}
+   */
+  function highlightShapes(element) {
+    /** @type {Set<string>} */
+    const seen = new Set();
+    /** @type {LineShape[]} */
+    const shapes = [];
+    for (const shape of element.shapes) {
+      if (isTextShape(shape) || shape.clip !== undefined) continue;
+      const key = `${shape.transform ?? ""}\n${shape.d}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      shapes.push(shape);
+    }
+    return shapes;
   }
 
   /**
@@ -598,15 +658,13 @@
               ${elementArt(element)}
               ${
                 element.selected
-                  ? element.shapes
-                      .filter((shape) => !isTextShape(shape))
-                      .map(
-                        (shape) => html`<path
-                          class="map-selection"
-                          d="${shape.d}"
-                          transform="${shape.transform ?? undefined}"
-                        />`
-                      )
+                  ? highlightShapes(element).map(
+                      (shape) => html`<path
+                        class="map-selection"
+                        d="${shape.d}"
+                        transform="${shape.transform ?? undefined}"
+                      />`
+                    )
                   : null
               }
             </g>`

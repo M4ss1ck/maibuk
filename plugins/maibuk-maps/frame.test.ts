@@ -257,6 +257,48 @@ describe("drawing the scene", () => {
     expect(document.querySelector("path.map-selection")).toBeNull();
   });
 
+  it("marks a selected Fill's area outline only, not its paint or the Stamps it scatters", () => {
+    frame = loadFrame();
+    const area = "M 0 0 L 10 0 L 10 10 Z";
+    frame.scene({
+      defs: ['<clipPath id="fill-clip-a1"><path d="M 0 0 L 10 0 L 10 10 Z"/></clipPath>'],
+      elements: [
+        sceneElement({
+          selected: true,
+          shapes: [
+            // The Fill's colour and the texture laid over it draw one area.
+            shape({ d: area, stroke: null, strokeWidth: 0, fill: "#cbd59f", fillRule: "evenodd" }),
+            shape({
+              d: area,
+              stroke: null,
+              strokeWidth: 0,
+              fill: "url(#texture-grass)",
+              fillRule: "evenodd",
+            }),
+            // Two scattered Stamps, each clipped to the area it sits in.
+            shape({
+              d: "M -2 -2 L 2 -2 L 2 2 Z",
+              transform: "translate(2 2)",
+              clip: "fill-clip-a1",
+            }),
+            shape({
+              d: "M -2 -2 L 2 -2 L 2 2 Z",
+              transform: "translate(8 8)",
+              clip: "fill-clip-a1",
+            }),
+          ],
+        }),
+      ],
+    });
+
+    // One outline marks the Fill's area, whatever paint or scatter it holds; a
+    // Stamp is content inside the area, never a separate outline of its own.
+    const highlights = Array.from(document.querySelectorAll("path.map-selection"));
+    expect(highlights).toHaveLength(1);
+    expect(highlights[0].getAttribute("d")).toBe(area);
+    expect(highlights[0].getAttribute("transform")).toBeNull();
+  });
+
   it("crops and slides the viewBox with zoom and pan", () => {
     frame = loadFrame();
     frame.scene({ zoom: 2, panX: 10, panY: -5 });
@@ -332,24 +374,44 @@ describe("the scene's definitions", () => {
     expect(document.querySelector("[filter]")).toBeNull();
   });
 
-  it("clips a scattered Stamp's drawn and hit paths to its Fill's area", () => {
+  it("draws a scattered Stamp's Clip Path on a group, where its transform cannot move the clip", () => {
     frame = loadFrame();
+    const area = "M 0 0 L 10 0 L 10 10 Z";
     frame.scene({
       defs: ['<clipPath id="fill-clip-a1"><path d="M 0 0 L 10 0 L 10 10 Z"/></clipPath>'],
       elements: [
         sceneElement({
-          shapes: [shape({ clip: "fill-clip-a1" })],
+          shapes: [
+            shape({ d: area, stroke: null, strokeWidth: 0, fill: "#cbd59f" }),
+            shape({
+              d: "M -2 -2 L 2 -2 L 2 2 Z",
+              transform: "translate(5 5) scale(0.5)",
+              clip: "fill-clip-a1",
+            }),
+          ],
         }),
       ],
     });
 
     const group = document.querySelector('g[data-element-id="e1"]');
-    expect(group?.querySelector("path.map-line")?.getAttribute("clip-path")).toBe(
-      "url(#fill-clip-a1)"
+    // The Fill's own paint draws in page space, so it takes no clip and sits
+    // outside every clip group.
+    expect(group?.querySelector(":scope > path.map-line")?.getAttribute("d")).toBe(area);
+
+    // The Stamp's art and its hit target both draw inside a group that carries
+    // the Clip Path: SVG applies a clip in the user space of the element that
+    // references it, so a clip on the transformed path itself would move the
+    // clip with the art and cut the Stamp away.
+    const clipGroups = group?.querySelectorAll('g[clip-path="url(#fill-clip-a1)"]') ?? [];
+    expect(clipGroups).toHaveLength(2);
+    const clipped = Array.from(clipGroups).flatMap((clipGroup) =>
+      Array.from(clipGroup.querySelectorAll("path"))
     );
-    expect(group?.querySelector("path.map-hit")?.getAttribute("clip-path")).toBe(
-      "url(#fill-clip-a1)"
-    );
+    expect(clipped).toHaveLength(2);
+    for (const path of clipped) {
+      expect(path.getAttribute("clip-path")).toBeNull();
+      expect(path.getAttribute("transform")).toBe("translate(5 5) scale(0.5)");
+    }
   });
 
   it("drops a clip id a scene could write an attribute of its own into", () => {

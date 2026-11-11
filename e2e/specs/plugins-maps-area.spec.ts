@@ -16,7 +16,7 @@
 
 import type { FrameLocator, Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
-import { drawArea } from "../support/frame-stroke";
+import { drawArea, scatterPaint } from "../support/frame-stroke";
 import { leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
 
@@ -60,11 +60,16 @@ const scatterClips = (page: Page) => mapFrame(page).locator("defs clipPath");
 /** The scattered Stamps: art placed by a transform, where the Fill's own paint has none. */
 const placedStamps = (page: Page) =>
   mapFrame(page).locator("g[data-element-id] path.map-line[transform]");
-/** The scattered Stamps the Frame also clips to the Fill's area. */
+/**
+ * The scattered Stamps, drawn inside the group that carries the Clip Path
+ * keeping them in the Fill's area. The clip goes on the group, not on each
+ * transformed path, which would carry the clip off with the art it cuts.
+ */
 const scatteredStamps = (page: Page) =>
-  mapFrame(page).locator(
-    'g[data-element-id] path.map-line[transform][clip-path^="url(#fill-clip-"]'
-  );
+  mapFrame(page).locator('g[data-element-id] g[clip-path^="url(#fill-clip-"] path.map-line');
+/** The outline the Frame strokes around the selected Element. */
+const selectionOutlines = (page: Page) =>
+  mapFrame(page).locator("g[data-element-id] path.map-selection");
 
 /**
  * The Map's page defaults to the landscape preset, so the keyboard crosshair
@@ -76,6 +81,9 @@ const PAGE_MM: readonly [number, number] = [PAGE_CENTRE_MM[0] * 2, PAGE_CENTRE_M
 /** The square the keyboard pen encloses: three Shift+Arrow steps each way. */
 const OUTLINE_MM = 30;
 const OUTLINE_SIDE_STEPS = 3;
+
+/** How far a painted Stamp may sit outside the outline's box, in Frame pixels. */
+const CLIP_TOLERANCE_PX = 0.5;
 
 /** The page millimetres a drawn path covers, as `[left, top, right, bottom]`. */
 function pathBounds(d: string): [number, number, number, number] {
@@ -360,6 +368,26 @@ test.describe("Maps Soft Edge and Fill content @wf:plugins-maps-fill-content @sc
       expect(y).toBeGreaterThanOrEqual(top);
       expect(y).toBeLessThanOrEqual(bottom);
     }
+
+    // Nothing scattered paints outside the area. The browser paints a Stamp
+    // only where its art meets the Clip Path the Frame draws it in, and answers
+    // a hit only where it paints, so every point where a Stamp's own box
+    // reaches past the outline must be clear of the Fill's ink.
+    const paint = await scatterPaint(surface(page));
+    // A Stamp may sit a hair past the outline, so only points further out than
+    // the tolerance claim that anything scattered paints outside the area.
+    const spill = paint.outside.filter((sample) => sample.outsideBy > CLIP_TOLERANCE_PX);
+    expect(spill.length).toBeGreaterThan(0);
+    for (const sample of spill) expect(sample.painted).toBe(false);
+    // The Stamps do paint inside the area, so that silence is the clip at work.
+    expect(paint.inside).toBe(true);
+
+    // The selection marks the Fill's area outline alone: one highlight, tracing
+    // the area's own path, instead of one stroked around every scattered Stamp.
+    const outlines = selectionOutlines(page);
+    await expect(outlines).toHaveCount(1);
+    expect(await pathData(outlines.first())).toBe(await pathData(areaPath(page)));
+
     await capture(page, "area-texture-scatter");
   });
 });

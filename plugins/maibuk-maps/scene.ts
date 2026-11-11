@@ -820,9 +820,11 @@ function shapePath(shape: LineShape): string {
   if (shape.fillRule !== undefined) attributes.push(`fill-rule="${shape.fillRule}"`);
   if (shape.dash !== null) attributes.push(`stroke-dasharray="${escapeAttribute(shape.dash)}"`);
   if (shape.opacity !== 1) attributes.push(`opacity="${roundedMm(shape.opacity)}"`);
-  if (shape.clip !== undefined) attributes.push(`clip-path="url(#${shape.clip})"`);
   attributes.push('stroke-linecap="round"', 'stroke-linejoin="round"');
-  return `<path ${attributes.join(" ")}/>`;
+  const path = `<path ${attributes.join(" ")}/>`;
+  // A clip on the path itself would be read in its transformed coordinates, so
+  // a group in page space carries it instead, as the Frame does.
+  return shape.clip === undefined ? path : `<g clip-path="url(#${shape.clip})">${path}</g>`;
 }
 
 /** One piece of text as SVG, with only the attributes it needs. */

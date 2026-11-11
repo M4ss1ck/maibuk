@@ -1002,7 +1002,10 @@ describe("Fill scatter", () => {
     expect(svg).toMatch(
       /<clipPath id="fill-clip-[0-9a-f]+"><path d="[^"]+" clip-rule="evenodd"\/>/
     );
-    expect(svg).toMatch(/clip-path="url\(#fill-clip-[0-9a-f]+\)"/);
+    // The clip wraps the art in page space: a clip-path on the transformed path
+    // itself would be read in the Stamp's own coordinates and cut the wrong area.
+    expect(svg).toMatch(/<g clip-path="url\(#fill-clip-[0-9a-f]+\)"><path [^>]*transform=/);
+    expect(svg).not.toMatch(/<path [^>]*clip-path=/);
     const points = stampPoints(svg);
     expect(points.length).toBeGreaterThan(2);
     for (const [x, y] of points) {

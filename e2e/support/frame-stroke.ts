@@ -24,6 +24,11 @@
 // guesses at the page's geometry. An Eraser drag names page millimetres instead,
 // because the caller reads them off the Map Line it means to cut, and this
 // helper maps them through the svg's viewBox.
+//
+// `scatterPaint` reads the other way round: what the Frame actually paints
+// for a Fill's scatter (#750), measured by the browser in the Frame's own
+// pixels, so a spec can prove the Stamps stay inside the area without reading
+// attributes.
 
 import type { Locator, Page } from "@playwright/test";
 
@@ -247,4 +252,106 @@ export async function dragPagePoint(
   } finally {
     if (constrain) await page.keyboard.up("Shift");
   }
+}
+
+/** A box in a Frame's own pixels, from its screen matrix. */
+export interface FrameBox {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/** What a Frame paints for a Fill's scatter, and where its Stamps answer a hit. */
+export interface ScatterPaint {
+  /** The box the Fill's own area outline covers. */
+  outline: FrameBox;
+  /**
+   * One point per side a scattered Stamp's art reaches past the outline, with
+   * how far outside it sits and whether a Stamp answers a hit there.
+   */
+  outside: { x: number; y: number; outsideBy: number; painted: boolean }[];
+  /** Whether a Stamp answers a hit inside the area, so the Stamps did paint. */
+  inside: boolean;
+}
+
+/**
+ * What a Frame paints for its Fill's scatter (#750), measured by the browser in
+ * the Frame's own pixels. A Stamp answers a hit only where the browser paints
+ * it, and a Clip Path cuts both: so a Stamp whose art reaches past the Fill's
+ * outline must not answer a hit outside it, while the ones inside the area must.
+ *
+ * The Clip Path belongs on the group, never on a Stamp's own path: SVG applies
+ * a clip in the user space of the element that references it, so the Stamp's
+ * transform would carry the clip away with the art it should cut.
+ */
+export async function scatterPaint(surface: Locator): Promise<ScatterPaint> {
+  return surface.evaluate((element) => {
+    if (!(element instanceof SVGSVGElement)) throw new Error("the Frame's surface is no svg");
+    const svg = element;
+    const matrix = svg.getScreenCTM();
+    if (matrix === null) throw new Error("the Frame has no screen matrix");
+    const screenBox = (x: number, y: number, width: number, height: number): FrameBox => {
+      const start = new DOMPoint(x, y).matrixTransform(matrix);
+      const end = new DOMPoint(x + width, y + height).matrixTransform(matrix);
+      return {
+        left: Math.min(start.x, end.x),
+        top: Math.min(start.y, end.y),
+        right: Math.max(start.x, end.x),
+        bottom: Math.max(start.y, end.y),
+      };
+    };
+
+    const area = svg.querySelector("g[data-element-id] path.map-line");
+    if (!(area instanceof SVGGraphicsElement)) throw new Error("the Fill painted no area");
+    const { x, y, width, height } = area.getBBox();
+    const outline = screenBox(x, y, width, height);
+    const vertically = (value: number) =>
+      Math.min(Math.max(value, outline.top + 2), outline.bottom - 2);
+
+    const clipGroup = Array.from(svg.querySelectorAll("g[clip-path]")).find(
+      (group) => group.querySelector("path.map-line") !== null
+    );
+    if (clipGroup === undefined) throw new Error("the Stamps drew in no clip group");
+    const stamps = Array.from(clipGroup.querySelectorAll("path.map-line"));
+    if (stamps.length === 0) throw new Error("the Fill scattered no Stamp");
+
+    const painted = (point: { x: number; y: number }) =>
+      document
+        .elementsFromPoint(point.x, point.y)
+        .some((hit) => hit.matches("path.map-line, path.map-hit"));
+
+    const outside: ScatterPaint["outside"] = [];
+    for (const stamp of stamps) {
+      const box = stamp.getBoundingClientRect();
+      const samples = [
+        { x: box.left + 2, y: vertically(box.top + box.height / 2) },
+        { x: box.right - 2, y: vertically(box.top + box.height / 2) },
+        {
+          x: Math.min(Math.max(box.left + box.width / 2, outline.left + 2), outline.right - 2),
+          y: box.top + 2,
+        },
+        {
+          x: Math.min(Math.max(box.left + box.width / 2, outline.left + 2), outline.right - 2),
+          y: box.bottom - 2,
+        },
+      ];
+      for (const sample of samples) {
+        const outsideBy = Math.max(
+          outline.left - sample.x,
+          outline.top - sample.y,
+          sample.x - outline.right,
+          sample.y - outline.bottom
+        );
+        if (outsideBy <= 0) continue;
+        outside.push({ ...sample, outsideBy, painted: painted(sample) });
+      }
+    }
+
+    const centre = {
+      x: (outline.left + outline.right) / 2,
+      y: (outline.top + outline.bottom) / 2,
+    };
+    return { outline, outside, inside: painted(centre) };
+  });
 }
