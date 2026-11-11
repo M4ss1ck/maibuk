@@ -12,12 +12,12 @@ import {
   type MapLineElement,
   type PagePreset,
 } from "./maps";
+import { linePath } from "./geometry";
 import {
   EMPTY_MAP_COLOR,
   LINE_STROKE,
   SMOOTH_TOLERANCE_MM,
   addElement,
-  linePath,
   lineShapes,
   moveElement,
   removeElement,

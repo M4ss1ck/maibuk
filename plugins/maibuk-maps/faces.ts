@@ -13,14 +13,14 @@
  *
  * Rings are closed: the first point is repeated at the end.
  *
- * This module imports only `./maps`, its own files, and npm packages.
+ * This module imports only `./maps`, `./geometry`, and npm packages.
  */
 
 import polygonize from "@turf/polygonize";
 import type { FeatureCollection, LineString } from "geojson";
 import polylabel from "polylabel";
+import { linePath } from "./geometry";
 import type { MapLineElement, MapPoint } from "./maps";
-import { linePath } from "./scene";
 
 /** How far two ends of Map Lines may be apart and still close the area between them. */
 export const GAP_TOLERANCE_MM = 2;

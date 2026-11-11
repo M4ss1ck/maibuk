@@ -11,7 +11,7 @@
 
 import { RoughGenerator } from "roughjs/bin/generator.js";
 import { faceAt, findFaces, type Face } from "./faces";
-import { cumulativeLengths, seedFor } from "./geometry";
+import { cumulativeLengths, linePath, roundedMm, seedFor } from "./geometry";
 import type { MapDocument, MapElement, MapFillElement, MapLineElement, MapPoint } from "./maps";
 
 /** The Atlas Map Style's water, which an empty Map shows. */
@@ -31,7 +31,7 @@ const LINE_STROKE_WIDTH_MM = 0.6;
 
 /** The background a Map is drawn on; the Atlas Map Style's water. */
 function background(widthMm: number, heightMm: number): string {
-  return `<rect width="${number(widthMm)}" height="${number(heightMm)}" fill="${EMPTY_MAP_COLOR}"/>`;
+  return `<rect width="${roundedMm(widthMm)}" height="${roundedMm(heightMm)}" fill="${EMPTY_MAP_COLOR}"/>`;
 }
 
 /** A point-to-point distance, for dropping near-duplicate Pencil points. */
@@ -111,59 +111,6 @@ export function smoothStroke(raw: readonly MapPoint[]): MapPoint[] {
   const deduped = dropNearDuplicates(raw);
   if (deduped.length < 2) return [];
   return simplify(deduped, SMOOTH_TOLERANCE_MM);
-}
-
-/** A number with two decimals, so the same points always produce the same path. */
-function number(value: number): string {
-  return String(Math.round(value * 100) / 100);
-}
-
-/** What `linePath` needs from a Map Line: its points, one flag per segment, and whether it closes. */
-export interface LinePathInput {
-  points: readonly MapPoint[];
-  curves: readonly boolean[];
-  closed: boolean;
-}
-
-/**
- * The SVG path `d` through a Map Line: a straight `L` for a segment its flag
- * marks straight, and a Catmull-Rom spline written as cubic Beziers for a
- * curved one, using the neighbours across the seam of a closed line. A closed
- * line ends with `Z`. Two points make a straight line whatever their flag says,
- * which keeps every Pencil line from #745 drawing exactly as it did.
- */
-export function linePath(line: LinePathInput): string {
-  const { points, curves, closed } = line;
-  if (points.length < 2) return "";
-
-  const count = points.length;
-  const segments = count - 1 + (closed ? 1 : 0);
-  let path = `M ${number(points[0][0])} ${number(points[0][1])}`;
-  for (let index = 0; index < segments; index++) {
-    const start = points[index];
-    const end = points[(index + 1) % count];
-    if (curves[index] !== true || count === 2) {
-      // A straight closing segment is what `Z` draws, so it is not written twice.
-      if (!(closed && index === segments - 1)) {
-        path += ` L ${number(end[0])} ${number(end[1])}`;
-      }
-      continue;
-    }
-    const previous = closed ? points[(index - 1 + count) % count] : (points[index - 1] ?? start);
-    const next = closed ? points[(index + 2) % count] : (points[index + 2] ?? end);
-    const controlOne: MapPoint = [
-      start[0] + (end[0] - previous[0]) / 6,
-      start[1] + (end[1] - previous[1]) / 6,
-    ];
-    const controlTwo: MapPoint = [
-      end[0] - (next[0] - start[0]) / 6,
-      end[1] - (next[1] - start[1]) / 6,
-    ];
-    path += ` C ${number(controlOne[0])} ${number(controlOne[1])} ${number(
-      controlTwo[0]
-    )} ${number(controlTwo[1])} ${number(end[0])} ${number(end[1])}`;
-  }
-  return closed ? `${path} Z` : path;
 }
 
 /** One path the Frame draws for a Map Line, and everything it draws it with. */
@@ -290,9 +237,9 @@ function taperedRiverPath(points: readonly MapPoint[]): string {
 
   const outline = [...left, ...right.reverse()];
   const first = outline[0];
-  let path = `M ${number(first[0])} ${number(first[1])}`;
+  let path = `M ${roundedMm(first[0])} ${roundedMm(first[1])}`;
   for (const point of outline.slice(1)) {
-    path += ` L ${number(point[0])} ${number(point[1])}`;
+    path += ` L ${roundedMm(point[0])} ${roundedMm(point[1])}`;
   }
   return `${path} Z`;
 }
@@ -395,8 +342,8 @@ function ringPath(ring: readonly MapPoint[]): string {
   const points =
     ring.length > 1 && samePoint(ring[0], ring[ring.length - 1]) ? ring.slice(0, -1) : ring;
   if (points.length === 0) return "";
-  let path = `M ${number(points[0][0])} ${number(points[0][1])}`;
-  for (const point of points.slice(1)) path += ` L ${number(point[0])} ${number(point[1])}`;
+  let path = `M ${roundedMm(points[0][0])} ${roundedMm(points[0][1])}`;
+  for (const point of points.slice(1)) path += ` L ${roundedMm(point[0])} ${roundedMm(point[1])}`;
   return `${path} Z`;
 }
 
@@ -462,12 +409,12 @@ function shapePath(shape: LineShape): string {
     attributes.push('stroke="none"');
   } else {
     attributes.push(`stroke="${escapeAttribute(shape.stroke)}"`);
-    attributes.push(`stroke-width="${number(shape.strokeWidth)}"`);
+    attributes.push(`stroke-width="${roundedMm(shape.strokeWidth)}"`);
   }
   attributes.push(shape.fill === null ? 'fill="none"' : `fill="${escapeAttribute(shape.fill)}"`);
   if (shape.fillRule !== undefined) attributes.push(`fill-rule="${shape.fillRule}"`);
   if (shape.dash !== null) attributes.push(`stroke-dasharray="${escapeAttribute(shape.dash)}"`);
-  if (shape.opacity !== 1) attributes.push(`opacity="${number(shape.opacity)}"`);
+  if (shape.opacity !== 1) attributes.push(`opacity="${roundedMm(shape.opacity)}"`);
   attributes.push('stroke-linecap="round"', 'stroke-linejoin="round"');
   return `<path ${attributes.join(" ")}/>`;
 }
@@ -499,12 +446,12 @@ export function sceneToSvg(
   const { widthMm, heightMm } = map.page;
   const pixelSize =
     options.widthPx !== undefined && Number.isFinite(options.widthPx) && options.widthPx > 0
-      ? ` width="${number(options.widthPx)}" height="${number(
+      ? ` width="${roundedMm(options.widthPx)}" height="${roundedMm(
           (heightMm * options.widthPx) / widthMm
         )}"`
       : "";
   const parts = [
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${number(widthMm)} ${number(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${roundedMm(widthMm)} ${roundedMm(
       heightMm
     )}"${pixelSize}>`,
     background(widthMm, heightMm),

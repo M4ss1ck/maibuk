@@ -44,8 +44,8 @@ import {
   startMaps,
   type MapsRuntime,
 } from "./runtime";
-import { linePath, smoothStroke } from "./scene";
-import { roughen, seedFor, shapeOutline } from "./geometry";
+import { smoothStroke } from "./scene";
+import { linePath, roughen, seedFor, shapeOutline } from "./geometry";
 
 type User = ReturnType<typeof userEvent.setup>;
 

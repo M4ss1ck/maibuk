@@ -17,7 +17,7 @@ import type { MapElement, MapFillElement, MapLineElement, MapPoint } from "./map
 export type MakeFill = (anchor: MapPoint, color: string) => MapFillElement;
 
 /** The Element kinds a new Fill is drawn behind: a Fill sits under all of them. */
-const IN_FRONT_OF_FILL_KINDS: ReadonlySet<string> = new Set(["line", "stamp", "label"]);
+const KINDS_DRAWN_OVER_A_FILL: ReadonlySet<string> = new Set(["line", "stamp", "label"]);
 
 function isFill(element: MapElement): element is MapFillElement {
   return element.kind === "fill";
@@ -30,7 +30,7 @@ function linesOf(elements: readonly MapElement[]): MapLineElement[] {
 
 /** Where a new Fill goes: in front of every image and older Fill, behind a line, stamp, or label. */
 function insertionIndex(elements: readonly MapElement[]): number {
-  const index = elements.findIndex((element) => IN_FRONT_OF_FILL_KINDS.has(element.kind));
+  const index = elements.findIndex((element) => KINDS_DRAWN_OVER_A_FILL.has(element.kind));
   return index === -1 ? elements.length : index;
 }
 
@@ -54,6 +54,12 @@ export function pourFill(
     (element) => isFill(element) && faceAt(faces, element.anchor) === face
   );
   if (existing !== -1) {
+    // A locked Fill refuses the Bucket as it refuses the colour control.
+    const current = elements[existing];
+    // A colour the Fill already has is no edit either, so it is no undo step.
+    if (current.locked || (current.kind === "fill" && current.content.color === color)) {
+      return elements;
+    }
     return elements.map((element, index) =>
       index === existing && isFill(element)
         ? { ...element, content: { ...element.content, color } }

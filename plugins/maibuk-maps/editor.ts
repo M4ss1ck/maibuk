@@ -460,7 +460,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     edit(next);
   }
 
-  /** The name a newly poured Fill takes: the next free "Fill N". */
+  /** The name a newly poured Fill takes: "Fill N", counting the Fills the Map holds. */
   function newFillName(): string {
     const number = elements.filter((element) => element.kind === "fill").length + 1;
     return format(translate(options.language(), "element.fillName"), { number });

@@ -153,6 +153,23 @@ describe("pourFill", () => {
     expect(fill.anchor).toEqual(before.anchor);
     expect(fill.content.color).toBe("#a0522d");
   });
+
+  it("returns the same array for a pour of the colour the Fill already has", () => {
+    const elements: MapElement[] = [rectangle("ring", 0, 0, 40, 40)];
+    const poured = pourFill(elements, [10, 10], "#c8d5a3", fillMaker());
+
+    expect(pourFill(poured, [30, 30], "#c8d5a3", fillMaker())).toBe(poured);
+  });
+
+  it("leaves a locked Fill its colour, as every other edit of a locked Element does", () => {
+    const elements: MapElement[] = [rectangle("ring", 0, 0, 40, 40)];
+    const poured = pourFill(elements, [10, 10], "#c8d5a3", fillMaker());
+    const locked = poured.map((element) =>
+      element.kind === "fill" ? { ...element, locked: true } : element
+    );
+
+    expect(pourFill(locked, [30, 30], "#a0522d", fillMaker())).toBe(locked);
+  });
 });
 
 describe("reconcileFills", () => {
