@@ -1957,8 +1957,12 @@ describe("Map editor page", () => {
       });
 
       // The Elements list calls the row a Stamp, as it calls a line a Map Line.
-      expect(screen.getByRole("listbox", { name: en["elements.label"] })).toHaveTextContent(
-        en["element.kind.stamp"]
+      // The description reaches the page over the Remote UI bridge, one hop
+      // after the row itself, so the assertion waits for it.
+      await waitFor(() =>
+        expect(screen.getByRole("listbox", { name: en["elements.label"] })).toHaveTextContent(
+          en["element.kind.stamp"]
+        )
       );
 
       // One arrow moves the selected Stamp one page millimetre.

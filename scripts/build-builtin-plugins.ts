@@ -59,8 +59,7 @@ export const BUNDLE_SIZE_LIMIT_OVERRIDES: Readonly<Record<string, number>> = {
   "maibuk-reader": 700 * 1024,
   // Maps carries @turf/polygonize for the Bucket's faces and its base Stamp
   // art as path data (plugins/maibuk-maps/stamp-art.ts, about 5 KB gzip):
-  // 150.5 KB gzip with the SDK once Stamps landed (#749). Map Styles, Labels,
-  // and uploads still to come, so rounded up to the next 50 KB.
+  // 150.5 KB gzip with the SDK, rounded up to the next 50 KB.
   "maibuk-maps": 200 * 1024,
 };
 

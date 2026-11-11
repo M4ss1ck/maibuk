@@ -19,6 +19,7 @@ plugins/<id>/
   *.test.ts         the Plugin's own tests, never built, never shipped
   fixtures/         optional; test inputs, never built
   GLOSSARY.md       optional; the Plugin's own terms (CODING_STANDARDS.md, Domain language)
+  LICENSES          optional; the root notice for third-party art a Plugin derives from, copied beside the build
   vendor/           optional; third-party source copied in, with its licence and provenance
 ```
 
@@ -134,7 +135,9 @@ carry a higher per-Plugin budget in `scripts/build-builtin-plugins.ts`
 zod alone exceed 150 KB gzip, and maibuk-reader gets 700 KB because it carries
 pdf.js's core worker and display module and the foliate-js parsers as raw source
 strings under `plugins/maibuk-reader/vendor/` (about 653 KB gzip on their own),
-evaluated only when a Document opens.
+evaluated only when a Document opens. maibuk-maps gets 200 KB because it carries
+@turf/polygonize for the Bucket's faces and its base Stamp art as path data under
+`plugins/maibuk-maps/stamp-art.ts` (about 150.5 KB gzip with the SDK).
 
 ## Plugins in their own repository
 

@@ -70,6 +70,10 @@ _Avoid_: pointer, arrow, cursor
 The editor tool that draws a Map Line point by point: each click adds a straight point, Shift+click adds a curved point, and clicking the first point again closes the line. Its keyboard form moves a crosshair with the arrows and adds points with Enter.
 _Avoid_: polyline tool, path tool, polygon tool
 
+**Insert**:
+The editor tool that places a Stamp chosen from one picker where the author clicks, or at the view center from the keyboard.
+_Avoid_: stamp tool
+
 **Ellipse**:
 The editor tool that draws a Shape as a closed oval: a drag sets its box, and Shift squares that box into a circle. Its keyboard form is its key and the Place button, which lands one at the view center.
 _Avoid_: circle tool, oval tool, ellipse primitive
