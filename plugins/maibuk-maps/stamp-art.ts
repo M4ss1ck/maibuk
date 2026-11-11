@@ -24,7 +24,7 @@
 import type { StampArt } from "./stamps";
 
 /** The built-in Stamp pictures, in the order `stamps.ts` lists them. */
-export const STAMP_ART: readonly StampArt[] = [
+export const STAMP_ART = [
   {
     id: "capital",
     viewBox: [-5, -9.5, 10, 10],
@@ -517,4 +517,4 @@ export const STAMP_ART: readonly StampArt[] = [
       },
     ],
   },
-];
+] as const satisfies readonly StampArt[];

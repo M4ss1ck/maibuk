@@ -19,7 +19,7 @@
  * This module imports only its own files.
  */
 
-import { LINE_STROKE, sceneToSvg } from "./scene";
+import { sceneToSvg } from "./scene";
 import { SCALE_BAR_STAMP_REF } from "./stamps";
 
 /** The Plugin's data format version; `migrateData` owns every change to it. */
@@ -156,6 +156,14 @@ export const DEFAULT_SCALE_BAR_SIZE_MM = 40;
 
 /** The smallest art box a Stamp keeps, in page millimetres. */
 export const MIN_STAMP_SIZE_MM = 1;
+
+/**
+ * The ink a Map Line is drawn in until Map Styles choose another. It lives here,
+ * beside the Elements that carry it, so the model never reads the scene for it:
+ * `scene.ts` imports this module, and a cycle back would leave the default
+ * Stamp colour undefined on the way in.
+ */
+export const LINE_STROKE = "#1f2933";
 
 /** The ink a new Stamp takes until the author or the Map Style picks another. */
 export const DEFAULT_STAMP_COLOR = LINE_STROKE;

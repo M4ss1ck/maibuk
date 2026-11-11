@@ -13,6 +13,7 @@ import {
   DEFAULT_STAMP_COLOR,
   DEFAULT_STAMP_SIZE_MM,
   INDEX_KEY,
+  LINE_STROKE,
   LINE_STYLE_DEFAULT_ENCLOSES,
   createMapStore,
   mapKey,
@@ -26,7 +27,7 @@ import {
   type MapStampElement,
   type MapStorage,
 } from "./maps";
-import { EMPTY_MAP_COLOR, LINE_STROKE, sceneToSvg } from "./scene";
+import { EMPTY_MAP_COLOR, sceneToSvg } from "./scene";
 import { SCALE_BAR_STAMP_REF } from "./stamps";
 
 /** An in-memory storage that remembers every key read. */

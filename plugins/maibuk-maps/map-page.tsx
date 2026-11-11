@@ -10,12 +10,7 @@
 
 import { useEffect, useState, useSyncExternalStore, type ComponentType } from "react";
 import { ui, type PluginClient } from "@/plugin-sdk";
-import {
-  MAX_ROUGHEN_STRENGTH_MM,
-  MIN_ROUGHEN_STRENGTH_MM,
-  stampNameKey,
-  type MapEditor,
-} from "./editor";
+import { MAX_ROUGHEN_STRENGTH_MM, MIN_ROUGHEN_STRENGTH_MM, type MapEditor } from "./editor";
 import type { MapTool } from "./frame-protocol";
 import { format, translate, type MapsKey } from "./i18n";
 import type { MapsRuntime } from "./runtime";
@@ -34,7 +29,7 @@ import {
   type ShapeKind,
   type StampScaleUnit,
 } from "./maps";
-import { BASE_STAMP_IDS, stampTakesColour } from "./stamps";
+import { BASE_STAMP_IDS, stampNameKey, stampTakesColour } from "./stamps";
 
 /** The editor page id, exactly as the manifest declares it. */
 export const MAP_PAGE_ID = "map";
@@ -103,12 +98,14 @@ const STAMP_UNIT_KEYS: Readonly<Record<StampScaleUnit, MapsKey>> = {
 
 /**
  * The Elements list's kind label, for the kinds a Map can hold (#748: a Fill
- * joins a Map Line). A kind with no label of its own says nothing, so the row
- * falls back to its flags alone rather than calling itself a Map Line.
+ * joins a Map Line; #749: a Stamp joins them). A kind with no label of its own
+ * says nothing, so the row falls back to its flags alone rather than calling
+ * itself a Map Line.
  */
 const ELEMENT_KIND_KEYS: Readonly<Partial<Record<MapElement["kind"], MapsKey>>> = {
   line: "element.kind.line",
   fill: "element.kind.fill",
+  stamp: "element.kind.stamp",
 };
 
 interface RenameDialog {
@@ -430,8 +427,14 @@ function MapEditorView({
                     isDisabled={selected.locked}
                     onChange={(event) => editor.setStampTransform(selected.id, { y: event.detail })}
                   />
+                  {/* The scale bar's size is the room its bar may draw in, so
+                      that field reads as the longest bar it can label. */}
                   <ui.NumberField
-                    label={t("properties.stamp.size")}
+                    label={
+                      stamp.scale === undefined
+                        ? t("properties.stamp.size")
+                        : t("properties.stamp.maxLength")
+                    }
                     value={stamp.transform.size}
                     minValue={MIN_STAMP_SIZE_MM}
                     isDisabled={selected.locked}
@@ -473,10 +476,12 @@ function MapEditorView({
                           })
                         }
                       />
+                      {/* A page width standing for no distance reads no bar, so
+                          the field's minimum is the smallest span the model keeps. */}
                       <ui.NumberField
                         label={t("properties.stamp.span")}
                         value={stamp.scale.span}
-                        minValue={0}
+                        minValue={1}
                         isDisabled={selected.locked}
                         onChange={(event) =>
                           editor.setStampScale(selected.id, { span: event.detail })

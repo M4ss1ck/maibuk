@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { MAP_FRAME_SRC } from "./map-page";
 import { parseFrameMessage, sceneMessage } from "./frame-protocol";
-import { sceneToSvg } from "./scene";
+import { TEXT_FONT_FAMILY, sceneToSvg } from "./scene";
 
 const HTML = readFileSync(join(__dirname, "assets/ui/map.html"), "utf8");
 const LIBRARY = readFileSync(join(__dirname, "assets/ui/lib/htm-preact-standalone.umd.js"), "utf8");
@@ -278,6 +278,7 @@ describe("Stamp shapes", () => {
               y: 60,
               size: 3,
               fill: "#1f2933",
+              font: TEXT_FONT_FAMILY,
               anchor: "end",
               transform: "translate(100 50)",
             },
@@ -294,6 +295,7 @@ describe("Stamp shapes", () => {
     expect(text?.getAttribute("x")).toBe("40");
     expect(text?.getAttribute("y")).toBe("60");
     expect(text?.getAttribute("font-size")).toBe("3");
+    expect(text?.getAttribute("font-family")).toBe(TEXT_FONT_FAMILY);
     expect(text?.getAttribute("fill")).toBe("#1f2933");
     expect(text?.getAttribute("text-anchor")).toBe("end");
     expect(text?.getAttribute("transform")).toBe("translate(100 50)");
@@ -508,10 +510,10 @@ describe("the scene message", () => {
         transform: "translate(100 50) scale(1.111) translate(0 0)",
       }),
     ]);
-    const labels = message.elements[1].shapes
-      .filter((shape) => "text" in shape)
-      .map((shape) => ("text" in shape ? shape.text : ""));
-    expect(labels).toEqual(["0", "200 km"]);
+    const labels = message.elements[1].shapes.filter((shape) => "text" in shape);
+    expect(labels.map((shape) => ("text" in shape ? shape.text : ""))).toEqual(["0", "200 km"]);
+    // The font travels with the label, so the Frame and an export agree.
+    for (const label of labels) expect(label).toMatchObject({ font: TEXT_FONT_FAMILY });
   });
 });
 
@@ -614,6 +616,18 @@ describe("the Insert tool", () => {
     expect(key("ArrowRight").defaultPrevented).toBe(false);
     expect(key("Enter").defaultPrevented).toBe(false);
     expect(frame.port.messages).toEqual([]);
+  });
+
+  it("shows the crosshair every placing tool shows, and only Select shows the pointer", () => {
+    frame = loadFrame();
+    const placing = ["pencil", "pen", "bucket", "insert", "ellipse", "rectangle", "polygon"];
+    for (const tool of placing) {
+      frame.scene({ tool });
+      expect(getComputedStyle(svg()).cursor, tool).toBe("crosshair");
+    }
+
+    frame.scene({ tool: "select" });
+    expect(getComputedStyle(svg()).cursor).toBe("default");
   });
 });
 

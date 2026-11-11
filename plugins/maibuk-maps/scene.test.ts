@@ -6,6 +6,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  LINE_STROKE,
   type MapDocument,
   type MapElement,
   type MapFillElement,
@@ -16,8 +17,8 @@ import {
 import { linePath } from "./geometry";
 import {
   EMPTY_MAP_COLOR,
-  LINE_STROKE,
   SMOOTH_TOLERANCE_MM,
+  TEXT_FONT_FAMILY,
   type LineShape,
   type SceneShape,
   type TextShape,
@@ -743,8 +744,20 @@ describe("Stamp rendering", () => {
     expect(paths[0].transform).toBe("translate(100 50)");
 
     const [zero, far] = textsOf(shapes);
-    expect(zero).toMatchObject({ text: "0", x: -15.24, anchor: "start", fill: LINE_STROKE });
-    expect(far).toMatchObject({ text: "200 km", x: 15.24, anchor: "end", fill: LINE_STROKE });
+    expect(zero).toMatchObject({
+      text: "0",
+      x: -15.24,
+      anchor: "start",
+      fill: LINE_STROKE,
+      font: TEXT_FONT_FAMILY,
+    });
+    expect(far).toMatchObject({
+      text: "200 km",
+      x: 15.24,
+      anchor: "end",
+      fill: LINE_STROKE,
+      font: TEXT_FONT_FAMILY,
+    });
     expect(zero.size).toBeGreaterThan(0);
   });
 
@@ -778,6 +791,9 @@ describe("Stamp rendering", () => {
     expect(bar).toContain(">0</text>");
     expect(bar).toContain(">200 km</text>");
     expect(bar).toContain('text-anchor="end"');
+    // The one font constant, escaped for the attribute it lands in, so an
+    // exported SVG draws the frame's face instead of the renderer's default.
+    expect(bar).toContain(`font-family="${TEXT_FONT_FAMILY.replace(/'/g, "&apos;")}"`);
   });
 });
 

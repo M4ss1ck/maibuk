@@ -11,11 +11,14 @@ import en from "./locales/runtime/en.json";
 import es from "./locales/runtime/es.json";
 import {
   BASE_STAMP_IDS,
+  DEFAULT_STAMP_ID,
   SCALE_BAR_STAMP_REF,
   baseStampRef,
   scaleBarLayout,
   stampArt,
+  stampNameKey,
   stampTakesColour,
+  type StampNameKey,
 } from "./stamps";
 
 /** The built-in Stamps, in the order the art set lists them. */
@@ -353,6 +356,20 @@ describe("the base Stamp art", () => {
       expect(english[`stamp.${id}`]?.length ?? 0, `en stamp.${id}`).toBeGreaterThan(0);
       expect(spanish[`stamp.${id}`]?.length ?? 0, `es stamp.${id}`).toBeGreaterThan(0);
     }
+  });
+
+  it("builds the catalog key a Stamp's name lives under", () => {
+    for (const id of BASE_STAMP_IDS) expect(stampNameKey(id)).toBe(`stamp.${id}`);
+    // The Insert tool places the capital until the author picks another.
+    expect(DEFAULT_STAMP_ID).toBe("capital");
+  });
+
+  it("refuses a key for an id the built-in set does not carry", () => {
+    // The type is the guard: only a built-in id reaches a catalog key, so a typo
+    // fails the build instead of drawing a Stamp with no name.
+    // @ts-expect-error an id outside BASE_STAMP_IDS has no catalog key.
+    const unknown: StampNameKey = stampNameKey("nope");
+    expect(unknown).toBe("stamp.nope");
   });
 
   it("tells which art takes the Stamp's colour, and names a base ref", () => {

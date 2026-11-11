@@ -25,7 +25,7 @@
    * @typedef {"ellipse" | "rectangle" | "polygon"} ShapeKind
    * @typedef {"select" | "pencil" | "pen" | "bucket" | "eraser" | "insert" | ShapeKind} MapTool
    * @typedef {{ d: string, stroke: string | null, strokeWidth: number, dash: string | null, fill: string | null, fillRule?: "evenodd", opacity: number, transform?: string }} LineShape
-   * @typedef {{ text: string, x: number, y: number, size: number, fill: string, anchor: "start" | "middle" | "end", transform?: string }} TextShape
+   * @typedef {{ text: string, x: number, y: number, size: number, fill: string, font?: string, anchor: "start" | "middle" | "end", transform?: string }} TextShape
    * @typedef {LineShape | TextShape} SceneShape
    * @typedef {{ id: string, shapes: SceneShape[], hidden: boolean, locked: boolean, selected: boolean }} FrameSceneElement
    * @typedef {{ one: string, other: string }} PenDraftLabel
@@ -153,7 +153,9 @@
 
   /**
    * Reads one piece of text, or null when it cannot be drawn: one with no
-   * place, no height, or no colour would paint an invisible nothing.
+   * place, no height, or no colour would paint an invisible nothing. The font
+   * arrives with the shape, so the Frame draws the face an export does rather
+   * than whatever the renderer defaults to.
    * @param {Record<string, unknown>} shape
    * @returns {TextShape | null}
    */
@@ -171,6 +173,7 @@
       y: shape.y,
       size: shape.size,
       fill: shape.fill,
+      ...(typeof shape.font === "string" && shape.font !== "" ? { font: shape.font } : {}),
       anchor,
       ...(typeof shape.transform === "string" ? { transform: shape.transform } : {}),
     };
@@ -502,6 +505,7 @@
                       x="${n(shape.x)}"
                       y="${n(shape.y)}"
                       font-size="${n(shape.size)}"
+                      font-family="${shape.font ?? undefined}"
                       fill="${shape.fill}"
                       text-anchor="${shape.anchor}"
                       transform="${shape.transform ?? undefined}"

@@ -1956,6 +1956,11 @@ describe("Map editor page", () => {
         stampRef: "base:castle",
       });
 
+      // The Elements list calls the row a Stamp, as it calls a line a Map Line.
+      expect(screen.getByRole("listbox", { name: en["elements.label"] })).toHaveTextContent(
+        en["element.kind.stamp"]
+      );
+
       // One arrow moves the selected Stamp one page millimetre.
       await focusPanelButton(user);
       await user.keyboard("{ArrowRight}");
@@ -2030,6 +2035,12 @@ describe("Map editor page", () => {
         scale: { unit: "km", span: 1000 },
       });
 
+      // The bar's size is the longest bar it may draw, so the field says so.
+      const maxLength = await screen.findByRole("textbox", {
+        name: en["properties.stamp.maxLength"],
+      });
+      expect(maxLength).toHaveValue("40");
+
       // The unit is a two-choice group: one arrow picks the other choice.
       const unit = await screen.findByRole("radiogroup", { name: en["properties.stamp.unit"] });
       for (let i = 0; i < 60 && !unit.contains(document.activeElement); i++) await user.tab();
@@ -2054,6 +2065,15 @@ describe("Map editor page", () => {
         unit: "mi",
         span: 500,
       });
+
+      // The field's minimum is a span the model keeps: typing 0 commits 1, so
+      // the panel never shows a reading the Map has refused.
+      await tabTo(user, span, 60);
+      await user.keyboard("{Control>}a{/Control}0{Enter}");
+      await waitFor(() =>
+        expect((runtime.editor?.getSnapshot().elements[0] as MapStampElement).scale?.span).toBe(1)
+      );
+      expect(span).toHaveValue("1");
 
       await page.unmount();
     } finally {

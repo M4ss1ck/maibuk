@@ -37,8 +37,8 @@ export interface StampPart {
 export interface StampArt {
   id: string;
   /** The art box: its left, top, width, and height, which the Stamp's size scales. */
-  viewBox: [number, number, number, number];
-  parts: StampPart[];
+  viewBox: readonly [number, number, number, number];
+  parts: readonly StampPart[];
 }
 
 /** The ref prefix every built-in Stamp art carries. */
@@ -48,13 +48,37 @@ const BASE_REF_PREFIX = "base:";
 export const SCALE_BAR_STAMP_REF = `${BASE_REF_PREFIX}scale-bar`;
 
 /** The scale bar: the scene draws it from `scaleBarLayout`, so it carries no art. */
-const SCALE_BAR: StampArt = { id: "scale-bar", viewBox: [0, 0, 100, 20], parts: [] };
+const SCALE_BAR = { id: "scale-bar", viewBox: [0, 0, 100, 20], parts: [] } as const;
 
 /** The built-in Stamps, in the order the art set lists them. */
-const ARTS: readonly StampArt[] = [...STAMP_ART, SCALE_BAR];
+const ARTS = [...STAMP_ART, SCALE_BAR];
+
+/** A built-in Stamp's id: exactly the ids `BASE_STAMP_IDS` carries, and no other string. */
+export type BaseStampId = (typeof ARTS)[number]["id"];
 
 /** The ids of the built-in Stamps, in the order the art set lists them. */
-export const BASE_STAMP_IDS: readonly string[] = ARTS.map((art) => art.id);
+export const BASE_STAMP_IDS: readonly BaseStampId[] = ARTS.map((art) => art.id);
+
+/** The base Stamp the Insert tool places until the author picks another. */
+export const DEFAULT_STAMP_ID: BaseStampId = "capital";
+
+/** The catalog key a built-in Stamp's name lives under, such as `stamp.castle`. */
+export type StampNameKey = `stamp.${BaseStampId}`;
+
+/**
+ * The catalog key of a built-in Stamp's name, which every art carries a string
+ * for in both shipped languages. Taking only a `BaseStampId` keeps a ref this
+ * build does not know from naming a key at all: an unknown id is a type error,
+ * not a name that draws empty.
+ */
+export function stampNameKey(id: BaseStampId): StampNameKey {
+  return `stamp.${id}`;
+}
+
+/** Whether a string names a built-in Stamp this build carries. */
+export function isBaseStampId(value: string): value is BaseStampId {
+  return BASE_STAMP_IDS.some((id) => id === value);
+}
 
 /** The art `ref` names, or undefined for a ref this build does not know. */
 export function stampArt(ref: string): StampArt | undefined {

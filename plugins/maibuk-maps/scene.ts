@@ -14,6 +14,7 @@ import { faceAt, findFaces, type Face } from "./faces";
 import { cumulativeLengths, linePath, roundedMm, seedFor } from "./geometry";
 import {
   DEFAULT_STAMP_SCALE,
+  LINE_STROKE,
   type MapDocument,
   type MapElement,
   type MapFillElement,
@@ -31,9 +32,6 @@ export const SMOOTH_TOLERANCE_MM = 0.5;
 
 /** Consecutive Pencil points closer than this are the same point. */
 const DUPLICATE_DISTANCE_MM = 0.05;
-
-/** The ink a Map Line is drawn in until Map Styles choose another. */
-export const LINE_STROKE = "#1f2933";
 
 /** A Map Line's width in page millimetres. */
 const LINE_STROKE_WIDTH_MM = 0.6;
@@ -142,6 +140,13 @@ export interface LineShape {
   transform?: string;
 }
 
+/**
+ * The font family drawn text takes: a system sans stack, so the Frame (whose
+ * body font is the host's sans) and an exported SVG, which has no host theme,
+ * draw the same face. The Frame's script and an export both read this one.
+ */
+export const TEXT_FONT_FAMILY = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+
 /** One piece of text the Frame draws, in page millimetres. */
 export interface TextShape {
   text: string;
@@ -150,6 +155,8 @@ export interface TextShape {
   /** The text's height in page millimetres. */
   size: number;
   fill: string;
+  /** The font family the text is drawn in, so a Frame and an export agree. */
+  font: string;
   anchor: "start" | "middle" | "end";
   /** An SVG transform, when the text turns with its Element. */
   transform?: string;
@@ -510,6 +517,7 @@ function scaleBarShapes(element: MapStampElement, pageWidthMm: number): SceneSha
     y: top + height + height * SCALE_BAR_LABEL_RATIO,
     size: height * SCALE_BAR_LABEL_RATIO,
     fill: element.color,
+    font: TEXT_FONT_FAMILY,
     transform,
   };
   shapes.push({ text: "0", x: left, anchor: "start", ...label });
@@ -588,6 +596,7 @@ function shapeText(shape: TextShape): string {
     `x="${roundedMm(shape.x)}"`,
     `y="${roundedMm(shape.y)}"`,
     `font-size="${roundedMm(shape.size)}"`,
+    `font-family="${escapeAttribute(shape.font)}"`,
     `fill="${escapeAttribute(shape.fill)}"`,
     `text-anchor="${shape.anchor}"`,
   ];

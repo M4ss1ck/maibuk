@@ -69,7 +69,14 @@ import {
   setLocked,
   smoothStroke,
 } from "./scene";
-import { BASE_STAMP_IDS, baseStampRef, stampTakesColour } from "./stamps";
+import {
+  DEFAULT_STAMP_ID,
+  baseStampRef,
+  isBaseStampId,
+  stampNameKey,
+  stampTakesColour,
+  type BaseStampId,
+} from "./stamps";
 
 /** How much one zoom step changes the view. */
 const ZOOM_STEP = 1.25;
@@ -89,17 +96,6 @@ const SHAPE_NAME_KEYS: Readonly<Record<ShapeKind, MapsKey>> = {
   rectangle: "element.rectangleName",
   polygon: "element.polygonName",
 };
-
-/** The base Stamp the Insert tool places until the author picks another. */
-export const DEFAULT_STAMP_ID = "capital";
-
-/**
- * The catalog key of a built-in Stamp's name, which every art carries a string
- * for in both shipped languages.
- */
-export function stampNameKey(id: string): MapsKey {
-  return `stamp.${id}` as MapsKey;
-}
 
 /** What the page draws: the document, its Elements, and the editor flags. */
 export interface MapEditorSnapshot {
@@ -131,7 +127,7 @@ export interface MapEditorSnapshot {
   /** The Shape kind the selected line was converted from, or null when it never was a Shape. */
   selectedConvertedFrom: ShapeKind | null;
   /** The base Stamp the Insert tool places next. */
-  currentStampId: string;
+  currentStampId: BaseStampId;
   /** The selected Stamp, or null when the selection is not a Stamp. */
   selectedStamp: MapStampElement | null;
 }
@@ -237,7 +233,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
   let tool: MapTool = "select";
   let currentLineStyle: LineStyleId = "plain";
   let currentFillColor = DEFAULT_FILL_COLOR;
-  let currentStampId = DEFAULT_STAMP_ID;
+  let currentStampId: BaseStampId = DEFAULT_STAMP_ID;
   let roughenStrength = DEFAULT_ROUGHEN_STRENGTH_MM;
   let zoom = 1;
   let panX = 0;
@@ -544,7 +540,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
    * the app language. The new Stamp becomes the selection, and the whole
    * placement is one undo step.
    */
-  function placeStamp(point?: MapPoint): void {
+  function insertStamp(point?: MapPoint): void {
     const at: MapPoint = point ?? [doc.page.widthMm / 2 + panX, doc.page.heightMm / 2 + panY];
     const element = newStamp({
       id: randomMapId(),
@@ -574,7 +570,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
         pour(message.point);
         break;
       case "insert":
-        placeStamp(message.point);
+        insertStamp(message.point);
         break;
       case "select":
         selectElement(message.id);
@@ -780,14 +776,12 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     setStamp(id) {
       // A pick this build has no art for would place a Stamp that draws
       // nothing, so only the built-in Stamps are picks.
-      if (!BASE_STAMP_IDS.includes(id) || id === currentStampId) return;
+      if (!isBaseStampId(id) || id === currentStampId) return;
       currentStampId = id;
       publish();
     },
 
-    insertStamp(point) {
-      placeStamp(point);
-    },
+    insertStamp,
 
     setStampTransform(id, patch) {
       const target = elementById(id);
