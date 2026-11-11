@@ -1,10 +1,10 @@
 // @ts-check
-/* The Map Frame's drawing surface (#745, #746, #748, #749, #766). The Frame's
-   only host channel is `window.maibuk.port`: the Worker sends the whole `scene`
-   on every change and when the Frame connects, and the Frame answers a finished
-   Pencil stroke, a finished Pen line, an Eraser drag, a drawn Shape, a Bucket
-   pour, a dropped Stamp, the Element the author picked, and a Select drag that
-   moved one.
+/* The Map Frame's drawing surface (#745, #746, #748, #749, #750, #766). The
+   Frame's only host channel is `window.maibuk.port`: the Worker sends the whole
+   `scene` on every change and when the Frame connects, and the Frame answers a
+   finished Pencil stroke, a finished Pen line, a finished Area Fill outline, an
+   Eraser drag, a drawn Shape, a Bucket pour, a dropped Stamp, the Element the
+   author picked, and a Select drag that moved one.
    Points cross the port in page millimetres, the same space as the page's
    `widthMm`/`heightMm`, so the pointer's own screen pixels are converted
    through the svg's `getScreenCTM`.
@@ -24,15 +24,16 @@
   /**
    * @typedef {[number, number]} MapPoint
    * @typedef {"ellipse" | "rectangle" | "polygon"} ShapeKind
-   * @typedef {"select" | "pencil" | "pen" | "bucket" | "eraser" | "insert" | ShapeKind} MapTool
-   * @typedef {{ d: string, stroke: string | null, strokeWidth: number, dash: string | null, fill: string | null, fillRule?: "evenodd", opacity: number, transform?: string }} LineShape
+   * @typedef {"select" | "pencil" | "pen" | "bucket" | "area" | "eraser" | "insert" | ShapeKind} MapTool
+   * @typedef {{ d: string, stroke: string | null, strokeWidth: number, dash: string | null, fill: string | null, fillRule?: "evenodd", opacity: number, transform?: string, clip?: string }} LineShape
    * @typedef {{ text: string, x: number, y: number, size: number, fill: string, font?: string, anchor: "start" | "middle" | "end", transform?: string }} TextShape
    * @typedef {LineShape | TextShape} SceneShape
-   * @typedef {{ id: string, shapes: SceneShape[], hidden: boolean, locked: boolean, selected: boolean, movable: boolean }} FrameSceneElement
+   * @typedef {{ id: string, shapes: SceneShape[], filter: string | null, hidden: boolean, locked: boolean, selected: boolean, movable: boolean }} FrameSceneElement
    * @typedef {{ one: string, other: string }} PenDraftLabel
-   * @typedef {{ kind: "scene", widthMm: number, heightMm: number, background: string, elements: FrameSceneElement[], tool: MapTool, zoom: number, panX: number, panY: number, penLabel: PenDraftLabel }} FrameSceneMessage
+   * @typedef {{ kind: "scene", widthMm: number, heightMm: number, background: string, elements: FrameSceneElement[], defs: string, tool: MapTool, zoom: number, panX: number, panY: number, penLabel: PenDraftLabel }} FrameSceneMessage
    * @typedef {{ kind: "stroke", points: MapPoint[] }} FrameStrokeMessage
    * @typedef {{ kind: "line", points: MapPoint[], curves: boolean[], closed: boolean }} FrameLineMessage
+   * @typedef {{ kind: "area", points: MapPoint[], curves: boolean[], freehand: boolean }} FrameAreaMessage
    * @typedef {{ kind: "erase", points: MapPoint[], radiusMm: number }} FrameEraseMessage
    * @typedef {{ kind: "select", id: string | null }} FrameSelectMessage
    * @typedef {{ kind: "shape", shape: ShapeKind, start: MapPoint, end: MapPoint, constrain: boolean }} FrameShapeMessage
@@ -88,6 +89,9 @@
   /** A Shape drag is too small to keep when either side is under this, in mm. */
   const MIN_SHAPE_SIZE_MM = 1;
 
+  /** The characters a definitions id may hold, so a scene cannot write an attribute of its own. */
+  const FILTER_ID = /^[A-Za-z0-9_-]+$/;
+
   /** The Shape tools, which draw an exact Shape by dragging (#747). */
   const SHAPE_KINDS = ["ellipse", "rectangle", "polygon"];
 
@@ -105,7 +109,7 @@
   let drawing = null;
   /** The Pen line in progress, or null. @type {PenDraft | null} */
   let penDraft = null;
-  /** The keyboard crosshair, in page millimetres, or null when neither the Pen nor the Bucket is active. @type {MapPoint | null} */
+  /** The keyboard crosshair, in page millimetres, or null when the Pen, the Bucket, and the Area tool are all inactive. @type {MapPoint | null} */
   let crosshair = null;
   /** Where the pointer last hovered with the Pen, for the draft's preview segment. @type {MapPoint | null} */
   let penPointer = null;
@@ -150,6 +154,7 @@
       raw === "pencil" ||
       raw === "pen" ||
       raw === "bucket" ||
+      raw === "area" ||
       raw === "eraser" ||
       raw === "insert"
     ) {
@@ -224,6 +229,8 @@
       ...(shape.fillRule === "evenodd" ? { fillRule: "evenodd" } : {}),
       opacity: isNumber(shape.opacity) ? Math.max(0, Math.min(1, shape.opacity)) : 1,
       ...(typeof shape.transform === "string" ? { transform: shape.transform } : {}),
+      // A Clip Path id is only as safe as a definitions id, so it takes the same check.
+      ...(typeof shape.clip === "string" && FILTER_ID.test(shape.clip) ? { clip: shape.clip } : {}),
     };
   }
 
@@ -240,6 +247,19 @@
       one: typeof label.one === "string" ? label.one : "",
       other: typeof label.other === "string" ? label.other : "",
     };
+  }
+
+  /**
+   * Reads the SVG definitions the shapes reference, joined into the one
+   * `<defs>` body the Frame draws (#750): the Worker writes them exactly as the
+   * exported SVG does, so the Frame and the export share one definition of
+   * every texture pattern, scatter Clip Path, and Soft Edge filter.
+   * @param {unknown} raw
+   * @returns {string}
+   */
+  function readDefs(raw) {
+    if (!Array.isArray(raw)) return "";
+    return raw.filter((entry) => typeof entry === "string" && entry !== "").join("");
   }
 
   /**
@@ -273,6 +293,10 @@
         elements.push({
           id: element.id,
           shapes,
+          filter:
+            typeof element.filter === "string" && FILTER_ID.test(element.filter)
+              ? element.filter
+              : null,
           hidden: element.hidden === true,
           locked: element.locked === true,
           selected: element.selected === true,
@@ -288,6 +312,7 @@
       heightMm: message.heightMm,
       background: typeof message.background === "string" ? message.background : "transparent",
       elements,
+      defs: readDefs(message.defs),
       tool: readTool(message.tool),
       zoom: isNumber(message.zoom) && message.zoom > 0 ? message.zoom : 1,
       panX: isNumber(message.panX) ? message.panX : 0,
@@ -425,7 +450,9 @@
    */
   function updateLabel() {
     if (surface === null) return;
-    if (penDraft === null || scene === null) {
+    // Only the Pen names the surface: the Area tool adds points too, but its
+    // outline is not a Pen line, and a Frame with no name beats a wrong one.
+    if (penDraft === null || scene === null || scene.tool !== "pen") {
       surface.removeAttribute("aria-label");
       return;
     }
@@ -451,15 +478,133 @@
   }
 
   /**
-   * Keeps the keyboard crosshair at the page centre while the Pen or the Bucket
-   * is active: both aim with it, the Pen to add a point and the Bucket to pour.
+   * Keeps the keyboard crosshair at the page centre while the Pen, the Bucket,
+   * or the Area tool is active: each aims with it, the Pen and the Area tool to
+   * add a point and the Bucket to pour.
    */
   function syncCrosshair() {
-    if (scene === null || (scene.tool !== "pen" && scene.tool !== "bucket")) {
+    if (
+      scene === null ||
+      (scene.tool !== "pen" && scene.tool !== "bucket" && scene.tool !== "area")
+    ) {
       crosshair = null;
       return;
     }
     if (crosshair === null) crosshair = [scene.widthMm / 2, scene.heightMm / 2];
+  }
+
+  /**
+   * The nodes `shapes` draw, with each run of shapes that share a Clip Path
+   * drawn inside one `<g clip-path="url(#…)">` (#750).
+   *
+   * The Clip Path belongs on the group, never on the shape: SVG applies a Clip
+   * Path in the user space of the element that references it, so a scattered
+   * Stamp's own `transform` would carry the clip off with the art it should
+   * cut, and the Stamp would vanish outside the page. The group has no
+   * transform, so the clip keeps the page millimetres `scene.ts` wrote, and
+   * cuts whichever Stamp it holds.
+   * @param {readonly SceneShape[]} shapes
+   * @param {(shape: SceneShape) => any} draw
+   * @returns {any[]}
+   */
+  function clippedArt(shapes, draw) {
+    const { html } = lib;
+    /** @type {any[]} */
+    const nodes = [];
+    /** @type {any[]} */
+    let run = [];
+    /** @type {string | undefined} */
+    let clip;
+    const flush = () => {
+      if (run.length === 0) return;
+      if (clip === undefined) nodes.push(...run);
+      else nodes.push(html`<g clip-path="url(#${clip})">${run}</g>`);
+      run = [];
+    };
+    for (const shape of shapes) {
+      const next = isTextShape(shape) ? undefined : shape.clip;
+      if (next !== clip) {
+        flush();
+        clip = next;
+      }
+      run.push(draw(shape));
+    }
+    flush();
+    return nodes;
+  }
+
+  /**
+   * The paths and text one Element draws, under the Soft Edge filter the scene
+   * gave it (#750). The selection outline stays outside the filter, so it keeps
+   * its crisp edge while the art fades.
+   * @param {FrameSceneElement} element
+   * @returns {any}
+   */
+  function elementArt(element) {
+    const { html } = lib;
+    const art = [
+      ...clippedArt(
+        element.shapes.filter((shape) => !isTextShape(shape)),
+        (shape) => html`<path
+          class="map-hit"
+          d="${shape.d}"
+          fill-rule="${shape.fillRule ?? undefined}"
+          data-fill="${shape.fill === null ? undefined : "true"}"
+          transform="${shape.transform ?? undefined}"
+        />`
+      ),
+      ...clippedArt(element.shapes, (shape) =>
+        isTextShape(shape)
+          ? html`<text
+              class="map-line"
+              x="${n(shape.x)}"
+              y="${n(shape.y)}"
+              font-size="${n(shape.size)}"
+              font-family="${shape.font ?? undefined}"
+              fill="${shape.fill}"
+              text-anchor="${shape.anchor}"
+              transform="${shape.transform ?? undefined}"
+            >
+              ${shape.text}
+            </text>`
+          : html`<path
+              class="map-line"
+              d="${shape.d}"
+              stroke="${shape.stroke ?? "none"}"
+              stroke-width="${shape.stroke === null ? undefined : n(shape.strokeWidth)}"
+              fill="${shape.fill ?? "none"}"
+              fill-rule="${shape.fillRule ?? undefined}"
+              stroke-dasharray="${shape.dash ?? undefined}"
+              opacity="${shape.opacity === 1 ? undefined : n(shape.opacity)}"
+              transform="${shape.transform ?? undefined}"
+            />`
+      ),
+    ];
+    if (element.filter === null) return art;
+    return html`<g filter="url(#${element.filter})">${art}</g>`;
+  }
+
+  /**
+   * The shapes a selected Element's highlight traces (#750): the ink it drew,
+   * without the Stamps a Fill scatters, which are content painted inside its
+   * area rather than the outline that marks it. Shapes that draw the same path,
+   * such as a Fill's colour and the texture laid over it, trace one outline.
+   * @param {FrameSceneElement} element
+   * @returns {LineShape[]}
+   */
+  function highlightShapes(element) {
+    /** @type {Set<string>} */
+    const seen = new Set();
+    /** @type {LineShape[]} */
+    const shapes = [];
+    for (const shape of element.shapes) {
+      if (isTextShape(shape) || shape.clip !== undefined) continue;
+      const key = `${shape.transform ?? ""}\n${shape.d}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      shapes.push(shape);
+    }
+    return shapes;
   }
 
   /**
@@ -492,6 +637,13 @@
           height="${n(current.heightMm)}"
           fill="${current.background}"
         />
+        ${
+          current.defs === ""
+            ? null
+            : html`<defs
+                dangerouslySetInnerHTML=${{ __html: current.defs }}
+              />`
+        }
         ${current.elements
           .filter((element) => !element.hidden && element.shapes.length > 0)
           .map(
@@ -503,56 +655,18 @@
               data-dragging="${isDragging(element.id) ? "true" : undefined}"
               transform="${dragTransform(element.id)}"
             >
-              ${element.shapes
-                .filter((shape) => !isTextShape(shape))
-                .map(
-                  (shape) => html`<path
-                    class="map-hit"
-                    d="${shape.d}"
-                    fill-rule="${shape.fillRule ?? undefined}"
-                    data-fill="${shape.fill === null ? undefined : "true"}"
-                    transform="${shape.transform ?? undefined}"
-                  />`
-                )}
+              ${elementArt(element)}
               ${
                 element.selected
-                  ? element.shapes
-                      .filter((shape) => !isTextShape(shape))
-                      .map(
-                        (shape) => html`<path
-                          class="map-selection"
-                          d="${shape.d}"
-                          transform="${shape.transform ?? undefined}"
-                        />`
-                      )
+                  ? highlightShapes(element).map(
+                      (shape) => html`<path
+                        class="map-selection"
+                        d="${shape.d}"
+                        transform="${shape.transform ?? undefined}"
+                      />`
+                    )
                   : null
               }
-              ${element.shapes.map((shape) =>
-                isTextShape(shape)
-                  ? html`<text
-                      class="map-line"
-                      x="${n(shape.x)}"
-                      y="${n(shape.y)}"
-                      font-size="${n(shape.size)}"
-                      font-family="${shape.font ?? undefined}"
-                      fill="${shape.fill}"
-                      text-anchor="${shape.anchor}"
-                      transform="${shape.transform ?? undefined}"
-                    >
-                      ${shape.text}
-                    </text>`
-                  : html`<path
-                      class="map-line"
-                      d="${shape.d}"
-                      stroke="${shape.stroke ?? "none"}"
-                      stroke-width="${shape.stroke === null ? undefined : n(shape.strokeWidth)}"
-                      fill="${shape.fill ?? "none"}"
-                      fill-rule="${shape.fillRule ?? undefined}"
-                      stroke-dasharray="${shape.dash ?? undefined}"
-                      opacity="${shape.opacity === 1 ? undefined : n(shape.opacity)}"
-                      transform="${shape.transform ?? undefined}"
-                    />`
-              )}
             </g>`
           )}
         ${drawing === null ? null : html`<path class="map-live" d="${polyline(drawing.points)}" />`}
@@ -774,6 +888,43 @@
     post({ kind: "line", points: draft.points, curves: draft.curves, closed });
   }
 
+  /**
+   * Adds the next keyboard point of an Area Fill outline: starts the outline,
+   * appends a point, or closes it when the point lands on the first one.
+   * @param {MapPoint} point
+   * @param {boolean} curved whether the segment into this point curves
+   */
+  function addAreaPoint(point, curved) {
+    if (penDraft === null) {
+      penDraft = { points: [point], curves: [] };
+      draw();
+      return;
+    }
+    if (penDraft.points.length >= 3 && near(point, penDraft.points[0])) {
+      finishArea();
+      return;
+    }
+    penDraft.points.push(point);
+    penDraft.curves.push(curved);
+    draw();
+  }
+
+  /**
+   * Ends the Area Fill outline in progress, always closed: the closing segment
+   * is added straight, so the outline has one flag per segment including it. An
+   * outline of fewer than three points encloses nothing and is dropped.
+   */
+  function finishArea() {
+    if (penDraft === null) return;
+    const draft = penDraft;
+    penDraft = null;
+    penPointer = null;
+    if (draft.points.length >= 3) draft.curves.push(false);
+    draw();
+    if (draft.points.length < 3) return;
+    post({ kind: "area", points: draft.points, curves: draft.curves, freehand: false });
+  }
+
   /** @param {PointerEvent} event */
   function onPointerDown(event) {
     if (scene === null) return;
@@ -781,7 +932,7 @@
     // and the primary button are.
     if (event.pointerType === "mouse" && event.button !== 0) return;
 
-    if (scene.tool === "pencil") {
+    if (scene.tool === "pencil" || scene.tool === "area") {
       if (drawing !== null) return;
       const point = pagePoint(event);
       if (point === null) return;
@@ -943,17 +1094,25 @@
 
   /**
    * Ends the stroke in progress. A finished stroke of two points or more goes
-   * to the Worker; a tap with no movement is dropped.
+   * to the Worker; a tap with no movement is dropped. The Pencil's stroke is a
+   * Map Line and the Area tool's is a closed Area Fill outline, which the
+   * Worker smooths exactly as the Pencil's line.
    * @param {PointerEvent} event
    * @param {boolean} send
    */
   function endStroke(event, send) {
     if (drawing === null || event.pointerId !== drawing.pointerId) return;
     const points = drawing.points;
+    const tool = scene === null ? "pencil" : scene.tool;
     drawing = null;
     releasePointer(event);
     draw();
-    if (send && points.length >= 2) post({ kind: "stroke", points });
+    if (!send || points.length < 2) return;
+    if (tool === "area") {
+      post({ kind: "area", points, curves: [], freehand: true });
+      return;
+    }
+    post({ kind: "stroke", points });
   }
 
   /**
@@ -1019,11 +1178,10 @@
   }
 
   /**
-   * The keyboard Pen and Bucket: one crosshair moved by the arrows, Enter adding
-   * a Pen point or pouring at the crosshair. Every key either handles is
-   * `preventDefault`ed, so the Frame keeps it and the host's Commands never see
-   * it (#760); every other key, including the Pen's own Backspace and Escape
-   * when the Bucket is active, forwards as before.
+   * The keyboard Pen, Bucket, and Area tool: one crosshair moved by the arrows,
+   * Enter adding a Pen or Area point or pouring at the crosshair. Every key
+   * either handles is `preventDefault`ed, so the Frame keeps it and the host's
+   * Commands never see it (#760); every other key forwards as before.
    * @param {KeyboardEvent} event
    */
   function onKeyDown(event) {
@@ -1042,7 +1200,12 @@
       return;
     }
     if (event.key === "Shift") constrainDrag(true);
-    if (scene === null || (scene.tool !== "pen" && scene.tool !== "bucket")) return;
+    if (
+      scene === null ||
+      (scene.tool !== "pen" && scene.tool !== "bucket" && scene.tool !== "area")
+    ) {
+      return;
+    }
     if (crosshair === null) return;
     const step = event.shiftKey ? CROSSHAIR_FAR_STEP_MM : CROSSHAIR_STEP_MM;
     if (event.key === "ArrowLeft") {
@@ -1072,11 +1235,16 @@
         return;
       }
       penPointer = null;
+      if (scene.tool === "area") {
+        addAreaPoint(crosshair, event.shiftKey === true);
+        return;
+      }
       addPenPoint(crosshair, event.shiftKey === true);
       return;
     }
-    // Backspace and Escape belong to the Pen draft, which the Bucket has none of.
-    if (scene.tool !== "pen") return;
+    // Backspace and Escape belong to the Pen draft and the Area outline, which
+    // the Bucket has neither of.
+    if (scene.tool !== "pen" && scene.tool !== "area") return;
     if (event.key === "Backspace") {
       event.preventDefault();
       if (penDraft === null || penDraft.points.length === 0) return;
@@ -1088,7 +1256,8 @@
     }
     if (event.key === "Escape") {
       event.preventDefault();
-      finishPen(false);
+      if (scene.tool === "area") finishArea();
+      else finishPen(false);
     }
   }
 

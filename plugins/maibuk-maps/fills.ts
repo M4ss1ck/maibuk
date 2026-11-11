@@ -11,7 +11,13 @@
  */
 
 import { deepestPoint, faceAt, findFaces, type Face } from "./faces";
-import type { MapElement, MapFillElement, MapLineElement, MapPoint } from "./maps";
+import {
+  isAreaFill,
+  type MapElement,
+  type MapFillElement,
+  type MapLineElement,
+  type MapPoint,
+} from "./maps";
 
 /** Builds a Fill at `anchor` in `color`; the caller owns its id and name. */
 export type MakeFill = (anchor: MapPoint, color: string) => MapFillElement;
@@ -28,17 +34,33 @@ function linesOf(elements: readonly MapElement[]): MapLineElement[] {
   return elements.filter((element): element is MapLineElement => element.kind === "line");
 }
 
-/** Where a new Fill goes: in front of every image and older Fill, behind a line, stamp, or label. */
-function insertionIndex(elements: readonly MapElement[]): number {
-  const index = elements.findIndex((element) => KINDS_DRAWN_OVER_A_FILL.has(element.kind));
-  return index === -1 ? elements.length : index;
+/**
+ * Where a new Fill goes (#737, #750): the top of the Fill stack, above every
+ * image and older Fill, and behind every Map Line, Stamp, and Map Label. A Fill
+ * a document or the author put above a Map Line still takes the new Fill above
+ * it, so Fills always stack over Fills.
+ */
+export function fillInsertionIndex(elements: readonly MapElement[]): number {
+  const first = elements.findIndex((element) => KINDS_DRAWN_OVER_A_FILL.has(element.kind));
+  let at = first === -1 ? elements.length : first;
+  elements.forEach((element, index) => {
+    if (isFill(element) && index >= at) at = index + 1;
+  });
+  return at;
+}
+
+/** Puts `fill` at the top of the Fill stack, leaving the other Elements as they were. */
+export function insertFill(elements: readonly MapElement[], fill: MapFillElement): MapElement[] {
+  const at = fillInsertionIndex(elements);
+  return [...elements.slice(0, at), fill, ...elements.slice(at)];
 }
 
 /**
  * Pours `color` into the face `point` falls in. The Fill already in that face
  * takes the new colour and keeps its place; otherwise a new Fill appears at the
  * face's deepest point, behind every Map Line, Stamp, and Map Label. A point
- * outside every face leaves the Elements exactly as they were.
+ * outside every face leaves the Elements exactly as they were. An Area Fill
+ * covers its own outline, so a pour never recolours one.
  */
 export function pourFill(
   elements: MapElement[],
@@ -51,7 +73,7 @@ export function pourFill(
   if (face === null) return elements;
 
   const existing = elements.findIndex(
-    (element) => isFill(element) && faceAt(faces, element.anchor) === face
+    (element) => isFill(element) && !isAreaFill(element) && faceAt(faces, element.anchor) === face
   );
   if (existing !== -1) {
     // A locked Fill refuses the Bucket as it refuses the colour control.
@@ -68,8 +90,7 @@ export function pourFill(
   }
 
   const fill = makeFill(deepestPoint(face), color);
-  const at = insertionIndex(elements);
-  return [...elements.slice(0, at), fill, ...elements.slice(at)];
+  return insertFill(elements, fill);
 }
 
 /** One Fill of the after array, with the face it left and the face it lands in. */
@@ -174,8 +195,10 @@ function copyId(originalId: string, used: Set<string>): string {
  * after it. Each Fill follows its new face to that face's deepest point, two
  * Fills merged into one face leave the larger face's Fill, a face a new line
  * splits gives each half a copy, and a Fill whose face disappears is removed.
- * An edit that leaves every Fill where it was returns `edited` itself, with each
- * unchanged Fill object kept, so history and autosave see no phantom edit.
+ * An Area Fill covers its own outline, so the face rules leave it exactly where
+ * it is. An edit that leaves every Fill where it was returns `edited` itself,
+ * with each unchanged Fill object kept, so history and autosave see no phantom
+ * edit.
  *
  * `offset` is the shift of an edit that only moved one Map Line (an arrow move
  * or a Select drag, #766). With it, a Fill whose face moved whole goes with
@@ -191,10 +214,13 @@ export function reconcileFills(
 
   const facesBefore = findFaces(linesOf(before));
   const facesAfter = findFaces(linesOf(edited));
-  const beforeFills = before.filter(isFill).map((fill) => ({
-    fill,
-    face: faceAt(facesBefore, fill.anchor),
-  }));
+  const beforeFills = before
+    .filter(isFill)
+    .filter((fill) => !isAreaFill(fill))
+    .map((fill) => ({
+      fill,
+      face: faceAt(facesBefore, fill.anchor),
+    }));
   // The face each Fill held before the edit, by id: a moved anchor no longer
   // points into it, and the merge rule weighs the face the Fill came from.
   const beforeFaces = new Map(beforeFills.map((entry) => [entry.fill.id, entry.face]));
@@ -203,7 +229,7 @@ export function reconcileFills(
   if (offset !== undefined) {
     let carried = false;
     const next = edited.map((element) => {
-      if (!isFill(element)) return element;
+      if (!isFill(element) || isAreaFill(element)) return element;
       const anchor = followMove(element.anchor, facesBefore, facesAfter, offset);
       if (samePoint(anchor, element.anchor)) return element;
       carried = true;
@@ -213,10 +239,11 @@ export function reconcileFills(
   }
 
   // Follow each Fill to the after-face its anchor lies in; a Fill whose anchor
-  // lies in no after-face is left out, which removes it.
+  // lies in no after-face is left out, which removes it. An Area Fill answers to
+  // its own outline, so it is never left out.
   const moves: FillMove[] = [];
   for (const element of after) {
-    if (!isFill(element)) continue;
+    if (!isFill(element) || isAreaFill(element)) continue;
     const afterFace = faceAt(facesAfter, element.anchor);
     if (afterFace === null) continue;
     const beforeFace = beforeFaces.has(element.id)
@@ -248,7 +275,7 @@ export function reconcileFills(
 
   const result: MapElement[] = [];
   for (const element of after) {
-    if (!isFill(element)) {
+    if (!isFill(element) || isAreaFill(element)) {
       result.push(element);
       continue;
     }

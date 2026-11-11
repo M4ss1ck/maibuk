@@ -7,7 +7,8 @@
  * so a relative import would fail closed.
  *
  * The Worker sends the whole scene on every change and when a Frame connects;
- * the Frame reports a finished Pencil stroke, a finished Pen line, an Eraser
+ * the Frame reports a finished Pencil stroke, a finished Pen line, a finished
+ * Area Fill outline, an Eraser
  * drag, a drawn Shape, a Bucket pour, a dropped Stamp, a picked Element, and a
  * Select drag that moved one.
  * Points are page millimetres, the same space as `page.widthMm/heightMm`. Every
@@ -17,19 +18,30 @@
 
 import type { MapDocument, MapPoint, ShapeKind } from "./maps";
 import { isShapeKind } from "./maps";
-import { canMove, EMPTY_MAP_COLOR, type SceneShape, sceneShapes } from "./scene";
+import { canMove, EMPTY_MAP_COLOR, type SceneShape, sceneRender } from "./scene";
 
 /** The editor tool the Frame should honour. */
-export type MapTool = "select" | "pencil" | "pen" | "bucket" | "eraser" | "insert" | ShapeKind;
+export type MapTool =
+  | "select"
+  | "pencil"
+  | "pen"
+  | "bucket"
+  | "area"
+  | "eraser"
+  | "insert"
+  | ShapeKind;
 
 /** One Element as the Frame draws it: its render primitives, its flags, and its selection. */
 export interface FrameSceneElement {
   id: string;
   /**
    * The paths and text the Frame draws, from `sceneShapes`; empty for an
-   * Element with nothing to draw yet.
+   * Element with nothing to draw yet. A path carries the Clip Path id that
+   * keeps it inside its Fill's area when it is a scattered Stamp.
    */
   shapes: SceneShape[];
+  /** The Soft Edge filter the Element draws with, or null for a sharp edge. */
+  filter: string | null;
   hidden: boolean;
   locked: boolean;
   selected: boolean;
@@ -61,6 +73,12 @@ export interface FrameSceneMessage {
   /** The page background colour. */
   background: string;
   elements: FrameSceneElement[];
+  /**
+   * The SVG definitions the shapes reference (#750): the texture patterns, the
+   * scatter Clip Paths, and the Soft Edge filters. They arrive as the markup
+   * `sceneToSvg` writes, so the Frame and the export use one definition of each.
+   */
+  defs: string[];
   tool: MapTool;
   zoom: number;
   panX: number;
@@ -85,6 +103,21 @@ export interface FrameLineMessage {
   points: MapPoint[];
   curves: boolean[];
   closed: boolean;
+}
+
+/**
+ * Frame -> Worker: an Area Fill's outline (#750), which always closes. A
+ * freehand outline carries the raw pointer points with no `curves` and the
+ * Worker smooths them exactly as the Pencil does; a point-by-point outline
+ * carries `curves` with one flag per segment, the closing one included.
+ */
+export interface FrameAreaMessage {
+  kind: "area";
+  points: MapPoint[];
+  /** One flag per segment of a point-by-point outline; empty for a freehand stroke. */
+  curves: boolean[];
+  /** Whether the points are a raw freehand stroke to smooth, or a point-by-point outline. */
+  freehand: boolean;
 }
 
 /** Frame -> Worker: one Eraser drag and how far it reaches. */
@@ -149,6 +182,7 @@ export interface FrameMoveMessage {
 export type FrameToWorkerMessage =
   | FrameStrokeMessage
   | FrameLineMessage
+  | FrameAreaMessage
   | FrameEraseMessage
   | FrameSelectMessage
   | FrameShapeMessage
@@ -172,7 +206,9 @@ function isPoint(value: unknown): value is MapPoint {
  * must be dropped. A stroke needs a list of finite `[x, y]` pairs; a stroke of
  * fewer than two points is still well formed, and the editor simply draws no
  * line from it. A Pen line also needs a flag per segment and a boolean
- * `closed`; an Eraser drag needs at least one point and a finite reach; a Shape
+ * `closed`; an Area Fill needs a boolean `freehand`, and no `curves` at all
+ * when it is freehand, else one flag per segment of its closed outline; an
+ * Eraser drag needs at least one point and a finite reach; a Shape
  * needs a known kind, two finite corners, and a boolean `constrain`; a pour or
  * an insert needs one finite page point; a move needs an Element id and a
  * finite offset.
@@ -201,6 +237,25 @@ export function parseFrameMessage(data: unknown): FrameToWorkerMessage | null {
       points: message.points.map(([x, y]) => [x, y]),
       curves: message.curves.map((flag) => flag === true),
       closed: message.closed,
+    };
+  }
+  if (message.kind === "area") {
+    if (!Array.isArray(message.points) || message.points.length < 2) return null;
+    if (!message.points.every(isPoint)) return null;
+    if (typeof message.freehand !== "boolean") return null;
+    if (!Array.isArray(message.curves)) return null;
+    const segments = message.freehand ? 0 : message.points.length;
+    if (
+      message.curves.length !== segments ||
+      !message.curves.every((flag) => typeof flag === "boolean")
+    ) {
+      return null;
+    }
+    return {
+      kind: "area",
+      points: message.points.map(([x, y]) => [x, y]),
+      curves: message.curves.map((flag) => flag === true),
+      freehand: message.freehand,
     };
   }
   if (message.kind === "erase") {
@@ -265,7 +320,7 @@ export function sceneMessage(
     penLabel: PenDraftLabel;
   }
 ): FrameSceneMessage {
-  const shapes = sceneShapes(map.elements, map.page.widthMm);
+  const render = sceneRender(map.elements, map.page.widthMm, map.page.heightMm);
   return {
     kind: "scene",
     widthMm: map.page.widthMm,
@@ -273,12 +328,14 @@ export function sceneMessage(
     background: EMPTY_MAP_COLOR,
     elements: map.elements.map((element, index) => ({
       id: element.id,
-      shapes: shapes[index],
+      shapes: render.shapes[index],
+      filter: render.filters[index],
       hidden: element.hidden,
       locked: element.locked,
       selected: element.id === view.selectedId,
       movable: !element.hidden && canMove(element),
     })),
+    defs: render.defs,
     tool: view.tool,
     zoom: view.zoom,
     panX: view.panX,

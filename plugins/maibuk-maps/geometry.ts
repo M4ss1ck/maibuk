@@ -63,8 +63,12 @@ export function seedFor(id: string): number {
   return hash >>> 0;
 }
 
-/** An alea-like seeded PRNG, which `createNoise2D` wants in place of `Math.random`. */
-function seededRandom(seed: number): () => number {
+/**
+ * A seeded PRNG (mulberry32), which `createNoise2D` wants in place of
+ * `Math.random` and `scatterPoints` wants in place of it too: the same seed
+ * always draws the same noise, and scatters the same points.
+ */
+export function seededRandom(seed: number): () => number {
   let state = seed >>> 0 || 1;
   return () => {
     state = (state + 0x6d2b79f5) >>> 0;
@@ -78,6 +82,30 @@ function seededRandom(seed: number): () => number {
 /** A point `t` of the way from `a` to `b`. */
 function pointAt(a: MapPoint, b: MapPoint, t: number): MapPoint {
   return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+}
+
+/** The smallest and largest coordinate of a set of points, in page millimetres. */
+export interface MapBounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+/** The box `points` fill, in page millimetres, or null for no points. */
+export function pointsBounds(points: readonly MapPoint[]): MapBounds | null {
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  for (const [x, y] of points) {
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  }
+  if (minX === Number.POSITIVE_INFINITY) return null;
+  return { minX, minY, maxX, maxY };
 }
 
 /** The distance from a point to the nearest spot on segment `a`-`b`. */

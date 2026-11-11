@@ -23,6 +23,7 @@ import { useShortcuts } from "@/lib/shortcuts";
 import { createPluginClient, type PluginClient, type PluginFrame } from "@/plugin-sdk";
 import { PLUGIN_COMMAND_RUN_REQUEST, PLUGIN_MIGRATE_DATA_REQUEST } from "@/plugin-sdk/protocol";
 import { servePluginUi } from "@/plugin-sdk/ui-serve";
+import { DEFAULT_SOFT_EDGE_MM, SOFT_EDGE_STEP_MM } from "./editor";
 import en from "./locales/runtime/en.json";
 import es from "./locales/runtime/es.json";
 import { format } from "./i18n";
@@ -32,6 +33,7 @@ import {
   mapKey,
   type MapDocument,
   type MapElement,
+  type MapFillContent,
   type MapFillElement,
   type MapIndexEntry,
   type MapLineElement,
@@ -46,10 +48,22 @@ import {
   startMaps,
   type MapsRuntime,
 } from "./runtime";
+import { DEFAULT_SCATTER_SPACING_MM } from "./scatter";
 import { smoothStroke } from "./scene";
 import { linePath, roughen, seedFor, shapeOutline } from "./geometry";
 
 type User = ReturnType<typeof userEvent.setup>;
+
+/**
+ * The Map Frame's own files (#750), read from the Plugin folder: the keyboard
+ * test below runs the real `assets/ui/map.js`, so its crosshair answers real
+ * key presses and posts the real messages the open editor keeps.
+ */
+const FRAME_LIBRARY = readFileSync(
+  join(__dirname, "assets/ui/lib/htm-preact-standalone.umd.js"),
+  "utf8"
+);
+const FRAME_SCRIPT = readFileSync(join(__dirname, "assets/ui/map.js"), "utf8");
 
 const cleanups: Array<() => void> = [];
 afterEach(() => {
@@ -165,6 +179,50 @@ function recordingPort(): { port: MessagePort; messages: unknown[] } {
   return { port, messages };
 }
 
+/**
+ * The real Map Frame (#750), loaded into this document so a keyboard test can
+ * drive its crosshair with real key presses and read what it posts. The two
+ * ports stand for the ends of the Frame's MessageChannel: every message the
+ * Frame posts reaches the open editor, and every scene the editor sends reaches
+ * the Frame. Returns the port the editor draws into.
+ *
+ * The Frame's own `#surface` is added to the document's body rather than
+ * replacing it, so the page around this test keeps the body its queries hold.
+ */
+function loadMapFrame(runtime: MapsRuntime): MessagePort {
+  const surface = document.createElement("div");
+  surface.id = "surface";
+  document.body.appendChild(surface);
+  const framePort = {
+    onmessage: null as ((event: MessageEvent) => void) | null,
+    start: () => {},
+    postMessage: (message: unknown) => runtime.editor?.handleFrameMessage(message),
+  };
+  const workerPort = {
+    onmessage: null,
+    start: () => {},
+    postMessage: (message: unknown) => framePort.onmessage?.({ data: message } as MessageEvent),
+  } as unknown as MessagePort;
+  (window as unknown as { maibuk: unknown }).maibuk = { port: framePort };
+  // The script hands back its cleanup through the same test seam the Frame's
+  // own tests use, so its document listeners and surface never outlive it.
+  (globalThis as Record<string, unknown>).__mapTestHooks = {
+    onReady: (cleanup: () => void) =>
+      cleanups.push(() => {
+        cleanup();
+        surface.remove();
+        delete (window as unknown as { maibuk?: unknown }).maibuk;
+      }),
+  };
+  try {
+    new Function(FRAME_LIBRARY)();
+    new Function(FRAME_SCRIPT)();
+  } finally {
+    delete (globalThis as Record<string, unknown>).__mapTestHooks;
+  }
+  return workerPort;
+}
+
 /** A host and the runtime that owns the open Map, for the editor tests. */
 function editorHostFor(storage: Map<string, unknown>, language = "en") {
   const host = createTestHost({
@@ -196,6 +254,29 @@ function line(
     curves: points.slice(1).map(() => true),
     roughened: false,
     ...extra,
+  };
+}
+
+/** An Area Fill covering its own square outline, which the properties panel edits. */
+function areaFill(content: MapFillContent): MapFillElement {
+  return {
+    id: "f1",
+    kind: "fill",
+    name: "Fill 1",
+    hidden: false,
+    locked: false,
+    anchor: [50, 50],
+    outline: {
+      points: [
+        [10, 10],
+        [90, 10],
+        [90, 90],
+        [10, 90],
+      ],
+      curves: [false, false, false, false],
+      roughened: false,
+    },
+    content,
   };
 }
 
@@ -296,6 +377,50 @@ function linePoints(storage: Map<string, unknown>, index = 0): [number, number][
 
 async function tabTo(user: User, element: HTMLElement, max = 40): Promise<void> {
   for (let i = 0; i < max && document.activeElement !== element; i++) await user.tab();
+}
+
+/** Tabs back into the Elements list, so a row can be picked again. */
+async function backToRows(user: User): Promise<HTMLElement> {
+  const list = screen.getByRole("listbox", { name: en["elements.label"] });
+  for (let i = 0; i < 60 && !list.contains(document.activeElement); i++)
+    await user.tab({ shift: true });
+  return list;
+}
+
+/** The Fill the open editor holds. */
+function fillNow(runtime: MapsRuntime): MapFillElement {
+  const element = runtime.editor
+    ?.getSnapshot()
+    .elements.find((candidate): candidate is MapFillElement => candidate.kind === "fill");
+  if (element === undefined) throw new Error("no Fill");
+  return element;
+}
+
+/** The Map Line the open editor holds. */
+function lineNow(runtime: MapsRuntime): MapLineElement {
+  const element = runtime.editor
+    ?.getSnapshot()
+    .elements.find((candidate): candidate is MapLineElement => candidate.kind === "line");
+  if (element === undefined) throw new Error("no Map Line");
+  return element;
+}
+
+/** The Fill the stored Map holds. */
+function storedFill(storage: Map<string, unknown>): MapFillElement {
+  const element = storedMap(storage).elements.find(
+    (candidate): candidate is MapFillElement => candidate.kind === "fill"
+  );
+  if (element === undefined) throw new Error("no stored Fill");
+  return element;
+}
+
+/** The Map Line the stored Map holds. */
+function storedLine(storage: Map<string, unknown>): MapLineElement {
+  const element = storedMap(storage).elements.find(
+    (candidate): candidate is MapLineElement => candidate.kind === "line"
+  );
+  if (element === undefined) throw new Error("no stored Map Line");
+  return element;
 }
 
 /** Focuses the Tool radio group and arrows to `name`, from wherever it stands. */
@@ -614,6 +739,7 @@ describe("Map editor Commands", () => {
     "pencilTool",
     "penTool",
     "bucketTool",
+    "areaTool",
     "ellipseTool",
     "rectangleTool",
     "polygonTool",
@@ -640,6 +766,7 @@ describe("Map editor Commands", () => {
     ]);
     expect(effectiveShortcuts("plugin.maibuk-maps.penTool", {}, false)).toContainEqual(["n"]);
     expect(effectiveShortcuts("plugin.maibuk-maps.bucketTool", {}, false)).toContainEqual(["b"]);
+    expect(effectiveShortcuts("plugin.maibuk-maps.areaTool", {}, false)).toContainEqual(["a"]);
     expect(effectiveShortcuts("plugin.maibuk-maps.insertTool", {}, false)).toContainEqual(["i"]);
     expect(effectiveShortcuts("plugin.maibuk-maps.ellipseTool", {}, false)).toContainEqual(["o"]);
     expect(effectiveShortcuts("plugin.maibuk-maps.rectangleTool", {}, false)).toContainEqual(["r"]);
@@ -1325,6 +1452,70 @@ describe("Map editor page", () => {
     }
   });
 
+  it("draws an Area Fill with the keyboard and Roughens its outline", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    registerMapCommands();
+    // The real Frame runs here, so the arrows move its crosshair and Enter
+    // posts the outline it closes; nothing about the Frame is stubbed.
+    const workerPort = loadMapFrame(runtime);
+    runtime.editor?.attachFrame(workerPort);
+    const keys = render(<CommandKeys host={host} />);
+    try {
+      const user = userEvent.setup();
+
+      // The Area tool's own key selects it, through the host's shortcut registry.
+      await user.keyboard("a");
+      await waitFor(() => expect(runtime.editor?.getSnapshot().tool).toBe("area"));
+
+      // The crosshair starts at the view centre of the portrait page, 76.2 by
+      // 114.3 mm; Shift+Arrow steps it ten millimetres.
+      const startX = 152.4 / 2;
+      const startY = 228.6 / 2;
+      await user.keyboard("{Enter}");
+      await user.keyboard("{Shift>}{ArrowRight}{/Shift}");
+      await user.keyboard("{Enter}");
+      await user.keyboard("{Shift>}{ArrowDown}{/Shift}");
+      await user.keyboard("{Enter}");
+      // Back on the first point, Enter closes the outline.
+      await user.keyboard("{Shift>}{ArrowLeft}{/Shift}");
+      await user.keyboard("{Shift>}{ArrowUp}{/Shift}");
+      await user.keyboard("{Enter}");
+
+      await waitFor(() => expect(runtime.editor?.getSnapshot().elements).toHaveLength(1));
+      await runtime.editor?.flush();
+
+      // The outline the author pointed out is the Area Fill the Map keeps.
+      const drawn = storedMap(storage).elements[0] as MapFillElement;
+      expect(drawn).toMatchObject({
+        kind: "fill",
+        name: "Fill 1",
+        content: { color: DEFAULT_FILL_COLOR },
+      });
+      expect(drawn.outline?.points).toEqual([
+        [startX, startY],
+        [startX + 10, startY],
+        [startX + 10, startY + 10],
+      ]);
+      expect(drawn.outline?.curves).toEqual([false, false, false]);
+      expect(drawn.outline?.roughened).toBe(false);
+      expect(runtime.editor?.getSnapshot().selectedId).toBe(drawn.id);
+
+      // Roughen by its Shortcut redraws that outline, as one undo step.
+      await user.keyboard("{Control>}{Shift>}r{/Shift}{/Control}");
+      const roughenedNow = () =>
+        (runtime.editor?.getSnapshot().elements[0] as MapFillElement).outline?.roughened;
+      await waitFor(() => expect(roughenedNow()).toBe(true));
+      const roughened = runtime.editor?.getSnapshot().elements[0] as MapFillElement;
+      expect(roughened.outline?.points.length).toBeGreaterThan(drawn.outline?.points.length ?? 0);
+      await runtime.editor?.flush();
+      expect((storedMap(storage).elements[0] as MapFillElement).outline?.roughened).toBe(true);
+    } finally {
+      keys.unmount();
+      await host.stop();
+    }
+  });
+
   it("picks the Bucket, pours at the keyboard crosshair, and undoes the Fill", async () => {
     const storage = mapStorage([]);
     const { host, runtime } = await openEditor(storage);
@@ -1525,7 +1716,7 @@ describe("Map editor page", () => {
       for (let i = 0; i < 60 && !tools.contains(document.activeElement); i++)
         await user.tab({ shift: true });
       const rectangle = screen.getByRole("radio", { name: en["tools.rectangle"] });
-      for (let i = 0; i < 8 && !(rectangle as HTMLInputElement).checked; i++)
+      for (let i = 0; i < 12 && !(rectangle as HTMLInputElement).checked; i++)
         await user.keyboard("{ArrowRight}");
       await waitFor(() => expect(rectangle).toBeChecked());
       const place = await screen.findByRole("button", {
@@ -2078,6 +2269,147 @@ describe("Map editor page", () => {
         expect((runtime.editor?.getSnapshot().elements[0] as MapStampElement).scale?.span).toBe(1)
       );
       expect(span).toHaveValue("1");
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("turns Soft Edge on a Fill and a Map Line by keyboard, and fades it further with the arrows", async () => {
+    const storage = mapStorage([
+      areaFill({ color: DEFAULT_FILL_COLOR }),
+      line(
+        "ring",
+        "Ring",
+        [
+          [20, 20],
+          [70, 20],
+          [70, 70],
+        ],
+        { closed: true, curves: [false, false, false] }
+      ),
+    ]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await selectRow(user, "Fill 1");
+
+      const toggle = await screen.findByRole("switch", { name: en["properties.softEdge"] });
+      await tabTo(user, toggle, 60);
+      expect(toggle).toHaveFocus();
+      await user.keyboard(" ");
+      await waitFor(() => expect(fillNow(runtime).softEdge).toBe(DEFAULT_SOFT_EDGE_MM));
+
+      const amount = await screen.findByRole("slider", { name: en["properties.softEdgeAmount"] });
+      await tabTo(user, amount, 10);
+      await user.keyboard("{ArrowRight}");
+      await waitFor(() =>
+        expect(fillNow(runtime).softEdge).toBe(DEFAULT_SOFT_EDGE_MM + SOFT_EDGE_STEP_MM)
+      );
+      await runtime.editor?.flush();
+      expect(storedFill(storage).softEdge).toBe(DEFAULT_SOFT_EDGE_MM + SOFT_EDGE_STEP_MM);
+
+      // A Map Line takes the same two controls, and its own amount: the panel
+      // shows the Line's value, not the one the Fill left behind.
+      await backToRows(user);
+      await selectRow(user, "Ring");
+      const lineToggle = await screen.findByRole("switch", { name: en["properties.softEdge"] });
+      await tabTo(user, lineToggle, 60);
+      await user.keyboard(" ");
+      await waitFor(() => expect(lineNow(runtime).softEdge).toBe(DEFAULT_SOFT_EDGE_MM));
+
+      const lineAmount = await screen.findByRole("slider", {
+        name: en["properties.softEdgeAmount"],
+      });
+      await tabTo(user, lineAmount, 10);
+      expect(lineAmount).toHaveFocus();
+      // The Line's amount is its own: one step down lands on 1.5, not on the
+      // 2 the Fill's slider had moved to.
+      await user.keyboard("{ArrowLeft}");
+      await waitFor(() =>
+        expect(lineNow(runtime).softEdge).toBe(DEFAULT_SOFT_EDGE_MM - SOFT_EDGE_STEP_MM)
+      );
+      await runtime.editor?.flush();
+      expect(storedLine(storage).softEdge).toBe(DEFAULT_SOFT_EDGE_MM - SOFT_EDGE_STEP_MM);
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("picks a texture and a scatter by keyboard, respaces and reseeds it, and clears one kind", async () => {
+    const storage = mapStorage([areaFill({ color: DEFAULT_FILL_COLOR })]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await selectRow(user, "Fill 1");
+
+      await pickOption(user, en["properties.fillTexture"], en["properties.texture.grass"]);
+      await waitFor(() => expect(fillNow(runtime).content.texture).toBe("grass"));
+
+      // A Fill that first takes a scatter picks a Stamp from the base picker and
+      // starts from a fresh seed.
+      await pickOption(user, en["properties.fillScatter"], en["stamp.castle"]);
+      await waitFor(() => expect(fillNow(runtime).content.scatter?.stamp).toBe("base:castle"));
+      const firstSeed = fillNow(runtime).content.scatter?.seed ?? 0;
+      expect(firstSeed).toBeGreaterThan(0);
+      expect(fillNow(runtime).content.scatter?.spacing).toBe(DEFAULT_SCATTER_SPACING_MM);
+
+      const spacing = await screen.findByRole("slider", { name: en["properties.scatterSpacing"] });
+      await tabTo(user, spacing, 60);
+      await user.keyboard("{ArrowRight}");
+      await waitFor(() =>
+        expect(fillNow(runtime).content.scatter?.spacing).toBe(DEFAULT_SCATTER_SPACING_MM + 1)
+      );
+      expect(fillNow(runtime).content.scatter?.seed).toBe(firstSeed);
+
+      // Reseed keeps the Stamp and the spacing, and moves the Stamps.
+      const reseed = await screen.findByRole("button", { name: en["properties.reseed"] });
+      await tabTo(user, reseed, 10);
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(fillNow(runtime).content.scatter?.seed).not.toBe(firstSeed));
+
+      // The colour and the scatter still cover the Fill, so the texture may go.
+      await backToRows(user);
+      await pickOption(user, en["properties.fillTexture"], en["properties.none"]);
+      await waitFor(() => expect(fillNow(runtime).content.texture).toBeUndefined());
+      await runtime.editor?.flush();
+      expect(storedFill(storage).content).toMatchObject({
+        color: DEFAULT_FILL_COLOR,
+        scatter: { stamp: "base:castle" },
+      });
+      expect(storedFill(storage).content.texture).toBeUndefined();
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("refuses to remove the last kind a Fill has, from the keyboard", async () => {
+    const storage = mapStorage([areaFill({ texture: "hatching" })]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await selectRow(user, "Fill 1");
+
+      await pickOption(user, en["properties.fillTexture"], en["properties.none"]);
+
+      // A pick the Worker refuses leaves the Fill as it was: the scatter that
+      // lands afterwards proves the refusal was answered, not still in flight.
+      await backToRows(user);
+      await pickOption(user, en["properties.fillScatter"], en["stamp.castle"]);
+      await waitFor(() => expect(fillNow(runtime).content.scatter?.stamp).toBe("base:castle"));
+
+      expect(fillNow(runtime).content.texture).toBe("hatching");
+      expect(screen.getByLabelText(en["properties.fillTexture"])).toHaveTextContent(
+        en["properties.texture.hatching"]
+      );
 
       await page.unmount();
     } finally {

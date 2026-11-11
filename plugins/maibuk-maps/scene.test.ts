@@ -10,7 +10,9 @@ import {
   type MapDocument,
   type MapElement,
   type MapFillElement,
+  type MapFillOutline,
   type MapLineElement,
+  type MapPoint,
   type MapStampElement,
   type PagePreset,
 } from "./maps";
@@ -23,6 +25,7 @@ import {
   type SceneShape,
   type TextShape,
   addElement,
+  canMove,
   lineShapes,
   moveElement,
   removeElement,
@@ -99,6 +102,28 @@ function mapWith(
     square: { widthMm: 203.2, heightMm: 203.2 },
   }[preset];
   return { page: { preset, ...page }, elements };
+}
+
+/** The 20 mm square at (0, 0), as an Area Fill's own outline. */
+const AREA_OUTLINE: MapFillOutline = {
+  points: [
+    [0, 0],
+    [20, 0],
+    [20, 20],
+    [0, 20],
+  ],
+  curves: [false, false, false, false],
+  roughened: false,
+};
+
+/** An Area Fill over `AREA_OUTLINE`, in the default land colour. */
+function areaFill(overrides: Partial<MapFillElement> = {}): MapFillElement {
+  return fill("forest", [10, 10], { outline: AREA_OUTLINE, ...overrides });
+}
+
+/** The paths of one Element's primitives, which an Area Fill's content draws. */
+function pathsOf(shapes: readonly SceneShape[]): LineShape[] {
+  return shapes.filter((shape): shape is LineShape => !("text" in shape));
 }
 
 describe("smoothStroke", () => {
@@ -636,7 +661,7 @@ describe("Stamp rendering", () => {
   }
 
   it("draws a marker's art in the Stamp's colour, scaled and centred on its point", () => {
-    const [shape] = pathsOf(sceneShapes([stamp()], 152.4)[0]);
+    const [shape] = pathsOf(sceneShapes([stamp()], 152.4, 152.4)[0]);
 
     expect(shape).toMatchObject({
       stroke: null,
@@ -652,7 +677,7 @@ describe("Stamp rendering", () => {
 
   it("turns and resizes the art with the Stamp's own numbers", () => {
     const [shape] = pathsOf(
-      sceneShapes([stamp({ transform: { x: 40, y: 30, size: 5, rotation: 90 } })], 152.4)[0]
+      sceneShapes([stamp({ transform: { x: 40, y: 30, size: 5, rotation: 90 } })], 152.4, 152.4)[0]
     );
 
     expect(shape.transform).toBe("translate(40 30) rotate(90) scale(0.463) translate(0 0)");
@@ -676,14 +701,14 @@ describe("Stamp rendering", () => {
     ];
     for (const id of oneColour) {
       const first = pathsOf(
-        sceneShapes([stamp({ stampRef: `base:${id}`, color: "#2779a8" })], 152.4)[0]
+        sceneShapes([stamp({ stampRef: `base:${id}`, color: "#2779a8" })], 152.4, 152.4)[0]
       );
       expect(first.length, id).toBeGreaterThan(0);
       for (const shape of first) {
         expect(shape.fill, id).toBe("#2779a8");
       }
       const second = pathsOf(
-        sceneShapes([stamp({ stampRef: `base:${id}`, color: "#a82779" })], 152.4)[0]
+        sceneShapes([stamp({ stampRef: `base:${id}`, color: "#a82779" })], 152.4, 152.4)[0]
       );
       for (const shape of second) {
         expect(shape.fill, id).toBe("#a82779");
@@ -703,9 +728,9 @@ describe("Stamp rendering", () => {
       "compass-rose",
     ];
     for (const id of multiColour) {
-      const ink = pathsOf(sceneShapes([stamp({ stampRef: `base:${id}` })], 152.4)[0]);
+      const ink = pathsOf(sceneShapes([stamp({ stampRef: `base:${id}` })], 152.4, 152.4)[0]);
       const other = pathsOf(
-        sceneShapes([stamp({ stampRef: `base:${id}`, color: "#a82779" })], 152.4)[0]
+        sceneShapes([stamp({ stampRef: `base:${id}`, color: "#a82779" })], 152.4, 152.4)[0]
       );
       expect(ink.length, id).toBeGreaterThan(0);
       // The art keeps every colour it owns: no shape takes the Stamp's ink.
@@ -725,12 +750,12 @@ describe("Stamp rendering", () => {
   });
 
   it("draws nothing for a Stamp whose art is unknown", () => {
-    expect(sceneShapes([stamp({ stampRef: "base:nope" })], 152.4)[0]).toEqual([]);
-    expect(sceneShapes([stamp({ stampRef: "custom:castle" })], 152.4)[0]).toEqual([]);
+    expect(sceneShapes([stamp({ stampRef: "base:nope" })], 152.4, 152.4)[0]).toEqual([]);
+    expect(sceneShapes([stamp({ stampRef: "custom:castle" })], 152.4, 152.4)[0]).toEqual([]);
   });
 
   it("draws the scale bar as four alternating segments and two labels", () => {
-    const shapes = sceneShapes([scaleBar()], 152.4)[0];
+    const shapes = sceneShapes([scaleBar()], 152.4, 152.4)[0];
     const paths = pathsOf(shapes);
 
     // 40 mm of a 152.4 mm page reading 1000 km labels 200 km, so 30.48 mm of bar.
@@ -763,7 +788,7 @@ describe("Stamp rendering", () => {
 
   it("reads the scale in miles and in the span the Stamp carries", () => {
     const [, far] = textsOf(
-      sceneShapes([scaleBar({ scale: { unit: "mi", span: 500 } })], 152.4)[0]
+      sceneShapes([scaleBar({ scale: { unit: "mi", span: 500 } })], 152.4, 152.4)[0]
     );
 
     expect(far.text).toBe("100 mi");
@@ -773,6 +798,7 @@ describe("Stamp rendering", () => {
     // 200 mm of page stands for 1000 km, so a 100 mm bar is exactly 500 km.
     const shapes = sceneShapes(
       [scaleBar({ transform: { x: 100, y: 50, size: 100, rotation: 0 } })],
+      200,
       200
     )[0];
 
@@ -836,6 +862,293 @@ describe("Fill rendering", () => {
     const svg = sceneToSvg(mapWith([fill("land", [200, 200]), ring("coast")]));
 
     expect(svg).not.toContain('data-element-id="land"');
+  });
+
+  it("writes no definitions for a Fill of an old colour-only document", () => {
+    const svg = sceneToSvg(mapWith([fill("land", [20, 20]), ring("coast")]));
+
+    expect(svg).not.toContain("<defs>");
+    expect(svg).not.toContain("<filter");
+    expect(svg).not.toContain("<clipPath");
+    expect(svg).not.toContain("filter=");
+    expect(svg).not.toContain("clip-path=");
+  });
+});
+
+describe("Area Fills", () => {
+  /** The one path the group of `id` holds, as SVG. */
+  function groupOf(svg: string, id: string): string {
+    const start = svg.indexOf(`<g data-element-id="${id}">`);
+    expect(start).toBeGreaterThan(-1);
+    return svg.slice(start, svg.indexOf("</g>", start));
+  }
+
+  it("draws an Area Fill as its own outline, filled and unstroked", () => {
+    // No Map Line in the Map: an Area Fill covers its outline, not a face.
+    const svg = sceneToSvg(mapWith([areaFill()]));
+
+    const group = groupOf(svg, "forest");
+    expect(group).toContain('d="M 0 0 L 20 0 L 20 20 L 0 20 Z"');
+    expect(group).toContain('stroke="none"');
+    expect(group).toContain('fill="#c8d5a3"');
+    expect(group).toContain('fill-rule="evenodd"');
+    expect(group).not.toContain('stroke-width="');
+  });
+
+  it("draws an Area Fill's outline through its curved segments", () => {
+    const [shape] = pathsOf(
+      sceneShapes(
+        [
+          areaFill({
+            outline: {
+              points: [
+                [0, 0],
+                [10, 10],
+                [20, 0],
+              ],
+              curves: [true, true, true],
+              roughened: false,
+            },
+          }),
+        ],
+        152.4,
+        152.4
+      )[0]
+    );
+
+    expect(shape.d).toContain(" C ");
+    expect(shape.d.endsWith(" Z")).toBe(true);
+    expect(shape.stroke).toBeNull();
+    expect(shape.fill).toBe("#c8d5a3");
+  });
+
+  it("draws a roughened Area Fill's outline in the rough ink look, still unstroked", () => {
+    const roughened = () => areaFill({ outline: { ...AREA_OUTLINE, roughened: true } });
+    const [plain] = pathsOf(sceneShapes([areaFill()], 152.4, 152.4)[0]);
+    const [rough] = pathsOf(sceneShapes([roughened()], 152.4, 152.4)[0]);
+
+    expect(rough.d).not.toBe(plain.d);
+    expect(rough.stroke).toBeNull();
+    expect(rough.fill).toBe("#c8d5a3");
+    // The same Element roughens the same way every render.
+    expect(pathsOf(sceneShapes([roughened()], 152.4, 152.4)[0])[0].d).toBe(rough.d);
+  });
+
+  it("moves an Area Fill with its outline, and leaves a Bucket Fill where it is", () => {
+    const area = areaFill();
+    const moved = moveElement([area], "forest", 3, -2)[0];
+
+    expect(moved).toMatchObject({
+      anchor: [13, 8],
+      outline: {
+        points: [
+          [3, -2],
+          [23, -2],
+          [23, 18],
+          [3, 18],
+        ],
+      },
+    });
+    expect(canMove(area)).toBe(true);
+    const bucket = fill("land", [1, 1]);
+    expect(canMove(bucket)).toBe(false);
+    expect(moveElement([bucket], "land", 3, -2)[0]).toBe(bucket);
+  });
+});
+
+describe("Fill textures", () => {
+  it("paints a Fill's texture from one pattern per texture, defined once", () => {
+    const svg = sceneToSvg(
+      mapWith([
+        areaFill({ id: "meadow", content: { color: "#c8d5a3", texture: "grass" } }),
+        areaFill({ id: "field", content: { texture: "grass" } }),
+      ])
+    );
+
+    expect(svg.match(/<pattern id="texture-grass"/g)).toHaveLength(1);
+    expect(svg.match(/url\(#texture-grass\)/g)).toHaveLength(2);
+    expect(svg.indexOf("<defs>")).toBeLessThan(svg.indexOf("<pattern"));
+  });
+
+  it("defines only the textures the Map paints with", () => {
+    const svg = sceneToSvg(mapWith([areaFill({ content: { texture: "sand" } })]));
+
+    expect(svg).toContain('id="texture-sand"');
+    expect(svg).not.toContain('id="texture-grass"');
+  });
+});
+
+describe("Fill scatter", () => {
+  /** Every point a scattered Stamp is placed on, once per point, in order. */
+  function stampPoints(svg: string): MapPoint[] {
+    const points = [...svg.matchAll(/transform="translate\((-?[\d.]+) (-?[\d.]+)\)/g)].map(
+      ([, x, y]): MapPoint => [Number(x), Number(y)]
+    );
+    // A Stamp's art is several paths at one point, so a point repeats per part.
+    const seen = new Set<string>();
+    return points.filter((point) => {
+      const key = `${point[0]},${point[1]}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  it("scatters a Fill's Stamps inside its area, clipped to it", () => {
+    const svg = sceneToSvg(
+      mapWith([areaFill({ content: { scatter: { stamp: "base:tree", spacing: 8, seed: 5 } } })])
+    );
+
+    expect(svg).toMatch(
+      /<clipPath id="fill-clip-[0-9a-f]+"><path d="[^"]+" clip-rule="evenodd"\/>/
+    );
+    // The clip wraps the art in page space: a clip-path on the transformed path
+    // itself would be read in the Stamp's own coordinates and cut the wrong area.
+    expect(svg).toMatch(/<g clip-path="url\(#fill-clip-[0-9a-f]+\)"><path [^>]*transform=/);
+    expect(svg).not.toMatch(/<path [^>]*clip-path=/);
+    const points = stampPoints(svg);
+    expect(points.length).toBeGreaterThan(2);
+    for (const [x, y] of points) {
+      expect(x).toBeGreaterThan(0);
+      expect(x).toBeLessThan(20);
+      expect(y).toBeGreaterThan(0);
+      expect(y).toBeLessThan(20);
+    }
+  });
+
+  it("draws each scattered Stamp one scatter spacing wide, so they do not pile up", () => {
+    const scaleOf = (spacing: number) => {
+      const [shape] = pathsOf(
+        sceneShapes(
+          [areaFill({ content: { scatter: { stamp: "base:tree", spacing, seed: 5 } } })],
+          203.2,
+          203.2
+        )[0]
+      );
+      return Number(/scale\(([\d.]+)\)/.exec(shape.transform ?? "")?.[1]);
+    };
+
+    // The art is scaled from its own box, so twice the spacing draws each
+    // Stamp twice as wide: one control sets both the gap and the size.
+    expect(scaleOf(12) / scaleOf(6)).toBeCloseTo(2, 5);
+  });
+
+  it("samples a Bucket Fill's scatter in page space, so the Stamps inside a moved face stay put", () => {
+    const scatter = { stamp: "base:tree", spacing: 5, seed: 4 };
+    const pointsOver = (offset: number) =>
+      stampPoints(
+        sceneToSvg(
+          mapWith([
+            fill("trees", [offset + 20, offset + 20], { content: { scatter } }),
+            ring("coast", 40, offset),
+          ])
+        )
+      );
+
+    const before = pointsOver(0);
+    const after = pointsOver(10);
+
+    // A point both the old and the new face cover is a page spot, not a face
+    // spot: the face sliding under it leaves it where it was.
+    const shared = before.filter(([x, y]) => x > 10 && x < 40 && y > 10 && y < 40);
+    expect(shared.length).toBeGreaterThan(0);
+    for (const point of shared) expect(after).toContainEqual(point);
+  });
+
+  it("scatters the one Stamp its Fill names, at every point", () => {
+    const scatterSvg = (stamp: string) =>
+      sceneToSvg(mapWith([areaFill({ content: { scatter: { stamp, spacing: 8, seed: 2 } } })]));
+    const trees = scatterSvg("base:tree");
+    const markers = scatterSvg("base:marker");
+
+    // Both Fills scatter on the same points; only the art each holds differs.
+    expect(stampPoints(markers)).toEqual(stampPoints(trees));
+    expect(markers).not.toBe(trees);
+  });
+});
+
+describe("Soft Edge", () => {
+  it("blurs a Fill's edge with a filter in page space", () => {
+    const svg = sceneToSvg(mapWith([areaFill({ softEdge: 2 })]));
+    const id = /<filter id="([^"]+)"/.exec(svg)?.[1];
+
+    expect(id).toBeDefined();
+    expect(svg).toContain(`<filter id="${id}" filterUnits="userSpaceOnUse"`);
+    expect(svg).toContain('color-interpolation-filters="sRGB"');
+    expect(svg).toContain('width="');
+    expect(svg).toContain('height="');
+    expect(svg).toContain('<feGaussianBlur stdDeviation="2"/>');
+    expect(svg).toContain(`filter="url(#${id})"`);
+  });
+
+  it("widens the filter's region past the Fill, so the blur is not cut off", () => {
+    const svg = sceneToSvg(mapWith([areaFill({ softEdge: 4 })]));
+    const filter = /<filter [^>]+>/.exec(svg)?.[0] ?? "";
+    const value = (name: string) => Number(new RegExp(` ${name}="(-?[\\d.]+)"`).exec(filter)?.[1]);
+
+    // The 20 mm square starts at 0 and ends at 20; the region has to reach past both.
+    expect(value("x")).toBeLessThan(0);
+    expect(value("y")).toBeLessThan(0);
+    expect(value("x") + value("width")).toBeGreaterThan(20);
+    expect(value("y") + value("height")).toBeGreaterThan(20);
+  });
+
+  it("blurs a Map Line's edge too", () => {
+    const svg = sceneToSvg(
+      mapWith([
+        line(
+          "coast",
+          [
+            [0, 0],
+            [10, 0],
+          ],
+          { curves: [false], softEdge: 1.5 }
+        ),
+      ])
+    );
+
+    expect(svg).toContain('<feGaussianBlur stdDeviation="1.5"/>');
+    expect(svg).toMatch(/filter="url\(#soft-edge-[0-9a-f]+\)"/);
+  });
+
+  it("gives each Element its own filter id, the same one every render", () => {
+    const idOf = (id: string, softEdge: number) => {
+      const svg = sceneToSvg(
+        mapWith([
+          line(
+            id,
+            [
+              [0, 0],
+              [10, 0],
+            ],
+            { curves: [false], softEdge }
+          ),
+        ])
+      );
+      return /<filter id="([^"]+)"/.exec(svg)?.[1];
+    };
+
+    expect(idOf("coast", 1)).toBe(idOf("coast", 1));
+    expect(idOf("coast", 1)).not.toBe(idOf("river", 1));
+  });
+
+  it("writes no filter for a sharp Fill or Map Line", () => {
+    const svg = sceneToSvg(
+      mapWith([
+        areaFill(),
+        line(
+          "coast",
+          [
+            [0, 0],
+            [10, 0],
+          ],
+          { curves: [false] }
+        ),
+      ])
+    );
+
+    expect(svg).not.toContain("<filter");
+    expect(svg).not.toContain("filter=");
   });
 });
 

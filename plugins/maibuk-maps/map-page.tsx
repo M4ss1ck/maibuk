@@ -10,7 +10,15 @@
 
 import { useEffect, useState, useSyncExternalStore, type ComponentType } from "react";
 import { ui, type PluginClient } from "@/plugin-sdk";
-import { MAX_ROUGHEN_STRENGTH_MM, MIN_ROUGHEN_STRENGTH_MM, type MapEditor } from "./editor";
+import {
+  DEFAULT_SOFT_EDGE_MM,
+  MAX_ROUGHEN_STRENGTH_MM,
+  MAX_SOFT_EDGE_MM,
+  MIN_ROUGHEN_STRENGTH_MM,
+  MIN_SOFT_EDGE_MM,
+  SOFT_EDGE_STEP_MM,
+  type MapEditor,
+} from "./editor";
 import type { MapTool } from "./frame-protocol";
 import { format, translate, type MapsKey } from "./i18n";
 import type { MapsRuntime } from "./runtime";
@@ -29,7 +37,9 @@ import {
   type ShapeKind,
   type StampScaleUnit,
 } from "./maps";
-import { BASE_STAMP_IDS, stampNameKey, stampTakesColour } from "./stamps";
+import { MAX_SCATTER_SPACING_MM, MIN_SCATTER_SPACING_MM } from "./scatter";
+import { BASE_STAMP_IDS, baseStampRef, stampNameKey, stampTakesColour } from "./stamps";
+import { TEXTURE_IDS, type TextureId } from "./textures";
 
 /** The editor page id, exactly as the manifest declares it. */
 export const MAP_PAGE_ID = "map";
@@ -58,6 +68,9 @@ const LOCK = "lock";
 const UNLOCK = "unlock";
 const DELETE = "delete";
 const PROPERTIES = "properties";
+
+/** The no-texture and no-scatter choice of the Fill content selects. */
+const NONE = "none";
 
 /** The Line style select's label for each style the model accepts, in its order. */
 const LINE_STYLE_KEYS: Readonly<Record<LineStyleId, MapsKey>> = {
@@ -94,6 +107,15 @@ const CONVERTED_KEYS: Readonly<Record<ShapeKind, MapsKey>> = {
 const STAMP_UNIT_KEYS: Readonly<Record<StampScaleUnit, MapsKey>> = {
   km: "properties.stamp.unit.km",
   mi: "properties.stamp.unit.mi",
+};
+
+/** The Texture select's label for each texture a Fill takes, in the order it offers them. */
+const TEXTURE_KEYS: Readonly<Record<TextureId, MapsKey>> = {
+  grass: "properties.texture.grass",
+  sand: "properties.texture.sand",
+  marsh: "properties.texture.marsh",
+  hatching: "properties.texture.hatching",
+  dots: "properties.texture.dots",
 };
 
 /**
@@ -146,6 +168,13 @@ function MapEditorView({
   const shapeTool = isShapeKind(snapshot.tool) ? snapshot.tool : null;
   const shape = snapshot.selectedShape;
   const stamp = snapshot.selectedStamp;
+  const scatter = snapshot.selectedFillScatter;
+  // The scatter select offers the base Stamps, so it reads the one the Fill
+  // scatters back from its art ref.
+  const scatterStampId =
+    scatter === null
+      ? null
+      : (BASE_STAMP_IDS.find((id) => baseStampRef(id) === scatter.stamp) ?? null);
   // The Bucket's colour is what the next pour uses, so it wins while the Bucket
   // is active; with any other tool the one control edits the selected Fill.
   const pouring = snapshot.tool === "bucket";
@@ -237,6 +266,7 @@ function MapEditorView({
               { value: "pencil", label: t("tools.pencil") },
               { value: "pen", label: t("tools.pen") },
               { value: "bucket", label: t("tools.bucket") },
+              { value: "area", label: t("tools.area") },
               { value: "insert", label: t("tools.insert") },
               ...SHAPE_KINDS.map((kind) => ({ value: kind, label: t(SHAPE_TOOL_KEYS[kind]) })),
               { value: "eraser", label: t("tools.eraser") },
@@ -498,7 +528,93 @@ function MapEditorView({
                   onChange={(event) => editor.setEnclosesFills(selected.id, event.detail)}
                 />
               ) : null}
-              {snapshot.selectedIsLine ? (
+              {snapshot.selectedIsLine || snapshot.selectedIsFill ? (
+                <>
+                  <ui.Switch
+                    label={t("properties.softEdge")}
+                    isSelected={snapshot.selectedSoftEdge !== null}
+                    isDisabled={selected.locked}
+                    onChange={(event) =>
+                      editor.setSoftEdge(selected.id, event.detail ? DEFAULT_SOFT_EDGE_MM : null)
+                    }
+                  />
+                  {/* The amount stays mounted while an Element is selected, so a
+                      change of selection updates it in place; the host keeps the
+                      value it mounted with when a control is replaced at its
+                      slot. Moving it also turns the Soft Edge on. */}
+                  <ui.Slider
+                    label={t("properties.softEdgeAmount")}
+                    value={snapshot.selectedSoftEdge ?? DEFAULT_SOFT_EDGE_MM}
+                    minValue={MIN_SOFT_EDGE_MM}
+                    maxValue={MAX_SOFT_EDGE_MM}
+                    step={SOFT_EDGE_STEP_MM}
+                    isDisabled={selected.locked}
+                    onChange={(event) => editor.setSoftEdge(selected.id, event.detail)}
+                  />
+                </>
+              ) : null}
+              {snapshot.selectedIsFill ? (
+                <>
+                  {/* A Fill covers some of a colour, a texture, and a scatter of
+                      Stamps, in any combination; the last kind cannot go. */}
+                  <ui.Select
+                    label={t("properties.fillTexture")}
+                    options={[
+                      { value: NONE, label: t("properties.none") },
+                      ...TEXTURE_IDS.map((id) => ({ value: id, label: t(TEXTURE_KEYS[id]) })),
+                    ]}
+                    selectedKey={snapshot.selectedFillTexture ?? NONE}
+                    isDisabled={selected.locked}
+                    onChange={(event) =>
+                      editor.setFillTexture(
+                        selected.id,
+                        event.detail === NONE ? null : event.detail
+                      )
+                    }
+                  />
+                  <ui.Select
+                    label={t("properties.fillScatter")}
+                    options={[
+                      { value: NONE, label: t("properties.none") },
+                      ...BASE_STAMP_IDS.map((id) => ({
+                        value: id,
+                        label: t(stampNameKey(id)),
+                      })),
+                    ]}
+                    selectedKey={scatterStampId ?? NONE}
+                    isDisabled={selected.locked}
+                    onChange={(event) =>
+                      editor.setFillScatter(
+                        selected.id,
+                        event.detail === NONE ? null : event.detail
+                      )
+                    }
+                  />
+                  {scatter === null ? null : (
+                    <>
+                      <ui.Slider
+                        label={t("properties.scatterSpacing")}
+                        value={scatter.spacing}
+                        minValue={MIN_SCATTER_SPACING_MM}
+                        maxValue={MAX_SCATTER_SPACING_MM}
+                        isDisabled={selected.locked}
+                        onChange={(event) =>
+                          editor.setFillScatterSpacing(selected.id, event.detail)
+                        }
+                      />
+                      {/* The same Stamps land in new spots, so the author can
+                          scatter again without picking a different Stamp. */}
+                      <ui.Button
+                        variant="secondary"
+                        onPress={() => editor.reseedFillScatter(selected.id)}
+                      >
+                        {t("properties.reseed")}
+                      </ui.Button>
+                    </>
+                  )}
+                </>
+              ) : null}
+              {snapshot.selectedIsLine || snapshot.selectedIsAreaFill ? (
                 <>
                   <ui.Slider
                     label={t("properties.roughenStrength")}

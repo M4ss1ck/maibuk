@@ -540,6 +540,129 @@ describe("Map Fills", () => {
     expect(DEFAULT_FILL_COLOR).toMatch(/^#[0-9a-f]{6}$/i);
     expect(DEFAULT_FILL_COLOR).not.toBe(EMPTY_MAP_COLOR);
   });
+
+  it("keeps an Area Fill's own outline and its texture", async () => {
+    const area = fill("forest", {
+      anchor: [10, 10],
+      outline: {
+        points: [
+          [0, 0],
+          [20, 0],
+          [20, 20],
+          [0, 20],
+        ],
+        curves: [false, false, false, false],
+        roughened: true,
+      },
+      content: { color: "#c8d5a3", texture: "grass" },
+    });
+
+    expect(await loadMap([area])).toMatchObject({ elements: [area] });
+  });
+
+  it("keeps a Fill of scattered Stamps, or of a texture alone, with no colour", async () => {
+    const scatter = { stamp: "base:tree", spacing: 6, seed: 12 };
+    const [textured] = [fill("grass", { content: { texture: "marsh" } })];
+    const [scattered] = [fill("trees", { content: { scatter } })];
+
+    expect((await loadMap([textured]))?.elements[0]).toMatchObject({
+      content: { texture: "marsh" },
+    });
+    expect((await loadMap([scattered]))?.elements[0]).toMatchObject({ content: { scatter } });
+  });
+
+  it("rejects a Fill with nothing to cover the area, or with malformed content", async () => {
+    const base = fill("broken");
+
+    for (const element of [
+      { ...base, content: {} },
+      { ...base, content: { color: undefined } },
+      { ...base, content: { texture: "forest" } },
+      { ...base, content: { color: "#c8d5a3", texture: 7 } },
+      { ...base, content: { scatter: { stamp: "", spacing: 6, seed: 1 } } },
+      { ...base, content: { scatter: { stamp: 7, spacing: 6, seed: 1 } } },
+      { ...base, content: { scatter: { stamps: ["base:tree"], spacing: 6, seed: 1 } } },
+      { ...base, content: { scatter: { stamp: "base:tree", spacing: 0, seed: 1 } } },
+      { ...base, content: { scatter: { stamp: "base:tree", spacing: 6, seed: Number.NaN } } },
+    ]) {
+      expect(await loadMap([element])).toBeNull();
+    }
+  });
+
+  it("rejects a Fill whose own outline, or Soft Edge, cannot be one", async () => {
+    const base = fill("broken");
+    const outline = {
+      points: [
+        [0, 0],
+        [20, 0],
+        [20, 20],
+      ],
+      curves: [false, false, false],
+      roughened: false,
+    };
+
+    for (const element of [
+      { ...base, outline: null },
+      { ...base, outline: { ...outline, points: [[0, 0]] } },
+      {
+        ...base,
+        outline: {
+          ...outline,
+          points: [
+            [0, 0],
+            [20, 0],
+          ],
+        },
+      },
+      { ...base, outline: { ...outline, curves: [false, false] } },
+      { ...base, outline: { ...outline, curves: [false, false, "no"] } },
+      { ...base, outline: { ...outline, roughened: "yes" } },
+      {
+        ...base,
+        outline: {
+          ...outline,
+          points: [
+            [0, 0],
+            [20, 0],
+            [Number.NaN, 20],
+          ],
+        },
+      },
+      { ...base, softEdge: -1 },
+      { ...base, softEdge: "2" },
+    ]) {
+      expect(await loadMap([element])).toBeNull();
+    }
+  });
+
+  it("keeps a Soft Edge on a Fill and on a Map Line, and reads a stored 0 back as sharp", async () => {
+    const soft = fill("soft", { softEdge: 2.5 });
+    const line = {
+      id: "coast",
+      kind: "line",
+      name: "Coast",
+      hidden: false,
+      locked: false,
+      points: [
+        [0, 0],
+        [10, 0],
+      ],
+      style: "plain",
+      enclosesFills: true,
+      closed: false,
+      curves: [false],
+      roughened: false,
+      softEdge: 1.25,
+    };
+
+    const loaded = await loadMap([soft, line]);
+    expect(loaded?.elements[0]).toMatchObject({ softEdge: 2.5 });
+    expect(loaded?.elements[1]).toMatchObject({ softEdge: 1.25 });
+
+    // 0 and absent draw the same sharp edge, so 0 is not stored.
+    const sharp = await loadMap([{ ...soft, softEdge: 0 }]);
+    expect(sharp?.elements[0]).not.toHaveProperty("softEdge");
+  });
 });
 
 describe("Map Shapes", () => {

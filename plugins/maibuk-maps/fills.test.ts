@@ -493,3 +493,76 @@ describe("reconcileFills after a move", () => {
     );
   });
 });
+
+describe("Area Fills", () => {
+  /** An Area Fill over a 20 mm square around `anchor`, with its own outline. */
+  function areaFill(id: string, anchor: MapPoint = [10, 10]): MapFillElement {
+    return {
+      id,
+      kind: "fill",
+      name: id,
+      hidden: false,
+      locked: false,
+      anchor,
+      outline: {
+        points: [
+          [0, 0],
+          [20, 0],
+          [20, 20],
+          [0, 20],
+        ],
+        curves: [false, false, false, false],
+        roughened: false,
+      },
+      content: { color: "#c8d5a3" },
+    };
+  }
+
+  it("leaves an Area Fill where it is when the Map Lines around it change", () => {
+    const area = areaFill("forest");
+    const before: MapElement[] = [rectangle("ring", 0, 0, 40, 40), area];
+    const after: MapElement[] = [rectangle("ring", 0, 0, 60, 40), area];
+
+    expect(reconcileFills(before, after)).toBe(after);
+  });
+
+  it("keeps an Area Fill whose anchor lies in no face", () => {
+    const area = areaFill("forest", [200, 200]);
+    const before: MapElement[] = [rectangle("ring", 0, 0, 40, 40)];
+
+    expect(fillsOf(reconcileFills(before, [...before, area]))).toEqual([area]);
+  });
+
+  it("does not recolour an Area Fill whose anchor lies in a poured face", () => {
+    const area = areaFill("forest", [20, 20]);
+    const poured = pourFill(
+      [rectangle("ring", 0, 0, 40, 40), area],
+      [10, 10],
+      "#a0522d",
+      fillMaker()
+    );
+
+    const fills = fillsOf(poured);
+    expect(fills).toHaveLength(2);
+    expect(fills.find((fill) => fill.id === "forest")).toBe(area);
+    expect(fills.find((fill) => fill.id === "fill-1")?.content.color).toBe("#a0522d");
+  });
+
+  it("does not split or merge an Area Fill when a Map Line crosses it", () => {
+    const area = areaFill("forest");
+    const ring = rectangle("ring", 0, 0, 40, 40);
+    const before: MapElement[] = [ring, area];
+    const after: MapElement[] = [
+      ...before,
+      line("divider", [
+        [10, 0],
+        [10, 40],
+      ]),
+    ];
+
+    const reconciled = reconcileFills(before, after);
+
+    expect(fillsOf(reconciled).map((fill) => fill.id)).toEqual(["forest"]);
+    expect(fillsOf(reconciled)[0]).toBe(area);
+  });
+});
