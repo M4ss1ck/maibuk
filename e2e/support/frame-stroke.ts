@@ -29,7 +29,8 @@
 // `scatterPaint` reads the other way round: what the Frame actually paints
 // for a Fill's scatter (#750), measured by the browser in the Frame's own
 // pixels, so a spec can prove the Stamps stay inside the area without reading
-// attributes.
+// attributes. `fontLoaded` reads a bundled face's status in `document.fonts`
+// (#751), so a spec proves the bytes arrived instead of only the CSS name.
 
 import type { Locator, Page } from "@playwright/test";
 
@@ -289,6 +290,23 @@ export async function dragBendHandle(
     );
   }
   await page.mouse.up();
+}
+
+/**
+ * Whether a Frame has actually loaded the named font family (#751): asks the
+ * Frame's own `document.fonts` to load it, then reads the matched face's
+ * status. A stylesheet that merely names the family would pass a CSS
+ * assertion; this proves the bundled bytes arrived and the face is usable.
+ */
+export async function fontLoaded(surface: Locator, family: string): Promise<boolean> {
+  return surface.evaluate(async (_element, wanted) => {
+    await document.fonts.load(`12px "${wanted}"`);
+    let loaded = false;
+    document.fonts.forEach((face) => {
+      if (face.family.replace(/["']/g, "") === wanted && face.status === "loaded") loaded = true;
+    });
+    return loaded;
+  }, family);
 }
 
 /** A box in a Frame's own pixels, from its screen matrix. */

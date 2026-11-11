@@ -34,6 +34,7 @@ import {
   INDEX_KEY,
   MAP_LABEL_FONT_FAMILIES,
   mapKey,
+  newLabel,
   type MapDocument,
   type MapElement,
   type MapFillContent,
@@ -2405,6 +2406,43 @@ describe("Map editor page", () => {
       await page.unmount();
     } finally {
       await host.stop();
+    }
+  });
+
+  it("names an installed PDF Font in the Font select, and says when none is installed", async () => {
+    const storageLabel = () =>
+      newLabel({
+        id: "l1",
+        name: "Map Label 1",
+        text: "Label",
+        point: [76.2, 114.3],
+        font: "pdf",
+      });
+
+    const installed = frameHostFor(mapStorage([storageLabel()]), [
+      { id: "latin", family: "Noto Serif", bytes: new TextEncoder().encode("FONT") },
+    ]);
+    try {
+      expect(await installed.runtime.openMap("m1")).toBe(true);
+      installed.runtime.editor?.select("l1");
+      const page = await installed.host.renderPage(MAP_PAGE_ID);
+      const font = await screen.findByLabelText(en["properties.mapLabel.font"]);
+      await waitFor(() => expect(font).toHaveTextContent("PDF Font (Noto Serif)"));
+      await page.unmount();
+    } finally {
+      await installed.host.stop();
+    }
+
+    const missing = frameHostFor(mapStorage([storageLabel()]));
+    try {
+      expect(await missing.runtime.openMap("m1")).toBe(true);
+      missing.runtime.editor?.select("l1");
+      const page = await missing.host.renderPage(MAP_PAGE_ID);
+      const font = await screen.findByLabelText(en["properties.mapLabel.font"]);
+      await waitFor(() => expect(font).toHaveTextContent(en["font.pdfNotInstalled"]));
+      await page.unmount();
+    } finally {
+      await missing.host.stop();
     }
   });
 

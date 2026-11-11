@@ -366,6 +366,7 @@ export default defineConfig(() => ({
         "src/features/plugins/library.ts",
         "src/features/plugins/navigation.ts",
         "src/features/plugins/editor-host.ts",
+        "src/features/plugins/fonts.ts",
         "src/features/plugins/language.ts",
         "src/features/plugins/test-kit.ts",
         "src/lib/platform/web/plugins.ts",

@@ -237,7 +237,7 @@ export const MAP_LABEL_FONT_FAMILIES: Readonly<Record<MapLabelFont, string>> = {
 };
 
 /** Every font id a Map Label takes, bundled and PDF alike. */
-const LABEL_FONT_IDS: readonly string[] = [...MAP_LABEL_FONTS, "pdf"];
+export const LABEL_FONT_IDS: readonly MapLabelFont[] = [...MAP_LABEL_FONTS, "pdf"];
 
 /** The font a new Map Label takes, and the one an id this build does not know reads as. */
 export const DEFAULT_LABEL_FONT: MapLabelFont = "im-fell-english";
@@ -287,12 +287,12 @@ export interface MapLabelElement extends MapElementBase {
    */
   bend: number;
   /** The font id it draws in, from `MAP_LABEL_FONTS`, or `pdf` for the PDF Font. */
-  font: string;
+  font: MapLabelFont;
   /** The cap size, which is the text's font size, in page millimetres. */
   size: number;
   /** The room each letter takes beyond its own width, in page millimetres. */
   letterSpacing: number;
-  /** The ink it draws in; absent takes the Map Style's label colour, else the map ink. */
+  /** The ink it draws in; absent draws the map ink. */
   color?: string;
   /** The halo behind the text, as a stroke width in page millimetres; 0 draws none. */
   halo: number;
@@ -479,7 +479,7 @@ export function isShapeKind(value: unknown): value is ShapeKind {
 
 /** Whether a value names a font a Map Label can take. */
 export function isLabelFont(value: unknown): value is MapLabelFont {
-  return typeof value === "string" && LABEL_FONT_IDS.includes(value);
+  return typeof value === "string" && (LABEL_FONT_IDS as readonly string[]).includes(value);
 }
 
 /** The family name a font id draws in; an id this build does not know draws IM Fell English. */
@@ -720,7 +720,7 @@ export interface NewLabel {
   width?: number;
   bend?: number;
   rotation?: number;
-  font?: string;
+  font?: MapLabelFont;
   size?: number;
   letterSpacing?: number;
   color?: string;

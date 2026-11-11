@@ -975,7 +975,7 @@ describe("Map Labels", () => {
 
   it("normalizes an unknown font to IM Fell English, and keeps the PDF Font", async () => {
     const [unknown, pdf] = (await loadElements([
-      label({ font: "papyrus" }),
+      { ...label(), font: "papyrus" },
       label({ id: "pdf", font: "pdf" }),
     ])) as MapLabelElement[];
 

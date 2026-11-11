@@ -51,7 +51,7 @@
    * @typedef {{ clientX: number, clientY: number }} ClientPoint
    * @typedef {{ pointerId: number, id: string, press: ClientPoint, client: ClientPoint, travel: MapPoint, constrain: boolean, moved: boolean, offset: MapPoint }} MoveDrag
    * @typedef {{ id: string, offset: MapPoint }} PendingMove
-   * @typedef {{ pointerId: number, id: string, label: FrameLabelLayout, bend: number }} BendDrag
+   * @typedef {{ pointerId: number, id: string, press: ClientPoint, label: FrameLabelLayout, moved: boolean, bend: number }} BendDrag
    * @typedef {{ id: string, bend: number }} PendingBend
    * @typedef {{ start: MapPoint, control: MapPoint, apex: MapPoint, end: MapPoint }} BendGeometry
    */
@@ -1042,8 +1042,12 @@
     bendDrag = {
       pointerId: event.pointerId,
       id: target.id,
+      press: { clientX: event.clientX, clientY: event.clientY },
       label: target.label,
-      bend: bendAt(target.label, point),
+      // The press alone does not shape the curve: a click on the handle's edge
+      // leaves it as it was, and only travel past the drag threshold bends it.
+      moved: false,
+      bend: target.label.bend,
     };
     capturePointer(event);
     draw();
@@ -1051,22 +1055,33 @@
   }
 
   /**
-   * Follows the pointer with the bend drag: the handle and the curve preview
-   * the bend the pointer asks for, live, in this Frame only.
+   * Follows the pointer with the bend drag: once the press has travelled past
+   * the Select drag's threshold, the handle and the curve preview the bend the
+   * pointer asks for, live, in this Frame only. A press that never travels
+   * leaves the bend untouched, so a click on the handle's edge posts nothing.
    * @param {PointerEvent} event
    */
   function followBend(event) {
     if (bendDrag === null) return;
     const point = pagePoint(event);
     if (point === null) return;
+    if (!bendDrag.moved) {
+      const travelled = Math.hypot(
+        event.clientX - bendDrag.press.clientX,
+        event.clientY - bendDrag.press.clientY
+      );
+      if (travelled < DRAG_THRESHOLD_PX) return;
+      bendDrag.moved = true;
+    }
     bendDrag.bend = bendAt(bendDrag.label, point);
     draw();
   }
 
   /**
-   * Ends the bend drag. A drag that changed the bend goes to the Worker as one
-   * bend message, which is one undo step, and its preview holds until the
-   * Worker answers; a drag that left the curve as it was sends nothing.
+   * Ends the bend drag. A drag that moved the pointer and changed the bend goes
+   * to the Worker as one bend message, which is one undo step, and its preview
+   * holds until the Worker answers; a press that never passed the threshold, or
+   * one that left the curve as it was, sends nothing.
    * @param {PointerEvent} event
    * @param {boolean} send
    */
@@ -1075,7 +1090,7 @@
     const drag = bendDrag;
     bendDrag = null;
     releasePointer(event);
-    if (!send || drag.bend === drag.label.bend) {
+    if (!send || !drag.moved || drag.bend === drag.label.bend) {
       draw();
       return;
     }

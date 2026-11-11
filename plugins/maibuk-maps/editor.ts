@@ -19,6 +19,8 @@ import type {
   MapFillContent,
   MapFillElement,
   MapFillScatter,
+  MapLabelElement,
+  MapLabelFont,
   MapLineElement,
   MapPoint,
   MapShape,
@@ -163,6 +165,11 @@ export interface MapEditorSnapshot {
   currentStampId: BaseStampId;
   /** The selected Stamp, or null when the selection is not a Stamp. */
   selectedStamp: MapStampElement | null;
+  /**
+   * The installed PDF Font's family, which the Font select names beside the
+   * `pdf` option, or null when this device has none installed.
+   */
+  pdfFontFamily: string | null;
 }
 
 export interface MapEditorOptions {
@@ -246,7 +253,7 @@ export interface MapEditor {
   /** Writes one unlocked Map Label's text; a blank text is refused. */
   setLabelText(id: string, text: string): void;
   /** Sets one unlocked Map Label's font, one of the bundled faces or the PDF Font. */
-  setLabelFont(id: string, font: string): void;
+  setLabelFont(id: string, font: MapLabelFont): void;
   /** Recolours one unlocked Map Label's text, as one undo step. */
   setLabelColor(id: string, color: string): void;
   /**
@@ -254,6 +261,8 @@ export interface MapEditor {
    * its bend handle, as one undo step.
    */
   setLabelLayout(id: string, patch: MapLabelLayout): void;
+  /** Reports the installed PDF Font's family, or null, for the Font select's label. */
+  setPdfFontFamily(family: string | null): void;
   deleteElement(id: string): void;
   /** Moves one Element one place towards the top of the Elements list. */
   moveUp(id: string): void;
@@ -334,6 +343,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
   let currentFillColor = DEFAULT_FILL_COLOR;
   let currentStampId: BaseStampId = DEFAULT_STAMP_ID;
   let roughenStrength = DEFAULT_ROUGHEN_STRENGTH_MM;
+  let pdfFontFamily: string | null = null;
   let zoom = 1;
   let panX = 0;
   let panY = 0;
@@ -383,6 +393,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       selectedConvertedFrom: selectedLine === null ? null : (selectedLine.convertedFrom ?? null),
       currentStampId,
       selectedStamp,
+      pdfFontFamily,
     };
   }
 
@@ -469,6 +480,16 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
 
   function elementById(id: string | null): MapElement | undefined {
     return id === null ? undefined : elements.find((element) => element.id === id);
+  }
+
+  /**
+   * The Map Label an edit may change: the Element with this id when it exists,
+   * is a label, and is unlocked. A missing, other-kind, or locked Element keeps
+   * every field, so a caller that gets null simply returns.
+   */
+  function labelForEdit(id: string): MapLabelElement | null {
+    const target = elementById(id);
+    return target !== undefined && target.kind === "label" && !target.locked ? target : null;
   }
 
   function selectElement(id: string | null): void {
@@ -797,42 +818,34 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
    * edit that changes nothing is not an undo step.
    */
   function setLabelLayout(id: string, patch: MapLabelLayout): void {
-    const target = elementById(id);
-    if (target === undefined || target.kind !== "label" || target.locked) return;
-    const x = patch.x ?? target.x;
-    const y = patch.y ?? target.y;
-    const rotation = patch.rotation ?? target.rotation;
-    const width = patch.width ?? target.width;
-    const bend = patch.bend ?? target.bend;
-    const size = patch.size ?? target.size;
-    const letterSpacing = patch.letterSpacing ?? target.letterSpacing;
-    const halo = patch.halo ?? target.halo;
-    if (![x, y, rotation, width, bend, size, letterSpacing, halo].every(Number.isFinite)) return;
-    const layout: MapLabelLayout = {
-      x,
-      y,
-      // The turn reads in one circle, as a Stamp's does.
-      rotation: normalizeRotation(rotation),
-      // A baseline or a cap size too small draws no name at all.
-      width: Math.max(MIN_LABEL_WIDTH_MM, width),
-      bend,
-      size: Math.max(MIN_LABEL_SIZE_MM, size),
-      letterSpacing,
-      // A halo of none is no halo at all.
-      halo: Math.max(0, halo),
+    const target = labelForEdit(id);
+    if (target === null) return;
+    const base: Required<MapLabelLayout> = {
+      x: target.x,
+      y: target.y,
+      rotation: target.rotation,
+      width: target.width,
+      bend: target.bend,
+      size: target.size,
+      letterSpacing: target.letterSpacing,
+      halo: target.halo,
     };
-    if (
-      layout.x === target.x &&
-      layout.y === target.y &&
-      layout.rotation === target.rotation &&
-      layout.width === target.width &&
-      layout.bend === target.bend &&
-      layout.size === target.size &&
-      layout.letterSpacing === target.letterSpacing &&
-      layout.halo === target.halo
-    ) {
-      return;
-    }
+    const layout: Required<MapLabelLayout> = {
+      x: patch.x ?? base.x,
+      y: patch.y ?? base.y,
+      // The turn reads in one circle, as a Stamp's does.
+      rotation: normalizeRotation(patch.rotation ?? base.rotation),
+      // A baseline or a cap size too small draws no name at all.
+      width: Math.max(MIN_LABEL_WIDTH_MM, patch.width ?? base.width),
+      bend: patch.bend ?? base.bend,
+      size: Math.max(MIN_LABEL_SIZE_MM, patch.size ?? base.size),
+      letterSpacing: patch.letterSpacing ?? base.letterSpacing,
+      // A halo of none is no halo at all.
+      halo: Math.max(0, patch.halo ?? base.halo),
+    };
+    if (!Object.values(layout).every(Number.isFinite)) return;
+    const keys = Object.keys(layout) as (keyof MapLabelLayout)[];
+    if (keys.every((key) => layout[key] === base[key])) return;
     updateElement(id, (element) =>
       element.kind === "label" ? { ...element, ...layout } : element
     );
@@ -846,14 +859,8 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
    * that scene draws the curve the label really has.
    */
   function bendDragged(id: string, bend: number): void {
-    const target = elementById(id);
-    if (
-      target === undefined ||
-      target.kind !== "label" ||
-      target.locked ||
-      target.hidden ||
-      target.bend === bend
-    ) {
+    const target = labelForEdit(id);
+    if (target === null || target.hidden || target.bend === bend) {
       sendScene();
       return;
     }
@@ -1180,8 +1187,8 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     insertLabel,
 
     setLabelText(id, text) {
-      const target = elementById(id);
-      if (target === undefined || target.kind !== "label" || target.locked) return;
+      const target = labelForEdit(id);
+      if (target === null) return;
       // A Map Label always writes a word, so a blank text keeps the old one.
       const trimmed = text.trim();
       if (trimmed === "" || trimmed === target.text) return;
@@ -1191,22 +1198,28 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     },
 
     setLabelFont(id, font) {
-      const target = elementById(id);
+      const target = labelForEdit(id);
       // A font id this build has no face for would draw the browser's fallback,
       // so only the bundled faces and the PDF Font are picks.
-      if (target === undefined || target.kind !== "label" || target.locked) return;
+      if (target === null) return;
       if (!isLabelFont(font) || target.font === font) return;
       updateElement(id, (element) => (element.kind === "label" ? { ...element, font } : element));
     },
 
     setLabelColor(id, color) {
-      const target = elementById(id);
-      if (target === undefined || target.kind !== "label" || target.locked) return;
+      const target = labelForEdit(id);
+      if (target === null) return;
       if (color === "" || target.color === color) return;
       updateElement(id, (element) => (element.kind === "label" ? { ...element, color } : element));
     },
 
     setLabelLayout,
+
+    setPdfFontFamily(family) {
+      if (family === pdfFontFamily) return;
+      pdfFontFamily = family;
+      publish();
+    },
 
     setStampTransform(id, patch) {
       const target = elementById(id);

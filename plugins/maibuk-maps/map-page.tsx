@@ -24,9 +24,9 @@ import { format, translate, type MapsKey } from "./i18n";
 import type { MapsRuntime } from "./runtime";
 import { useLanguage } from "./maps-page";
 import {
+  LABEL_FONT_IDS,
   LINE_STROKE,
   LINE_STYLE_IDS,
-  MAP_LABEL_FONTS,
   MAX_POLYGON_SIDES,
   MIN_LABEL_SIZE_MM,
   MIN_LABEL_WIDTH_MM,
@@ -123,17 +123,13 @@ const TEXTURE_KEYS: Readonly<Record<TextureId, MapsKey>> = {
   dots: "properties.texture.dots",
 };
 
-/** The Font select's label for each face a Map Label takes, in the order it offers them. */
-const LABEL_FONT_KEYS: Readonly<Record<MapLabelFont, MapsKey>> = {
+/** The Font select's label for each bundled face a Map Label takes, in the order it offers them. */
+const LABEL_FONT_KEYS: Readonly<Record<Exclude<MapLabelFont, "pdf">, MapsKey>> = {
   "im-fell-english": "font.imFellEnglish",
   cinzel: "font.cinzel",
   "uncial-antiqua": "font.uncialAntiqua",
   "medieval-sharp": "font.medievalSharp",
-  pdf: "font.pdf",
 };
-
-/** Every face the Font select offers: the bundled ones, then the PDF Font. */
-const LABEL_FONT_IDS: readonly MapLabelFont[] = [...MAP_LABEL_FONTS, "pdf"];
 
 /**
  * The Elements list's kind label, for the kinds a Map can hold (#748: a Fill
@@ -558,11 +554,18 @@ function MapEditorView({
                     label={t("properties.mapLabel.font")}
                     options={LABEL_FONT_IDS.map((font) => ({
                       value: font,
-                      label: t(LABEL_FONT_KEYS[font]),
+                      label:
+                        font === "pdf"
+                          ? snapshot.pdfFontFamily === null
+                            ? t("font.pdfNotInstalled")
+                            : format(t("font.pdfInstalled"), { family: snapshot.pdfFontFamily })
+                          : t(LABEL_FONT_KEYS[font]),
                     }))}
                     selectedKey={label.font}
                     isDisabled={selected.locked}
-                    onChange={(event) => editor.setLabelFont(selected.id, event.detail)}
+                    onChange={(event) =>
+                      editor.setLabelFont(selected.id, event.detail as MapLabelFont)
+                    }
                   />
                   <ui.NumberField
                     label={t("properties.mapLabel.size")}

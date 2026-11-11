@@ -14,7 +14,7 @@
 
 import type { FrameLocator, Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
-import { dragBendHandle } from "../support/frame-stroke";
+import { dragBendHandle, fontLoaded } from "../support/frame-stroke";
 import { leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
 
@@ -246,15 +246,12 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.in
     await pickOption(page, fontTrigger(page), "Cinzel");
 
     // The drawn text asks for the face by its family name, and the browser
-    // resolves that name to the family the Frame's own style declares.
+    // resolves that name to the family the Frame's linked stylesheet declares.
     const ink = drawnLabelText(page).last();
     await expect(ink).toHaveAttribute("font-family", "Cinzel");
     await expect(ink).toHaveCSS("font-family", /Cinzel/);
-    // The family the text asks for is the one the Frame's own style declares
-    // for its bundled face; a style element renders no text, so its CSS is read
-    // rather than asserted as visible content.
-    const declaration = await mapFrame(page).locator("head style").last().textContent();
-    expect(declaration).toContain('font-family: "Cinzel"');
+    // The bundled face really loaded, not just a family name the text names.
+    await expect.poll(() => fontLoaded(surface(page), "Cinzel")).toBe(true);
 
     // The face is bundled: a font request, if the engine makes one, stays on
     // the app's own origin, inside the Plugin's folder.

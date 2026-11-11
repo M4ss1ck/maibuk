@@ -38,6 +38,7 @@ import {
   type MapFillContent,
   type MapFillElement,
   type MapLabelElement,
+  type MapLabelFont,
   type MapLineElement,
   type MapPoint,
   type MapShape,
@@ -1739,7 +1740,7 @@ describe("a Map Label's properties", () => {
     editor.setLabelFont(id, "pdf");
     expect(labelOf(editor).font).toBe("pdf");
 
-    editor.setLabelFont(id, "not-a-font");
+    editor.setLabelFont(id, "not-a-font" as MapLabelFont);
     expect(labelOf(editor).font).toBe("pdf");
   });
 
