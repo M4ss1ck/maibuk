@@ -6,9 +6,10 @@
  * import this module: a Frame script is a classic script in an opaque origin,
  * so a relative import would fail closed.
  *
- * The Worker sends the whole scene on every change and when a Frame connects;
- * the Frame reports a finished Pencil stroke, a finished Pen line, a finished
- * Area Fill outline, an Eraser
+ * The Worker sends the whole scene on every change and when a Frame connects,
+ * and the author's PDF Font once as the Frame connects; the Frame reports a
+ * finished Pencil stroke, a finished Pen line, a finished Area Fill outline, an
+ * Eraser
  * drag, a drawn Shape, a Bucket pour, a dropped Stamp, a picked Element, a
  * Select drag that moved one, and a Map Label's bend dragged from its handle.
  * Points are page millimetres, the same space as `page.widthMm/heightMm`. Every
@@ -106,6 +107,22 @@ export interface FrameSceneMessage {
   /** The surface's accessible name while a Pen line is in progress. */
   penLabel: PenDraftLabel;
 }
+
+/**
+ * Worker -> Frame: the author's PDF Font (#751), sent once when the Frame
+ * connects. `bytes` is the installed font's regular style file, read through the
+ * Plugin API's `fonts.read`; the Frame registers it as `family`, which is the
+ * family a Map Label set to `pdf` asks for. A device with no PDF Font installed
+ * sends none, and the label draws in a serif.
+ */
+export interface FrameFontMessage {
+  kind: "font";
+  family: string;
+  bytes: ArrayBuffer;
+}
+
+/** Every message the Worker may send the Frame. */
+export type WorkerToFrameMessage = FrameSceneMessage | FrameFontMessage;
 
 /** Frame -> Worker: a finished Pencil stroke, in page millimetres. */
 export interface FrameStrokeMessage {

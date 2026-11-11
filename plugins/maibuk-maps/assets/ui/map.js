@@ -43,7 +43,8 @@
    * @typedef {{ kind: "insert", point: MapPoint }} FrameInsertMessage
    * @typedef {{ kind: "move", id: string, dx: number, dy: number }} FrameMoveMessage
    * @typedef {{ kind: "bendLabel", id: string, bend: number }} FrameBendMessage
-   * @typedef {FrameSceneMessage} WorkerToFrameMessage
+   * @typedef {{ kind: "font", family: string, bytes: ArrayBuffer }} FrameFontMessage
+   * @typedef {FrameSceneMessage | FrameFontMessage} WorkerToFrameMessage
    * @typedef {{ pointerId: number, points: MapPoint[] }} Drawing
    * @typedef {{ points: MapPoint[], curves: boolean[] }} PenDraft
    * @typedef {{ pointerId: number, kind: ShapeKind, start: MapPoint, end: MapPoint, constrain: boolean }} ShapeDraft
@@ -1568,8 +1569,32 @@
     if (event.key === "Shift") constrainDrag(false);
   }
 
+  /**
+   * Registers the author's PDF Font the Worker sends (#751) as a FontFace, so a
+   * Map Label set to `pdf` draws in the face an export embeds. Where the engine
+   * has no FontFace, or refuses the bytes, the label keeps its serif fallback.
+   * @param {unknown} data
+   * @returns {boolean} whether the message was a font message
+   */
+  function registerFont(data) {
+    if (typeof data !== "object" || data === null) return false;
+    const message = /** @type {Record<string, unknown>} */ (data);
+    if (message.kind !== "font") return false;
+    if (typeof message.family !== "string" || message.family === "") return true;
+    const bytes = message.bytes;
+    if (!(bytes instanceof ArrayBuffer)) return true;
+    if (typeof FontFace !== "function" || document.fonts === undefined) return true;
+    try {
+      document.fonts.add(new FontFace(message.family, bytes));
+    } catch {
+      // A face the engine will not take leaves the text in the fallback serif.
+    }
+    return true;
+  }
+
   /** @param {MessageEvent} event */
   function onMessage(event) {
+    if (registerFont(event.data)) return;
     const next = readScene(event.data);
     if (next === null) return;
     const previousTool = scene === null ? null : scene.tool;

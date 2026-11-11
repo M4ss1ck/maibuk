@@ -47,6 +47,7 @@ const UNGATED = new Set([
   "notifications",
   "navigation",
   "language",
+  "fonts",
   "permissions",
   "toolbar",
 ]);

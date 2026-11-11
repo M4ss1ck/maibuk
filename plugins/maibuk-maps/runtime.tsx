@@ -20,8 +20,9 @@ import {
   type PluginFrame,
 } from "@/plugin-sdk";
 import { createMapEditor, type MapEditor } from "./editor";
+import type { FrameFontMessage } from "./frame-protocol";
 import { MAP_PAGE_ID, createMapPage } from "./map-page";
-import { createMapStore, migrateMapsData } from "./maps";
+import { MAP_LABEL_FONT_FAMILIES, createMapStore, migrateMapsData } from "./maps";
 import { MAPS_PAGE_ID, createBookFilter, createMapsPage } from "./maps-page";
 
 export { MAPS_PAGE_ID, MAP_PAGE_ID };
@@ -97,6 +98,12 @@ export function startMaps(client: PluginClient, serve: MapsServe): MapsRuntime {
    * stops receiving scenes (#745).
    */
   let framePort: MessagePort | null = null;
+  /**
+   * The author's PDF Font, read once per activation (#751): `null` before the
+   * first Frame asks, then either the regular style file's bytes or nothing when
+   * no PDF Font is installed on this device.
+   */
+  let pdfFont: Promise<ArrayBuffer | null> | null = null;
 
   const runtime: MapsRuntime = {
     currentMapId: null,
@@ -158,6 +165,44 @@ export function startMaps(client: PluginClient, serve: MapsServe): MapsRuntime {
     frame.port.onmessage = (event: MessageEvent) => runtime.editor?.handleFrameMessage(event.data);
     frame.port.start();
     runtime.editor?.attachFrame(frame.port);
+    void sendPdfFont(frame.port);
+  }
+
+  /**
+   * Hands the Frame the author's PDF Font, so a Map Label set to `pdf` draws in
+   * the face an export embeds (#751). The first installed font wins, and the
+   * catalog puts Noto Serif first; a device with none installed, or a refused
+   * call, sends nothing and the label keeps its serif fallback.
+   */
+  async function sendPdfFont(port: MessagePort): Promise<void> {
+    if (pdfFont === null) pdfFont = readPdfFont();
+    const bytes = await pdfFont;
+    if (bytes === null) return;
+    const message: FrameFontMessage = {
+      kind: "font",
+      family: MAP_LABEL_FONT_FAMILIES.pdf,
+      bytes,
+    };
+    port.postMessage(message);
+  }
+
+  /** The regular style file of the first PDF Font this device has installed. */
+  async function readPdfFont(): Promise<ArrayBuffer | null> {
+    try {
+      const installed = await client.fonts.list();
+      const first = installed[0];
+      if (first === undefined) return null;
+      const bytes = await client.fonts.read({ id: first.id });
+      // A buffer of its own rather than a view into the SDK's array, so every
+      // Frame the page mounts gets the whole file.
+      const copy = new Uint8Array(bytes.byteLength);
+      copy.set(bytes);
+      return copy.buffer;
+    } catch {
+      // No PDF Font, no Plugin API, or bytes that will not arrive: the label
+      // falls back to a serif, and the Map still draws.
+      return null;
+    }
   }
 
   async function runCommand(params: unknown): Promise<null> {

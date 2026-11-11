@@ -11,8 +11,9 @@
          url() keeps them inside the Frame's own folder. `font-display: block`
          holds the text back for the brief load rather than painting a
          fallback and swapping the letterforms once the face arrives. The PDF
-         Font stays undeclared: the export supplies the author's face, and the
-         Frame draws a serif until slice 3 wires it. */
+         Font is not declared here: the Worker sends the author's installed
+         face over the Frame's port and map.js registers it, so a `pdf` label
+         draws in it and falls back to a serif when none is installed. */
       @font-face {
         font-family: "IM Fell English";
         src: url("fonts/IMFeENrm28P.ttf") format("truetype");

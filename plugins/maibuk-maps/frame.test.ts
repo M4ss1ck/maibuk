@@ -144,6 +144,8 @@ afterEach(() => {
   for (const cleanup of frame?.cleanups ?? []) cleanup();
   frame = null;
   delete (window as unknown as { maibuk?: unknown }).maibuk;
+  delete (globalThis as Record<string, unknown>).FontFace;
+  delete (document as unknown as { fonts?: unknown }).fonts;
   document.documentElement.innerHTML = "";
 });
 
@@ -179,9 +181,95 @@ describe("the Map Label fonts", () => {
       expect(HTML).toContain(`font-family: "${MAP_LABEL_FONT_FAMILIES[font]}"`);
     }
 
-    // The PDF Font is the author's own face, which slice 3 will wire; until
-    // then the Frame leaves it undeclared and draws a serif.
+    // The PDF Font is the author's own installed face: the Worker sends its
+    // bytes over the Frame's port and map.js registers the face, so the page
+    // itself declares no family for it.
     expect(HTML).not.toContain(`"${MAP_LABEL_FONT_FAMILIES.pdf}"`);
+  });
+});
+
+/**
+ * jsdom implements neither FontFace nor document.fonts, so the registration is
+ * proven against a stub that records what the Frame handed it.
+ */
+function stubFontFace(): { family: string; source: unknown }[] {
+  const registered: { family: string; source: unknown }[] = [];
+  (globalThis as Record<string, unknown>).FontFace = class {
+    family: string;
+    source: unknown;
+    constructor(family: string, source: unknown) {
+      this.family = family;
+      this.source = source;
+    }
+  };
+  (document as unknown as { fonts: unknown }).fonts = {
+    add: (face: { family: string; source: unknown }) => registered.push(face),
+  };
+  return registered;
+}
+
+describe("the author's PDF Font", () => {
+  const BYTES = new ArrayBuffer(8);
+
+  it("registers the bytes the Worker sends as the family a pdf label asks for", () => {
+    const registered = stubFontFace();
+    frame = loadFrame();
+
+    frame.port.deliver({
+      kind: "font",
+      family: MAP_LABEL_FONT_FAMILIES.pdf,
+      bytes: BYTES,
+    });
+
+    expect(registered.map((face) => face.family)).toEqual([MAP_LABEL_FONT_FAMILIES.pdf]);
+    expect(registered[0].source).toBe(BYTES);
+  });
+
+  it("registers it without disturbing the scene already drawn", () => {
+    const registered = stubFontFace();
+    frame = loadFrame();
+    frame.scene({ elements: [sceneElement({ id: "e1" })] });
+
+    frame.port.deliver({
+      kind: "font",
+      family: MAP_LABEL_FONT_FAMILIES.pdf,
+      bytes: BYTES,
+    });
+
+    // A font message is not a scene: the face arrives and the picture stays.
+    expect(registered).toHaveLength(1);
+    expect(document.querySelectorAll("[data-element-id]")).toHaveLength(1);
+  });
+
+  it("registers nothing for a malformed font message", () => {
+    const registered = stubFontFace();
+    frame = loadFrame();
+
+    for (const message of [
+      { kind: "font", family: "", bytes: BYTES },
+      { kind: "font", family: MAP_LABEL_FONT_FAMILIES.pdf },
+      { kind: "font", family: MAP_LABEL_FONT_FAMILIES.pdf, bytes: "not bytes" },
+      { kind: "font", bytes: BYTES },
+    ]) {
+      frame.port.deliver(message);
+    }
+
+    expect(registered).toEqual([]);
+  });
+
+  it("keeps drawing where the engine has no FontFace at all", () => {
+    frame = loadFrame();
+
+    // No stub: document.fonts is undefined, what an engine without the
+    // FontFace API looks like. The label keeps its serif fallback.
+    frame.port.deliver({
+      kind: "font",
+      family: MAP_LABEL_FONT_FAMILIES.pdf,
+      bytes: BYTES,
+    });
+    frame.scene({ elements: [sceneElement()] });
+
+    expect(document.querySelector("svg")).not.toBeNull();
   });
 });
 

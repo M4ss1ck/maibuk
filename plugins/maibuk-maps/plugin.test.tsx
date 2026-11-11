@@ -12,7 +12,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import { parsePluginManifest } from "@/features/plugins/manifest-validate";
 import { createTestHost } from "@/features/plugins/test-kit";
-import type { TestHost } from "@/features/plugins/types";
+import type { TestHost, TestPdfFont } from "@/features/plugins/types";
 import {
   registerPluginCommands,
   type CommandId,
@@ -24,6 +24,7 @@ import { createPluginClient, type PluginClient, type PluginFrame } from "@/plugi
 import { PLUGIN_COMMAND_RUN_REQUEST, PLUGIN_MIGRATE_DATA_REQUEST } from "@/plugin-sdk/protocol";
 import { servePluginUi } from "@/plugin-sdk/ui-serve";
 import { DEFAULT_SOFT_EDGE_MM, SOFT_EDGE_STEP_MM } from "./editor";
+import type { FrameFontMessage } from "./frame-protocol";
 import en from "./locales/runtime/en.json";
 import es from "./locales/runtime/es.json";
 import { format } from "./i18n";
@@ -31,6 +32,7 @@ import {
   DEFAULT_FILL_COLOR,
   DEFAULT_LABEL_FONT,
   INDEX_KEY,
+  MAP_LABEL_FONT_FAMILIES,
   mapKey,
   type MapDocument,
   type MapElement,
@@ -140,12 +142,13 @@ function hostFor(storage = new Map<string, unknown>(), language = "en") {
 }
 
 /** A host, its runtime, and the Frame handoff handler the Plugin registered. */
-function frameHostFor(storage: Map<string, unknown>) {
+function frameHostFor(storage: Map<string, unknown>, pdfFonts: TestPdfFont[] = []) {
   const host = createTestHost({
     manifest: mapsManifest(),
     library: { books: BOOKS },
     storage,
     language: "en",
+    pdfFonts,
   });
   const handlers: Array<(frame: PluginFrame) => void> = [];
   const client = createPluginClient(host.port);
@@ -179,6 +182,11 @@ function recordingPort(): { port: MessagePort; messages: unknown[] } {
     postMessage: (message: unknown) => messages.push(message),
   } as unknown as MessagePort;
   return { port, messages };
+}
+
+/** Whether one recorded Frame message carries the author's PDF Font. */
+function isFontMessage(message: unknown): message is FrameFontMessage {
+  return (message as { kind?: unknown } | null)?.kind === "font";
 }
 
 /**
@@ -2016,6 +2024,43 @@ describe("Map editor page", () => {
 
       expect(first.messages).toHaveLength(1);
       expect(second.messages.length).toBeGreaterThan(1);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("hands the Frame the installed PDF Font, so a pdf label draws in it", async () => {
+    const bytes = new TextEncoder().encode("FONT BYTES");
+    const { host, runtime, handoff } = frameHostFor(mapStorage([]), [
+      { id: "latin", family: "Noto Serif", bytes },
+    ]);
+    try {
+      expect(await runtime.openMap("m1")).toBe(true);
+      const frame = recordingPort();
+      handoff("frame-1", frame.port);
+
+      const fonts = () => frame.messages.filter(isFontMessage);
+      await waitFor(() => expect(fonts()).toHaveLength(1));
+      expect(fonts()[0].family).toBe(MAP_LABEL_FONT_FAMILIES.pdf);
+      expect(Array.from(new Uint8Array(fonts()[0].bytes))).toEqual(Array.from(bytes));
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("sends no font when no PDF Font is installed, so a pdf label stays a serif", async () => {
+    const { host, runtime, handoff } = frameHostFor(mapStorage([]));
+    try {
+      expect(await runtime.openMap("m1")).toBe(true);
+      const frame = recordingPort();
+      handoff("frame-1", frame.port);
+
+      // The host answers this request only after the font read it served first,
+      // so a font message would already be here.
+      await expect(host.broker.request("health.check", null)).resolves.toBe("pong");
+      expect(frame.messages.filter(isFontMessage)).toEqual([]);
+      // The Frame still drew the scene it was handed.
+      expect(frame.messages).toHaveLength(1);
     } finally {
       await host.stop();
     }

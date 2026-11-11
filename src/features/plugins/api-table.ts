@@ -17,13 +17,14 @@ import type { McpToolProjection, PluginApiEventRow, PluginApiRow } from "@/featu
 import { FILE_READ_MAX_BYTES } from "@/plugin-sdk/protocol";
 
 /** The Plugin API's own semver, separate from Maibuk's release number. */
-export const PLUGIN_API_VERSION = "0.1.10";
+export const PLUGIN_API_VERSION = "0.1.11";
 
 export const PLUGIN_API_NAMESPACES = [
   "library",
   "editor",
   "navigation",
   "language",
+  "fonts",
   "endpoint",
   "permissions",
   "secrets",
@@ -69,6 +70,17 @@ export const ARRAY_BUFFER_SCHEMA_DESCRIPTION =
 const arrayBuffer = z
   .custom<ArrayBuffer>((value) => value instanceof ArrayBuffer, "ArrayBuffer")
   .describe(ARRAY_BUFFER_SCHEMA_DESCRIPTION);
+
+/**
+ * The bytes `fonts.read` returns. JSON Schema has no byte type either, so the
+ * same emitter turns this custom schema into an object carrying this
+ * description, and `api-codegen` maps that description back to `Uint8Array`.
+ */
+export const UINT8_ARRAY_SCHEMA_DESCRIPTION = "Uint8Array of the font file's bytes.";
+
+const uint8Array = z
+  .custom<Uint8Array>((value) => value instanceof Uint8Array, "Uint8Array")
+  .describe(UINT8_ARRAY_SCHEMA_DESCRIPTION);
 
 /**
  * The file bytes an `acceptsBlob` method takes. They never travel in the JSON
@@ -541,6 +553,24 @@ export const PLUGIN_API_TABLE = [
     effect: "read",
   }),
   defineApiRow({
+    id: "fonts.list",
+    description:
+      "Lists the PDF Fonts installed on this device, in catalog order, each with the id fonts.read takes and the family name it draws in. No permission is required.",
+    input: none,
+    output: z.array(z.strictObject({ id: z.string(), family: z.string() })),
+    permission: null,
+    effect: "read",
+  }),
+  defineApiRow({
+    id: "fonts.read",
+    description:
+      "Reads an installed PDF Font's regular style file as bytes, so a Plugin can draw in the font the author installed. An id that names no installed PDF Font is refused with invalid-params. No permission is required.",
+    input: z.strictObject({ id: z.string().min(1).max(64) }),
+    output: uint8Array,
+    permission: null,
+    effect: "read",
+  }),
+  defineApiRow({
     id: "endpoint.address",
     description:
       "Reads this Plugin's own base URL on the Plugin Endpoint, http://127.0.0.1:<port>/plugin/<pluginId>/, or null while the Plugin Endpoint is not listening. Compare it with the URL you last showed to notice a move.",
@@ -856,11 +886,11 @@ function toJsonSchema(schema: z.ZodType, io: "input" | "output"): JsonSchema {
   const { $schema: _, ...rest } = z.toJSONSchema(schema, {
     io,
     unrepresentable: (ctx) =>
-      // `.describe()` wraps the custom schema, so the inner one arrives without
-      // the description: every custom schema in this table is the file bytes.
-      ctx.zodSchema._zod.def.type === "custom"
-        ? { type: "object", description: ARRAY_BUFFER_SCHEMA_DESCRIPTION }
-        : "throw",
+      // JSON Schema has no byte type: every custom schema in this table is a
+      // method's file bytes. The object carries the `.describe()` the schema
+      // itself sets, which is how `api-codegen` maps it back to ArrayBuffer or
+      // Uint8Array.
+      ctx.zodSchema._zod.def.type === "custom" ? { type: "object" } : "throw",
   }) as JsonSchema;
   return rest;
 }

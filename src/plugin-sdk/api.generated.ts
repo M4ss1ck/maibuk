@@ -2,7 +2,7 @@
 
 import type { PluginStreamListener } from "@/plugin-sdk/protocol";
 
-export const PLUGIN_API_VERSION = "0.1.10";
+export const PLUGIN_API_VERSION = "0.1.11";
 
 export const PLUGIN_API_METHODS = [
   "library.books.list",
@@ -33,6 +33,8 @@ export const PLUGIN_API_METHODS = [
   "navigation.openEntity",
   "navigation.openPage",
   "language.get",
+  "fonts.list",
+  "fonts.read",
   "endpoint.address",
   "permissions.granted",
   "secrets.set",
@@ -578,6 +580,21 @@ export interface PluginApiMethods {
       language: string;
     };
   };
+  /** Lists the PDF Fonts installed on this device, in catalog order, each with the id fonts.read takes and the family name it draws in. No permission is required. */
+  "fonts.list": {
+    input: Record<string, never>;
+    output: {
+      id: string;
+      family: string;
+    }[];
+  };
+  /** Reads an installed PDF Font's regular style file as bytes, so a Plugin can draw in the font the author installed. An id that names no installed PDF Font is refused with invalid-params. No permission is required. */
+  "fonts.read": {
+    input: {
+      id: string;
+    };
+    output: Uint8Array;
+  };
   /** Reads this Plugin's own base URL on the Plugin Endpoint, http://127.0.0.1:<port>/plugin/<pluginId>/, or null while the Plugin Endpoint is not listening. Compare it with the URL you last showed to notice a move. */
   "endpoint.address": {
     input: Record<string, never>;
@@ -893,6 +910,12 @@ export interface PluginApi {
   language: {
     /** Reads the language Maibuk runs in. No permission is required. */
     get(params?: PluginApiMethods["language.get"]["input"]): Promise<PluginApiMethods["language.get"]["output"]>;
+  };
+  fonts: {
+    /** Lists the PDF Fonts installed on this device, in catalog order, each with the id fonts.read takes and the family name it draws in. No permission is required. */
+    list(params?: PluginApiMethods["fonts.list"]["input"]): Promise<PluginApiMethods["fonts.list"]["output"]>;
+    /** Reads an installed PDF Font's regular style file as bytes, so a Plugin can draw in the font the author installed. An id that names no installed PDF Font is refused with invalid-params. No permission is required. */
+    read(params: PluginApiMethods["fonts.read"]["input"]): Promise<PluginApiMethods["fonts.read"]["output"]>;
   };
   endpoint: {
     /** Reads this Plugin's own base URL on the Plugin Endpoint, http://127.0.0.1:<port>/plugin/<pluginId>/, or null while the Plugin Endpoint is not listening. Compare it with the URL you last showed to notice a move. */
