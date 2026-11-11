@@ -1,9 +1,9 @@
 // @ts-check
-/* The Map Frame's drawing surface (#745, #746). The Frame's only host channel
-   is `window.maibuk.port`: the Worker sends the whole `scene` on every change
-   and when the Frame connects, and the Frame answers a finished Pencil stroke,
-   a finished Pen line, an Eraser drag, a drawn Shape, and the Element the
-   author picked.
+/* The Map Frame's drawing surface (#745, #746, #748). The Frame's only host
+   channel is `window.maibuk.port`: the Worker sends the whole `scene` on every
+   change and when the Frame connects, and the Frame answers a finished Pencil
+   stroke, a finished Pen line, an Eraser drag, a drawn Shape, a Bucket pour, and
+   the Element the author picked.
    Points cross the port in page millimetres, the same space as the page's
    `widthMm`/`heightMm`, so the pointer's own screen pixels are converted
    through the svg's `getScreenCTM`.
@@ -23,8 +23,8 @@
   /**
    * @typedef {[number, number]} MapPoint
    * @typedef {"ellipse" | "rectangle" | "polygon"} ShapeKind
-   * @typedef {"select" | "pencil" | "pen" | "eraser" | ShapeKind} MapTool
-   * @typedef {{ d: string, stroke: string | null, strokeWidth: number, dash: string | null, fill: string | null, opacity: number }} LineShape
+   * @typedef {"select" | "pencil" | "pen" | "bucket" | "eraser" | ShapeKind} MapTool
+   * @typedef {{ d: string, stroke: string | null, strokeWidth: number, dash: string | null, fill: string | null, fillRule?: "evenodd", opacity: number }} LineShape
    * @typedef {{ id: string, shapes: LineShape[], hidden: boolean, locked: boolean, selected: boolean }} FrameSceneElement
    * @typedef {{ one: string, other: string }} PenDraftLabel
    * @typedef {{ kind: "scene", widthMm: number, heightMm: number, background: string, elements: FrameSceneElement[], tool: MapTool, zoom: number, panX: number, panY: number, penLabel: PenDraftLabel }} FrameSceneMessage
@@ -33,6 +33,7 @@
    * @typedef {{ kind: "erase", points: MapPoint[], radiusMm: number }} FrameEraseMessage
    * @typedef {{ kind: "select", id: string | null }} FrameSelectMessage
    * @typedef {{ kind: "shape", shape: ShapeKind, start: MapPoint, end: MapPoint, constrain: boolean }} FrameShapeMessage
+   * @typedef {{ kind: "pour", point: MapPoint }} FramePourMessage
    * @typedef {FrameSceneMessage} WorkerToFrameMessage
    * @typedef {{ pointerId: number, points: MapPoint[] }} Drawing
    * @typedef {{ points: MapPoint[], curves: boolean[] }} PenDraft
@@ -88,7 +89,7 @@
   let drawing = null;
   /** The Pen line in progress, or null. @type {PenDraft | null} */
   let penDraft = null;
-  /** The keyboard crosshair, in page millimetres, or null when the Pen is not active. @type {MapPoint | null} */
+  /** The keyboard crosshair, in page millimetres, or null when neither the Pen nor the Bucket is active. @type {MapPoint | null} */
   let crosshair = null;
   /** Where the pointer last hovered with the Pen, for the draft's preview segment. @type {MapPoint | null} */
   let penPointer = null;
@@ -120,7 +121,7 @@
    * @returns {MapTool}
    */
   function readTool(raw) {
-    if (raw === "pencil" || raw === "pen" || raw === "eraser") return raw;
+    if (raw === "pencil" || raw === "pen" || raw === "bucket" || raw === "eraser") return raw;
     if (isShapeKind(raw)) return raw;
     return "select";
   }
@@ -133,7 +134,8 @@
   /**
    * Reads one render primitive, or null when it has no path to draw. A shape
    * without a usable stroke colour is a fill; without a usable fill, a stroke.
-   * The Worker sends every shape's width, so one without it is malformed.
+   * The Worker sends every shape's width, so one without it is malformed, and
+   * its `fillRule` only when the fill has to cut holes in itself.
    * @param {unknown} raw
    * @returns {LineShape | null}
    */
@@ -148,6 +150,7 @@
       strokeWidth: shape.strokeWidth,
       dash: typeof shape.dash === "string" ? shape.dash : null,
       fill: typeof shape.fill === "string" ? shape.fill : null,
+      ...(shape.fillRule === "evenodd" ? { fillRule: "evenodd" } : {}),
       opacity: isNumber(shape.opacity) ? Math.max(0, Math.min(1, shape.opacity)) : 1,
     };
   }
@@ -371,9 +374,12 @@
     shapeDraft = null;
   }
 
-  /** Keeps the keyboard crosshair at the page centre while the Pen is active. */
+  /**
+   * Keeps the keyboard crosshair at the page centre while the Pen or the Bucket
+   * is active: both aim with it, the Pen to add a point and the Bucket to pour.
+   */
   function syncCrosshair() {
-    if (scene === null || scene.tool !== "pen") {
+    if (scene === null || (scene.tool !== "pen" && scene.tool !== "bucket")) {
       crosshair = null;
       return;
     }
@@ -422,6 +428,7 @@
                 (shape) => html`<path
                   class="map-hit"
                   d="${shape.d}"
+                  fill-rule="${shape.fillRule ?? undefined}"
                   data-fill="${shape.fill === null ? undefined : "true"}"
                 />`
               )}
@@ -439,6 +446,7 @@
                   stroke="${shape.stroke ?? "none"}"
                   stroke-width="${shape.stroke === null ? undefined : n(shape.strokeWidth)}"
                   fill="${shape.fill ?? "none"}"
+                  fill-rule="${shape.fillRule ?? undefined}"
                   stroke-dasharray="${shape.dash ?? undefined}"
                   opacity="${shape.opacity === 1 ? undefined : n(shape.opacity)}"
                 />`
@@ -568,6 +576,16 @@
       event.preventDefault();
       penPointer = point;
       addPenPoint(point, event.shiftKey === true);
+      return;
+    }
+
+    // The Bucket pours at the clicked or tapped point in one go: the Worker
+    // decides whether it lands in a face, so the Frame only reports the spot.
+    if (scene.tool === "bucket") {
+      const point = pagePoint(event);
+      if (point === null) return;
+      event.preventDefault();
+      post({ kind: "pour", point });
       return;
     }
 
@@ -746,10 +764,11 @@
   }
 
   /**
-   * The keyboard Pen: a crosshair moved by the arrows and points added with
-   * Enter. Every key it handles is `preventDefault`ed, so the Frame keeps it
-   * and the host's Commands never see it (#760); every other key forwards as
-   * before.
+   * The keyboard Pen and Bucket: one crosshair moved by the arrows, Enter adding
+   * a Pen point or pouring at the crosshair. Every key either handles is
+   * `preventDefault`ed, so the Frame keeps it and the host's Commands never see
+   * it (#760); every other key, including the Pen's own Backspace and Escape
+   * when the Bucket is active, forwards as before.
    * @param {KeyboardEvent} event
    */
   function onKeyDown(event) {
@@ -760,7 +779,8 @@
       cancelShape();
       return;
     }
-    if (scene === null || scene.tool !== "pen" || crosshair === null) return;
+    if (scene === null || (scene.tool !== "pen" && scene.tool !== "bucket")) return;
+    if (crosshair === null) return;
     const step = event.shiftKey ? CROSSHAIR_FAR_STEP_MM : CROSSHAIR_STEP_MM;
     if (event.key === "ArrowLeft") {
       event.preventDefault();
@@ -784,10 +804,16 @@
     }
     if (event.key === "Enter") {
       event.preventDefault();
+      if (scene.tool === "bucket") {
+        post({ kind: "pour", point: crosshair });
+        return;
+      }
       penPointer = null;
       addPenPoint(crosshair, event.shiftKey === true);
       return;
     }
+    // Backspace and Escape belong to the Pen draft, which the Bucket has none of.
+    if (scene.tool !== "pen") return;
     if (event.key === "Backspace") {
       event.preventDefault();
       if (penDraft === null || penDraft.points.length === 0) return;

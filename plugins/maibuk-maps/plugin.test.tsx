@@ -26,10 +26,12 @@ import { servePluginUi } from "@/plugin-sdk/ui-serve";
 import en from "./locales/runtime/en.json";
 import es from "./locales/runtime/es.json";
 import {
+  DEFAULT_FILL_COLOR,
   INDEX_KEY,
   mapKey,
   type MapDocument,
   type MapElement,
+  type MapFillElement,
   type MapIndexEntry,
   type MapLineElement,
 } from "./maps";
@@ -42,8 +44,8 @@ import {
   startMaps,
   type MapsRuntime,
 } from "./runtime";
-import { linePath, smoothStroke } from "./scene";
-import { roughen, seedFor, shapeOutline } from "./geometry";
+import { smoothStroke } from "./scene";
+import { linePath, roughen, seedFor, shapeOutline } from "./geometry";
 
 type User = ReturnType<typeof userEvent.setup>;
 
@@ -608,6 +610,7 @@ describe("Map editor Commands", () => {
     "selectTool",
     "pencilTool",
     "penTool",
+    "bucketTool",
     "ellipseTool",
     "rectangleTool",
     "polygonTool",
@@ -632,6 +635,7 @@ describe("Map editor Commands", () => {
       "Shift+ArrowDown",
     ]);
     expect(effectiveShortcuts("plugin.maibuk-maps.penTool", {}, false)).toContainEqual(["n"]);
+    expect(effectiveShortcuts("plugin.maibuk-maps.bucketTool", {}, false)).toContainEqual(["b"]);
     expect(effectiveShortcuts("plugin.maibuk-maps.ellipseTool", {}, false)).toContainEqual(["o"]);
     expect(effectiveShortcuts("plugin.maibuk-maps.rectangleTool", {}, false)).toContainEqual(["r"]);
     expect(effectiveShortcuts("plugin.maibuk-maps.polygonTool", {}, false)).toContainEqual(["s"]);
@@ -1308,6 +1312,134 @@ describe("Map editor page", () => {
       expect((runtime.editor?.getSnapshot().elements[0] as MapLineElement).points).toEqual(outline);
       await runtime.editor?.flush();
       expect(linePoints(storage)).toEqual(outline);
+
+      keys.unmount();
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("picks the Bucket, pours at the keyboard crosshair, and undoes the Fill", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    registerMapCommands();
+    const keys = render(<CommandKeys host={host} />);
+    try {
+      const user = userEvent.setup();
+
+      // A closed Shape to pour into, landed at the view centre by keyboard.
+      await placeShape(user, "rectangle");
+      await waitFor(() => expect(runtime.editor?.getSnapshot().elements).toHaveLength(1));
+
+      // The tool picker reaches the Bucket with its arrows.
+      const tools = screen.getByRole("radiogroup", { name: en["tools.label"] });
+      for (let i = 0; i < 10 && !tools.contains(document.activeElement); i++)
+        await user.tab({ shift: true });
+      const bucket = screen.getByRole("radio", { name: en["tools.bucket"] });
+      for (let i = 0; i < 8 && !(bucket as HTMLInputElement).checked; i++)
+        await user.keyboard("{ArrowLeft}");
+      await waitFor(() => expect(bucket).toBeChecked());
+      expect(runtime.editor?.getSnapshot().tool).toBe("bucket");
+
+      // Enter at the crosshair sends the Frame's pour message; the Frame stand-in
+      // hands the editor the point the real Frame would report (the page centre).
+      runtime.editor?.handleFrameMessage({ kind: "pour", point: [76.2, 114.3] });
+      await runtime.editor?.flush();
+
+      const list = screen.getByRole("listbox", { name: en["elements.label"] });
+      expect(await within(list).findByRole("option", { name: /^Fill 1/ })).toBeInTheDocument();
+      const poured = storedMap(storage).elements.find(
+        (element): element is MapFillElement => element.kind === "fill"
+      );
+      expect(poured).toMatchObject({ name: "Fill 1", content: { color: DEFAULT_FILL_COLOR } });
+      expect(runtime.editor?.getSnapshot().selectedId).toBe(poured?.id);
+      expect(screen.getByRole("listbox", { name: en["elements.label"] })).toHaveTextContent(
+        en["element.kind.fill"]
+      );
+
+      // Undo by its Shortcut takes the Fill off the list again.
+      await focusPanelButton(user);
+      await user.keyboard("{Control>}z{/Control}");
+      await waitFor(() =>
+        expect(within(list).queryByRole("option", { name: /^Fill/ })).not.toBeInTheDocument()
+      );
+      await runtime.editor?.flush();
+      expect(storedMap(storage).elements.some((element) => element.kind === "fill")).toBe(false);
+
+      keys.unmount();
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("sets the Bucket's Fill color, then a selected Fill's, from the properties panel", async () => {
+    const storage = mapStorage([
+      line(
+        "ring",
+        "Ring",
+        [
+          [10, 10],
+          [90, 10],
+          [90, 90],
+          [10, 90],
+        ],
+        { closed: true, curves: [false, false, false, false] }
+      ),
+    ]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    registerMapCommands();
+    const keys = render(<CommandKeys host={host} />);
+    try {
+      const user = userEvent.setup();
+
+      /** Opens the Fill color picker and commits one hex colour by keyboard. */
+      async function pickColor(hex: string): Promise<void> {
+        const trigger = await screen.findByRole("button", { name: en["properties.fillColor"] });
+        await tabTo(user, trigger, 60);
+        await user.keyboard("{Enter}");
+        const dialog = await screen.findByRole("dialog", { name: en["properties.fillColor"] });
+        const field = within(dialog).getByRole("textbox");
+        await user.clear(field);
+        await user.type(field, hex);
+        await user.keyboard("{Enter}");
+        await user.keyboard("{Escape}");
+        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      }
+
+      // With the Bucket active the control holds what the next pour uses.
+      await pickTool(user, en["tools.bucket"]);
+      await pickColor("#112233");
+      await waitFor(() => expect(runtime.editor?.getSnapshot().currentFillColor).toBe("#112233"));
+
+      runtime.editor?.handleFrameMessage({ kind: "pour", point: [50, 50] });
+      await runtime.editor?.flush();
+      const poured = storedMap(storage).elements.find(
+        (element): element is MapFillElement => element.kind === "fill"
+      );
+      expect(poured?.content.color).toBe("#112233");
+
+      // With a Fill selected the same control edits that Fill.
+      await user.keyboard("v");
+      await waitFor(() => expect(runtime.editor?.getSnapshot().tool).toBe("select"));
+      expect(runtime.editor?.getSnapshot().selectedId).toBe(poured?.id);
+
+      const trigger = await screen.findByRole("button", { name: en["properties.fillColor"] });
+      await tabTo(user, trigger, 60);
+      await user.keyboard("{Enter}");
+      const dialog = await screen.findByRole("dialog", { name: en["properties.fillColor"] });
+      expect(within(dialog).getByRole("textbox")).toHaveValue("#112233");
+      await user.clear(within(dialog).getByRole("textbox"));
+      await user.type(within(dialog).getByRole("textbox"), "#445566");
+      await user.keyboard("{Enter}");
+      await user.keyboard("{Escape}");
+
+      await waitFor(() => expect(runtime.editor?.getSnapshot().selectedFillColor).toBe("#445566"));
+      await runtime.editor?.flush();
+      expect((storedMap(storage).elements[0] as MapFillElement).content.color).toBe("#445566");
 
       keys.unmount();
       await page.unmount();

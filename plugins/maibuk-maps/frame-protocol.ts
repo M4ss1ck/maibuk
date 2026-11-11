@@ -8,17 +8,18 @@
  *
  * The Worker sends the whole scene on every change and when a Frame connects;
  * the Frame reports a finished Pencil stroke, a finished Pen line, an Eraser
- * drag, a drawn Shape, and a picked Element. Points are page millimetres, the
- * same space as `page.widthMm/heightMm`. Every inbound message is validated
- * here, and a malformed one is dropped. This module imports only its own files.
+ * drag, a drawn Shape, a Bucket pour, and a picked Element. Points are page
+ * millimetres, the same space as `page.widthMm/heightMm`. Every inbound message
+ * is validated here, and a malformed one is dropped. This module imports only
+ * its own files.
  */
 
 import type { MapDocument, MapPoint, ShapeKind } from "./maps";
 import { isShapeKind } from "./maps";
-import { EMPTY_MAP_COLOR, type LineShape, lineShapes } from "./scene";
+import { EMPTY_MAP_COLOR, type LineShape, sceneShapes } from "./scene";
 
 /** The editor tool the Frame should honour. */
-export type MapTool = "select" | "pencil" | "pen" | "eraser" | ShapeKind;
+export type MapTool = "select" | "pencil" | "pen" | "bucket" | "eraser" | ShapeKind;
 
 /** One Element as the Frame draws it: its render primitives, its flags, and its selection. */
 export interface FrameSceneElement {
@@ -101,13 +102,24 @@ export interface FrameShapeMessage {
   constrain: boolean;
 }
 
+/**
+ * Frame -> Worker: a Bucket pour at one page point (#748). The point is where
+ * the author clicked, tapped, or left the keyboard crosshair, and the Worker
+ * pours the current Fill colour into the face it falls in.
+ */
+export interface FramePourMessage {
+  kind: "pour";
+  point: MapPoint;
+}
+
 /** Every message a Frame may send the Worker. */
 export type FrameToWorkerMessage =
   | FrameStrokeMessage
   | FrameLineMessage
   | FrameEraseMessage
   | FrameSelectMessage
-  | FrameShapeMessage;
+  | FrameShapeMessage
+  | FramePourMessage;
 
 function isPoint(value: unknown): value is MapPoint {
   return (
@@ -126,7 +138,8 @@ function isPoint(value: unknown): value is MapPoint {
  * fewer than two points is still well formed, and the editor simply draws no
  * line from it. A Pen line also needs a flag per segment and a boolean
  * `closed`; an Eraser drag needs at least one point and a finite reach; a Shape
- * needs a known kind, two finite corners, and a boolean `constrain`.
+ * needs a known kind, two finite corners, and a boolean `constrain`; a pour
+ * needs one finite page point.
  */
 export function parseFrameMessage(data: unknown): FrameToWorkerMessage | null {
   if (typeof data !== "object" || data === null) return null;
@@ -186,6 +199,10 @@ export function parseFrameMessage(data: unknown): FrameToWorkerMessage | null {
       constrain: message.constrain,
     };
   }
+  if (message.kind === "pour") {
+    if (!isPoint(message.point)) return null;
+    return { kind: "pour", point: [message.point[0], message.point[1]] };
+  }
   return null;
 }
 
@@ -202,14 +219,15 @@ export function sceneMessage(
     penLabel: PenDraftLabel;
   }
 ): FrameSceneMessage {
+  const shapes = sceneShapes(map.elements);
   return {
     kind: "scene",
     widthMm: map.page.widthMm,
     heightMm: map.page.heightMm,
     background: EMPTY_MAP_COLOR,
-    elements: map.elements.map((element) => ({
+    elements: map.elements.map((element, index) => ({
       id: element.id,
-      shapes: element.kind === "line" ? lineShapes(element) : [],
+      shapes: shapes[index],
       hidden: element.hidden,
       locked: element.locked,
       selected: element.id === view.selectedId,

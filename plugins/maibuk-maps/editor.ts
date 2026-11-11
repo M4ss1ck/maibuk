@@ -7,15 +7,16 @@
  * except through `MapStore.save`.
  *
  * Every edit goes through `history.commit` and schedules the whole Map document
- * for autosave. Zoom, pan, tool, selection, the current line style, and the
- * Roughen strength are view state: not saved and not undoable. This module
- * imports only its own files.
+ * for autosave. Zoom, pan, tool, selection, the current line style, the current
+ * Fill colour, and the Roughen strength are view state: not saved and not
+ * undoable. This module imports only its own files.
  */
 
 import type {
   LineStyleId,
   MapDocument,
   MapElement,
+  MapFillElement,
   MapLineElement,
   MapPoint,
   MapShape,
@@ -23,6 +24,7 @@ import type {
   ShapeKind,
 } from "./maps";
 import {
+  DEFAULT_FILL_COLOR,
   DEFAULT_POLYGON_SIDES,
   DEFAULT_SHAPE_SIZE_MM,
   LINE_STYLE_DEFAULT_ENCLOSES,
@@ -32,6 +34,7 @@ import {
   randomMapId,
 } from "./maps";
 import { createAutosave } from "./autosave";
+import { pourFill, reconcileFills } from "./fills";
 import {
   parseFrameMessage,
   sceneMessage,
@@ -91,10 +94,16 @@ export interface MapEditorSnapshot {
   saveFailed: boolean;
   /** The line style a new Pen line takes, and the style the select shows with no Map Line selected. */
   currentLineStyle: LineStyleId;
+  /** The colour a new Fill takes, which the Bucket pours. */
+  currentFillColor: string;
   /** How hard Roughen pushes the selected line, in page millimetres. */
   roughenStrength: number;
   /** Whether the selected Element is a Map Line. */
   selectedIsLine: boolean;
+  /** Whether the selected Element is a Fill. */
+  selectedIsFill: boolean;
+  /** The selected Fill's colour, or null when the selection is not a Fill. */
+  selectedFillColor: string | null;
   /** The selected Map Line's style, or null when the selection is not a Map Line. */
   selectedLineStyle: LineStyleId | null;
   /** Whether the selected Map Line encloses Fills, or null when it is not a Map Line. */
@@ -126,6 +135,10 @@ export interface MapEditor {
   setLocked(id: string, locked: boolean): void;
   /** Picks a line style for new Pen lines; a selected unlocked Map Line takes it too. */
   setLineStyle(style: LineStyleId): void;
+  /** Picks the colour the Bucket pours. */
+  setFillColor(color: string): void;
+  /** Sets one unlocked Fill's colour; a refused or equal colour is not an undo step. */
+  setElementFillColor(id: string, color: string): void;
   /** Sets whether one unlocked Map Line encloses Fills. */
   setEnclosesFills(id: string, enclosesFills: boolean): void;
   /** Sets how hard Roughen pushes the selected line, in page millimetres. */
@@ -185,6 +198,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
   let selectedId: string | null = null;
   let tool: MapTool = "select";
   let currentLineStyle: LineStyleId = "plain";
+  let currentFillColor = DEFAULT_FILL_COLOR;
   let roughenStrength = DEFAULT_ROUGHEN_STRENGTH_MM;
   let zoom = 1;
   let panX = 0;
@@ -208,6 +222,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
   function buildSnapshot(): MapEditorSnapshot {
     const selected = elementById(selectedId);
     const selectedLine = selected !== undefined && selected.kind === "line" ? selected : null;
+    const selectedFill = selected !== undefined && selected.kind === "fill" ? selected : null;
     return {
       doc,
       elements,
@@ -217,8 +232,11 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       canRedo: history.canRedo,
       saveFailed,
       currentLineStyle,
+      currentFillColor,
       roughenStrength,
       selectedIsLine: selectedLine !== null,
+      selectedIsFill: selectedFill !== null,
+      selectedFillColor: selectedFill === null ? null : selectedFill.content.color,
       selectedLineStyle: selectedLine === null ? null : selectedLine.style,
       selectedEnclosesFills: selectedLine === null ? null : selectedLine.enclosesFills,
       selectedShape: selectedLine === null ? null : (selectedLine.shape ?? null),
@@ -265,11 +283,20 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     autosave.schedule(doc);
   }
 
-  /** Commits a new Elements list as one undo step, then saves and redraws. */
+  /**
+   * Commits a new Elements list as one undo step, then saves and redraws. Every
+   * committed edit goes through the live-Fill rule first, so moving, erasing,
+   * roughening, deleting, or adding a Map Line reshapes, merges, or splits the
+   * Fills in the same undo step the lines changed in (#748). Undo and redo
+   * restore whole history states as they are and never reconcile.
+   */
   function edit(next: MapElement[]): void {
-    history.commit(next);
+    history.commit(reconcileFills(elements, next));
     elements = history.current;
     doc = { ...doc, elements };
+    // A Fill the edit merged away, or one whose face went with a deleted line,
+    // leaves the selection pointing at a ghost.
+    if (selectedId !== null && elementById(selectedId) === undefined) selectedId = null;
     publish();
     schedule();
     sendScene();
@@ -433,6 +460,42 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     edit(next);
   }
 
+  /** The name a newly poured Fill takes: "Fill N", counting the Fills the Map holds. */
+  function newFillName(): string {
+    const number = elements.filter((element) => element.kind === "fill").length + 1;
+    return format(translate(options.language(), "element.fillName"), { number });
+  }
+
+  /** A new Fill in `color`, which `pourFill` puts at the deepest point of its face. */
+  function makeFill(anchor: MapPoint, color: string): MapFillElement {
+    return {
+      id: randomMapId(),
+      kind: "fill",
+      name: newFillName(),
+      hidden: false,
+      locked: false,
+      anchor,
+      content: { color },
+    };
+  }
+
+  /**
+   * Pours the current Fill colour into the face `point` falls in (#748): a face
+   * with no Fill takes a new one behind every Map Line, and a face already
+   * filled takes the new colour instead and keeps its place. The Fill the pour
+   * changed becomes the selection, and a point outside every face is not an
+   * edit at all, so it leaves the undo history as it was.
+   */
+  function pour(point: MapPoint): void {
+    const next = pourFill(elements, point, currentFillColor, makeFill);
+    if (next === elements) return;
+    // Every other Element comes back as it was, so the one object the before
+    // list does not hold is the Fill the pour added or recoloured.
+    const poured = next.find((element) => !elements.includes(element));
+    if (poured !== undefined) selectedId = poured.id;
+    edit(next);
+  }
+
   function applyMessage(message: FrameToWorkerMessage): void {
     switch (message.kind) {
       case "stroke":
@@ -446,6 +509,9 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
         break;
       case "shape":
         addShape(message.shape, message.start, message.end, message.constrain);
+        break;
+      case "pour":
+        pour(message.point);
         break;
       case "select":
         selectElement(message.id);
@@ -533,6 +599,33 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
         elements.map((element) =>
           element.id === target.id && element.kind === "line"
             ? { ...element, style, enclosesFills }
+            : element
+        )
+      );
+    },
+
+    setFillColor(color) {
+      if (color === currentFillColor) return;
+      currentFillColor = color;
+      publish();
+    },
+
+    setElementFillColor(id, color) {
+      const target = elementById(id);
+      // A locked Fill keeps its colour, as a locked Map Line keeps its look, and
+      // a colour the Fill already has is not an undo step.
+      if (
+        target === undefined ||
+        target.kind !== "fill" ||
+        target.locked ||
+        target.content.color === color
+      ) {
+        return;
+      }
+      edit(
+        elements.map((element) =>
+          element.id === id && element.kind === "fill"
+            ? { ...element, content: { ...element.content, color } }
             : element
         )
       );

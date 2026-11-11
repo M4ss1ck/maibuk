@@ -86,6 +86,10 @@ _Avoid_: n-gon tool, regular polygon, polygon primitive
 The editor tool that removes the parts of Map Lines a drag passes over, cutting a Map Line into pieces where the drag crosses it.
 _Avoid_: rubber, delete tool, cutting tool
 
+**Bucket**:
+The editor tool that pours the current Fill colour into the area Map Lines enclose: a click on a face fills it, and a click on a filled face recolours it. Its keyboard form uses the Pen's crosshair, moving with the arrows and pouring with Enter.
+_Avoid_: paint tool, fill tool, flood fill, color bucket
+
 **Line style**:
 The kind of Map Line a line is drawn as: a coast, a river, a road, a border, a coast ripple, or a plain line. Each kind has its own look and its own default for Encloses Fills.
 _Avoid_: preset, brush, line type, stroke style
@@ -105,5 +109,6 @@ _Avoid_: jitter (that is a defect, not an effect), wobble, noise, sketch
 - **Custom Stamps** and **Custom Fills** belong to the **Library**; any **Map** can use them.
 - Every **Map Line**, **Fill**, **Stamp**, **Map Label**, and **Map Image** is an **Element**; order in the **Elements list** is z-order.
 - The **Pen** and the **Pencil** draw **Map Lines**; the **Eraser** cuts them into pieces, and **Roughen** redraws one in the rough.js ink look.
+- The **Bucket** pours a **Fill** into an area **Map Lines** enclose, and the **Fill** follows those lines when they move.
 - The **Ellipse**, **Rectangle**, and **Polygon** draw a **Shape**, a **Map Line** that keeps its exact geometry; **Roughen** or an **Eraser** cut converts it into a point-by-point line.
 - A **Map Line** has one **Line style**, which decides its look and its default **Encloses Fills**.

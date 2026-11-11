@@ -95,6 +95,18 @@ export interface MapLineElement extends MapElementBase {
   convertedFrom?: ShapeKind;
 }
 
+/**
+ * A Fill: one colour over the face the Map Lines enclose (#748). Its anchor
+ * keeps it on that face when the lines move.
+ */
+export interface MapFillElement extends MapElementBase {
+  kind: "fill";
+  /** The point the Fill sits on, kept at the deepest point of its face. */
+  anchor: MapPoint;
+  /** What covers the face. */
+  content: { color: string };
+}
+
 /** The exact Shapes a Map Line can be (#747). */
 export const SHAPE_KINDS = ["ellipse", "rectangle", "polygon"] as const;
 export type ShapeKind = (typeof SHAPE_KINDS)[number];
@@ -142,6 +154,9 @@ export const LINE_STYLE_DEFAULT_ENCLOSES: Readonly<Record<LineStyleId, boolean>>
   plain: true,
 };
 
+/** The land colour a new Fill takes, chosen to read against the page's water. */
+export const DEFAULT_FILL_COLOR = "#c8d5a3";
+
 /** The curve flags of a line with `pointCount` points, every segment curved. */
 export function curvedSegments(pointCount: number, closed: boolean): boolean[] {
   return Array.from({ length: pointCount - 1 + (closed ? 1 : 0) }, () => true);
@@ -149,10 +164,10 @@ export function curvedSegments(pointCount: number, closed: boolean): boolean[] {
 
 /** Every other Element kind, whose geometry lands with its own ticket. */
 export interface MapOtherElement extends MapElementBase {
-  kind: Exclude<MapElementKind, "line">;
+  kind: Exclude<MapElementKind, "line" | "fill">;
 }
 
-export type MapElement = MapLineElement | MapOtherElement;
+export type MapElement = MapLineElement | MapFillElement | MapOtherElement;
 
 /** One stored Map, exactly as `map:<id>` holds it. */
 export interface MapDocument {
@@ -304,6 +319,15 @@ function isMapElement(value: unknown): value is MapElement {
     if (!Array.isArray(element.points) || element.points.length < 2) return false;
     if (!element.points.every(isMapPoint)) return false;
     return isLineStyleFields(element, element.points.length);
+  }
+  if (element.kind === "fill") {
+    if (!isMapPoint(element.anchor)) return false;
+    const content = element.content;
+    return (
+      typeof content === "object" &&
+      content !== null &&
+      typeof (content as Record<string, unknown>).color === "string"
+    );
   }
   return true;
 }

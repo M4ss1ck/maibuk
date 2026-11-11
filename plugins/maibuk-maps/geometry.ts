@@ -483,3 +483,56 @@ export function convertShapeLine(line: MapLineElement): MapLineElement {
   const { shape, ...rest } = line;
   return shape === undefined ? line : { ...rest, convertedFrom: shape.kind };
 }
+
+/** A number with two decimals, so the same points always produce the same path. */
+export function roundedMm(value: number): string {
+  return String(Math.round(value * 100) / 100);
+}
+
+/** What `linePath` needs from a Map Line: its points, one flag per segment, and whether it closes. */
+export interface LinePathInput {
+  points: readonly MapPoint[];
+  curves: readonly boolean[];
+  closed: boolean;
+}
+
+/**
+ * The SVG path `d` through a Map Line: a straight `L` for a segment its flag
+ * marks straight, and a Catmull-Rom spline written as cubic Beziers for a
+ * curved one, using the neighbours across the seam of a closed line. A closed
+ * line ends with `Z`. Two points make a straight line whatever their flag says,
+ * which keeps every Pencil line from #745 drawing exactly as it did.
+ */
+export function linePath(line: LinePathInput): string {
+  const { points, curves, closed } = line;
+  if (points.length < 2) return "";
+
+  const count = points.length;
+  const segments = count - 1 + (closed ? 1 : 0);
+  let path = `M ${roundedMm(points[0][0])} ${roundedMm(points[0][1])}`;
+  for (let index = 0; index < segments; index++) {
+    const start = points[index];
+    const end = points[(index + 1) % count];
+    if (curves[index] !== true || count === 2) {
+      // A straight closing segment is what `Z` draws, so it is not written twice.
+      if (!(closed && index === segments - 1)) {
+        path += ` L ${roundedMm(end[0])} ${roundedMm(end[1])}`;
+      }
+      continue;
+    }
+    const previous = closed ? points[(index - 1 + count) % count] : (points[index - 1] ?? start);
+    const next = closed ? points[(index + 2) % count] : (points[index + 2] ?? end);
+    const controlOne: MapPoint = [
+      start[0] + (end[0] - previous[0]) / 6,
+      start[1] + (end[1] - previous[1]) / 6,
+    ];
+    const controlTwo: MapPoint = [
+      end[0] - (next[0] - start[0]) / 6,
+      end[1] - (next[1] - start[1]) / 6,
+    ];
+    path += ` C ${roundedMm(controlOne[0])} ${roundedMm(controlOne[1])} ${roundedMm(
+      controlTwo[0]
+    )} ${roundedMm(controlTwo[1])} ${roundedMm(end[0])} ${roundedMm(end[1])}`;
+  }
+  return closed ? `${path} Z` : path;
+}

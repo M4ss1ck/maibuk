@@ -12,10 +12,12 @@ import { parseFrameMessage } from "./frame-protocol";
 import { shapeOutline } from "./geometry";
 import {
   DATA_VERSION,
+  DEFAULT_FILL_COLOR,
   DEFAULT_POLYGON_SIDES,
   DEFAULT_SHAPE_SIZE_MM,
   type MapDocument,
   type MapElement,
+  type MapFillElement,
   type MapLineElement,
   type MapShape,
 } from "./maps";
@@ -332,5 +334,223 @@ describe("the editor snapshot", () => {
     editor.select(null);
     expect(editor.getSnapshot().selectedShape).toBeNull();
     expect(editor.getSnapshot().selectedConvertedFrom).toBeNull();
+  });
+});
+
+/** A closed square Map Line from (x, y) to (x + size, y + size), enclosing Fills. */
+function squareLine(id: string, name: string, x: number, y: number, size: number): MapLineElement {
+  return {
+    id,
+    kind: "line",
+    name,
+    hidden: false,
+    locked: false,
+    points: [
+      [x, y],
+      [x + size, y],
+      [x + size, y + size],
+      [x, y + size],
+    ],
+    style: "plain",
+    enclosesFills: true,
+    closed: true,
+    curves: [false, false, false, false],
+    roughened: false,
+  };
+}
+
+/** The Fills an editor holds, in z-order. */
+function fills(editor: MapEditor): MapFillElement[] {
+  return editor
+    .getSnapshot()
+    .elements.filter((element): element is MapFillElement => element.kind === "fill");
+}
+
+describe("pouring a Fill with the Bucket", () => {
+  it("adds a Fill behind the Map Line and selects it", () => {
+    const { editor } = openEditor([squareLine("ring", "Ring", 10, 10, 80)]);
+
+    editor.handleFrameMessage({ kind: "pour", point: [50, 50] });
+
+    const elements = editor.getSnapshot().elements;
+    expect(elements).toHaveLength(2);
+    expect(elements[0]).toMatchObject({
+      kind: "fill",
+      name: "Fill 1",
+      hidden: false,
+      locked: false,
+      content: { color: DEFAULT_FILL_COLOR },
+    });
+    expect(elements[1].id).toBe("ring");
+    const [fill] = fills(editor);
+    // The anchor sits on the face, inside the square the pour landed in.
+    expect(fill.anchor[0]).toBeGreaterThan(10);
+    expect(fill.anchor[0]).toBeLessThan(90);
+    expect(fill.anchor[1]).toBeGreaterThan(10);
+    expect(fill.anchor[1]).toBeLessThan(90);
+    expect(editor.getSnapshot().selectedId).toBe(fill.id);
+    expect(editor.getSnapshot().selectedIsFill).toBe(true);
+    expect(editor.getSnapshot().selectedFillColor).toBe(DEFAULT_FILL_COLOR);
+    expect(editor.getSnapshot().currentFillColor).toBe(DEFAULT_FILL_COLOR);
+  });
+
+  it("commits nothing for a pour outside every face", () => {
+    const { editor } = openEditor([squareLine("ring", "Ring", 10, 10, 80)]);
+
+    editor.handleFrameMessage({ kind: "pour", point: [150, 50] });
+
+    expect(editor.getSnapshot().elements).toHaveLength(1);
+    expect(editor.getSnapshot().selectedId).toBeNull();
+    expect(editor.getSnapshot().canUndo).toBe(false);
+  });
+
+  it("recolours the face's Fill instead of adding another", () => {
+    const { editor } = openEditor([squareLine("ring", "Ring", 10, 10, 80)]);
+    editor.setFillColor("#123456");
+    editor.handleFrameMessage({ kind: "pour", point: [50, 50] });
+    const [fill] = fills(editor);
+
+    editor.setFillColor("#abcdef");
+    editor.handleFrameMessage({ kind: "pour", point: [60, 40] });
+
+    expect(fills(editor)).toHaveLength(1);
+    expect(fills(editor)[0]).toMatchObject({ id: fill.id, content: { color: "#abcdef" } });
+    expect(editor.getSnapshot().selectedId).toBe(fill.id);
+
+    // One undo puts the first colour back.
+    editor.undo();
+    expect(fills(editor)[0].content.color).toBe("#123456");
+  });
+
+  it("undoes the pour as one step and redoes it", () => {
+    const { editor } = openEditor([squareLine("ring", "Ring", 10, 10, 80)]);
+    editor.handleFrameMessage({ kind: "pour", point: [50, 50] });
+    const [fill] = fills(editor);
+
+    editor.undo();
+    expect(editor.getSnapshot().elements).toHaveLength(1);
+    expect(editor.getSnapshot().selectedId).toBeNull();
+
+    editor.redo();
+    expect(fills(editor)).toHaveLength(1);
+    expect(fills(editor)[0].id).toBe(fill.id);
+  });
+
+  it("drops a malformed pour", () => {
+    const { editor } = openEditor([squareLine("ring", "Ring", 10, 10, 80)]);
+    for (const message of [
+      { kind: "pour" },
+      { kind: "pour", point: [10] },
+      { kind: "pour", point: ["10", "10"] },
+    ]) {
+      expect(parseFrameMessage(message)).toBeNull();
+      editor.handleFrameMessage(message);
+    }
+
+    expect(editor.getSnapshot().elements).toHaveLength(1);
+  });
+});
+
+describe("Fills that follow the Map Lines", () => {
+  it("keeps the larger face's Fill when the line between two is deleted, as one step", () => {
+    const { editor } = openEditor([
+      squareLine("ring", "Ring", 10, 10, 80),
+      {
+        id: "divider",
+        kind: "line",
+        name: "Divider",
+        hidden: false,
+        locked: false,
+        points: [
+          [40, 10],
+          [40, 190],
+        ],
+        style: "plain",
+        enclosesFills: true,
+        closed: false,
+        curves: [false],
+        roughened: false,
+      },
+    ]);
+    editor.handleFrameMessage({ kind: "pour", point: [25, 50] });
+    editor.handleFrameMessage({ kind: "pour", point: [70, 50] });
+    const poured = fills(editor);
+    expect(poured).toHaveLength(2);
+    const larger = poured[1];
+
+    editor.deleteElement("divider");
+
+    const merged = fills(editor);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].id).toBe(larger.id);
+    expect(editor.getSnapshot().elements.some((element) => element.id === "divider")).toBe(false);
+
+    // One undo brings both Fills and the line back.
+    editor.undo();
+    expect(editor.getSnapshot().elements.map((element) => element.id)).toEqual(
+      expect.arrayContaining(["ring", "divider", larger.id, poured[0].id])
+    );
+    expect(fills(editor)).toHaveLength(2);
+  });
+
+  it("gives both halves a Fill when an enclosing line splits a filled face", () => {
+    const { editor } = openEditor([squareLine("ring", "Ring", 10, 10, 80)]);
+    editor.handleFrameMessage({ kind: "pour", point: [50, 50] });
+    const [fill] = fills(editor);
+
+    editor.handleFrameMessage({
+      kind: "line",
+      points: [
+        [40, 0],
+        [40, 100],
+      ],
+      curves: [false],
+      closed: false,
+    });
+
+    const split = fills(editor);
+    expect(split).toHaveLength(2);
+    expect(split[0].id).toBe(fill.id);
+    expect(split[1]).toMatchObject({ id: `${fill.id}-2`, content: { color: fill.content.color } });
+
+    // The split came with the line, so one undo removes both.
+    editor.undo();
+    expect(fills(editor)).toHaveLength(1);
+  });
+
+  it("leaves the face empty when the author deletes its Fill", () => {
+    const { editor } = openEditor([squareLine("ring", "Ring", 10, 10, 80)]);
+    editor.handleFrameMessage({ kind: "pour", point: [50, 50] });
+    const [fill] = fills(editor);
+
+    editor.deleteElement(fill.id);
+
+    expect(fills(editor)).toEqual([]);
+    expect(editor.getSnapshot().elements).toHaveLength(1);
+    expect(editor.getSnapshot().selectedId).toBeNull();
+  });
+});
+
+describe("a Fill's own colour", () => {
+  it("changes an unlocked Fill as one undo step and ignores a locked one", () => {
+    const { editor } = openEditor([squareLine("ring", "Ring", 10, 10, 80)]);
+    editor.handleFrameMessage({ kind: "pour", point: [50, 50] });
+    const [fill] = fills(editor);
+
+    editor.setElementFillColor(fill.id, "#445566");
+    expect(fills(editor)[0].content.color).toBe("#445566");
+
+    // The same colour again is not a step.
+    editor.setElementFillColor(fill.id, "#445566");
+    editor.undo();
+    expect(fills(editor)[0].content.color).toBe(DEFAULT_FILL_COLOR);
+
+    editor.setLocked(fill.id, true);
+    editor.setElementFillColor(fill.id, "#000000");
+    expect(fills(editor)[0].content.color).toBe(DEFAULT_FILL_COLOR);
+    // The refused change is not a step either: undo unlocks the Fill.
+    editor.undo();
+    expect(fills(editor)[0].locked).toBe(false);
+    expect(fills(editor)[0].content.color).toBe(DEFAULT_FILL_COLOR);
   });
 });
