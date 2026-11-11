@@ -51,6 +51,14 @@ export const EXCLUSIONS: Exclusion[] = [
     owner: "#653 reader E2E rows; plugins/maibuk-reader/session.test.ts for the forwarded Commands",
   },
   {
+    kind: "shortcut",
+    items: ["plugin.maibuk-maps.areaTool"],
+    reason:
+      "Interim, while #750 lands in steps: the Area tool's own E2E row and spec (e2e/specs/plugins-maps-area.spec.ts) arrive with step 3 of the plan. Remove this exclusion then, so the row owns the shortcut again",
+    owner:
+      "plugins/maibuk-maps/plugin.test.tsx: the Area tool's key, its keyboard outline, and Roughen on an Area Fill, driven with user-event key presses over the real Frame",
+  },
+  {
     kind: "term",
     items: ["Drawing"],
     reason: "Creating a Drawing and erasing are pointer gestures by nature (documented exemption)",

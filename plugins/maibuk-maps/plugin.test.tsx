@@ -51,6 +51,17 @@ import { linePath, roughen, seedFor, shapeOutline } from "./geometry";
 
 type User = ReturnType<typeof userEvent.setup>;
 
+/**
+ * The Map Frame's own files (#750), read from the Plugin folder: the keyboard
+ * test below runs the real `assets/ui/map.js`, so its crosshair answers real
+ * key presses and posts the real messages the open editor keeps.
+ */
+const FRAME_LIBRARY = readFileSync(
+  join(__dirname, "assets/ui/lib/htm-preact-standalone.umd.js"),
+  "utf8"
+);
+const FRAME_SCRIPT = readFileSync(join(__dirname, "assets/ui/map.js"), "utf8");
+
 const cleanups: Array<() => void> = [];
 afterEach(() => {
   while (cleanups.length > 0) cleanups.pop()?.();
@@ -163,6 +174,50 @@ function recordingPort(): { port: MessagePort; messages: unknown[] } {
     postMessage: (message: unknown) => messages.push(message),
   } as unknown as MessagePort;
   return { port, messages };
+}
+
+/**
+ * The real Map Frame (#750), loaded into this document so a keyboard test can
+ * drive its crosshair with real key presses and read what it posts. The two
+ * ports stand for the ends of the Frame's MessageChannel: every message the
+ * Frame posts reaches the open editor, and every scene the editor sends reaches
+ * the Frame. Returns the port the editor draws into.
+ *
+ * The Frame's own `#surface` is added to the document's body rather than
+ * replacing it, so the page around this test keeps the body its queries hold.
+ */
+function loadMapFrame(runtime: MapsRuntime): MessagePort {
+  const surface = document.createElement("div");
+  surface.id = "surface";
+  document.body.appendChild(surface);
+  const framePort = {
+    onmessage: null as ((event: MessageEvent) => void) | null,
+    start: () => {},
+    postMessage: (message: unknown) => runtime.editor?.handleFrameMessage(message),
+  };
+  const workerPort = {
+    onmessage: null,
+    start: () => {},
+    postMessage: (message: unknown) => framePort.onmessage?.({ data: message } as MessageEvent),
+  } as unknown as MessagePort;
+  (window as unknown as { maibuk: unknown }).maibuk = { port: framePort };
+  // The script hands back its cleanup through the same test seam the Frame's
+  // own tests use, so its document listeners and surface never outlive it.
+  (globalThis as Record<string, unknown>).__mapTestHooks = {
+    onReady: (cleanup: () => void) =>
+      cleanups.push(() => {
+        cleanup();
+        surface.remove();
+        delete (window as unknown as { maibuk?: unknown }).maibuk;
+      }),
+  };
+  try {
+    new Function(FRAME_LIBRARY)();
+    new Function(FRAME_SCRIPT)();
+  } finally {
+    delete (globalThis as Record<string, unknown>).__mapTestHooks;
+  }
+  return workerPort;
 }
 
 /** A host and the runtime that owns the open Map, for the editor tests. */
@@ -614,6 +669,7 @@ describe("Map editor Commands", () => {
     "pencilTool",
     "penTool",
     "bucketTool",
+    "areaTool",
     "ellipseTool",
     "rectangleTool",
     "polygonTool",
@@ -640,6 +696,7 @@ describe("Map editor Commands", () => {
     ]);
     expect(effectiveShortcuts("plugin.maibuk-maps.penTool", {}, false)).toContainEqual(["n"]);
     expect(effectiveShortcuts("plugin.maibuk-maps.bucketTool", {}, false)).toContainEqual(["b"]);
+    expect(effectiveShortcuts("plugin.maibuk-maps.areaTool", {}, false)).toContainEqual(["a"]);
     expect(effectiveShortcuts("plugin.maibuk-maps.insertTool", {}, false)).toContainEqual(["i"]);
     expect(effectiveShortcuts("plugin.maibuk-maps.ellipseTool", {}, false)).toContainEqual(["o"]);
     expect(effectiveShortcuts("plugin.maibuk-maps.rectangleTool", {}, false)).toContainEqual(["r"]);
@@ -1321,6 +1378,70 @@ describe("Map editor page", () => {
       keys.unmount();
       await page.unmount();
     } finally {
+      await host.stop();
+    }
+  });
+
+  it("draws an Area Fill with the keyboard and Roughens its outline", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    registerMapCommands();
+    // The real Frame runs here, so the arrows move its crosshair and Enter
+    // posts the outline it closes; nothing about the Frame is stubbed.
+    const workerPort = loadMapFrame(runtime);
+    runtime.editor?.attachFrame(workerPort);
+    const keys = render(<CommandKeys host={host} />);
+    try {
+      const user = userEvent.setup();
+
+      // The Area tool's own key selects it, through the host's shortcut registry.
+      await user.keyboard("a");
+      await waitFor(() => expect(runtime.editor?.getSnapshot().tool).toBe("area"));
+
+      // The crosshair starts at the view centre of the portrait page, 76.2 by
+      // 114.3 mm; Shift+Arrow steps it ten millimetres.
+      const startX = 152.4 / 2;
+      const startY = 228.6 / 2;
+      await user.keyboard("{Enter}");
+      await user.keyboard("{Shift>}{ArrowRight}{/Shift}");
+      await user.keyboard("{Enter}");
+      await user.keyboard("{Shift>}{ArrowDown}{/Shift}");
+      await user.keyboard("{Enter}");
+      // Back on the first point, Enter closes the outline.
+      await user.keyboard("{Shift>}{ArrowLeft}{/Shift}");
+      await user.keyboard("{Shift>}{ArrowUp}{/Shift}");
+      await user.keyboard("{Enter}");
+
+      await waitFor(() => expect(runtime.editor?.getSnapshot().elements).toHaveLength(1));
+      await runtime.editor?.flush();
+
+      // The outline the author pointed out is the Area Fill the Map keeps.
+      const drawn = storedMap(storage).elements[0] as MapFillElement;
+      expect(drawn).toMatchObject({
+        kind: "fill",
+        name: "Fill 1",
+        content: { color: DEFAULT_FILL_COLOR },
+      });
+      expect(drawn.outline?.points).toEqual([
+        [startX, startY],
+        [startX + 10, startY],
+        [startX + 10, startY + 10],
+      ]);
+      expect(drawn.outline?.curves).toEqual([false, false, false]);
+      expect(drawn.outline?.roughened).toBe(false);
+      expect(runtime.editor?.getSnapshot().selectedId).toBe(drawn.id);
+
+      // Roughen by its Shortcut redraws that outline, as one undo step.
+      await user.keyboard("{Control>}{Shift>}r{/Shift}{/Control}");
+      const roughenedNow = () =>
+        (runtime.editor?.getSnapshot().elements[0] as MapFillElement).outline?.roughened;
+      await waitFor(() => expect(roughenedNow()).toBe(true));
+      const roughened = runtime.editor?.getSnapshot().elements[0] as MapFillElement;
+      expect(roughened.outline?.points.length).toBeGreaterThan(drawn.outline?.points.length ?? 0);
+      await runtime.editor?.flush();
+      expect((storedMap(storage).elements[0] as MapFillElement).outline?.roughened).toBe(true);
+    } finally {
+      keys.unmount();
       await host.stop();
     }
   });
