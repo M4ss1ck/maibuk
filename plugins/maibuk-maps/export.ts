@@ -2,7 +2,7 @@
  * The Maps export core (#753): pure, DOM-free functions that turn a Map into a
  * picture the author can place in a Chapter or Note or save beside their Book.
  *
- * Three jobs, none of them needing a canvas:
+ * Four jobs, none of them needing a canvas:
  *
  * - **Sizes.** A print size in inches and a DPI give the PNG's pixel size, a
  *   placement gives about 2000 px on the long side, and both keep the page's
@@ -14,6 +14,9 @@
  * - **SVG.** {@link exportSvg} serializes the scene with no editor marks, the
  *   print size in millimetres, and one `@font-face` per font the picture asks
  *   for, so Inkscape and a browser draw what the Frame drew.
+ * - **Placing.** {@link imageHtml} builds the `<img>` one Place inserts and
+ *   {@link insertWhenReady} retries the insert until the opened Chapter or
+ *   Note's editor is mounted.
  *
  * `fitUnderCap` takes its encoder, so this module never touches a canvas: the
  * Worker hands it one that rasterizes the scene. This module imports only its
@@ -44,6 +47,12 @@ export const INSERT_ENVELOPE_MARGIN_BYTES = 64 * 1024;
 /** The longest data URI an inserted Map may carry, in UTF-8 bytes. */
 export const INSERT_IMAGE_CAP_BYTES = PLUGIN_MESSAGE_MAX_BYTES - INSERT_ENVELOPE_MARGIN_BYTES;
 
+/** How long a Place waits between insert attempts, in milliseconds. */
+export const PLACE_RETRY_DELAY_MS = 150;
+
+/** How long a Place keeps retrying before it reports that no editor answered. */
+export const PLACE_RETRY_TIMEOUT_MS = 5000;
+
 /**
  * The JPEG qualities {@link fitUnderCap} falls through, highest first: each step
  * is visibly coarser than the one before, so the first that fits is the best
@@ -67,6 +76,11 @@ export interface FittedImage {
 
 /** How {@link fitUnderCap} asks for one picture: PNG, or JPEG at a quality. */
 export type EncodeImage = (format: "png" | { jpeg: number }) => Promise<Uint8Array>;
+
+/** What one `editor.insert` answers. */
+export interface InsertOutcome {
+  status: "applied" | "no-target";
+}
 
 /** A font an SVG export can embed: its family name and the file's bytes. */
 export interface ExportFont {
@@ -179,6 +193,44 @@ export function dataUri(mime: string, bytes: Uint8Array): string {
     binary += String.fromCharCode(...bytes.subarray(index, index + chunk));
   }
   return `data:${mime};base64,${btoa(binary)}`;
+}
+
+/**
+ * The HTML one Place inserts (#753): the Map's picture as one image, with the
+ * alt text escaped so a Map name holding a quote cannot break the tag.
+ */
+export function imageHtml(alt: string, src: string): string {
+  const escaped = alt
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+  return `<img src="${src}" alt="${escaped}">`;
+}
+
+/**
+ * Inserts once the target editor is mounted (#753): the Maps page is its own
+ * route, so the editor `navigation.openEntity` opens is not there on the first
+ * try. A `no-target` answer is retried every `delayMs` until `timeoutMs` has
+ * passed, and the last answer returns. Takes its insert and its sleep, so a
+ * test waits no real time.
+ */
+export async function insertWhenReady(
+  insert: () => Promise<InsertOutcome>,
+  sleep: (ms: number) => Promise<void>,
+  { delayMs = PLACE_RETRY_DELAY_MS, timeoutMs = PLACE_RETRY_TIMEOUT_MS } = {}
+): Promise<InsertOutcome> {
+  let outcome = await insert();
+  for (
+    let waited = 0;
+    outcome.status === "no-target" && waited + delayMs <= timeoutMs;
+    waited += delayMs
+  ) {
+    await sleep(delayMs);
+    outcome = await insert();
+  }
+  return outcome;
 }
 
 /** One `@font-face` rule, drawing `font` by its family name from its bytes. */

@@ -184,5 +184,13 @@
   "export.dpi": "DPI",
   "export.size": "{{width}} × {{height}} px, {{heightIn}} pulg. de alto",
   "export.save": "Guardar…",
-  "export.failed": "No se pudo guardar el mapa como imagen. Inténtalo de nuevo."
+  "export.failed": "No se pudo guardar el mapa como imagen. Inténtalo de nuevo.",
+  "place.label": "Colocar en un capítulo o una nota…",
+  "place.title": "Colocar mapa",
+  "place.target": "Capítulo o nota",
+  "place.alt": "Texto alternativo",
+  "place.loading": "Cargando capítulos y notas…",
+  "place.submit": "Colocar",
+  "place.cancel": "Cancelar",
+  "place.failed": "No se pudo colocar el mapa. Inténtalo de nuevo."
 }

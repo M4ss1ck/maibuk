@@ -179,6 +179,24 @@ describe("renderSceneBreak (PDF)", () => {
   });
 });
 
+describe("image blocks (PDF)", () => {
+  // A Chapter's planted Map is a data-URI <img> at block level (#753): the PDF
+  // renderer draws PNG and JPEG data URIs alike.
+  it.each([
+    ["PNG", "data:image/png;base64,AA"],
+    ["JPEG", "data:image/jpeg;base64,BB"],
+  ])("renders a data-URI %s <img> in Chapter HTML as an Image", (_kind, src) => {
+    const tree = renderHtmlContent(
+      `<p>Before</p><img src="${src}" alt="Map" /><p>After</p>`,
+      styles
+    );
+    const image = tree[1] as { type?: unknown; props?: { src?: unknown; alt?: unknown } };
+
+    expect(image.type).toBe("Image");
+    expect(image.props?.src).toBe(src);
+  });
+});
+
 describe("code blocks (PDF)", () => {
   it("renders a <pre><code> block with the code-block style and its text", () => {
     const tree = renderHtmlContent("<pre><code>const x = 1;</code></pre>", styles);

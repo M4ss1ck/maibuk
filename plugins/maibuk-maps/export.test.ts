@@ -18,7 +18,11 @@ import {
   exportLogLine,
   exportSvg,
   fitUnderCap,
+  imageHtml,
+  insertWhenReady,
   placePixelSize,
+  PLACE_RETRY_DELAY_MS,
+  PLACE_RETRY_TIMEOUT_MS,
   printPixelSize,
   svgAtPixelSize,
   svgPixelSize,
@@ -356,5 +360,65 @@ describe("svgAtPixelSize()", () => {
     expect(out).toContain('height="1350"');
     expect(out).not.toContain("mm");
     expect(out).toContain('viewBox="0 0 152.4 228.6"');
+  });
+});
+
+describe("imageHtml()", () => {
+  it("wraps the data URI in an img tag with the alt text escaped", () => {
+    expect(imageHtml('The Reach & "Tides" <1>', "data:image/png;base64,AA")).toBe(
+      '<img src="data:image/png;base64,AA" alt="The Reach &amp; &quot;Tides&quot; &lt;1&gt;">'
+    );
+  });
+});
+
+describe("insertWhenReady()", () => {
+  /** An insert answering each outcome in turn, then the last one again. */
+  function answers(...outcomes: Array<"applied" | "no-target">) {
+    let calls = 0;
+    const insert = () => {
+      const status = outcomes[Math.min(calls, outcomes.length - 1)];
+      calls += 1;
+      return Promise.resolve({ status });
+    };
+    return { insert, calls: () => calls };
+  }
+
+  function recorder(): { sleep: (ms: number) => Promise<void>; waits: number[] } {
+    const waits: number[] = [];
+    return {
+      waits,
+      sleep: (ms) => {
+        waits.push(ms);
+        return Promise.resolve();
+      },
+    };
+  }
+
+  it("inserts once and waits not at all when the editor is already mounted", async () => {
+    const { insert, calls } = answers("applied");
+    const { sleep, waits } = recorder();
+
+    await expect(insertWhenReady(insert, sleep)).resolves.toEqual({ status: "applied" });
+    expect(calls()).toBe(1);
+    expect(waits).toEqual([]);
+  });
+
+  it("retries a no-target answer after the delay, then applies", async () => {
+    const { insert, calls } = answers("no-target", "applied");
+    const { sleep, waits } = recorder();
+
+    await expect(insertWhenReady(insert, sleep)).resolves.toEqual({ status: "applied" });
+    expect(calls()).toBe(2);
+    expect(waits).toEqual([PLACE_RETRY_DELAY_MS]);
+  });
+
+  it("gives up after the timeout with the last no-target answer", async () => {
+    const { insert, calls } = answers("no-target");
+    const { sleep, waits } = recorder();
+
+    await expect(insertWhenReady(insert, sleep)).resolves.toEqual({ status: "no-target" });
+    // One attempt, then one every delay until the timeout is spent.
+    expect(waits).toHaveLength(Math.floor(PLACE_RETRY_TIMEOUT_MS / PLACE_RETRY_DELAY_MS));
+    expect(calls()).toBe(waits.length + 1);
   });
 });

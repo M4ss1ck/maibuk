@@ -24,7 +24,13 @@ import { createPluginClient, type PluginClient, type PluginFrame } from "@/plugi
 import { PLUGIN_COMMAND_RUN_REQUEST, PLUGIN_MIGRATE_DATA_REQUEST } from "@/plugin-sdk/protocol";
 import { servePluginUi } from "@/plugin-sdk/ui-serve";
 import { DEFAULT_SOFT_EDGE_MM, SOFT_EDGE_STEP_MM } from "./editor";
-import { exportLogLine, printPixelSize, svgPixelSize } from "./export";
+import {
+  exportLogLine,
+  INSERT_IMAGE_CAP_BYTES,
+  placePixelSize,
+  printPixelSize,
+  svgPixelSize,
+} from "./export";
 import type { FrameFontMessage } from "./frame-protocol";
 import en from "./locales/runtime/en.json";
 import es from "./locales/runtime/es.json";
@@ -322,6 +328,94 @@ function exportHostFor(storage: Map<string, unknown>) {
     cancelSaves(): void {
       cancelNext = true;
     },
+    handoff(frameId: string, port: MessagePort): void {
+      for (const handler of handlers) handler({ id: frameId, src: "", port });
+    },
+  };
+}
+
+/**
+ * A host whose Library holds a Chapter and a Note for the Map's Book, and whose
+ * `editor.insert` is recorded at the SDK seam (#753): the Maps page is its own
+ * route, so no editor is mounted while it is open and the test answers the
+ * insert the way a mounted Chapter would.
+ */
+function placeHostFor(storage: Map<string, unknown>) {
+  const host = createTestHost({
+    manifest: mapsManifest(),
+    library: {
+      books: BOOKS,
+      chapters: [
+        {
+          id: "c1",
+          bookId: "b1",
+          title: "Chapter One",
+          order: 1,
+          parentId: null,
+          chapterType: "chapter" as const,
+          wordCount: 0,
+          status: "draft" as const,
+          updatedAt: 1,
+        },
+        {
+          id: "c2",
+          bookId: "b2",
+          title: "A Chapter of the Salt Road",
+          order: 1,
+          parentId: null,
+          chapterType: "chapter" as const,
+          wordCount: 0,
+          status: "draft" as const,
+          updatedAt: 1,
+        },
+      ],
+      notes: [
+        {
+          id: "n1",
+          bookId: "b1",
+          title: "Field Notes",
+          language: "en",
+          tags: [],
+          wordCount: 0,
+          updatedAt: 1,
+        },
+      ],
+    },
+    storage,
+    language: "en",
+  });
+  const handlers: Array<(frame: PluginFrame) => void> = [];
+  const inserts: Array<{ html: string }> = [];
+  const base = createPluginClient(host.port);
+  const client = new Proxy(base, {
+    get(target, property, receiver) {
+      if (property === "onFrame") {
+        return (handler: (frame: PluginFrame) => void) => {
+          handlers.push(handler);
+          return target.onFrame(handler);
+        };
+      }
+      if (property === "editor") {
+        return new Proxy(target.editor, {
+          get(editor, key, inner) {
+            if (key === "insert") {
+              return async ({ content }: { content: { html: string } }) => {
+                inserts.push({ html: content.html });
+                return { status: "applied" as const };
+              };
+            }
+            return Reflect.get(editor, key, inner);
+          },
+        });
+      }
+      return Reflect.get(target, property, receiver);
+    },
+  }) as PluginClient;
+  const runtime = startMaps(client, servePluginUi);
+  return {
+    host,
+    runtime,
+    inserts,
     handoff(frameId: string, port: MessagePort): void {
       for (const handler of handlers) handler({ id: frameId, src: "", port });
     },
@@ -2951,6 +3045,127 @@ describe("Map editor Export panel", () => {
       await page.unmount();
     } finally {
       info.mockRestore();
+      await host.stop();
+    }
+  });
+});
+
+describe("Map editor Place dialog", () => {
+  /** The portrait page `mapStorage` gives its Map: 6 by 9 inches. */
+  const PAGE = { preset: "portrait" as const, widthMm: 152.4, heightMm: 228.6 };
+
+  it("places the Map in a Chapter by keyboard, with its alt text and one log line", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime, handoff, inserts } = placeHostFor(storage);
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      expect(await runtime.openMap("m1")).toBe(true);
+      handoff("frame-1", rasterReplyPort().port);
+      const page = await host.renderPage(MAP_PAGE_ID);
+      const user = userEvent.setup();
+
+      const placeButton = await screen.findByRole("button", { name: en["place.label"] });
+      await tabTo(user, placeButton, 100);
+      await user.keyboard("{Enter}");
+
+      const dialog = await screen.findByRole("dialog", { name: en["place.title"] });
+      // The Map's own name is the alt text until the author edits it.
+      const alt = within(dialog).getByRole("textbox", { name: en["place.alt"] });
+      expect(alt).toHaveValue("Coast");
+
+      // The picker lists the Map's Book's Chapters and Notes.
+      await within(dialog).findByLabelText(en["place.target"]);
+      await pickOption(user, en["place.target"], "Chapter One", dialog);
+
+      await tabTo(user, alt);
+      await user.keyboard("{Control>}a{/Control}The Reach & Tides");
+      await waitFor(() => expect(alt).toHaveValue("The Reach & Tides"));
+
+      const submit = within(dialog).getByRole("button", { name: en["place.submit"] });
+      await tabTo(user, submit);
+      await user.keyboard("{Enter}");
+
+      await waitFor(() => expect(inserts).toHaveLength(1));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+      expect(host.navigations).toEqual([{ entity: { kind: "chapter", id: "c1" } }]);
+      expect(inserts[0].html).toBe(
+        '<img src="data:image/png;base64,iVBORw==" alt="The Reach &amp; Tides">'
+      );
+
+      const size = placePixelSize(PAGE);
+      expect(info).toHaveBeenCalledTimes(1);
+      expect(info).toHaveBeenCalledWith(
+        exportLogLine({
+          action: "insert",
+          format: "png",
+          widthPx: size.widthPx,
+          heightPx: size.heightPx,
+          bytes: 4,
+        })
+      );
+
+      await page.unmount();
+    } finally {
+      info.mockRestore();
+      await host.stop();
+    }
+  });
+
+  it("shows the panel error and navigates nowhere when the picture is too large", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime, handoff, inserts } = placeHostFor(storage);
+    try {
+      // 80% of the cap in bytes is over it as a data URI at every quality.
+      handoff(
+        "frame-1",
+        rasterReplyPort(new Uint8Array(Math.floor(INSERT_IMAGE_CAP_BYTES * 0.8))).port
+      );
+      expect(await runtime.openMap("m1")).toBe(true);
+      const page = await host.renderPage(MAP_PAGE_ID);
+      const user = userEvent.setup();
+
+      const placeButton = await screen.findByRole("button", { name: en["place.label"] });
+      await tabTo(user, placeButton, 100);
+      await user.keyboard("{Enter}");
+      const dialog = await screen.findByRole("dialog", { name: en["place.title"] });
+      await within(dialog).findByLabelText(en["place.target"]);
+
+      const submit = within(dialog).getByRole("button", { name: en["place.submit"] });
+      await tabTo(user, submit);
+      await user.keyboard("{Enter}");
+
+      expect(await screen.findByText(en["place.failed"])).toBeInTheDocument();
+      expect(host.navigations).toEqual([]);
+      expect(inserts).toHaveLength(0);
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("closes the Place dialog on Escape and returns focus to its button", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime, handoff, inserts } = placeHostFor(storage);
+    try {
+      expect(await runtime.openMap("m1")).toBe(true);
+      handoff("frame-1", rasterReplyPort().port);
+      const page = await host.renderPage(MAP_PAGE_ID);
+      const user = userEvent.setup();
+
+      const placeButton = await screen.findByRole("button", { name: en["place.label"] });
+      await tabTo(user, placeButton, 100);
+      await user.keyboard("{Enter}");
+      await screen.findByRole("dialog", { name: en["place.title"] });
+
+      await user.keyboard("{Escape}");
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      await waitFor(() => expect(placeButton).toHaveFocus());
+      expect(inserts).toHaveLength(0);
+
+      await page.unmount();
+    } finally {
       await host.stop();
     }
   });

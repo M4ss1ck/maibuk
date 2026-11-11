@@ -21,10 +21,15 @@ import {
 } from "./editor";
 import {
   DEFAULT_DPI,
+  dataUri,
   defaultPrintWidthIn,
   exportFileName,
   exportLogLine,
   exportSvg,
+  fitUnderCap,
+  imageHtml,
+  insertWhenReady,
+  placePixelSize,
   printPixelSize,
   svgAtPixelSize,
   svgPixelSize,
@@ -47,6 +52,7 @@ import {
   STAMP_SCALE_UNITS,
   isShapeKind,
   type LineStyleId,
+  type MapDocument,
   type MapElement,
   type MapLabelFont,
   type ShapeKind,
@@ -146,6 +152,141 @@ async function saveMapImage(
       widthPx: size.widthPx,
       heightPx: size.heightPx,
       bytes: bytes.length,
+    })
+  );
+}
+
+/** One editor a Map can be placed in: a Chapter or a Note. */
+interface PlaceTarget {
+  id: string;
+  kind: "chapter" | "note";
+  label: string;
+}
+
+/**
+ * The editors one Place can reach (#753): the Chapters and Notes of the Map's
+ * own Book, or, for a Map with no Book, every Book's Chapters and Notes labelled
+ * by their Book. The Library lists are the public handle on them.
+ */
+async function listPlaceTargets(
+  client: PluginClient,
+  map: Pick<MapDocument, "bookId">
+): Promise<PlaceTarget[]> {
+  if (map.bookId !== null) {
+    const [chapters, notes] = await Promise.all([
+      client.library.chapters.list({ bookId: map.bookId }),
+      client.library.notes.list({ bookId: map.bookId }),
+    ]);
+    return [
+      ...chapters.map((chapter) => ({
+        id: chapter.id,
+        kind: "chapter" as const,
+        label: chapter.title,
+      })),
+      ...notes.map((note) => ({ id: note.id, kind: "note" as const, label: note.title })),
+    ];
+  }
+
+  const books = await client.library.books.list();
+  const titles = new Map(books.map((book) => [book.id, book.title]));
+  const label = (title: string, bookId: string | null): string => {
+    const bookTitle = bookId === null ? undefined : titles.get(bookId);
+    return bookTitle === undefined ? title : `${bookTitle} — ${title}`;
+  };
+  const chapters = await Promise.all(
+    books.map(async (book) => {
+      const list = await client.library.chapters.list({ bookId: book.id });
+      return list.map((chapter) => ({
+        id: chapter.id,
+        kind: "chapter" as const,
+        label: label(chapter.title, book.id),
+      }));
+    })
+  );
+  const notes = await client.library.notes.list({});
+  return [
+    ...chapters.flat(),
+    ...notes.map((note) => ({
+      id: note.id,
+      kind: "note" as const,
+      label: label(note.title, note.bookId),
+    })),
+  ];
+}
+
+/** The picture one Place inserts, and what its one log line names. */
+interface PlacedImage {
+  html: string;
+  format: "png" | "jpeg";
+  widthPx: number;
+  heightPx: number;
+  bytes: number;
+}
+
+/** The host calls and fonts one Place needs, so the panel stays presentational. */
+interface PlaceDeps {
+  client: PluginClient;
+  editor: MapEditor;
+  exportFonts(): Promise<readonly ExportFont[]>;
+}
+
+/** The three steps the Place dialog drives, so each failure reaches its own surface. */
+interface PlaceCallbacks {
+  listTargets(): Promise<PlaceTarget[]>;
+  prepare(alt: string): Promise<PlacedImage>;
+  finish(target: PlaceTarget, image: PlacedImage): Promise<void>;
+  notifyFailed(): Promise<void>;
+}
+
+/** Waits before one insert retry, so a Place does not busy-loop on the host. */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Rasterizes the open Map into the HTML one Place inserts (#753): at
+ * {@link placePixelSize}, PNG first and JPEG at falling quality when the data
+ * URI would be over the insert cap, with the alt text escaped. Throws
+ * {@link ExportTooLargeError} when even the lowest JPEG is over the cap, before
+ * anything navigates.
+ */
+async function preparePlace({ editor, exportFonts }: PlaceDeps, alt: string): Promise<PlacedImage> {
+  const doc = editor.getSnapshot().doc;
+  const size = placePixelSize(doc.page);
+  const svg = svgAtPixelSize(exportSvg(doc, await exportFonts()), size);
+  const fitted = await fitUnderCap((format) => editor.rasterize(svg, size, format));
+  return {
+    html: imageHtml(alt, dataUri(fitted.mime, fitted.bytes)),
+    format: fitted.mime === "image/png" ? "png" : "jpeg",
+    widthPx: size.widthPx,
+    heightPx: size.heightPx,
+    bytes: fitted.bytes.length,
+  };
+}
+
+/**
+ * Opens the target, inserts the picture once its editor is mounted, and logs
+ * exactly one line (#753). Throws when no editor answers within the retry
+ * window; nothing is inserted then.
+ */
+async function finishPlace(
+  { client }: PlaceDeps,
+  target: PlaceTarget,
+  image: PlacedImage
+): Promise<void> {
+  await client.navigation.openEntity({ entity: { kind: target.kind, id: target.id } });
+  const outcome = await insertWhenReady(
+    () => client.editor.insert({ content: { html: image.html } }),
+    sleep
+  );
+  if (outcome.status !== "applied") throw new Error("no editor answered the insert");
+  console.info(
+    exportLogLine({
+      action: "insert",
+      format: image.format,
+      widthPx: image.widthPx,
+      heightPx: image.heightPx,
+      bytes: image.bytes,
     })
   );
 }
@@ -285,11 +426,13 @@ function MapEditorView({
   t,
   backToMaps,
   save,
+  place,
 }: {
   editor: MapEditor;
   t: (key: MapsKey) => string;
   backToMaps: () => Promise<void>;
   save(options: SaveImageOptions): Promise<void>;
+  place: PlaceCallbacks;
 }) {
   const snapshot = useSyncExternalStore(editor.subscribe, editor.getSnapshot);
   const [dialog, setDialog] = useState<RenameDialog | null>(null);
@@ -301,6 +444,13 @@ function MapEditorView({
   );
   const [dpi, setDpi] = useState(DEFAULT_DPI);
   const [exportFailed, setExportFailed] = useState(false);
+  // The Place dialog's state: the targets it lists, the one picked, the alt
+  // text, and whether the last Place failed.
+  const [placeOpen, setPlaceOpen] = useState(false);
+  const [placeTargets, setPlaceTargets] = useState<PlaceTarget[] | null>(null);
+  const [placeTargetId, setPlaceTargetId] = useState<string | null>(null);
+  const [placeAlt, setPlaceAlt] = useState("");
+  const [placeFailed, setPlaceFailed] = useState(false);
   // Each Properties request remounts the Name field with `autoFocus`, so the
   // menu entry visibly lands focus on the panel even when the row already is
   // the selection (#745).
@@ -402,6 +552,43 @@ function MapEditorView({
     } catch {
       // A refused save or a Frame that could not draw shows one localized line.
       setExportFailed(true);
+    }
+  }
+
+  async function openPlace(): Promise<void> {
+    setPlaceFailed(false);
+    setPlaceTargets(null);
+    setPlaceTargetId(null);
+    setPlaceAlt(snapshot.doc.name);
+    setPlaceOpen(true);
+    try {
+      const targets = await place.listTargets();
+      setPlaceTargets(targets);
+      setPlaceTargetId(targets[0]?.id ?? null);
+    } catch {
+      setPlaceOpen(false);
+      setPlaceFailed(true);
+    }
+  }
+
+  async function submitPlace(): Promise<void> {
+    const target = placeTargets?.find((candidate) => candidate.id === placeTargetId);
+    if (target === undefined) return;
+    setPlaceFailed(false);
+    let image: PlacedImage;
+    try {
+      image = await place.prepare(placeAlt);
+    } catch {
+      // Nothing navigated yet, so the panel can still show the failure.
+      setPlaceFailed(true);
+      return;
+    }
+    setPlaceOpen(false);
+    try {
+      await place.finish(target, image);
+    } catch {
+      // The Map page is gone once the target opened: the host toast reports it.
+      await place.notifyFailed();
     }
   }
 
@@ -952,6 +1139,12 @@ function MapEditorView({
               Frame which alone has a canvas, or the SVG itself. The panel is
               the keyboard path that saves either picture. */}
           <ui.Text weight="semibold">{t("export.label")}</ui.Text>
+          {/* Place copies the Map into a Chapter or Note as an image (#753);
+              the dialog holds the target picker and the alt text. */}
+          <ui.Button variant="secondary" onPress={() => void openPlace()}>
+            {t("place.label")}
+          </ui.Button>
+          {placeFailed ? <ui.Status tone="warning">{t("place.failed")}</ui.Status> : null}
           <ui.RadioGroup
             label={t("export.format")}
             orientation="horizontal"
@@ -995,6 +1188,49 @@ function MapEditorView({
           {exportFailed ? <ui.Status tone="warning">{t("export.failed")}</ui.Status> : null}
         </ui.View>
       </ui.View>
+
+      <ui.Modal
+        title={t("place.title")}
+        isOpen={placeOpen}
+        onOpenChange={(event) => {
+          if (!event.detail) setPlaceOpen(false);
+        }}
+      >
+        {placeOpen ? (
+          <ui.View direction="column" gap="md">
+            {placeTargets === null ? (
+              <ui.Text tone="muted">{t("place.loading")}</ui.Text>
+            ) : (
+              <ui.Select
+                label={t("place.target")}
+                options={placeTargets.map((target) => ({
+                  value: target.id,
+                  label: target.label,
+                }))}
+                selectedKey={placeTargetId ?? undefined}
+                onChange={(event) => setPlaceTargetId(event.detail)}
+              />
+            )}
+            <ui.TextField
+              label={t("place.alt")}
+              value={placeAlt}
+              onInput={(event) => setPlaceAlt(event.detail)}
+            />
+            <ui.View direction="row" gap="sm" justify="end">
+              <ui.Button variant="secondary" onPress={() => setPlaceOpen(false)}>
+                {t("place.cancel")}
+              </ui.Button>
+              <ui.Button
+                variant="primary"
+                isDisabled={placeTargets === null || placeTargetId === null}
+                onPress={() => void submitPlace()}
+              >
+                {t("place.submit")}
+              </ui.Button>
+            </ui.View>
+          </ui.View>
+        ) : null}
+      </ui.Modal>
 
       <ui.Modal
         title={t("properties.renameTitle")}
@@ -1059,6 +1295,15 @@ export function createMapPage(deps: MapPageDeps): ComponentType {
         save={(options) =>
           saveMapImage({ client, editor, exportFonts: runtime.exportFonts }, options)
         }
+        place={{
+          listTargets: () => listPlaceTargets(client, editor.getSnapshot().doc),
+          prepare: (alt) => preparePlace({ client, editor, exportFonts: runtime.exportFonts }, alt),
+          finish: (target, image) =>
+            finishPlace({ client, editor, exportFonts: runtime.exportFonts }, target, image),
+          notifyFailed: async () => {
+            await client.notifications.show({ variant: "error", message: t("place.failed") });
+          },
+        }}
       />
     );
   };
