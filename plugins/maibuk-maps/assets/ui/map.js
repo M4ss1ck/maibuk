@@ -25,7 +25,7 @@
    * @typedef {[number, number]} MapPoint
    * @typedef {"ellipse" | "rectangle" | "polygon"} ShapeKind
    * @typedef {"select" | "pencil" | "pen" | "bucket" | "area" | "eraser" | "insert" | ShapeKind} MapTool
-   * @typedef {{ d: string, stroke: string | null, strokeWidth: number, dash: string | null, fill: string | null, fillRule?: "evenodd", opacity: number, transform?: string }} LineShape
+   * @typedef {{ d: string, stroke: string | null, strokeWidth: number, dash: string | null, fill: string | null, fillRule?: "evenodd", opacity: number, transform?: string, clip?: string }} LineShape
    * @typedef {{ text: string, x: number, y: number, size: number, fill: string, font?: string, anchor: "start" | "middle" | "end", transform?: string }} TextShape
    * @typedef {LineShape | TextShape} SceneShape
    * @typedef {{ id: string, shapes: SceneShape[], filter: string | null, hidden: boolean, locked: boolean, selected: boolean, movable: boolean }} FrameSceneElement
@@ -229,6 +229,8 @@
       ...(shape.fillRule === "evenodd" ? { fillRule: "evenodd" } : {}),
       opacity: isNumber(shape.opacity) ? Math.max(0, Math.min(1, shape.opacity)) : 1,
       ...(typeof shape.transform === "string" ? { transform: shape.transform } : {}),
+      // A Clip Path id is only as safe as a definitions id, so it takes the same check.
+      ...(typeof shape.clip === "string" && FILTER_ID.test(shape.clip) ? { clip: shape.clip } : {}),
     };
   }
 
@@ -510,6 +512,7 @@
             fill-rule="${shape.fillRule ?? undefined}"
             data-fill="${shape.fill === null ? undefined : "true"}"
             transform="${shape.transform ?? undefined}"
+            clip-path="${shape.clip === undefined ? undefined : `url(#${shape.clip})`}"
           />`
         ),
       ...element.shapes.map((shape) =>
@@ -536,6 +539,7 @@
               stroke-dasharray="${shape.dash ?? undefined}"
               opacity="${shape.opacity === 1 ? undefined : n(shape.opacity)}"
               transform="${shape.transform ?? undefined}"
+              clip-path="${shape.clip === undefined ? undefined : `url(#${shape.clip})`}"
             />`
       ),
     ];

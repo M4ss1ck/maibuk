@@ -561,7 +561,7 @@ describe("Map Fills", () => {
   });
 
   it("keeps a Fill of scattered Stamps, or of a texture alone, with no colour", async () => {
-    const scatter = { stamps: ["base:tree", "base:marker"], spacing: 6, seed: 12 };
+    const scatter = { stamp: "base:tree", spacing: 6, seed: 12 };
     const [textured] = [fill("grass", { content: { texture: "marsh" } })];
     const [scattered] = [fill("trees", { content: { scatter } })];
 
@@ -579,10 +579,11 @@ describe("Map Fills", () => {
       { ...base, content: { color: undefined } },
       { ...base, content: { texture: "forest" } },
       { ...base, content: { color: "#c8d5a3", texture: 7 } },
-      { ...base, content: { scatter: { stamps: [], spacing: 6, seed: 1 } } },
-      { ...base, content: { scatter: { stamps: [""], spacing: 6, seed: 1 } } },
-      { ...base, content: { scatter: { stamps: ["base:tree"], spacing: 0, seed: 1 } } },
-      { ...base, content: { scatter: { stamps: ["base:tree"], spacing: 6, seed: Number.NaN } } },
+      { ...base, content: { scatter: { stamp: "", spacing: 6, seed: 1 } } },
+      { ...base, content: { scatter: { stamp: 7, spacing: 6, seed: 1 } } },
+      { ...base, content: { scatter: { stamps: ["base:tree"], spacing: 6, seed: 1 } } },
+      { ...base, content: { scatter: { stamp: "base:tree", spacing: 0, seed: 1 } } },
+      { ...base, content: { scatter: { stamp: "base:tree", spacing: 6, seed: Number.NaN } } },
     ]) {
       expect(await loadMap([element])).toBeNull();
     }

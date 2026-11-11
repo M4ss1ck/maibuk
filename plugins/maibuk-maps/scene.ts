@@ -11,12 +11,19 @@
 
 import { RoughGenerator } from "roughjs/bin/generator.js";
 import { faceAt, findFaces, type Face } from "./faces";
-import { cumulativeLengths, linePath, roundedMm, seedFor } from "./geometry";
+import {
+  cumulativeLengths,
+  linePath,
+  type MapBounds,
+  pointsBounds,
+  roundedMm,
+  seedFor,
+} from "./geometry";
 import {
   DEFAULT_STAMP_COLOR,
   DEFAULT_STAMP_SCALE,
-  DEFAULT_STAMP_SIZE_MM,
   LINE_STROKE,
+  isAreaFill,
   type MapDocument,
   type MapElement,
   type MapFillElement,
@@ -478,28 +485,37 @@ function scatterClipId(elementId: string): string {
 /**
  * The Stamps a Fill scatters over its area (#750), drawn exactly as Stamp
  * Elements are and clipped to the area, so the ones near its edge are cut off
- * cleanly. The Stamps cycle over the sampled points in order, so a Fill of two
- * kinds alternates them.
+ * cleanly. Each Stamp is drawn one scatter spacing wide, so the Stamps sit
+ * apart instead of piling up.
  */
 function scatteredShapes(
   element: MapFillElement,
   area: FillArea,
   scatter: MapFillScatter,
+  pageWidthMm: number,
+  pageHeightMm: number,
   collector: SceneCollector
 ): LineShape[] {
   const clip = scatterClipId(element.id);
   const shapes: LineShape[] = [];
-  scatterPoints(area.rings, scatter.spacing, scatter.seed).forEach((point, index) => {
-    const art = stampArt(scatter.stamps[index % scatter.stamps.length]);
-    if (art === undefined) return;
-    const transform = artTransform(
-      { x: point[0], y: point[1], size: DEFAULT_STAMP_SIZE_MM, rotation: 0 },
-      art
-    );
-    for (const shape of artShapes(art, transform, DEFAULT_STAMP_COLOR)) {
-      shapes.push({ ...shape, clip });
+  const art = stampArt(scatter.stamp);
+  if (art !== undefined) {
+    for (const point of scatterPoints(
+      area.rings,
+      scatter.spacing,
+      scatter.seed,
+      pageWidthMm,
+      pageHeightMm
+    )) {
+      const transform = artTransform(
+        { x: point[0], y: point[1], size: scatter.spacing, rotation: 0 },
+        art
+      );
+      for (const shape of artShapes(art, transform, DEFAULT_STAMP_COLOR)) {
+        shapes.push({ ...shape, clip });
+      }
     }
-  });
+  }
   if (shapes.length === 0) return shapes;
   collector.defs.push(
     `<clipPath id="${clip}"><path d="${escapeAttribute(area.d)}" clip-rule="evenodd"/></clipPath>`
@@ -516,6 +532,8 @@ function scatteredShapes(
 function fillShapes(
   element: MapFillElement,
   area: FillArea,
+  pageWidthMm: number,
+  pageHeightMm: number,
   collector: SceneCollector
 ): LineShape[] {
   const { color, texture, scatter } = element.content;
@@ -525,7 +543,9 @@ function fillShapes(
     collector.textures.add(texture);
     shapes.push(areaPaint(area, `url(#${texturePatternId(texture)})`));
   }
-  if (scatter !== undefined) shapes.push(...scatteredShapes(element, area, scatter, collector));
+  if (scatter !== undefined) {
+    shapes.push(...scatteredShapes(element, area, scatter, pageWidthMm, pageHeightMm, collector));
+  }
   return shapes;
 }
 
@@ -658,10 +678,13 @@ function elementShapes(
   element: MapElement,
   area: FillArea | null,
   pageWidthMm: number,
+  pageHeightMm: number,
   collector: SceneCollector
 ): SceneShape[] {
   if (element.kind === "line") return lineShapes(element);
-  if (element.kind === "fill") return area === null ? [] : fillShapes(element, area, collector);
+  if (element.kind === "fill") {
+    return area === null ? [] : fillShapes(element, area, pageWidthMm, pageHeightMm, collector);
+  }
   if (element.kind === "stamp") return stampShapes(element, pageWidthMm);
   return [];
 }
@@ -684,41 +707,22 @@ function softEdgeFilterId(elementId: string): string {
   return `soft-edge-${seedFor(elementId).toString(16)}`;
 }
 
-/** The smallest and largest coordinate of `points`, in page millimetres. */
-function pointsBounds(points: readonly MapPoint[]): {
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
-} {
-  let minX = Number.POSITIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
-  for (const [x, y] of points) {
-    minX = Math.min(minX, x);
-    minY = Math.min(minY, y);
-    maxX = Math.max(maxX, x);
-    maxY = Math.max(maxY, y);
-  }
-  return { minX, minY, maxX, maxY };
-}
-
 /**
  * The `<filter>` one Element's Soft Edge draws: a Gaussian blur of `softEdgeMm`
  * whose region is widened to hold the whole blur, in page space with explicit
- * bounds, so a browser and Inkscape cut nothing off it.
+ * bounds, so a browser and Inkscape cut nothing off it. The blur blends in
+ * sRGB, the space both renderers agree on, so the fade looks the same in each.
  */
-function softEdgeFilter(id: string, softEdgeMm: number, points: readonly MapPoint[]): string {
-  const { minX, minY, maxX, maxY } = pointsBounds(points);
+function softEdgeFilter(id: string, softEdgeMm: number, bounds: MapBounds): string {
+  const { minX, minY, maxX, maxY } = bounds;
   const padding = softEdgeMm * SOFT_EDGE_REACH + SOFT_EDGE_PADDING_MM;
   const x = minX - padding;
   const y = minY - padding;
   const width = maxX - minX + padding * 2;
   const height = maxY - minY + padding * 2;
-  return `<filter id="${id}" filterUnits="userSpaceOnUse" x="${roundedMm(x)}" y="${roundedMm(
-    y
-  )}" width="${roundedMm(width)}" height="${roundedMm(height)}"><feGaussianBlur stdDeviation="${roundedMm(
+  return `<filter id="${id}" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB" x="${roundedMm(
+    x
+  )}" y="${roundedMm(y)}" width="${roundedMm(width)}" height="${roundedMm(height)}"><feGaussianBlur stdDeviation="${roundedMm(
     softEdgeMm
   )}"/></filter>`;
 }
@@ -733,7 +737,11 @@ export interface SceneRender {
 }
 
 /** Every Element's primitives, its Soft Edge, and the definitions its SVG needs, in one pass. */
-export function sceneRender(elements: readonly MapElement[], pageWidthMm: number): SceneRender {
+export function sceneRender(
+  elements: readonly MapElement[],
+  pageWidthMm: number,
+  pageHeightMm: number
+): SceneRender {
   const needsFaces = elements.some((element) => element.kind === "fill");
   const faces = needsFaces ? sceneFaces(elements) : [];
   const collector: SceneCollector = { defs: [], textures: new Set() };
@@ -742,16 +750,17 @@ export function sceneRender(elements: readonly MapElement[], pageWidthMm: number
 
   for (const element of elements) {
     const area = element.kind === "fill" ? fillArea(element, faces) : null;
-    shapes.push(elementShapes(element, area, pageWidthMm, collector));
+    shapes.push(elementShapes(element, area, pageWidthMm, pageHeightMm, collector));
 
     const softEdge = softEdgeOf(element);
     const outline = element.kind === "line" ? element.points : (area?.rings.flat() ?? []);
-    if (softEdge === null || outline.length === 0) {
+    const bounds = softEdge === null ? null : pointsBounds(outline);
+    if (softEdge === null || bounds === null) {
       filters.push(null);
       continue;
     }
     const id = softEdgeFilterId(element.id);
-    collector.defs.push(softEdgeFilter(id, softEdge, outline));
+    collector.defs.push(softEdgeFilter(id, softEdge, bounds));
     filters.push(id);
   }
 
@@ -768,8 +777,12 @@ export function sceneRender(elements: readonly MapElement[], pageWidthMm: number
 }
 
 /** Every Element's render primitives, in array order, from one pass over the faces. */
-export function sceneShapes(elements: readonly MapElement[], pageWidthMm: number): SceneShape[][] {
-  return sceneRender(elements, pageWidthMm).shapes;
+export function sceneShapes(
+  elements: readonly MapElement[],
+  pageWidthMm: number,
+  pageHeightMm: number
+): SceneShape[][] {
+  return sceneRender(elements, pageWidthMm, pageHeightMm).shapes;
 }
 
 /** Escapes text for an XML attribute. */
@@ -870,7 +883,7 @@ export function sceneToSvg(
     background(widthMm, heightMm),
   ];
 
-  const render = sceneRender(map.elements, widthMm);
+  const render = sceneRender(map.elements, widthMm, heightMm);
   if (render.defs.length > 0) parts.push(`<defs>${render.defs.join("")}</defs>`);
   map.elements.forEach((element, index) => {
     // An Element with nothing to draw writes no group: a hidden one, a Fill in
@@ -936,11 +949,6 @@ export function canMove(element: MapElement): boolean {
   return (
     !element.locked && (element.kind === "line" || element.kind === "stamp" || isAreaFill(element))
   );
-}
-
-/** Whether a Fill covers its own outline (#750), which no move of a Map Line carries it along. */
-function isAreaFill(element: MapElement): element is MapFillElement {
-  return element.kind === "fill" && element.outline !== undefined;
 }
 
 /**

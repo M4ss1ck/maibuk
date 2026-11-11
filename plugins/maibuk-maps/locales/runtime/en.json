@@ -85,7 +85,7 @@
   "properties.softEdgeAmount": "Soft Edge amount (mm)",
   "properties.fillTexture": "Texture",
   "properties.fillScatter": "Scatter",
-  "properties.scatterSpacing": "Scatter spacing (mm)",
+  "properties.scatterSpacing": "Scatter size and spacing (mm)",
   "properties.reseed": "Reseed",
   "properties.none": "None",
   "properties.texture.grass": "Grass",

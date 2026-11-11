@@ -36,6 +36,7 @@ import {
   MAX_NAME_LENGTH,
   MIN_STAMP_SIZE_MM,
   curvedSegments,
+  isAreaFill,
   isStampScaleUnit,
   newStamp,
   normalizeShape,
@@ -43,7 +44,7 @@ import {
   randomMapId,
 } from "./maps";
 import { createAutosave } from "./autosave";
-import { type FillTranslation, pourFill, reconcileFills } from "./fills";
+import { type FillTranslation, insertFill, pourFill, reconcileFills } from "./fills";
 import {
   parseFrameMessage,
   sceneMessage,
@@ -134,7 +135,7 @@ export interface MapEditorSnapshot {
   roughenStrength: number;
   /** Whether the selected Element is a Map Line. */
   selectedIsLine: boolean;
-  /** The selected Element is a Fill. */
+  /** Whether the selected Element is a Fill. */
   selectedIsFill: boolean;
   /** Whether the selected Element is an Area Fill, whose own outline Roughen redraws. */
   selectedIsAreaFill: boolean;
@@ -339,7 +340,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       roughenStrength,
       selectedIsLine: selectedLine !== null,
       selectedIsFill: selectedFill !== null,
-      selectedIsAreaFill: selectedFill !== null && selectedFill.outline !== undefined,
+      selectedIsAreaFill: selectedFill !== null && isAreaFill(selectedFill),
       selectedFillColor: selectedFill === null ? null : (selectedFill.content.color ?? null),
       selectedLineStyle: selectedLine === null ? null : selectedLine.style,
       selectedSoftEdge: faded === null ? null : softEdgeAmount(faded),
@@ -423,6 +424,15 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     publish();
     schedule();
     sendScene();
+  }
+
+  /**
+   * Replaces one Element's fields as one undo step; every other Element comes
+   * back as it was. The caller has already refused a locked or missing Element
+   * and an edit that changes nothing.
+   */
+  function updateElement(id: string, update: (element: MapElement) => MapElement): void {
+    edit(elements.map((element) => (element.id === id ? update(element) : element)));
   }
 
   function elementById(id: string | null): MapElement | undefined {
@@ -602,8 +612,8 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
   }
 
   /**
-   * The Area Fill a finished Area tool outline makes (#750), added on top of
-   * the z-order: what the freehand stroke or the point-by-point outline
+   * The Area Fill a finished Area tool outline makes (#750), at the top of the
+   * Fill stack: what the freehand stroke or the point-by-point outline
    * enclosed, in the current Fill colour. A freehand stroke smooths exactly as
    * the Pencil's does, so both forms draw one outline from the same points.
    */
@@ -625,7 +635,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       content: { color: currentFillColor },
     };
     selectedId = element.id;
-    edit(addElement(elements, element));
+    edit(insertFill(elements, element));
   }
 
   /**
@@ -864,12 +874,10 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
           ? 0
           : clamp(softEdgeMm, MIN_SOFT_EDGE_MM, MAX_SOFT_EDGE_MM);
       if (amount === before) return;
-      edit(
-        elements.map((element) =>
-          element.id === id && (element.kind === "line" || element.kind === "fill")
-            ? normalizeSoftEdge({ ...element, softEdge: amount })
-            : element
-        )
+      updateElement(id, (element) =>
+        element.kind === "line" || element.kind === "fill"
+          ? normalizeSoftEdge({ ...element, softEdge: amount })
+          : element
       );
     },
 
@@ -884,11 +892,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
           : { ...target.content, texture };
       // A Fill covers something at all times: the last kind stays.
       if (coversNothing(content)) return;
-      edit(
-        elements.map((element) =>
-          element.id === id && element.kind === "fill" ? { ...element, content } : element
-        )
-      );
+      updateElement(id, (element) => (element.kind === "fill" ? { ...element, content } : element));
     },
 
     setFillScatter(id, stampId) {
@@ -900,30 +904,22 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
         // A Fill covers something at all times: the last kind stays.
         const content = contentWithout(target.content, "scatter");
         if (coversNothing(content)) return;
-        edit(
-          elements.map((element) =>
-            element.id === id && element.kind === "fill" ? { ...element, content } : element
-          )
+        updateElement(id, (element) =>
+          element.kind === "fill" ? { ...element, content } : element
         );
         return;
       }
       if (!isBaseStampId(stampId)) return;
-      const stamps = [baseStampRef(stampId)];
+      const stamp = baseStampRef(stampId);
       // The first scatter takes a fresh seed, so no two Fills scatter alike.
       const scatter: MapFillScatter = {
-        stamps,
+        stamp,
         spacing: before?.spacing ?? DEFAULT_SCATTER_SPACING_MM,
         seed: before?.seed ?? newScatterSeed(),
       };
-      if (before !== undefined && before.stamps.length === 1 && before.stamps[0] === stamps[0]) {
-        return;
-      }
-      edit(
-        elements.map((element) =>
-          element.id === id && element.kind === "fill"
-            ? { ...element, content: { ...element.content, scatter } }
-            : element
-        )
+      if (before !== undefined && before.stamp === stamp) return;
+      updateElement(id, (element) =>
+        element.kind === "fill" ? { ...element, content: { ...element.content, scatter } } : element
       );
     },
 
@@ -934,12 +930,10 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       if (scatter === undefined || !Number.isFinite(spacingMm)) return;
       const spacing = clamp(spacingMm, MIN_SCATTER_SPACING_MM, MAX_SCATTER_SPACING_MM);
       if (spacing === scatter.spacing) return;
-      edit(
-        elements.map((element) =>
-          element.id === id && element.kind === "fill"
-            ? { ...element, content: { ...element.content, scatter: { ...scatter, spacing } } }
-            : element
-        )
+      updateElement(id, (element) =>
+        element.kind === "fill"
+          ? { ...element, content: { ...element.content, scatter: { ...scatter, spacing } } }
+          : element
       );
     },
 
@@ -949,12 +943,10 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       const scatter = target.content.scatter;
       if (scatter === undefined) return;
       const reseeded: MapFillScatter = { ...scatter, seed: newScatterSeed() };
-      edit(
-        elements.map((element) =>
-          element.id === id && element.kind === "fill"
-            ? { ...element, content: { ...element.content, scatter: reseeded } }
-            : element
-        )
+      updateElement(id, (element) =>
+        element.kind === "fill"
+          ? { ...element, content: { ...element.content, scatter: reseeded } }
+          : element
       );
     },
 

@@ -2354,9 +2354,7 @@ describe("Map editor page", () => {
       // A Fill that first takes a scatter picks a Stamp from the base picker and
       // starts from a fresh seed.
       await pickOption(user, en["properties.fillScatter"], en["stamp.castle"]);
-      await waitFor(() =>
-        expect(fillNow(runtime).content.scatter?.stamps).toEqual(["base:castle"])
-      );
+      await waitFor(() => expect(fillNow(runtime).content.scatter?.stamp).toBe("base:castle"));
       const firstSeed = fillNow(runtime).content.scatter?.seed ?? 0;
       expect(firstSeed).toBeGreaterThan(0);
       expect(fillNow(runtime).content.scatter?.spacing).toBe(DEFAULT_SCATTER_SPACING_MM);
@@ -2382,7 +2380,7 @@ describe("Map editor page", () => {
       await runtime.editor?.flush();
       expect(storedFill(storage).content).toMatchObject({
         color: DEFAULT_FILL_COLOR,
-        scatter: { stamps: ["base:castle"] },
+        scatter: { stamp: "base:castle" },
       });
       expect(storedFill(storage).content.texture).toBeUndefined();
 
@@ -2406,9 +2404,7 @@ describe("Map editor page", () => {
       // lands afterwards proves the refusal was answered, not still in flight.
       await backToRows(user);
       await pickOption(user, en["properties.fillScatter"], en["stamp.castle"]);
-      await waitFor(() =>
-        expect(fillNow(runtime).content.scatter?.stamps).toEqual(["base:castle"])
-      );
+      await waitFor(() => expect(fillNow(runtime).content.scatter?.stamp).toBe("base:castle"));
 
       expect(fillNow(runtime).content.texture).toBe("hatching");
       expect(screen.getByLabelText(en["properties.fillTexture"])).toHaveTextContent(

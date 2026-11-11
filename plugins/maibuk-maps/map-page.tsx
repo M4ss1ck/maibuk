@@ -174,7 +174,7 @@ function MapEditorView({
   const scatterStampId =
     scatter === null
       ? null
-      : (BASE_STAMP_IDS.find((id) => baseStampRef(id) === scatter.stamps[0]) ?? null);
+      : (BASE_STAMP_IDS.find((id) => baseStampRef(id) === scatter.stamp) ?? null);
   // The Bucket's colour is what the next pour uses, so it wins while the Bucket
   // is active; with any other tool the one control edits the selected Fill.
   const pouring = snapshot.tool === "bucket";

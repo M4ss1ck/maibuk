@@ -585,7 +585,7 @@ describe("drawing an Area Fill with the Area tool", () => {
     return fill;
   }
 
-  it("adds a freehand outline as a closed Area Fill on top, selected, as one undo step", () => {
+  it("adds a freehand outline as a closed Area Fill in the Fill stack, selected, as one undo step", () => {
     const { editor } = openEditor([squareLine("ring", "Ring", 10, 10, 80)]);
     editor.setFillColor("#445566");
 
@@ -605,8 +605,8 @@ describe("drawing an Area Fill with the Area tool", () => {
     expect(elements).toHaveLength(2);
     const fill = onlyFill(editor);
     // The Area Fill covers its own outline, in the colour the Bucket pours, and
-    // sits on top of the Map Line it crossed.
-    expect(elements[1]).toBe(fill);
+    // takes the top of the Fill stack, below the Map Line it crossed.
+    expect(elements[0]).toBe(fill);
     expect(fill).toMatchObject({
       kind: "fill",
       name: "Fill 1",
@@ -630,6 +630,56 @@ describe("drawing an Area Fill with the Area tool", () => {
 
     editor.undo();
     expect(editor.getSnapshot().elements).toHaveLength(1);
+  });
+
+  it("puts a new Area Fill at the top of the Fill stack, below Map Lines, Stamps, and Map Labels", () => {
+    const { editor } = openEditor([
+      { id: "image", kind: "image", name: "Scan", hidden: false, locked: false },
+      {
+        ...fillAt("older", [150, 50]),
+        outline: {
+          points: [
+            [130, 30],
+            [170, 30],
+            [170, 70],
+            [130, 70],
+          ],
+          curves: [false, false, false, false],
+          roughened: false,
+        },
+      },
+      squareLine("ring", "Ring", 10, 10, 40),
+      {
+        id: "stamp",
+        kind: "stamp",
+        name: "Castle",
+        hidden: false,
+        locked: false,
+        stampRef: "base:castle",
+        transform: { x: 100, y: 50, size: 12, rotation: 0 },
+        color: DEFAULT_STAMP_COLOR,
+      },
+      { id: "label", kind: "label", name: "The Reach", hidden: false, locked: false },
+    ]);
+
+    editor.handleFrameMessage({
+      kind: "area",
+      points: [
+        [10, 10],
+        [40, 10],
+        [40, 40],
+        [10, 40],
+      ],
+      curves: [],
+      freehand: true,
+    });
+
+    const ids = editor
+      .getSnapshot()
+      .elements.map((element) =>
+        element.kind === "fill" && element.id !== "older" ? "new" : element.id
+      );
+    expect(ids).toEqual(["image", "older", "new", "ring", "stamp", "label"]);
   });
 
   it("smooths a freehand outline exactly as the Pencil smooths a stroke", () => {
@@ -783,11 +833,14 @@ describe("Roughen on an Area Fill", () => {
       curves: [false, false, false],
       freehand: false,
     });
-    const area = editor.getSnapshot().elements[1] as MapFillElement;
+    const area = editor
+      .getSnapshot()
+      .elements.find((element): element is MapFillElement => element.kind === "fill");
+    if (area === undefined) throw new Error("no Area Fill");
     editor.setLocked(area.id, true);
 
     editor.roughen();
-    expect(editor.getSnapshot().elements[1]).toMatchObject({
+    expect(editor.getSnapshot().elements.find((element) => element.id === area.id)).toMatchObject({
       outline: { roughened: false },
     });
 
@@ -1516,7 +1569,7 @@ describe("a Fill's texture and scatter", () => {
     editor.setFillScatter("fill", "castle");
 
     const scatter = onlyFill(editor).content.scatter;
-    expect(scatter?.stamps).toEqual(["base:castle"]);
+    expect(scatter?.stamp).toBe("base:castle");
     expect(scatter?.spacing).toBe(DEFAULT_SCATTER_SPACING_MM);
     expect(scatter?.seed).toBeGreaterThan(0);
     expect(editor.getSnapshot().selectedFillScatter).toEqual(scatter);
@@ -1554,7 +1607,7 @@ describe("a Fill's texture and scatter", () => {
 
     editor.reseedFillScatter("fill");
     expect(onlyFill(editor).content.scatter?.seed).not.toBe(first?.seed);
-    expect(onlyFill(editor).content.scatter?.stamps).toEqual(["base:castle"]);
+    expect(onlyFill(editor).content.scatter?.stamp).toBe("base:castle");
 
     editor.setFillScatterSpacing("fill", 40);
     expect(onlyFill(editor).content.scatter?.spacing).toBe(MAX_SCATTER_SPACING_MM);
@@ -1566,7 +1619,7 @@ describe("a Fill's texture and scatter", () => {
   });
 
   it("refuses to clear the only kind a Fill has, and leaves a locked Fill's content alone", () => {
-    const scatter = { stamps: ["base:castle"], spacing: DEFAULT_SCATTER_SPACING_MM, seed: 7 };
+    const scatter = { stamp: "base:castle", spacing: DEFAULT_SCATTER_SPACING_MM, seed: 7 };
     const { editor } = openEditor(bucketFill({ scatter }));
 
     editor.setFillScatter("fill", null);

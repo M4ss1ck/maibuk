@@ -84,6 +84,30 @@ function pointAt(a: MapPoint, b: MapPoint, t: number): MapPoint {
   return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
 }
 
+/** The smallest and largest coordinate of a set of points, in page millimetres. */
+export interface MapBounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+/** The box `points` fill, in page millimetres, or null for no points. */
+export function pointsBounds(points: readonly MapPoint[]): MapBounds | null {
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  for (const [x, y] of points) {
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  }
+  if (minX === Number.POSITIVE_INFINITY) return null;
+  return { minX, minY, maxX, maxY };
+}
+
 /** The distance from a point to the nearest spot on segment `a`-`b`. */
 function distanceToSegment(point: MapPoint, a: MapPoint, b: MapPoint): number {
   const dx = b[0] - a[0];

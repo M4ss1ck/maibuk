@@ -36,7 +36,8 @@ export interface FrameSceneElement {
   id: string;
   /**
    * The paths and text the Frame draws, from `sceneShapes`; empty for an
-   * Element with nothing to draw yet.
+   * Element with nothing to draw yet. A path carries the Clip Path id that
+   * keeps it inside its Fill's area when it is a scattered Stamp.
    */
   shapes: SceneShape[];
   /** The Soft Edge filter the Element draws with, or null for a sharp edge. */
@@ -319,7 +320,7 @@ export function sceneMessage(
     penLabel: PenDraftLabel;
   }
 ): FrameSceneMessage {
-  const render = sceneRender(map.elements, map.page.widthMm);
+  const render = sceneRender(map.elements, map.page.widthMm, map.page.heightMm);
   return {
     kind: "scene",
     widthMm: map.page.widthMm,

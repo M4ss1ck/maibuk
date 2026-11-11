@@ -661,7 +661,7 @@ describe("Stamp rendering", () => {
   }
 
   it("draws a marker's art in the Stamp's colour, scaled and centred on its point", () => {
-    const [shape] = pathsOf(sceneShapes([stamp()], 152.4)[0]);
+    const [shape] = pathsOf(sceneShapes([stamp()], 152.4, 152.4)[0]);
 
     expect(shape).toMatchObject({
       stroke: null,
@@ -677,7 +677,7 @@ describe("Stamp rendering", () => {
 
   it("turns and resizes the art with the Stamp's own numbers", () => {
     const [shape] = pathsOf(
-      sceneShapes([stamp({ transform: { x: 40, y: 30, size: 5, rotation: 90 } })], 152.4)[0]
+      sceneShapes([stamp({ transform: { x: 40, y: 30, size: 5, rotation: 90 } })], 152.4, 152.4)[0]
     );
 
     expect(shape.transform).toBe("translate(40 30) rotate(90) scale(0.463) translate(0 0)");
@@ -701,14 +701,14 @@ describe("Stamp rendering", () => {
     ];
     for (const id of oneColour) {
       const first = pathsOf(
-        sceneShapes([stamp({ stampRef: `base:${id}`, color: "#2779a8" })], 152.4)[0]
+        sceneShapes([stamp({ stampRef: `base:${id}`, color: "#2779a8" })], 152.4, 152.4)[0]
       );
       expect(first.length, id).toBeGreaterThan(0);
       for (const shape of first) {
         expect(shape.fill, id).toBe("#2779a8");
       }
       const second = pathsOf(
-        sceneShapes([stamp({ stampRef: `base:${id}`, color: "#a82779" })], 152.4)[0]
+        sceneShapes([stamp({ stampRef: `base:${id}`, color: "#a82779" })], 152.4, 152.4)[0]
       );
       for (const shape of second) {
         expect(shape.fill, id).toBe("#a82779");
@@ -728,9 +728,9 @@ describe("Stamp rendering", () => {
       "compass-rose",
     ];
     for (const id of multiColour) {
-      const ink = pathsOf(sceneShapes([stamp({ stampRef: `base:${id}` })], 152.4)[0]);
+      const ink = pathsOf(sceneShapes([stamp({ stampRef: `base:${id}` })], 152.4, 152.4)[0]);
       const other = pathsOf(
-        sceneShapes([stamp({ stampRef: `base:${id}`, color: "#a82779" })], 152.4)[0]
+        sceneShapes([stamp({ stampRef: `base:${id}`, color: "#a82779" })], 152.4, 152.4)[0]
       );
       expect(ink.length, id).toBeGreaterThan(0);
       // The art keeps every colour it owns: no shape takes the Stamp's ink.
@@ -750,12 +750,12 @@ describe("Stamp rendering", () => {
   });
 
   it("draws nothing for a Stamp whose art is unknown", () => {
-    expect(sceneShapes([stamp({ stampRef: "base:nope" })], 152.4)[0]).toEqual([]);
-    expect(sceneShapes([stamp({ stampRef: "custom:castle" })], 152.4)[0]).toEqual([]);
+    expect(sceneShapes([stamp({ stampRef: "base:nope" })], 152.4, 152.4)[0]).toEqual([]);
+    expect(sceneShapes([stamp({ stampRef: "custom:castle" })], 152.4, 152.4)[0]).toEqual([]);
   });
 
   it("draws the scale bar as four alternating segments and two labels", () => {
-    const shapes = sceneShapes([scaleBar()], 152.4)[0];
+    const shapes = sceneShapes([scaleBar()], 152.4, 152.4)[0];
     const paths = pathsOf(shapes);
 
     // 40 mm of a 152.4 mm page reading 1000 km labels 200 km, so 30.48 mm of bar.
@@ -788,7 +788,7 @@ describe("Stamp rendering", () => {
 
   it("reads the scale in miles and in the span the Stamp carries", () => {
     const [, far] = textsOf(
-      sceneShapes([scaleBar({ scale: { unit: "mi", span: 500 } })], 152.4)[0]
+      sceneShapes([scaleBar({ scale: { unit: "mi", span: 500 } })], 152.4, 152.4)[0]
     );
 
     expect(far.text).toBe("100 mi");
@@ -798,6 +798,7 @@ describe("Stamp rendering", () => {
     // 200 mm of page stands for 1000 km, so a 100 mm bar is exactly 500 km.
     const shapes = sceneShapes(
       [scaleBar({ transform: { x: 100, y: 50, size: 100, rotation: 0 } })],
+      200,
       200
     )[0];
 
@@ -910,6 +911,7 @@ describe("Area Fills", () => {
             },
           }),
         ],
+        152.4,
         152.4
       )[0]
     );
@@ -922,14 +924,14 @@ describe("Area Fills", () => {
 
   it("draws a roughened Area Fill's outline in the rough ink look, still unstroked", () => {
     const roughened = () => areaFill({ outline: { ...AREA_OUTLINE, roughened: true } });
-    const [plain] = pathsOf(sceneShapes([areaFill()], 152.4)[0]);
-    const [rough] = pathsOf(sceneShapes([roughened()], 152.4)[0]);
+    const [plain] = pathsOf(sceneShapes([areaFill()], 152.4, 152.4)[0]);
+    const [rough] = pathsOf(sceneShapes([roughened()], 152.4, 152.4)[0]);
 
     expect(rough.d).not.toBe(plain.d);
     expect(rough.stroke).toBeNull();
     expect(rough.fill).toBe("#c8d5a3");
     // The same Element roughens the same way every render.
-    expect(pathsOf(sceneShapes([roughened()], 152.4)[0])[0].d).toBe(rough.d);
+    expect(pathsOf(sceneShapes([roughened()], 152.4, 152.4)[0])[0].d).toBe(rough.d);
   });
 
   it("moves an Area Fill with its outline, and leaves a Bucket Fill where it is", () => {
@@ -994,7 +996,7 @@ describe("Fill scatter", () => {
 
   it("scatters a Fill's Stamps inside its area, clipped to it", () => {
     const svg = sceneToSvg(
-      mapWith([areaFill({ content: { scatter: { stamps: ["base:tree"], spacing: 8, seed: 5 } } })])
+      mapWith([areaFill({ content: { scatter: { stamp: "base:tree", spacing: 8, seed: 5 } } })])
     );
 
     expect(svg).toMatch(
@@ -1011,8 +1013,25 @@ describe("Fill scatter", () => {
     }
   });
 
-  it("samples a Bucket Fill's scatter from its face, so the Stamps follow a moved Map Line", () => {
-    const scatter = { stamps: ["base:tree"], spacing: 7, seed: 4 };
+  it("draws each scattered Stamp one scatter spacing wide, so they do not pile up", () => {
+    const scaleOf = (spacing: number) => {
+      const [shape] = pathsOf(
+        sceneShapes(
+          [areaFill({ content: { scatter: { stamp: "base:tree", spacing, seed: 5 } } })],
+          203.2,
+          203.2
+        )[0]
+      );
+      return Number(/scale\(([\d.]+)\)/.exec(shape.transform ?? "")?.[1]);
+    };
+
+    // The art is scaled from its own box, so twice the spacing draws each
+    // Stamp twice as wide: one control sets both the gap and the size.
+    expect(scaleOf(12) / scaleOf(6)).toBeCloseTo(2, 5);
+  });
+
+  it("samples a Bucket Fill's scatter in page space, so the Stamps inside a moved face stay put", () => {
+    const scatter = { stamp: "base:tree", spacing: 5, seed: 4 };
     const pointsOver = (offset: number) =>
       stampPoints(
         sceneToSvg(
@@ -1024,26 +1043,24 @@ describe("Fill scatter", () => {
       );
 
     const before = pointsOver(0);
-    const after = pointsOver(40);
+    const after = pointsOver(10);
 
-    expect(before.length).toBeGreaterThan(2);
-    expect(after).toHaveLength(before.length);
-    after.forEach(([x, y], index) => {
-      expect(x).toBeCloseTo(before[index][0] + 40, 2);
-      expect(y).toBeCloseTo(before[index][1] + 40, 2);
-    });
+    // A point both the old and the new face cover is a page spot, not a face
+    // spot: the face sliding under it leaves it where it was.
+    const shared = before.filter(([x, y]) => x > 10 && x < 40 && y > 10 && y < 40);
+    expect(shared.length).toBeGreaterThan(0);
+    for (const point of shared) expect(after).toContainEqual(point);
   });
 
-  it("cycles the Stamps a Fill scatters over its points", () => {
-    const scatterSvg = (stamps: string[]) =>
-      sceneToSvg(mapWith([areaFill({ content: { scatter: { stamps, spacing: 8, seed: 2 } } })]));
-    const one = scatterSvg(["base:tree"]);
-    const two = scatterSvg(["base:tree", "base:marker"]);
+  it("scatters the one Stamp its Fill names, at every point", () => {
+    const scatterSvg = (stamp: string) =>
+      sceneToSvg(mapWith([areaFill({ content: { scatter: { stamp, spacing: 8, seed: 2 } } })]));
+    const trees = scatterSvg("base:tree");
+    const markers = scatterSvg("base:marker");
 
-    // Both Fills scatter on the same points; the second draws a marker's art at
-    // every other one, so their shapes differ while their points do not.
-    expect(stampPoints(two)).toEqual(stampPoints(one));
-    expect(two).not.toBe(one);
+    // Both Fills scatter on the same points; only the art each holds differs.
+    expect(stampPoints(markers)).toEqual(stampPoints(trees));
+    expect(markers).not.toBe(trees);
   });
 });
 
@@ -1053,7 +1070,8 @@ describe("Soft Edge", () => {
     const id = /<filter id="([^"]+)"/.exec(svg)?.[1];
 
     expect(id).toBeDefined();
-    expect(svg).toContain(`<filter id="${id}" filterUnits="userSpaceOnUse" x="`);
+    expect(svg).toContain(`<filter id="${id}" filterUnits="userSpaceOnUse"`);
+    expect(svg).toContain('color-interpolation-filters="sRGB"');
     expect(svg).toContain('width="');
     expect(svg).toContain('height="');
     expect(svg).toContain('<feGaussianBlur stdDeviation="2"/>');

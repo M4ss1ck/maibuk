@@ -109,11 +109,11 @@ export interface MapFillContent {
   scatter?: MapFillScatter;
 }
 
-/** The Stamps a Fill scatters over its area, how far apart they sit, and the seed that places them. */
+/** The Stamp a Fill scatters over its area, how far apart the Stamps sit, and the seed that places them. */
 export interface MapFillScatter {
-  /** One `stampRef` per kind of Stamp scattered, cycled in order over the points. */
-  stamps: string[];
-  /** The smallest distance between two scattered Stamps, in page millimetres. */
+  /** The `stampRef` of the one kind of Stamp scattered over the area. */
+  stamp: string;
+  /** The smallest distance between two scattered Stamps, in page millimetres; each Stamp draws this wide. */
   spacing: number;
   /** The seed the points are sampled from, so the same Fill scatters the same way each render. */
   seed: number;
@@ -273,6 +273,16 @@ export interface MapOtherElement extends MapElementBase {
 }
 
 export type MapElement = MapLineElement | MapFillElement | MapStampElement | MapOtherElement;
+
+/**
+ * Whether an Element is a Fill that covers its own outline (#750), rather than
+ * the face its anchor sits in: no move of a Map Line carries it along.
+ */
+export function isAreaFill(
+  element: MapElement
+): element is MapFillElement & { outline: MapFillOutline } {
+  return element.kind === "fill" && element.outline !== undefined;
+}
 
 /** One stored Map, exactly as `map:<id>` holds it. */
 export interface MapDocument {
@@ -453,9 +463,8 @@ function isFillScatter(value: unknown): boolean {
   if (typeof value !== "object" || value === null) return false;
   const scatter = value as Record<string, unknown>;
   return (
-    Array.isArray(scatter.stamps) &&
-    scatter.stamps.length > 0 &&
-    scatter.stamps.every((ref) => typeof ref === "string" && ref !== "") &&
+    typeof scatter.stamp === "string" &&
+    scatter.stamp !== "" &&
     isFiniteNumber(scatter.spacing) &&
     scatter.spacing > 0 &&
     isFiniteNumber(scatter.seed)

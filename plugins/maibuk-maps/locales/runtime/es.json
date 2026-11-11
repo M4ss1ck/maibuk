@@ -85,7 +85,7 @@
   "properties.softEdgeAmount": "Grosor del borde suave (mm)",
   "properties.fillTexture": "Textura",
   "properties.fillScatter": "Dispersión",
-  "properties.scatterSpacing": "Separación de la dispersión (mm)",
+  "properties.scatterSpacing": "Tamaño y separación de la dispersión (mm)",
   "properties.reseed": "Nueva semilla",
   "properties.none": "Ninguna",
   "properties.texture.grass": "Hierba",

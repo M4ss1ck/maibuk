@@ -279,7 +279,7 @@ describe("the scene's definitions", () => {
       defs: [
         '<pattern id="texture-grass" patternUnits="userSpaceOnUse" width="4" height="4"><path d="M 0.6 3.6 L 1.2 1.7"/></pattern>',
         '<clipPath id="fill-clip-a1"><path d="M 0 0 L 10 0 L 10 10 Z" clip-rule="evenodd"/></clipPath>',
-        '<filter id="soft-edge-b2" filterUnits="userSpaceOnUse" x="-5" y="-5" width="30" height="30"><feGaussianBlur stdDeviation="2"/></filter>',
+        '<filter id="soft-edge-b2" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB" x="-5" y="-5" width="30" height="30"><feGaussianBlur stdDeviation="2"/></filter>',
       ],
       elements: [
         sceneElement({
@@ -303,6 +303,9 @@ describe("the scene's definitions", () => {
     );
     const blur = defs?.querySelector("filter#soft-edge-b2 feGaussianBlur");
     expect(blur?.getAttribute("stdDeviation")).toBe("2");
+    expect(
+      defs?.querySelector("filter#soft-edge-b2")?.getAttribute("color-interpolation-filters")
+    ).toBe("sRGB");
 
     // The Element's art draws through its filter, in the texture it references.
     const group = document.querySelector('g[data-element-id="e1"]');
@@ -327,6 +330,35 @@ describe("the scene's definitions", () => {
     });
 
     expect(document.querySelector("[filter]")).toBeNull();
+  });
+
+  it("clips a scattered Stamp's drawn and hit paths to its Fill's area", () => {
+    frame = loadFrame();
+    frame.scene({
+      defs: ['<clipPath id="fill-clip-a1"><path d="M 0 0 L 10 0 L 10 10 Z"/></clipPath>'],
+      elements: [
+        sceneElement({
+          shapes: [shape({ clip: "fill-clip-a1" })],
+        }),
+      ],
+    });
+
+    const group = document.querySelector('g[data-element-id="e1"]');
+    expect(group?.querySelector("path.map-line")?.getAttribute("clip-path")).toBe(
+      "url(#fill-clip-a1)"
+    );
+    expect(group?.querySelector("path.map-hit")?.getAttribute("clip-path")).toBe(
+      "url(#fill-clip-a1)"
+    );
+  });
+
+  it("drops a clip id a scene could write an attribute of its own into", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [sceneElement({ shapes: [shape({ clip: 'x" onload="alert(1)' })] })],
+    });
+
+    expect(document.querySelector("[clip-path]")).toBeNull();
   });
 });
 
@@ -646,7 +678,7 @@ describe("the scene message", () => {
             curves: [false, false, false, false],
             roughened: false,
           },
-          content: { scatter: { stamps: ["base:tree"], spacing: 8, seed: 5 } },
+          content: { scatter: { stamp: "base:tree", spacing: 8, seed: 5 } },
         },
       ],
     };

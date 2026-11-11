@@ -11,7 +11,13 @@
  */
 
 import { deepestPoint, faceAt, findFaces, type Face } from "./faces";
-import type { MapElement, MapFillElement, MapLineElement, MapPoint } from "./maps";
+import {
+  isAreaFill,
+  type MapElement,
+  type MapFillElement,
+  type MapLineElement,
+  type MapPoint,
+} from "./maps";
 
 /** Builds a Fill at `anchor` in `color`; the caller owns its id and name. */
 export type MakeFill = (anchor: MapPoint, color: string) => MapFillElement;
@@ -23,20 +29,30 @@ function isFill(element: MapElement): element is MapFillElement {
   return element.kind === "fill";
 }
 
-/** Whether a Fill covers its own outline (#750), so no face decides where it sits. */
-function isAreaFill(fill: MapFillElement): boolean {
-  return fill.outline !== undefined;
-}
-
 /** The Map Lines of an elements array, which are what faces are built from. */
 function linesOf(elements: readonly MapElement[]): MapLineElement[] {
   return elements.filter((element): element is MapLineElement => element.kind === "line");
 }
 
-/** Where a new Fill goes: in front of every image and older Fill, behind a line, stamp, or label. */
-function insertionIndex(elements: readonly MapElement[]): number {
-  const index = elements.findIndex((element) => KINDS_DRAWN_OVER_A_FILL.has(element.kind));
-  return index === -1 ? elements.length : index;
+/**
+ * Where a new Fill goes (#737, #750): the top of the Fill stack, above every
+ * image and older Fill, and behind every Map Line, Stamp, and Map Label. A Fill
+ * a document or the author put above a Map Line still takes the new Fill above
+ * it, so Fills always stack over Fills.
+ */
+export function fillInsertionIndex(elements: readonly MapElement[]): number {
+  const first = elements.findIndex((element) => KINDS_DRAWN_OVER_A_FILL.has(element.kind));
+  let at = first === -1 ? elements.length : first;
+  elements.forEach((element, index) => {
+    if (isFill(element) && index >= at) at = index + 1;
+  });
+  return at;
+}
+
+/** Puts `fill` at the top of the Fill stack, leaving the other Elements as they were. */
+export function insertFill(elements: readonly MapElement[], fill: MapFillElement): MapElement[] {
+  const at = fillInsertionIndex(elements);
+  return [...elements.slice(0, at), fill, ...elements.slice(at)];
 }
 
 /**
@@ -74,8 +90,7 @@ export function pourFill(
   }
 
   const fill = makeFill(deepestPoint(face), color);
-  const at = insertionIndex(elements);
-  return [...elements.slice(0, at), fill, ...elements.slice(at)];
+  return insertFill(elements, fill);
 }
 
 /** One Fill of the after array, with the face it left and the face it lands in. */

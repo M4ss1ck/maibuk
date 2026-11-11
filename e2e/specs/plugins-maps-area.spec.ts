@@ -58,8 +58,13 @@ const texturedPaint = (page: Page, id: string) =>
 /** The Clip Path that keeps a Fill's scattered Stamps inside its area. */
 const scatterClips = (page: Page) => mapFrame(page).locator("defs clipPath");
 /** The scattered Stamps: art placed by a transform, where the Fill's own paint has none. */
-const scatteredStamps = (page: Page) =>
+const placedStamps = (page: Page) =>
   mapFrame(page).locator("g[data-element-id] path.map-line[transform]");
+/** The scattered Stamps the Frame also clips to the Fill's area. */
+const scatteredStamps = (page: Page) =>
+  mapFrame(page).locator(
+    'g[data-element-id] path.map-line[transform][clip-path^="url(#fill-clip-"]'
+  );
 
 /**
  * The Map's page defaults to the landscape preset, so the keyboard crosshair
@@ -334,6 +339,9 @@ test.describe("Maps Soft Edge and Fill content @wf:plugins-maps-fill-content @sc
     await pickOption(page, page.getByRole("button", { name: "Scatter" }), "Castle");
     await expect(scatterClips(page)).toHaveCount(1);
     const stamps = scatteredStamps(page);
+    // Every Stamp the Fill scatters is clipped to its area, not only the ones
+    // that happen to land inside it.
+    await expect(stamps).toHaveCount(await placedStamps(page).count());
     await expect(stamps.first()).toBeVisible();
     const points = await Promise.all(
       (await stamps.all()).map(async (path) => {
