@@ -29,6 +29,7 @@ import es from "./locales/runtime/es.json";
 import { format } from "./i18n";
 import {
   DEFAULT_FILL_COLOR,
+  DEFAULT_LABEL_FONT,
   INDEX_KEY,
   mapKey,
   type MapDocument,
@@ -36,6 +37,7 @@ import {
   type MapFillContent,
   type MapFillElement,
   type MapIndexEntry,
+  type MapLabelElement,
   type MapLineElement,
   type MapStampElement,
 } from "./maps";
@@ -2270,6 +2272,91 @@ describe("Map editor page", () => {
       );
       expect(span).toHaveValue("1");
 
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("adds a Map Label at the view centre by keyboard, then writes, fonts, and bends it", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    registerMapCommands();
+    const keys = render(<CommandKeys host={host} />);
+    try {
+      const user = userEvent.setup();
+
+      // The Insert tool offers a Map Label beside the Stamp picker; the button
+      // is the keyboard path that lands it at the view centre.
+      await pickTool(user, en["tools.insert"]);
+      const place = await screen.findByRole("button", { name: en["properties.mapLabel.place"] });
+      await tabTo(user, place, 10);
+      await user.keyboard("{Enter}");
+
+      // A Map Label at the centre of the portrait page, writing the default
+      // text, and selected.
+      await waitFor(() => expect(runtime.editor?.getSnapshot().elements).toHaveLength(1));
+      const inserted = runtime.editor?.getSnapshot().elements[0] as MapLabelElement;
+      expect(inserted).toMatchObject({
+        kind: "label",
+        name: "Map Label 1",
+        text: "Label",
+        x: 76.2,
+        y: 114.3,
+        rotation: 0,
+        font: DEFAULT_LABEL_FONT,
+        bend: 0,
+      });
+      expect(runtime.editor?.getSnapshot().selectedId).toBe(inserted.id);
+      await runtime.editor?.flush();
+      expect(storedMap(storage).elements[0]).toMatchObject({ x: 76.2, y: 114.3 });
+
+      // The Elements list calls the row a Map Label.
+      await waitFor(() =>
+        expect(screen.getByRole("listbox", { name: en["elements.label"] })).toHaveTextContent(
+          en["element.kind.label"]
+        )
+      );
+
+      // One arrow moves the selected label one page millimetre.
+      await focusPanelButton(user);
+      await user.keyboard("{ArrowRight}");
+      await waitFor(() =>
+        expect((runtime.editor?.getSnapshot().elements[0] as MapLabelElement).x).toBe(77.2)
+      );
+
+      // The Text field writes what the author commits.
+      const text = await screen.findByRole("textbox", { name: en["properties.mapLabel.text"] });
+      await tabTo(user, text, 60);
+      await user.keyboard("{Control>}a{/Control}Northern Reach{Enter}");
+      await waitFor(() =>
+        expect((runtime.editor?.getSnapshot().elements[0] as MapLabelElement).text).toBe(
+          "Northern Reach"
+        )
+      );
+      await runtime.editor?.flush();
+      expect(storedMap(storage).elements[0]).toMatchObject({ text: "Northern Reach" });
+
+      // The Font select offers the bundled faces by family name.
+      await pickOption(user, en["properties.mapLabel.font"], "Cinzel");
+      await waitFor(() =>
+        expect((runtime.editor?.getSnapshot().elements[0] as MapLabelElement).font).toBe("cinzel")
+      );
+      await runtime.editor?.flush();
+      expect(storedMap(storage).elements[0]).toMatchObject({ font: "cinzel" });
+
+      // Bend curves the baseline; 0 draws it straight.
+      const bend = await screen.findByRole("textbox", { name: en["properties.mapLabel.bend"] });
+      await tabTo(user, bend, 60);
+      await user.keyboard("{Control>}a{/Control}5{Enter}");
+      await waitFor(() =>
+        expect((runtime.editor?.getSnapshot().elements[0] as MapLabelElement).bend).toBe(5)
+      );
+      await runtime.editor?.flush();
+      expect(storedMap(storage).elements[0]).toMatchObject({ bend: 5 });
+
+      keys.unmount();
       await page.unmount();
     } finally {
       await host.stop();

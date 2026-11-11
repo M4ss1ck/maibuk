@@ -245,8 +245,14 @@ export const DEFAULT_LABEL_FONT: MapLabelFont = "im-fell-english";
 /** The baseline a new Map Label starts with, in page millimetres. */
 export const DEFAULT_LABEL_WIDTH_MM = 40;
 
+/** The shortest baseline a Map Label keeps, in page millimetres. */
+export const MIN_LABEL_WIDTH_MM = 1;
+
 /** The cap size a new Map Label starts at, in page millimetres. */
 export const DEFAULT_LABEL_SIZE_MM = 6;
+
+/** The smallest cap size a Map Label keeps, in page millimetres. */
+export const MIN_LABEL_SIZE_MM = 1;
 
 /** The halo a new Map Label starts with, as a stroke width in page millimetres. */
 export const DEFAULT_LABEL_HALO_MM = 0.8;

@@ -34,10 +34,14 @@ import {
   DEFAULT_SHAPE_SIZE_MM,
   LINE_STYLE_DEFAULT_ENCLOSES,
   MAX_NAME_LENGTH,
+  MIN_LABEL_SIZE_MM,
+  MIN_LABEL_WIDTH_MM,
   MIN_STAMP_SIZE_MM,
   curvedSegments,
   isAreaFill,
+  isLabelFont,
   isStampScaleUnit,
+  newLabel,
   newStamp,
   normalizeShape,
   normalizeSoftEdge,
@@ -168,6 +172,21 @@ export interface MapEditorOptions {
   language: () => string;
 }
 
+/**
+ * The numbers a Map Label's properties panel edits: where its baseline sits,
+ * how long and how curved it is, and the type that runs along it.
+ */
+export interface MapLabelLayout {
+  x?: number;
+  y?: number;
+  rotation?: number;
+  width?: number;
+  bend?: number;
+  size?: number;
+  letterSpacing?: number;
+  halo?: number;
+}
+
 export interface MapEditor {
   getSnapshot(): MapEditorSnapshot;
   subscribe(listener: () => void): () => void;
@@ -222,6 +241,16 @@ export interface MapEditor {
   setStampScale(id: string, patch: Partial<MapStampScale>): void;
   /** Recolours one unlocked one-colour Stamp, as one undo step. */
   setStampColor(id: string, color: string): void;
+  /** Adds a Map Label at the view centre, writing the localized default, selected, as one undo step. */
+  insertLabel(): void;
+  /** Writes one unlocked Map Label's text; a blank text is refused. */
+  setLabelText(id: string, text: string): void;
+  /** Sets one unlocked Map Label's font, one of the bundled faces or the PDF Font. */
+  setLabelFont(id: string, font: string): void;
+  /** Recolours one unlocked Map Label's text, as one undo step. */
+  setLabelColor(id: string, color: string): void;
+  /** Moves, turns, or reshapes one unlocked Map Label from its number fields, as one undo step. */
+  setLabelLayout(id: string, patch: MapLabelLayout): void;
   deleteElement(id: string): void;
   /** Moves one Element one place towards the top of the Elements list. */
   moveUp(id: string): void;
@@ -673,6 +702,28 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     edit(addElement(elements, element));
   }
 
+  /** The name a newly placed Map Label takes: the next free "Map Label N". */
+  function newLabelName(): string {
+    const number = elements.filter((element) => element.kind === "label").length + 1;
+    return format(translate(options.language(), "element.labelName"), { number });
+  }
+
+  /**
+   * Places a Map Label at the view centre (#751), writing the localized
+   * "Label" so the author has a word to replace. The new label becomes the
+   * selection, and the whole placement is one undo step.
+   */
+  function insertLabel(): void {
+    const element = newLabel({
+      id: randomMapId(),
+      name: newLabelName(),
+      text: translate(options.language(), "element.labelText"),
+      point: [doc.page.widthMm / 2 + panX, doc.page.heightMm / 2 + panY],
+    });
+    selectedId = element.id;
+    edit(addElement(elements, element));
+  }
+
   /**
    * Commits one Select drag (#766) as one undo step, through the same
    * `moveElement` the arrow Commands use, so `edit` reconciles the Fills on a
@@ -1049,6 +1100,77 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     },
 
     insertStamp,
+
+    insertLabel,
+
+    setLabelText(id, text) {
+      const target = elementById(id);
+      if (target === undefined || target.kind !== "label" || target.locked) return;
+      // A Map Label always writes a word, so a blank text keeps the old one.
+      const trimmed = text.trim();
+      if (trimmed === "" || trimmed === target.text) return;
+      updateElement(id, (element) =>
+        element.kind === "label" ? { ...element, text: trimmed } : element
+      );
+    },
+
+    setLabelFont(id, font) {
+      const target = elementById(id);
+      // A font id this build has no face for would draw the browser's fallback,
+      // so only the bundled faces and the PDF Font are picks.
+      if (target === undefined || target.kind !== "label" || target.locked) return;
+      if (!isLabelFont(font) || target.font === font) return;
+      updateElement(id, (element) => (element.kind === "label" ? { ...element, font } : element));
+    },
+
+    setLabelColor(id, color) {
+      const target = elementById(id);
+      if (target === undefined || target.kind !== "label" || target.locked) return;
+      if (color === "" || target.color === color) return;
+      updateElement(id, (element) => (element.kind === "label" ? { ...element, color } : element));
+    },
+
+    setLabelLayout(id, patch) {
+      const target = elementById(id);
+      if (target === undefined || target.kind !== "label" || target.locked) return;
+      const x = patch.x ?? target.x;
+      const y = patch.y ?? target.y;
+      const rotation = patch.rotation ?? target.rotation;
+      const width = patch.width ?? target.width;
+      const bend = patch.bend ?? target.bend;
+      const size = patch.size ?? target.size;
+      const letterSpacing = patch.letterSpacing ?? target.letterSpacing;
+      const halo = patch.halo ?? target.halo;
+      if (![x, y, rotation, width, bend, size, letterSpacing, halo].every(Number.isFinite)) return;
+      const layout: MapLabelLayout = {
+        x,
+        y,
+        // The turn reads in one circle, as a Stamp's does.
+        rotation: normalizeRotation(rotation),
+        // A baseline or a cap size too small draws no name at all.
+        width: Math.max(MIN_LABEL_WIDTH_MM, width),
+        bend,
+        size: Math.max(MIN_LABEL_SIZE_MM, size),
+        letterSpacing,
+        // A halo of none is no halo at all.
+        halo: Math.max(0, halo),
+      };
+      if (
+        layout.x === target.x &&
+        layout.y === target.y &&
+        layout.rotation === target.rotation &&
+        layout.width === target.width &&
+        layout.bend === target.bend &&
+        layout.size === target.size &&
+        layout.letterSpacing === target.letterSpacing &&
+        layout.halo === target.halo
+      ) {
+        return;
+      }
+      updateElement(id, (element) =>
+        element.kind === "label" ? { ...element, ...layout } : element
+      );
+    },
 
     setStampTransform(id, patch) {
       const target = elementById(id);

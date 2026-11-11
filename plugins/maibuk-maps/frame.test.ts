@@ -7,11 +7,12 @@
  * to the Worker.
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { MAP_FRAME_SRC } from "./map-page";
 import { parseFrameMessage, sceneMessage } from "./frame-protocol";
+import { MAP_LABEL_FONT_FAMILIES, MAP_LABEL_FONTS } from "./maps";
 import { TEXT_FONT_FAMILY, sceneToSvg } from "./scene";
 
 const HTML = readFileSync(join(__dirname, "assets/ui/map.html"), "utf8");
@@ -152,6 +153,35 @@ describe("the Map Frame page", () => {
     expect(existsSync(join(__dirname, MAP_FRAME_SRC))).toBe(true);
     expect(HTML).toContain('src="lib/htm-preact-standalone.umd.js"');
     expect(HTML).toContain('src="map.js"');
+  });
+});
+
+describe("the Map Label fonts", () => {
+  it("declares one bundled face per shipped file, under the family the scene asks for", () => {
+    // The whole point of bundling the faces is that the Frame draws a Map Label
+    // in the same letterforms an export does, with nothing loaded from the
+    // network: a family the scene names but the page never declares would
+    // silently draw the browser's fallback.
+    const files = readdirSync(join(__dirname, "assets/ui/fonts"))
+      .filter((file) => file.endsWith(".ttf"))
+      .sort();
+    expect(files).toEqual([
+      "Cinzel-wght.ttf",
+      "IMFeENrm28P.ttf",
+      "MedievalSharp.ttf",
+      "UncialAntiqua-Regular.ttf",
+    ]);
+    for (const file of files) expect(HTML).toContain(`url("fonts/${file}")`);
+
+    expect(HTML.match(/@font-face/g)).toHaveLength(MAP_LABEL_FONTS.length);
+    expect(HTML.match(/font-display: block;/g)).toHaveLength(MAP_LABEL_FONTS.length);
+    for (const font of MAP_LABEL_FONTS) {
+      expect(HTML).toContain(`font-family: "${MAP_LABEL_FONT_FAMILIES[font]}"`);
+    }
+
+    // The PDF Font is the author's own face, which slice 3 will wire; until
+    // then the Frame leaves it undeclared and draws a serif.
+    expect(HTML).not.toContain(`"${MAP_LABEL_FONT_FAMILIES.pdf}"`);
   });
 });
 

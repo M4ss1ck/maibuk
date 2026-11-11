@@ -20,17 +20,24 @@ import { smoothStroke } from "./scene";
 import {
   DATA_VERSION,
   DEFAULT_FILL_COLOR,
+  DEFAULT_LABEL_FONT,
+  DEFAULT_LABEL_HALO_MM,
+  DEFAULT_LABEL_SIZE_MM,
+  DEFAULT_LABEL_WIDTH_MM,
   DEFAULT_POLYGON_SIDES,
   DEFAULT_SCALE_BAR_SIZE_MM,
   DEFAULT_SHAPE_SIZE_MM,
   DEFAULT_STAMP_COLOR,
   DEFAULT_STAMP_SIZE_MM,
+  MIN_LABEL_SIZE_MM,
+  MIN_LABEL_WIDTH_MM,
   MIN_STAMP_SIZE_MM,
   newLabel,
   type MapDocument,
   type MapElement,
   type MapFillContent,
   type MapFillElement,
+  type MapLabelElement,
   type MapLineElement,
   type MapPoint,
   type MapShape,
@@ -1634,5 +1641,183 @@ describe("a Fill's texture and scatter", () => {
     locked.setFillScatter("fill", "castle");
     expect(onlyFill(locked).content).toEqual({ color: DEFAULT_FILL_COLOR });
     expect(locked.getSnapshot().canUndo).toBe(false);
+  });
+});
+
+describe("placing a Map Label with the Insert tool", () => {
+  /** The one Map Label an editor holds, which every label test starts from. */
+  function onlyLabel(editor: MapEditor): MapLabelElement {
+    const [element] = editor.getSnapshot().elements;
+    if (element === undefined || element.kind !== "label") throw new Error("no Map Label");
+    return element;
+  }
+
+  it("places a Map Label at the view centre, selected, with the default text", () => {
+    const { editor } = openEditor();
+
+    editor.insertLabel();
+
+    const label = onlyLabel(editor);
+    expect(label).toMatchObject({
+      kind: "label",
+      name: "Map Label 1",
+      text: "Label",
+      hidden: false,
+      locked: false,
+      x: 100,
+      y: 50,
+      rotation: 0,
+      width: DEFAULT_LABEL_WIDTH_MM,
+      bend: 0,
+      font: DEFAULT_LABEL_FONT,
+      size: DEFAULT_LABEL_SIZE_MM,
+      letterSpacing: 0,
+      halo: DEFAULT_LABEL_HALO_MM,
+    });
+    // With no colour of its own the label draws in the map ink.
+    expect(label.color).toBeUndefined();
+    expect(editor.getSnapshot().selectedId).toBe(label.id);
+
+    editor.undo();
+    expect(editor.getSnapshot().elements).toEqual([]);
+    expect(editor.getSnapshot().selectedId).toBeNull();
+  });
+
+  it("numbers each label in turn and lands it on the panned view centre", () => {
+    const { editor } = openEditor();
+    editor.insertLabel();
+    editor.panRight();
+    editor.insertLabel();
+
+    const [first, second] = editor.getSnapshot().elements as MapLabelElement[];
+    expect(first.name).toBe("Map Label 1");
+    expect(second.name).toBe("Map Label 2");
+    expect(first.x).toBe(100);
+    expect(second.x).toBe(120);
+    expect(second.y).toBe(50);
+  });
+});
+
+describe("a Map Label's properties", () => {
+  /** An editor holding one inserted Map Label, selected. */
+  function labelEditor(): { editor: MapEditor; id: string } {
+    const { editor } = openEditor();
+    editor.insertLabel();
+    const [element] = editor.getSnapshot().elements as MapLabelElement[];
+    return { editor, id: element.id };
+  }
+
+  function labelOf(editor: MapEditor): MapLabelElement {
+    const [element] = editor.getSnapshot().elements;
+    if (element === undefined || element.kind !== "label") throw new Error("no Map Label");
+    return element;
+  }
+
+  it("writes the text as one undo step and refuses a blank one", () => {
+    const { editor, id } = labelEditor();
+
+    editor.setLabelText(id, "  The Reach  ");
+
+    expect(labelOf(editor).text).toBe("The Reach");
+    editor.undo();
+    expect(labelOf(editor).text).toBe("Label");
+    editor.redo();
+    expect(labelOf(editor).text).toBe("The Reach");
+
+    editor.setLabelText(id, "   ");
+    expect(labelOf(editor).text).toBe("The Reach");
+  });
+
+  it("sets a bundled font or the PDF Font, and refuses an id this build does not know", () => {
+    const { editor, id } = labelEditor();
+
+    editor.setLabelFont(id, "cinzel");
+    expect(labelOf(editor).font).toBe("cinzel");
+    editor.undo();
+    expect(labelOf(editor).font).toBe(DEFAULT_LABEL_FONT);
+
+    editor.setLabelFont(id, "pdf");
+    expect(labelOf(editor).font).toBe("pdf");
+
+    editor.setLabelFont(id, "not-a-font");
+    expect(labelOf(editor).font).toBe("pdf");
+  });
+
+  it("takes a colour as one undo step, and draws the map ink until it has one", () => {
+    const { editor, id } = labelEditor();
+    expect(labelOf(editor).color).toBeUndefined();
+
+    editor.setLabelColor(id, "#8b1a1a");
+
+    expect(labelOf(editor).color).toBe("#8b1a1a");
+    editor.undo();
+    expect(labelOf(editor).color).toBeUndefined();
+  });
+
+  it("moves, turns, and reshapes the baseline from its numbers, each as one undo step", () => {
+    const { editor, id } = labelEditor();
+
+    editor.setLabelLayout(id, { x: 20, y: 30 });
+    expect(labelOf(editor)).toMatchObject({ x: 20, y: 30 });
+
+    editor.setLabelLayout(id, { rotation: 450 });
+    expect(labelOf(editor).rotation).toBe(90);
+
+    editor.setLabelLayout(id, { width: 60 });
+    expect(labelOf(editor).width).toBe(60);
+
+    editor.setLabelLayout(id, { bend: 8 });
+    expect(labelOf(editor).bend).toBe(8);
+
+    editor.setLabelLayout(id, { size: 9, letterSpacing: 0.4, halo: 1.2 });
+    expect(labelOf(editor)).toMatchObject({ size: 9, letterSpacing: 0.4, halo: 1.2 });
+
+    editor.undo();
+    expect(labelOf(editor)).toMatchObject({
+      size: DEFAULT_LABEL_SIZE_MM,
+      letterSpacing: 0,
+      halo: DEFAULT_LABEL_HALO_MM,
+    });
+  });
+
+  it("keeps a baseline and a cap size that still draw a name", () => {
+    const { editor, id } = labelEditor();
+
+    editor.setLabelLayout(id, { width: 0, size: 0 });
+    expect(labelOf(editor).width).toBe(MIN_LABEL_WIDTH_MM);
+    expect(labelOf(editor).size).toBe(MIN_LABEL_SIZE_MM);
+
+    // A halo of none is no halo at all.
+    editor.setLabelLayout(id, { halo: -1 });
+    expect(labelOf(editor).halo).toBe(0);
+  });
+
+  it("moves with the arrow Commands as one undo step", () => {
+    const { editor, id } = labelEditor();
+    editor.select(id);
+
+    editor.move(1, -1);
+
+    expect(labelOf(editor)).toMatchObject({ x: 101, y: 49 });
+    editor.undo();
+    expect(labelOf(editor)).toMatchObject({ x: 100, y: 50 });
+  });
+
+  it("leaves a locked Map Label alone and takes no undo step for it", () => {
+    const locked: MapLabelElement = {
+      ...newLabel({ id: "label", name: "Map Label 1", text: "The Reach", point: [100, 50] }),
+      locked: true,
+    };
+    const { editor } = openEditor([locked]);
+    editor.select("label");
+
+    editor.setLabelText("label", "Other");
+    editor.setLabelFont("label", "cinzel");
+    editor.setLabelColor("label", "#8b1a1a");
+    editor.setLabelLayout("label", { x: 10, y: 10, size: 9, bend: 3 });
+    editor.move(2, 2);
+
+    expect(editor.getSnapshot().elements[0]).toEqual(locked);
+    expect(editor.getSnapshot().canUndo).toBe(false);
   });
 });

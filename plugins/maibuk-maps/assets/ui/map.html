@@ -5,6 +5,38 @@
     <meta name="color-scheme" content="light dark" />
     <title>Map</title>
     <style>
+      /* The bundled Map Label faces (#751): the SIL OFL fonts the Plugin ships
+         under assets/ui/fonts/, declared here so a label draws in the family
+         the scene names for it and the Frame matches an export. Relative
+         url() keeps them inside the Frame's own folder. `font-display: block`
+         holds the text back for the brief load rather than painting a
+         fallback and swapping the letterforms once the face arrives. The PDF
+         Font stays undeclared: the export supplies the author's face, and the
+         Frame draws a serif until slice 3 wires it. */
+      @font-face {
+        font-family: "IM Fell English";
+        src: url("fonts/IMFeENrm28P.ttf") format("truetype");
+        font-display: block;
+      }
+
+      @font-face {
+        font-family: "Cinzel";
+        src: url("fonts/Cinzel-wght.ttf") format("truetype");
+        font-display: block;
+      }
+
+      @font-face {
+        font-family: "Uncial Antiqua";
+        src: url("fonts/UncialAntiqua-Regular.ttf") format("truetype");
+        font-display: block;
+      }
+
+      @font-face {
+        font-family: "MedievalSharp";
+        src: url("fonts/MedievalSharp.ttf") format("truetype");
+        font-display: block;
+      }
+
       /* The Map drawing surface (#745). Every colour comes from the host's
          public theme tokens, so the Frame follows a light/dark flip; the Map's
          own water and ink colours arrive with the scene, as Map Style data. */
