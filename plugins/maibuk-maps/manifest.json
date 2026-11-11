@@ -206,6 +206,11 @@
         "defaults": [["Mod+Shift+r"]]
       },
       {
+        "id": "nextMapStyle",
+        "label": "Next Map Style",
+        "contexts": ["map"]
+      },
+      {
         "id": "deleteElement",
         "label": "Delete element",
         "contexts": ["map"],

@@ -46,10 +46,10 @@ import { BASE_STAMP_IDS, baseStampRef, stampNameKey, stampTakesColour } from "./
 import {
   MAP_STYLE_IDS,
   isStyleRole,
+  lineRole,
   resolveColor,
   styleSwatches,
   type MapStyleId,
-  type StyleRole,
 } from "./styles";
 import { TEXTURE_IDS, type TextureId } from "./textures";
 
@@ -139,13 +139,29 @@ const MAP_STYLE_KEYS: Readonly<Record<MapStyleId, MapsKey>> = {
 };
 
 /** Whether a colour field already follows the Map Style, so it has no override to clear. */
-function followsStyle(color: string | null): boolean {
-  return color === null || isStyleRole(color);
+function followsStyle(color: string | undefined): boolean {
+  return color === undefined || isStyleRole(color);
 }
 
-/** The role a Map Line draws in until it takes a colour of its own. */
-function lineRole(style: LineStyleId): StyleRole {
-  return style === "river" ? "river" : "ink";
+/**
+ * The button that hands one Element's colour back to the Map Style (#752):
+ * every Element that overrides a role offers the same path, so it is one
+ * component rather than four identical copies.
+ */
+function UseMapStyleColor({
+  label,
+  isDisabled,
+  onPress,
+}: {
+  label: string;
+  isDisabled: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <ui.Button variant="secondary" isDisabled={isDisabled} onPress={onPress}>
+      {label}
+    </ui.Button>
+  );
 }
 
 /** The Font select's label for each bundled face a Map Label takes, in the order it offers them. */
@@ -403,7 +419,7 @@ function MapEditorView({
             <>
               <ui.ColorPicker
                 label={t("properties.fillColor")}
-                value={resolveColor(style, fillColor ?? undefined, "land")}
+                value={fillColor === null ? undefined : resolveColor(style, fillColor, "land")}
                 swatches={styleSwatches(style)}
                 isDisabled={!pouring && selected?.locked === true}
                 onChange={(event) =>
@@ -415,13 +431,11 @@ function MapEditorView({
               {/* The Bucket's next pour holds no Element's override, so only a
                   selected Fill offers the path back to the Style's colour. */}
               {pouring || selected === null ? null : (
-                <ui.Button
-                  variant="secondary"
-                  isDisabled={selected.locked || followsStyle(snapshot.selectedFillColor)}
+                <UseMapStyleColor
+                  label={t("properties.useMapStyleColor")}
+                  isDisabled={selected.locked || followsStyle(fillColor ?? undefined)}
                   onPress={() => editor.clearElementColor(selected.id)}
-                >
-                  {t("properties.useMapStyleColor")}
-                </ui.Button>
+                />
               )}
             </>
           ) : null}
@@ -563,13 +577,11 @@ function MapEditorView({
                         isDisabled={selected.locked}
                         onChange={(event) => editor.setStampColor(selected.id, event.detail)}
                       />
-                      <ui.Button
-                        variant="secondary"
-                        isDisabled={selected.locked || followsStyle(stamp.color ?? null)}
+                      <UseMapStyleColor
+                        label={t("properties.useMapStyleColor")}
+                        isDisabled={selected.locked || followsStyle(stamp.color)}
                         onPress={() => editor.clearElementColor(selected.id)}
-                      >
-                        {t("properties.useMapStyleColor")}
-                      </ui.Button>
+                      />
                     </>
                   ) : null}
                   {stamp.scale === undefined ? null : (
@@ -661,13 +673,11 @@ function MapEditorView({
                     isDisabled={selected.locked}
                     onChange={(event) => editor.setLabelColor(selected.id, event.detail)}
                   />
-                  <ui.Button
-                    variant="secondary"
-                    isDisabled={selected.locked || followsStyle(label.color ?? null)}
+                  <UseMapStyleColor
+                    label={t("properties.useMapStyleColor")}
+                    isDisabled={selected.locked || followsStyle(label.color)}
                     onPress={() => editor.clearElementColor(selected.id)}
-                  >
-                    {t("properties.useMapStyleColor")}
-                  </ui.Button>
+                  />
                   <ui.NumberField
                     label={t("properties.mapLabel.x")}
                     value={label.x}
@@ -722,13 +732,11 @@ function MapEditorView({
                     isDisabled={selected.locked}
                     onChange={(event) => editor.setLineColor(selectedLine.id, event.detail)}
                   />
-                  <ui.Button
-                    variant="secondary"
-                    isDisabled={selected.locked || followsStyle(selectedLine.color ?? null)}
+                  <UseMapStyleColor
+                    label={t("properties.useMapStyleColor")}
+                    isDisabled={selected.locked || followsStyle(selectedLine.color)}
                     onPress={() => editor.clearElementColor(selectedLine.id)}
-                  >
-                    {t("properties.useMapStyleColor")}
-                  </ui.Button>
+                  />
                 </>
               )}
               {snapshot.selectedIsLine || snapshot.selectedIsFill ? (

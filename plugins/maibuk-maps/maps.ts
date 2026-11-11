@@ -208,19 +208,14 @@ export const DEFAULT_SCALE_BAR_SIZE_MM = 40;
 export const MIN_STAMP_SIZE_MM = 1;
 
 /**
- * The ink a Map Line is drawn in until Map Styles choose another. It lives here,
- * beside the Elements that carry it, so the model never reads the scene for it:
- * `scene.ts` imports this module, and a cycle back would leave the default
- * Stamp colour undefined on the way in.
+ * The Atlas ink: the colour Maps drew their lines and Stamps in before Map
+ * Styles existed. It lives here, beside the Elements that carry it, so the model
+ * never reads the scene for it: `scene.ts` imports this module, and a cycle back
+ * would leave the legacy value undefined on the way in. Production reads it only
+ * as the legacy Stamp colour `normalizeStamp` drops when it reads an old
+ * document; every current ink comes from the Map Style.
  */
 export const LINE_STROKE = "#1f2933";
-
-/**
- * The Atlas ink Stamps stored before Map Styles existed. A Stamp now stores no
- * colour and follows the Style, so this is only the legacy value `maps.ts` drops
- * when it reads an old document.
- */
-export const DEFAULT_STAMP_COLOR = LINE_STROKE;
 
 /** The reading a new scale bar takes: the page's full width stands for 1000 km. */
 export const DEFAULT_STAMP_SCALE: MapStampScale = { unit: "km", span: 1000 };

@@ -16,7 +16,7 @@
 
 import type { FrameLocator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
-import { leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
+import { expectFocusWithin, leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
 
 /**
@@ -151,6 +151,8 @@ async function pickLineColor(page: Page, value: string): Promise<void> {
   await page.keyboard.press("Enter");
   const picker = page.getByRole("dialog", { name: "Map Line color" });
   await expect(picker).toBeVisible();
+  // Opening the picker moves focus into it, as every dialog does.
+  await expectFocusWithin(picker);
   const field = picker.getByRole("textbox", { name: "Hex color" });
   await tabTo(page, field, { max: 25 });
   await page.keyboard.press("ControlOrMeta+a");
@@ -194,7 +196,7 @@ test.use({
   builtInPlugins: [{ id: "maibuk-maps" }],
 });
 
-test.describe("Maps Map Styles @wf:plugins-maps-styles @sc:plugin.maibuk-maps.rectangleTool @sandbox", () => {
+test.describe("Maps Map Styles @wf:plugins-maps-styles @sc:plugin.maibuk-maps.rectangleTool @sc:plugin.maibuk-maps.nextMapStyle @sandbox", () => {
   test("picking a Map Style from the header recolours the page and the Map Line that follows it", async ({
     page,
   }) => {

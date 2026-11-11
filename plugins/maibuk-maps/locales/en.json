@@ -32,6 +32,7 @@
   "commands.polygonTool.label": "Polygon tool",
   "commands.eraserTool.label": "Eraser tool",
   "commands.roughen.label": "Roughen",
+  "commands.nextMapStyle.label": "Next Map Style",
   "commands.deleteElement.label": "Delete element",
   "pages.maps.title": "Maps",
   "pages.map.title": "Map"

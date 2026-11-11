@@ -37,11 +37,8 @@ import {
 } from "./maps";
 import { scatterPoints } from "./scatter";
 import { SCALE_BAR_STAMP_REF, type StampArt, scaleBarLayout, stampArt } from "./stamps";
-import { resolveColor, styleOf, type MapStyleId } from "./styles";
+import { lineRole, resolveColor, styleOf, type MapStyleId } from "./styles";
 import { TEXTURE_IDS, texturePattern, texturePatternId, type TextureId } from "./textures";
-
-/** The Atlas Map Style's water, which an empty Map shows. */
-export const EMPTY_MAP_COLOR = "#d7e6ec";
 
 /** Ramer-Douglas-Peucker distance below which a Pencil point is noise. */
 export const SMOOTH_TOLERANCE_MM = 0.5;
@@ -326,7 +323,7 @@ function taperedRiverPath(points: readonly MapPoint[]): string {
 function styleShapes(element: MapLineElement, d: string, style: MapStyleId): LineShape[] {
   // A river follows the river role unless the line overrides it; every other
   // line style draws in the ink role.
-  const ink = resolveColor(style, element.color, element.style === "river" ? "river" : "ink");
+  const ink = resolveColor(style, element.color, lineRole(element.style));
   switch (element.style) {
     case "coast":
       return [strokeShape(d, COAST_STROKE_WIDTH_MM, ink)];
@@ -399,10 +396,10 @@ function roughenShape(shape: LineShape, id: string, closed: boolean): LineShape[
  * Frame draws and `sceneToSvg` writes, so the preview and the Frame cannot
  * drift. A roughened line's strokes come from rough.js instead of `linePath`.
  */
-export function lineShapes(element: MapLineElement, styleId?: string): LineShape[] {
+export function lineShapes(element: MapLineElement, style: MapStyleId): LineShape[] {
   const d = linePath(element);
   if (d === "") return [];
-  const shapes = styleShapes(element, d, styleOf(styleId));
+  const shapes = styleShapes(element, d, style);
   return element.roughened
     ? shapes.flatMap((shape) => roughenShape(shape, element.id, element.closed))
     : shapes;
@@ -577,7 +574,7 @@ function fillShapes(
   if (color !== undefined) shapes.push(areaPaint(area, resolveColor(style, color, "land")));
   if (texture !== undefined) {
     collector.textures.add(texture);
-    shapes.push(areaPaint(area, `url(#${texturePatternId(texture)})`));
+    shapes.push(areaPaint(area, `url(#${texturePatternId(texture, style)})`));
   }
   if (scatter !== undefined) {
     shapes.push(
@@ -857,7 +854,7 @@ export function sceneRender(
     filters,
     defs: [
       ...TEXTURE_IDS.filter((texture) => collector.textures.has(texture)).map((texture) =>
-        texturePattern(texture)
+        texturePattern(texture, style)
       ),
       ...collector.defs,
     ],

@@ -27,7 +27,6 @@ import {
   DEFAULT_POLYGON_SIDES,
   DEFAULT_SCALE_BAR_SIZE_MM,
   DEFAULT_SHAPE_SIZE_MM,
-  DEFAULT_STAMP_COLOR,
   DEFAULT_STAMP_SIZE_MM,
   MIN_LABEL_SIZE_MM,
   MIN_LABEL_WIDTH_MM,
@@ -667,7 +666,7 @@ describe("drawing an Area Fill with the Area tool", () => {
         locked: false,
         stampRef: "base:castle",
         transform: { x: 100, y: 50, size: 12, rotation: 0 },
-        color: DEFAULT_STAMP_COLOR,
+        color: MAP_STYLES.atlas.ink,
       },
       newLabel({ id: "label", name: "The Reach", text: "The Reach", point: [100, 20] }),
     ]);
@@ -879,7 +878,7 @@ describe("moving a Stamp", () => {
       locked: false,
       stampRef: "base:marker",
       transform: { x: 100, y: 50, size: 12, rotation: 0 },
-      color: DEFAULT_STAMP_COLOR,
+      color: MAP_STYLES.atlas.ink,
       ...overrides,
     };
   }
@@ -1286,7 +1285,7 @@ describe("dragging an Element with the Select tool", () => {
     locked: false,
     stampRef: "base:marker",
     transform: { x: 100, y: 50, size: 12, rotation: 0 },
-    color: DEFAULT_STAMP_COLOR,
+    color: MAP_STYLES.atlas.ink,
   };
 
   it("commits a dragged Map Line as one undo step, selected, and autosaves it", async () => {

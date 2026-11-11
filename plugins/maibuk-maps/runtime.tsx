@@ -24,6 +24,7 @@ import type { FrameFontMessage } from "./frame-protocol";
 import { MAP_PAGE_ID, createMapPage } from "./map-page";
 import { MAP_LABEL_FONT_FAMILIES, createMapStore, migrateMapsData } from "./maps";
 import { MAPS_PAGE_ID, createBookFilter, createMapsPage } from "./maps-page";
+import { MAP_STYLE_IDS } from "./styles";
 
 export { MAPS_PAGE_ID, MAP_PAGE_ID };
 
@@ -59,6 +60,7 @@ export const RECTANGLE_TOOL = "rectangleTool";
 export const POLYGON_TOOL = "polygonTool";
 export const ERASER_TOOL = "eraserTool";
 export const ROUGHEN = "roughen";
+export const NEXT_MAP_STYLE = "nextMapStyle";
 export const DELETE_ELEMENT = "deleteElement";
 
 /** One step of an arrow-key move, in page millimetres; Shift moves ten. */
@@ -360,6 +362,13 @@ function runEditorCommand(editor: MapEditor | null, id: string): void {
     case ROUGHEN:
       editor.roughen();
       break;
+    case NEXT_MAP_STYLE: {
+      // Cycles atlas -> parchment -> ink -> night -> atlas as one undo step.
+      const style = editor.getSnapshot().styleId;
+      const next = MAP_STYLE_IDS[(MAP_STYLE_IDS.indexOf(style) + 1) % MAP_STYLE_IDS.length];
+      editor.setMapStyle(next);
+      break;
+    }
     case DELETE_ELEMENT: {
       const selected = editor.getSnapshot().selectedId;
       if (selected !== null) editor.deleteElement(selected);

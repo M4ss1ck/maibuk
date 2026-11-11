@@ -7,20 +7,12 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_FILL_COLOR,
   DEFAULT_STAMP_SIZE_MM,
-  LINE_STROKE,
   type MapFillElement,
   type MapLabelElement,
   type MapLineElement,
   type MapStampElement,
 } from "./maps";
-import {
-  EMPTY_MAP_COLOR,
-  sceneShapes,
-  sceneToSvg,
-  type LineShape,
-  type SceneShape,
-  type TextShape,
-} from "./scene";
+import { sceneShapes, sceneToSvg, type LineShape, type SceneShape, type TextShape } from "./scene";
 import {
   MAP_STYLE_IDS,
   MAP_STYLES,
@@ -121,6 +113,13 @@ function textsOf(shapes: readonly SceneShape[]): TextShape[] {
   return shapes.filter((shape): shape is TextShape => "text" in shape);
 }
 
+/** The colours a piece of markup paints with, from its `fill` and `stroke` attributes. */
+function coloursOf(markup: string): string[] {
+  return [...markup.matchAll(/(?:fill|stroke)="([^"]+)"/g)]
+    .map((match) => match[1])
+    .filter((colour) => colour !== "none");
+}
+
 /** The ONE color of an element kind's primitive, drawn in `style`. */
 function oneColorOf(
   element: MapLineElement | MapFillElement | MapStampElement,
@@ -153,12 +152,14 @@ describe("the Map Styles", () => {
   });
 
   it("keeps Atlas the palette Maps already draw in", () => {
-    expect(MAP_STYLES.atlas.water).toBe(EMPTY_MAP_COLOR);
+    // The palette Maps drew in before Map Styles existed, so an existing Map
+    // renders unchanged.
+    expect(MAP_STYLES.atlas.water).toBe("#d7e6ec");
     expect(MAP_STYLES.atlas.land).toBe(DEFAULT_FILL_COLOR);
-    expect(MAP_STYLES.atlas.ink).toBe(LINE_STROKE);
+    expect(MAP_STYLES.atlas.ink).toBe("#1f2933");
     expect(MAP_STYLES.atlas.river).toBe("#3b6e8f");
-    expect(MAP_STYLES.atlas.label).toBe(LINE_STROKE);
-    expect(MAP_STYLES.atlas.halo).toBe(EMPTY_MAP_COLOR);
+    expect(MAP_STYLES.atlas.label).toBe("#1f2933");
+    expect(MAP_STYLES.atlas.halo).toBe("#d7e6ec");
   });
 
   it("reads an unknown Style id as Atlas", () => {
@@ -273,6 +274,49 @@ describe("a Map drawn in each Style", () => {
       expect(text.fill).toBe("#fedcba");
       // A halo has no override, so it still follows the Style.
       expect(text.halo?.color).toBe(MAP_STYLES[style].halo);
+    }
+  });
+
+  it("draws a textured Fill in the texture's own ink in Atlas and the Style's ink elsewhere", () => {
+    for (const style of STYLES) {
+      const svg = sceneToSvg({
+        page: { preset: "square", widthMm: 100, heightMm: 100 },
+        elements: [fill({ texture: "grass" })],
+        styleId: style,
+      });
+      const pattern = /<pattern id="([^"]+)"[^>]*>(.*?)<\/pattern>/.exec(svg);
+      expect(pattern, style).not.toBeNull();
+      const [, id, marks] = pattern as RegExpExecArray;
+      const inks = new Set(coloursOf(marks));
+      expect(inks.size, style).toBe(1);
+      const [ink] = [...inks];
+      if (style === "atlas") {
+        // Atlas keeps each texture's own ink and the id every Atlas Map already
+        // references, so an existing Map's markup does not change.
+        expect(id).toBe("texture-grass");
+        expect(ink).toBe("#5c7a3f");
+      } else {
+        expect(id).toBe(`texture-grass-${style}`);
+        expect(ink).toBe(MAP_STYLES[style].ink);
+      }
+      // The Fill paints the pattern of its own Style.
+      expect(svg).toContain(`url(#${id})`);
+    }
+  });
+
+  it("scatters a Fill's Stamps in the Style's ink", () => {
+    for (const style of STYLES) {
+      const [shapes] = sceneShapes(
+        [fill({ scatter: { stamp: "base:marker", spacing: 12, seed: 3 } })],
+        100,
+        100,
+        style
+      );
+      const colours = pathsOf(shapes).flatMap((shape) =>
+        [shape.fill, shape.stroke].filter((colour): colour is string => typeof colour === "string")
+      );
+      expect(colours.length, style).toBeGreaterThan(0);
+      for (const colour of colours) expect(colour, style).toBe(MAP_STYLES[style].ink);
     }
   });
 });

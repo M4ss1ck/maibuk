@@ -96,6 +96,7 @@ import {
 import {
   isMapStyleId,
   isStyleRole,
+  lineRole,
   roleForColor,
   styleOf,
   type MapStyleId,
@@ -474,10 +475,10 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
    * whole however far the move carried it (#766).
    */
   function edit(next: MapElement[], offset?: FillTranslation): void {
-    const reconciled = reconcileFills(elements, next, offset);
-    if (reconciled !== history.current.elements) {
-      history.commit({ elements: reconciled, styleId: history.current.styleId });
-    }
+    history.commit({
+      elements: reconcileFills(elements, next, offset),
+      styleId: history.current.styleId,
+    });
     afterHistory();
   }
 
@@ -1031,7 +1032,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       if (target === undefined || target.kind !== "line" || target.locked) return;
       // A river draws in the river ink until it takes a colour of its own; a
       // pick of that ink stores the role, so it keeps following the Style.
-      const stored = storedColor(color, target.style === "river" ? "river" : "ink");
+      const stored = storedColor(color, lineRole(target.style));
       if (target.color === stored) return;
       updateElement(id, (element) =>
         element.kind === "line" ? { ...element, color: stored } : element
@@ -1041,38 +1042,6 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     clearElementColor(id) {
       const target = elementById(id);
       if (target === undefined || target.locked) return;
-      // A field the Style already supplies already follows it, so there is
-      // nothing to clear and no undo step.
-      if (target.kind === "line") {
-        if (target.color === undefined || isStyleRole(target.color)) return;
-        updateElement(id, (element) => {
-          if (element.kind !== "line") return element;
-          const cleared = { ...element };
-          delete cleared.color;
-          return cleared;
-        });
-        return;
-      }
-      if (target.kind === "stamp") {
-        if (target.color === undefined || isStyleRole(target.color)) return;
-        updateElement(id, (element) => {
-          if (element.kind !== "stamp") return element;
-          const cleared = { ...element };
-          delete cleared.color;
-          return cleared;
-        });
-        return;
-      }
-      if (target.kind === "label") {
-        if (target.color === undefined || isStyleRole(target.color)) return;
-        updateElement(id, (element) => {
-          if (element.kind !== "label") return element;
-          const cleared = { ...element };
-          delete cleared.color;
-          return cleared;
-        });
-        return;
-      }
       // A Fill always covers something, so clearing its override leaves the
       // flat colour in the `land` role, which follows the Style.
       if (target.kind === "fill") {
@@ -1083,7 +1052,18 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
             ? { ...element, content: { ...element.content, color: "land" } }
             : element
         );
+        return;
       }
+      // A Map Line, Stamp, or Map Label simply drops its override. A field the
+      // Style already supplies already follows it, so there is nothing to clear.
+      if (target.kind !== "line" && target.kind !== "stamp" && target.kind !== "label") return;
+      if (target.color === undefined || isStyleRole(target.color)) return;
+      updateElement(id, (element) => {
+        if (element.kind !== target.kind) return element;
+        const cleared = { ...element };
+        delete cleared.color;
+        return cleared;
+      });
     },
 
     setEnclosesFills(id, enclosesFills) {

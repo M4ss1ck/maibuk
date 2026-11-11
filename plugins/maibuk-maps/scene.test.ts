@@ -23,7 +23,6 @@ import {
 } from "./maps";
 import { linePath } from "./geometry";
 import {
-  EMPTY_MAP_COLOR,
   SMOOTH_TOLERANCE_MM,
   TEXT_FONT_FAMILY,
   type LineShape,
@@ -42,6 +41,7 @@ import {
   setLocked,
   smoothStroke,
 } from "./scene";
+import { MAP_STYLES } from "./styles";
 import { SCALE_BAR_STAMP_REF } from "./stamps";
 
 function line(
@@ -292,7 +292,7 @@ describe("lineShapes", () => {
   }
 
   it("draws a plain line as one ink stroke of 0.6mm", () => {
-    expect(lineShapes(straight())).toEqual([
+    expect(lineShapes(straight(), "atlas")).toEqual([
       {
         d: "M 0 0 L 10 0",
         stroke: LINE_STROKE,
@@ -305,7 +305,7 @@ describe("lineShapes", () => {
   });
 
   it("draws a coast as one ink stroke of 0.9mm", () => {
-    expect(lineShapes(straight({ style: "coast" }))).toEqual([
+    expect(lineShapes(straight({ style: "coast" }), "atlas")).toEqual([
       {
         d: "M 0 0 L 10 0",
         stroke: LINE_STROKE,
@@ -318,7 +318,7 @@ describe("lineShapes", () => {
   });
 
   it("draws an open river as a filled polygon 0.2mm wide at the start and 1.4mm at the end", () => {
-    expect(lineShapes(straight({ style: "river", enclosesFills: false }))).toEqual([
+    expect(lineShapes(straight({ style: "river", enclosesFills: false }), "atlas")).toEqual([
       {
         d: "M 0 0.1 L 10 0.7 L 10 -0.7 L 0 -0.1 Z",
         stroke: null,
@@ -340,7 +340,7 @@ describe("lineShapes", () => {
       ],
       { style: "river", closed: true, curves: [false, false, false] }
     );
-    expect(lineShapes(closed)).toEqual([
+    expect(lineShapes(closed, "atlas")).toEqual([
       {
         d: "M 0 0 L 10 0 L 10 10 Z",
         stroke: "#3b6e8f",
@@ -353,7 +353,7 @@ describe("lineShapes", () => {
   });
 
   it("draws a road as a dashed 0.5mm ink stroke", () => {
-    expect(lineShapes(straight({ style: "road", enclosesFills: false }))).toEqual([
+    expect(lineShapes(straight({ style: "road", enclosesFills: false }), "atlas")).toEqual([
       {
         d: "M 0 0 L 10 0",
         stroke: LINE_STROKE,
@@ -366,7 +366,7 @@ describe("lineShapes", () => {
   });
 
   it("draws a border as a dash-dot 0.6mm ink stroke", () => {
-    expect(lineShapes(straight({ style: "border" }))).toEqual([
+    expect(lineShapes(straight({ style: "border" }), "atlas")).toEqual([
       {
         d: "M 0 0 L 10 0",
         stroke: LINE_STROKE,
@@ -379,7 +379,7 @@ describe("lineShapes", () => {
   });
 
   it("draws a coast ripple as the coast line plus three fading offset copies", () => {
-    const shapes = lineShapes(straight({ style: "coastRipple", enclosesFills: false }));
+    const shapes = lineShapes(straight({ style: "coastRipple", enclosesFills: false }), "atlas");
     expect(shapes).toHaveLength(4);
     expect(shapes[0]).toEqual({
       d: "M 0 0 L 10 0",
@@ -418,8 +418,8 @@ describe("lineShapes", () => {
   });
 
   it("draws a roughened line from rough.js, the same way every time for one Element", () => {
-    const first = lineShapes(straight({ roughened: true }));
-    const again = lineShapes(straight({ roughened: true }));
+    const first = lineShapes(straight({ roughened: true }), "atlas");
+    const again = lineShapes(straight({ roughened: true }), "atlas");
     expect(first).toEqual(again);
     expect(first[0].stroke).toBe(LINE_STROKE);
     expect(first[0].strokeWidth).toBe(0.6);
@@ -435,7 +435,8 @@ describe("lineShapes", () => {
           [10, 10],
         ],
         { curves: [false], roughened: true }
-      )
+      ),
+      "atlas"
     );
     const two = lineShapes(
       line(
@@ -445,13 +446,14 @@ describe("lineShapes", () => {
           [10, 10],
         ],
         { curves: [false], roughened: true }
-      )
+      ),
+      "atlas"
     );
     expect(one[0].d).not.toBe(two[0].d);
   });
 
   it("leaves a filled river rough-free, because only strokes roughen", () => {
-    const shapes = lineShapes(straight({ style: "river", roughened: true }));
+    const shapes = lineShapes(straight({ style: "river", roughened: true }), "atlas");
     expect(shapes[0]).toMatchObject({
       d: "M 0 0.1 L 10 0.7 L 10 -0.7 L 0 -0.1 Z",
       fill: "#3b6e8f",
@@ -470,7 +472,7 @@ describe("lineShapes", () => {
       ],
       { closed: true, curves: [false, false, false, false], roughened: true }
     );
-    const shapes = lineShapes(closed);
+    const shapes = lineShapes(closed, "atlas");
     expect(shapes).toHaveLength(1);
     const d = shapes[0].d;
     const start = /^M\s*(-?[\d.]+)\s+(-?[\d.]+)/.exec(d);
@@ -484,7 +486,7 @@ describe("lineShapes", () => {
   });
 
   it("roughens every stroke of a ripple", () => {
-    const shapes = lineShapes(straight({ style: "coastRipple", roughened: true }));
+    const shapes = lineShapes(straight({ style: "coastRipple", roughened: true }), "atlas");
     expect(shapes).toHaveLength(4);
     for (const shape of shapes) expect(shape.d).not.toMatch(/^M 0 0 L 10 0$/);
   });
@@ -497,7 +499,7 @@ describe("sceneToSvg", () => {
       svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 203.2 203.2"')
     ).toBe(true);
     expect(svg.endsWith("</svg>")).toBe(true);
-    expect(svg).toContain(`<rect width="203.2" height="203.2" fill="${EMPTY_MAP_COLOR}"/>`);
+    expect(svg).toContain(`<rect width="203.2" height="203.2" fill="${MAP_STYLES.atlas.water}"/>`);
   });
 
   it("draws visible Map Lines in array order and omits hidden ones", () => {
@@ -935,7 +937,7 @@ describe("Map Label rendering", () => {
     const svg = sceneToSvg(mapWith([label({ halo: 0.8 })]));
 
     expect(svg.match(/<text /g)).toHaveLength(2);
-    expect(svg).toContain(`stroke="${EMPTY_MAP_COLOR}"`);
+    expect(svg).toContain(`stroke="${MAP_STYLES.atlas.water}"`);
     expect(svg).toContain('stroke-width="0.8"');
     expect(svg).toContain('stroke-linejoin="round"');
     // The halo is written first, unfilled, so the ink sits on top of it.

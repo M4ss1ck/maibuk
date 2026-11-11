@@ -49,6 +49,7 @@ import {
   MAP_PAGE_ID,
   MAPS_PAGE_ID,
   MOVE_RIGHT,
+  NEXT_MAP_STYLE,
   OPEN_MAPS,
   startMaps,
   type MapsRuntime,
@@ -651,6 +652,26 @@ describe("Maps Commands and host requests", () => {
     try {
       await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: OPEN_MAPS });
       expect(host.pageNavigations).toEqual([{ pluginId: "maibuk-maps", pageId: MAPS_PAGE_ID }]);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("Next Map Style cycles every Style, each switch one undo step", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    try {
+      expect(runtime.editor?.getSnapshot().styleId).toBe("atlas");
+      for (const style of ["parchment", "ink", "night", "atlas"] as const) {
+        await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: NEXT_MAP_STYLE });
+        expect(runtime.editor?.getSnapshot().styleId).toBe(style);
+      }
+
+      // Each switch is one history step, so undo walks back through them.
+      runtime.editor?.undo();
+      expect(runtime.editor?.getSnapshot().styleId).toBe("night");
+      runtime.editor?.undo();
+      expect(runtime.editor?.getSnapshot().styleId).toBe("ink");
     } finally {
       await host.stop();
     }
@@ -2655,6 +2676,29 @@ describe("Map editor page", () => {
           screen.getByRole("button", { name: en["properties.useMapStyleColor"] })
         ).toBeDisabled()
       );
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("shows the picker's default, not land, for a Fill that only paints a texture", async () => {
+    const storage = mapStorage([areaFill({ texture: "dots" })]);
+    const { host } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await selectRow(user, "Fill 1");
+
+      const trigger = await screen.findByRole("button", { name: en["properties.fillColor"] });
+      await tabTo(user, trigger, 60);
+      await user.keyboard("{Enter}");
+      const dialog = await screen.findByRole("dialog", { name: en["properties.fillColor"] });
+
+      // No flat colour paints the Fill, so its picker shows the host's default
+      // instead of claiming the Fill is painted land.
+      expect(within(dialog).getByRole("textbox")).toHaveValue("#000000");
 
       await page.unmount();
     } finally {

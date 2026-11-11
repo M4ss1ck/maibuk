@@ -14,7 +14,6 @@ import {
   DEFAULT_LABEL_SIZE_MM,
   DEFAULT_LABEL_WIDTH_MM,
   DEFAULT_SCALE_BAR_SIZE_MM,
-  DEFAULT_STAMP_COLOR,
   DEFAULT_STAMP_SIZE_MM,
   INDEX_KEY,
   LINE_STYLE_DEFAULT_ENCLOSES,
@@ -36,7 +35,8 @@ import {
   type MapStampElement,
   type MapStorage,
 } from "./maps";
-import { EMPTY_MAP_COLOR, sceneToSvg } from "./scene";
+import { sceneToSvg } from "./scene";
+import { MAP_STYLES } from "./styles";
 import { SCALE_BAR_STAMP_REF } from "./stamps";
 
 /** An in-memory storage that remembers every key read. */
@@ -595,7 +595,7 @@ describe("Map Fills", () => {
 
   it("gives the default Fill colour a land tone that differs from the water", () => {
     expect(DEFAULT_FILL_COLOR).toMatch(/^#[0-9a-f]{6}$/i);
-    expect(DEFAULT_FILL_COLOR).not.toBe(EMPTY_MAP_COLOR);
+    expect(DEFAULT_FILL_COLOR).not.toBe(MAP_STYLES.atlas.water);
   });
 
   it("keeps an Area Fill's own outline and its texture", async () => {
@@ -832,7 +832,7 @@ describe("Map Stamps", () => {
       locked: false,
       stampRef: "base:marker",
       transform: { x: 10, y: 20, size: 12, rotation: 0 },
-      color: DEFAULT_STAMP_COLOR,
+      color: MAP_STYLES.atlas.ink,
       ...overrides,
     };
   }

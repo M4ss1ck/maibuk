@@ -2962,7 +2962,7 @@ export const ROWS: MatrixRow[] = [
       "The Map Style and the override survive a reload and reopening the Map",
     ],
     terms: ["Shortcut"],
-    shortcuts: ["plugin.maibuk-maps.rectangleTool"],
+    shortcuts: ["plugin.maibuk-maps.rectangleTool", "plugin.maibuk-maps.nextMapStyle"],
     routes: ["/plugin/:pluginId/:pageId"],
     fixture: "bookShelf",
     tags: ["sandbox"],

@@ -9,6 +9,8 @@
  * This module imports only its own files.
  */
 
+import type { LineStyleId } from "./maps";
+
 /** The Map Styles a Map can be drawn in. */
 export const MAP_STYLE_IDS = ["atlas", "parchment", "ink", "night"] as const;
 export type MapStyleId = (typeof MAP_STYLE_IDS)[number];
@@ -112,6 +114,14 @@ export function resolveColor(
   if (value === undefined) return MAP_STYLES[style][fallbackRole];
   if (isStyleRole(value)) return MAP_STYLES[style][value];
   return value;
+}
+
+/**
+ * The role a Map Line draws in until it takes a colour of its own: a river its
+ * `river` ink, every other line style the `ink` role.
+ */
+export function lineRole(style: LineStyleId): StyleRole {
+  return style === "river" ? "river" : "ink";
 }
 
 /** The Style's colours in role order, deduped, for a colour picker's swatches. */
