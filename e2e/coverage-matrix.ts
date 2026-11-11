@@ -51,14 +51,6 @@ export const EXCLUSIONS: Exclusion[] = [
     owner: "#653 reader E2E rows; plugins/maibuk-reader/session.test.ts for the forwarded Commands",
   },
   {
-    kind: "shortcut",
-    items: ["plugin.maibuk-maps.areaTool"],
-    reason:
-      "Interim, while #750 lands in steps: the Area tool's own E2E row and spec (e2e/specs/plugins-maps-area.spec.ts) arrive with step 3 of the plan. Remove this exclusion then, so the row owns the shortcut again",
-    owner:
-      "plugins/maibuk-maps/plugin.test.tsx: the Area tool's key, its keyboard outline, and Roughen on an Area Fill, driven with user-event key presses over the real Frame",
-  },
-  {
     kind: "term",
     items: ["Drawing"],
     reason: "Creating a Drawing and erasing are pointer gestures by nature (documented exemption)",
@@ -2957,6 +2949,39 @@ export const ROWS: MatrixRow[] = [
       "plugin.maibuk-maps.insertTool",
       "plugin.maibuk-maps.moveRightFar",
     ],
+    routes: ["/plugin/:pluginId/:pageId"],
+    fixture: "bookShelf",
+    tags: ["sandbox"],
+    status: "accepted",
+  },
+  {
+    id: "plugins-maps-area",
+    area: "plugins",
+    workflow:
+      "The Maps editor's Area tool and Area Fill (#750): the Area tool's key picks it, and the author encloses a region that the Elements list lists as a Fill and the Frame paints in the Fill color. Both forms draw one: a drag in the Frame smooths the stroke it enclosed, and the keyboard pen draws a point-by-point outline (the arrows move the crosshair, Enter adds a point, and Enter on the first point closes the outline, leaving nothing in progress). Roughen (Mod+Shift+R) redraws that outline with the rough ink look, and Mod+Z restores it exactly; asserts: the Fill row in the Elements list, the closed path the Frame paints and its area, the outline's page points after the keyboard pen, and the changed then restored path around Roughen; persists: yes (every edit autosaves to Plugin storage)",
+    edges: [
+      "A drag in the Frame with the Area tool encloses the stroke it traced and the Elements list lists it as a Fill",
+      "The keyboard pen draws a closed Area Fill outline, and Enter on the first point closes it",
+      "Roughen (Mod+Shift+R) redraws the Area Fill's outline and Mod+Z restores it",
+    ],
+    terms: ["Command", "Shortcut"],
+    shortcuts: ["plugin.maibuk-maps.areaTool", "plugin.maibuk-maps.roughen"],
+    routes: ["/plugin/:pluginId/:pageId"],
+    fixture: "bookShelf",
+    tags: ["sandbox"],
+    status: "accepted",
+  },
+  {
+    id: "plugins-maps-fill-content",
+    area: "plugins",
+    workflow:
+      "The Maps editor's Soft Edge and Fill content controls (#750): with a Fill selected the properties panel offers a Soft Edge switch with its amount slider, a Texture select, and a Scatter select with its spacing slider and Reseed button. From the keyboard the author turns Soft Edge on, which makes the Frame wrap the Fill's art in a Gaussian blur whose standard deviation the amount slider then deepens; a Texture paints the Fill's area with that pattern, and a Scatter draws the chosen Stamp at points seeded inside the area, so one seed always scatters the same Stamps; asserts: the switch's state, the blur the Frame draws and its amount, the pattern the Fill's paint references, the scattered Stamps' count and each one's page point inside the area's outline; persists: yes (each control autosaves to Plugin storage)",
+    edges: [
+      "Soft Edge turns on from the properties panel and the Frame draws the fade, which the amount slider deepens",
+      "A Fill takes a texture and a scatter, and the Frame draws the scattered Stamps inside the area",
+    ],
+    terms: [],
+    shortcuts: [],
     routes: ["/plugin/:pluginId/:pageId"],
     fixture: "bookShelf",
     tags: ["sandbox"],

@@ -1,7 +1,9 @@
 // Pointer gestures for the Maps editor's drawing Frame (#745, #746, #747,
-// #766): a straight Pencil stroke, an Eraser drag across the Frame's svg, a
-// Shape tool's drag, and a Select drag that moves an Element. Moving has a
-// keyboard path (the arrow Commands); the drag is the pointer form of it.
+// #766, #750): a straight Pencil stroke, an Area tool outline, an Eraser drag
+// across the Frame's svg, a Shape tool's drag, and a Select drag that moves an
+// Element. Moving has a keyboard path (the arrow Commands), and so does the
+// Area tool's outline (its arrows and Enter); the drag here is the pointer form
+// of each.
 //
 // Drawing a Map Line has no keyboard path in this slice (the keyboard acts on a
 // selected Map Line: the move Commands, the Elements list, undo), and the E2E
@@ -34,6 +36,12 @@ const TO: readonly [number, number] = [0.6, 0.55];
 /** Where a Shape drag starts and ends, as fractions of the svg's box. */
 const SHAPE_FROM: readonly [number, number] = [0.3, 0.3];
 const SHAPE_TO: readonly [number, number] = [0.55, 0.45];
+/** Where an Area tool outline turns, as fractions of the svg's box. */
+const AREA_CORNERS: readonly (readonly [number, number])[] = [
+  [0.34, 0.36],
+  [0.62, 0.42],
+  [0.44, 0.62],
+];
 /** How many moves the stroke is split into. */
 const STEPS = 12;
 
@@ -58,6 +66,39 @@ export async function drawStroke(page: Page, surface: Locator): Promise<void> {
       from.x + ((to.x - from.x) * step) / STEPS,
       from.y + ((to.y - from.y) * step) / STEPS
     );
+  }
+  await page.mouse.up();
+}
+
+/**
+ * Traces one closed outline in a Frame's drawing surface with the mouse: the
+ * Area tool's pointer form (#750). The Frame smooths the traced stroke into an
+ * Area Fill exactly as the Pencil's stroke becomes a Map Line, so the outline
+ * has to enclose something: this one turns at three corners and comes back to
+ * the first. (A straight drag is no use here: smoothing reduces it to the two
+ * points a Fill refuses.) The Area tool must already be selected; the caller
+ * waits for the scene with `svg[data-tool="area"]` before calling this.
+ */
+export async function drawArea(page: Page, surface: Locator): Promise<void> {
+  const box = await surface.boundingBox();
+  if (box === null) throw new Error("the Frame's drawing surface has no box to draw on");
+  const at = (fraction: readonly [number, number]) => ({
+    x: box.x + box.width * fraction[0],
+    y: box.y + box.height * fraction[1],
+  });
+  // The closing leg returns to the first corner, so the outline is one loop.
+  const corners = [...AREA_CORNERS, AREA_CORNERS[0]].map(at);
+  await page.mouse.move(corners[0].x, corners[0].y);
+  await page.mouse.down();
+  for (let index = 1; index < corners.length; index += 1) {
+    const from = corners[index - 1];
+    const to = corners[index];
+    for (let step = 1; step <= STEPS; step += 1) {
+      await page.mouse.move(
+        from.x + ((to.x - from.x) * step) / STEPS,
+        from.y + ((to.y - from.y) * step) / STEPS
+      );
+    }
   }
   await page.mouse.up();
 }
