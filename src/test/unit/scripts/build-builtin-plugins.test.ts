@@ -182,12 +182,14 @@ describe("checkBundleSize()", () => {
     expect(plain).toMatchObject({ id: "desktop-only", limitBytes: 10, ok: false });
   });
 
-  it("gives maibuk-mcp and maibuk-reader the raised budgets", () => {
-    // The MCP SDK plus zod alone exceed the 150 KB default, and Reader carries
-    // pdf.js and the foliate-js parsers as raw source strings.
+  it("gives maibuk-mcp, maibuk-reader, and maibuk-maps the raised budgets", () => {
+    // The MCP SDK plus zod alone exceed the 150 KB default, Reader carries
+    // pdf.js and the foliate-js parsers as raw source strings, and Maps carries
+    // @turf/polygonize plus its base Stamp art.
     expect(BUNDLE_SIZE_LIMIT_OVERRIDES).toEqual({
       "maibuk-mcp": 240 * 1024,
       "maibuk-reader": 700 * 1024,
+      "maibuk-maps": 200 * 1024,
     });
   });
 });
