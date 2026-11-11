@@ -724,7 +724,7 @@ function softEdgeFilter(id: string, softEdgeMm: number, points: readonly MapPoin
 }
 
 /** One whole scene, ready to draw: the primitives, the Soft Edges, and the definitions they use. */
-interface SceneRender {
+export interface SceneRender {
   shapes: SceneShape[][];
   /** The Soft Edge filter each Element draws with, by array index; null for a sharp edge. */
   filters: (string | null)[];
@@ -733,7 +733,7 @@ interface SceneRender {
 }
 
 /** Every Element's primitives, its Soft Edge, and the definitions its SVG needs, in one pass. */
-function renderScene(elements: readonly MapElement[], pageWidthMm: number): SceneRender {
+export function sceneRender(elements: readonly MapElement[], pageWidthMm: number): SceneRender {
   const needsFaces = elements.some((element) => element.kind === "fill");
   const faces = needsFaces ? sceneFaces(elements) : [];
   const collector: SceneCollector = { defs: [], textures: new Set() };
@@ -769,7 +769,7 @@ function renderScene(elements: readonly MapElement[], pageWidthMm: number): Scen
 
 /** Every Element's render primitives, in array order, from one pass over the faces. */
 export function sceneShapes(elements: readonly MapElement[], pageWidthMm: number): SceneShape[][] {
-  return renderScene(elements, pageWidthMm).shapes;
+  return sceneRender(elements, pageWidthMm).shapes;
 }
 
 /** Escapes text for an XML attribute. */
@@ -870,7 +870,7 @@ export function sceneToSvg(
     background(widthMm, heightMm),
   ];
 
-  const render = renderScene(map.elements, widthMm);
+  const render = sceneRender(map.elements, widthMm);
   if (render.defs.length > 0) parts.push(`<defs>${render.defs.join("")}</defs>`);
   map.elements.forEach((element, index) => {
     // An Element with nothing to draw writes no group: a hidden one, a Fill in

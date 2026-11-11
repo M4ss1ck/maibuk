@@ -272,6 +272,64 @@ describe("drawing the scene", () => {
   });
 });
 
+describe("the scene's definitions", () => {
+  it("draws the texture patterns, scatter Clip Paths, and Soft Edge filters the Worker sends", () => {
+    frame = loadFrame();
+    frame.scene({
+      defs: [
+        '<pattern id="texture-grass" patternUnits="userSpaceOnUse" width="4" height="4"><path d="M 0.6 3.6 L 1.2 1.7"/></pattern>',
+        '<clipPath id="fill-clip-a1"><path d="M 0 0 L 10 0 L 10 10 Z" clip-rule="evenodd"/></clipPath>',
+        '<filter id="soft-edge-b2" filterUnits="userSpaceOnUse" x="-5" y="-5" width="30" height="30"><feGaussianBlur stdDeviation="2"/></filter>',
+      ],
+      elements: [
+        sceneElement({
+          filter: "soft-edge-b2",
+          shapes: [
+            shape({
+              d: "M 0 0 L 10 0 L 10 10 Z",
+              stroke: null,
+              strokeWidth: 0,
+              fill: "url(#texture-grass)",
+            }),
+          ],
+        }),
+      ],
+    });
+
+    const defs = document.querySelector("defs");
+    expect(defs?.querySelector("pattern#texture-grass")).not.toBeNull();
+    expect(defs?.querySelector("clipPath#fill-clip-a1 path")?.getAttribute("clip-rule")).toBe(
+      "evenodd"
+    );
+    const blur = defs?.querySelector("filter#soft-edge-b2 feGaussianBlur");
+    expect(blur?.getAttribute("stdDeviation")).toBe("2");
+
+    // The Element's art draws through its filter, in the texture it references.
+    const group = document.querySelector('g[data-element-id="e1"]');
+    const filtered = group?.querySelector('g[filter="url(#soft-edge-b2)"]');
+    expect(filtered?.querySelector("path.map-line")?.getAttribute("fill")).toBe(
+      "url(#texture-grass)"
+    );
+  });
+
+  it("draws no definitions for a scene that references none", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [sceneElement()] });
+
+    expect(document.querySelector("defs")).toBeNull();
+    expect(document.querySelector("[filter]")).toBeNull();
+  });
+
+  it("drops a filter id a scene could write an attribute of its own into", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [sceneElement({ filter: 'x" onload="alert(1)' })],
+    });
+
+    expect(document.querySelector("[filter]")).toBeNull();
+  });
+});
+
 describe("Stamp shapes", () => {
   it("draws a text shape as SVG text and honours a shape's own transform", () => {
     frame = loadFrame();
@@ -523,6 +581,178 @@ describe("the scene message", () => {
     // The font travels with the label, so the Frame and an export agree.
     for (const label of labels) expect(label).toMatchObject({ font: TEXT_FONT_FAMILY });
   });
+
+  it("carries an Area Fill's texture and Soft Edge as the definitions the Frame draws", () => {
+    const map = {
+      page: { preset: "square" as const, widthMm: 200, heightMm: 100 },
+      elements: [
+        {
+          id: "meadow",
+          kind: "fill" as const,
+          name: "Meadow",
+          hidden: false,
+          locked: false,
+          anchor: [10, 10] as [number, number],
+          outline: {
+            points: [
+              [0, 0],
+              [20, 0],
+              [20, 20],
+              [0, 20],
+            ] as [number, number][],
+            curves: [false, false, false, false],
+            roughened: false,
+          },
+          content: { color: "#c8d5a3", texture: "grass" as const },
+          softEdge: 2,
+        },
+      ],
+    };
+    const message = sceneMessage(map, {
+      selectedId: null,
+      tool: "select",
+      zoom: 1,
+      panX: 0,
+      panY: 0,
+      penLabel: PEN_LABEL,
+    });
+
+    const defs = message.defs.join("");
+    expect(defs).toContain('id="texture-grass"');
+    expect(defs).toContain("<feGaussianBlur");
+    // The Element names its own Soft Edge filter, which the defs define.
+    expect(message.elements[0].filter).toMatch(/^soft-edge-[0-9a-f]+$/);
+    expect(defs).toContain(`id="${message.elements[0].filter}"`);
+  });
+
+  it("carries a scatter Fill's Clip Path, so the Frame cuts its Stamps to the area", () => {
+    const map = {
+      page: { preset: "square" as const, widthMm: 200, heightMm: 100 },
+      elements: [
+        {
+          id: "forest",
+          kind: "fill" as const,
+          name: "Forest",
+          hidden: false,
+          locked: false,
+          anchor: [10, 10] as [number, number],
+          outline: {
+            points: [
+              [0, 0],
+              [20, 0],
+              [20, 20],
+              [0, 20],
+            ] as [number, number][],
+            curves: [false, false, false, false],
+            roughened: false,
+          },
+          content: { scatter: { stamps: ["base:tree"], spacing: 8, seed: 5 } },
+        },
+      ],
+    };
+    const message = sceneMessage(map, {
+      selectedId: null,
+      tool: "select",
+      zoom: 1,
+      panX: 0,
+      panY: 0,
+      penLabel: PEN_LABEL,
+    });
+
+    expect(message.defs.join("")).toMatch(/<clipPath id="fill-clip-[0-9a-f]+">/);
+    const paths = message.elements[0].shapes.filter((shape) => "d" in shape);
+    expect(paths.length).toBeGreaterThan(0);
+    for (const path of paths) expect(path.clip).toMatch(/^fill-clip-[0-9a-f]+$/);
+  });
+});
+
+describe("the area message", () => {
+  it("reads a freehand outline, which carries no curves", () => {
+    expect(
+      parseFrameMessage({
+        kind: "area",
+        points: [
+          [10, 10],
+          [40, 10],
+          [40, 40],
+        ],
+        curves: [],
+        freehand: true,
+      })
+    ).toEqual({
+      kind: "area",
+      points: [
+        [10, 10],
+        [40, 10],
+        [40, 40],
+      ],
+      curves: [],
+      freehand: true,
+    });
+  });
+
+  it("reads a point-by-point outline with one flag per segment, the closing one too", () => {
+    expect(
+      parseFrameMessage({
+        kind: "area",
+        points: [
+          [10, 10],
+          [40, 10],
+          [40, 40],
+        ],
+        curves: [false, true, false],
+        freehand: false,
+      })
+    ).toEqual({
+      kind: "area",
+      points: [
+        [10, 10],
+        [40, 10],
+        [40, 40],
+      ],
+      curves: [false, true, false],
+      freehand: false,
+    });
+  });
+
+  it("drops an area message with a missing flag or the wrong curve count", () => {
+    const valid = {
+      kind: "area",
+      points: [
+        [10, 10],
+        [40, 10],
+        [40, 40],
+      ],
+      curves: [false, false, false],
+      freehand: false,
+    };
+    for (const message of [
+      { ...valid, freehand: undefined },
+      { ...valid, freehand: "no" },
+      { ...valid, curves: undefined },
+      { ...valid, curves: [false, false] },
+      { ...valid, curves: [false, false, false, false] },
+      {
+        ...valid,
+        points: [
+          [10, 10],
+          [40, 10],
+        ],
+      },
+      {
+        ...valid,
+        points: [
+          [10, 10],
+          [40, 10],
+          [40, "40"],
+        ],
+      },
+      // A freehand outline is smoothed by the Worker, so it carries no curves.
+      { ...valid, freehand: true },
+    ]) {
+      expect(parseFrameMessage(message)).toBeNull();
+    }
+  });
 });
 
 describe("the shape message", () => {
@@ -762,6 +992,133 @@ describe("the Pencil", () => {
     pointer(svg(), "pointercancel", 30, 40);
     expect(frame.port.messages).toEqual([]);
     expect(document.querySelector("path.map-live")).toBeNull();
+  });
+});
+
+describe("the Area tool", () => {
+  it("posts a freehand drag as one closed Area Fill outline and draws it live", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "area" });
+    expect(svg().getAttribute("data-tool")).toBe("area");
+    expect(getComputedStyle(svg()).cursor).toBe("crosshair");
+
+    pointer(svg(), "pointerdown", 10, 20);
+    pointer(svg(), "pointermove", 30, 20);
+    pointer(svg(), "pointermove", 30, 40);
+    expect(document.querySelector("path.map-live")?.getAttribute("d")).toBe(
+      "M 10 20 L 30 20 L 30 40"
+    );
+
+    pointer(svg(), "pointerup", 30, 40);
+    expect(document.querySelector("path.map-live")).toBeNull();
+    // The Worker smooths and closes it exactly as it smooths a Pencil stroke.
+    expect(frame.port.messages).toEqual([
+      {
+        kind: "area",
+        points: [
+          [10, 20],
+          [30, 20],
+          [30, 40],
+        ],
+        curves: [],
+        freehand: true,
+      },
+    ]);
+  });
+
+  it("drops a tap that never moved", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "area" });
+    pointer(svg(), "pointerdown", 10, 20);
+    pointer(svg(), "pointerup", 10, 20);
+    expect(frame.port.messages).toEqual([]);
+  });
+
+  it("draws an outline with the keyboard and closes it on the first point", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "area" });
+
+    // The crosshair starts at the page centre, 100 by 50 mm.
+    expect(document.querySelector("path.map-crosshair")?.getAttribute("d")).toBe(
+      "M 98.5 50 L 101.5 50 M 100 48.5 L 100 51.5"
+    );
+
+    // The Area tool keeps every key it handles, so the host's Commands never see it.
+    expect(key("Enter").defaultPrevented).toBe(true);
+    expect(key("ArrowRight").defaultPrevented).toBe(true);
+    key("ArrowRight");
+    key("Enter");
+    key("ArrowDown");
+    key("ArrowDown");
+    key("Enter");
+    expect(document.querySelector("path.map-crosshair")?.getAttribute("d")).toBe(
+      "M 100.5 52 L 103.5 52 M 102 50.5 L 102 53.5"
+    );
+
+    // Back on the first point, Enter closes the outline.
+    key("ArrowLeft");
+    key("ArrowLeft");
+    key("ArrowUp");
+    key("ArrowUp");
+    expect(key("Enter").defaultPrevented).toBe(true);
+
+    expect(frame.port.messages).toEqual([
+      {
+        kind: "area",
+        points: [
+          [100, 50],
+          [102, 50],
+          [102, 52],
+        ],
+        curves: [false, false, false],
+        freehand: false,
+      },
+    ]);
+    expect(document.querySelector("path.map-crosshair")).not.toBeNull();
+  });
+
+  it("finishes the outline closed with Escape, and drops one that encloses nothing", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "area" });
+
+    key("Enter");
+    key("ArrowRight");
+    key("ArrowRight");
+    key("Enter");
+    key("ArrowDown");
+    key("ArrowDown");
+    key("Enter");
+    expect(key("Backspace").defaultPrevented).toBe(true);
+    key("Enter");
+    expect(key("Escape").defaultPrevented).toBe(true);
+
+    expect(frame.port.messages).toEqual([
+      {
+        kind: "area",
+        points: [
+          [100, 50],
+          [102, 50],
+          [102, 52],
+        ],
+        curves: [false, false, false],
+        freehand: false,
+      },
+    ]);
+
+    // One or two points enclose nothing, so Escape keeps no outline at all.
+    key("Enter");
+    key("ArrowRight");
+    key("Enter");
+    key("Escape");
+    expect(frame.port.messages).toHaveLength(1);
+    expect(document.querySelector("path.map-live")).toBeNull();
+  });
+
+  it("leaves the host its own keys, as the Pen does", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "area" });
+    expect(key("p").defaultPrevented).toBe(false);
+    expect(key("z", { ctrlKey: true }).defaultPrevented).toBe(false);
   });
 });
 

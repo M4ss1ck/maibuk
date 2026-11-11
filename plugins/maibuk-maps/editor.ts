@@ -115,8 +115,10 @@ export interface MapEditorSnapshot {
   roughenStrength: number;
   /** Whether the selected Element is a Map Line. */
   selectedIsLine: boolean;
-  /** Whether the selected Element is a Fill. */
+  /** The selected Element is a Fill. */
   selectedIsFill: boolean;
+  /** Whether the selected Element is an Area Fill, whose own outline Roughen redraws. */
+  selectedIsAreaFill: boolean;
   /** The selected Fill's colour, or null when the selection is not a Fill. */
   selectedFillColor: string | null;
   /** The selected Map Line's style, or null when the selection is not a Map Line. */
@@ -162,7 +164,7 @@ export interface MapEditor {
   setEnclosesFills(id: string, enclosesFills: boolean): void;
   /** Sets how hard Roughen pushes the selected line, in page millimetres. */
   setRoughenStrength(strengthMm: number): void;
-  /** Roughens the selected unlocked Map Line as one undo step. */
+  /** Roughens the selected unlocked Map Line or Area Fill as one undo step. */
   roughen(): void;
   /** Adds a Shape of `kind` at the view centre, at the default size, as one undo step. */
   placeShape(kind: ShapeKind): void;
@@ -273,6 +275,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       roughenStrength,
       selectedIsLine: selectedLine !== null,
       selectedIsFill: selectedFill !== null,
+      selectedIsAreaFill: selectedFill !== null && selectedFill.outline !== undefined,
       selectedFillColor: selectedFill === null ? null : (selectedFill.content.color ?? null),
       selectedLineStyle: selectedLine === null ? null : selectedLine.style,
       selectedEnclosesFills: selectedLine === null ? null : selectedLine.enclosesFills,
@@ -520,6 +523,44 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     };
   }
 
+  /** The middle of an outline, which is an Area Fill's selection point. */
+  function centroidOf(points: readonly MapPoint[]): MapPoint {
+    let x = 0;
+    let y = 0;
+    for (const point of points) {
+      x += point[0];
+      y += point[1];
+    }
+    return [x / points.length, y / points.length];
+  }
+
+  /**
+   * The Area Fill a finished Area tool outline makes (#750), added on top of
+   * the z-order: what the freehand stroke or the point-by-point outline
+   * enclosed, in the current Fill colour. A freehand stroke smooths exactly as
+   * the Pencil's does, so both forms draw one outline from the same points.
+   */
+  function addArea(raw: readonly MapPoint[], curves: readonly boolean[], freehand: boolean): void {
+    const points = freehand ? smoothStroke(raw) : raw.map(([x, y]): MapPoint => [x, y]);
+    // An outline encloses nothing with fewer than three corners.
+    if (points.length < 3) return;
+    const segmentCurves = freehand
+      ? curvedSegments(points.length, true)
+      : Array.from({ length: points.length }, (_flag, index) => curves[index] === true);
+    const element: MapFillElement = {
+      id: randomMapId(),
+      kind: "fill",
+      name: newFillName(),
+      hidden: false,
+      locked: false,
+      anchor: centroidOf(points),
+      outline: { points, curves: segmentCurves, roughened: false },
+      content: { color: currentFillColor },
+    };
+    selectedId = element.id;
+    edit(addElement(elements, element));
+  }
+
   /**
    * Pours the current Fill colour into the face `point` falls in (#748): a face
    * with no Fill takes a new one behind every Map Line, and a face already
@@ -590,6 +631,9 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
         break;
       case "line":
         addLine(message.points, message.curves, message.closed);
+        break;
+      case "area":
+        addArea(message.points, message.curves, message.freehand);
         break;
       case "erase":
         erase(message.points, message.radiusMm);
@@ -751,7 +795,31 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
 
     roughen() {
       const target = elementById(selectedId);
-      if (target === undefined || target.kind !== "line" || target.locked) return;
+      if (target === undefined || target.locked) return;
+      // Roughen on an Area Fill redraws its own outline, as it redraws a Map
+      // Line, and the same seed keeps the same wobble between renders (#750).
+      if (target.kind === "fill") {
+        const { outline } = target;
+        if (outline === undefined) return;
+        const points = roughenPoints(outline.points, true, roughenStrength, seedFor(target.id));
+        edit(
+          elements.map((element) =>
+            element.id === target.id && element.kind === "fill"
+              ? {
+                  ...element,
+                  outline: {
+                    ...outline,
+                    points,
+                    curves: Array.from({ length: points.length }, () => false),
+                    roughened: true,
+                  },
+                }
+              : element
+          )
+        );
+        return;
+      }
+      if (target.kind !== "line") return;
       // Roughen resamples the points, so an exact Shape stops being one.
       const base = convertShapeLine(target);
       const points = roughenPoints(base.points, base.closed, roughenStrength, seedFor(base.id));

@@ -94,6 +94,10 @@ _Avoid_: rubber, delete tool, cutting tool
 The editor tool that pours the current Fill colour into the area Map Lines enclose: a click on a face fills it, and a click on a filled face recolours it. Its keyboard form uses the Pen's crosshair, moving with the arrows and pouring with Enter.
 _Avoid_: paint tool, fill tool, flood fill, color bucket
 
+**Area**:
+The editor tool that draws an Area Fill, a Fill with an outline of its own: a drag draws a freehand outline, closed and smoothed as the Pencil smooths a line, and it covers that outline in the current Fill colour. Its keyboard form uses the Pen's crosshair, adding points with Enter and closing the outline on the first point.
+_Avoid_: lasso tool, region tool, shape fill, polygon fill
+
 **Line style**:
 The kind of Map Line a line is drawn as: a coast, a river, a road, a border, a coast ripple, or a plain line. Each kind has its own look and its own default for Encloses Fills.
 _Avoid_: preset, brush, line type, stroke style
@@ -114,5 +118,6 @@ _Avoid_: jitter (that is a defect, not an effect), wobble, noise, sketch
 - Every **Map Line**, **Fill**, **Stamp**, **Map Label**, and **Map Image** is an **Element**; order in the **Elements list** is z-order.
 - The **Pen** and the **Pencil** draw **Map Lines**; the **Eraser** cuts them into pieces, and **Roughen** redraws one in the rough.js ink look.
 - The **Bucket** pours a **Fill** into an area **Map Lines** enclose, and the **Fill** follows those lines when they move.
+- The **Area** tool draws a **Fill** with an outline of its own, and **Roughen** redraws that outline in the rough ink look.
 - The **Ellipse**, **Rectangle**, and **Polygon** draw a **Shape**, a **Map Line** that keeps its exact geometry; **Roughen** or an **Eraser** cut converts it into a point-by-point line.
 - A **Map Line** has one **Line style**, which decides its look and its default **Encloses Fills**.

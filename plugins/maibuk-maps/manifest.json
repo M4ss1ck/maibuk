@@ -164,6 +164,12 @@
         "defaults": [["b"]]
       },
       {
+        "id": "areaTool",
+        "label": "Area tool",
+        "contexts": ["map"],
+        "defaults": [["a"]]
+      },
+      {
         "id": "insertTool",
         "label": "Insert tool",
         "contexts": ["map"],

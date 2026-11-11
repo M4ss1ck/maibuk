@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import { createMapEditor, type MapEditor } from "./editor";
 import { parseFrameMessage } from "./frame-protocol";
 import { shapeOutline } from "./geometry";
+import { smoothStroke } from "./scene";
 import {
   DATA_VERSION,
   DEFAULT_FILL_COLOR,
@@ -558,6 +559,236 @@ describe("a Fill's own colour", () => {
     editor.undo();
     expect(fills(editor)[0].locked).toBe(false);
     expect(fills(editor)[0].content.color).toBe(DEFAULT_FILL_COLOR);
+  });
+});
+
+describe("drawing an Area Fill with the Area tool", () => {
+  /** The one Fill an editor holds, which every Area test starts from. */
+  function onlyFill(editor: MapEditor): MapFillElement {
+    const fill = editor
+      .getSnapshot()
+      .elements.find((element): element is MapFillElement => element.kind === "fill");
+    if (fill === undefined) throw new Error("no Fill");
+    return fill;
+  }
+
+  it("adds a freehand outline as a closed Area Fill on top, selected, as one undo step", () => {
+    const { editor } = openEditor([squareLine("ring", "Ring", 10, 10, 80)]);
+    editor.setFillColor("#445566");
+
+    editor.handleFrameMessage({
+      kind: "area",
+      points: [
+        [10, 10],
+        [40, 10],
+        [40, 40],
+        [10, 40],
+      ],
+      curves: [],
+      freehand: true,
+    });
+
+    const elements = editor.getSnapshot().elements;
+    expect(elements).toHaveLength(2);
+    const fill = onlyFill(editor);
+    // The Area Fill covers its own outline, in the colour the Bucket pours, and
+    // sits on top of the Map Line it crossed.
+    expect(elements[1]).toBe(fill);
+    expect(fill).toMatchObject({
+      kind: "fill",
+      name: "Fill 1",
+      hidden: false,
+      locked: false,
+      anchor: [25, 25],
+      content: { color: "#445566" },
+    });
+    expect(fill.outline).toEqual({
+      points: [
+        [10, 10],
+        [40, 10],
+        [40, 40],
+        [10, 40],
+      ],
+      curves: [true, true, true, true],
+      roughened: false,
+    });
+    expect(editor.getSnapshot().selectedId).toBe(fill.id);
+    expect(editor.getSnapshot().selectedIsAreaFill).toBe(true);
+
+    editor.undo();
+    expect(editor.getSnapshot().elements).toHaveLength(1);
+  });
+
+  it("smooths a freehand outline exactly as the Pencil smooths a stroke", () => {
+    const { editor } = openEditor();
+    const raw: [number, number][] = [
+      [10, 10],
+      [12, 10.1],
+      [40, 10.2],
+      [40, 40],
+      [10, 40],
+    ];
+
+    editor.handleFrameMessage({ kind: "area", points: raw, curves: [], freehand: true });
+
+    expect(onlyFill(editor).outline?.points).toEqual(smoothStroke(raw));
+  });
+
+  it("keeps a point-by-point outline with the curves the Frame sent", () => {
+    const { editor } = openEditor();
+
+    editor.handleFrameMessage({
+      kind: "area",
+      points: [
+        [20, 20],
+        [60, 20],
+        [60, 50],
+      ],
+      curves: [false, true, false],
+      freehand: false,
+    });
+
+    const fill = onlyFill(editor);
+    expect(fill.outline).toEqual({
+      points: [
+        [20, 20],
+        [60, 20],
+        [60, 50],
+      ],
+      curves: [false, true, false],
+      roughened: false,
+    });
+    expect(fill.anchor[0]).toBeCloseTo(140 / 3, 10);
+    expect(fill.anchor[1]).toBeCloseTo(30, 10);
+  });
+
+  it("draws nothing for an outline that encloses no area, and takes no undo step", () => {
+    const { editor } = openEditor();
+    for (const message of [
+      { kind: "area", points: [[10, 10]], curves: [], freehand: true },
+      {
+        kind: "area",
+        points: [
+          [10, 10],
+          [40, 10],
+        ],
+        curves: [],
+        freehand: true,
+      },
+      {
+        kind: "area",
+        points: [
+          [10, 10],
+          [40, 10],
+        ],
+        curves: [false, false],
+        freehand: false,
+      },
+    ]) {
+      editor.handleFrameMessage(message);
+    }
+
+    expect(editor.getSnapshot().elements).toEqual([]);
+    expect(editor.getSnapshot().canUndo).toBe(false);
+  });
+
+  it("drops a malformed area message", () => {
+    const { editor } = openEditor();
+    const valid = {
+      kind: "area",
+      points: [
+        [10, 10],
+        [40, 10],
+        [40, 40],
+      ],
+      curves: [false, false, false],
+      freehand: false,
+    };
+    for (const message of [
+      { ...valid, curves: [false, false] },
+      { ...valid, curves: [] },
+      { ...valid, freehand: undefined },
+      { ...valid, freehand: "yes" },
+      { ...valid, points: [[10, 10]] },
+      {
+        ...valid,
+        points: [
+          [10, 10],
+          [40, 10],
+          [40, "40"],
+        ],
+      },
+      { kind: "area", points: valid.points },
+    ]) {
+      expect(parseFrameMessage(message)).toBeNull();
+      editor.handleFrameMessage(message);
+    }
+
+    expect(editor.getSnapshot().elements).toEqual([]);
+  });
+});
+
+describe("Roughen on an Area Fill", () => {
+  it("redraws the Area Fill's outline as one undo step", () => {
+    const { editor } = openEditor();
+    editor.handleFrameMessage({
+      kind: "area",
+      points: [
+        [10, 10],
+        [40, 10],
+        [40, 40],
+        [10, 40],
+      ],
+      curves: [false, false, false, false],
+      freehand: false,
+    });
+    const before = editor.getSnapshot().elements[0] as MapFillElement;
+
+    editor.roughen();
+
+    const roughened = editor.getSnapshot().elements[0] as MapFillElement;
+    expect(roughened.outline?.roughened).toBe(true);
+    expect(roughened.outline?.points.length).toBeGreaterThan(before.outline?.points.length ?? 0);
+    // A closed outline keeps one straight flag per segment, the closing one too.
+    expect(roughened.outline?.curves).toEqual(
+      Array.from({ length: roughened.outline?.points.length ?? 0 }, () => false)
+    );
+
+    editor.undo();
+    expect(editor.getSnapshot().elements[0]).toEqual(before);
+  });
+
+  it("leaves a locked Area Fill, and a Bucket Fill with no outline, alone", () => {
+    const { editor } = openEditor([squareLine("ring", "Ring", 10, 10, 80)]);
+    editor.handleFrameMessage({
+      kind: "area",
+      points: [
+        [10, 10],
+        [40, 10],
+        [40, 40],
+      ],
+      curves: [false, false, false],
+      freehand: false,
+    });
+    const area = editor.getSnapshot().elements[1] as MapFillElement;
+    editor.setLocked(area.id, true);
+
+    editor.roughen();
+    expect(editor.getSnapshot().elements[1]).toMatchObject({
+      outline: { roughened: false },
+    });
+
+    // A Bucket Fill covers a face, not an outline, so Roughen has nothing to redraw.
+    editor.handleFrameMessage({ kind: "pour", point: [50, 50] });
+    const bucket = editor
+      .getSnapshot()
+      .elements.find(
+        (element) => element.kind === "fill" && element.outline === undefined
+      ) as MapFillElement;
+    editor.select(bucket.id);
+    const before = editor.getSnapshot().elements;
+    editor.roughen();
+    expect(editor.getSnapshot().elements).toBe(before);
   });
 });
 

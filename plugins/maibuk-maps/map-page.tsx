@@ -237,6 +237,7 @@ function MapEditorView({
               { value: "pencil", label: t("tools.pencil") },
               { value: "pen", label: t("tools.pen") },
               { value: "bucket", label: t("tools.bucket") },
+              { value: "area", label: t("tools.area") },
               { value: "insert", label: t("tools.insert") },
               ...SHAPE_KINDS.map((kind) => ({ value: kind, label: t(SHAPE_TOOL_KEYS[kind]) })),
               { value: "eraser", label: t("tools.eraser") },
@@ -498,7 +499,7 @@ function MapEditorView({
                   onChange={(event) => editor.setEnclosesFills(selected.id, event.detail)}
                 />
               ) : null}
-              {snapshot.selectedIsLine ? (
+              {snapshot.selectedIsLine || snapshot.selectedIsAreaFill ? (
                 <>
                   <ui.Slider
                     label={t("properties.roughenStrength")}

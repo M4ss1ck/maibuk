@@ -1525,7 +1525,7 @@ describe("Map editor page", () => {
       for (let i = 0; i < 60 && !tools.contains(document.activeElement); i++)
         await user.tab({ shift: true });
       const rectangle = screen.getByRole("radio", { name: en["tools.rectangle"] });
-      for (let i = 0; i < 8 && !(rectangle as HTMLInputElement).checked; i++)
+      for (let i = 0; i < 12 && !(rectangle as HTMLInputElement).checked; i++)
         await user.keyboard("{ArrowRight}");
       await waitFor(() => expect(rectangle).toBeChecked());
       const place = await screen.findByRole("button", {
