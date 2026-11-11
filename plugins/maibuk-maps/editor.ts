@@ -93,6 +93,14 @@ import {
   stampTakesColour,
   type BaseStampId,
 } from "./stamps";
+import {
+  isMapStyleId,
+  isStyleRole,
+  roleForColor,
+  styleOf,
+  type MapStyleId,
+  type StyleRole,
+} from "./styles";
 import { isTextureId, type TextureId } from "./textures";
 
 /** How much one zoom step changes the view. */
@@ -129,6 +137,8 @@ export interface MapEditorSnapshot {
   elements: readonly MapElement[];
   selectedId: string | null;
   tool: MapTool;
+  /** The Map Style the whole Map is drawn in. */
+  styleId: MapStyleId;
   canUndo: boolean;
   canRedo: boolean;
   saveFailed: boolean;
@@ -207,10 +217,20 @@ export interface MapEditor {
   setLocked(id: string, locked: boolean): void;
   /** Picks a line style for new Pen lines; a selected unlocked Map Line takes it too. */
   setLineStyle(style: LineStyleId): void;
+  /** Draws the whole Map in another Map Style, as one undo step. */
+  setMapStyle(styleId: MapStyleId): void;
   /** Picks the colour the Bucket pours. */
   setFillColor(color: string): void;
   /** Sets one unlocked Fill's colour; a refused or equal colour is not an undo step. */
   setElementFillColor(id: string, color: string): void;
+  /** Recolours one unlocked Map Line, as one undo step. */
+  setLineColor(id: string, color: string): void;
+  /**
+   * Clears one unlocked Element's colour override so it follows the Map Style
+   * again: a Map Line, Stamp, or Map Label drops the field, and a Fill takes
+   * the `land` role. A colour the Style already supplies is not an undo step.
+   */
+  clearElementColor(id: string): void;
   /** Sets whether one unlocked Map Line encloses Fills. */
   setEnclosesFills(id: string, enclosesFills: boolean): void;
   /**
@@ -332,10 +352,16 @@ function coversNothing(content: MapFillContent): boolean {
   );
 }
 
+/** One undo step: the Elements list and the Map Style the Map is drawn in. */
+interface EditorHistoryState {
+  elements: MapElement[];
+  styleId: string;
+}
+
 export function createMapEditor(options: MapEditorOptions): MapEditor {
   let doc = options.doc;
   let elements: MapElement[] = doc.elements;
-  const history = createHistory<MapElement[]>(elements);
+  const history = createHistory<EditorHistoryState>({ elements, styleId: doc.styleId });
   let selectedId: string | null = null;
   let tool: MapTool = "select";
   let currentLineStyle: LineStyleId = "plain";
@@ -375,6 +401,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       elements,
       selectedId,
       tool,
+      styleId: styleOf(doc.styleId),
       canUndo: history.canUndo,
       canRedo: history.canRedo,
       saveFailed,
@@ -447,27 +474,35 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
    * whole however far the move carried it (#766).
    */
   function edit(next: MapElement[], offset?: FillTranslation): void {
-    history.commit(reconcileFills(elements, next, offset));
-    elements = history.current;
-    doc = { ...doc, elements };
-    // A Fill the edit merged away, or one whose face went with a deleted line,
-    // leaves the selection pointing at a ghost.
-    if (selectedId !== null && elementById(selectedId) === undefined) selectedId = null;
-    publish();
-    schedule();
-    sendScene();
+    const reconciled = reconcileFills(elements, next, offset);
+    if (reconciled !== history.current.elements) {
+      history.commit({ elements: reconciled, styleId: history.current.styleId });
+    }
+    afterHistory();
   }
 
   /** Undo and redo share the same follow-up: redraw, resave, repaint panels. */
   function afterHistory(): void {
-    elements = history.current;
-    doc = { ...doc, elements };
+    const current = history.current;
+    elements = current.elements;
+    doc = { ...doc, elements, styleId: current.styleId };
     // Undo can bring back a document without the selected Element (undoing a
     // stroke, or a delete): the selection must not point at a ghost.
     if (selectedId !== null && elementById(selectedId) === undefined) selectedId = null;
     publish();
     schedule();
     sendScene();
+  }
+
+  /**
+   * The value a colour pick stores: a hex equal to one of the current Style's
+   * colours stores that role name, so the pick follows a Style switch; any
+   * other hex stays an override. `preferred` is the kind's own role, so a
+   * Style whose roles share a colour still stores the meaningful one.
+   */
+  function storedColor(color: string, preferred: StyleRole): string {
+    const role = roleForColor(styleOf(history.current.styleId), color, preferred);
+    return role ?? color;
   }
 
   /**
@@ -954,30 +989,101 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     },
 
     setFillColor(color) {
-      if (color === currentFillColor) return;
-      currentFillColor = color;
+      // The Bucket's colour is what a new Fill stores, so a Style colour keeps
+      // the role name and the Fill follows a Style switch.
+      const stored = storedColor(color, "land");
+      if (stored === currentFillColor) return;
+      currentFillColor = stored;
       publish();
+    },
+
+    setMapStyle(styleId) {
+      // A Style this build does not know, or the one already on, is no step.
+      if (!isMapStyleId(styleId) || styleId === history.current.styleId) return;
+      history.commit({ elements: history.current.elements, styleId });
+      afterHistory();
     },
 
     setElementFillColor(id, color) {
       const target = elementById(id);
+      const stored = storedColor(color, "land");
       // A locked Fill keeps its colour, as a locked Map Line keeps its look, and
       // a colour the Fill already has is not an undo step.
       if (
         target === undefined ||
         target.kind !== "fill" ||
         target.locked ||
-        target.content.color === color
+        target.content.color === stored
       ) {
         return;
       }
       edit(
         elements.map((element) =>
           element.id === id && element.kind === "fill"
-            ? { ...element, content: { ...element.content, color } }
+            ? { ...element, content: { ...element.content, color: stored } }
             : element
         )
       );
+    },
+
+    setLineColor(id, color) {
+      const target = elementById(id);
+      if (target === undefined || target.kind !== "line" || target.locked) return;
+      // A river draws in the river ink until it takes a colour of its own; a
+      // pick of that ink stores the role, so it keeps following the Style.
+      const stored = storedColor(color, target.style === "river" ? "river" : "ink");
+      if (target.color === stored) return;
+      updateElement(id, (element) =>
+        element.kind === "line" ? { ...element, color: stored } : element
+      );
+    },
+
+    clearElementColor(id) {
+      const target = elementById(id);
+      if (target === undefined || target.locked) return;
+      // A field the Style already supplies already follows it, so there is
+      // nothing to clear and no undo step.
+      if (target.kind === "line") {
+        if (target.color === undefined || isStyleRole(target.color)) return;
+        updateElement(id, (element) => {
+          if (element.kind !== "line") return element;
+          const cleared = { ...element };
+          delete cleared.color;
+          return cleared;
+        });
+        return;
+      }
+      if (target.kind === "stamp") {
+        if (target.color === undefined || isStyleRole(target.color)) return;
+        updateElement(id, (element) => {
+          if (element.kind !== "stamp") return element;
+          const cleared = { ...element };
+          delete cleared.color;
+          return cleared;
+        });
+        return;
+      }
+      if (target.kind === "label") {
+        if (target.color === undefined || isStyleRole(target.color)) return;
+        updateElement(id, (element) => {
+          if (element.kind !== "label") return element;
+          const cleared = { ...element };
+          delete cleared.color;
+          return cleared;
+        });
+        return;
+      }
+      // A Fill always covers something, so clearing its override leaves the
+      // flat colour in the `land` role, which follows the Style.
+      if (target.kind === "fill") {
+        const color = target.content.color;
+        if (color === undefined || isStyleRole(color)) return;
+        updateElement(id, (element) =>
+          element.kind === "fill"
+            ? { ...element, content: { ...element.content, color: "land" } }
+            : element
+        );
+      }
     },
 
     setEnclosesFills(id, enclosesFills) {
@@ -1210,8 +1316,11 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     setLabelColor(id, color) {
       const target = labelForEdit(id);
       if (target === null) return;
-      if (color === "" || target.color === color) return;
-      updateElement(id, (element) => (element.kind === "label" ? { ...element, color } : element));
+      const stored = storedColor(color, "label");
+      if (color === "" || target.color === stored) return;
+      updateElement(id, (element) =>
+        element.kind === "label" ? { ...element, color: stored } : element
+      );
     },
 
     setLabelLayout,
@@ -1278,6 +1387,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
 
     setStampColor(id, color) {
       const target = elementById(id);
+      const stored = storedColor(color, "ink");
       // Art that keeps its own colours has none to take, and a locked Stamp
       // keeps the colour it has.
       if (
@@ -1285,13 +1395,13 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
         target.kind !== "stamp" ||
         target.locked ||
         !stampTakesColour(target.stampRef) ||
-        target.color === color
+        target.color === stored
       ) {
         return;
       }
       edit(
         elements.map((element) =>
-          element.id === id && element.kind === "stamp" ? { ...element, color } : element
+          element.id === id && element.kind === "stamp" ? { ...element, color: stored } : element
         )
       );
     },

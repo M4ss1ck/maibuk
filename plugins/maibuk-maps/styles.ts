@@ -118,3 +118,19 @@ export function resolveColor(
 export function styleSwatches(style: MapStyleId): string[] {
   return [...new Set(STYLE_ROLES.map((role) => MAP_STYLES[style][role]))];
 }
+
+/**
+ * The role whose colour is `color` in `style`, or null when it is none of them.
+ * A pick that lands on a Style colour stores this role name instead, so it
+ * follows a Style switch. `preferred` is the kind's own role, so a Style where
+ * two roles share a colour still stores the meaningful one.
+ */
+export function roleForColor(
+  style: MapStyleId,
+  color: string,
+  preferred: StyleRole
+): StyleRole | null {
+  const wanted = color.toLowerCase();
+  if (MAP_STYLES[style][preferred].toLowerCase() === wanted) return preferred;
+  return STYLE_ROLES.find((role) => MAP_STYLES[style][role].toLowerCase() === wanted) ?? null;
+}
