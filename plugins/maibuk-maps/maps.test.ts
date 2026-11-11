@@ -9,18 +9,24 @@ import { describe, expect, it } from "vitest";
 import {
   DATA_VERSION,
   DEFAULT_FILL_COLOR,
+  DEFAULT_STAMP_COLOR,
+  DEFAULT_STAMP_SIZE_MM,
   INDEX_KEY,
   LINE_STYLE_DEFAULT_ENCLOSES,
   createMapStore,
   mapKey,
   mapPreview,
   migrateMapsData,
+  newStamp,
   type MapDocument,
+  type MapElement,
   type MapFillElement,
   type MapLineElement,
+  type MapStampElement,
   type MapStorage,
 } from "./maps";
-import { EMPTY_MAP_COLOR, sceneToSvg } from "./scene";
+import { EMPTY_MAP_COLOR, LINE_STROKE, sceneToSvg } from "./scene";
+import { SCALE_BAR_STAMP_REF } from "./stamps";
 
 /** An in-memory storage that remembers every key read. */
 function memoryStorage(seed: Iterable<[string, unknown]> = []) {
@@ -628,6 +634,100 @@ describe("Map Shapes", () => {
 
     expect(converted.convertedFrom).toBe("rectangle");
     expect(junk.convertedFrom).toBeUndefined();
+  });
+});
+
+describe("Map Stamps", () => {
+  /** A marker Stamp centred on (10, 20), 12 mm wide and upright. */
+  function stamp(overrides: Partial<MapStampElement> = {}): MapStampElement {
+    return {
+      id: "marker",
+      kind: "stamp",
+      name: "City",
+      hidden: false,
+      locked: false,
+      stampRef: "base:marker",
+      transform: { x: 10, y: 20, size: 12, rotation: 0 },
+      color: DEFAULT_STAMP_COLOR,
+      ...overrides,
+    };
+  }
+
+  /** The Elements a stored Map holding `elements` loads, or null when it refuses them. */
+  async function loadElements(elements: unknown[]): Promise<MapElement[] | null> {
+    const memory = memoryStorage();
+    const store = storeOver(memory.storage);
+    await store.create({ name: "Stamps", bookId: null, preset: "square" });
+    const created = memory.values.get(mapKey("m1")) as MapDocument;
+    await memory.storage.set({ key: mapKey("m1"), value: { ...created, elements } });
+    const doc = await store.load("m1");
+    return doc === null ? null : doc.elements;
+  }
+
+  it("gives a new Stamp the map ink, the default size, and the scale bar its scale", () => {
+    const marker = newStamp({
+      id: "marker",
+      name: "City",
+      stampRef: "base:marker",
+      point: [30, 40],
+    });
+
+    expect(marker).toMatchObject({
+      id: "marker",
+      kind: "stamp",
+      name: "City",
+      hidden: false,
+      locked: false,
+      stampRef: "base:marker",
+      transform: { x: 30, y: 40, size: DEFAULT_STAMP_SIZE_MM, rotation: 0 },
+      color: LINE_STROKE,
+    });
+    expect(marker.scale).toBeUndefined();
+
+    const bar = newStamp({
+      id: "bar",
+      name: "Scale",
+      stampRef: SCALE_BAR_STAMP_REF,
+      point: [0, 0],
+    });
+    expect(bar.scale).toEqual({ unit: "km", span: 1000 });
+  });
+
+  it("keeps a Stamp's ref, transform, colour, and scale", async () => {
+    const stored = stamp({
+      stampRef: "base:scale-bar",
+      transform: { x: 80, y: 190, size: 40, rotation: 15 },
+      color: "#8b1a1a",
+      scale: { unit: "mi", span: 500 },
+    });
+
+    expect(await loadElements([stored])).toEqual([stored]);
+  });
+
+  it("rejects a Stamp whose ref, transform, colour, or scale is malformed", async () => {
+    const base = stamp();
+
+    for (const element of [
+      { ...base, stampRef: undefined },
+      { ...base, stampRef: "" },
+      { ...base, stampRef: 7 },
+      { ...base, color: undefined },
+      { ...base, color: null },
+      { ...base, transform: undefined },
+      { ...base, transform: null },
+      { ...base, transform: { x: 10, y: 20, size: 12 } },
+      { ...base, transform: { ...base.transform, x: Number.NaN } },
+      { ...base, transform: { ...base.transform, size: 0 } },
+      { ...base, transform: { ...base.transform, size: -2 } },
+      { ...base, transform: { ...base.transform, rotation: "45" } },
+      { ...base, scale: null },
+      { ...base, scale: { unit: "ft", span: 1000 } },
+      { ...base, scale: { unit: "km", span: 0 } },
+      { ...base, scale: { unit: "km", span: Number.POSITIVE_INFINITY } },
+      { ...base, scale: { span: 1000 } },
+    ]) {
+      expect(await loadElements([element])).toBeNull();
+    }
   });
 });
 

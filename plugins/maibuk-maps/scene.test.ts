@@ -10,6 +10,7 @@ import {
   type MapElement,
   type MapFillElement,
   type MapLineElement,
+  type MapStampElement,
   type PagePreset,
 } from "./maps";
 import { linePath } from "./geometry";
@@ -17,17 +18,22 @@ import {
   EMPTY_MAP_COLOR,
   LINE_STROKE,
   SMOOTH_TOLERANCE_MM,
+  type LineShape,
+  type SceneShape,
+  type TextShape,
   addElement,
   lineShapes,
   moveElement,
   removeElement,
   renameElement,
   reorder,
+  sceneShapes,
   sceneToSvg,
   setHidden,
   setLocked,
   smoothStroke,
 } from "./scene";
+import { SCALE_BAR_STAMP_REF } from "./stamps";
 
 function line(
   id: string,
@@ -588,9 +594,124 @@ describe("sceneToSvg", () => {
 
   it("ignores an element kind that has no geometry yet", () => {
     const svg = sceneToSvg(
-      mapWith([{ id: "stamp-1", kind: "stamp", name: "Castle", hidden: false, locked: false }])
+      mapWith([{ id: "label-1", kind: "label", name: "The Reach", hidden: false, locked: false }])
     );
-    expect(svg).not.toContain("stamp-1");
+    expect(svg).not.toContain("label-1");
+  });
+});
+
+describe("Stamp rendering", () => {
+  /** A marker Stamp 12 mm wide, centred on (100, 50), upright, in the map ink. */
+  function stamp(overrides: Partial<MapStampElement> = {}): MapStampElement {
+    return {
+      id: "stamp",
+      kind: "stamp",
+      name: "City",
+      hidden: false,
+      locked: false,
+      stampRef: "base:marker",
+      transform: { x: 100, y: 50, size: 12, rotation: 0 },
+      color: LINE_STROKE,
+      ...overrides,
+    };
+  }
+
+  /** A scale bar Stamp 40 mm wide, centred on (100, 50), reading the default scale. */
+  function scaleBar(overrides: Partial<MapStampElement> = {}): MapStampElement {
+    return stamp({
+      name: "Scale",
+      stampRef: SCALE_BAR_STAMP_REF,
+      transform: { x: 100, y: 50, size: 40, rotation: 0 },
+      ...overrides,
+    });
+  }
+
+  function pathsOf(shapes: readonly SceneShape[]): LineShape[] {
+    return shapes.filter((shape): shape is LineShape => !("text" in shape));
+  }
+
+  function textsOf(shapes: readonly SceneShape[]): TextShape[] {
+    return shapes.filter((shape): shape is TextShape => "text" in shape);
+  }
+
+  it("draws a marker's art in the Stamp's colour, scaled and centred on its point", () => {
+    const [shape] = pathsOf(sceneShapes([stamp()], 152.4)[0]);
+
+    expect(shape).toMatchObject({
+      stroke: null,
+      strokeWidth: 0,
+      dash: null,
+      fill: LINE_STROKE,
+      opacity: 1,
+      // A 10 by 14 mm art box at a 12 mm width, its centre on the Stamp's point.
+      transform: "translate(100 50) scale(1.2) translate(-5 -7)",
+    });
+    expect(shape.d).toMatch(/^M 5 0 /);
+  });
+
+  it("turns and resizes the art with the Stamp's own numbers", () => {
+    const [shape] = pathsOf(
+      sceneShapes([stamp({ transform: { x: 40, y: 30, size: 5, rotation: 90 } })], 152.4)[0]
+    );
+
+    expect(shape.transform).toBe("translate(40 30) rotate(90) scale(0.5) translate(-5 -7)");
+  });
+
+  it("draws nothing for a Stamp whose art is unknown", () => {
+    expect(sceneShapes([stamp({ stampRef: "base:nope" })], 152.4)[0]).toEqual([]);
+    expect(sceneShapes([stamp({ stampRef: "custom:castle" })], 152.4)[0]).toEqual([]);
+  });
+
+  it("draws the scale bar as four alternating segments and two labels", () => {
+    const shapes = sceneShapes([scaleBar()], 152.4)[0];
+    const paths = pathsOf(shapes);
+
+    // 40 mm of a 152.4 mm page reading 1000 km labels 200 km, so 30.48 mm of bar.
+    expect(paths).toHaveLength(4);
+    expect(paths[0]).toMatchObject({ fill: LINE_STROKE, stroke: null, strokeWidth: 0 });
+    expect(paths[1]).toMatchObject({ fill: null, stroke: LINE_STROKE });
+    expect(paths[2]).toMatchObject({ fill: LINE_STROKE, stroke: null });
+    expect(paths[3]).toMatchObject({ fill: null, stroke: LINE_STROKE });
+    // The bar straddles the Stamp's point, turned with it.
+    expect(paths[0].d).toMatch(/^M -15.24 -1.83 /);
+    expect(paths[0].transform).toBe("translate(100 50)");
+
+    const [zero, far] = textsOf(shapes);
+    expect(zero).toMatchObject({ text: "0", x: -15.24, anchor: "start", fill: LINE_STROKE });
+    expect(far).toMatchObject({ text: "200 km", x: 15.24, anchor: "end", fill: LINE_STROKE });
+    expect(zero.size).toBeGreaterThan(0);
+  });
+
+  it("reads the scale in miles and in the span the Stamp carries", () => {
+    const [, far] = textsOf(
+      sceneShapes([scaleBar({ scale: { unit: "mi", span: 500 } })], 152.4)[0]
+    );
+
+    expect(far.text).toBe("100 mi");
+  });
+
+  it("splits the bar into five segments when the distance starts with a five", () => {
+    // 200 mm of page stands for 1000 km, so a 100 mm bar is exactly 500 km.
+    const shapes = sceneShapes(
+      [scaleBar({ transform: { x: 100, y: 50, size: 100, rotation: 0 } })],
+      200
+    )[0];
+
+    expect(pathsOf(shapes)).toHaveLength(5);
+    expect(textsOf(shapes)[1].text).toBe("500 km");
+  });
+
+  it("writes the bar's labels as SVG text and the art as one transformed path", () => {
+    const svg = sceneToSvg(mapWith([stamp()], "portrait"));
+
+    expect(svg).toContain('<g data-element-id="stamp">');
+    expect(svg).toContain('transform="translate(100 50) scale(1.2) translate(-5 -7)"');
+
+    const bar = sceneToSvg(mapWith([scaleBar()], "portrait"));
+    expect(bar).toContain("<text ");
+    expect(bar).toContain(">0</text>");
+    expect(bar).toContain(">200 km</text>");
+    expect(bar).toContain('text-anchor="end"');
   });
 });
 
@@ -713,6 +834,29 @@ describe("element operations", () => {
       -10
     )[0] as MapLineElement;
     expect(locked.shape).toMatchObject({ cx: 100, cy: 50 });
+  });
+
+  it("moves a Stamp by shifting its centre, and leaves a locked one where it is", () => {
+    const marker: MapStampElement = {
+      id: "marker",
+      kind: "stamp",
+      name: "City",
+      hidden: false,
+      locked: false,
+      stampRef: "base:marker",
+      transform: { x: 100, y: 50, size: 12, rotation: 45 },
+      color: LINE_STROKE,
+    };
+
+    const [moved] = moveElement([marker], "marker", 5, -10);
+    expect(moved).toEqual({
+      ...marker,
+      transform: { x: 105, y: 40, size: 12, rotation: 45 },
+    });
+    expect(moveElement([{ ...marker, locked: true }], "marker", 5, -10)[0]).toEqual({
+      ...marker,
+      locked: true,
+    });
   });
 
   it("reorders one step forward or backward, and stays put at the ends", () => {

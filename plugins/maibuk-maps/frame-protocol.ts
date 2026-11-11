@@ -16,7 +16,7 @@
 
 import type { MapDocument, MapPoint, ShapeKind } from "./maps";
 import { isShapeKind } from "./maps";
-import { EMPTY_MAP_COLOR, type LineShape, sceneShapes } from "./scene";
+import { EMPTY_MAP_COLOR, type SceneShape, sceneShapes } from "./scene";
 
 /** The editor tool the Frame should honour. */
 export type MapTool = "select" | "pencil" | "pen" | "bucket" | "eraser" | ShapeKind;
@@ -24,8 +24,11 @@ export type MapTool = "select" | "pencil" | "pen" | "bucket" | "eraser" | ShapeK
 /** One Element as the Frame draws it: its render primitives, its flags, and its selection. */
 export interface FrameSceneElement {
   id: string;
-  /** The paths the Frame strokes and fills, from `lineShapes`; empty for an Element with no path yet. */
-  shapes: LineShape[];
+  /**
+   * The paths and text the Frame draws, from `sceneShapes`; empty for an
+   * Element with nothing to draw yet.
+   */
+  shapes: SceneShape[];
   hidden: boolean;
   locked: boolean;
   selected: boolean;
@@ -219,7 +222,7 @@ export function sceneMessage(
     penLabel: PenDraftLabel;
   }
 ): FrameSceneMessage {
-  const shapes = sceneShapes(map.elements);
+  const shapes = sceneShapes(map.elements, map.page.widthMm);
   return {
     kind: "scene",
     widthMm: map.page.widthMm,

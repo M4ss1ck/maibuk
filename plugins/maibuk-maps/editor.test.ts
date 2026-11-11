@@ -15,11 +15,13 @@ import {
   DEFAULT_FILL_COLOR,
   DEFAULT_POLYGON_SIDES,
   DEFAULT_SHAPE_SIZE_MM,
+  DEFAULT_STAMP_COLOR,
   type MapDocument,
   type MapElement,
   type MapFillElement,
   type MapLineElement,
   type MapShape,
+  type MapStampElement,
 } from "./maps";
 
 /** An editor over a square 200 by 100 mm Map, with a store that drops its saves. */
@@ -552,5 +554,56 @@ describe("a Fill's own colour", () => {
     editor.undo();
     expect(fills(editor)[0].locked).toBe(false);
     expect(fills(editor)[0].content.color).toBe(DEFAULT_FILL_COLOR);
+  });
+});
+
+describe("moving a Stamp", () => {
+  /** A marker Stamp centred on (100, 50), 12 mm wide, upright, in the map ink. */
+  function stamp(overrides: Partial<MapStampElement> = {}): MapStampElement {
+    return {
+      id: "marker",
+      kind: "stamp",
+      name: "City",
+      hidden: false,
+      locked: false,
+      stampRef: "base:marker",
+      transform: { x: 100, y: 50, size: 12, rotation: 0 },
+      color: DEFAULT_STAMP_COLOR,
+      ...overrides,
+    };
+  }
+
+  it("shifts the selected Stamp's centre as one undo step", () => {
+    const { editor } = openEditor([stamp()]);
+    editor.select("marker");
+
+    editor.move(-1, 2);
+
+    expect(editor.getSnapshot().elements).toEqual([
+      stamp({ transform: { x: 99, y: 52, size: 12, rotation: 0 } }),
+    ]);
+    editor.undo();
+    expect(editor.getSnapshot().elements).toEqual([stamp()]);
+  });
+
+  it("leaves a locked Stamp, and an Element with no centre of its own, where it is", () => {
+    const { editor } = openEditor([
+      stamp({ locked: true }),
+      { id: "label", kind: "label", name: "The Reach", hidden: false, locked: false },
+    ]);
+
+    editor.select("marker");
+    editor.move(1, 0);
+    expect(editor.getSnapshot().elements[0]).toEqual(stamp({ locked: true }));
+
+    editor.select("label");
+    editor.move(1, 0);
+    expect(editor.getSnapshot().elements[1]).toEqual({
+      id: "label",
+      kind: "label",
+      name: "The Reach",
+      hidden: false,
+      locked: false,
+    });
   });
 });

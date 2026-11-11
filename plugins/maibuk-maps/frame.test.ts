@@ -264,6 +264,60 @@ describe("drawing the scene", () => {
   });
 });
 
+describe("Stamp shapes", () => {
+  it("draws a text shape as SVG text and honours a shape's own transform", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [
+        sceneElement({
+          shapes: [
+            shape({ transform: "translate(100 50) scale(1.2)" }),
+            {
+              text: "200 km",
+              x: 40,
+              y: 60,
+              size: 3,
+              fill: "#1f2933",
+              anchor: "end",
+              transform: "translate(100 50)",
+            },
+          ],
+        }),
+      ],
+    });
+
+    const line = document.querySelector("path.map-line");
+    expect(line?.getAttribute("transform")).toBe("translate(100 50) scale(1.2)");
+
+    const text = document.querySelector("text");
+    expect(text?.textContent).toBe("200 km");
+    expect(text?.getAttribute("x")).toBe("40");
+    expect(text?.getAttribute("y")).toBe("60");
+    expect(text?.getAttribute("font-size")).toBe("3");
+    expect(text?.getAttribute("fill")).toBe("#1f2933");
+    expect(text?.getAttribute("text-anchor")).toBe("end");
+    expect(text?.getAttribute("transform")).toBe("translate(100 50)");
+  });
+
+  it("drops a text shape with no place, no size, or no colour", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [
+        sceneElement({
+          shapes: [
+            { text: "0", y: 10, size: 2, fill: "#1f2933", anchor: "start" },
+            { text: "0", x: 1, y: 10, size: 0, fill: "#1f2933", anchor: "start" },
+            { text: "0", x: 1, y: 10, size: 2, anchor: "start" },
+          ],
+        }),
+      ],
+    });
+
+    expect(document.querySelector("text")).toBeNull();
+    expect(document.querySelector("[data-element-id]")).toBeNull();
+  });
+});
+
 describe("the scene message", () => {
   it("sends the shapes the list preview draws a Map Line from", () => {
     const map = {
@@ -392,8 +446,10 @@ describe("the scene message", () => {
       penLabel: PEN_LABEL,
     });
 
+    const shape = message.elements[1].shapes[0];
+    if (!("d" in shape)) throw new Error("the Fill drew no path");
     expect(message.elements[1].shapes).toHaveLength(1);
-    expect(message.elements[1].shapes[0]).toMatchObject({
+    expect(shape).toMatchObject({
       stroke: null,
       strokeWidth: 0,
       dash: null,
@@ -401,7 +457,56 @@ describe("the scene message", () => {
       fillRule: "evenodd",
       opacity: 1,
     });
-    expect(message.elements[1].shapes[0].d).toMatch(/^M .+ Z$/);
+    expect(shape.d).toMatch(/^M .+ Z$/);
+  });
+
+  it("carries a Stamp's art and its scale bar's labels", () => {
+    const map = {
+      page: { preset: "portrait" as const, widthMm: 152.4, heightMm: 228.6 },
+      elements: [
+        {
+          id: "marker",
+          kind: "stamp" as const,
+          name: "City",
+          hidden: false,
+          locked: false,
+          stampRef: "base:marker",
+          transform: { x: 100, y: 50, size: 12, rotation: 0 },
+          color: "#1f2933",
+        },
+        {
+          id: "bar",
+          kind: "stamp" as const,
+          name: "Scale",
+          hidden: false,
+          locked: false,
+          stampRef: "base:scale-bar",
+          transform: { x: 100, y: 200, size: 40, rotation: 0 },
+          color: "#1f2933",
+          scale: { unit: "km" as const, span: 1000 },
+        },
+      ],
+    };
+    const message = sceneMessage(map, {
+      selectedId: null,
+      tool: "select",
+      zoom: 1,
+      panX: 0,
+      panY: 0,
+      penLabel: PEN_LABEL,
+    });
+
+    expect(message.elements[0].shapes).toEqual([
+      expect.objectContaining({
+        stroke: null,
+        fill: "#1f2933",
+        transform: "translate(100 50) scale(1.2) translate(-5 -7)",
+      }),
+    ]);
+    const labels = message.elements[1].shapes
+      .filter((shape) => "text" in shape)
+      .map((shape) => ("text" in shape ? shape.text : ""));
+    expect(labels).toEqual(["0", "200 km"]);
   });
 });
 

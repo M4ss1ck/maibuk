@@ -734,7 +734,8 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
 
     move(dx, dy) {
       const target = elementById(selectedId);
-      if (target === undefined || target.locked || target.kind !== "line") return;
+      if (target === undefined || target.locked) return;
+      if (target.kind !== "line" && target.kind !== "stamp") return;
       edit(moveElement(elements, target.id, dx, dy));
     },
 

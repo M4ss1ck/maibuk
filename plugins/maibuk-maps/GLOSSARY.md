@@ -43,7 +43,7 @@ A Fill the author defined, from a texture image or a set of their Stamps to scat
 _Avoid_: custom terrain, custom biome, custom texture
 
 **Stamp**:
-A single picture placed on a Map at one spot, such as a city, a castle, a lone mountain, a compass rose, or a ship.
+A single picture placed on a Map at one spot, such as a city, a castle, a lone mountain, a compass rose, or a ship. It can also be the scale bar, which reads the distance the Map's full width stands for.
 _Avoid_: icon (that is a Plugin UI component), symbol (that is the Symbol inserter), marker, pin, decoration
 
 **Custom Stamp**:

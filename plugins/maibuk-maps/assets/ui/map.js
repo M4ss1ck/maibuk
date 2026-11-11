@@ -24,8 +24,10 @@
    * @typedef {[number, number]} MapPoint
    * @typedef {"ellipse" | "rectangle" | "polygon"} ShapeKind
    * @typedef {"select" | "pencil" | "pen" | "bucket" | "eraser" | ShapeKind} MapTool
-   * @typedef {{ d: string, stroke: string | null, strokeWidth: number, dash: string | null, fill: string | null, fillRule?: "evenodd", opacity: number }} LineShape
-   * @typedef {{ id: string, shapes: LineShape[], hidden: boolean, locked: boolean, selected: boolean }} FrameSceneElement
+   * @typedef {{ d: string, stroke: string | null, strokeWidth: number, dash: string | null, fill: string | null, fillRule?: "evenodd", opacity: number, transform?: string }} LineShape
+   * @typedef {{ text: string, x: number, y: number, size: number, fill: string, anchor: "start" | "middle" | "end", transform?: string }} TextShape
+   * @typedef {LineShape | TextShape} SceneShape
+   * @typedef {{ id: string, shapes: SceneShape[], hidden: boolean, locked: boolean, selected: boolean }} FrameSceneElement
    * @typedef {{ one: string, other: string }} PenDraftLabel
    * @typedef {{ kind: "scene", widthMm: number, heightMm: number, background: string, elements: FrameSceneElement[], tool: MapTool, zoom: number, panX: number, panY: number, penLabel: PenDraftLabel }} FrameSceneMessage
    * @typedef {{ kind: "stroke", points: MapPoint[] }} FrameStrokeMessage
@@ -132,16 +134,51 @@
   }
 
   /**
-   * Reads one render primitive, or null when it has no path to draw. A shape
-   * without a usable stroke colour is a fill; without a usable fill, a stroke.
-   * The Worker sends every shape's width, so one without it is malformed, and
-   * its `fillRule` only when the fill has to cut holes in itself.
+   * Whether a shape is text rather than a path.
+   * @param {SceneShape} shape
+   * @returns {shape is TextShape}
+   */
+  function isTextShape(shape) {
+    return typeof (/** @type {TextShape} */ (shape).text) === "string";
+  }
+
+  /**
+   * Reads one piece of text, or null when it cannot be drawn: one with no
+   * place, no height, or no colour would paint an invisible nothing.
+   * @param {Record<string, unknown>} shape
+   * @returns {TextShape | null}
+   */
+  function readTextShape(shape) {
+    if (!isNumber(shape.x) || !isNumber(shape.y)) return null;
+    if (!isNumber(shape.size) || shape.size <= 0) return null;
+    if (typeof shape.fill !== "string") return null;
+    const anchor =
+      shape.anchor === "start" || shape.anchor === "middle" || shape.anchor === "end"
+        ? shape.anchor
+        : "start";
+    return {
+      text: String(shape.text),
+      x: shape.x,
+      y: shape.y,
+      size: shape.size,
+      fill: shape.fill,
+      anchor,
+      ...(typeof shape.transform === "string" ? { transform: shape.transform } : {}),
+    };
+  }
+
+  /**
+   * Reads one render primitive, or null when it has no path or text to draw. A
+   * path without a usable stroke colour is a fill; without a usable fill, a
+   * stroke. The Worker sends every path's width, so one without it is malformed,
+   * and its `fillRule` only when the fill has to cut holes in itself.
    * @param {unknown} raw
-   * @returns {LineShape | null}
+   * @returns {SceneShape | null}
    */
   function readShape(raw) {
     if (typeof raw !== "object" || raw === null) return null;
     const shape = /** @type {Record<string, unknown>} */ (raw);
+    if (typeof shape.text === "string") return readTextShape(shape);
     if (typeof shape.d !== "string" || shape.d === "") return null;
     if (!isNumber(shape.strokeWidth) || shape.strokeWidth < 0) return null;
     return {
@@ -152,6 +189,7 @@
       fill: typeof shape.fill === "string" ? shape.fill : null,
       ...(shape.fillRule === "evenodd" ? { fillRule: "evenodd" } : {}),
       opacity: isNumber(shape.opacity) ? Math.max(0, Math.min(1, shape.opacity)) : 1,
+      ...(typeof shape.transform === "string" ? { transform: shape.transform } : {}),
     };
   }
 
@@ -192,7 +230,7 @@
         if (typeof raw !== "object" || raw === null) continue;
         const element = /** @type {Record<string, unknown>} */ (raw);
         if (typeof element.id !== "string" || !Array.isArray(element.shapes)) continue;
-        /** @type {LineShape[]} */
+        /** @type {SceneShape[]} */
         const shapes = [];
         for (const rawShape of element.shapes) {
           const shape = readShape(rawShape);
@@ -424,32 +462,54 @@
               data-element-id="${element.id}"
               data-selected="${element.selected ? "true" : undefined}"
             >
-              ${element.shapes.map(
-                (shape) => html`<path
-                  class="map-hit"
-                  d="${shape.d}"
-                  fill-rule="${shape.fillRule ?? undefined}"
-                  data-fill="${shape.fill === null ? undefined : "true"}"
-                />`
-              )}
+              ${element.shapes
+                .filter((shape) => !isTextShape(shape))
+                .map(
+                  (shape) => html`<path
+                    class="map-hit"
+                    d="${shape.d}"
+                    fill-rule="${shape.fillRule ?? undefined}"
+                    data-fill="${shape.fill === null ? undefined : "true"}"
+                    transform="${shape.transform ?? undefined}"
+                  />`
+                )}
               ${
                 element.selected
-                  ? element.shapes.map(
-                      (shape) => html`<path class="map-selection" d="${shape.d}" />`
-                    )
+                  ? element.shapes
+                      .filter((shape) => !isTextShape(shape))
+                      .map(
+                        (shape) => html`<path
+                          class="map-selection"
+                          d="${shape.d}"
+                          transform="${shape.transform ?? undefined}"
+                        />`
+                      )
                   : null
               }
-              ${element.shapes.map(
-                (shape) => html`<path
-                  class="map-line"
-                  d="${shape.d}"
-                  stroke="${shape.stroke ?? "none"}"
-                  stroke-width="${shape.stroke === null ? undefined : n(shape.strokeWidth)}"
-                  fill="${shape.fill ?? "none"}"
-                  fill-rule="${shape.fillRule ?? undefined}"
-                  stroke-dasharray="${shape.dash ?? undefined}"
-                  opacity="${shape.opacity === 1 ? undefined : n(shape.opacity)}"
-                />`
+              ${element.shapes.map((shape) =>
+                isTextShape(shape)
+                  ? html`<text
+                      class="map-line"
+                      x="${n(shape.x)}"
+                      y="${n(shape.y)}"
+                      font-size="${n(shape.size)}"
+                      fill="${shape.fill}"
+                      text-anchor="${shape.anchor}"
+                      transform="${shape.transform ?? undefined}"
+                    >
+                      ${shape.text}
+                    </text>`
+                  : html`<path
+                      class="map-line"
+                      d="${shape.d}"
+                      stroke="${shape.stroke ?? "none"}"
+                      stroke-width="${shape.stroke === null ? undefined : n(shape.strokeWidth)}"
+                      fill="${shape.fill ?? "none"}"
+                      fill-rule="${shape.fillRule ?? undefined}"
+                      stroke-dasharray="${shape.dash ?? undefined}"
+                      opacity="${shape.opacity === 1 ? undefined : n(shape.opacity)}"
+                      transform="${shape.transform ?? undefined}"
+                    />`
               )}
             </g>`
           )}

@@ -115,7 +115,16 @@ describe("pourFill", () => {
         content: { color: "#000000" },
       },
       ring,
-      { id: "stamp", kind: "stamp", name: "Castle", hidden: false, locked: false },
+      {
+        id: "stamp",
+        kind: "stamp",
+        name: "Castle",
+        hidden: false,
+        locked: false,
+        stampRef: "base:marker",
+        transform: { x: 20, y: 20, size: 12, rotation: 0 },
+        color: "#1f2933",
+      },
       { id: "label", kind: "label", name: "The Reach", hidden: false, locked: false },
     ];
 
