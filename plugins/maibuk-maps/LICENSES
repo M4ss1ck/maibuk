@@ -50,3 +50,16 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+Maps Label fonts
+================
+
+The Map Label fonts in assets/ui/fonts/ are unmodified copies of the files in
+the Google Fonts repository (https://github.com/google/fonts, ofl/), each
+licensed under the SIL Open Font License, Version 1.1. Each font's license
+text, with its copyright line and any Reserved Font Name, sits beside it:
+
+- IM FELL English: IMFeENrm28P.ttf, OFL-IMFellEnglish.txt
+- Cinzel: Cinzel-wght.ttf, OFL-Cinzel.txt
+- Uncial Antiqua: UncialAntiqua-Regular.ttf, OFL-UncialAntiqua.txt
+- MedievalSharp: MedievalSharp.ttf, OFL-MedievalSharp.txt
