@@ -16,7 +16,9 @@ import type {
   LineStyleId,
   MapDocument,
   MapElement,
+  MapFillContent,
   MapFillElement,
+  MapFillScatter,
   MapLineElement,
   MapPoint,
   MapShape,
@@ -37,6 +39,7 @@ import {
   isStampScaleUnit,
   newStamp,
   normalizeShape,
+  normalizeSoftEdge,
   randomMapId,
 } from "./maps";
 import { createAutosave } from "./autosave";
@@ -60,6 +63,12 @@ import {
 import { createHistory } from "./history";
 import { format, translate, type MapsKey } from "./i18n";
 import {
+  DEFAULT_SCATTER_SPACING_MM,
+  MAX_SCATTER_SPACING_MM,
+  MIN_SCATTER_SPACING_MM,
+  newScatterSeed,
+} from "./scatter";
+import {
   addElement,
   canMove,
   moveElement,
@@ -78,6 +87,7 @@ import {
   stampTakesColour,
   type BaseStampId,
 } from "./stamps";
+import { isTextureId, type TextureId } from "./textures";
 
 /** How much one zoom step changes the view. */
 const ZOOM_STEP = 1.25;
@@ -90,6 +100,15 @@ export const PAN_STEP_MM = 20;
 export const DEFAULT_ROUGHEN_STRENGTH_MM = 1.5;
 export const MIN_ROUGHEN_STRENGTH_MM = 0.5;
 export const MAX_ROUGHEN_STRENGTH_MM = 5;
+
+/**
+ * How far a Soft Edge fades out, in page millimetres: the amount turning one on
+ * picks, the range the panel offers, and one step of its slider.
+ */
+export const DEFAULT_SOFT_EDGE_MM = 2;
+export const MIN_SOFT_EDGE_MM = 0.5;
+export const MAX_SOFT_EDGE_MM = 10;
+export const SOFT_EDGE_STEP_MM = 0.5;
 
 /** The catalog key of the line name each Shape kind takes (#747). */
 const SHAPE_NAME_KEYS: Readonly<Record<ShapeKind, MapsKey>> = {
@@ -123,6 +142,12 @@ export interface MapEditorSnapshot {
   selectedFillColor: string | null;
   /** The selected Map Line's style, or null when the selection is not a Map Line. */
   selectedLineStyle: LineStyleId | null;
+  /** How far the selected Fill's or Map Line's edge fades out, or null when it is sharp. */
+  selectedSoftEdge: number | null;
+  /** The selected Fill's texture, or null when it has none. */
+  selectedFillTexture: TextureId | null;
+  /** The Stamps the selected Fill scatters, or null when it scatters none. */
+  selectedFillScatter: MapFillScatter | null;
   /** Whether the selected Map Line encloses Fills, or null when it is not a Map Line. */
   selectedEnclosesFills: boolean | null;
   /** The selected Map Line's exact Shape, or null when it carries none. */
@@ -162,6 +187,22 @@ export interface MapEditor {
   setElementFillColor(id: string, color: string): void;
   /** Sets whether one unlocked Map Line encloses Fills. */
   setEnclosesFills(id: string, enclosesFills: boolean): void;
+  /**
+   * Fades the edge of one unlocked Fill or Map Line out by `softEdgeMm`, or
+   * makes it sharp again with null.
+   */
+  setSoftEdge(id: string, softEdgeMm: number | null): void;
+  /** Paints one unlocked Fill's area with a texture, or with none. */
+  setFillTexture(id: string, texture: string | null): void;
+  /**
+   * Scatters one base Stamp over one unlocked Fill's area, with a fresh seed
+   * when it scatters for the first time, or clears the scatter with null.
+   */
+  setFillScatter(id: string, stampId: string | null): void;
+  /** Sets how far apart one unlocked Fill's scattered Stamps sit, in millimetres. */
+  setFillScatterSpacing(id: string, spacingMm: number): void;
+  /** Reseeds one unlocked Fill's scatter, so its Stamps land in new spots. */
+  reseedFillScatter(id: string): void;
   /** Sets how hard Roughen pushes the selected line, in page millimetres. */
   setRoughenStrength(strengthMm: number): void;
   /** Roughens the selected unlocked Map Line or Area Fill as one undo step. */
@@ -228,6 +269,28 @@ function normalizeRotation(rotation: number): number {
   return turned < 0 ? turned + 360 : turned;
 }
 
+/** How far a Fill's or Map Line's edge fades out, or null when it ends in a line. */
+function softEdgeAmount(element: MapLineElement | MapFillElement): number | null {
+  const softEdge = element.softEdge;
+  return softEdge === undefined || softEdge <= 0 ? null : softEdge;
+}
+
+/** A Fill's content with one kind left out, which the last-kind rule re-checks. */
+function contentWithout(content: MapFillContent, kind: "texture" | "scatter"): MapFillContent {
+  const next: MapFillContent = {};
+  if (content.color !== undefined) next.color = content.color;
+  if (kind !== "texture" && content.texture !== undefined) next.texture = content.texture;
+  if (kind !== "scatter" && content.scatter !== undefined) next.scatter = content.scatter;
+  return next;
+}
+
+/** Whether a Fill's content covers nothing, which the model refuses to store. */
+function coversNothing(content: MapFillContent): boolean {
+  return (
+    content.color === undefined && content.texture === undefined && content.scatter === undefined
+  );
+}
+
 export function createMapEditor(options: MapEditorOptions): MapEditor {
   let doc = options.doc;
   let elements: MapElement[] = doc.elements;
@@ -262,6 +325,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     const selectedLine = selected !== undefined && selected.kind === "line" ? selected : null;
     const selectedFill = selected !== undefined && selected.kind === "fill" ? selected : null;
     const selectedStamp = selected !== undefined && selected.kind === "stamp" ? selected : null;
+    const faded = selectedLine ?? selectedFill;
     return {
       doc,
       elements,
@@ -278,6 +342,9 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       selectedIsAreaFill: selectedFill !== null && selectedFill.outline !== undefined,
       selectedFillColor: selectedFill === null ? null : (selectedFill.content.color ?? null),
       selectedLineStyle: selectedLine === null ? null : selectedLine.style,
+      selectedSoftEdge: faded === null ? null : softEdgeAmount(faded),
+      selectedFillTexture: selectedFill === null ? null : (selectedFill.content.texture ?? null),
+      selectedFillScatter: selectedFill === null ? null : (selectedFill.content.scatter ?? null),
       selectedEnclosesFills: selectedLine === null ? null : selectedLine.enclosesFills,
       selectedShape: selectedLine === null ? null : (selectedLine.shape ?? null),
       selectedConvertedFrom: selectedLine === null ? null : (selectedLine.convertedFrom ?? null),
@@ -781,6 +848,112 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       edit(
         elements.map((element) =>
           element.id === id && element.kind === "line" ? { ...element, enclosesFills } : element
+        )
+      );
+    },
+
+    setSoftEdge(id, softEdgeMm) {
+      const target = elementById(id);
+      if (target === undefined || target.locked) return;
+      if (target.kind !== "line" && target.kind !== "fill") return;
+      // Absent and 0 draw the same sharp edge, so the model keeps one of them
+      // and a value outside the slider's range is brought into it.
+      const before = target.softEdge ?? 0;
+      const amount =
+        softEdgeMm === null || !Number.isFinite(softEdgeMm) || softEdgeMm <= 0
+          ? 0
+          : clamp(softEdgeMm, MIN_SOFT_EDGE_MM, MAX_SOFT_EDGE_MM);
+      if (amount === before) return;
+      edit(
+        elements.map((element) =>
+          element.id === id && (element.kind === "line" || element.kind === "fill")
+            ? normalizeSoftEdge({ ...element, softEdge: amount })
+            : element
+        )
+      );
+    },
+
+    setFillTexture(id, texture) {
+      const target = elementById(id);
+      if (target === undefined || target.kind !== "fill" || target.locked) return;
+      if (texture !== null && !isTextureId(texture)) return;
+      if (target.content.texture === (texture ?? undefined)) return;
+      const content =
+        texture === null
+          ? contentWithout(target.content, "texture")
+          : { ...target.content, texture };
+      // A Fill covers something at all times: the last kind stays.
+      if (coversNothing(content)) return;
+      edit(
+        elements.map((element) =>
+          element.id === id && element.kind === "fill" ? { ...element, content } : element
+        )
+      );
+    },
+
+    setFillScatter(id, stampId) {
+      const target = elementById(id);
+      if (target === undefined || target.kind !== "fill" || target.locked) return;
+      const before = target.content.scatter;
+      if (stampId === null) {
+        if (before === undefined) return;
+        // A Fill covers something at all times: the last kind stays.
+        const content = contentWithout(target.content, "scatter");
+        if (coversNothing(content)) return;
+        edit(
+          elements.map((element) =>
+            element.id === id && element.kind === "fill" ? { ...element, content } : element
+          )
+        );
+        return;
+      }
+      if (!isBaseStampId(stampId)) return;
+      const stamps = [baseStampRef(stampId)];
+      // The first scatter takes a fresh seed, so no two Fills scatter alike.
+      const scatter: MapFillScatter = {
+        stamps,
+        spacing: before?.spacing ?? DEFAULT_SCATTER_SPACING_MM,
+        seed: before?.seed ?? newScatterSeed(),
+      };
+      if (before !== undefined && before.stamps.length === 1 && before.stamps[0] === stamps[0]) {
+        return;
+      }
+      edit(
+        elements.map((element) =>
+          element.id === id && element.kind === "fill"
+            ? { ...element, content: { ...element.content, scatter } }
+            : element
+        )
+      );
+    },
+
+    setFillScatterSpacing(id, spacingMm) {
+      const target = elementById(id);
+      if (target === undefined || target.kind !== "fill" || target.locked) return;
+      const scatter = target.content.scatter;
+      if (scatter === undefined || !Number.isFinite(spacingMm)) return;
+      const spacing = clamp(spacingMm, MIN_SCATTER_SPACING_MM, MAX_SCATTER_SPACING_MM);
+      if (spacing === scatter.spacing) return;
+      edit(
+        elements.map((element) =>
+          element.id === id && element.kind === "fill"
+            ? { ...element, content: { ...element.content, scatter: { ...scatter, spacing } } }
+            : element
+        )
+      );
+    },
+
+    reseedFillScatter(id) {
+      const target = elementById(id);
+      if (target === undefined || target.kind !== "fill" || target.locked) return;
+      const scatter = target.content.scatter;
+      if (scatter === undefined) return;
+      const reseeded: MapFillScatter = { ...scatter, seed: newScatterSeed() };
+      edit(
+        elements.map((element) =>
+          element.id === id && element.kind === "fill"
+            ? { ...element, content: { ...element.content, scatter: reseeded } }
+            : element
         )
       );
     },

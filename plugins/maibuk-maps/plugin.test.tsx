@@ -23,6 +23,7 @@ import { useShortcuts } from "@/lib/shortcuts";
 import { createPluginClient, type PluginClient, type PluginFrame } from "@/plugin-sdk";
 import { PLUGIN_COMMAND_RUN_REQUEST, PLUGIN_MIGRATE_DATA_REQUEST } from "@/plugin-sdk/protocol";
 import { servePluginUi } from "@/plugin-sdk/ui-serve";
+import { DEFAULT_SOFT_EDGE_MM, SOFT_EDGE_STEP_MM } from "./editor";
 import en from "./locales/runtime/en.json";
 import es from "./locales/runtime/es.json";
 import { format } from "./i18n";
@@ -32,6 +33,7 @@ import {
   mapKey,
   type MapDocument,
   type MapElement,
+  type MapFillContent,
   type MapFillElement,
   type MapIndexEntry,
   type MapLineElement,
@@ -46,6 +48,7 @@ import {
   startMaps,
   type MapsRuntime,
 } from "./runtime";
+import { DEFAULT_SCATTER_SPACING_MM } from "./scatter";
 import { smoothStroke } from "./scene";
 import { linePath, roughen, seedFor, shapeOutline } from "./geometry";
 
@@ -254,6 +257,29 @@ function line(
   };
 }
 
+/** An Area Fill covering its own square outline, which the properties panel edits. */
+function areaFill(content: MapFillContent): MapFillElement {
+  return {
+    id: "f1",
+    kind: "fill",
+    name: "Fill 1",
+    hidden: false,
+    locked: false,
+    anchor: [50, 50],
+    outline: {
+      points: [
+        [10, 10],
+        [90, 10],
+        [90, 90],
+        [10, 90],
+      ],
+      curves: [false, false, false, false],
+      roughened: false,
+    },
+    content,
+  };
+}
+
 /** One Map, `m1`, holding `elements`. */
 function mapStorage(elements: MapElement[]): Map<string, unknown> {
   const storage = new Map<string, unknown>([[INDEX_KEY, [entry("m1", "Coast", "b1", 30)]]]);
@@ -351,6 +377,50 @@ function linePoints(storage: Map<string, unknown>, index = 0): [number, number][
 
 async function tabTo(user: User, element: HTMLElement, max = 40): Promise<void> {
   for (let i = 0; i < max && document.activeElement !== element; i++) await user.tab();
+}
+
+/** Tabs back into the Elements list, so a row can be picked again. */
+async function backToRows(user: User): Promise<HTMLElement> {
+  const list = screen.getByRole("listbox", { name: en["elements.label"] });
+  for (let i = 0; i < 60 && !list.contains(document.activeElement); i++)
+    await user.tab({ shift: true });
+  return list;
+}
+
+/** The Fill the open editor holds. */
+function fillNow(runtime: MapsRuntime): MapFillElement {
+  const element = runtime.editor
+    ?.getSnapshot()
+    .elements.find((candidate): candidate is MapFillElement => candidate.kind === "fill");
+  if (element === undefined) throw new Error("no Fill");
+  return element;
+}
+
+/** The Map Line the open editor holds. */
+function lineNow(runtime: MapsRuntime): MapLineElement {
+  const element = runtime.editor
+    ?.getSnapshot()
+    .elements.find((candidate): candidate is MapLineElement => candidate.kind === "line");
+  if (element === undefined) throw new Error("no Map Line");
+  return element;
+}
+
+/** The Fill the stored Map holds. */
+function storedFill(storage: Map<string, unknown>): MapFillElement {
+  const element = storedMap(storage).elements.find(
+    (candidate): candidate is MapFillElement => candidate.kind === "fill"
+  );
+  if (element === undefined) throw new Error("no stored Fill");
+  return element;
+}
+
+/** The Map Line the stored Map holds. */
+function storedLine(storage: Map<string, unknown>): MapLineElement {
+  const element = storedMap(storage).elements.find(
+    (candidate): candidate is MapLineElement => candidate.kind === "line"
+  );
+  if (element === undefined) throw new Error("no stored Map Line");
+  return element;
 }
 
 /** Focuses the Tool radio group and arrows to `name`, from wherever it stands. */
@@ -2199,6 +2269,151 @@ describe("Map editor page", () => {
         expect((runtime.editor?.getSnapshot().elements[0] as MapStampElement).scale?.span).toBe(1)
       );
       expect(span).toHaveValue("1");
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("turns Soft Edge on a Fill and a Map Line by keyboard, and fades it further with the arrows", async () => {
+    const storage = mapStorage([
+      areaFill({ color: DEFAULT_FILL_COLOR }),
+      line(
+        "ring",
+        "Ring",
+        [
+          [20, 20],
+          [70, 20],
+          [70, 70],
+        ],
+        { closed: true, curves: [false, false, false] }
+      ),
+    ]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await selectRow(user, "Fill 1");
+
+      const toggle = await screen.findByRole("switch", { name: en["properties.softEdge"] });
+      await tabTo(user, toggle, 60);
+      expect(toggle).toHaveFocus();
+      await user.keyboard(" ");
+      await waitFor(() => expect(fillNow(runtime).softEdge).toBe(DEFAULT_SOFT_EDGE_MM));
+
+      const amount = await screen.findByRole("slider", { name: en["properties.softEdgeAmount"] });
+      await tabTo(user, amount, 10);
+      await user.keyboard("{ArrowRight}");
+      await waitFor(() =>
+        expect(fillNow(runtime).softEdge).toBe(DEFAULT_SOFT_EDGE_MM + SOFT_EDGE_STEP_MM)
+      );
+      await runtime.editor?.flush();
+      expect(storedFill(storage).softEdge).toBe(DEFAULT_SOFT_EDGE_MM + SOFT_EDGE_STEP_MM);
+
+      // A Map Line takes the same two controls, and its own amount: the panel
+      // shows the Line's value, not the one the Fill left behind.
+      await backToRows(user);
+      await selectRow(user, "Ring");
+      const lineToggle = await screen.findByRole("switch", { name: en["properties.softEdge"] });
+      await tabTo(user, lineToggle, 60);
+      await user.keyboard(" ");
+      await waitFor(() => expect(lineNow(runtime).softEdge).toBe(DEFAULT_SOFT_EDGE_MM));
+
+      const lineAmount = await screen.findByRole("slider", {
+        name: en["properties.softEdgeAmount"],
+      });
+      await tabTo(user, lineAmount, 10);
+      expect(lineAmount).toHaveFocus();
+      // The Line's amount is its own: one step down lands on 1.5, not on the
+      // 2 the Fill's slider had moved to.
+      await user.keyboard("{ArrowLeft}");
+      await waitFor(() =>
+        expect(lineNow(runtime).softEdge).toBe(DEFAULT_SOFT_EDGE_MM - SOFT_EDGE_STEP_MM)
+      );
+      await runtime.editor?.flush();
+      expect(storedLine(storage).softEdge).toBe(DEFAULT_SOFT_EDGE_MM - SOFT_EDGE_STEP_MM);
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("picks a texture and a scatter by keyboard, respaces and reseeds it, and clears one kind", async () => {
+    const storage = mapStorage([areaFill({ color: DEFAULT_FILL_COLOR })]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await selectRow(user, "Fill 1");
+
+      await pickOption(user, en["properties.fillTexture"], en["properties.texture.grass"]);
+      await waitFor(() => expect(fillNow(runtime).content.texture).toBe("grass"));
+
+      // A Fill that first takes a scatter picks a Stamp from the base picker and
+      // starts from a fresh seed.
+      await pickOption(user, en["properties.fillScatter"], en["stamp.castle"]);
+      await waitFor(() =>
+        expect(fillNow(runtime).content.scatter?.stamps).toEqual(["base:castle"])
+      );
+      const firstSeed = fillNow(runtime).content.scatter?.seed ?? 0;
+      expect(firstSeed).toBeGreaterThan(0);
+      expect(fillNow(runtime).content.scatter?.spacing).toBe(DEFAULT_SCATTER_SPACING_MM);
+
+      const spacing = await screen.findByRole("slider", { name: en["properties.scatterSpacing"] });
+      await tabTo(user, spacing, 60);
+      await user.keyboard("{ArrowRight}");
+      await waitFor(() =>
+        expect(fillNow(runtime).content.scatter?.spacing).toBe(DEFAULT_SCATTER_SPACING_MM + 1)
+      );
+      expect(fillNow(runtime).content.scatter?.seed).toBe(firstSeed);
+
+      // Reseed keeps the Stamp and the spacing, and moves the Stamps.
+      const reseed = await screen.findByRole("button", { name: en["properties.reseed"] });
+      await tabTo(user, reseed, 10);
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(fillNow(runtime).content.scatter?.seed).not.toBe(firstSeed));
+
+      // The colour and the scatter still cover the Fill, so the texture may go.
+      await backToRows(user);
+      await pickOption(user, en["properties.fillTexture"], en["properties.none"]);
+      await waitFor(() => expect(fillNow(runtime).content.texture).toBeUndefined());
+      await runtime.editor?.flush();
+      expect(storedFill(storage).content).toMatchObject({
+        color: DEFAULT_FILL_COLOR,
+        scatter: { stamps: ["base:castle"] },
+      });
+      expect(storedFill(storage).content.texture).toBeUndefined();
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("refuses to remove the last kind a Fill has, from the keyboard", async () => {
+    const storage = mapStorage([areaFill({ texture: "hatching" })]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await selectRow(user, "Fill 1");
+
+      await pickOption(user, en["properties.fillTexture"], en["properties.none"]);
+
+      // A pick the Worker refuses leaves the Fill as it was: the scatter that
+      // lands afterwards proves the refusal was answered, not still in flight.
+      await backToRows(user);
+      await pickOption(user, en["properties.fillScatter"], en["stamp.castle"]);
+      await waitFor(() =>
+        expect(fillNow(runtime).content.scatter?.stamps).toEqual(["base:castle"])
+      );
+
+      expect(fillNow(runtime).content.texture).toBe("hatching");
+      expect(screen.getByLabelText(en["properties.fillTexture"])).toHaveTextContent(
+        en["properties.texture.hatching"]
+      );
 
       await page.unmount();
     } finally {

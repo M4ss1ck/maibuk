@@ -7,7 +7,13 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { createMapEditor, type MapEditor } from "./editor";
+import {
+  DEFAULT_SOFT_EDGE_MM,
+  MAX_SOFT_EDGE_MM,
+  MIN_SOFT_EDGE_MM,
+  createMapEditor,
+  type MapEditor,
+} from "./editor";
 import { parseFrameMessage } from "./frame-protocol";
 import { shapeOutline } from "./geometry";
 import { smoothStroke } from "./scene";
@@ -22,12 +28,19 @@ import {
   MIN_STAMP_SIZE_MM,
   type MapDocument,
   type MapElement,
+  type MapFillContent,
   type MapFillElement,
   type MapLineElement,
+  type MapPoint,
   type MapShape,
   type MapStampElement,
   type StampScaleUnit,
 } from "./maps";
+import {
+  DEFAULT_SCATTER_SPACING_MM,
+  MAX_SCATTER_SPACING_MM,
+  MIN_SCATTER_SPACING_MM,
+} from "./scatter";
 
 /** An editor over a square 200 by 100 mm Map, with a store that drops its saves. */
 function openEditor(elements: MapElement[] = []) {
@@ -1389,5 +1402,183 @@ describe("dragging an Element with the Select tool", () => {
     expect(editor.getSnapshot().canUndo).toBe(false);
     await editor.flush();
     expect(saves()).toBe(0);
+  });
+});
+
+/** A Bucket Fill at the middle of a closed 80 mm square, which each property test starts from. */
+function bucketFill(
+  content: MapFillContent = { color: DEFAULT_FILL_COLOR }
+): [MapFillElement, MapLineElement] {
+  const fill: MapFillElement = {
+    id: "fill",
+    kind: "fill",
+    name: "Fill 1",
+    hidden: false,
+    locked: false,
+    anchor: [50, 50],
+    content,
+  };
+  return [fill, squareLine("ring", "Ring", 10, 10, 80)];
+}
+
+/** The same Fill, moved to `anchor` under another id: one Fill per face. */
+function fillAt(id: string, anchor: MapPoint): MapFillElement {
+  return { ...bucketFill()[0], id, anchor };
+}
+
+/** The one Fill an editor holds. */
+function onlyFill(editor: MapEditor): MapFillElement {
+  const [fill] = fills(editor);
+  if (fill === undefined) throw new Error("no Fill");
+  return fill;
+}
+
+describe("Soft Edge on a Fill and a Map Line", () => {
+  it("fades a Fill's edge as one undo step, and sharpens it again", () => {
+    const { editor } = openEditor(bucketFill());
+    editor.select("fill");
+    expect(editor.getSnapshot().selectedSoftEdge).toBeNull();
+
+    editor.setSoftEdge("fill", DEFAULT_SOFT_EDGE_MM);
+    expect(onlyFill(editor).softEdge).toBe(DEFAULT_SOFT_EDGE_MM);
+    expect(editor.getSnapshot().selectedSoftEdge).toBe(DEFAULT_SOFT_EDGE_MM);
+    expect(editor.getSnapshot().canUndo).toBe(true);
+
+    editor.undo();
+    expect(editor.getSnapshot().selectedSoftEdge).toBeNull();
+    expect(onlyFill(editor).softEdge).toBeUndefined();
+
+    // Turning it off stores one sharp edge, which the model keeps as absent.
+    editor.redo();
+    editor.setSoftEdge("fill", null);
+    expect(onlyFill(editor).softEdge).toBeUndefined();
+    expect(editor.getSnapshot().selectedSoftEdge).toBeNull();
+  });
+
+  it("fades a Map Line and brings an amount the slider cannot reach inside it", () => {
+    const { editor } = openEditor([squareLine("ring", "Ring", 10, 10, 80)]);
+    editor.select("ring");
+
+    editor.setSoftEdge("ring", 40);
+    expect(onlyLine(editor).softEdge).toBe(MAX_SOFT_EDGE_MM);
+    expect(editor.getSnapshot().selectedSoftEdge).toBe(MAX_SOFT_EDGE_MM);
+
+    editor.setSoftEdge("ring", 0.1);
+    expect(onlyLine(editor).softEdge).toBe(MIN_SOFT_EDGE_MM);
+    expect(editor.getSnapshot().selectedSoftEdge).toBe(MIN_SOFT_EDGE_MM);
+  });
+
+  it("keeps a locked Element's edge sharp and takes no step for it", () => {
+    const { editor } = openEditor([{ ...squareLine("ring", "Ring", 10, 10, 80), locked: true }]);
+
+    editor.setSoftEdge("ring", 3);
+    editor.setSoftEdge("ghost", 3);
+
+    expect(onlyLine(editor).softEdge).toBeUndefined();
+    expect(editor.getSnapshot().canUndo).toBe(false);
+  });
+});
+
+describe("a Fill's texture and scatter", () => {
+  it("paints a texture over the colour, and clears it while another kind stays", () => {
+    const { editor } = openEditor(bucketFill());
+    editor.select("fill");
+
+    editor.setFillTexture("fill", "grass");
+    expect(onlyFill(editor).content).toEqual({ color: DEFAULT_FILL_COLOR, texture: "grass" });
+    expect(editor.getSnapshot().selectedFillTexture).toBe("grass");
+
+    // A texture this build does not draw is not a pick.
+    editor.setFillTexture("fill", "lava");
+    expect(onlyFill(editor).content.texture).toBe("grass");
+
+    editor.setFillTexture("fill", null);
+    expect(onlyFill(editor).content).toEqual({ color: DEFAULT_FILL_COLOR });
+    expect(editor.getSnapshot().selectedFillTexture).toBeNull();
+
+    editor.undo();
+    expect(onlyFill(editor).content.texture).toBe("grass");
+  });
+
+  it("refuses to leave a Fill covering nothing", () => {
+    const { editor } = openEditor(bucketFill({ texture: "hatching" }));
+
+    editor.setFillTexture("fill", null);
+
+    expect(onlyFill(editor).content).toEqual({ texture: "hatching" });
+    expect(editor.getSnapshot().canUndo).toBe(false);
+  });
+
+  it("scatters a Stamp at the default spacing and with a fresh seed", () => {
+    const { editor } = openEditor(bucketFill());
+    editor.select("fill");
+
+    editor.setFillScatter("fill", "castle");
+
+    const scatter = onlyFill(editor).content.scatter;
+    expect(scatter?.stamps).toEqual(["base:castle"]);
+    expect(scatter?.spacing).toBe(DEFAULT_SCATTER_SPACING_MM);
+    expect(scatter?.seed).toBeGreaterThan(0);
+    expect(editor.getSnapshot().selectedFillScatter).toEqual(scatter);
+
+    // Picking the Stamp it already scatters keeps the seed, so nothing moves.
+    editor.setFillScatter("fill", "castle");
+    expect(onlyFill(editor).content.scatter?.seed).toBe(scatter?.seed);
+  });
+
+  it("gives each Fill that starts scattering its own seed", () => {
+    const { editor } = openEditor([
+      fillAt("one", [30, 30]),
+      squareLine("left", "Left", 10, 10, 40),
+      fillAt("two", [130, 30]),
+      squareLine("right", "Right", 110, 10, 40),
+    ]);
+    const scatterOf = (id: string) => {
+      const element = editor.getSnapshot().elements.find((candidate) => candidate.id === id);
+      return element?.kind === "fill" ? element.content.scatter : undefined;
+    };
+
+    editor.setFillScatter("one", "castle");
+    editor.setFillScatter("two", "tower");
+
+    expect(scatterOf("one")?.seed).toBeGreaterThan(0);
+    expect(scatterOf("two")?.seed).toBeGreaterThan(0);
+    expect(scatterOf("one")?.seed).not.toBe(scatterOf("two")?.seed);
+  });
+
+  it("reseeds and respaces a scatter, then clears it while the colour stays", () => {
+    const { editor } = openEditor(bucketFill());
+    editor.select("fill");
+    editor.setFillScatter("fill", "castle");
+    const first = onlyFill(editor).content.scatter;
+
+    editor.reseedFillScatter("fill");
+    expect(onlyFill(editor).content.scatter?.seed).not.toBe(first?.seed);
+    expect(onlyFill(editor).content.scatter?.stamps).toEqual(["base:castle"]);
+
+    editor.setFillScatterSpacing("fill", 40);
+    expect(onlyFill(editor).content.scatter?.spacing).toBe(MAX_SCATTER_SPACING_MM);
+    editor.setFillScatterSpacing("fill", 0.1);
+    expect(onlyFill(editor).content.scatter?.spacing).toBe(MIN_SCATTER_SPACING_MM);
+
+    editor.setFillScatter("fill", null);
+    expect(onlyFill(editor).content).toEqual({ color: DEFAULT_FILL_COLOR });
+  });
+
+  it("refuses to clear the only kind a Fill has, and leaves a locked Fill's content alone", () => {
+    const scatter = { stamps: ["base:castle"], spacing: DEFAULT_SCATTER_SPACING_MM, seed: 7 };
+    const { editor } = openEditor(bucketFill({ scatter }));
+
+    editor.setFillScatter("fill", null);
+
+    expect(onlyFill(editor).content).toEqual({ scatter });
+    expect(editor.getSnapshot().canUndo).toBe(false);
+
+    const [fill, ring] = bucketFill();
+    const locked = openEditor([{ ...fill, locked: true }, ring]).editor;
+    locked.setFillTexture("fill", "grass");
+    locked.setFillScatter("fill", "castle");
+    expect(onlyFill(locked).content).toEqual({ color: DEFAULT_FILL_COLOR });
+    expect(locked.getSnapshot().canUndo).toBe(false);
   });
 });

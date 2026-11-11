@@ -653,7 +653,7 @@ function normalizeLine(line: MapLineElement): MapLineElement {
  * An Element stored with a Soft Edge of 0 reads back sharp, which is what it
  * draws: absent and 0 are the same edge, so one of them is enough to store.
  */
-function normalizeSoftEdge<T extends MapLineElement | MapFillElement>(element: T): T {
+export function normalizeSoftEdge<T extends MapLineElement | MapFillElement>(element: T): T {
   if (element.softEdge === undefined || element.softEdge > 0) return element;
   const sharp = { ...element };
   delete sharp.softEdge;

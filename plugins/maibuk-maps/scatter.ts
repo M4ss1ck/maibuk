@@ -19,6 +19,22 @@ import type { MapPoint } from "./maps";
 /** How many spots the sampler tries around each point before it accepts the point as placed. */
 const SCATTER_TRIES = 10;
 
+/** The spacing a Fill's scatter starts with, and the range the properties panel offers, in millimetres. */
+export const DEFAULT_SCATTER_SPACING_MM = 5;
+export const MIN_SCATTER_SPACING_MM = 1;
+export const MAX_SCATTER_SPACING_MM = 30;
+
+/**
+ * The seed a Fill takes when it first scatters: a fresh value, so two Fills
+ * never scatter the same way. It is never 0, which no seed needs and which
+ * reads as a Fill that never picked one.
+ */
+export function newScatterSeed(): number {
+  const bytes = new Uint32Array(1);
+  crypto.getRandomValues(bytes);
+  return (bytes[0] % 0x7fff_ffff) + 1;
+}
+
 /** One area's box: the smallest rectangle that holds every ring. */
 interface AreaBounds {
   minX: number;
