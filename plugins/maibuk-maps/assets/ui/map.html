@@ -58,6 +58,17 @@
       #surface svg[data-tool="select"] {
         cursor: default;
       }
+      /* With Select, an Element a drag can move shows the move cursor (#766),
+         and the one being dragged keeps it while it follows the pointer. A
+         drag never selects the Stamps' label text. */
+      #surface svg[data-tool="select"] g[data-movable="true"],
+      #surface svg[data-tool="select"] g[data-dragging="true"] {
+        cursor: move;
+      }
+      #surface svg {
+        user-select: none;
+        -webkit-user-select: none;
+      }
 
       /* A Map Line is page ink: its width is page millimetres, so zooming in
          shows a thicker line, exactly as the Maps list preview does. The Map's

@@ -1,6 +1,7 @@
-// Pointer gestures for the Maps editor's drawing Frame (#745, #746, #747): a
-// straight Pencil stroke, an Eraser drag across the Frame's svg, and a Shape
-// tool's drag.
+// Pointer gestures for the Maps editor's drawing Frame (#745, #746, #747,
+// #766): a straight Pencil stroke, an Eraser drag across the Frame's svg, a
+// Shape tool's drag, and a Select drag that moves an Element. Moving has a
+// keyboard path (the arrow Commands); the drag is the pointer form of it.
 //
 // Drawing a Map Line has no keyboard path in this slice (the keyboard acts on a
 // selected Map Line: the move Commands, the Elements list, undo), and the E2E
@@ -166,4 +167,43 @@ export async function eraseAcross(
     );
   }
   await page.mouse.up();
+}
+
+/**
+ * Drags with the Select tool from one page point to another, in millimetres:
+ * the pointer form of the arrow move Commands (#766). The caller waits for the
+ * scene with `svg[data-tool="select"]` and reads `from` off the Element it
+ * means to move, a point on its ink. `constrain` holds Shift for the whole
+ * drag. `during` runs with the button still down on the drag's last point,
+ * where the live preview is worth a screenshot, or where Escape cancels it.
+ */
+export async function dragPagePoint(
+  page: Page,
+  surface: Locator,
+  from: PagePoint,
+  to: PagePoint,
+  { constrain = false, during }: { constrain?: boolean; during?: () => Promise<void> } = {}
+): Promise<void> {
+  const box = await surface.boundingBox();
+  if (box === null) throw new Error("the Frame's drawing surface has no box to draw on");
+  const viewBox = await surface.getAttribute("viewBox");
+  if (viewBox === null) throw new Error("the Frame's drawing surface has no viewBox");
+  const toScreen = fitToBox(box, viewBox.split(" ").map(Number));
+  const start = toScreen(from);
+  const end = toScreen(to);
+  if (constrain) await page.keyboard.down("Shift");
+  try {
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    for (let step = 1; step <= STEPS; step += 1) {
+      await page.mouse.move(
+        start.x + ((end.x - start.x) * step) / STEPS,
+        start.y + ((end.y - start.y) * step) / STEPS
+      );
+    }
+    if (during !== undefined) await during();
+    await page.mouse.up();
+  } finally {
+    if (constrain) await page.keyboard.up("Shift");
+  }
 }

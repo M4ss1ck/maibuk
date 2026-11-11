@@ -2932,6 +2932,29 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-maps-move",
+    area: "plugins",
+    workflow:
+      "The Maps editor's Select drag (#766): with Select (its key, v), a press on a Map Line, Shape, or Stamp in the drawing Frame picks it, and a drag past a small threshold moves it live in the Frame; the release commits the move as one undo step through the same path as the arrow move Commands, so a Fill poured into a placed Rectangle follows it. Shift keeps the drag straight across or down, Escape with the button still down puts the Element back and leaves no undo step, and a press that never travels only selects. The drag is a pointer gesture by nature (documented exemption, `support/frame-stroke.ts`); its keyboard form is the arrow move Commands, which still move the dragged Stamp; asserts: the Rectangle's and its Fill's drawn corners after the drag and after Mod+Z, the live drag marker, the Shift drag's unchanged top, the cancelled drag's unchanged corner and the single undo it leaves, the Stamp's selection and its landing point; persists: yes (each committed drag is one autosaving, undoable edit)",
+    edges: [
+      "A Select drag moves a Rectangle and its Fill, and Mod+Z puts both back in one step",
+      "Shift keeps the drag straight, and Escape during the drag puts the Element back with no undo step",
+      "A press on a Stamp only selects it, a drag moves it, and the arrow Commands still move it",
+    ],
+    terms: ["Command", "Shortcut"],
+    shortcuts: [
+      "plugin.maibuk-maps.selectTool",
+      "plugin.maibuk-maps.rectangleTool",
+      "plugin.maibuk-maps.bucketTool",
+      "plugin.maibuk-maps.insertTool",
+      "plugin.maibuk-maps.moveRightFar",
+    ],
+    routes: ["/plugin/:pluginId/:pageId"],
+    fixture: "bookShelf",
+    tags: ["sandbox"],
+    status: "accepted",
+  },
+  {
     id: "plugins-maps-frame-keys",
     area: "plugins",
     workflow:

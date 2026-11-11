@@ -1,9 +1,10 @@
 // @ts-check
-/* The Map Frame's drawing surface (#745, #746, #748, #749). The Frame's only
-   host channel is `window.maibuk.port`: the Worker sends the whole `scene` on
-   every change and when the Frame connects, and the Frame answers a finished
+/* The Map Frame's drawing surface (#745, #746, #748, #749, #766). The Frame's
+   only host channel is `window.maibuk.port`: the Worker sends the whole `scene`
+   on every change and when the Frame connects, and the Frame answers a finished
    Pencil stroke, a finished Pen line, an Eraser drag, a drawn Shape, a Bucket
-   pour, a dropped Stamp, and the Element the author picked.
+   pour, a dropped Stamp, the Element the author picked, and a Select drag that
+   moved one.
    Points cross the port in page millimetres, the same space as the page's
    `widthMm`/`heightMm`, so the pointer's own screen pixels are converted
    through the svg's `getScreenCTM`.
@@ -27,7 +28,7 @@
    * @typedef {{ d: string, stroke: string | null, strokeWidth: number, dash: string | null, fill: string | null, fillRule?: "evenodd", opacity: number, transform?: string }} LineShape
    * @typedef {{ text: string, x: number, y: number, size: number, fill: string, font?: string, anchor: "start" | "middle" | "end", transform?: string }} TextShape
    * @typedef {LineShape | TextShape} SceneShape
-   * @typedef {{ id: string, shapes: SceneShape[], hidden: boolean, locked: boolean, selected: boolean }} FrameSceneElement
+   * @typedef {{ id: string, shapes: SceneShape[], hidden: boolean, locked: boolean, selected: boolean, movable: boolean }} FrameSceneElement
    * @typedef {{ one: string, other: string }} PenDraftLabel
    * @typedef {{ kind: "scene", widthMm: number, heightMm: number, background: string, elements: FrameSceneElement[], tool: MapTool, zoom: number, panX: number, panY: number, penLabel: PenDraftLabel }} FrameSceneMessage
    * @typedef {{ kind: "stroke", points: MapPoint[] }} FrameStrokeMessage
@@ -37,10 +38,14 @@
    * @typedef {{ kind: "shape", shape: ShapeKind, start: MapPoint, end: MapPoint, constrain: boolean }} FrameShapeMessage
    * @typedef {{ kind: "pour", point: MapPoint }} FramePourMessage
    * @typedef {{ kind: "insert", point: MapPoint }} FrameInsertMessage
+   * @typedef {{ kind: "move", id: string, dx: number, dy: number }} FrameMoveMessage
    * @typedef {FrameSceneMessage} WorkerToFrameMessage
    * @typedef {{ pointerId: number, points: MapPoint[] }} Drawing
    * @typedef {{ points: MapPoint[], curves: boolean[] }} PenDraft
    * @typedef {{ pointerId: number, kind: ShapeKind, start: MapPoint, end: MapPoint, constrain: boolean }} ShapeDraft
+   * @typedef {{ clientX: number, clientY: number }} ClientPoint
+   * @typedef {{ pointerId: number, id: string, press: ClientPoint, client: ClientPoint, travel: MapPoint, constrain: boolean, moved: boolean, offset: MapPoint }} MoveDrag
+   * @typedef {{ id: string, offset: MapPoint }} PendingMove
    */
 
   const hooks = /** @type {any} */ (globalThis).__mapTestHooks || null;
@@ -72,6 +77,14 @@
   const PREVIEW_ELLIPSE_SAMPLES = 64;
   const PREVIEW_POLYGON_SIDES = 6;
 
+  /**
+   * How far a Select press must travel before it moves the Element, in screen
+   * pixels (#766), so a press with a shaky hand only selects. It is measured
+   * on screen, so neither the zoom nor the panel's size changes how far a
+   * hand must go.
+   */
+  const DRAG_THRESHOLD_PX = 4;
+
   /** A Shape drag is too small to keep when either side is under this, in mm. */
   const MIN_SHAPE_SIZE_MM = 1;
 
@@ -100,6 +113,15 @@
   let erasing = null;
   /** The Shape drag in progress, or null. @type {ShapeDraft | null} */
   let shapeDraft = null;
+  /** The Select drag in progress, or null. @type {MoveDrag | null} */
+  let moveDrag = null;
+  /**
+   * A finished Select drag the Worker has not answered yet, or null. Its
+   * preview stays until the next scene arrives, so the Element never jumps
+   * back to its start between the release and the Worker's redraw; the Worker
+   * answers every move with a scene, a refused one included. @type {PendingMove | null}
+   */
+  let pendingMove = null;
 
   /** The rendered svg, which Preact keeps across draws. @returns {SVGSVGElement | null} */
   function svgElement() {
@@ -254,6 +276,8 @@
           hidden: element.hidden === true,
           locked: element.locked === true,
           selected: element.selected === true,
+          // A locked Element never moves, whatever else the scene says.
+          movable: element.movable === true && element.locked !== true,
         });
       }
     }
@@ -422,6 +446,8 @@
     crosshair = null;
     erasing = null;
     shapeDraft = null;
+    moveDrag = null;
+    pendingMove = null;
   }
 
   /**
@@ -473,6 +499,9 @@
               key="${element.id}"
               data-element-id="${element.id}"
               data-selected="${element.selected ? "true" : undefined}"
+              data-movable="${element.movable ? "true" : undefined}"
+              data-dragging="${isDragging(element.id) ? "true" : undefined}"
+              transform="${dragTransform(element.id)}"
             >
               ${element.shapes
                 .filter((shape) => !isTextShape(shape))
@@ -540,6 +569,121 @@
     );
   }
 
+  /**
+   * Whether `id` is the Element a Select drag is moving right now, past its
+   * threshold.
+   * @param {string} id
+   */
+  function isDragging(id) {
+    return moveDrag !== null && moveDrag.moved && moveDrag.id === id;
+  }
+
+  /**
+   * The live offset a Select drag draws an Element at, as an SVG translate, or
+   * undefined when it sits where the scene put it. A finished drag keeps its
+   * offset until the Worker's next scene draws the Element there itself.
+   * @param {string} id
+   * @returns {string | undefined}
+   */
+  function dragTransform(id) {
+    /** @type {MapPoint | null} */
+    let offset = null;
+    if (isDragging(id) && moveDrag !== null) offset = moveDrag.offset;
+    else if (pendingMove !== null && pendingMove.id === id) offset = pendingMove.offset;
+    if (offset === null) return undefined;
+    return `translate(${n(offset[0])} ${n(offset[1])})`;
+  }
+
+  /**
+   * The Select drag's offset, its travel so far with Shift keeping only the
+   * longer axis, so the Element slides straight across or down.
+   * @param {MoveDrag} drag
+   * @returns {MapPoint}
+   */
+  function dragOffset(drag) {
+    const [dx, dy] = drag.travel;
+    if (!drag.constrain) return [dx, dy];
+    return Math.abs(dx) >= Math.abs(dy) ? [dx, 0] : [0, dy];
+  }
+
+  /**
+   * Follows the pointer with the Select drag: once the press has travelled
+   * past the threshold, the Element moves with it, live, in this Frame only.
+   *
+   * The drag adds up the pointer's steps, each converted through the screen
+   * matrix of the moment, never the start point against the current one: the
+   * press selects the Element, the host's panels change height, and the Frame
+   * can move under a still pointer mid-drag. A step measured in one matrix
+   * follows the pointer; a start and an end measured in two would jump the
+   * Element by the layout shift.
+   * @param {PointerEvent} event
+   */
+  function followDrag(event) {
+    if (moveDrag === null || scene === null) return;
+    const from = pagePoint(moveDrag.client);
+    const to = pagePoint(event);
+    if (from === null || to === null) return;
+    moveDrag.client = { clientX: event.clientX, clientY: event.clientY };
+    moveDrag.travel = [moveDrag.travel[0] + to[0] - from[0], moveDrag.travel[1] + to[1] - from[1]];
+    moveDrag.constrain = event.shiftKey === true;
+    if (!moveDrag.moved) {
+      const travelled = Math.hypot(
+        event.clientX - moveDrag.press.clientX,
+        event.clientY - moveDrag.press.clientY
+      );
+      if (travelled < DRAG_THRESHOLD_PX) return;
+      moveDrag.moved = true;
+    }
+    moveDrag.offset = dragOffset(moveDrag);
+    draw();
+  }
+
+  /**
+   * Re-applies Shift to the Select drag in progress without waiting for the
+   * pointer to move, so pressing or releasing it snaps the preview at once.
+   * @param {boolean} constrain
+   */
+  function constrainDrag(constrain) {
+    if (moveDrag === null || !moveDrag.moved || moveDrag.constrain === constrain) return;
+    moveDrag.constrain = constrain;
+    moveDrag.offset = dragOffset(moveDrag);
+    draw();
+  }
+
+  /**
+   * Ends the Select drag. A drag that moved goes to the Worker as one move,
+   * which is one undo step, and its preview holds until the Worker answers; a
+   * press that never passed the threshold already selected and sends nothing.
+   * @param {PointerEvent} event
+   * @param {boolean} send
+   */
+  function endMove(event, send) {
+    if (moveDrag === null || event.pointerId !== moveDrag.pointerId) return;
+    const drag = moveDrag;
+    moveDrag = null;
+    releasePointer(event);
+    const [dx, dy] = drag.offset;
+    if (send && drag.moved && (dx !== 0 || dy !== 0)) {
+      pendingMove = { id: drag.id, offset: drag.offset };
+      draw();
+      post({ kind: "move", id: drag.id, dx, dy });
+      return;
+    }
+    draw();
+  }
+
+  /**
+   * Drops the Select drag in progress on Escape: the Element goes back to its
+   * start and the Worker never hears of it, so it is no edit at all.
+   */
+  function cancelMove() {
+    if (moveDrag === null) return;
+    const pointerId = moveDrag.pointerId;
+    moveDrag = null;
+    releasePointerId(pointerId);
+    draw();
+  }
+
   /** Posts one validated message to the Worker; a missing port drops it. */
   function post(message) {
     if (port === null) return;
@@ -549,7 +693,7 @@
   /**
    * The pointer's place on the page, in millimetres, through the svg's own
    * screen matrix, so the viewBox, zoom, and pan need no arithmetic here.
-   * @param {PointerEvent | MouseEvent} event
+   * @param {PointerEvent | MouseEvent | ClientPoint} event
    * @returns {MapPoint | null}
    */
   function pagePoint(event) {
@@ -578,10 +722,15 @@
 
   /** Drops the stroke's capture; a pointer the engine already released throws. */
   function releasePointer(event) {
+    releasePointerId(event.pointerId);
+  }
+
+  /** @param {number} pointerId */
+  function releasePointerId(pointerId) {
     const svg = svgElement();
     if (svg === null || typeof svg.releasePointerCapture !== "function") return;
     try {
-      svg.releasePointerCapture(event.pointerId);
+      svg.releasePointerCapture(pointerId);
     } catch {
       /* The pointerup may arrive after the engine dropped the capture. */
     }
@@ -700,9 +849,27 @@
       return;
     }
 
+    // A second finger while one drag is under way neither picks nor drags.
+    if (moveDrag !== null) return;
     const target =
       event.target instanceof Element ? event.target.closest("[data-element-id]") : null;
-    post({ kind: "select", id: target === null ? null : target.getAttribute("data-element-id") });
+    const id = target === null ? null : target.getAttribute("data-element-id");
+    post({ kind: "select", id });
+    // A press on a movable Element may become a drag (#766): it only selects
+    // until the pointer travels past the threshold.
+    const pressed = id === null ? undefined : scene.elements.find((element) => element.id === id);
+    if (pressed === undefined || !pressed.movable) return;
+    moveDrag = {
+      pointerId: event.pointerId,
+      id: pressed.id,
+      press: { clientX: event.clientX, clientY: event.clientY },
+      client: { clientX: event.clientX, clientY: event.clientY },
+      travel: [0, 0],
+      constrain: event.shiftKey === true,
+      moved: false,
+      offset: [0, 0],
+    };
+    capturePointer(event);
   }
 
   /**
@@ -723,6 +890,11 @@
 
   /** @param {PointerEvent} event */
   function onPointerMove(event) {
+    if (moveDrag !== null && event.pointerId === moveDrag.pointerId) {
+      followDrag(event);
+      return;
+    }
+
     if (scene !== null && scene.tool === "pen") {
       const hovered = pagePoint(event);
       if (hovered === null) return;
@@ -862,6 +1034,14 @@
       cancelShape();
       return;
     }
+    // Escape cancels a Select drag (#766), and Shift constrains it the moment
+    // it goes down; Shift alone still reaches the host, which ignores it.
+    if (event.key === "Escape" && moveDrag !== null) {
+      event.preventDefault();
+      cancelMove();
+      return;
+    }
+    if (event.key === "Shift") constrainDrag(true);
     if (scene === null || (scene.tool !== "pen" && scene.tool !== "bucket")) return;
     if (crosshair === null) return;
     const step = event.shiftKey ? CROSSHAIR_FAR_STEP_MM : CROSSHAIR_STEP_MM;
@@ -912,24 +1092,42 @@
     }
   }
 
+  /** Lifting Shift frees a constrained Select drag at once. @param {KeyboardEvent} event */
+  function onKeyUp(event) {
+    if (event.key === "Shift") constrainDrag(false);
+  }
+
   /** @param {MessageEvent} event */
   function onMessage(event) {
     const next = readScene(event.data);
     if (next === null) return;
     const previousTool = scene === null ? null : scene.tool;
     scene = next;
+    // Any scene after a release draws the moved Element where the Worker put
+    // it, or back at its start when the Worker refused the move.
+    pendingMove = null;
     if (next.tool !== previousTool) resetGestures();
+    // An Element locked, deleted, or undone away mid-drag stops moving.
+    if (moveDrag !== null) {
+      const dragged = moveDrag.id;
+      if (!next.elements.some((element) => element.id === dragged && element.movable)) {
+        cancelMove();
+        return;
+      }
+    }
     syncCrosshair();
     draw();
   }
 
   function cleanup() {
     document.removeEventListener("keydown", onKeyDown);
+    document.removeEventListener("keyup", onKeyUp);
     if (surface === null) return;
     surface.removeEventListener("pointerdown", onPointerDown);
     surface.removeEventListener("pointermove", onPointerMove);
     surface.removeEventListener("pointerup", onPointerUp);
     surface.removeEventListener("pointercancel", onPointerCancel);
+    surface.removeEventListener("lostpointercapture", onLostPointerCapture);
     surface.removeEventListener("dblclick", onDoubleClick);
   }
 
@@ -938,6 +1136,7 @@
     endStroke(event, true);
     endErase(event, true);
     endShape(event, true);
+    endMove(event, true);
   }
 
   /** @param {PointerEvent} event */
@@ -945,17 +1144,31 @@
     endStroke(event, false);
     endErase(event, false);
     endShape(event, false);
+    endMove(event, false);
+  }
+
+  /**
+   * The engine took a Select drag's capture away with no pointerup (#766): the
+   * drag is dropped like a cancel, so the next press is not ignored as a
+   * second finger. After a pointerup the drag is already over and this is a
+   * no-op.
+   * @param {PointerEvent} event
+   */
+  function onLostPointerCapture(event) {
+    endMove(event, false);
   }
 
   draw();
 
   document.addEventListener("keydown", onKeyDown);
+  document.addEventListener("keyup", onKeyUp);
 
   if (surface !== null) {
     surface.addEventListener("pointerdown", onPointerDown);
     surface.addEventListener("pointermove", onPointerMove);
     surface.addEventListener("pointerup", onPointerUp);
     surface.addEventListener("pointercancel", onPointerCancel);
+    surface.addEventListener("lostpointercapture", onLostPointerCapture);
     surface.addEventListener("dblclick", onDoubleClick);
   }
 

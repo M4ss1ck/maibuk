@@ -89,6 +89,72 @@ function samePoint(a: MapPoint, b: MapPoint): boolean {
   return a[0] === b[0] && a[1] === b[1];
 }
 
+/**
+ * How far apart two ring corners may be and still be the same corner, in mm.
+ * Faces are built from paths written to the hundredth of a millimetre
+ * (`linePath`), so a corner moved by any offset lands up to a hundredth away
+ * from the shifted old corner; twice that leaves room for a curve's samples,
+ * and is still far below any gap an author could draw.
+ */
+const RING_TOLERANCE_MM = 0.02;
+
+/**
+ * Whether two rings run through the same corners once `ring` is shifted by
+ * `dx`, `dy`. Polygonize may start a ring at any corner and run it either way,
+ * so the corners are compared as a set; rings are closed, so the repeated
+ * last corner is left out.
+ */
+function sameRing(ring: readonly MapPoint[], other: readonly MapPoint[], dx = 0, dy = 0): boolean {
+  if (ring.length !== other.length) return false;
+  const corners = other.slice(0, -1);
+  return ring
+    .slice(0, -1)
+    .every(([x, y]) =>
+      corners.some(
+        ([ox, oy]) =>
+          Math.abs(x + dx - ox) <= RING_TOLERANCE_MM && Math.abs(y + dy - oy) <= RING_TOLERANCE_MM
+      )
+    );
+}
+
+/** The offset one move shifted Map Lines by, in page millimetres. */
+export interface FillTranslation {
+  dx: number;
+  dy: number;
+}
+
+/**
+ * Where a Fill's anchor goes before the anchor rule runs, after a move of
+ * Map Lines by `offset`. A move can carry a closed line further than its own
+ * size, and then the old anchor lies outside the face it came from, so the
+ * anchor alone cannot tell where the Fill went:
+ *
+ * - A face that moved whole, its outer ring shifted by the offset, takes the
+ *   Fill with it: the anchor shifts by the same offset.
+ * - A face whose outer ring stayed put, though a hole in it moved (a lake
+ *   dragged across the land), keeps the Fill: the anchor goes to the deepest
+ *   point of that face as it is now, which no moved hole covers.
+ * - Any other face changed shape, a border between two provinces moved, and
+ *   the anchor stays for the usual rule, exactly as without the offset.
+ */
+function followMove(
+  anchor: MapPoint,
+  facesBefore: readonly Face[],
+  facesAfter: readonly Face[],
+  offset: FillTranslation
+): MapPoint {
+  const face = faceAt(facesBefore, anchor);
+  if (face === null) return anchor;
+  const { dx, dy } = offset;
+  const moved = facesAfter.find(
+    (after) => after.holes.length === face.holes.length && sameRing(face.outer, after.outer, dx, dy)
+  );
+  if (moved !== undefined) return [anchor[0] + dx, anchor[1] + dy];
+  const stayed = facesAfter.find((after) => sameRing(face.outer, after.outer));
+  if (stayed !== undefined && faceAt(facesAfter, anchor) !== stayed) return deepestPoint(stayed);
+  return anchor;
+}
+
 /** A face's area, with a Fill that had no before-face losing every merge. */
 function areaOf(face: Face | null): number {
   return face === null ? -1 : face.area;
@@ -108,18 +174,43 @@ function copyId(originalId: string, used: Set<string>): string {
  * after it. Each Fill follows its new face to that face's deepest point, two
  * Fills merged into one face leave the larger face's Fill, a face a new line
  * splits gives each half a copy, and a Fill whose face disappears is removed.
- * An edit that leaves every Fill where it was returns `after` itself, with each
+ * An edit that leaves every Fill where it was returns `edited` itself, with each
  * unchanged Fill object kept, so history and autosave see no phantom edit.
+ *
+ * `offset` is the shift of an edit that only moved one Map Line (an arrow move
+ * or a Select drag, #766). With it, a Fill whose face moved whole goes with
+ * it however far it went, and one whose face only lost a moved hole stays on
+ * that face (`followMove`).
  */
-export function reconcileFills(before: MapElement[], after: MapElement[]): MapElement[] {
-  if (!before.some(isFill) && !after.some(isFill)) return after;
+export function reconcileFills(
+  before: MapElement[],
+  edited: MapElement[],
+  offset?: FillTranslation
+): MapElement[] {
+  if (!before.some(isFill) && !edited.some(isFill)) return edited;
 
   const facesBefore = findFaces(linesOf(before));
-  const facesAfter = findFaces(linesOf(after));
+  const facesAfter = findFaces(linesOf(edited));
   const beforeFills = before.filter(isFill).map((fill) => ({
     fill,
     face: faceAt(facesBefore, fill.anchor),
   }));
+  // The face each Fill held before the edit, by id: a moved anchor no longer
+  // points into it, and the merge rule weighs the face the Fill came from.
+  const beforeFaces = new Map(beforeFills.map((entry) => [entry.fill.id, entry.face]));
+
+  let after = edited;
+  if (offset !== undefined) {
+    let carried = false;
+    const next = edited.map((element) => {
+      if (!isFill(element)) return element;
+      const anchor = followMove(element.anchor, facesBefore, facesAfter, offset);
+      if (samePoint(anchor, element.anchor)) return element;
+      carried = true;
+      return { ...element, anchor };
+    });
+    if (carried) after = next;
+  }
 
   // Follow each Fill to the after-face its anchor lies in; a Fill whose anchor
   // lies in no after-face is left out, which removes it.
@@ -128,7 +219,10 @@ export function reconcileFills(before: MapElement[], after: MapElement[]): MapEl
     if (!isFill(element)) continue;
     const afterFace = faceAt(facesAfter, element.anchor);
     if (afterFace === null) continue;
-    moves.push({ fill: element, beforeFace: faceAt(facesBefore, element.anchor), afterFace });
+    const beforeFace = beforeFaces.has(element.id)
+      ? (beforeFaces.get(element.id) ?? null)
+      : faceAt(facesBefore, element.anchor);
+    moves.push({ fill: element, beforeFace, afterFace });
   }
 
   // Merge: one after-face keeps the one Fill whose before-face was the larger.
@@ -142,7 +236,7 @@ export function reconcileFills(before: MapElement[], after: MapElement[]): MapEl
   const kept = moves.filter((move) => winners.get(move.afterFace) === move);
   const keptFills = new Set(kept.map((move) => move.fill));
 
-  let changed = false;
+  let changed = after !== edited;
   const anchors = new Map<string, MapPoint>();
   for (const move of kept) {
     const anchor = deepestPoint(move.afterFace);
@@ -201,5 +295,5 @@ export function reconcileFills(before: MapElement[], after: MapElement[]): MapEl
     inserted.set(copy.originalId, at);
   }
 
-  return changed ? result : after;
+  return changed ? result : edited;
 }

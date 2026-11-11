@@ -63,7 +63,7 @@ The editor tool that draws a Map Line freehand and smooths the stroke as the aut
 _Avoid_: brush, freehand tool
 
 **Select**:
-The editor tool that picks one Element on the Map, to move, rename, hide, lock, or delete it.
+The editor tool that picks one Element on the Map, to move, rename, hide, lock, or delete it. Dragging an unlocked Map Line or Stamp moves it, as the arrow keys do.
 _Avoid_: pointer, arrow, cursor
 
 **Pen**:
