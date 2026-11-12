@@ -47,6 +47,7 @@ import {
   DEFAULT_LABEL_FONT,
   INDEX_KEY,
   MAP_LABEL_FONT_FAMILIES,
+  PAGE_SIZES,
   mapKey,
   newLabel,
   type MapDocument,
@@ -72,6 +73,7 @@ import { DEFAULT_SCATTER_SPACING_MM } from "./scatter";
 import { smoothStroke } from "./scene";
 import { linePath, roughen, seedFor, shapeOutline } from "./geometry";
 import { MAP_STYLES } from "./styles";
+import { templateElements } from "./templates";
 
 type User = ReturnType<typeof userEvent.setup>;
 
@@ -657,6 +659,120 @@ describe("Maps page", () => {
       const [created] = index(storage);
       expect(created).toMatchObject({ name: "Northern Reach", bookId: "b2", preset: "spread" });
       expect(storage.get(mapKey(created.id))).toMatchObject({ elements: [], dataVersion: 1 });
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("creates a Map from a Template by keyboard alone", async () => {
+    const storage = new Map<string, unknown>();
+    const host = hostFor(storage);
+    try {
+      const page = await host.renderPage(MAPS_PAGE_ID);
+      expect(await screen.findByText(en["list.emptyTitle"])).toBeInTheDocument();
+      const user = userEvent.setup();
+
+      const create = screen.getByRole("button", { name: en["list.new"] });
+      await tabTo(user, create);
+      await user.keyboard("{Enter}");
+      const dialog = await screen.findByRole("dialog", { name: en["create.title"] });
+      expect(within(dialog).getByRole("textbox", { name: en["create.name"] })).toHaveFocus();
+      await user.keyboard("Archipelago Reach");
+
+      const startFrom = within(dialog).getByRole("radiogroup", { name: en["create.template"] });
+      const blank = within(startFrom).getByRole("radio", { name: en["template.blank"] });
+      await tabTo(user, blank);
+      // Blank, then the first Template, then Archipelago.
+      await user.keyboard("{ArrowDown}");
+      await user.keyboard("{ArrowDown}");
+      await waitFor(() =>
+        expect(
+          within(startFrom).getByRole("radio", { name: en["template.archipelago"] })
+        ).toBeChecked()
+      );
+
+      await tabTo(user, within(dialog).getByRole("button", { name: en["create.submit"] }));
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(names()).toEqual(["Archipelago Reach"]));
+
+      const [templated] = index(storage);
+      const doc = storage.get(mapKey(templated.id)) as MapDocument;
+      expect(doc.styleId).toBe("parchment");
+      expect(doc.elements.map(({ id: _id, ...rest }) => rest)).toEqual(
+        templateElements("archipelago", PAGE_SIZES.landscape, "Archipelago Reach", () => "x").map(
+          ({ id: _id, ...rest }) => rest
+        )
+      );
+      expect(doc.elements.filter((element) => element.kind === "fill")).toHaveLength(7);
+      const compass = doc.elements.find(
+        (element) => element.kind === "stamp" && element.stampRef === "base:compass-rose"
+      );
+      expect(compass).toBeDefined();
+      const label = doc.elements.find(
+        (element): element is MapLabelElement => element.kind === "label"
+      );
+      expect(label?.text).toBe("Archipelago Reach");
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("starts a new Map from Blank by default", async () => {
+    const storage = new Map<string, unknown>();
+    const host = hostFor(storage);
+    try {
+      const page = await host.renderPage(MAPS_PAGE_ID);
+      expect(await screen.findByText(en["list.emptyTitle"])).toBeInTheDocument();
+      const user = userEvent.setup();
+
+      const create = screen.getByRole("button", { name: en["list.new"] });
+      await tabTo(user, create);
+      await user.keyboard("{Enter}");
+      const dialog = await screen.findByRole("dialog", { name: en["create.title"] });
+      const startFrom = within(dialog).getByRole("radiogroup", { name: en["create.template"] });
+      expect(within(startFrom).getByRole("radio", { name: en["template.blank"] })).toBeChecked();
+
+      await user.keyboard("Plain Coast");
+      await tabTo(user, within(dialog).getByRole("button", { name: en["create.submit"] }));
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(names()).toEqual(["Plain Coast"]));
+
+      const [blankMap] = index(storage);
+      expect(storage.get(mapKey(blankMap.id))).toMatchObject({ styleId: "atlas", elements: [] });
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("offers the Templates in the author's language", async () => {
+    const host = hostFor(new Map<string, unknown>(), "es");
+    try {
+      const page = await host.renderPage(MAPS_PAGE_ID);
+      const user = userEvent.setup();
+      const create = await screen.findByRole("button", { name: es["list.new"] });
+      await tabTo(user, create);
+      await user.keyboard("{Enter}");
+      const dialog = await screen.findByRole("dialog", { name: es["create.title"] });
+      const startFrom = within(dialog).getByRole("radiogroup", { name: es["create.template"] });
+      // Blank first, then each Template in the picker's order, every label Spanish.
+      const blank = within(startFrom).getByRole("radio", { name: es["template.blank"] });
+      await tabTo(user, blank);
+      for (const label of [
+        es["template.continent"],
+        es["template.archipelago"],
+        es["template.two-continents"],
+        es["template.inland-kingdom"],
+        es["template.blank-sea"],
+      ]) {
+        await user.keyboard("{ArrowDown}");
+        await waitFor(() =>
+          expect(within(startFrom).getByRole("radio", { name: label })).toBeChecked()
+        );
+      }
       await page.unmount();
     } finally {
       await host.stop();

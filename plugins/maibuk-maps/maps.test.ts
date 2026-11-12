@@ -19,6 +19,7 @@ import {
   LINE_STYLE_DEFAULT_ENCLOSES,
   MAP_LABEL_FONTS,
   MAP_LABEL_FONT_FAMILIES,
+  PAGE_SIZES,
   bendFromPoint,
   createMapStore,
   labelBaselinePath,
@@ -38,6 +39,7 @@ import {
 import { sceneToSvg } from "./scene";
 import { MAP_STYLES } from "./styles";
 import { SCALE_BAR_STAMP_REF } from "./stamps";
+import { templateElements } from "./templates";
 
 /** An in-memory storage that remembers every key read. */
 function memoryStorage(seed: Iterable<[string, unknown]> = []) {
@@ -122,6 +124,65 @@ describe("createMapStore", () => {
       { preset: "spread", widthMm: 304.8, heightMm: 228.6 },
       { preset: "square", widthMm: 203.2, heightMm: 203.2 },
     ]);
+  });
+
+  it("starts a Map from a Template, writing its Elements, style, and name at once", async () => {
+    const { storage, values } = memoryStorage();
+    const store = storeOver(storage);
+
+    await store.create({
+      name: "  The Reach  ",
+      bookId: null,
+      preset: "landscape",
+      templateId: "archipelago",
+    });
+
+    // The Map took `m1`; its Elements take the ids that follow it.
+    let next = 1;
+    const expected = templateElements(
+      "archipelago",
+      PAGE_SIZES.landscape,
+      "The Reach",
+      () => `m${++next}`
+    );
+    expect(values.get(mapKey("m1"))).toMatchObject({
+      styleId: "parchment",
+      elements: expected,
+    });
+    // The title Label carries the cleaned Map name.
+    expect(expected.find((element) => element.kind === "label")).toMatchObject({
+      text: "The Reach",
+    });
+  });
+
+  it("names a Template's Elements in the author's language", async () => {
+    const { storage, values } = memoryStorage();
+    const store = storeOver(storage);
+
+    await store.create({
+      name: "Las Islas",
+      bookId: null,
+      preset: "landscape",
+      templateId: "archipelago",
+      language: "es",
+    });
+
+    const map = values.get(mapKey("m1")) as MapDocument;
+    expect(map.elements[0].name).toBe("Relleno 1");
+    expect(
+      map.elements.some(
+        (element) => element.kind === "stamp" && element.name === "Rosa de los vientos"
+      )
+    ).toBe(true);
+  });
+
+  it("leaves a Map blank when it names no Template", async () => {
+    const { storage, values } = memoryStorage();
+    const store = storeOver(storage);
+
+    await store.create({ name: "Blank", bookId: null, preset: "square" });
+
+    expect(values.get(mapKey("m1"))).toMatchObject({ styleId: "atlas", elements: [] });
   });
 
   it("lists newest first and reads only the index, never a whole Map", async () => {
