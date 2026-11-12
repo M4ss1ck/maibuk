@@ -14,7 +14,13 @@
 import type { FrameLocator, Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { drawStroke } from "../support/frame-stroke";
-import { isFocusWithin, leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
+import {
+  expectFocusWithin,
+  isFocusWithin,
+  leaveFrame,
+  pressUntilFocused,
+  tabTo,
+} from "../support/keyboard";
 import { expect, test } from "../support/test";
 import { openLayers } from "../support/maps-layers";
 
@@ -112,8 +118,11 @@ async function selectElement(page: Page, name: string): Promise<Locator> {
   const list = elementsList(page);
   // Start at Back to Maps, the first panel control, and Tab forward into the
   // list: from either side of it, that is the one direction that always works.
+  // The floating chrome (#778) puts the pill's other three controls and the
+  // eleven belt buttons between it and the list, so the walk allows for them.
   await focusBack(page);
-  for (let i = 0; i < 10 && !(await isFocusWithin(list)); i++) await page.keyboard.press("Tab");
+  for (let i = 0; i < 20 && !(await isFocusWithin(list)); i++) await page.keyboard.press("Tab");
+  await expectFocusWithin(list);
   await page.keyboard.press("Home");
   await pressUntilFocused(page, "ArrowDown", row, { max: 10 });
   if ((await row.getAttribute("aria-selected")) !== "true") await page.keyboard.press(" ");
@@ -438,7 +447,7 @@ test.describe("Maps editor @wf:plugins-maps-editor @sc:plugin.maibuk-maps.openMa
     // the Frame; Tab into it the way an author would. The Frame handles no
     // keys, so the host's undo Command runs with the author on the drawing
     // (#760).
-    await tabTo(page, frameElement(page), { max: 20, backwards: true });
+    await tabTo(page, frameElement(page), { max: 40, backwards: true });
     await expect(frameElement(page)).toBeFocused();
     await page.keyboard.press("ControlOrMeta+z");
     await expect(drawnElements(page)).toHaveCount(0);
