@@ -90,8 +90,21 @@ export async function expectFocusWithin(region: Locator): Promise<void> {
   await expect.poll(() => isFocusWithin(region), { message: `focus within ${region}` }).toBe(true);
 }
 
+/**
+ * Whether focus is on `target`, `false` when the locator matches nothing. A
+ * locator matching more than one element throws: Playwright cannot say which
+ * element should hold focus, and answering "not focused" would read as a
+ * broken tab order instead of the ambiguous locator it is (#778).
+ */
 async function isFocused(target: Locator): Promise<boolean> {
-  return target.evaluate((el) => el === document.activeElement).catch(() => false);
+  const count = await target.count();
+  if (count === 0) return false;
+  if (count > 1) {
+    throw new Error(
+      `${target} matches ${count} elements: the keyboard helper cannot tell which one should hold focus. Narrow the locator.`
+    );
+  }
+  return target.evaluate((el) => el === document.activeElement);
 }
 
 /** Tag, role and accessible-ish name of the focused element, for failure messages. */

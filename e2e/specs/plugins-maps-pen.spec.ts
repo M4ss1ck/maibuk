@@ -172,11 +172,18 @@ async function openProperties(page: Page, name: string): Promise<void> {
   await expect(page.getByRole("textbox", { name: "Name" })).toBeFocused();
 }
 
+/**
+ * The Properties panel's Line style select trigger. Its accessible name is its
+ * current value and the row's label ("Plain Line style"), so it is found by
+ * that name: the row's own "Line style" label belongs to the select's native
+ * control, which `getByLabel` resolves to and which the author can never focus
+ * (#778).
+ */
+const lineStyleTrigger = (page: Page) => page.getByRole("button", { name: /Line style$/ });
+
 /** Picks one option of the Line style select by keyboard. */
 async function pickLineStyle(page: Page, option: string): Promise<void> {
-  // A Select's trigger is named through `aria-labelledby` ("Plain Line style"),
-  // so it is found by its label, never by a whole accessible-name match (#778).
-  const trigger = page.getByLabel("Line style");
+  const trigger = lineStyleTrigger(page);
   // The panel's header (#778) puts the name, the two switches, and the
   // Minimise button before the select, which is where focus starts.
   await tabTo(page, trigger, { max: 20 });
@@ -256,7 +263,7 @@ test.describe("Maps Pen, Eraser, line styles, and Roughen @wf:plugins-maps-pen @
     await openProperties(page, "Map Line 1");
 
     // A new Pen line is Plain, and Coast draws a thicker ink stroke.
-    const styleTrigger = page.getByLabel("Line style");
+    const styleTrigger = lineStyleTrigger(page);
     await tabTo(page, styleTrigger, { max: 20 });
     await expect(styleTrigger).toHaveText("Plain");
     await expect(drawnLine(page).first()).toHaveAttribute("stroke-width", "0.6");
