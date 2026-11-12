@@ -153,6 +153,40 @@ describe("buildTopology()", () => {
     }
   });
 
+  it("simplifies a junction-free closed coast ring and keeps it closed", () => {
+    // One province on an island no neighbour touches: a square whose edges are
+    // split by midpoints, so it arrives as a closed arc with no junction to cut.
+    const ring: MapPoint[] = [
+      [0, 0],
+      [0.5, 0],
+      [1, 0],
+      [1, 0.5],
+      [1, 1],
+      [0.5, 1],
+      [0, 1],
+      [0, 0.5],
+      [0, 0],
+    ];
+
+    const topology = buildTopology([ring]);
+    expect(topology.borders).toHaveLength(0);
+    expect(topology.coastArcs).toHaveLength(1);
+    const [arc] = topology.coastArcs;
+    expect(arc[0]).toEqual(arc[arc.length - 1]);
+
+    const data = buildCubaModuleData([{ iso: "CU-01", name: "Only", rings: [ring] }]);
+    expect(data.coasts).toHaveLength(1);
+    const [coast] = data.coasts;
+    // Douglas-Peucker drops the midpoints and keeps the four corners.
+    expect(coast.length).toBeLessThan(ring.length - 1);
+    const xs = coast.map(([x]) => x);
+    const ys = coast.map(([, y]) => y);
+    for (const [x, y] of coast) {
+      expect(x === Math.min(...xs) || x === Math.max(...xs)).toBe(true);
+      expect(y === Math.min(...ys) || y === Math.max(...ys)).toBe(true);
+    }
+  });
+
   it("keeps the coast junction a border end after simplification and projection", () => {
     const provinces = [
       { iso: "CU-01", name: "West", rings: [square(0, 0, 1)] },

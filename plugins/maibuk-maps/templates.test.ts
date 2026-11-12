@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest";
 import { PLUGIN_MESSAGE_MAX_BYTES } from "@/plugin-sdk/protocol";
 import { CUBA_BORDERS, CUBA_COASTS, CUBA_PROVINCES } from "./cuba";
-import { GAP_TOLERANCE_MM, faceAt, findFaces, type Face } from "./faces";
+import { faceAt, findFaces, type Face } from "./faces";
 import { reconcileFills } from "./fills";
 import {
   DATA_VERSION,
@@ -146,13 +146,9 @@ function fillRole(fill: MapFillElement): string {
   return fill.content.color ?? "";
 }
 
-/**
- * The faces a Template's lines enclose, read the way `templateElements` reads
- * them: generated geography meets at its shared vertices, so `cuba` closes no
- * gaps.
- */
-function facesOf(id: MapTemplateId, elements: readonly MapElement[]): Face[] {
-  return findFaces(linesOf(elements), id === "cuba" ? 0 : GAP_TOLERANCE_MM);
+/** The faces a Template's lines enclose, read the way the editor reads them. */
+function facesOf(elements: readonly MapElement[]): Face[] {
+  return findFaces(linesOf(elements));
 }
 
 /** Every point a Template draws, with the element it belongs to. */
@@ -317,7 +313,7 @@ describe("templateElements", () => {
         expect(land.length, where).toBe(EXPECTED[id].landFills);
         expect(fills.length, where).toBe(water.length + land.length);
 
-        const faces = facesOf(id, elements);
+        const faces = facesOf(elements);
         expect(faces.length, where).toBe(EXPECTED[id].faces);
         const landed = fills.map((fill) => faceAt(faces, fill.anchor));
         for (const [index, face] of landed.entries()) {
@@ -401,7 +397,7 @@ describe("templateElements", () => {
     expect(fills.filter((fill) => fillRole(fill) === "water")).toHaveLength(1);
     expect(fills.filter((fill) => fillRole(fill) === "land")).toHaveLength(16);
 
-    const faces = facesOf("cuba", elements);
+    const faces = facesOf(elements);
     expect(faces).toHaveLength(17);
     // Every province Fill sits in a face of its own, beside the sea's.
     const landed = fills.map((fill) => faceAt(faces, fill.anchor));
@@ -598,7 +594,9 @@ describe("templateElements", () => {
 
   it("keeps Cuba live: a moved province border reshapes both neighbouring Fills", () => {
     const before = elementsOf("cuba", "portrait");
-    const facesBefore = facesOf("cuba", before);
+    // Read the faces with the editor's default tolerance, as a Map opened from
+    // this Template is read once it is on screen.
+    const facesBefore = findFaces(linesOf(before));
     const fills = fillsOf(before);
     const labelOf = (name: string): MapLabelElement => {
       const label = labelsOf(before).find((candidate) => candidate.text === name);
@@ -638,7 +636,7 @@ describe("templateElements", () => {
       element.id === border.id && element.kind === "line" ? { ...element, points } : element
     );
 
-    const facesAfter = facesOf("cuba", edited);
+    const facesAfter = findFaces(linesOf(edited));
     expect(facesAfter).toHaveLength(facesBefore.length);
 
     const holguinBefore = faceAt(facesBefore, holguinFill.anchor);

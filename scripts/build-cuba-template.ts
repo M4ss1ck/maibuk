@@ -395,11 +395,9 @@ export function buildCubaModuleData(provinces: readonly CubaProvince[]): CubaMod
   const project = projectCuba(rings);
   const topology = buildTopology(rings);
 
-  const coastArcs = topology.coastArcs.map((arc) =>
-    arc.length > 2 && samePoint(arc[0], arc[arc.length - 1])
-      ? arc
-      : simplifyArc(arc, SIMPLIFY_TOLERANCE_DEGREES)
-  );
+  // Douglas-Peucker pins each arc's ends: an open arc ends at junctions, and a
+  // closed arc's first and last point are the same, so the ring stays closed.
+  const coastArcs = topology.coastArcs.map((arc) => simplifyArc(arc, SIMPLIFY_TOLERANCE_DEGREES));
   const coasts = joinCoastArcs(coastArcs)
     .map((ring) => canonicalRing(ring.map((point) => roundPoint(project(point)))))
     .sort((one, two) => compare(sequenceKey(one), sequenceKey(two)));

@@ -277,6 +277,7 @@ test.describe("Maps Map Templates @wf:plugins-maps-templates @sandbox", () => {
     await openMap(page, "Cuba");
 
     await expectCubaTemplate(page, "Cuba");
+    await capture(page, "templates-cuba");
   });
 
   test("a second Map from the same Template is an unchanged copy after the first Map's Element is renamed", async ({

@@ -22,6 +22,7 @@
 
 import { CUBA_BORDERS, CUBA_COASTS, CUBA_PROVINCES } from "./cuba";
 import { deepestPoint, findFaces } from "./faces";
+import { pointsBounds } from "./geometry";
 import { format, translate, type MapsKey } from "./i18n";
 import {
   LINE_STYLE_DEFAULT_ENCLOSES,
@@ -453,31 +454,6 @@ interface TemplateLineOptions {
   roughened: boolean;
 }
 
-/** A box that holds every point of a set of unit-square shapes. */
-interface UnitBounds {
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
-}
-
-/** The box `shapes` fit in, in unit coordinates. */
-function unitBounds(shapes: readonly (readonly MapPoint[])[]): UnitBounds {
-  let minX = Number.POSITIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
-  for (const shape of shapes) {
-    for (const [x, y] of shape) {
-      minX = Math.min(minX, x);
-      minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x);
-      maxY = Math.max(maxY, y);
-    }
-  }
-  return { minX, minY, maxX, maxY };
-}
-
 /**
  * The Elements a Map made from `id` starts with, drawn on `page`: the world
  * border, a coast per landmass (a province border per border, and a kingdom's
@@ -513,7 +489,9 @@ export function templateElements(
   /** The land's drawn width, which a province Label is sized from. */
   let landWidth = 0;
   if (realGeography) {
-    const bounds = unitBounds(spec.coasts);
+    const bounds = pointsBounds(spec.coasts.flat());
+    // Real geography always has at least one coast: there is nothing to fit without one.
+    if (bounds === null) throw new Error(`The ${id} Template has no coasts to fit.`);
     const unitWidth = bounds.maxX - bounds.minX;
     const unitHeight = bounds.maxY - bounds.minY;
     const fitWidth = innerWidth * (1 - 2 * GEOGRAPHY_MARGIN);
