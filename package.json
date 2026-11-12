@@ -38,6 +38,7 @@
     "android:dev": "tauri android dev",
     "version:bump": "./scripts/bump-version.sh",
     "generate:symbols": "tsx scripts/generate-symbols-data.ts",
+    "build:cuba-template": "tsx scripts/build-cuba-template.ts",
     "build:plugins": "tsx scripts/build-builtin-plugins.ts",
     "plugin:build": "tsx scripts/plugin/cli.ts build",
     "plugin:validate": "tsx scripts/plugin/cli.ts validate",
