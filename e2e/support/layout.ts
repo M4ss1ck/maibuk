@@ -22,6 +22,30 @@ export function pageScrollWidths(
   });
 }
 
+/**
+ * The nearest query container above `element`, as the width it reports and
+ * whether it is the editor's own root: a Plugin page asks its own width, not
+ * the viewport's, and the app's sidebar takes part of the window.
+ */
+export function queryContainerAround(
+  element: Locator
+): Promise<{ width: number; isRoot: boolean } | null> {
+  return element.evaluate((start) => {
+    let node: Element | null = start;
+    while (node !== null) {
+      const type = getComputedStyle(node).containerType;
+      if (type !== "" && type !== "normal") {
+        return {
+          width: node.getBoundingClientRect().width,
+          isRoot: node.hasAttribute("data-plugin-ui"),
+        };
+      }
+      node = node.parentElement;
+    }
+    return null;
+  });
+}
+
 /** Vertical center of `element`'s first line box, in viewport pixels. */
 export function firstLineCenter(element: Locator): Promise<number> {
   return element.evaluate((target) => {

@@ -8,7 +8,9 @@
  * Remote UI surface the app draws a Plugin page with - and holds every selector
  * in `MAP_EDITOR_CSS` to the element it is meant for, found through what that
  * element holds rather than through its place; the one selector that sizes a
- * whole row of controls is held to that row in document order.
+ * whole row of controls is held to that row in document order. The stylesheet's
+ * two switches are held too: the narrow block asks the editor root's own width
+ * (a `@container` query), and the 44px touch minimum asks for a coarse pointer.
  *
  * The kit draws no Frame (it mounts a tree with no runtime to hand it a port),
  * so the three selectors that reach into the Frame's own wrapper are proven by
@@ -396,15 +398,15 @@ const EXPECTATIONS: ReadonlyArray<Expectation> = [
   { selector: `${ROOT} > div:nth-child(4)`, state: "closed", expected: slotFour },
   { selector: `${ROOT} > div:nth-child(6)`, state: "closed", expected: slotSix },
   {
-    // The narrow page's 44px touch minimum, on every control it draws (#779,
-    // #775 Decision 6).
+    // The touch minimum is not a width rule: every control the page draws is a
+    // 44px target on any coarse pointer, at any width (#779, #775 Decision 6).
     selector: `${ROOT} button`,
     state: "open",
     expected: (mounted) => Array.from(mounted.root.querySelectorAll("button")),
   },
   {
-    // The narrow block's 44px targets: every tool in the belt, and the Layers
-    // toggle that closes the belt (#779, #775 Decision 6).
+    // The belt's tools, each held to its own width inside the scrolling row, so
+    // the layout never squashes one (#779).
     selector: `${ROOT} > div:nth-child(2) > button`,
     state: "open",
     expected: () => BELT_LABELS.map((key) => screen.getByRole("button", { name: en[key] })),
@@ -554,5 +556,31 @@ describe("the floating editor's stylesheet against the host's DOM", () => {
     } finally {
       await mounted.unmount();
     }
+  });
+
+  it("switches the narrow page on the editor container's width, and sizes touch targets by pointer", () => {
+    const scope = '[data-plugin-ui="plugin-ui-1"]';
+    const scoped = scopePluginCss(MAP_EDITOR_CSS, scope);
+    expect(scoped).not.toBe("");
+
+    // The root is the query container the narrow block asks about, so a narrow
+    // editor inside a wide window gets the narrow chrome (#779, review R1).
+    expect(scoped).toMatch(
+      /[^}]*div\[data-plugin-ui\]\s*\{[^}]*container-type: inline-size[^}]*\}/
+    );
+    expect(scoped).toContain("@container (max-width: 639px)");
+    expect(scoped).toContain("@container (min-width: 640px)");
+    expect(scoped).not.toMatch(/@media \(max-width/);
+    expect(scoped).not.toMatch(/@media \(min-width/);
+
+    // The 44px touch minimum is a pointer rule, not a width rule: a coarse
+    // pointer gets it at any width, and no width rule reintroduces it (#779,
+    // #775 Decision 6).
+    expect(scoped).toContain("@media (pointer: coarse)");
+    const coarse = scoped.slice(scoped.indexOf("@media (pointer: coarse)"));
+    expect(coarse).toContain("min-width: 2.75rem; min-height: 2.75rem");
+    expect(scoped.slice(0, scoped.indexOf("@media (pointer: coarse)"))).not.toContain(
+      "min-width: 2.75rem; min-height: 2.75rem"
+    );
   });
 });

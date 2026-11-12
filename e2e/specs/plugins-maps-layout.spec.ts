@@ -4,14 +4,16 @@
 // around a `fill` Frame, which the unit guard `layout-css.test.tsx` holds
 // selector by selector; what only a real engine can say is that the Frame's box
 // really is the page body's, at the two desktop sizes #778 names, and that
-// opening or closing any card or popover never moves it.
+// opening or closing any card or popover never moves it. The narrow switch is a
+// container query on the editor's own root, so the page's chrome follows the
+// editor's width rather than the window's.
 // Tagged @sandbox because Maps runs in the Plugin sandbox: the lane runs it on
 // Chromium, WebKit, and Firefox.
 
 import type { Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { pressUntilFocused, tabTo } from "../support/keyboard";
-import { pageScrollWidths } from "../support/layout";
+import { pageScrollWidths, queryContainerAround } from "../support/layout";
 import { expect, test } from "../support/test";
 
 const primaryNav = (page: Page) => page.getByRole("listbox", { name: "Primary navigation" });
@@ -241,10 +243,43 @@ test.describe("Maps floating layout at 1024x768 @wf:plugins-maps-layout @sandbox
     expectSameBox(frame, body, "the Frame and the page body");
     await capture(page, "maps-layout-1024");
   });
+
+  test("the chrome switches on the editor's own width, not the viewport's", async ({ page }) => {
+    await openEditor(page);
+
+    // The editor root is the query container the stylesheet asks about: with
+    // the app's sidebar open the editor is narrower than the window, so the
+    // editor's width, not the viewport's, is what picks the chrome (#779,
+    // review R1).
+    const container = await queryContainerAround(toolButton(page, "Pencil"));
+    expect(container, "the page draws no query container above the belt").not.toBeNull();
+    expect(container?.isRoot, "the editor root is the query container").toBe(true);
+
+    // The chrome follows that width: a wide editor keeps the desktop pill and
+    // its own three controls, and a narrow one folds them into the overflow
+    // popover. Reading the viewport instead would get a narrow editor in a wide
+    // window wrong, and that is the case this test exists for.
+    if ((container?.width ?? 0) < 640) {
+      await expect(toolButton(page, "More actions")).toBeVisible();
+      await expect(toolButton(page, "Export")).toBeHidden();
+    } else {
+      await expect(toolButton(page, "Export")).toBeVisible();
+      await expect(toolButton(page, "More actions")).toBeHidden();
+    }
+
+    // The 44px touch minimum is a pointer rule, not a width one: this desktop
+    // pointer keeps the host's own controls below the touch size (#779, #775
+    // Decision 6).
+    const pencil = await toolButton(page, "Pencil").boundingBox();
+    if (pencil === null) throw new Error("the Pencil control is not drawn");
+    expect(pencil.width).toBeLessThan(44);
+  });
 });
 
 test.describe("Maps narrow layout at 390x844 @wf:plugins-maps-layout @sandbox", () => {
-  test.use({ viewport: { width: 1440, height: 900 } });
+  // A phone is a coarse pointer, which is what the touch minimum asks for: the
+  // 44px targets are a pointer rule, so the run below has to report one (#779).
+  test.use({ viewport: { width: 1440, height: 900 }, hasTouch: true });
 
   test("the narrow page never scrolls sideways and every control is a 44px target", async ({
     page,

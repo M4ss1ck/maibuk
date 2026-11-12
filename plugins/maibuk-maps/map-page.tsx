@@ -453,12 +453,14 @@ const TOOL_BELT: ReadonlyArray<{ tool: MapTool; label: MapsKey; icon: string }> 
  * `data-plugin-ui`) and each card is one of its slots: its children in the order
  * #775 Decision 7 fixes the tab order in. A shut card keeps its slot and empties
  * it, so a card's place never depends on another card's state, and the Frame's
- * box never changes when one opens or closes. `layout-css.test.tsx` mounts the
- * page through the host renderer and holds every selector here to the element it
- * is meant for.
+ * box never changes when one opens or closes. The narrow page's block is a
+ * `@container` query on this root's own width, so a narrow editor inside a wide
+ * window gets the narrow chrome. `layout-css.test.tsx` mounts the page through
+ * the host renderer and holds every selector here to the element it is meant
+ * for.
  */
 export const MAP_EDITOR_CSS = `
-div[data-plugin-ui] { position: relative; display: block; height: 100%; min-height: 0; overflow: hidden; }
+div[data-plugin-ui] { position: relative; display: block; height: 100%; min-height: 0; overflow: hidden; container-type: inline-size; }
 div[data-plugin-ui] > div:nth-child(5) { position: absolute; inset: 0; }
 div[data-plugin-ui] > div:nth-child(5) > [data-plugin-frame="embedded"] { height: 100%; min-height: 0; }
 div[data-plugin-ui] > div:nth-child(5) > [data-plugin-frame="embedded"] > div { height: 100%; min-height: 0; border-width: 0; border-radius: 0; }
@@ -480,12 +482,14 @@ div[data-plugin-ui] > div:nth-child(6) { top: 4.5rem; right: 0.75rem; width: 18.
 div[data-plugin-ui] > div:nth-child(7) { top: 0.75rem; right: 0.75rem; }
 div[data-plugin-ui] > div:nth-child(8) { right: 0.75rem; bottom: 0.75rem; }
 /* The narrow page (#779, #775 Decision 6): the drawing still fills the page,
-   but the chrome turns into bars. The two top pills become one top bar, the
-   belt runs along the bottom and scrolls sideways with 44px targets, and
+   but the chrome turns into bars. The switch is on the editor's own container
+   width, not the viewport's, so a narrow editor inside a wide window (the app's
+   sidebar taking the rest) gets the narrow chrome too. The two top pills become
+   one top bar, the belt runs along the bottom and scrolls sideways, and
    Properties and Layers become bottom regions at most half the page tall, the
    pill's three controls fold into one overflow popover, and a toggle gives a
    bottom region the whole page. */
-@media (max-width: 639px) {
+@container (max-width: 639px) {
   /* The left pill spans the bar; the right pill gives up its own box, so the
      bar shows through and the two read as one. */
   div[data-plugin-ui] > div:nth-child(1) { top: 0; left: 0; right: 0; padding: 0.5rem 3.5rem 0.5rem 0.5rem; border-width: 0 0 1px; border-radius: 0; }
@@ -502,12 +506,9 @@ div[data-plugin-ui] > div:nth-child(8) { right: 0.75rem; bottom: 0.75rem; }
   div[data-plugin-ui] > div:nth-child(7) { top: 0; right: 0.5rem; left: auto; padding: 0.5rem 0; border-width: 0; border-radius: 0; background: none; box-shadow: none; }
   /* The belt lies along the bottom, one row that scrolls sideways. */
   div[data-plugin-ui] > div:nth-child(2) { top: auto; bottom: 0; left: 0; right: 0; flex-direction: row; overflow-x: auto; overflow-y: hidden; transform: none; padding: 0.5rem; border-width: 1px 0 0; border-radius: 0; }
-  /* Every control the narrow page shows is a 44px target, the touch minimum
-     (#779, #775 Decision 6): the host's icon buttons are 32px wide at their
-     default size, which a thumb cannot hit. */
-  div[data-plugin-ui] button { min-width: 2.75rem; min-height: 2.75rem; }
-  /* Every tool is a 44px target that never shrinks inside the scrolling row. */
-  div[data-plugin-ui] > div:nth-child(2) > button { flex: 0 0 auto; min-width: 2.75rem; min-height: 2.75rem; }
+  /* Every tool stays its own width inside the scrolling row, so the belt never
+     squashes a control the author is aiming at (#779). */
+  div[data-plugin-ui] > div:nth-child(2) > button { flex: 0 0 auto; }
   /* The three pill controls give way to one overflow popover, so the bar keeps
      one row of icons the width of the page (#779, #775 Decision 6). */
   div[data-plugin-ui] > div:nth-child(7) > div:nth-child(1) { display: none; }
@@ -546,8 +547,15 @@ div[data-plugin-ui] > div:nth-child(8) { right: 0.75rem; bottom: 0.75rem; }
 }
 /* At the desktop width the pill's own three controls show again, and the
    overflow stays out of the page (#779). */
-@media (min-width: 640px) {
+@container (min-width: 640px) {
   div[data-plugin-ui] > div:nth-child(7) > div:nth-child(2) { display: none; }
+}
+/* A coarse pointer gets a thumb-sized target on every control the page draws,
+   at any width (#779, #775 Decision 6): the host's icon buttons are 32px wide
+   at their default size, which a thumb cannot hit. This keys on the pointer,
+   not the width, so a touchscreen laptop at desktop size is served too. */
+@media (pointer: coarse) {
+  div[data-plugin-ui] button { min-width: 2.75rem; min-height: 2.75rem; }
 }
 `;
 
