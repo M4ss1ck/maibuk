@@ -93,6 +93,18 @@ async function pressControl(page: Page, control: Locator): Promise<void> {
   await page.keyboard.press("Enter");
 }
 
+test.use({
+  library: "empty",
+  plugins: ["maibuk-maps"],
+  pluginApprovals: [
+    {
+      pluginId: "maibuk-maps",
+      granted: ["library:read", "editor:write", "files:pick", "files:save"],
+    },
+  ],
+  builtInPlugins: [{ id: "maibuk-maps" }],
+});
+
 test.describe("Maps floating layout @wf:plugins-maps-layout @sandbox", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
