@@ -479,6 +479,26 @@ div[data-plugin-ui] > div:nth-child(4) { top: 50%; left: 3.75rem; width: 15rem; 
 div[data-plugin-ui] > div:nth-child(6) { top: 4.5rem; right: 0.75rem; width: 18.5rem; }
 div[data-plugin-ui] > div:nth-child(7) { top: 0.75rem; right: 0.75rem; }
 div[data-plugin-ui] > div:nth-child(8) { right: 0.75rem; bottom: 0.75rem; }
+/* The narrow page (#779, #775 Decision 6): the drawing still fills the page,
+   but the chrome turns into bars. The two top pills become one top bar, the
+   belt runs along the bottom and scrolls sideways with 44px targets, and
+   Properties and Layers become bottom regions at most half the page tall. The
+   overflow popover and the full-height toggle are chunk 2's, not this block's. */
+@media (max-width: 639px) {
+  /* The left pill spans the bar; the right pill gives up its own box, so the
+     bar shows through and the two read as one. */
+  div[data-plugin-ui] > div:nth-child(1) { top: 0; left: 0; right: 0; padding: 0.5rem; border-width: 0 0 1px; border-radius: 0; }
+  div[data-plugin-ui] > div:nth-child(7) { top: 0; right: 0.5rem; left: auto; padding: 0.5rem 0; border-width: 0; border-radius: 0; background: none; box-shadow: none; }
+  /* The belt lies along the bottom, one row that scrolls sideways. */
+  div[data-plugin-ui] > div:nth-child(2) { top: auto; bottom: 0; left: 0; right: 0; flex-direction: row; overflow-x: auto; overflow-y: hidden; transform: none; padding: 0.5rem; border-width: 1px 0 0; border-radius: 0; }
+  /* Every tool is a 44px target that never shrinks inside the scrolling row. */
+  div[data-plugin-ui] > div:nth-child(2) > button { flex: 0 0 auto; min-width: 2.75rem; min-height: 2.75rem; }
+  /* Layers and Properties are bottom regions, each at most half the page tall. */
+  div[data-plugin-ui] > div:nth-child(4) { top: auto; bottom: 4.25rem; left: 0.5rem; right: 0.5rem; width: auto; transform: none; max-height: calc(50% - 4.25rem); }
+  div[data-plugin-ui] > div:nth-child(6) { top: auto; bottom: 4.25rem; left: 0.5rem; right: 0.5rem; width: auto; max-height: calc(50% - 4.25rem); }
+  /* The zoom cluster moves under the bar, clear of the belt and the regions. */
+  div[data-plugin-ui] > div:nth-child(8) { top: 3.25rem; right: 0.5rem; bottom: auto; }
+}
 `;
 
 /** What a line converted from a Shape says it was, one string per kind. */

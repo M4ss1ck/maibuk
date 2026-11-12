@@ -6,8 +6,9 @@
  * move the Frame or a card, and the page would keep rendering with nothing in
  * its way. This suite mounts the Map page through the host renderer - the same
  * Remote UI surface the app draws a Plugin page with - and holds every selector
- * in `MAP_EDITOR_CSS` to the one element it is meant for, found through what
- * that element holds rather than through its place.
+ * in `MAP_EDITOR_CSS` to the element it is meant for, found through what that
+ * element holds rather than through its place; the one selector that sizes a
+ * whole row of controls is held to that row in document order.
  *
  * The kit draws no Frame (it mounts a tree with no runtime to hand it a port),
  * so the three selectors that reach into the Frame's own wrapper are proven by
@@ -190,11 +191,30 @@ interface Expectation {
   selector: string;
   /** The state whose page the selector matches in. */
   state: State;
-  /** The element the selector is meant for, found through what that element holds. */
-  expected(mounted: Mounted): Element;
+  /**
+   * The element the selector is meant for, found through what that element
+   * holds; or every element, in document order, for a selector that sizes a
+   * whole row of controls at once (the narrow tool belt's 44px targets).
+   */
+  expected(mounted: Mounted): Element | Element[];
   /** The selector reaches into the Frame, which the kit does not draw. */
   needsFrame?: true;
 }
+
+/** The tool belt's controls in page order: every tool, then the Layers toggle. */
+const BELT_LABELS = [
+  "tools.select",
+  "tools.pencil",
+  "tools.pen",
+  "tools.bucket",
+  "tools.area",
+  "tools.ellipse",
+  "tools.rectangle",
+  "tools.polygon",
+  "tools.insert",
+  "tools.eraser",
+  "chrome.layers",
+] as const;
 
 const EXPECTATIONS: ReadonlyArray<Expectation> = [
   {
@@ -268,6 +288,13 @@ const EXPECTATIONS: ReadonlyArray<Expectation> = [
   { selector: `${ROOT} > div:nth-child(3)`, state: "closed", expected: slotThree },
   { selector: `${ROOT} > div:nth-child(4)`, state: "closed", expected: slotFour },
   { selector: `${ROOT} > div:nth-child(6)`, state: "closed", expected: slotSix },
+  {
+    // The narrow block's 44px targets: every tool in the belt, and the Layers
+    // toggle that closes the belt (#779, #775 Decision 6).
+    selector: `${ROOT} > div:nth-child(2) > button`,
+    state: "open",
+    expected: () => BELT_LABELS.map((key) => screen.getByRole("button", { name: en[key] })),
+  },
   { selector: `${ROOT} > div:nth-child(3):empty`, state: "closed", expected: slotThree },
   { selector: `${ROOT} > div:nth-child(4):empty`, state: "closed", expected: slotFour },
   { selector: `${ROOT} > div:nth-child(6):empty`, state: "closed", expected: slotSix },
@@ -343,8 +370,12 @@ describe("the floating editor's stylesheet against the host's DOM", () => {
           expect(matched.length, selector).toBe(0);
           continue;
         }
-        expect(matched.length, selector).toBe(1);
-        expect(matched[0], selector).toBe(expectation.expected(mounted));
+        const expected = expectation.expected(mounted);
+        const wanted = Array.isArray(expected) ? expected : [expected];
+        expect(matched.length, selector).toBe(wanted.length);
+        for (const [index, element] of wanted.entries()) {
+          expect(matched[index], selector).toBe(element);
+        }
       }
     } finally {
       await mounted.unmount();
