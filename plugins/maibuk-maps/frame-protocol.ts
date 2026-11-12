@@ -8,17 +8,21 @@
  *
  * The Worker sends the whole scene on every change and when a Frame connects,
  * and the author's PDF Font once as the Frame connects; it asks the Frame to
- * rasterize an export SVG, since only the Frame's document has a canvas. The
- * Frame reports a finished Pencil stroke, a finished Pen line, a finished Area
- * Fill outline, an
+ * rasterize an export SVG, since only the Frame's document has a canvas, and to
+ * clean and measure one uploaded picture, since only it has a DOM. An uploaded
+ * picture's bytes travel to the Frame once per asset, the way the font does.
+ * The Frame reports a finished Pencil stroke, a finished Pen line, a finished
+ * Area Fill outline, an
  * Eraser
  * drag, a drawn Shape, a Bucket pour, a dropped Stamp, a picked Element, a
- * Select drag that moved one, a Map Label's bend dragged from its handle, and
- * the pixels an export asked for. Points are page millimetres, the same space
- * as `page.widthMm/heightMm`. Every inbound message is validated here, and a
- * malformed one is dropped. This module imports only its own files.
+ * Select drag that moved one, a Map Label's bend dragged from its handle, the
+ * pixels an export asked for, and what one uploaded picture measured. Points
+ * are page millimetres, the same space as `page.widthMm/heightMm`. Every
+ * inbound message is validated here, and a malformed one is dropped. This
+ * module imports only its own files.
  */
 
+import type { MapAssetMime } from "./assets";
 import type { MapDocument, MapPoint, ShapeKind } from "./maps";
 import { isShapeKind } from "./maps";
 import { canMove, type SceneShape, sceneRender } from "./scene";
@@ -124,8 +128,64 @@ export interface FrameFontMessage {
   bytes: ArrayBuffer;
 }
 
+/**
+ * Worker -> Frame: an uploaded picture's bytes (#756), sent once per asset the
+ * way the PDF Font is sent once. `data` is base64, so the Frame can keep the
+ * picture as a `blob:` URL under `id` and a scene can name it by id instead of
+ * carrying a picture through every scene message.
+ */
+export interface FrameAssetMessage {
+  kind: "asset";
+  id: string;
+  mime: MapAssetMime;
+  /** The picture's bytes, base64-encoded, exactly as the Library stores them. */
+  data: string;
+}
+
+/**
+ * Worker -> Frame: clean and measure one uploaded picture (#756). The Worker
+ * has no DOM: the Frame is where an untrusted SVG is sanitized and where a
+ * raster is decoded for its intrinsic size, before the Library keeps anything.
+ */
+export interface IngestAssetMessage {
+  kind: "ingest-asset";
+  requestId: number;
+  mime: MapAssetMime;
+  /** The uploaded bytes, base64-encoded, as the file arrived. */
+  data: string;
+}
+
+/**
+ * Frame -> Worker: what one `ingest-asset` produced. `data` is the bytes the
+ * Library keeps, base64: the sanitized markup of an SVG, or the uploaded bytes
+ * of a raster. `recolorable` says whether the picture draws in a single paint,
+ * so a Custom Stamp can tint it.
+ */
+export interface AssetIngestedMessage {
+  kind: "asset-ingested";
+  requestId: number;
+  data: string;
+  /** The picture's intrinsic width in pixels. */
+  width: number;
+  /** The picture's intrinsic height in pixels. */
+  height: number;
+  recolorable: boolean;
+}
+
+/** Frame -> Worker: why an upload could not be ingested, under its `requestId`. */
+export interface IngestErrorMessage {
+  kind: "ingest-error";
+  requestId: number;
+  reason: "invalid-image";
+}
+
 /** Every message the Worker may send the Frame. */
-export type WorkerToFrameMessage = FrameSceneMessage | FrameFontMessage | FrameRasterizeMessage;
+export type WorkerToFrameMessage =
+  | FrameSceneMessage
+  | FrameFontMessage
+  | FrameRasterizeMessage
+  | FrameAssetMessage
+  | IngestAssetMessage;
 
 /** The picture a rasterize request asks for: PNG, or JPEG at a quality. */
 export type RasterFormat = "png" | { jpeg: number };
@@ -275,7 +335,9 @@ export type FrameToWorkerMessage =
   | FrameMoveMessage
   | FrameBendMessage
   | FrameRasterizedMessage
-  | FrameRasterizeErrorMessage;
+  | FrameRasterizeErrorMessage
+  | AssetIngestedMessage
+  | IngestErrorMessage;
 
 function isPoint(value: unknown): value is MapPoint {
   return (
@@ -286,6 +348,11 @@ function isPoint(value: unknown): value is MapPoint {
     typeof value[1] === "number" &&
     Number.isFinite(value[1])
   );
+}
+
+/** Whether a value is a finite number a picture may be measured by. */
+function isPositiveNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
 }
 
 /**
@@ -300,7 +367,9 @@ function isPoint(value: unknown): value is MapPoint {
  * an insert needs one finite page point; a move needs an Element id and a
  * finite offset; a bend needs an Element id and a finite bend; a rasterize
  * reply needs a finite request id and either an `ArrayBuffer` of bytes or a
- * non-empty error, never both.
+ * non-empty error, never both; an ingest reply needs a finite request id and
+ * either a positive picture size with its bytes and whether it draws in one
+ * paint, or the single reason an upload was refused.
  */
 export function parseFrameMessage(data: unknown): FrameToWorkerMessage | null {
   if (typeof data !== "object" || data === null) return null;
@@ -410,6 +479,25 @@ export function parseFrameMessage(data: unknown): FrameToWorkerMessage | null {
       return { kind: "rasterized", requestId: message.requestId, error: message.error };
     }
     return null;
+  }
+  if (message.kind === "asset-ingested") {
+    if (typeof message.requestId !== "number" || !Number.isFinite(message.requestId)) return null;
+    if (typeof message.data !== "string" || message.data === "") return null;
+    if (!isPositiveNumber(message.width) || !isPositiveNumber(message.height)) return null;
+    if (typeof message.recolorable !== "boolean") return null;
+    return {
+      kind: "asset-ingested",
+      requestId: message.requestId,
+      data: message.data,
+      width: message.width,
+      height: message.height,
+      recolorable: message.recolorable,
+    };
+  }
+  if (message.kind === "ingest-error") {
+    if (typeof message.requestId !== "number" || !Number.isFinite(message.requestId)) return null;
+    if (message.reason !== "invalid-image") return null;
+    return { kind: "ingest-error", requestId: message.requestId, reason: "invalid-image" };
   }
   return null;
 }

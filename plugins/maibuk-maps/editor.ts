@@ -888,6 +888,11 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       case "bendLabel":
         bendDragged(message.id, message.bend);
         break;
+      // An uploaded picture's ingest reply (#756) changes no Element: the
+      // Insert panel resolves its pending uploads here once it can ask.
+      case "asset-ingested":
+      case "ingest-error":
+        break;
     }
   }
 

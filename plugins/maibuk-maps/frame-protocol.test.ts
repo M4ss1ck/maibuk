@@ -4,6 +4,9 @@
  * image, turns the export SVG into pixels, and the reply it answers with. The
  * Frame mirrors the request shape in `assets/ui/map.js`; the Worker validates
  * every reply here before it reaches the editor.
+ *
+ * The asset ingest pair (#756) is validated here too: the Frame cleans and
+ * measures an uploaded picture, and the Worker keeps only what came back.
  */
 
 import { describe, expect, it } from "vitest";
@@ -69,5 +72,75 @@ describe("parseFrameMessage() for a rasterize reply", () => {
     expect(
       parseFrameMessage(rasterizeMessage(1, "<svg/>", { widthPx: 10, heightPx: 10 }, "png"))
     ).toBeNull();
+  });
+});
+
+describe("parseFrameMessage() for an asset ingest reply", () => {
+  const SVG = "PHN2Zy8+";
+
+  it("reads what the Frame measured and the bytes the Library keeps", () => {
+    expect(
+      parseFrameMessage({
+        kind: "asset-ingested",
+        requestId: 3,
+        data: SVG,
+        width: 24,
+        height: 36,
+        recolorable: true,
+      })
+    ).toEqual({
+      kind: "asset-ingested",
+      requestId: 3,
+      data: SVG,
+      width: 24,
+      height: 36,
+      recolorable: true,
+    });
+  });
+
+  it("reads a refused upload under its own request id", () => {
+    expect(
+      parseFrameMessage({ kind: "ingest-error", requestId: 4, reason: "invalid-image" })
+    ).toEqual({ kind: "ingest-error", requestId: 4, reason: "invalid-image" });
+  });
+
+  it("drops an ingest reply that could not be stored", () => {
+    const valid = {
+      kind: "asset-ingested",
+      requestId: 3,
+      data: SVG,
+      width: 24,
+      height: 36,
+      recolorable: true,
+    };
+    for (const message of [
+      { ...valid, requestId: undefined },
+      { ...valid, requestId: "3" },
+      { ...valid, data: "" },
+      { ...valid, data: 7 },
+      // A picture of no size would draw nothing, and the Library refuses it.
+      { ...valid, width: 0 },
+      { ...valid, height: -1 },
+      { ...valid, width: Number.NaN },
+      { ...valid, recolorable: "yes" },
+      { ...valid, recolorable: undefined },
+      { kind: "ingest-error", requestId: 4, reason: "too-large" },
+      { kind: "ingest-error", requestId: 4 },
+      { kind: "ingest-error", reason: "invalid-image" },
+    ]) {
+      expect(parseFrameMessage(message)).toBeNull();
+    }
+  });
+
+  it("does not read the Worker's own ingest request back as a Frame message", () => {
+    expect(
+      parseFrameMessage({
+        kind: "ingest-asset",
+        requestId: 5,
+        mime: "image/svg+xml",
+        data: SVG,
+      })
+    ).toBeNull();
+    expect(parseFrameMessage({ kind: "asset", id: "a1", mime: "image/png", data: SVG })).toBeNull();
   });
 });

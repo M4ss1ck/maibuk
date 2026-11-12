@@ -9,7 +9,7 @@
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { MAP_FRAME_SRC } from "./map-page";
 import { parseFrameMessage, sceneMessage } from "./frame-protocol";
 import {
@@ -24,6 +24,8 @@ import { TEXT_FONT_FAMILY, sceneToSvg } from "./scene";
 const HTML = readFileSync(join(__dirname, "assets/ui/map.html"), "utf8");
 const CSS = readFileSync(join(__dirname, "assets/ui/fonts.css"), "utf8");
 const LIBRARY = readFileSync(join(__dirname, "assets/ui/lib/htm-preact-standalone.umd.js"), "utf8");
+const PURIFY = readFileSync(join(__dirname, "assets/ui/lib/purify.min.js"), "utf8");
+const INGEST = readFileSync(join(__dirname, "assets/ui/svg-ingest.js"), "utf8");
 const SCRIPT = readFileSync(join(__dirname, "assets/ui/map.js"), "utf8");
 
 /** One `window.maibuk.port`: records what the Frame posts, delivers scenes. */
@@ -53,7 +55,7 @@ interface Frame {
   scene(overrides?: Record<string, unknown>): void;
 }
 
-/** Loads the Frame's markup, the vendored library, and its script. */
+/** Loads the Frame's markup, the vendored libraries, and its scripts. */
 function loadFrame(): Frame {
   document.documentElement.innerHTML = HTML.replace(/^<!doctype html>\s*/i, "");
   const port = new FakePort();
@@ -65,7 +67,11 @@ function loadFrame(): Frame {
     onReady: (cleanup: () => void) => cleanups.push(cleanup),
   };
   try {
+    // The page's own order: the drawing library, then the sanitizer and the
+    // ingest rules an uploaded picture needs, then the Frame's script.
     new Function(LIBRARY)();
+    new Function(PURIFY)();
+    new Function(INGEST)();
     new Function(SCRIPT)();
   } finally {
     delete (globalThis as Record<string, unknown>).__mapTestHooks;
@@ -151,6 +157,8 @@ afterEach(() => {
   for (const cleanup of frame?.cleanups ?? []) cleanup();
   frame = null;
   delete (window as unknown as { maibuk?: unknown }).maibuk;
+  delete (globalThis as Record<string, unknown>).DOMPurify;
+  delete (globalThis as Record<string, unknown>).maibukSvgIngest;
   delete (globalThis as Record<string, unknown>).FontFace;
   delete (document as unknown as { fonts?: unknown }).fonts;
   document.documentElement.innerHTML = "";
@@ -160,8 +168,18 @@ describe("the Map Frame page", () => {
   it("mounts a document that exists in the Plugin folder", () => {
     expect(MAP_FRAME_SRC).toBe("assets/ui/map.html");
     expect(existsSync(join(__dirname, MAP_FRAME_SRC))).toBe(true);
-    expect(HTML).toContain('src="lib/htm-preact-standalone.umd.js"');
-    expect(HTML).toContain('src="map.js"');
+    // An uploaded picture is cleaned in the Frame (#756), so the sanitizer and
+    // the ingest rules load before map.js, which reaches them only when asked.
+    const page = new DOMParser().parseFromString(HTML, "text/html");
+    const scripts = Array.from(page.querySelectorAll("script")).map((script) =>
+      script.getAttribute("src")
+    );
+    expect(scripts).toEqual([
+      "lib/htm-preact-standalone.umd.js",
+      "lib/purify.min.js",
+      "svg-ingest.js",
+      "map.js",
+    ]);
   });
 });
 
@@ -281,6 +299,266 @@ describe("the author's PDF Font", () => {
     frame.scene({ elements: [sceneElement()] });
 
     expect(document.querySelector("svg")).not.toBeNull();
+  });
+});
+
+/** One picture's bytes, base64, as they cross the port (#756). */
+const base64 = (text: string): string => btoa(text);
+const textOf = (data: string): string => atob(data);
+
+/** Waits for one reply the Frame posts a turn later, since an ingest is async. */
+async function reply(port: FakePort, index = 0): Promise<Record<string, unknown>> {
+  await vi.waitFor(() => expect(port.messages.length).toBeGreaterThan(index));
+  const message = port.messages[index];
+  if (message === undefined) throw new Error(`the Frame posted no reply at ${index}`);
+  return message;
+}
+
+/** One uploaded picture, in the namespace a real SVG file declares. */
+function picture(body: string): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg">${body}</svg>`;
+}
+
+describe("ingesting an uploaded SVG", () => {
+  it("sanitizes it, measures it, and says whether it draws in one paint", async () => {
+    frame = loadFrame();
+    const markup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 36"><script>alert(1)</script><path d="M 0 0 L 24 0 L 24 36 Z" fill="#1f2933"/></svg>`;
+    frame.port.deliver({
+      kind: "ingest-asset",
+      requestId: 9,
+      mime: "image/svg+xml",
+      data: base64(markup),
+    });
+
+    const answer = await reply(frame.port);
+    expect(answer).toMatchObject({
+      kind: "asset-ingested",
+      requestId: 9,
+      width: 24,
+      height: 36,
+      recolorable: true,
+    });
+    // The Library keeps the cleaned markup, never the bytes the file arrived with.
+    const kept = textOf(String(answer.data));
+    expect(kept).not.toContain("script");
+    expect(kept).toContain("<path");
+  });
+
+  it("calls a two-colour picture not recolorable", async () => {
+    frame = loadFrame();
+    const markup = picture(
+      `<path d="M 0 0 L 4 0 L 4 4 Z" fill="#8b1a1a"/><path d="M 6 0 L 8 0" fill="none" stroke="#3b6e8f"/>`
+    );
+    frame.port.deliver({
+      kind: "ingest-asset",
+      requestId: 1,
+      mime: "image/svg+xml",
+      data: base64(markup),
+    });
+
+    expect(await reply(frame.port)).toMatchObject({ recolorable: false });
+  });
+
+  it("measures by the declared size when no viewBox says it, and 100 by 100 as a last resort", async () => {
+    frame = loadFrame();
+    const declared = `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="360"><rect width="1" height="1"/></svg>`;
+    frame.port.deliver({
+      kind: "ingest-asset",
+      requestId: 1,
+      mime: "image/svg+xml",
+      data: base64(declared),
+    });
+    expect(await reply(frame.port)).toMatchObject({ width: 240, height: 360 });
+
+    frame.port.deliver({
+      kind: "ingest-asset",
+      requestId: 2,
+      mime: "image/svg+xml",
+      data: base64(picture(`<rect width="1" height="1"/>`)),
+    });
+    expect(await reply(frame.port, 1)).toMatchObject({
+      requestId: 2,
+      width: 100,
+      height: 100,
+    });
+  });
+
+  it("refuses an upload that is not a picture", async () => {
+    frame = loadFrame();
+    frame.port.deliver({
+      kind: "ingest-asset",
+      requestId: 5,
+      mime: "image/svg+xml",
+      data: base64("<div>not a picture</div>"),
+    });
+
+    expect(await reply(frame.port)).toEqual({
+      kind: "ingest-error",
+      requestId: 5,
+      reason: "invalid-image",
+    });
+  });
+});
+
+describe("ingesting an uploaded raster", () => {
+  /** jsdom has no decoder, so the Frame is given one that reports a size. */
+  function stubBitmap(size: { width: number; height: number }): {
+    blobs: Blob[];
+    closed: number;
+  } {
+    const blobs: Blob[] = [];
+    const state = { blobs, closed: 0 };
+    (globalThis as Record<string, unknown>).createImageBitmap = async (blob: Blob) => {
+      blobs.push(blob);
+      return {
+        width: size.width,
+        height: size.height,
+        close: () => {
+          state.closed += 1;
+        },
+      };
+    };
+    return state;
+  }
+
+  afterEach(() => {
+    delete (globalThis as Record<string, unknown>).createImageBitmap;
+  });
+
+  it("measures it from the decoded bitmap, and never calls it recolorable", async () => {
+    const bitmap = stubBitmap({ width: 640, height: 480 });
+    frame = loadFrame();
+    frame.port.deliver({
+      kind: "ingest-asset",
+      requestId: 2,
+      mime: "image/png",
+      data: "iVBORw0KGgo=",
+    });
+
+    expect(await reply(frame.port)).toEqual({
+      kind: "asset-ingested",
+      requestId: 2,
+      // A raster is stored exactly as uploaded: its paints are pixels.
+      data: "iVBORw0KGgo=",
+      width: 640,
+      height: 480,
+      recolorable: false,
+    });
+    expect(bitmap.blobs[0]?.type).toBe("image/png");
+    expect(bitmap.closed).toBe(1);
+  });
+
+  it("refuses a picture the decoder rejects, or that this engine cannot decode", async () => {
+    (globalThis as Record<string, unknown>).createImageBitmap = async () => {
+      throw new Error("broken bytes");
+    };
+    frame = loadFrame();
+    frame.port.deliver({
+      kind: "ingest-asset",
+      requestId: 3,
+      mime: "image/jpeg",
+      data: "/9j/4AAQ",
+    });
+    expect(await reply(frame.port)).toEqual({
+      kind: "ingest-error",
+      requestId: 3,
+      reason: "invalid-image",
+    });
+
+    // jsdom has no createImageBitmap at all, which is what an engine without
+    // the API looks like: the upload is refused rather than stored unmeasured.
+    delete (globalThis as Record<string, unknown>).createImageBitmap;
+    frame.port.deliver({
+      kind: "ingest-asset",
+      requestId: 4,
+      mime: "image/png",
+      data: "AAAA",
+    });
+    expect(await reply(frame.port, 1)).toEqual({
+      kind: "ingest-error",
+      requestId: 4,
+      reason: "invalid-image",
+    });
+  });
+});
+
+describe("an ingest request", () => {
+  it("drops one with no id, no picture type, or no bytes, and answers the next valid one", async () => {
+    frame = loadFrame();
+    for (const message of [
+      { kind: "ingest-asset" },
+      { kind: "ingest-asset", requestId: 1, mime: "", data: "AA" },
+      { kind: "ingest-asset", requestId: 1, mime: "image/svg+xml", data: "" },
+      { kind: "ingest-asset", requestId: "1", mime: "image/svg+xml", data: "AA" },
+      "nonsense",
+    ]) {
+      frame.port.deliver(message);
+    }
+
+    frame.port.deliver({
+      kind: "ingest-asset",
+      requestId: 7,
+      mime: "image/svg+xml",
+      data: base64(picture(`<rect width="4" height="4"/>`)),
+    });
+
+    // A malformed request is dropped, not answered: the one after it is the
+    // only reply the Worker gets, and it keeps the id it asked with.
+    expect(await reply(frame.port)).toMatchObject({ kind: "asset-ingested", requestId: 7 });
+    expect(frame.port.messages).toHaveLength(1);
+  });
+});
+
+describe("an uploaded picture's bytes", () => {
+  it("keeps one blob URL per asset and revokes the one it replaces", () => {
+    const created: string[] = [];
+    const revoked: string[] = [];
+    const originalCreate = URL.createObjectURL;
+    const originalRevoke = URL.revokeObjectURL;
+    URL.createObjectURL = () => {
+      const url = `blob:mock/${created.length + 1}`;
+      created.push(url);
+      return url;
+    };
+    URL.revokeObjectURL = (url: string) => {
+      revoked.push(url);
+    };
+    try {
+      frame = loadFrame();
+      const asset = (id: string, data: string) => ({ kind: "asset", id, mime: "image/png", data });
+
+      frame.port.deliver(asset("a1", "AAAA"));
+      expect(created).toEqual(["blob:mock/1"]);
+
+      // The same picture uploaded again replaces its URL, and the old one is
+      // freed rather than leaked for the life of the Frame.
+      frame.port.deliver(asset("a1", "BBBB"));
+      expect(created).toEqual(["blob:mock/1", "blob:mock/2"]);
+      expect(revoked).toEqual(["blob:mock/1"]);
+
+      frame.port.deliver(asset("a2", "CCCC"));
+      expect(created).toHaveLength(3);
+      expect(revoked).toEqual(["blob:mock/1"]);
+
+      // A message with no id, type, or bytes keeps nothing.
+      for (const message of [
+        { kind: "asset" },
+        { kind: "asset", id: "", mime: "image/png", data: "AAAA" },
+        { kind: "asset", id: "a3", mime: "", data: "AAAA" },
+        { kind: "asset", id: "a3", mime: "image/png", data: "" },
+      ]) {
+        frame.port.deliver(message);
+      }
+      expect(created).toHaveLength(3);
+
+      // A Frame that goes away frees every picture it kept.
+      for (const cleanup of frame.cleanups) cleanup();
+      frame = null;
+      expect(revoked).toEqual(["blob:mock/1", "blob:mock/2", "blob:mock/3"]);
+    } finally {
+      URL.createObjectURL = originalCreate;
+      URL.revokeObjectURL = originalRevoke;
+    }
   });
 });
 

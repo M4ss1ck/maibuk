@@ -1,13 +1,15 @@
 // @ts-check
-/* The Map Frame's drawing surface (#745, #746, #748, #749, #750, #766, #751). The
-   Frame's only host channel is `window.maibuk.port`: the Worker sends the whole
-   `scene` on every change and when the Frame connects, and asks it to
-   `rasterize` an export SVG, since only this document has a canvas. The Frame
-   answers a finished Pencil stroke, a finished Pen line, a finished Area Fill
-   outline, an
+/* The Map Frame's drawing surface (#745, #746, #748, #749, #750, #766, #751,
+   #756). The Frame's only host channel is `window.maibuk.port`: the Worker
+   sends the whole `scene` on every change and when the Frame connects, an
+   uploaded picture's bytes once per asset, and asks it to `rasterize` an export
+   SVG, since only this document has a canvas, and to `ingest` one uploaded
+   picture, since only it has a DOM. The Frame answers a finished Pencil stroke,
+   a finished Pen line, a finished Area Fill outline, an
    Eraser drag, a drawn Shape, a Bucket pour, a dropped Stamp, the Element the
    author picked, a Select drag that moved one, a Map Label's bend dragged
-   from its handle, and the encoded picture an export asked for.
+   from its handle, the encoded picture an export asked for, and what one
+   uploaded picture measured.
    Points cross the port in page millimetres, the same space as the page's
    `widthMm`/`heightMm`, so the pointer's own screen pixels are converted
    through the svg's `getScreenCTM`.
@@ -48,7 +50,11 @@
    * @typedef {{ kind: "font", family: string, bytes: ArrayBuffer }} FrameFontMessage
    * @typedef {{ kind: "rasterize", requestId: number, svg: string, widthPx: number, heightPx: number, format: "png" | { jpeg: number } }} FrameRasterizeMessage
    * @typedef {{ kind: "rasterized", requestId: number, bytes?: ArrayBuffer, error?: string }} FrameRasterizedMessage
-   * @typedef {FrameSceneMessage | FrameFontMessage | FrameRasterizeMessage} WorkerToFrameMessage
+   * @typedef {{ kind: "asset", id: string, mime: string, data: string }} FrameAssetMessage
+   * @typedef {{ kind: "ingest-asset", requestId: number, mime: string, data: string }} IngestAssetMessage
+   * @typedef {{ kind: "asset-ingested", requestId: number, data: string, width: number, height: number, recolorable: boolean }} AssetIngestedMessage
+   * @typedef {{ kind: "ingest-error", requestId: number, reason: "invalid-image" }} IngestErrorMessage
+   * @typedef {FrameSceneMessage | FrameFontMessage | FrameRasterizeMessage | FrameAssetMessage | IngestAssetMessage} WorkerToFrameMessage
    * @typedef {{ pointerId: number, points: MapPoint[] }} Drawing
    * @typedef {{ points: MapPoint[], curves: boolean[] }} PenDraft
    * @typedef {{ pointerId: number, kind: ShapeKind, start: MapPoint, end: MapPoint, constrain: boolean }} ShapeDraft
@@ -111,6 +117,9 @@
   /** The characters a definitions id may hold, so a scene cannot write an attribute of its own. */
   const FILTER_ID = /^[A-Za-z0-9_-]+$/;
 
+  /** The size an uploaded picture falls back to, in pixels, when it names none. */
+  const DEFAULT_ASSET_SIZE = 100;
+
   /** The Shape tools, which draw an exact Shape by dragging (#747). */
   const SHAPE_KINDS = ["ellipse", "rectangle", "polygon"];
 
@@ -157,6 +166,14 @@
    * between the release and the Worker's redraw. @type {PendingBend | null}
    */
   let pendingBend = null;
+
+  /**
+   * Every uploaded picture the Worker has sent, as the `blob:` URL this
+   * document made from its bytes, keyed by asset id (#756). A scene names a
+   * picture by id, so its bytes cross the port once instead of on every scene.
+   * @type {Map<string, string>}
+   */
+  const assetUrls = new Map();
 
   /** The rendered svg, which Preact keeps across draws. @returns {SVGSVGElement | null} */
   function svgElement() {
@@ -386,6 +403,28 @@
       widthPx: Math.round(message.widthPx),
       heightPx: Math.round(message.heightPx),
       format,
+    };
+  }
+
+  /**
+   * Reads one asset ingest request (#756), or null when it is malformed and
+   * must be dropped: a request with no id, no picture type, or no bytes would
+   * answer nobody, or store a picture with nothing in it.
+   * @param {unknown} data
+   * @returns {IngestAssetMessage | null}
+   */
+  function readIngestAsset(data) {
+    if (typeof data !== "object" || data === null) return null;
+    const message = /** @type {Record<string, unknown>} */ (data);
+    if (message.kind !== "ingest-asset") return null;
+    if (!isNumber(message.requestId)) return null;
+    if (typeof message.mime !== "string" || message.mime === "") return null;
+    if (typeof message.data !== "string" || message.data === "") return null;
+    return {
+      kind: "ingest-asset",
+      requestId: message.requestId,
+      mime: message.mime,
+      data: message.data,
     };
   }
 
@@ -1744,9 +1783,154 @@
     }
   }
 
+  /** Decodes base64 into the bytes it carries. @param {string} data @returns {Uint8Array} */
+  function decodeBase64(data) {
+    const binary = atob(data);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return bytes;
+  }
+
+  /** Encodes bytes as the base64 the Library stores. @param {Uint8Array} bytes @returns {string} */
+  function encodeBase64(bytes) {
+    let binary = "";
+    for (let index = 0; index < bytes.length; index += 1) {
+      binary += String.fromCharCode(bytes[index]);
+    }
+    return btoa(binary);
+  }
+
+  /**
+   * A length a picture's `width` or `height` names, in pixels, or null when it
+   * names a percentage, a physical unit, or nothing this Frame can measure.
+   * @param {string | null} value
+   * @returns {number | null}
+   */
+  function readLength(value) {
+    const match = /^\s*(\d+(?:\.\d+)?)\s*(?:px)?\s*$/.exec(value ?? "");
+    if (match === null) return null;
+    const length = Number(match[1]);
+    return length > 0 ? length : null;
+  }
+
+  /**
+   * The size one sanitized SVG asks for, in pixels: its `viewBox`, which is the
+   * picture's own coordinate space and what a scene scales from, else the
+   * `width` and `height` it declares, else the fallback size.
+   * @param {string} markup
+   * @returns {{ width: number, height: number }}
+   */
+  function svgSize(markup) {
+    const fallback = { width: DEFAULT_ASSET_SIZE, height: DEFAULT_ASSET_SIZE };
+    const root = new DOMParser().parseFromString(markup, "image/svg+xml").documentElement;
+    if (root === null) return fallback;
+    const box = (root.getAttribute("viewBox") ?? "")
+      .trim()
+      .split(/[\s,]+/)
+      .map(Number);
+    if (
+      box.length === 4 &&
+      box.every((value) => Number.isFinite(value)) &&
+      box[2] > 0 &&
+      box[3] > 0
+    ) {
+      return { width: box[2], height: box[3] };
+    }
+    const width = readLength(root.getAttribute("width"));
+    const height = readLength(root.getAttribute("height"));
+    if (width === null || height === null) return fallback;
+    return { width, height };
+  }
+
+  /**
+   * Sanitizes one uploaded SVG and measures it (#756). The Library keeps the
+   * cleaned markup, never the file the Worker was handed, and `recolorable`
+   * says whether its paints are a single colour.
+   * @param {string} data base64
+   * @returns {{ data: string, width: number, height: number, recolorable: boolean }}
+   */
+  function ingestSvg(data) {
+    const ingest = /** @type {any} */ (window).maibukSvgIngest;
+    const text = new TextDecoder().decode(decodeBase64(data));
+    const clean = ingest.sanitizeSvg(text, /** @type {any} */ (window).DOMPurify);
+    if (clean === null) throw new Error("the SVG is not a picture");
+    const size = svgSize(clean.svg);
+    return {
+      data: encodeBase64(new TextEncoder().encode(clean.svg)),
+      width: size.width,
+      height: size.height,
+      recolorable: clean.recolorable,
+    };
+  }
+
+  /**
+   * Measures one uploaded raster (#756), in the Frame because only its document
+   * can decode a picture. A picture's paints are pixels, so it is never
+   * recolorable.
+   * @param {string} data base64
+   * @param {string} mime
+   * @returns {Promise<{ data: string, width: number, height: number, recolorable: false }>}
+   */
+  async function ingestRaster(data, mime) {
+    if (typeof createImageBitmap !== "function") {
+      throw new Error("this Frame cannot decode a picture");
+    }
+    const bitmap = await createImageBitmap(new Blob([decodeBase64(data)], { type: mime }));
+    try {
+      return { data, width: bitmap.width, height: bitmap.height, recolorable: false };
+    } finally {
+      bitmap.close();
+    }
+  }
+
+  /**
+   * Answers one asset ingest request (#756): what the Library keeps and how big
+   * it is, or the one reason an upload was refused. The Worker never sees the
+   * uploaded bytes again, so nothing here trusts them.
+   * @param {IngestAssetMessage} request
+   */
+  async function answerIngest(request) {
+    try {
+      const result =
+        request.mime === "image/svg+xml"
+          ? ingestSvg(request.data)
+          : await ingestRaster(request.data, request.mime);
+      post({ kind: "asset-ingested", requestId: request.requestId, ...result });
+    } catch {
+      post({ kind: "ingest-error", requestId: request.requestId, reason: "invalid-image" });
+    }
+  }
+
+  /**
+   * Keeps one uploaded picture's bytes as a `blob:` URL this document can draw
+   * (#756), keyed by asset id; a picture the Worker sends again replaces the
+   * URL it had, which is revoked so its buffer is freed.
+   * @param {unknown} data
+   * @returns {boolean} whether the message was an asset message
+   */
+  function keepAsset(data) {
+    if (typeof data !== "object" || data === null) return false;
+    const message = /** @type {Record<string, unknown>} */ (data);
+    if (message.kind !== "asset") return false;
+    if (typeof message.id !== "string" || message.id === "") return true;
+    if (typeof message.mime !== "string" || message.mime === "") return true;
+    if (typeof message.data !== "string" || message.data === "") return true;
+    const url = URL.createObjectURL(new Blob([decodeBase64(message.data)], { type: message.mime }));
+    const previous = assetUrls.get(message.id);
+    if (previous !== undefined) URL.revokeObjectURL(previous);
+    assetUrls.set(message.id, url);
+    return true;
+  }
+
   /** @param {MessageEvent} event */
   function onMessage(event) {
     if (registerFont(event.data)) return;
+    if (keepAsset(event.data)) return;
+    const ingestRequest = readIngestAsset(event.data);
+    if (ingestRequest !== null) {
+      void answerIngest(ingestRequest);
+      return;
+    }
     const rasterizeRequest = readRasterize(event.data);
     if (rasterizeRequest !== null) {
       void answerRasterize(rasterizeRequest);
@@ -1786,6 +1970,8 @@
   function cleanup() {
     document.removeEventListener("keydown", onKeyDown);
     document.removeEventListener("keyup", onKeyUp);
+    for (const url of assetUrls.values()) URL.revokeObjectURL(url);
+    assetUrls.clear();
     if (surface === null) return;
     surface.removeEventListener("pointerdown", onPointerDown);
     surface.removeEventListener("pointermove", onPointerMove);
