@@ -214,8 +214,10 @@ test.describe("Maps Insert tool and Stamps @wf:plugins-maps-stamps @sc:plugin.ma
 
     // A pointer-only gesture (see `support/frame-stroke.ts`): the Frame has no
     // key that names a point on the page. The floating chrome (#778) draws its
-    // cards over the page's left edge, so the point sits clear of them.
-    const point = [70, 50] as const;
+    // cards over the page's left edge, and the Insert card, which this test
+    // needs open, reaches a little past 70 mm across the middle of the page, so
+    // the point sits clear of it.
+    const point = [95, 50] as const;
     await clickPagePoint(page, surface(page), point);
 
     await expect(elementRow(page, "Lone mountain")).toBeVisible();
@@ -282,9 +284,11 @@ test.describe("Maps Insert tool and Stamps @wf:plugins-maps-stamps @sc:plugin.ma
     // One of every kind of Stamp art the slice ships a look for, plus the scale
     // bar, spread over the landscape page. The floating chrome (#778) floats its
     // cards over the page's left edge and its top-right corner, so every point
-    // below sits in the page the cards leave uncovered.
+    // below sits in the page the cards leave uncovered: the Insert card reaches
+    // a little past 70 mm across the middle, which is why the left-hand Stamps
+    // sit at 95 mm and the Compass rose below the card's lower edge.
     for (const [stamp, point] of [
-      ["Capital", [70, 45]],
+      ["Capital", [95, 45]],
       ["Castle", [145, 40]],
       ["Lone mountain", [135, 105]],
       ["Lone tree", [150, 95]],
