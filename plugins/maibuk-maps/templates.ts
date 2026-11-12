@@ -1,10 +1,11 @@
 /**
  * The Maps Map Templates (#754): the ready-made Maps an author starts a new Map
  * from. A Template is a set of shapes in unit coordinates, drawn by hand or, for
- * Cuba, generated from Natural Earth (#755): land on a unit square, scaled by one
- * factor inside the page border so it keeps its aspect on every page preset.
- * `templateElements` scales them to the page it is given and mints a fresh id for
- * every Element, and `templateStyle` names the Map Style it is drawn in.
+ * Cuba, generated from Natural Earth (#755). A hand-drawn Template sits on a
+ * unit square scaled by the page's shorter side; real geography is fitted to
+ * the page's own shape, so the island fills the width a landscape page has.
+ * `templateElements` scales them to the page it is given and mints a fresh id
+ * for every Element, and `templateStyle` names the Map Style it is drawn in.
  *
  * A Map made from a Template is a copy: nothing it holds is shared with the
  * Template, or with another Map, so editing one never touches the others. Its
@@ -60,6 +61,12 @@ type TemplateFillRole = Extract<StyleRole, "water" | "land" | "forest">;
 /** How far the world border keeps from the page edge, as a share of each page side. */
 const BORDER_INSET = 0.03;
 
+/**
+ * How far real geography keeps from the world border, as a share of the inner
+ * page's width and height on each side, so a coast never touches the frame.
+ */
+export const GEOGRAPHY_MARGIN = 0.06;
+
 /** The world border: a rectangle just inside the page, drawn corner to corner. */
 const BORDER: readonly MapPoint[] = [
   [BORDER_INSET, BORDER_INSET],
@@ -92,8 +99,13 @@ const COMPASS_CENTRE: MapPoint = [0.88, 0.86];
 /** The compass rose's art box width, as a share of the page's shorter side. */
 const COMPASS_SIZE = 0.14;
 
-/** A province Label's cap size, as a share of the land square's side. */
-const PROVINCE_LABEL_SIZE_RATIO = 0.0075;
+/**
+ * A province Label's cap size, as a share of the fitted geography's width.
+ * Cuba's provinces are close together, so this is the largest share whose
+ * Labels stay apart: 2.5 mm on a landscape A4 page, the size the island could
+ * carry, puts two of them on each other.
+ */
+const PROVINCE_LABEL_SIZE_RATIO = 0.008;
 
 /** The share of a Label's cap size one glyph takes, which sets its baseline length. */
 const PROVINCE_LABEL_GLYPH_RATIO = 0.6;
@@ -359,7 +371,8 @@ interface TemplateSpec {
   /**
    * Whether the shapes are real geography, meeting at shared vertices exactly:
    * then they are neither smoothed nor roughened, since either would pull the
-   * borders off the coast they meet.
+   * borders off the coast they meet, and their own bounding box is what the
+   * page is fitted to, so the shapes take the page's shape rather than a square.
    */
   realGeography?: boolean;
   /** Open borders inside the coasts, each end shared with a coast or another border. */
@@ -440,6 +453,31 @@ interface TemplateLineOptions {
   roughened: boolean;
 }
 
+/** A box that holds every point of a set of unit-square shapes. */
+interface UnitBounds {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+}
+
+/** The box `shapes` fit in, in unit coordinates. */
+function unitBounds(shapes: readonly (readonly MapPoint[])[]): UnitBounds {
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  for (const shape of shapes) {
+    for (const [x, y] of shape) {
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+  }
+  return { minX, minY, maxX, maxY };
+}
+
 /**
  * The Elements a Map made from `id` starts with, drawn on `page`: the world
  * border, a coast per landmass (a province border per border, and a kingdom's
@@ -461,10 +499,42 @@ export function templateElements(
   const realGeography = spec.realGeography === true;
   const lines: MapLineElement[] = [];
 
-  // Land shapes are authored on a unit square. One factor, the shorter inner
-  // side, keeps their aspect on every page and stays inside the page border.
-  const landSize = Math.min(page.widthMm, page.heightMm) * (1 - 2 * BORDER_INSET);
-  const landOrigin: MapPoint = [(page.widthMm - landSize) / 2, (page.heightMm - landSize) / 2];
+  // Land shapes are authored on a unit square. A hand-drawn Template scales
+  // that square by the shorter inner side, which keeps its aspect on every page
+  // and stays inside the page border. Real geography instead fills the page
+  // shape it is drawn on: its own bounding box, not the square around it, is
+  // fitted to the area the page border leaves, so a long island takes the whole
+  // width of a landscape page.
+  const innerWidth = page.widthMm * (1 - 2 * BORDER_INSET);
+  const innerHeight = page.heightMm * (1 - 2 * BORDER_INSET);
+  /** The factor from unit coordinates to page millimetres, and the page point it starts at. */
+  let landSize = 0;
+  let landOrigin: MapPoint = [0, 0];
+  /** The land's drawn width, which a province Label is sized from. */
+  let landWidth = 0;
+  if (realGeography) {
+    const bounds = unitBounds(spec.coasts);
+    const unitWidth = bounds.maxX - bounds.minX;
+    const unitHeight = bounds.maxY - bounds.minY;
+    const fitWidth = innerWidth * (1 - 2 * GEOGRAPHY_MARGIN);
+    const fitHeight = innerHeight * (1 - 2 * GEOGRAPHY_MARGIN);
+    landSize = Math.min(fitWidth / unitWidth, fitHeight / unitHeight);
+    landWidth = unitWidth * landSize;
+    landOrigin = [
+      page.widthMm * BORDER_INSET +
+        GEOGRAPHY_MARGIN * innerWidth +
+        (fitWidth - landWidth) / 2 -
+        bounds.minX * landSize,
+      page.heightMm * BORDER_INSET +
+        GEOGRAPHY_MARGIN * innerHeight +
+        (fitHeight - unitHeight * landSize) / 2 -
+        bounds.minY * landSize,
+    ];
+  } else {
+    landSize = Math.min(innerWidth, innerHeight);
+    landWidth = landSize;
+    landOrigin = [(page.widthMm - landSize) / 2, (page.heightMm - landSize) / 2];
+  }
   const landToPage = (points: readonly MapPoint[]): MapPoint[] =>
     points.map(([x, y]): MapPoint => [landOrigin[0] + x * landSize, landOrigin[1] + y * landSize]);
 
@@ -553,7 +623,7 @@ export function templateElements(
     width: cartoucheSize * (CARTOUCHE_PLAQUE_WIDTH / CARTOUCHE_ART_WIDTH),
     size: cartoucheSize * (CARTOUCHE_PLAQUE_HEIGHT / CARTOUCHE_ART_WIDTH) * TITLE_SIZE_RATIO,
   });
-  const provinceSize = landSize * PROVINCE_LABEL_SIZE_RATIO;
+  const provinceSize = landWidth * PROVINCE_LABEL_SIZE_RATIO;
   const provinceLabels: MapLabelElement[] = (spec.provinces ?? []).map((province, index) =>
     newLabel({
       id: newId(),

@@ -30,6 +30,7 @@ import {
   CARTOUCHE_ART_WIDTH,
   CARTOUCHE_PLAQUE_HEIGHT,
   CARTOUCHE_PLAQUE_WIDTH,
+  GEOGRAPHY_MARGIN,
   MAP_TEMPLATE_IDS,
   TITLE_SIZE_RATIO,
   isMapTemplateId,
@@ -303,27 +304,30 @@ describe("templateElements", () => {
     expect(lines.filter((line) => line.style === "river")).toHaveLength(1);
   });
 
-  it("covers the sea and each land face with a Fill of its own", () => {
+  it("covers the sea and each land face with a Fill of its own on every page preset", () => {
     for (const id of MAP_TEMPLATE_IDS) {
-      const elements = elementsOf(id, "portrait");
-      const fills = fillsOf(elements);
-      const water = fills.filter((fill) => fillRole(fill) === "water");
-      const land = fills.filter((fill) => LAND_ROLES.includes(fillRole(fill)));
+      for (const preset of PAGE_PRESETS) {
+        const where = `${id} on ${preset}`;
+        const elements = elementsOf(id, preset);
+        const fills = fillsOf(elements);
+        const water = fills.filter((fill) => fillRole(fill) === "water");
+        const land = fills.filter((fill) => LAND_ROLES.includes(fillRole(fill)));
 
-      expect(water.length, id).toBe(EXPECTED[id].waterFills);
-      expect(land.length, id).toBe(EXPECTED[id].landFills);
-      expect(fills.length, id).toBe(water.length + land.length);
+        expect(water.length, where).toBe(EXPECTED[id].waterFills);
+        expect(land.length, where).toBe(EXPECTED[id].landFills);
+        expect(fills.length, where).toBe(water.length + land.length);
 
-      const faces = facesOf(id, elements);
-      expect(faces.length, id).toBe(EXPECTED[id].faces);
-      const landed = fills.map((fill) => faceAt(faces, fill.anchor));
-      for (const [index, face] of landed.entries()) {
-        expect(face, `${id} fill ${index}`).not.toBeNull();
-      }
-      // Two Fills in one face would fight over it, so every Fill sits in its own.
-      expect(new Set(landed).size, id).toBe(fills.length);
-      for (const [index, fill] of fills.entries()) {
-        expect(fill.outline, `${id} fill ${index}`).toBeUndefined();
+        const faces = facesOf(id, elements);
+        expect(faces.length, where).toBe(EXPECTED[id].faces);
+        const landed = fills.map((fill) => faceAt(faces, fill.anchor));
+        for (const [index, face] of landed.entries()) {
+          expect(face, `${where} fill ${index}`).not.toBeNull();
+        }
+        // Two Fills in one face would fight over it, so every Fill sits in its own.
+        expect(new Set(landed).size, where).toBe(fills.length);
+        for (const [index, fill] of fills.entries()) {
+          expect(fill.outline, `${where} fill ${index}`).toBeUndefined();
+        }
       }
     }
   });
@@ -415,6 +419,128 @@ describe("templateElements", () => {
     for (const label of labels) {
       expect(label.hidden).toBe(false);
       expect(label.locked).toBe(false);
+    }
+  });
+
+  it("fits Cuba to the page inside the world border, clear of the cartouche and compass", () => {
+    // The box the fit keeps: the island's own bounds in unit coordinates.
+    const unitXs = CUBA_COASTS.flat().map((point) => point[0]);
+    const unitYs = CUBA_COASTS.flat().map((point) => point[1]);
+    const unitWidth = Math.max(...unitXs) - Math.min(...unitXs);
+    const unitHeight = Math.max(...unitYs) - Math.min(...unitYs);
+
+    for (const preset of PAGE_PRESETS) {
+      const elements = elementsOf("cuba", preset);
+      const border = worldBorderOf(elements, preset);
+      const borderXs = border.points.map((point) => point[0]);
+      const borderYs = border.points.map((point) => point[1]);
+      const [left, right] = [Math.min(...borderXs), Math.max(...borderXs)];
+      const [top, bottom] = [Math.min(...borderYs), Math.max(...borderYs)];
+
+      const islandPoints = landLinesOf(elements, preset).flatMap((line) => line.points);
+      const xs = islandPoints.map((point) => point[0]);
+      const ys = islandPoints.map((point) => point[1]);
+      const island = {
+        left: Math.min(...xs),
+        right: Math.max(...xs),
+        top: Math.min(...ys),
+        bottom: Math.max(...ys),
+      };
+
+      // Inside the world border by a margin of GEOGRAPHY_MARGIN of the inner
+      // page on every side. Cuba is a long island, so the width is what binds:
+      // it takes the whole width the margin leaves, rather than the page's
+      // shorter side as a hand-drawn Template does.
+      const marginX = (right - left) * GEOGRAPHY_MARGIN;
+      const marginY = (bottom - top) * GEOGRAPHY_MARGIN;
+      expect(island.left, preset).toBeCloseTo(left + marginX, 6);
+      expect(island.right, preset).toBeCloseTo(right - marginX, 6);
+      expect(island.top, preset).toBeGreaterThanOrEqual(top + marginY - 1e-6);
+      expect(island.bottom, preset).toBeLessThanOrEqual(bottom - marginY + 1e-6);
+
+      // Aspect kept, and centred between the top and bottom margins.
+      expect((island.right - island.left) / (island.bottom - island.top), preset).toBeCloseTo(
+        unitWidth / unitHeight,
+        6
+      );
+      expect(island.top - top - marginY, preset).toBeCloseTo(bottom - marginY - island.bottom, 6);
+
+      // The cartouche and the compass keep their places, and neither stands on
+      // the island: each Stamp's art box is clear of the island's box.
+      for (const stamp of stampsOf(elements)) {
+        const art = stampArt(stamp.stampRef);
+        const halfWidth = stamp.transform.size / 2;
+        const halfHeight =
+          art === undefined ? halfWidth : (halfWidth * art.viewBox[3]) / art.viewBox[2];
+        const box = {
+          left: stamp.transform.x - halfWidth,
+          right: stamp.transform.x + halfWidth,
+          top: stamp.transform.y - halfHeight,
+          bottom: stamp.transform.y + halfHeight,
+        };
+        const apart =
+          island.right <= box.left ||
+          box.right <= island.left ||
+          island.bottom <= box.top ||
+          box.bottom <= island.top;
+        expect(apart, `${preset}: ${stamp.name}`).toBe(true);
+      }
+    }
+  });
+
+  it("sizes the province Labels to the fitted island, apart from each other on every page", () => {
+    /** A province Label's box at a cap size: its point, its width estimate, and its cap height. */
+    const boxesAt = (labels: readonly MapLabelElement[], size: number) =>
+      labels.map((label) => {
+        const halfWidth = (label.text.length * size * 0.6) / 2;
+        return {
+          name: label.text,
+          left: label.x - halfWidth,
+          right: label.x + halfWidth,
+          top: label.y - size / 2,
+          bottom: label.y + size / 2,
+        };
+      });
+    /** The pairs of those boxes that overlap. */
+    const clashes = (boxes: ReturnType<typeof boxesAt>): string[] => {
+      const found: string[] = [];
+      for (let one = 0; one < boxes.length; one++) {
+        for (let two = one + 1; two < boxes.length; two++) {
+          const a = boxes[one];
+          const b = boxes[two];
+          const apart =
+            a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top;
+          if (!apart) found.push(`${a.name} beside ${b.name}`);
+        }
+      }
+      return found;
+    };
+
+    // On a landscape A4 page the cap is about 2 mm. Cuba's provinces are too
+    // close for the 2.5 mm the island could carry: at that size two Labels sit
+    // on each other, so the size is the largest one that keeps them apart.
+    const a4Landscape = { widthMm: 297, heightMm: 210 };
+    const [a4Title, ...a4Labels] = labelsOf(
+      templateElements("cuba", a4Landscape, TITLE, idMaker())
+    );
+    expect(a4Labels[0].size).toBeCloseTo(1.97, 1);
+    expect(a4Labels[0].size).toBeLessThan(a4Title.size);
+    expect(clashes(boxesAt(a4Labels, 2.5)).length).toBeGreaterThan(0);
+    expect(clashes(boxesAt(a4Labels, a4Labels[0].size))).toEqual([]);
+
+    /** A province Label's cap size as a share of the island's fitted width on one preset. */
+    const shareOfIsland = (preset: PagePreset): number => {
+      const elements = elementsOf("cuba", preset);
+      const [first] = labelsOf(elements).slice(1);
+      const xs = landLinesOf(elements, preset).flatMap((line) =>
+        line.points.map((point) => point[0])
+      );
+      return first.size / (Math.max(...xs) - Math.min(...xs));
+    };
+    for (const preset of PAGE_PRESETS) {
+      expect(shareOfIsland(preset), preset).toBeCloseTo(shareOfIsland("landscape"), 6);
+      const labels = labelsOf(elementsOf("cuba", preset)).slice(1);
+      expect(clashes(boxesAt(labels, labels[0].size)), preset).toEqual([]);
     }
   });
 

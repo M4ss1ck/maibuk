@@ -177,6 +177,25 @@ describe("findFaces touching", () => {
   });
 });
 
+describe("findFaces degenerate", () => {
+  it("gives no face for the ring an island's own lines tile exactly", () => {
+    // The sea, and an island inside it that one divider splits in two. The
+    // island's ring comes back beside the two faces the divider makes of it,
+    // and its interior is exactly those two: it covers no ground of its own, so
+    // a Fill poured there would fight the one in the province beside it.
+    const faces = findFaces([
+      rectangle("sea", 0, 0, 100, 100),
+      rectangle("island", 20, 20, 60, 60),
+      line("divider", [
+        [40, 20],
+        [40, 60],
+      ]),
+    ]);
+
+    expect(areas(faces)).toEqual([800, 800, 8400]);
+  });
+});
+
 describe("findFaces nested", () => {
   const faces = findFaces([rectangle("outer", 0, 0, 60, 60), rectangle("inner", 20, 20, 40, 40)]);
 

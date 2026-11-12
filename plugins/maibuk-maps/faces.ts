@@ -39,6 +39,14 @@ export type NodedSegment = [MapPoint, MapPoint];
 /** Points closer than this are the same point, in page millimetres. */
 const EPSILON_MM = 1e-6;
 
+/**
+ * The area a face has to cover to be one a Fill can sit in, in square
+ * millimetres. A ring whose own children tile it exactly — an island cut into
+ * its provinces — hands back the difference of two sums of the same vertices,
+ * which is this much noise rather than ground.
+ */
+const SMALLEST_FACE_AREA_MM2 = 1e-3;
+
 /** How many samples a curved segment is flattened to. */
 const CURVE_SAMPLES = 8;
 
@@ -398,7 +406,10 @@ function ringKey(ring: readonly MapPoint[]): string {
  * The faces the rings bound. Turf 7.4 hands a ring nested inside another back as
  * a polygon of its own instead of as a hole, so each ring is taken as the
  * boundary of the face inside it, and the rings directly inside it are that
- * face's holes.
+ * face's holes. A ring whose holes already cover it — the island's own ring
+ * beside the province rings it is cut into — therefore bounds no face at all,
+ * and is dropped: keeping it would hand a Fill an empty face that fights the
+ * province beside it.
  */
 function facesFromRings(rings: readonly MapPoint[][]): Face[] {
   const unique = new Map<string, MapPoint[]>();
@@ -424,13 +435,15 @@ function facesFromRings(rings: readonly MapPoint[][]): Face[] {
     return parent;
   });
 
-  return ringsWithArea.map((entry, index) => {
-    const holes = ringsWithArea
-      .filter((_other, otherIndex) => parents[otherIndex] === index)
-      .map((child) => child.ring);
-    const holeArea = holes.reduce((total, hole) => total + Math.abs(signedArea(hole)), 0);
-    return { outer: entry.ring, holes, area: entry.area - holeArea };
-  });
+  return ringsWithArea
+    .map((entry, index) => {
+      const holes = ringsWithArea
+        .filter((_other, otherIndex) => parents[otherIndex] === index)
+        .map((child) => child.ring);
+      const holeArea = holes.reduce((total, hole) => total + Math.abs(signedArea(hole)), 0);
+      return { outer: entry.ring, holes, area: entry.area - holeArea };
+    })
+    .filter((face) => face.area >= SMALLEST_FACE_AREA_MM2);
 }
 
 /** The faces the Map Lines enclose, which a Fill can cover. */
