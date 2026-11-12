@@ -488,7 +488,12 @@ div[data-plugin-ui] > div:nth-child(8) { right: 0.75rem; bottom: 0.75rem; }
 @media (max-width: 639px) {
   /* The left pill spans the bar; the right pill gives up its own box, so the
      bar shows through and the two read as one. */
-  div[data-plugin-ui] > div:nth-child(1) { top: 0; left: 0; right: 0; padding: 0.5rem; border-width: 0 0 1px; border-radius: 0; }
+  div[data-plugin-ui] > div:nth-child(1) { top: 0; left: 0; right: 0; padding: 0.5rem 3.5rem 0.5rem 0.5rem; border-width: 0 0 1px; border-radius: 0; }
+  /* The back button keeps its icon and its words on one line, and the Map's
+     own name gives up the width instead, ending in an ellipsis (#779). The
+     right padding clears the overflow popover the other pill leaves there. */
+  div[data-plugin-ui] > div:nth-child(1) > button { flex: 0 0 auto; white-space: nowrap; }
+  div[data-plugin-ui] > div:nth-child(1) > button:nth-of-type(2) { display: block; flex: 1 1 auto; min-width: 2.75rem; overflow: hidden; text-align: left; text-overflow: ellipsis; }
   div[data-plugin-ui] > div:nth-child(7) { top: 0; right: 0.5rem; left: auto; padding: 0.5rem 0; border-width: 0; border-radius: 0; background: none; box-shadow: none; }
   /* The belt lies along the bottom, one row that scrolls sideways. */
   div[data-plugin-ui] > div:nth-child(2) { top: auto; bottom: 0; left: 0; right: 0; flex-direction: row; overflow-x: auto; overflow-y: hidden; transform: none; padding: 0.5rem; border-width: 1px 0 0; border-radius: 0; }
@@ -513,11 +518,22 @@ div[data-plugin-ui] > div:nth-child(8) { right: 0.75rem; bottom: 0.75rem; }
   div[data-plugin-ui]:has(> div:nth-child(6):not(:empty)) > div:nth-child(4) { top: 50%; bottom: auto; max-height: calc(25% - 0.25rem); }
   div[data-plugin-ui]:has(> div:nth-child(3):not(:empty)) > div:nth-child(6),
   div[data-plugin-ui]:has(> div:nth-child(4):not(:empty)) > div:nth-child(6) { top: 75%; bottom: 4.25rem; max-height: calc(25% - 4.25rem); }
+  /* The Properties header keeps its two controls on the header's own line,
+     right-aligned as on the desktop, instead of letting them drop to a row of
+     their own under the title: the row never wraps, and the selection's name
+     and switches shrink to make room for them (#779). */
+  div[data-plugin-ui] > div:nth-child(6) > div:nth-child(2) { flex-wrap: nowrap; gap: 0.5rem; }
+  div[data-plugin-ui] > div:nth-child(6) > div:nth-child(2) > div:nth-child(1) { flex: 1 1 auto; min-width: 0; }
+  div[data-plugin-ui] > div:nth-child(6) > div:nth-child(2) > button { flex: 0 0 auto; }
   /* The full-height toggle: the region takes all the page but the bar and the
      belt. The Frame's own box never moves, so the drawing is not resized. */
   div[data-plugin-ui]:has(> div:nth-child(6) button[aria-pressed="true"]) > div:nth-child(6) { top: 3.25rem; bottom: 4.25rem; max-height: none; }
-  /* The zoom cluster moves under the bar, clear of the belt and the regions. */
-  div[data-plugin-ui] > div:nth-child(8) { top: 3.25rem; right: 0.5rem; bottom: auto; }
+  /* The zoom cluster sits bottom right, just above the belt, and gives that
+     corner up while a bottom region covers it (#779); pinch zoom remains. */
+  div[data-plugin-ui] > div:nth-child(8) { top: auto; right: 0.5rem; bottom: 4.25rem; }
+  div[data-plugin-ui]:has(> div:nth-child(3):not(:empty)) > div:nth-child(8),
+  div[data-plugin-ui]:has(> div:nth-child(4):not(:empty)) > div:nth-child(8),
+  div[data-plugin-ui]:has(> div:nth-child(6):not(:empty)) > div:nth-child(8) { display: none; }
 }
 /* At the desktop width the pill's own three controls show again, and the
    overflow stays out of the page (#779). */

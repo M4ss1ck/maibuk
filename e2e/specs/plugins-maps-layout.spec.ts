@@ -262,10 +262,17 @@ test.describe("Maps narrow layout at 390x844 @wf:plugins-maps-layout @sandbox", 
 
     const before = await boxes(page);
 
+    // The state a phone shows first: every card shut, the Map filling the page
+    // under the bars, and the zoom cluster above the belt (#779).
+    await capture(page, "maps-layout-390");
+
     // Properties open, so the controls below include the tall card's own: the
     // narrow block makes every one of them a thumb-sized target (#779).
     await pressControl(page, toolButton(page, "Pen"));
     await expect(page.getByRole("button", { name: "Minimise Properties" })).toBeVisible();
+
+    // Properties at half height, the Map still drawn above it (#779).
+    await capture(page, "maps-layout-390-properties");
 
     const buttons = pageBody(page).getByRole("button");
     const count = await buttons.count();
@@ -299,8 +306,5 @@ test.describe("Maps narrow layout at 390x844 @wf:plugins-maps-layout @sandbox", 
     );
     const fullHeight = await boxes(page);
     expectSameBox(fullHeight.frame, before.frame, "the Frame with Properties at full height");
-
-    // Light and dark, at the narrow viewport.
-    await capture(page, "maps-layout-390");
   });
 });

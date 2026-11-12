@@ -325,6 +325,52 @@ const EXPECTATIONS: ReadonlyArray<Expectation> = [
     expected: (mounted) =>
       cardHolding(mounted.root, () => screen.getByRole("button", { name: en["chrome.zoomIn"] })),
   },
+  {
+    // The narrow bar's buttons, and the Map's name that gives up the room: the
+    // back button keeps its words on one line and the name shrinks (#779).
+    selector: `${ROOT} > div:nth-child(1) > button`,
+    state: "open",
+    expected: () => barButtons(),
+  },
+  {
+    selector: `${ROOT} > div:nth-child(1) > button:nth-of-type(2)`,
+    state: "open",
+    expected: () => screen.getByRole("button", { name: "Coast" }),
+  },
+  {
+    // The Properties header row, and the group it holds at its left: the header
+    // keeps its two controls on its own line, right-aligned (#779).
+    selector: `${ROOT} > div:nth-child(6) > div:nth-child(2)`,
+    state: "open",
+    expected: () => headerRow(),
+  },
+  {
+    selector: `${ROOT} > div:nth-child(6) > div:nth-child(2) > div:nth-child(1)`,
+    state: "open",
+    expected: () => headerRow().children.item(0) as Element,
+  },
+  {
+    selector: `${ROOT} > div:nth-child(6) > div:nth-child(2) > button`,
+    state: "open",
+    expected: () => headerButtons(),
+  },
+  {
+    // The zoom cluster gives the bottom right to a bottom region that covers it
+    // (#779): each region hides it.
+    selector: `${ROOT}:has(> div:nth-child(3):not(:empty)) > div:nth-child(8)`,
+    state: "open",
+    expected: (mounted) => slot(mounted.root, 8),
+  },
+  {
+    selector: `${ROOT}:has(> div:nth-child(4):not(:empty)) > div:nth-child(8)`,
+    state: "open",
+    expected: (mounted) => slot(mounted.root, 8),
+  },
+  {
+    selector: `${ROOT}:has(> div:nth-child(6):not(:empty)) > div:nth-child(8)`,
+    state: "open",
+    expected: (mounted) => slot(mounted.root, 8),
+  },
   { selector: `${ROOT} > div:nth-child(3)`, state: "closed", expected: slotThree },
   { selector: `${ROOT} > div:nth-child(4)`, state: "closed", expected: slotFour },
   { selector: `${ROOT} > div:nth-child(6)`, state: "closed", expected: slotSix },
@@ -364,6 +410,32 @@ function slotFour(mounted: Mounted): Element {
 
 function slotSix(mounted: Mounted): Element {
   return slot(mounted.root, 6);
+}
+
+/** The top bar's own buttons, in page order: back, the Map's name, undo, redo. */
+function barButtons(): Element[] {
+  return [
+    screen.getByRole("button", { name: en["map.backToMaps"] }),
+    screen.getByRole("button", { name: "Coast" }),
+    screen.getByRole("button", { name: en["chrome.undo"] }),
+    screen.getByRole("button", { name: en["chrome.redo"] }),
+  ];
+}
+
+/** The Properties header row: the row the Minimise control sits in. */
+function headerRow(): HTMLElement {
+  const button = screen.getByRole("button", { name: en["chrome.minimiseProperties"] });
+  const row = button.parentElement;
+  if (row === null) throw new Error("the Minimise control has no header row");
+  return row;
+}
+
+/** The header row's two controls: the full-height toggle, then Minimise. */
+function headerButtons(): Element[] {
+  return [
+    screen.getByRole("button", { name: en["chrome.expandProperties"] }),
+    screen.getByRole("button", { name: en["chrome.minimiseProperties"] }),
+  ];
 }
 
 /** Fills every card: Insert shows, so does Layers, and the line is selected. */
