@@ -1,10 +1,10 @@
 /**
  * The Maps Map Templates (#754): the ready-made Maps an author starts a new Map
- * from. A Template is a set of hand-authored shapes in unit coordinates: land
- * on a unit square, scaled by one factor inside the page border so it keeps its
- * aspect on every page preset. `templateElements` scales them to the page it is
- * given and mints a fresh id for every Element, and `templateStyle` names the
- * Map Style it is drawn in.
+ * from. A Template is a set of shapes in unit coordinates, drawn by hand or, for
+ * Cuba, generated from Natural Earth (#755): land on a unit square, scaled by one
+ * factor inside the page border so it keeps its aspect on every page preset.
+ * `templateElements` scales them to the page it is given and mints a fresh id for
+ * every Element, and `templateStyle` names the Map Style it is drawn in.
  *
  * A Map made from a Template is a copy: nothing it holds is shared with the
  * Template, or with another Map, so editing one never touches the others. Its
@@ -19,6 +19,7 @@
  * This module imports only its own files.
  */
 
+import { CUBA_BORDERS, CUBA_COASTS, CUBA_PROVINCES } from "./cuba";
 import { deepestPoint, findFaces } from "./faces";
 import { format, translate, type MapsKey } from "./i18n";
 import {
@@ -28,6 +29,7 @@ import {
   type LineStyleId,
   type MapElement,
   type MapFillElement,
+  type MapLabelElement,
   type MapLineElement,
   type MapPoint,
 } from "./maps";
@@ -41,6 +43,7 @@ export const MAP_TEMPLATE_IDS = [
   "two-continents",
   "inland-kingdom",
   "blank-sea",
+  "cuba",
 ] as const;
 
 /** The id of one Map Template. */
@@ -88,6 +91,12 @@ const COMPASS_CENTRE: MapPoint = [0.88, 0.86];
 
 /** The compass rose's art box width, as a share of the page's shorter side. */
 const COMPASS_SIZE = 0.14;
+
+/** A province Label's cap size, as a share of the land square's side. */
+const PROVINCE_LABEL_SIZE_RATIO = 0.0075;
+
+/** The share of a Label's cap size one glyph takes, which sets its baseline length. */
+const PROVINCE_LABEL_GLYPH_RATIO = 0.6;
 
 /** One large landmass, its coast drawn by hand. */
 const CONTINENT_COAST: readonly MapPoint[] = [
@@ -347,6 +356,16 @@ interface TemplateSpec {
   interiorRole: TemplateFillRole;
   /** Closed coasts inside the border, each one enclosing its own land face. */
   coasts: readonly (readonly MapPoint[])[];
+  /**
+   * Whether the shapes are real geography, meeting at shared vertices exactly:
+   * then they are neither smoothed nor roughened, since either would pull the
+   * borders off the coast they meet.
+   */
+  realGeography?: boolean;
+  /** Open borders inside the coasts, each end shared with a coast or another border. */
+  borders?: readonly (readonly MapPoint[])[];
+  /** The places a political Template names, each with the point its Label sits on. */
+  provinces?: readonly { name: string; point: MapPoint }[];
   /** A kingdom's border inside the border, its face the other land face. */
   kingdom?: readonly MapPoint[];
   /** A river inside the kingdom, drawn open and enclosing nothing. */
@@ -392,6 +411,16 @@ const TEMPLATES: Readonly<Record<MapTemplateId, TemplateSpec>> = {
     interiorRole: "land",
     coasts: [],
   },
+  cuba: {
+    style: "atlas",
+    labelKey: "template.cuba",
+    borderRole: "water",
+    interiorRole: "land",
+    realGeography: true,
+    coasts: CUBA_COASTS,
+    borders: CUBA_BORDERS,
+    provinces: CUBA_PROVINCES,
+  },
 };
 
 /** The Map Style a Template draws in. */
@@ -413,9 +442,10 @@ interface TemplateLineOptions {
 
 /**
  * The Elements a Map made from `id` starts with, drawn on `page`: the world
- * border, a coast per landmass (and a kingdom's border and river, where the
- * Template has them), one Bucket Fill per face, the compass rose and title
- * cartouche, and a Map Label writing `title` across the cartouche. Element
+ * border, a coast per landmass (a province border per border, and a kingdom's
+ * border and river, where the Template has them), one Bucket Fill per face, the
+ * compass rose and title cartouche, and a Map Label writing `title` across the
+ * cartouche, then one Label per province a political Template names. Element
  * names are written in `language`, the app language, exactly as the editor
  * names the Elements it makes; every call mints fresh Elements from `newId`, so
  * a Map made from a Template is a copy.
@@ -428,6 +458,7 @@ export function templateElements(
   language = "en"
 ): MapElement[] {
   const spec = TEMPLATES[id];
+  const realGeography = spec.realGeography === true;
   const lines: MapLineElement[] = [];
 
   // Land shapes are authored on a unit square. One factor, the shorter inner
@@ -463,13 +494,22 @@ export function templateElements(
   const borderStyle: LineStyleId = spec.borderRole === "water" ? "coast" : "plain";
   line(borderToPage(BORDER), borderStyle, { closed: true, smooth: false, roughened: false });
   for (const coast of spec.coasts) {
-    line(landToPage(coast), "coast", { closed: true, smooth: true, roughened: true });
+    // Real geography is drawn as surveyed, so smoothing or roughening it would
+    // pull the borders that meet it off the coast.
+    line(landToPage(coast), "coast", {
+      closed: true,
+      smooth: !realGeography,
+      roughened: !realGeography,
+    });
   }
   if (spec.kingdom !== undefined) {
     line(landToPage(spec.kingdom), "border", { closed: true, smooth: true, roughened: true });
   }
   if (spec.river !== undefined) {
     line(landToPage(spec.river), "river", { closed: false, smooth: true, roughened: true });
+  }
+  for (const border of spec.borders ?? []) {
+    line(landToPage(border), "border", { closed: false, smooth: false, roughened: false });
   }
 
   // The largest face is the one just inside the world border: the sea, or, in a
@@ -513,6 +553,17 @@ export function templateElements(
     width: cartoucheSize * (CARTOUCHE_PLAQUE_WIDTH / CARTOUCHE_ART_WIDTH),
     size: cartoucheSize * (CARTOUCHE_PLAQUE_HEIGHT / CARTOUCHE_ART_WIDTH) * TITLE_SIZE_RATIO,
   });
+  const provinceSize = landSize * PROVINCE_LABEL_SIZE_RATIO;
+  const provinceLabels: MapLabelElement[] = (spec.provinces ?? []).map((province, index) =>
+    newLabel({
+      id: newId(),
+      name: format(translate(language, "element.labelName"), { number: index + 2 }),
+      text: province.name,
+      point: landToPage([province.point])[0],
+      width: province.name.length * provinceSize * PROVINCE_LABEL_GLYPH_RATIO,
+      size: provinceSize,
+    })
+  );
 
-  return [...fills, ...lines, cartouche, compass, titleLabel];
+  return [...fills, ...lines, cartouche, compass, titleLabel, ...provinceLabels];
 }

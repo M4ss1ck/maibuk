@@ -6,7 +6,9 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { faceAt, findFaces } from "./faces";
+import { PLUGIN_MESSAGE_MAX_BYTES } from "@/plugin-sdk/protocol";
+import { CUBA_BORDERS, CUBA_COASTS, CUBA_PROVINCES } from "./cuba";
+import { GAP_TOLERANCE_MM, faceAt, findFaces, type Face } from "./faces";
 import { reconcileFills } from "./fills";
 import {
   DATA_VERSION,
@@ -38,6 +40,9 @@ import {
 } from "./templates";
 import { translate } from "./i18n";
 
+/** The page the Cuba Template's size and labels are measured on: A4, upright. */
+const A4 = { widthMm: 210, heightMm: 297 };
+
 /** The Map name every test starts from. */
 const TITLE = "The Reach";
 
@@ -55,6 +60,8 @@ const EXPECTED: Readonly<
   // The outer face is land, and the kingdom inside its border is a second land face.
   "inland-kingdom": { style: "parchment", waterFills: 0, landFills: 2, faces: 2 },
   "blank-sea": { style: "atlas", waterFills: 1, landFills: 0, faces: 1 },
+  // Real geography: the sea, fifteen provinces, and Isla de la Juventud.
+  cuba: { style: "atlas", waterFills: 1, landFills: 16, faces: 17 },
 };
 
 /** A fresh id for every Element, so two calls never share one. */
@@ -138,6 +145,15 @@ function fillRole(fill: MapFillElement): string {
   return fill.content.color ?? "";
 }
 
+/**
+ * The faces a Template's lines enclose, read the way `templateElements` reads
+ * them: generated geography meets at its shared vertices, so `cuba` closes no
+ * gaps.
+ */
+function facesOf(id: MapTemplateId, elements: readonly MapElement[]): Face[] {
+  return findFaces(linesOf(elements), id === "cuba" ? 0 : GAP_TOLERANCE_MM);
+}
+
 /** Every point a Template draws, with the element it belongs to. */
 function pointsOf(elements: readonly MapElement[]): MapPoint[] {
   const points: MapPoint[] = [];
@@ -163,8 +179,10 @@ describe("MAP_TEMPLATE_IDS", () => {
       "two-continents",
       "inland-kingdom",
       "blank-sea",
+      "cuba",
     ]);
     expect(isMapTemplateId("continent")).toBe(true);
+    expect(isMapTemplateId("cuba")).toBe(true);
     expect(isMapTemplateId("blank-sea")).toBe(true);
     expect(isMapTemplateId("blank")).toBe(false);
     expect(isMapTemplateId("")).toBe(false);
@@ -296,7 +314,7 @@ describe("templateElements", () => {
       expect(land.length, id).toBe(EXPECTED[id].landFills);
       expect(fills.length, id).toBe(water.length + land.length);
 
-      const faces = findFaces(linesOf(elements));
+      const faces = facesOf(id, elements);
       expect(faces.length, id).toBe(EXPECTED[id].faces);
       const landed = fills.map((fill) => faceAt(faces, fill.anchor));
       for (const [index, face] of landed.entries()) {
@@ -310,7 +328,7 @@ describe("templateElements", () => {
     }
   });
 
-  it("draws a compass rose, a title cartouche, and the title as the only Map Label", () => {
+  it("draws a compass rose, a title cartouche, and the title as the first Map Label", () => {
     for (const id of MAP_TEMPLATE_IDS) {
       const elements = elementsOf(id);
       const stamps = stampsOf(elements).map((stamp) => stamp.stampRef);
@@ -324,7 +342,6 @@ describe("templateElements", () => {
       ).toHaveLength(1);
 
       const labels = labelsOf(elements);
-      expect(labels, id).toHaveLength(1);
       const [label] = labels;
       expect(label.text, id).toBe(TITLE);
       const cartouche = stampsOf(elements).find(
@@ -332,7 +349,197 @@ describe("templateElements", () => {
       ) as MapStampElement;
       expect(label.x, id).toBeCloseTo(cartouche.transform.x, 6);
       expect(label.y, id).toBeCloseTo(cartouche.transform.y, 6);
+      // Only a political Template names places after the title.
+      expect(labels, id).toHaveLength(1 + (id === "cuba" ? CUBA_PROVINCES.length : 0));
     }
+  });
+
+  it("draws Cuba's generated coasts and province borders as real geography", () => {
+    const elements = elementsOf("cuba", "portrait");
+    const land = landLinesOf(elements, "portrait");
+    const coasts = land.filter((line) => line.style === "coast");
+    const borders = land.filter((line) => line.style === "border");
+
+    // Two generated islands and thirty-eight generated border arcs.
+    expect(CUBA_COASTS).toHaveLength(2);
+    expect(CUBA_BORDERS).toHaveLength(38);
+    expect(coasts).toHaveLength(CUBA_COASTS.length);
+    expect(borders).toHaveLength(CUBA_BORDERS.length);
+
+    // Real geography is neither smoothed nor roughened, and every coast closes.
+    expect(coasts.map((coast) => coast.points.length)).toEqual(
+      CUBA_COASTS.map((ring) => ring.length)
+    );
+    for (const coast of coasts) {
+      expect(coast.closed).toBe(true);
+      expect(coast.roughened).toBe(false);
+      expect(coast.curves.every((curved) => !curved)).toBe(true);
+      expect(coast.enclosesFills).toBe(true);
+    }
+
+    // One open line per generated border arc, its ends left where they meet.
+    expect(borders.map((border) => border.points.length)).toEqual(
+      CUBA_BORDERS.map((path) => path.length)
+    );
+    for (const border of borders) {
+      expect(border.closed).toBe(false);
+      expect(border.roughened).toBe(false);
+      expect(border.curves.every((curved) => !curved)).toBe(true);
+      // The border line style encloses Fills, which is what splits the land.
+      expect(border.enclosesFills).toBe(true);
+    }
+  });
+
+  it("covers Cuba's sea and provinces with a Fill and a Map Label of their own", () => {
+    const elements = elementsOf("cuba", "portrait");
+    const fills = fillsOf(elements);
+    expect(fills).toHaveLength(17);
+    expect(fills.filter((fill) => fillRole(fill) === "water")).toHaveLength(1);
+    expect(fills.filter((fill) => fillRole(fill) === "land")).toHaveLength(16);
+
+    const faces = facesOf("cuba", elements);
+    expect(faces).toHaveLength(17);
+    // Every province Fill sits in a face of its own, beside the sea's.
+    const landed = fills.map((fill) => faceAt(faces, fill.anchor));
+    expect(landed.every((face) => face !== null)).toBe(true);
+    expect(new Set(landed).size).toBe(fills.length);
+
+    // One ordinary Map Label per province, numbered on after the title's.
+    const labels = labelsOf(elements).slice(1);
+    expect(labels.map((label) => label.text)).toEqual(
+      CUBA_PROVINCES.map((province) => province.name)
+    );
+    expect(labels.map((label) => label.name)).toEqual(
+      CUBA_PROVINCES.map((_province, index) => `Map Label ${index + 2}`)
+    );
+    for (const label of labels) {
+      expect(label.hidden).toBe(false);
+      expect(label.locked).toBe(false);
+    }
+  });
+
+  it("places Cuba's province Labels on their points, uncluttered on A4", () => {
+    const elements = templateElements("cuba", A4, TITLE, idMaker());
+    const [titleLabel, ...labels] = labelsOf(elements);
+
+    // The two provinces farthest apart in the unit square give the scale from
+    // unit coordinates to page millimetres.
+    const unitXs = CUBA_PROVINCES.map((province) => province.point[0]);
+    const west = unitXs.indexOf(Math.min(...unitXs));
+    const east = unitXs.indexOf(Math.max(...unitXs));
+    const scale = (labels[east].x - labels[west].x) / (unitXs[east] - unitXs[west]);
+    for (const [index, label] of labels.entries()) {
+      const [x, y] = CUBA_PROVINCES[index].point;
+      expect(label.x, label.text).toBeCloseTo(labels[west].x + (x - unitXs[west]) * scale, 6);
+      expect(label.y, label.text).toBeCloseTo(
+        labels[west].y + (y - CUBA_PROVINCES[west].point[1]) * scale,
+        6
+      );
+      expect(label.x, label.text).toBeGreaterThan(0);
+      expect(label.x, label.text).toBeLessThan(A4.widthMm);
+      expect(label.y, label.text).toBeGreaterThan(0);
+      expect(label.y, label.text).toBeLessThan(A4.heightMm);
+      // Small enough for a dense island, and smaller than the Map's own title.
+      expect(label.size, label.text).toBeGreaterThanOrEqual(1);
+      expect(label.size, label.text).toBeLessThan(titleLabel.size);
+    }
+
+    // No two province Labels overlap: a serif glyph takes about 0.6 of the cap
+    // size, and a line of text stands a little taller than its caps.
+    const glyphWidth = 0.6;
+    const lineHeight = 1.2;
+    const boxes = labels.map((label) => {
+      const halfWidth = (label.text.length * label.size * glyphWidth) / 2;
+      const halfHeight = (label.size * lineHeight) / 2;
+      return {
+        name: label.text,
+        left: label.x - halfWidth,
+        right: label.x + halfWidth,
+        top: label.y - halfHeight,
+        bottom: label.y + halfHeight,
+      };
+    });
+    for (let one = 0; one < boxes.length; one++) {
+      for (let two = one + 1; two < boxes.length; two++) {
+        const a = boxes[one];
+        const b = boxes[two];
+        const apart =
+          a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top;
+        expect(apart, `${a.name} beside ${b.name}`).toBe(true);
+      }
+    }
+  });
+
+  it("keeps Cuba live: a moved province border reshapes both neighbouring Fills", () => {
+    const before = elementsOf("cuba", "portrait");
+    const facesBefore = facesOf("cuba", before);
+    const fills = fillsOf(before);
+    const labelOf = (name: string): MapLabelElement => {
+      const label = labelsOf(before).find((candidate) => candidate.text === name);
+      if (label === undefined) throw new Error(`no Label names ${name}`);
+      return label;
+    };
+    /** The Fill sitting in the same face as a province's Label. */
+    const fillOf = (label: MapLabelElement): MapFillElement => {
+      const face = faceAt(facesBefore, [label.x, label.y]);
+      const fill = fills.find((candidate) => faceAt(facesBefore, candidate.anchor) === face);
+      if (fill === undefined) throw new Error(`no Fill covers ${label.text}`);
+      return fill;
+    };
+
+    const holguinFill = fillOf(labelOf("Holguín"));
+    const granmaFill = fillOf(labelOf("Granma"));
+    expect(holguinFill.id).not.toBe(granmaFill.id);
+
+    // The border between the two is the one running nearest their midpoint.
+    const holguin = labelOf("Holguín");
+    const granma = labelOf("Granma");
+    const middle: MapPoint = [(holguin.x + granma.x) / 2, (holguin.y + granma.y) / 2];
+    const distanceTo = (border: MapLineElement): number =>
+      Math.min(...border.points.map(([x, y]) => Math.hypot(x - middle[0], y - middle[1])));
+    const borders = linesOf(before).filter((line) => line.style === "border");
+    const border = borders.reduce((nearest, candidate) =>
+      distanceTo(candidate) < distanceTo(nearest) ? candidate : nearest
+    );
+    expect(distanceTo(border)).toBeLessThan(2);
+
+    // Move one interior point of that border a few millimetres sideways.
+    const moved = Math.floor(border.points.length / 2);
+    const points = border.points.map(
+      (point, index): MapPoint => (index === moved ? [point[0] + 3, point[1]] : point)
+    );
+    const edited = before.map((element) =>
+      element.id === border.id && element.kind === "line" ? { ...element, points } : element
+    );
+
+    const facesAfter = facesOf("cuba", edited);
+    expect(facesAfter).toHaveLength(facesBefore.length);
+
+    const holguinBefore = faceAt(facesBefore, holguinFill.anchor);
+    const granmaBefore = faceAt(facesBefore, granmaFill.anchor);
+    const holguinAfter = faceAt(facesAfter, holguinFill.anchor);
+    const granmaAfter = faceAt(facesAfter, granmaFill.anchor);
+    expect(holguinBefore).not.toBeNull();
+    expect(granmaBefore).not.toBeNull();
+    expect(holguinAfter).not.toBeNull();
+    expect(granmaAfter).not.toBeNull();
+    if (
+      holguinBefore === null ||
+      granmaBefore === null ||
+      holguinAfter === null ||
+      granmaAfter === null
+    ) {
+      return;
+    }
+    // Both faces moved with the border, and neither Fill fell out of one.
+    expect(Math.abs(holguinAfter.area - holguinBefore.area)).toBeGreaterThan(0.5);
+    expect(Math.abs(granmaAfter.area - granmaBefore.area)).toBeGreaterThan(0.5);
+  });
+
+  it("keeps a Cuba Map well inside the per-Map storage cap", () => {
+    const elements = templateElements("cuba", A4, "Cuba", idMaker());
+    const bytes = new TextEncoder().encode(JSON.stringify(elements)).length;
+    expect(bytes).toBeLessThan(PLUGIN_MESSAGE_MAX_BYTES / 2);
   });
 
   it("fits the title Label in the cartouche plaque, scaling it with the page", () => {

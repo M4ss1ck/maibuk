@@ -216,6 +216,45 @@ describe("findFaces gap tolerance", () => {
   it("takes the tolerance it is given", () => {
     expect(areas(findFaces([almostClosed(5)], 6))).toEqual([1600]);
   });
+
+  it("leaves ends that already meet at a junction where they are, beside a nearer line", () => {
+    // Three borders meet exactly at (20, 20); a fourth line passes 1 mm away.
+    // Snapping the junction ends onto it would bend the upright border and
+    // move area between the faces above.
+    const faces = findFaces([
+      rectangle("box", 0, 0, 40, 40),
+      line("west", [
+        [0, 20],
+        [20, 20],
+      ]),
+      line("east", [
+        [20, 20],
+        [40, 20],
+      ]),
+      line("north", [
+        [20, 20],
+        [20, 40],
+      ]),
+      line("near", [
+        [21, 0],
+        [21, 40],
+      ]),
+    ]);
+    expect(areas(faces)).toEqual([20, 380, 380, 400, 420]);
+  });
+
+  it("does not close a short line onto itself when both its ends meet other lines", () => {
+    // A border cutting a corner off the box: its ends are under 2 mm apart,
+    // but each one already lies on the box.
+    const faces = findFaces([
+      rectangle("box", 0, 0, 40, 40),
+      line("corner", [
+        [1.4, 0],
+        [0, 1.4],
+      ]),
+    ]);
+    expect(faces).toHaveLength(2);
+  });
 });
 
 describe("findFaces and Encloses Fills", () => {

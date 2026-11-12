@@ -767,6 +767,7 @@ describe("Maps page", () => {
         es["template.two-continents"],
         es["template.inland-kingdom"],
         es["template.blank-sea"],
+        es["template.cuba"],
       ]) {
         await user.keyboard("{ArrowDown}");
         await waitFor(() =>

@@ -196,7 +196,9 @@ function rangesOverlap(one: Bounds, two: Bounds): boolean {
  * ends. An open line's dangling end that lies within `toleranceMm` of another
  * line (or of the other end of its own line) is snapped onto the nearest point
  * of it, which closes the hand-drawn gap a Fill has to follow; a wider gap stays
- * open. Every segment is then cut at every crossing and touching point, and a
+ * open. An end that already touches another line is not dangling and stays put,
+ * so lines that meet exactly, as a Template's shared borders do, keep their
+ * junctions. Every segment is then cut at every crossing and touching point, and a
  * segment that repeats another one, or has no length, is dropped.
  */
 export function nodeLines(
@@ -224,9 +226,19 @@ export function nodeLines(
     return [points[segment.index], points[segment.index + 1]];
   };
 
+  // Whether an end already touches another line: such an end is not dangling.
+  // A line's own segments are left out, so it never counts the stretch it
+  // already runs along.
+  function touchesOther(point: MapPoint, lineIndex: number): boolean {
+    return segments.some((segment) => {
+      if (segment.line === lineIndex) return false;
+      const [a, b] = ends(segment);
+      return distance(point, nearestOnSegment(point, a, b).point) <= EPSILON_MM;
+    });
+  }
+
   // The nearest point of another line, within the tolerance, for a dangling end.
-  // A line's own segments are left out, so it never snaps onto the stretch it
-  // already runs along; its two ends meeting each other is the second rule below.
+  // Its two ends meeting each other is the second rule below.
   function nearestGap(point: MapPoint, lineIndex: number): MapPoint | null {
     let best: MapPoint | null = null;
     let bestDistance = tolerance;
@@ -235,7 +247,7 @@ export function nodeLines(
       const [a, b] = ends(segment);
       const near = nearestOnSegment(point, a, b).point;
       const gap = distance(point, near);
-      if (gap > EPSILON_MM && gap < bestDistance) {
+      if (gap < bestDistance) {
         bestDistance = gap;
         best = near;
       }
@@ -243,15 +255,27 @@ export function nodeLines(
     return best;
   }
 
+  // Which ends dangle is read before any end moves, so one snap never decides
+  // whether another end counts as touching.
+  const dangling = flat.map((line, lineIndex) =>
+    line.closed
+      ? [false, false]
+      : [0, line.points.length - 1].map((end) => !touchesOther(line.points[end], lineIndex))
+  );
   flat.forEach((line, lineIndex) => {
     if (line.closed) return;
     const last = line.points.length - 1;
-    for (const end of [0, last]) {
+    const [startDangles, endDangles] = dangling[lineIndex];
+    for (const [end, dangles] of [
+      [0, startDangles],
+      [last, endDangles],
+    ] as const) {
+      if (!dangles) continue;
       const near = nearestGap(line.points[end], lineIndex);
       if (near !== null) line.points[end] = [near[0], near[1]];
     }
     // A line drawn almost back to its own start closes onto that start.
-    if (distance(line.points[0], line.points[last]) <= tolerance) {
+    if (startDangles && endDangles && distance(line.points[0], line.points[last]) <= tolerance) {
       line.points[last] = [line.points[0][0], line.points[0][1]];
     }
   });
