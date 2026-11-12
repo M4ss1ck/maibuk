@@ -348,7 +348,9 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.in
     await tabTo(page, page.getByRole("button", { name: "Open Coastline" }), { max: 60 });
     await page.keyboard.press("Enter");
     await expect(surface(page)).toBeVisible();
-
+    // The reload put the editor back, and the floating chrome (#778) starts with
+    // its Layers card shut, so the document opens it again.
+    await openLayers(page);
     await expect(elementRow(page, "Map Label 1")).toBeVisible();
     await expect(drawnLabelPaths(page).first()).toHaveText("North Sea");
     await expect(drawnLabelText(page).last()).toHaveAttribute("font-family", "Cinzel");
