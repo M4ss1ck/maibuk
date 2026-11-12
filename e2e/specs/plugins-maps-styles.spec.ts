@@ -125,9 +125,10 @@ async function placeRectangle(page: Page): Promise<void> {
 
 /**
  * Picks a Map Style from the top-right pill's popover (#778) by keyboard: Enter
- * opens it, and the group's own arrows walk from the Style it holds to the named
- * one, which takes effect as it is picked; Escape shuts the popover and returns
- * focus to its trigger.
+ * opens it, the one Tab an open popover takes walks into the group from the
+ * Style it holds, and the group's own arrows go on to the named one, which takes
+ * effect as it is picked; Escape shuts the popover and returns focus to its
+ * trigger.
  */
 async function pickMapStyle(page: Page, style: string): Promise<void> {
   const trigger = mapStyleTrigger(page);
@@ -137,6 +138,11 @@ async function pickMapStyle(page: Page, style: string): Promise<void> {
   await page.keyboard.press("Enter");
   const group = page.getByRole("radiogroup", { name: "Map Style" });
   await expect(group).toBeVisible();
+  // An open popover holds focus itself, so Tab is the author's way in: the group
+  // is one tab stop, the radio its Style already holds.
+  const current = group.getByRole("radio", { checked: true });
+  await tabTo(page, current, { max: 5 });
+  await expect(current).toBeFocused();
   const item = group.getByRole("radio", { name: style, exact: true });
   await pressUntilFocused(page, "ArrowDown", item, { max: 8 });
   await expect(item).toBeChecked();
@@ -186,6 +192,9 @@ async function reopenMap(page: Page): Promise<void> {
   await tabTo(page, page.getByRole("button", { name: "Open Coastline" }), { max: 60 });
   await page.keyboard.press("Enter");
   await expect(surface(page)).toBeVisible();
+  // Layers starts shut in the floating editor (#778), so the list below is
+  // opened again the way an author opens it.
+  await openLayers(page);
   await expect(elementRow(page, "Rectangle 1")).toBeVisible();
 }
 
