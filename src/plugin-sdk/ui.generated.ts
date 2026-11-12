@@ -268,6 +268,8 @@ export interface PluginUiElementProps {
     label: string;
     icon: string;
     variant?: "primary" | "secondary" | "ghost" | "destructive";
+    /** Whether the button is a selected toggle: it reports its pressed state and takes the selected look. Leave it unset for a plain action. */
+    isSelected?: boolean;
     isDisabled?: boolean;
     onPress?: () => void;
   };
@@ -379,6 +381,8 @@ export interface PluginUiElementProps {
     label: string;
     /** An optional Lucide icon name for the trigger. */
     icon?: string;
+    /** Shows only the `icon` in the trigger, with `label` as its accessible name and tooltip. Ignored when `icon` is not set. */
+    iconOnly?: boolean;
     isOpen?: boolean;
     children?: ReactNode;
     /** Fires when the host dismisses or opens the dialog. The host closes immediately, even with a stopped Worker. Once the Worker has handled this event, the Plugin's `isOpen` is authoritative again: set it from this handler. A Plugin that ignores this event and keeps `isOpen` true reopens the dialog. */

@@ -609,6 +609,11 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
       label: { kind: "string", required: true, maxLength: 512, description: "Accessible name." },
       icon: { kind: "string", required: true, maxLength: 64 },
       variant: { kind: "enum", values: ["primary", "secondary", "ghost", "destructive"] },
+      isSelected: {
+        kind: "boolean",
+        description:
+          "Whether the button is a selected toggle: it reports its pressed state and takes the selected look. Leave it unset for a plain action.",
+      },
       isDisabled: { kind: "boolean" },
     },
     events: [{ prop: "onPress", event: "press", detail: "none" }],
@@ -915,6 +920,11 @@ export const PLUGIN_UI_TABLE: readonly PluginUiElement[] = [
         kind: "string",
         maxLength: 64,
         description: "An optional Lucide icon name for the trigger.",
+      },
+      iconOnly: {
+        kind: "boolean",
+        description:
+          "Shows only the `icon` in the trigger, with `label` as its accessible name and tooltip. Ignored when `icon` is not set.",
       },
       isOpen: { kind: "boolean" },
       openSeq: {
