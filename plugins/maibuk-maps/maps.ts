@@ -117,6 +117,8 @@ export interface MapFillContent {
   texture?: TextureId;
   /** The Stamps scattered over the area. */
   scatter?: MapFillScatter;
+  /** The Custom Fill covering the area, by its id in the Library's `custom-fills`. */
+  customFill?: string;
 }
 
 /** The Stamp a Fill scatters over its area, how far apart the Stamps sit, and the seed that places them. */
@@ -195,6 +197,28 @@ export interface MapStampElement extends MapElementBase {
   /** The scale bar's reading; no other Stamp carries one. */
   scale?: MapStampScale;
 }
+
+/**
+ * A Map Image: an uploaded picture at one spot on the page (#756). `assetRef`
+ * names the Library asset it draws, by its own id; its `transform` centres the
+ * picture the way a Stamp's does, with `size` its width in page millimetres.
+ * `opacity` fades it, and `exportable` decides whether an export and a Place
+ * include it.
+ */
+export interface MapImageElement extends MapElementBase {
+  kind: "image";
+  /** The Library asset it draws, by the asset's own id. */
+  assetRef: string;
+  transform: MapStampTransform;
+  /** How strongly it draws, from `MIN_IMAGE_OPACITY` to `MAX_IMAGE_OPACITY`. */
+  opacity: number;
+  /** Whether an export and a Place draw it; false keeps it in the editor only. */
+  exportable: boolean;
+}
+
+/** The faintest a Map Image draws, and the strongest. */
+export const MIN_IMAGE_OPACITY = 0.05;
+export const MAX_IMAGE_OPACITY = 1;
 
 /** The width a new Stamp's art box starts at, in page millimetres. */
 export const DEFAULT_STAMP_SIZE_MM = 12;
@@ -366,17 +390,13 @@ export function curvedSegments(pointCount: number, closed: boolean): boolean[] {
   return Array.from({ length: pointCount - 1 + (closed ? 1 : 0) }, () => true);
 }
 
-/** Every other Element kind, whose geometry lands with its own ticket. */
-export interface MapOtherElement extends MapElementBase {
-  kind: Exclude<MapElementKind, "line" | "fill" | "stamp" | "label">;
-}
-
+/** Every Element kind, each with its own geometry and fields. */
 export type MapElement =
   | MapLineElement
   | MapFillElement
   | MapStampElement
   | MapLabelElement
-  | MapOtherElement;
+  | MapImageElement;
 
 /**
  * Whether an Element is a Fill that covers its own outline (#750), rather than
@@ -592,15 +612,23 @@ function isFillScatter(value: unknown): boolean {
   );
 }
 
-/** Whether a Fill's content covers something: at least one of a colour, a texture, or a scatter. */
+/**
+ * Whether a Fill's content covers something: at least one of a colour, a
+ * texture, a scatter, or a Custom Fill.
+ */
 function isFillContent(value: unknown): boolean {
   if (typeof value !== "object" || value === null) return false;
   const content = value as Record<string, unknown>;
   if (content.color !== undefined && !isMapColor(content.color)) return false;
   if (content.texture !== undefined && !isTextureId(content.texture)) return false;
   if (content.scatter !== undefined && !isFillScatter(content.scatter)) return false;
+  if (content.customFill !== undefined && typeof content.customFill !== "string") return false;
+  if (content.customFill === "") return false;
   return (
-    content.color !== undefined || content.texture !== undefined || content.scatter !== undefined
+    content.color !== undefined ||
+    content.texture !== undefined ||
+    content.scatter !== undefined ||
+    content.customFill !== undefined
   );
 }
 
@@ -620,6 +648,20 @@ function isLabelFields(element: Record<string, unknown>): boolean {
   if (!isFiniteNumber(element.letterSpacing)) return false;
   if (!isFiniteNumber(element.halo) || element.halo < 0) return false;
   return element.color === undefined || isMapColor(element.color);
+}
+
+/**
+ * Whether a Map Image's asset, place, size, opacity, and export flag are
+ * present and well formed.
+ */
+function isImageFields(element: Record<string, unknown>): boolean {
+  return (
+    typeof element.assetRef === "string" &&
+    element.assetRef !== "" &&
+    isStampTransform(element.transform) &&
+    isFiniteNumber(element.opacity) &&
+    typeof element.exportable === "boolean"
+  );
 }
 
 function isMapElement(value: unknown): value is MapElement {
@@ -654,6 +696,7 @@ function isMapElement(value: unknown): value is MapElement {
     );
   }
   if (element.kind === "label") return isLabelFields(element);
+  if (element.kind === "image") return isImageFields(element);
   return true;
 }
 
@@ -927,6 +970,15 @@ function normalizeStamp(stamp: MapStampElement): MapStampElement {
 }
 
 /**
+ * A Map Image read from a document: its opacity brought inside the range the
+ * model draws, so a number an older or a broken build wrote still shows.
+ */
+function normalizeImage(image: MapImageElement): MapImageElement {
+  const opacity = Math.min(MAX_IMAGE_OPACITY, Math.max(MIN_IMAGE_OPACITY, image.opacity));
+  return opacity === image.opacity ? image : { ...image, opacity };
+}
+
+/**
  * A Fill read from a document: the old default land colour becomes the `land`
  * role, so a Style switch recolours it along with the rest of the land.
  */
@@ -946,6 +998,7 @@ function normalizeDocument(map: MapDocument): MapDocument {
       if (element.kind === "fill") return normalizeSoftEdge(normalizeFill(element));
       if (element.kind === "stamp") return normalizeStamp(element);
       if (element.kind === "label") return normalizeLabel(element);
+      if (element.kind === "image") return normalizeImage(element);
       return element;
     }),
   };

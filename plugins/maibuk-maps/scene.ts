@@ -10,6 +10,7 @@
  */
 
 import { RoughGenerator } from "roughjs/bin/generator.js";
+import { parseCustomStampRef, type AssetIndexEntry, type CustomFill } from "./assets";
 import { faceAt, findFaces, type Face } from "./faces";
 import {
   cumulativeLengths,
@@ -29,16 +30,45 @@ import {
   type MapFillElement,
   type MapFillOutline,
   type MapFillScatter,
+  type MapImageElement,
   type MapLabelElement,
   type MapLineElement,
   type MapPoint,
   type MapStampElement,
   type MapStampTransform,
 } from "./maps";
-import { scatterPoints } from "./scatter";
+import { DEFAULT_SCATTER_SPACING_MM, scatterPoints } from "./scatter";
 import { SCALE_BAR_STAMP_REF, type StampArt, scaleBarLayout, stampArt } from "./stamps";
 import { lineRole, resolveColor, styleOf, type MapStyleId } from "./styles";
 import { TEXTURE_IDS, texturePattern, texturePatternId, type TextureId } from "./textures";
+
+/**
+ * The Library pictures and Custom Fills a Map draws from (#756), without any
+ * picture's bytes: a scene needs only what a picture looks like and how big it
+ * is, so this value stays small enough to pass through every render. The
+ * Library's index is the source of this value, and a Map's Frame is sent the
+ * bytes of the few ids the Map names.
+ */
+export interface MapLibrary {
+  /** Every picture the Library holds, by asset id. */
+  assets: ReadonlyMap<string, AssetIndexEntry>;
+  /** Every Custom Fill the Library holds, by its own id. */
+  customFills: ReadonlyMap<string, CustomFill>;
+}
+
+/** A Library holding nothing: what a scene with no Library draws its pictures from. */
+export const EMPTY_MAP_LIBRARY: MapLibrary = { assets: new Map(), customFills: new Map() };
+
+/** A Library value from the rows the Library lists. */
+export function mapLibrary(
+  assets: readonly AssetIndexEntry[] = [],
+  customFills: readonly CustomFill[] = []
+): MapLibrary {
+  return {
+    assets: new Map(assets.map((asset) => [asset.id, asset])),
+    customFills: new Map(customFills.map((customFill) => [customFill.id, customFill])),
+  };
+}
 
 /** Ramer-Douglas-Peucker distance below which a Pencil point is noise. */
 export const SMOOTH_TOLERANCE_MM = 0.5;
@@ -205,8 +235,34 @@ export interface TextHalo {
   width: number;
 }
 
-/** One primitive an Element draws: a path to stroke or fill, or a piece of text. */
-export type SceneShape = LineShape | TextShape;
+/**
+ * One uploaded picture, drawn as a box centred on (x, y) (#756). The box is
+ * `width` wide and `height` tall, the height following the picture's own aspect
+ * ratio so nothing is squashed, and it turns about its centre. `sceneToSvg`
+ * writes the picture itself as an `asset:<id>` placeholder, which the Frame
+ * swaps for the bytes it holds and an export resolves to a data URI.
+ */
+export interface ImageShape {
+  kind: "image";
+  /** The Library asset it draws. */
+  assetId: string;
+  /** The box's centre on the page, in millimetres. */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** The box's turn in degrees clockwise about its centre. */
+  rotation: number;
+  /** How strongly it draws, 0 to 1. */
+  opacity: number;
+  /** The one colour a recolorable picture is painted in; absent draws it as uploaded. */
+  tint?: string;
+  /** The Clip Path id that keeps the picture inside its Element's area, when it has one. */
+  clip?: string;
+}
+
+/** One primitive an Element draws: a path to stroke or fill, a piece of text, or an uploaded picture. */
+export type SceneShape = LineShape | TextShape | ImageShape;
 
 /** A river's width at its start and its end, in page millimetres. */
 const RIVER_START_WIDTH_MM = 0.2;
@@ -432,12 +488,16 @@ function fillPath(face: Face): string {
   return [face.outer, ...face.holes].map(ringPath).join(" ");
 }
 
-/** What one pass over a scene collects: the definitions an SVG needs, and the textures it paints. */
+/** What one pass over a scene collects: the definitions an SVG needs, and the paints it repeats. */
 interface SceneCollector {
-  /** The Clip Path and filter definitions, in Element order. */
+  /** The Clip Path, tint filter, and Custom Fill pattern definitions, in Element order. */
   defs: string[];
   /** The textures the scene paints with, so each one is defined once. */
   textures: Set<TextureId>;
+  /** The colours the scene tints a picture in, so each filter is defined once. */
+  tints: Set<string>;
+  /** The Custom Fills whose texture pattern is already defined. */
+  customFillPatterns: Set<string>;
 }
 
 /** The area one Fill covers: the exact path it paints, and the rings that bound it. */
@@ -513,6 +573,205 @@ function scatterClipId(elementId: string): string {
 }
 
 /**
+ * The id the Clip Path a Custom Fill's own scatter is cut by takes (#756): its
+ * own id, because one Fill can carry both a scatter and a Custom Fill, and two
+ * `<clipPath>`s that share an id would leave one of them undefined.
+ */
+function customFillClipId(elementId: string): string {
+  return `custom-fill-clip-${seedFor(elementId).toString(16)}`;
+}
+
+/** How wide one tile of a Custom Fill's texture picture is, in page millimetres. */
+export const CUSTOM_FILL_TILE_MM = 20;
+
+/**
+ * One Library picture as a render primitive: a box `transform.size`
+ * millimetres wide, centred on the Stamp's or Map Image's point, with its
+ * height taken from the picture's own aspect ratio.
+ */
+function imageShape(
+  asset: AssetIndexEntry,
+  transform: MapStampTransform,
+  opacity: number,
+  tint?: string
+): ImageShape {
+  return {
+    kind: "image",
+    assetId: asset.id,
+    x: transform.x,
+    y: transform.y,
+    width: transform.size,
+    height: (transform.size * asset.height) / asset.width,
+    rotation: transform.rotation,
+    opacity,
+    ...(tint === undefined ? {} : { tint }),
+  };
+}
+
+/**
+ * The picture one Custom Stamp draws (#756): the Library's asset its ref names,
+ * sized and turned by the Stamp's transform, and painted in the Stamp's ink
+ * when the picture draws in one paint. A ref this build or this Library does not
+ * hold draws nothing, as an unknown base Stamp does.
+ */
+function customStampShapes(
+  element: MapStampElement,
+  library: MapLibrary,
+  style: MapStyleId
+): SceneShape[] {
+  const assetId = parseCustomStampRef(element.stampRef);
+  const asset = assetId === null ? undefined : library.assets.get(assetId);
+  if (asset === undefined || !(element.transform.size > 0)) return [];
+  return [
+    imageShape(
+      asset,
+      element.transform,
+      1,
+      asset.recolorable ? resolveColor(style, element.color, "ink") : undefined
+    ),
+  ];
+}
+
+/** The picture one Map Image draws, at its own opacity; a Library without it draws nothing. */
+function imageElementShapes(element: MapImageElement, library: MapLibrary): SceneShape[] {
+  const asset = library.assets.get(element.assetRef);
+  if (asset === undefined || !(element.transform.size > 0)) return [];
+  return [imageShape(asset, element.transform, element.opacity)];
+}
+
+/** The id a Custom Fill's texture pattern takes, from the Custom Fill's own id. */
+function customFillPatternId(fillId: string): string {
+  return `custom-fill-texture-${seedFor(fillId).toString(16)}`;
+}
+
+/**
+ * The `<pattern>` a Custom Fill's texture paints with (#756): one `<image>` of
+ * the Library's picture, tiled {@link CUSTOM_FILL_TILE_MM} wide with the
+ * picture's own aspect ratio. The tile is a page measurement, so the texture
+ * keeps its scale whatever the Fill's area is.
+ */
+function customFillTexturePattern(fill: CustomFill, asset: AssetIndexEntry): string {
+  const height = (CUSTOM_FILL_TILE_MM * asset.height) / asset.width;
+  const width = roundedMm(CUSTOM_FILL_TILE_MM);
+  return `<pattern id="${customFillPatternId(
+    fill.id
+  )}" patternUnits="userSpaceOnUse" width="${width}" height="${roundedMm(
+    height
+  )}"><image href="asset:${escapeAttribute(asset.id)}" x="0" y="0" width="${width}" height="${roundedMm(
+    height
+  )}" preserveAspectRatio="xMidYMid slice"/></pattern>`;
+}
+
+/** One Custom Fill's picture as the pattern its area paints with, defined once per Custom Fill. */
+function paintCustomFillTexture(
+  fill: CustomFill,
+  asset: AssetIndexEntry,
+  collector: SceneCollector
+): string {
+  if (!collector.customFillPatterns.has(fill.id)) {
+    collector.customFillPatterns.add(fill.id);
+    collector.defs.push(customFillTexturePattern(fill, asset));
+  }
+  return `url(#${customFillPatternId(fill.id)})`;
+}
+
+/**
+ * The Stamps a Custom Fill scatters over its area (#756): the points a Fill's
+ * own scatter lands on, from the Element's own seed, with the Custom Fill's refs
+ * taking turns in the order it lists them, so one seed always draws the same
+ * picture. A ref the Library does not hold, or a base Stamp this build does not
+ * know, draws nothing at its turn.
+ */
+function customFillScatterShapes(
+  element: MapFillElement,
+  area: FillArea,
+  refs: readonly string[],
+  pageWidthMm: number,
+  pageHeightMm: number,
+  style: MapStyleId,
+  library: MapLibrary,
+  collector: SceneCollector
+): SceneShape[] {
+  const clip = customFillClipId(element.id);
+  const ink = resolveColor(style, undefined, "ink");
+  const shapes: SceneShape[] = [];
+  for (const [index, point] of scatterPoints(
+    area.rings,
+    DEFAULT_SCATTER_SPACING_MM,
+    // The seed never 0, which reads as a Fill that never picked one.
+    seedFor(element.id) || 1,
+    pageWidthMm,
+    pageHeightMm
+  ).entries()) {
+    const ref = refs[index % refs.length];
+    const box: MapStampTransform = {
+      x: point[0],
+      y: point[1],
+      size: DEFAULT_SCATTER_SPACING_MM,
+      rotation: 0,
+    };
+    const art = stampArt(ref);
+    if (art !== undefined) {
+      shapes.push(
+        ...artShapes(art, artTransform(box, art), ink, style).map((shape) => ({ ...shape, clip }))
+      );
+      continue;
+    }
+    const assetId = parseCustomStampRef(ref);
+    const asset = assetId === null ? undefined : library.assets.get(assetId);
+    if (asset === undefined) continue;
+    shapes.push({ ...imageShape(asset, box, 1, asset.recolorable ? ink : undefined), clip });
+  }
+  if (shapes.length === 0) return shapes;
+  collector.defs.push(
+    `<clipPath id="${clip}"><path d="${escapeAttribute(area.d)}" clip-rule="evenodd"/></clipPath>`
+  );
+  return shapes;
+}
+
+/**
+ * The shapes one Fill's Custom Fill draws (#756): its texture painted over the
+ * area, then its Stamps scattered over it. A Custom Fill the Library does not
+ * hold draws nothing extra, so the Fill keeps the paint it already had.
+ */
+function customFillShapes(
+  element: MapFillElement,
+  area: FillArea,
+  customFillId: string,
+  pageWidthMm: number,
+  pageHeightMm: number,
+  style: MapStyleId,
+  library: MapLibrary,
+  collector: SceneCollector
+): SceneShape[] {
+  const fill = library.customFills.get(customFillId);
+  if (fill === undefined) return [];
+  const shapes: SceneShape[] = [];
+  if (fill.texture !== undefined) {
+    const asset = library.assets.get(fill.texture);
+    if (asset !== undefined) {
+      shapes.push(areaPaint(area, paintCustomFillTexture(fill, asset, collector)));
+    }
+  }
+  const stamps = fill.stamps ?? [];
+  if (stamps.length > 0) {
+    shapes.push(
+      ...customFillScatterShapes(
+        element,
+        area,
+        stamps,
+        pageWidthMm,
+        pageHeightMm,
+        style,
+        library,
+        collector
+      )
+    );
+  }
+  return shapes;
+}
+
+/**
  * The Stamps a Fill scatters over its area (#750), drawn exactly as Stamp
  * Elements are and clipped to the area, so the ones near its edge are cut off
  * cleanly. Each Stamp is drawn one scatter spacing wide, so the Stamps sit
@@ -567,14 +826,29 @@ function fillShapes(
   pageWidthMm: number,
   pageHeightMm: number,
   style: MapStyleId,
-  collector: SceneCollector
-): LineShape[] {
-  const { color, texture, scatter } = element.content;
-  const shapes: LineShape[] = [];
+  collector: SceneCollector,
+  context: ResolvedSceneContext
+): SceneShape[] {
+  const { color, texture, scatter, customFill } = element.content;
+  const shapes: SceneShape[] = [];
   if (color !== undefined) shapes.push(areaPaint(area, resolveColor(style, color, "land")));
   if (texture !== undefined) {
     collector.textures.add(texture);
     shapes.push(areaPaint(area, `url(#${texturePatternId(texture, style)})`));
+  }
+  if (customFill !== undefined) {
+    shapes.push(
+      ...customFillShapes(
+        element,
+        area,
+        customFill,
+        pageWidthMm,
+        pageHeightMm,
+        style,
+        context.library,
+        collector
+      )
+    );
   }
   if (scatter !== undefined) {
     shapes.push(
@@ -710,14 +984,18 @@ function scaleBarShapes(element: MapStampElement, pageWidthMm: number, ink: stri
   return shapes;
 }
 
-/** The shapes one Stamp draws: its built-in art, or the scale bar its reading lays out. */
+/** The shapes one Stamp draws: its built-in art, a Custom Stamp's picture, or the scale bar's layout. */
 function stampShapes(
   element: MapStampElement,
   pageWidthMm: number,
-  style: MapStyleId
+  style: MapStyleId,
+  library: MapLibrary
 ): SceneShape[] {
   const ink = resolveColor(style, element.color, "ink");
   if (element.stampRef === SCALE_BAR_STAMP_REF) return scaleBarShapes(element, pageWidthMm, ink);
+  if (parseCustomStampRef(element.stampRef) !== null) {
+    return customStampShapes(element, library, style);
+  }
   const art = stampArt(element.stampRef);
   if (art === undefined || !(element.transform.size > 0)) return [];
   return artShapes(art, artTransform(element.transform, art), ink, style);
@@ -762,23 +1040,54 @@ function labelShapes(
   ];
 }
 
-/** The render primitives one Element is drawn from: a line's, a fill's content, or a Stamp's picture. */
+/**
+ * What a scene draws from, beside its Elements: the Library its pictures and
+ * Custom Fills come from, and whether the picture is an export.
+ */
+export interface SceneContext {
+  /** The Library's pictures and Custom Fills; absent draws no uploaded picture. */
+  library?: MapLibrary;
+  /**
+   * Whether the scene is an export or a Place: a Map Image the author kept out
+   * of exports is dropped. The editor draws it.
+   */
+  forExport?: boolean;
+}
+
+/** A context with every field at its default, so one pass reads each once. */
+interface ResolvedSceneContext {
+  library: MapLibrary;
+  forExport: boolean;
+}
+
+function sceneContext(context: SceneContext = {}): ResolvedSceneContext {
+  return { library: context.library ?? EMPTY_MAP_LIBRARY, forExport: context.forExport === true };
+}
+
+/** The render primitives one Element is drawn from: a line's, a fill's content, a Stamp's picture, or a Map Image. */
 function elementShapes(
   element: MapElement,
   area: FillArea | null,
   pageWidthMm: number,
   pageHeightMm: number,
   style: MapStyleId,
-  collector: SceneCollector
+  collector: SceneCollector,
+  context: ResolvedSceneContext
 ): SceneShape[] {
   if (element.kind === "line") return lineShapes(element, style);
   if (element.kind === "fill") {
     return area === null
       ? []
-      : fillShapes(element, area, pageWidthMm, pageHeightMm, style, collector);
+      : fillShapes(element, area, pageWidthMm, pageHeightMm, style, collector, context);
   }
-  if (element.kind === "stamp") return stampShapes(element, pageWidthMm, style);
+  if (element.kind === "stamp") return stampShapes(element, pageWidthMm, style, context.library);
   if (element.kind === "label") return labelShapes(element, style, collector);
+  // A Map Image the author keeps out of exports draws in the editor alone.
+  if (element.kind === "image") {
+    return context.forExport && !element.exportable
+      ? []
+      : imageElementShapes(element, context.library);
+  }
   return [];
 }
 
@@ -829,23 +1138,67 @@ export interface SceneRender {
   defs: string[];
 }
 
-/** Every Element's primitives, its Soft Edge, and the definitions its SVG needs, in one pass. */
+/** The id a tint filter takes: one colour has one filter, which every picture in it shares. */
+export function tintFilterId(color: string): string {
+  const digits = color.replace(/[^0-9a-zA-Z]/g, "").toLowerCase();
+  return `asset-tint-${digits === "" ? "none" : digits}`;
+}
+
+/**
+ * The `<filter>` one tint colour draws a picture through: the colour flooded
+ * into the picture's own alpha, so every painted pixel takes the colour and
+ * every transparent one stays clear. That repaints a Custom Stamp's one-colour
+ * picture in the Stamp's ink, however the file drew it.
+ */
+function tintFilter(color: string): string {
+  return `<filter id="${tintFilterId(
+    color
+  )}" color-interpolation-filters="sRGB"><feFlood flood-color="${escapeAttribute(
+    color
+  )}" result="tint"/><feComposite in="tint" in2="SourceAlpha" operator="in"/></filter>`;
+}
+
+/**
+ * Every Element's primitives, its Soft Edge, and the definitions its SVG needs,
+ * in one pass. `context` adds the Library the scene's pictures come from and
+ * whether it is an export.
+ */
 export function sceneRender(
   elements: readonly MapElement[],
   pageWidthMm: number,
   pageHeightMm: number,
-  styleId?: string
+  styleId?: string,
+  context: SceneContext = {}
 ): SceneRender {
   const style = styleOf(styleId);
+  const resolved = sceneContext(context);
   const needsFaces = elements.some((element) => element.kind === "fill");
   const faces = needsFaces ? sceneFaces(elements) : [];
-  const collector: SceneCollector = { defs: [], textures: new Set() };
+  const collector: SceneCollector = {
+    defs: [],
+    textures: new Set(),
+    tints: new Set(),
+    customFillPatterns: new Set(),
+  };
   const shapes: SceneShape[][] = [];
   const filters: (string | null)[] = [];
 
   for (const element of elements) {
     const area = element.kind === "fill" ? fillArea(element, faces) : null;
-    shapes.push(elementShapes(element, area, pageWidthMm, pageHeightMm, style, collector));
+    const primitives = elementShapes(
+      element,
+      area,
+      pageWidthMm,
+      pageHeightMm,
+      style,
+      collector,
+      resolved
+    );
+    shapes.push(primitives);
+    // A picture's tint is a definition of its own, so each colour is written once.
+    for (const shape of primitives) {
+      if (isImageShape(shape) && shape.tint !== undefined) collector.tints.add(shape.tint);
+    }
 
     const softEdge = softEdgeOf(element);
     const outline = element.kind === "line" ? element.points : (area?.rings.flat() ?? []);
@@ -866,6 +1219,7 @@ export function sceneRender(
       ...TEXTURE_IDS.filter((texture) => collector.textures.has(texture)).map((texture) =>
         texturePattern(texture, style)
       ),
+      ...[...collector.tints].map(tintFilter),
       ...collector.defs,
     ],
   };
@@ -876,9 +1230,38 @@ export function sceneShapes(
   elements: readonly MapElement[],
   pageWidthMm: number,
   pageHeightMm: number,
-  styleId?: string
+  styleId?: string,
+  context: SceneContext = {}
 ): SceneShape[][] {
-  return sceneRender(elements, pageWidthMm, pageHeightMm, styleId).shapes;
+  return sceneRender(elements, pageWidthMm, pageHeightMm, styleId, context).shapes;
+}
+
+/**
+ * Every asset id the Map draws, in Element order and once each: a Map Image's
+ * picture, a Custom Stamp's picture, and a Custom Fill's texture and scattered
+ * Stamps. The Worker sends the Frame these ids' bytes and an SVG export embeds
+ * them, so nothing bigger crosses the port.
+ */
+export function referencedAssetIds(
+  elements: readonly MapElement[],
+  library: MapLibrary = EMPTY_MAP_LIBRARY
+): string[] {
+  const ids = new Set<string>();
+  const addRef = (ref: string): void => {
+    const assetId = parseCustomStampRef(ref);
+    if (assetId !== null) ids.add(assetId);
+  };
+  for (const element of elements) {
+    if (element.kind === "image") ids.add(element.assetRef);
+    if (element.kind === "stamp") addRef(element.stampRef);
+    if (element.kind === "fill" && element.content.customFill !== undefined) {
+      const customFill = library.customFills.get(element.content.customFill);
+      if (customFill === undefined) continue;
+      if (customFill.texture !== undefined) ids.add(customFill.texture);
+      for (const ref of customFill.stamps ?? []) addRef(ref);
+    }
+  }
+  return [...ids];
 }
 
 /** Escapes text for an XML attribute. */
@@ -896,9 +1279,14 @@ function escapeAttribute(value: string): string {
   );
 }
 
-/** Whether a shape is text rather than a path. */
+/** Whether a shape is text rather than a path or a picture. */
 function isTextShape(shape: SceneShape): shape is TextShape {
   return "text" in shape;
+}
+
+/** Whether a shape is an uploaded picture rather than a path or text. */
+export function isImageShape(shape: SceneShape): shape is ImageShape {
+  return "kind" in shape && shape.kind === "image";
 }
 
 /** One drawn primitive as an SVG path, with only the attributes it needs. */
@@ -925,7 +1313,7 @@ function shapePath(shape: LineShape): string {
 
 /** Whether a shape only marks where its Element can be picked, painting no ink. */
 function isHitOnlyShape(shape: SceneShape): boolean {
-  return !isTextShape(shape) && shape.hitOnly === true;
+  return !isTextShape(shape) && !isImageShape(shape) && shape.hitOnly === true;
 }
 
 /** The text's own markup, and the baseline path it follows when it has one. */
@@ -974,6 +1362,37 @@ function shapeText(shape: TextShape): string {
   return `${halo}<text ${[...attributes, fill].join(" ")}>${body}</text>`;
 }
 
+/**
+ * One uploaded picture as SVG, with only the attributes it needs (#756). Its
+ * `href` is the `asset:<id>` placeholder that names the picture rather than
+ * carrying its bytes: the Frame swaps in the blob URL it holds, and an export
+ * replaces it with a data URI. The box is centred on the shape's point, so the
+ * place and turn read as a Stamp's do.
+ */
+function shapeImage(shape: ImageShape): string {
+  const left = shape.x - shape.width / 2;
+  const top = shape.y - shape.height / 2;
+  const attributes = [
+    `href="asset:${escapeAttribute(shape.assetId)}"`,
+    `x="${roundedMm(left)}"`,
+    `y="${roundedMm(top)}"`,
+    `width="${roundedMm(shape.width)}"`,
+    `height="${roundedMm(shape.height)}"`,
+    'preserveAspectRatio="xMidYMid meet"',
+  ];
+  if (shape.rotation !== 0) {
+    attributes.push(
+      `transform="rotate(${roundedMm(shape.rotation)} ${roundedMm(shape.x)} ${roundedMm(shape.y)})"`
+    );
+  }
+  if (shape.opacity !== 1) attributes.push(`opacity="${roundedMm(shape.opacity)}"`);
+  if (shape.tint !== undefined) attributes.push(`filter="url(#${tintFilterId(shape.tint)})"`);
+  const image = `<image ${attributes.join(" ")}/>`;
+  // A clip on the picture itself would be read in its turned coordinates, so a
+  // group in page space carries it instead, as the Frame does.
+  return shape.clip === undefined ? image : `<g clip-path="url(#${shape.clip})">${image}</g>`;
+}
+
 /** One Element as a group of primitives, marked when it is the selection and blurred when it has a Soft Edge. */
 function elementGroup(
   element: MapElement,
@@ -986,11 +1405,17 @@ function elementGroup(
   if (softEdgeFilterId !== null) attributes.push(`filter="url(#${softEdgeFilterId})"`);
   const primitives = shapes
     .filter((shape) => !isHitOnlyShape(shape))
-    .map((shape) => (isTextShape(shape) ? shapeText(shape) : shapePath(shape)));
+    .map((shape) =>
+      isTextShape(shape)
+        ? shapeText(shape)
+        : isImageShape(shape)
+          ? shapeImage(shape)
+          : shapePath(shape)
+    );
   return `<g ${attributes.join(" ")}>${primitives.join("")}</g>`;
 }
 
-export interface SceneOptions {
+export interface SceneOptions extends SceneContext {
   /** The Element the editor has selected, marked for the Frame to style. */
   selectedId?: string;
   /** The SVG's pixel width; its height follows the page's proportions. */
@@ -1017,7 +1442,7 @@ export function sceneToSvg(
     background(widthMm, heightMm, style),
   ];
 
-  const render = sceneRender(map.elements, widthMm, heightMm, style);
+  const render = sceneRender(map.elements, widthMm, heightMm, style, options);
   if (render.defs.length > 0) parts.push(`<defs>${render.defs.join("")}</defs>`);
   map.elements.forEach((element, index) => {
     // An Element with nothing to draw writes no group: a hidden one, a Fill in
@@ -1076,9 +1501,9 @@ export function setLocked(
 
 /**
  * Whether the move Commands may move an Element: an unlocked Map Line, Stamp,
- * Map Label, or Area Fill, the Elements `moveElement` knows how to shift. A
- * Select drag also needs it shown (#766), since a hidden Element is never drawn
- * to press.
+ * Map Label, Map Image, or Area Fill, the Elements `moveElement` knows how to
+ * shift. A Select drag also needs it shown (#766), since a hidden Element is
+ * never drawn to press.
  */
 export function canMove(element: MapElement): boolean {
   return (
@@ -1086,6 +1511,7 @@ export function canMove(element: MapElement): boolean {
     (element.kind === "line" ||
       element.kind === "stamp" ||
       element.kind === "label" ||
+      element.kind === "image" ||
       isAreaFill(element))
   );
 }
@@ -1104,7 +1530,7 @@ export function moveElement(
 ): MapElement[] {
   return elements.map((element) => {
     if (element.id !== id || element.locked) return element;
-    if (element.kind === "stamp") {
+    if (element.kind === "stamp" || element.kind === "image") {
       return {
         ...element,
         transform: {

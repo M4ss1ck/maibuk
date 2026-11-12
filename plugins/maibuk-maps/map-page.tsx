@@ -9,7 +9,13 @@
  */
 
 import { useEffect, useState, useSyncExternalStore, type ComponentType } from "react";
-import { PLUGIN_UI_LIMITS, ui, type PluginClient } from "@/plugin-sdk";
+import {
+  FILE_READ_MAX_BYTES,
+  PLUGIN_UI_LIMITS,
+  bytesToBase64,
+  ui,
+  type PluginClient,
+} from "@/plugin-sdk";
 import {
   DEFAULT_SOFT_EDGE_MM,
   MAX_ROUGHEN_STRENGTH_MM,
@@ -19,6 +25,19 @@ import {
   SOFT_EDGE_STEP_MM,
   type MapEditor,
 } from "./editor";
+import {
+  ASSET_MAX_BYTES,
+  AssetTooLargeError,
+  assetName,
+  createAssetStore,
+  customStampRef,
+  parseCustomStampRef,
+  type AssetStore,
+  type AssetUse,
+  type CustomFill,
+  type MapAsset,
+  type MapAssetMime,
+} from "./assets";
 import {
   ALT_TEXT_MAX_CHARS,
   DEFAULT_DPI,
@@ -37,6 +56,7 @@ import {
   maxDpiForPrint,
   placePixelSize,
   printPixelSize,
+  resolveAssetHrefs,
   svgAtPixelSize,
   svgPixelSize,
   type ExportFont,
@@ -48,7 +68,9 @@ import { useLanguage } from "./maps-page";
 import {
   LABEL_FONT_IDS,
   LINE_STYLE_IDS,
+  MAX_IMAGE_OPACITY,
   MAX_POLYGON_SIDES,
+  MIN_IMAGE_OPACITY,
   MIN_LABEL_SIZE_MM,
   MIN_LABEL_WIDTH_MM,
   MIN_POLYGON_SIDES,
@@ -57,6 +79,7 @@ import {
   SHAPE_KINDS,
   STAMP_SCALE_UNITS,
   isShapeKind,
+  randomMapId,
   type LineStyleId,
   type MapDocument,
   type MapElement,
@@ -65,7 +88,14 @@ import {
   type StampScaleUnit,
 } from "./maps";
 import { MAX_SCATTER_SPACING_MM, MIN_SCATTER_SPACING_MM } from "./scatter";
-import { BASE_STAMP_IDS, baseStampRef, stampNameKey, stampTakesColour } from "./stamps";
+import { mapLibrary } from "./scene";
+import {
+  BASE_STAMP_IDS,
+  baseStampRef,
+  isBaseStampId,
+  stampNameKey,
+  stampTakesColour,
+} from "./stamps";
 import {
   MAP_STYLE_IDS,
   isStyleRole,
@@ -113,9 +143,10 @@ interface MapPictureDeps {
 
 /**
  * Saves the open Map through `files.save` (#753): an SVG of the page with its
- * fonts embedded, or a PNG rasterized in the Frame at the chosen print size and
- * DPI. A save the author cancels writes nothing and logs nothing; a saved
- * picture logs exactly one line with its format, pixel size, and bytes.
+ * fonts embedded and its pictures inlined, or a PNG rasterized in the Frame at
+ * the chosen print size and DPI, where the Frame swaps each picture's id for
+ * the bytes it holds. A save the author cancels writes nothing and logs nothing;
+ * a saved picture logs exactly one line with its format, pixel size, and bytes.
  */
 async function saveMapImage(
   { client, editor, exportFonts }: MapPictureDeps,
@@ -123,9 +154,14 @@ async function saveMapImage(
 ): Promise<void> {
   const doc = editor.getSnapshot().doc;
   const fonts = await exportFonts();
+  const library = editor.getSnapshot().library;
 
   if (pictureFormat === "svg") {
-    const bytes = new TextEncoder().encode(exportSvg(doc, fonts));
+    // A saved SVG carries its pictures, so it reads in Inkscape or a browser
+    // with no Library beside it (#756).
+    const uris = await editor.assetUris();
+    const svg = resolveAssetHrefs(exportSvg(doc, fonts, { library }), (id) => uris.get(id) ?? null);
+    const bytes = new TextEncoder().encode(svg);
     const result = await client.files.save({
       name: exportFileName(doc.name, "svg"),
       mimeType: "image/svg+xml",
@@ -147,7 +183,9 @@ async function saveMapImage(
   }
 
   const size = printPixelSize(doc.page, printWidthIn, dpi);
-  const svg = svgAtPixelSize(exportSvg(doc, fonts), size);
+  // The rasterize request keeps the ids alone, and the Frame draws the pictures
+  // it was sent: a picture's bytes never ride in a message (#756).
+  const svg = svgAtPixelSize(exportSvg(doc, fonts, { library }), size);
   const bytes = await editor.rasterize(svg, size, "png");
   const result = await client.files.save({
     name: exportFileName(doc.name, "png"),
@@ -243,20 +281,33 @@ function clampLabel(text: string): string {
 }
 
 /**
- * The target picker's options (#753): a Library past the host's
- * {@link PLUGIN_UI_LIMITS.maxOptions} loses the tail of its list, never the
- * page, and every label is clamped, since a Chapter title is the author's text.
- * The target already picked keeps its place, the last one kept making room.
+ * `options` fitted to the host's {@link PLUGIN_UI_LIMITS.maxOptions} (#753,
+ * #756): a Library past the cap loses the tail of its list, never the page, and
+ * every label is clamped, since a Library name is the author's own text. The
+ * value already picked keeps its place, the last one kept making room.
  */
+function fitOptions(
+  options: readonly { value: string; label: string }[],
+  selectedValue?: string | null
+): Array<{ value: string; label: string }> {
+  const kept = options.slice(0, PLUGIN_UI_LIMITS.maxOptions);
+  const chosen =
+    selectedValue === null || selectedValue === undefined
+      ? undefined
+      : options.find((option) => option.value === selectedValue);
+  if (chosen !== undefined && !kept.includes(chosen)) kept[kept.length - 1] = chosen;
+  return kept.map((option) => ({ value: option.value, label: clampLabel(option.label) }));
+}
+
+/** The target picker's options (#753): the Library's Chapters and Notes, fitted to the cap. */
 function placeTargetOptions(
   targets: readonly PlaceTarget[],
   selectedId: string | null
 ): Array<{ value: string; label: string }> {
-  const kept = targets.slice(0, PLUGIN_UI_LIMITS.maxOptions);
-  const chosen =
-    selectedId === null ? undefined : targets.find((target) => target.id === selectedId);
-  if (chosen !== undefined && !kept.includes(chosen)) kept[kept.length - 1] = chosen;
-  return kept.map((target) => ({ value: target.id, label: clampLabel(target.label) }));
+  return fitOptions(
+    targets.map((target) => ({ value: target.id, label: target.label })),
+    selectedId
+  );
 }
 
 /** The alt text the dialog holds: at most {@link ALT_TEXT_MAX_CHARS} characters (#753). */
@@ -289,9 +340,10 @@ function sleep(ms: number): Promise<void> {
 /**
  * Rasterizes the open Map into the HTML one Place inserts (#753): at
  * {@link placePixelSize}, PNG first and JPEG at falling quality when the data
- * URI would be over the insert cap, with the alt text escaped. Throws
- * {@link ExportTooLargeError} when even the lowest JPEG is over the cap, before
- * anything navigates.
+ * URI would be over the insert cap, with the alt text escaped. The SVG names its
+ * pictures by id, and the Frame draws the bytes it holds, so no picture rides in
+ * the rasterize message (#756). Throws {@link ExportTooLargeError} when even the
+ * lowest JPEG is over the cap, before anything navigates.
  */
 async function preparePlace(
   { editor, exportFonts }: Pick<MapPictureDeps, "editor" | "exportFonts">,
@@ -299,7 +351,8 @@ async function preparePlace(
 ): Promise<PlacedImage> {
   const doc = editor.getSnapshot().doc;
   const size = placePixelSize(doc.page);
-  const svg = svgAtPixelSize(exportSvg(doc, await exportFonts()), size);
+  const library = editor.getSnapshot().library;
+  const svg = svgAtPixelSize(exportSvg(doc, await exportFonts(), { library }), size);
   const fitted = await fitUnderCap((format) => editor.rasterize(svg, size, format));
   return {
     html: imageHtml(alt, dataUri(fitted.mime, fitted.bytes)),
@@ -441,15 +494,16 @@ const LABEL_FONT_KEYS: Readonly<Record<Exclude<MapLabelFont, "pdf">, MapsKey>> =
 
 /**
  * The Elements list's kind label, for the kinds a Map can hold (#748: a Fill
- * joins a Map Line; #749: a Stamp joins them; #751: a Map Label joins them). A
- * kind with no label of its own says nothing, so the row falls back to its
- * flags alone rather than calling itself a Map Line.
+ * joins a Map Line; #749: a Stamp joins them; #751: a Map Label joins them;
+ * #756: a Map Image joins them). A kind with no label of its own says nothing,
+ * so the row falls back to its flags alone rather than calling itself a Map Line.
  */
 const ELEMENT_KIND_KEYS: Readonly<Partial<Record<MapElement["kind"], MapsKey>>> = {
   line: "element.kind.line",
   fill: "element.kind.fill",
   stamp: "element.kind.stamp",
   label: "element.kind.label",
+  image: "element.kind.image",
 };
 
 interface RenameDialog {
@@ -467,18 +521,122 @@ function describe(element: MapElement, t: (key: MapsKey) => string): string {
   return parts.join(" · ");
 }
 
+/** The picture types an upload accepts, in the host picker's own spelling. */
+const UPLOAD_EXTENSIONS = ["png", "jpg", "jpeg", "webp", "svg"] as const;
+
+/** The picture type each accepted file extension names. */
+const UPLOAD_MIMES: Readonly<Record<string, MapAssetMime>> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  svg: "image/svg+xml",
+};
+
+/** The picture type `name`'s extension names, or null when Maps cannot draw it. */
+function uploadMime(name: string): MapAssetMime | null {
+  const dot = name.lastIndexOf(".");
+  if (dot < 0) return null;
+  return UPLOAD_MIMES[name.slice(dot + 1).toLowerCase()] ?? null;
+}
+
+/** A file name without its extension, which names the Library picture. */
+function fileStem(name: string): string {
+  const dot = name.lastIndexOf(".");
+  return dot <= 0 ? name : name.slice(0, dot);
+}
+
+/** The message an upload failure shows: the size limit, or that the picture is unusable. */
+function uploadErrorMessage(error: unknown, t: (key: MapsKey) => string): string {
+  if (error instanceof AssetTooLargeError) {
+    return format(t("upload.tooLarge"), {
+      limit: (ASSET_MAX_BYTES / (1024 * 1024)).toFixed(1),
+    });
+  }
+  return t("upload.invalid");
+}
+
+/** Every byte behind `grant`, read in the ranges the host accepts. */
+async function readAllBytes(
+  client: PluginClient,
+  grant: { grant: string; size: number }
+): Promise<Uint8Array> {
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (let offset = 0; offset < grant.size; ) {
+    const bytes = new Uint8Array(
+      await client.files.read({ grant: grant.grant, offset, length: FILE_READ_MAX_BYTES })
+    );
+    // A short read is the end of a file that shrank since it was picked.
+    if (bytes.length === 0) break;
+    chunks.push(bytes);
+    total += bytes.length;
+    offset += bytes.length;
+    if (bytes.length < FILE_READ_MAX_BYTES) break;
+  }
+  const all = new Uint8Array(total);
+  let at = 0;
+  for (const chunk of chunks) {
+    all.set(chunk, at);
+    at += chunk.length;
+  }
+  return all;
+}
+
+/**
+ * Picks one picture, cleans and measures it in the Frame, and saves it to the
+ * Library under `use` (#756). Null means the author closed the picker. Throws
+ * {@link AssetTooLargeError} before reading an upload the size cap already
+ * refuses, and any other failure when the picture cannot be ingested or saved.
+ */
+async function pickAndSaveAsset(
+  client: PluginClient,
+  editor: MapEditor,
+  assets: AssetStore,
+  use: AssetUse
+): Promise<MapAsset | null> {
+  const picked = await client.files.pick({ extensions: [...UPLOAD_EXTENSIONS] });
+  if (picked === null) return null;
+  const mime = uploadMime(picked.name);
+  if (mime === null) throw new Error("unsupported-image");
+  // Base64 grows bytes by a third before the index adds anything, so a file
+  // already over the cap is refused without reading it.
+  if (picked.size * (4 / 3) > ASSET_MAX_BYTES) throw new AssetTooLargeError(ASSET_MAX_BYTES);
+  const bytes = await readAllBytes(client, picked);
+  const ingested = await editor.ingestAsset(mime, bytesToBase64(bytes));
+  const asset: MapAsset = {
+    id: randomMapId(),
+    // A file name is the author's, and as long as a path allows: the Library
+    // keeps it under the same bound a Map's own name has (#756).
+    name: assetName(fileStem(picked.name)),
+    mime,
+    data: ingested.data,
+    width: ingested.width,
+    height: ingested.height,
+    recolorable: ingested.recolorable,
+  };
+  await assets.saveAsset(asset, use);
+  return asset;
+}
+
 function MapEditorView({
   editor,
   t,
   backToMaps,
   save,
   place,
+  pickAsset,
+  saveCustomFill,
 }: {
   editor: MapEditor;
   t: (key: MapsKey) => string;
   backToMaps: () => Promise<void>;
   save(options: SaveImageOptions): Promise<void>;
   place: PlaceCallbacks;
+  /** Picks, ingests, saves, and lists one uploaded picture for `use`; null when cancelled. */
+  pickAsset(use: AssetUse): Promise<MapAsset | null>;
+  /** Saves one Custom Fill and lists it, so every Map draws it. */
+  saveCustomFill(fill: CustomFill): Promise<void>;
 }) {
   const snapshot = useSyncExternalStore(editor.subscribe, editor.getSnapshot);
   const [dialog, setDialog] = useState<RenameDialog | null>(null);
@@ -490,6 +648,12 @@ function MapEditorView({
   );
   const [dpi, setDpi] = useState(DEFAULT_DPI);
   const [exportFailed, setExportFailed] = useState(false);
+  // The Insert panel's upload: whether the picture is a Map Image, and the one
+  // localized error the last upload left behind.
+  const [asMapImage, setAsMapImage] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  // The Custom Stamps picked for a new Custom Fill in the Fill properties.
+  const [fillStampRefs, setFillStampRefs] = useState<string[]>([]);
   // The Place dialog's state: the targets it lists, the one picked, the alt
   // text, and whether the last Place failed.
   const [placeOpen, setPlaceOpen] = useState(false);
@@ -511,8 +675,26 @@ function MapEditorView({
   const stamp = snapshot.selectedStamp;
   const label = selected?.kind === "label" ? selected : null;
   const selectedLine = selected?.kind === "line" ? selected : null;
+  const selectedFill = selected?.kind === "fill" ? selected : null;
+  const image = selected?.kind === "image" ? selected : null;
   const scatter = snapshot.selectedFillScatter;
   const style = snapshot.styleId;
+  // The Custom Stamps the Library holds: the Insert picker names them after
+  // the base Stamps, and a new Custom Fill picks among them.
+  const customStamps = [...snapshot.library.assets.values()]
+    .filter((asset) => asset.use === "stamp")
+    .map((asset) => ({ ref: customStampRef(asset.id), name: asset.name }));
+  // Every Library picture the author uploaded grows these lists, so each one is
+  // fitted to the host's caps: a Select's options to `maxOptions`, and the
+  // Custom Stamps' rows (one node each) to the same list cap.
+  const stampOptions = fitOptions(
+    [
+      ...BASE_STAMP_IDS.map((id) => ({ value: id, label: t(stampNameKey(id)) })),
+      ...customStamps.map((one) => ({ value: one.ref, label: one.name })),
+    ],
+    snapshot.currentStampId
+  );
+  const fillStampRows = customStamps.slice(0, PLUGIN_UI_LIMITS.maxOptions);
   // The scatter select offers the base Stamps, so it reads the one the Fill
   // scatters back from its art ref.
   const scatterStampId =
@@ -584,6 +766,80 @@ function MapEditorView({
     if (dialog === null) return;
     editor.rename(dialog.id, dialog.name);
     setDialog(null);
+  }
+
+  /** What the Insert picker's current Stamp is called: a base Stamp or a Library picture. */
+  function stampLabel(pick: string): string {
+    if (isBaseStampId(pick)) return t(stampNameKey(pick));
+    const assetId = parseCustomStampRef(pick);
+    const asset = assetId === null ? undefined : snapshot.library.assets.get(assetId);
+    return asset?.name ?? t("element.kind.stamp");
+  }
+
+  /** Whether a Stamp pick offers a colour: base one-paint art, or a one-paint picture. */
+  function stampRecolours(pick: string): boolean {
+    const assetId = parseCustomStampRef(pick);
+    if (assetId !== null) return snapshot.library.assets.get(assetId)?.recolorable === true;
+    return stampTakesColour(pick);
+  }
+
+  /** The name a new Custom Fill takes: the next free "Custom Fill N". */
+  function newCustomFillName(): string {
+    return format(t("customFill.name"), { number: snapshot.library.customFills.size + 1 });
+  }
+
+  /**
+   * The Insert panel's Upload (#756): pick a picture, ingest it in the Frame,
+   * keep it in the Library, then place it at the view centre as the Custom
+   * Stamp or the Map Image the panel asked for.
+   */
+  async function uploadPicture(): Promise<void> {
+    setUploadError(null);
+    try {
+      const asset = await pickAsset(asMapImage ? "image" : "stamp");
+      if (asset === null) return;
+      if (asMapImage) editor.insertImage(asset.id);
+      else editor.insertCustomStamp(asset.id);
+    } catch (error) {
+      setUploadError(uploadErrorMessage(error, t));
+    }
+  }
+
+  /** Builds a Custom Fill from an uploaded texture and gives it to the selected Fill. */
+  async function createFillFromTexture(): Promise<void> {
+    if (selectedFill === null) return;
+    setUploadError(null);
+    try {
+      const asset = await pickAsset("texture");
+      if (asset === null) return;
+      const fill: CustomFill = {
+        id: randomMapId(),
+        name: newCustomFillName(),
+        texture: asset.id,
+      };
+      await saveCustomFill(fill);
+      editor.setFillCustomFill(selectedFill.id, fill.id);
+    } catch (error) {
+      setUploadError(uploadErrorMessage(error, t));
+    }
+  }
+
+  /** Builds a Custom Fill from the chosen Custom Stamps and gives it to the selected Fill. */
+  async function createFillFromStamps(): Promise<void> {
+    if (selectedFill === null || fillStampRefs.length === 0) return;
+    setUploadError(null);
+    try {
+      const fill: CustomFill = {
+        id: randomMapId(),
+        name: newCustomFillName(),
+        stamps: [...fillStampRefs],
+      };
+      await saveCustomFill(fill);
+      editor.setFillCustomFill(selectedFill.id, fill.id);
+      setFillStampRefs([]);
+    } catch {
+      setUploadError(t("customFill.failed"));
+    }
   }
 
   // The pixel size the PNG will be, and the print height it comes to, so the
@@ -702,21 +958,19 @@ function MapEditorView({
           )}
           {/* Insert picks one Stamp and drops it where the pointer lands; the
               Place button is the keyboard path that lands it at the view
-              centre (#749). Custom Stamps and Upload join this picker later. */}
+              centre (#749). The picker lists the base Stamps and then the
+              Library's Custom Stamps (#756). */}
           {snapshot.tool === "insert" ? (
             <>
               <ui.Select
                 label={t("properties.stamp")}
-                options={BASE_STAMP_IDS.map((id) => ({
-                  value: id,
-                  label: t(stampNameKey(id)),
-                }))}
+                options={stampOptions}
                 selectedKey={snapshot.currentStampId}
                 onChange={(event) => editor.setStamp(event.detail)}
               />
               <ui.Button variant="secondary" onPress={() => editor.insertStamp()}>
                 {format(t("properties.placeStamp"), {
-                  stamp: t(stampNameKey(snapshot.currentStampId)),
+                  stamp: stampLabel(snapshot.currentStampId),
                 })}
               </ui.Button>
               {/* A Map Label is not a Stamp, so it takes its own button beside
@@ -725,8 +979,19 @@ function MapEditorView({
               <ui.Button variant="secondary" onPress={() => editor.insertLabel()}>
                 {t("properties.mapLabel.place")}
               </ui.Button>
+              {/* An upload joins the Library, then lands at the view centre as a
+                  Custom Stamp or a Map Image (#756). */}
+              <ui.Checkbox
+                label={t("properties.asMapImage")}
+                isSelected={asMapImage}
+                onChange={(event) => setAsMapImage(event.detail)}
+              />
+              <ui.Button variant="secondary" onPress={() => void uploadPicture()}>
+                {t("properties.upload")}
+              </ui.Button>
             </>
           ) : null}
+          {uploadError === null ? null : <ui.Status tone="warning">{uploadError}</ui.Status>}
           <ui.Text weight="semibold">{t("elements.label")}</ui.Text>
           <ui.Collection
             label={t("elements.label")}
@@ -918,7 +1183,7 @@ function MapEditorView({
                     }
                   />
                   {/* Only art that leaves its fill to the Stamp recolours. */}
-                  {stampTakesColour(stamp.stampRef) ? (
+                  {stampRecolours(stamp.stampRef) ? (
                     <>
                       <ui.ColorPicker
                         label={t("properties.stamp.color")}
@@ -964,6 +1229,34 @@ function MapEditorView({
                       />
                     </>
                   )}
+                </>
+              )}
+              {image === null ? null : (
+                <>
+                  <ui.NumberField
+                    label={t("properties.image.size")}
+                    value={image.transform.size}
+                    minValue={MIN_STAMP_SIZE_MM}
+                    isDisabled={selected.locked}
+                    onChange={(event) => editor.setImageSize(selected.id, event.detail)}
+                  />
+                  {/* The slider reads a whole percentage; the model keeps a
+                      fraction from 0.05 to 1. */}
+                  <ui.Slider
+                    label={t("properties.image.opacity")}
+                    value={Math.round(image.opacity * 100)}
+                    minValue={Math.round(MIN_IMAGE_OPACITY * 100)}
+                    maxValue={Math.round(MAX_IMAGE_OPACITY * 100)}
+                    step={1}
+                    isDisabled={selected.locked}
+                    onChange={(event) => editor.setImageOpacity(selected.id, event.detail / 100)}
+                  />
+                  <ui.Switch
+                    label={t("properties.image.exportable")}
+                    isSelected={image.exportable}
+                    isDisabled={selected.locked}
+                    onChange={(event) => editor.setImageExportable(selected.id, event.detail)}
+                  />
                 </>
               )}
               {label === null ? null : (
@@ -1173,6 +1466,62 @@ function MapEditorView({
                       </ui.Button>
                     </>
                   )}
+                  {/* A Custom Fill paints a Library texture or scatters Custom
+                      Stamps over the area (#756). */}
+                  <ui.Select
+                    label={t("properties.customFill")}
+                    options={fitOptions(
+                      [
+                        { value: NONE, label: t("properties.none") },
+                        ...[...snapshot.library.customFills.values()].map((customFill) => ({
+                          value: customFill.id,
+                          label: customFill.name,
+                        })),
+                      ],
+                      selectedFill?.content.customFill ?? NONE
+                    )}
+                    selectedKey={selectedFill?.content.customFill ?? NONE}
+                    isDisabled={selected.locked}
+                    onChange={(event) =>
+                      editor.setFillCustomFill(
+                        selected.id,
+                        event.detail === NONE ? null : event.detail
+                      )
+                    }
+                  />
+                  <ui.Text weight="semibold">{t("properties.newCustomFill")}</ui.Text>
+                  <ui.Button
+                    variant="secondary"
+                    isDisabled={selected.locked}
+                    onPress={() => void createFillFromTexture()}
+                  >
+                    {t("properties.customFill.texture")}
+                  </ui.Button>
+                  {customStamps.length === 0 ? null : (
+                    <>
+                      <ui.Collection
+                        label={t("properties.customFill.stamps")}
+                        selectionMode="multiple"
+                        selectedKeys={fillStampRefs}
+                        onSelectionChange={(event) => setFillStampRefs([...event.detail])}
+                      >
+                        {fillStampRows.map((customStamp) => (
+                          <ui.CollectionRow
+                            key={customStamp.ref}
+                            id={customStamp.ref}
+                            label={clampLabel(customStamp.name)}
+                          />
+                        ))}
+                      </ui.Collection>
+                      <ui.Button
+                        variant="secondary"
+                        isDisabled={selected.locked || fillStampRefs.length === 0}
+                        onPress={() => void createFillFromStamps()}
+                      >
+                        {t("properties.customFill.create")}
+                      </ui.Button>
+                    </>
+                  )}
                 </>
               ) : null}
               {snapshot.selectedIsLine || snapshot.selectedIsAreaFill ? (
@@ -1328,11 +1677,66 @@ function MapEditorView({
 
 export function createMapPage(deps: MapPageDeps): ComponentType {
   const { client, runtime, backToMaps } = deps;
+  /**
+   * The Library's uploaded pictures (#756), read and written through the same
+   * Plugin storage the Maps store uses. The page holds one, so every Map opened
+   * while it is mounted draws from the same Library.
+   */
+  const assets = createAssetStore(client.storage);
 
   return function MapPage() {
     const language = useLanguage(client);
-    const t = (key: MapsKey) => translate(language, key);
     const editor = runtime.editor;
+
+    // The pictures, and the Custom Fills built from them, reach the editor once
+    // the Library has loaded: it draws them, sends a Frame the bytes of the few
+    // the Map names, and embeds them in an exported SVG (#756).
+    useEffect(() => {
+      if (editor === null) return;
+      let live = true;
+      void Promise.all([assets.listAssets(), assets.listCustomFills()])
+        .then(([index, customFills]) => {
+          if (!live) return;
+          editor.setAssetLibrary({
+            library: mapLibrary(index, customFills),
+            load: (id) => assets.getAsset(id),
+          });
+        })
+        .catch(() => {
+          // A Library that will not load leaves the pictures out; the Map still
+          // draws everything else.
+        });
+      return () => {
+        live = false;
+      };
+    }, [editor]);
+
+    /** Lists the Library again, so an upload or a new Custom Fill reaches every Map. */
+    async function refreshLibrary(): Promise<void> {
+      if (editor === null) return;
+      const [index, customFills] = await Promise.all([
+        assets.listAssets(),
+        assets.listCustomFills(),
+      ]);
+      editor.setAssetLibrary({
+        library: mapLibrary(index, customFills),
+        load: (id) => assets.getAsset(id),
+      });
+    }
+
+    async function pickAsset(use: AssetUse): Promise<MapAsset | null> {
+      if (editor === null) return null;
+      const asset = await pickAndSaveAsset(client, editor, assets, use);
+      if (asset !== null) await refreshLibrary();
+      return asset;
+    }
+
+    async function saveCustomFill(fill: CustomFill): Promise<void> {
+      await assets.saveCustomFill(fill);
+      await refreshLibrary();
+    }
+
+    const t = (key: MapsKey) => translate(language, key);
     if (editor === null) {
       return (
         <ui.EmptyState
@@ -1362,6 +1766,8 @@ export function createMapPage(deps: MapPageDeps): ComponentType {
             await client.notifications.show({ variant: "error", message: t("place.failed") });
           },
         }}
+        pickAsset={pickAsset}
+        saveCustomFill={saveCustomFill}
       />
     );
   };

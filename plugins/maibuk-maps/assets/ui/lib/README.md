@@ -1,3 +1,5 @@
 # Third-party Frame libraries
 
 `htm-preact-standalone.umd.js` is `htm@3.1.1/preact/standalone.umd.js` from https://unpkg.com/htm@3.1.1/preact/standalone.umd.js, unmodified (sha256 `62c4ffea400078c0eda7f435b22726b4961ebdf74c8506f188e92bec41d8ac51`). It bundles htm (Apache-2.0, `LICENSE-htm`) with Preact (MIT, `LICENSE-preact`; htm 3.1.1 declares preact ^10.2.0) and exposes `window.htmPreact` (`html`, `render`, `h`, hooks). The Map Frame loads it as a classic script; the Frame loads nothing from the network.
+
+`purify.min.js` is `dompurify@3.4.3/dist/purify.min.js` from Maibuk's own `node_modules`, unmodified (sha256 `b42b8311bb236c455ea0796549ecc81d8ac0b5ef40f87b9e50a72dd7448d0ea6`), dual-licensed Apache-2.0 OR MPL-2.0 (`LICENSE-dompurify`, the package's own `LICENSE`). It exposes `window.DOMPurify`, the sanitizer `svg-ingest.js` runs over an uploaded SVG before its bytes are stored. The Frame cannot import Maibuk's copy: it is a classic script in an opaque origin, so the file is vendored beside it.

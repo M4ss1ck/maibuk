@@ -31,6 +31,15 @@ import { PLUGIN_COMMAND_RUN_REQUEST, PLUGIN_MIGRATE_DATA_REQUEST } from "@/plugi
 import { servePluginUi } from "@/plugin-sdk/ui-serve";
 import { DEFAULT_SOFT_EDGE_MM, SOFT_EDGE_STEP_MM, type MapEditor } from "./editor";
 import {
+  ASSET_MAX_BYTES,
+  ASSETS_KEY,
+  CUSTOM_FILLS_KEY,
+  assetKey,
+  type AssetIndexEntry,
+  type CustomFill,
+  type MapAsset,
+} from "./assets";
+import {
   ALT_TEXT_MAX_CHARS,
   exportLogLine,
   INSERT_IMAGE_CAP_BYTES,
@@ -47,6 +56,7 @@ import {
   DEFAULT_LABEL_FONT,
   INDEX_KEY,
   MAP_LABEL_FONT_FAMILIES,
+  MAX_NAME_LENGTH,
   PAGE_SIZES,
   mapKey,
   newLabel,
@@ -55,6 +65,7 @@ import {
   type MapFillContent,
   type MapFillElement,
   type MapIndexEntry,
+  type MapImageElement,
   type MapLabelElement,
   type MapLineElement,
   type MapStampElement,
@@ -233,7 +244,8 @@ function isFontMessage(message: unknown): message is FrameFontMessage {
  */
 function frameStandIn(
   editor: MapEditor | null,
-  bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47])
+  bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
+  answerIngest?: (message: Record<string, unknown>) => Record<string, unknown> | null
 ): { port: MessagePort; messages: Array<Record<string, unknown>> } {
   const messages: Array<Record<string, unknown>> = [];
   const port = {
@@ -241,6 +253,11 @@ function frameStandIn(
     start: () => {},
     postMessage: (message: Record<string, unknown>) => {
       messages.push(message);
+      if (message.kind === "ingest-asset") {
+        const reply = answerIngest?.(message);
+        if (reply !== undefined && reply !== null) editor?.handleFrameMessage(reply);
+        return;
+      }
       if (message.kind !== "rasterize") return;
       editor?.handleFrameMessage({
         kind: "rasterized",
@@ -453,6 +470,41 @@ function mapStorage(elements: MapElement[]): Map<string, unknown> {
 
 function storedMap(storage: Map<string, unknown>): MapDocument {
   return storage.get(mapKey("m1")) as MapDocument;
+}
+
+/** A PNG's bytes, base64, as the Library stores one picture. */
+const PICTURE_DATA = "iVBORw0KGgo=";
+
+/**
+ * The storage of a Map drawing one uploaded picture twice (#756): the Map Image
+ * `trace`, which exports, and `kept`, which the author left out of them. The
+ * Library holds the picture the Map names.
+ */
+function pictureStorage(): Map<string, unknown> {
+  const image = (id: string, exportable: boolean): MapImageElement => ({
+    id,
+    kind: "image",
+    name: id,
+    hidden: false,
+    locked: false,
+    assetRef: "a1",
+    transform: { x: 76.2, y: 60, size: 80, rotation: 0 },
+    opacity: 1,
+    exportable,
+  });
+  const storage = mapStorage([image("trace", true), image("kept", false)]);
+  const row: AssetIndexEntry = {
+    id: "a1",
+    name: "Trace",
+    mime: "image/png",
+    width: 40,
+    height: 20,
+    recolorable: false,
+    use: "image",
+  };
+  storage.set(ASSETS_KEY, [row]);
+  storage.set(assetKey("a1"), { ...row, data: PICTURE_DATA });
+  return storage;
 }
 
 /** Registers the manifest's Commands so the harness can bind their keys. */
@@ -3101,6 +3153,75 @@ describe("Map editor Export panel", () => {
     }
   });
 
+  it("draws a Map Image in the editor and keeps its id in the rasterize message", async () => {
+    const { host, runtime } = exportHostFor(pictureStorage());
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      expect(await runtime.openMap("m1")).toBe(true);
+      const frame = frameStandIn(runtime.editor);
+      const page = await host.renderPage(MAP_PAGE_ID);
+      const user = userEvent.setup();
+
+      // The page hands the editor the Library once it has loaded, and the editor
+      // hands the Frame the picture's bytes once, by id.
+      await waitFor(() =>
+        expect(frame.messages.filter((message) => message.kind === "asset")).toEqual([
+          { kind: "asset", id: "a1", mime: "image/png", data: PICTURE_DATA },
+        ])
+      );
+
+      const save = await screen.findByRole("button", { name: en["export.save"] });
+      await tabTo(user, save, 80);
+      await user.keyboard("{Enter}");
+
+      await waitFor(() => expect(host.files.saves).toHaveLength(1));
+      const svg = String(frame.messages.find((message) => message.kind === "rasterize")?.svg ?? "");
+      // The bytes stay in the Frame; the request carries the id it draws.
+      expect(svg).toContain('href="asset:a1"');
+      expect(svg).not.toContain("data:image");
+      // The Map Image the author kept out of exports draws nowhere.
+      expect(svg.match(/<image /g)).toHaveLength(1);
+
+      await page.unmount();
+    } finally {
+      info.mockRestore();
+      await host.stop();
+    }
+  });
+
+  it("embeds a picture's bytes in a saved SVG, so the file reads on its own", async () => {
+    const { host, runtime } = exportHostFor(pictureStorage());
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      expect(await runtime.openMap("m1")).toBe(true);
+      frameStandIn(runtime.editor);
+      const page = await host.renderPage(MAP_PAGE_ID);
+      const user = userEvent.setup();
+
+      const group = await screen.findByRole("radiogroup", { name: en["export.format"] });
+      for (let i = 0; i < 80 && !group.contains(document.activeElement); i++) await user.tab();
+      await user.keyboard("{ArrowRight}");
+      await waitFor(() =>
+        expect(screen.getByRole("radio", { name: en["export.format.svg"] })).toBeChecked()
+      );
+
+      const save = screen.getByRole("button", { name: en["export.save"] });
+      await tabTo(user, save, 20);
+      await user.keyboard("{Enter}");
+
+      await waitFor(() => expect(host.files.saves).toHaveLength(1));
+      const svg = new TextDecoder().decode(host.files.saves[0].bytes);
+      expect(svg).toContain(`href="data:image/png;base64,${PICTURE_DATA}"`);
+      expect(svg).not.toContain("asset:");
+      expect(svg.match(/<image /g)).toHaveLength(1);
+
+      await page.unmount();
+    } finally {
+      info.mockRestore();
+      await host.stop();
+    }
+  });
+
   it("logs nothing and shows no error when the author cancels the save", async () => {
     const storage = mapStorage([]);
     const { host, runtime } = exportHostFor(storage);
@@ -3314,6 +3435,601 @@ describe("Map editor Place dialog", () => {
       await user.keyboard("{Control>}a{/Control}");
       await user.paste("x".repeat(600));
       await waitFor(() => expect(alt).toHaveValue("x".repeat(ALT_TEXT_MAX_CHARS)));
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+});
+
+describe("Map editor uploads (#756)", () => {
+  /** The SVG the upload tests hand the picker, as the bytes a File Grant holds. */
+  const SVG = '<svg xmlns="http://www.w3.org/2000/svg"><rect width="40" height="20"/></svg>';
+  const svgBytes = () => new TextEncoder().encode(SVG);
+
+  /** Every Library picture the storage's index lists. */
+  function storedAssets(storage: Map<string, unknown>): AssetIndexEntry[] {
+    return (storage.get(ASSETS_KEY) as AssetIndexEntry[] | undefined) ?? [];
+  }
+
+  /** The one picture the storage keeps under `id`. */
+  function storedAsset(storage: Map<string, unknown>, id: string): MapAsset {
+    return storage.get(assetKey(id)) as MapAsset;
+  }
+
+  /** Saves one picture's index row and bytes into a storage, as an earlier upload did. */
+  function seedAsset(storage: Map<string, unknown>, row: AssetIndexEntry): void {
+    storage.set(ASSETS_KEY, [...storedAssets(storage), row]);
+    storage.set(assetKey(row.id), { ...row, data: PICTURE_DATA });
+  }
+
+  /** Adds a second Map to the storage, so the Library can be read from another Map. */
+  function addMap(storage: Map<string, unknown>, id: string, name: string): void {
+    const rows = (storage.get(INDEX_KEY) as MapIndexEntry[] | undefined) ?? [];
+    storage.set(INDEX_KEY, [...rows, entry(id, name, "b1", 10)]);
+    storage.set(mapKey(id), {
+      id,
+      name,
+      bookId: "b1",
+      page: { preset: "portrait", widthMm: 152.4, heightMm: 228.6 },
+      elements: [],
+      styleId: "atlas",
+      overrides: {},
+      createdAt: 1,
+      updatedAt: 1,
+      dataVersion: 1,
+    } satisfies MapDocument);
+  }
+
+  /** The reply a Frame sends for an ingest: its sanitized bytes and measured size. */
+  function ingested(message: Record<string, unknown>): Record<string, unknown> {
+    return {
+      kind: "asset-ingested",
+      requestId: message.requestId,
+      data: message.data,
+      width: 40,
+      height: 20,
+      recolorable: true,
+    };
+  }
+
+  /** Tabs to the Insert panel's Upload button. */
+  async function tabToUpload(user: User): Promise<HTMLElement> {
+    const upload = await screen.findByRole("button", { name: en["properties.upload"] });
+    await tabTo(user, upload, 20);
+    return upload;
+  }
+
+  it("uploads an SVG as a Custom Stamp by keyboard, lists it, and places it at the view centre", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    const frame = frameStandIn(runtime.editor, undefined, ingested);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      host.files.queuePick({ name: "banner.svg", bytes: svgBytes() });
+      const user = userEvent.setup();
+
+      await pickTool(user, en["tools.insert"]);
+      const upload = await tabToUpload(user);
+      expect(upload).toHaveFocus();
+      await user.keyboard("{Enter}");
+
+      // The picture lands in the Library under its file name, and the Frame's
+      // sanitized bytes are what the Library keeps.
+      await waitFor(() => expect(storedAssets(storage)).toHaveLength(1));
+      const [row] = storedAssets(storage);
+      expect(row).toMatchObject({
+        name: "banner",
+        mime: "image/svg+xml",
+        width: 40,
+        height: 20,
+        recolorable: true,
+        use: "stamp",
+      });
+      expect(storedAsset(storage, row.id)).toMatchObject({
+        name: "banner",
+        data: Buffer.from(svgBytes()).toString("base64"),
+      });
+
+      // It lands at the page centre, selected, as a Custom Stamp.
+      await waitFor(() => expect(runtime.editor?.getSnapshot().elements).toHaveLength(1));
+      const stamp = runtime.editor?.getSnapshot().elements[0] as MapStampElement;
+      expect(stamp).toMatchObject({
+        kind: "stamp",
+        name: "banner",
+        stampRef: `custom:${row.id}`,
+        transform: { x: 76.2, y: 114.3, size: 12, rotation: 0 },
+      });
+      expect(runtime.editor?.getSnapshot().selectedId).toBe(stamp.id);
+      expect(runtime.editor?.getSnapshot().currentStampId).toBe(`custom:${row.id}`);
+
+      // The picker lists the Custom Stamp and the Place button names it.
+      await waitFor(() =>
+        expect(screen.getByLabelText(en["properties.stamp"])).toHaveTextContent("banner")
+      );
+      expect(
+        screen.getByRole("button", {
+          name: format(en["properties.placeStamp"], { stamp: "banner" }),
+        })
+      ).toBeInTheDocument();
+      expect(frame.messages.filter((message) => message.kind === "ingest-asset")).toHaveLength(1);
+
+      await runtime.editor?.flush();
+      expect(storedMap(storage).elements[0]).toMatchObject({ stampRef: `custom:${row.id}` });
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("uploads a picture as a Map Image by keyboard, at half the page width", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    frameStandIn(runtime.editor, undefined, ingested);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      host.files.queuePick({ name: "trace.png", bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47]) });
+      const user = userEvent.setup();
+
+      await pickTool(user, en["tools.insert"]);
+      const asImage = await screen.findByRole("checkbox", { name: en["properties.asMapImage"] });
+      await tabTo(user, asImage, 20);
+      await user.keyboard(" ");
+      await waitFor(() => expect(asImage).toBeChecked());
+
+      const upload = screen.getByRole("button", { name: en["properties.upload"] });
+      await tabTo(user, upload, 5);
+      await user.keyboard("{Enter}");
+
+      await waitFor(() => expect(storedAssets(storage)).toHaveLength(1));
+      const [row] = storedAssets(storage);
+      expect(row).toMatchObject({ name: "trace", mime: "image/png", use: "image" });
+
+      await waitFor(() => expect(runtime.editor?.getSnapshot().elements).toHaveLength(1));
+      const image = runtime.editor?.getSnapshot().elements[0] as MapImageElement;
+      expect(image).toMatchObject({
+        kind: "image",
+        name: "trace",
+        assetRef: row.id,
+        transform: { x: 76.2, y: 114.3, size: 76.2, rotation: 0 },
+        opacity: 1,
+        exportable: true,
+      });
+      expect(runtime.editor?.getSnapshot().selectedId).toBe(image.id);
+
+      // The panel offers the Map Image's own controls.
+      expect(
+        screen.getByRole("slider", { name: en["properties.image.opacity"] })
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("switch", { name: en["properties.image.exportable"] })
+      ).toBeInTheDocument();
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("keeps an upload's name inside the bound a Map's own name has", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    frameStandIn(runtime.editor, undefined, ingested);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    // A file name is as long as a path allows: this one is far past the bound.
+    const fileName = `${"Beacon of the Northern Reach ".repeat(10)}.svg`;
+    try {
+      host.files.queuePick({ name: fileName, bytes: svgBytes() });
+      const user = userEvent.setup();
+
+      await pickTool(user, en["tools.insert"]);
+      const upload = await tabToUpload(user);
+      expect(upload).toHaveFocus();
+      await user.keyboard("{Enter}");
+
+      // The Library keeps the file's own stem, cut the way a Map's name is, so
+      // the row and the Stamp picker draw it inside the host's own limits.
+      await waitFor(() => expect(storedAssets(storage)).toHaveLength(1));
+      const [row] = storedAssets(storage);
+      const stem = fileName.slice(0, fileName.length - ".svg".length);
+      expect(row.name).toBe(stem.slice(0, MAX_NAME_LENGTH));
+      expect(row.name).toHaveLength(MAX_NAME_LENGTH);
+      // The host refused no label the page sent it.
+      expect(page.violations).toEqual([]);
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("describes a Map Image row as one, in the author's language", async () => {
+    for (const [language, catalog] of [
+      ["en", en],
+      ["es", es],
+    ] as const) {
+      const storage = mapStorage([
+        {
+          id: "scan",
+          kind: "image",
+          name: "Scan",
+          hidden: false,
+          locked: false,
+          assetRef: "a1",
+          transform: { x: 76.2, y: 114.3, size: 80, rotation: 0 },
+          opacity: 1,
+          exportable: true,
+        } satisfies MapImageElement,
+      ]);
+      const { host, runtime } = await openEditor(storage, language);
+      const page = await host.renderPage(MAP_PAGE_ID);
+      try {
+        // The Map holds the picture the row describes, and the row's kind names
+        // the Element, instead of leaving the author with its flags alone (#756).
+        expect(runtime.editor?.getSnapshot().elements[0]?.kind).toBe("image");
+        await waitFor(() =>
+          expect(
+            screen.getByRole("listbox", { name: catalog["elements.label"] })
+          ).toHaveTextContent(catalog["element.kind.image"])
+        );
+        expect(catalog["element.kind.image"]).not.toBe("");
+      } finally {
+        await page.unmount();
+        await host.stop();
+      }
+    }
+  });
+
+  it("fits the Insert Stamp picker to the host's cap, with a Library past 2,000 Custom Stamps", async () => {
+    // More uploaded pictures than the host accepts in one option list, each
+    // named well past the length one label may carry.
+    const longName = "Beacon of the Northern Reach ".repeat(20);
+    const rows: AssetIndexEntry[] = Array.from(
+      { length: PLUGIN_UI_LIMITS.maxOptions + 100 },
+      (_, index) => ({
+        id: `a${index + 1}`,
+        name: `${index + 1} ${longName}`,
+        mime: "image/png",
+        width: 40,
+        height: 20,
+        recolorable: true,
+        use: "stamp",
+      })
+    );
+    const storage = mapStorage([]);
+    storage.set(ASSETS_KEY, rows);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await pickTool(user, en["tools.insert"]);
+
+      // The Library really is past the cap this test is about.
+      expect(runtime.editor?.getSnapshot().library.assets.size).toBe(
+        PLUGIN_UI_LIMITS.maxOptions + 100
+      );
+
+      const trigger = await screen.findByLabelText(en["properties.stamp"]);
+      await tabTo(user, trigger, 40);
+      await user.keyboard("{Enter}");
+      const listbox = await screen.findByRole("listbox", { name: en["properties.stamp"] });
+      const options = within(listbox).getAllByRole("option");
+
+      // The page asked for no option list the host would refuse.
+      expect(page.violations).toEqual([]);
+      expect(options).toHaveLength(PLUGIN_UI_LIMITS.maxOptions);
+      // The Library's Custom Stamps follow the base Stamps, and the last one
+      // kept is cut to the host's 512-code unit label cap instead of going whole.
+      const last = options[options.length - 1];
+      expect(last.textContent).toHaveLength(512);
+      expect(last.textContent?.endsWith("…")).toBe(true);
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("fits the Custom Fill picker and its Custom Stamps to the host's caps", async () => {
+    const longName = "Banner of the Reach ".repeat(20);
+    const rows: AssetIndexEntry[] = Array.from(
+      { length: PLUGIN_UI_LIMITS.maxOptions + 100 },
+      (_, index) => ({
+        id: `a${index + 1}`,
+        name: `${index + 1} ${longName}`,
+        mime: "image/png",
+        width: 40,
+        height: 20,
+        recolorable: true,
+        use: "stamp",
+      })
+    );
+    const fills: CustomFill[] = Array.from(
+      { length: PLUGIN_UI_LIMITS.maxOptions + 100 },
+      (_, index) => ({ id: `f${index + 1}`, name: `${index + 1} Meadow`, texture: "a1" })
+    );
+    const storage = mapStorage([areaFill({ color: "land" })]);
+    storage.set(ASSETS_KEY, rows);
+    storage.set(CUSTOM_FILLS_KEY, fills);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await selectRow(user, "Fill 1");
+
+      // The Library really is past the caps this test is about.
+      expect(runtime.editor?.getSnapshot().library.assets.size).toBe(
+        PLUGIN_UI_LIMITS.maxOptions + 100
+      );
+      expect(runtime.editor?.getSnapshot().library.customFills.size).toBe(
+        PLUGIN_UI_LIMITS.maxOptions + 100
+      );
+
+      // The picture rows the page asked for are one node each, so the list is
+      // fitted to the same cap: the Library's tail is what it loses.
+      const stamps = await screen.findByRole("listbox", {
+        name: en["properties.customFill.stamps"],
+      });
+      expect(within(stamps).getAllByRole("option")).toHaveLength(PLUGIN_UI_LIMITS.maxOptions);
+
+      const trigger = await screen.findByLabelText(en["properties.customFill"]);
+      await tabTo(user, trigger);
+      await user.keyboard("{Enter}");
+      const listbox = await screen.findByRole("listbox", { name: en["properties.customFill"] });
+      // "None" is the first entry the page offers, so the cap keeps it and 1999
+      // Custom Fills after it.
+      expect(within(listbox).getAllByRole("option")).toHaveLength(PLUGIN_UI_LIMITS.maxOptions);
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("refuses an upload the size cap already exceeds, and stores nothing", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      // Base64 grows a file by a third, so this one is over the cap unread.
+      host.files.queuePick({
+        name: "huge.png",
+        bytes: new Uint8Array(Math.ceil((ASSET_MAX_BYTES * 3) / 4) + 1),
+      });
+      const user = userEvent.setup();
+
+      await pickTool(user, en["tools.insert"]);
+      const upload = await tabToUpload(user);
+      expect(upload).toHaveFocus();
+      await user.keyboard("{Enter}");
+
+      const limit = (ASSET_MAX_BYTES / (1024 * 1024)).toFixed(1);
+      expect(await screen.findByText(format(en["upload.tooLarge"], { limit }))).toBeInTheDocument();
+      expect(storage.get(ASSETS_KEY)).toBeUndefined();
+      expect(runtime.editor?.getSnapshot().elements).toEqual([]);
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("shows the invalid-image error when the Frame refuses an upload", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    frameStandIn(runtime.editor, undefined, (message) => ({
+      kind: "ingest-error",
+      requestId: message.requestId,
+      reason: "invalid-image",
+    }));
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      host.files.queuePick({ name: "broken.svg", bytes: svgBytes() });
+      const user = userEvent.setup();
+
+      await pickTool(user, en["tools.insert"]);
+      const upload = await tabToUpload(user);
+      expect(upload).toHaveFocus();
+      await user.keyboard("{Enter}");
+
+      expect(await screen.findByText(en["upload.invalid"])).toBeInTheDocument();
+      expect(storage.get(ASSETS_KEY)).toBeUndefined();
+      expect(runtime.editor?.getSnapshot().elements).toEqual([]);
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("resizes, fades, and keeps a Map Image out of exports from the keyboard", async () => {
+    const scan: MapImageElement = {
+      id: "scan",
+      kind: "image",
+      name: "Scan",
+      hidden: false,
+      locked: false,
+      assetRef: "a1",
+      transform: { x: 76.2, y: 114.3, size: 80, rotation: 0 },
+      opacity: 1,
+      exportable: true,
+    };
+    const storage = mapStorage([scan]);
+    seedAsset(storage, {
+      id: "a1",
+      name: "Scan",
+      mime: "image/png",
+      width: 40,
+      height: 20,
+      recolorable: false,
+      use: "image",
+    });
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await selectRow(user, "Scan");
+
+      const size = await screen.findByRole("textbox", { name: en["properties.image.size"] });
+      await tabTo(user, size, 80);
+      await user.keyboard("{Control>}a{/Control}30{Enter}");
+      await waitFor(() =>
+        expect((runtime.editor?.getSnapshot().elements[0] as MapImageElement).transform.size).toBe(
+          30
+        )
+      );
+
+      const opacity = await screen.findByRole("slider", { name: en["properties.image.opacity"] });
+      await tabTo(user, opacity, 10);
+      await user.keyboard("{ArrowLeft}");
+      await waitFor(() =>
+        expect((runtime.editor?.getSnapshot().elements[0] as MapImageElement).opacity).toBeCloseTo(
+          0.99
+        )
+      );
+
+      const include = await screen.findByRole("switch", {
+        name: en["properties.image.exportable"],
+      });
+      await tabTo(user, include, 10);
+      await user.keyboard(" ");
+      await waitFor(() =>
+        expect((runtime.editor?.getSnapshot().elements[0] as MapImageElement).exportable).toBe(
+          false
+        )
+      );
+
+      await runtime.editor?.flush();
+      expect(storedMap(storage).elements[0]).toMatchObject({
+        transform: { size: 30 },
+        opacity: 0.99,
+        exportable: false,
+      });
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("applies a Library Custom Fill from the keyboard, and a second Map sees it", async () => {
+    const storage = mapStorage([areaFill({ color: "land" })]);
+    addMap(storage, "m2", "Second");
+    seedAsset(storage, {
+      id: "a1",
+      name: "Banner",
+      mime: "image/png",
+      width: 40,
+      height: 20,
+      recolorable: true,
+      use: "stamp",
+    });
+    const meadow: CustomFill = { id: "meadow", name: "Meadow", texture: "a1" };
+    storage.set(CUSTOM_FILLS_KEY, [meadow]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await selectRow(user, "Fill 1");
+
+      await pickOption(user, en["properties.customFill"], "Meadow");
+      await waitFor(() => expect(fillNow(runtime).content.customFill).toBe("meadow"));
+      await runtime.editor?.flush();
+      expect(storedFill(storage).content.customFill).toBe("meadow");
+
+      // A second Map reads the same Library-wide pictures and Custom Fills.
+      await page.unmount();
+      expect(await runtime.openMap("m2")).toBe(true);
+      const second = await host.renderPage(MAP_PAGE_ID);
+      await waitFor(() =>
+        expect(runtime.editor?.getSnapshot().library.customFills.has("meadow")).toBe(true)
+      );
+      expect(runtime.editor?.getSnapshot().library.assets.has("a1")).toBe(true);
+      await second.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("builds a Custom Fill from an uploaded texture and applies it by keyboard", async () => {
+    const storage = mapStorage([areaFill({ color: "land" })]);
+    const { host, runtime } = await openEditor(storage);
+    frameStandIn(runtime.editor, undefined, ingested);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      host.files.queuePick({ name: "moss.svg", bytes: svgBytes() });
+      const user = userEvent.setup();
+      await selectRow(user, "Fill 1");
+
+      const fromTexture = await screen.findByRole("button", {
+        name: en["properties.customFill.texture"],
+      });
+      await tabTo(user, fromTexture, 80);
+      await user.keyboard("{Enter}");
+
+      await waitFor(() => expect(storage.get(CUSTOM_FILLS_KEY)).toHaveLength(1));
+      const [fill] = storage.get(CUSTOM_FILLS_KEY) as CustomFill[];
+      expect(fill).toMatchObject({ name: "Custom Fill 1", texture: expect.any(String) });
+      await waitFor(() => expect(fillNow(runtime).content.customFill).toBe(fill.id));
+      expect(storedAssets(storage)[0]).toMatchObject({ name: "moss", use: "texture" });
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("builds a Custom Fill from chosen Custom Stamps and applies it by keyboard", async () => {
+    const storage = mapStorage([areaFill({ color: "land" })]);
+    seedAsset(storage, {
+      id: "a1",
+      name: "Banner",
+      mime: "image/png",
+      width: 40,
+      height: 20,
+      recolorable: true,
+      use: "stamp",
+    });
+    seedAsset(storage, {
+      id: "a2",
+      name: "Crest",
+      mime: "image/png",
+      width: 40,
+      height: 20,
+      recolorable: true,
+      use: "stamp",
+    });
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await selectRow(user, "Fill 1");
+
+      const stamps = await screen.findByRole("listbox", {
+        name: en["properties.customFill.stamps"],
+      });
+      // The Collection's row is the tab stop, not its listbox: focus it, then
+      // Space toggles its selection.
+      const banner = within(stamps).getByRole("option", { name: "Banner" });
+      await tabTo(user, banner, 20);
+      expect(banner).toHaveFocus();
+      await user.keyboard(" ");
+      await waitFor(() => expect(banner).toHaveAttribute("aria-selected", "true"));
+
+      const create = await screen.findByRole("button", {
+        name: en["properties.customFill.create"],
+      });
+      await tabTo(user, create, 5);
+      await user.keyboard("{Enter}");
+
+      await waitFor(() => expect(storage.get(CUSTOM_FILLS_KEY)).toHaveLength(1));
+      const [fill] = storage.get(CUSTOM_FILLS_KEY) as CustomFill[];
+      expect(fill).toMatchObject({
+        name: "Custom Fill 1",
+        stamps: ["custom:a1"],
+      });
+      await waitFor(() => expect(fillNow(runtime).content.customFill).toBe(fill.id));
 
       await page.unmount();
     } finally {

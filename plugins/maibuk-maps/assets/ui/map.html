@@ -172,6 +172,11 @@
   <body>
     <div id="surface"></div>
     <script src="lib/htm-preact-standalone.umd.js"></script>
+    <!-- An uploaded picture is cleaned and measured in this document (#756):
+         DOMPurify, then the rules `svg-ingest.js` adds to it. Both load before
+         map.js, which only reaches them when a Worker sends one. -->
+    <script src="lib/purify.min.js"></script>
+    <script src="svg-ingest.js"></script>
     <script src="map.js"></script>
   </body>
 </html>

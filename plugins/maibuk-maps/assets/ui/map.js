@@ -1,13 +1,15 @@
 // @ts-check
-/* The Map Frame's drawing surface (#745, #746, #748, #749, #750, #766, #751). The
-   Frame's only host channel is `window.maibuk.port`: the Worker sends the whole
-   `scene` on every change and when the Frame connects, and asks it to
-   `rasterize` an export SVG, since only this document has a canvas. The Frame
-   answers a finished Pencil stroke, a finished Pen line, a finished Area Fill
-   outline, an
+/* The Map Frame's drawing surface (#745, #746, #748, #749, #750, #766, #751,
+   #756). The Frame's only host channel is `window.maibuk.port`: the Worker
+   sends the whole `scene` on every change and when the Frame connects, an
+   uploaded picture's bytes once per asset, and asks it to `rasterize` an export
+   SVG, since only this document has a canvas, and to `ingest` one uploaded
+   picture, since only it has a DOM. The Frame answers a finished Pencil stroke,
+   a finished Pen line, a finished Area Fill outline, an
    Eraser drag, a drawn Shape, a Bucket pour, a dropped Stamp, the Element the
    author picked, a Select drag that moved one, a Map Label's bend dragged
-   from its handle, and the encoded picture an export asked for.
+   from its handle, the encoded picture an export asked for, and what one
+   uploaded picture measured.
    Points cross the port in page millimetres, the same space as the page's
    `widthMm`/`heightMm`, so the pointer's own screen pixels are converted
    through the svg's `getScreenCTM`.
@@ -30,7 +32,8 @@
    * @typedef {"select" | "pencil" | "pen" | "bucket" | "area" | "eraser" | "insert" | ShapeKind} MapTool
    * @typedef {{ d: string, stroke: string | null, strokeWidth: number, dash: string | null, fill: string | null, fillRule?: "evenodd", opacity: number, transform?: string, clip?: string, hitOnly?: true }} LineShape
    * @typedef {{ text: string, x: number, y: number, size: number, fill: string, font?: string, letterSpacing?: number, halo?: { color: string, width: number }, path?: { id: string, d: string }, anchor: "start" | "middle" | "end", transform?: string }} TextShape
-   * @typedef {LineShape | TextShape} SceneShape
+   * @typedef {{ kind: "image", assetId: string, x: number, y: number, width: number, height: number, rotation: number, opacity: number, tint?: string, clip?: string }} ImageShape
+   * @typedef {LineShape | TextShape | ImageShape} SceneShape
    * @typedef {{ x: number, y: number, rotation: number, width: number, bend: number }} FrameLabelLayout
    * @typedef {{ id: string, shapes: SceneShape[], filter: string | null, hidden: boolean, locked: boolean, selected: boolean, movable: boolean, label?: FrameLabelLayout }} FrameSceneElement
    * @typedef {{ one: string, other: string }} PenDraftLabel
@@ -48,7 +51,11 @@
    * @typedef {{ kind: "font", family: string, bytes: ArrayBuffer }} FrameFontMessage
    * @typedef {{ kind: "rasterize", requestId: number, svg: string, widthPx: number, heightPx: number, format: "png" | { jpeg: number } }} FrameRasterizeMessage
    * @typedef {{ kind: "rasterized", requestId: number, bytes?: ArrayBuffer, error?: string }} FrameRasterizedMessage
-   * @typedef {FrameSceneMessage | FrameFontMessage | FrameRasterizeMessage} WorkerToFrameMessage
+   * @typedef {{ kind: "asset", id: string, mime: string, data: string }} FrameAssetMessage
+   * @typedef {{ kind: "ingest-asset", requestId: number, mime: string, data: string }} IngestAssetMessage
+   * @typedef {{ kind: "asset-ingested", requestId: number, data: string, width: number, height: number, recolorable: boolean }} AssetIngestedMessage
+   * @typedef {{ kind: "ingest-error", requestId: number, reason: "invalid-image" }} IngestErrorMessage
+   * @typedef {FrameSceneMessage | FrameFontMessage | FrameRasterizeMessage | FrameAssetMessage | IngestAssetMessage} WorkerToFrameMessage
    * @typedef {{ pointerId: number, points: MapPoint[] }} Drawing
    * @typedef {{ points: MapPoint[], curves: boolean[] }} PenDraft
    * @typedef {{ pointerId: number, kind: ShapeKind, start: MapPoint, end: MapPoint, constrain: boolean }} ShapeDraft
@@ -111,6 +118,9 @@
   /** The characters a definitions id may hold, so a scene cannot write an attribute of its own. */
   const FILTER_ID = /^[A-Za-z0-9_-]+$/;
 
+  /** The size an uploaded picture falls back to, in pixels, when it names none. */
+  const DEFAULT_ASSET_SIZE = 100;
+
   /** The Shape tools, which draw an exact Shape by dragging (#747). */
   const SHAPE_KINDS = ["ellipse", "rectangle", "polygon"];
 
@@ -157,6 +167,17 @@
    * between the release and the Worker's redraw. @type {PendingBend | null}
    */
   let pendingBend = null;
+
+  /**
+   * Every uploaded picture the Worker has sent, as the URLs this document draws
+   * its bytes with, keyed by asset id (#756): a `blob:` URL for the live canvas,
+   * and the `data:` URI a rasterize request needs, since a browser loads no
+   * subresource — `blob:` included — into an SVG it draws as an image, exactly
+   * why the export's fonts travel as data URIs. A scene names a picture by id,
+   * so its bytes cross the port once instead of on every scene.
+   * @type {Map<string, { url: string, dataUri: string }>}
+   */
+  const assetSources = new Map();
 
   /** The rendered svg, which Preact keeps across draws. @returns {SVGSVGElement | null} */
   function svgElement() {
@@ -207,6 +228,15 @@
    */
   function isTextShape(shape) {
     return typeof (/** @type {TextShape} */ (shape).text) === "string";
+  }
+
+  /**
+   * Whether a shape is an uploaded picture rather than a path or text (#756).
+   * @param {SceneShape} shape
+   * @returns {shape is ImageShape}
+   */
+  function isImageShape(shape) {
+    return /** @type {ImageShape} */ (shape).kind === "image";
   }
 
   /**
@@ -273,9 +303,36 @@
   }
 
   /**
-   * Reads one render primitive, or null when it has no path or text to draw. A
-   * path without a usable stroke colour is a fill; without a usable fill, a
-   * stroke. The Worker sends every path's width, so one without it is malformed,
+   * Reads one uploaded picture (#756), or null when it cannot be drawn: one of
+   * no place, no size, or no asset id would paint an invisible nothing. It
+   * carries only the asset's id, so its bytes stay out of every scene message.
+   * @param {Record<string, unknown>} shape
+   * @returns {ImageShape | null}
+   */
+  function readImageShape(shape) {
+    if (typeof shape.assetId !== "string" || shape.assetId === "") return null;
+    if (!isNumber(shape.x) || !isNumber(shape.y)) return null;
+    if (!isNumber(shape.width) || shape.width <= 0) return null;
+    if (!isNumber(shape.height) || shape.height <= 0) return null;
+    return {
+      kind: "image",
+      assetId: shape.assetId,
+      x: shape.x,
+      y: shape.y,
+      width: shape.width,
+      height: shape.height,
+      rotation: isNumber(shape.rotation) ? shape.rotation : 0,
+      opacity: isNumber(shape.opacity) ? Math.max(0, Math.min(1, shape.opacity)) : 1,
+      ...(typeof shape.tint === "string" && shape.tint !== "" ? { tint: shape.tint } : {}),
+      // A Clip Path id is only as safe as a definitions id, so it takes the same check.
+      ...(typeof shape.clip === "string" && FILTER_ID.test(shape.clip) ? { clip: shape.clip } : {}),
+    };
+  }
+
+  /**
+   * Reads one render primitive, or null when it has no path, text, or picture to
+   * draw. A path without a usable stroke colour is a fill; without a usable fill,
+   * a stroke. The Worker sends every path's width, so one without it is malformed,
    * and its `fillRule` only when the fill has to cut holes in itself.
    * @param {unknown} raw
    * @returns {SceneShape | null}
@@ -284,6 +341,7 @@
     if (typeof raw !== "object" || raw === null) return null;
     const shape = /** @type {Record<string, unknown>} */ (raw);
     if (typeof shape.text === "string") return readTextShape(shape);
+    if (shape.kind === "image") return readImageShape(shape);
     if (typeof shape.d !== "string" || shape.d === "") return null;
     if (!isNumber(shape.strokeWidth) || shape.strokeWidth < 0) return null;
     return {
@@ -386,6 +444,28 @@
       widthPx: Math.round(message.widthPx),
       heightPx: Math.round(message.heightPx),
       format,
+    };
+  }
+
+  /**
+   * Reads one asset ingest request (#756), or null when it is malformed and
+   * must be dropped: a request with no id, no picture type, or no bytes would
+   * answer nobody, or store a picture with nothing in it.
+   * @param {unknown} data
+   * @returns {IngestAssetMessage | null}
+   */
+  function readIngestAsset(data) {
+    if (typeof data !== "object" || data === null) return null;
+    const message = /** @type {Record<string, unknown>} */ (data);
+    if (message.kind !== "ingest-asset") return null;
+    if (!isNumber(message.requestId)) return null;
+    if (typeof message.mime !== "string" || message.mime === "") return null;
+    if (typeof message.data !== "string" || message.data === "") return null;
+    return {
+      kind: "ingest-asset",
+      requestId: message.requestId,
+      mime: message.mime,
+      data: message.data,
     };
   }
 
@@ -706,6 +786,69 @@
   }
 
   /**
+   * The rectangle one picture covers, as a closed path in page millimetres, so
+   * the Frame can pick the Element by the picture's box.
+   * @param {ImageShape} shape
+   * @returns {string}
+   */
+  function imagePath(shape) {
+    const left = shape.x - shape.width / 2;
+    const top = shape.y - shape.height / 2;
+    return `M ${n(left)} ${n(top)} L ${n(left + shape.width)} ${n(top)} L ${n(
+      left + shape.width
+    )} ${n(top + shape.height)} L ${n(left)} ${n(top + shape.height)} Z`;
+  }
+
+  /**
+   * The turn one picture draws with, about its own centre, or undefined when it
+   * stands upright.
+   * @param {ImageShape} shape
+   * @returns {string | undefined}
+   */
+  function imageRotation(shape) {
+    if (shape.rotation === 0) return undefined;
+    return `rotate(${n(shape.rotation)} ${n(shape.x)} ${n(shape.y)})`;
+  }
+
+  /**
+   * The id a tint filter takes, mirroring `tintFilterId` in `scene.ts`: the
+   * colour's own letters and digits, so one colour has one filter.
+   * @param {string} color
+   * @returns {string}
+   */
+  function tintFilterId(color) {
+    const digits = color.replace(/[^0-9a-zA-Z]/g, "").toLowerCase();
+    return `asset-tint-${digits === "" ? "none" : digits}`;
+  }
+
+  /**
+   * The node one picture draws (#756), or null while the Frame holds no bytes
+   * for its id: a picture is sent once and the scene only names it, so an
+   * Element whose asset has not arrived yet draws nothing here rather than a
+   * broken image. Its tint is a filter the Worker defined, written over the
+   * picture's own alpha.
+   * @param {ImageShape} shape
+   * @returns {any}
+   */
+  function imageNode(shape) {
+    const { html } = lib;
+    const source = assetSources.get(shape.assetId);
+    if (source === undefined) return null;
+    return html`<image
+      class="map-image"
+      href="${source.url}"
+      x="${n(shape.x - shape.width / 2)}"
+      y="${n(shape.y - shape.height / 2)}"
+      width="${n(shape.width)}"
+      height="${n(shape.height)}"
+      preserveAspectRatio="xMidYMid meet"
+      opacity="${shape.opacity === 1 ? undefined : n(shape.opacity)}"
+      transform="${imageRotation(shape)}"
+      filter="${shape.tint === undefined ? undefined : `url(#${tintFilterId(shape.tint)})`}"
+    />`;
+  }
+
+  /**
    * The paths and text one Element draws, under the Soft Edge filter the scene
    * gave it (#750). The selection outline stays outside the filter, so it keeps
    * its crisp edge while the art fades.
@@ -717,32 +860,41 @@
     const art = [
       ...clippedArt(
         element.shapes.filter((shape) => !isTextShape(shape)),
-        (shape) => html`<path
-          class="map-hit"
-          d="${shape.d}"
-          fill-rule="${shape.fillRule ?? undefined}"
-          data-fill="${shape.fill === null ? undefined : "true"}"
-          transform="${shape.transform ?? undefined}"
-        />`
+        (shape) =>
+          isImageShape(shape)
+            ? html`<path
+              class="map-hit"
+              d="${imagePath(shape)}"
+              data-fill="true"
+              transform="${imageRotation(shape)}"
+            />`
+            : html`<path
+              class="map-hit"
+              d="${shape.d}"
+              fill-rule="${shape.fillRule ?? undefined}"
+              data-fill="${shape.fill === null ? undefined : "true"}"
+              transform="${shape.transform ?? undefined}"
+            />`
       ),
       // The ink: every path the Element paints, then its text. A hit-only path,
       // such as a Map Label's baseline, is a target and never ink of its own.
       ...clippedArt(
         element.shapes.filter((shape) => isTextShape(shape) || !shape.hitOnly),
-        (shape) =>
-          isTextShape(shape)
-            ? textNodes(shape)
-            : html`<path
-              class="map-line"
-              d="${shape.d}"
-              stroke="${shape.stroke ?? "none"}"
-              stroke-width="${shape.stroke === null ? undefined : n(shape.strokeWidth)}"
-              fill="${shape.fill ?? "none"}"
-              fill-rule="${shape.fillRule ?? undefined}"
-              stroke-dasharray="${shape.dash ?? undefined}"
-              opacity="${shape.opacity === 1 ? undefined : n(shape.opacity)}"
-              transform="${shape.transform ?? undefined}"
-            />`
+        (shape) => {
+          if (isTextShape(shape)) return textNodes(shape);
+          if (isImageShape(shape)) return imageNode(shape);
+          return html`<path
+            class="map-line"
+            d="${shape.d}"
+            stroke="${shape.stroke ?? "none"}"
+            stroke-width="${shape.stroke === null ? undefined : n(shape.strokeWidth)}"
+            fill="${shape.fill ?? "none"}"
+            fill-rule="${shape.fillRule ?? undefined}"
+            stroke-dasharray="${shape.dash ?? undefined}"
+            opacity="${shape.opacity === 1 ? undefined : n(shape.opacity)}"
+            transform="${shape.transform ?? undefined}"
+          />`;
+        }
       ),
     ];
     if (element.filter === null) return art;
@@ -753,21 +905,25 @@
    * The shapes a selected Element's highlight traces (#750): the ink it drew,
    * without the Stamps a Fill scatters, which are content painted inside its
    * area rather than the outline that marks it. Shapes that draw the same path,
-   * such as a Fill's colour and the texture laid over it, trace one outline.
+   * such as a Fill's colour and the texture laid over it, trace one outline. A
+   * picture is marked by the box it covers (#756).
    * @param {FrameSceneElement} element
-   * @returns {LineShape[]}
+   * @returns {Array<{ d: string, transform?: string }>}
    */
   function highlightShapes(element) {
     /** @type {Set<string>} */
     const seen = new Set();
-    /** @type {LineShape[]} */
+    /** @type {Array<{ d: string, transform?: string }>} */
     const shapes = [];
     for (const shape of element.shapes) {
       if (isTextShape(shape) || shape.clip !== undefined) continue;
-      const key = `${shape.transform ?? ""}\n${shape.d}`;
+      const traced = isImageShape(shape)
+        ? { d: imagePath(shape), transform: imageRotation(shape) }
+        : { d: shape.d, ...(shape.transform === undefined ? {} : { transform: shape.transform }) };
+      const key = `${traced.transform ?? ""}\n${traced.d}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      shapes.push(shape);
+      shapes.push(traced);
     }
     return shapes;
   }
@@ -911,7 +1067,7 @@
           current.defs === ""
             ? null
             : html`<defs
-                dangerouslySetInnerHTML=${{ __html: current.defs }}
+                dangerouslySetInnerHTML=${{ __html: withAssetHrefs(current.defs, liveUrl) }}
               />`
         }
         ${current.elements
@@ -1693,9 +1849,51 @@
   }
 
   /**
+   * One `<image>` still naming the picture it draws, as `sceneToSvg` writes it
+   * in the drawn markup and in the `<defs>` a Custom Fill's texture pattern
+   * lives in, rather than holding its bytes.
+   * @type {RegExp}
+   */
+  const ASSET_IMAGE_TAG = /<image\b[^>]*?\bhref="asset:([^"]*)"[^>]*?\/>/g;
+
+  /**
+   * The markup with each picture placeholder pointing at the URL `hrefOf`
+   * answers for its asset id (#756). A picture the Frame holds no bytes for
+   * loses its whole `<image>`, so it leaves no broken box. The live canvas and
+   * the raster trail ask for different URLs, so one swap serves both.
+   * @param {string} markup
+   * @param {(id: string) => string | undefined} hrefOf
+   * @returns {string}
+   */
+  function withAssetHrefs(markup, hrefOf) {
+    return markup.replace(ASSET_IMAGE_TAG, (tag, id) => {
+      const href = hrefOf(id);
+      return href === undefined ? "" : tag.replace(`href="asset:${id}"`, `href="${href}"`);
+    });
+  }
+
+  /** The `blob:` URL the live canvas draws one picture with, or undefined. @param {string} id */
+  function liveUrl(id) {
+    const source = assetSources.get(id);
+    return source === undefined ? undefined : source.url;
+  }
+
+  /**
+   * The `data:` URI the rasterize path draws one picture with, or undefined: an
+   * SVG drawn as an image loads no external subresource, so its pictures have
+   * to travel inside it as base64, the way its fonts do.
+   * @param {string} id
+   */
+  function rasterUrl(id) {
+    const source = assetSources.get(id);
+    return source === undefined ? undefined : source.dataUri;
+  }
+
+  /**
    * Draws one export SVG into a canvas of the requested pixel size and encodes
-   * it (#753). The SVG carries its fonts as data URIs, so nothing here reaches
-   * the network; a JPEG gets white paper behind it, since it has no alpha.
+   * it (#753). The SVG carries its fonts and its pictures as data URIs and names
+   * nothing by an external URL, so nothing here reaches the network; a JPEG gets
+   * white paper behind it, since it has no alpha.
    * @param {FrameRasterizeMessage} request
    * @returns {Promise<ArrayBuffer>}
    */
@@ -1705,7 +1903,8 @@
     canvas.height = request.heightPx;
     const context = canvas.getContext("2d");
     if (context === null) throw new Error("this Frame cannot draw a canvas");
-    const url = URL.createObjectURL(new Blob([request.svg], { type: "image/svg+xml" }));
+    const svg = withAssetHrefs(request.svg, rasterUrl);
+    const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
     try {
       const image = await loadImage(url);
       if (request.format !== "png") {
@@ -1744,9 +1943,165 @@
     }
   }
 
+  /** Decodes base64 into the bytes it carries. @param {string} data @returns {Uint8Array} */
+  function decodeBase64(data) {
+    const binary = atob(data);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return bytes;
+  }
+
+  /** Encodes bytes as the base64 the Library stores. @param {Uint8Array} bytes @returns {string} */
+  function encodeBase64(bytes) {
+    let binary = "";
+    for (let index = 0; index < bytes.length; index += 1) {
+      binary += String.fromCharCode(bytes[index]);
+    }
+    return btoa(binary);
+  }
+
+  /**
+   * A length a picture's `width` or `height` names, in pixels, or null when it
+   * names a percentage, a physical unit, or nothing this Frame can measure.
+   * @param {string | null} value
+   * @returns {number | null}
+   */
+  function readLength(value) {
+    const match = /^\s*(\d+(?:\.\d+)?)\s*(?:px)?\s*$/.exec(value ?? "");
+    if (match === null) return null;
+    const length = Number(match[1]);
+    return length > 0 ? length : null;
+  }
+
+  /**
+   * The size one sanitized SVG asks for, in pixels: its `viewBox`, which is the
+   * picture's own coordinate space and what a scene scales from, else the
+   * `width` and `height` it declares, else the fallback size.
+   * @param {string} markup
+   * @returns {{ width: number, height: number }}
+   */
+  function svgSize(markup) {
+    const fallback = { width: DEFAULT_ASSET_SIZE, height: DEFAULT_ASSET_SIZE };
+    const root = new DOMParser().parseFromString(markup, "image/svg+xml").documentElement;
+    if (root === null) return fallback;
+    const box = (root.getAttribute("viewBox") ?? "")
+      .trim()
+      .split(/[\s,]+/)
+      .map(Number);
+    if (
+      box.length === 4 &&
+      box.every((value) => Number.isFinite(value)) &&
+      box[2] > 0 &&
+      box[3] > 0
+    ) {
+      return { width: box[2], height: box[3] };
+    }
+    const width = readLength(root.getAttribute("width"));
+    const height = readLength(root.getAttribute("height"));
+    if (width === null || height === null) return fallback;
+    return { width, height };
+  }
+
+  /**
+   * Sanitizes one uploaded SVG and measures it (#756). The Library keeps the
+   * cleaned markup, never the file the Worker was handed, and `recolorable`
+   * says whether its paints are a single colour.
+   * @param {string} data base64
+   * @returns {{ data: string, width: number, height: number, recolorable: boolean }}
+   */
+  function ingestSvg(data) {
+    const ingest = /** @type {any} */ (window).maibukSvgIngest;
+    const text = new TextDecoder().decode(decodeBase64(data));
+    const clean = ingest.sanitizeSvg(text, /** @type {any} */ (window).DOMPurify);
+    if (clean === null) throw new Error("the SVG is not a picture");
+    const size = svgSize(clean.svg);
+    return {
+      data: encodeBase64(new TextEncoder().encode(clean.svg)),
+      width: size.width,
+      height: size.height,
+      recolorable: clean.recolorable,
+    };
+  }
+
+  /**
+   * Measures one uploaded raster (#756), in the Frame because only its document
+   * can decode a picture. A picture's paints are pixels, so it is never
+   * recolorable.
+   * @param {string} data base64
+   * @param {string} mime
+   * @returns {Promise<{ data: string, width: number, height: number, recolorable: false }>}
+   */
+  async function ingestRaster(data, mime) {
+    if (typeof createImageBitmap !== "function") {
+      throw new Error("this Frame cannot decode a picture");
+    }
+    const bitmap = await createImageBitmap(new Blob([decodeBase64(data)], { type: mime }));
+    try {
+      return { data, width: bitmap.width, height: bitmap.height, recolorable: false };
+    } finally {
+      bitmap.close();
+    }
+  }
+
+  /**
+   * Answers one asset ingest request (#756): what the Library keeps and how big
+   * it is, or the one reason an upload was refused. The Worker never sees the
+   * uploaded bytes again, so nothing here trusts them.
+   * @param {IngestAssetMessage} request
+   */
+  async function answerIngest(request) {
+    try {
+      const result =
+        request.mime === "image/svg+xml"
+          ? ingestSvg(request.data)
+          : await ingestRaster(request.data, request.mime);
+      post({ kind: "asset-ingested", requestId: request.requestId, ...result });
+    } catch {
+      post({ kind: "ingest-error", requestId: request.requestId, reason: "invalid-image" });
+    }
+  }
+
+  /**
+   * Keeps one uploaded picture's bytes under the URLs this document draws them
+   * with (#756), keyed by asset id: the `blob:` URL the live canvas paints and
+   * the `data:` URI a rasterize request carries. A picture the Worker sends
+   * again replaces them, revoking the URL it had so its buffer is freed.
+   * @param {unknown} data
+   * @returns {boolean} whether the message was an asset message
+   */
+  function keepAsset(data) {
+    if (typeof data !== "object" || data === null) return false;
+    const message = /** @type {Record<string, unknown>} */ (data);
+    if (message.kind !== "asset") return false;
+    if (typeof message.id !== "string" || message.id === "") return true;
+    if (typeof message.mime !== "string" || message.mime === "") return true;
+    if (typeof message.data !== "string" || message.data === "") return true;
+    const url = URL.createObjectURL(new Blob([decodeBase64(message.data)], { type: message.mime }));
+    const previous = assetSources.get(message.id);
+    if (previous !== undefined) URL.revokeObjectURL(previous.url);
+    assetSources.set(message.id, {
+      url,
+      dataUri: `data:${message.mime};base64,${message.data}`,
+    });
+    return true;
+  }
+
   /** @param {MessageEvent} event */
   function onMessage(event) {
     if (registerFont(event.data)) return;
+    if (keepAsset(event.data)) {
+      // The Worker sends the scene first and a picture's bytes after the Library
+      // read that holds them (#756), so kept bytes repaint the picture they
+      // belong to: an upload must not wait for the next pan, select, or edit to
+      // appear. A Frame with no scene yet has nothing to draw.
+      if (scene !== null) draw();
+      return;
+    }
+    const ingestRequest = readIngestAsset(event.data);
+    if (ingestRequest !== null) {
+      void answerIngest(ingestRequest);
+      return;
+    }
     const rasterizeRequest = readRasterize(event.data);
     if (rasterizeRequest !== null) {
       void answerRasterize(rasterizeRequest);
@@ -1786,6 +2141,8 @@
   function cleanup() {
     document.removeEventListener("keydown", onKeyDown);
     document.removeEventListener("keyup", onKeyUp);
+    for (const source of assetSources.values()) URL.revokeObjectURL(source.url);
+    assetSources.clear();
     if (surface === null) return;
     surface.removeEventListener("pointerdown", onPointerDown);
     surface.removeEventListener("pointermove", onPointerMove);
@@ -1845,4 +2202,10 @@
   }
 
   if (hooks && typeof hooks.onReady === "function") hooks.onReady(cleanup);
+  // A test document may have no canvas, so the rasterize answer is out of reach:
+  // this seam hands it the SVG the Frame would draw instead, which is the one
+  // fact a test can assert about an export.
+  if (hooks && typeof hooks.onAssetSvg === "function") {
+    hooks.onAssetSvg((svg) => withAssetHrefs(svg, rasterUrl));
+  }
 })();

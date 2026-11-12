@@ -5,6 +5,7 @@
  */
 
 import { describe, expect, it } from "vitest";
+import type { AssetIndexEntry, CustomFill } from "./assets";
 import {
   DEFAULT_LABEL_FONT,
   DEFAULT_LABEL_HALO_MM,
@@ -15,6 +16,7 @@ import {
   type MapElement,
   type MapFillElement,
   type MapFillOutline,
+  type MapImageElement,
   type MapLabelElement,
   type MapLineElement,
   type MapPoint,
@@ -23,15 +25,20 @@ import {
 } from "./maps";
 import { linePath } from "./geometry";
 import {
+  CUSTOM_FILL_TILE_MM,
   SMOOTH_TOLERANCE_MM,
   TEXT_FONT_FAMILY,
+  type ImageShape,
   type LineShape,
   type SceneShape,
   type TextShape,
   addElement,
   canMove,
+  isImageShape,
   lineShapes,
+  mapLibrary,
   moveElement,
+  referencedAssetIds,
   removeElement,
   renameElement,
   reorder,
@@ -625,11 +632,24 @@ describe("sceneToSvg", () => {
     expect(svg).toContain('viewBox="0 0 152.4 228.6"');
   });
 
-  it("ignores an element kind that has no geometry yet", () => {
+  it("draws no picture for a Map Image whose Library is not loaded", () => {
     const svg = sceneToSvg(
-      mapWith([{ id: "image-1", kind: "image", name: "Scan", hidden: false, locked: false }])
+      mapWith([
+        {
+          id: "image-1",
+          kind: "image",
+          name: "Scan",
+          hidden: false,
+          locked: false,
+          assetRef: "scan-1",
+          transform: { x: 40, y: 60, size: 80, rotation: 0 },
+          opacity: 1,
+          exportable: true,
+        },
+      ])
     );
     expect(svg).not.toContain("image-1");
+    expect(svg).not.toContain("<image");
   });
 });
 
@@ -1458,5 +1478,298 @@ describe("element operations", () => {
     expect(setLocked(added, "first", true)[0]).toMatchObject({ id: "first", locked: true });
     expect(added[0].hidden).toBe(false);
     expect(added[0].locked).toBe(false);
+  });
+});
+
+describe("Uploaded pictures (#756)", () => {
+  /** One index row for a picture `width` by `height` pixels. */
+  function entry(id: string, width = 40, height = 20, recolorable = false): AssetIndexEntry {
+    return { id, name: id, mime: "image/png", width, height, recolorable, use: "image" };
+  }
+
+  /** A Custom Stamp drawing the Library's picture `a1`, 12 mm wide at (100, 50). */
+  function customStamp(overrides: Partial<MapStampElement> = {}): MapStampElement {
+    return {
+      id: "portrait",
+      kind: "stamp",
+      name: "Portrait",
+      hidden: false,
+      locked: false,
+      stampRef: "custom:a1",
+      transform: { x: 100, y: 50, size: 12, rotation: 0 },
+      ...overrides,
+    };
+  }
+
+  /** A Map Image of the picture `a1`, 80 mm wide at (40, 60) and fully opaque. */
+  function imageElement(overrides: Partial<MapImageElement> = {}): MapImageElement {
+    return {
+      id: "scan",
+      kind: "image",
+      name: "The Reach",
+      hidden: false,
+      locked: false,
+      assetRef: "a1",
+      transform: { x: 40, y: 60, size: 80, rotation: 0 },
+      opacity: 1,
+      exportable: true,
+      ...overrides,
+    };
+  }
+
+  function imagesOf(shapes: readonly SceneShape[]): ImageShape[] {
+    return shapes.filter((shape): shape is ImageShape => isImageShape(shape));
+  }
+
+  /** A Custom Fill painting the picture `a1` as its texture. */
+  const MEADOW: CustomFill = { id: "meadow", name: "Meadow", texture: "a1" };
+
+  it("draws a Custom Stamp's picture at its own size, centred on its point", () => {
+    const [shape] = imagesOf(
+      sceneShapes([customStamp()], 203.2, 203.2, "atlas", {
+        library: mapLibrary([entry("a1", 40, 20)]),
+      })[0]
+    );
+
+    expect(shape).toEqual({
+      kind: "image",
+      assetId: "a1",
+      x: 100,
+      y: 50,
+      // 12 mm wide, its height from the picture's 2:1 aspect.
+      width: 12,
+      height: 6,
+      rotation: 0,
+      opacity: 1,
+    });
+  });
+
+  it("turns a Custom Stamp's picture with the Stamp", () => {
+    const [shape] = imagesOf(
+      sceneShapes(
+        [customStamp({ transform: { x: 40, y: 30, size: 20, rotation: 90 } })],
+        203.2,
+        203.2,
+        "atlas",
+        {
+          library: mapLibrary([entry("a1")]),
+        }
+      )[0]
+    );
+
+    expect(shape).toMatchObject({ x: 40, y: 30, width: 20, rotation: 90 });
+  });
+
+  it("tints a picture that draws in one paint, in the Stamp's ink", () => {
+    const [tinted] = imagesOf(
+      sceneShapes([customStamp()], 203.2, 203.2, "atlas", {
+        library: mapLibrary([entry("a1", 40, 20, true)]),
+      })[0]
+    );
+    const [ownColours] = imagesOf(
+      sceneShapes([customStamp()], 203.2, 203.2, "atlas", {
+        library: mapLibrary([entry("a1")]),
+      })[0]
+    );
+
+    expect(tinted.tint).toBe(MAP_STYLES.atlas.ink);
+    // A colour the Stamp carries itself is the one it paints in.
+    const [recoloured] = imagesOf(
+      sceneShapes([customStamp({ color: "forest" })], 203.2, 203.2, "atlas", {
+        library: mapLibrary([entry("a1", 40, 20, true)]),
+      })[0]
+    );
+    expect(recoloured.tint).toBe(MAP_STYLES.atlas.forest);
+    expect(ownColours.tint).toBeUndefined();
+  });
+
+  it("draws nothing for a Custom Stamp whose picture the Library does not hold", () => {
+    const svg = sceneToSvg(mapWith([customStamp({ stampRef: "custom:gone" })]), {
+      library: mapLibrary([entry("a1")]),
+    });
+
+    expect(svg).not.toContain("<image");
+    expect(svg).not.toContain("portrait");
+  });
+
+  it("draws a Map Image at its own opacity, sized from the picture's aspect", () => {
+    const [shape] = imagesOf(
+      sceneShapes([imageElement({ opacity: 0.4 })], 203.2, 203.2, "atlas", {
+        library: mapLibrary([entry("a1", 40, 20)]),
+      })[0]
+    );
+
+    expect(shape).toEqual({
+      kind: "image",
+      assetId: "a1",
+      x: 40,
+      y: 60,
+      width: 80,
+      height: 40,
+      rotation: 0,
+      opacity: 0.4,
+    });
+  });
+
+  it("drops a Map Image the author kept out of exports, and the editor keeps it", () => {
+    const elements = [imageElement({ exportable: false })];
+    const library = mapLibrary([entry("a1")]);
+
+    expect(sceneShapes(elements, 203.2, 203.2, "atlas", { library })[0]).toHaveLength(1);
+    expect(
+      sceneShapes(elements, 203.2, 203.2, "atlas", { library, forExport: true })[0]
+    ).toHaveLength(0);
+    expect(sceneToSvg(mapWith(elements), { library, forExport: true })).not.toContain("<image");
+    expect(sceneToSvg(mapWith(elements), { library })).toContain("<image");
+  });
+
+  it("writes a picture as an asset placeholder with its place, size, turn, fade, and tint", () => {
+    const svg = sceneToSvg(
+      mapWith([
+        customStamp({ transform: { x: 100, y: 50, size: 20, rotation: 15 } }),
+        imageElement({ id: "scan", opacity: 0.4 }),
+      ]),
+      { library: mapLibrary([entry("a1", 40, 20, true)]) }
+    );
+
+    expect(svg).toContain(
+      '<image href="asset:a1" x="90" y="45" width="20" height="10" preserveAspectRatio="xMidYMid meet" transform="rotate(15 100 50)" filter="url(#asset-tint-1f2933)"/>'
+    );
+    // The Map Image keeps the picture's own colours and its own fade.
+    expect(svg).toContain(
+      '<image href="asset:a1" x="0" y="40" width="80" height="40" preserveAspectRatio="xMidYMid meet" opacity="0.4"/>'
+    );
+  });
+
+  it("writes one tint filter per colour, flooded and composited into the picture's alpha", () => {
+    const svg = sceneToSvg(mapWith([customStamp({ id: "one" }), customStamp({ id: "two" })]), {
+      library: mapLibrary([entry("a1", 40, 20, true)]),
+    });
+
+    expect(svg.match(/<filter id="asset-tint-1f2933"/g)).toHaveLength(1);
+    expect(svg.match(/filter="url\(#asset-tint-1f2933\)"/g)).toHaveLength(2);
+    expect(svg).toContain('<feFlood flood-color="#1f2933" result="tint"/>');
+    expect(svg).toContain('<feComposite in="tint" in2="SourceAlpha" operator="in"/>');
+    expect(svg.indexOf("<defs>")).toBeLessThan(svg.indexOf("<filter"));
+  });
+
+  it("paints a Custom Fill's texture from its picture, tiled at one fixed size", () => {
+    const svg = sceneToSvg(
+      mapWith([
+        areaFill({ id: "one", content: { customFill: "meadow" } }),
+        areaFill({ id: "two", content: { customFill: "meadow" } }),
+      ]),
+      { library: mapLibrary([entry("a1", 40, 20)], [MEADOW]) }
+    );
+    const id = /<pattern id="(custom-fill-texture-[0-9a-f]+)"/.exec(svg)?.[1];
+
+    expect(id).toBeDefined();
+    // One pattern for the Custom Fill, however many Fills paint it.
+    expect(svg.match(/<pattern id="custom-fill-texture-/g)).toHaveLength(1);
+    expect(svg.match(new RegExp(`url\\(#${id}\\)`, "g"))).toHaveLength(2);
+    // The tile is CUSTOM_FILL_TILE_MM wide, its height from the picture's aspect.
+    expect(svg).toContain(
+      `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${CUSTOM_FILL_TILE_MM}" height="${
+        CUSTOM_FILL_TILE_MM / 2
+      }">`
+    );
+    expect(svg).toContain(
+      `<image href="asset:a1" x="0" y="0" width="${CUSTOM_FILL_TILE_MM}" height="${
+        CUSTOM_FILL_TILE_MM / 2
+      }" preserveAspectRatio="xMidYMid slice"/>`
+    );
+  });
+
+  it("draws nothing extra for a Custom Fill the Library does not hold, keeping the Fill's colour", () => {
+    const svg = sceneToSvg(
+      mapWith([areaFill({ content: { color: "#c8d5a3", customFill: "gone" } })]),
+      { library: mapLibrary([], [MEADOW]) }
+    );
+
+    expect(svg).toContain('fill="#c8d5a3"');
+    expect(svg).not.toContain("<pattern");
+    expect(svg).not.toContain("<image");
+  });
+
+  it("scatters a Custom Fill's Stamps and pictures over its area, clipped to it", () => {
+    const fill: CustomFill = { id: "mixed", name: "Mixed", stamps: ["base:tree", "custom:a1"] };
+    const svg = sceneToSvg(mapWith([areaFill({ content: { customFill: "mixed" } })]), {
+      library: mapLibrary([entry("a1")], [fill]),
+    });
+
+    // The base Stamp draws its art at some points, and the picture at the others.
+    expect(svg).toMatch(/<g clip-path="url\(#custom-fill-clip-[0-9a-f]+\)"><path [^>]*transform=/);
+    expect(svg).toMatch(/<g clip-path="url\(#custom-fill-clip-[0-9a-f]+\)"><image href="asset:a1"/);
+    expect(svg.match(/<image href="asset:a1"/g)?.length).toBeGreaterThan(1);
+  });
+
+  it("gives one Fill's own scatter and its Custom Fill's scatter separate Clip Paths", () => {
+    const fill: CustomFill = { id: "mixed", name: "Mixed", stamps: ["custom:a1"] };
+    const svg = sceneToSvg(
+      mapWith([
+        areaFill({
+          content: {
+            customFill: "mixed",
+            scatter: { stamp: "base:tree", spacing: 8, seed: 3 },
+          },
+        }),
+      ]),
+      { library: mapLibrary([entry("a1")], [fill]) }
+    );
+
+    // Two scatters over one area: each Clip Path keeps its own id, so neither
+    // is left undefined by the other.
+    const ids = [...svg.matchAll(/<clipPath id="([^"]+)"/g)].map((match) => match[1]);
+    expect(ids).toHaveLength(2);
+    expect(new Set(ids).size).toBe(2);
+  });
+
+  it("scatters a Custom Fill the same way every render, and differently for another Element", () => {
+    const fill: CustomFill = {
+      id: "mixed",
+      name: "Mixed",
+      stamps: ["base:tree", "custom:a1", "custom:gone"],
+    };
+    const library = mapLibrary([entry("a1")], [fill]);
+    const scatterOf = (id: string) =>
+      sceneToSvg(mapWith([areaFill({ id, content: { customFill: "mixed" } })]), { library });
+
+    expect(scatterOf("one")).toBe(scatterOf("one"));
+    expect(scatterOf("one")).not.toBe(scatterOf("two"));
+  });
+
+  it("names every picture a Map draws, once each, in Element order", () => {
+    const fill: CustomFill = {
+      id: "mixed",
+      name: "Mixed",
+      texture: "a2",
+      stamps: ["base:tree", "custom:a3"],
+    };
+    const ids = referencedAssetIds(
+      [
+        imageElement({ assetRef: "a1" }),
+        customStamp({ stampRef: "custom:a1" }),
+        areaFill({ content: { customFill: "mixed" } }),
+        areaFill({ id: "gone-fill", content: { customFill: "gone" } }),
+      ],
+      mapLibrary([entry("a1"), entry("a2"), entry("a3")], [fill])
+    );
+
+    expect(ids).toEqual(["a1", "a2", "a3"]);
+  });
+
+  it("moves a Map Image by its transform, and leaves a locked one and a thumbnail alone", () => {
+    const image = imageElement();
+
+    expect(canMove(image)).toBe(true);
+    expect(canMove({ ...image, locked: true })).toBe(false);
+    expect(moveElement([image], "scan", 5, -10)[0]).toEqual({
+      ...image,
+      transform: { x: 45, y: 50, size: 80, rotation: 0 },
+    });
+    expect(moveElement([{ ...image, locked: true }], "scan", 5, -10)[0]).toEqual({
+      ...image,
+      locked: true,
+    });
   });
 });

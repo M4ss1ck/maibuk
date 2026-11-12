@@ -39,7 +39,7 @@ An edge of a Fill or Map Line that fades out instead of ending in a line, as on 
 _Avoid_: blur, feather, fuzzy
 
 **Custom Fill**:
-A Fill the author defined, from a texture image or a set of their Stamps to scatter. It belongs to the Library.
+A Fill the author defined, from a texture image or a set of their Stamps to scatter. It belongs to the Library, so every Map can use it.
 _Avoid_: custom terrain, custom biome, custom texture
 
 **Stamp**:
@@ -47,7 +47,7 @@ A single picture placed on a Map at one spot, such as a city, a castle, a lone m
 _Avoid_: icon (that is a Plugin UI component), symbol (that is the Symbol inserter), marker, pin, decoration
 
 **Custom Stamp**:
-A Stamp made from an image the author uploaded. It belongs to the Library, so every Map can use it.
+A Stamp made from a picture the author uploaded, named after the file. It belongs to the Library, so every Map can use it, and a picture drawn in one colour takes the Stamp's own colour.
 _Avoid_: uploaded icon, custom icon
 
 **Map Label**:
@@ -55,7 +55,7 @@ A name written on a Map, straight or along a curve.
 _Avoid_: text, caption, title (that is a Book's)
 
 **Map Image**:
-An image the author places on a Map as its own layer, such as a scanned map to trace over; it can be dimmed or left out of the exported picture.
+An image the author places on a Map as its own layer, such as a scanned map to trace over; it can be dimmed or left out of the exported picture. An upload with As Map Image set makes one instead of a Custom Stamp.
 _Avoid_: background, overlay, Custom Stamp (that is placed as a Stamp)
 
 **Pencil**:
@@ -71,7 +71,7 @@ The editor tool that draws a Map Line point by point: each click adds a straight
 _Avoid_: polyline tool, path tool, polygon tool
 
 **Insert**:
-The editor tool that places a Stamp chosen from one picker where the author clicks, or at the view center from the keyboard.
+The editor tool that places a Stamp chosen from one picker where the author clicks, or at the view center from the keyboard. Its panel also uploads a picture, which becomes a Custom Stamp or, with As Map Image set, a Map Image placed at the view center.
 _Avoid_: stamp tool
 
 **Ellipse**:

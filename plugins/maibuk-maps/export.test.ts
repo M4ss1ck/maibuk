@@ -14,6 +14,7 @@ import {
   MAX_CANVAS_AREA_PX,
   MAX_CANVAS_SIDE_PX,
   MAX_DPI,
+  assetDataUri,
   dataUri,
   defaultPrintWidthIn,
   embedFonts,
@@ -28,6 +29,7 @@ import {
   PLACE_RETRY_DELAY_MS,
   PLACE_RETRY_TIMEOUT_MS,
   printPixelSize,
+  resolveAssetHrefs,
   svgAtPixelSize,
   svgPixelSize,
 } from "./export";
@@ -38,9 +40,12 @@ import {
   DEFAULT_LABEL_SIZE_MM,
   DEFAULT_LABEL_WIDTH_MM,
   MAP_LABEL_FONT_FAMILIES,
+  type MapElement,
+  type MapImageElement,
   type MapLabelElement,
   type MapPage,
 } from "./maps";
+import { mapLibrary } from "./scene";
 
 /** The four page sizes, exactly as `maps.ts` stores them. */
 const PAGES: Readonly<Record<string, MapPage>> = {
@@ -73,8 +78,24 @@ function label(overrides: Partial<MapLabelElement> = {}): MapLabelElement {
 }
 
 /** A Map of these elements on `page`, in the default Style. */
-function mapWith(elements: MapLabelElement[], page: MapPage = PAGES.square): ExportMap {
+function mapWith(elements: MapElement[], page: MapPage = PAGES.square): ExportMap {
   return { page, elements, styleId: "atlas" };
+}
+
+/** A Map Image of the picture `a1`, 80 mm wide at (40, 60) and fully opaque. */
+function image(overrides: Partial<MapImageElement> = {}): MapImageElement {
+  return {
+    id: "scan",
+    kind: "image",
+    name: "The Reach",
+    hidden: false,
+    locked: false,
+    assetRef: "a1",
+    transform: { x: 40, y: 60, size: 80, rotation: 0 },
+    opacity: 1,
+    exportable: true,
+    ...overrides,
+  };
 }
 
 /** The base64 a byte range encodes to, so tests can name the exact `src`. */
@@ -291,6 +312,68 @@ describe("exportSvg()", () => {
     const svg = exportSvg(map, [pdfFont]);
 
     expect(svg).toContain(`@font-face{font-family:"${pdfFont.family}"`);
+  });
+
+  it("carries an uploaded picture's placeholder, and drops one kept out of exports", () => {
+    const library = mapLibrary([
+      {
+        id: "a1",
+        name: "Coast",
+        mime: "image/png",
+        width: 40,
+        height: 20,
+        recolorable: false,
+        use: "image",
+      },
+    ]);
+    const scan = image({ id: "scan" });
+    const kept = image({ id: "kept", exportable: false });
+
+    expect(exportSvg(mapWith([scan]), [], { library })).toContain('href="asset:a1"');
+    expect(exportSvg(mapWith([kept]), [], { library })).not.toContain("<image");
+  });
+});
+
+describe("assetDataUri()", () => {
+  it("writes a stored picture's bytes as the data URI an export embeds", () => {
+    expect(assetDataUri({ mime: "image/png", data: "AAAA" })).toBe("data:image/png;base64,AAAA");
+  });
+});
+
+describe("resolveAssetHrefs()", () => {
+  /** An SVG holding one picture twice, once inside a Custom Fill's pattern, and one unknown. */
+  const SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg"><defs><pattern id="p"><image href="asset:a1" x="0" y="0" width="20" height="10" preserveAspectRatio="xMidYMid slice"/></pattern></defs><g><image href="asset:a1" x="10" y="10" width="40" height="20" preserveAspectRatio="xMidYMid meet"/><image href="asset:gone" x="0" y="0" width="4" height="4" preserveAspectRatio="xMidYMid meet"/></g></svg>';
+
+  it("replaces every placeholder with the URI its id resolves to", () => {
+    const resolved = resolveAssetHrefs(SVG, (id) =>
+      id === "a1" ? "data:image/png;base64,AAAA" : null
+    );
+
+    expect(resolved.match(/href="data:image\/png;base64,AAAA"/g)).toHaveLength(2);
+    expect(resolved).not.toContain("asset:");
+  });
+
+  it("drops a picture whose id resolves to nothing, and keeps the rest of the SVG", () => {
+    const resolved = resolveAssetHrefs(SVG, (id) =>
+      id === "a1" ? "data:image/png;base64,AAAA" : null
+    );
+
+    expect(resolved).not.toContain('href="asset:gone"');
+    expect(resolved).toContain("<pattern");
+    expect(resolved).toContain('preserveAspectRatio="xMidYMid meet"');
+  });
+
+  it("leaves an SVG with no picture untouched, without asking for any id", () => {
+    const plain = '<svg xmlns="http://www.w3.org/2000/svg"><path d="M 0 0 L 1 1"/></svg>';
+    const asked: string[] = [];
+    const resolve = (id: string): string | null => {
+      asked.push(id);
+      return null;
+    };
+
+    expect(resolveAssetHrefs(plain, resolve)).toBe(plain);
+    expect(asked).toEqual([]);
   });
 });
 

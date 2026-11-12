@@ -110,7 +110,17 @@ describe("pourFill", () => {
   it("pours one Fill into an enclosed face, at its deepest point, behind Map Lines, Stamps, and Map Labels", () => {
     const ring = rectangle("ring", 0, 0, 40, 40);
     const elements: MapElement[] = [
-      { id: "image", kind: "image", name: "Scan", hidden: false, locked: false },
+      {
+        id: "image",
+        kind: "image",
+        name: "Scan",
+        hidden: false,
+        locked: false,
+        assetRef: "scan-1",
+        transform: { x: 100, y: 50, size: 60, rotation: 0 },
+        opacity: 1,
+        exportable: true,
+      },
       {
         id: "older",
         kind: "fill",
