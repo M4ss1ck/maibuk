@@ -22,6 +22,7 @@
 import { sceneToSvg } from "./scene";
 import { SCALE_BAR_STAMP_REF } from "./stamps";
 import { isMapColor, isMapStyleId } from "./styles";
+import { templateElements, templateStyle, type MapTemplateId } from "./templates";
 import { isTextureId, type TextureId } from "./textures";
 
 /** The Plugin's data format version; `migrateData` owns every change to it. */
@@ -43,7 +44,7 @@ export type PagePreset = (typeof PAGE_PRESETS)[number];
  * Each preset's page in millimetres: a 6×9 in trade page upright or on its
  * side, a 12×9 in double-page spread, and an 8×8 in square.
  */
-const PAGE_SIZES: Readonly<Record<PagePreset, { widthMm: number; heightMm: number }>> = {
+export const PAGE_SIZES: Readonly<Record<PagePreset, { widthMm: number; heightMm: number }>> = {
   portrait: { widthMm: 152.4, heightMm: 228.6 },
   landscape: { widthMm: 228.6, heightMm: 152.4 },
   spread: { widthMm: 304.8, heightMm: 228.6 },
@@ -429,6 +430,8 @@ export interface NewMap {
   name: string;
   bookId: string | null;
   preset: PagePreset;
+  /** The Map Template to start from; absent starts a blank Map. */
+  templateId?: MapTemplateId;
 }
 
 export interface MapStore {
@@ -665,7 +668,8 @@ function isIndexEntry(value: unknown): value is MapIndexEntry {
   );
 }
 
-function isMapDocument(value: unknown): value is MapDocument {
+/** Whether a value is a stored Map this build can read and draw. */
+export function isMapDocument(value: unknown): value is MapDocument {
   if (typeof value !== "object" || value === null) return false;
   const map = value as Record<string, unknown>;
   const page = map.page as Record<string, unknown> | null | undefined;
@@ -989,14 +993,17 @@ export function createMapStore(
       return serial(async () => {
         const name = cleanName(input.name);
         const at = now();
+        const page: MapPage = { preset: input.preset, ...PAGE_SIZES[input.preset] };
+        const templateId = input.templateId;
         const map: MapDocument = {
           id: newId(),
           bookId: input.bookId,
           name,
-          page: { preset: input.preset, ...PAGE_SIZES[input.preset] },
-          styleId: DEFAULT_STYLE_ID,
+          page,
+          styleId: templateId === undefined ? DEFAULT_STYLE_ID : templateStyle(templateId),
           overrides: {},
-          elements: [],
+          elements:
+            templateId === undefined ? [] : templateElements(templateId, page, name, () => newId()),
           createdAt: at,
           updatedAt: at,
           dataVersion: DATA_VERSION,
