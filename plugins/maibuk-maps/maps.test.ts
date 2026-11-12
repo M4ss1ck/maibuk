@@ -19,6 +19,8 @@ import {
   LINE_STYLE_DEFAULT_ENCLOSES,
   MAP_LABEL_FONTS,
   MAP_LABEL_FONT_FAMILIES,
+  MAX_IMAGE_OPACITY,
+  MIN_IMAGE_OPACITY,
   PAGE_SIZES,
   bendFromPoint,
   createMapStore,
@@ -31,6 +33,7 @@ import {
   type MapDocument,
   type MapElement,
   type MapFillElement,
+  type MapImageElement,
   type MapLabelElement,
   type MapLineElement,
   type MapStampElement,
@@ -691,6 +694,18 @@ describe("Map Fills", () => {
     expect((await loadMap([scattered]))?.elements[0]).toMatchObject({ content: { scatter } });
   });
 
+  it("keeps a Fill of a Custom Fill, alone or under a colour", async () => {
+    const custom = fill("custom", { content: { customFill: "meadow" } });
+    const tinted = fill("tinted", { content: { color: "land", customFill: "meadow" } });
+
+    expect((await loadMap([custom]))?.elements[0]).toMatchObject({
+      content: { customFill: "meadow" },
+    });
+    expect((await loadMap([tinted]))?.elements[0]).toMatchObject({
+      content: { color: "land", customFill: "meadow" },
+    });
+  });
+
   it("rejects a Fill with nothing to cover the area, or with malformed content", async () => {
     const base = fill("broken");
 
@@ -704,6 +719,10 @@ describe("Map Fills", () => {
       { ...base, content: { scatter: { stamps: ["base:tree"], spacing: 6, seed: 1 } } },
       { ...base, content: { scatter: { stamp: "base:tree", spacing: 0, seed: 1 } } },
       { ...base, content: { scatter: { stamp: "base:tree", spacing: 6, seed: Number.NaN } } },
+      { ...base, content: { customFill: "" } },
+      { ...base, content: { customFill: null } },
+      { ...base, content: { customFill: 7 } },
+      { ...base, content: { color: "land", customFill: "" } },
     ]) {
       expect(await loadMap([element])).toBeNull();
     }
@@ -983,6 +1002,83 @@ describe("Map Stamps", () => {
       { ...base, scale: { unit: "km", span: 0 } },
       { ...base, scale: { unit: "km", span: Number.POSITIVE_INFINITY } },
       { ...base, scale: { span: 1000 } },
+    ]) {
+      expect(await loadElements([element])).toBeNull();
+    }
+  });
+});
+
+describe("Map Images", () => {
+  /** A Map Image of asset `a1` centred on (40, 50), 60 mm wide, upright, and fully opaque. */
+  function image(overrides: Partial<MapImageElement> = {}): MapImageElement {
+    return {
+      id: "image",
+      kind: "image",
+      name: "Coast",
+      hidden: false,
+      locked: false,
+      assetRef: "a1",
+      transform: { x: 40, y: 50, size: 60, rotation: 0 },
+      opacity: 1,
+      exportable: true,
+      ...overrides,
+    };
+  }
+
+  /** The Elements a stored Map holding `elements` loads, or null when it refuses them. */
+  async function loadElements(elements: unknown[]): Promise<MapElement[] | null> {
+    const memory = memoryStorage();
+    const store = storeOver(memory.storage);
+    await store.create({ name: "Images", bookId: null, preset: "square" });
+    const created = memory.values.get(mapKey("m1")) as MapDocument;
+    await memory.storage.set({ key: mapKey("m1"), value: { ...created, elements } });
+    const doc = await store.load("m1");
+    return doc === null ? null : doc.elements;
+  }
+
+  it("keeps an Image's asset, place, size, turn, opacity, and export flag", async () => {
+    const stored = image({
+      assetRef: "a7",
+      transform: { x: 80, y: 190, size: 40, rotation: 15 },
+      opacity: 0.6,
+      exportable: false,
+    });
+
+    expect(await loadElements([stored])).toEqual([stored]);
+  });
+
+  it("clamps a stored opacity inside the range an Image draws", async () => {
+    const [faint, solid, atMin, atMax] = (await loadElements([
+      image({ opacity: 0 }),
+      image({ id: "solid", opacity: 4 }),
+      image({ id: "min", opacity: MIN_IMAGE_OPACITY }),
+      image({ id: "max", opacity: MAX_IMAGE_OPACITY }),
+    ])) as MapImageElement[];
+
+    expect(faint.opacity).toBe(MIN_IMAGE_OPACITY);
+    expect(solid.opacity).toBe(MAX_IMAGE_OPACITY);
+    expect(atMin.opacity).toBe(MIN_IMAGE_OPACITY);
+    expect(atMax.opacity).toBe(MAX_IMAGE_OPACITY);
+  });
+
+  it("rejects an Image whose asset, transform, opacity, or export flag is malformed", async () => {
+    const base = image();
+
+    for (const element of [
+      { ...base, assetRef: undefined },
+      { ...base, assetRef: "" },
+      { ...base, assetRef: 7 },
+      { ...base, transform: undefined },
+      { ...base, transform: null },
+      { ...base, transform: { x: 10, y: 20, size: 12 } },
+      { ...base, transform: { ...base.transform, size: 0 } },
+      { ...base, transform: { ...base.transform, rotation: "45" } },
+      { ...base, opacity: undefined },
+      { ...base, opacity: null },
+      { ...base, opacity: "0.5" },
+      { ...base, opacity: Number.NaN },
+      { ...base, exportable: undefined },
+      { ...base, exportable: "yes" },
     ]) {
       expect(await loadElements([element])).toBeNull();
     }

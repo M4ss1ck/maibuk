@@ -36,6 +36,7 @@ import {
   type MapElement,
   type MapFillContent,
   type MapFillElement,
+  type MapImageElement,
   type MapLabelElement,
   type MapLabelFont,
   type MapLineElement,
@@ -643,7 +644,17 @@ describe("drawing an Area Fill with the Area tool", () => {
 
   it("puts a new Area Fill at the top of the Fill stack, below Map Lines, Stamps, and Map Labels", () => {
     const { editor } = openEditor([
-      { id: "image", kind: "image", name: "Scan", hidden: false, locked: false },
+      {
+        id: "image",
+        kind: "image",
+        name: "Scan",
+        hidden: false,
+        locked: false,
+        assetRef: "scan-1",
+        transform: { x: 100, y: 50, size: 60, rotation: 0 },
+        opacity: 1,
+        exportable: true,
+      },
       {
         ...fillAt("older", [150, 50]),
         outline: {
@@ -896,11 +907,19 @@ describe("moving a Stamp", () => {
     expect(editor.getSnapshot().elements).toEqual([stamp()]);
   });
 
-  it("leaves a locked Stamp, and an Element with no centre of its own, where it is", () => {
-    const { editor } = openEditor([
-      stamp({ locked: true }),
-      { id: "scan", kind: "image", name: "The Reach", hidden: false, locked: false },
-    ]);
+  it("leaves a locked Stamp, and an Element it cannot move yet, where it is", () => {
+    const scan: MapImageElement = {
+      id: "scan",
+      kind: "image",
+      name: "The Reach",
+      hidden: false,
+      locked: false,
+      assetRef: "scan-1",
+      transform: { x: 20, y: 20, size: 40, rotation: 0 },
+      opacity: 1,
+      exportable: true,
+    };
+    const { editor } = openEditor([stamp({ locked: true }), scan]);
 
     editor.select("marker");
     editor.move(1, 0);
@@ -908,13 +927,7 @@ describe("moving a Stamp", () => {
 
     editor.select("scan");
     editor.move(1, 0);
-    expect(editor.getSnapshot().elements[1]).toEqual({
-      id: "scan",
-      kind: "image",
-      name: "The Reach",
-      hidden: false,
-      locked: false,
-    });
+    expect(editor.getSnapshot().elements[1]).toEqual(scan);
   });
 });
 

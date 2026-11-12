@@ -625,9 +625,21 @@ describe("sceneToSvg", () => {
     expect(svg).toContain('viewBox="0 0 152.4 228.6"');
   });
 
-  it("ignores an element kind that has no geometry yet", () => {
+  it("ignores an Image, which has no render primitives yet", () => {
     const svg = sceneToSvg(
-      mapWith([{ id: "image-1", kind: "image", name: "Scan", hidden: false, locked: false }])
+      mapWith([
+        {
+          id: "image-1",
+          kind: "image",
+          name: "Scan",
+          hidden: false,
+          locked: false,
+          assetRef: "scan-1",
+          transform: { x: 40, y: 60, size: 80, rotation: 0 },
+          opacity: 1,
+          exportable: true,
+        },
+      ])
     );
     expect(svg).not.toContain("image-1");
   });
