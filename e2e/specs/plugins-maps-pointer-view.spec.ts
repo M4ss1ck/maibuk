@@ -1,0 +1,195 @@
+// The Maps editor's pointer view (#777): Ctrl+wheel zooms around the pointer and
+// Space+drag pans, the way the app's own Canvas does. The Frame only posts each
+// request; the editor owns zoom and pan, so it crops the view and sends it back,
+// and the Frame's own viewBox is what the author sees change. Every assertion
+// here reads that viewBox: a zoom keeps the page point under the pointer where
+// it was on screen, a plain wheel leaves the view alone, and a pan moves the
+// drawing with the gesture while the Pencil draws nothing until Space is lifted.
+// Zoom has a keyboard path (its Commands, covered by `plugins-maps-editor`); so
+// does picking a tool. The wheel and the drag themselves are
+// `support/frame-stroke.ts`, which explains why the pointer gestures sit outside
+// the spec.
+// Tagged @sandbox because Maps runs in the Plugin sandbox: the lane runs it on
+// Chromium, WebKit, and Firefox.
+
+import type { FrameLocator, Page } from "@playwright/test";
+import { capture } from "../support/capture";
+import {
+  drawStroke,
+  fractionOfPagePoint,
+  millimetresPerPixel,
+  pagePointAt,
+  spaceDragPan,
+  wheelAt,
+} from "../support/frame-stroke";
+import { pressUntilFocused, tabTo } from "../support/keyboard";
+import { expect, test } from "../support/test";
+
+const primaryNav = (page: Page) => page.getByRole("listbox", { name: "Primary navigation" });
+const navOption = (page: Page, name: string) =>
+  primaryNav(page).getByRole("option", { name: new RegExp(`^${name}`) });
+
+/** The Map cards, by their preview's alt text (the Map's name). */
+const mapNames = (page: Page) => page.getByRole("list").getByRole("img");
+
+/** The Map editor's embedded Frame, the iframe element around it, and its surface. */
+const mapFrame = (page: Page): FrameLocator =>
+  page.frameLocator('[data-plugin-frame="embedded"] iframe');
+const frameElement = (page: Page) => page.locator('[data-plugin-frame="embedded"] iframe');
+const surface = (page: Page) => mapFrame(page).locator("#surface svg");
+
+/** Every non-hidden Element the Frame draws. */
+const drawnElements = (page: Page) => mapFrame(page).locator("[data-element-id]");
+
+/** Where the wheel rests and where the pan is dragged, as fractions of the svg's box. */
+const POINTER: readonly [number, number] = [0.7, 0.3];
+const PAN_FROM: readonly [number, number] = [0.4, 0.45];
+const PAN_TO: readonly [number, number] = [0.6, 0.55];
+
+/** Opens Maps from the sidebar, waiting for the Plugin's launch scan. */
+async function openMaps(page: Page): Promise<void> {
+  await expect(navOption(page, "Maps")).toBeVisible({ timeout: 60_000 });
+  await tabTo(page, navOption(page, "Books"), { max: 60 });
+  await pressUntilFocused(page, "ArrowDown", navOption(page, "Maps"), { max: 20 });
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/plugin\/maibuk-maps\/maps$/);
+  await expect(page.getByRole("heading", { name: "Maps", level: 1 })).toBeVisible();
+}
+
+/** Creates a Map from the New Map dialog by keyboard. */
+async function createMap(page: Page, name: string): Promise<void> {
+  const trigger = page.getByRole("button", { name: "New Map" });
+  await tabTo(page, trigger, { max: 60 });
+  await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "New Map" });
+  await expect(dialog.getByRole("textbox", { name: "Name" })).toBeFocused();
+  await page.keyboard.type(name);
+  await tabTo(page, dialog.getByRole("button", { name: "Create" }), { max: 20 });
+  await page.keyboard.press("Enter");
+  await expect(dialog).toBeHidden();
+  await expect(mapNames(page).first()).toHaveAccessibleName(name);
+}
+
+/** Opens a Map from the list and waits for its editor's Frame to draw. */
+async function openMap(page: Page, name: string): Promise<void> {
+  await tabTo(page, page.getByRole("button", { name: `Open ${name}` }), { max: 60 });
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/plugin\/maibuk-maps\/map$/);
+  await expect(surface(page)).toBeVisible();
+}
+
+/** Picks the Pencil with its Command and waits for the Frame to honour it. */
+async function pickPencil(page: Page): Promise<void> {
+  await page.keyboard.press("p");
+  await expect(page.getByRole("radio", { name: "Pencil" })).toBeChecked();
+  // The scene round-trip is what proves the Frame is listening before a gesture.
+  await expect(mapFrame(page).locator('svg[data-tool="pencil"]')).toBeVisible();
+}
+
+/** Tabs into the Frame, which is how a key reaches its document. */
+async function focusFrame(page: Page): Promise<void> {
+  await tabTo(page, frameElement(page), { max: 60 });
+  await expect(frameElement(page)).toBeFocused();
+}
+
+/** The Frame svg's viewBox as four numbers. */
+async function viewBox(page: Page): Promise<number[]> {
+  const value = await surface(page).getAttribute("viewBox");
+  if (value === null) throw new Error("the Frame drew no viewBox");
+  return value.split(" ").map(Number);
+}
+
+test.use({
+  library: "empty",
+  plugins: ["maibuk-maps"],
+  pluginApprovals: [
+    {
+      pluginId: "maibuk-maps",
+      granted: ["library:read", "editor:write", "files:pick", "files:save"],
+    },
+  ],
+  builtInPlugins: [{ id: "maibuk-maps" }],
+});
+
+test.describe("Maps pointer view @wf:plugins-maps-pointer-view @sc:plugin.maibuk-maps.pencilTool @sandbox", () => {
+  test("zooms around the pointer on a Ctrl+wheel", async ({ page }) => {
+    await page.goto("/");
+    await openMaps(page);
+    await createMap(page, "Coastline");
+    await openMap(page, "Coastline");
+    await focusFrame(page);
+
+    const before = await viewBox(page);
+    // The page point under the pointer, and where it sits on screen right now.
+    const anchor = await pagePointAt(surface(page), POINTER);
+    const across = await fractionOfPagePoint(surface(page), anchor);
+    await wheelAt(page, surface(page), POINTER, { notches: 2 });
+
+    // The view really zoomed in: its crop is narrower than it was.
+    await expect.poll(async () => (await viewBox(page))[2]).toBeLessThan(before[2] * 0.8);
+    await capture(page, "maps-pointer-zoom", { around: [frameElement(page)] });
+
+    // And it zoomed around the pointer: the page point that was under it is
+    // still under it, so the drawing grew away from where the author pointed.
+    await expect
+      .poll(async () => (await fractionOfPagePoint(surface(page), anchor))[0])
+      .toBeCloseTo(across[0], 2);
+    await expect
+      .poll(async () => (await fractionOfPagePoint(surface(page), anchor))[1])
+      .toBeCloseTo(across[1], 2);
+  });
+
+  test("leaves the view alone on a plain wheel", async ({ page }) => {
+    await page.goto("/");
+    await openMaps(page);
+    await createMap(page, "Coastline");
+    await openMap(page, "Coastline");
+    await focusFrame(page);
+
+    const before = await viewBox(page);
+    await wheelAt(page, surface(page), POINTER, { ctrl: false, notches: 2 });
+    // A gesture that never reaches the editor leaves nothing to wait for, so
+    // the second read is the whole check: the crop is the one that was there.
+    expect(await viewBox(page)).toEqual(before);
+  });
+
+  test("pans on Space+drag without drawing, and the Pencil draws once Space is lifted", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await openMaps(page);
+    await createMap(page, "Coastline");
+    await openMap(page, "Coastline");
+    await pickPencil(page);
+    await focusFrame(page);
+
+    const pressed = await pagePointAt(surface(page), PAN_FROM);
+    // One pixel of the drawing surface, in page millimetres.
+    const pixel = await millimetresPerPixel(surface(page));
+
+    await spaceDragPan(page, surface(page), PAN_FROM, PAN_TO);
+
+    // The drawing follows the gesture: the page point that was under the press
+    // is under the release once the view has moved there, which is what a pan
+    // is and what no other gesture would do. The pan is exact in the Frame, so
+    // the only slack is the pixel the engine delivered the pointer on — Firefox
+    // and WebKit round the pointer's place to a whole pixel, Chromium keeps the
+    // fraction — plus the two decimals the viewBox is printed to. The travel
+    // here is about forty-five millimetres, so a pan that stopped short, ran the
+    // wrong way, or did not happen misses by far more than two pixels.
+    await expect
+      .poll(async () => Math.abs((await pagePointAt(surface(page), PAN_TO))[0] - pressed[0]))
+      .toBeLessThan(2 * pixel);
+    await expect
+      .poll(async () => Math.abs((await pagePointAt(surface(page), PAN_TO))[1] - pressed[1]))
+      .toBeLessThan(2 * pixel);
+    await capture(page, "maps-pointer-pan", { around: [frameElement(page)] });
+    // A press that pans never draws: the Pencil is still the tool, and the Map
+    // has no Map Line to list.
+    await expect(drawnElements(page)).toHaveCount(0);
+
+    // Releasing Space gave the Pencil back, and the next drag is a stroke.
+    await drawStroke(page, surface(page));
+    await expect(drawnElements(page)).toHaveCount(1);
+  });
+});

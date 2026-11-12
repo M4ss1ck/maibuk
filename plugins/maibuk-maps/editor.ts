@@ -1127,6 +1127,12 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       case "bendLabel":
         bendDragged(message.id, message.bend);
         break;
+      case "zoom":
+        zoomAt(message.point, message.factor);
+        break;
+      case "pan":
+        panBy(message.dx, message.dy);
+        break;
     }
   }
 
@@ -1192,7 +1198,28 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     sendScene();
   }
 
-  function pan(dx: number, dy: number): void {
+  /**
+   * Zooms around one page point (#777), so the point under the pointer keeps
+   * its place on screen: the view crops about the page centre and slides by
+   * `panX`/`panY` (`viewRect` in `assets/ui/map.js`), so the point's distance
+   * from the centre shrinks with the zoom's own ratio.
+   */
+  function zoomAt(point: MapPoint, factor: number): void {
+    const next = clamp(zoom * factor, MIN_ZOOM, MAX_ZOOM);
+    // A gesture the minimum or the maximum refuses moves nothing: sliding the
+    // crop for a zoom that did not happen would drift the point instead.
+    if (next === zoom) return;
+    const reached = next / zoom;
+    const centreX = doc.page.widthMm / 2;
+    const centreY = doc.page.heightMm / 2;
+    panX = point[0] - centreX - (point[0] - centreX - panX) / reached;
+    panY = point[1] - centreY - (point[1] - centreY - panY) / reached;
+    zoom = next;
+    publish();
+    sendScene();
+  }
+
+  function panBy(dx: number, dy: number): void {
     panX += dx;
     panY += dy;
     publish();
@@ -1861,19 +1888,19 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     },
 
     panLeft() {
-      pan(-PAN_STEP_MM, 0);
+      panBy(-PAN_STEP_MM, 0);
     },
 
     panRight() {
-      pan(PAN_STEP_MM, 0);
+      panBy(PAN_STEP_MM, 0);
     },
 
     panUp() {
-      pan(0, -PAN_STEP_MM);
+      panBy(0, -PAN_STEP_MM);
     },
 
     panDown() {
-      pan(0, PAN_STEP_MM);
+      panBy(0, PAN_STEP_MM);
     },
 
     flush() {

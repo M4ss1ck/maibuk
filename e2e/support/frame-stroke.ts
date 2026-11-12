@@ -1,10 +1,10 @@
 // Pointer gestures for the Maps editor's drawing Frame (#745, #746, #747,
-// #766, #750, #751): a straight Pencil stroke, an Area tool outline, an Eraser
-// drag across the Frame's svg, a Shape tool's drag, a Select drag that moves an
-// Element, and a Map Label's bend handle. Moving has a keyboard path (the arrow
-// Commands), so does the Area tool's outline (its arrows and Enter), and so
-// does a label's bend (the panel's Bend field); the drag here is the pointer
-// form of each.
+// #766, #750, #751, #777): a straight Pencil stroke, an Area tool outline, an
+// Eraser drag across the Frame's svg, a Shape tool's drag, a Select drag that
+// moves an Element, a Map Label's bend handle, a wheel zoom, and a Space+drag
+// pan. Moving has a keyboard path (the arrow Commands), so does the Area tool's
+// outline (its arrows and Enter), and so does a label's bend (the panel's Bend
+// field); the drag here is the pointer form of each.
 //
 // Drawing a Map Line has no keyboard path in this slice (the keyboard acts on a
 // selected Map Line: the move Commands, the Elements list, undo), and the E2E
@@ -38,6 +38,9 @@ import type { Locator, Page } from "@playwright/test";
 
 /** A page point, in millimetres, the same space as a Map Line's points. */
 type PagePoint = readonly [number, number];
+
+/** A place on the drawing surface, as fractions of the svg's box. */
+export type BoxFraction = readonly [number, number];
 
 /** Where the stroke starts and ends, as fractions of the svg's box. */
 const FROM: readonly [number, number] = [0.3, 0.35];
@@ -292,6 +295,144 @@ export async function dragBendHandle(
     );
   }
   await page.mouse.up();
+}
+
+/**
+ * A Frame svg's box, and the mapping between its pixels and page millimetres.
+ * `preserveAspectRatio="xMidYMid meet"` fits the whole viewBox inside the box
+ * and centres it, so one scale serves both axes.
+ */
+interface SurfaceMapping {
+  box: { x: number; y: number; width: number; height: number };
+  /** Frame pixels per page millimetre. */
+  scale: number;
+  /** Where the viewBox's own top-left corner sits, in Frame pixels. */
+  left: number;
+  top: number;
+  view: { x: number; y: number; width: number; height: number };
+}
+
+/** Reads a Frame surface's box and viewBox, and the mapping between them. */
+async function surfaceMapping(surface: Locator): Promise<SurfaceMapping> {
+  const box = await surface.boundingBox();
+  if (box === null) throw new Error("the Frame's drawing surface has no box to draw on");
+  const viewBox = await surface.getAttribute("viewBox");
+  if (viewBox === null) throw new Error("the Frame's drawing surface has no viewBox");
+  const [x, y, width, height] = viewBox.split(" ").map(Number);
+  if (width <= 0 || height <= 0) throw new Error(`unexpected viewBox: ${viewBox}`);
+  const scale = Math.min(box.width / width, box.height / height);
+  return {
+    box,
+    scale,
+    left: box.x + (box.width - width * scale) / 2,
+    top: box.y + (box.height - height * scale) / 2,
+    view: { x, y, width, height },
+  };
+}
+
+/**
+ * The page point in millimetres under one fraction of a Frame's box (#777):
+ * what the pointer is over, read the way the Frame's own `getScreenCTM` reads
+ * it. A zoom keeps this point under the pointer, so a spec names it once and
+ * asks where it sits afterwards.
+ */
+export async function pagePointAt(surface: Locator, fraction: BoxFraction): Promise<PagePoint> {
+  const { box, scale, left, top, view } = await surfaceMapping(surface);
+  return [
+    view.x + (box.x + box.width * fraction[0] - left) / scale,
+    view.y + (box.y + box.height * fraction[1] - top) / scale,
+  ];
+}
+
+/** Where one page point in millimetres sits, as fractions of a Frame's box (#777). */
+export async function fractionOfPagePoint(
+  surface: Locator,
+  point: PagePoint
+): Promise<BoxFraction> {
+  const { box, scale, left, top, view } = await surfaceMapping(surface);
+  return [
+    (left + (point[0] - view.x) * scale - box.x) / box.width,
+    (top + (point[1] - view.y) * scale - box.y) / box.height,
+  ];
+}
+
+/**
+ * How many page millimetres one pixel of a Frame's surface is worth right now
+ * (#777): the unit a pointer gesture is accurate to. An engine delivers a
+ * pointer's place on a whole pixel — Chromium keeps the fraction a caller asks
+ * for, Firefox and WebKit land on the pixel — so a pan that follows the gesture
+ * can differ from the requested travel by one pixel, and no more.
+ */
+export async function millimetresPerPixel(surface: Locator): Promise<number> {
+  return 1 / (await surfaceMapping(surface)).scale;
+}
+
+/**
+ * Sends one or more wheel clicks over a point of a Frame's drawing surface
+ * (#777), each a 100-pixel step the way a mouse wheel reports one. With `ctrl`
+ * — the default — it is the Ctrl+wheel a trackpad reports a pinch as, which the
+ * Frame zooms around the pointer with; without it, the plain wheel the Frame
+ * leaves alone. Keys reach the Frame only while it holds focus, so the caller
+ * Tabs into it first.
+ */
+export async function wheelAt(
+  page: Page,
+  surface: Locator,
+  fraction: BoxFraction,
+  { ctrl = true, notches = 1 }: { ctrl?: boolean; notches?: number } = {}
+): Promise<void> {
+  const box = await surface.boundingBox();
+  if (box === null) throw new Error("the Frame's drawing surface has no box to draw on");
+  const at = { x: box.x + box.width * fraction[0], y: box.y + box.height * fraction[1] };
+  await page.mouse.move(at.x, at.y);
+  if (!ctrl) {
+    for (let notch = 0; notch < notches; notch += 1) await page.mouse.wheel(0, -100);
+    return;
+  }
+  // The wheel carries the modifiers the keyboard holds, so Ctrl down around it
+  // is the same event a pinch sends.
+  await page.keyboard.down("Control");
+  try {
+    for (let notch = 0; notch < notches; notch += 1) await page.mouse.wheel(0, -100);
+  } finally {
+    await page.keyboard.up("Control");
+  }
+}
+
+/**
+ * Pans a Frame's view by holding Space and dragging between two points of its
+ * drawing surface (#777), the pointer form of the pan Commands: with Space down
+ * a press pans whatever tool is active and draws nothing. The caller Tabs into
+ * the Frame first, because Space only reaches it while it holds focus.
+ */
+export async function spaceDragPan(
+  page: Page,
+  surface: Locator,
+  from: BoxFraction,
+  to: BoxFraction
+): Promise<void> {
+  const box = await surface.boundingBox();
+  if (box === null) throw new Error("the Frame's drawing surface has no box to draw on");
+  const at = (fraction: BoxFraction) => ({
+    x: box.x + box.width * fraction[0],
+    y: box.y + box.height * fraction[1],
+  });
+  const start = at(from);
+  const end = at(to);
+  await page.mouse.move(start.x, start.y);
+  await page.keyboard.down(" ");
+  try {
+    await page.mouse.down();
+    for (let step = 1; step <= STEPS; step += 1) {
+      await page.mouse.move(
+        start.x + ((end.x - start.x) * step) / STEPS,
+        start.y + ((end.y - start.y) * step) / STEPS
+      );
+    }
+    await page.mouse.up();
+  } finally {
+    await page.keyboard.up(" ");
+  }
 }
 
 /**

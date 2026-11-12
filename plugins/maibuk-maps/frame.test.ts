@@ -2840,3 +2840,130 @@ describe("an uploaded picture on the Map (#756)", () => {
     }
   });
 });
+
+describe("pointer zoom and pan (#777)", () => {
+  /** One wheel event over the drawing; jsdom neither scrolls nor throttles it. */
+  function wheel(x: number, y: number, init: WheelEventInit = {}): WheelEvent {
+    const event = new WheelEvent("wheel", {
+      bubbles: true,
+      cancelable: true,
+      clientX: x,
+      clientY: y,
+      ...init,
+    });
+    svg().dispatchEvent(event);
+    return event;
+  }
+
+  /** One pointer event of a named kind of pointer, which jsdom has no class for. */
+  function pointerOf(type: string, x: number, y: number, pointerId: number, pointerType: string) {
+    const event = new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0 });
+    Object.defineProperty(event, "pointerId", { value: pointerId });
+    Object.defineProperty(event, "pointerType", { value: pointerType });
+    svg().dispatchEvent(event);
+  }
+
+  /** Lifting Space, which restores the tool the author was drawing with. */
+  function releaseSpace(): void {
+    document.body.dispatchEvent(new KeyboardEvent("keyup", { key: " ", bubbles: true }));
+  }
+
+  it("zooms around the pointer for a Ctrl or Cmd wheel, and keeps the wheel's default", () => {
+    frame = loadFrame();
+    frame.scene();
+
+    const pinch = wheel(60, 25, { ctrlKey: true, deltaY: -100 });
+    const command = wheel(60, 25, { metaKey: true, deltaY: 100 });
+
+    expect(pinch.defaultPrevented).toBe(true);
+    expect(command.defaultPrevented).toBe(true);
+    // The page point under the pointer travels with the request, so the
+    // editor can crop the view around it instead of around the centre.
+    expect(frame.port.messages[0]).toEqual({
+      kind: "zoom",
+      point: [60, 25],
+      factor: expect.closeTo(Math.exp(0.2), 5),
+    });
+    expect(frame.port.messages[1]).toEqual({
+      kind: "zoom",
+      point: [60, 25],
+      factor: expect.closeTo(Math.exp(-0.2), 5),
+    });
+  });
+
+  it("leaves a plain wheel to the Frame's document", () => {
+    frame = loadFrame();
+    frame.scene();
+
+    const event = wheel(60, 25, { deltaY: -100 });
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(frame.port.messages).toEqual([]);
+  });
+
+  it("pans with Space held whatever tool is active, and draws nothing", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "pencil" });
+    key(" ");
+
+    pointer(svg(), "pointerdown", 10, 10);
+    pointer(svg(), "pointermove", 20, 15);
+    pointer(svg(), "pointerup", 20, 15);
+
+    // The drawing follows the gesture, so the view slides the other way.
+    expect(frame.port.messages).toEqual([{ kind: "pan", dx: -10, dy: -5 }]);
+
+    // Releasing Space gives the Pencil back: the next drag draws a Map Line.
+    releaseSpace();
+    pointer(svg(), "pointerdown", 30, 30);
+    pointer(svg(), "pointermove", 40, 30);
+    pointer(svg(), "pointerup", 40, 30);
+
+    expect(frame.port.messages).toEqual([
+      { kind: "pan", dx: -10, dy: -5 },
+      {
+        kind: "stroke",
+        points: [
+          [30, 30],
+          [40, 30],
+        ],
+      },
+    ]);
+  });
+
+  it("keeps the key to itself while Space is held, so the host never draws from it", () => {
+    frame = loadFrame();
+    frame.scene();
+
+    expect(key(" ").defaultPrevented).toBe(true);
+  });
+
+  it("pans on a middle-button drag and never draws", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "pencil" });
+
+    pointer(svg(), "pointerdown", 10, 10, { button: 1 });
+    pointer(svg(), "pointermove", 15, 12);
+    pointer(svg(), "pointerup", 15, 12, { button: 1 });
+
+    expect(frame.port.messages).toEqual([{ kind: "pan", dx: -5, dy: -2 }]);
+  });
+
+  it("pans on a two-finger drag, dropping the stroke one finger began", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "pencil" });
+
+    pointerOf("pointerdown", 10, 10, 1, "touch");
+    pointerOf("pointermove", 12, 10, 1, "touch");
+    // The second finger turns the gesture into a pan: the stroke under way is
+    // dropped without reaching the Worker.
+    pointerOf("pointerdown", 40, 40, 2, "touch");
+    // Both fingers travel together, so the pan follows their average: the pair
+    // moved five millimetres right of where it began.
+    pointerOf("pointermove", 22, 10, 1, "touch");
+    pointerOf("pointerup", 22, 10, 1, "touch");
+    pointerOf("pointerup", 40, 40, 2, "touch");
+
+    expect(frame.port.messages).toEqual([{ kind: "pan", dx: -5, dy: 0 }]);
+  });
+});

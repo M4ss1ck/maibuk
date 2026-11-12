@@ -2866,6 +2866,23 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-maps-pointer-view",
+    area: "plugins",
+    workflow:
+      "The Maps editor's pointer view (#777): with focus in the drawing Frame, the author zooms with a Ctrl+wheel (the wheel a trackpad reports a pinch as) around the pointer and pans by holding Space and dragging, while the Frame only posts each request and the editor, which owns zoom and pan, crops the view; asserts: the Frame's viewBox before and after the wheel, the page point under the pointer staying where it was on screen after a zoom, a plain wheel leaving the view as it was, and the viewBox a Space drag moved while the Pencil drew nothing until Space was lifted; persists: yes (the Map document is untouched by a gesture, and the view lives in the editor)",
+    edges: [
+      "A Ctrl+wheel zooms the view around the pointer, keeping the page point under it where it was on screen",
+      "A plain wheel leaves the view as it was",
+      "Space+drag pans the view with the Pencil picked and draws no Map Line; the Pencil draws again once Space is released",
+    ],
+    terms: [],
+    shortcuts: ["plugin.maibuk-maps.pencilTool"],
+    routes: ["/plugin/:pluginId/:pageId"],
+    fixture: "bookShelf",
+    tags: ["sandbox"],
+    status: "accepted",
+  },
+  {
     id: "plugins-maps-pen",
     area: "plugins",
     workflow:
