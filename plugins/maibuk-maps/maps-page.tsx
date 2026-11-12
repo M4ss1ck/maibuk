@@ -13,7 +13,12 @@ import { useEffect, useRef, useState, type ComponentType } from "react";
 import { ui, type PluginClient } from "@/plugin-sdk";
 import { format, translate, type MapsKey } from "./i18n";
 import { PAGE_PRESETS, type MapIndexEntry, type MapStore, type PagePreset } from "./maps";
-import { MAP_TEMPLATE_IDS, isMapTemplateId, type MapTemplateId } from "./templates";
+import {
+  MAP_TEMPLATE_IDS,
+  isMapTemplateId,
+  templateLabelKey,
+  type MapTemplateId,
+} from "./templates";
 
 /** The page id, exactly as the manifest declares it. */
 export const MAPS_PAGE_ID = "maps";
@@ -66,15 +71,6 @@ const PAGE_KEYS: Readonly<Record<PagePreset, MapsKey>> = {
   landscape: "page.landscape",
   spread: "page.spread",
   square: "page.square",
-};
-
-/** The Start from label each Template takes. */
-const TEMPLATE_KEYS: Readonly<Record<MapTemplateId, MapsKey>> = {
-  continent: "template.continent",
-  archipelago: "template.archipelago",
-  "two-continents": "template.two-continents",
-  "inland-kingdom": "template.inland-kingdom",
-  "blank-sea": "template.blank-sea",
 };
 
 /** The app language: the current value at mount, then every change. */
@@ -321,7 +317,7 @@ export function createMapsPage(deps: MapsPageDeps): ComponentType {
     }));
     const templateOptions = [
       { value: BLANK_TEMPLATE, label: t("template.blank") },
-      ...MAP_TEMPLATE_IDS.map((id) => ({ value: id, label: t(TEMPLATE_KEYS[id]) })),
+      ...MAP_TEMPLATE_IDS.map((id) => ({ value: id, label: t(templateLabelKey(id)) })),
     ];
 
     return (

@@ -22,14 +22,21 @@ import {
   type MapStampElement,
   type PagePreset,
 } from "./maps";
+import { stampArt } from "./stamps";
 import { isMapStyleId } from "./styles";
 import {
+  CARTOUCHE_ART_WIDTH,
+  CARTOUCHE_PLAQUE_HEIGHT,
+  CARTOUCHE_PLAQUE_WIDTH,
   MAP_TEMPLATE_IDS,
+  TITLE_SIZE_RATIO,
   isMapTemplateId,
   templateElements,
+  templateLabelKey,
   templateStyle,
   type MapTemplateId,
 } from "./templates";
+import { translate } from "./i18n";
 
 /** The Map name every test starts from. */
 const TITLE = "The Reach";
@@ -45,7 +52,7 @@ const EXPECTED: Readonly<
   // Six islands of varied size, one Fill each.
   archipelago: { style: "parchment", waterFills: 1, landFills: 6, faces: 7 },
   "two-continents": { style: "atlas", waterFills: 1, landFills: 2, faces: 3 },
-  // The frame is land, and the kingdom inside its border is a second land face.
+  // The outer face is land, and the kingdom inside its border is a second land face.
   "inland-kingdom": { style: "parchment", waterFills: 0, landFills: 2, faces: 2 },
   "blank-sea": { style: "atlas", waterFills: 1, landFills: 0, faces: 1 },
 };
@@ -97,6 +104,35 @@ function labelsOf(elements: readonly MapElement[]): MapLabelElement[] {
   return elements.filter((element): element is MapLabelElement => element.kind === "label");
 }
 
+/** The world border: the closed line that spans nearly the whole page. */
+function worldBorderOf(elements: readonly MapElement[], preset: PagePreset): MapLineElement {
+  const page = PAGE_SIZES[preset];
+  const border = linesOf(elements).find((element) => {
+    if (!element.closed || !element.enclosesFills) return false;
+    const xs = element.points.map((point) => point[0]);
+    const ys = element.points.map((point) => point[1]);
+    return (
+      Math.max(...xs) - Math.min(...xs) > page.widthMm * 0.8 &&
+      Math.max(...ys) - Math.min(...ys) > page.heightMm * 0.8
+    );
+  });
+  if (border === undefined) throw new Error(`no world border on ${preset}`);
+  return border;
+}
+
+/** The land a Template draws: every line but the page-wide world border. */
+function landLinesOf(elements: readonly MapElement[], preset: PagePreset): MapLineElement[] {
+  const border = worldBorderOf(elements, preset);
+  return linesOf(elements).filter((element) => element !== border);
+}
+
+/** A line's bounding box, in page millimetres. */
+function boundsOf(line: MapLineElement): { width: number; height: number } {
+  const xs = line.points.map((point) => point[0]);
+  const ys = line.points.map((point) => point[1]);
+  return { width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) };
+}
+
 /** A Fill's colour role, which is all a Template Fill holds. */
 function fillRole(fill: MapFillElement): string {
   return fill.content.color ?? "";
@@ -144,6 +180,17 @@ describe("templateStyle", () => {
       expect(isMapStyleId(templateStyle(id))).toBe(true);
     }
     expect(templateStyle("inland-kingdom")).toBe("parchment");
+  });
+});
+
+describe("templateLabelKey", () => {
+  it("gives every Template its Start from label, in both languages", () => {
+    for (const id of MAP_TEMPLATE_IDS) {
+      const key = templateLabelKey(id);
+      expect(key).toBe(`template.${id}`);
+      expect(translate("en", key)).not.toBe(key);
+      expect(translate("es", key)).not.toBe(key);
+    }
   });
 });
 
@@ -222,6 +269,22 @@ describe("templateElements", () => {
     }
   });
 
+  it("draws the world border as a coast only where it meets the sea", () => {
+    for (const id of MAP_TEMPLATE_IDS) {
+      for (const preset of PAGE_PRESETS) {
+        const border = worldBorderOf(elementsOf(id, preset), preset);
+        const expected = id === "inland-kingdom" ? "plain" : "coast";
+        expect(border.style, `${id} on ${preset}`).toBe(expected);
+      }
+    }
+
+    // The inland kingdom has no coast at all: its border and river keep their own styles.
+    const lines = linesOf(elementsOf("inland-kingdom"));
+    expect(lines.filter((line) => line.style === "coast")).toHaveLength(0);
+    expect(lines.filter((line) => line.style === "border")).toHaveLength(1);
+    expect(lines.filter((line) => line.style === "river")).toHaveLength(1);
+  });
+
   it("covers the sea and each land face with a Fill of its own", () => {
     for (const id of MAP_TEMPLATE_IDS) {
       const elements = elementsOf(id, "portrait");
@@ -270,6 +333,43 @@ describe("templateElements", () => {
       expect(label.x, id).toBeCloseTo(cartouche.transform.x, 6);
       expect(label.y, id).toBeCloseTo(cartouche.transform.y, 6);
     }
+  });
+
+  it("fits the title Label in the cartouche plaque, scaling it with the page", () => {
+    const samples = PAGE_PRESETS.map((preset) => {
+      const elements = elementsOf("continent", preset);
+      const cartouche = stampsOf(elements).find(
+        (stamp) => stamp.stampRef === "base:cartouche"
+      ) as MapStampElement;
+      const [label] = labelsOf(elements);
+      const plaqueWidth = cartouche.transform.size * (CARTOUCHE_PLAQUE_WIDTH / CARTOUCHE_ART_WIDTH);
+      const plaqueHeight =
+        cartouche.transform.size * (CARTOUCHE_PLAQUE_HEIGHT / CARTOUCHE_ART_WIDTH);
+      return { preset, cartouche, label, plaqueWidth, plaqueHeight };
+    });
+
+    for (const { preset, label, plaqueWidth, plaqueHeight } of samples) {
+      expect(label.width, preset).toBeLessThanOrEqual(plaqueWidth);
+      expect(label.size, preset).toBeCloseTo(plaqueHeight * TITLE_SIZE_RATIO, 6);
+      expect(label.size, preset).toBeLessThan(plaqueHeight);
+    }
+
+    // The title grows with the cartouche, rather than staying at a fixed size.
+    const bySize = [...samples].sort(
+      (one, two) => one.cartouche.transform.size - two.cartouche.transform.size
+    );
+    for (let index = 1; index < bySize.length; index++) {
+      expect(bySize[index].label.size, bySize[index].preset).toBeGreaterThan(
+        bySize[index - 1].label.size
+      );
+    }
+  });
+
+  it("ties the plaque constants to the cartouche art", () => {
+    const art = stampArt("base:cartouche");
+    expect(art?.viewBox[2]).toBe(CARTOUCHE_ART_WIDTH);
+    expect(CARTOUCHE_PLAQUE_WIDTH).toBeLessThan(CARTOUCHE_ART_WIDTH);
+    expect(CARTOUCHE_PLAQUE_HEIGHT).toBeLessThan(art?.viewBox[3] ?? 0);
   });
 
   it("copies: two calls draw the same geometry with ids and objects of their own", () => {
@@ -365,11 +465,41 @@ describe("templateElements", () => {
     const square = templateElements("continent", PAGE_SIZES.square, TITLE, idMaker());
     const widest = (elements: readonly MapElement[]): number =>
       Math.max(...linesOf(elements).flatMap((line) => line.points.map((point) => point[0])));
-    // Authored in unit coordinates, so the same shape takes each page's width.
+    // Land is centred on a square sized by the shorter side, so it takes the
+    // same share of these two pages' widths.
     expect(widest(portrait) / PAGE_SIZES.portrait.widthMm).toBeCloseTo(
       widest(square) / PAGE_SIZES.square.widthMm,
       6
     );
     expect(widest(portrait)).toBeLessThan(PAGE_SIZES.portrait.widthMm);
+  });
+
+  it("keeps land shapes' aspect ratio on every page, inside the border", () => {
+    /** The bounding-box aspect ratio of one Template's land, on one preset. */
+    const landAspect = (preset: PagePreset): number => {
+      const elements = elementsOf("continent", preset);
+      const [coast] = landLinesOf(elements, preset);
+      const { width, height } = boundsOf(coast);
+      return width / height;
+    };
+    expect(landAspect("portrait")).toBeCloseTo(landAspect("landscape"), 6);
+
+    // The land sits inside the page-wide border on each page, not stretched to it.
+    for (const preset of PAGE_PRESETS) {
+      const elements = elementsOf("inland-kingdom", preset);
+      const border = worldBorderOf(elements, preset);
+      const xs = border.points.map((point) => point[0]);
+      const ys = border.points.map((point) => point[1]);
+      const [left, right] = [Math.min(...xs), Math.max(...xs)];
+      const [top, bottom] = [Math.min(...ys), Math.max(...ys)];
+      for (const line of landLinesOf(elements, preset)) {
+        for (const [x, y] of line.points) {
+          expect(x, `${preset} x`).toBeGreaterThanOrEqual(left);
+          expect(x, `${preset} x`).toBeLessThanOrEqual(right);
+          expect(y, `${preset} y`).toBeGreaterThanOrEqual(top);
+          expect(y, `${preset} y`).toBeLessThanOrEqual(bottom);
+        }
+      }
+    }
   });
 });

@@ -1,9 +1,10 @@
 /**
  * The Maps Map Templates (#754): the ready-made Maps an author starts a new Map
- * from. A Template is a set of hand-authored shapes in unit coordinates, 0 to 1
- * across each page side, so one Template fits every page preset:
- * `templateElements` scales them to the page it is given and mints a fresh id
- * for every Element, and `templateStyle` names the Map Style it is drawn in.
+ * from. A Template is a set of hand-authored shapes in unit coordinates: land
+ * on a unit square, scaled by one factor inside the page border so it keeps its
+ * aspect on every page preset. `templateElements` scales them to the page it is
+ * given and mints a fresh id for every Element, and `templateStyle` names the
+ * Map Style it is drawn in.
  *
  * A Map made from a Template is a copy: nothing it holds is shared with the
  * Template, or with another Map, so editing one never touches the others. Its
@@ -19,7 +20,7 @@
  */
 
 import { deepestPoint, findFaces } from "./faces";
-import { format, translate } from "./i18n";
+import { format, translate, type MapsKey } from "./i18n";
 import {
   LINE_STYLE_DEFAULT_ENCLOSES,
   newLabel,
@@ -31,7 +32,7 @@ import {
   type MapPoint,
 } from "./maps";
 import { baseStampRef, stampNameKey } from "./stamps";
-import type { MapStyleId } from "./styles";
+import type { MapStyleId, StyleRole } from "./styles";
 
 /** The Templates an author can start a Map from, in the order a picker lists them. */
 export const MAP_TEMPLATE_IDS = [
@@ -50,22 +51,8 @@ export function isMapTemplateId(value: unknown): value is MapTemplateId {
   return typeof value === "string" && (MAP_TEMPLATE_IDS as readonly string[]).includes(value);
 }
 
-/** The Map Style each Template is drawn in. */
-const TEMPLATE_STYLES: Readonly<Record<MapTemplateId, MapStyleId>> = {
-  continent: "atlas",
-  archipelago: "parchment",
-  "two-continents": "atlas",
-  "inland-kingdom": "parchment",
-  "blank-sea": "atlas",
-};
-
-/** The Map Style a Template draws in. */
-export function templateStyle(id: MapTemplateId): MapStyleId {
-  return TEMPLATE_STYLES[id];
-}
-
 /** The Fill role a Template face takes. */
-type TemplateFillRole = "water" | "land" | "forest";
+type TemplateFillRole = Extract<StyleRole, "water" | "land" | "forest">;
 
 /** How far the world border keeps from the page edge, as a share of each page side. */
 const BORDER_INSET = 0.03;
@@ -84,8 +71,17 @@ const CARTOUCHE_CENTRE: MapPoint = [0.5, 0.1];
 /** The cartouche's art box width, as a share of the page width. */
 const CARTOUCHE_WIDTH = 0.42;
 
-/** The title Map Label's baseline, as a share of the page width. */
-const TITLE_WIDTH = 0.36;
+/**
+ * The cartouche art's own units (`stamp-art.ts`: its `viewBox` is 10.6 wide, and
+ * its plaque path spans x -3.2 … 3.2 by y -5.2 … -3.2), which the Label takes its
+ * width and size from so the title sits in the plaque.
+ */
+export const CARTOUCHE_ART_WIDTH = 10.6;
+export const CARTOUCHE_PLAQUE_WIDTH = 6.4;
+export const CARTOUCHE_PLAQUE_HEIGHT = 2;
+
+/** The title Label's cap size as a share of the plaque's height, leaving room for ascenders. */
+export const TITLE_SIZE_RATIO = 0.5;
 
 /** The compass rose's centre on the page, as a share of each page side. */
 const COMPASS_CENTRE: MapPoint = [0.88, 0.86];
@@ -341,13 +337,17 @@ const ISLAND_SIX: readonly MapPoint[] = [
 
 /** One Template's shapes, in unit coordinates on the page. */
 interface TemplateSpec {
+  /** The Map Style the Template is drawn in. */
+  style: MapStyleId;
+  /** The Start from option's label. */
+  labelKey: MapsKey;
   /** The Fill role of the face just inside the world border. */
-  frameRole: TemplateFillRole;
-  /** The Fill role of every face inside the frame. */
-  innerRole: TemplateFillRole;
+  borderRole: TemplateFillRole;
+  /** The Fill role of every face inside the border. */
+  interiorRole: TemplateFillRole;
   /** Closed coasts inside the border, each one enclosing its own land face. */
   coasts: readonly (readonly MapPoint[])[];
-  /** A kingdom's border inside the frame, its face the other land face. */
+  /** A kingdom's border inside the border, its face the other land face. */
   kingdom?: readonly MapPoint[];
   /** A river inside the kingdom, drawn open and enclosing nothing. */
   river?: readonly MapPoint[];
@@ -355,26 +355,54 @@ interface TemplateSpec {
 
 /** What each Template draws. */
 const TEMPLATES: Readonly<Record<MapTemplateId, TemplateSpec>> = {
-  continent: { frameRole: "water", innerRole: "land", coasts: [CONTINENT_COAST] },
+  continent: {
+    style: "atlas",
+    labelKey: "template.continent",
+    borderRole: "water",
+    interiorRole: "land",
+    coasts: [CONTINENT_COAST],
+  },
   archipelago: {
-    frameRole: "water",
-    innerRole: "land",
+    style: "parchment",
+    labelKey: "template.archipelago",
+    borderRole: "water",
+    interiorRole: "land",
     coasts: [ISLAND_ONE, ISLAND_TWO, ISLAND_THREE, ISLAND_FOUR, ISLAND_FIVE, ISLAND_SIX],
   },
   "two-continents": {
-    frameRole: "water",
-    innerRole: "land",
+    style: "atlas",
+    labelKey: "template.two-continents",
+    borderRole: "water",
+    interiorRole: "land",
     coasts: [WEST_CONTINENT_COAST, EAST_CONTINENT_COAST],
   },
   "inland-kingdom": {
-    frameRole: "land",
-    innerRole: "forest",
+    style: "parchment",
+    labelKey: "template.inland-kingdom",
+    borderRole: "land",
+    interiorRole: "forest",
     coasts: [],
     kingdom: KINGDOM_BORDER,
     river: KINGDOM_RIVER,
   },
-  "blank-sea": { frameRole: "water", innerRole: "land", coasts: [] },
+  "blank-sea": {
+    style: "atlas",
+    labelKey: "template.blank-sea",
+    borderRole: "water",
+    interiorRole: "land",
+    coasts: [],
+  },
 };
+
+/** The Map Style a Template draws in. */
+export function templateStyle(id: MapTemplateId): MapStyleId {
+  return TEMPLATES[id].style;
+}
+
+/** The Start from label a Template takes. */
+export function templateLabelKey(id: MapTemplateId): MapsKey {
+  return TEMPLATES[id].labelKey;
+}
 
 /** The line a Template draws: its shape, its line style, and how it is inked. */
 interface TemplateLineOptions {
@@ -402,14 +430,18 @@ export function templateElements(
   const spec = TEMPLATES[id];
   const lines: MapLineElement[] = [];
 
-  const toPage = (points: readonly MapPoint[]): MapPoint[] =>
+  // Land shapes are authored on a unit square. One factor, the shorter inner
+  // side, keeps their aspect on every page and stays inside the page border.
+  const landSize = Math.min(page.widthMm, page.heightMm) * (1 - 2 * BORDER_INSET);
+  const landOrigin: MapPoint = [(page.widthMm - landSize) / 2, (page.heightMm - landSize) / 2];
+  const landToPage = (points: readonly MapPoint[]): MapPoint[] =>
+    points.map(([x, y]): MapPoint => [landOrigin[0] + x * landSize, landOrigin[1] + y * landSize]);
+
+  // The border keeps to the page's own shape, just inside its edge.
+  const borderToPage = (points: readonly MapPoint[]): MapPoint[] =>
     points.map(([x, y]): MapPoint => [x * page.widthMm, y * page.heightMm]);
 
-  const line = (
-    points: readonly MapPoint[],
-    style: LineStyleId,
-    options: TemplateLineOptions
-  ): void => {
+  const line = (points: MapPoint[], style: LineStyleId, options: TemplateLineOptions): void => {
     const segments = points.length - 1 + (options.closed ? 1 : 0);
     lines.push({
       id: newId(),
@@ -417,7 +449,7 @@ export function templateElements(
       name: format(translate(language, "element.lineName"), { number: lines.length + 1 }),
       hidden: false,
       locked: false,
-      points: toPage(points),
+      points,
       style,
       enclosesFills: LINE_STYLE_DEFAULT_ENCLOSES[style],
       closed: options.closed,
@@ -426,20 +458,23 @@ export function templateElements(
     });
   };
 
-  line(BORDER, "coast", { closed: true, smooth: false, roughened: false });
+  // A coast line belongs only where sea meets land: an inland Template's border
+  // traces land, so it takes the most neutral ordinary line instead.
+  const borderStyle: LineStyleId = spec.borderRole === "water" ? "coast" : "plain";
+  line(borderToPage(BORDER), borderStyle, { closed: true, smooth: false, roughened: false });
   for (const coast of spec.coasts) {
-    line(coast, "coast", { closed: true, smooth: true, roughened: true });
+    line(landToPage(coast), "coast", { closed: true, smooth: true, roughened: true });
   }
   if (spec.kingdom !== undefined) {
-    line(spec.kingdom, "border", { closed: true, smooth: true, roughened: true });
+    line(landToPage(spec.kingdom), "border", { closed: true, smooth: true, roughened: true });
   }
   if (spec.river !== undefined) {
-    line(spec.river, "river", { closed: false, smooth: true, roughened: true });
+    line(landToPage(spec.river), "river", { closed: false, smooth: true, roughened: true });
   }
 
   // The largest face is the one just inside the world border: the sea, or, in a
   // Template with no sea, the outer land. Every face inside it takes the
-  // Template's inner role.
+  // Template's interior role.
   const faces = findFaces(lines).sort((one, two) => two.area - one.area);
   const fills: MapFillElement[] = faces.map((face, index) => ({
     id: newId(),
@@ -448,19 +483,20 @@ export function templateElements(
     hidden: false,
     locked: false,
     anchor: deepestPoint(face),
-    content: { color: index === 0 ? spec.frameRole : spec.innerRole },
+    content: { color: index === 0 ? spec.borderRole : spec.interiorRole },
   }));
 
   const cartouchePoint: MapPoint = [
     CARTOUCHE_CENTRE[0] * page.widthMm,
     CARTOUCHE_CENTRE[1] * page.heightMm,
   ];
+  const cartoucheSize = page.widthMm * CARTOUCHE_WIDTH;
   const cartouche = newStamp({
     id: newId(),
     name: translate(language, stampNameKey("cartouche")),
     stampRef: baseStampRef("cartouche"),
     point: cartouchePoint,
-    size: page.widthMm * CARTOUCHE_WIDTH,
+    size: cartoucheSize,
   });
   const compass = newStamp({
     id: newId(),
@@ -474,7 +510,8 @@ export function templateElements(
     name: format(translate(language, "element.labelName"), { number: 1 }),
     text: title,
     point: cartouchePoint,
-    width: page.widthMm * TITLE_WIDTH,
+    width: cartoucheSize * (CARTOUCHE_PLAQUE_WIDTH / CARTOUCHE_ART_WIDTH),
+    size: cartoucheSize * (CARTOUCHE_PLAQUE_HEIGHT / CARTOUCHE_ART_WIDTH) * TITLE_SIZE_RATIO,
   });
 
   return [...fills, ...lines, cartouche, compass, titleLabel];

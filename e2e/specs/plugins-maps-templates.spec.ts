@@ -66,7 +66,9 @@ async function openMaps(page: Page): Promise<void> {
 /**
  * Creates a Map from a Map Template in the New Map dialog by keyboard: the name,
  * then Tab to the Start from group, whose Blank entry it leaves with the arrows.
- * `shot` captures the dialog with Start from showing, for the PR's screenshots.
+ * `shot` captures the open dialog before a Template is picked, for the PR's
+ * screenshots; it runs before the Start from assertions so a base-branch run
+ * still reaches it.
  */
 async function createMapFromTemplate(
   page: Page,
@@ -80,6 +82,7 @@ async function createMapFromTemplate(
   const dialog = page.getByRole("dialog", { name: "New Map" });
   await expect(dialog.getByRole("textbox", { name: "Name" })).toBeFocused();
   await page.keyboard.type(name);
+  if (shot !== null) await capture(page, shot);
 
   // Blank is the default, so the group starts on it and the arrows walk away.
   await expect(dialog.getByRole("radiogroup", { name: "Start from" })).toBeVisible();
@@ -89,7 +92,6 @@ async function createMapFromTemplate(
   const picked = dialog.getByRole("radio", { name: template, exact: true });
   await pressUntilFocused(page, "ArrowDown", picked, { max: 10 });
   await expect(picked).toBeChecked();
-  if (shot !== null) await capture(page, shot);
 
   await tabTo(page, dialog.getByRole("button", { name: "Create" }), { max: 10 });
   await page.keyboard.press("Enter");
@@ -105,7 +107,7 @@ async function openMap(page: Page, name: string): Promise<void> {
   await expect(surface(page)).toBeVisible();
 }
 
-/** Clicks Back to Maps from wherever focus is, by keyboard. */
+/** Leaves the Map Frame and Tabs back to Back to Maps, then opens it by keyboard. */
 async function backToMaps(page: Page): Promise<void> {
   await leaveFrame(page, frameElement(page));
   await tabTo(page, page.getByRole("button", { name: "Back to Maps" }), {

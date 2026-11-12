@@ -714,16 +714,33 @@ describe("Maps page", () => {
       );
       expect(label?.text).toBe("Archipelago Reach");
 
-      // A second visit starts from Blank again, so its Map has no Elements.
-      await tabTo(user, screen.getByRole("button", { name: en["list.new"] }));
-      await user.keyboard("{Enter}");
-      const second = await screen.findByRole("dialog", { name: en["create.title"] });
-      await user.keyboard("Plain Coast");
-      await tabTo(user, within(second).getByRole("button", { name: en["create.submit"] }));
-      await user.keyboard("{Enter}");
-      await waitFor(() => expect(names()).toEqual(["Plain Coast", "Archipelago Reach"]));
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
 
-      const [, blankMap] = index(storage);
+  it("starts a new Map from Blank by default", async () => {
+    const storage = new Map<string, unknown>();
+    const host = hostFor(storage);
+    try {
+      const page = await host.renderPage(MAPS_PAGE_ID);
+      expect(await screen.findByText(en["list.emptyTitle"])).toBeInTheDocument();
+      const user = userEvent.setup();
+
+      const create = screen.getByRole("button", { name: en["list.new"] });
+      await tabTo(user, create);
+      await user.keyboard("{Enter}");
+      const dialog = await screen.findByRole("dialog", { name: en["create.title"] });
+      const startFrom = within(dialog).getByRole("radiogroup", { name: en["create.template"] });
+      expect(within(startFrom).getByRole("radio", { name: en["template.blank"] })).toBeChecked();
+
+      await user.keyboard("Plain Coast");
+      await tabTo(user, within(dialog).getByRole("button", { name: en["create.submit"] }));
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(names()).toEqual(["Plain Coast"]));
+
+      const [blankMap] = index(storage);
       expect(storage.get(mapKey(blankMap.id))).toMatchObject({ styleId: "atlas", elements: [] });
       await page.unmount();
     } finally {
