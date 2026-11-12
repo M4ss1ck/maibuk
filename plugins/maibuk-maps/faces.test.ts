@@ -177,6 +177,25 @@ describe("findFaces touching", () => {
   });
 });
 
+describe("findFaces degenerate", () => {
+  it("gives no face for the ring an island's own lines tile exactly", () => {
+    // The sea, and an island inside it that one divider splits in two. The
+    // island's ring comes back beside the two faces the divider makes of it,
+    // and its interior is exactly those two: it covers no ground of its own, so
+    // a Fill poured there would fight the one in the province beside it.
+    const faces = findFaces([
+      rectangle("sea", 0, 0, 100, 100),
+      rectangle("island", 20, 20, 60, 60),
+      line("divider", [
+        [40, 20],
+        [40, 60],
+      ]),
+    ]);
+
+    expect(areas(faces)).toEqual([800, 800, 8400]);
+  });
+});
+
 describe("findFaces nested", () => {
   const faces = findFaces([rectangle("outer", 0, 0, 60, 60), rectangle("inner", 20, 20, 40, 40)]);
 
@@ -215,6 +234,45 @@ describe("findFaces gap tolerance", () => {
 
   it("takes the tolerance it is given", () => {
     expect(areas(findFaces([almostClosed(5)], 6))).toEqual([1600]);
+  });
+
+  it("leaves ends that already meet at a junction where they are, beside a nearer line", () => {
+    // Three borders meet exactly at (20, 20); a fourth line passes 1 mm away.
+    // Snapping the junction ends onto it would bend the upright border and
+    // move area between the faces above.
+    const faces = findFaces([
+      rectangle("box", 0, 0, 40, 40),
+      line("west", [
+        [0, 20],
+        [20, 20],
+      ]),
+      line("east", [
+        [20, 20],
+        [40, 20],
+      ]),
+      line("north", [
+        [20, 20],
+        [20, 40],
+      ]),
+      line("near", [
+        [21, 0],
+        [21, 40],
+      ]),
+    ]);
+    expect(areas(faces)).toEqual([20, 380, 380, 400, 420]);
+  });
+
+  it("does not close a short line onto itself when both its ends meet other lines", () => {
+    // A border cutting a corner off the box: its ends are under 2 mm apart,
+    // but each one already lies on the box.
+    const faces = findFaces([
+      rectangle("box", 0, 0, 40, 40),
+      line("corner", [
+        [1.4, 0],
+        [0, 1.4],
+      ]),
+    ]);
+    expect(faces).toHaveLength(2);
   });
 });
 

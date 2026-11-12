@@ -13,7 +13,12 @@
  * the burg icons keep white fills with #3e3e4b outlines, so they never take the
  * Stamp's colour, and the relief icons keep #5c5c70 outlines. Only the
  * one-colour Stamps (port, marker, and the in-house set) leave a part's fill
- * null, so only they recolour with the Element.
+ * null, so only they recolour with the Element. The compass rose is two-tone in
+ * the Map Style: its body takes the halo role and its shaded halves and outline
+ * the Stamp's colour, so it matches every Style and recolours with the Element.
+ *
+ * The cartouche ribbon's two tails wind the same way, so under the nonzero fill
+ * rule each end's scroll roll overlaps its tail identically.
  *
  * Each viewBox is the art's own bounding box, computed from the paths and
  * padded 4% a side, so the Stamp's size is the art's width.
@@ -457,15 +462,13 @@ export const STAMP_ART = [
     parts: [
       {
         d: "M 100 60 L 106 88 L 120 80 L 112 95 L 140 100 L 112 106 L 120 120 L 106 112 L 100 140 L 94 112 L 80 120 L 88 106 L 60 100 L 88 94 L 80 80 L 94 88 Z",
-        fill: "#d7374a",
-        stroke: "#000000",
+        fill: "halo",
+        stroke: null,
         strokeWidth: 0.5,
       },
       {
         d: "M 100 61 L 100 100 L 107 94 L 112 95 C 114.7 90 117.3 85 120 80 C 115.7 84.3 111.3 89.7 107 94 C 104.7 83.3 102.3 71.7 100 61 Z M 100 100 L 107 107 C 117.7 104.7 128.3 102.3 139 100 Z M 100 100 L 93 107 C 95.3 117.7 97.7 128.3 100 139 Z M 100 100 L 93 93 L 61 100 Z M 93 93 L 94 88 L 80 80 Z M 93 107 C 91.3 106.7 89.7 106.3 88 106 C 85.3 110.7 82.7 115.3 80 120 L 93 107 Z M 107 107 C 106.7 108.7 106.3 110.3 106 112 C 110.7 114.7 115.3 117.3 120 120 Z",
-        fill: "#00000080",
-        stroke: "#00000033",
-        strokeWidth: 0.5,
+        fill: null,
       },
     ],
   },
@@ -474,7 +477,7 @@ export const STAMP_ART = [
     viewBox: [-5.3, -5.28, 10.6, 2.16],
     parts: [
       {
-        d: "M -3.2 -5.2 L 3.2 -5.2 L 3.2 -3.2 L -3.2 -3.2 Z M -4.15 -4.2 A 0.95 0.95 0 1 0 -2.25 -4.2 A 0.95 0.95 0 1 0 -4.15 -4.2 Z M 2.25 -4.2 A 0.95 0.95 0 1 0 4.15 -4.2 A 0.95 0.95 0 1 0 2.25 -4.2 Z M -3.2 -5 L -4.9 -5 L -4.15 -4.2 L -4.9 -3.4 L -3.2 -3.4 Z M 3.2 -5 L 4.9 -5 L 4.15 -4.2 L 4.9 -3.4 L 3.2 -3.4 Z",
+        d: "M -3.2 -5.2 L 3.2 -5.2 L 3.2 -3.2 L -3.2 -3.2 Z M -4.15 -4.2 A 0.95 0.95 0 1 0 -2.25 -4.2 A 0.95 0.95 0 1 0 -4.15 -4.2 Z M 2.25 -4.2 A 0.95 0.95 0 1 0 4.15 -4.2 A 0.95 0.95 0 1 0 2.25 -4.2 Z M -3.2 -5 L -4.9 -5 L -4.15 -4.2 L -4.9 -3.4 L -3.2 -3.4 Z M 3.2 -3.4 L 4.9 -3.4 L 4.15 -4.2 L 4.9 -5 L 3.2 -5 Z",
         fill: null,
       },
     ],

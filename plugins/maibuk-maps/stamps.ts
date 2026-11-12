@@ -20,8 +20,9 @@ export interface StampPart {
   /** The SVG path `d`. */
   d: string;
   /**
-   * The part's own colour, `"none"` for a stroke-only detail with no fill, or
-   * null to paint it in the Stamp's colour.
+   * The part's own colour (a hex colour, or a Map Style colour role such as
+   * `"halo"`, painted in the Map's Style), `"none"` for a stroke-only detail
+   * with no fill, or null to paint it in the Stamp's colour.
    */
   fill: string | null;
   /**

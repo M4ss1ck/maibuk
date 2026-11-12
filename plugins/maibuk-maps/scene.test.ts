@@ -723,17 +723,31 @@ describe("Stamp rendering", () => {
     }
   });
 
+  it("paints the compass rose in the Map Style and recolours its ink with the Stamp", () => {
+    const rose = (styleId: string, color?: string): LineShape[] =>
+      pathsOf(
+        sceneShapes(
+          // No colour of its own, as a Template lays it down: the Style's ink.
+          [stamp({ stampRef: "base:compass-rose", color })],
+          152.4,
+          152.4,
+          styleId
+        )[0]
+      );
+    for (const styleId of ["atlas", "night"] as const) {
+      const [body, shade] = rose(styleId);
+      expect(body.fill, styleId).toBe(MAP_STYLES[styleId].halo);
+      expect(body.stroke, styleId).toBe(MAP_STYLES[styleId].ink);
+      expect(shade.fill, styleId).toBe(MAP_STYLES[styleId].ink);
+    }
+    const [body, shade] = rose("atlas", "#a82779");
+    expect(body.fill).toBe(MAP_STYLES.atlas.halo);
+    expect(body.stroke).toBe("#a82779");
+    expect(shade.fill).toBe("#a82779");
+  });
+
   it("keeps the multi-colour art's own paint whatever colour the Stamp carries", () => {
-    const multiColour = [
-      "capital",
-      "city",
-      "castle",
-      "temple",
-      "volcano",
-      "mountain",
-      "tree",
-      "compass-rose",
-    ];
+    const multiColour = ["capital", "city", "castle", "temple", "volcano", "mountain", "tree"];
     for (const id of multiColour) {
       const ink = pathsOf(sceneShapes([stamp({ stampRef: `base:${id}` })], 152.4, 152.4)[0]);
       const other = pathsOf(

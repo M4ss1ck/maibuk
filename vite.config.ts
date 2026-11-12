@@ -483,6 +483,9 @@ export default defineConfig(() => ({
         // Built-in Plugin build lane (issue #444): the pure build, target, and
         // bundle-size logic.
         "scripts/build-builtin-plugins.ts",
+        // Cuba Map Template build (issue #755): the pure topology, simplification,
+        // projection, and rendering steps.
+        "scripts/build-cuba-template.ts",
         // Plugin tooling (issue #455): the CLI, the generated configs, the
         // shared file listing, and the boundary, layout, and package checks,
         // each with a unit test. `steps.ts` is deliberately absent: only the

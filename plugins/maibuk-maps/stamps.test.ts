@@ -65,16 +65,7 @@ const ONE_COLOUR_IDS = [
 ];
 
 /** The Stamps whose own art keeps its colours, so it never takes the Stamp's. */
-const MULTI_COLOUR_IDS = [
-  "capital",
-  "city",
-  "castle",
-  "temple",
-  "volcano",
-  "mountain",
-  "tree",
-  "compass-rose",
-];
+const MULTI_COLOUR_IDS = ["capital", "city", "castle", "temple", "volcano", "mountain", "tree"];
 
 /** The Stamps derived from Azgaar's Fantasy Map Generator art. */
 const AZGAAR_IDS = [
@@ -307,6 +298,41 @@ describe("the base Stamp art", () => {
         }
       }
     }
+  });
+
+  it("draws the compass rose two-tone: a halo body under the Stamp's colour", () => {
+    const art = stampArt("base:compass-rose");
+    if (art === undefined) throw new Error("the compass rose art is missing");
+    expect(art.parts.map((part) => part.fill)).toEqual(["halo", null]);
+    expect(art.parts[0].stroke).toBeNull();
+    expect(stampTakesColour("base:compass-rose")).toBe(false);
+  });
+
+  it("winds the cartouche ribbon's two tails the same way, so both ends match", () => {
+    const art = stampArt("base:cartouche");
+    if (art === undefined) throw new Error("the cartouche art is missing");
+    // Under the nonzero fill rule a tail wound against its scroll roll cancels
+    // their overlap, so each tail must turn the same way as the other.
+    const tails = art.parts[0].d
+      .split("M")
+      .map((sub) => sub.trim())
+      .filter((sub) => sub.length > 0 && !sub.includes("A"))
+      .map((sub) =>
+        sub
+          .replace("Z", "")
+          .split("L")
+          .map((pair) => pair.trim().split(/\s+/).map(Number) as [number, number])
+      )
+      .filter((points) => points.length === 5);
+    const turn = (points: [number, number][]): number =>
+      Math.sign(
+        points.reduce((sum, [x, y], index) => {
+          const [nextX, nextY] = points[(index + 1) % points.length];
+          return sum + x * nextY - nextX * y;
+        }, 0)
+      );
+    expect(tails).toHaveLength(2);
+    expect(turn(tails[0])).toBe(turn(tails[1]));
   });
 
   it("keeps the burg art's Fantasy Map Generator paint on its bodies and outlines", () => {

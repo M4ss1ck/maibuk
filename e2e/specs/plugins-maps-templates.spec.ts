@@ -1,9 +1,10 @@
 // The Maps Map Templates (#754): the New Map dialog's "Start from" group starts
-// a Map from one of five ready-made Templates instead of a blank page. By
+// a Map from one of six ready-made Templates instead of a blank page. By
 // keyboard alone the author names the Map, Tabs to Start from, arrows to
-// Archipelago, and creates the Map: the editor's Elements list then holds the
-// Template's coasts, one Fill per face, the compass rose, and the title
-// cartouche, whose Map Label writes the Map's name across the page.
+// Archipelago or Cuba, and creates the Map: the editor's Elements list then
+// holds the Template's coasts, one Fill per face, the compass rose, and the
+// title cartouche, whose Map Label writes the Map's name across the page. Cuba
+// (#755) is real geography, so it also names its provinces in drawn Labels.
 //
 // A Map made from a Template is a copy: renaming an Element of the first Map
 // leaves the Template untouched, so a second Map made from it is the same
@@ -25,6 +26,34 @@ import { expect, test } from "../support/test";
  */
 const ARCHIPELAGO_FILLS = 7;
 const ARCHIPELAGO_LINES = 7;
+
+/**
+ * What the Cuba Template lays down on the page the New Map dialog opens on, as
+ * `cuba.ts` declares it: two coasts (the main island and Isla de la Juventud)
+ * cut by thirty-eight province borders, so seventeen Fills (the sea and one land
+ * face per province) and a Label per province.
+ */
+const CUBA_FILLS = 17;
+
+/** The provinces the Cuba Template names, in the order `cuba.ts` lists them. */
+const CUBA_PROVINCES = [
+  "Pinar del Río",
+  "La Habana",
+  "Matanzas",
+  "Villa Clara",
+  "Cienfuegos",
+  "Sancti Spíritus",
+  "Ciego de Ávila",
+  "Camagüey",
+  "Las Tunas",
+  "Holguín",
+  "Granma",
+  "Santiago de Cuba",
+  "Guantánamo",
+  "Artemisa",
+  "Mayabeque",
+  "Isla de la Juventud",
+];
 
 const primaryNav = (page: Page) => page.getByRole("listbox", { name: "Primary navigation" });
 const navOption = (page: Page, name: string) =>
@@ -68,7 +97,8 @@ async function openMaps(page: Page): Promise<void> {
  * then Tab to the Start from group, whose Blank entry it leaves with the arrows.
  * `shot` captures the open dialog before a Template is picked, for the PR's
  * screenshots; it runs before the Start from assertions so a base-branch run
- * still reaches it.
+ * still reaches it. The dialog's page size is left on the landscape page it
+ * opens on.
  */
 async function createMapFromTemplate(
   page: Page,
@@ -186,6 +216,25 @@ async function expectArchipelagoTemplate(page: Page, title: string): Promise<voi
   await expect(drawnLabelPaths(page).first()).toHaveText(title);
 }
 
+/**
+ * Asserts the open Map is the Cuba Template: the sea and one land Fill per
+ * province in the Elements list, the compass rose and title cartouche Stamps
+ * with the title Label in the cartouche, and a drawn Label per province, whose
+ * halo is the second copy of its text.
+ */
+async function expectCubaTemplate(page: Page, title: string): Promise<void> {
+  await expect(elementsList(page)).toBeVisible();
+  await expect(fillRows(page)).toHaveCount(CUBA_FILLS);
+  await expect(elementRow(page, "Compass rose")).toBeVisible();
+  await expect(elementRow(page, "Title cartouche")).toBeVisible();
+  await expect(drawnLabelPaths(page).first()).toHaveText(title);
+  // The title Label is Map Label 1, so the last province Label is the 17th.
+  await expect(elementRow(page, `Map Label ${CUBA_PROVINCES.length + 1}`)).toBeVisible();
+  for (const province of CUBA_PROVINCES) {
+    await expect(drawnLabelPaths(page).filter({ hasText: province })).toHaveCount(2);
+  }
+}
+
 test.use({
   library: "bookShelf",
   plugins: ["maibuk-maps"],
@@ -216,6 +265,19 @@ test.describe("Maps Map Templates @wf:plugins-maps-templates @sandbox", () => {
     await expect(page.getByRole("heading", { name: "Maps", level: 1 })).toBeVisible();
     await openMap(page, "Coastline");
     await expectArchipelagoTemplate(page, "Coastline");
+  });
+
+  test("Start from Cuba creates a Map whose Elements are the island's provinces", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await openMaps(page);
+    // The default page the dialog opens on, the landscape one.
+    await createMapFromTemplate(page, "Cuba", "Cuba");
+    await openMap(page, "Cuba");
+
+    await expectCubaTemplate(page, "Cuba");
+    await capture(page, "templates-cuba");
   });
 
   test("a second Map from the same Template is an unchanged copy after the first Map's Element is renamed", async ({

@@ -543,7 +543,7 @@ function scatteredShapes(
         { x: point[0], y: point[1], size: scatter.spacing, rotation: 0 },
         art
       );
-      for (const shape of artShapes(art, transform, ink)) {
+      for (const shape of artShapes(art, transform, ink, style)) {
         shapes.push({ ...shape, clip });
       }
     }
@@ -621,14 +621,24 @@ function artTransform(transform: MapStampTransform, art: StampArt): string {
   ].join(" ");
 }
 
-/** The shapes built-in art draws: one per part, a part with no colour of its own taking `color`. */
-function artShapes(art: StampArt, transform: string, color: string): LineShape[] {
+/**
+ * The shapes built-in art draws: one per part, a part with no colour of its own
+ * taking `color`, and a part naming a colour role taking that role in `style`.
+ */
+function artShapes(
+  art: StampArt,
+  transform: string,
+  color: string,
+  style: MapStyleId
+): LineShape[] {
+  const paint = (value: string | null): string =>
+    value === null ? color : resolveColor(style, value, "ink");
   return art.parts.map((part) => ({
     d: part.d,
-    stroke: part.stroke === undefined ? null : (part.stroke ?? color),
+    stroke: part.stroke === undefined ? null : paint(part.stroke),
     strokeWidth: part.strokeWidth ?? 0,
     dash: null,
-    fill: part.fill ?? color,
+    fill: paint(part.fill),
     opacity: 1,
     transform,
   }));
@@ -710,7 +720,7 @@ function stampShapes(
   if (element.stampRef === SCALE_BAR_STAMP_REF) return scaleBarShapes(element, pageWidthMm, ink);
   const art = stampArt(element.stampRef);
   if (art === undefined || !(element.transform.size > 0)) return [];
-  return artShapes(art, artTransform(element.transform, art), ink);
+  return artShapes(art, artTransform(element.transform, art), ink, style);
 }
 
 /** The id a Map Label's baseline path takes, from the Element's own id. */
