@@ -9,7 +9,7 @@
  */
 
 import { useEffect, useState, useSyncExternalStore, type ComponentType } from "react";
-import { ui, type PluginClient } from "@/plugin-sdk";
+import { PLUGIN_UI_LIMITS, ui, type PluginClient } from "@/plugin-sdk";
 import {
   DEFAULT_SOFT_EDGE_MM,
   MAX_ROUGHEN_STRENGTH_MM,
@@ -20,7 +20,12 @@ import {
   type MapEditor,
 } from "./editor";
 import {
+  ALT_TEXT_MAX_CHARS,
   DEFAULT_DPI,
+  MAX_DPI,
+  MAX_PRINT_WIDTH_IN,
+  MIN_DPI,
+  MIN_PRINT_WIDTH_IN,
   dataUri,
   defaultPrintWidthIn,
   exportFileName,
@@ -29,6 +34,7 @@ import {
   fitUnderCap,
   imageHtml,
   insertWhenReady,
+  maxDpiForPrint,
   placePixelSize,
   printPixelSize,
   svgAtPixelSize,
@@ -94,8 +100,12 @@ interface SaveImageOptions {
   dpi: number;
 }
 
-/** The host calls and fonts one Save needs, so the panel stays presentational. */
-interface SaveImageDeps {
+/**
+ * The host calls and fonts one picture needs, so the save and place paths stay
+ * presentational: the client writes or navigates, the editor draws the page, and
+ * `exportFonts` embeds the faces it asks for.
+ */
+interface MapPictureDeps {
   client: PluginClient;
   editor: MapEditor;
   exportFonts(): Promise<readonly ExportFont[]>;
@@ -108,7 +118,7 @@ interface SaveImageDeps {
  * picture logs exactly one line with its format, pixel size, and bytes.
  */
 async function saveMapImage(
-  { client, editor, exportFonts }: SaveImageDeps,
+  { client, editor, exportFonts }: MapPictureDeps,
   { format: pictureFormat, printWidthIn, dpi }: SaveImageOptions
 ): Promise<void> {
   const doc = editor.getSnapshot().doc;
@@ -214,6 +224,46 @@ async function listPlaceTargets(
   ];
 }
 
+/**
+ * The host's cap on one UI string, in UTF-16 code units (`maibuk-select`'s
+ * `label` and `selectedKey` in the SDK's UI table). A longer one is refused and
+ * the Plugin stopped, so a label built from Library data is cut to it.
+ */
+const PLACE_LABEL_MAX = 512;
+
+/**
+ * `text` cut to at most {@link PLACE_LABEL_MAX} code units, ending in "…" when
+ * it was cut. A cut never splits a surrogate pair, so the result is well-formed.
+ */
+function clampLabel(text: string): string {
+  if (text.length <= PLACE_LABEL_MAX) return text;
+  const end = PLACE_LABEL_MAX - 1;
+  const last = text.charCodeAt(end - 1);
+  return `${text.slice(0, last >= 0xd800 && last <= 0xdbff ? end - 1 : end)}…`;
+}
+
+/**
+ * The target picker's options (#753): a Library past the host's
+ * {@link PLUGIN_UI_LIMITS.maxOptions} loses the tail of its list, never the
+ * page, and every label is clamped, since a Chapter title is the author's text.
+ * The target already picked keeps its place, the last one kept making room.
+ */
+function placeTargetOptions(
+  targets: readonly PlaceTarget[],
+  selectedId: string | null
+): Array<{ value: string; label: string }> {
+  const kept = targets.slice(0, PLUGIN_UI_LIMITS.maxOptions);
+  const chosen =
+    selectedId === null ? undefined : targets.find((target) => target.id === selectedId);
+  if (chosen !== undefined && !kept.includes(chosen)) kept[kept.length - 1] = chosen;
+  return kept.map((target) => ({ value: target.id, label: clampLabel(target.label) }));
+}
+
+/** The alt text the dialog holds: at most {@link ALT_TEXT_MAX_CHARS} characters (#753). */
+function altText(text: string): string {
+  return text.slice(0, ALT_TEXT_MAX_CHARS);
+}
+
 /** The picture one Place inserts, and what its one log line names. */
 interface PlacedImage {
   html: string;
@@ -221,13 +271,6 @@ interface PlacedImage {
   widthPx: number;
   heightPx: number;
   bytes: number;
-}
-
-/** The host calls and fonts one Place needs, so the panel stays presentational. */
-interface PlaceDeps {
-  client: PluginClient;
-  editor: MapEditor;
-  exportFonts(): Promise<readonly ExportFont[]>;
 }
 
 /** The three steps the Place dialog drives, so each failure reaches its own surface. */
@@ -250,7 +293,10 @@ function sleep(ms: number): Promise<void> {
  * {@link ExportTooLargeError} when even the lowest JPEG is over the cap, before
  * anything navigates.
  */
-async function preparePlace({ editor, exportFonts }: PlaceDeps, alt: string): Promise<PlacedImage> {
+async function preparePlace(
+  { editor, exportFonts }: Pick<MapPictureDeps, "editor" | "exportFonts">,
+  alt: string
+): Promise<PlacedImage> {
   const doc = editor.getSnapshot().doc;
   const size = placePixelSize(doc.page);
   const svg = svgAtPixelSize(exportSvg(doc, await exportFonts()), size);
@@ -270,7 +316,7 @@ async function preparePlace({ editor, exportFonts }: PlaceDeps, alt: string): Pr
  * window; nothing is inserted then.
  */
 async function finishPlace(
-  { client }: PlaceDeps,
+  client: PluginClient,
   target: PlaceTarget,
   image: PlacedImage
 ): Promise<void> {
@@ -544,6 +590,18 @@ function MapEditorView({
   // author sees both before saving.
   const exportSize = printPixelSize(snapshot.doc.page, printWidthIn, dpi);
   const printHeightIn = Math.round((exportSize.heightPx / Math.max(dpi, 1)) * 10) / 10;
+  const dpiLimit = dpiLimitAt(printWidthIn);
+
+  /** The most DPI a print width may be drawn at (#753): the canvas limit under the panel's own cap. */
+  function dpiLimitAt(widthIn: number): number {
+    return Math.min(MAX_DPI, maxDpiForPrint(snapshot.doc.page, widthIn));
+  }
+
+  /** Picks a print width, lowering the DPI with it when the page outgrows it. */
+  function setPrintWidth(widthIn: number): void {
+    setPrintWidthIn(widthIn);
+    setDpi((current) => Math.min(current, dpiLimitAt(widthIn)));
+  }
 
   async function saveExport(): Promise<void> {
     setExportFailed(false);
@@ -559,7 +617,7 @@ function MapEditorView({
     setPlaceFailed(false);
     setPlaceTargets(null);
     setPlaceTargetId(null);
-    setPlaceAlt(snapshot.doc.name);
+    setPlaceAlt(altText(snapshot.doc.name));
     setPlaceOpen(true);
     try {
       const targets = await place.listTargets();
@@ -1160,16 +1218,18 @@ function MapEditorView({
               <ui.NumberField
                 label={t("export.printWidth")}
                 value={printWidthIn}
-                minValue={1}
-                maxValue={40}
+                minValue={MIN_PRINT_WIDTH_IN}
+                maxValue={MAX_PRINT_WIDTH_IN}
                 step={0.1}
-                onChange={(event) => setPrintWidthIn(event.detail)}
+                onChange={(event) => setPrintWidth(event.detail)}
               />
+              {/* The DPI the canvas can still encode at this print width: 40 in
+                  at 1200 DPI would be 48000x72000 px, which nothing draws. */}
               <ui.NumberField
                 label={t("export.dpi")}
                 value={dpi}
-                minValue={72}
-                maxValue={1200}
+                minValue={MIN_DPI}
+                maxValue={dpiLimit}
                 step={1}
                 onChange={(event) => setDpi(event.detail)}
               />
@@ -1203,18 +1263,17 @@ function MapEditorView({
             ) : (
               <ui.Select
                 label={t("place.target")}
-                options={placeTargets.map((target) => ({
-                  value: target.id,
-                  label: target.label,
-                }))}
+                options={placeTargetOptions(placeTargets, placeTargetId)}
                 selectedKey={placeTargetId ?? undefined}
                 onChange={(event) => setPlaceTargetId(event.detail)}
               />
             )}
+            {/* The alt text is bounded (#753): its escaped form then always fits
+                the insert message's envelope margin beside the picture. */}
             <ui.TextField
               label={t("place.alt")}
               value={placeAlt}
-              onInput={(event) => setPlaceAlt(event.detail)}
+              onInput={(event) => setPlaceAlt(altText(event.detail))}
             />
             <ui.View direction="row" gap="sm" justify="end">
               <ui.Button variant="secondary" onPress={() => setPlaceOpen(false)}>
@@ -1297,9 +1356,8 @@ export function createMapPage(deps: MapPageDeps): ComponentType {
         }
         place={{
           listTargets: () => listPlaceTargets(client, editor.getSnapshot().doc),
-          prepare: (alt) => preparePlace({ client, editor, exportFonts: runtime.exportFonts }, alt),
-          finish: (target, image) =>
-            finishPlace({ client, editor, exportFonts: runtime.exportFonts }, target, image),
+          prepare: (alt) => preparePlace({ editor, exportFonts: runtime.exportFonts }, alt),
+          finish: (target, image) => finishPlace(client, target, image),
           notifyFailed: async () => {
             await client.notifications.show({ variant: "error", message: t("place.failed") });
           },

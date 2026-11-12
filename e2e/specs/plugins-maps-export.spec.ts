@@ -20,9 +20,7 @@
 // Tagged @sandbox because Maps runs in the Plugin sandbox: the lane runs it on
 // Chromium, WebKit, and Firefox.
 
-import { mkdirSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
 import type { Download, Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { pressUntilFocused, tabTo } from "../support/keyboard";
@@ -73,32 +71,6 @@ const placeButton = (page: Page) =>
   page.getByRole("button", { name: /^Place in a Chapter or Note/ });
 const dpiField = (page: Page) => page.getByRole("textbox", { name: "DPI", exact: true });
 const saveButton = (page: Page) => page.getByRole("button", { name: /^Save/ });
-
-/**
- * The folder the supervisor's manual check reads (#753), beside the
- * light/dark pairs `capture` writes: both hang off `E2E_CAPTURE_DIR`, so an
- * ordinary run writes nothing. Returns null when the run keeps no pictures.
- */
-function critiqueDir(): string | null {
-  const dir = process.env.E2E_CAPTURE_DIR;
-  return dir === undefined ? null : resolve(dir, "critique");
-}
-
-/** Keeps one downloaded picture for the manual check, when the run keeps pictures. */
-function keepPicture(name: string, bytes: Uint8Array): void {
-  const dir = critiqueDir();
-  if (dir === null) return;
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(resolve(dir, name), bytes);
-}
-
-/** Keeps a PNG of one element for the manual check, when the run keeps pictures. */
-async function keepScreenshot(target: Locator, name: string): Promise<void> {
-  const dir = critiqueDir();
-  if (dir === null) return;
-  mkdirSync(dir, { recursive: true });
-  await target.screenshot({ path: resolve(dir, name) });
-}
 
 /** Opens Maps from the sidebar, waiting for the Plugin's launch scan. */
 async function openMaps(page: Page): Promise<void> {
@@ -277,7 +249,6 @@ test.describe("Maps export: Place a Map in a Chapter @wf:plugins-maps-place @sc:
     await expect(image).toHaveJSProperty("naturalWidth", PLACED.widthPx);
     await expect(image).toHaveJSProperty("naturalHeight", PLACED.heightPx);
     await capture(page, "maps-export-placed", { around: [figure] });
-    await keepScreenshot(figure, "placed-in-chapter.png");
   });
 
   test("Escape closes the Place dialog and returns focus to its button", async ({ page }) => {
@@ -321,7 +292,6 @@ test.describe("Maps export: save a Map as PNG or SVG @wf:plugins-maps-export @sc
     const download = await enterForDownload(page);
     expect(download.suggestedFilename()).toBe(`${MAP}.png`);
     const bytes = await downloadBytes(download);
-    keepPicture("maps-export-150dpi.png", bytes);
 
     // A real PNG, whose own header declares the printed size: 6 x 9 in at 150 DPI.
     expect(pngSize(bytes)).toEqual(PRINTED_AT_150_DPI);
@@ -346,7 +316,6 @@ test.describe("Maps export: save a Map as PNG or SVG @wf:plugins-maps-export @sc
     const download = await saveByKeyboard(page, saveButton(page));
     expect(download.suggestedFilename()).toBe(`${MAP}.svg`);
     const bytes = await downloadBytes(download);
-    keepPicture("maps-export.svg", bytes);
     const svg = new TextDecoder().decode(bytes);
 
     // The page keeps its print size, so a renderer draws it at 6 x 9 in.

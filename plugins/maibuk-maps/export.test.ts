@@ -11,6 +11,9 @@ import {
   DEFAULT_DPI,
   ExportTooLargeError,
   type ExportMap,
+  MAX_CANVAS_AREA_PX,
+  MAX_CANVAS_SIDE_PX,
+  MAX_DPI,
   dataUri,
   defaultPrintWidthIn,
   embedFonts,
@@ -20,6 +23,7 @@ import {
   fitUnderCap,
   imageHtml,
   insertWhenReady,
+  maxDpiForPrint,
   placePixelSize,
   PLACE_RETRY_DELAY_MS,
   PLACE_RETRY_TIMEOUT_MS,
@@ -304,17 +308,60 @@ describe("exportLogLine()", () => {
   });
 });
 
+describe("maxDpiForPrint()", () => {
+  it("keeps a 6 in tall page's raster inside the canvas side cap", () => {
+    // The page is 6x9 in, so the height is the side that runs out first: 9 in
+    // at 1820 DPI is 16380 px, and 1821 would be 16389.
+    expect(maxDpiForPrint(PAGES.portrait, 6)).toBe(1820);
+    expect(printPixelSize(PAGES.portrait, 6, 1820)).toEqual({ widthPx: 10_920, heightPx: 16_380 });
+    const over = printPixelSize(PAGES.portrait, 6, 1821);
+    expect(over.heightPx).toBeGreaterThan(MAX_CANVAS_SIDE_PX);
+  });
+
+  it("clamps a 40 in wide page far below the DPI the field offered", () => {
+    // 40 in at 1200 DPI would be 48000x72000 px, which no canvas encodes.
+    expect(printPixelSize(PAGES.portrait, 40, MAX_DPI).widthPx).toBeGreaterThan(MAX_CANVAS_SIDE_PX);
+    const dpi = maxDpiForPrint(PAGES.portrait, 40);
+    expect(dpi).toBe(273);
+    const size = printPixelSize(PAGES.portrait, 40, dpi);
+    expect(size).toEqual({ widthPx: 10_920, heightPx: 16_380 });
+    expect(size.widthPx * size.heightPx).toBeLessThanOrEqual(MAX_CANVAS_AREA_PX);
+  });
+
+  it("stops a wide page at the side cap, not at the area cap", () => {
+    // A 12x9 in spread at 12 in is 12 in across: 1365 DPI is 16380 px, and the
+    // area it takes (16380x12285) stays under the area cap.
+    expect(maxDpiForPrint(PAGES.spread, 12)).toBe(1365);
+    const size = printPixelSize(PAGES.spread, 12, 1365);
+    expect(Math.max(size.widthPx, size.heightPx)).toBeLessThanOrEqual(MAX_CANVAS_SIDE_PX);
+    expect(printPixelSize(PAGES.spread, 12, 1366).widthPx).toBeGreaterThan(MAX_CANVAS_SIDE_PX);
+  });
+
+  it("holds the square page at the cap both limits share", () => {
+    // The area cap's square root is the side cap, so an 8x8 in page at 8 in
+    // reaches both limits at once: 16384x16384 px.
+    expect(maxDpiForPrint(PAGES.square, 8)).toBe(2048);
+    expect(printPixelSize(PAGES.square, 8, 2048)).toEqual({
+      widthPx: MAX_CANVAS_SIDE_PX,
+      heightPx: MAX_CANVAS_SIDE_PX,
+    });
+    expect(MAX_CANVAS_SIDE_PX * MAX_CANVAS_SIDE_PX).toBe(MAX_CANVAS_AREA_PX);
+  });
+});
+
 describe("exportFileName()", () => {
   it("appends the extension to the Map's name", () => {
     expect(exportFileName("The Reach", "png")).toBe("The Reach.png");
   });
 
-  it("drops path separators and characters a filesystem refuses", () => {
-    expect(exportFileName('../../North / "South" <1>', "svg")).toBe("North South 1.svg");
+  it("trims the name and leaves the host's cleaning alone", () => {
+    // `cleanSaveName` drops the path separators and the characters a
+    // filesystem refuses, so the name travels as the author typed it.
+    expect(exportFileName('  North / "South" <1>  ', "svg")).toBe('North / "South" <1>.svg');
   });
 
-  it("falls back to a plain name when nothing is left", () => {
-    expect(exportFileName("  ...  ", "png")).toBe("map.png");
+  it("falls back to a plain name when the name is blank", () => {
+    expect(exportFileName("   ", "png")).toBe("map.png");
   });
 });
 

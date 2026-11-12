@@ -216,9 +216,10 @@ the reason, when:
 
 The guard scans `e2e/specs/**` only. The Reader bench lanes (`e2e/reader-bench/`,
 like `e2e/frames/`) are measurements and may use `evaluate`, `fill`, and `press`;
-the file-picker stub (`e2e/support/file-picker.ts`) uses `addInitScript` because a
-native file dialog has no keyboard path. CODING_STANDARDS.md "E2E" records both
-exemptions. Their specs still drive Reader by keyboard.
+the file-picker stub (`e2e/support/file-picker.ts`) and the save-picker stub
+(`e2e/support/save-picker.ts`) use `addInitScript`, because a native file dialog
+and the browser's own Save dialog have no keyboard path. CODING_STANDARDS.md
+"E2E" records all three exemptions. Their specs still drive Reader by keyboard.
 
 The guard's own tests (`e2e/guards/coverage.test.ts`, `node:test`) run next;
 each feeds it one bad fixture and expects the named rejection.

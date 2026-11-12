@@ -34,13 +34,39 @@ const MM_PER_INCH = 25.4;
 /** The DPI a print export uses unless the author picks another. */
 export const DEFAULT_DPI = 300;
 
+/** The DPI range the panel offers, whatever a canvas could take. */
+export const MIN_DPI = 72;
+export const MAX_DPI = 1200;
+
+/** The print width range the panel offers, in inches. */
+export const MIN_PRINT_WIDTH_IN = 1;
+export const MAX_PRINT_WIDTH_IN = 40;
+
+/**
+ * The largest canvas side Chromium and Firefox encode, in pixels: a raster
+ * wider or taller than this is not drawn at all.
+ */
+export const MAX_CANVAS_SIDE_PX = 16_384;
+
+/** The largest canvas area Chromium and Firefox encode, in pixels. */
+export const MAX_CANVAS_AREA_PX = 268_435_456;
+
+/**
+ * The most characters the Place dialog's alt text holds (#753): an alt text of
+ * that length, escaped for the tag, stays far inside
+ * {@link INSERT_ENVELOPE_MARGIN_BYTES}, so the picture is what the cap measures.
+ */
+export const ALT_TEXT_MAX_CHARS = 500;
+
 /** The long side a placed Map is drawn at, in pixels. */
 export const PLACE_LONG_SIDE_PX = 2000;
 
 /**
  * The room the insert message leaves free for the HTML wrapper, the alt text,
  * and the message envelope, below Maibuk's 4 MB message cap: only the data URI
- * that rides in it has to fit under the rest.
+ * that rides in it has to fit under the rest. The alt text is bounded at
+ * {@link ALT_TEXT_MAX_CHARS} characters, so its escaped form stays inside this
+ * margin whatever the author types.
  */
 export const INSERT_ENVELOPE_MARGIN_BYTES = 64 * 1024;
 
@@ -133,6 +159,27 @@ export function printPixelSize(page: MapPage, printWidthIn: number, dpi: number)
  */
 export function defaultPrintWidthIn(page: MapPage): number {
   return Math.round((page.widthMm / MM_PER_INCH) * 1000) / 1000;
+}
+
+/**
+ * The largest whole DPI a page printed `printWidthIn` inches across can be
+ * drawn at, so the raster stays inside the canvas limits (#753): 40 in at 1200
+ * DPI would be 48000x72000 px, which no canvas encodes. Neither side passes
+ * {@link MAX_CANVAS_SIDE_PX} and the area stays under
+ * {@link MAX_CANVAS_AREA_PX}, whose square the side cap is, so a rectangular
+ * page is bounded by its long side. A whole number, so the field, the size text
+ * and the log line all name the same DPI. The width is read at the panel's own
+ * minimum, so a stray zero still answers a real DPI.
+ */
+export function maxDpiForPrint(page: MapPage, printWidthIn: number): number {
+  const widthIn = Math.max(printWidthIn, MIN_PRINT_WIDTH_IN);
+  const heightIn = (widthIn * page.heightMm) / page.widthMm;
+  const limit = Math.min(
+    MAX_CANVAS_SIDE_PX / widthIn,
+    MAX_CANVAS_SIDE_PX / heightIn,
+    Math.sqrt(MAX_CANVAS_AREA_PX / (widthIn * heightIn))
+  );
+  return Math.max(1, Math.floor(limit));
 }
 
 /** The DPI a browser draws an SVG at, which its log line reads as pixels. */
@@ -330,16 +377,11 @@ export function exportLogLine(entry: ExportLogEntry): string {
 }
 
 /**
- * A file name that saves the Map under its own name: path separators and the
- * characters Windows refuses go, runs of whitespace collapse, and a name with
- * nothing left becomes `map`.
+ * A file name that saves the Map under its own name: the Map's name trimmed,
+ * then the extension. The host cleans the rest (`cleanSaveName` drops path
+ * separators, characters Windows refuses, control characters, and leading
+ * dots), so this only covers the name that is nothing but spaces.
  */
 export function exportFileName(mapName: string, ext: string): string {
-  const base = mapName
-    // Control characters in a file name are exactly what has to go.
-    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/^[. ]+|[. ]+$/g, "");
-  return `${base === "" ? "map" : base}.${ext}`;
+  return `${mapName.trim() || "map"}.${ext}`;
 }

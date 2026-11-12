@@ -365,10 +365,11 @@ The frame-rate lane (`pnpm bench:frames`, `e2e/frames/`) is a measurement, not
 a spec: its drivers use the wheel and mouse drags where the measured gesture
 is a pointer one, and the keyboard contract below does not apply to it.
 
-Two more exemptions sit beside it, each limited to the files named:
+Three more exemptions sit beside it, each limited to the files named:
 
 - **Reader bench lanes** (`e2e/reader-bench/`, like `e2e/frames/`) are measurements, so they may use `evaluate`, `fill`, and `press` to measure. Their specs still drive Reader by keyboard.
 - **File picker stub** (`e2e/support/file-picker.ts`): no keyboard path can choose a file in a native dialog, so the stub installs a File System Access stand-in with `addInitScript`. Specs call it through `installFilePicker` and never call `addInitScript` themselves.
+- **Save picker stub** (`e2e/support/save-picker.ts`): no keyboard path can answer the browser's Save dialog either, so the stub removes `showSaveFilePicker` with `addInitScript` and the app takes its own documented download fallback. Specs call it through `forceDownloadSaves` and never call `addInitScript` themselves.
 
 Specs live in `e2e/specs/`. The suite drives the production web build in
 Chromium and WebKit, runs locally, and is invisible to `pnpm test`,

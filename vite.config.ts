@@ -496,6 +496,9 @@ export default defineConfig(() => ({
         // Echoes Built-in Plugin (issue #449): the analyzer and the find logic.
         "plugins/maibuk-echoes/find-echoes.ts",
         "plugins/maibuk-echoes/language.ts",
+        // Maps Built-in Plugin (issue #753): the export core, which is pure and
+        // DOM-free, so its tests need no canvas.
+        "plugins/maibuk-maps/export.ts",
         // Frame-rate lane (issue #372): the pure Frame Report, budget, and parsers.
         "src/test/support/frames/frame-report.ts",
         "src/test/support/frames/attribution.ts",
