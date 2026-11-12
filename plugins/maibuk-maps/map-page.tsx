@@ -482,8 +482,9 @@ div[data-plugin-ui] > div:nth-child(8) { right: 0.75rem; bottom: 0.75rem; }
 /* The narrow page (#779, #775 Decision 6): the drawing still fills the page,
    but the chrome turns into bars. The two top pills become one top bar, the
    belt runs along the bottom and scrolls sideways with 44px targets, and
-   Properties and Layers become bottom regions at most half the page tall. The
-   overflow popover and the full-height toggle are chunk 2's, not this block's. */
+   Properties and Layers become bottom regions at most half the page tall, the
+   pill's three controls fold into one overflow popover, and a toggle gives a
+   bottom region the whole page. */
 @media (max-width: 639px) {
   /* The left pill spans the bar; the right pill gives up its own box, so the
      bar shows through and the two read as one. */
@@ -493,11 +494,29 @@ div[data-plugin-ui] > div:nth-child(8) { right: 0.75rem; bottom: 0.75rem; }
   div[data-plugin-ui] > div:nth-child(2) { top: auto; bottom: 0; left: 0; right: 0; flex-direction: row; overflow-x: auto; overflow-y: hidden; transform: none; padding: 0.5rem; border-width: 1px 0 0; border-radius: 0; }
   /* Every tool is a 44px target that never shrinks inside the scrolling row. */
   div[data-plugin-ui] > div:nth-child(2) > button { flex: 0 0 auto; min-width: 2.75rem; min-height: 2.75rem; }
-  /* Layers and Properties are bottom regions, each at most half the page tall. */
+  /* The three pill controls give way to one overflow popover, so the bar keeps
+     one row of icons the width of the page (#779, #775 Decision 6). */
+  div[data-plugin-ui] > div:nth-child(7) > div:nth-child(1) { display: none; }
+  /* Insert, Layers, and Properties are all bottom regions, each at most half
+     the page tall (#779). */
+  div[data-plugin-ui] > div:nth-child(3) { top: auto; bottom: 4.25rem; left: 0.5rem; right: 0.5rem; width: auto; transform: none; max-height: calc(50% - 4.25rem); }
   div[data-plugin-ui] > div:nth-child(4) { top: auto; bottom: 4.25rem; left: 0.5rem; right: 0.5rem; width: auto; transform: none; max-height: calc(50% - 4.25rem); }
   div[data-plugin-ui] > div:nth-child(6) { top: auto; bottom: 4.25rem; left: 0.5rem; right: 0.5rem; width: auto; max-height: calc(50% - 4.25rem); }
+  /* With Properties open too, the bottom half is split: Layers above, from the
+     middle of the page down, and Properties below it, so neither covers the
+     other (#779). */
+  div[data-plugin-ui]:has(> div:nth-child(6):not(:empty)) > div:nth-child(4) { top: 50%; bottom: auto; max-height: calc(25% - 0.25rem); }
+  div[data-plugin-ui]:has(> div:nth-child(4):not(:empty)) > div:nth-child(6) { top: 75%; bottom: 4.25rem; max-height: calc(25% - 4.25rem); }
+  /* The full-height toggle: the region takes all the page but the bar and the
+     belt. The Frame's own box never moves, so the drawing is not resized. */
+  div[data-plugin-ui]:has(> div:nth-child(6) button[aria-pressed="true"]) > div:nth-child(6) { top: 3.25rem; bottom: 4.25rem; max-height: none; }
   /* The zoom cluster moves under the bar, clear of the belt and the regions. */
   div[data-plugin-ui] > div:nth-child(8) { top: 3.25rem; right: 0.5rem; bottom: auto; }
+}
+/* At the desktop width the pill's own three controls show again, and the
+   overflow stays out of the page (#779). */
+@media (min-width: 640px) {
+  div[data-plugin-ui] > div:nth-child(7) > div:nth-child(2) { display: none; }
 }
 `;
 
@@ -721,6 +740,8 @@ function MapEditorView({
   // whether the Properties card is shrunk to its restore icon.
   const [layersOpen, setLayersOpen] = useState(false);
   const [propertiesMinimised, setPropertiesMinimised] = useState(false);
+  // Whether the Properties region takes the whole page on a narrow screen (#779).
+  const [propertiesFullHeight, setPropertiesFullHeight] = useState(false);
   // The Map's own name while its rename dialog holds it, or null when it is shut.
   const [mapRename, setMapRename] = useState<string | null>(null);
   const selected =
@@ -992,6 +1013,72 @@ function MapEditorView({
   const showProperties =
     selected !== null || snapshot.tool === "pen" || shapeTool !== null || pouring;
   const zoomPercent = Math.round(snapshot.zoom * 100);
+  // The narrow bar's overflow (#779, #775 Decision 6): the same three controls
+  // the desktop pill holds, drawn once more inside the overflow popover. The
+  // stylesheet swaps which set is reachable at each width, and both read this
+  // page's own state, so a pick made in either place lands the same way.
+  const mapStylePicker = (
+    <ui.RadioGroup
+      label={t("properties.mapStyle")}
+      orientation="vertical"
+      options={MAP_STYLE_IDS.map((styleId) => ({
+        value: styleId,
+        label: t(MAP_STYLE_KEYS[styleId]),
+      }))}
+      selectedKey={snapshot.styleId}
+      onChange={(event) => editor.setMapStyle(event.detail as MapStyleId)}
+    />
+  );
+  const placeButton = (
+    <ui.IconButton label={t("place.label")} icon="file-image" onPress={() => void openPlace()} />
+  );
+  const exportPanel = (
+    <>
+      <ui.RadioGroup
+        label={t("export.format")}
+        orientation="horizontal"
+        options={[
+          { value: "png", label: t("export.format.png") },
+          { value: "svg", label: t("export.format.svg") },
+        ]}
+        selectedKey={exportFormat}
+        onChange={(event) => setExportFormat(event.detail as "png" | "svg")}
+      />
+      {exportFormat === "png" ? (
+        <>
+          <ui.NumberField
+            label={t("export.printWidth")}
+            value={printWidthIn}
+            minValue={MIN_PRINT_WIDTH_IN}
+            maxValue={MAX_PRINT_WIDTH_IN}
+            step={0.1}
+            onChange={(event) => setPrintWidth(event.detail)}
+          />
+          {/* The DPI the canvas can still encode at this print width: 40 in
+              at 1200 DPI would be 48000x72000 px, which nothing draws. */}
+          <ui.NumberField
+            label={t("export.dpi")}
+            value={dpi}
+            minValue={MIN_DPI}
+            maxValue={dpiLimit}
+            step={1}
+            onChange={(event) => setDpi(event.detail)}
+          />
+          <ui.Text tone="muted">
+            {format(t("export.size"), {
+              width: exportSize.widthPx,
+              height: exportSize.heightPx,
+              heightIn: printHeightIn,
+            })}
+          </ui.Text>
+        </>
+      ) : null}
+      <ui.Button variant="secondary" onPress={() => void saveExport()}>
+        {t("export.save")}
+      </ui.Button>
+      {exportFailed ? <ui.Status tone="warning">{t("export.failed")}</ui.Status> : null}
+    </>
+  );
 
   return (
     <ui.Surface css={MAP_EDITOR_CSS}>
@@ -1167,6 +1254,12 @@ function MapEditorView({
                       />
                     )}
                   </ui.View>
+                  <ui.IconButton
+                    label={t("chrome.expandProperties")}
+                    icon="chevrons-down"
+                    isSelected={propertiesFullHeight}
+                    onPress={() => setPropertiesFullHeight((full) => !full)}
+                  />
                   <ui.IconButton
                     label={t("chrome.minimiseProperties")}
                     icon="chevrons-up"
@@ -1716,80 +1809,41 @@ function MapEditorView({
         </ui.View>
 
         {/* 7: the top-right pill. Map Style and Export are icon-only Popovers;
-            Place opens its dialog (#778). */}
+            Place opens its dialog (#778). On a narrow page the three fold into
+            one overflow popover (#779), which the stylesheet shows in their
+            place, so the bar keeps a single row of icons. */}
         <ui.View direction="row" gap="sm" align="center">
-          <ui.Popover label={t("properties.mapStyle")} icon="palette" iconOnly>
-            {/* The Map Style is Map-level: it recolours everything that follows a
-                role, and leaves every colour an Element overrides alone (#752). */}
-            <ui.RadioGroup
-              label={t("properties.mapStyle")}
-              orientation="vertical"
-              options={MAP_STYLE_IDS.map((styleId) => ({
-                value: styleId,
-                label: t(MAP_STYLE_KEYS[styleId]),
-              }))}
-              selectedKey={snapshot.styleId}
-              onChange={(event) => editor.setMapStyle(event.detail as MapStyleId)}
-            />
-          </ui.Popover>
-          {/* Place copies the Map into a Chapter or Note as an image (#753);
-              the dialog holds the target picker and the alt text. */}
-          <ui.IconButton
-            label={t("place.label")}
-            icon="file-image"
-            onPress={() => void openPlace()}
-          />
-          {placeFailed ? <ui.Status tone="warning">{t("place.failed")}</ui.Status> : null}
-          {/* Export (#753): PNG at a chosen print size and DPI, drawn by the
-              Frame which alone has a canvas, or the SVG itself. The panel is
-              the keyboard path that saves either picture. */}
-          <ui.Popover label={t("export.label")} icon="download" iconOnly>
-            <ui.View direction="column" gap="sm">
-              <ui.RadioGroup
-                label={t("export.format")}
-                orientation="horizontal"
-                options={[
-                  { value: "png", label: t("export.format.png") },
-                  { value: "svg", label: t("export.format.svg") },
-                ]}
-                selectedKey={exportFormat}
-                onChange={(event) => setExportFormat(event.detail as "png" | "svg")}
-              />
-              {exportFormat === "png" ? (
-                <>
-                  <ui.NumberField
-                    label={t("export.printWidth")}
-                    value={printWidthIn}
-                    minValue={MIN_PRINT_WIDTH_IN}
-                    maxValue={MAX_PRINT_WIDTH_IN}
-                    step={0.1}
-                    onChange={(event) => setPrintWidth(event.detail)}
-                  />
-                  {/* The DPI the canvas can still encode at this print width: 40 in
-                      at 1200 DPI would be 48000x72000 px, which nothing draws. */}
-                  <ui.NumberField
-                    label={t("export.dpi")}
-                    value={dpi}
-                    minValue={MIN_DPI}
-                    maxValue={dpiLimit}
-                    step={1}
-                    onChange={(event) => setDpi(event.detail)}
-                  />
-                  <ui.Text tone="muted">
-                    {format(t("export.size"), {
-                      width: exportSize.widthPx,
-                      height: exportSize.heightPx,
-                      heightIn: printHeightIn,
-                    })}
-                  </ui.Text>
-                </>
-              ) : null}
-              <ui.Button variant="secondary" onPress={() => void saveExport()}>
-                {t("export.save")}
-              </ui.Button>
-              {exportFailed ? <ui.Status tone="warning">{t("export.failed")}</ui.Status> : null}
-            </ui.View>
-          </ui.Popover>
+          <ui.View direction="row" gap="sm" align="center">
+            <ui.Popover label={t("properties.mapStyle")} icon="palette" iconOnly>
+              {/* The Map Style is Map-level: it recolours everything that follows a
+                  role, and leaves every colour an Element overrides alone (#752). */}
+              {mapStylePicker}
+            </ui.Popover>
+            {/* Place copies the Map into a Chapter or Note as an image (#753);
+                the dialog holds the target picker and the alt text. */}
+            {placeButton}
+            {placeFailed ? <ui.Status tone="warning">{t("place.failed")}</ui.Status> : null}
+            {/* Export (#753): PNG at a chosen print size and DPI, drawn by the
+                Frame which alone has a canvas, or the SVG itself. The panel is
+                the keyboard path that saves either picture. */}
+            <ui.Popover label={t("export.label")} icon="download" iconOnly>
+              <ui.View direction="column" gap="sm">
+                {exportPanel}
+              </ui.View>
+            </ui.Popover>
+          </ui.View>
+          {/* The narrow page's one overflow control (#779): the same three
+              paths in a popover, styled into the bar at the narrow width only. */}
+          <ui.View direction="row" gap="sm" align="center">
+            <ui.Popover label={t("chrome.more")} icon="ellipsis" iconOnly>
+              <ui.View direction="column" gap="sm">
+                {mapStylePicker}
+                {placeButton}
+                <ui.Text weight="semibold">{t("export.label")}</ui.Text>
+                {exportPanel}
+              </ui.View>
+            </ui.Popover>
+          </ui.View>
         </ui.View>
 
         {/* 8: the zoom cluster. Reset zoom is fit, so the design's separate Fit

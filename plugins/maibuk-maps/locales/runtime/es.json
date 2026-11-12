@@ -223,5 +223,7 @@
   "chrome.restoreProperties": "Restaurar propiedades",
   "chrome.zoomIn": "Acercar",
   "chrome.zoomOut": "Alejar",
-  "chrome.zoom": "{{percent}} %"
+  "chrome.zoom": "{{percent}} %",
+  "chrome.more": "Más acciones",
+  "chrome.expandProperties": "Propiedades a altura completa"
 }

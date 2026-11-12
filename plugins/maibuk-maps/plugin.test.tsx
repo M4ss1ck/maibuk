@@ -4112,6 +4112,82 @@ describe("Map editor uploads (#756)", () => {
   });
 });
 
+describe("the narrow editor's bar and regions (#779)", () => {
+  // The saved picture crosses the in-process MessageChannel as Node's Blob does
+  // in a browser, as the Export suite above arranges.
+  beforeEach(() => {
+    vi.stubGlobal("Blob", NodeBlob);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("reaches Map Style, Place, and Export behind one overflow popover, and exports by keyboard", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    frameStandIn(runtime.editor);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      // The narrow bar folds the pill's three controls into one popover; the
+      // stylesheet is what shows it in their place, so the same control the
+      // narrow page draws is the one this test drives.
+      const more = await screen.findByRole("button", { name: en["chrome.more"] });
+      await tabTo(user, more, 120);
+      await user.keyboard("{Enter}");
+      const panel = await screen.findByRole("dialog");
+
+      // The three paths are all in it: the Style picker, Place, and Export.
+      expect(
+        within(panel).getByRole("radiogroup", { name: en["properties.mapStyle"] })
+      ).toBeInTheDocument();
+      expect(within(panel).getByRole("button", { name: en["place.label"] })).toBeInTheDocument();
+
+      // Export saves the Map from the overflow, exactly as the pill's own does.
+      const save = within(panel).getByRole("button", { name: en["export.save"] });
+      await tabTo(user, save, 60);
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(host.files.saves).toHaveLength(1));
+      expect(host.files.saves[0]).toMatchObject({ name: "Coast.png", mimeType: "image/png" });
+      info.mockRestore();
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("expands the Properties region to full height and back by keyboard", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      // A Pen selection keeps the Properties card on the page with no Element.
+      await pickTool(user, en["tools.pen"]);
+      const full = await screen.findByRole("button", { name: en["chrome.expandProperties"] });
+      expect(full).toHaveAttribute("aria-pressed", "false");
+      const pageBefore = runtime.editor?.getSnapshot().doc.page;
+
+      await tabTo(user, full, 120);
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(full).toHaveAttribute("aria-pressed", "true"));
+      // The region grew, and the drawing's own page did not resize with it.
+      expect(await screen.findByLabelText(en["properties.lineStyle"])).toBeInTheDocument();
+      expect(runtime.editor?.getSnapshot().doc.page).toEqual(pageBefore);
+
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(full).toHaveAttribute("aria-pressed", "false"));
+      expect(await screen.findByLabelText(en["properties.lineStyle"])).toBeInTheDocument();
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+});
+
 describe("the floating editor's chrome (#778)", () => {
   it("drives the belt, Insert, Layers, Properties, the zoom cluster, and Export by keyboard", async () => {
     const storage = mapStorage([]);

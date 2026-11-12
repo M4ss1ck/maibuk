@@ -223,5 +223,7 @@
   "chrome.restoreProperties": "Restore Properties",
   "chrome.zoomIn": "Zoom in",
   "chrome.zoomOut": "Zoom out",
-  "chrome.zoom": "{{percent}}%"
+  "chrome.zoom": "{{percent}}%",
+  "chrome.more": "More actions",
+  "chrome.expandProperties": "Full-height Properties"
 }

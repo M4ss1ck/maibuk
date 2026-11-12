@@ -280,6 +280,36 @@ const EXPECTATIONS: ReadonlyArray<Expectation> = [
       cardHolding(mounted.root, () => screen.getByRole("button", { name: en["export.label"] })),
   },
   {
+    // The narrow bar's two groups (#779): the pill's own three controls, and
+    // the one overflow popover the stylesheet swaps them for.
+    selector: `${ROOT} > div:nth-child(7) > div:nth-child(1)`,
+    state: "open",
+    expected: (mounted) => slot(mounted.root, 7).children.item(0) as Element,
+  },
+  {
+    selector: `${ROOT} > div:nth-child(7) > div:nth-child(2)`,
+    state: "open",
+    expected: (mounted) => slot(mounted.root, 7).children.item(1) as Element,
+  },
+  {
+    // With both bottom regions open the narrow block splits the bottom half:
+    // Layers above, and Properties below it (#779).
+    selector: `${ROOT}:has(> div:nth-child(6):not(:empty)) > div:nth-child(4)`,
+    state: "open",
+    expected: (mounted) => slotFour(mounted),
+  },
+  {
+    selector: `${ROOT}:has(> div:nth-child(4):not(:empty)) > div:nth-child(6)`,
+    state: "open",
+    expected: (mounted) => slotSix(mounted),
+  },
+  {
+    // The full-height toggle, still the Properties card it belongs to (#779).
+    selector: `${ROOT}:has(> div:nth-child(6) button[aria-pressed="true"]) > div:nth-child(6)`,
+    state: "open",
+    expected: (mounted) => slotSix(mounted),
+  },
+  {
     selector: `${ROOT} > div:nth-child(8)`,
     state: "open",
     expected: (mounted) =>
@@ -327,6 +357,9 @@ async function fillEveryCard(mounted: Mounted): Promise<void> {
   await screen.findByRole("listbox", { name: en["elements.label"] });
   mounted.editor.select("e1");
   await screen.findByRole("button", { name: en["chrome.minimiseProperties"] });
+  // The full-height toggle pressed, so the stylesheet's own state selector
+  // matches the Properties card (#779).
+  await user.click(await screen.findByRole("button", { name: en["chrome.expandProperties"] }));
 }
 
 /** Whether this mount drew a Frame the stylesheet's Frame selectors can reach. */
