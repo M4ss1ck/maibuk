@@ -13,6 +13,7 @@ import { useEffect, useRef, useState, type ComponentType } from "react";
 import { ui, type PluginClient } from "@/plugin-sdk";
 import { format, translate, type MapsKey } from "./i18n";
 import { PAGE_PRESETS, type MapIndexEntry, type MapStore, type PagePreset } from "./maps";
+import { MAP_TEMPLATE_IDS, isMapTemplateId, type MapTemplateId } from "./templates";
 
 /** The page id, exactly as the manifest declares it. */
 export const MAPS_PAGE_ID = "maps";
@@ -22,6 +23,9 @@ export const ALL_BOOKS = "all";
 
 /** The Book select value for a Map with no Book. */
 const NO_BOOK = "none";
+
+/** The Start from value that starts a blank Map, naming no Template. */
+const BLANK_TEMPLATE = "blank";
 
 /** The Book filter the runtime shares between the page and the Book Item Menu entry. */
 export interface BookFilter {
@@ -64,6 +68,15 @@ const PAGE_KEYS: Readonly<Record<PagePreset, MapsKey>> = {
   square: "page.square",
 };
 
+/** The Start from label each Template takes. */
+const TEMPLATE_KEYS: Readonly<Record<MapTemplateId, MapsKey>> = {
+  continent: "template.continent",
+  archipelago: "template.archipelago",
+  "two-continents": "template.two-continents",
+  "inland-kingdom": "template.inland-kingdom",
+  "blank-sea": "template.blank-sea",
+};
+
 /** The app language: the current value at mount, then every change. */
 export function useLanguage(client: PluginClient): string {
   const [language, setLanguage] = useState("en");
@@ -104,7 +117,15 @@ li > div:last-child { margin-top: auto; gap: 0; }
 
 /** The dialog the page has open, if any. */
 type Dialog =
-  | { kind: "create"; name: string; bookKey: string; preset: PagePreset; error: string | null }
+  | {
+      kind: "create";
+      name: string;
+      bookKey: string;
+      preset: PagePreset;
+      /** The Template the Map starts from; null starts a blank Map. */
+      template: MapTemplateId | null;
+      error: string | null;
+    }
   | { kind: "rename"; entry: MapIndexEntry; name: string; error: string | null }
   | { kind: "delete"; entry: MapIndexEntry }
   | null;
@@ -208,6 +229,7 @@ export function createMapsPage(deps: MapsPageDeps): ComponentType {
         name: "",
         bookKey: activeFilter === ALL_BOOKS ? NO_BOOK : activeFilter,
         preset: "landscape",
+        template: null,
         error: null,
       });
     }
@@ -232,9 +254,15 @@ export function createMapsPage(deps: MapsPageDeps): ComponentType {
           isForm(current) ? { ...current, error: t("dialog.emptyName") } : current
         );
       if (dialog.kind === "create") {
-        const { name, bookKey, preset } = dialog;
+        const { name, bookKey, preset, template } = dialog;
         void write(async () => {
-          await store.create({ name, bookId: bookKey === NO_BOOK ? null : bookKey, preset });
+          await store.create({
+            name,
+            bookId: bookKey === NO_BOOK ? null : bookKey,
+            preset,
+            ...(template === null ? {} : { templateId: template }),
+            language,
+          });
         }, emptyName);
       } else if (dialog.kind === "rename") {
         const { entry, name } = dialog;
@@ -291,6 +319,10 @@ export function createMapsPage(deps: MapsPageDeps): ComponentType {
       value: preset,
       label: t(PAGE_KEYS[preset]),
     }));
+    const templateOptions = [
+      { value: BLANK_TEMPLATE, label: t("template.blank") },
+      ...MAP_TEMPLATE_IDS.map((id) => ({ value: id, label: t(TEMPLATE_KEYS[id]) })),
+    ];
 
     return (
       <ui.View direction="column" gap="lg">
@@ -393,6 +425,21 @@ export function createMapsPage(deps: MapsPageDeps): ComponentType {
                       setDialog((current) =>
                         current?.kind === "create"
                           ? { ...current, preset: event.detail as PagePreset }
+                          : current
+                      )
+                    }
+                  />
+                  <ui.RadioGroup
+                    label={t("create.template")}
+                    options={templateOptions}
+                    selectedKey={dialog.template ?? BLANK_TEMPLATE}
+                    onChange={(event) =>
+                      setDialog((current) =>
+                        current?.kind === "create"
+                          ? {
+                              ...current,
+                              template: isMapTemplateId(event.detail) ? event.detail : null,
+                            }
                           : current
                       )
                     }

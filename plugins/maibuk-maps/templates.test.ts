@@ -186,6 +186,18 @@ describe("templateElements", () => {
     }
   });
 
+  it("names every Element in the author's language", () => {
+    const spanish = templateElements("archipelago", PAGE_SIZES.landscape, TITLE, idMaker(), "es");
+    const names = spanish.map((element) => element.name);
+    expect(names).toContain("Línea de mapa 1");
+    expect(names).toContain("Relleno 1");
+    expect(names).toContain("Etiqueta de mapa 1");
+    expect(names).toContain("Rosa de los vientos");
+    expect(names).toContain("Cartela de título");
+    // With no language named, an Element keeps the English catalog's words.
+    expect(elementsOf("archipelago").map((element) => element.name)).toContain("Compass rose");
+  });
+
   it("frames the page with a closed border line that encloses Fills", () => {
     for (const id of MAP_TEMPLATE_IDS) {
       for (const preset of PAGE_PRESETS) {

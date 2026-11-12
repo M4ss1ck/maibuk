@@ -155,6 +155,27 @@ describe("createMapStore", () => {
     });
   });
 
+  it("names a Template's Elements in the author's language", async () => {
+    const { storage, values } = memoryStorage();
+    const store = storeOver(storage);
+
+    await store.create({
+      name: "Las Islas",
+      bookId: null,
+      preset: "landscape",
+      templateId: "archipelago",
+      language: "es",
+    });
+
+    const map = values.get(mapKey("m1")) as MapDocument;
+    expect(map.elements[0].name).toBe("Relleno 1");
+    expect(
+      map.elements.some(
+        (element) => element.kind === "stamp" && element.name === "Rosa de los vientos"
+      )
+    ).toBe(true);
+  });
+
   it("leaves a Map blank when it names no Template", async () => {
     const { storage, values } = memoryStorage();
     const store = storeOver(storage);

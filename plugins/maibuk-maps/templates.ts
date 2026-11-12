@@ -64,14 +64,6 @@ export function templateStyle(id: MapTemplateId): MapStyleId {
   return TEMPLATE_STYLES[id];
 }
 
-/**
- * The language a Template's Element names are written in. The store builds a
- * Template with no language in hand, so its names are the English catalog's
- * words, given exactly the way the editor names the Elements it makes; the
- * author renames any Element from the Elements list.
- */
-const NAME_LANGUAGE = "en";
-
 /** The Fill role a Template face takes. */
 type TemplateFillRole = "water" | "land" | "forest";
 
@@ -395,14 +387,17 @@ interface TemplateLineOptions {
  * The Elements a Map made from `id` starts with, drawn on `page`: the world
  * border, a coast per landmass (and a kingdom's border and river, where the
  * Template has them), one Bucket Fill per face, the compass rose and title
- * cartouche, and a Map Label writing `title` across the cartouche. Every call
- * mints fresh Elements from `newId`, so a Map made from a Template is a copy.
+ * cartouche, and a Map Label writing `title` across the cartouche. Element
+ * names are written in `language`, the app language, exactly as the editor
+ * names the Elements it makes; every call mints fresh Elements from `newId`, so
+ * a Map made from a Template is a copy.
  */
 export function templateElements(
   id: MapTemplateId,
   page: { widthMm: number; heightMm: number },
   title: string,
-  newId: () => string
+  newId: () => string,
+  language = "en"
 ): MapElement[] {
   const spec = TEMPLATES[id];
   const lines: MapLineElement[] = [];
@@ -419,7 +414,7 @@ export function templateElements(
     lines.push({
       id: newId(),
       kind: "line",
-      name: format(translate(NAME_LANGUAGE, "element.lineName"), { number: lines.length + 1 }),
+      name: format(translate(language, "element.lineName"), { number: lines.length + 1 }),
       hidden: false,
       locked: false,
       points: toPage(points),
@@ -449,7 +444,7 @@ export function templateElements(
   const fills: MapFillElement[] = faces.map((face, index) => ({
     id: newId(),
     kind: "fill",
-    name: format(translate(NAME_LANGUAGE, "element.fillName"), { number: index + 1 }),
+    name: format(translate(language, "element.fillName"), { number: index + 1 }),
     hidden: false,
     locked: false,
     anchor: deepestPoint(face),
@@ -462,21 +457,21 @@ export function templateElements(
   ];
   const cartouche = newStamp({
     id: newId(),
-    name: translate(NAME_LANGUAGE, stampNameKey("cartouche")),
+    name: translate(language, stampNameKey("cartouche")),
     stampRef: baseStampRef("cartouche"),
     point: cartouchePoint,
     size: page.widthMm * CARTOUCHE_WIDTH,
   });
   const compass = newStamp({
     id: newId(),
-    name: translate(NAME_LANGUAGE, stampNameKey("compass-rose")),
+    name: translate(language, stampNameKey("compass-rose")),
     stampRef: baseStampRef("compass-rose"),
     point: [COMPASS_CENTRE[0] * page.widthMm, COMPASS_CENTRE[1] * page.heightMm],
     size: Math.min(page.widthMm, page.heightMm) * COMPASS_SIZE,
   });
   const titleLabel = newLabel({
     id: newId(),
-    name: format(translate(NAME_LANGUAGE, "element.labelName"), { number: 1 }),
+    name: format(translate(language, "element.labelName"), { number: 1 }),
     text: title,
     point: cartouchePoint,
     width: page.widthMm * TITLE_WIDTH,

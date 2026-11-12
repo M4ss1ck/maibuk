@@ -432,6 +432,8 @@ export interface NewMap {
   preset: PagePreset;
   /** The Map Template to start from; absent starts a blank Map. */
   templateId?: MapTemplateId;
+  /** The language the Template's Element names are written in; absent names them in English. */
+  language?: string;
 }
 
 export interface MapStore {
@@ -1003,7 +1005,9 @@ export function createMapStore(
           styleId: templateId === undefined ? DEFAULT_STYLE_ID : templateStyle(templateId),
           overrides: {},
           elements:
-            templateId === undefined ? [] : templateElements(templateId, page, name, () => newId()),
+            templateId === undefined
+              ? []
+              : templateElements(templateId, page, name, () => newId(), input.language),
           createdAt: at,
           updatedAt: at,
           dataVersion: DATA_VERSION,
