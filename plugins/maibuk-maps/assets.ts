@@ -18,7 +18,7 @@
  * This module imports only its own files.
  */
 
-import type { MapStorage } from "./maps";
+import { MAX_NAME_LENGTH, type MapStorage } from "./maps";
 
 /** The largest an uploaded picture may be, measured on its JSON encoding. */
 export const ASSET_MAX_BYTES = 3.9 * 1024 * 1024;
@@ -66,6 +66,15 @@ export interface AssetIndexEntry {
   height: number;
   recolorable: boolean;
   use: AssetUse;
+}
+
+/**
+ * The name a Library picture keeps (#756): the file name the author picked,
+ * trimmed and cut to {@link MAX_NAME_LENGTH}, the bound a Map's own name has, so
+ * a picker draws it whole and the host never refuses its row or option label.
+ */
+export function assetName(name: string): string {
+  return name.trim().slice(0, MAX_NAME_LENGTH);
 }
 
 /**
@@ -223,24 +232,29 @@ export function createAssetStore(storage: AssetStorage): AssetStore {
     saveAsset(asset, use) {
       return serial(async () => {
         if (!isMapAsset(asset) || !isAssetUse(use)) throw new Error("invalid-asset");
-        if (utf8Bytes(JSON.stringify(asset)) > ASSET_MAX_BYTES) {
+        // A name is the author's own text and a file name is as long as a path
+        // allows, so it is normalized before it is stored or listed (#756).
+        const name = assetName(asset.name);
+        if (name === "") throw new Error("invalid-asset");
+        const saved: MapAsset = { ...asset, name };
+        if (utf8Bytes(JSON.stringify(saved)) > ASSET_MAX_BYTES) {
           throw new AssetTooLargeError(ASSET_MAX_BYTES);
         }
         const entry: AssetIndexEntry = {
-          id: asset.id,
-          name: asset.name,
-          mime: asset.mime,
-          width: asset.width,
-          height: asset.height,
-          recolorable: asset.recolorable,
+          id: saved.id,
+          name: saved.name,
+          mime: saved.mime,
+          width: saved.width,
+          height: saved.height,
+          recolorable: saved.recolorable,
           use,
         };
         const index = await readIndex();
-        await storage.set({ key: assetKey(asset.id), value: asset });
+        await storage.set({ key: assetKey(saved.id), value: saved });
         try {
           await storage.set({ key: ASSETS_KEY, value: upsert(index, entry) });
         } catch (error) {
-          await storage.delete({ key: assetKey(asset.id) }).catch(() => null);
+          await storage.delete({ key: assetKey(saved.id) }).catch(() => null);
           throw error;
         }
         return entry;

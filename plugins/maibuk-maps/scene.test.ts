@@ -1698,9 +1698,30 @@ describe("Uploaded pictures (#756)", () => {
     });
 
     // The base Stamp draws its art at some points, and the picture at the others.
-    expect(svg).toMatch(/<g clip-path="url\(#fill-clip-[0-9a-f]+\)"><path [^>]*transform=/);
-    expect(svg).toMatch(/<g clip-path="url\(#fill-clip-[0-9a-f]+\)"><image href="asset:a1"/);
+    expect(svg).toMatch(/<g clip-path="url\(#custom-fill-clip-[0-9a-f]+\)"><path [^>]*transform=/);
+    expect(svg).toMatch(/<g clip-path="url\(#custom-fill-clip-[0-9a-f]+\)"><image href="asset:a1"/);
     expect(svg.match(/<image href="asset:a1"/g)?.length).toBeGreaterThan(1);
+  });
+
+  it("gives one Fill's own scatter and its Custom Fill's scatter separate Clip Paths", () => {
+    const fill: CustomFill = { id: "mixed", name: "Mixed", stamps: ["custom:a1"] };
+    const svg = sceneToSvg(
+      mapWith([
+        areaFill({
+          content: {
+            customFill: "mixed",
+            scatter: { stamp: "base:tree", spacing: 8, seed: 3 },
+          },
+        }),
+      ]),
+      { library: mapLibrary([entry("a1")], [fill]) }
+    );
+
+    // Two scatters over one area: each Clip Path keeps its own id, so neither
+    // is left undefined by the other.
+    const ids = [...svg.matchAll(/<clipPath id="([^"]+)"/g)].map((match) => match[1]);
+    expect(ids).toHaveLength(2);
+    expect(new Set(ids).size).toBe(2);
   });
 
   it("scatters a Custom Fill the same way every render, and differently for another Element", () => {

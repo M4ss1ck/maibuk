@@ -169,12 +169,15 @@
   let pendingBend = null;
 
   /**
-   * Every uploaded picture the Worker has sent, as the `blob:` URL this
-   * document made from its bytes, keyed by asset id (#756). A scene names a
-   * picture by id, so its bytes cross the port once instead of on every scene.
-   * @type {Map<string, string>}
+   * Every uploaded picture the Worker has sent, as the URLs this document draws
+   * its bytes with, keyed by asset id (#756): a `blob:` URL for the live canvas,
+   * and the `data:` URI a rasterize request needs, since a browser loads no
+   * subresource — `blob:` included — into an SVG it draws as an image, exactly
+   * why the export's fonts travel as data URIs. A scene names a picture by id,
+   * so its bytes cross the port once instead of on every scene.
+   * @type {Map<string, { url: string, dataUri: string }>}
    */
-  const assetUrls = new Map();
+  const assetSources = new Map();
 
   /** The rendered svg, which Preact keeps across draws. @returns {SVGSVGElement | null} */
   function svgElement() {
@@ -829,11 +832,11 @@
    */
   function imageNode(shape) {
     const { html } = lib;
-    const src = assetUrls.get(shape.assetId);
-    if (src === undefined) return null;
+    const source = assetSources.get(shape.assetId);
+    if (source === undefined) return null;
     return html`<image
       class="map-image"
-      href="${src}"
+      href="${source.url}"
       x="${n(shape.x - shape.width / 2)}"
       y="${n(shape.y - shape.height / 2)}"
       width="${n(shape.width)}"
@@ -1064,7 +1067,7 @@
           current.defs === ""
             ? null
             : html`<defs
-                dangerouslySetInnerHTML=${{ __html: current.defs }}
+                dangerouslySetInnerHTML=${{ __html: withAssetHrefs(current.defs, liveUrl) }}
               />`
         }
         ${current.elements
@@ -1846,32 +1849,51 @@
   }
 
   /**
-   * One `<image>` in an export SVG still naming the picture it draws, as
-   * `sceneToSvg` writes it, rather than holding its bytes.
+   * One `<image>` still naming the picture it draws, as `sceneToSvg` writes it
+   * in the drawn markup and in the `<defs>` a Custom Fill's texture pattern
+   * lives in, rather than holding its bytes.
    * @type {RegExp}
    */
   const ASSET_IMAGE_TAG = /<image\b[^>]*?\bhref="asset:([^"]*)"[^>]*?\/>/g;
 
   /**
-   * The export SVG with each picture placeholder pointing at the `blob:` URL
-   * this Frame keeps for that asset id (#756), so the rasterize request carries
-   * ids and never a picture. A picture the Frame holds no bytes for loses its
-   * whole `<image>`, so it leaves no broken box in the exported picture.
-   * @param {string} svg
+   * The markup with each picture placeholder pointing at the URL `hrefOf`
+   * answers for its asset id (#756). A picture the Frame holds no bytes for
+   * loses its whole `<image>`, so it leaves no broken box. The live canvas and
+   * the raster trail ask for different URLs, so one swap serves both.
+   * @param {string} markup
+   * @param {(id: string) => string | undefined} hrefOf
    * @returns {string}
    */
-  function withAssetUrls(svg) {
-    return svg.replace(ASSET_IMAGE_TAG, (tag, id) => {
-      const url = assetUrls.get(id);
-      return url === undefined ? "" : tag.replace(`href="asset:${id}"`, `href="${url}"`);
+  function withAssetHrefs(markup, hrefOf) {
+    return markup.replace(ASSET_IMAGE_TAG, (tag, id) => {
+      const href = hrefOf(id);
+      return href === undefined ? "" : tag.replace(`href="asset:${id}"`, `href="${href}"`);
     });
+  }
+
+  /** The `blob:` URL the live canvas draws one picture with, or undefined. @param {string} id */
+  function liveUrl(id) {
+    const source = assetSources.get(id);
+    return source === undefined ? undefined : source.url;
+  }
+
+  /**
+   * The `data:` URI the rasterize path draws one picture with, or undefined: an
+   * SVG drawn as an image loads no external subresource, so its pictures have
+   * to travel inside it as base64, the way its fonts do.
+   * @param {string} id
+   */
+  function rasterUrl(id) {
+    const source = assetSources.get(id);
+    return source === undefined ? undefined : source.dataUri;
   }
 
   /**
    * Draws one export SVG into a canvas of the requested pixel size and encodes
-   * it (#753). The SVG carries its fonts as data URIs and names its pictures by
-   * asset id, so nothing here reaches the network; a JPEG gets white paper
-   * behind it, since it has no alpha.
+   * it (#753). The SVG carries its fonts and its pictures as data URIs and names
+   * nothing by an external URL, so nothing here reaches the network; a JPEG gets
+   * white paper behind it, since it has no alpha.
    * @param {FrameRasterizeMessage} request
    * @returns {Promise<ArrayBuffer>}
    */
@@ -1881,7 +1903,7 @@
     canvas.height = request.heightPx;
     const context = canvas.getContext("2d");
     if (context === null) throw new Error("this Frame cannot draw a canvas");
-    const svg = withAssetUrls(request.svg);
+    const svg = withAssetHrefs(request.svg, rasterUrl);
     const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
     try {
       const image = await loadImage(url);
@@ -2040,9 +2062,10 @@
   }
 
   /**
-   * Keeps one uploaded picture's bytes as a `blob:` URL this document can draw
-   * (#756), keyed by asset id; a picture the Worker sends again replaces the
-   * URL it had, which is revoked so its buffer is freed.
+   * Keeps one uploaded picture's bytes under the URLs this document draws them
+   * with (#756), keyed by asset id: the `blob:` URL the live canvas paints and
+   * the `data:` URI a rasterize request carries. A picture the Worker sends
+   * again replaces them, revoking the URL it had so its buffer is freed.
    * @param {unknown} data
    * @returns {boolean} whether the message was an asset message
    */
@@ -2054,9 +2077,12 @@
     if (typeof message.mime !== "string" || message.mime === "") return true;
     if (typeof message.data !== "string" || message.data === "") return true;
     const url = URL.createObjectURL(new Blob([decodeBase64(message.data)], { type: message.mime }));
-    const previous = assetUrls.get(message.id);
-    if (previous !== undefined) URL.revokeObjectURL(previous);
-    assetUrls.set(message.id, url);
+    const previous = assetSources.get(message.id);
+    if (previous !== undefined) URL.revokeObjectURL(previous.url);
+    assetSources.set(message.id, {
+      url,
+      dataUri: `data:${message.mime};base64,${message.data}`,
+    });
     return true;
   }
 
@@ -2115,8 +2141,8 @@
   function cleanup() {
     document.removeEventListener("keydown", onKeyDown);
     document.removeEventListener("keyup", onKeyUp);
-    for (const url of assetUrls.values()) URL.revokeObjectURL(url);
-    assetUrls.clear();
+    for (const source of assetSources.values()) URL.revokeObjectURL(source.url);
+    assetSources.clear();
     if (surface === null) return;
     surface.removeEventListener("pointerdown", onPointerDown);
     surface.removeEventListener("pointermove", onPointerMove);
@@ -2179,5 +2205,7 @@
   // A test document may have no canvas, so the rasterize answer is out of reach:
   // this seam hands it the SVG the Frame would draw instead, which is the one
   // fact a test can assert about an export.
-  if (hooks && typeof hooks.onAssetSvg === "function") hooks.onAssetSvg(withAssetUrls);
+  if (hooks && typeof hooks.onAssetSvg === "function") {
+    hooks.onAssetSvg((svg) => withAssetHrefs(svg, rasterUrl));
+  }
 })();

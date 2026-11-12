@@ -2791,7 +2791,7 @@ describe("an uploaded picture on the Map (#756)", () => {
     expect(document.querySelector("image.map-image")).toBeNull();
   });
 
-  it("swaps the export's picture placeholders for the blob URLs it keeps, dropping one it never got", () => {
+  it("swaps the export's picture placeholders for the data URIs it keeps, dropping one it never got", () => {
     const blobs = stubBlobUrls();
     try {
       frame = loadFrame();
@@ -2801,9 +2801,40 @@ describe("an uploaded picture on the Map (#756)", () => {
         '<svg><image href="asset:a1" x="0" y="0" width="8" height="4" preserveAspectRatio="xMidYMid meet"/><image href="asset:gone" x="0" y="0" width="8" height="4" preserveAspectRatio="xMidYMid meet"/></svg>'
       );
 
-      expect(swapped).toContain('href="blob:mock/1"');
+      // A browser loads no subresource into an SVG it draws as an image, a
+      // `blob:` one included, so the raster carries the picture's own bytes.
+      expect(swapped).toContain('href="data:image/png;base64,AAAA"');
       expect(swapped).not.toContain("asset:");
+      expect(swapped).not.toContain("blob:");
       expect(swapped.match(/<image /g)).toHaveLength(1);
+    } finally {
+      blobs.restore();
+    }
+  });
+
+  it("draws a Custom Fill's texture with the bitmap URL it keeps, once its picture arrives", () => {
+    const blobs = stubBlobUrls();
+    try {
+      frame = loadFrame();
+      // `sceneToSvg` names a Custom Fill's texture picture inside the pattern
+      // the Frame injects as definitions, so the placeholder needs the same
+      // swap the drawn markup gets, or the live canvas paints nothing.
+      const defs = [
+        '<pattern id="custom-fill-texture-1" patternUnits="userSpaceOnUse" width="20" height="10"><image href="asset:a1" x="0" y="0" width="20" height="10" preserveAspectRatio="xMidYMid slice"/></pattern>',
+      ];
+      frame.scene({ defs, elements: [sceneElement({ id: "meadow" })] });
+
+      // Before the bytes land the picture is dropped rather than left blank.
+      expect(document.querySelector("defs pattern#custom-fill-texture-1 image")).toBeNull();
+
+      // The Worker sends the bytes after the scene, and the repaint they cause
+      // is what puts the picture in the pattern.
+      frame.port.deliver({ kind: "asset", id: "a1", mime: "image/png", data: "AAAA" });
+
+      const drawn = document.querySelector("defs pattern#custom-fill-texture-1 image");
+      expect(drawn?.getAttribute("href")).toBe("blob:mock/1");
+      // The Fill painting with that pattern still references its own id.
+      expect(document.querySelector("defs")).not.toBeNull();
     } finally {
       blobs.restore();
     }

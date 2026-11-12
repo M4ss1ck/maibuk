@@ -28,6 +28,7 @@ import {
 import {
   ASSET_MAX_BYTES,
   AssetTooLargeError,
+  assetName,
   createAssetStore,
   customStampRef,
   parseCustomStampRef,
@@ -280,20 +281,33 @@ function clampLabel(text: string): string {
 }
 
 /**
- * The target picker's options (#753): a Library past the host's
- * {@link PLUGIN_UI_LIMITS.maxOptions} loses the tail of its list, never the
- * page, and every label is clamped, since a Chapter title is the author's text.
- * The target already picked keeps its place, the last one kept making room.
+ * `options` fitted to the host's {@link PLUGIN_UI_LIMITS.maxOptions} (#753,
+ * #756): a Library past the cap loses the tail of its list, never the page, and
+ * every label is clamped, since a Library name is the author's own text. The
+ * value already picked keeps its place, the last one kept making room.
  */
+function fitOptions(
+  options: readonly { value: string; label: string }[],
+  selectedValue?: string | null
+): Array<{ value: string; label: string }> {
+  const kept = options.slice(0, PLUGIN_UI_LIMITS.maxOptions);
+  const chosen =
+    selectedValue === null || selectedValue === undefined
+      ? undefined
+      : options.find((option) => option.value === selectedValue);
+  if (chosen !== undefined && !kept.includes(chosen)) kept[kept.length - 1] = chosen;
+  return kept.map((option) => ({ value: option.value, label: clampLabel(option.label) }));
+}
+
+/** The target picker's options (#753): the Library's Chapters and Notes, fitted to the cap. */
 function placeTargetOptions(
   targets: readonly PlaceTarget[],
   selectedId: string | null
 ): Array<{ value: string; label: string }> {
-  const kept = targets.slice(0, PLUGIN_UI_LIMITS.maxOptions);
-  const chosen =
-    selectedId === null ? undefined : targets.find((target) => target.id === selectedId);
-  if (chosen !== undefined && !kept.includes(chosen)) kept[kept.length - 1] = chosen;
-  return kept.map((target) => ({ value: target.id, label: clampLabel(target.label) }));
+  return fitOptions(
+    targets.map((target) => ({ value: target.id, label: target.label })),
+    selectedId
+  );
 }
 
 /** The alt text the dialog holds: at most {@link ALT_TEXT_MAX_CHARS} characters (#753). */
@@ -480,15 +494,16 @@ const LABEL_FONT_KEYS: Readonly<Record<Exclude<MapLabelFont, "pdf">, MapsKey>> =
 
 /**
  * The Elements list's kind label, for the kinds a Map can hold (#748: a Fill
- * joins a Map Line; #749: a Stamp joins them; #751: a Map Label joins them). A
- * kind with no label of its own says nothing, so the row falls back to its
- * flags alone rather than calling itself a Map Line.
+ * joins a Map Line; #749: a Stamp joins them; #751: a Map Label joins them;
+ * #756: a Map Image joins them). A kind with no label of its own says nothing,
+ * so the row falls back to its flags alone rather than calling itself a Map Line.
  */
 const ELEMENT_KIND_KEYS: Readonly<Partial<Record<MapElement["kind"], MapsKey>>> = {
   line: "element.kind.line",
   fill: "element.kind.fill",
   stamp: "element.kind.stamp",
   label: "element.kind.label",
+  image: "element.kind.image",
 };
 
 interface RenameDialog {
@@ -591,7 +606,9 @@ async function pickAndSaveAsset(
   const ingested = await editor.ingestAsset(mime, bytesToBase64(bytes));
   const asset: MapAsset = {
     id: randomMapId(),
-    name: fileStem(picked.name),
+    // A file name is the author's, and as long as a path allows: the Library
+    // keeps it under the same bound a Map's own name has (#756).
+    name: assetName(fileStem(picked.name)),
     mime,
     data: ingested.data,
     width: ingested.width,
@@ -667,10 +684,17 @@ function MapEditorView({
   const customStamps = [...snapshot.library.assets.values()]
     .filter((asset) => asset.use === "stamp")
     .map((asset) => ({ ref: customStampRef(asset.id), name: asset.name }));
-  const stampOptions = [
-    ...BASE_STAMP_IDS.map((id) => ({ value: id, label: t(stampNameKey(id)) })),
-    ...customStamps.map((one) => ({ value: one.ref, label: one.name })),
-  ];
+  // Every Library picture the author uploaded grows these lists, so each one is
+  // fitted to the host's caps: a Select's options to `maxOptions`, and the
+  // Custom Stamps' rows (one node each) to the same list cap.
+  const stampOptions = fitOptions(
+    [
+      ...BASE_STAMP_IDS.map((id) => ({ value: id, label: t(stampNameKey(id)) })),
+      ...customStamps.map((one) => ({ value: one.ref, label: one.name })),
+    ],
+    snapshot.currentStampId
+  );
+  const fillStampRows = customStamps.slice(0, PLUGIN_UI_LIMITS.maxOptions);
   // The scatter select offers the base Stamps, so it reads the one the Fill
   // scatters back from its art ref.
   const scatterStampId =
@@ -1446,13 +1470,16 @@ function MapEditorView({
                       Stamps over the area (#756). */}
                   <ui.Select
                     label={t("properties.customFill")}
-                    options={[
-                      { value: NONE, label: t("properties.none") },
-                      ...[...snapshot.library.customFills.values()].map((customFill) => ({
-                        value: customFill.id,
-                        label: customFill.name,
-                      })),
-                    ]}
+                    options={fitOptions(
+                      [
+                        { value: NONE, label: t("properties.none") },
+                        ...[...snapshot.library.customFills.values()].map((customFill) => ({
+                          value: customFill.id,
+                          label: customFill.name,
+                        })),
+                      ],
+                      selectedFill?.content.customFill ?? NONE
+                    )}
                     selectedKey={selectedFill?.content.customFill ?? NONE}
                     isDisabled={selected.locked}
                     onChange={(event) =>
@@ -1478,11 +1505,11 @@ function MapEditorView({
                         selectedKeys={fillStampRefs}
                         onSelectionChange={(event) => setFillStampRefs([...event.detail])}
                       >
-                        {customStamps.map((customStamp) => (
+                        {fillStampRows.map((customStamp) => (
                           <ui.CollectionRow
                             key={customStamp.ref}
                             id={customStamp.ref}
-                            label={customStamp.name}
+                            label={clampLabel(customStamp.name)}
                           />
                         ))}
                       </ui.Collection>

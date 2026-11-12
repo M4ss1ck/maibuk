@@ -20,7 +20,7 @@ import {
   type CustomFill,
   type MapAsset,
 } from "./assets";
-import type { MapStorage } from "./maps";
+import { MAX_NAME_LENGTH, type MapStorage } from "./maps";
 
 /** An in-memory storage that remembers every key it was asked to write. */
 function memoryStorage(seed: Iterable<[string, unknown]> = []) {
@@ -141,6 +141,27 @@ describe("createAssetStore", () => {
     expect(attempts).toEqual([assetKey("a1"), ASSETS_KEY]);
     expect(values.has(assetKey("a1"))).toBe(false);
     expect(values.has(ASSETS_KEY)).toBe(false);
+  });
+
+  it("trims a picture's name to the bound a Map's own name has, and refuses a blank one", async () => {
+    const { storage, values } = memoryStorage();
+    const store = createAssetStore(storage);
+
+    // A file name is as long as a path allows, and a picker draws it whole.
+    const long = "Beacon of the Northern Reach ".repeat(10);
+    const saved = await store.saveAsset(asset({ name: `  ${long}  ` }), "stamp");
+
+    expect(saved.name).toHaveLength(MAX_NAME_LENGTH);
+    expect(saved.name).toBe(long.slice(0, MAX_NAME_LENGTH));
+    expect(await store.getAsset("a1")).toMatchObject({ name: saved.name });
+    expect(values.get(ASSETS_KEY)).toEqual([entry({ name: saved.name })]);
+
+    // The trimmed name is what a row or a Select label carries: an empty one
+    // would name nothing, so the save is refused before any write.
+    await expect(store.saveAsset(asset({ id: "a2", name: "   " }), "stamp")).rejects.toThrow(
+      "invalid-asset"
+    );
+    expect(values.has(assetKey("a2"))).toBe(false);
   });
 
   it("refuses an asset this build cannot read", async () => {

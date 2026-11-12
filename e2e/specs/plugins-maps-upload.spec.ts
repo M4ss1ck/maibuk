@@ -4,7 +4,10 @@
 // the Custom Stamp path with one small one-colour SVG: the Elements list lists
 // it under the file's own name, the Frame draws it as a picture, its single
 // paint takes the Stamp color picker, and because the picture belongs to the
-// Library rather than to the Map, a second Map's Stamp picker lists it too.
+// Library rather than to the Map, a second Map's Stamp picker lists it too. The
+// same picture then has to survive Export: the PNG the Frame rasterizes carries
+// the picture's bytes as a data URI, since an SVG drawn as an image loads no
+// external subresource and would otherwise print bare paper.
 //
 // The file dialog itself is `support/file-picker.ts`: the host opens it through
 // the File System Access API, which Playwright cannot drive, so the stub
@@ -12,10 +15,13 @@
 // Tagged @sandbox because Maps runs in the Plugin sandbox: the lane runs it on
 // Chromium, WebKit, and Firefox.
 
-import type { FrameLocator, Page } from "@playwright/test";
+import { readFile } from "node:fs/promises";
+import type { Download, FrameLocator, Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { installFilePicker } from "../support/file-picker";
 import { leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
+import { countInkPixels } from "../support/png-ink";
+import { forceDownloadSaves } from "../support/save-picker";
 import { expect, test } from "../support/test";
 
 const primaryNav = (page: Page) => page.getByRole("listbox", { name: "Primary navigation" });
@@ -42,6 +48,10 @@ const drawnPictures = (page: Page) => mapFrame(page).locator("g[data-element-id]
 
 /** The Insert panel's Upload button, which picks a picture and places it. */
 const uploadButton = (page: Page) => page.getByRole("button", { name: "Upload…", exact: true });
+
+/** The Export panel's fields the picture test saves through. */
+const dpiField = (page: Page) => page.getByRole("textbox", { name: "DPI", exact: true });
+const saveButton = (page: Page) => page.getByRole("button", { name: /^Save/ });
 
 /**
  * The Insert tool's Stamp picker: its trigger button, its list, and one option.
@@ -115,6 +125,32 @@ async function openStampPicker(page: Page): Promise<void> {
   await expect(stampList(page)).toBeVisible();
 }
 
+/** Writes one field: focus it, select all, type the value, Enter to commit. */
+async function writeField(page: Page, field: Locator, value: string): Promise<void> {
+  await tabTo(page, field, { max: 120 });
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.type(value);
+  await page.keyboard.press("Enter");
+  await expect(field).toHaveValue(value);
+}
+
+/** Tabs to `button` and presses it, returning the file the browser downloaded. */
+async function saveByKeyboard(page: Page, button: Locator): Promise<Download> {
+  await tabTo(page, button, { max: 90 });
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.keyboard.press("Enter"),
+  ]);
+  return download;
+}
+
+/** The bytes the browser kept for one download. */
+async function downloadBytes(download: Download): Promise<Buffer> {
+  const path = await download.path();
+  if (path === null) throw new Error("the browser kept no file for the download");
+  return readFile(path);
+}
+
 test.use({
   library: "bookShelf",
   plugins: ["maibuk-maps"],
@@ -171,5 +207,43 @@ test.describe("Maps Insert upload @wf:plugins-maps-upload @sc:plugin.maibuk-maps
     await page.keyboard.press("Escape");
     await expect(stampList(page)).toBeHidden();
     await expect(stampTrigger(page)).toBeFocused();
+  });
+
+  test("the PNG the Map exports draws the uploaded picture instead of bare paper", async ({
+    page,
+  }) => {
+    // The Save dialog is no place for a keyboard run, so the app takes its own
+    // download fallback and the spec reads the file the browser saved.
+    await forceDownloadSaves(page);
+    await page.goto("/");
+    await openMaps(page);
+    await createMap(page, "Coastline");
+    await openMap(page, "Coastline");
+    await pickInsert(page);
+
+    // The Custom Stamp lands at the view centre, which is the page's centre.
+    await tabTo(page, uploadButton(page), { max: 80 });
+    await page.keyboard.press("Enter");
+    await expect(drawnPictures(page)).toHaveCount(1);
+
+    // A smaller print keeps the file quick to read back, and the panel says
+    // what it will save before it saves it: the landscape page at 150 DPI.
+    await writeField(page, dpiField(page), "150");
+    await expect(page.getByText(/1350 × 900 px/)).toBeVisible();
+
+    const download = await saveByKeyboard(page, saveButton(page));
+    expect(download.suggestedFilename()).toBe("Coastline.png");
+    const png = await downloadBytes(download);
+
+    // The picture draws in the Map's own dark ink over pale paper, so the box
+    // around the page's centre is where it shows. An SVG drawn as an image
+    // loads no external subresource, `blob:` included, so a raster that swapped
+    // in the wrong URL leaves the centre as bare as a corner.
+    const [centre, corner] = await countInkPixels(page, png.toString("base64"), [
+      { x: 0.5, y: 0.5, width: 0.05 },
+      { x: 0.05, y: 0.05, width: 0.05 },
+    ]);
+    expect(centre).toBeGreaterThan(100);
+    expect(corner).toBe(0);
   });
 });

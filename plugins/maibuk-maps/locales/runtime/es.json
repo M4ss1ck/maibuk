@@ -73,6 +73,7 @@
   "element.kind.fill": "Relleno",
   "element.kind.stamp": "Sello",
   "element.kind.label": "Etiqueta de mapa",
+  "element.kind.image": "Imagen del mapa",
   "element.lineName": "Línea de mapa {{number}}",
   "element.fillName": "Relleno {{number}}",
   "element.lineSplitName": "{{name}} {{number}}",

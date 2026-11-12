@@ -572,6 +572,15 @@ function scatterClipId(elementId: string): string {
   return `fill-clip-${seedFor(elementId).toString(16)}`;
 }
 
+/**
+ * The id the Clip Path a Custom Fill's own scatter is cut by takes (#756): its
+ * own id, because one Fill can carry both a scatter and a Custom Fill, and two
+ * `<clipPath>`s that share an id would leave one of them undefined.
+ */
+function customFillClipId(elementId: string): string {
+  return `custom-fill-clip-${seedFor(elementId).toString(16)}`;
+}
+
 /** How wide one tile of a Custom Fill's texture picture is, in page millimetres. */
 export const CUSTOM_FILL_TILE_MM = 20;
 
@@ -683,7 +692,7 @@ function customFillScatterShapes(
   library: MapLibrary,
   collector: SceneCollector
 ): SceneShape[] {
-  const clip = scatterClipId(element.id);
+  const clip = customFillClipId(element.id);
   const ink = resolveColor(style, undefined, "ink");
   const shapes: SceneShape[] = [];
   for (const [index, point] of scatterPoints(

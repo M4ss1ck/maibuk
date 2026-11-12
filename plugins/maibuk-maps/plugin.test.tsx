@@ -56,6 +56,7 @@ import {
   DEFAULT_LABEL_FONT,
   INDEX_KEY,
   MAP_LABEL_FONT_FAMILIES,
+  MAX_NAME_LENGTH,
   PAGE_SIZES,
   mapKey,
   newLabel,
@@ -3604,6 +3605,181 @@ describe("Map editor uploads (#756)", () => {
       expect(
         screen.getByRole("switch", { name: en["properties.image.exportable"] })
       ).toBeInTheDocument();
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("keeps an upload's name inside the bound a Map's own name has", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    frameStandIn(runtime.editor, undefined, ingested);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    // A file name is as long as a path allows: this one is far past the bound.
+    const fileName = `${"Beacon of the Northern Reach ".repeat(10)}.svg`;
+    try {
+      host.files.queuePick({ name: fileName, bytes: svgBytes() });
+      const user = userEvent.setup();
+
+      await pickTool(user, en["tools.insert"]);
+      const upload = await tabToUpload(user);
+      expect(upload).toHaveFocus();
+      await user.keyboard("{Enter}");
+
+      // The Library keeps the file's own stem, cut the way a Map's name is, so
+      // the row and the Stamp picker draw it inside the host's own limits.
+      await waitFor(() => expect(storedAssets(storage)).toHaveLength(1));
+      const [row] = storedAssets(storage);
+      const stem = fileName.slice(0, fileName.length - ".svg".length);
+      expect(row.name).toBe(stem.slice(0, MAX_NAME_LENGTH));
+      expect(row.name).toHaveLength(MAX_NAME_LENGTH);
+      // The host refused no label the page sent it.
+      expect(page.violations).toEqual([]);
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("describes a Map Image row as one, in the author's language", async () => {
+    for (const [language, catalog] of [
+      ["en", en],
+      ["es", es],
+    ] as const) {
+      const storage = mapStorage([
+        {
+          id: "scan",
+          kind: "image",
+          name: "Scan",
+          hidden: false,
+          locked: false,
+          assetRef: "a1",
+          transform: { x: 76.2, y: 114.3, size: 80, rotation: 0 },
+          opacity: 1,
+          exportable: true,
+        } satisfies MapImageElement,
+      ]);
+      const { host, runtime } = await openEditor(storage, language);
+      const page = await host.renderPage(MAP_PAGE_ID);
+      try {
+        // The Map holds the picture the row describes, and the row's kind names
+        // the Element, instead of leaving the author with its flags alone (#756).
+        expect(runtime.editor?.getSnapshot().elements[0]?.kind).toBe("image");
+        await waitFor(() =>
+          expect(
+            screen.getByRole("listbox", { name: catalog["elements.label"] })
+          ).toHaveTextContent(catalog["element.kind.image"])
+        );
+        expect(catalog["element.kind.image"]).not.toBe("");
+      } finally {
+        await page.unmount();
+        await host.stop();
+      }
+    }
+  });
+
+  it("fits the Insert Stamp picker to the host's cap, with a Library past 2,000 Custom Stamps", async () => {
+    // More uploaded pictures than the host accepts in one option list, each
+    // named well past the length one label may carry.
+    const longName = "Beacon of the Northern Reach ".repeat(20);
+    const rows: AssetIndexEntry[] = Array.from(
+      { length: PLUGIN_UI_LIMITS.maxOptions + 100 },
+      (_, index) => ({
+        id: `a${index + 1}`,
+        name: `${index + 1} ${longName}`,
+        mime: "image/png",
+        width: 40,
+        height: 20,
+        recolorable: true,
+        use: "stamp",
+      })
+    );
+    const storage = mapStorage([]);
+    storage.set(ASSETS_KEY, rows);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await pickTool(user, en["tools.insert"]);
+
+      // The Library really is past the cap this test is about.
+      expect(runtime.editor?.getSnapshot().library.assets.size).toBe(
+        PLUGIN_UI_LIMITS.maxOptions + 100
+      );
+
+      const trigger = await screen.findByLabelText(en["properties.stamp"]);
+      await tabTo(user, trigger, 40);
+      await user.keyboard("{Enter}");
+      const listbox = await screen.findByRole("listbox", { name: en["properties.stamp"] });
+      const options = within(listbox).getAllByRole("option");
+
+      // The page asked for no option list the host would refuse.
+      expect(page.violations).toEqual([]);
+      expect(options).toHaveLength(PLUGIN_UI_LIMITS.maxOptions);
+      // The Library's Custom Stamps follow the base Stamps, and the last one
+      // kept is cut to the host's 512-code unit label cap instead of going whole.
+      const last = options[options.length - 1];
+      expect(last.textContent).toHaveLength(512);
+      expect(last.textContent?.endsWith("…")).toBe(true);
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("fits the Custom Fill picker and its Custom Stamps to the host's caps", async () => {
+    const longName = "Banner of the Reach ".repeat(20);
+    const rows: AssetIndexEntry[] = Array.from(
+      { length: PLUGIN_UI_LIMITS.maxOptions + 100 },
+      (_, index) => ({
+        id: `a${index + 1}`,
+        name: `${index + 1} ${longName}`,
+        mime: "image/png",
+        width: 40,
+        height: 20,
+        recolorable: true,
+        use: "stamp",
+      })
+    );
+    const fills: CustomFill[] = Array.from(
+      { length: PLUGIN_UI_LIMITS.maxOptions + 100 },
+      (_, index) => ({ id: `f${index + 1}`, name: `${index + 1} Meadow`, texture: "a1" })
+    );
+    const storage = mapStorage([areaFill({ color: "land" })]);
+    storage.set(ASSETS_KEY, rows);
+    storage.set(CUSTOM_FILLS_KEY, fills);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await selectRow(user, "Fill 1");
+
+      // The Library really is past the caps this test is about.
+      expect(runtime.editor?.getSnapshot().library.assets.size).toBe(
+        PLUGIN_UI_LIMITS.maxOptions + 100
+      );
+      expect(runtime.editor?.getSnapshot().library.customFills.size).toBe(
+        PLUGIN_UI_LIMITS.maxOptions + 100
+      );
+
+      // The picture rows the page asked for are one node each, so the list is
+      // fitted to the same cap: the Library's tail is what it loses.
+      const stamps = await screen.findByRole("listbox", {
+        name: en["properties.customFill.stamps"],
+      });
+      expect(within(stamps).getAllByRole("option")).toHaveLength(PLUGIN_UI_LIMITS.maxOptions);
+
+      const trigger = await screen.findByLabelText(en["properties.customFill"]);
+      await tabTo(user, trigger);
+      await user.keyboard("{Enter}");
+      const listbox = await screen.findByRole("listbox", { name: en["properties.customFill"] });
+      // "None" is the first entry the page offers, so the cap keeps it and 1999
+      // Custom Fills after it.
+      expect(within(listbox).getAllByRole("option")).toHaveLength(PLUGIN_UI_LIMITS.maxOptions);
 
       await page.unmount();
     } finally {

@@ -73,6 +73,7 @@
   "element.kind.fill": "Fill",
   "element.kind.stamp": "Stamp",
   "element.kind.label": "Map Label",
+  "element.kind.image": "Map Image",
   "element.lineName": "Map Line {{number}}",
   "element.fillName": "Fill {{number}}",
   "element.lineSplitName": "{{name}} {{number}}",
