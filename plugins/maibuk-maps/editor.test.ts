@@ -32,6 +32,7 @@ import {
   MIN_LABEL_SIZE_MM,
   MIN_LABEL_WIDTH_MM,
   MIN_STAMP_SIZE_MM,
+  MAX_IMAGE_OPACITY,
   newLabel,
   type MapDocument,
   type MapElement,
@@ -2381,5 +2382,175 @@ describe("the Library's pictures (#756)", () => {
     const { editor } = openEditor([imageElement("scan")]);
 
     await expect(editor.assetUris()).resolves.toEqual(new Map());
+  });
+});
+
+describe("an upload's ingest and the Elements it places (#756)", () => {
+  /** One index row for a picture `width` by `height` pixels. */
+  function entry(id: string, width = 40, height = 20, recolorable = false): AssetIndexEntry {
+    return { id, name: id, mime: "image/png", width, height, recolorable, use: "stamp" };
+  }
+
+  /** One Library picture: its index row and the base64 bytes the Library stores. */
+  function asset(id: string, width = 40, height = 20): AssetIndexEntry & MapAsset {
+    return { ...entry(id, width, height), data: "AAAA" };
+  }
+
+  /** A Frame port that records what the editor sends and answers nothing. */
+  function framePort(): { port: MessagePort; messages: Array<Record<string, unknown>> } {
+    const messages: Array<Record<string, unknown>> = [];
+    const port = {
+      onmessage: null,
+      start: () => {},
+      postMessage: (message: Record<string, unknown>) => messages.push(message),
+    } as unknown as MessagePort;
+    return { port, messages };
+  }
+
+  /** Where a Map's pictures come from, listing these rows. */
+  function libraryOf(assets: Array<AssetIndexEntry & MapAsset>, customFills: CustomFill[] = []) {
+    const byId = new Map(assets.map((one) => [one.id, one]));
+    return {
+      library: mapLibrary(assets, customFills),
+      load: async (id: string) => byId.get(id) ?? null,
+    };
+  }
+
+  /** The one ingest request the editor posted. */
+  function ingestRequest(messages: Array<Record<string, unknown>>) {
+    const request = messages.find((message) => message.kind === "ingest-asset");
+    if (request === undefined) throw new Error("no ingest request");
+    return request as {
+      requestId: number;
+      mime: string;
+      data: string;
+    };
+  }
+
+  it("resolves an ingest with the size and bytes the Frame measured", async () => {
+    const { editor } = openEditor();
+    const { port, messages } = framePort();
+    editor.attachFrame(port);
+
+    const pending = editor.ingestAsset("image/svg+xml", "PHN2Zz4=");
+    await vi.waitFor(() =>
+      expect(messages.some((message) => message.kind === "ingest-asset")).toBe(true)
+    );
+    const request = ingestRequest(messages);
+    expect(request).toMatchObject({ mime: "image/svg+xml", data: "PHN2Zz4=" });
+
+    editor.handleFrameMessage({
+      kind: "asset-ingested",
+      requestId: request.requestId,
+      data: "<svg/>",
+      width: 40,
+      height: 20,
+      recolorable: true,
+    });
+
+    await expect(pending).resolves.toEqual({
+      data: "<svg/>",
+      width: 40,
+      height: 20,
+      recolorable: true,
+    });
+  });
+
+  it("rejects an ingest the Frame refuses, and one no Frame can answer", async () => {
+    const { editor } = openEditor();
+    await expect(editor.ingestAsset("image/png", "AAAA")).rejects.toThrow("no Frame");
+
+    const { port, messages } = framePort();
+    editor.attachFrame(port);
+    const pending = editor.ingestAsset("image/png", "AAAA");
+    await vi.waitFor(() =>
+      expect(messages.some((message) => message.kind === "ingest-asset")).toBe(true)
+    );
+
+    editor.handleFrameMessage({
+      kind: "ingest-error",
+      requestId: ingestRequest(messages).requestId,
+      reason: "invalid-image",
+    });
+
+    await expect(pending).rejects.toThrow("invalid-image");
+  });
+
+  it("rejects a pending ingest when a new Frame replaces the one that held it", async () => {
+    const { editor } = openEditor();
+    const first = framePort();
+    editor.attachFrame(first.port);
+    const pending = editor.ingestAsset("image/png", "AAAA");
+    await vi.waitFor(() => expect(ingestRequest(first.messages)).toBeDefined());
+
+    editor.attachFrame(framePort().port);
+
+    await expect(pending).rejects.toThrow("the Frame was replaced");
+  });
+
+  it("places a Custom Stamp of the Library picture at the view centre, selected and undoable", () => {
+    const { editor } = openEditor();
+    editor.setAssetLibrary(libraryOf([asset("a2")]));
+
+    editor.insertCustomStamp("a2");
+
+    const [element] = editor.getSnapshot().elements as MapStampElement[];
+    expect(element).toMatchObject({
+      kind: "stamp",
+      name: "a2",
+      stampRef: "custom:a2",
+      transform: { x: 100, y: 50, size: DEFAULT_STAMP_SIZE_MM, rotation: 0 },
+    });
+    expect(editor.getSnapshot().selectedId).toBe(element.id);
+    // The Insert tool keeps the picture as its pick, so a pointer drop places it too.
+    expect(editor.getSnapshot().currentStampId).toBe("custom:a2");
+
+    editor.undo();
+    expect(editor.getSnapshot().elements).toEqual([]);
+  });
+
+  it("places a Map Image at half the page width, selected and undoable", () => {
+    const { editor } = openEditor();
+    editor.setAssetLibrary(libraryOf([{ ...asset("a1", 100, 50), use: "image" }]));
+
+    editor.insertImage("a1");
+
+    const [element] = editor.getSnapshot().elements as MapImageElement[];
+    expect(element).toMatchObject({
+      kind: "image",
+      name: "a1",
+      assetRef: "a1",
+      transform: { x: 100, y: 50, size: 100, rotation: 0 },
+      opacity: MAX_IMAGE_OPACITY,
+      exportable: true,
+    });
+    expect(editor.getSnapshot().selectedId).toBe(element.id);
+
+    editor.undo();
+    expect(editor.getSnapshot().elements).toEqual([]);
+  });
+
+  it("fades, resizes, and keeps a Map Image out of exports, one undo step each", () => {
+    const { editor } = openEditor();
+    editor.setAssetLibrary(libraryOf([{ ...asset("a1", 100, 50), use: "image" }]));
+    editor.insertImage("a1");
+    const id = (editor.getSnapshot().elements[0] as MapImageElement).id;
+
+    editor.setImageOpacity(id, 0.5);
+    editor.setImageExportable(id, false);
+    editor.setImageSize(id, 30);
+
+    const image = editor.getSnapshot().elements[0] as MapImageElement;
+    expect(image.opacity).toBe(0.5);
+    expect(image.exportable).toBe(false);
+    expect(image.transform.size).toBe(30);
+
+    editor.undo();
+    editor.undo();
+    editor.undo();
+    const restored = editor.getSnapshot().elements[0] as MapImageElement;
+    expect(restored.opacity).toBe(MAX_IMAGE_OPACITY);
+    expect(restored.exportable).toBe(true);
+    expect(restored.transform.size).toBe(100);
   });
 });

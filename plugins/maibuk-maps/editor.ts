@@ -19,6 +19,7 @@ import type {
   MapFillContent,
   MapFillElement,
   MapFillScatter,
+  MapImageElement,
   MapLabelElement,
   MapLabelFont,
   MapLineElement,
@@ -34,7 +35,9 @@ import {
   DEFAULT_POLYGON_SIDES,
   DEFAULT_SHAPE_SIZE_MM,
   LINE_STYLE_DEFAULT_ENCLOSES,
+  MAX_IMAGE_OPACITY,
   MAX_NAME_LENGTH,
+  MIN_IMAGE_OPACITY,
   MIN_LABEL_SIZE_MM,
   MIN_LABEL_WIDTH_MM,
   MIN_STAMP_SIZE_MM,
@@ -50,16 +53,19 @@ import {
 } from "./maps";
 import { createAutosave } from "./autosave";
 import { type FillTranslation, insertFill, pourFill, reconcileFills } from "./fills";
-import type { MapAsset } from "./assets";
+import { customStampRef, parseCustomStampRef, type MapAsset, type MapAssetMime } from "./assets";
 import {
   assetMessage,
   parseFrameMessage,
   rasterizeMessage,
   sceneMessage,
+  type AssetIngestedMessage,
   type FrameRasterizeErrorMessage,
   type FrameRasterizedMessage,
   type FrameSceneMessage,
   type FrameToWorkerMessage,
+  type IngestAssetMessage,
+  type IngestErrorMessage,
   type MapTool,
   type PenDraftLabel,
   type RasterFormat,
@@ -101,7 +107,6 @@ import {
   isBaseStampId,
   stampNameKey,
   stampTakesColour,
-  type BaseStampId,
 } from "./stamps";
 import {
   isMapStyleId,
@@ -181,8 +186,8 @@ export interface MapEditorSnapshot {
   selectedShape: MapShape | null;
   /** The Shape kind the selected line was converted from, or null when it never was a Shape. */
   selectedConvertedFrom: ShapeKind | null;
-  /** The base Stamp the Insert tool places next. */
-  currentStampId: BaseStampId;
+  /** The Stamp the Insert tool places next: a base Stamp id, or a Custom Stamp ref. */
+  currentStampId: string;
   /** The selected Stamp, or null when the selection is not a Stamp. */
   selectedStamp: MapStampElement | null;
   /**
@@ -298,6 +303,28 @@ export interface MapEditor {
   setStamp(id: string): void;
   /** Drops the picked Stamp at `point`, or at the view centre, selected, as one undo step. */
   insertStamp(point?: MapPoint): void;
+  /** Places a Custom Stamp of the Library picture `assetId` at the view centre, selected. */
+  insertCustomStamp(assetId: string): void;
+  /** Places a Map Image of the Library picture `assetId` at the view centre, selected. */
+  insertImage(assetId: string): void;
+  /**
+   * Cleans and measures one uploaded picture in the Frame (#756), which alone
+   * has a DOM. Resolves with the sanitized bytes and their intrinsic size;
+   * rejects when no Frame is mounted, when its reply refuses the picture, or
+   * when the Frame goes away first.
+   */
+  ingestAsset(
+    mime: MapAssetMime,
+    data: string
+  ): Promise<{ data: string; width: number; height: number; recolorable: boolean }>;
+  /** Fades one unlocked Map Image to `opacity`, a fraction from 0.05 to 1. */
+  setImageOpacity(id: string, opacity: number): void;
+  /** Sets whether one unlocked Map Image is drawn in an export and a Place. */
+  setImageExportable(id: string, exportable: boolean): void;
+  /** Resizes one unlocked Map Image to `sizeMm` wide, keeping its aspect ratio. */
+  setImageSize(id: string, sizeMm: number): void;
+  /** Gives one unlocked Fill a Custom Fill from the Library, or none. */
+  setFillCustomFill(id: string, customFill: string | null): void;
   /** Moves, sizes, or turns one unlocked Stamp from its number fields, as one undo step. */
   setStampTransform(id: string, patch: Partial<MapStampTransform>): void;
   /** Sets the scale bar's unit or the distance its page width stands for, as one undo step. */
@@ -387,18 +414,26 @@ function softEdgeAmount(element: MapLineElement | MapFillElement): number | null
 }
 
 /** A Fill's content with one kind left out, which the last-kind rule re-checks. */
-function contentWithout(content: MapFillContent, kind: "texture" | "scatter"): MapFillContent {
+function contentWithout(
+  content: MapFillContent,
+  kind: "texture" | "scatter" | "customFill"
+): MapFillContent {
   const next: MapFillContent = {};
   if (content.color !== undefined) next.color = content.color;
   if (kind !== "texture" && content.texture !== undefined) next.texture = content.texture;
   if (kind !== "scatter" && content.scatter !== undefined) next.scatter = content.scatter;
+  if (kind !== "customFill" && content.customFill !== undefined)
+    next.customFill = content.customFill;
   return next;
 }
 
 /** Whether a Fill's content covers nothing, which the model refuses to store. */
 function coversNothing(content: MapFillContent): boolean {
   return (
-    content.color === undefined && content.texture === undefined && content.scatter === undefined
+    content.color === undefined &&
+    content.texture === undefined &&
+    content.scatter === undefined &&
+    content.customFill === undefined
   );
 }
 
@@ -418,7 +453,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
   // A new Fill takes the `land` role, so it follows the Map Style until the
   // author overrides it.
   let currentFillColor = "land";
-  let currentStampId: BaseStampId = DEFAULT_STAMP_ID;
+  let currentStampId: string = DEFAULT_STAMP_ID;
   let roughenStrength = DEFAULT_ROUGHEN_STRENGTH_MM;
   let pdfFontFamily: string | null = null;
   let zoom = 1;
@@ -450,6 +485,19 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     { resolve(value: Uint8Array): void; reject(reason: Error): void }
   >();
   let nextRasterRequestId = 1;
+
+  /**
+   * The ingest requests the Frame has not answered yet (#756), by the id the
+   * Worker sent. A reply settles its own request only.
+   */
+  const ingestRequests = new Map<
+    number,
+    {
+      resolve(value: { data: string; width: number; height: number; recolorable: boolean }): void;
+      reject(reason: Error): void;
+    }
+  >();
+  let nextIngestRequestId = 1;
 
   let snapshot = buildSnapshot();
 
@@ -856,6 +904,41 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
   }
 
   /**
+   * The Stamp pick a `setStamp` call stores: a base Stamp id, or a Custom Stamp
+   * ref the Library holds. A ref this build or this Library does not know would
+   * place a Stamp that draws nothing, so it is refused.
+   */
+  function storedStampPick(id: string): string | null {
+    if (isBaseStampId(id)) return id;
+    if (id.startsWith("base:")) {
+      const baseId = id.slice("base:".length);
+      return isBaseStampId(baseId) ? baseId : null;
+    }
+    const assetId = parseCustomStampRef(id);
+    return assetId !== null && assetSource?.library.assets.has(assetId) === true ? id : null;
+  }
+
+  /** The `stampRef` a Stamp pick draws. */
+  function stampRefOf(pick: string): string {
+    return isBaseStampId(pick) ? baseStampRef(pick) : pick;
+  }
+
+  /** The name a Stamp pick takes, from its base Stamp or its Library picture. */
+  function stampNameOf(pick: string): string {
+    if (isBaseStampId(pick)) return translate(options.language(), stampNameKey(pick));
+    const assetId = parseCustomStampRef(pick);
+    const asset = assetId === null ? undefined : assetSource?.library.assets.get(assetId);
+    return asset?.name ?? translate(options.language(), "element.kind.stamp");
+  }
+
+  /** Whether a Stamp pick's art draws in one paint this Library can tint. */
+  function stampRecolours(pick: string): boolean {
+    const assetId = parseCustomStampRef(pick);
+    if (assetId !== null) return assetSource?.library.assets.get(assetId)?.recolorable === true;
+    return stampTakesColour(pick);
+  }
+
+  /**
    * Drops the picked Stamp at `point` (#749), or at the view centre with no
    * point: the art's own default size, in the map ink, named after the art in
    * the app language. The new Stamp becomes the selection, and the whole
@@ -865,10 +948,58 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     const at: MapPoint = point ?? [doc.page.widthMm / 2 + panX, doc.page.heightMm / 2 + panY];
     const element = newStamp({
       id: randomMapId(),
-      name: translate(options.language(), stampNameKey(currentStampId)),
-      stampRef: baseStampRef(currentStampId),
+      name: stampNameOf(currentStampId),
+      stampRef: stampRefOf(currentStampId),
       point: at,
     });
+    selectedId = element.id;
+    edit(addElement(elements, element));
+  }
+
+  /**
+   * Places a Custom Stamp of the Library picture `assetId` at the view centre,
+   * selected (#756), and keeps it as the Insert tool's pick so the next pointer
+   * drop places the same picture.
+   */
+  function insertCustomStamp(assetId: string): void {
+    const asset = assetSource?.library.assets.get(assetId);
+    if (asset === undefined) return;
+    currentStampId = customStampRef(assetId);
+    const element = newStamp({
+      id: randomMapId(),
+      name: asset.name,
+      stampRef: currentStampId,
+      point: [doc.page.widthMm / 2 + panX, doc.page.heightMm / 2 + panY],
+    });
+    selectedId = element.id;
+    edit(addElement(elements, element));
+  }
+
+  /**
+   * Places a Map Image of the Library picture `assetId` at the view centre,
+   * selected (#756): half the page wide, its aspect ratio from the picture, at
+   * full strength, and included in exports.
+   */
+  function insertImage(assetId: string): void {
+    const asset = assetSource?.library.assets.get(assetId);
+    if (asset === undefined) return;
+    const widthMm = doc.page.widthMm / 2;
+    const element: MapImageElement = {
+      id: randomMapId(),
+      kind: "image",
+      name: asset.name,
+      hidden: false,
+      locked: false,
+      assetRef: assetId,
+      transform: {
+        x: doc.page.widthMm / 2 + panX,
+        y: doc.page.heightMm / 2 + panY,
+        size: widthMm,
+        rotation: 0,
+      },
+      opacity: MAX_IMAGE_OPACITY,
+      exportable: true,
+    };
     selectedId = element.id;
     edit(addElement(elements, element));
   }
@@ -941,6 +1072,29 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     rasterRequests.clear();
   }
 
+  /** Answers the ingest request a Frame reply names (#756), with its picture or its reason. */
+  function settleIngest(message: AssetIngestedMessage | IngestErrorMessage): void {
+    const pending = ingestRequests.get(message.requestId);
+    if (pending === undefined) return;
+    ingestRequests.delete(message.requestId);
+    if (message.kind === "ingest-error") {
+      pending.reject(new Error(message.reason));
+      return;
+    }
+    pending.resolve({
+      data: message.data,
+      width: message.width,
+      height: message.height,
+      recolorable: message.recolorable,
+    });
+  }
+
+  /** Rejects every ingest request a Frame that is gone will never answer. */
+  function rejectIngestRequests(reason: string): void {
+    for (const { reject } of ingestRequests.values()) reject(new Error(reason));
+    ingestRequests.clear();
+  }
+
   function applyMessage(message: FrameToWorkerMessage): void {
     switch (message.kind) {
       case "stroke":
@@ -972,11 +1126,6 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
         break;
       case "bendLabel":
         bendDragged(message.id, message.bend);
-        break;
-      // An uploaded picture's ingest reply (#756) changes no Element: the
-      // Insert panel resolves its pending uploads here once it can ask.
-      case "asset-ingested":
-      case "ingest-error":
         break;
     }
   }
@@ -1062,7 +1211,10 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       // A new Frame replaces the old one (#745): whatever the old one was
       // drawing will never answer, so its pending exports fail instead of
       // hanging.
-      if (frame !== null && frame !== port) rejectRasterRequests("the Frame was replaced");
+      if (frame !== null && frame !== port) {
+        rejectRasterRequests("the Frame was replaced");
+        rejectIngestRequests("the Frame was replaced");
+      }
       frame = port;
       // A Frame that just connected holds no picture yet, so every one the Map
       // names is sent again, once each (#756).
@@ -1076,6 +1228,10 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       if (message === null) return;
       if (message.kind === "rasterized") {
         settleRasterize(message);
+        return;
+      }
+      if (message.kind === "asset-ingested" || message.kind === "ingest-error") {
+        settleIngest(message);
         return;
       }
       applyMessage(message);
@@ -1094,6 +1250,25 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
           port.postMessage(rasterizeMessage(requestId, svg, size, format));
         } catch (error) {
           rasterRequests.delete(requestId);
+          reject(error instanceof Error ? error : new Error(String(error)));
+        }
+      });
+    },
+
+    ingestAsset(mime, data) {
+      const port = frame;
+      if (port === null) {
+        return Promise.reject(new Error("no Frame is mounted to ingest in"));
+      }
+      const requestId = nextIngestRequestId;
+      nextIngestRequestId += 1;
+      const message: IngestAssetMessage = { kind: "ingest-asset", requestId, mime, data };
+      return new Promise((resolve, reject) => {
+        ingestRequests.set(requestId, { resolve, reject });
+        try {
+          port.postMessage(message);
+        } catch (error) {
+          ingestRequests.delete(requestId);
           reject(error instanceof Error ? error : new Error(String(error)));
         }
       });
@@ -1280,6 +1455,22 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       updateElement(id, (element) => (element.kind === "fill" ? { ...element, content } : element));
     },
 
+    setFillCustomFill(id, customFill) {
+      const target = elementById(id);
+      if (target === undefined || target.kind !== "fill" || target.locked) return;
+      // A Custom Fill only a Library this Map can read draws anything, so the
+      // Fill only names one the Library holds.
+      if (customFill !== null && assetSource?.library.customFills.has(customFill) !== true) return;
+      if ((target.content.customFill ?? null) === customFill) return;
+      const content =
+        customFill === null
+          ? contentWithout(target.content, "customFill")
+          : { ...target.content, customFill };
+      // A Fill covers something at all times: the last kind stays.
+      if (coversNothing(content)) return;
+      updateElement(id, (element) => (element.kind === "fill" ? { ...element, content } : element));
+    },
+
     setFillScatter(id, stampId) {
       const target = elementById(id);
       if (target === undefined || target.kind !== "fill" || target.locked) return;
@@ -1427,13 +1618,18 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
 
     setStamp(id) {
       // A pick this build has no art for would place a Stamp that draws
-      // nothing, so only the built-in Stamps are picks.
-      if (!isBaseStampId(id) || id === currentStampId) return;
-      currentStampId = id;
+      // nothing, so only a base Stamp or a Library Custom Stamp is a pick.
+      const pick = storedStampPick(id);
+      if (pick === null || pick === currentStampId) return;
+      currentStampId = pick;
       publish();
     },
 
     insertStamp,
+
+    insertCustomStamp,
+
+    insertImage,
 
     insertLabel,
 
@@ -1531,6 +1727,45 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       );
     },
 
+    setImageOpacity(id, opacity) {
+      const target = elementById(id);
+      if (target === undefined || target.kind !== "image" || target.locked) return;
+      if (!Number.isFinite(opacity)) return;
+      const next = clamp(opacity, MIN_IMAGE_OPACITY, MAX_IMAGE_OPACITY);
+      if (next === target.opacity) return;
+      updateElement(id, (element) =>
+        element.kind === "image" ? { ...element, opacity: next } : element
+      );
+    },
+
+    setImageExportable(id, exportable) {
+      const target = elementById(id);
+      if (
+        target === undefined ||
+        target.kind !== "image" ||
+        target.locked ||
+        target.exportable === exportable
+      ) {
+        return;
+      }
+      updateElement(id, (element) =>
+        element.kind === "image" ? { ...element, exportable } : element
+      );
+    },
+
+    setImageSize(id, sizeMm) {
+      const target = elementById(id);
+      if (target === undefined || target.kind !== "image" || target.locked) return;
+      if (!Number.isFinite(sizeMm)) return;
+      const size = Math.max(MIN_STAMP_SIZE_MM, sizeMm);
+      if (size === target.transform.size) return;
+      updateElement(id, (element) =>
+        element.kind === "image"
+          ? { ...element, transform: { ...element.transform, size } }
+          : element
+      );
+    },
+
     setStampScale(id, patch) {
       const target = elementById(id);
       if (target === undefined || target.kind !== "stamp" || target.locked) return;
@@ -1561,7 +1796,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
         target === undefined ||
         target.kind !== "stamp" ||
         target.locked ||
-        !stampTakesColour(target.stampRef) ||
+        !stampRecolours(target.stampRef) ||
         target.color === stored
       ) {
         return;
@@ -1651,6 +1886,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
 
     dispose() {
       rejectRasterRequests("the Frame is gone");
+      rejectIngestRequests("the Frame is gone");
       frame = null;
       listeners.clear();
     },
