@@ -10,7 +10,10 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { parseFrameMessage, rasterizeMessage } from "./frame-protocol";
+import type { MapAsset } from "./assets";
+import { assetMessage, parseFrameMessage, rasterizeMessage, sceneMessage } from "./frame-protocol";
+import type { MapDocument, MapImageElement } from "./maps";
+import { mapLibrary } from "./scene";
 
 /** A PNG's first bytes, enough to tell one reply's bytes from another's. */
 function pngBytes(): ArrayBuffer {
@@ -142,5 +145,91 @@ describe("parseFrameMessage() for an asset ingest reply", () => {
       })
     ).toBeNull();
     expect(parseFrameMessage({ kind: "asset", id: "a1", mime: "image/png", data: SVG })).toBeNull();
+  });
+});
+
+describe("assetMessage()", () => {
+  it("hands the Frame one picture's bytes under its asset id", () => {
+    const asset: MapAsset = {
+      id: "a1",
+      name: "Coast",
+      mime: "image/png",
+      data: "AAAA",
+      width: 40,
+      height: 20,
+      recolorable: false,
+    };
+
+    expect(assetMessage(asset)).toEqual({
+      kind: "asset",
+      id: "a1",
+      mime: "image/png",
+      data: "AAAA",
+    });
+  });
+});
+
+describe("sceneMessage() with the Library's pictures", () => {
+  /** A square Map holding one Map Image of the picture `a1`. */
+  const scan: MapImageElement = {
+    id: "scan",
+    kind: "image",
+    name: "The Reach",
+    hidden: false,
+    locked: false,
+    assetRef: "a1",
+    transform: { x: 40, y: 60, size: 80, rotation: 0 },
+    opacity: 1,
+    exportable: true,
+  };
+  const map = {
+    page: { preset: "square" as const, widthMm: 203.2, heightMm: 203.2 },
+    elements: [scan],
+    styleId: "atlas",
+  } satisfies Pick<MapDocument, "page" | "elements" | "styleId">;
+  const view = {
+    selectedId: null,
+    tool: "select" as const,
+    zoom: 1,
+    panX: 0,
+    panY: 0,
+    penLabel: { one: "Pen line, {{count}} point", other: "Pen line, {{count}} points" },
+  };
+
+  it("carries the picture's primitive, by id, in the scene the Frame draws", () => {
+    const message = sceneMessage(map, view, {
+      library: mapLibrary([
+        {
+          id: "a1",
+          name: "Coast",
+          mime: "image/png",
+          width: 40,
+          height: 20,
+          recolorable: false,
+          use: "image",
+        },
+      ]),
+    });
+
+    expect(message.elements[0].shapes).toEqual([
+      {
+        kind: "image",
+        assetId: "a1",
+        x: 40,
+        y: 60,
+        width: 80,
+        height: 40,
+        rotation: 0,
+        opacity: 1,
+      },
+    ]);
+    // The bytes never ride in the scene; the Frame is sent them once by id.
+    expect(JSON.stringify(message)).not.toContain("data:");
+  });
+
+  it("draws nothing for a picture the Library is not asked about", () => {
+    const message = sceneMessage(map, view);
+
+    expect(message.elements[0].shapes).toEqual([]);
   });
 });

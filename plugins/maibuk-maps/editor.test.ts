@@ -6,7 +6,8 @@
  * snapshot the page draws.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { AssetIndexEntry, CustomFill, MapAsset } from "./assets";
 import {
   DEFAULT_SOFT_EDGE_MM,
   MAX_SOFT_EDGE_MM,
@@ -16,7 +17,7 @@ import {
 } from "./editor";
 import { parseFrameMessage } from "./frame-protocol";
 import { shapeOutline } from "./geometry";
-import { smoothStroke } from "./scene";
+import { mapLibrary, smoothStroke } from "./scene";
 import {
   DATA_VERSION,
   DEFAULT_FILL_COLOR,
@@ -907,7 +908,7 @@ describe("moving a Stamp", () => {
     expect(editor.getSnapshot().elements).toEqual([stamp()]);
   });
 
-  it("leaves a locked Stamp, and an Element it cannot move yet, where it is", () => {
+  it("leaves a locked Stamp and a locked Map Image where they are, and moves them once unlocked", () => {
     const scan: MapImageElement = {
       id: "scan",
       kind: "image",
@@ -925,9 +926,18 @@ describe("moving a Stamp", () => {
     editor.move(1, 0);
     expect(editor.getSnapshot().elements[0]).toEqual(stamp({ locked: true }));
 
+    // A Map Image moves by its transform, as a Stamp does.
     editor.select("scan");
     editor.move(1, 0);
-    expect(editor.getSnapshot().elements[1]).toEqual(scan);
+    expect(editor.getSnapshot().elements[1]).toEqual({
+      ...scan,
+      transform: { x: 21, y: 20, size: 40, rotation: 0 },
+    });
+    editor.setLocked("scan", true);
+    editor.move(1, 0);
+    expect(editor.getSnapshot().elements[1]).toMatchObject({
+      transform: { x: 21, y: 20, size: 40, rotation: 0 },
+    });
   });
 });
 
@@ -2186,5 +2196,190 @@ describe("rasterizing the export SVG in the Frame", () => {
     editor.dispose();
 
     await expect(pending).rejects.toThrow();
+  });
+});
+
+describe("the Library's pictures (#756)", () => {
+  /** One index row for a picture `width` by `height` pixels. */
+  function entry(id: string, width = 40, height = 20, recolorable = false): AssetIndexEntry {
+    return { id, name: id, mime: "image/png", width, height, recolorable, use: "image" };
+  }
+
+  /** One Library picture: its index row and the base64 bytes the Library stores. */
+  function asset(id: string, data = "AAAA"): AssetIndexEntry & MapAsset {
+    return { ...entry(id), name: id, data };
+  }
+
+  /** A Map Image of the picture `id`, 80 mm wide at (40, 60). */
+  function imageElement(id: string, overrides: Partial<MapImageElement> = {}): MapImageElement {
+    return {
+      id,
+      kind: "image",
+      name: id,
+      hidden: false,
+      locked: false,
+      assetRef: "a1",
+      transform: { x: 40, y: 60, size: 80, rotation: 0 },
+      opacity: 1,
+      exportable: true,
+      ...overrides,
+    };
+  }
+
+  /** A Custom Stamp drawing the picture `custom:a2`. */
+  function customStamp(): MapStampElement {
+    return {
+      id: "portrait",
+      kind: "stamp",
+      name: "Portrait",
+      hidden: false,
+      locked: false,
+      stampRef: "custom:a2",
+      transform: { x: 100, y: 50, size: 12, rotation: 0 },
+    };
+  }
+
+  /** A Frame port that records what the editor sends and answers nothing. */
+  function framePort(): { port: MessagePort; messages: Array<Record<string, unknown>> } {
+    const messages: Array<Record<string, unknown>> = [];
+    const port = {
+      onmessage: null,
+      start: () => {},
+      postMessage: (message: Record<string, unknown>) => messages.push(message),
+    } as unknown as MessagePort;
+    return { port, messages };
+  }
+
+  /** Where a Map's pictures come from, recording which ids were read. */
+  function sourceOf(assets: Array<AssetIndexEntry & MapAsset>, customFills: CustomFill[] = []) {
+    const loaded: string[] = [];
+    const byId = new Map(assets.map((one) => [one.id, one]));
+    return {
+      loaded,
+      source: {
+        library: mapLibrary(assets, customFills),
+        load: async (id: string) => {
+          loaded.push(id);
+          return byId.get(id) ?? null;
+        },
+      },
+    };
+  }
+
+  const assetMessages = (messages: Array<Record<string, unknown>>) =>
+    messages.filter((message) => message.kind === "asset");
+
+  it("sends one asset message per picture the Map names, when the Frame connects", async () => {
+    const { editor } = openEditor([imageElement("scan"), customStamp()]);
+    editor.setAssetLibrary(sourceOf([asset("a1"), asset("a2")]).source);
+    const { port, messages } = framePort();
+
+    editor.attachFrame(port);
+
+    await vi.waitFor(() =>
+      expect(assetMessages(messages)).toEqual([
+        { kind: "asset", id: "a1", mime: "image/png", data: "AAAA" },
+        { kind: "asset", id: "a2", mime: "image/png", data: "AAAA" },
+      ])
+    );
+  });
+
+  it("sends a picture once, however many scenes name it", async () => {
+    const { editor } = openEditor([imageElement("scan"), customStamp()]);
+    const { source, loaded } = sourceOf([asset("a1"), asset("a2")]);
+    editor.setAssetLibrary(source);
+    const { port, messages } = framePort();
+    editor.attachFrame(port);
+    await vi.waitFor(() => expect(assetMessages(messages)).toHaveLength(2));
+
+    editor.panLeft();
+    editor.panLeft();
+
+    await vi.waitFor(() =>
+      expect(messages.filter((message) => message.kind === "scene")).toHaveLength(3)
+    );
+    expect(assetMessages(messages)).toHaveLength(2);
+    expect(loaded).toEqual(["a1", "a2"]);
+  });
+
+  it("sends every picture again to a Frame that replaces the first", async () => {
+    const { editor } = openEditor([imageElement("scan")]);
+    editor.setAssetLibrary(sourceOf([asset("a1")]).source);
+    const first = framePort();
+    editor.attachFrame(first.port);
+    await vi.waitFor(() => expect(assetMessages(first.messages)).toHaveLength(1));
+
+    const second = framePort();
+    editor.attachFrame(second.port);
+
+    await vi.waitFor(() => expect(assetMessages(second.messages)).toHaveLength(1));
+  });
+
+  it("sends a picture a Custom Fill names once the Library holding it arrives", async () => {
+    const [fill, ring] = bucketFill({ customFill: "meadow" });
+    const { editor } = openEditor([fill, ring]);
+    const { port, messages } = framePort();
+    editor.attachFrame(port);
+
+    editor.setAssetLibrary(
+      sourceOf([asset("a3")], [{ id: "meadow", name: "Meadow", texture: "a3" }]).source
+    );
+
+    await vi.waitFor(() =>
+      expect(assetMessages(messages)).toEqual([
+        { kind: "asset", id: "a3", mime: "image/png", data: "AAAA" },
+      ])
+    );
+  });
+
+  it("sends nothing for a picture the Library no longer holds, and keeps drawing", async () => {
+    const { editor } = openEditor([imageElement("scan")]);
+    editor.setAssetLibrary(sourceOf([]).source);
+    const { port, messages } = framePort();
+    editor.attachFrame(port);
+
+    // The scene still arrives, with the picture's primitive naming an id the
+    // Frame has no bytes for, so it draws nothing there rather than nothing at all.
+    await vi.waitFor(() =>
+      expect(messages.filter((message) => message.kind === "scene")).toHaveLength(1)
+    );
+    expect(assetMessages(messages)).toEqual([]);
+    expect(editor.getSnapshot().library.assets.size).toBe(0);
+  });
+
+  it("draws the Library's pictures in the scene it sends, never their bytes", async () => {
+    const { editor } = openEditor([imageElement("scan")]);
+    editor.setAssetLibrary(sourceOf([asset("a1")]).source);
+    const { port, messages } = framePort();
+
+    editor.attachFrame(port);
+
+    const scene = messages.find((message) => message.kind === "scene");
+    expect(scene).toMatchObject({
+      elements: [
+        { shapes: [{ kind: "image", assetId: "a1", x: 40, y: 60, width: 80, height: 40 }] },
+      ],
+    });
+    expect(JSON.stringify(scene)).not.toContain("data:image");
+  });
+
+  it("names the data URIs an SVG export embeds, loading only the pictures the Map draws", async () => {
+    const { editor } = openEditor([imageElement("scan"), customStamp()]);
+    const { source, loaded } = sourceOf([asset("a1"), asset("a2"), asset("unused")], []);
+    editor.setAssetLibrary(source);
+
+    const uris = await editor.assetUris();
+
+    expect([...uris]).toEqual([
+      ["a1", "data:image/png;base64,AAAA"],
+      ["a2", "data:image/png;base64,AAAA"],
+    ]);
+    expect(loaded).toEqual(["a1", "a2"]);
+  });
+
+  it("has no pictures to embed before the Library loads", async () => {
+    const { editor } = openEditor([imageElement("scan")]);
+
+    await expect(editor.assetUris()).resolves.toEqual(new Map());
   });
 });

@@ -32,7 +32,8 @@
    * @typedef {"select" | "pencil" | "pen" | "bucket" | "area" | "eraser" | "insert" | ShapeKind} MapTool
    * @typedef {{ d: string, stroke: string | null, strokeWidth: number, dash: string | null, fill: string | null, fillRule?: "evenodd", opacity: number, transform?: string, clip?: string, hitOnly?: true }} LineShape
    * @typedef {{ text: string, x: number, y: number, size: number, fill: string, font?: string, letterSpacing?: number, halo?: { color: string, width: number }, path?: { id: string, d: string }, anchor: "start" | "middle" | "end", transform?: string }} TextShape
-   * @typedef {LineShape | TextShape} SceneShape
+   * @typedef {{ kind: "image", assetId: string, x: number, y: number, width: number, height: number, rotation: number, opacity: number, tint?: string, clip?: string }} ImageShape
+   * @typedef {LineShape | TextShape | ImageShape} SceneShape
    * @typedef {{ x: number, y: number, rotation: number, width: number, bend: number }} FrameLabelLayout
    * @typedef {{ id: string, shapes: SceneShape[], filter: string | null, hidden: boolean, locked: boolean, selected: boolean, movable: boolean, label?: FrameLabelLayout }} FrameSceneElement
    * @typedef {{ one: string, other: string }} PenDraftLabel
@@ -227,6 +228,15 @@
   }
 
   /**
+   * Whether a shape is an uploaded picture rather than a path or text (#756).
+   * @param {SceneShape} shape
+   * @returns {shape is ImageShape}
+   */
+  function isImageShape(shape) {
+    return /** @type {ImageShape} */ (shape).kind === "image";
+  }
+
+  /**
    * Reads the baseline a piece of text follows, or null when it follows none.
    * Its id has to be as safe as a definitions id, because the text names it in
    * an href, and it needs a path lines can follow.
@@ -290,9 +300,36 @@
   }
 
   /**
-   * Reads one render primitive, or null when it has no path or text to draw. A
-   * path without a usable stroke colour is a fill; without a usable fill, a
-   * stroke. The Worker sends every path's width, so one without it is malformed,
+   * Reads one uploaded picture (#756), or null when it cannot be drawn: one of
+   * no place, no size, or no asset id would paint an invisible nothing. It
+   * carries only the asset's id, so its bytes stay out of every scene message.
+   * @param {Record<string, unknown>} shape
+   * @returns {ImageShape | null}
+   */
+  function readImageShape(shape) {
+    if (typeof shape.assetId !== "string" || shape.assetId === "") return null;
+    if (!isNumber(shape.x) || !isNumber(shape.y)) return null;
+    if (!isNumber(shape.width) || shape.width <= 0) return null;
+    if (!isNumber(shape.height) || shape.height <= 0) return null;
+    return {
+      kind: "image",
+      assetId: shape.assetId,
+      x: shape.x,
+      y: shape.y,
+      width: shape.width,
+      height: shape.height,
+      rotation: isNumber(shape.rotation) ? shape.rotation : 0,
+      opacity: isNumber(shape.opacity) ? Math.max(0, Math.min(1, shape.opacity)) : 1,
+      ...(typeof shape.tint === "string" && shape.tint !== "" ? { tint: shape.tint } : {}),
+      // A Clip Path id is only as safe as a definitions id, so it takes the same check.
+      ...(typeof shape.clip === "string" && FILTER_ID.test(shape.clip) ? { clip: shape.clip } : {}),
+    };
+  }
+
+  /**
+   * Reads one render primitive, or null when it has no path, text, or picture to
+   * draw. A path without a usable stroke colour is a fill; without a usable fill,
+   * a stroke. The Worker sends every path's width, so one without it is malformed,
    * and its `fillRule` only when the fill has to cut holes in itself.
    * @param {unknown} raw
    * @returns {SceneShape | null}
@@ -301,6 +338,7 @@
     if (typeof raw !== "object" || raw === null) return null;
     const shape = /** @type {Record<string, unknown>} */ (raw);
     if (typeof shape.text === "string") return readTextShape(shape);
+    if (shape.kind === "image") return readImageShape(shape);
     if (typeof shape.d !== "string" || shape.d === "") return null;
     if (!isNumber(shape.strokeWidth) || shape.strokeWidth < 0) return null;
     return {
@@ -745,6 +783,69 @@
   }
 
   /**
+   * The rectangle one picture covers, as a closed path in page millimetres, so
+   * the Frame can pick the Element by the picture's box.
+   * @param {ImageShape} shape
+   * @returns {string}
+   */
+  function imagePath(shape) {
+    const left = shape.x - shape.width / 2;
+    const top = shape.y - shape.height / 2;
+    return `M ${n(left)} ${n(top)} L ${n(left + shape.width)} ${n(top)} L ${n(
+      left + shape.width
+    )} ${n(top + shape.height)} L ${n(left)} ${n(top + shape.height)} Z`;
+  }
+
+  /**
+   * The turn one picture draws with, about its own centre, or undefined when it
+   * stands upright.
+   * @param {ImageShape} shape
+   * @returns {string | undefined}
+   */
+  function imageRotation(shape) {
+    if (shape.rotation === 0) return undefined;
+    return `rotate(${n(shape.rotation)} ${n(shape.x)} ${n(shape.y)})`;
+  }
+
+  /**
+   * The id a tint filter takes, mirroring `tintFilterId` in `scene.ts`: the
+   * colour's own letters and digits, so one colour has one filter.
+   * @param {string} color
+   * @returns {string}
+   */
+  function tintFilterId(color) {
+    const digits = color.replace(/[^0-9a-zA-Z]/g, "").toLowerCase();
+    return `asset-tint-${digits === "" ? "none" : digits}`;
+  }
+
+  /**
+   * The node one picture draws (#756), or null while the Frame holds no bytes
+   * for its id: a picture is sent once and the scene only names it, so an
+   * Element whose asset has not arrived yet draws nothing here rather than a
+   * broken image. Its tint is a filter the Worker defined, written over the
+   * picture's own alpha.
+   * @param {ImageShape} shape
+   * @returns {any}
+   */
+  function imageNode(shape) {
+    const { html } = lib;
+    const src = assetUrls.get(shape.assetId);
+    if (src === undefined) return null;
+    return html`<image
+      class="map-image"
+      href="${src}"
+      x="${n(shape.x - shape.width / 2)}"
+      y="${n(shape.y - shape.height / 2)}"
+      width="${n(shape.width)}"
+      height="${n(shape.height)}"
+      preserveAspectRatio="xMidYMid meet"
+      opacity="${shape.opacity === 1 ? undefined : n(shape.opacity)}"
+      transform="${imageRotation(shape)}"
+      filter="${shape.tint === undefined ? undefined : `url(#${tintFilterId(shape.tint)})`}"
+    />`;
+  }
+
+  /**
    * The paths and text one Element draws, under the Soft Edge filter the scene
    * gave it (#750). The selection outline stays outside the filter, so it keeps
    * its crisp edge while the art fades.
@@ -756,32 +857,41 @@
     const art = [
       ...clippedArt(
         element.shapes.filter((shape) => !isTextShape(shape)),
-        (shape) => html`<path
-          class="map-hit"
-          d="${shape.d}"
-          fill-rule="${shape.fillRule ?? undefined}"
-          data-fill="${shape.fill === null ? undefined : "true"}"
-          transform="${shape.transform ?? undefined}"
-        />`
+        (shape) =>
+          isImageShape(shape)
+            ? html`<path
+              class="map-hit"
+              d="${imagePath(shape)}"
+              data-fill="true"
+              transform="${imageRotation(shape)}"
+            />`
+            : html`<path
+              class="map-hit"
+              d="${shape.d}"
+              fill-rule="${shape.fillRule ?? undefined}"
+              data-fill="${shape.fill === null ? undefined : "true"}"
+              transform="${shape.transform ?? undefined}"
+            />`
       ),
       // The ink: every path the Element paints, then its text. A hit-only path,
       // such as a Map Label's baseline, is a target and never ink of its own.
       ...clippedArt(
         element.shapes.filter((shape) => isTextShape(shape) || !shape.hitOnly),
-        (shape) =>
-          isTextShape(shape)
-            ? textNodes(shape)
-            : html`<path
-              class="map-line"
-              d="${shape.d}"
-              stroke="${shape.stroke ?? "none"}"
-              stroke-width="${shape.stroke === null ? undefined : n(shape.strokeWidth)}"
-              fill="${shape.fill ?? "none"}"
-              fill-rule="${shape.fillRule ?? undefined}"
-              stroke-dasharray="${shape.dash ?? undefined}"
-              opacity="${shape.opacity === 1 ? undefined : n(shape.opacity)}"
-              transform="${shape.transform ?? undefined}"
-            />`
+        (shape) => {
+          if (isTextShape(shape)) return textNodes(shape);
+          if (isImageShape(shape)) return imageNode(shape);
+          return html`<path
+            class="map-line"
+            d="${shape.d}"
+            stroke="${shape.stroke ?? "none"}"
+            stroke-width="${shape.stroke === null ? undefined : n(shape.strokeWidth)}"
+            fill="${shape.fill ?? "none"}"
+            fill-rule="${shape.fillRule ?? undefined}"
+            stroke-dasharray="${shape.dash ?? undefined}"
+            opacity="${shape.opacity === 1 ? undefined : n(shape.opacity)}"
+            transform="${shape.transform ?? undefined}"
+          />`;
+        }
       ),
     ];
     if (element.filter === null) return art;
@@ -792,21 +902,25 @@
    * The shapes a selected Element's highlight traces (#750): the ink it drew,
    * without the Stamps a Fill scatters, which are content painted inside its
    * area rather than the outline that marks it. Shapes that draw the same path,
-   * such as a Fill's colour and the texture laid over it, trace one outline.
+   * such as a Fill's colour and the texture laid over it, trace one outline. A
+   * picture is marked by the box it covers (#756).
    * @param {FrameSceneElement} element
-   * @returns {LineShape[]}
+   * @returns {Array<{ d: string, transform?: string }>}
    */
   function highlightShapes(element) {
     /** @type {Set<string>} */
     const seen = new Set();
-    /** @type {LineShape[]} */
+    /** @type {Array<{ d: string, transform?: string }>} */
     const shapes = [];
     for (const shape of element.shapes) {
       if (isTextShape(shape) || shape.clip !== undefined) continue;
-      const key = `${shape.transform ?? ""}\n${shape.d}`;
+      const traced = isImageShape(shape)
+        ? { d: imagePath(shape), transform: imageRotation(shape) }
+        : { d: shape.d, ...(shape.transform === undefined ? {} : { transform: shape.transform }) };
+      const key = `${traced.transform ?? ""}\n${traced.d}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      shapes.push(shape);
+      shapes.push(traced);
     }
     return shapes;
   }
@@ -1732,9 +1846,32 @@
   }
 
   /**
+   * One `<image>` in an export SVG still naming the picture it draws, as
+   * `sceneToSvg` writes it, rather than holding its bytes.
+   * @type {RegExp}
+   */
+  const ASSET_IMAGE_TAG = /<image\b[^>]*?\bhref="asset:([^"]*)"[^>]*?\/>/g;
+
+  /**
+   * The export SVG with each picture placeholder pointing at the `blob:` URL
+   * this Frame keeps for that asset id (#756), so the rasterize request carries
+   * ids and never a picture. A picture the Frame holds no bytes for loses its
+   * whole `<image>`, so it leaves no broken box in the exported picture.
+   * @param {string} svg
+   * @returns {string}
+   */
+  function withAssetUrls(svg) {
+    return svg.replace(ASSET_IMAGE_TAG, (tag, id) => {
+      const url = assetUrls.get(id);
+      return url === undefined ? "" : tag.replace(`href="asset:${id}"`, `href="${url}"`);
+    });
+  }
+
+  /**
    * Draws one export SVG into a canvas of the requested pixel size and encodes
-   * it (#753). The SVG carries its fonts as data URIs, so nothing here reaches
-   * the network; a JPEG gets white paper behind it, since it has no alpha.
+   * it (#753). The SVG carries its fonts as data URIs and names its pictures by
+   * asset id, so nothing here reaches the network; a JPEG gets white paper
+   * behind it, since it has no alpha.
    * @param {FrameRasterizeMessage} request
    * @returns {Promise<ArrayBuffer>}
    */
@@ -1744,7 +1881,8 @@
     canvas.height = request.heightPx;
     const context = canvas.getContext("2d");
     if (context === null) throw new Error("this Frame cannot draw a canvas");
-    const url = URL.createObjectURL(new Blob([request.svg], { type: "image/svg+xml" }));
+    const svg = withAssetUrls(request.svg);
+    const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
     try {
       const image = await loadImage(url);
       if (request.format !== "png") {
@@ -2031,4 +2169,8 @@
   }
 
   if (hooks && typeof hooks.onReady === "function") hooks.onReady(cleanup);
+  // A test document may have no canvas, so the rasterize answer is out of reach:
+  // this seam hands it the SVG the Frame would draw instead, which is the one
+  // fact a test can assert about an export.
+  if (hooks && typeof hooks.onAssetSvg === "function") hooks.onAssetSvg(withAssetUrls);
 })();

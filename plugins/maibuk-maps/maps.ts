@@ -200,13 +200,14 @@ export interface MapStampElement extends MapElementBase {
 
 /**
  * A Map Image: an uploaded picture at one spot on the page (#756). `assetRef`
- * names the Library asset it draws; its `transform` centres the picture the way
- * a Stamp's does, with `size` its width in page millimetres. `opacity` fades
- * it, and `exportable` decides whether an export and a Place include it.
+ * names the Library asset it draws, by its own id; its `transform` centres the
+ * picture the way a Stamp's does, with `size` its width in page millimetres.
+ * `opacity` fades it, and `exportable` decides whether an export and a Place
+ * include it.
  */
 export interface MapImageElement extends MapElementBase {
   kind: "image";
-  /** The Library asset it draws, `asset:<id>`. */
+  /** The Library asset it draws, by the asset's own id. */
   assetRef: string;
   transform: MapStampTransform;
   /** How strongly it draws, from `MIN_IMAGE_OPACITY` to `MAX_IMAGE_OPACITY`. */

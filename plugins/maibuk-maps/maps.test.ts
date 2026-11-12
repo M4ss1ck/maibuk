@@ -1083,6 +1083,24 @@ describe("Map Images", () => {
       expect(await loadElements([element])).toBeNull();
     }
   });
+
+  it("leaves uploaded pictures out of the index thumbnail, which carries no bytes", async () => {
+    const memory = memoryStorage();
+    const store = storeOver(memory.storage);
+    await store.create({ name: "Traced", bookId: null, preset: "square" });
+    const created = memory.values.get(mapKey("m1")) as MapDocument;
+    await memory.storage.set({
+      key: mapKey("m1"),
+      value: { ...created, elements: [image()] },
+    });
+    await store.save((await store.load("m1")) as MapDocument);
+
+    const svg = decodeURIComponent(
+      (await store.list())[0].preview.slice("data:image/svg+xml,".length)
+    );
+    expect(svg).not.toContain("<image");
+    expect(svg).not.toContain("asset:");
+  });
 });
 
 describe("Map Labels", () => {

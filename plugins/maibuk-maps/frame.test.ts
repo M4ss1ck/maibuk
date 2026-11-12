@@ -53,6 +53,11 @@ interface Frame {
   origin: [number, number];
   /** Sends one scene, with the defaults a Select-tool, unzoomed view has. */
   scene(overrides?: Record<string, unknown>): void;
+  /**
+   * The SVG the Frame would rasterize, with each picture placeholder swapped for
+   * the blob URL it keeps: jsdom has no canvas, so a test reads the swap here.
+   */
+  assetSvg(svg: string): string;
 }
 
 /** Loads the Frame's markup, the vendored libraries, and its scripts. */
@@ -62,9 +67,13 @@ function loadFrame(): Frame {
   (window as unknown as { maibuk: unknown }).maibuk = { port };
   const cleanups: (() => void)[] = [];
   const origin: [number, number] = [0, 0];
+  let assetSvg: (svg: string) => string = (svg) => svg;
   (globalThis as Record<string, unknown>).__mapTestHooks = {
     pagePoint: (event: MouseEvent) => [event.clientX - origin[0], event.clientY - origin[1]],
     onReady: (cleanup: () => void) => cleanups.push(cleanup),
+    onAssetSvg: (resolve: (svg: string) => string) => {
+      assetSvg = resolve;
+    },
   };
   try {
     // The page's own order: the drawing library, then the sanitizer and the
@@ -95,6 +104,7 @@ function loadFrame(): Frame {
         ...overrides,
       });
     },
+    assetSvg: (svg) => assetSvg(svg),
   };
 }
 
@@ -2378,6 +2388,43 @@ describe("the Select tool", () => {
     expect(frame.port.messages).toEqual([{ kind: "select", id: "e1" }]);
   });
 
+  it("drags a Map Image by its box and posts one move on release", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [
+        sceneElement({
+          id: "scan",
+          movable: true,
+          shapes: [
+            {
+              kind: "image",
+              assetId: "a1",
+              x: 100,
+              y: 50,
+              width: 80,
+              height: 40,
+              rotation: 0,
+              opacity: 1,
+            },
+          ],
+        }),
+      ],
+    });
+    const box = document.querySelector('g[data-element-id="scan"] path.map-hit');
+    if (box === null) throw new Error("the picture drew no hit box");
+
+    // The box is the picture's own, centred on its point: a press inside it
+    // picks the Element, exactly as a Stamp's art does.
+    pointer(box, "pointerdown", 100, 50);
+    pointer(svg(), "pointermove", 110, 55);
+    pointer(svg(), "pointerup", 110, 55);
+
+    expect(frame.port.messages).toEqual([
+      { kind: "select", id: "scan" },
+      { kind: "move", id: "scan", dx: 10, dy: 5 },
+    ]);
+  });
+
   it("reports an empty pick for the page around the Elements", () => {
     frame = loadFrame();
     frame.scene({ elements: [sceneElement()] });
@@ -2595,5 +2642,131 @@ describe("the Select tool", () => {
     if (surface === null) throw new Error("the Frame has no surface");
     pointer(surface, "pointerdown", 5, 5);
     expect(frame.port.messages).toEqual([]);
+  });
+});
+
+describe("an uploaded picture on the Map (#756)", () => {
+  /** One image primitive: an 80 by 40 mm box centred on (100, 50), upright and opaque. */
+  const imageShape = (overrides: Record<string, unknown> = {}) => ({
+    kind: "image",
+    assetId: "a1",
+    x: 100,
+    y: 50,
+    width: 80,
+    height: 40,
+    rotation: 0,
+    opacity: 1,
+    ...overrides,
+  });
+
+  /** Every `blob:` URL a test makes, and every one it frees. */
+  function stubBlobUrls(): { created: string[]; revoked: string[]; restore(): void } {
+    const created: string[] = [];
+    const revoked: string[] = [];
+    const originalCreate = URL.createObjectURL;
+    const originalRevoke = URL.revokeObjectURL;
+    URL.createObjectURL = () => {
+      const url = `blob:mock/${created.length + 1}`;
+      created.push(url);
+      return url;
+    };
+    URL.revokeObjectURL = (url: string) => {
+      revoked.push(url);
+    };
+    return {
+      created,
+      revoked,
+      restore() {
+        URL.createObjectURL = originalCreate;
+        URL.revokeObjectURL = originalRevoke;
+      },
+    };
+  }
+
+  it("draws a picture in the box the scene gives it, at the blob URL it was sent", () => {
+    const blobs = stubBlobUrls();
+    try {
+      frame = loadFrame();
+      frame.port.deliver({ kind: "asset", id: "a1", mime: "image/png", data: "AAAA" });
+      frame.scene({
+        elements: [
+          sceneElement({
+            id: "scan",
+            shapes: [imageShape({ rotation: 15, opacity: 0.4, tint: "#1f2933" })],
+          }),
+        ],
+      });
+
+      const drawn = document.querySelector("image.map-image");
+      expect(drawn?.getAttribute("href")).toBe("blob:mock/1");
+      expect(drawn?.getAttribute("x")).toBe("60");
+      expect(drawn?.getAttribute("y")).toBe("30");
+      expect(drawn?.getAttribute("width")).toBe("80");
+      expect(drawn?.getAttribute("height")).toBe("40");
+      expect(drawn?.getAttribute("preserveAspectRatio")).toBe("xMidYMid meet");
+      expect(drawn?.getAttribute("opacity")).toBe("0.4");
+      expect(drawn?.getAttribute("transform")).toBe("rotate(15 100 50)");
+      expect(drawn?.getAttribute("filter")).toBe("url(#asset-tint-1f2933)");
+    } finally {
+      blobs.restore();
+    }
+  });
+
+  it("draws nothing for a picture whose bytes have not arrived, though it can still be picked", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [sceneElement({ id: "scan", shapes: [imageShape()] })] });
+
+    expect(document.querySelector("image.map-image")).toBeNull();
+    // The box itself is the target, so a press still selects the Element.
+    const hit = document.querySelector("path.map-hit");
+    expect(hit?.getAttribute("d")).toBe("M 60 30 L 140 30 L 140 70 L 60 70 Z");
+    expect(hit?.getAttribute("data-fill")).toBe("true");
+  });
+
+  it("marks a selected picture with the box it covers", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [sceneElement({ id: "scan", selected: true, shapes: [imageShape()] })],
+    });
+
+    const outline = document.querySelector("path.map-selection");
+    expect(outline?.getAttribute("d")).toBe("M 60 30 L 140 30 L 140 70 L 60 70 Z");
+  });
+
+  it("drops a picture the scene gives no asset id or no size", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [
+        sceneElement({
+          id: "scan",
+          shapes: [
+            imageShape({ assetId: "" }),
+            imageShape({ width: 0 }),
+            imageShape({ height: -4 }),
+            imageShape({ x: undefined }),
+          ],
+        }),
+      ],
+    });
+
+    expect(document.querySelector("image.map-image")).toBeNull();
+  });
+
+  it("swaps the export's picture placeholders for the blob URLs it keeps, dropping one it never got", () => {
+    const blobs = stubBlobUrls();
+    try {
+      frame = loadFrame();
+      frame.port.deliver({ kind: "asset", id: "a1", mime: "image/png", data: "AAAA" });
+
+      const swapped = frame.assetSvg(
+        '<svg><image href="asset:a1" x="0" y="0" width="8" height="4" preserveAspectRatio="xMidYMid meet"/><image href="asset:gone" x="0" y="0" width="8" height="4" preserveAspectRatio="xMidYMid meet"/></svg>'
+      );
+
+      expect(swapped).toContain('href="blob:mock/1"');
+      expect(swapped).not.toContain("asset:");
+      expect(swapped.match(/<image /g)).toHaveLength(1);
+    } finally {
+      blobs.restore();
+    }
   });
 });

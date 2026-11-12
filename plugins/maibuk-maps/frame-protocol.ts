@@ -22,10 +22,10 @@
  * module imports only its own files.
  */
 
-import type { MapAssetMime } from "./assets";
+import type { MapAsset, MapAssetMime } from "./assets";
 import type { MapDocument, MapPoint, ShapeKind } from "./maps";
 import { isShapeKind } from "./maps";
-import { canMove, type SceneShape, sceneRender } from "./scene";
+import { canMove, type SceneContext, type SceneShape, sceneRender } from "./scene";
 import { resolveColor, styleOf } from "./styles";
 
 /** The editor tool the Frame should honour. */
@@ -43,11 +43,12 @@ export type MapTool =
 export interface FrameSceneElement {
   id: string;
   /**
-   * The paths and text the Frame draws, from `sceneShapes`; empty for an
-   * Element with nothing to draw yet. A path carries the Clip Path id that
-   * keeps it inside its Fill's area when it is a scattered Stamp, and a
-   * hit-only path, such as a Map Label's baseline, only marks where its Element
-   * can be picked.
+   * The paths, text, and pictures the Frame draws, from `sceneShapes`; empty for
+   * an Element with nothing to draw yet. A path carries the Clip Path id that
+   * keeps it inside its Fill's area when it is a scattered Stamp, a hit-only
+   * path, such as a Map Label's baseline, only marks where its Element can be
+   * picked, and a picture carries its asset id rather than any bytes, so a scene
+   * stays small (#756).
    */
   shapes: SceneShape[];
   /** The Soft Edge filter the Element draws with, or null for a sharp edge. */
@@ -102,9 +103,10 @@ export interface FrameSceneMessage {
   background: string;
   elements: FrameSceneElement[];
   /**
-   * The SVG definitions the shapes reference (#750): the texture patterns, the
-   * scatter Clip Paths, and the Soft Edge filters. They arrive as the markup
-   * `sceneToSvg` writes, so the Frame and the export use one definition of each.
+   * The SVG definitions the shapes reference (#750, #756): the texture
+   * patterns, the tint filters, the scatter Clip Paths, and the Soft Edge
+   * filters. They arrive as the markup `sceneToSvg` writes, so the Frame and the
+   * export use one definition of each.
    */
   defs: string[];
   tool: MapTool;
@@ -503,6 +505,16 @@ export function parseFrameMessage(data: unknown): FrameToWorkerMessage | null {
 }
 
 /**
+ * The message that hands one Library picture's bytes to a Frame (#756), which
+ * keeps them as a `blob:` URL under the asset id. A scene names the picture by
+ * id, so the bytes cross the port once however many scenes draw it, and a scene
+ * message never carries a picture.
+ */
+export function assetMessage(asset: MapAsset): FrameAssetMessage {
+  return { kind: "asset", id: asset.id, mime: asset.mime, data: asset.data };
+}
+
+/**
  * The rasterize request the Worker sends one Frame (#753): the export SVG, the
  * pixel size to draw it at, and the format. The Frame answers with the bytes,
  * or an error, under the same `requestId`.
@@ -534,10 +546,11 @@ export function sceneMessage(
     panY: number;
     /** The localized Pen draft label's plural forms, with `{{count}}` for the point count. */
     penLabel: PenDraftLabel;
-  }
+  },
+  context: SceneContext = {}
 ): FrameSceneMessage {
   const style = styleOf(map.styleId);
-  const render = sceneRender(map.elements, map.page.widthMm, map.page.heightMm, style);
+  const render = sceneRender(map.elements, map.page.widthMm, map.page.heightMm, style, context);
   return {
     kind: "scene",
     widthMm: map.page.widthMm,

@@ -50,7 +50,9 @@ import {
 } from "./maps";
 import { createAutosave } from "./autosave";
 import { type FillTranslation, insertFill, pourFill, reconcileFills } from "./fills";
+import type { MapAsset } from "./assets";
 import {
+  assetMessage,
   parseFrameMessage,
   rasterizeMessage,
   sceneMessage,
@@ -71,6 +73,7 @@ import {
   shapeOutline,
 } from "./geometry";
 import { createHistory } from "./history";
+import { assetDataUri } from "./export";
 import { format, translate, type MapsKey } from "./i18n";
 import {
   DEFAULT_SCATTER_SPACING_MM,
@@ -81,13 +84,16 @@ import {
 import {
   addElement,
   canMove,
+  EMPTY_MAP_LIBRARY,
   moveElement,
+  referencedAssetIds,
   removeElement,
   renameElement,
   reorder,
   setHidden,
   setLocked,
   smoothStroke,
+  type MapLibrary,
 } from "./scene";
 import {
   DEFAULT_STAMP_ID,
@@ -184,6 +190,11 @@ export interface MapEditorSnapshot {
    * `pdf` option, or null when this device has none installed.
    */
   pdfFontFamily: string | null;
+  /**
+   * The Library's pictures and Custom Fills (#756): what a Custom Stamp, a
+   * Custom Fill, and a Map Image draw from. Empty until the Library has loaded.
+   */
+  library: MapLibrary;
 }
 
 export interface MapEditorOptions {
@@ -191,6 +202,17 @@ export interface MapEditorOptions {
   doc: MapDocument;
   /** The app language at call time, for the names a new Map Line takes. */
   language: () => string;
+}
+
+/**
+ * Where a Map's uploaded pictures come from (#756): the Library's index, which
+ * the scene draws from without any bytes, and the bytes of one picture, which
+ * only the Frame that draws it needs.
+ */
+export interface AssetSource {
+  library: MapLibrary;
+  /** One picture's bytes; null when the Library no longer holds it. */
+  load(assetId: string): Promise<MapAsset | null>;
 }
 
 /**
@@ -297,6 +319,19 @@ export interface MapEditor {
   setLabelLayout(id: string, patch: MapLabelLayout): void;
   /** Reports the installed PDF Font's family, or null, for the Font select's label. */
   setPdfFontFamily(family: string | null): void;
+  /**
+   * Gives the editor the Library's pictures and Custom Fills, so a Custom Stamp,
+   * a Custom Fill, and a Map Image draw, and so the attached Frame is sent the
+   * bytes of every picture the Map names, once each. Null leaves the Library
+   * empty, as a Map opened before it loads draws.
+   */
+  setAssetLibrary(source: AssetSource | null): void;
+  /**
+   * The pictures the open Map draws, as the data URIs an SVG export embeds.
+   * Only the ids the Map names are loaded, and an id the Library no longer
+   * holds is left out, so its picture leaves no empty box.
+   */
+  assetUris(): Promise<ReadonlyMap<string, string>>;
   deleteElement(id: string): void;
   /** Moves one Element one place towards the top of the Elements list. */
   moveUp(id: string): void;
@@ -395,6 +430,16 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
   let frame: MessagePort | null = null;
   const listeners = new Set<() => void>();
 
+  /** Where the Map's uploaded pictures come from (#756); null until the Library loads. */
+  let assetSource: AssetSource | null = null;
+  /**
+   * The asset ids the attached Frame already holds bytes for, and the ones being
+   * read right now, so a picture crosses the port once however many scenes name
+   * it. A scene message carries ids alone, never a picture.
+   */
+  let sentAssets = new Set<string>();
+  const loadingAssets = new Set<string>();
+
   /**
    * The rasterize requests the Frame has not answered yet (#753), by the id the
    * Worker sent. A reply settles its own request, so two exports in flight
@@ -448,6 +493,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       currentStampId,
       selectedStamp,
       pdfFontFamily,
+      library: assetSource?.library ?? EMPTY_MAP_LIBRARY,
     };
   }
 
@@ -471,19 +517,58 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
 
   /** The scene message the Frame draws, from the editor's current state. */
   function sceneForFrame(): FrameSceneMessage {
-    return sceneMessage(doc, {
-      selectedId,
-      tool,
-      zoom,
-      panX,
-      panY,
-      penLabel: penDraftLabel(),
-    });
+    return sceneMessage(
+      doc,
+      {
+        selectedId,
+        tool,
+        zoom,
+        panX,
+        panY,
+        penLabel: penDraftLabel(),
+      },
+      { library: assetSource?.library ?? EMPTY_MAP_LIBRARY }
+    );
   }
 
   function sendScene(): void {
     if (frame === null) return;
     frame.postMessage(sceneForFrame());
+    sendAssets();
+  }
+
+  /** Every picture the open Map names, in Element order and once each. */
+  function assetIds(): string[] {
+    return referencedAssetIds(elements, assetSource?.library ?? EMPTY_MAP_LIBRARY);
+  }
+
+  /**
+   * Hands the attached Frame the bytes of every picture the open Map names that
+   * it has not been sent yet (#756), so a Custom Stamp, a Custom Fill, and a Map
+   * Image draw, and a scene never carries a picture. A read that fails or finds
+   * nothing sends nothing, and the next scene tries again.
+   */
+  function sendAssets(): void {
+    const port = frame;
+    const source = assetSource;
+    if (port === null || source === null) return;
+    for (const id of assetIds()) {
+      if (sentAssets.has(id) || loadingAssets.has(id)) continue;
+      loadingAssets.add(id);
+      void source
+        .load(id)
+        .then((asset) => {
+          // A Frame replaced while the bytes were being read gets its own copies
+          // from its own attach, so a late read never posts to a dead port.
+          if (asset === null || frame !== port) return;
+          port.postMessage(assetMessage(asset));
+          sentAssets.add(id);
+        })
+        .catch(() => {
+          // A picture that will not load leaves its Element drawing nothing.
+        })
+        .finally(() => loadingAssets.delete(id));
+    }
   }
 
   function schedule(): void {
@@ -979,7 +1064,11 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       // hanging.
       if (frame !== null && frame !== port) rejectRasterRequests("the Frame was replaced");
       frame = port;
+      // A Frame that just connected holds no picture yet, so every one the Map
+      // names is sent again, once each (#756).
+      if (sentAssets.size > 0) sentAssets = new Set();
       port.postMessage(sceneForFrame());
+      sendAssets();
     },
 
     handleFrameMessage(data) {
@@ -1384,6 +1473,29 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       if (family === pdfFontFamily) return;
       pdfFontFamily = family;
       publish();
+    },
+
+    setAssetLibrary(source) {
+      assetSource = source;
+      // A different Library can name different pictures, so the Frame is told
+      // which of them it holds again: the ids the last Library had may be gone.
+      sentAssets = new Set();
+      publish();
+      sendScene();
+    },
+
+    assetUris() {
+      const source = assetSource;
+      if (source === null) return Promise.resolve(new Map<string, string>());
+      return Promise.all(assetIds().map(async (id) => [id, await source.load(id)] as const)).then(
+        (loaded) => {
+          const uris = new Map<string, string>();
+          for (const [id, asset] of loaded) {
+            if (asset !== null) uris.set(id, assetDataUri(asset));
+          }
+          return uris;
+        }
+      );
     },
 
     setStampTransform(id, patch) {

@@ -13,7 +13,10 @@
  *   nothing fits.
  * - **SVG.** {@link exportSvg} serializes the scene with no editor marks, the
  *   print size in millimetres, and one `@font-face` per font the picture asks
- *   for, so Inkscape and a browser draw what the Frame drew.
+ *   for, so Inkscape and a browser draw what the Frame drew. An uploaded
+ *   picture travels as an `asset:<id>` placeholder that {@link resolveAssetHrefs}
+ *   turns into a data URI for a saved file, while the Frame swaps in the bytes
+ *   it holds (#756).
  * - **Placing.** {@link imageHtml} builds the `<img>` one Place inserts and
  *   {@link insertWhenReady} retries the insert until the opened Chapter or
  *   Note's editor is mounted.
@@ -24,9 +27,10 @@
  */
 
 import { PLUGIN_MESSAGE_MAX_BYTES } from "@/plugin-sdk/protocol";
+import type { MapAsset } from "./assets";
 import { roundedMm } from "./geometry";
 import type { MapDocument, MapPage } from "./maps";
-import { sceneToSvg } from "./scene";
+import { type SceneContext, sceneToSvg } from "./scene";
 
 /** Millimetres in an inch, so a page's physical width reads in inches. */
 const MM_PER_INCH = 25.4;
@@ -344,14 +348,45 @@ function withPrintSize(svg: string, page: MapPage): string {
 /**
  * A whole Map as an export SVG: what the Frame draws, with no editor marks
  * (`data-element-id`/`data-selected`), the page size in millimetres so Inkscape
- * prints it at the right size, and the fonts it asks for embedded.
+ * prints it at the right size, and the fonts it asks for embedded. `context`
+ * brings the Library a Map's pictures come from, and an export drops the Map
+ * Images the author kept out of it.
  */
-export function exportSvg(map: ExportMap, fonts: readonly ExportFont[]): string {
-  const picture = sceneToSvg(map)
+export function exportSvg(
+  map: ExportMap,
+  fonts: readonly ExportFont[],
+  context: SceneContext = {}
+): string {
+  const picture = sceneToSvg(map, { ...context, forExport: true })
     .replace(/ data-element-id="[^"]*"/g, "")
     .replace(/ data-selected="true"/g, "")
     .replace(/<g >/g, "<g>");
   return embedFonts(withPrintSize(picture, map.page), fonts);
+}
+
+/** The data URI a Library picture's stored bytes make, which an export embeds. */
+export function assetDataUri(asset: Pick<MapAsset, "mime" | "data">): string {
+  return `data:${asset.mime};base64,${asset.data}`;
+}
+
+/** One `<image>` still naming the picture it draws rather than holding its bytes. */
+const ASSET_IMAGE_TAG = /<image\b[^>]*?\bhref="asset:([^"]*)"[^>]*?\/>/g;
+
+/**
+ * The same SVG with every picture placeholder replaced by the URI `resolve`
+ * answers for its asset id (#756): a data URI for a saved file, so the picture
+ * travels inside the SVG. An id `resolve` answers null for loses its whole
+ * `<image>`, since a picture the Library no longer holds leaves no empty box.
+ * The Frame never calls this: it swaps in the blob URLs it already holds.
+ */
+export function resolveAssetHrefs(
+  svg: string,
+  resolve: (assetId: string) => string | null
+): string {
+  return svg.replace(ASSET_IMAGE_TAG, (tag: string, assetId: string) => {
+    const href = resolve(assetId);
+    return href === null ? "" : tag.replace(`href="asset:${assetId}"`, `href="${href}"`);
+  });
 }
 
 /**

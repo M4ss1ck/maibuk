@@ -30,6 +30,7 @@ import {
 import { PLUGIN_COMMAND_RUN_REQUEST, PLUGIN_MIGRATE_DATA_REQUEST } from "@/plugin-sdk/protocol";
 import { servePluginUi } from "@/plugin-sdk/ui-serve";
 import { DEFAULT_SOFT_EDGE_MM, SOFT_EDGE_STEP_MM, type MapEditor } from "./editor";
+import { ASSETS_KEY, assetKey, type AssetIndexEntry } from "./assets";
 import {
   ALT_TEXT_MAX_CHARS,
   exportLogLine,
@@ -55,6 +56,7 @@ import {
   type MapFillContent,
   type MapFillElement,
   type MapIndexEntry,
+  type MapImageElement,
   type MapLabelElement,
   type MapLineElement,
   type MapStampElement,
@@ -453,6 +455,41 @@ function mapStorage(elements: MapElement[]): Map<string, unknown> {
 
 function storedMap(storage: Map<string, unknown>): MapDocument {
   return storage.get(mapKey("m1")) as MapDocument;
+}
+
+/** A PNG's bytes, base64, as the Library stores one picture. */
+const PICTURE_DATA = "iVBORw0KGgo=";
+
+/**
+ * The storage of a Map drawing one uploaded picture twice (#756): the Map Image
+ * `trace`, which exports, and `kept`, which the author left out of them. The
+ * Library holds the picture the Map names.
+ */
+function pictureStorage(): Map<string, unknown> {
+  const image = (id: string, exportable: boolean): MapImageElement => ({
+    id,
+    kind: "image",
+    name: id,
+    hidden: false,
+    locked: false,
+    assetRef: "a1",
+    transform: { x: 76.2, y: 60, size: 80, rotation: 0 },
+    opacity: 1,
+    exportable,
+  });
+  const storage = mapStorage([image("trace", true), image("kept", false)]);
+  const row: AssetIndexEntry = {
+    id: "a1",
+    name: "Trace",
+    mime: "image/png",
+    width: 40,
+    height: 20,
+    recolorable: false,
+    use: "image",
+  };
+  storage.set(ASSETS_KEY, [row]);
+  storage.set(assetKey("a1"), { ...row, data: PICTURE_DATA });
+  return storage;
 }
 
 /** Registers the manifest's Commands so the harness can bind their keys. */
@@ -3093,6 +3130,75 @@ describe("Map editor Export panel", () => {
           bytes: saved.bytes.length,
         })
       );
+
+      await page.unmount();
+    } finally {
+      info.mockRestore();
+      await host.stop();
+    }
+  });
+
+  it("draws a Map Image in the editor and keeps its id in the rasterize message", async () => {
+    const { host, runtime } = exportHostFor(pictureStorage());
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      expect(await runtime.openMap("m1")).toBe(true);
+      const frame = frameStandIn(runtime.editor);
+      const page = await host.renderPage(MAP_PAGE_ID);
+      const user = userEvent.setup();
+
+      // The page hands the editor the Library once it has loaded, and the editor
+      // hands the Frame the picture's bytes once, by id.
+      await waitFor(() =>
+        expect(frame.messages.filter((message) => message.kind === "asset")).toEqual([
+          { kind: "asset", id: "a1", mime: "image/png", data: PICTURE_DATA },
+        ])
+      );
+
+      const save = await screen.findByRole("button", { name: en["export.save"] });
+      await tabTo(user, save, 80);
+      await user.keyboard("{Enter}");
+
+      await waitFor(() => expect(host.files.saves).toHaveLength(1));
+      const svg = String(frame.messages.find((message) => message.kind === "rasterize")?.svg ?? "");
+      // The bytes stay in the Frame; the request carries the id it draws.
+      expect(svg).toContain('href="asset:a1"');
+      expect(svg).not.toContain("data:image");
+      // The Map Image the author kept out of exports draws nowhere.
+      expect(svg.match(/<image /g)).toHaveLength(1);
+
+      await page.unmount();
+    } finally {
+      info.mockRestore();
+      await host.stop();
+    }
+  });
+
+  it("embeds a picture's bytes in a saved SVG, so the file reads on its own", async () => {
+    const { host, runtime } = exportHostFor(pictureStorage());
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      expect(await runtime.openMap("m1")).toBe(true);
+      frameStandIn(runtime.editor);
+      const page = await host.renderPage(MAP_PAGE_ID);
+      const user = userEvent.setup();
+
+      const group = await screen.findByRole("radiogroup", { name: en["export.format"] });
+      for (let i = 0; i < 80 && !group.contains(document.activeElement); i++) await user.tab();
+      await user.keyboard("{ArrowRight}");
+      await waitFor(() =>
+        expect(screen.getByRole("radio", { name: en["export.format.svg"] })).toBeChecked()
+      );
+
+      const save = screen.getByRole("button", { name: en["export.save"] });
+      await tabTo(user, save, 20);
+      await user.keyboard("{Enter}");
+
+      await waitFor(() => expect(host.files.saves).toHaveLength(1));
+      const svg = new TextDecoder().decode(host.files.saves[0].bytes);
+      expect(svg).toContain(`href="data:image/png;base64,${PICTURE_DATA}"`);
+      expect(svg).not.toContain("asset:");
+      expect(svg.match(/<image /g)).toHaveLength(1);
 
       await page.unmount();
     } finally {

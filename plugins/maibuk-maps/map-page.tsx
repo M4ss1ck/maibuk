@@ -19,6 +19,7 @@ import {
   SOFT_EDGE_STEP_MM,
   type MapEditor,
 } from "./editor";
+import { createAssetStore } from "./assets";
 import {
   ALT_TEXT_MAX_CHARS,
   DEFAULT_DPI,
@@ -37,6 +38,7 @@ import {
   maxDpiForPrint,
   placePixelSize,
   printPixelSize,
+  resolveAssetHrefs,
   svgAtPixelSize,
   svgPixelSize,
   type ExportFont,
@@ -65,6 +67,7 @@ import {
   type StampScaleUnit,
 } from "./maps";
 import { MAX_SCATTER_SPACING_MM, MIN_SCATTER_SPACING_MM } from "./scatter";
+import { mapLibrary } from "./scene";
 import { BASE_STAMP_IDS, baseStampRef, stampNameKey, stampTakesColour } from "./stamps";
 import {
   MAP_STYLE_IDS,
@@ -113,9 +116,10 @@ interface MapPictureDeps {
 
 /**
  * Saves the open Map through `files.save` (#753): an SVG of the page with its
- * fonts embedded, or a PNG rasterized in the Frame at the chosen print size and
- * DPI. A save the author cancels writes nothing and logs nothing; a saved
- * picture logs exactly one line with its format, pixel size, and bytes.
+ * fonts embedded and its pictures inlined, or a PNG rasterized in the Frame at
+ * the chosen print size and DPI, where the Frame swaps each picture's id for
+ * the bytes it holds. A save the author cancels writes nothing and logs nothing;
+ * a saved picture logs exactly one line with its format, pixel size, and bytes.
  */
 async function saveMapImage(
   { client, editor, exportFonts }: MapPictureDeps,
@@ -123,9 +127,14 @@ async function saveMapImage(
 ): Promise<void> {
   const doc = editor.getSnapshot().doc;
   const fonts = await exportFonts();
+  const library = editor.getSnapshot().library;
 
   if (pictureFormat === "svg") {
-    const bytes = new TextEncoder().encode(exportSvg(doc, fonts));
+    // A saved SVG carries its pictures, so it reads in Inkscape or a browser
+    // with no Library beside it (#756).
+    const uris = await editor.assetUris();
+    const svg = resolveAssetHrefs(exportSvg(doc, fonts, { library }), (id) => uris.get(id) ?? null);
+    const bytes = new TextEncoder().encode(svg);
     const result = await client.files.save({
       name: exportFileName(doc.name, "svg"),
       mimeType: "image/svg+xml",
@@ -147,7 +156,9 @@ async function saveMapImage(
   }
 
   const size = printPixelSize(doc.page, printWidthIn, dpi);
-  const svg = svgAtPixelSize(exportSvg(doc, fonts), size);
+  // The rasterize request keeps the ids alone, and the Frame draws the pictures
+  // it was sent: a picture's bytes never ride in a message (#756).
+  const svg = svgAtPixelSize(exportSvg(doc, fonts, { library }), size);
   const bytes = await editor.rasterize(svg, size, "png");
   const result = await client.files.save({
     name: exportFileName(doc.name, "png"),
@@ -289,9 +300,10 @@ function sleep(ms: number): Promise<void> {
 /**
  * Rasterizes the open Map into the HTML one Place inserts (#753): at
  * {@link placePixelSize}, PNG first and JPEG at falling quality when the data
- * URI would be over the insert cap, with the alt text escaped. Throws
- * {@link ExportTooLargeError} when even the lowest JPEG is over the cap, before
- * anything navigates.
+ * URI would be over the insert cap, with the alt text escaped. The SVG names its
+ * pictures by id, and the Frame draws the bytes it holds, so no picture rides in
+ * the rasterize message (#756). Throws {@link ExportTooLargeError} when even the
+ * lowest JPEG is over the cap, before anything navigates.
  */
 async function preparePlace(
   { editor, exportFonts }: Pick<MapPictureDeps, "editor" | "exportFonts">,
@@ -299,7 +311,8 @@ async function preparePlace(
 ): Promise<PlacedImage> {
   const doc = editor.getSnapshot().doc;
   const size = placePixelSize(doc.page);
-  const svg = svgAtPixelSize(exportSvg(doc, await exportFonts()), size);
+  const library = editor.getSnapshot().library;
+  const svg = svgAtPixelSize(exportSvg(doc, await exportFonts(), { library }), size);
   const fitted = await fitUnderCap((format) => editor.rasterize(svg, size, format));
   return {
     html: imageHtml(alt, dataUri(fitted.mime, fitted.bytes)),
@@ -1328,11 +1341,41 @@ function MapEditorView({
 
 export function createMapPage(deps: MapPageDeps): ComponentType {
   const { client, runtime, backToMaps } = deps;
+  /**
+   * The Library's uploaded pictures (#756), read and written through the same
+   * Plugin storage the Maps store uses. The page holds one, so every Map opened
+   * while it is mounted draws from the same Library.
+   */
+  const assets = createAssetStore(client.storage);
 
   return function MapPage() {
     const language = useLanguage(client);
-    const t = (key: MapsKey) => translate(language, key);
     const editor = runtime.editor;
+
+    // The pictures, and the Custom Fills built from them, reach the editor once
+    // the Library has loaded: it draws them, sends a Frame the bytes of the few
+    // the Map names, and embeds them in an exported SVG (#756).
+    useEffect(() => {
+      if (editor === null) return;
+      let live = true;
+      void Promise.all([assets.listAssets(), assets.listCustomFills()])
+        .then(([index, customFills]) => {
+          if (!live) return;
+          editor.setAssetLibrary({
+            library: mapLibrary(index, customFills),
+            load: (id) => assets.getAsset(id),
+          });
+        })
+        .catch(() => {
+          // A Library that will not load leaves the pictures out; the Map still
+          // draws everything else.
+        });
+      return () => {
+        live = false;
+      };
+    }, [editor]);
+
+    const t = (key: MapsKey) => translate(language, key);
     if (editor === null) {
       return (
         <ui.EmptyState
