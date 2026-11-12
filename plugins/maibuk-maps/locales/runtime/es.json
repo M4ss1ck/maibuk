@@ -46,7 +46,6 @@
   "map.saveFailed": "No se pudo guardar el mapa. El último cambio todavía no está guardado.",
   "map.emptyTitle": "No hay ningún mapa abierto",
   "map.emptyDescription": "Abre un mapa desde la lista de Mapas para editarlo.",
-  "tools.label": "Herramienta",
   "tools.select": "Selección",
   "tools.pencil": "Lápiz",
   "tools.pen": "Pluma",
@@ -215,5 +214,13 @@
   "customFill.name": "Relleno personalizado {{number}}",
   "customFill.failed": "No se pudo guardar el relleno personalizado. Inténtalo de nuevo.",
   "upload.tooLarge": "Esa imagen es demasiado grande. El límite es {{limit}} MB.",
-  "upload.invalid": "Ese archivo no es una imagen que Mapas pueda usar."
+  "upload.invalid": "Ese archivo no es una imagen que Mapas pueda usar.",
+  "chrome.undo": "Deshacer",
+  "chrome.redo": "Rehacer",
+  "chrome.layers": "Capas",
+  "chrome.minimiseProperties": "Minimizar propiedades",
+  "chrome.restoreProperties": "Restaurar propiedades",
+  "chrome.zoomIn": "Acercar",
+  "chrome.zoomOut": "Alejar",
+  "chrome.zoom": "{{percent}} %"
 }

@@ -2706,3 +2706,138 @@ describe("zooming and panning by gesture (#777)", () => {
     expect(scenes).toHaveLength(sent);
   });
 });
+
+describe("the view the zoom cluster reads (#778)", () => {
+  it("reports the zoom every path that moves it leaves", () => {
+    const { editor } = openEditor();
+    expect(editor.getSnapshot().zoom).toBe(1);
+
+    editor.zoomIn();
+    expect(editor.getSnapshot().zoom).toBeCloseTo(1.25, 10);
+
+    // A gesture moves the same value the cluster's readout reads, so the two
+    // never disagree about how far in the view is.
+    editor.handleFrameMessage({ kind: "zoom", point: [100, 50], factor: 2 });
+    expect(editor.getSnapshot().zoom).toBeCloseTo(2.5, 10);
+
+    editor.zoomReset();
+    expect(editor.getSnapshot().zoom).toBe(1);
+  });
+
+  it("repaints the page when a gesture zooms or pans", () => {
+    const { editor } = openEditor();
+    let painted = 0;
+    const stop = editor.subscribe(() => {
+      painted += 1;
+    });
+
+    editor.handleFrameMessage({ kind: "zoom", point: [100, 50], factor: 2 });
+    editor.handleFrameMessage({ kind: "pan", dx: 4, dy: 0 });
+
+    stop();
+    expect(painted).toBe(2);
+  });
+});
+
+describe("the Stamp size the Insert card picks (#778)", () => {
+  /** The one Stamp an editor holds. */
+  function onlyStamp(editor: MapEditor): MapStampElement {
+    const [element] = editor.getSnapshot().elements;
+    if (element === undefined || element.kind !== "stamp") throw new Error("no Stamp");
+    return element;
+  }
+
+  it("places the next Stamp at the size the author picked", () => {
+    const { editor } = openEditor();
+    expect(editor.getSnapshot().currentStampSize).toBe(DEFAULT_STAMP_SIZE_MM);
+
+    editor.setStampSize(40);
+    editor.insertStamp();
+
+    expect(editor.getSnapshot().currentStampSize).toBe(40);
+    expect(onlyStamp(editor).transform.size).toBe(40);
+  });
+
+  it("keeps the size above the model's minimum", () => {
+    const { editor } = openEditor();
+    editor.setStampSize(0);
+    expect(editor.getSnapshot().currentStampSize).toBe(MIN_STAMP_SIZE_MM);
+  });
+
+  it("places an uploaded Custom Stamp at the same size, and takes no undo step to set it", () => {
+    const { editor } = openEditor();
+    const entry: AssetIndexEntry = {
+      id: "a1",
+      name: "Banner",
+      mime: "image/svg+xml",
+      width: 20,
+      height: 10,
+      recolorable: false,
+      use: "stamp",
+    };
+    editor.setAssetLibrary({
+      library: mapLibrary([entry], []),
+      load: async () => null,
+    });
+
+    editor.setStampSize(30);
+    editor.insertCustomStamp("a1");
+
+    expect(onlyStamp(editor).transform.size).toBe(30);
+    expect(editor.getSnapshot().canUndo).toBe(true);
+    editor.undo();
+    expect(editor.getSnapshot().elements).toEqual([]);
+  });
+});
+
+describe("renaming the Map from its own name (#778)", () => {
+  it("writes the trimmed name and saves the document once", async () => {
+    let saves = 0;
+    const saved: MapDocument[] = [];
+    const editor = createMapEditor({
+      store: {
+        save: async (doc: MapDocument) => {
+          saves += 1;
+          saved.push(doc);
+        },
+      },
+      doc: {
+        id: "map-1",
+        bookId: null,
+        name: "Map",
+        page: { preset: "square", widthMm: 200, heightMm: 100 },
+        styleId: "atlas",
+        overrides: {},
+        elements: [],
+        createdAt: 0,
+        updatedAt: 0,
+        dataVersion: DATA_VERSION,
+      },
+      language: () => "en",
+    });
+
+    editor.renameMap("  Coastline  ");
+    expect(editor.getSnapshot().doc.name).toBe("Coastline");
+    await editor.flush();
+
+    expect(saves).toBe(1);
+    expect(saved[0].name).toBe("Coastline");
+    // The Map is not one of its Elements: renaming it is no undo step.
+    expect(editor.getSnapshot().canUndo).toBe(false);
+  });
+
+  it("refuses a blank name and a name it already has", async () => {
+    const { editor } = openEditor();
+    let painted = 0;
+    const stop = editor.subscribe(() => {
+      painted += 1;
+    });
+
+    editor.renameMap("   ");
+    editor.renameMap("Map");
+
+    stop();
+    expect(editor.getSnapshot().doc.name).toBe("Map");
+    expect(painted).toBe(0);
+  });
+});

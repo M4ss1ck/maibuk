@@ -46,7 +46,6 @@
   "map.saveFailed": "The Map could not be saved. Your last change is not stored yet.",
   "map.emptyTitle": "No Map open",
   "map.emptyDescription": "Open a Map from the Maps list to edit it.",
-  "tools.label": "Tool",
   "tools.select": "Select",
   "tools.pencil": "Pencil",
   "tools.pen": "Pen",
@@ -215,5 +214,13 @@
   "customFill.name": "Custom Fill {{number}}",
   "customFill.failed": "The Custom Fill could not be saved. Try again.",
   "upload.tooLarge": "That image is too large. The limit is {{limit}} MB.",
-  "upload.invalid": "That file is not an image Maps can use."
+  "upload.invalid": "That file is not an image Maps can use.",
+  "chrome.undo": "Undo",
+  "chrome.redo": "Redo",
+  "chrome.layers": "Layers",
+  "chrome.minimiseProperties": "Minimise Properties",
+  "chrome.restoreProperties": "Restore Properties",
+  "chrome.zoomIn": "Zoom in",
+  "chrome.zoomOut": "Zoom out",
+  "chrome.zoom": "{{percent}}%"
 }
