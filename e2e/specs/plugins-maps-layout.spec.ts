@@ -11,6 +11,7 @@
 import type { Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { pressUntilFocused, tabTo } from "../support/keyboard";
+import { pageScrollWidths } from "../support/layout";
 import { expect, test } from "../support/test";
 
 const primaryNav = (page: Page) => page.getByRole("listbox", { name: "Primary navigation" });
@@ -239,5 +240,67 @@ test.describe("Maps floating layout at 1024x768 @wf:plugins-maps-layout @sandbox
     const { body, frame } = await boxes(page);
     expectSameBox(frame, body, "the Frame and the page body");
     await capture(page, "maps-layout-1024");
+  });
+});
+
+test.describe("Maps narrow layout at 390x844 @wf:plugins-maps-layout @sandbox", () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  test("the narrow page never scrolls sideways and every control is a 44px target", async ({
+    page,
+  }) => {
+    // The editor is reached at the desktop width, where the host's sidebar
+    // offers Maps, and the screen is narrowed afterwards: a phone shows this
+    // page with no sidebar at all, and the Plugin CSS takes over.
+    await openEditor(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    // The chrome is bars over an edge-to-edge drawing now, so nothing may push
+    // the page wider than the screen it is drawn on.
+    const scroll = await pageScrollWidths(page);
+    expect(scroll.scrollWidth, "the page's scroll width").toBeLessThanOrEqual(scroll.clientWidth);
+
+    const before = await boxes(page);
+
+    // Properties open, so the controls below include the tall card's own: the
+    // narrow block makes every one of them a thumb-sized target (#779).
+    await pressControl(page, toolButton(page, "Pen"));
+    await expect(page.getByRole("button", { name: "Minimise Properties" })).toBeVisible();
+
+    const buttons = pageBody(page).getByRole("button");
+    const count = await buttons.count();
+    expect(count, "the editor draws controls").toBeGreaterThan(0);
+    let measured = 0;
+    for (let index = 0; index < count; index++) {
+      const button = buttons.nth(index);
+      if (!(await button.isVisible())) continue;
+      const box = await button.boundingBox();
+      if (box === null) continue;
+      measured += 1;
+      const name = (await button.getAttribute("aria-label")) ?? (await button.innerText());
+      expect(box.width, `${name}: width`).toBeGreaterThanOrEqual(44);
+      expect(box.height, `${name}: height`).toBeGreaterThanOrEqual(44);
+    }
+    expect(measured, "controls measured").toBeGreaterThan(0);
+
+    // The overflow popover opens over the bar, and the full-height toggle gives
+    // Properties the page: neither may take a pixel of the Frame (#779).
+    await pressControl(page, toolButton(page, "More actions"));
+    await expect(page.getByRole("dialog")).toBeVisible();
+    const withOverflow = await boxes(page);
+    expectSameBox(withOverflow.frame, before.frame, "the Frame with the overflow popover open");
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toBeHidden();
+
+    await pressControl(page, toolButton(page, "Full-height Properties"));
+    await expect(toolButton(page, "Full-height Properties")).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    const fullHeight = await boxes(page);
+    expectSameBox(fullHeight.frame, before.frame, "the Frame with Properties at full height");
+
+    // Light and dark, at the narrow viewport.
+    await capture(page, "maps-layout-390");
   });
 });

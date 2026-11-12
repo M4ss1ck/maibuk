@@ -492,6 +492,10 @@ div[data-plugin-ui] > div:nth-child(8) { right: 0.75rem; bottom: 0.75rem; }
   div[data-plugin-ui] > div:nth-child(7) { top: 0; right: 0.5rem; left: auto; padding: 0.5rem 0; border-width: 0; border-radius: 0; background: none; box-shadow: none; }
   /* The belt lies along the bottom, one row that scrolls sideways. */
   div[data-plugin-ui] > div:nth-child(2) { top: auto; bottom: 0; left: 0; right: 0; flex-direction: row; overflow-x: auto; overflow-y: hidden; transform: none; padding: 0.5rem; border-width: 1px 0 0; border-radius: 0; }
+  /* Every control the narrow page shows is a 44px target, the touch minimum
+     (#779, #775 Decision 6): the host's icon buttons are 32px wide at their
+     default size, which a thumb cannot hit. */
+  div[data-plugin-ui] button { min-width: 2.75rem; min-height: 2.75rem; }
   /* Every tool is a 44px target that never shrinks inside the scrolling row. */
   div[data-plugin-ui] > div:nth-child(2) > button { flex: 0 0 auto; min-width: 2.75rem; min-height: 2.75rem; }
   /* The three pill controls give way to one overflow popover, so the bar keeps
@@ -502,10 +506,12 @@ div[data-plugin-ui] > div:nth-child(8) { right: 0.75rem; bottom: 0.75rem; }
   div[data-plugin-ui] > div:nth-child(3) { top: auto; bottom: 4.25rem; left: 0.5rem; right: 0.5rem; width: auto; transform: none; max-height: calc(50% - 4.25rem); }
   div[data-plugin-ui] > div:nth-child(4) { top: auto; bottom: 4.25rem; left: 0.5rem; right: 0.5rem; width: auto; transform: none; max-height: calc(50% - 4.25rem); }
   div[data-plugin-ui] > div:nth-child(6) { top: auto; bottom: 4.25rem; left: 0.5rem; right: 0.5rem; width: auto; max-height: calc(50% - 4.25rem); }
-  /* With Properties open too, the bottom half is split: Layers above, from the
-     middle of the page down, and Properties below it, so neither covers the
-     other (#779). */
+  /* With Properties open too, the bottom half is split: Insert and Layers
+     above, from the middle of the page down, and Properties below them, so
+     none covers another (#779). */
+  div[data-plugin-ui]:has(> div:nth-child(6):not(:empty)) > div:nth-child(3),
   div[data-plugin-ui]:has(> div:nth-child(6):not(:empty)) > div:nth-child(4) { top: 50%; bottom: auto; max-height: calc(25% - 0.25rem); }
+  div[data-plugin-ui]:has(> div:nth-child(3):not(:empty)) > div:nth-child(6),
   div[data-plugin-ui]:has(> div:nth-child(4):not(:empty)) > div:nth-child(6) { top: 75%; bottom: 4.25rem; max-height: calc(25% - 4.25rem); }
   /* The full-height toggle: the region takes all the page but the bar and the
      belt. The Frame's own box never moves, so the drawing is not resized. */

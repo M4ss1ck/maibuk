@@ -293,10 +293,20 @@ const EXPECTATIONS: ReadonlyArray<Expectation> = [
   },
   {
     // With both bottom regions open the narrow block splits the bottom half:
-    // Layers above, and Properties below it (#779).
+    // Insert and Layers above, and Properties below them (#779).
+    selector: `${ROOT}:has(> div:nth-child(6):not(:empty)) > div:nth-child(3)`,
+    state: "open",
+    expected: (mounted) => slotThree(mounted),
+  },
+  {
     selector: `${ROOT}:has(> div:nth-child(6):not(:empty)) > div:nth-child(4)`,
     state: "open",
     expected: (mounted) => slotFour(mounted),
+  },
+  {
+    selector: `${ROOT}:has(> div:nth-child(3):not(:empty)) > div:nth-child(6)`,
+    state: "open",
+    expected: (mounted) => slotSix(mounted),
   },
   {
     selector: `${ROOT}:has(> div:nth-child(4):not(:empty)) > div:nth-child(6)`,
@@ -318,6 +328,13 @@ const EXPECTATIONS: ReadonlyArray<Expectation> = [
   { selector: `${ROOT} > div:nth-child(3)`, state: "closed", expected: slotThree },
   { selector: `${ROOT} > div:nth-child(4)`, state: "closed", expected: slotFour },
   { selector: `${ROOT} > div:nth-child(6)`, state: "closed", expected: slotSix },
+  {
+    // The narrow page's 44px touch minimum, on every control it draws (#779,
+    // #775 Decision 6).
+    selector: `${ROOT} button`,
+    state: "open",
+    expected: (mounted) => Array.from(mounted.root.querySelectorAll("button")),
+  },
   {
     // The narrow block's 44px targets: every tool in the belt, and the Layers
     // toggle that closes the belt (#779, #775 Decision 6).

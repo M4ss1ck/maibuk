@@ -9,6 +9,19 @@ export function scrollTopAround(element: Locator): Promise<number> {
   });
 }
 
+/**
+ * The page's own scroll box, as content width and viewport width: content
+ * wider than the viewport is a sideways scroll the author never asked for.
+ */
+export function pageScrollWidths(
+  page: Page
+): Promise<{ scrollWidth: number; clientWidth: number }> {
+  return page.evaluate(() => {
+    const scrolling = document.scrollingElement ?? document.documentElement;
+    return { scrollWidth: scrolling.scrollWidth, clientWidth: scrolling.clientWidth };
+  });
+}
+
 /** Vertical center of `element`'s first line box, in viewport pixels. */
 export function firstLineCenter(element: Locator): Promise<number> {
   return element.evaluate((target) => {
