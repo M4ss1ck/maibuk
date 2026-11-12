@@ -327,10 +327,15 @@ const EXPECTATIONS: ReadonlyArray<Expectation> = [
   },
   {
     // The narrow bar's buttons, and the Map's name that gives up the room: the
-    // back button keeps its words on one line and the name shrinks (#779).
+    // back button shows its arrow alone, so the name keeps its letters (#779).
     selector: `${ROOT} > div:nth-child(1) > button`,
     state: "open",
     expected: () => barButtons(),
+  },
+  {
+    selector: `${ROOT} > div:nth-child(1) > button:nth-of-type(1)`,
+    state: "open",
+    expected: () => screen.getByRole("button", { name: en["map.backToMaps"] }),
   },
   {
     selector: `${ROOT} > div:nth-child(1) > button:nth-of-type(2)`,
@@ -338,11 +343,17 @@ const EXPECTATIONS: ReadonlyArray<Expectation> = [
     expected: () => screen.getByRole("button", { name: "Coast" }),
   },
   {
-    // The Properties header row, and the group it holds at its left: the header
-    // keeps its two controls on its own line, right-aligned (#779).
+    // The Properties header row, and the group it holds at its left: the card's
+    // title shares the header's top band with its two controls, right-aligned
+    // (#779).
     selector: `${ROOT} > div:nth-child(6) > div:nth-child(2)`,
     state: "open",
     expected: () => headerRow(),
+  },
+  {
+    selector: `${ROOT} > div:nth-child(6) > p:nth-child(1)`,
+    state: "open",
+    expected: () => headerTitle(),
   },
   {
     selector: `${ROOT} > div:nth-child(6) > div:nth-child(2) > div:nth-child(1)`,
@@ -353,6 +364,16 @@ const EXPECTATIONS: ReadonlyArray<Expectation> = [
     selector: `${ROOT} > div:nth-child(6) > div:nth-child(2) > button`,
     state: "open",
     expected: () => headerButtons(),
+  },
+  {
+    selector: `${ROOT} > div:nth-child(6) > div:nth-child(2) > button:first-of-type`,
+    state: "open",
+    expected: () => screen.getByRole("button", { name: en["chrome.expandProperties"] }),
+  },
+  {
+    selector: `${ROOT} > div:nth-child(6) > div:nth-child(2) > button:last-of-type`,
+    state: "open",
+    expected: () => screen.getByRole("button", { name: en["chrome.minimiseProperties"] }),
   },
   {
     // The zoom cluster gives the bottom right to a bottom region that covers it
@@ -428,6 +449,13 @@ function headerRow(): HTMLElement {
   const row = button.parentElement;
   if (row === null) throw new Error("the Minimise control has no header row");
   return row;
+}
+
+/** The Properties card's title, which shares the header's top band. */
+function headerTitle(): Element {
+  const title = headerRow().previousElementSibling;
+  if (title === null) throw new Error("the header row has no title above it");
+  return title;
 }
 
 /** The header row's two controls: the full-height toggle, then Minimise. */
