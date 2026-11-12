@@ -152,8 +152,10 @@ test.describe("Maps Bucket and Fills @wf:plugins-maps-fills @sc:plugin.maibuk-ma
     await pickBucket(page);
 
     // The crosshair rests at the page centre, inside the Rectangle placed
-    // there, and Enter pours at it from inside the Frame.
-    await tabTo(page, frameElement(page), { max: 20 });
+    // there, and Enter pours at it from inside the Frame. The floating chrome
+    // (#778) puts the Frame past the belt's eleven tool buttons, so the walk to
+    // it allows for them.
+    await tabTo(page, frameElement(page), { max: 60 });
     await expect(frameElement(page)).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(elementRow(page, "Fill 1")).toBeVisible();
@@ -172,7 +174,7 @@ test.describe("Maps Bucket and Fills @wf:plugins-maps-fills @sc:plugin.maibuk-ma
     await openEditorWithMap(page);
     await placeRectangle(page);
     await pickBucket(page);
-    await tabTo(page, frameElement(page), { max: 20 });
+    await tabTo(page, frameElement(page), { max: 60 });
     await expect(frameElement(page)).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(elementRow(page, "Fill 1")).toBeVisible();
@@ -192,6 +194,9 @@ test.describe("Maps Bucket and Fills @wf:plugins-maps-fills @sc:plugin.maibuk-ma
     await tabTo(page, page.getByRole("button", { name: "Open Coastline" }), { max: 60 });
     await page.keyboard.press("Enter");
     await expect(surface(page)).toBeVisible();
+    // Layers starts shut in the floating editor (#778), so the list below is
+    // opened again the way an author opens it.
+    await openLayers(page);
     await expect(elementRow(page, "Fill 1")).toBeVisible();
     await expect(filledPaths(page)).toHaveCount(1);
   });

@@ -97,7 +97,9 @@ async function placeRectangle(page: Page): Promise<void> {
 /** Picks a tool with its key and waits for the Frame to honour it. */
 async function pickTool(page: Page, key: string, name: string, tool: string): Promise<void> {
   await page.keyboard.press(key);
-  await expect(page.getByRole("radio", { name, exact: true })).toBeChecked();
+  // The floating belt (#778) presses its tool buttons rather than checking a
+  // radio, the way `plugins-maps-fills` already reports the Bucket.
+  await expect(page.getByRole("button", { name, exact: true, pressed: true })).toBeVisible();
   // The scene round-trip is what proves the Frame is listening before a press.
   await expect(mapFrame(page).locator(`svg[data-tool="${tool}"]`)).toBeVisible();
 }
@@ -240,7 +242,9 @@ test.describe("Maps Select drag @wf:plugins-maps-move @sc:plugin.maibuk-maps.sel
     // beside the Map Label's own "Place Map Label" (#751); this test means the
     // Stamp one, whose name follows "Place " with the pick.
     const place = page.getByRole("button", { name: /^Place (?!Map Label$)/ });
-    await tabTo(page, place, { max: 60 });
+    // The floating chrome puts the pill, the eleven tool buttons and the cards
+    // between the author and the Insert card's footer.
+    await tabTo(page, place, { max: 120 });
     const stamp = ((await place.textContent()) ?? "").replace(/^Place /, "");
     await page.keyboard.press("Enter");
     await expect(elementRow(page, stamp)).toBeVisible();
