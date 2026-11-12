@@ -225,5 +225,6 @@
   "chrome.zoomOut": "Alejar",
   "chrome.zoom": "{{percent}} %",
   "chrome.more": "Más acciones",
-  "chrome.expandProperties": "Propiedades a altura completa"
+  "chrome.expandProperties": "Propiedades a altura completa",
+  "chrome.expandLayers": "Capas a altura completa"
 }

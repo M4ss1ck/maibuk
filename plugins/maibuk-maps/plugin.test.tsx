@@ -4186,6 +4186,37 @@ describe("the narrow editor's bar and regions (#779)", () => {
       await host.stop();
     }
   });
+
+  it("expands the Layers region to full height and back by keyboard", async () => {
+    const storage = mapStorage([areaFill({ color: "land" })]);
+    const { host } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await openLayers(user);
+      const list = await screen.findByRole("listbox", { name: en["elements.label"] });
+
+      const full = await screen.findByRole("button", { name: en["chrome.expandLayers"] });
+      expect(full).toHaveAttribute("aria-pressed", "false");
+
+      await tabTo(user, full, 120);
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(full).toHaveAttribute("aria-pressed", "true"));
+      // The region is still the Layers card and holds the same list: the toggle
+      // changes how tall the region draws, not what it lists. Its geometry is
+      // `@wf:plugins-maps-layout`'s, measured in a real browser (#779).
+      expect(screen.getByRole("listbox", { name: en["elements.label"] })).toBe(list);
+      expect(within(list).getByRole("option", { name: /^Fill 1/ })).toBeInTheDocument();
+
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(full).toHaveAttribute("aria-pressed", "false"));
+      expect(screen.getByRole("listbox", { name: en["elements.label"] })).toBe(list);
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
 });
 
 describe("the floating editor's chrome (#778)", () => {

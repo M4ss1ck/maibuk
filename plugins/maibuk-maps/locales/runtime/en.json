@@ -225,5 +225,6 @@
   "chrome.zoomOut": "Zoom out",
   "chrome.zoom": "{{percent}}%",
   "chrome.more": "More actions",
-  "chrome.expandProperties": "Full-height Properties"
+  "chrome.expandProperties": "Full-height Properties",
+  "chrome.expandLayers": "Full-height Layers"
 }

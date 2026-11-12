@@ -316,7 +316,13 @@ const EXPECTATIONS: ReadonlyArray<Expectation> = [
     expected: (mounted) => slotSix(mounted),
   },
   {
-    // The full-height toggle, still the Properties card it belongs to (#779).
+    // The full-height toggle, still the region it belongs to: Properties and
+    // Layers each own one (#779, #775 review R2).
+    selector: `${ROOT}:has(> div:nth-child(4) > button[aria-pressed="true"]) > div:nth-child(4)`,
+    state: "open",
+    expected: (mounted) => slotFour(mounted),
+  },
+  {
     selector: `${ROOT}:has(> div:nth-child(6) button[aria-pressed="true"]) > div:nth-child(6)`,
     state: "open",
     expected: (mounted) => slotSix(mounted),
@@ -378,8 +384,8 @@ const EXPECTATIONS: ReadonlyArray<Expectation> = [
     expected: () => screen.getByRole("button", { name: en["chrome.minimiseProperties"] }),
   },
   {
-    // The zoom cluster gives the bottom right to a bottom region that covers it
-    // (#779): each region hides it.
+    // The zoom cluster sits above the belt, or above whichever bottom region is
+    // open, so it stays reachable (#779, #775 review R2).
     selector: `${ROOT}:has(> div:nth-child(3):not(:empty)) > div:nth-child(8)`,
     state: "open",
     expected: (mounted) => slot(mounted.root, 8),
@@ -393,6 +399,35 @@ const EXPECTATIONS: ReadonlyArray<Expectation> = [
     selector: `${ROOT}:has(> div:nth-child(6):not(:empty)) > div:nth-child(8)`,
     state: "open",
     expected: (mounted) => slot(mounted.root, 8),
+  },
+  {
+    // A full-height region leaves no room above the middle, so the cluster moves
+    // under the top bar instead (#775 review R2).
+    selector: `${ROOT}:has(> div:nth-child(4) > button[aria-pressed="true"]) > div:nth-child(8)`,
+    state: "open",
+    expected: (mounted) => slot(mounted.root, 8),
+  },
+  {
+    selector: `${ROOT}:has(> div:nth-child(6) button[aria-pressed="true"]) > div:nth-child(8)`,
+    state: "open",
+    expected: (mounted) => slot(mounted.root, 8),
+  },
+  {
+    // The desktop width hides the full-height toggles, and stacks Insert over
+    // Layers when both are open (#775 review R2).
+    selector: `${ROOT} > div:nth-child(4) > button`,
+    state: "open",
+    expected: () => screen.getByRole("button", { name: en["chrome.expandLayers"] }),
+  },
+  {
+    selector: `${ROOT}:has(> div:nth-child(4):not(:empty)) > div:nth-child(3)`,
+    state: "open",
+    expected: (mounted) => slotThree(mounted),
+  },
+  {
+    selector: `${ROOT}:has(> div:nth-child(3):not(:empty)) > div:nth-child(4)`,
+    state: "open",
+    expected: (mounted) => slotFour(mounted),
   },
   { selector: `${ROOT} > div:nth-child(3)`, state: "closed", expected: slotThree },
   { selector: `${ROOT} > div:nth-child(4)`, state: "closed", expected: slotFour },
@@ -476,9 +511,11 @@ async function fillEveryCard(mounted: Mounted): Promise<void> {
   await screen.findByRole("listbox", { name: en["elements.label"] });
   mounted.editor.select("e1");
   await screen.findByRole("button", { name: en["chrome.minimiseProperties"] });
-  // The full-height toggle pressed, so the stylesheet's own state selector
-  // matches the Properties card (#779).
-  await user.click(await screen.findByRole("button", { name: en["chrome.expandProperties"] }));
+  // Both full-height toggles pressed, so the stylesheet's own region selectors
+  // match the Layers and Properties cards (#779, #775 review R2).
+  for (const key of ["chrome.expandLayers", "chrome.expandProperties"] as const) {
+    await user.click(await screen.findByRole("button", { name: en[key] }));
+  }
 }
 
 /** Whether this mount drew a Frame the stylesheet's Frame selectors can reach. */

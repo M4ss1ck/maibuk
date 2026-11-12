@@ -535,20 +535,38 @@ div[data-plugin-ui] > div:nth-child(8) { right: 0.75rem; bottom: 0.75rem; }
   div[data-plugin-ui] > div:nth-child(6) > div:nth-child(2) > button { position: absolute; top: 0.75rem; flex: 0 0 auto; }
   div[data-plugin-ui] > div:nth-child(6) > div:nth-child(2) > button:first-of-type { right: 3.75rem; }
   div[data-plugin-ui] > div:nth-child(6) > div:nth-child(2) > button:last-of-type { right: 0.75rem; }
-  /* The full-height toggle: the region takes all the page but the bar and the
-     belt. The Frame's own box never moves, so the drawing is not resized. */
+  /* The full-height toggle: whichever region holds a pressed toggle takes all
+     the page but the bar and the belt, so Properties and Layers each own the
+     one toggle (#779). The Frame's own box never moves, so the drawing is not
+     resized. */
+  div[data-plugin-ui]:has(> div:nth-child(4) > button[aria-pressed="true"]) > div:nth-child(4),
   div[data-plugin-ui]:has(> div:nth-child(6) button[aria-pressed="true"]) > div:nth-child(6) { top: 3.25rem; bottom: 4.25rem; max-height: none; }
-  /* The zoom cluster sits bottom right, just above the belt, and gives that
-     corner up while a bottom region covers it (#779); pinch zoom remains. */
+  /* The zoom cluster sits bottom right, just above the belt, or just above the
+     bottom region that is open, so zoom in, zoom out, and the readout stay
+     reachable whatever is open (#779, #775 review R2). */
   div[data-plugin-ui] > div:nth-child(8) { top: auto; right: 0.5rem; bottom: 4.25rem; }
   div[data-plugin-ui]:has(> div:nth-child(3):not(:empty)) > div:nth-child(8),
   div[data-plugin-ui]:has(> div:nth-child(4):not(:empty)) > div:nth-child(8),
-  div[data-plugin-ui]:has(> div:nth-child(6):not(:empty)) > div:nth-child(8) { display: none; }
+  div[data-plugin-ui]:has(> div:nth-child(6):not(:empty)) > div:nth-child(8) { bottom: calc(50% + 0.5rem); }
+  /* A region at full height leaves no room above the middle, so the cluster
+     moves under the top bar instead of hiding (#775 review R2). */
+  div[data-plugin-ui]:has(> div:nth-child(4) > button[aria-pressed="true"]) > div:nth-child(8),
+  div[data-plugin-ui]:has(> div:nth-child(6) button[aria-pressed="true"]) > div:nth-child(8) { top: 3.25rem; bottom: auto; }
 }
 /* At the desktop width the pill's own three controls show again, and the
    overflow stays out of the page (#779). */
 @container (min-width: 640px) {
   div[data-plugin-ui] > div:nth-child(7) > div:nth-child(2) { display: none; }
+  /* The full-height toggles only exist where a region can react to them: a
+     desktop region already takes the room its content needs, so at this width
+     the two controls leave the header (#775 review R2). */
+  div[data-plugin-ui] > div:nth-child(4) > button { display: none; }
+  div[data-plugin-ui] > div:nth-child(6) > div:nth-child(2) > button:first-of-type { display: none; }
+  /* Insert and Layers share one box beside the belt, so with both open they
+     stack rather than cover each other: Insert above the middle, Layers below
+     it, each held to its own half (#775 review R2). */
+  div[data-plugin-ui]:has(> div:nth-child(4):not(:empty)) > div:nth-child(3) { transform: translateY(calc(-100% - 0.25rem)); max-height: calc(50% - 1rem); }
+  div[data-plugin-ui]:has(> div:nth-child(3):not(:empty)) > div:nth-child(4) { transform: translateY(0.25rem); max-height: calc(50% - 1rem); }
 }
 /* A coarse pointer gets a thumb-sized target on every control the page draws,
    at any width (#779, #775 Decision 6): the host's icon buttons are 32px wide
@@ -781,6 +799,8 @@ function MapEditorView({
   const [propertiesMinimised, setPropertiesMinimised] = useState(false);
   // Whether the Properties region takes the whole page on a narrow screen (#779).
   const [propertiesFullHeight, setPropertiesFullHeight] = useState(false);
+  // Whether the Layers region takes the whole page on a narrow screen (#779).
+  const [layersFullHeight, setLayersFullHeight] = useState(false);
   // The Map's own name while its rename dialog holds it, or null when it is shut.
   const [mapRename, setMapRename] = useState<string | null>(null);
   const selected =
@@ -1221,26 +1241,36 @@ function MapEditorView({
         </ui.View>
 
         {/* 4: the Layers card, closed until the author asks for it (#778). It
-            keeps the Elements list's row menus as they were. */}
+            keeps the Elements list's row menus as they were, and its own
+            full-height toggle, which the narrow stylesheet is the only one to
+            show (#779, #775 review R2). */}
         <ui.View direction="column" gap="sm">
           {layersOpen ? (
-            <ui.Collection
-              label={t("elements.label")}
-              selectionMode="single"
-              selectedKeys={snapshot.selectedId === null ? [] : [snapshot.selectedId]}
-              onSelectionChange={(event) => editor.select(event.detail[0] ?? null)}
-            >
-              {rows.map((element) => (
-                <ui.CollectionRow
-                  key={element.id}
-                  id={element.id}
-                  label={element.name}
-                  description={describe(element, t)}
-                  menuItems={menuItems(element)}
-                  onMenuAction={(event) => menuAction(element, event.detail)}
-                />
-              ))}
-            </ui.Collection>
+            <>
+              <ui.IconButton
+                label={t("chrome.expandLayers")}
+                icon="chevrons-down"
+                isSelected={layersFullHeight}
+                onPress={() => setLayersFullHeight((full) => !full)}
+              />
+              <ui.Collection
+                label={t("elements.label")}
+                selectionMode="single"
+                selectedKeys={snapshot.selectedId === null ? [] : [snapshot.selectedId]}
+                onSelectionChange={(event) => editor.select(event.detail[0] ?? null)}
+              >
+                {rows.map((element) => (
+                  <ui.CollectionRow
+                    key={element.id}
+                    id={element.id}
+                    label={element.name}
+                    description={describe(element, t)}
+                    menuItems={menuItems(element)}
+                    onMenuAction={(event) => menuAction(element, event.detail)}
+                  />
+                ))}
+              </ui.Collection>
+            </>
           ) : null}
         </ui.View>
 
