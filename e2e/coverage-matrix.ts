@@ -2949,6 +2949,21 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-maps-upload",
+    area: "plugins",
+    workflow:
+      "The Maps editor's Insert upload (#756): a picture the author picks with the Insert panel's Upload… button becomes a Library picture, and the Custom Stamp or Map Image the panel asked for lands at the view centre. This row proves the Custom Stamp path with a one-colour SVG: the Elements list lists it under the file's own name, selected, the Frame draws it as a picture, and its single paint takes the Stamp color picker. Because the picture belongs to the Library and not to the Map, a second Map's Stamp picker lists it beside the built-in Stamps; asserts: the row and its selection, the drawn picture, the Stamp color control, the raised Stamp picker's option, and that the second Map's own Elements list is still empty; persists: yes (the picture and the Library index that names it are saved in Plugin storage)",
+    edges: [
+      "An SVG uploaded through Insert lands as a Custom Stamp the Elements list names and the Frame draws, and a second Map's Stamp picker lists it",
+    ],
+    terms: ["Command", "Shortcut"],
+    shortcuts: ["plugin.maibuk-maps.insertTool"],
+    routes: ["/plugin/:pluginId/:pageId"],
+    fixture: "bookShelf",
+    tags: ["sandbox"],
+    status: "accepted",
+  },
+  {
     id: "plugins-maps-labels",
     area: "plugins",
     workflow:

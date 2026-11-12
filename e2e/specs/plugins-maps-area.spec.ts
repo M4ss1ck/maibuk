@@ -338,7 +338,7 @@ test.describe("Maps Soft Edge and Fill content @wf:plugins-maps-fill-content @sc
     const [left, top, right, bottom] = pathBounds(await pathData(areaPath(page)));
 
     // The texture paints the area with its own pattern, defined once in the Frame.
-    await pickOption(page, page.getByRole("button", { name: "Texture" }), "Grass");
+    await pickOption(page, page.getByRole("button", { name: "Texture", exact: true }), "Grass");
     await expect(texturePatterns(page)).toHaveCount(1);
     await expect(texturePatterns(page).first()).toHaveAttribute("id", "texture-grass");
     await expect(texturedPaint(page, "texture-grass")).toHaveCount(1);

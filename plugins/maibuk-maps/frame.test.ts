@@ -2723,6 +2723,45 @@ describe("an uploaded picture on the Map (#756)", () => {
     expect(hit?.getAttribute("data-fill")).toBe("true");
   });
 
+  it("draws the picture as soon as its bytes arrive, after the scene that names it", () => {
+    const blobs = stubBlobUrls();
+    try {
+      frame = loadFrame();
+      // The Worker sends the scene first and a picture's bytes after the Library
+      // read that holds them (#756), so the Frame repaints when they land: an
+      // upload must not wait for the next pan, select, or edit to appear.
+      frame.scene({ elements: [sceneElement({ id: "scan", shapes: [imageShape()] })] });
+      expect(document.querySelector("image.map-image")).toBeNull();
+
+      frame.port.deliver({ kind: "asset", id: "a1", mime: "image/png", data: "AAAA" });
+
+      const drawn = document.querySelector("image.map-image");
+      expect(drawn?.getAttribute("href")).toBe("blob:mock/1");
+      expect(drawn?.getAttribute("x")).toBe("60");
+      expect(drawn?.getAttribute("width")).toBe("80");
+      // The Element it belongs to keeps its selection and its hit box.
+      expect(document.querySelector("g[data-element-id='scan'] path.map-hit")).not.toBeNull();
+    } finally {
+      blobs.restore();
+    }
+  });
+
+  it("holds a picture sent before any scene, and draws it with the first one", () => {
+    const blobs = stubBlobUrls();
+    try {
+      frame = loadFrame();
+      // No scene yet: the bytes are kept and nothing is drawn.
+      frame.port.deliver({ kind: "asset", id: "a1", mime: "image/png", data: "AAAA" });
+      expect(document.querySelector("svg")).toBeNull();
+
+      frame.scene({ elements: [sceneElement({ id: "scan", shapes: [imageShape()] })] });
+
+      expect(document.querySelector("image.map-image")?.getAttribute("href")).toBe("blob:mock/1");
+    } finally {
+      blobs.restore();
+    }
+  });
+
   it("marks a selected picture with the box it covers", () => {
     frame = loadFrame();
     frame.scene({

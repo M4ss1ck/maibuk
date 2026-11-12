@@ -2063,7 +2063,14 @@
   /** @param {MessageEvent} event */
   function onMessage(event) {
     if (registerFont(event.data)) return;
-    if (keepAsset(event.data)) return;
+    if (keepAsset(event.data)) {
+      // The Worker sends the scene first and a picture's bytes after the Library
+      // read that holds them (#756), so kept bytes repaint the picture they
+      // belong to: an upload must not wait for the next pan, select, or edit to
+      // appear. A Frame with no scene yet has nothing to draw.
+      if (scene !== null) draw();
+      return;
+    }
     const ingestRequest = readIngestAsset(event.data);
     if (ingestRequest !== null) {
       void answerIngest(ingestRequest);
