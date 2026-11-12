@@ -50,7 +50,10 @@ const drawnPictures = (page: Page) => mapFrame(page).locator("g[data-element-id]
 /** The Insert panel's Upload button, which picks a picture and places it. */
 const uploadButton = (page: Page) => page.getByRole("button", { name: "Upload…", exact: true });
 
-/** The Export panel's fields the picture test saves through. */
+/** The top-right pill's Export popover (#778), which holds the print fields. */
+const exportTrigger = (page: Page) => page.getByRole("button", { name: "Export", exact: true });
+
+/** The Export popover's fields the picture test saves through. */
 const dpiField = (page: Page) => page.getByRole("textbox", { name: "DPI", exact: true });
 const saveButton = (page: Page) => page.getByRole("button", { name: /^Save/ });
 
@@ -125,6 +128,17 @@ async function openStampPicker(page: Page): Promise<void> {
   await tabTo(page, stampTrigger(page), { max: 60 });
   await page.keyboard.press("Enter");
   await expect(stampList(page)).toBeVisible();
+}
+
+/**
+ * Opens the top-right pill's Export popover (#778) and walks into its controls:
+ * an open popover holds focus itself, so one Tab is the author's way in.
+ */
+async function openExportPanel(page: Page): Promise<void> {
+  await tabTo(page, exportTrigger(page), { max: 90 });
+  await page.keyboard.press("Enter");
+  await expect(saveButton(page)).toBeVisible();
+  await page.keyboard.press("Tab");
 }
 
 /** Writes one field: focus it, select all, type the value, Enter to commit. */
@@ -230,6 +244,7 @@ test.describe("Maps Insert upload @wf:plugins-maps-upload @sc:plugin.maibuk-maps
 
     // A smaller print keeps the file quick to read back, and the panel says
     // what it will save before it saves it: the landscape page at 150 DPI.
+    await openExportPanel(page);
     await writeField(page, dpiField(page), "150");
     await expect(page.getByText(/1350 × 900 px/)).toBeVisible();
 

@@ -166,8 +166,10 @@ async function selectElement(page: Page, name: string): Promise<Locator> {
   const list = elementsList(page);
   // Start at Back to Maps, the first panel control, and Tab forward into the
   // list: from either side of it, that is the one direction that always works.
+  // The floating chrome (#778) puts the belt's eleven tool buttons and the
+  // properties panel between the two, so the walk into the list allows for them.
   await focusBack(page);
-  for (let i = 0; i < 10 && !(await isFocusWithin(list)); i++) await page.keyboard.press("Tab");
+  for (let i = 0; i < 60 && !(await isFocusWithin(list)); i++) await page.keyboard.press("Tab");
   await page.keyboard.press("Home");
   await pressUntilFocused(page, "ArrowDown", row, { max: 20 });
   if ((await row.getAttribute("aria-selected")) !== "true") await page.keyboard.press(" ");
