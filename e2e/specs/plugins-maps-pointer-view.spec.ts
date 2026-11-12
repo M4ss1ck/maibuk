@@ -81,9 +81,15 @@ async function openMap(page: Page, name: string): Promise<void> {
 /** Picks the Pencil with its Command and waits for the Frame to honour it. */
 async function pickPencil(page: Page): Promise<void> {
   await page.keyboard.press("p");
-  await expect(page.getByRole("radio", { name: "Pencil" })).toBeChecked();
+  await expect(page.getByRole("button", { name: "Pencil", pressed: true }));
   // The scene round-trip is what proves the Frame is listening before a gesture.
   await expect(mapFrame(page).locator('svg[data-tool="pencil"]')).toBeVisible();
+}
+
+/** The zoom the cluster reads, as the whole percentage its readout shows. */
+async function readoutPercent(page: Page): Promise<number> {
+  const text = (await zoomReadout(page).textContent()) ?? "";
+  return Number(text.replace(/[^\d]/g, ""));
 }
 
 /** Tabs into the Frame, which is how a key reaches its document. */
@@ -91,6 +97,9 @@ async function focusFrame(page: Page): Promise<void> {
   await tabTo(page, frameElement(page), { max: 60 });
   await expect(frameElement(page)).toBeFocused();
 }
+
+/** The zoom cluster's readout (#778): a button whose text is the view's zoom. */
+const zoomReadout = (page: Page) => page.getByRole("button", { name: /^\d+\s?%$/ });
 
 /** The Frame svg's viewBox as four numbers. */
 async function viewBox(page: Page): Promise<number[]> {
@@ -137,6 +146,15 @@ test.describe("Maps pointer view @wf:plugins-maps-pointer-view @sc:plugin.maibuk
     await expect
       .poll(async () => (await fractionOfPagePoint(surface(page), anchor))[1])
       .toBeCloseTo(across[1], 2);
+
+    // The zoom cluster reads the same view the gesture set: its percentage is
+    // the crop the Frame just drew, so the readout and the drawing never
+    // disagree about how far in the author is.
+    await expect.poll(async () => readoutPercent(page)).toBeGreaterThan(100);
+    const zoomed = await viewBox(page);
+    // The readout is the whole percentage the editor rounds to, so it agrees
+    // with the crop to within a point.
+    expect(await readoutPercent(page)).toBeCloseTo((before[2] / zoomed[2]) * 100, -1);
   });
 
   test("leaves the view alone on a plain wheel", async ({ page }) => {

@@ -17,6 +17,7 @@ import { capture } from "../support/capture";
 import { clickPagePoint, dragPagePoint } from "../support/frame-stroke";
 import { pressUntilFocused, tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
+import { openLayers } from "../support/maps-layers";
 
 const primaryNav = (page: Page) => page.getByRole("listbox", { name: "Primary navigation" });
 const navOption = (page: Page, name: string) =>
@@ -79,12 +80,13 @@ async function openEditorWithMap(page: Page): Promise<void> {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/maibuk-maps\/map$/);
   await expect(surface(page)).toBeVisible();
+  await openLayers(page);
 }
 
 /** Places a Rectangle at the view centre with the Rectangle tool's Place button. */
 async function placeRectangle(page: Page): Promise<void> {
   await page.keyboard.press("r");
-  await expect(page.getByRole("radio", { name: "Rectangle", exact: true })).toBeChecked();
+  await expect(page.getByRole("button", { name: "Rectangle", exact: true, pressed: true }));
   await expect(mapFrame(page).locator('svg[data-tool="rectangle"]')).toBeVisible();
   const place = page.getByRole("button", { name: "Place rectangle" });
   await tabTo(page, place, { max: 60 });

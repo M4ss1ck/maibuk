@@ -16,6 +16,7 @@ import { capture } from "../support/capture";
 import { drawStroke } from "../support/frame-stroke";
 import { isFocusWithin, leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
+import { openLayers } from "../support/maps-layers";
 
 const primaryNav = (page: Page) => page.getByRole("listbox", { name: "Primary navigation" });
 const navOption = (page: Page, name: string) =>
@@ -68,12 +69,13 @@ async function openMap(page: Page, name: string): Promise<void> {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/maibuk-maps\/map$/);
   await expect(mapFrame(page).locator("svg")).toBeVisible();
+  await openLayers(page);
 }
 
 /** Picks the Pencil with its Command and waits for the Frame to honour it. */
 async function pickPencil(page: Page): Promise<void> {
   await page.keyboard.press("p");
-  await expect(page.getByRole("radio", { name: "Pencil" })).toBeChecked();
+  await expect(page.getByRole("button", { name: "Pencil", pressed: true }));
   // The scene round-trip is what proves the Frame is listening before a stroke.
   await expect(mapFrame(page).locator('svg[data-tool="pencil"]')).toBeVisible();
 }
@@ -178,7 +180,9 @@ test.describe("Maps editor @wf:plugins-maps-editor @sc:plugin.maibuk-maps.openMa
     await createMap(page, "Coastline");
     await openMap(page, "Coastline");
 
-    await expect(page.getByRole("radiogroup", { name: "Tool" })).toBeVisible();
+    // The belt holds every tool as one button (#778), the Layers card shows the
+    // Elements, and the top-left pill is still the way back.
+    await expect(page.getByRole("button", { name: "Pencil", pressed: false })).toBeVisible();
     await expect(elementsList(page)).toBeVisible();
     await expect(page.getByRole("button", { name: "Back to Maps" })).toBeVisible();
   });

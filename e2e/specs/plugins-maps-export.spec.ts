@@ -27,6 +27,7 @@ import { pressUntilFocused, tabTo } from "../support/keyboard";
 import { forceDownloadSaves } from "../support/save-picker";
 import { SEED_BOOK } from "../support/seed/names";
 import { expect, test } from "../support/test";
+import { openLayers } from "../support/maps-layers";
 
 /** The Map every test builds: a portrait page of the seed Book. */
 const MAP = "Coastline";
@@ -66,11 +67,19 @@ const placeLabelButton = (page: Page) => page.getByRole("button", { name: "Place
 const textField = (page: Page) => page.getByRole("textbox", { name: "Text", exact: true });
 const bendField = (page: Page) => page.getByRole("textbox", { name: "Bend (mm)", exact: true });
 
-/** The Export panel: its Place button, format, print fields, and Save. */
+/** The top-right pill's Place button and Export popover (#778). */
 const placeButton = (page: Page) =>
   page.getByRole("button", { name: /^Place in a Chapter or Note/ });
+const exportTrigger = (page: Page) => page.getByRole("button", { name: "Export", exact: true });
 const dpiField = (page: Page) => page.getByRole("textbox", { name: "DPI", exact: true });
 const saveButton = (page: Page) => page.getByRole("button", { name: /^Save/ });
+
+/** Opens the Export popover, which holds the format, the print fields, and Save. */
+async function openExportPanel(page: Page): Promise<void> {
+  await tabTo(page, exportTrigger(page), { max: 90 });
+  await page.keyboard.press("Enter");
+  await expect(saveButton(page)).toBeVisible();
+}
 
 /** Opens Maps from the sidebar, waiting for the Plugin's launch scan. */
 async function openMaps(page: Page): Promise<void> {
@@ -125,12 +134,13 @@ async function openEditorWithMap(page: Page): Promise<void> {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/maibuk-maps\/map$/);
   await expect(surface(page)).toBeVisible();
+  await openLayers(page);
 }
 
 /** Places a Map Label at the view centre: the Insert tool's key, then its button. */
 async function placeLabel(page: Page): Promise<void> {
   await page.keyboard.press("i");
-  await expect(page.getByRole("radio", { name: "Insert", exact: true })).toBeChecked();
+  await expect(page.getByRole("button", { name: "Insert", exact: true, pressed: true }));
   // The scene round-trip is what proves the Frame is listening before a press.
   await expect(mapFrame(page).locator('svg[data-tool="insert"]')).toBeVisible();
   await tabTo(page, placeLabelButton(page), { max: 60 });
@@ -278,6 +288,7 @@ test.describe("Maps export: save a Map as PNG or SVG @wf:plugins-maps-export @sc
     await forceDownloadSaves(page);
     await openEditorWithMap(page);
     await curveLabel(page);
+    await openExportPanel(page);
 
     // A portrait page starts at its own 6 in wide and 300 DPI.
     await expect(page.getByText(/1800 × 2700 px/)).toBeVisible();
@@ -303,13 +314,14 @@ test.describe("Maps export: save a Map as PNG or SVG @wf:plugins-maps-export @sc
     await forceDownloadSaves(page);
     await openEditorWithMap(page);
     await curveLabel(page);
+    await openExportPanel(page);
 
     // The SVG radio is the other format of the same group; the print fields go
     // away with it, since an SVG is sized in millimetres.
-    await expect(page.getByRole("radio", { name: "PNG", exact: true })).toBeChecked();
+    await expect(page.getByRole("radio", { name: "PNG", exact: true }));
     await tabTo(page, page.getByRole("radio", { name: "PNG", exact: true }), { max: 90 });
     await page.keyboard.press("ArrowRight");
-    await expect(page.getByRole("radio", { name: "SVG", exact: true })).toBeChecked();
+    await expect(page.getByRole("radio", { name: "SVG", exact: true }));
     await expect(dpiField(page)).toHaveCount(0);
     await capture(page, "maps-export-svg", { around: [placeButton(page), saveButton(page)] });
 

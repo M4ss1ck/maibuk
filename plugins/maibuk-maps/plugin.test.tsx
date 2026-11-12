@@ -546,9 +546,10 @@ async function openEditor(
 
 /** Focuses a row in the Elements list by keyboard and selects it with Space. */
 async function selectRow(user: User, name: string): Promise<HTMLElement> {
+  await openLayers(user);
   const list = await screen.findByRole("listbox", { name: en["elements.label"] });
   const row = within(list).getByRole("option", { name: new RegExp(`^${name}`) });
-  for (let i = 0; i < 60 && !list.contains(document.activeElement); i++) await user.tab();
+  for (let i = 0; i < 120 && !list.contains(document.activeElement); i++) await user.tab();
   await user.keyboard("{Home}");
   for (let i = 0; i < 10 && document.activeElement !== row; i++) await user.keyboard("{ArrowDown}");
   if (row.getAttribute("aria-selected") !== "true") await user.keyboard(" ");
@@ -571,7 +572,7 @@ async function chooseRowMenu(user: User, label: string): Promise<void> {
 /** Focuses a plain host button, away from the Elements list's own arrows. */
 async function focusPanelButton(user: User): Promise<HTMLElement> {
   const button = screen.getByRole("button", { name: en["map.backToMaps"] });
-  await tabTo(user, button, 60);
+  await tabTo(user, button, 120);
   return button;
 }
 
@@ -580,14 +581,15 @@ function linePoints(storage: Map<string, unknown>, index = 0): [number, number][
   return element.points.map(([x, y]) => [x, y]);
 }
 
-async function tabTo(user: User, element: HTMLElement, max = 40): Promise<void> {
+async function tabTo(user: User, element: HTMLElement, max = 120): Promise<void> {
   for (let i = 0; i < max && document.activeElement !== element; i++) await user.tab();
 }
 
 /** Tabs back into the Elements list, so a row can be picked again. */
 async function backToRows(user: User): Promise<HTMLElement> {
+  await openLayers(user);
   const list = screen.getByRole("listbox", { name: en["elements.label"] });
-  for (let i = 0; i < 60 && !list.contains(document.activeElement); i++)
+  for (let i = 0; i < 120 && !list.contains(document.activeElement); i++)
     await user.tab({ shift: true });
   return list;
 }
@@ -628,22 +630,73 @@ function storedLine(storage: Map<string, unknown>): MapLineElement {
   return element;
 }
 
-/** Focuses the Tool radio group and arrows to `name`, from wherever it stands. */
+/**
+ * Picks a tool from the belt (#778): every tool is one `ui.IconButton` there, so
+ * it is its own Tab stop and reports its pressed state.
+ */
 async function pickTool(user: User, name: string): Promise<HTMLElement> {
-  const tools = await screen.findByRole("radiogroup", { name: en["tools.label"] });
-  for (let i = 0; i < 60 && !tools.contains(document.activeElement); i++) await user.tab();
-  const radio = screen.getByRole("radio", { name });
-  for (let i = 0; i < 8 && !(radio as HTMLInputElement).checked; i++)
-    await user.keyboard("{ArrowRight}");
-  await waitFor(() => expect(radio).toBeChecked());
-  return radio;
+  const button = await screen.findByRole("button", { name });
+  await tabTo(user, button, 120);
+  await user.keyboard("{Enter}");
+  await waitFor(() => expect(button).toHaveAttribute("aria-pressed", "true"));
+  return button;
+}
+
+/** Whether the belt reports `name` as the picked tool. */
+function pickedTool(name: string): HTMLElement {
+  return screen.getByRole("button", { name });
+}
+
+/** Opens the Layers card, which starts shut (#778), and waits for the list. */
+async function openLayers(user: User): Promise<void> {
+  const toggle = await screen.findByRole("button", { name: en["chrome.layers"] });
+  if (toggle.getAttribute("aria-pressed") === "false") {
+    await tabTo(user, toggle, 120);
+    await user.keyboard("{Enter}");
+  }
+  await waitFor(() => expect(toggle).toHaveAttribute("aria-pressed", "true"));
+}
+
+/** Shuts the Layers card, when it is open. */
+async function closeLayers(user: User): Promise<void> {
+  const toggle = await screen.findByRole("button", { name: en["chrome.layers"] });
+  if (toggle.getAttribute("aria-pressed") === "true") {
+    await tabTo(user, toggle, 120);
+    await user.keyboard("{Enter}");
+  }
+  await waitFor(() => expect(toggle).toHaveAttribute("aria-pressed", "false"));
+}
+
+/** Opens the Export popover (#778) and waits for its one button. */
+async function openExport(user: User): Promise<HTMLElement> {
+  const trigger = await screen.findByRole("button", { name: en["export.label"] });
+  await tabTo(user, trigger, 120);
+  await user.keyboard("{Enter}");
+  return screen.findByRole("button", { name: en["export.save"] });
+}
+
+/** Opens the Map Style popover (#778) and picks one Style from its radio group. */
+async function pickMapStyle(user: User, style: string): Promise<void> {
+  const trigger = await screen.findByRole("button", { name: en["properties.mapStyle"] });
+  await tabTo(user, trigger, 120);
+  await user.keyboard("{Enter}");
+  const group = await screen.findByRole("radiogroup", { name: en["properties.mapStyle"] });
+  const option = within(group).getByRole("radio", { name: style });
+  const radios = within(group).getAllByRole("radio") as HTMLInputElement[];
+  const from = radios.find((radio) => radio.checked) ?? radios[0];
+  await tabTo(user, from, 4);
+  for (let i = 0; i < radios.length && !(option as HTMLInputElement).checked; i++)
+    await user.keyboard("{ArrowDown}");
+  await waitFor(() => expect(option).toBeChecked());
+  await user.keyboard("{Escape}");
+  await waitFor(() => expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument());
 }
 
 /** Picks a Shape tool by keyboard, then places one with its Place button. */
 async function placeShape(user: User, tool: "ellipse" | "rectangle" | "polygon"): Promise<void> {
   await pickTool(user, en[`tools.${tool}`]);
   const place = await screen.findByRole("button", { name: en[`properties.placeShape.${tool}`] });
-  await tabTo(user, place, 10);
+  await tabTo(user, place, 120);
   await user.keyboard("{Enter}");
 }
 
@@ -654,7 +707,9 @@ async function pickOption(
   option: string,
   scope: HTMLElement = document.body
 ) {
-  const trigger = within(scope).getByLabelText(label);
+  // The page draws what the editor last published, so a control the last press
+  // opened can arrive one host batch later: wait for it, never sample it.
+  const trigger = await within(scope).findByLabelText(label);
   await tabTo(user, trigger);
   await user.keyboard("{Enter}");
   const listbox = await screen.findByRole("listbox");
@@ -1133,7 +1188,7 @@ describe("Map editor page", () => {
       const mapsPage = await host.renderPage(MAPS_PAGE_ID);
       const user = userEvent.setup();
       const open = await screen.findByRole("button", { name: `${en["list.open"]} Coast` });
-      await tabTo(user, open, 60);
+      await tabTo(user, open, 120);
       await user.keyboard("{Enter}");
       await waitFor(() =>
         expect(host.pageNavigations).toContainEqual({
@@ -1145,12 +1200,16 @@ describe("Map editor page", () => {
       await mapsPage.unmount();
 
       const editorPage = await host.renderPage(MAP_PAGE_ID);
-      // The Line style select also offers "Coast", so the page title is the
-      // paragraph, not any text of that name.
-      expect(await screen.findByText("Coast", { selector: "p" })).toBeInTheDocument();
-      expect(screen.getByRole("listbox", { name: en["elements.label"] })).toBeInTheDocument();
-      expect(screen.getByRole("radiogroup", { name: en["tools.label"] })).toBeInTheDocument();
+      // The Map's own name is the top-left pill's second control (#778), and the
+      // belt holds every tool: an IconButton each, the Pencil among them.
+      expect(await screen.findByRole("button", { name: "Coast" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: en["tools.pencil"] })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: en["map.backToMaps"] })).toBeInTheDocument();
+      // The Layers card starts shut (#778), so its Elements list is not drawn
+      // until the author asks for it.
+      expect(screen.queryByRole("listbox", { name: en["elements.label"] })).toBeNull();
+      await openLayers(user);
+      expect(screen.getByRole("listbox", { name: en["elements.label"] })).toBeInTheDocument();
       await editorPage.unmount();
     } finally {
       await host.stop();
@@ -1164,7 +1223,7 @@ describe("Map editor page", () => {
       expect(await screen.findByText(en["map.emptyTitle"])).toBeInTheDocument();
       const user = userEvent.setup();
       const back = screen.getByRole("button", { name: en["map.backToMaps"] });
-      await tabTo(user, back, 40);
+      await tabTo(user, back, 120);
       await user.keyboard("{Enter}");
       await waitFor(() =>
         expect(host.pageNavigations).toContainEqual({
@@ -1337,7 +1396,9 @@ describe("Map editor page", () => {
       await chooseRowMenu(user, "Delete");
       await runtime.editor?.flush();
       expect(storedMap(storage).elements.map((element) => element.id)).toEqual(["e2"]);
-      expect(screen.queryByRole("option", { name: /^Coastline/ })).not.toBeInTheDocument();
+      await waitFor(() =>
+        expect(screen.queryByRole("option", { name: /^Coastline/ })).not.toBeInTheDocument()
+      );
 
       await page.unmount();
     } finally {
@@ -1701,7 +1762,7 @@ describe("Map editor page", () => {
       expect(runtime.editor?.getSnapshot().roughenStrength).toBe(1.5);
 
       const slider = screen.getByRole("slider", { name: en["properties.roughenStrength"] });
-      await tabTo(user, slider, 80);
+      await tabTo(user, slider, 120);
       await user.keyboard("{ArrowRight}");
       await waitFor(() => expect(runtime.editor?.getSnapshot().roughenStrength).toBeCloseTo(1.6));
       const raised = runtime.editor?.getSnapshot().roughenStrength ?? 0;
@@ -1710,7 +1771,7 @@ describe("Map editor page", () => {
       const roughenButton = await screen.findByRole("button", {
         name: en["properties.roughen"],
       });
-      await tabTo(user, roughenButton, 10);
+      await tabTo(user, roughenButton, 120);
       await user.keyboard("{Enter}");
       await waitFor(() =>
         expect((runtime.editor?.getSnapshot().elements[0] as MapLineElement).roughened).toBe(true)
@@ -1736,13 +1797,13 @@ describe("Map editor page", () => {
     try {
       const user = userEvent.setup();
       // The page commits after `renderPage` returns; wait for its first control.
-      await screen.findByRole("radiogroup", { name: en["tools.label"] });
+      await screen.findByRole("button", { name: en["tools.pen"] });
       await focusPanelButton(user);
 
-      // The Pen tool's own key selects it, and the picker follows.
+      // The Pen tool's own key selects it, and the belt follows.
       await user.keyboard("n");
       await waitFor(() => expect(runtime.editor?.getSnapshot().tool).toBe("pen"));
-      expect(screen.getByRole("radio", { name: en["tools.pen"] })).toBeChecked();
+      expect(pickedTool(en["tools.pen"])).toHaveAttribute("aria-pressed", "true");
 
       // The keyboard pen draws a closed outline in the Frame; the Frame stand-in
       // hands the editor the line message the real Frame posts for it.
@@ -1869,14 +1930,8 @@ describe("Map editor page", () => {
       await placeShape(user, "rectangle");
       await waitFor(() => expect(runtime.editor?.getSnapshot().elements).toHaveLength(1));
 
-      // The tool picker reaches the Bucket with its arrows.
-      const tools = screen.getByRole("radiogroup", { name: en["tools.label"] });
-      for (let i = 0; i < 10 && !tools.contains(document.activeElement); i++)
-        await user.tab({ shift: true });
-      const bucket = screen.getByRole("radio", { name: en["tools.bucket"] });
-      for (let i = 0; i < 8 && !(bucket as HTMLInputElement).checked; i++)
-        await user.keyboard("{ArrowLeft}");
-      await waitFor(() => expect(bucket).toBeChecked());
+      // The belt reaches the Bucket by keyboard like any other button.
+      await pickTool(user, en["tools.bucket"]);
       expect(runtime.editor?.getSnapshot().tool).toBe("bucket");
 
       // Enter at the crosshair sends the Frame's pour message; the Frame stand-in
@@ -1884,7 +1939,8 @@ describe("Map editor page", () => {
       runtime.editor?.handleFrameMessage({ kind: "pour", point: [76.2, 114.3] });
       await runtime.editor?.flush();
 
-      const list = screen.getByRole("listbox", { name: en["elements.label"] });
+      await openLayers(user);
+      const list = await screen.findByRole("listbox", { name: en["elements.label"] });
       expect(await within(list).findByRole("option", { name: /^Fill 1/ })).toBeInTheDocument();
       const poured = storedMap(storage).elements.find(
         (element): element is MapFillElement => element.kind === "fill"
@@ -1935,7 +1991,7 @@ describe("Map editor page", () => {
       /** Opens the Fill color picker and commits one hex colour by keyboard. */
       async function pickColor(hex: string): Promise<void> {
         const trigger = await screen.findByRole("button", { name: en["properties.fillColor"] });
-        await tabTo(user, trigger, 60);
+        await tabTo(user, trigger, 120);
         await user.keyboard("{Enter}");
         const dialog = await screen.findByRole("dialog", { name: en["properties.fillColor"] });
         const field = within(dialog).getByRole("textbox");
@@ -1964,7 +2020,7 @@ describe("Map editor page", () => {
       expect(runtime.editor?.getSnapshot().selectedId).toBe(poured?.id);
 
       const trigger = await screen.findByRole("button", { name: en["properties.fillColor"] });
-      await tabTo(user, trigger, 60);
+      await tabTo(user, trigger, 120);
       await user.keyboard("{Enter}");
       const dialog = await screen.findByRole("dialog", { name: en["properties.fillColor"] });
       expect(within(dialog).getByRole("textbox")).toHaveValue("#112233");
@@ -1995,10 +2051,10 @@ describe("Map editor page", () => {
 
       // The Frame's drag is the pointer path; the number fields are the keyboard's.
       const width = await screen.findByRole("textbox", { name: en["properties.shape.width"] });
-      await tabTo(user, width, 60);
+      await tabTo(user, width, 120);
       await user.keyboard("{Control>}a{/Control}60{Tab}");
       const height = screen.getByRole("textbox", { name: en["properties.shape.height"] });
-      await tabTo(user, height, 10);
+      await tabTo(user, height, 120);
       await user.keyboard("{Control>}a{/Control}60{Tab}");
 
       await waitFor(() =>
@@ -2047,29 +2103,23 @@ describe("Map editor page", () => {
       expect(cornerRadius()).not.toBeInTheDocument();
 
       // ArrowUp steps the side count, and the Shape follows.
-      await tabTo(user, sidesField, 60);
+      await tabTo(user, sidesField, 120);
       await user.keyboard("{ArrowUp}");
       await waitFor(() => expect(runtime.editor?.getSnapshot().selectedShape?.sides).toBe(7));
 
-      // Shift+Tab walks back to the Tool group, where the next Shape is one ArrowLeft away.
-      const tools = screen.getByRole("radiogroup", { name: en["tools.label"] });
-      for (let i = 0; i < 60 && !tools.contains(document.activeElement); i++)
-        await user.tab({ shift: true });
-      const rectangle = screen.getByRole("radio", { name: en["tools.rectangle"] });
-      for (let i = 0; i < 12 && !(rectangle as HTMLInputElement).checked; i++)
-        await user.keyboard("{ArrowRight}");
-      await waitFor(() => expect(rectangle).toBeChecked());
+      // The belt holds the next Shape too, one Tab stop away.
+      await pickTool(user, en["tools.rectangle"]);
       const place = await screen.findByRole("button", {
         name: en["properties.placeShape.rectangle"],
       });
-      await tabTo(user, place, 10);
+      await tabTo(user, place, 120);
       await user.keyboard("{Enter}");
 
       const radiusField = await screen.findByRole("textbox", {
         name: en["properties.shape.cornerRadius"],
       });
       expect(sides()).not.toBeInTheDocument();
-      await tabTo(user, radiusField, 60);
+      await tabTo(user, radiusField, 120);
       await user.keyboard("{Control>}a{/Control}2{Enter}");
       await waitFor(() =>
         expect(runtime.editor?.getSnapshot().selectedShape?.cornerRadius).toBe(2)
@@ -2090,8 +2140,8 @@ describe("Map editor page", () => {
       await placeShape(user, "ellipse");
       expect(screen.queryByText(en["properties.convertedFrom.ellipse"])).not.toBeInTheDocument();
 
-      const roughenButton = screen.getByRole("button", { name: en["properties.roughen"] });
-      await tabTo(user, roughenButton, 60);
+      const roughenButton = await screen.findByRole("button", { name: en["properties.roughen"] });
+      await tabTo(user, roughenButton, 120);
       await user.keyboard("{Enter}");
 
       expect(await screen.findByText(en["properties.convertedFrom.ellipse"])).toBeInTheDocument();
@@ -2120,7 +2170,7 @@ describe("Map editor page", () => {
       expect(width).toBeEnabled();
 
       const locked = screen.getByRole("switch", { name: en["properties.locked"] });
-      await tabTo(user, locked, 60);
+      await tabTo(user, locked, 120);
       await user.keyboard(" ");
       await waitFor(() =>
         expect(screen.getByRole("textbox", { name: en["properties.shape.width"] })).toBeDisabled()
@@ -2145,7 +2195,7 @@ describe("Map editor page", () => {
     const keys = render(<CommandKeys host={host} />);
     try {
       const user = userEvent.setup();
-      await screen.findByRole("radiogroup", { name: en["tools.label"] });
+      await screen.findByRole("button", { name: en["tools.polygon"] });
       await focusPanelButton(user);
 
       const tools = [
@@ -2156,7 +2206,7 @@ describe("Map editor page", () => {
       for (const [key, tool, label] of tools) {
         await user.keyboard(key);
         await waitFor(() => expect(runtime.editor?.getSnapshot().tool).toBe(tool));
-        expect(screen.getByRole("radio", { name: label })).toBeChecked();
+        expect(pickedTool(label)).toHaveAttribute("aria-pressed", "true");
         expect(
           await screen.findByRole("button", { name: en[`properties.placeShape.${tool}`] })
         ).toBeInTheDocument();
@@ -2185,15 +2235,20 @@ describe("Map editor page", () => {
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
       const user = userEvent.setup();
-      await screen.findByRole("radiogroup", { name: en["tools.label"] });
-      // With no Map Line selected the select shows the current style.
-      expect(screen.getByLabelText(en["properties.lineStyle"])).toHaveTextContent(
-        en["properties.style.plain"]
+      // With the Pen picked and no Map Line selected, Properties shows the style
+      // the next line takes (#778); selecting one shows that line's own.
+      await pickTool(user, en["tools.pen"]);
+      await waitFor(() =>
+        expect(screen.getByLabelText(en["properties.lineStyle"])).toHaveTextContent(
+          en["properties.style.plain"]
+        )
       );
 
       await selectRow(user, "Road");
-      expect(screen.getByLabelText(en["properties.lineStyle"])).toHaveTextContent(
-        en["properties.style.road"]
+      await waitFor(() =>
+        expect(screen.getByLabelText(en["properties.lineStyle"])).toHaveTextContent(
+          en["properties.style.road"]
+        )
       );
 
       // Picking a style changes the selected line and takes its Encloses Fills default.
@@ -2315,8 +2370,14 @@ describe("Map editor page", () => {
       const snapshot = runtime.editor?.getSnapshot();
       expect(snapshot?.elements).toHaveLength(0);
       expect(snapshot?.selectedId).toBeNull();
-      // The properties panel says what it says with no Element selected.
-      expect(await screen.findByText(en["properties.empty"])).toBeInTheDocument();
+      // With nothing selected and a tool that offers no default, the Properties
+      // card closes (#778), so none of its controls is left behind.
+      expect(await screen.findByRole("button", { name: en["map.backToMaps"] })).toBeVisible();
+      await waitFor(() =>
+        expect(
+          screen.queryByRole("button", { name: en["chrome.minimiseProperties"] })
+        ).not.toBeInTheDocument()
+      );
 
       // Redo restores the Element, but a pruned selection stays cleared.
       runtime.editor?.redo();
@@ -2505,7 +2566,7 @@ describe("Map editor page", () => {
       const place = await screen.findByRole("button", {
         name: format(en["properties.placeStamp"], { stamp: en["stamp.castle"] }),
       });
-      await tabTo(user, place, 10);
+      await tabTo(user, place, 120);
       await user.keyboard("{Enter}");
 
       // A Castle Stamp at the page centre of the portrait page, and selected.
@@ -2527,6 +2588,7 @@ describe("Map editor page", () => {
       // The Elements list calls the row a Stamp, as it calls a line a Map Line.
       // The description reaches the page over the Remote UI bridge, one hop
       // after the row itself, so the assertion waits for it.
+      await openLayers(user);
       await waitFor(() =>
         expect(screen.getByRole("listbox", { name: en["elements.label"] })).toHaveTextContent(
           en["element.kind.stamp"]
@@ -2546,7 +2608,7 @@ describe("Map editor page", () => {
 
       // The number fields size and turn it.
       const size = await screen.findByRole("textbox", { name: en["properties.stamp.size"] });
-      await tabTo(user, size, 60);
+      await tabTo(user, size, 120);
       await user.keyboard("{Control>}a{/Control}20{Enter}");
       await waitFor(() =>
         expect((runtime.editor?.getSnapshot().elements[0] as MapStampElement).transform.size).toBe(
@@ -2554,7 +2616,7 @@ describe("Map editor page", () => {
         )
       );
       const rotation = screen.getByRole("textbox", { name: en["properties.stamp.rotation"] });
-      await tabTo(user, rotation, 60);
+      await tabTo(user, rotation, 120);
       await user.keyboard("{Control>}a{/Control}30{Enter}");
       await waitFor(() =>
         expect(
@@ -2596,7 +2658,7 @@ describe("Map editor page", () => {
       const place = await screen.findByRole("button", {
         name: format(en["properties.placeStamp"], { stamp: en["stamp.scale-bar"] }),
       });
-      await tabTo(user, place, 10);
+      await tabTo(user, place, 120);
       await user.keyboard("{Enter}");
 
       // The scale bar starts at 40 mm, reading the page's width in kilometres.
@@ -2624,7 +2686,7 @@ describe("Map editor page", () => {
       );
 
       const span = await screen.findByRole("textbox", { name: en["properties.stamp.span"] });
-      await tabTo(user, span, 60);
+      await tabTo(user, span, 120);
       await user.keyboard("{Control>}a{/Control}500{Enter}");
       await waitFor(() =>
         expect((runtime.editor?.getSnapshot().elements[0] as MapStampElement).scale).toEqual({
@@ -2640,7 +2702,7 @@ describe("Map editor page", () => {
 
       // The field's minimum is a span the model keeps: typing 0 commits 1, so
       // the panel never shows a reading the Map has refused.
-      await tabTo(user, span, 60);
+      await tabTo(user, span, 120);
       await user.keyboard("{Control>}a{/Control}0{Enter}");
       await waitFor(() =>
         expect((runtime.editor?.getSnapshot().elements[0] as MapStampElement).scale?.span).toBe(1)
@@ -2666,7 +2728,7 @@ describe("Map editor page", () => {
       // is the keyboard path that lands it at the view centre.
       await pickTool(user, en["tools.insert"]);
       const place = await screen.findByRole("button", { name: en["properties.mapLabel.place"] });
-      await tabTo(user, place, 10);
+      await tabTo(user, place, 120);
       await user.keyboard("{Enter}");
 
       // A Map Label at the centre of the portrait page, writing the default
@@ -2688,6 +2750,7 @@ describe("Map editor page", () => {
       expect(storedMap(storage).elements[0]).toMatchObject({ x: 76.2, y: 114.3 });
 
       // The Elements list calls the row a Map Label.
+      await openLayers(user);
       await waitFor(() =>
         expect(screen.getByRole("listbox", { name: en["elements.label"] })).toHaveTextContent(
           en["element.kind.label"]
@@ -2703,7 +2766,7 @@ describe("Map editor page", () => {
 
       // The Text field writes what the author commits.
       const text = await screen.findByRole("textbox", { name: en["properties.mapLabel.text"] });
-      await tabTo(user, text, 60);
+      await tabTo(user, text, 120);
       await user.keyboard("{Control>}a{/Control}Northern Reach{Enter}");
       await waitFor(() =>
         expect((runtime.editor?.getSnapshot().elements[0] as MapLabelElement).text).toBe(
@@ -2723,7 +2786,7 @@ describe("Map editor page", () => {
 
       // Bend curves the baseline; 0 draws it straight.
       const bend = await screen.findByRole("textbox", { name: en["properties.mapLabel.bend"] });
-      await tabTo(user, bend, 60);
+      await tabTo(user, bend, 120);
       await user.keyboard("{Control>}a{/Control}5{Enter}");
       await waitFor(() =>
         expect((runtime.editor?.getSnapshot().elements[0] as MapLabelElement).bend).toBe(5)
@@ -2796,13 +2859,13 @@ describe("Map editor page", () => {
       await selectRow(user, "Fill 1");
 
       const toggle = await screen.findByRole("switch", { name: en["properties.softEdge"] });
-      await tabTo(user, toggle, 60);
+      await tabTo(user, toggle, 120);
       expect(toggle).toHaveFocus();
       await user.keyboard(" ");
       await waitFor(() => expect(fillNow(runtime).softEdge).toBe(DEFAULT_SOFT_EDGE_MM));
 
       const amount = await screen.findByRole("slider", { name: en["properties.softEdgeAmount"] });
-      await tabTo(user, amount, 10);
+      await tabTo(user, amount, 120);
       await user.keyboard("{ArrowRight}");
       await waitFor(() =>
         expect(fillNow(runtime).softEdge).toBe(DEFAULT_SOFT_EDGE_MM + SOFT_EDGE_STEP_MM)
@@ -2815,14 +2878,14 @@ describe("Map editor page", () => {
       await backToRows(user);
       await selectRow(user, "Ring");
       const lineToggle = await screen.findByRole("switch", { name: en["properties.softEdge"] });
-      await tabTo(user, lineToggle, 60);
+      await tabTo(user, lineToggle, 120);
       await user.keyboard(" ");
       await waitFor(() => expect(lineNow(runtime).softEdge).toBe(DEFAULT_SOFT_EDGE_MM));
 
       const lineAmount = await screen.findByRole("slider", {
         name: en["properties.softEdgeAmount"],
       });
-      await tabTo(user, lineAmount, 10);
+      await tabTo(user, lineAmount, 120);
       expect(lineAmount).toHaveFocus();
       // The Line's amount is its own: one step down lands on 1.5, not on the
       // 2 the Fill's slider had moved to.
@@ -2859,7 +2922,7 @@ describe("Map editor page", () => {
       expect(fillNow(runtime).content.scatter?.spacing).toBe(DEFAULT_SCATTER_SPACING_MM);
 
       const spacing = await screen.findByRole("slider", { name: en["properties.scatterSpacing"] });
-      await tabTo(user, spacing, 60);
+      await tabTo(user, spacing, 120);
       await user.keyboard("{ArrowRight}");
       await waitFor(() =>
         expect(fillNow(runtime).content.scatter?.spacing).toBe(DEFAULT_SCATTER_SPACING_MM + 1)
@@ -2868,7 +2931,7 @@ describe("Map editor page", () => {
 
       // Reseed keeps the Stamp and the spacing, and moves the Stamps.
       const reseed = await screen.findByRole("button", { name: en["properties.reseed"] });
-      await tabTo(user, reseed, 10);
+      await tabTo(user, reseed, 120);
       await user.keyboard("{Enter}");
       await waitFor(() => expect(fillNow(runtime).content.scatter?.seed).not.toBe(firstSeed));
 
@@ -2927,12 +2990,12 @@ describe("Map editor page", () => {
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
       const user = userEvent.setup();
-      await screen.findByRole("radiogroup", { name: en["tools.label"] });
+      await screen.findByRole("button", { name: en["tools.pen"] });
       expect(runtime.editor?.getSnapshot().styleId).toBe("atlas");
 
-      // The Map Style picker sits with the Map-level controls; its own arrow
-      // keys reach Night, and the Map takes it.
-      await pickOption(user, en["properties.mapStyle"], en["properties.mapStyle.night"]);
+      // The Map Style picker is the top-right pill's first popover (#778); its
+      // own arrow keys reach Night, and the Map takes it.
+      await pickMapStyle(user, en["properties.mapStyle.night"]);
       await waitFor(() => expect(runtime.editor?.getSnapshot().styleId).toBe("night"));
       await runtime.editor?.flush();
       expect(storedMap(storage).styleId).toBe("night");
@@ -2946,7 +3009,7 @@ describe("Map editor page", () => {
       /** Opens the Map Line colour picker and commits one hex colour by keyboard. */
       async function pickLineColor(hex: string): Promise<void> {
         const trigger = screen.getByRole("button", { name: en["properties.mapLine.color"] });
-        await tabTo(user, trigger, 80);
+        await tabTo(user, trigger, 120);
         await user.keyboard("{Enter}");
         const dialog = await screen.findByRole("dialog", { name: en["properties.mapLine.color"] });
         const field = within(dialog).getByRole("textbox");
@@ -2973,7 +3036,7 @@ describe("Map editor page", () => {
 
       const clear = screen.getByRole("button", { name: en["properties.useMapStyleColor"] });
       await waitFor(() => expect(clear).toBeEnabled());
-      await tabTo(user, clear, 20);
+      await tabTo(user, clear, 120);
       await user.keyboard("{Enter}");
       await waitFor(() => expect(lineNow(runtime).color).toBeUndefined());
       await runtime.editor?.flush();
@@ -2999,7 +3062,7 @@ describe("Map editor page", () => {
       await selectRow(user, "Fill 1");
 
       const trigger = await screen.findByRole("button", { name: en["properties.fillColor"] });
-      await tabTo(user, trigger, 60);
+      await tabTo(user, trigger, 120);
       await user.keyboard("{Enter}");
       const dialog = await screen.findByRole("dialog", { name: en["properties.fillColor"] });
 
@@ -3043,6 +3106,8 @@ describe("Map editor Export panel", () => {
       const frame = frameStandIn(runtime.editor);
       const page = await host.renderPage(MAP_PAGE_ID);
       const user = userEvent.setup();
+      // The Export panel is the top-right pill's popover (#778), so it opens first.
+      await openExport(user);
 
       // PNG is the panel's default, and the page is 6 in wide.
       const png = await screen.findByRole("radio", { name: en["export.format.png"] });
@@ -3051,12 +3116,12 @@ describe("Map editor Export panel", () => {
 
       // Tab to the DPI field, type 150, and press Enter on Save.
       const dpi = screen.getByRole("textbox", { name: en["export.dpi"] });
-      await tabTo(user, dpi, 80);
+      await tabTo(user, dpi, 120);
       await user.keyboard("{Control>}a{/Control}150{Enter}");
       await waitFor(() => expect(dpi).toHaveValue("150"));
 
       const save = screen.getByRole("button", { name: en["export.save"] });
-      await tabTo(user, save, 20);
+      await tabTo(user, save, 120);
       await user.keyboard("{Enter}");
 
       await waitFor(() => expect(host.files.saves).toHaveLength(1));
@@ -3109,6 +3174,8 @@ describe("Map editor Export panel", () => {
       frameStandIn(runtime.editor);
       const page = await host.renderPage(MAP_PAGE_ID);
       const user = userEvent.setup();
+      // The Export panel is the top-right pill's popover (#778), so it opens first.
+      await openExport(user);
 
       // Tab into the Format group and pick SVG with the arrow key.
       const group = await screen.findByRole("radiogroup", { name: en["export.format"] });
@@ -3119,7 +3186,7 @@ describe("Map editor Export panel", () => {
       );
 
       const save = screen.getByRole("button", { name: en["export.save"] });
-      await tabTo(user, save, 20);
+      await tabTo(user, save, 120);
       await user.keyboard("{Enter}");
 
       await waitFor(() => expect(host.files.saves).toHaveLength(1));
@@ -3161,6 +3228,8 @@ describe("Map editor Export panel", () => {
       const frame = frameStandIn(runtime.editor);
       const page = await host.renderPage(MAP_PAGE_ID);
       const user = userEvent.setup();
+      // The Export panel is the top-right pill's popover (#778), so it opens first.
+      await openExport(user);
 
       // The page hands the editor the Library once it has loaded, and the editor
       // hands the Frame the picture's bytes once, by id.
@@ -3171,7 +3240,7 @@ describe("Map editor Export panel", () => {
       );
 
       const save = await screen.findByRole("button", { name: en["export.save"] });
-      await tabTo(user, save, 80);
+      await tabTo(user, save, 120);
       await user.keyboard("{Enter}");
 
       await waitFor(() => expect(host.files.saves).toHaveLength(1));
@@ -3197,6 +3266,8 @@ describe("Map editor Export panel", () => {
       frameStandIn(runtime.editor);
       const page = await host.renderPage(MAP_PAGE_ID);
       const user = userEvent.setup();
+      // The Export panel is the top-right pill's popover (#778), so it opens first.
+      await openExport(user);
 
       const group = await screen.findByRole("radiogroup", { name: en["export.format"] });
       for (let i = 0; i < 80 && !group.contains(document.activeElement); i++) await user.tab();
@@ -3206,7 +3277,7 @@ describe("Map editor Export panel", () => {
       );
 
       const save = screen.getByRole("button", { name: en["export.save"] });
-      await tabTo(user, save, 20);
+      await tabTo(user, save, 120);
       await user.keyboard("{Enter}");
 
       await waitFor(() => expect(host.files.saves).toHaveLength(1));
@@ -3231,10 +3302,12 @@ describe("Map editor Export panel", () => {
       frameStandIn(runtime.editor);
       const page = await host.renderPage(MAP_PAGE_ID);
       const user = userEvent.setup();
+      // The Export panel is the top-right pill's popover (#778), so it opens first.
+      await openExport(user);
       host.files.queueSaveCancel();
 
       const save = await screen.findByRole("button", { name: en["export.save"] });
-      await tabTo(user, save, 80);
+      await tabTo(user, save, 120);
       await user.keyboard("{Enter}");
 
       // A later request settles after the save the host answered with a cancel.
@@ -3267,7 +3340,7 @@ describe("Map editor Place dialog", () => {
       const user = userEvent.setup();
 
       const placeButton = await screen.findByRole("button", { name: en["place.label"] });
-      await tabTo(user, placeButton, 100);
+      await tabTo(user, placeButton, 120);
       await user.keyboard("{Enter}");
 
       const dialog = await screen.findByRole("dialog", { name: en["place.title"] });
@@ -3325,7 +3398,7 @@ describe("Map editor Place dialog", () => {
       const user = userEvent.setup();
 
       const placeButton = await screen.findByRole("button", { name: en["place.label"] });
-      await tabTo(user, placeButton, 100);
+      await tabTo(user, placeButton, 120);
       await user.keyboard("{Enter}");
       const dialog = await screen.findByRole("dialog", { name: en["place.title"] });
       await within(dialog).findByLabelText(en["place.target"]);
@@ -3354,7 +3427,7 @@ describe("Map editor Place dialog", () => {
       const user = userEvent.setup();
 
       const placeButton = await screen.findByRole("button", { name: en["place.label"] });
-      await tabTo(user, placeButton, 100);
+      await tabTo(user, placeButton, 120);
       await user.keyboard("{Enter}");
       await screen.findByRole("dialog", { name: en["place.title"] });
 
@@ -3388,7 +3461,7 @@ describe("Map editor Place dialog", () => {
       const user = userEvent.setup();
 
       const placeButton = await screen.findByRole("button", { name: en["place.label"] });
-      await tabTo(user, placeButton, 100);
+      await tabTo(user, placeButton, 120);
       await user.keyboard("{Enter}");
       const dialog = await screen.findByRole("dialog", { name: en["place.title"] });
       const trigger = await within(dialog).findByLabelText(en["place.target"]);
@@ -3424,7 +3497,7 @@ describe("Map editor Place dialog", () => {
       const user = userEvent.setup();
 
       const placeButton = await screen.findByRole("button", { name: en["place.label"] });
-      await tabTo(user, placeButton, 100);
+      await tabTo(user, placeButton, 120);
       await user.keyboard("{Enter}");
       const dialog = await screen.findByRole("dialog", { name: en["place.title"] });
       const alt = within(dialog).getByRole("textbox", { name: en["place.alt"] });
@@ -3497,7 +3570,7 @@ describe("Map editor uploads (#756)", () => {
   /** Tabs to the Insert panel's Upload button. */
   async function tabToUpload(user: User): Promise<HTMLElement> {
     const upload = await screen.findByRole("button", { name: en["properties.upload"] });
-    await tabTo(user, upload, 20);
+    await tabTo(user, upload, 120);
     return upload;
   }
 
@@ -3574,12 +3647,12 @@ describe("Map editor uploads (#756)", () => {
 
       await pickTool(user, en["tools.insert"]);
       const asImage = await screen.findByRole("checkbox", { name: en["properties.asMapImage"] });
-      await tabTo(user, asImage, 20);
+      await tabTo(user, asImage, 120);
       await user.keyboard(" ");
       await waitFor(() => expect(asImage).toBeChecked());
 
       const upload = screen.getByRole("button", { name: en["properties.upload"] });
-      await tabTo(user, upload, 5);
+      await tabTo(user, upload, 120);
       await user.keyboard("{Enter}");
 
       await waitFor(() => expect(storedAssets(storage)).toHaveLength(1));
@@ -3600,7 +3673,7 @@ describe("Map editor uploads (#756)", () => {
 
       // The panel offers the Map Image's own controls.
       expect(
-        screen.getByRole("slider", { name: en["properties.image.opacity"] })
+        await screen.findByRole("slider", { name: en["properties.image.opacity"] })
       ).toBeInTheDocument();
       expect(
         screen.getByRole("switch", { name: en["properties.image.exportable"] })
@@ -3668,6 +3741,7 @@ describe("Map editor uploads (#756)", () => {
         // The Map holds the picture the row describes, and the row's kind names
         // the Element, instead of leaving the author with its flags alone (#756).
         expect(runtime.editor?.getSnapshot().elements[0]?.kind).toBe("image");
+        await openLayers(userEvent.setup());
         await waitFor(() =>
           expect(
             screen.getByRole("listbox", { name: catalog["elements.label"] })
@@ -3711,7 +3785,7 @@ describe("Map editor uploads (#756)", () => {
       );
 
       const trigger = await screen.findByLabelText(en["properties.stamp"]);
-      await tabTo(user, trigger, 40);
+      await tabTo(user, trigger, 120);
       await user.keyboard("{Enter}");
       const listbox = await screen.findByRole("listbox", { name: en["properties.stamp"] });
       const options = within(listbox).getAllByRole("option");
@@ -3872,7 +3946,7 @@ describe("Map editor uploads (#756)", () => {
       await selectRow(user, "Scan");
 
       const size = await screen.findByRole("textbox", { name: en["properties.image.size"] });
-      await tabTo(user, size, 80);
+      await tabTo(user, size, 120);
       await user.keyboard("{Control>}a{/Control}30{Enter}");
       await waitFor(() =>
         expect((runtime.editor?.getSnapshot().elements[0] as MapImageElement).transform.size).toBe(
@@ -3881,7 +3955,7 @@ describe("Map editor uploads (#756)", () => {
       );
 
       const opacity = await screen.findByRole("slider", { name: en["properties.image.opacity"] });
-      await tabTo(user, opacity, 10);
+      await tabTo(user, opacity, 120);
       await user.keyboard("{ArrowLeft}");
       await waitFor(() =>
         expect((runtime.editor?.getSnapshot().elements[0] as MapImageElement).opacity).toBeCloseTo(
@@ -3892,7 +3966,7 @@ describe("Map editor uploads (#756)", () => {
       const include = await screen.findByRole("switch", {
         name: en["properties.image.exportable"],
       });
-      await tabTo(user, include, 10);
+      await tabTo(user, include, 120);
       await user.keyboard(" ");
       await waitFor(() =>
         expect((runtime.editor?.getSnapshot().elements[0] as MapImageElement).exportable).toBe(
@@ -3965,7 +4039,7 @@ describe("Map editor uploads (#756)", () => {
       const fromTexture = await screen.findByRole("button", {
         name: en["properties.customFill.texture"],
       });
-      await tabTo(user, fromTexture, 80);
+      await tabTo(user, fromTexture, 120);
       await user.keyboard("{Enter}");
 
       await waitFor(() => expect(storage.get(CUSTOM_FILLS_KEY)).toHaveLength(1));
@@ -4012,7 +4086,7 @@ describe("Map editor uploads (#756)", () => {
       // The Collection's row is the tab stop, not its listbox: focus it, then
       // Space toggles its selection.
       const banner = within(stamps).getByRole("option", { name: "Banner" });
-      await tabTo(user, banner, 20);
+      await tabTo(user, banner, 120);
       expect(banner).toHaveFocus();
       await user.keyboard(" ");
       await waitFor(() => expect(banner).toHaveAttribute("aria-selected", "true"));
@@ -4020,7 +4094,7 @@ describe("Map editor uploads (#756)", () => {
       const create = await screen.findByRole("button", {
         name: en["properties.customFill.create"],
       });
-      await tabTo(user, create, 5);
+      await tabTo(user, create, 120);
       await user.keyboard("{Enter}");
 
       await waitFor(() => expect(storage.get(CUSTOM_FILLS_KEY)).toHaveLength(1));
@@ -4030,6 +4104,91 @@ describe("Map editor uploads (#756)", () => {
         stamps: ["custom:a1"],
       });
       await waitFor(() => expect(fillNow(runtime).content.customFill).toBe(fill.id));
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+});
+
+describe("the floating editor's chrome (#778)", () => {
+  it("drives the belt, Insert, Layers, Properties, the zoom cluster, and Export by keyboard", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+
+      // A tool from the belt: one press picks it, and the belt says so.
+      await pickTool(user, en["tools.pencil"]);
+      expect(runtime.editor?.getSnapshot().tool).toBe("pencil");
+
+      // The Layers card starts shut, and its toggle is the way in.
+      expect(screen.queryByRole("listbox", { name: en["elements.label"] })).toBeNull();
+      await openLayers(user);
+      expect(
+        await screen.findByRole("listbox", { name: en["elements.label"] })
+      ).toBeInTheDocument();
+
+      // Insert's card places a Stamp at the view centre by keyboard.
+      await pickTool(user, en["tools.insert"]);
+      const place = await screen.findByRole("button", {
+        name: format(en["properties.placeStamp"], { stamp: en["stamp.capital"] }),
+      });
+      await tabTo(user, place, 120);
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(runtime.editor?.getSnapshot().elements).toHaveLength(1));
+      expect(runtime.editor?.getSnapshot().elements[0]).toMatchObject({
+        kind: "stamp",
+        name: en["stamp.capital"],
+        transform: { x: 76.2, y: 114.3 },
+      });
+
+      // The Layers row menu deletes it again.
+      await selectRow(user, en["stamp.capital"]);
+      await chooseRowMenu(user, en["elements.delete"]);
+      await waitFor(() => expect(runtime.editor?.getSnapshot().elements).toEqual([]));
+
+      // The toggle shuts the card again, and the list leaves the page with it.
+      await closeLayers(user);
+      await waitFor(() =>
+        expect(screen.queryByRole("listbox", { name: en["elements.label"] })).toBeNull()
+      );
+
+      // Properties minimises to one icon, and comes back.
+      await pickTool(user, en["tools.pen"]);
+      const minimise = await screen.findByRole("button", {
+        name: en["chrome.minimiseProperties"],
+      });
+      await tabTo(user, minimise, 120);
+      await user.keyboard("{Enter}");
+      const restore = await screen.findByRole("button", { name: en["chrome.restoreProperties"] });
+      // One icon is all the card keeps while it is minimised.
+      expect(screen.queryByLabelText(en["properties.lineStyle"])).toBeNull();
+      await tabTo(user, restore, 120);
+      await user.keyboard("{Enter}");
+      expect(
+        await screen.findByRole("button", { name: en["chrome.minimiseProperties"] })
+      ).toBeInTheDocument();
+      // The controls are back: the Pen's line style is the card's first one.
+      expect(await screen.findByLabelText(en["properties.lineStyle"])).toBeInTheDocument();
+
+      // The zoom cluster: Zoom in moves the view, and the readout resets it.
+      const zoomIn = screen.getByRole("button", { name: en["chrome.zoomIn"] });
+      await tabTo(user, zoomIn, 120);
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(runtime.editor?.getSnapshot().zoom).toBeCloseTo(1.25, 10));
+      const readout = await screen.findByRole("button", {
+        name: format(en["chrome.zoom"], { percent: 125 }),
+      });
+      await tabTo(user, readout, 120);
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(runtime.editor?.getSnapshot().zoom).toBe(1));
+
+      // Export opens its popover, which holds the Save path.
+      await openExport(user);
+      expect(screen.getByRole("button", { name: en["export.save"] })).toBeInTheDocument();
 
       await page.unmount();
     } finally {

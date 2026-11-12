@@ -18,6 +18,7 @@ import type { FrameLocator, Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { isFocusWithin, leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
+import { openLayers } from "../support/maps-layers";
 
 /**
  * What the Archipelago Template lays down, as `templates.ts` declares it: six
@@ -135,6 +136,7 @@ async function openMap(page: Page, name: string): Promise<void> {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/maibuk-maps\/map$/);
   await expect(surface(page)).toBeVisible();
+  await openLayers(page);
 }
 
 /** Leaves the Map Frame and Tabs back to Back to Maps, then opens it by keyboard. */

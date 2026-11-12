@@ -128,6 +128,7 @@
   "properties.stamp.x": "X (mm)",
   "properties.stamp.y": "Y (mm)",
   "properties.stamp.size": "Tamaño (mm)",
+  "properties.stamp.newSize": "Tamaño del sello (mm)",
   "properties.stamp.maxLength": "Longitud máxima (mm)",
   "properties.stamp.rotation": "Rotación (grados)",
   "properties.stamp.color": "Color del sello",

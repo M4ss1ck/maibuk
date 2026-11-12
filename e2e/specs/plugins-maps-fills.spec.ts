@@ -17,6 +17,7 @@ import { capture } from "../support/capture";
 import { clickPagePoint } from "../support/frame-stroke";
 import { leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
+import { openLayers } from "../support/maps-layers";
 
 const primaryNav = (page: Page) => page.getByRole("listbox", { name: "Primary navigation" });
 const navOption = (page: Page, name: string) =>
@@ -76,12 +77,13 @@ async function openEditorWithMap(page: Page): Promise<void> {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/maibuk-maps\/map$/);
   await expect(surface(page)).toBeVisible();
+  await openLayers(page);
 }
 
 /** Places a Rectangle at the view centre from its key and its Place button. */
 async function placeRectangle(page: Page): Promise<void> {
   await page.keyboard.press("r");
-  await expect(page.getByRole("radio", { name: "Rectangle", exact: true })).toBeChecked();
+  await expect(page.getByRole("button", { name: "Rectangle", exact: true, pressed: true }));
   await expect(mapFrame(page).locator('svg[data-tool="rectangle"]')).toBeVisible();
   const place = page.getByRole("button", { name: "Place rectangle" });
   await tabTo(page, place, { max: 60 });
@@ -92,7 +94,7 @@ async function placeRectangle(page: Page): Promise<void> {
 /** Picks the Bucket with its key and waits for the Frame to honour it. */
 async function pickBucket(page: Page): Promise<void> {
   await page.keyboard.press("b");
-  await expect(page.getByRole("radio", { name: "Bucket", exact: true })).toBeChecked();
+  await expect(page.getByRole("button", { name: "Bucket", exact: true, pressed: true }));
   // The scene round-trip is what proves the Frame is listening before a pour.
   await expect(mapFrame(page).locator('svg[data-tool="bucket"]')).toBeVisible();
 }

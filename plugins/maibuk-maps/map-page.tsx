@@ -966,9 +966,11 @@ function MapEditorView({
 
   // Top of the list is the topmost Element; the document array grows upward.
   const rows = [...snapshot.elements].reverse();
-  // With nothing selected the Properties card still shows the one default the
-  // active tool offers: the Pen's line style, or a Shape's Place path (#778).
-  const showProperties = selected !== null || snapshot.tool === "pen" || shapeTool !== null;
+  // With nothing selected the Properties card still shows the defaults the
+  // active tool offers: the Pen's line style, a Shape's Place path, or the
+  // colour the Bucket pours (#778).
+  const showProperties =
+    selected !== null || snapshot.tool === "pen" || shapeTool !== null || pouring;
   const zoomPercent = Math.round(snapshot.zoom * 100);
 
   return (
@@ -1036,7 +1038,7 @@ function MapEditorView({
                 onChange={(event) => editor.setStamp(event.detail)}
               />
               <ui.NumberField
-                label={t("properties.stamp.size")}
+                label={t("properties.stamp.newSize")}
                 value={snapshot.currentStampSize}
                 minValue={MIN_STAMP_SIZE_MM}
                 onChange={(event) => editor.setStampSize(event.detail)}
@@ -1488,7 +1490,11 @@ function MapEditorView({
                     {selectedLine === null ? null : (
                       <ui.ColorPicker
                         label={t("properties.mapLine.color")}
-                        value={resolveColor(style, selectedLine.color, lineRole(selectedLine.style))}
+                        value={resolveColor(
+                          style,
+                          selectedLine.color,
+                          lineRole(selectedLine.style)
+                        )}
                         swatches={styleSwatches(style)}
                         isDisabled={selected.locked}
                         onChange={(event) => editor.setLineColor(selectedLine.id, event.detail)}
@@ -1708,7 +1714,11 @@ function MapEditorView({
           </ui.Popover>
           {/* Place copies the Map into a Chapter or Note as an image (#753);
               the dialog holds the target picker and the alt text. */}
-          <ui.IconButton label={t("place.label")} icon="file-image" onPress={() => void openPlace()} />
+          <ui.IconButton
+            label={t("place.label")}
+            icon="file-image"
+            onPress={() => void openPlace()}
+          />
           {placeFailed ? <ui.Status tone="warning">{t("place.failed")}</ui.Status> : null}
           {/* Export (#753): PNG at a chosen print size and DPI, drawn by the
               Frame which alone has a canvas, or the SVG itself. The panel is
@@ -1765,11 +1775,19 @@ function MapEditorView({
         {/* 8: the zoom cluster. Reset zoom is fit, so the design's separate Fit
             button is dropped (#778). */}
         <ui.View direction="row" gap="sm" align="center">
-          <ui.IconButton label={t("chrome.zoomOut")} icon="zoom-out" onPress={() => editor.zoomOut()} />
+          <ui.IconButton
+            label={t("chrome.zoomOut")}
+            icon="zoom-out"
+            onPress={() => editor.zoomOut()}
+          />
           <ui.Button variant="ghost" onPress={() => editor.zoomReset()}>
             {format(t("chrome.zoom"), { percent: zoomPercent })}
           </ui.Button>
-          <ui.IconButton label={t("chrome.zoomIn")} icon="zoom-in" onPress={() => editor.zoomIn()} />
+          <ui.IconButton
+            label={t("chrome.zoomIn")}
+            icon="zoom-in"
+            onPress={() => editor.zoomIn()}
+          />
         </ui.View>
       </ui.Surface>
 

@@ -23,6 +23,7 @@ import { leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
 import { countInkPixels } from "../support/png-ink";
 import { forceDownloadSaves } from "../support/save-picker";
 import { expect, test } from "../support/test";
+import { openLayers } from "../support/maps-layers";
 
 const primaryNav = (page: Page) => page.getByRole("listbox", { name: "Primary navigation" });
 const navOption = (page: Page, name: string) =>
@@ -96,6 +97,7 @@ async function openMap(page: Page, name: string): Promise<void> {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/maibuk-maps\/map$/);
   await expect(surface(page)).toBeVisible();
+  await openLayers(page);
 }
 
 /** Leaves the Map Frame and Tabs back to Back to Maps, then presses it. */
@@ -113,7 +115,7 @@ async function backToMaps(page: Page): Promise<void> {
 /** Picks the Insert tool with its key and waits for the Frame to honour it. */
 async function pickInsert(page: Page): Promise<void> {
   await page.keyboard.press("i");
-  await expect(page.getByRole("radio", { name: "Insert", exact: true })).toBeChecked();
+  await expect(page.getByRole("button", { name: "Insert", exact: true, pressed: true }));
   // The scene round-trip is what proves the Frame is listening before an upload.
   await expect(mapFrame(page).locator('svg[data-tool="insert"]')).toBeVisible();
 }

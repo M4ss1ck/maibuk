@@ -16,6 +16,7 @@ import { capture } from "../support/capture";
 import { eraseAcross } from "../support/frame-stroke";
 import { isFocusWithin, leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
+import { openLayers } from "../support/maps-layers";
 
 const primaryNav = (page: Page) => page.getByRole("listbox", { name: "Primary navigation" });
 const navOption = (page: Page, name: string) =>
@@ -69,12 +70,13 @@ async function openMap(page: Page, name: string): Promise<void> {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/maibuk-maps\/map$/);
   await expect(mapFrame(page).locator("svg")).toBeVisible();
+  await openLayers(page);
 }
 
 /** Picks the Pen with its Command and waits for the Frame to honour it. */
 async function pickPen(page: Page): Promise<void> {
   await page.keyboard.press("n");
-  await expect(page.getByRole("radio", { name: "Pen", exact: true })).toBeChecked();
+  await expect(page.getByRole("button", { name: "Pen", exact: true, pressed: true }));
   // The scene round-trip is what proves the Frame is listening before a key.
   await expect(mapFrame(page).locator('svg[data-tool="pen"]')).toBeVisible();
 }
@@ -286,7 +288,7 @@ test.describe("Maps Pen, Eraser, line styles, and Roughen @wf:plugins-maps-pen @
     await focusBack(page);
 
     await page.keyboard.press("e");
-    await expect(page.getByRole("radio", { name: "Eraser", exact: true })).toBeChecked();
+    await expect(page.getByRole("button", { name: "Eraser", exact: true, pressed: true }));
     await expect(mapFrame(page).locator('svg[data-tool="eraser"]')).toBeVisible();
 
     // A drag across the middle of the closed outline cuts it twice, once per

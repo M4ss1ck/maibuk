@@ -18,6 +18,7 @@ import { capture } from "../support/capture";
 import { dragShape } from "../support/frame-stroke";
 import { pressUntilFocused, tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
+import { openLayers } from "../support/maps-layers";
 
 const primaryNav = (page: Page) => page.getByRole("listbox", { name: "Primary navigation" });
 const navOption = (page: Page, name: string) =>
@@ -72,6 +73,7 @@ async function openMap(page: Page, name: string): Promise<void> {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/maibuk-maps\/map$/);
   await expect(mapFrame(page).locator("svg")).toBeVisible();
+  await openLayers(page);
 }
 
 /** Opens an empty Map in its editor, where every test below starts. */

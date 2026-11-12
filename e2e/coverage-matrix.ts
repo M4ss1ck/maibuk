@@ -2883,6 +2883,24 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-maps-layout",
+    area: "plugins",
+    workflow:
+      "The Maps editor's floating layout (#778): the drawing Frame takes the whole page body and every control floats over it as a card the way the app's own Canvas does — the top-left pill (Back to Maps, the Map's own name, Undo, Redo), the tool belt with Layers last, the Insert and Layers cards beside it, the Properties card under the top-right pill (Map Style, Place, Export), and the zoom cluster at the bottom right — so the author sees the drawing and not three host columns; asserts: the Frame's bounding box equals the page body's at 1440x900 and at 1024x768, the Back to Maps pill and the tool belt sit inside that box, opening or shutting Layers, Insert, Properties, or the Export popover changes neither box, and pressing the Map's own name renames the Map; persists: yes (the rename autosaves to Plugin storage)",
+    edges: [
+      "The Frame's box equals the page body's at 1440x900, with the cards floating inside it",
+      "Opening or shutting Layers, Insert, Properties, or the Export popover never changes the Frame's size",
+      "The Map's own name in the top-left pill renames the Map",
+      "The Frame's box still equals the page body's at 1024x768",
+    ],
+    terms: [],
+    shortcuts: [],
+    routes: ["/plugin/:pluginId/:pageId"],
+    fixture: "bookShelf",
+    tags: ["sandbox"],
+    status: "accepted",
+  },
+  {
     id: "plugins-maps-pen",
     area: "plugins",
     workflow:

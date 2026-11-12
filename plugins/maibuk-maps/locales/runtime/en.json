@@ -128,6 +128,7 @@
   "properties.stamp.x": "X (mm)",
   "properties.stamp.y": "Y (mm)",
   "properties.stamp.size": "Size (mm)",
+  "properties.stamp.newSize": "Stamp size (mm)",
   "properties.stamp.maxLength": "Max length (mm)",
   "properties.stamp.rotation": "Rotation (degrees)",
   "properties.stamp.color": "Stamp color",

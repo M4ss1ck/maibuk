@@ -223,9 +223,7 @@ const EXPECTATIONS: ReadonlyArray<Expectation> = [
     selector: `${ROOT} > div:nth-child(1)`,
     state: "open",
     expected: (mounted) =>
-      cardHolding(mounted.root, () =>
-        screen.getByRole("button", { name: en["map.backToMaps"] })
-      ),
+      cardHolding(mounted.root, () => screen.getByRole("button", { name: en["map.backToMaps"] })),
   },
   {
     selector: `${ROOT} > div:nth-child(2)`,
@@ -237,7 +235,9 @@ const EXPECTATIONS: ReadonlyArray<Expectation> = [
     selector: `${ROOT} > div:nth-child(3)`,
     state: "open",
     expected: (mounted) =>
-      cardHolding(mounted.root, () => screen.getByRole("button", { name: en["properties.upload"] })),
+      cardHolding(mounted.root, () =>
+        screen.getByRole("button", { name: en["properties.upload"] })
+      ),
   },
   {
     selector: `${ROOT} > div:nth-child(4)`,
