@@ -2969,6 +2969,38 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-maps-place",
+    area: "plugins",
+    workflow:
+      "The Maps editor's Place (#753): Place in a Chapter or Note… opens a dialog listing the Map's Book's Chapters and Notes with the Map's own name as the alt text, and Place copies the Map into the target as one image and opens that Chapter. The picture is rasterized in the Frame at 2,000 px on its long side, the short side following the page's aspect, and travels as a data URI so the Chapter holds it rather than a file it cannot read; Escape closes the dialog and returns focus to its button; asserts: the target's name in the picker, the alt text, the Chapter the app opens and its editor, the image's alt, that its src is a data:image URI, and its decoded natural width and height; persists: yes (the picture becomes Chapter content through the app's own write path)",
+    edges: [
+      "Place in a Chapter opens it with the Map's picture in its editor",
+      "Escape closes the Place dialog and returns focus to its button",
+    ],
+    terms: ["Export"],
+    shortcuts: ["plugin.maibuk-maps.insertTool"],
+    routes: ["/plugin/:pluginId/:pageId", "/book/:bookId"],
+    fixture: "bookShelf",
+    tags: ["sandbox"],
+    status: "accepted",
+  },
+  {
+    id: "plugins-maps-export",
+    area: "plugins",
+    workflow:
+      "The Maps editor's Export panel (#753): the author saves the open Map as a PNG drawn at a print width in inches and a DPI, or as an SVG. From the keyboard the panel's DPI field takes 150, which turns a 6 x 9 in portrait page into a 900 x 1350 px PNG the Frame rasterizes, and the browser downloads the file under the Map's own name; the Format radio then moves to SVG, which downloads the page at its millimetre print size with the curved Map Label drawn along its textPath, one @font-face per face the picture asks for carrying the bundled font's own bytes, and none of the editor's marks; asserts: the panel's own pixel size before saving, the downloaded PNG's signature and its IHDR width and height, the SVG's print size, its textPath and label text, its data URI font bytes, and the absence of data-element-id and data-selected; persists: no (a saved picture leaves the app as a file)",
+    edges: [
+      "Save downloads a PNG drawn at the print width and DPI the author picks",
+      "Save downloads an SVG that draws the curved label in its embedded face, with no editor marks",
+    ],
+    terms: ["Export"],
+    shortcuts: ["plugin.maibuk-maps.insertTool"],
+    routes: ["/plugin/:pluginId/:pageId"],
+    fixture: "bookShelf",
+    tags: ["sandbox"],
+    status: "accepted",
+  },
+  {
     id: "plugins-maps-move",
     area: "plugins",
     workflow:

@@ -185,11 +185,12 @@ describe("checkBundleSize()", () => {
   it("gives maibuk-mcp, maibuk-reader, and maibuk-maps the raised budgets", () => {
     // The MCP SDK plus zod alone exceed the 150 KB default, Reader carries
     // pdf.js and the foliate-js parsers as raw source strings, and Maps carries
-    // @turf/polygonize plus its base Stamp art.
+    // @turf/polygonize, its base Stamp art, and its bundled Map Label fonts
+    // inlined for SVG and PNG export.
     expect(BUNDLE_SIZE_LIMIT_OVERRIDES).toEqual({
       "maibuk-mcp": 240 * 1024,
       "maibuk-reader": 700 * 1024,
-      "maibuk-maps": 200 * 1024,
+      "maibuk-maps": 600 * 1024,
     });
   });
 });

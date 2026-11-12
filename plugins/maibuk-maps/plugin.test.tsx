@@ -6,10 +6,11 @@
  */
 
 import { readFileSync } from "node:fs";
+import { Blob as NodeBlob } from "node:buffer";
 import { join } from "node:path";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { parsePluginManifest } from "@/features/plugins/manifest-validate";
 import { createTestHost } from "@/features/plugins/test-kit";
 import type { TestHost, TestPdfFont } from "@/features/plugins/types";
@@ -20,10 +21,23 @@ import {
 } from "@/lib/shortcut-registry";
 import { effectiveShortcuts } from "@/lib/shortcut-resolve";
 import { useShortcuts } from "@/lib/shortcuts";
-import { createPluginClient, type PluginClient, type PluginFrame } from "@/plugin-sdk";
+import {
+  PLUGIN_UI_LIMITS,
+  createPluginClient,
+  type PluginClient,
+  type PluginFrame,
+} from "@/plugin-sdk";
 import { PLUGIN_COMMAND_RUN_REQUEST, PLUGIN_MIGRATE_DATA_REQUEST } from "@/plugin-sdk/protocol";
 import { servePluginUi } from "@/plugin-sdk/ui-serve";
-import { DEFAULT_SOFT_EDGE_MM, SOFT_EDGE_STEP_MM } from "./editor";
+import { DEFAULT_SOFT_EDGE_MM, SOFT_EDGE_STEP_MM, type MapEditor } from "./editor";
+import {
+  ALT_TEXT_MAX_CHARS,
+  exportLogLine,
+  INSERT_IMAGE_CAP_BYTES,
+  placePixelSize,
+  printPixelSize,
+  svgPixelSize,
+} from "./export";
 import type { FrameFontMessage } from "./frame-protocol";
 import en from "./locales/runtime/en.json";
 import es from "./locales/runtime/es.json";
@@ -60,6 +74,23 @@ import { linePath, roughen, seedFor, shapeOutline } from "./geometry";
 import { MAP_STYLES } from "./styles";
 
 type User = ReturnType<typeof userEvent.setup>;
+
+/**
+ * vitest's jsdom environment puts jsdom's own realm's `Uint8Array` and
+ * `ArrayBuffer` on the global, while the host `TextEncoder` still produces the
+ * host ones. The export tests then hand the SDK the Plugin's own encoded bytes,
+ * which fail its `bytes instanceof Uint8Array` check on `files.save`, and hand
+ * the editor a rasterizer's `ArrayBuffer` its own parse refuses. The host
+ * intrinsics are put back for this file, as
+ * `src/test/support/bundle-plugin-fixture.ts` does for its bundle.
+ */
+const hostBytes = new TextEncoder().encode("");
+const globalsWithBytes = globalThis as {
+  Uint8Array: Uint8ArrayConstructor;
+  ArrayBuffer: ArrayBufferConstructor;
+};
+globalsWithBytes.Uint8Array = hostBytes.constructor as Uint8ArrayConstructor;
+globalsWithBytes.ArrayBuffer = hostBytes.buffer.constructor as ArrayBufferConstructor;
 
 /**
  * The Map Frame's own files (#750), read from the Plugin folder: the keyboard
@@ -193,6 +224,34 @@ function isFontMessage(message: unknown): message is FrameFontMessage {
 }
 
 /**
+ * A mounted Frame stand-in for the export (#753): it answers every rasterize
+ * request with `bytes`, the way the real Frame draws the SVG into a canvas and
+ * hands the encoded picture back, and records every message the editor posts.
+ * It attaches straight to the open editor, so a test needs no host handoff.
+ */
+function frameStandIn(
+  editor: MapEditor | null,
+  bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47])
+): { port: MessagePort; messages: Array<Record<string, unknown>> } {
+  const messages: Array<Record<string, unknown>> = [];
+  const port = {
+    onmessage: null,
+    start: () => {},
+    postMessage: (message: Record<string, unknown>) => {
+      messages.push(message);
+      if (message.kind !== "rasterize") return;
+      editor?.handleFrameMessage({
+        kind: "rasterized",
+        requestId: message.requestId,
+        bytes: bytes.slice().buffer,
+      });
+    },
+  } as unknown as MessagePort;
+  editor?.attachFrame(port);
+  return { port, messages };
+}
+
+/**
  * The real Map Frame (#750), loaded into this document so a keyboard test can
  * drive its crosshair with real key presses and read what it posts. The two
  * ports stand for the ends of the Frame's MessageChannel: every message the
@@ -234,6 +293,85 @@ function loadMapFrame(runtime: MapsRuntime): MessagePort {
     delete (globalThis as Record<string, unknown>).__mapTestHooks;
   }
   return workerPort;
+}
+
+/**
+ * A host and runtime for the Export and Place tests (#753). Every host call is
+ * the real one: the suites below stub `Blob` for Node's, so a saved picture
+ * crosses jsdom's MessageChannel and lands in `host.files.saves`, and
+ * `host.files.queueSaveCancel()` stands for the dialog the author closed.
+ */
+function exportHostFor(storage: Map<string, unknown>) {
+  const host = createTestHost({
+    manifest: mapsManifest(),
+    library: { books: BOOKS },
+    storage,
+    language: "en",
+  });
+  const runtime = startMaps(createPluginClient(host.port), servePluginUi);
+  return { host, runtime };
+}
+
+/** The Chapters and Notes the Place tests reach: two Chapters and a Note. */
+const PLACE_CHAPTERS = [
+  {
+    id: "c1",
+    bookId: "b1",
+    title: "Chapter One",
+    order: 1,
+    parentId: null,
+    chapterType: "chapter" as const,
+    wordCount: 0,
+    status: "draft" as const,
+    updatedAt: 1,
+  },
+  {
+    id: "c2",
+    bookId: "b2",
+    title: "A Chapter of the Salt Road",
+    order: 1,
+    parentId: null,
+    chapterType: "chapter" as const,
+    wordCount: 0,
+    status: "draft" as const,
+    updatedAt: 1,
+  },
+];
+
+/** The one Note the Place tests reach, filed under the Map's Book. */
+const PLACE_NOTES = [
+  {
+    id: "n1",
+    bookId: "b1",
+    title: "Field Notes",
+    language: "en",
+    tags: [],
+    wordCount: 0,
+    updatedAt: 1,
+  },
+];
+
+/**
+ * A host whose Library holds a Chapter and a Note for the Map's Book, and a
+ * Chapter of the other Book. The kit serves no editor (`editor.insert` is not
+ * one of its rows) and the Maps page is its own route, so the one insert call a
+ * Place makes is answered at the SDK seam; the Library read, the navigation,
+ * and the notification are the real host.
+ */
+function placeHostFor(
+  storage: Map<string, unknown>,
+  chapters: typeof PLACE_CHAPTERS = PLACE_CHAPTERS
+) {
+  const host = createTestHost({
+    manifest: mapsManifest(),
+    library: { books: BOOKS, chapters, notes: PLACE_NOTES },
+    storage,
+    language: "en",
+  });
+  const client = createPluginClient(host.port);
+  const insert = vi.spyOn(client.editor, "insert").mockResolvedValue({ status: "applied" });
+  const runtime = startMaps(client, servePluginUi);
+  return { host, runtime, insert };
 }
 
 /** A host and the runtime that owns the open Map, for the editor tests. */
@@ -2699,6 +2837,366 @@ describe("Map editor page", () => {
       // No flat colour paints the Fill, so its picker shows the host's default
       // instead of claiming the Fill is painted land.
       expect(within(dialog).getByRole("textbox")).toHaveValue("#000000");
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+});
+
+describe("Map editor Export panel", () => {
+  /** The portrait page `mapStorage` gives its Map: 6 by 9 inches. */
+  const PAGE = { preset: "portrait" as const, widthMm: 152.4, heightMm: 228.6 };
+
+  // jsdom's Blob is a stand-in class the in-process MessageChannel turns into a
+  // plain object; Node's real Blob crosses the port the way a browser's does,
+  // so the host's own save flow runs (`test-kit.test.ts` does the same).
+  beforeEach(() => {
+    vi.stubGlobal("Blob", NodeBlob);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("saves a PNG at the print size and DPI typed by keyboard, and logs one line", async () => {
+    const storage = mapStorage([
+      line("e1", "Coastline", [
+        [10, 10],
+        [20, 20],
+      ]),
+    ]);
+    const { host, runtime } = exportHostFor(storage);
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      expect(await runtime.openMap("m1")).toBe(true);
+      const frame = frameStandIn(runtime.editor);
+      const page = await host.renderPage(MAP_PAGE_ID);
+      const user = userEvent.setup();
+
+      // PNG is the panel's default, and the page is 6 in wide.
+      const png = await screen.findByRole("radio", { name: en["export.format.png"] });
+      expect(png).toBeChecked();
+      expect(screen.getByRole("textbox", { name: en["export.printWidth"] })).toHaveValue("6");
+
+      // Tab to the DPI field, type 150, and press Enter on Save.
+      const dpi = screen.getByRole("textbox", { name: en["export.dpi"] });
+      await tabTo(user, dpi, 80);
+      await user.keyboard("{Control>}a{/Control}150{Enter}");
+      await waitFor(() => expect(dpi).toHaveValue("150"));
+
+      const save = screen.getByRole("button", { name: en["export.save"] });
+      await tabTo(user, save, 20);
+      await user.keyboard("{Enter}");
+
+      await waitFor(() => expect(host.files.saves).toHaveLength(1));
+      const [saved] = host.files.saves;
+      expect(saved.name).toBe("Coast.png");
+      expect(saved.mimeType).toBe("image/png");
+      expect([...saved.bytes]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+
+      // The Frame was asked to draw the 6 in page at 150 DPI.
+      const size = printPixelSize(PAGE, 6, 150);
+      const request = frame.messages.find((message) => message.kind === "rasterize");
+      expect(request).toMatchObject({
+        widthPx: size.widthPx,
+        heightPx: size.heightPx,
+        format: "png",
+      });
+
+      expect(info).toHaveBeenCalledTimes(1);
+      expect(info).toHaveBeenCalledWith(
+        exportLogLine({
+          action: "save",
+          format: "png",
+          widthPx: size.widthPx,
+          heightPx: size.heightPx,
+          bytes: 4,
+        })
+      );
+
+      await page.unmount();
+    } finally {
+      info.mockRestore();
+      await host.stop();
+    }
+  });
+
+  it("saves an SVG that embeds only the fonts it uses and no editor marks", async () => {
+    const storage = mapStorage([
+      newLabel({
+        id: "l1",
+        name: "Map Label 1",
+        text: "The Reach",
+        point: [76.2, 114.3],
+        font: "cinzel",
+      }),
+    ]);
+    const { host, runtime } = exportHostFor(storage);
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      expect(await runtime.openMap("m1")).toBe(true);
+      frameStandIn(runtime.editor);
+      const page = await host.renderPage(MAP_PAGE_ID);
+      const user = userEvent.setup();
+
+      // Tab into the Format group and pick SVG with the arrow key.
+      const group = await screen.findByRole("radiogroup", { name: en["export.format"] });
+      for (let i = 0; i < 80 && !group.contains(document.activeElement); i++) await user.tab();
+      await user.keyboard("{ArrowRight}");
+      await waitFor(() =>
+        expect(screen.getByRole("radio", { name: en["export.format.svg"] })).toBeChecked()
+      );
+
+      const save = screen.getByRole("button", { name: en["export.save"] });
+      await tabTo(user, save, 20);
+      await user.keyboard("{Enter}");
+
+      await waitFor(() => expect(host.files.saves).toHaveLength(1));
+      const [saved] = host.files.saves;
+      expect(saved.name).toBe("Coast.svg");
+      expect(saved.mimeType).toBe("image/svg+xml");
+
+      const svg = new TextDecoder().decode(saved.bytes);
+      expect(svg).not.toContain("data-element-id");
+      expect(svg.match(/@font-face/g)).toHaveLength(1);
+      expect(svg).toContain(`@font-face{font-family:"${MAP_LABEL_FONT_FAMILIES.cinzel}"`);
+      expect(svg).not.toContain(MAP_LABEL_FONT_FAMILIES["medieval-sharp"]);
+
+      // The SVG log names the size a browser draws it at, 96 DPI.
+      const size = svgPixelSize(PAGE);
+      expect(info).toHaveBeenCalledTimes(1);
+      expect(info).toHaveBeenCalledWith(
+        exportLogLine({
+          action: "save",
+          format: "svg",
+          widthPx: size.widthPx,
+          heightPx: size.heightPx,
+          bytes: saved.bytes.length,
+        })
+      );
+
+      await page.unmount();
+    } finally {
+      info.mockRestore();
+      await host.stop();
+    }
+  });
+
+  it("logs nothing and shows no error when the author cancels the save", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = exportHostFor(storage);
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      expect(await runtime.openMap("m1")).toBe(true);
+      frameStandIn(runtime.editor);
+      const page = await host.renderPage(MAP_PAGE_ID);
+      const user = userEvent.setup();
+      host.files.queueSaveCancel();
+
+      const save = await screen.findByRole("button", { name: en["export.save"] });
+      await tabTo(user, save, 80);
+      await user.keyboard("{Enter}");
+
+      // A later request settles after the save the host answered with a cancel.
+      await expect(host.broker.request("health.check", null)).resolves.toBe("pong");
+      expect(host.files.saves).toEqual([]);
+      expect(info).not.toHaveBeenCalled();
+      // A cancelled save is not a failure: the panel says nothing.
+      expect(screen.queryByText(en["export.failed"])).not.toBeInTheDocument();
+
+      await page.unmount();
+    } finally {
+      info.mockRestore();
+      await host.stop();
+    }
+  });
+});
+
+describe("Map editor Place dialog", () => {
+  /** The portrait page `mapStorage` gives its Map: 6 by 9 inches. */
+  const PAGE = { preset: "portrait" as const, widthMm: 152.4, heightMm: 228.6 };
+
+  it("places the Map in a Chapter by keyboard, with its alt text and one log line", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime, insert } = placeHostFor(storage);
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      expect(await runtime.openMap("m1")).toBe(true);
+      frameStandIn(runtime.editor);
+      const page = await host.renderPage(MAP_PAGE_ID);
+      const user = userEvent.setup();
+
+      const placeButton = await screen.findByRole("button", { name: en["place.label"] });
+      await tabTo(user, placeButton, 100);
+      await user.keyboard("{Enter}");
+
+      const dialog = await screen.findByRole("dialog", { name: en["place.title"] });
+      // The Map's own name is the alt text until the author edits it.
+      const alt = within(dialog).getByRole("textbox", { name: en["place.alt"] });
+      expect(alt).toHaveValue("Coast");
+
+      // The picker lists the Map's Book's Chapters and Notes.
+      await within(dialog).findByLabelText(en["place.target"]);
+      await pickOption(user, en["place.target"], "Chapter One", dialog);
+
+      await tabTo(user, alt);
+      await user.keyboard("{Control>}a{/Control}The Reach & Tides");
+      await waitFor(() => expect(alt).toHaveValue("The Reach & Tides"));
+
+      const submit = within(dialog).getByRole("button", { name: en["place.submit"] });
+      await tabTo(user, submit);
+      await user.keyboard("{Enter}");
+
+      await waitFor(() => expect(insert).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+      expect(host.navigations).toEqual([{ entity: { kind: "chapter", id: "c1" } }]);
+      expect(insert).toHaveBeenCalledWith({
+        content: { html: '<img src="data:image/png;base64,iVBORw==" alt="The Reach &amp; Tides">' },
+      });
+
+      const size = placePixelSize(PAGE);
+      expect(info).toHaveBeenCalledTimes(1);
+      expect(info).toHaveBeenCalledWith(
+        exportLogLine({
+          action: "insert",
+          format: "png",
+          widthPx: size.widthPx,
+          heightPx: size.heightPx,
+          bytes: 4,
+        })
+      );
+
+      await page.unmount();
+    } finally {
+      info.mockRestore();
+      await host.stop();
+    }
+  });
+
+  it("shows the panel error and navigates nowhere when the picture is too large", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime, insert } = placeHostFor(storage);
+    try {
+      // 80% of the cap in bytes is over it as a data URI at every quality.
+      frameStandIn(runtime.editor, new Uint8Array(Math.floor(INSERT_IMAGE_CAP_BYTES * 0.8)));
+      expect(await runtime.openMap("m1")).toBe(true);
+      const page = await host.renderPage(MAP_PAGE_ID);
+      const user = userEvent.setup();
+
+      const placeButton = await screen.findByRole("button", { name: en["place.label"] });
+      await tabTo(user, placeButton, 100);
+      await user.keyboard("{Enter}");
+      const dialog = await screen.findByRole("dialog", { name: en["place.title"] });
+      await within(dialog).findByLabelText(en["place.target"]);
+
+      const submit = within(dialog).getByRole("button", { name: en["place.submit"] });
+      await tabTo(user, submit);
+      await user.keyboard("{Enter}");
+
+      expect(await screen.findByText(en["place.failed"])).toBeInTheDocument();
+      expect(host.navigations).toEqual([]);
+      expect(insert).not.toHaveBeenCalled();
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("closes the Place dialog on Escape and returns focus to its button", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime, insert } = placeHostFor(storage);
+    try {
+      expect(await runtime.openMap("m1")).toBe(true);
+      frameStandIn(runtime.editor);
+      const page = await host.renderPage(MAP_PAGE_ID);
+      const user = userEvent.setup();
+
+      const placeButton = await screen.findByRole("button", { name: en["place.label"] });
+      await tabTo(user, placeButton, 100);
+      await user.keyboard("{Enter}");
+      await screen.findByRole("dialog", { name: en["place.title"] });
+
+      await user.keyboard("{Escape}");
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      await waitFor(() => expect(placeButton).toHaveFocus());
+      expect(insert).not.toHaveBeenCalled();
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("fits the target picker to the host's cap, with a Library past 2,000 Chapters", async () => {
+    // A long Book: more Chapters than the host accepts in one option list, each
+    // title well past the length one label may carry.
+    const longTitle = "The Northern Reach ".repeat(40);
+    const chapters = Array.from({ length: PLUGIN_UI_LIMITS.maxOptions + 100 }, (_, index) => ({
+      ...PLACE_CHAPTERS[0],
+      id: `c${index + 1}`,
+      title: `${index + 1} ${longTitle}`,
+      order: index + 1,
+    }));
+    const storage = mapStorage([]);
+    const { host, runtime } = placeHostFor(storage, chapters);
+    try {
+      expect(await runtime.openMap("m1")).toBe(true);
+      frameStandIn(runtime.editor);
+      const page = await host.renderPage(MAP_PAGE_ID);
+      const user = userEvent.setup();
+
+      const placeButton = await screen.findByRole("button", { name: en["place.label"] });
+      await tabTo(user, placeButton, 100);
+      await user.keyboard("{Enter}");
+      const dialog = await screen.findByRole("dialog", { name: en["place.title"] });
+      const trigger = await within(dialog).findByLabelText(en["place.target"]);
+
+      // The page asked for no option list the host would refuse.
+      expect(page.violations).toEqual([]);
+
+      await tabTo(user, trigger);
+      await user.keyboard("{Enter}");
+      const listbox = await screen.findByRole("listbox");
+      const options = within(listbox).getAllByRole("option");
+      expect(options).toHaveLength(PLUGIN_UI_LIMITS.maxOptions);
+      // The first Chapter is still offered, its title cut to the host's 512-code
+      // unit cap instead of going whole.
+      const first = options[0];
+      expect(first).toHaveAccessibleName(/^1 The Northern Reach/);
+      expect((first.textContent ?? "").length).toBe(512);
+      expect(first.textContent?.endsWith("…")).toBe(true);
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("keeps the alt text inside its 500-character bound", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = placeHostFor(storage);
+    try {
+      expect(await runtime.openMap("m1")).toBe(true);
+      frameStandIn(runtime.editor);
+      const page = await host.renderPage(MAP_PAGE_ID);
+      const user = userEvent.setup();
+
+      const placeButton = await screen.findByRole("button", { name: en["place.label"] });
+      await tabTo(user, placeButton, 100);
+      await user.keyboard("{Enter}");
+      const dialog = await screen.findByRole("dialog", { name: en["place.title"] });
+      const alt = within(dialog).getByRole("textbox", { name: en["place.alt"] });
+
+      // Pasted whole, so the field takes the 600 characters in one edit and
+      // keeps only what the insert message's envelope margin leaves room for.
+      await tabTo(user, alt);
+      await user.keyboard("{Control>}a{/Control}");
+      await user.paste("x".repeat(600));
+      await waitFor(() => expect(alt).toHaveValue("x".repeat(ALT_TEXT_MAX_CHARS)));
 
       await page.unmount();
     } finally {

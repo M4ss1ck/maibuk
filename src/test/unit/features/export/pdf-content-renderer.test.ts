@@ -39,6 +39,23 @@ function collectText(node: unknown, out: string[] = []): string[] {
   return out;
 }
 
+/** Every `Image` element in a rendered tree, whatever block wraps it. */
+function collectImages(
+  node: unknown,
+  out: Array<{ props?: { src?: unknown } }> = []
+): Array<{ props?: { src?: unknown } }> {
+  if (Array.isArray(node)) {
+    node.forEach((child) => {
+      collectImages(child, out);
+    });
+  } else if (node && typeof node === "object" && "props" in node) {
+    const el = node as { type?: unknown; props?: { children?: unknown } };
+    if (el.type === "Image") out.push(el as { props?: { src?: unknown } });
+    collectImages(el.props?.children, out);
+  }
+  return out;
+}
+
 /**
  * Recursively collect every `key` from an element tree.
  * Returns them grouped by parent so we can check siblings.
@@ -176,6 +193,26 @@ describe("renderSceneBreak (PDF)", () => {
 
     expect(JSON.stringify(tree)).toContain("data:image/png;base64,AA");
     expect(sceneBreak.props?.style).toBe(styles.sceneBreak);
+  });
+});
+
+describe("image blocks (PDF)", () => {
+  // A Chapter's planted Map is a data-URI image the editor stores as a
+  // `figure[data-image]` wrapping the `img` (#753, the image node's
+  // `renderHTML`), so the PDF renderer is fed that shape and draws PNG and JPEG
+  // data URIs alike.
+  it.each([
+    ["PNG", "data:image/png;base64,AA"],
+    ["JPEG", "data:image/jpeg;base64,BB"],
+  ])("renders a data-URI %s figure in Chapter HTML as an Image", (_kind, src) => {
+    const tree = renderHtmlContent(
+      `<p>Before</p><figure data-image=""><img src="${src}" alt="Map"><figcaption></figcaption></figure><p>After</p>`,
+      styles
+    );
+    const images = collectImages(tree);
+
+    expect(images).toHaveLength(1);
+    expect(images[0]?.props?.src).toBe(src);
   });
 });
 

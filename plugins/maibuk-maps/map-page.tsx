@@ -9,7 +9,7 @@
  */
 
 import { useEffect, useState, useSyncExternalStore, type ComponentType } from "react";
-import { ui, type PluginClient } from "@/plugin-sdk";
+import { PLUGIN_UI_LIMITS, ui, type PluginClient } from "@/plugin-sdk";
 import {
   DEFAULT_SOFT_EDGE_MM,
   MAX_ROUGHEN_STRENGTH_MM,
@@ -19,6 +19,28 @@ import {
   SOFT_EDGE_STEP_MM,
   type MapEditor,
 } from "./editor";
+import {
+  ALT_TEXT_MAX_CHARS,
+  DEFAULT_DPI,
+  MAX_DPI,
+  MAX_PRINT_WIDTH_IN,
+  MIN_DPI,
+  MIN_PRINT_WIDTH_IN,
+  dataUri,
+  defaultPrintWidthIn,
+  exportFileName,
+  exportLogLine,
+  exportSvg,
+  fitUnderCap,
+  imageHtml,
+  insertWhenReady,
+  maxDpiForPrint,
+  placePixelSize,
+  printPixelSize,
+  svgAtPixelSize,
+  svgPixelSize,
+  type ExportFont,
+} from "./export";
 import type { MapTool } from "./frame-protocol";
 import { format, translate, type MapsKey } from "./i18n";
 import type { MapsRuntime } from "./runtime";
@@ -36,6 +58,7 @@ import {
   STAMP_SCALE_UNITS,
   isShapeKind,
   type LineStyleId,
+  type MapDocument,
   type MapElement,
   type MapLabelFont,
   type ShapeKind,
@@ -65,9 +88,253 @@ export const MAP_FRAME_SRC = "assets/ui/map.html";
 
 export interface MapPageDeps {
   client: PluginClient;
-  runtime: Pick<MapsRuntime, "editor" | "currentMapId">;
+  runtime: Pick<MapsRuntime, "editor" | "currentMapId" | "exportFonts">;
   /** Flushes autosave and opens the Maps list. */
   backToMaps(): Promise<void>;
+}
+
+/** What the Export panel asks for: the format, and a PNG's print size and DPI. */
+interface SaveImageOptions {
+  format: "png" | "svg";
+  printWidthIn: number;
+  dpi: number;
+}
+
+/**
+ * The host calls and fonts one picture needs, so the save and place paths stay
+ * presentational: the client writes or navigates, the editor draws the page, and
+ * `exportFonts` embeds the faces it asks for.
+ */
+interface MapPictureDeps {
+  client: PluginClient;
+  editor: MapEditor;
+  exportFonts(): Promise<readonly ExportFont[]>;
+}
+
+/**
+ * Saves the open Map through `files.save` (#753): an SVG of the page with its
+ * fonts embedded, or a PNG rasterized in the Frame at the chosen print size and
+ * DPI. A save the author cancels writes nothing and logs nothing; a saved
+ * picture logs exactly one line with its format, pixel size, and bytes.
+ */
+async function saveMapImage(
+  { client, editor, exportFonts }: MapPictureDeps,
+  { format: pictureFormat, printWidthIn, dpi }: SaveImageOptions
+): Promise<void> {
+  const doc = editor.getSnapshot().doc;
+  const fonts = await exportFonts();
+
+  if (pictureFormat === "svg") {
+    const bytes = new TextEncoder().encode(exportSvg(doc, fonts));
+    const result = await client.files.save({
+      name: exportFileName(doc.name, "svg"),
+      mimeType: "image/svg+xml",
+      bytes,
+    });
+    if (result.status !== "saved") return;
+    // An SVG itself has no pixels; the log names the size a browser draws it.
+    const size = svgPixelSize(doc.page);
+    console.info(
+      exportLogLine({
+        action: "save",
+        format: "svg",
+        widthPx: size.widthPx,
+        heightPx: size.heightPx,
+        bytes: bytes.length,
+      })
+    );
+    return;
+  }
+
+  const size = printPixelSize(doc.page, printWidthIn, dpi);
+  const svg = svgAtPixelSize(exportSvg(doc, fonts), size);
+  const bytes = await editor.rasterize(svg, size, "png");
+  const result = await client.files.save({
+    name: exportFileName(doc.name, "png"),
+    mimeType: "image/png",
+    bytes,
+  });
+  if (result.status !== "saved") return;
+  console.info(
+    exportLogLine({
+      action: "save",
+      format: "png",
+      widthPx: size.widthPx,
+      heightPx: size.heightPx,
+      bytes: bytes.length,
+    })
+  );
+}
+
+/** One editor a Map can be placed in: a Chapter or a Note. */
+interface PlaceTarget {
+  id: string;
+  kind: "chapter" | "note";
+  label: string;
+}
+
+/**
+ * The editors one Place can reach (#753): the Chapters and Notes of the Map's
+ * own Book, or, for a Map with no Book, every Book's Chapters and Notes labelled
+ * by their Book. The Library lists are the public handle on them.
+ */
+async function listPlaceTargets(
+  client: PluginClient,
+  map: Pick<MapDocument, "bookId">
+): Promise<PlaceTarget[]> {
+  if (map.bookId !== null) {
+    const [chapters, notes] = await Promise.all([
+      client.library.chapters.list({ bookId: map.bookId }),
+      client.library.notes.list({ bookId: map.bookId }),
+    ]);
+    return [
+      ...chapters.map((chapter) => ({
+        id: chapter.id,
+        kind: "chapter" as const,
+        label: chapter.title,
+      })),
+      ...notes.map((note) => ({ id: note.id, kind: "note" as const, label: note.title })),
+    ];
+  }
+
+  const books = await client.library.books.list();
+  const titles = new Map(books.map((book) => [book.id, book.title]));
+  const label = (title: string, bookId: string | null): string => {
+    const bookTitle = bookId === null ? undefined : titles.get(bookId);
+    return bookTitle === undefined ? title : `${bookTitle} — ${title}`;
+  };
+  const chapters = await Promise.all(
+    books.map(async (book) => {
+      const list = await client.library.chapters.list({ bookId: book.id });
+      return list.map((chapter) => ({
+        id: chapter.id,
+        kind: "chapter" as const,
+        label: label(chapter.title, book.id),
+      }));
+    })
+  );
+  const notes = await client.library.notes.list({});
+  return [
+    ...chapters.flat(),
+    ...notes.map((note) => ({
+      id: note.id,
+      kind: "note" as const,
+      label: label(note.title, note.bookId),
+    })),
+  ];
+}
+
+/**
+ * The host's cap on one UI string, in UTF-16 code units (`maibuk-select`'s
+ * `label` and `selectedKey` in the SDK's UI table). A longer one is refused and
+ * the Plugin stopped, so a label built from Library data is cut to it.
+ */
+const PLACE_LABEL_MAX = 512;
+
+/**
+ * `text` cut to at most {@link PLACE_LABEL_MAX} code units, ending in "…" when
+ * it was cut. A cut never splits a surrogate pair, so the result is well-formed.
+ */
+function clampLabel(text: string): string {
+  if (text.length <= PLACE_LABEL_MAX) return text;
+  const end = PLACE_LABEL_MAX - 1;
+  const last = text.charCodeAt(end - 1);
+  return `${text.slice(0, last >= 0xd800 && last <= 0xdbff ? end - 1 : end)}…`;
+}
+
+/**
+ * The target picker's options (#753): a Library past the host's
+ * {@link PLUGIN_UI_LIMITS.maxOptions} loses the tail of its list, never the
+ * page, and every label is clamped, since a Chapter title is the author's text.
+ * The target already picked keeps its place, the last one kept making room.
+ */
+function placeTargetOptions(
+  targets: readonly PlaceTarget[],
+  selectedId: string | null
+): Array<{ value: string; label: string }> {
+  const kept = targets.slice(0, PLUGIN_UI_LIMITS.maxOptions);
+  const chosen =
+    selectedId === null ? undefined : targets.find((target) => target.id === selectedId);
+  if (chosen !== undefined && !kept.includes(chosen)) kept[kept.length - 1] = chosen;
+  return kept.map((target) => ({ value: target.id, label: clampLabel(target.label) }));
+}
+
+/** The alt text the dialog holds: at most {@link ALT_TEXT_MAX_CHARS} characters (#753). */
+function altText(text: string): string {
+  return text.slice(0, ALT_TEXT_MAX_CHARS);
+}
+
+/** The picture one Place inserts, and what its one log line names. */
+interface PlacedImage {
+  html: string;
+  format: "png" | "jpeg";
+  widthPx: number;
+  heightPx: number;
+  bytes: number;
+}
+
+/** The three steps the Place dialog drives, so each failure reaches its own surface. */
+interface PlaceCallbacks {
+  listTargets(): Promise<PlaceTarget[]>;
+  prepare(alt: string): Promise<PlacedImage>;
+  finish(target: PlaceTarget, image: PlacedImage): Promise<void>;
+  notifyFailed(): Promise<void>;
+}
+
+/** Waits before one insert retry, so a Place does not busy-loop on the host. */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Rasterizes the open Map into the HTML one Place inserts (#753): at
+ * {@link placePixelSize}, PNG first and JPEG at falling quality when the data
+ * URI would be over the insert cap, with the alt text escaped. Throws
+ * {@link ExportTooLargeError} when even the lowest JPEG is over the cap, before
+ * anything navigates.
+ */
+async function preparePlace(
+  { editor, exportFonts }: Pick<MapPictureDeps, "editor" | "exportFonts">,
+  alt: string
+): Promise<PlacedImage> {
+  const doc = editor.getSnapshot().doc;
+  const size = placePixelSize(doc.page);
+  const svg = svgAtPixelSize(exportSvg(doc, await exportFonts()), size);
+  const fitted = await fitUnderCap((format) => editor.rasterize(svg, size, format));
+  return {
+    html: imageHtml(alt, dataUri(fitted.mime, fitted.bytes)),
+    format: fitted.mime === "image/png" ? "png" : "jpeg",
+    widthPx: size.widthPx,
+    heightPx: size.heightPx,
+    bytes: fitted.bytes.length,
+  };
+}
+
+/**
+ * Opens the target, inserts the picture once its editor is mounted, and logs
+ * exactly one line (#753). Throws when no editor answers within the retry
+ * window; nothing is inserted then.
+ */
+async function finishPlace(
+  client: PluginClient,
+  target: PlaceTarget,
+  image: PlacedImage
+): Promise<void> {
+  await client.navigation.openEntity({ entity: { kind: target.kind, id: target.id } });
+  const outcome = await insertWhenReady(
+    () => client.editor.insert({ content: { html: image.html } }),
+    sleep
+  );
+  if (outcome.status !== "applied") throw new Error("no editor answered the insert");
+  console.info(
+    exportLogLine({
+      action: "insert",
+      format: image.format,
+      widthPx: image.widthPx,
+      heightPx: image.heightPx,
+      bytes: image.bytes,
+    })
+  );
 }
 
 /** One Element's row menu values. */
@@ -204,13 +471,32 @@ function MapEditorView({
   editor,
   t,
   backToMaps,
+  save,
+  place,
 }: {
   editor: MapEditor;
   t: (key: MapsKey) => string;
   backToMaps: () => Promise<void>;
+  save(options: SaveImageOptions): Promise<void>;
+  place: PlaceCallbacks;
 }) {
   const snapshot = useSyncExternalStore(editor.subscribe, editor.getSnapshot);
   const [dialog, setDialog] = useState<RenameDialog | null>(null);
+  // The Export panel's own state (#753): a new Map opens on PNG at its own
+  // physical width and the default print DPI.
+  const [exportFormat, setExportFormat] = useState<"png" | "svg">("png");
+  const [printWidthIn, setPrintWidthIn] = useState(() =>
+    defaultPrintWidthIn(editor.getSnapshot().doc.page)
+  );
+  const [dpi, setDpi] = useState(DEFAULT_DPI);
+  const [exportFailed, setExportFailed] = useState(false);
+  // The Place dialog's state: the targets it lists, the one picked, the alt
+  // text, and whether the last Place failed.
+  const [placeOpen, setPlaceOpen] = useState(false);
+  const [placeTargets, setPlaceTargets] = useState<PlaceTarget[] | null>(null);
+  const [placeTargetId, setPlaceTargetId] = useState<string | null>(null);
+  const [placeAlt, setPlaceAlt] = useState("");
+  const [placeFailed, setPlaceFailed] = useState(false);
   // Each Properties request remounts the Name field with `autoFocus`, so the
   // menu entry visibly lands focus on the panel even when the row already is
   // the selection (#745).
@@ -298,6 +584,70 @@ function MapEditorView({
     if (dialog === null) return;
     editor.rename(dialog.id, dialog.name);
     setDialog(null);
+  }
+
+  // The pixel size the PNG will be, and the print height it comes to, so the
+  // author sees both before saving.
+  const exportSize = printPixelSize(snapshot.doc.page, printWidthIn, dpi);
+  const printHeightIn = Math.round((exportSize.heightPx / Math.max(dpi, 1)) * 10) / 10;
+  const dpiLimit = dpiLimitAt(printWidthIn);
+
+  /** The most DPI a print width may be drawn at (#753): the canvas limit under the panel's own cap. */
+  function dpiLimitAt(widthIn: number): number {
+    return Math.min(MAX_DPI, maxDpiForPrint(snapshot.doc.page, widthIn));
+  }
+
+  /** Picks a print width, lowering the DPI with it when the page outgrows it. */
+  function setPrintWidth(widthIn: number): void {
+    setPrintWidthIn(widthIn);
+    setDpi((current) => Math.min(current, dpiLimitAt(widthIn)));
+  }
+
+  async function saveExport(): Promise<void> {
+    setExportFailed(false);
+    try {
+      await save({ format: exportFormat, printWidthIn, dpi });
+    } catch {
+      // A refused save or a Frame that could not draw shows one localized line.
+      setExportFailed(true);
+    }
+  }
+
+  async function openPlace(): Promise<void> {
+    setPlaceFailed(false);
+    setPlaceTargets(null);
+    setPlaceTargetId(null);
+    setPlaceAlt(altText(snapshot.doc.name));
+    setPlaceOpen(true);
+    try {
+      const targets = await place.listTargets();
+      setPlaceTargets(targets);
+      setPlaceTargetId(targets[0]?.id ?? null);
+    } catch {
+      setPlaceOpen(false);
+      setPlaceFailed(true);
+    }
+  }
+
+  async function submitPlace(): Promise<void> {
+    const target = placeTargets?.find((candidate) => candidate.id === placeTargetId);
+    if (target === undefined) return;
+    setPlaceFailed(false);
+    let image: PlacedImage;
+    try {
+      image = await place.prepare(placeAlt);
+    } catch {
+      // Nothing navigated yet, so the panel can still show the failure.
+      setPlaceFailed(true);
+      return;
+    }
+    setPlaceOpen(false);
+    try {
+      await place.finish(target, image);
+    } catch {
+      // The Map page is gone once the target opened: the host toast reports it.
+      await place.notifyFailed();
+    }
   }
 
   // Top of the list is the topmost Element; the document array grows upward.
@@ -842,8 +1192,104 @@ function MapEditorView({
               ) : null}
             </>
           )}
+
+          {/* Export (#753): PNG at a chosen print size and DPI, drawn by the
+              Frame which alone has a canvas, or the SVG itself. The panel is
+              the keyboard path that saves either picture. */}
+          <ui.Text weight="semibold">{t("export.label")}</ui.Text>
+          {/* Place copies the Map into a Chapter or Note as an image (#753);
+              the dialog holds the target picker and the alt text. */}
+          <ui.Button variant="secondary" onPress={() => void openPlace()}>
+            {t("place.label")}
+          </ui.Button>
+          {placeFailed ? <ui.Status tone="warning">{t("place.failed")}</ui.Status> : null}
+          <ui.RadioGroup
+            label={t("export.format")}
+            orientation="horizontal"
+            options={[
+              { value: "png", label: t("export.format.png") },
+              { value: "svg", label: t("export.format.svg") },
+            ]}
+            selectedKey={exportFormat}
+            onChange={(event) => setExportFormat(event.detail as "png" | "svg")}
+          />
+          {exportFormat === "png" ? (
+            <>
+              <ui.NumberField
+                label={t("export.printWidth")}
+                value={printWidthIn}
+                minValue={MIN_PRINT_WIDTH_IN}
+                maxValue={MAX_PRINT_WIDTH_IN}
+                step={0.1}
+                onChange={(event) => setPrintWidth(event.detail)}
+              />
+              {/* The DPI the canvas can still encode at this print width: 40 in
+                  at 1200 DPI would be 48000x72000 px, which nothing draws. */}
+              <ui.NumberField
+                label={t("export.dpi")}
+                value={dpi}
+                minValue={MIN_DPI}
+                maxValue={dpiLimit}
+                step={1}
+                onChange={(event) => setDpi(event.detail)}
+              />
+              <ui.Text tone="muted">
+                {format(t("export.size"), {
+                  width: exportSize.widthPx,
+                  height: exportSize.heightPx,
+                  heightIn: printHeightIn,
+                })}
+              </ui.Text>
+            </>
+          ) : null}
+          <ui.Button variant="secondary" onPress={() => void saveExport()}>
+            {t("export.save")}
+          </ui.Button>
+          {exportFailed ? <ui.Status tone="warning">{t("export.failed")}</ui.Status> : null}
         </ui.View>
       </ui.View>
+
+      <ui.Modal
+        title={t("place.title")}
+        isOpen={placeOpen}
+        onOpenChange={(event) => {
+          if (!event.detail) setPlaceOpen(false);
+        }}
+      >
+        {placeOpen ? (
+          <ui.View direction="column" gap="md">
+            {placeTargets === null ? (
+              <ui.Text tone="muted">{t("place.loading")}</ui.Text>
+            ) : (
+              <ui.Select
+                label={t("place.target")}
+                options={placeTargetOptions(placeTargets, placeTargetId)}
+                selectedKey={placeTargetId ?? undefined}
+                onChange={(event) => setPlaceTargetId(event.detail)}
+              />
+            )}
+            {/* The alt text is bounded (#753): its escaped form then always fits
+                the insert message's envelope margin beside the picture. */}
+            <ui.TextField
+              label={t("place.alt")}
+              value={placeAlt}
+              onInput={(event) => setPlaceAlt(altText(event.detail))}
+            />
+            <ui.View direction="row" gap="sm" justify="end">
+              <ui.Button variant="secondary" onPress={() => setPlaceOpen(false)}>
+                {t("place.cancel")}
+              </ui.Button>
+              <ui.Button
+                variant="primary"
+                isDisabled={placeTargets === null || placeTargetId === null}
+                onPress={() => void submitPlace()}
+              >
+                {t("place.submit")}
+              </ui.Button>
+            </ui.View>
+          </ui.View>
+        ) : null}
+      </ui.Modal>
 
       <ui.Modal
         title={t("properties.renameTitle")}
@@ -900,6 +1346,23 @@ export function createMapPage(deps: MapPageDeps): ComponentType {
         </ui.EmptyState>
       );
     }
-    return <MapEditorView editor={editor} t={t} backToMaps={backToMaps} />;
+    return (
+      <MapEditorView
+        editor={editor}
+        t={t}
+        backToMaps={backToMaps}
+        save={(options) =>
+          saveMapImage({ client, editor, exportFonts: runtime.exportFonts }, options)
+        }
+        place={{
+          listTargets: () => listPlaceTargets(client, editor.getSnapshot().doc),
+          prepare: (alt) => preparePlace({ editor, exportFonts: runtime.exportFonts }, alt),
+          finish: (target, image) => finishPlace(client, target, image),
+          notifyFailed: async () => {
+            await client.notifications.show({ variant: "error", message: t("place.failed") });
+          },
+        }}
+      />
+    );
   };
 }

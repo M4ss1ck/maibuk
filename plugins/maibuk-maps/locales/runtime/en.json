@@ -175,5 +175,22 @@
   "stamp.border-frame": "Border frame",
   "stamp.sea-monster": "Sea monster",
   "stamp.ship": "Ship",
-  "stamp.scale-bar": "Scale bar"
+  "stamp.scale-bar": "Scale bar",
+  "export.label": "Export",
+  "export.format": "Format",
+  "export.format.png": "PNG",
+  "export.format.svg": "SVG",
+  "export.printWidth": "Print width (inches)",
+  "export.dpi": "DPI",
+  "export.size": "{{width}} × {{height}} px, {{heightIn}} in tall",
+  "export.save": "Save…",
+  "export.failed": "The Map could not be saved as an image. Try again.",
+  "place.label": "Place in a Chapter or Note…",
+  "place.title": "Place Map",
+  "place.target": "Chapter or Note",
+  "place.alt": "Alt text",
+  "place.loading": "Loading Chapters and Notes…",
+  "place.submit": "Place",
+  "place.cancel": "Cancel",
+  "place.failed": "The Map could not be placed. Try again."
 }

@@ -7,14 +7,16 @@
  * so a relative import would fail closed.
  *
  * The Worker sends the whole scene on every change and when a Frame connects,
- * and the author's PDF Font once as the Frame connects; the Frame reports a
- * finished Pencil stroke, a finished Pen line, a finished Area Fill outline, an
+ * and the author's PDF Font once as the Frame connects; it asks the Frame to
+ * rasterize an export SVG, since only the Frame's document has a canvas. The
+ * Frame reports a finished Pencil stroke, a finished Pen line, a finished Area
+ * Fill outline, an
  * Eraser
  * drag, a drawn Shape, a Bucket pour, a dropped Stamp, a picked Element, a
- * Select drag that moved one, and a Map Label's bend dragged from its handle.
- * Points are page millimetres, the same space as `page.widthMm/heightMm`. Every
- * inbound message is validated here, and a malformed one is dropped. This
- * module imports only its own files.
+ * Select drag that moved one, a Map Label's bend dragged from its handle, and
+ * the pixels an export asked for. Points are page millimetres, the same space
+ * as `page.widthMm/heightMm`. Every inbound message is validated here, and a
+ * malformed one is dropped. This module imports only its own files.
  */
 
 import type { MapDocument, MapPoint, ShapeKind } from "./maps";
@@ -123,7 +125,39 @@ export interface FrameFontMessage {
 }
 
 /** Every message the Worker may send the Frame. */
-export type WorkerToFrameMessage = FrameSceneMessage | FrameFontMessage;
+export type WorkerToFrameMessage = FrameSceneMessage | FrameFontMessage | FrameRasterizeMessage;
+
+/** The picture a rasterize request asks for: PNG, or JPEG at a quality. */
+export type RasterFormat = "png" | { jpeg: number };
+
+/**
+ * Worker -> Frame: draw one export SVG into a canvas of `widthPx` by `heightPx`
+ * and answer with the encoded picture (#753). The Worker has no DOM and its CSP
+ * refuses images; the Frame's page does not, so the rasterizing happens there.
+ * `requestId` names the reply, because two exports can be in flight at once.
+ */
+export interface FrameRasterizeMessage {
+  kind: "rasterize";
+  requestId: number;
+  svg: string;
+  widthPx: number;
+  heightPx: number;
+  format: RasterFormat;
+}
+
+/** Frame -> Worker: the encoded picture one rasterize request asked for. */
+export interface FrameRasterizedMessage {
+  kind: "rasterized";
+  requestId: number;
+  bytes: ArrayBuffer;
+}
+
+/** Frame -> Worker: why a rasterize request could not be answered. */
+export interface FrameRasterizeErrorMessage {
+  kind: "rasterized";
+  requestId: number;
+  error: string;
+}
 
 /** Frame -> Worker: a finished Pencil stroke, in page millimetres. */
 export interface FrameStrokeMessage {
@@ -239,7 +273,9 @@ export type FrameToWorkerMessage =
   | FramePourMessage
   | FrameInsertMessage
   | FrameMoveMessage
-  | FrameBendMessage;
+  | FrameBendMessage
+  | FrameRasterizedMessage
+  | FrameRasterizeErrorMessage;
 
 function isPoint(value: unknown): value is MapPoint {
   return (
@@ -262,7 +298,9 @@ function isPoint(value: unknown): value is MapPoint {
  * Eraser drag needs at least one point and a finite reach; a Shape
  * needs a known kind, two finite corners, and a boolean `constrain`; a pour or
  * an insert needs one finite page point; a move needs an Element id and a
- * finite offset; a bend needs an Element id and a finite bend.
+ * finite offset; a bend needs an Element id and a finite bend; a rasterize
+ * reply needs a finite request id and either an `ArrayBuffer` of bytes or a
+ * non-empty error, never both.
  */
 export function parseFrameMessage(data: unknown): FrameToWorkerMessage | null {
   if (typeof data !== "object" || data === null) return null;
@@ -360,7 +398,41 @@ export function parseFrameMessage(data: unknown): FrameToWorkerMessage | null {
     if (typeof message.bend !== "number" || !Number.isFinite(message.bend)) return null;
     return { kind: "bendLabel", id: message.id, bend: message.bend };
   }
+  if (message.kind === "rasterized") {
+    if (typeof message.requestId !== "number" || !Number.isFinite(message.requestId)) return null;
+    if (message.bytes !== undefined) {
+      if (!(message.bytes instanceof ArrayBuffer)) return null;
+      // One answer is either the picture or the reason, never both.
+      if (message.error !== undefined) return null;
+      return { kind: "rasterized", requestId: message.requestId, bytes: message.bytes };
+    }
+    if (typeof message.error === "string" && message.error !== "") {
+      return { kind: "rasterized", requestId: message.requestId, error: message.error };
+    }
+    return null;
+  }
   return null;
+}
+
+/**
+ * The rasterize request the Worker sends one Frame (#753): the export SVG, the
+ * pixel size to draw it at, and the format. The Frame answers with the bytes,
+ * or an error, under the same `requestId`.
+ */
+export function rasterizeMessage(
+  requestId: number,
+  svg: string,
+  size: { widthPx: number; heightPx: number },
+  format: RasterFormat
+): FrameRasterizeMessage {
+  return {
+    kind: "rasterize",
+    requestId,
+    svg,
+    widthPx: size.widthPx,
+    heightPx: size.heightPx,
+    format,
+  };
 }
 
 /** The scene one open Map sends its Frame. */
