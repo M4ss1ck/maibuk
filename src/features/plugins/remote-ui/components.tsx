@@ -758,20 +758,23 @@ function IconButtonHost({
   onPress,
 }: IconButtonHostProps) {
   return (
-    <Button
-      variant={variant}
-      size="sm"
-      aria-label={label}
-      // Absent stays a plain action: no pressed state at all, not `false`.
-      aria-pressed={isSelected}
-      disabled={isDisabled}
-      onClick={() => onPress?.()}
-      className={`px-2 pointer-coarse:min-h-10 pointer-coarse:min-w-10 ${
-        isSelected === true ? ICON_BUTTON_SELECTED_CLASS : ""
-      }`}
-    >
-      <PluginIcon icon={icon} className="h-4 w-4" />
-    </Button>
+    // The button shows only an icon, so its label doubles as the tooltip.
+    <Tooltip content={label}>
+      <Button
+        variant={variant}
+        size="sm"
+        aria-label={label}
+        // Absent stays a plain action: no pressed state at all, not `false`.
+        aria-pressed={isSelected}
+        disabled={isDisabled}
+        onClick={() => onPress?.()}
+        className={`px-2 pointer-coarse:min-h-10 pointer-coarse:min-w-10 ${
+          isSelected === true ? ICON_BUTTON_SELECTED_CLASS : ""
+        }`}
+      >
+        <PluginIcon icon={icon} className="h-4 w-4" />
+      </Button>
+    </Tooltip>
   );
 }
 

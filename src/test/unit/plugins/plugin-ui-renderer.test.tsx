@@ -763,6 +763,16 @@ describe("the Remote UI renderer", () => {
       expect(button).toHaveAttribute("aria-pressed", "true");
     });
 
+    it("shows an icon button's label as a tooltip on keyboard focus @ui-kbd:maibuk-icon-button", async () => {
+      harness = renderRemoteUi();
+      await harness.mount(<ui.IconButton label="Add chapter" icon="plus" />);
+      const button = screen.getByRole("button", { name: "Add chapter" });
+
+      await userEvent.tab();
+      expect(button).toHaveFocus();
+      expect(await screen.findByRole("tooltip")).toHaveTextContent("Add chapter");
+    });
+
     it("leaves an icon button without isSelected unmarked and unstyled @ui:maibuk-icon-button", async () => {
       harness = renderRemoteUi();
       await harness.mount(<ui.IconButton label="Pencil" icon="pencil" />);
