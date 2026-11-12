@@ -87,9 +87,21 @@ async function openEditor(page: Page): Promise<void> {
   await openMap(page, "Coastline");
 }
 
-/** Presses one control by keyboard, wherever focus is, from the page's first one. */
+/**
+ * Presses one control by keyboard, from wherever focus sits. The walk runs
+ * forward first and back second: Chrome and WebKit wrap Tab from the page's last
+ * control round to its first, but Firefox hands that Tab to the browser chrome,
+ * so a control earlier in the tab order than the one focus sits on is only
+ * reachable with Shift+Tab (the belt's last control is Layers and Insert sits
+ * before it, #778). Reaching a control you have tabbed past by going back is
+ * what an author does.
+ */
 async function pressControl(page: Page, control: Locator): Promise<void> {
-  await tabTo(page, control, { max: 80 });
+  try {
+    await tabTo(page, control, { max: 40 });
+  } catch {
+    await tabTo(page, control, { max: 40, backwards: true });
+  }
   await page.keyboard.press("Enter");
 }
 
