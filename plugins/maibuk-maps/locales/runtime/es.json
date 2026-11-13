@@ -82,7 +82,7 @@
   "element.rectangleName": "Rectángulo {{number}}",
   "element.polygonName": "Polígono {{number}}",
   "element.labelName": "Etiqueta de mapa {{number}}",
-  "element.labelText": "Etiqueta",
+  "element.labelText": "Escribe tu texto aquí",
   "properties.label": "Propiedades",
   "properties.name": "Nombre",
   "properties.mapStyle": "Estilo de mapa",

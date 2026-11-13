@@ -275,8 +275,11 @@ export const LABEL_FONT_IDS: readonly MapLabelFont[] = [...MAP_LABEL_FONTS, "pdf
 /** The font a new Map Label takes, and the one an id this build does not know reads as. */
 export const DEFAULT_LABEL_FONT: MapLabelFont = "im-fell-english";
 
-/** The baseline a new Map Label starts with, in page millimetres. */
-export const DEFAULT_LABEL_WIDTH_MM = 40;
+/**
+ * The baseline a new Map Label starts with, in page millimetres: wide enough
+ * for its default prompt to render without either end falling off the baseline.
+ */
+export const DEFAULT_LABEL_WIDTH_MM = 55;
 
 /** The shortest baseline a Map Label keeps, in page millimetres. */
 export const MIN_LABEL_WIDTH_MM = 1;
@@ -794,7 +797,7 @@ export interface NewLabel {
 
 /**
  * A Map Label writing `text` along a baseline centred on `point`: upright and
- * straight, 40 mm long, with a halo, in the bundled IM Fell English.
+ * straight, 55 mm long, with a halo, in the bundled IM Fell English.
  */
 export function newLabel(input: NewLabel): MapLabelElement {
   return {

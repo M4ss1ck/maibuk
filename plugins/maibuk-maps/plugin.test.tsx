@@ -2894,7 +2894,7 @@ describe("Map editor page", () => {
       expect(inserted).toMatchObject({
         kind: "label",
         name: "Map Label 1",
-        text: "Label",
+        text: en["element.labelText"],
         x: 76.2,
         y: 114.3,
         rotation: 0,

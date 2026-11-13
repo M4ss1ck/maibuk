@@ -1116,7 +1116,7 @@ describe("Map Labels", () => {
       x: 20,
       y: 30,
       rotation: 0,
-      width: DEFAULT_LABEL_WIDTH_MM,
+      width: 40,
       bend: 0,
       font: DEFAULT_LABEL_FONT,
       size: DEFAULT_LABEL_SIZE_MM,
@@ -1146,7 +1146,8 @@ describe("Map Labels", () => {
     });
 
     // The model never names the label in English: the caller supplies the text.
-    expect(created).toEqual(label({ text: "El Alcance" }));
+    // A new Label takes the default width, which its prompt fits on.
+    expect(created).toEqual(label({ text: "El Alcance", width: DEFAULT_LABEL_WIDTH_MM }));
   });
 
   it("keeps a Label's text, shape, font, spacing, halo, and colour through a save", async () => {
