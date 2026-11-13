@@ -328,7 +328,9 @@ describe("the transformElement message (#795)", () => {
   });
 
   it("does not read a scene that already carries the box back as a message", () => {
-    expect(parseFrameMessage({ kind: "scene", elements: [{ id: "e1", transform: { box } }] })).toBeNull();
+    expect(
+      parseFrameMessage({ kind: "scene", elements: [{ id: "e1", transform: { box } }] })
+    ).toBeNull();
   });
 });
 

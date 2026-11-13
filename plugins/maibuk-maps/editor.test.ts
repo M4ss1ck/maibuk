@@ -17,7 +17,7 @@ import {
   createMapEditor,
   type MapEditor,
 } from "./editor";
-import { parseFrameMessage } from "./frame-protocol";
+import { parseFrameMessage, type FrameSceneMessage } from "./frame-protocol";
 import { shapeOutline } from "./geometry";
 import { mapLibrary, smoothStroke } from "./scene";
 import {
@@ -1946,6 +1946,180 @@ describe("dragging a Map Label's bend handle", () => {
       line,
       newLabel({ id: "reach", name: "Map Label 2", text: "The Reach", point: [100, 50] }),
     ]);
+    expect(editor.getSnapshot().canUndo).toBe(false);
+  });
+});
+
+describe("a transform handle drag from the Frame (#795)", () => {
+  /** A marker Stamp 12 mm wide on (100, 50), and a Map Image 80 mm wide on (40, 60). */
+  const marker: MapStampElement = {
+    id: "marker",
+    kind: "stamp",
+    name: "City",
+    hidden: false,
+    locked: false,
+    stampRef: "base:marker",
+    transform: { x: 100, y: 50, size: 12, rotation: 0 },
+  };
+  const scan: MapImageElement = {
+    id: "scan",
+    kind: "image",
+    name: "Scan",
+    hidden: false,
+    locked: false,
+    assetRef: "a1",
+    transform: { x: 40, y: 60, size: 80, rotation: 0 },
+    opacity: 1,
+    exportable: true,
+  };
+
+  /** An editor that records the scenes it draws its Frame from. */
+  function openWatched(elements: MapElement[]) {
+    const { editor } = openEditor(elements);
+    const scenes: FrameSceneMessage[] = [];
+    editor.attachFrame({
+      postMessage: (message: FrameSceneMessage) => scenes.push(message),
+    } as unknown as MessagePort);
+    scenes.length = 0;
+    return { editor, scenes };
+  }
+
+  it("writes a Stamp's centre, size, and turn in one undo step", () => {
+    const { editor } = openEditor([marker]);
+    editor.select("marker");
+
+    editor.handleFrameMessage({
+      kind: "transformElement",
+      id: "marker",
+      box: { x: 40, y: 30, width: 24, height: 24, rotation: 30 },
+    });
+
+    expect(editor.getSnapshot().elements[0]).toMatchObject({
+      transform: { x: 40, y: 30, size: 24, rotation: 30 },
+    });
+    // The panel's Size and Rotation fields read the same snapshot.
+    expect(editor.getSnapshot().selectedStamp?.transform).toEqual({
+      x: 40,
+      y: 30,
+      size: 24,
+      rotation: 30,
+    });
+
+    // One drag is one edit, not one per pointer move the Frame previewed.
+    editor.undo();
+    expect(editor.getSnapshot().elements[0]).toEqual(marker);
+    editor.redo();
+    expect(editor.getSnapshot().elements[0]).toMatchObject({
+      transform: { x: 40, y: 30, size: 24, rotation: 30 },
+    });
+  });
+
+  it("writes a Map Image's centre, size, and turn in one undo step", () => {
+    const { editor } = openEditor([scan]);
+
+    editor.handleFrameMessage({
+      kind: "transformElement",
+      id: "scan",
+      box: { x: 60, y: 40, width: 40, height: 20, rotation: 15 },
+    });
+
+    expect(editor.getSnapshot().elements[0]).toMatchObject({
+      transform: { x: 60, y: 40, size: 40, rotation: 15 },
+    });
+
+    editor.undo();
+    expect(editor.getSnapshot().elements[0]).toEqual(scan);
+  });
+
+  it("keeps the box above zero and the turn inside one circle", () => {
+    const { editor } = openEditor([marker]);
+
+    editor.handleFrameMessage({
+      kind: "transformElement",
+      id: "marker",
+      box: { x: 100, y: 50, width: 0.2, height: 0.2, rotation: -90 },
+    });
+
+    expect(editor.getSnapshot().elements[0]).toMatchObject({
+      transform: { x: 100, y: 50, size: MIN_STAMP_SIZE_MM, rotation: 270 },
+    });
+  });
+
+  it("turns the scale bar's length, and with it the distance it reads", () => {
+    const { editor, scenes } = openWatched([]);
+    editor.setStamp("scale-bar");
+    editor.insertStamp();
+    const { id } = editor.getSnapshot().elements[0] as MapStampElement;
+    const reading = (): string[] => {
+      const [element] = scenes.at(-1)?.elements ?? [];
+      return (element?.shapes ?? []).flatMap((shape) => ("text" in shape ? [shape.text] : []));
+    };
+    // 40 mm of a 200 mm page reading 1000 km labels 200 km.
+    expect(reading()).toContain("200 km");
+
+    editor.handleFrameMessage({
+      kind: "transformElement",
+      id,
+      box: { x: 100, y: 50, width: 100, height: 12, rotation: 0 },
+    });
+
+    expect(editor.getSnapshot().elements[0]).toMatchObject({ transform: { size: 100 } });
+    expect(reading()).toContain("500 km");
+    editor.undo();
+    expect(reading()).toContain("200 km");
+  });
+
+  it("changes nothing, and takes no undo step, for a locked or hidden Element", () => {
+    const { editor } = openEditor([
+      { ...marker, locked: true },
+      { ...marker, id: "hidden", hidden: true },
+    ]);
+
+    for (const id of ["marker", "hidden"]) {
+      editor.handleFrameMessage({
+        kind: "transformElement",
+        id,
+        box: { x: 10, y: 10, width: 30, height: 30, rotation: 45 },
+      });
+    }
+
+    expect(editor.getSnapshot().elements).toEqual([
+      { ...marker, locked: true },
+      { ...marker, id: "hidden", hidden: true },
+    ]);
+    expect(editor.getSnapshot().canUndo).toBe(false);
+  });
+
+  it("sends the Frame both readout chip texts, so a drag can read millimetres or degrees", () => {
+    const { editor, scenes } = openWatched([]);
+
+    editor.zoomIn();
+
+    expect(scenes.at(-1)?.readout).toEqual({ size: "{{value}} mm", angle: "{{value}}°" });
+  });
+
+  it("leaves another kind of Element, a missing one, and the box it already has alone", () => {
+    const line = squareLine("ring", "Ring", 10, 10, 80);
+    const { editor } = openEditor([marker, line]);
+
+    editor.handleFrameMessage({
+      kind: "transformElement",
+      id: "ring",
+      box: { x: 40, y: 40, width: 20, height: 20, rotation: 0 },
+    });
+    editor.handleFrameMessage({
+      kind: "transformElement",
+      id: "gone",
+      box: { x: 40, y: 40, width: 20, height: 20, rotation: 0 },
+    });
+    // The box the Stamp already holds, and a whole turn back to its own.
+    editor.handleFrameMessage({
+      kind: "transformElement",
+      id: "marker",
+      box: { x: 100, y: 50, width: 12, height: 12, rotation: 360 },
+    });
+
+    expect(editor.getSnapshot().elements).toEqual([marker, line]);
     expect(editor.getSnapshot().canUndo).toBe(false);
   });
 });

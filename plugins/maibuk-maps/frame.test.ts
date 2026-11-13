@@ -101,6 +101,7 @@ function loadFrame(): Frame {
         panX: 0,
         panY: 0,
         penLabel: PEN_LABEL,
+        readout: READOUT,
         ...overrides,
       });
     },
@@ -135,6 +136,9 @@ function key(name: string, init: KeyboardEventInit = {}): KeyboardEvent {
 
 /** The Pen draft label the Worker sends: both plural forms, `{{count}}` to fill. */
 const PEN_LABEL = { one: "Pen line, {{count}} point", other: "Pen line, {{count}} points" };
+
+/** The readout chip's text the Worker sends: `{{value}}` for the millimetres or degrees. */
+const READOUT = { size: "{{value}} mm", angle: "{{value}}°" };
 
 const shape = (overrides: Record<string, unknown> = {}) => ({
   d: "M 10 10 L 20 20",
@@ -1228,6 +1232,7 @@ describe("the scene message", () => {
       panX: 0,
       panY: 0,
       penLabel: PEN_LABEL,
+      readout: READOUT,
     });
     expect(message.elements[0].shapes).toEqual([
       {
@@ -1271,6 +1276,7 @@ describe("the scene message", () => {
       panX: 0,
       panY: 0,
       penLabel: PEN_LABEL,
+      readout: READOUT,
     });
     expect(message.elements[0].shapes).toEqual([
       {
@@ -1324,6 +1330,7 @@ describe("the scene message", () => {
       panX: 0,
       panY: 0,
       penLabel: PEN_LABEL,
+      readout: READOUT,
     });
 
     const shape = message.elements[1].shapes[0];
@@ -1374,6 +1381,7 @@ describe("the scene message", () => {
       panX: 0,
       panY: 0,
       penLabel: PEN_LABEL,
+      readout: READOUT,
     });
 
     expect(message.elements[0].shapes).toEqual([
@@ -1427,6 +1435,7 @@ describe("the scene message", () => {
       panX: 0,
       panY: 0,
       penLabel: PEN_LABEL,
+      readout: READOUT,
     });
 
     const defs = message.defs.join("");
@@ -1469,6 +1478,7 @@ describe("the scene message", () => {
       panX: 0,
       panY: 0,
       penLabel: PEN_LABEL,
+      readout: READOUT,
     });
 
     expect(message.defs.join("")).toMatch(/<clipPath id="fill-clip-[0-9a-f]+">/);
@@ -1721,6 +1731,7 @@ describe("the move message", () => {
       panX: 0,
       panY: 0,
       penLabel: PEN_LABEL,
+      readout: READOUT,
     });
     expect(message.elements.map((element) => [element.id, element.movable])).toEqual([
       ["free", true],
@@ -1801,6 +1812,7 @@ describe("the bendLabel message", () => {
       panX: 0,
       panY: 0,
       penLabel: PEN_LABEL,
+      readout: READOUT,
     });
 
     expect(message.elements[0].label).toEqual({

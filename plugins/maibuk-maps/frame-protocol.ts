@@ -31,6 +31,7 @@ import {
   EMPTY_MAP_LIBRARY,
   canMove,
   elementTransform,
+  type ElementTransform,
   type ElementTransformBox,
   type SceneContext,
   type SceneShape,

@@ -1876,15 +1876,25 @@ describe("the handle box an Element carries (#795)", () => {
   });
 
   const library = () =>
-    mapLibrary([{ id: "a1", name: "Scan", mime: "image/png", width: 40, height: 20 }]);
+    mapLibrary([
+      {
+        id: "a1",
+        name: "Scan",
+        mime: "image/png",
+        width: 40,
+        height: 20,
+        recolorable: false,
+        use: "image",
+      },
+    ]);
 
   it("is a Stamp's art box, centred on its transform and turned with it", () => {
-    expect(elementTransform(stamp({ transform: { x: 100, y: 50, size: 12, rotation: 30 } }))).toEqual(
-      {
-        box: { x: 100, y: 50, width: 12, height: 12, rotation: 30 },
-        handles: "corners",
-      }
-    );
+    expect(
+      elementTransform(stamp({ transform: { x: 100, y: 50, size: 12, rotation: 30 } }))
+    ).toEqual({
+      box: { x: 100, y: 50, width: 12, height: 12, rotation: 30 },
+      handles: "corners",
+    });
   });
 
   it("follows the art's own proportions rather than a square", () => {
@@ -1908,7 +1918,10 @@ describe("the handle box an Element carries (#795)", () => {
   });
 
   it("is the scale bar's own bar box, which is shorter than its room", () => {
-    const bar = stamp({ stampRef: SCALE_BAR_STAMP_REF, transform: { x: 100, y: 50, size: 40, rotation: 0 } });
+    const bar = stamp({
+      stampRef: SCALE_BAR_STAMP_REF,
+      transform: { x: 100, y: 50, size: 40, rotation: 0 },
+    });
     expect(elementTransform(bar)?.box.height).toBeCloseTo(40 * 0.12, 6);
   });
 

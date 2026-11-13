@@ -100,6 +100,7 @@ import {
   setHidden,
   setLocked,
   smoothStroke,
+  type ElementTransformBox,
   type MapLibrary,
 } from "./scene";
 import {
@@ -417,6 +418,36 @@ function normalizeRotation(rotation: number): number {
   return turned < 0 ? turned + 360 : turned;
 }
 
+/**
+ * The transform a patch of numbers asks for, or null when one is unusable (#795):
+ * a field the patch leaves out keeps the transform's own, a size never reaches
+ * zero, and the turn reads in one circle.
+ */
+function resolvedTransform(
+  before: MapStampTransform,
+  patch: Partial<MapStampTransform>
+): MapStampTransform | null {
+  const x = patch.x ?? before.x;
+  const y = patch.y ?? before.y;
+  const size = patch.size ?? before.size;
+  const rotation = patch.rotation ?? before.rotation;
+  if (![x, y, size, rotation].every(Number.isFinite)) return null;
+  return {
+    x,
+    y,
+    // A Stamp or a Map Image with no box draws nothing, so the size keeps some room.
+    size: Math.max(MIN_STAMP_SIZE_MM, size),
+    rotation: normalizeRotation(rotation),
+  };
+}
+
+/** Whether two transforms place, size, and turn an Element the same way. */
+function sameTransform(one: MapStampTransform, two: MapStampTransform): boolean {
+  return (
+    one.x === two.x && one.y === two.y && one.size === two.size && one.rotation === two.rotation
+  );
+}
+
 /** How far a Fill's or Map Line's edge fades out, or null when it ends in a line. */
 function softEdgeAmount(element: MapLineElement | MapFillElement): number | null {
   const softEdge = element.softEdge;
@@ -589,6 +620,10 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
         panX,
         panY,
         penLabel: penDraftLabel(),
+        readout: {
+          size: translate(options.language(), "map.sizeReadout"),
+          angle: translate(options.language(), "map.angleReadout"),
+        },
       },
       { library: assetSource?.library ?? EMPTY_MAP_LIBRARY }
     );
@@ -1151,6 +1186,9 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       case "bendLabel":
         bendDragged(message.id, message.bend);
         break;
+      case "transformElement":
+        transformDragged(message.id, message.box);
+        break;
       case "zoom":
         zoomAt(message.point, message.factor);
         break;
@@ -1214,6 +1252,46 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       return;
     }
     setLabelLayout(id, { bend });
+  }
+
+  /**
+   * Writes one Stamp's or Map Image's stored transform — its centre, width, and
+   * turn — as one undo step, and answers whether it wrote anything (#795). Both
+   * kinds store a width alone, so the height a handle sends is only the art's
+   * own proportions and never lands here. A locked or missing Element, one of
+   * another kind, and a box the Element already holds all change nothing.
+   */
+  function applyTransform(id: string, patch: Partial<MapStampTransform>): boolean {
+    const target = elementById(id);
+    if (target === undefined || target.locked) return false;
+    if (target.kind !== "stamp" && target.kind !== "image") return false;
+    const transform = resolvedTransform(target.transform, patch);
+    if (transform === null || sameTransform(transform, target.transform)) return false;
+    updateElement(id, (element) =>
+      element.kind === "stamp" || element.kind === "image" ? { ...element, transform } : element
+    );
+    return true;
+  }
+
+  /**
+   * Commits one transform handle drag (#795) through the same clamp and write
+   * the panel's numbers use, so the whole drag is one undo step. A drag the
+   * Worker refuses still answers with a scene: the Frame keeps its preview
+   * until then, and that scene draws the box the Map really holds.
+   */
+  function transformDragged(id: string, box: ElementTransformBox): void {
+    const target = elementById(id);
+    if (target === undefined || target.hidden) {
+      sendScene();
+      return;
+    }
+    const written = applyTransform(id, {
+      x: box.x,
+      y: box.y,
+      size: box.width,
+      rotation: box.rotation,
+    });
+    if (!written) sendScene();
   }
 
   function setZoom(next: number): void {
@@ -1766,35 +1844,8 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
 
     setStampTransform(id, patch) {
       const target = elementById(id);
-      if (target === undefined || target.kind !== "stamp" || target.locked) return;
-      const before = target.transform;
-      const x = patch.x ?? before.x;
-      const y = patch.y ?? before.y;
-      const size = patch.size ?? before.size;
-      const rotation = patch.rotation ?? before.rotation;
-      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-      if (!Number.isFinite(size) || !Number.isFinite(rotation)) return;
-      const transform: MapStampTransform = {
-        x,
-        y,
-        // A Stamp with no art box draws nothing, so the size keeps some room.
-        size: Math.max(MIN_STAMP_SIZE_MM, size),
-        // The turn reads in one circle, so a whole turn is no turn at all.
-        rotation: normalizeRotation(rotation),
-      };
-      if (
-        transform.x === before.x &&
-        transform.y === before.y &&
-        transform.size === before.size &&
-        transform.rotation === before.rotation
-      ) {
-        return;
-      }
-      edit(
-        elements.map((element) =>
-          element.id === id && element.kind === "stamp" ? { ...element, transform } : element
-        )
-      );
+      if (target === undefined || target.kind !== "stamp") return;
+      applyTransform(id, patch);
     },
 
     setImageOpacity(id, opacity) {
@@ -1825,15 +1876,8 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
 
     setImageSize(id, sizeMm) {
       const target = elementById(id);
-      if (target === undefined || target.kind !== "image" || target.locked) return;
-      if (!Number.isFinite(sizeMm)) return;
-      const size = Math.max(MIN_STAMP_SIZE_MM, sizeMm);
-      if (size === target.transform.size) return;
-      updateElement(id, (element) =>
-        element.kind === "image"
-          ? { ...element, transform: { ...element.transform, size } }
-          : element
-      );
+      if (target === undefined || target.kind !== "image") return;
+      applyTransform(id, { size: sizeMm });
     },
 
     setStampScale(id, patch) {

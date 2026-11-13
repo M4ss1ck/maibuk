@@ -508,10 +508,7 @@ function pageOf(frame: TransformBox, local: MapPoint): MapPoint {
   const angle = (frame.rotation * Math.PI) / 180;
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
-  return [
-    frame.x + local[0] * cos - local[1] * sin,
-    frame.y + local[0] * sin + local[1] * cos,
-  ];
+  return [frame.x + local[0] * cos - local[1] * sin, frame.y + local[0] * sin + local[1] * cos];
 }
 
 /** The page point of one corner of a box, named the way a handle is. */
