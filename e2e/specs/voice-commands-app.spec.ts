@@ -48,7 +48,7 @@ async function downloadEnglishFast(page: Page) {
 // first Chapter with the caret in the text.
 async function openChapter(page: Page) {
   await page.keyboard.press("g");
-  await page.keyboard.press("p");
+  await page.keyboard.press("b");
   await page.getByRole("grid", { name: "Books" }).getByRole("row").waitFor();
   await page.keyboard.press("1");
   await page.keyboard.press("Enter");

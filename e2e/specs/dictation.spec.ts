@@ -40,17 +40,17 @@ async function downloadEnglishFast(page: Page) {
 
 // Same keyboard path as editor-language.spec.ts: the first Book, Enter opens
 // its first Chapter with the caret in the text. A later test reaches Home with
-// the in-app "g p" sequence rather than a reload, because StartupRedirect would
+// the in-app "g b" sequence rather than a reload, because StartupRedirect would
 // restore the last path (Settings, after a model download).
 async function openChapter(page: Page) {
   const url = new URL(page.url());
   // prepareDevice leaves the page on a blank same-origin route; a spec that
-  // already ran in the app reaches Home with "g p", because a reload would let
+  // already ran in the app reaches Home with "g b", because a reload would let
   // StartupRedirect restore the last path (Settings, after a model download).
   const onApp = url.hostname === "127.0.0.1" && !url.pathname.startsWith("/__e2e__");
   if (onApp && url.pathname !== "/") {
     await page.keyboard.press("g");
-    await page.keyboard.press("p");
+    await page.keyboard.press("b");
   } else {
     await page.goto("/");
   }
@@ -201,7 +201,7 @@ test.describe("@wf:dictation-settings @chromium-only", () => {
     // Off keeps the downloaded models; the author can still manage them.
     await expect(row.getByText("Used for English")).toBeVisible();
 
-    // A switch is an input, where a "g p" sequence would type instead; Tab off
+    // A switch is an input, where a "g b" sequence would type instead; Tab off
     // it before navigating.
     await page.keyboard.press("Tab");
 

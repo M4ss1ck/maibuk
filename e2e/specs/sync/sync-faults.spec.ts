@@ -33,7 +33,7 @@ const BACKUP_ABORT =
 /** From Settings to the open Book's editor without a reload, so this launch's sync state stays. */
 async function openBookInApp(page: Page): Promise<void> {
   await page.keyboard.press("g");
-  await page.keyboard.press("p");
+  await page.keyboard.press("b");
   await expect(bookCard(page, SEED_BOOK.title)).toBeVisible();
   await page.keyboard.press("1");
   await page.keyboard.press("Enter");

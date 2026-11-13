@@ -35,7 +35,7 @@ async function pickSize(page: Page, size: (typeof SIZES)[number]) {
     await page.keyboard.press(target > current ? "ArrowRight" : "ArrowLeft");
   }
   await expect(radio(size)).toBeChecked();
-  // A radio is a typing target; leave it so the "g p" Shortcut reaches Home.
+  // A radio is a typing target; leave it so the "g b" Shortcut reaches Home.
   await page.keyboard.press("Tab");
 }
 

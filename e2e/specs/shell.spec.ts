@@ -454,7 +454,7 @@ test.describe("shortcut hints @wf:shell-shortcut-hints @sc:global.toggleShortcut
   test("g h hides and shows the hints, and a reload keeps the choice", async ({ page }) => {
     await openHome(page);
     const nav = page.getByRole("listbox", { name: "Primary navigation" });
-    const withHint = nav.getByRole("option", { name: "Books G P", exact: true });
+    const withHint = nav.getByRole("option", { name: "Books G B", exact: true });
     const withoutHint = nav.getByRole("option", { name: "Books", exact: true });
     await expect(withHint).toBeVisible();
 

@@ -78,7 +78,7 @@ async function openStatusFilter(page: Page) {
 /** g p: back to the Gallery. page.goto("/") would reopen the last screen instead. */
 async function backToGallery(page: Page) {
   await page.keyboard.press("g");
-  await page.keyboard.press("p");
+  await page.keyboard.press("b");
   await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
 }
 
