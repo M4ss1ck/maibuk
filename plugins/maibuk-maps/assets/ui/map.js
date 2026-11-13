@@ -39,10 +39,11 @@
    * @typedef {LineShape | TextShape | ImageShape} SceneShape
    * @typedef {{ x: number, y: number, rotation: number, width: number, bend: number }} FrameLabelLayout
    * @typedef {{ x: number, y: number, width: number, height: number, rotation: number }} FrameTransformBox
-   * @typedef {{ box: FrameTransformBox, handles: "corners" | "all" | "label" }} FrameElementTransform
+   * @typedef {{ box: FrameTransformBox, handles: "corners" | "all" | "label", minSize?: number }} FrameElementTransform
    * @typedef {{ id: string, shapes: SceneShape[], filter: string | null, hidden: boolean, locked: boolean, selected: boolean, movable: boolean, label?: FrameLabelLayout, transform?: FrameElementTransform }} FrameSceneElement
    * @typedef {{ one: string, other: string }} PenDraftLabel
-   * @typedef {{ kind: "scene", widthMm: number, heightMm: number, background: string, elements: FrameSceneElement[], defs: string, tool: MapTool, zoom: number, panX: number, panY: number, penLabel: PenDraftLabel }} FrameSceneMessage
+   * @typedef {{ size: string, angle: string }} TransformReadout
+   * @typedef {{ kind: "scene", widthMm: number, heightMm: number, background: string, elements: FrameSceneElement[], defs: string, tool: MapTool, zoom: number, panX: number, panY: number, penLabel: PenDraftLabel, readout: TransformReadout }} FrameSceneMessage
    * @typedef {{ kind: "stroke", points: MapPoint[] }} FrameStrokeMessage
    * @typedef {{ kind: "line", points: MapPoint[], curves: boolean[], closed: boolean }} FrameLineMessage
    * @typedef {{ kind: "area", points: MapPoint[], curves: boolean[], freehand: boolean }} FrameAreaMessage
@@ -72,7 +73,7 @@
    * @typedef {{ pointerId: number, id: string, press: ClientPoint, label: FrameLabelLayout, moved: boolean, bend: number }} BendDrag
    * @typedef {{ id: string, bend: number }} PendingBend
    * @typedef {{ box: FrameTransformBox, handle: string, start: MapPoint, point: MapPoint, aspect?: boolean, fromCentre?: boolean, snap?: boolean, minWidth?: number, minHeight?: number }} TransformGesture
-   * @typedef {{ pointerId: number, id: string, handle: string, press: ClientPoint, start: MapPoint, startBox: FrameTransformBox, box: FrameTransformBox, moved: boolean }} TransformDrag
+   * @typedef {{ pointerId: number, id: string, handle: string, press: ClientPoint, start: MapPoint, point: MapPoint, startBox: FrameTransformBox, box: FrameTransformBox, minSize: number, snap: boolean, moved: boolean }} TransformDrag
    * @typedef {{ id: string, startBox: FrameTransformBox, box: FrameTransformBox }} PendingTransform
    * @typedef {{ pointers: number[], client: ClientPoint, offset: MapPoint }} PanDrag
    * @typedef {{ clientX: number, clientY: number, touch: boolean }} PointerPlace
@@ -144,6 +145,22 @@
   const COARSE_TURN_STALK_PX = 26;
 
   /**
+   * The readout chip and the Shift turn's tick ring (#795), in screen pixels, so
+   * both keep their size at every zoom. The chip sits just down and right of the
+   * pointer; its text is drawn at a small size, and each glyph is taken as
+   * `CHIP_ADVANCE` of that size because a Frame cannot measure text. The ticks
+   * stand a few pixels outside the box's corners.
+   */
+  const CHIP_FONT_PX = 12;
+  const CHIP_PAD_X_PX = 6;
+  const CHIP_PAD_Y_PX = 4;
+  const CHIP_GAP_PX = 14;
+  const CHIP_RADIUS_PX = 3;
+  const CHIP_ADVANCE = 0.6;
+  const TURN_TICK_PX = 5;
+  const TURN_TICK_GAP_PX = 8;
+
+  /**
    * How the handle maths turns and grows a box (#795), mirroring `geometry.ts`
    * so the Frame's preview obeys the rules the Worker writes: a turn within 2°
    * of a right angle sticks to it, Shift snaps to 15° steps, and a side never
@@ -152,6 +169,12 @@
   const RIGHT_ANGLE_STICK_DEGREES = 2;
   const TURN_SNAP_DEGREES = 15;
   const MIN_TRANSFORM_SIZE_MM = 0.01;
+
+  /** The turn steps a Shift turn marks, from the box's upright round one circle (#795). */
+  const TURN_STEPS = Array.from(
+    { length: 360 / TURN_SNAP_DEGREES },
+    (_step, index) => index * TURN_SNAP_DEGREES
+  );
 
   /** The cursor the turn handle shows: no browser has a rotate arrow of its own. */
   const TURN_CURSOR = "grab";
@@ -499,6 +522,21 @@
   }
 
   /**
+   * Reads the transform drag's readout templates (#795); an unreadable one
+   * leaves both empty, which draws no chip instead of falling back to English.
+   * @param {unknown} raw
+   * @returns {TransformReadout}
+   */
+  function readReadout(raw) {
+    const readout =
+      typeof raw === "object" && raw !== null ? /** @type {Record<string, unknown>} */ (raw) : {};
+    return {
+      size: typeof readout.size === "string" ? readout.size : "",
+      angle: typeof readout.angle === "string" ? readout.angle : "",
+    };
+  }
+
+  /**
    * Reads the SVG definitions the shapes reference, joined into the one
    * `<defs>` body the Frame draws (#750): the Worker writes them exactly as the
    * exported SVG does, so the Frame and the export share one definition of
@@ -596,7 +634,8 @@
    * Reads the box a selected Element's transform handles sit on (#795), or
    * null when it carries none or is malformed: a handle with no box to sit on
    * would grip nothing, and a handle set this Frame does not know would draw
-   * the wrong grips.
+   * the wrong grips. `minSize` is the smallest size the Worker keeps; a scene
+   * without one lets the drag reach the handle maths' own floor.
    * @param {unknown} raw
    * @returns {FrameElementTransform | null}
    */
@@ -614,6 +653,9 @@
     return {
       box: { x: box.x, y: box.y, width: box.width, height: box.height, rotation: box.rotation },
       handles,
+      ...(isNumber(transform.minSize) && transform.minSize > 0
+        ? { minSize: transform.minSize }
+        : {}),
     };
   }
 
@@ -680,6 +722,8 @@
       // access to the Plugin's catalogs, so it picks the plural form and fills
       // in the count alone.
       penLabel: readLabel(message.penLabel),
+      // The chip's size and angle text arrive the same way (#795).
+      readout: readReadout(message.readout),
     };
   }
 
@@ -1517,6 +1561,110 @@
   }
 
   /**
+   * The dashed ghost of the box a resize started from (#795), so the author
+   * compares the size the Element had with the one the drag asks for. A turn
+   * keeps the size it started with, so only a resize draws one, and it goes
+   * with the drag when it ends.
+   * @returns {any}
+   */
+  function transformGhost() {
+    if (transformDrag === null || !transformDrag.moved) return null;
+    if (transformDrag.handle === "rotate") return null;
+    const { html } = lib;
+    const { startBox } = transformDrag;
+    const frame = `translate(${n(startBox.x)} ${n(startBox.y)})${
+      startBox.rotation === 0 ? "" : ` rotate(${n(startBox.rotation)})`
+    }`;
+    return html`<rect
+      class="map-transform-ghost"
+      transform="${frame}"
+      x="${n(-startBox.width / 2)}"
+      y="${n(-startBox.height / 2)}"
+      width="${n(startBox.width)}"
+      height="${n(startBox.height)}"
+    />`;
+  }
+
+  /**
+   * The tick ring a Shift turn draws (#795): one tick at every 15° step, so the
+   * author sees where the snap will land. It sits a constant few pixels outside
+   * the box's corners, and goes with the drag when it ends.
+   * @returns {any}
+   */
+  function transformTicks() {
+    if (transformDrag === null || !transformDrag.moved) return null;
+    if (transformDrag.handle !== "rotate" || !transformDrag.snap) return null;
+    const scale = screenScale();
+    if (scale === null) return null;
+    const { html } = lib;
+    const { box } = transformDrag;
+    const outer = Math.hypot(box.width, box.height) / 2 + TURN_TICK_GAP_PX / scale;
+    const inner = outer - TURN_TICK_PX / scale;
+    return html`<g class="map-transform-ticks">
+      ${TURN_STEPS.map((degrees) => {
+        // A turn reads clockwise from the box's own upright, so 0° points up.
+        const angle = (degrees * Math.PI) / 180;
+        const dx = Math.sin(angle);
+        const dy = -Math.cos(angle);
+        return html`<line
+          class="map-transform-tick"
+          x1="${n(box.x + inner * dx)}"
+          y1="${n(box.y + inner * dy)}"
+          x2="${n(box.x + outer * dx)}"
+          y2="${n(box.y + outer * dy)}"
+        />`;
+      })}
+    </g>`;
+  }
+
+  /** A readout value with one decimal at most, so `50.0 mm` reads `50 mm`. */
+  function readoutNumber(value) {
+    return String(Math.round(value * 10) / 10);
+  }
+
+  /**
+   * The chip that reads the drag's size in millimetres, or its angle in
+   * degrees, just down and right of the pointer (#795). Its text is the
+   * localized template the scene carries, with the number filled in; a scene
+   * that carries none, or a Frame that cannot measure its screen, draws no chip
+   * rather than a wrong one.
+   * @returns {any}
+   */
+  function transformReadout() {
+    if (transformDrag === null || !transformDrag.moved || scene === null) return null;
+    const turning = transformDrag.handle === "rotate";
+    const template = turning ? scene.readout.angle : scene.readout.size;
+    if (template === "") return null;
+    const scale = screenScale();
+    if (scale === null) return null;
+    const { html } = lib;
+    const value = turning ? transformDrag.box.rotation : transformDrag.box.width;
+    const text = template.replace("{{value}}", readoutNumber(value));
+    const font = CHIP_FONT_PX / scale;
+    const padX = CHIP_PAD_X_PX / scale;
+    const padY = CHIP_PAD_Y_PX / scale;
+    // The Frame cannot measure a glyph, so a fixed advance keeps the chip's
+    // background behind its text; the Frame's body font is a system sans.
+    const width = text.length * font * CHIP_ADVANCE + padX * 2;
+    const height = font + padY * 2;
+    const [x, y] = transformDrag.point;
+    return html`<g
+      class="map-readout"
+      transform="translate(${n(x + CHIP_GAP_PX / scale)} ${n(y + CHIP_GAP_PX / scale)})"
+    >
+      <rect
+        class="map-readout-chip"
+        width="${n(width)}"
+        height="${n(height)}"
+        rx="${n(CHIP_RADIUS_PX / scale)}"
+      />
+      <text class="map-readout-text" x="${n(padX)}" y="${n(padY + font * 0.8)}" font-size="${n(font)}"
+        >${text}</text
+      >
+    </g>`;
+  }
+
+  /**
    * Draws the current scene and any live stroke into the Frame. The drawing is
    * `aria-hidden`: a Frame's contents sit outside Maibuk's accessibility gate
    * (`docs/plugins/frame-ui.md`), and the Elements list is the drawing's
@@ -1582,7 +1730,10 @@
             </g>`
           )}
         ${bendOverlay()}
+        ${transformGhost()}
         ${transformOverlay()}
+        ${transformTicks()}
+        ${transformReadout()}
         ${drawing === null ? null : html`<path class="map-live" d="${polyline(drawing.points)}" />`}
         ${penDraft === null ? null : html`<path class="map-live" d="${penDraftPath()}" />`}
         ${crosshair === null ? null : html`<path class="map-crosshair" d="${crosshairPath()}" />`}
@@ -1861,8 +2012,13 @@
       handle,
       press: { clientX: event.clientX, clientY: event.clientY },
       start: point,
+      point,
       startBox: { ...target.transform.box },
       box: { ...target.transform.box },
+      // The Worker's own minimum size, so a preview never shows a box it would
+      // shrink: a scene without one lets the maths' floor apply.
+      minSize: target.transform.minSize ?? MIN_TRANSFORM_SIZE_MM,
+      snap: false,
       moved: false,
     };
     capturePointer(event);
@@ -1889,6 +2045,8 @@
       if (travelled < DRAG_THRESHOLD_PX) return;
       transformDrag.moved = true;
     }
+    transformDrag.point = point;
+    transformDrag.snap = event.shiftKey === true;
     transformDrag.box = transformBox({
       box: transformDrag.startBox,
       handle: transformDrag.handle,
@@ -1896,7 +2054,10 @@
       point,
       aspect: true,
       fromCentre: event.altKey === true,
-      snap: event.shiftKey === true,
+      snap: transformDrag.snap,
+      // A Stamp and a Map Image store a width alone, and their aspect carries
+      // the height with it, so the Worker's minimum is the width's (#795).
+      minWidth: transformDrag.minSize,
     });
     draw();
   }

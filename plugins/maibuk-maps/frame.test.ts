@@ -2748,6 +2748,15 @@ describe("the transform handles (#795)", () => {
     Number(element.getAttribute("y")) + Number(element.getAttribute("height")) / 2,
   ];
 
+  /** Where a `translate(x y)` transform puts an element, in page millimetres. */
+  const translated = (element: Element): [number, number] => {
+    const match = /^translate\(\s*(-?[\d.]+)\s+(-?[\d.]+)/.exec(
+      element.getAttribute("transform") ?? ""
+    );
+    if (match === null) throw new Error("the element carries no translate");
+    return [Number(match[1]), Number(match[2])];
+  };
+
   /** The box the overlay draws around the selection. */
   const outline = (): Element => {
     const element = overlay().querySelector("rect.map-transform-box");
@@ -3047,14 +3056,131 @@ describe("the transform handles (#795)", () => {
     pointer(target("se"), "pointerdown", 120, 60);
     pointer(svg(), "pointermove", 130, 65);
     expect(outline().getAttribute("width")).toBe("50");
+    expect(document.querySelector("g.map-readout")).not.toBeNull();
+    expect(document.querySelector("rect.map-transform-ghost")).not.toBeNull();
 
     // Escape takes the start box back and the Worker never hears of the drag.
     expect(key("Escape").defaultPrevented).toBe(true);
     expect(outline().getAttribute("width")).toBe("40");
     expect(elementGroup().getAttribute("transform")).toBeNull();
+    // The chip and the ghost go with the drag, as the preview does.
+    expect(document.querySelector("g.map-readout")).toBeNull();
+    expect(document.querySelector("rect.map-transform-ghost")).toBeNull();
 
     pointer(svg(), "pointerup", 130, 65);
     expect(frame.port.messages).toEqual([]);
+  });
+
+  it("reads the size in page millimetres on a chip beside the pointer while resizing", () => {
+    frame = loadFrame();
+    // The Worker's own readout text, so the chip reads in the app's language.
+    frame.scene({
+      elements: [selected()],
+      readout: { size: "Tamaño {{value}} mm", angle: "{{value}}°" },
+    });
+
+    pointer(target("se"), "pointerdown", 120, 60);
+    // The press alone has not moved the box yet, so there is nothing to read.
+    expect(document.querySelector("g.map-readout")).toBeNull();
+    pointer(svg(), "pointermove", 130, 65);
+
+    const chip = document.querySelector("g.map-readout");
+    if (chip === null) throw new Error("the Frame drew no readout chip");
+    expect(chip.querySelector("text")?.textContent).toBe("Tamaño 50 mm");
+    // Beside the pointer the drag follows, not at the box's own middle.
+    const [x, y] = translated(chip);
+    expect(Math.hypot(x - 130, y - 65)).toBeLessThan(10);
+
+    // The chip goes with the drag; a turn reads its angle instead (below).
+    pointer(svg(), "pointerup", 130, 65);
+    expect(document.querySelector("g.map-readout")).toBeNull();
+  });
+
+  it("reads the angle in degrees on the chip while turning", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected()] });
+
+    pointer(target("rotate"), "pointerdown", 100, 35);
+    pointer(svg(), "pointermove", 110, 50);
+
+    const chip = document.querySelector("g.map-readout");
+    if (chip === null) throw new Error("the Frame drew no readout chip");
+    expect(chip.querySelector("text")?.textContent).toBe("90°");
+  });
+
+  it("keeps a dashed ghost of the start box while resizing, and only then", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected()] });
+
+    pointer(target("se"), "pointerdown", 120, 60);
+    pointer(svg(), "pointermove", 130, 65);
+
+    // The ghost stays where the drag began, so the author compares old and new.
+    const ghost = document.querySelector("rect.map-transform-ghost");
+    if (ghost === null) throw new Error("the Frame drew no start-box ghost");
+    expect(ghost.getAttribute("width")).toBe("40");
+    expect(ghost.getAttribute("height")).toBe("20");
+    expect(ghost.getAttribute("transform")).toBe("translate(100 50)");
+    // Dashed by the stylesheet, so it reads as a guide rather than the live box.
+    expect(HTML).toMatch(/\.map-transform-ghost[\s\S]*?stroke-dasharray/);
+
+    pointer(svg(), "pointerup", 130, 65);
+    expect(document.querySelector("rect.map-transform-ghost")).toBeNull();
+
+    // A turn keeps the size it started with, so only a resize needs comparing.
+    pointer(target("rotate"), "pointerdown", 100, 35);
+    pointer(svg(), "pointermove", 110, 50);
+    expect(document.querySelector("rect.map-transform-ghost")).toBeNull();
+  });
+
+  it("marks each 15° step around the box while Shift turns", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected()] });
+
+    pointer(target("rotate"), "pointerdown", 100, 35);
+    pointer(svg(), "pointermove", 110, 50);
+    expect(document.querySelectorAll("line.map-transform-tick")).toHaveLength(0);
+
+    pointer(svg(), "pointermove", 110, 50, { shiftKey: true });
+    const ticks = Array.from(document.querySelectorAll("line.map-transform-tick"));
+    expect(ticks).toHaveLength(24);
+    // One tick per step, the first due up, which is a turn of 0°.
+    const angles = ticks
+      .map((tick) => {
+        const dx = (Number(tick.getAttribute("x1")) + Number(tick.getAttribute("x2"))) / 2 - 100;
+        const dy = (Number(tick.getAttribute("y1")) + Number(tick.getAttribute("y2"))) / 2 - 50;
+        return ((Math.atan2(dx, -dy) * 180) / Math.PI + 360) % 360;
+      })
+      .sort((one, two) => one - two);
+    expect(angles.map((angle) => Math.round(angle) % 15)).toEqual(Array(24).fill(0));
+    // Written to two decimals, so a tick's own angle is within a rounding step.
+    expect(angles[0]).toBeCloseTo(0, 1);
+    expect(angles[1]).toBeCloseTo(15, 1);
+
+    pointer(svg(), "pointerup", 110, 50);
+    expect(document.querySelectorAll("line.map-transform-tick")).toHaveLength(0);
+  });
+
+  it("previews the minimum size the Worker keeps when a drag passes the opposite corner", () => {
+    frame = loadFrame();
+    // The Worker clamps a Stamp's or Map Image's size to 1 mm, and says so
+    // through the handle data, so the preview stops where the Worker will.
+    frame.scene({ elements: [selected({ transform: { ...handleBox(), minSize: 1 } })] });
+
+    pointer(target("se"), "pointerdown", 120, 60);
+    // Well past the anchored corner at (80, 40): the box must not flip.
+    pointer(svg(), "pointermove", 0, 0);
+
+    expect(outline().getAttribute("width")).toBe("1");
+    expect(outline().getAttribute("height")).toBe("0.5");
+    pointer(svg(), "pointerup", 0, 0);
+    expect(frame.port.messages).toEqual([
+      {
+        kind: "transformElement",
+        id: "e1",
+        box: { x: 80.5, y: 40.25, width: 1, height: 0.5, rotation: 0 },
+      },
+    ]);
   });
 
   it("draws no grips for an Element with no box, no other tool, and no selection", () => {

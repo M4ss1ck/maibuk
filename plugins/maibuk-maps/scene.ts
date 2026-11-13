@@ -25,6 +25,7 @@ import {
   isAreaFill,
   labelBaselinePath,
   labelFontFamily,
+  MIN_STAMP_SIZE_MM,
   type MapDocument,
   type MapElement,
   type MapFillElement,
@@ -1594,6 +1595,12 @@ export interface ElementTransformBox {
 export interface ElementTransform {
   box: ElementTransformBox;
   handles: ElementHandleSet;
+  /**
+   * The smallest width the Worker keeps for this Element, in page millimetres.
+   * A Stamp and a Map Image store a width alone, so a drag past the opposite
+   * corner stops here and the Frame's preview shows what the Worker stores.
+   */
+  minSize: number;
 }
 
 /**
@@ -1616,9 +1623,10 @@ function stampBoxRatio(element: MapStampElement, library: MapLibrary): number {
 
 /**
  * What the Frame needs to draw an Element's transform handles (#795): the box
- * they sit on, in page millimetres, and the handles it takes. A Stamp and a Map
- * Image carry four corners, which keep their aspect because both store a width
- * alone. Every other kind carries none here and keeps its selection outline.
+ * they sit on, in page millimetres, the handles it takes, and the smallest size
+ * the Worker keeps for it. A Stamp and a Map Image carry four corners, which
+ * keep their aspect because both store a width alone. Every other kind carries
+ * none here and keeps its selection outline.
  */
 export function elementTransform(
   element: MapElement,
@@ -1629,13 +1637,18 @@ export function elementTransform(
     return {
       box: { x, y, width: size, height: size * stampBoxRatio(element, library), rotation },
       handles: "corners",
+      minSize: MIN_STAMP_SIZE_MM,
     };
   }
   if (element.kind === "image") {
     const asset = library.assets.get(element.assetRef);
     const { x, y, size, rotation } = element.transform;
     const ratio = asset === undefined || !(asset.width > 0) ? 1 : asset.height / asset.width;
-    return { box: { x, y, width: size, height: size * ratio, rotation }, handles: "corners" };
+    return {
+      box: { x, y, width: size, height: size * ratio, rotation },
+      handles: "corners",
+      minSize: MIN_STAMP_SIZE_MM,
+    };
   }
   return null;
 }

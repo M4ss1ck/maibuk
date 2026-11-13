@@ -11,6 +11,7 @@ import {
   DEFAULT_LABEL_HALO_MM,
   DEFAULT_LABEL_SIZE_MM,
   LINE_STROKE,
+  MIN_STAMP_SIZE_MM,
   type MapDocument,
   type MapElement,
   type MapFillElement,
@@ -1894,6 +1895,8 @@ describe("the handle box an Element carries (#795)", () => {
     ).toEqual({
       box: { x: 100, y: 50, width: 12, height: 12, rotation: 30 },
       handles: "corners",
+      // The size the Worker keeps, so a preview stops where the Map does.
+      minSize: MIN_STAMP_SIZE_MM,
     });
   });
 
@@ -1906,6 +1909,7 @@ describe("the handle box an Element carries (#795)", () => {
     expect(elementTransform(image(), library())).toEqual({
       box: { x: 60, y: 40, width: 80, height: 40, rotation: 15 },
       handles: "corners",
+      minSize: MIN_STAMP_SIZE_MM,
     });
     // A picture the Library does not hold yet still gets a box to grab.
     expect(elementTransform(image())?.box).toEqual({

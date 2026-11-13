@@ -211,6 +211,46 @@
         stroke: none;
         pointer-events: all;
       }
+
+      /* The box a resize started from (#795): dashed, so the author compares
+         the old size with the live one. It guides rather than grips, so it
+         never takes a pointer. */
+      .map-transform-ghost {
+        fill: none;
+        stroke: var(--maibuk-color-primary);
+        stroke-width: 1;
+        stroke-dasharray: 4 3;
+        vector-effect: non-scaling-stroke;
+        opacity: 0.6;
+        pointer-events: none;
+      }
+
+      /* One tick at every 15° step while a Shift turn runs (#795), so the
+         author sees where the snap will land. */
+      .map-transform-tick {
+        stroke: var(--maibuk-color-primary);
+        stroke-width: 1.5;
+        stroke-linecap: round;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+      }
+
+      /* The readout chip beside the pointer during a drag (#795): the host's
+         foreground as its surface and the page colour as its ink, so it reads
+         in both themes over the Map's own paper. Its geometry is sized in page
+         millimetres from the screen scale, like the handles. */
+      .map-readout {
+        pointer-events: none;
+      }
+
+      .map-readout-chip {
+        fill: var(--maibuk-color-foreground);
+        fill-opacity: 0.85;
+      }
+
+      .map-readout-text {
+        fill: var(--maibuk-color-background);
+      }
     </style>
   </head>
   <body>

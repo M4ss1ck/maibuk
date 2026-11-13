@@ -82,15 +82,15 @@ export interface FrameSceneElement {
    */
   label?: FrameLabelLayout;
   /**
-   * The box a transform handle resizes or turns, and the handles the Element
-   * takes (#795). Only the selected Element carries one; a Map Line, a Fill,
-   * and (until ticket 2) a Shape or a Map Label carry none, and keep the
-   * selection outline they have always had.
+   * The box a transform handle resizes or turns, the handles the Element takes,
+   * and the smallest width the Worker keeps for it (#795). Only the selected
+   * Element carries one; a Map Line, a Fill, and (until ticket 2) a Shape or a
+   * Map Label carry none, and keep the selection outline they have always had.
    */
   transform?: FrameElementTransform;
 }
 
-/** What the Frame draws an Element's handles from (#795): its box, and which handles it takes. */
+/** What the Frame draws an Element's handles from (#795): its box, which handles it takes, and its minimum size. */
 export type FrameElementTransform = ElementTransform;
 
 /**
