@@ -16,7 +16,13 @@
 
 import type { FrameLocator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
-import { expectFocusWithin, leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
+import {
+  expectFocusWithin,
+  leaveFrame,
+  pressUntilFocused,
+  tabTo,
+  tabToEither,
+} from "../support/keyboard";
 import { expect, test } from "../support/test";
 import { openLayers } from "../support/maps-layers";
 
@@ -133,7 +139,7 @@ async function placeRectangle(page: Page): Promise<void> {
 async function pickMapStyle(page: Page, style: string): Promise<void> {
   const trigger = mapStyleTrigger(page);
   await leaveFrame(page, frameElement(page));
-  await tabTo(page, trigger, { max: 80, backwards: true });
+  await tabToEither(page, trigger, { max: 80 });
   await expect(trigger).toBeFocused();
   await page.keyboard.press("Enter");
   const group = page.getByRole("radiogroup", { name: "Map Style" });
@@ -158,7 +164,7 @@ async function pickMapStyle(page: Page, style: string): Promise<void> {
  */
 async function pickLineColor(page: Page, value: string): Promise<void> {
   const trigger = lineColorTrigger(page);
-  await tabTo(page, trigger, { max: 80 });
+  await tabToEither(page, trigger, { max: 80 });
   await page.keyboard.press("Enter");
   const picker = page.getByRole("dialog", { name: "Map Line color" });
   await expect(picker).toBeVisible();
@@ -255,7 +261,7 @@ test.describe("Maps Map Styles @wf:plugins-maps-styles @sc:plugin.maibuk-maps.re
     await expect(drawnLine(page)).toHaveAttribute("stroke", hex(OVERRIDE));
 
     const clear = useMapStyleColor(page);
-    await tabTo(page, clear, { max: 80 });
+    await tabToEither(page, clear, { max: 80 });
     await expect(clear).toBeEnabled();
     await page.keyboard.press("Enter");
 
@@ -283,7 +289,7 @@ test.describe("Maps Map Styles @wf:plugins-maps-styles @sc:plugin.maibuk-maps.re
     // The pill's trigger is icon-only, so the reopened Map Style shows in the
     // popover it opens: Night is still the group's pick.
     await expect(mapStyleTrigger(page)).toHaveAccessibleName("Map Style");
-    await tabTo(page, mapStyleTrigger(page), { max: 80, backwards: true });
+    await tabToEither(page, mapStyleTrigger(page), { max: 80 });
     await page.keyboard.press("Enter");
     await expect(page.getByRole("radio", { name: "Night", exact: true })).toBeChecked();
     await page.keyboard.press("Escape");

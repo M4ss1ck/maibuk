@@ -20,6 +20,7 @@ import {
   leaveFrame,
   pressUntilFocused,
   tabTo,
+  tabToEither,
 } from "../support/keyboard";
 import { expect, test } from "../support/test";
 import { openLayers } from "../support/maps-layers";
@@ -209,7 +210,7 @@ test.describe("Maps editor @wf:plugins-maps-editor @sc:plugin.maibuk-maps.openMa
     // The Worker turns the stroke into a Map Line, names it, and selects it.
     const line = elementRow(page, "Map Line 1");
     await leaveFrame(page, frameElement(page));
-    await tabTo(page, line, { max: 60, backwards: true });
+    await tabToEither(page, line, { max: 60 });
     await expect(line).toHaveAttribute("aria-selected", "true");
     await expect(drawnElements(page)).toHaveCount(1);
     const drawn = await pathData(drawnLine(page));
@@ -243,7 +244,7 @@ test.describe("Maps editor @wf:plugins-maps-editor @sc:plugin.maibuk-maps.openMa
     // panel control: the list owns the vertical arrows, the Map Commands the rest.
     const line = elementRow(page, "Map Line 1");
     await leaveFrame(page, frameElement(page));
-    await tabTo(page, line, { max: 60, backwards: true });
+    await tabToEither(page, line, { max: 60 });
     // Drawing selects the new line, and Space on an already-selected row drops
     // that selection, so only press it when the row is somehow unselected.
     if ((await line.getAttribute("aria-selected")) !== "true") await page.keyboard.press(" ");

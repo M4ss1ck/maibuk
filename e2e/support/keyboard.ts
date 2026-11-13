@@ -23,6 +23,24 @@ export async function tabTo(
 }
 
 /**
+ * Tabs to `target` whichever side of focus it sits on: forward first, then
+ * back. Firefox never wraps Tab from the last control to the first, so a
+ * target behind focus is only reached going back; the backward walk retraces
+ * the forward one, so it gets twice the presses.
+ */
+export async function tabToEither(
+  page: Page,
+  target: Locator,
+  { max = 40 }: { max?: number } = {}
+): Promise<void> {
+  try {
+    await tabTo(page, target, { max });
+  } catch {
+    await tabTo(page, target, { max: max * 2, backwards: true });
+  }
+}
+
+/**
  * Presses `key` (an arrow, usually) until `target` has focus: movement inside
  * a roving-focus group such as a toolbar, menu, grid or listbox.
  */

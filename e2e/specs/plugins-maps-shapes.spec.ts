@@ -16,7 +16,7 @@
 import type { FrameLocator, Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { dragShape } from "../support/frame-stroke";
-import { pressUntilFocused, tabTo } from "../support/keyboard";
+import { pressUntilFocused, tabTo, tabToEither } from "../support/keyboard";
 import { expect, test } from "../support/test";
 import { openLayers } from "../support/maps-layers";
 
@@ -194,7 +194,7 @@ test.describe("Maps Shape tools, Place buttons, and Shape number fields @wf:plug
     // A number field reshapes the exact Shape; the Frame draws what it stored.
     // The fields sit in the Properties card, past the footer, the pills, and the
     // page's own chrome, so the walk allows for all of it.
-    await tabTo(page, width, { max: 120 });
+    await tabToEither(page, width, { max: 120 });
     await page.keyboard.press("Control+a");
     await page.keyboard.type("60");
     await page.keyboard.press("Enter");

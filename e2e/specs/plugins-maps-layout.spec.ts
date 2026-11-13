@@ -16,7 +16,7 @@
 
 import type { Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
-import { tabTo } from "../support/keyboard";
+import { tabTo, tabToEither } from "../support/keyboard";
 import { pageScrollWidths, queryContainerAround } from "../support/layout";
 import { createMap, openLayers, openMap, openMaps } from "../support/maps-layers";
 import { expect, test } from "../support/test";
@@ -102,11 +102,7 @@ async function openEditor(page: Page): Promise<void> {
  * what an author does.
  */
 async function pressControl(page: Page, control: Locator): Promise<void> {
-  try {
-    await tabTo(page, control, { max: 40 });
-  } catch {
-    await tabTo(page, control, { max: 40, backwards: true });
-  }
+  await tabToEither(page, control);
   await page.keyboard.press("Enter");
 }
 

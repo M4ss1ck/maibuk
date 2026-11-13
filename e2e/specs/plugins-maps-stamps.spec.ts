@@ -284,15 +284,16 @@ test.describe("Maps Insert tool and Stamps @wf:plugins-maps-stamps @sc:plugin.ma
     // One of every kind of Stamp art the slice ships a look for, plus the scale
     // bar, spread over the landscape page. The floating chrome (#778) floats its
     // cards over the page's left edge and its top-right corner, so every point
-    // below sits in the page the cards leave uncovered: the Insert card reaches
-    // a little past 70 mm across the middle, which is why the left-hand Stamps
-    // sit at 95 mm and the Compass rose below the card's lower edge.
+    // below sits in the page the cards leave uncovered: the Insert card and,
+    // with Layers open, the Layers card stacked under it (#775 review R2) reach
+    // a little past 70 mm across, down to about 120 mm, which is why the
+    // left-hand Stamps sit at 95 mm and the Compass rose below the stack.
     for (const [stamp, point] of [
       ["Capital", [95, 45]],
       ["Castle", [145, 40]],
       ["Lone mountain", [135, 105]],
       ["Lone tree", [150, 95]],
-      ["Compass rose", [70, 120]],
+      ["Compass rose", [80, 135]],
       ["Ship", [150, 60]],
       ["Scale bar", [114, 112]],
       ["Town", [90, 100]],
