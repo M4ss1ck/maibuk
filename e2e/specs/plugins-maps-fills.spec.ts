@@ -32,10 +32,11 @@ const mapFrame = (page: Page): FrameLocator =>
 const frameElement = (page: Page) => page.locator('[data-plugin-frame="embedded"] iframe');
 const surface = (page: Page) => mapFrame(page).locator("svg");
 
-/** The Elements list and one row in it. */
-const elementsList = (page: Page) => page.getByRole("listbox", { name: "Elements" });
+/** The Layers card's Elements list, and one Element's row button in it. */
+const elementsList = (page: Page) =>
+  page.getByRole("list").filter({ has: page.getByRole("button", { name: /^More actions for / }) });
 const elementRow = (page: Page, name: string) =>
-  elementsList(page).getByRole("option", { name: new RegExp(`^${name}`) });
+  elementsList(page).getByRole("button", { name: new RegExp(`^${name}`) });
 
 /** The filled paths the Frame draws: a Fill's path has a colour where a line has none. */
 const filledPaths = (page: Page) =>

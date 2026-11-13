@@ -32,10 +32,11 @@ const mapFrame = (page: Page): FrameLocator =>
 const frameElement = (page: Page) => page.locator('[data-plugin-frame="embedded"] iframe');
 const surface = (page: Page) => mapFrame(page).locator("svg");
 
-/** The Elements list and one row in it. */
-const elementsList = (page: Page) => page.getByRole("listbox", { name: "Elements" });
+/** The Layers card's Elements list, and one Element's row button in it. */
+const elementsList = (page: Page) =>
+  page.getByRole("list").filter({ has: page.getByRole("button", { name: /^More actions for / }) });
 const elementRow = (page: Page, name: string) =>
-  elementsList(page).getByRole("option", { name: new RegExp(`^${name}`) });
+  elementsList(page).getByRole("button", { name: new RegExp(`^${name}`) });
 
 /**
  * The text a Map Label draws in the Frame. A label's halo is a second copy of
@@ -220,10 +221,11 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.in
     await pickInsert(page);
     await placeLabel(page);
 
-    // The row calls it what it is and holds the new label's selection.
+    // The row calls it what it is, and the properties panel holds the new
+    // label's selection.
     const row = elementRow(page, "Map Label 1");
     await expect(row).toBeVisible();
-    await expect(row).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("textbox", { name: "Name" })).toHaveValue(/^Map Label 1/);
 
     // The Frame draws the default text along the label's baseline.
     await expect(drawnLabelPaths(page).first()).toHaveText("Label");

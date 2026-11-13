@@ -479,8 +479,26 @@ div[data-plugin-ui] > div:nth-child(6):empty { display: none; }
 div[data-plugin-ui] > div:nth-child(1) { top: 0.75rem; left: 0.75rem; }
 div[data-plugin-ui] > div:nth-child(2) { top: 50%; left: 0.75rem; transform: translateY(-50%); }
 div[data-plugin-ui] > div:nth-child(3) { top: 50%; left: 3.75rem; width: 15rem; transform: translateY(-50%); }
-div[data-plugin-ui] > div:nth-child(4) { top: 50%; left: 3.75rem; width: 15rem; transform: translateY(-50%); }
-div[data-plugin-ui] > div:nth-child(6) { top: 4.5rem; right: 0.75rem; width: 18.5rem; }
+div[data-plugin-ui] > div:nth-child(4) { top: 50%; left: 3.75rem; width: 17rem; transform: translateY(-50%); }
+/* Properties sizes to what it holds, and stops above the zoom cluster in the
+   same corner, scrolling inside itself past that: 4.5rem above it, and below
+   it the cluster's 0.75rem inset, its height at a coarse pointer's 2.75rem
+   targets, and a 0.5rem gap. */
+div[data-plugin-ui] > div:nth-child(6) { top: 4.5rem; right: 0.75rem; width: 18.5rem; max-height: calc(100% - 9.25rem); }
+/* Minimised, Properties is its restore button alone, in a card that fits it,
+   where the design draws it: under the top-right pill. */
+div[data-plugin-ui] > div:nth-child(6):has(> button:only-child) { width: auto; padding: 0.25rem; }
+/* The Properties header: the name takes the row and ends in an ellipsis, and
+   the controls keep their width at its right. */
+div[data-plugin-ui] > div:nth-child(6) > div:first-child > div:first-child > p { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* An Elements list row: the row button takes the width and stacks the name
+   over the kind, each cut to one line, and the eye and the menu keep theirs. */
+div[data-plugin-ui] > div:nth-child(4) > ul > li > div > button:first-child { flex: 1 1 auto; min-width: 0; height: auto; flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; padding: 0.25rem 0.5rem; text-align: left; }
+div[data-plugin-ui] > div:nth-child(4) > ul > li > div > button:first-child > p { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.25rem; }
+div[data-plugin-ui] > div:nth-child(4) > ul > li > div > button:first-child > p:last-child { font-size: 0.75rem; line-height: 1rem; }
+div[data-plugin-ui] > div:nth-child(4) > ul > li > div > button:last-child { border-color: transparent; background: transparent; }
+/* A hidden Element's row dims its name, beside its pressed eye. */
+div[data-plugin-ui] > div:nth-child(4) > ul > li > div:has(> button[aria-pressed="true"]) > button:first-child { opacity: 0.55; }
 div[data-plugin-ui] > div:nth-child(7) { top: 0.75rem; right: 0.75rem; }
 div[data-plugin-ui] > div:nth-child(8) { right: 0.75rem; bottom: 0.75rem; }
 /* The narrow page (#779, #775 Decision 6): the drawing still fills the page,
@@ -518,42 +536,34 @@ div[data-plugin-ui] > div:nth-child(8) { right: 0.75rem; bottom: 0.75rem; }
      the page tall (#779). */
   div[data-plugin-ui] > div:nth-child(3) { top: auto; bottom: 4.25rem; left: 0.5rem; right: 0.5rem; width: auto; transform: none; max-height: calc(50% - 4.25rem); }
   div[data-plugin-ui] > div:nth-child(4) { top: auto; bottom: 4.25rem; left: 0.5rem; right: 0.5rem; width: auto; transform: none; max-height: calc(50% - 4.25rem); }
-  div[data-plugin-ui] > div:nth-child(6) { top: auto; bottom: 4.25rem; left: 0.5rem; right: 0.5rem; width: auto; max-height: calc(50% - 4.25rem); padding-top: 3.75rem; }
+  div[data-plugin-ui] > div:nth-child(6) { top: auto; bottom: 4.25rem; left: 0.5rem; right: 0.5rem; width: auto; max-height: calc(50% - 4.25rem); }
+  /* Minimised, its restore button sits under the top bar at the right, clear
+     of the zoom cluster and the belt. */
+  div[data-plugin-ui] > div:nth-child(6):has(> button:only-child) { top: 3.75rem; bottom: auto; left: auto; right: 0.5rem; max-height: none; }
   /* With Properties open too, the bottom half is split: Insert and Layers
      above, from the middle of the page down, and Properties below them, so
      none covers another (#779). */
-  div[data-plugin-ui]:has(> div:nth-child(6):not(:empty)) > div:nth-child(3),
-  div[data-plugin-ui]:has(> div:nth-child(6):not(:empty)) > div:nth-child(4) { top: 50%; bottom: auto; max-height: calc(25% - 0.25rem); }
-  div[data-plugin-ui]:has(> div:nth-child(3):not(:empty)) > div:nth-child(6),
-  div[data-plugin-ui]:has(> div:nth-child(4):not(:empty)) > div:nth-child(6) { top: 75%; bottom: 4.25rem; max-height: calc(25% - 4.25rem); }
-  /* The Properties header keeps its title and the card's two controls on the
-     card's own top band, right-aligned as on the desktop, instead of letting
-     them drop to a row of their own under the title: the title holds the band's
-     left, the two controls its right, and the selection's name and switches
-     start below them (#779). */
-  div[data-plugin-ui] > div:nth-child(6) > p:nth-child(1) { position: absolute; top: 0.75rem; left: 0.75rem; display: flex; align-items: center; height: 2.75rem; }
-  div[data-plugin-ui] > div:nth-child(6) > div:nth-child(2) { flex-wrap: nowrap; gap: 0.5rem; }
-  div[data-plugin-ui] > div:nth-child(6) > div:nth-child(2) > div:nth-child(1) { flex: 1 1 auto; min-width: 0; }
-  div[data-plugin-ui] > div:nth-child(6) > div:nth-child(2) > button { position: absolute; top: 0.75rem; flex: 0 0 auto; }
-  div[data-plugin-ui] > div:nth-child(6) > div:nth-child(2) > button:first-of-type { right: 3.75rem; }
-  div[data-plugin-ui] > div:nth-child(6) > div:nth-child(2) > button:last-of-type { right: 0.75rem; }
+  div[data-plugin-ui]:has(> div:nth-child(6) > div) > div:nth-child(3),
+  div[data-plugin-ui]:has(> div:nth-child(6) > div) > div:nth-child(4) { top: 50%; bottom: auto; max-height: calc(25% - 0.25rem); }
+  div[data-plugin-ui]:has(> div:nth-child(3):not(:empty)) > div:nth-child(6):has(> div),
+  div[data-plugin-ui]:has(> div:nth-child(4):not(:empty)) > div:nth-child(6):has(> div) { top: 75%; bottom: 4.25rem; max-height: calc(25% - 4.25rem); }
   /* The full-height toggle: whichever region holds a pressed toggle takes all
      the page but the bar and the belt, so Properties and Layers each own the
      one toggle (#779). The Frame's own box never moves, so the drawing is not
      resized. */
-  div[data-plugin-ui]:has(> div:nth-child(4) > button[aria-pressed="true"]) > div:nth-child(4),
-  div[data-plugin-ui]:has(> div:nth-child(6) button[aria-pressed="true"]) > div:nth-child(6) { top: 3.25rem; bottom: 4.25rem; max-height: none; }
+  div[data-plugin-ui]:has(> div:nth-child(4) > div:first-child button[aria-pressed="true"]) > div:nth-child(4),
+  div[data-plugin-ui]:has(> div:nth-child(6) > div:first-child > div:first-child > div:last-child > button:nth-last-child(2)[aria-pressed="true"]) > div:nth-child(6) { top: 3.25rem; bottom: 4.25rem; max-height: none; }
   /* The zoom cluster sits bottom right, just above the belt, or just above the
      bottom region that is open, so zoom in, zoom out, and the readout stay
      reachable whatever is open (#779, #775 review R2). */
   div[data-plugin-ui] > div:nth-child(8) { top: auto; right: 0.5rem; bottom: 4.25rem; }
   div[data-plugin-ui]:has(> div:nth-child(3):not(:empty)) > div:nth-child(8),
   div[data-plugin-ui]:has(> div:nth-child(4):not(:empty)) > div:nth-child(8),
-  div[data-plugin-ui]:has(> div:nth-child(6):not(:empty)) > div:nth-child(8) { bottom: calc(50% + 0.5rem); }
+  div[data-plugin-ui]:has(> div:nth-child(6) > div) > div:nth-child(8) { bottom: calc(50% + 0.5rem); }
   /* A region at full height leaves no room above the middle, so the cluster
      moves under the top bar instead of hiding (#775 review R2). */
-  div[data-plugin-ui]:has(> div:nth-child(4) > button[aria-pressed="true"]) > div:nth-child(8),
-  div[data-plugin-ui]:has(> div:nth-child(6) button[aria-pressed="true"]) > div:nth-child(8) { top: 3.25rem; bottom: auto; }
+  div[data-plugin-ui]:has(> div:nth-child(4) > div:first-child button[aria-pressed="true"]) > div:nth-child(8),
+  div[data-plugin-ui]:has(> div:nth-child(6) > div:first-child > div:first-child > div:last-child > button:nth-last-child(2)[aria-pressed="true"]) > div:nth-child(8) { top: 3.25rem; bottom: auto; }
 }
 /* At the desktop width the pill's own three controls show again, and the
    overflow stays out of the page (#779). */
@@ -562,8 +572,8 @@ div[data-plugin-ui] > div:nth-child(8) { right: 0.75rem; bottom: 0.75rem; }
   /* The full-height toggles only exist where a region can react to them: a
      desktop region already takes the room its content needs, so at this width
      the two controls leave the header (#775 review R2). */
-  div[data-plugin-ui] > div:nth-child(4) > button { display: none; }
-  div[data-plugin-ui] > div:nth-child(6) > div:nth-child(2) > button:first-of-type { display: none; }
+  div[data-plugin-ui] > div:nth-child(4) > div:first-child > div > button:first-child { display: none; }
+  div[data-plugin-ui] > div:nth-child(6) > div:first-child > div:first-child > div:last-child > button:nth-last-child(2) { display: none; }
   /* Insert and Layers share one box beside the belt, so with both open they
      stack rather than cover each other: Insert above the middle, Layers below
      it, each held to its own half (#775 review R2). */
@@ -646,7 +656,8 @@ function describe(element: MapElement, t: (key: MapsKey) => string): string {
   const parts: string[] = [];
   const kindKey = ELEMENT_KIND_KEYS[element.kind];
   if (kindKey !== undefined) parts.push(t(kindKey));
-  if (element.hidden) parts.push(t("elements.hidden"));
+  // Hidden reads off the row's own eye toggle and its dimmed name, so the
+  // second line keeps to the kind and the lock.
   if (element.locked) parts.push(t("elements.locked"));
   return parts.join(" · ");
 }
@@ -803,6 +814,16 @@ function MapEditorView({
   const [propertiesFullHeight, setPropertiesFullHeight] = useState(false);
   // Whether the Layers region takes the whole page on a narrow screen (#779).
   const [layersFullHeight, setLayersFullHeight] = useState(false);
+  // The Element whose row menu is open, or null. Only that row draws its menu's
+  // buttons, so a long Map does not send seven hidden buttons per row.
+  const [rowMenuFor, setRowMenuFor] = useState<string | null>(null);
+  // A Properties request from a row menu waits here for that menu to shut.
+  const [propertiesFocusPending, setPropertiesFocusPending] = useState(false);
+  useEffect(() => {
+    if (!propertiesFocusPending || rowMenuFor !== null) return;
+    setPropertiesFocusPending(false);
+    setPropertiesFocus((count) => count + 1);
+  }, [propertiesFocusPending, rowMenuFor]);
   // The Map's own name while its rename dialog holds it, or null when it is shut.
   const [mapRename, setMapRename] = useState<string | null>(null);
   const selected =
@@ -911,7 +932,9 @@ function MapEditorView({
         break;
       case PROPERTIES:
         editor.select(element.id);
-        setPropertiesFocus((count) => count + 1);
+        // The menu's popover hands focus back to its trigger as it shuts, so
+        // the Name field takes focus only once the shut has landed.
+        setPropertiesFocusPending(true);
         break;
     }
   }
@@ -1249,29 +1272,84 @@ function MapEditorView({
         <ui.View direction="column" gap="sm">
           {layersOpen ? (
             <>
-              <ui.IconButton
-                label={t("chrome.expandLayers")}
-                icon="chevrons-down"
-                isSelected={layersFullHeight}
-                onPress={() => setLayersFullHeight((full) => !full)}
-              />
-              <ui.Collection
-                label={t("elements.label")}
-                selectionMode="single"
-                selectedKeys={snapshot.selectedId === null ? [] : [snapshot.selectedId]}
-                onSelectionChange={(event) => editor.select(event.detail[0] ?? null)}
-              >
-                {rows.map((element) => (
-                  <ui.CollectionRow
-                    key={element.id}
-                    id={element.id}
-                    label={element.name}
-                    description={describe(element, t)}
-                    menuItems={menuItems(element)}
-                    onMenuAction={(event) => menuAction(element, event.detail)}
+              {/* The header: the card's title, the narrow page's full-height
+                  toggle, and Close. */}
+              <ui.View direction="row" gap="sm" align="center" justify="between">
+                <ui.Text weight="semibold">{t("chrome.layers")}</ui.Text>
+                <ui.View direction="row" gap="none" align="center">
+                  <ui.IconButton
+                    label={t("chrome.expandLayers")}
+                    icon="chevrons-down"
+                    isSelected={layersFullHeight}
+                    onPress={() => setLayersFullHeight((full) => !full)}
                   />
+                  <ui.IconButton
+                    label={t("chrome.closeLayers")}
+                    icon="x"
+                    onPress={() => setLayersOpen(false)}
+                  />
+                </ui.View>
+              </ui.View>
+              {/* The Elements list: one row per Element, topmost first. Each
+                  row is plain buttons, so Tab walks it: the row itself selects
+                  the Element and shows its name over its kind, the eye hides
+                  or shows it, and the menu holds the rest. */}
+              {rows.length === 0 ? (
+                <ui.Text size="sm" tone="muted">
+                  {t("elements.empty")}
+                </ui.Text>
+              ) : null}
+              <ui.List marker="none">
+                {rows.map((element) => (
+                  <ui.ListItem key={element.id}>
+                    <ui.View direction="row" gap="none" align="center">
+                      <ui.Button
+                        variant={element.id === snapshot.selectedId ? "secondary" : "ghost"}
+                        size="sm"
+                        onPress={() => editor.select(element.id)}
+                      >
+                        <ui.Text size="sm" weight="medium">
+                          {element.name}
+                        </ui.Text>
+                        <ui.Text size="sm" tone="muted">
+                          {describe(element, t)}
+                        </ui.Text>
+                      </ui.Button>
+                      <ui.IconButton
+                        label={format(t("elements.hideFor"), { name: element.name })}
+                        icon={element.hidden ? "eye-off" : "eye"}
+                        isSelected={element.hidden}
+                        onPress={() => editor.setHidden(element.id, !element.hidden)}
+                      />
+                      <ui.Popover
+                        label={format(t("elements.moreFor"), { name: element.name })}
+                        icon="ellipsis"
+                        iconOnly
+                        isOpen={rowMenuFor === element.id}
+                        onOpenChange={(event) => setRowMenuFor(event.detail ? element.id : null)}
+                      >
+                        {rowMenuFor === element.id ? (
+                          <ui.View direction="column" gap="none">
+                            {menuItems(element).map((item) => (
+                              <ui.Button
+                                key={item.value}
+                                variant="ghost"
+                                size="sm"
+                                onPress={() => {
+                                  setRowMenuFor(null);
+                                  menuAction(element, item.value);
+                                }}
+                              >
+                                {item.label}
+                              </ui.Button>
+                            ))}
+                          </ui.View>
+                        ) : null}
+                      </ui.Popover>
+                    </ui.View>
+                  </ui.ListItem>
                 ))}
-              </ui.Collection>
+              </ui.List>
             </>
           ) : null}
         </ui.View>
@@ -1290,52 +1368,63 @@ function MapEditorView({
             propertiesMinimised ? (
               <ui.IconButton
                 label={t("chrome.restoreProperties")}
-                icon="panel-right-open"
+                icon="sliders-horizontal"
                 onPress={() => setPropertiesMinimised(false)}
               />
             ) : (
               <>
-                <ui.Text weight="semibold">{t("properties.label")}</ui.Text>
-                {/* The header (#778): the selection's name, its Hidden and Locked
-                    switches, and the Minimise button. */}
-                <ui.View direction="row" gap="sm" align="center" justify="between" wrap>
-                  <ui.View direction="row" gap="sm" align="center" wrap>
-                    {selected === null ? null : (
-                      <ui.TextField
-                        key={`properties-name-${propertiesFocus}`}
-                        label={t("properties.name")}
-                        value={selected.name}
-                        isRequired
-                        autoFocus={propertiesFocus > 0}
-                        onChange={(event) => editor.rename(selected.id, event.detail)}
+                {/* The header (#778): the selection's name (or the card's
+                    title with nothing selected) with every control on one
+                    centred row at its right (Hidden, Locked, the narrow page's
+                    full-height toggle, Minimise), and the Name field below it
+                    at the card's full width. The field stays inside the header
+                    block: inserted as a direct child of the card, beside the
+                    rows a new selection adds, the host refused the batch. */}
+                <ui.View direction="column" gap="sm">
+                  <ui.View direction="row" gap="sm" align="center" justify="between">
+                    <ui.Text weight="semibold">
+                      {selected === null ? t("properties.label") : selected.name}
+                    </ui.Text>
+                    <ui.View direction="row" gap="none" align="center">
+                      {selected === null ? null : (
+                        <ui.IconButton
+                          label={t("properties.hidden")}
+                          icon={selected.hidden ? "eye-off" : "eye"}
+                          isSelected={selected.hidden}
+                          onPress={() => editor.setHidden(selected.id, !selected.hidden)}
+                        />
+                      )}
+                      {selected === null ? null : (
+                        <ui.IconButton
+                          label={t("properties.locked")}
+                          icon={selected.locked ? "lock" : "lock-open"}
+                          isSelected={selected.locked}
+                          onPress={() => editor.setLocked(selected.id, !selected.locked)}
+                        />
+                      )}
+                      <ui.IconButton
+                        label={t("chrome.expandProperties")}
+                        icon="chevrons-down"
+                        isSelected={propertiesFullHeight}
+                        onPress={() => setPropertiesFullHeight((full) => !full)}
                       />
-                    )}
-                    {selected === null ? null : (
-                      <ui.Switch
-                        label={t("properties.hidden")}
-                        isSelected={selected.hidden}
-                        onChange={(event) => editor.setHidden(selected.id, event.detail)}
+                      <ui.IconButton
+                        label={t("chrome.minimiseProperties")}
+                        icon="minus"
+                        onPress={() => setPropertiesMinimised(true)}
                       />
-                    )}
-                    {selected === null ? null : (
-                      <ui.Switch
-                        label={t("properties.locked")}
-                        isSelected={selected.locked}
-                        onChange={(event) => editor.setLocked(selected.id, event.detail)}
-                      />
-                    )}
+                    </ui.View>
                   </ui.View>
-                  <ui.IconButton
-                    label={t("chrome.expandProperties")}
-                    icon="chevrons-down"
-                    isSelected={propertiesFullHeight}
-                    onPress={() => setPropertiesFullHeight((full) => !full)}
-                  />
-                  <ui.IconButton
-                    label={t("chrome.minimiseProperties")}
-                    icon="chevrons-up"
-                    onPress={() => setPropertiesMinimised(true)}
-                  />
+                  {selected === null ? null : (
+                    <ui.TextField
+                      key={`properties-name-${propertiesFocus}`}
+                      label={t("properties.name")}
+                      value={selected.name}
+                      isRequired
+                      autoFocus={propertiesFocus > 0}
+                      onChange={(event) => editor.rename(selected.id, event.detail)}
+                    />
+                  )}
                 </ui.View>
 
                 {/* With no Map Line selected the select shows the style a new Pen

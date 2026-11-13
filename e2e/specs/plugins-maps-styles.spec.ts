@@ -59,10 +59,11 @@ const pageBackground = (page: Page) => mapFrame(page).locator("svg > rect").firs
 /** The ink the Map Line paints, which follows the Style's ink until it overrides it. */
 const drawnLine = (page: Page) => mapFrame(page).locator("g[data-element-id] path.map-line");
 
-/** The Elements list and one row in it. */
-const elementsList = (page: Page) => page.getByRole("listbox", { name: "Elements" });
+/** The Layers card's Elements list, and one Element's row button in it. */
+const elementsList = (page: Page) =>
+  page.getByRole("list").filter({ has: page.getByRole("button", { name: /^More actions for / }) });
 const elementRow = (page: Page, name: string) =>
-  elementsList(page).getByRole("option", { name: new RegExp(`^${name}`) });
+  elementsList(page).getByRole("button", { name: new RegExp(`^${name}`) });
 
 /**
  * The top-right pill's Map Style trigger (#778): icon-only, named "Map Style", so

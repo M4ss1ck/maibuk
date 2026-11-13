@@ -32,10 +32,11 @@ const mapFrame = (page: Page): FrameLocator =>
   page.frameLocator('[data-plugin-frame="embedded"] iframe');
 const surface = (page: Page) => mapFrame(page).locator("svg");
 
-/** The Elements list and one row in it. */
-const elementsList = (page: Page) => page.getByRole("listbox", { name: "Elements" });
+/** The Layers card's Elements list, and one Element's row button in it. */
+const elementsList = (page: Page) =>
+  page.getByRole("list").filter({ has: page.getByRole("button", { name: /^More actions for / }) });
 const elementRow = (page: Page, name: string) =>
-  elementsList(page).getByRole("option", { name: new RegExp(`^${name}`) });
+  elementsList(page).getByRole("button", { name: new RegExp(`^${name}`) });
 
 /** The Map Line path the Frame draws for an Element. */
 const drawnLine = (page: Page) => mapFrame(page).locator("g[data-element-id] path.map-line");
@@ -150,7 +151,8 @@ test.describe("Maps Shape tools, Place buttons, and Shape number fields @wf:plug
 
     // The finished drag named the Shape and selected it: the Elements list and
     // the properties panel show what the Worker stored.
-    await expect(elementsList(page).getByRole("option")).toHaveCount(1);
+    const rows = elementsList(page).getByRole("button", { name: /^More actions for / });
+    await expect(rows).toHaveCount(1);
     await expect(elementRow(page, "Ellipse 1")).toBeVisible();
     const width = numberField(page, "Width (mm)");
     const height = numberField(page, "Height (mm)");

@@ -14,13 +14,7 @@
 import type { FrameLocator, Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { eraseAcross } from "../support/frame-stroke";
-import {
-  expectFocusWithin,
-  isFocusWithin,
-  leaveFrame,
-  pressUntilFocused,
-  tabTo,
-} from "../support/keyboard";
+import { leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
 import { openLayers } from "../support/maps-layers";
 
@@ -37,10 +31,14 @@ const mapFrame = (page: Page): FrameLocator =>
 const frameElement = (page: Page) => page.locator('[data-plugin-frame="embedded"] iframe');
 const surface = (page: Page) => mapFrame(page).locator("#surface");
 
-/** The Elements list and one row in it. */
-const elementsList = (page: Page) => page.getByRole("listbox", { name: "Elements" });
+/** The Layers card's Elements list, and one Element's row button in it. */
+const elementsList = (page: Page) =>
+  page.getByRole("list").filter({ has: page.getByRole("button", { name: /^More actions for / }) });
 const elementRow = (page: Page, name: string) =>
-  elementsList(page).getByRole("option", { name: new RegExp(`^${name}`) });
+  elementsList(page).getByRole("button", { name: new RegExp(`^${name}`) });
+/** The row's More actions trigger, which opens its menu of plain buttons. */
+const rowMenuTrigger = (page: Page, name: string) =>
+  page.getByRole("button", { name: `More actions for ${name}`, exact: true });
 
 /** Every non-hidden Element the Frame draws, and every path it draws for one. */
 const drawnElements = (page: Page) => mapFrame(page).locator("[data-element-id]");
@@ -136,39 +134,35 @@ async function focusBack(page: Page): Promise<void> {
   });
 }
 
-/** Focuses the Elements list, from the panel control before it. */
-async function focusElements(page: Page): Promise<void> {
-  await focusBack(page);
-  const list = elementsList(page);
-  // The floating chrome (#778) puts the belt's eleven tool buttons between the
-  // pill's Back button and the Elements list, so the walk allows for them.
-  for (let i = 0; i < 20 && !(await isFocusWithin(list)); i++) await page.keyboard.press("Tab");
-  await expectFocusWithin(list);
-}
-
-/** Focuses the selected Map Line's row in the Elements list. */
-async function focusLineRow(page: Page, name: string): Promise<Locator> {
+/**
+ * Tabs from the panel's first control to an Element's row and selects it: the
+ * rows are plain buttons, so Tab is how the list is reached.
+ */
+async function selectRow(page: Page, name: string): Promise<Locator> {
   const row = elementRow(page, name);
-  await focusElements(page);
-  await page.keyboard.press("Home");
-  await pressUntilFocused(page, "ArrowDown", row, { max: 10 });
+  await focusBack(page);
+  await tabTo(page, row, { max: 200 });
+  await expect(row).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("textbox", { name: "Name" })).toHaveValue(new RegExp(`^${name}`));
   return row;
 }
 
 /**
- * Opens the Map Line's properties panel through its Item Menu, which selects
- * the line and lands focus on the panel's Name field.
+ * Opens the Map Line's properties panel through its row menu, which selects the
+ * line and lands focus on the panel's Name field.
  */
 async function openProperties(page: Page, name: string): Promise<void> {
-  await focusLineRow(page, name);
-  await page.keyboard.press("Shift+F10");
-  const menu = page.getByRole("menu");
-  await expect(menu).toBeVisible();
-  await pressUntilFocused(page, "ArrowDown", menu.getByRole("menuitem", { name: "Properties" }), {
-    max: 20,
-  });
+  await selectRow(page, name);
+  await tabTo(page, rowMenuTrigger(page, name), { max: 5 });
   await page.keyboard.press("Enter");
-  await expect(menu).toBeHidden();
+  const dialog = page
+    .getByRole("dialog")
+    .filter({ has: page.getByRole("button", { name: "Properties", exact: true }) });
+  const item = dialog.getByRole("button", { name: "Properties", exact: true });
+  await tabTo(page, item, { max: 15 });
+  await page.keyboard.press("Enter");
+  await expect(dialog).toBeHidden();
   await expect(page.getByRole("textbox", { name: "Name" })).toBeFocused();
 }
 
@@ -184,8 +178,8 @@ const lineStyleTrigger = (page: Page) => page.getByRole("button", { name: /Line 
 /** Picks one option of the Line style select by keyboard. */
 async function pickLineStyle(page: Page, option: string): Promise<void> {
   const trigger = lineStyleTrigger(page);
-  // The panel's header (#778) puts the name, the two switches, and the
-  // Minimise button before the select, which is where focus starts.
+  // The panel's header (#778) puts the name, the Hidden and Locked buttons, and
+  // the Minimise button before the select, which is where focus starts.
   await tabTo(page, trigger, { max: 20 });
   await page.keyboard.press("Enter");
   const item = page.getByRole("option", { name: option, exact: true });
@@ -220,9 +214,11 @@ function pathBounds(d: string): [number, number, number, number] {
   return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
 }
 
-/** The Elements rows' text, top of the list first. */
+/** The Elements rows' names, top of the list first. */
 async function elementNames(page: Page): Promise<string[]> {
-  return elementsList(page).getByRole("option").allTextContents();
+  return elementsList(page)
+    .locator("li > div > button:first-child > p:first-child")
+    .allTextContents();
 }
 
 test.use({
@@ -245,8 +241,8 @@ test.describe("Maps Pen, Eraser, line styles, and Roughen @wf:plugins-maps-pen @
 
     // The Worker turns the finished Pen line into a Map Line, names it, and
     // selects it: the row is the drawing's accessible view.
-    const row = await focusLineRow(page, "Map Line 1");
-    await expect(row).toHaveAttribute("aria-selected", "true");
+    const row = await selectRow(page, "Map Line 1");
+    await expect(row).toBeFocused();
     await expect(drawnElements(page)).toHaveCount(1);
 
     // Four points with straight segments, and the closing Z the last Enter gave.
@@ -317,7 +313,9 @@ test.describe("Maps Pen, Eraser, line styles, and Roughen @wf:plugins-maps-pen @
     const middle = (top + bottom) / 2;
     await eraseAcross(page, mapFrame(page).locator("svg"), [left - 3, middle], [right + 3, middle]);
 
-    await expect(elementsList(page).getByRole("option")).toHaveCount(2);
+    // Two rows, one More actions trigger each.
+    const rows = elementsList(page).getByRole("button", { name: /^More actions for / });
+    await expect(rows).toHaveCount(2);
     const names = await elementNames(page);
     expect(names.filter((name) => name.startsWith("Map Line 1 2"))).toHaveLength(1);
     expect(names.filter((name) => /^Map Line 1(?! 2)/.test(name))).toHaveLength(1);

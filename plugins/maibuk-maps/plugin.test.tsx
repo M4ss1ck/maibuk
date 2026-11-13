@@ -544,29 +544,44 @@ async function openEditor(
   return { host, runtime };
 }
 
-/** Focuses a row in the Elements list by keyboard and selects it with Space. */
+/** The Elements list the Layers card draws: the page's one list. */
+function elementsList(): HTMLElement {
+  return screen.getByRole("list");
+}
+
+/**
+ * Tabs to a row of the Elements list and selects it with Enter. Every row is
+ * plain buttons, so Tab walks the list; the selection shows in the Properties
+ * card's Name field.
+ */
 async function selectRow(user: User, name: string): Promise<HTMLElement> {
   await openLayers(user);
-  const list = await screen.findByRole("listbox", { name: en["elements.label"] });
-  const row = within(list).getByRole("option", { name: new RegExp(`^${name}`) });
-  for (let i = 0; i < 120 && !list.contains(document.activeElement); i++) await user.tab();
-  await user.keyboard("{Home}");
-  for (let i = 0; i < 10 && document.activeElement !== row; i++) await user.keyboard("{ArrowDown}");
-  if (row.getAttribute("aria-selected") !== "true") await user.keyboard(" ");
-  await waitFor(() => expect(row).toHaveAttribute("aria-selected", "true"));
+  const list = await screen.findByRole("list");
+  const row = within(list).getByRole("button", { name: new RegExp(`^${name}`) });
+  await tabTo(user, row, 300);
+  await user.keyboard("{Enter}");
+  await waitFor(() =>
+    expect(
+      (screen.getByRole("textbox", { name: en["properties.name"] }) as HTMLInputElement).value
+    ).toMatch(new RegExp(`^${name}`))
+  );
   return row;
 }
 
-/** Opens the focused row's Item Menu and runs one entry by keyboard. */
+/** Tabs from the focused row to its menu, opens it, and runs one entry by keyboard. */
 async function chooseRowMenu(user: User, label: string): Promise<void> {
-  await user.keyboard("{Shift>}{F10}{/Shift}");
-  const menu = await screen.findByRole("menu");
-  await user.keyboard("{Home}");
-  const target = within(menu).getByRole("menuitem", { name: label });
-  for (let i = 0; i < 10 && document.activeElement !== target; i++)
-    await user.keyboard("{ArrowDown}");
+  const item = (document.activeElement as HTMLElement | null)?.closest("li");
+  if (item === null || item === undefined) throw new Error("no row has focus");
+  const buttons = within(item).getAllByRole("button");
+  const trigger = buttons[buttons.length - 1];
+  await tabTo(user, trigger, 5);
   await user.keyboard("{Enter}");
-  await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
+  const dialog = await screen.findByRole("dialog");
+  const target = await within(dialog).findByRole("button", { name: label });
+  await tabTo(user, target, 10);
+  await user.keyboard("{Enter}");
+  // Only the menu's own popover shuts: an entry such as Rename opens a dialog.
+  await waitFor(() => expect(dialog).not.toBeInTheDocument());
 }
 
 /** Focuses a plain host button, away from the Elements list's own arrows. */
@@ -588,8 +603,8 @@ async function tabTo(user: User, element: HTMLElement, max = 120): Promise<void>
 /** Tabs back into the Elements list, so a row can be picked again. */
 async function backToRows(user: User): Promise<HTMLElement> {
   await openLayers(user);
-  const list = screen.getByRole("listbox", { name: en["elements.label"] });
-  for (let i = 0; i < 120 && !list.contains(document.activeElement); i++)
+  const list = elementsList();
+  for (let i = 0; i < 300 && !list.contains(document.activeElement); i++)
     await user.tab({ shift: true });
   return list;
 }
@@ -1209,9 +1224,9 @@ describe("Map editor page", () => {
       expect(screen.getByRole("button", { name: en["map.backToMaps"] })).toBeInTheDocument();
       // The Layers card starts shut (#778), so its Elements list is not drawn
       // until the author asks for it.
-      expect(screen.queryByRole("listbox", { name: en["elements.label"] })).toBeNull();
+      expect(screen.queryByRole("list")).toBeNull();
       await openLayers(user);
-      expect(screen.getByRole("listbox", { name: en["elements.label"] })).toBeInTheDocument();
+      expect(elementsList()).toBeInTheDocument();
       await editorPage.unmount();
     } finally {
       await host.stop();
@@ -1308,13 +1323,13 @@ describe("Map editor page", () => {
     try {
       const user = userEvent.setup();
       await selectRow(user, "Line two");
-      const list = screen.getByRole("listbox", { name: en["elements.label"] });
-      const first = within(list).getByRole("option", { name: /^Line one/ });
+      const list = elementsList();
+      const first = within(list).getByRole("button", { name: /^Line one/ });
 
-      // ArrowDown is the list's own: focus moves, and the selected Map Line
-      // stays where it was.
-      await user.keyboard("{ArrowDown}");
-      await waitFor(() => expect(document.activeElement).toBe(first));
+      // Tab walks the rows: focus moves, and the selected Map Line stays where
+      // it was.
+      await tabTo(user, first, 5);
+      expect(document.activeElement).toBe(first);
       expect(runtime.editor?.getSnapshot().selectedId).toBe("e2");
       await runtime.editor?.flush();
       expect(linePoints(storage, 1)).toEqual([
@@ -1399,7 +1414,7 @@ describe("Map editor page", () => {
       await runtime.editor?.flush();
       expect(storedMap(storage).elements.map((element) => element.id)).toEqual(["e2"]);
       await waitFor(() =>
-        expect(screen.queryByRole("option", { name: /^Coastline/ })).not.toBeInTheDocument()
+        expect(screen.queryByRole("button", { name: /^Coastline/ })).not.toBeInTheDocument()
       );
 
       await page.unmount();
@@ -1942,22 +1957,20 @@ describe("Map editor page", () => {
       await runtime.editor?.flush();
 
       await openLayers(user);
-      const list = await screen.findByRole("listbox", { name: en["elements.label"] });
-      expect(await within(list).findByRole("option", { name: /^Fill 1/ })).toBeInTheDocument();
+      const list = await screen.findByRole("list");
+      expect(await within(list).findByRole("button", { name: /^Fill 1/ })).toBeInTheDocument();
       const poured = storedMap(storage).elements.find(
         (element): element is MapFillElement => element.kind === "fill"
       );
       expect(poured).toMatchObject({ name: "Fill 1", content: { color: "land" } });
       expect(runtime.editor?.getSnapshot().selectedId).toBe(poured?.id);
-      expect(screen.getByRole("listbox", { name: en["elements.label"] })).toHaveTextContent(
-        en["element.kind.fill"]
-      );
+      expect(elementsList()).toHaveTextContent(en["element.kind.fill"]);
 
       // Undo by its Shortcut takes the Fill off the list again.
       await focusPanelButton(user);
       await user.keyboard("{Control>}z{/Control}");
       await waitFor(() =>
-        expect(within(list).queryByRole("option", { name: /^Fill/ })).not.toBeInTheDocument()
+        expect(within(list).queryByRole("button", { name: /^Fill/ })).not.toBeInTheDocument()
       );
       await runtime.editor?.flush();
       expect(storedMap(storage).elements.some((element) => element.kind === "fill")).toBe(false);
@@ -2171,9 +2184,11 @@ describe("Map editor page", () => {
       });
       expect(width).toBeEnabled();
 
-      const locked = screen.getByRole("switch", { name: en["properties.locked"] });
+      const locked = screen.getByRole("button", { name: en["properties.locked"] });
+      expect(locked).toHaveAttribute("aria-pressed", "false");
       await tabTo(user, locked, 120);
       await user.keyboard(" ");
+      await waitFor(() => expect(locked).toHaveAttribute("aria-pressed", "true"));
       await waitFor(() =>
         expect(screen.getByRole("textbox", { name: en["properties.shape.width"] })).toBeDisabled()
       );
@@ -2626,11 +2641,7 @@ describe("Map editor page", () => {
       // The description reaches the page over the Remote UI bridge, one hop
       // after the row itself, so the assertion waits for it.
       await openLayers(user);
-      await waitFor(() =>
-        expect(screen.getByRole("listbox", { name: en["elements.label"] })).toHaveTextContent(
-          en["element.kind.stamp"]
-        )
-      );
+      await waitFor(() => expect(elementsList()).toHaveTextContent(en["element.kind.stamp"]));
 
       // One arrow moves the selected Stamp one page millimetre.
       await focusPanelButton(user);
@@ -2788,11 +2799,7 @@ describe("Map editor page", () => {
 
       // The Elements list calls the row a Map Label.
       await openLayers(user);
-      await waitFor(() =>
-        expect(screen.getByRole("listbox", { name: en["elements.label"] })).toHaveTextContent(
-          en["element.kind.label"]
-        )
-      );
+      await waitFor(() => expect(elementsList()).toHaveTextContent(en["element.kind.label"]));
 
       // One arrow moves the selected label one page millimetre.
       await focusPanelButton(user);
@@ -3781,9 +3788,7 @@ describe("Map editor uploads (#756)", () => {
         expect(runtime.editor?.getSnapshot().elements[0]?.kind).toBe("image");
         await openLayers(userEvent.setup());
         await waitFor(() =>
-          expect(
-            screen.getByRole("listbox", { name: catalog["elements.label"] })
-          ).toHaveTextContent(catalog["element.kind.image"])
+          expect(screen.getByRole("list")).toHaveTextContent(catalog["element.kind.image"])
         );
         expect(catalog["element.kind.image"]).not.toBe("");
       } finally {
@@ -4235,7 +4240,7 @@ describe("the narrow editor's bar and regions (#779)", () => {
     try {
       const user = userEvent.setup();
       await openLayers(user);
-      const list = await screen.findByRole("listbox", { name: en["elements.label"] });
+      const list = await screen.findByRole("list");
 
       const full = await screen.findByRole("button", { name: en["chrome.expandLayers"] });
       expect(full).toHaveAttribute("aria-pressed", "false");
@@ -4246,12 +4251,12 @@ describe("the narrow editor's bar and regions (#779)", () => {
       // The region is still the Layers card and holds the same list: the toggle
       // changes how tall the region draws, not what it lists. Its geometry is
       // `@wf:plugins-maps-layout`'s, measured in a real browser (#779).
-      expect(screen.getByRole("listbox", { name: en["elements.label"] })).toBe(list);
-      expect(within(list).getByRole("option", { name: /^Fill 1/ })).toBeInTheDocument();
+      expect(elementsList()).toBe(list);
+      expect(within(list).getByRole("button", { name: /^Fill 1/ })).toBeInTheDocument();
 
       await user.keyboard("{Enter}");
       await waitFor(() => expect(full).toHaveAttribute("aria-pressed", "false"));
-      expect(screen.getByRole("listbox", { name: en["elements.label"] })).toBe(list);
+      expect(elementsList()).toBe(list);
 
       await page.unmount();
     } finally {
@@ -4274,11 +4279,9 @@ describe("the floating editor's chrome (#778)", () => {
       expect(runtime.editor?.getSnapshot().tool).toBe("pencil");
 
       // The Layers card starts shut, and its toggle is the way in.
-      expect(screen.queryByRole("listbox", { name: en["elements.label"] })).toBeNull();
+      expect(screen.queryByRole("list")).toBeNull();
       await openLayers(user);
-      expect(
-        await screen.findByRole("listbox", { name: en["elements.label"] })
-      ).toBeInTheDocument();
+      expect(await screen.findByRole("list")).toBeInTheDocument();
 
       await page.unmount();
     } finally {
@@ -4313,9 +4316,7 @@ describe("the floating editor's chrome (#778)", () => {
 
       // The toggle shuts the card again, and the list leaves the page with it.
       await closeLayers(user);
-      await waitFor(() =>
-        expect(screen.queryByRole("listbox", { name: en["elements.label"] })).toBeNull()
-      );
+      await waitFor(() => expect(screen.queryByRole("list")).toBeNull());
 
       await page.unmount();
     } finally {
@@ -4346,6 +4347,133 @@ describe("the floating editor's chrome (#778)", () => {
       ).toBeInTheDocument();
       // The controls are back: the Pen's line style is the card's first one.
       expect(await screen.findByLabelText(en["properties.lineStyle"])).toBeInTheDocument();
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("draws each Elements list row as its name over its kind, with Locked and no Hidden in words", async () => {
+    const storage = mapStorage([
+      {
+        ...line("e1", "Etiqueta de Pinar del Río", [
+          [10, 10],
+          [20, 20],
+        ]),
+        hidden: true,
+        locked: true,
+      },
+    ]);
+    const { host } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await openLayers(user);
+      const row = within(await screen.findByRole("list")).getByRole("button", {
+        name: /^Etiqueta de Pinar del Río/,
+      });
+      const [name, kind] = Array.from(row.children);
+      expect(name).toHaveTextContent(/^Etiqueta de Pinar del Río$/);
+      expect(kind).toHaveTextContent(`${en["element.kind.line"]} · ${en["elements.locked"]}`);
+      expect(row).not.toHaveTextContent(/Hidden/);
+      // Hidden reads off the row's own eye, pressed.
+      expect(
+        screen.getByRole("button", {
+          name: format(en["elements.hideFor"], { name: "Etiqueta de Pinar del Río" }),
+        })
+      ).toHaveAttribute("aria-pressed", "true");
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("says the Layers card is empty when the Map holds no Elements", async () => {
+    const storage = mapStorage([]);
+    const { host } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      await openLayers(userEvent.setup());
+      expect(await screen.findByText(en["elements.empty"])).toBeInTheDocument();
+      expect(screen.queryByRole("listitem")).toBeNull();
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("hides and shows an Element from its row's eye, and shuts Layers from its header, by keyboard", async () => {
+    const storage = mapStorage([
+      line("e1", "Line one", [
+        [10, 10],
+        [20, 20],
+      ]),
+    ]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await openLayers(user);
+      const eye = await screen.findByRole("button", {
+        name: format(en["elements.hideFor"], { name: "Line one" }),
+      });
+      expect(eye).toHaveAttribute("aria-pressed", "false");
+      await tabTo(user, eye, 300);
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(eye).toHaveAttribute("aria-pressed", "true"));
+      await runtime.editor?.flush();
+      expect(storedMap(storage).elements[0].hidden).toBe(true);
+      // The eye hides without selecting: the row stays a plain row.
+      expect(runtime.editor?.getSnapshot().selectedId).toBeNull();
+
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(eye).toHaveAttribute("aria-pressed", "false"));
+      await runtime.editor?.flush();
+      expect(storedMap(storage).elements[0].hidden).toBe(false);
+
+      const close = screen.getByRole("button", { name: en["chrome.closeLayers"] });
+      await tabTo(user, close, 300);
+      await user.keyboard("{Enter}");
+      await waitFor(() => expect(screen.queryByRole("list")).toBeNull());
+      expect(screen.getByRole("button", { name: en["chrome.layers"] })).toHaveAttribute(
+        "aria-pressed",
+        "false"
+      );
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("toggles Hidden and Locked from the Properties header by keyboard", async () => {
+    const storage = mapStorage([
+      line("e1", "Line one", [
+        [10, 10],
+        [20, 20],
+      ]),
+    ]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await selectRow(user, "Line one");
+      await closeLayers(user);
+      for (const [key, field] of [
+        ["properties.hidden", "hidden"],
+        ["properties.locked", "locked"],
+      ] as const) {
+        const toggle = screen.getByRole("button", { name: en[key] });
+        expect(toggle).toHaveAttribute("aria-pressed", "false");
+        await tabTo(user, toggle, 300);
+        await user.keyboard(" ");
+        await waitFor(() => expect(toggle).toHaveAttribute("aria-pressed", "true"));
+        await runtime.editor?.flush();
+        expect(storedMap(storage).elements[0][field]).toBe(true);
+      }
 
       await page.unmount();
     } finally {

@@ -37,6 +37,7 @@ import { INDEX_KEY, mapKey, type MapDocument, type MapLineElement } from "./maps
 import { MAP_EDITOR_CSS, MAP_PAGE_ID } from "./map-page";
 import { startMaps } from "./runtime";
 import en from "./locales/runtime/en.json";
+import { format } from "./i18n";
 
 /** The editor's root, and the Frame the stylesheet pins over the drawing. */
 const ROOT = "div[data-plugin-ui]";
@@ -186,7 +187,7 @@ function mountedCss(root: HTMLElement): string {
 }
 
 /** The states the stylesheet draws: every card filled, and every card shut. */
-type State = "open" | "closed";
+type State = "open" | "closed" | "minimised";
 
 interface Expectation {
   /** The selector exactly as `MAP_EDITOR_CSS` writes it, before scoping. */
@@ -265,8 +266,7 @@ const EXPECTATIONS: ReadonlyArray<Expectation> = [
   {
     selector: `${ROOT} > div:nth-child(4)`,
     state: "open",
-    expected: (mounted) =>
-      cardHolding(mounted.root, () => screen.getByRole("listbox", { name: en["elements.label"] })),
+    expected: (mounted) => cardHolding(mounted.root, () => screen.getByRole("list")),
   },
   {
     selector: `${ROOT} > div:nth-child(6)`,
@@ -297,34 +297,34 @@ const EXPECTATIONS: ReadonlyArray<Expectation> = [
   {
     // With both bottom regions open the narrow block splits the bottom half:
     // Insert and Layers above, and Properties below them (#779).
-    selector: `${ROOT}:has(> div:nth-child(6):not(:empty)) > div:nth-child(3)`,
+    selector: `${ROOT}:has(> div:nth-child(6) > div) > div:nth-child(3)`,
     state: "open",
     expected: (mounted) => slotThree(mounted),
   },
   {
-    selector: `${ROOT}:has(> div:nth-child(6):not(:empty)) > div:nth-child(4)`,
+    selector: `${ROOT}:has(> div:nth-child(6) > div) > div:nth-child(4)`,
     state: "open",
     expected: (mounted) => slotFour(mounted),
   },
   {
-    selector: `${ROOT}:has(> div:nth-child(3):not(:empty)) > div:nth-child(6)`,
+    selector: `${ROOT}:has(> div:nth-child(3):not(:empty)) > div:nth-child(6):has(> div)`,
     state: "open",
     expected: (mounted) => slotSix(mounted),
   },
   {
-    selector: `${ROOT}:has(> div:nth-child(4):not(:empty)) > div:nth-child(6)`,
+    selector: `${ROOT}:has(> div:nth-child(4):not(:empty)) > div:nth-child(6):has(> div)`,
     state: "open",
     expected: (mounted) => slotSix(mounted),
   },
   {
     // The full-height toggle, still the region it belongs to: Properties and
     // Layers each own one (#779, #775 review R2).
-    selector: `${ROOT}:has(> div:nth-child(4) > button[aria-pressed="true"]) > div:nth-child(4)`,
+    selector: `${ROOT}:has(> div:nth-child(4) > div:first-child button[aria-pressed="true"]) > div:nth-child(4)`,
     state: "open",
     expected: (mounted) => slotFour(mounted),
   },
   {
-    selector: `${ROOT}:has(> div:nth-child(6) button[aria-pressed="true"]) > div:nth-child(6)`,
+    selector: `${ROOT}:has(> div:nth-child(6) > div:first-child > div:first-child > div:last-child > button:nth-last-child(2)[aria-pressed="true"]) > div:nth-child(6)`,
     state: "open",
     expected: (mounted) => slotSix(mounted),
   },
@@ -352,37 +352,46 @@ const EXPECTATIONS: ReadonlyArray<Expectation> = [
     expected: () => screen.getByRole("button", { name: "Coast" }),
   },
   {
-    // The Properties header row, and the group it holds at its left: the card's
-    // title shares the header's top band with its two controls, right-aligned
-    // (#779).
-    selector: `${ROOT} > div:nth-child(6) > div:nth-child(2)`,
-    state: "open",
-    expected: () => headerRow(),
-  },
-  {
-    selector: `${ROOT} > div:nth-child(6) > p:nth-child(1)`,
-    state: "open",
-    expected: () => headerTitle(),
-  },
-  {
-    selector: `${ROOT} > div:nth-child(6) > div:nth-child(2) > div:nth-child(1)`,
+    // The Properties header (#778): the selection's name takes the row and ends
+    // in an ellipsis, and every control keeps its width at its right.
+    selector: `${ROOT} > div:nth-child(6) > div:first-child > div:first-child > p`,
     state: "open",
     expected: () => headerRow().children.item(0) as Element,
   },
   {
-    selector: `${ROOT} > div:nth-child(6) > div:nth-child(2) > button`,
-    state: "open",
-    expected: () => headerButtons(),
+    // Minimised, Properties is its restore button alone in a card that fits it.
+    selector: `${ROOT} > div:nth-child(6):has(> button:only-child)`,
+    state: "minimised",
+    expected: (mounted) => slotSix(mounted),
   },
   {
-    selector: `${ROOT} > div:nth-child(6) > div:nth-child(2) > button:first-of-type`,
+    // An Elements list row: the row button stacks the name over the kind, and
+    // the eye and the menu keep their width beside it.
+    selector: `${ROOT} > div:nth-child(4) > ul > li > div > button:first-child`,
     state: "open",
-    expected: () => screen.getByRole("button", { name: en["chrome.expandProperties"] }),
+    expected: () => rowButton(),
   },
   {
-    selector: `${ROOT} > div:nth-child(6) > div:nth-child(2) > button:last-of-type`,
+    selector: `${ROOT} > div:nth-child(4) > ul > li > div > button:first-child > p`,
     state: "open",
-    expected: () => screen.getByRole("button", { name: en["chrome.minimiseProperties"] }),
+    expected: () => Array.from(rowButton().children),
+  },
+  {
+    selector: `${ROOT} > div:nth-child(4) > ul > li > div > button:first-child > p:last-child`,
+    state: "open",
+    expected: () => rowButton().lastElementChild as Element,
+  },
+  {
+    selector: `${ROOT} > div:nth-child(4) > ul > li > div > button:last-child`,
+    state: "open",
+    expected: () =>
+      screen.getByRole("button", { name: format(en["elements.moreFor"], { name: "Line one" }) }),
+  },
+  {
+    // A hidden Element's row dims its name beside its pressed eye.
+    selector: `${ROOT} > div:nth-child(4) > ul > li > div:has(> button[aria-pressed="true"]) > button:first-child`,
+    state: "open",
+    expected: () => rowButton(),
   },
   {
     // The zoom cluster sits above the belt, or above whichever bottom region is
@@ -397,28 +406,33 @@ const EXPECTATIONS: ReadonlyArray<Expectation> = [
     expected: (mounted) => slot(mounted.root, 8),
   },
   {
-    selector: `${ROOT}:has(> div:nth-child(6):not(:empty)) > div:nth-child(8)`,
+    selector: `${ROOT}:has(> div:nth-child(6) > div) > div:nth-child(8)`,
     state: "open",
     expected: (mounted) => slot(mounted.root, 8),
   },
   {
     // A full-height region leaves no room above the middle, so the cluster moves
     // under the top bar instead (#775 review R2).
-    selector: `${ROOT}:has(> div:nth-child(4) > button[aria-pressed="true"]) > div:nth-child(8)`,
+    selector: `${ROOT}:has(> div:nth-child(4) > div:first-child button[aria-pressed="true"]) > div:nth-child(8)`,
     state: "open",
     expected: (mounted) => slot(mounted.root, 8),
   },
   {
-    selector: `${ROOT}:has(> div:nth-child(6) button[aria-pressed="true"]) > div:nth-child(8)`,
+    selector: `${ROOT}:has(> div:nth-child(6) > div:first-child > div:first-child > div:last-child > button:nth-last-child(2)[aria-pressed="true"]) > div:nth-child(8)`,
     state: "open",
     expected: (mounted) => slot(mounted.root, 8),
   },
   {
     // The desktop width hides the full-height toggles, and stacks Insert over
     // Layers when both are open (#775 review R2).
-    selector: `${ROOT} > div:nth-child(4) > button`,
+    selector: `${ROOT} > div:nth-child(4) > div:first-child > div > button:first-child`,
     state: "open",
     expected: () => screen.getByRole("button", { name: en["chrome.expandLayers"] }),
+  },
+  {
+    selector: `${ROOT} > div:nth-child(6) > div:first-child > div:first-child > div:last-child > button:nth-last-child(2)`,
+    state: "open",
+    expected: () => screen.getByRole("button", { name: en["chrome.expandProperties"] }),
   },
   {
     selector: `${ROOT}:has(> div:nth-child(4):not(:empty)) > div:nth-child(3)`,
@@ -481,27 +495,17 @@ function barButtons(): Element[] {
   ];
 }
 
-/** The Properties header row: the row the Minimise control sits in. */
+/** The Properties header row: the row whose right-hand group holds Minimise. */
 function headerRow(): HTMLElement {
   const button = screen.getByRole("button", { name: en["chrome.minimiseProperties"] });
-  const row = button.parentElement;
+  const row = button.parentElement?.parentElement ?? null;
   if (row === null) throw new Error("the Minimise control has no header row");
   return row;
 }
 
-/** The Properties card's title, which shares the header's top band. */
-function headerTitle(): Element {
-  const title = headerRow().previousElementSibling;
-  if (title === null) throw new Error("the header row has no title above it");
-  return title;
-}
-
-/** The header row's two controls: the full-height toggle, then Minimise. */
-function headerButtons(): Element[] {
-  return [
-    screen.getByRole("button", { name: en["chrome.expandProperties"] }),
-    screen.getByRole("button", { name: en["chrome.minimiseProperties"] }),
-  ];
+/** The Elements list's one row button: the Map's only line, by name. */
+function rowButton(): HTMLElement {
+  return screen.getByRole("button", { name: /^Line one/ });
 }
 
 /** Fills every card: Insert shows, so does Layers, and the line is selected. */
@@ -509,8 +513,10 @@ async function fillEveryCard(mounted: Mounted): Promise<void> {
   const user = userEvent.setup();
   mounted.editor.setTool("insert");
   await user.click(await screen.findByRole("button", { name: en["chrome.layers"] }));
-  await screen.findByRole("listbox", { name: en["elements.label"] });
+  await screen.findByRole("list");
   mounted.editor.select("e1");
+  // The line hidden, so its row draws the dimmed name beside the pressed eye.
+  mounted.editor.setHidden("e1", true);
   await screen.findByRole("button", { name: en["chrome.minimiseProperties"] });
   // Both full-height toggles pressed, so the stylesheet's own region selectors
   // match the Layers and Properties cards (#779, #775 review R2).
@@ -567,6 +573,11 @@ describe("the floating editor's stylesheet against the host's DOM", () => {
           expect(matched[index], selector).toBe(element);
         }
       }
+      // The minimised card's selectors stay off the open card.
+      for (const expectation of EXPECTATIONS.filter((one) => one.state === "minimised")) {
+        const selector = `${scope} ${expectation.selector}`;
+        expect(document.querySelectorAll(selector).length, selector).toBe(0);
+      }
     } finally {
       await mounted.unmount();
     }
@@ -589,8 +600,38 @@ describe("the floating editor's stylesheet against the host's DOM", () => {
       for (const index of [3, 4, 6]) {
         expect(window.getComputedStyle(slot(mounted.root, index)).display).toBe("none");
       }
-      expect(screen.queryByRole("listbox", { name: en["elements.label"] })).toBeNull();
+      expect(screen.queryByRole("list")).toBeNull();
       expect(screen.queryByRole("button", { name: en["chrome.minimiseProperties"] })).toBeNull();
+    } finally {
+      await mounted.unmount();
+    }
+  });
+
+  it("fits the minimised Properties card to its restore button, and keeps the open card's selectors off it", async () => {
+    const mounted = await mount();
+    try {
+      const user = userEvent.setup();
+      mounted.editor.select("e1");
+      await user.click(
+        await screen.findByRole("button", { name: en["chrome.minimiseProperties"] })
+      );
+      const restore = await screen.findByRole("button", { name: en["chrome.restoreProperties"] });
+      expect(cardOf(mounted.root, restore)).toBe(slotSix(mounted));
+      const scope = `[data-plugin-ui="${mounted.scope}"]`;
+      for (const expectation of EXPECTATIONS.filter((one) => one.state === "minimised")) {
+        const selector = `${scope} ${expectation.selector}`;
+        const matched = Array.from(document.querySelectorAll(selector));
+        expect(matched.length, selector).toBe(1);
+        expect(matched[0], selector).toBe(expectation.expected(mounted));
+      }
+      // No rule for the open card reaches the minimised one: it neither splits
+      // the narrow page's bottom half nor lifts the zoom cluster.
+      for (const selector of [
+        `${ROOT}:has(> div:nth-child(6) > div) > div:nth-child(8)`,
+        `${ROOT} > div:nth-child(6) > div:first-child > div:first-child > p`,
+      ]) {
+        expect(document.querySelectorAll(`${scope} ${selector}`).length, selector).toBe(0);
+      }
     } finally {
       await mounted.unmount();
     }

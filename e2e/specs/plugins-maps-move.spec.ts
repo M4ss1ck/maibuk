@@ -31,10 +31,11 @@ const mapFrame = (page: Page): FrameLocator =>
   page.frameLocator('[data-plugin-frame="embedded"] iframe');
 const surface = (page: Page) => mapFrame(page).locator("svg");
 
-/** The Elements list and one row in it. */
-const elementsList = (page: Page) => page.getByRole("listbox", { name: "Elements" });
+/** The Layers card's Elements list, and one Element's row button in it. */
+const elementsList = (page: Page) =>
+  page.getByRole("list").filter({ has: page.getByRole("button", { name: /^More actions for / }) });
 const elementRow = (page: Page, name: string) =>
-  elementsList(page).getByRole("option", { name: new RegExp(`^${name}`) });
+  elementsList(page).getByRole("button", { name: new RegExp(`^${name}`) });
 
 /** The ink of the Map Lines the Frame draws, and the Fills it draws filled. */
 const linePath = (page: Page) =>
@@ -171,7 +172,7 @@ test.describe("Maps Select drag @wf:plugins-maps-move @sc:plugin.maibuk-maps.sel
     // the host's Properties panel settle, which can resize the Frame, before
     // the drag's screen points are worked out from the Frame's box.
     await clickPagePoint(page, surface(page), RECTANGLE_EDGE_MM);
-    await expect(elementRow(page, "Rectangle 1")).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("textbox", { name: "Name" })).toHaveValue(/^Rectangle 1/);
     await expectTopLeft(linePath(page), [RECTANGLE_LEFT_MM, RECTANGLE_TOP_MM]);
     await dragPagePoint(
       page,
@@ -247,7 +248,11 @@ test.describe("Maps Select drag @wf:plugins-maps-move @sc:plugin.maibuk-maps.sel
     // The floating chrome puts the pill, the eleven tool buttons and the cards
     // between the author and the Insert card's footer.
     await tabTo(page, place, { max: 120 });
-    const stamp = ((await place.textContent()) ?? "").replace(/^Place /, "");
+    const stamp = (
+      (await place.getAttribute("aria-label")) ??
+      (await place.textContent()) ??
+      ""
+    ).replace(/^Place /, "");
     await page.keyboard.press("Enter");
     await expect(elementRow(page, stamp)).toBeVisible();
     await expect(drawnElements(page)).toHaveCount(1);
@@ -256,9 +261,10 @@ test.describe("Maps Select drag @wf:plugins-maps-move @sc:plugin.maibuk-maps.sel
     // and a press on the Stamp that never travels picks it again in place.
     await pickTool(page, "v", "Select", "select");
     await clickPagePoint(page, surface(page), [20, 20]);
-    await expect(elementRow(page, stamp)).toHaveAttribute("aria-selected", "false");
+    // Nothing is selected, so the properties panel shows no Name field.
+    await expect(page.getByRole("textbox", { name: "Name" })).toHaveCount(0);
     await clickPagePoint(page, surface(page), PAGE_CENTRE_MM);
-    await expect(elementRow(page, stamp)).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("textbox", { name: "Name" })).toHaveValue(new RegExp(`^${stamp}`));
     const drawn = drawnElements(page).first();
     const [x, y] = await stampPoint(drawn);
     expect(x).toBeCloseTo(PAGE_CENTRE_MM[0], 1);

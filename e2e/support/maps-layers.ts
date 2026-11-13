@@ -51,7 +51,7 @@ export async function openMap(page: Page, name: string): Promise<void> {
 export const layersToggle = (page: Page) =>
   page.getByRole("button", { name: "Layers", exact: true });
 
-/** Opens the Layers card, when it is shut, and waits for the Elements list. */
+/** Opens the Layers card, when it is shut, and waits for its header. */
 export async function openLayers(page: Page): Promise<void> {
   const toggle = layersToggle(page);
   if ((await toggle.getAttribute("aria-pressed")) !== "true") {
@@ -59,7 +59,7 @@ export async function openLayers(page: Page): Promise<void> {
     await page.keyboard.press("Enter");
   }
   await expect(toggle).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByRole("listbox", { name: "Elements" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Close Layers" })).toBeVisible();
 }
 
 /** Shuts the Layers card, when it shows. */
@@ -70,5 +70,5 @@ export async function closeLayers(page: Page): Promise<void> {
     await page.keyboard.press("Enter");
   }
   await expect(toggle).toHaveAttribute("aria-pressed", "false");
-  await expect(page.getByRole("listbox", { name: "Elements" })).toBeHidden();
+  await expect(page.getByRole("button", { name: "Close Layers" })).toBeHidden();
 }
