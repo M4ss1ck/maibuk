@@ -4,7 +4,7 @@
   "name": "Maps",
   "description": "Design maps of your world, a region, or a country and its provinces, in color or print-ready ink.",
   "author": "Maibuk",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "apiVersion": "^0.1.11",
   "entry": "index.js",
   "platforms": ["web", "desktop"],
@@ -144,6 +144,12 @@
         "label": "Select tool",
         "contexts": ["map"],
         "defaults": [["v"]]
+      },
+      {
+        "id": "handTool",
+        "label": "Hand tool",
+        "contexts": ["map"],
+        "defaults": [["h"]]
       },
       {
         "id": "pencilTool",

@@ -66,6 +66,10 @@ _Avoid_: brush, freehand tool
 The editor tool that picks one Element on the Map, to move, rename, hide, lock, or delete it. Dragging an unlocked Map Line or Stamp moves it, as the arrow keys do.
 _Avoid_: pointer, arrow, cursor
 
+**Hand**:
+The editor tool that pans the view: a drag with the primary button or one finger slides the Map under the view and never picks or draws. Space held, the middle button, and a two-finger drag pan the same way under any tool.
+_Avoid_: pan tool, grab tool, move tool
+
 **Pen**:
 The editor tool that draws a Map Line point by point: each click adds a straight point, Shift+click adds a curved point, and clicking the first point again closes the line. Its keyboard form moves a crosshair with the arrows and adds points with Enter.
 _Avoid_: polyline tool, path tool, polygon tool

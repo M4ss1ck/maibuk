@@ -63,6 +63,15 @@
       #surface svg[data-tool="select"] {
         cursor: default;
       }
+      /* The Hand shows the open hand, and every pan in progress, whatever
+         started it, shows the closed one. */
+      #surface svg[data-tool="hand"] {
+        cursor: grab;
+      }
+      #surface svg[data-panning="true"],
+      #surface svg[data-panning="true"] * {
+        cursor: grabbing;
+      }
       /* With Select, an Element a drag can move shows the move cursor (#766),
          and the one being dragged keeps it while it follows the pointer. A
          drag never selects the Stamps' label text. */

@@ -5,6 +5,8 @@
 // here reads that viewBox: a zoom keeps the page point under the pointer where
 // it was on screen, a plain wheel leaves the view alone, and a pan moves the
 // drawing with the gesture while the Pencil draws nothing until Space is lifted.
+// The Hand tool pans on a plain drag, and a drag over a Map Line neither
+// selects nor moves it.
 // Zoom has a keyboard path (its Commands, covered by `plugins-maps-editor`); so
 // does picking a tool. The wheel and the drag themselves are
 // `support/frame-stroke.ts`, which explains why the pointer gestures sit outside
@@ -15,11 +17,11 @@
 import type { FrameLocator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import {
+  dragPan,
   drawStroke,
   fractionOfPagePoint,
   millimetresPerPixel,
   pagePointAt,
-  spaceDragPan,
   wheelAt,
 } from "../support/frame-stroke";
 import { tabTo } from "../support/keyboard";
@@ -39,6 +41,12 @@ const drawnElements = (page: Page) => mapFrame(page).locator("[data-element-id]"
 const POINTER: readonly [number, number] = [0.7, 0.3];
 const PAN_FROM: readonly [number, number] = [0.4, 0.45];
 const PAN_TO: readonly [number, number] = [0.6, 0.55];
+/**
+ * Where the Hand's drag presses: on the Pencil stroke `drawStroke` draws from
+ * (0.3, 0.35) to (0.6, 0.55), so Select would pick the Map Line there.
+ */
+const HAND_FROM: readonly [number, number] = [0.45, 0.45];
+const HAND_TO: readonly [number, number] = [0.6, 0.6];
 
 /** Starts on an open Map called Coastline, whose Frame draws its surface. */
 async function openCoastline(page: Page): Promise<void> {
@@ -91,7 +99,7 @@ test.use({
   builtInPlugins: [{ id: "maibuk-maps" }],
 });
 
-test.describe("Maps pointer view @wf:plugins-maps-pointer-view @sc:plugin.maibuk-maps.pencilTool @sandbox", () => {
+test.describe("Maps pointer view @wf:plugins-maps-pointer-view @sc:plugin.maibuk-maps.pencilTool @sc:plugin.maibuk-maps.handTool @sandbox", () => {
   test("zooms around the pointer on a Ctrl+wheel", async ({ page }) => {
     await openCoastline(page);
     await focusFrame(page);
@@ -147,7 +155,7 @@ test.describe("Maps pointer view @wf:plugins-maps-pointer-view @sc:plugin.maibuk
     // One pixel of the drawing surface, in page millimetres.
     const pixel = await millimetresPerPixel(surface(page));
 
-    await spaceDragPan(page, surface(page), PAN_FROM, PAN_TO);
+    await dragPan(page, surface(page), PAN_FROM, PAN_TO);
 
     // The drawing follows the gesture: the page point that was under the press
     // is under the release once the view has moved there, which is what a pan
@@ -171,5 +179,41 @@ test.describe("Maps pointer view @wf:plugins-maps-pointer-view @sc:plugin.maibuk
     // Releasing Space gave the Pencil back, and the next drag is a stroke.
     await drawStroke(page, surface(page));
     await expect(drawnElements(page)).toHaveCount(1);
+  });
+
+  test("pans on a plain drag with the Hand, over a Map Line it never picks or moves", async ({
+    page,
+  }) => {
+    await openCoastline(page);
+    await pickPencil(page);
+    await drawStroke(page, surface(page));
+    await expect(drawnElements(page)).toHaveCount(1);
+    const lineBefore = await drawnElements(page).first().innerHTML();
+    const selected = mapFrame(page).locator('[data-element-id][data-selected="true"]');
+    const selectedBefore = await selected.count();
+
+    // The Hand by its Shortcut, from the host page, as every tool is picked.
+    await page.keyboard.press("h");
+    await expect(page.getByRole("button", { name: "Hand", pressed: true })).toBeVisible();
+    await expect(mapFrame(page).locator('svg[data-tool="hand"]')).toBeVisible();
+
+    const pressed = await pagePointAt(surface(page), HAND_FROM);
+    const pixel = await millimetresPerPixel(surface(page));
+    await dragPan(page, surface(page), HAND_FROM, HAND_TO, { space: false });
+
+    // The same check the Space pan makes: the page point under the press is
+    // under the release, so the view moved with the drag.
+    await expect
+      .poll(async () => Math.abs((await pagePointAt(surface(page), HAND_TO))[0] - pressed[0]))
+      .toBeLessThan(2 * pixel);
+    await expect
+      .poll(async () => Math.abs((await pagePointAt(surface(page), HAND_TO))[1] - pressed[1]))
+      .toBeLessThan(2 * pixel);
+    await capture(page, "maps-hand-pan", { around: [frameElement(page)] });
+
+    // The drag drew nothing, changed no selection, and left the Map Line where it was.
+    await expect(drawnElements(page)).toHaveCount(1);
+    await expect(selected).toHaveCount(selectedBefore);
+    expect(await drawnElements(page).first().innerHTML()).toBe(lineBefore);
   });
 });

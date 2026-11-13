@@ -2856,8 +2856,15 @@ describe("pointer zoom and pan (#777)", () => {
   }
 
   /** One pointer event of a named kind of pointer, which jsdom has no class for. */
-  function pointerOf(type: string, x: number, y: number, pointerId: number, pointerType: string) {
-    const event = new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0 });
+  function pointerOf(
+    type: string,
+    x: number,
+    y: number,
+    pointerId: number,
+    pointerType: string,
+    button = 0
+  ) {
+    const event = new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button });
     Object.defineProperty(event, "pointerId", { value: pointerId });
     Object.defineProperty(event, "pointerType", { value: pointerType });
     svg().dispatchEvent(event);
@@ -2953,6 +2960,47 @@ describe("pointer zoom and pan (#777)", () => {
     frame.scene();
 
     expect(key(" ").defaultPrevented).toBe(true);
+  });
+
+  it("pans on a primary drag with the Hand, picks nothing, and shows the grab cursor state", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "hand", elements: [sceneElement()] });
+    expect(svg().getAttribute("data-tool")).toBe("hand");
+    expect(svg().getAttribute("data-panning")).toBe("false");
+
+    // The press lands on an Element, which Select would pick.
+    const line = document.querySelector('g[data-element-id="e1"] path.map-line');
+    if (line === null) throw new Error("the Element drew no line");
+    pointer(line, "pointerdown", 10, 10);
+    expect(svg().getAttribute("data-panning")).toBe("true");
+    pointer(svg(), "pointermove", 20, 15);
+    pointer(svg(), "pointerup", 20, 15);
+
+    // The Hand never selects, draws, or moves: the drag is one pan step.
+    expect(frame.port.messages).toEqual([{ kind: "pan", dx: -10, dy: -5 }]);
+    expect(svg().getAttribute("data-panning")).toBe("false");
+  });
+
+  it("pans on a one-finger drag with the Hand", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "hand" });
+
+    pointerOf("pointerdown", 10, 10, 1, "touch");
+    pointerOf("pointermove", 16, 13, 1, "touch");
+    pointerOf("pointerup", 16, 13, 1, "touch");
+
+    expect(frame.port.messages).toEqual([{ kind: "pan", dx: -6, dy: -3 }]);
+  });
+
+  it("ignores a right-button press with the Hand", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "hand" });
+
+    pointerOf("pointerdown", 10, 10, 1, "mouse", 2);
+    pointerOf("pointermove", 20, 15, 1, "mouse", 2);
+    pointerOf("pointerup", 20, 15, 1, "mouse", 2);
+
+    expect(frame.port.messages).toEqual([]);
   });
 
   it("pans on a middle-button drag and never draws", () => {

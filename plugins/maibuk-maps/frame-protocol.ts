@@ -32,6 +32,7 @@ import { resolveColor, styleOf } from "./styles";
 /** The editor tool the Frame should honour. */
 export type MapTool =
   | "select"
+  | "hand"
   | "pencil"
   | "pen"
   | "bucket"

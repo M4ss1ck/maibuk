@@ -52,6 +52,7 @@ export const MOVE_RIGHT_FAR = "moveRightFar";
 export const MOVE_UP_FAR = "moveUpFar";
 export const MOVE_DOWN_FAR = "moveDownFar";
 export const SELECT_TOOL = "selectTool";
+export const HAND_TOOL = "handTool";
 export const PENCIL_TOOL = "pencilTool";
 export const PEN_TOOL = "penTool";
 export const BUCKET_TOOL = "bucketTool";
@@ -357,6 +358,9 @@ function runEditorCommand(editor: MapEditor | null, id: string): void {
       break;
     case SELECT_TOOL:
       editor.setTool("select");
+      break;
+    case HAND_TOOL:
+      editor.setTool("hand");
       break;
     case PENCIL_TOOL:
       editor.setTool("pencil");

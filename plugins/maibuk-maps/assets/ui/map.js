@@ -29,7 +29,7 @@
   /**
    * @typedef {[number, number]} MapPoint
    * @typedef {"ellipse" | "rectangle" | "polygon"} ShapeKind
-   * @typedef {"select" | "pencil" | "pen" | "bucket" | "area" | "eraser" | "insert" | ShapeKind} MapTool
+   * @typedef {"select" | "hand" | "pencil" | "pen" | "bucket" | "area" | "eraser" | "insert" | ShapeKind} MapTool
    * @typedef {{ d: string, stroke: string | null, strokeWidth: number, dash: string | null, fill: string | null, fillRule?: "evenodd", opacity: number, transform?: string, clip?: string, hitOnly?: true }} LineShape
    * @typedef {{ text: string, x: number, y: number, size: number, fill: string, font?: string, letterSpacing?: number, halo?: { color: string, width: number }, path?: { id: string, d: string }, anchor: "start" | "middle" | "end", transform?: string }} TextShape
    * @typedef {{ kind: "image", assetId: string, x: number, y: number, width: number, height: number, rotation: number, opacity: number, tint?: string, clip?: string }} ImageShape
@@ -234,6 +234,7 @@
    */
   function readTool(raw) {
     if (
+      raw === "hand" ||
       raw === "pencil" ||
       raw === "pen" ||
       raw === "bucket" ||
@@ -1086,6 +1087,7 @@
         viewBox="${n(view.x)} ${n(view.y)} ${n(view.width)} ${n(view.height)}"
         preserveAspectRatio="xMidYMid meet"
         data-tool="${current.tool}"
+        data-panning="${panDrag === null ? "false" : "true"}"
         aria-hidden="true"
       >
         <rect
@@ -1366,7 +1368,7 @@
 
   /**
    * Starts a pan (#777), whatever tool is active: Space held, the middle
-   * button, or a second finger. A gesture that pans never draws, so a draft
+   * button, or a second finger; with the Hand, any press. A gesture that pans never draws, so a draft
    * under way is dropped without reaching the Worker, as a tool change drops
    * one, and the crosshair comes back when the pan ends.
    * @param {PointerEvent} event
@@ -1591,6 +1593,12 @@
       .map(([id]) => id);
     if (event.pointerType === "touch" && fingers.length > 1) {
       beginPan(event, fingers);
+      return;
+    }
+    // The Hand pans with the primary button or one finger, and never picks or
+    // draws. A second finger then hands the pan to the pair, as above.
+    if (scene.tool === "hand") {
+      beginPan(event, [event.pointerId]);
       return;
     }
 
