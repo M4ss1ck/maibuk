@@ -16,7 +16,7 @@
 import { describe, expect, it } from "vitest";
 import type { MapAsset } from "./assets";
 import { assetMessage, parseFrameMessage, rasterizeMessage, sceneMessage } from "./frame-protocol";
-import type { MapDocument, MapImageElement } from "./maps";
+import type { MapDocument, MapImageElement, MapStampElement } from "./maps";
 import { mapLibrary } from "./scene";
 
 /** A PNG's first bytes, enough to tell one reply's bytes from another's. */
@@ -249,6 +249,7 @@ describe("sceneMessage() with the Library's pictures", () => {
     panX: 0,
     panY: 0,
     penLabel: { one: "Pen line, {{count}} point", other: "Pen line, {{count}} points" },
+    readout: { size: "{{value}} mm", angle: "{{value}}°" },
   };
 
   it("carries the picture's primitive, by id, in the scene the Frame draws", () => {
@@ -286,5 +287,105 @@ describe("sceneMessage() with the Library's pictures", () => {
     const message = sceneMessage(map, view);
 
     expect(message.elements[0].shapes).toEqual([]);
+  });
+});
+
+describe("the transformElement message (#795)", () => {
+  const box = { x: 10, y: 20, width: 30, height: 15, rotation: 45 };
+
+  it("reads the box a handle drag asks for", () => {
+    expect(parseFrameMessage({ kind: "transformElement", id: "e1", box })).toEqual({
+      kind: "transformElement",
+      id: "e1",
+      box,
+    });
+  });
+
+  it("reads the cap size a Map Label's corner asks for", () => {
+    expect(parseFrameMessage({ kind: "transformElement", id: "l1", box, size: 7 })).toEqual({
+      kind: "transformElement",
+      id: "l1",
+      box,
+      size: 7,
+    });
+  });
+
+  it("drops a malformed box", () => {
+    for (const message of [
+      { kind: "transformElement", box },
+      { kind: "transformElement", id: "", box },
+      { kind: "transformElement", id: "e1" },
+      { kind: "transformElement", id: "e1", box: { ...box, width: 0 } },
+      { kind: "transformElement", id: "e1", box: { ...box, height: -1 } },
+      { kind: "transformElement", id: "e1", box: { ...box, rotation: "45" } },
+      { kind: "transformElement", id: "e1", box: { ...box, x: Number.NaN } },
+      { kind: "transformElement", id: "e1", box: { ...box, y: Number.POSITIVE_INFINITY } },
+      { kind: "transformElement", id: "e1", box, size: 0 },
+      { kind: "transformElement", id: "e1", box, size: Number.NaN },
+    ]) {
+      expect(parseFrameMessage(message)).toBeNull();
+    }
+  });
+
+  it("does not read a scene that already carries the box back as a message", () => {
+    expect(parseFrameMessage({ kind: "scene", elements: [{ id: "e1", transform: { box } }] })).toBeNull();
+  });
+});
+
+describe("sceneMessage() with transform handles (#795)", () => {
+  const page = { preset: "square" as const, widthMm: 200, heightMm: 100 };
+  const stamp: MapStampElement = {
+    id: "stamp",
+    kind: "stamp",
+    name: "Marker",
+    hidden: false,
+    locked: false,
+    stampRef: "base:marker",
+    transform: { x: 100, y: 50, size: 12, rotation: 0 },
+  };
+  const image: MapImageElement = {
+    id: "image",
+    kind: "image",
+    name: "Scan",
+    hidden: false,
+    locked: false,
+    assetRef: "a1",
+    transform: { x: 60, y: 40, size: 80, rotation: 15 },
+    opacity: 1,
+    exportable: true,
+  };
+  const view = {
+    selectedId: "stamp",
+    tool: "select" as const,
+    zoom: 1,
+    panX: 0,
+    panY: 0,
+    penLabel: { one: "Pen line, {{count}} point", other: "Pen line, {{count}} points" },
+    readout: { size: "{{value}} mm", angle: "{{value}}°" },
+  };
+
+  it("carries the selected Stamp's handle box, its handle set, and whether it is locked", () => {
+    const message = sceneMessage({ page, elements: [stamp, image] }, view);
+    expect(message.elements[0]).toMatchObject({
+      id: "stamp",
+      selected: true,
+      locked: false,
+      transform: {
+        box: { x: 100, y: 50, width: 12, height: 12, rotation: 0 },
+        handles: "corners",
+      },
+    });
+    // Only the selected Element carries the box: the others keep the outline.
+    expect(message.elements[1].transform).toBeUndefined();
+  });
+
+  it("still carries a locked Element's box, so the Frame can say why it cannot be dragged", () => {
+    const message = sceneMessage({ page, elements: [{ ...stamp, locked: true }] }, view);
+    expect(message.elements[0]).toMatchObject({ locked: true, transform: { handles: "corners" } });
+  });
+
+  it("carries the readout's localized text for the Frame's chip", () => {
+    const message = sceneMessage({ page, elements: [] }, view);
+    expect(message.readout).toEqual({ size: "{{value}} mm", angle: "{{value}}°" });
   });
 });

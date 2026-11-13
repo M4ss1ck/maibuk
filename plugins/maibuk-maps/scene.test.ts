@@ -41,6 +41,7 @@ import {
   removeElement,
   renameElement,
   reorder,
+  elementTransform,
   sceneShapes,
   sceneToSvg,
   stampPreview,
@@ -1846,5 +1847,106 @@ describe("a Stamp's preview picture (the Insert grid's tiles)", () => {
       expect(svg).not.toContain("<image");
       expect(svg).toContain("stroke-dasharray");
     }
+  });
+});
+
+describe("the handle box an Element carries (#795)", () => {
+  const stamp = (overrides: Partial<MapStampElement> = {}): MapStampElement => ({
+    id: "stamp",
+    kind: "stamp",
+    name: "Marker",
+    hidden: false,
+    locked: false,
+    stampRef: "base:marker",
+    transform: { x: 100, y: 50, size: 12, rotation: 0 },
+    ...overrides,
+  });
+
+  const image = (overrides: Partial<MapImageElement> = {}): MapImageElement => ({
+    id: "image",
+    kind: "image",
+    name: "Scan",
+    hidden: false,
+    locked: false,
+    assetRef: "a1",
+    transform: { x: 60, y: 40, size: 80, rotation: 15 },
+    opacity: 1,
+    exportable: true,
+    ...overrides,
+  });
+
+  const library = () =>
+    mapLibrary([{ id: "a1", name: "Scan", mime: "image/png", width: 40, height: 20 }]);
+
+  it("is a Stamp's art box, centred on its transform and turned with it", () => {
+    expect(elementTransform(stamp({ transform: { x: 100, y: 50, size: 12, rotation: 30 } }))).toEqual(
+      {
+        box: { x: 100, y: 50, width: 12, height: 12, rotation: 30 },
+        handles: "corners",
+      }
+    );
+  });
+
+  it("follows the art's own proportions rather than a square", () => {
+    const city = stamp({ stampRef: "base:city" });
+    expect(elementTransform(city)?.box.height).toBeCloseTo((12 * 8.92) / 9.74, 6);
+  });
+
+  it("is a Map Image's picture box, whose height follows the picture", () => {
+    expect(elementTransform(image(), library())).toEqual({
+      box: { x: 60, y: 40, width: 80, height: 40, rotation: 15 },
+      handles: "corners",
+    });
+    // A picture the Library does not hold yet still gets a box to grab.
+    expect(elementTransform(image())?.box).toEqual({
+      x: 60,
+      y: 40,
+      width: 80,
+      height: 80,
+      rotation: 15,
+    });
+  });
+
+  it("is the scale bar's own bar box, which is shorter than its room", () => {
+    const bar = stamp({ stampRef: SCALE_BAR_STAMP_REF, transform: { x: 100, y: 50, size: 40, rotation: 0 } });
+    expect(elementTransform(bar)?.box.height).toBeCloseTo(40 * 0.12, 6);
+  });
+
+  it("is only a Stamp's or a Map Image's: a line, a fill, and a label carry none", () => {
+    const plain = line("plain", [
+      [0, 0],
+      [1, 1],
+    ]);
+    expect(elementTransform(plain)).toBeNull();
+    expect(
+      elementTransform({
+        id: "fill",
+        kind: "fill",
+        name: "Fill",
+        hidden: false,
+        locked: false,
+        anchor: [1, 1],
+        content: { color: "#c8d5a3" },
+      })
+    ).toBeNull();
+    expect(
+      elementTransform({
+        id: "label",
+        kind: "label",
+        name: "Label",
+        hidden: false,
+        locked: false,
+        text: "Sea",
+        x: 10,
+        y: 10,
+        rotation: 0,
+        width: 30,
+        bend: 0,
+        font: DEFAULT_LABEL_FONT,
+        size: 6,
+        letterSpacing: 0,
+        halo: 0,
+      })
+    ).toBeNull();
   });
 });

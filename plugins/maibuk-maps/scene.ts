@@ -1574,6 +1574,73 @@ export function setLocked(
 }
 
 /**
+ * The handles an Element's selection draws (#795): four corners, all eight, or
+ * a Map Label's own corners and sides. A Map Line and a Fill keep the selection
+ * outline they have always had.
+ */
+export const ELEMENT_HANDLE_SETS = ["corners", "all", "label"] as const;
+export type ElementHandleSet = (typeof ELEMENT_HANDLE_SETS)[number];
+
+/** The box a transform handle resizes or turns, in page millimetres (#795). */
+export interface ElementTransformBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+}
+
+/** What the Frame draws an Element's handles from (#795): its box, and which handles it takes. */
+export interface ElementTransform {
+  box: ElementTransformBox;
+  handles: ElementHandleSet;
+}
+
+/**
+ * The height a Stamp's art box takes for each millimetre of its `size`: the
+ * art's own proportions, so a tall or a wide Stamp keeps its shape on the page.
+ * A Custom Stamp reads its Library picture, and the scale bar reads the bar it
+ * draws; a ref this build cannot measure reads square.
+ */
+function stampBoxRatio(element: MapStampElement, library: MapLibrary): number {
+  if (element.stampRef === SCALE_BAR_STAMP_REF) return SCALE_BAR_HEIGHT_RATIO;
+  const assetId = parseCustomStampRef(element.stampRef);
+  if (assetId !== null) {
+    const asset = library.assets.get(assetId);
+    return asset === undefined || !(asset.width > 0) ? 1 : asset.height / asset.width;
+  }
+  const art = stampArt(element.stampRef);
+  const [, , width, height] = art?.viewBox ?? [0, 0, 1, 1];
+  return width > 0 ? height / width : 1;
+}
+
+/**
+ * What the Frame needs to draw an Element's transform handles (#795): the box
+ * they sit on, in page millimetres, and the handles it takes. A Stamp and a Map
+ * Image carry four corners, which keep their aspect because both store a width
+ * alone. Every other kind carries none here and keeps its selection outline.
+ */
+export function elementTransform(
+  element: MapElement,
+  library: MapLibrary = EMPTY_MAP_LIBRARY
+): ElementTransform | null {
+  if (element.kind === "stamp") {
+    const { x, y, size, rotation } = element.transform;
+    return {
+      box: { x, y, width: size, height: size * stampBoxRatio(element, library), rotation },
+      handles: "corners",
+    };
+  }
+  if (element.kind === "image") {
+    const asset = library.assets.get(element.assetRef);
+    const { x, y, size, rotation } = element.transform;
+    const ratio = asset === undefined || !(asset.width > 0) ? 1 : asset.height / asset.width;
+    return { box: { x, y, width: size, height: size * ratio, rotation }, handles: "corners" };
+  }
+  return null;
+}
+
+/**
  * Whether the move Commands may move an Element: an unlocked Map Line, Stamp,
  * Map Label, Map Image, or Area Fill, the Elements `moveElement` knows how to
  * shift. A Select drag also needs it shown (#766), since a hidden Element is

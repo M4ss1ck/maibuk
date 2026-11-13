@@ -9,12 +9,16 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  RIGHT_ANGLE_STICK_DEGREES,
+  TURN_SNAP_DEGREES,
   convertShapeLine,
   eraseLines,
   roughen,
   seedFor,
   shapeFromCorners,
   shapeOutline,
+  transformBox,
+  type TransformBox,
 } from "./geometry";
 import {
   DEFAULT_POLYGON_SIDES,
@@ -491,5 +495,240 @@ describe("convertShapeLine", () => {
       ],
     });
     expect(convertShapeLine(plain)).toBe(plain);
+  });
+});
+
+/** A box centred on the page, 40 mm wide and 20 mm high unless a test says otherwise. */
+function box(overrides: Partial<TransformBox> = {}): TransformBox {
+  return { x: 100, y: 50, width: 40, height: 20, rotation: 0, ...overrides };
+}
+
+/** Where a point of a box's own frame sits on the page, in millimetres. */
+function pageOf(frame: TransformBox, local: MapPoint): MapPoint {
+  const angle = (frame.rotation * Math.PI) / 180;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return [
+    frame.x + local[0] * cos - local[1] * sin,
+    frame.y + local[0] * sin + local[1] * cos,
+  ];
+}
+
+/** The page point of one corner of a box, named the way a handle is. */
+function cornerOf(frame: TransformBox, corner: "nw" | "ne" | "se" | "sw"): MapPoint {
+  const halfWidth = frame.width / 2;
+  const halfHeight = frame.height / 2;
+  const signX = corner === "ne" || corner === "se" ? 1 : -1;
+  const signY = corner === "sw" || corner === "se" ? 1 : -1;
+  return pageOf(frame, [signX * halfWidth, signY * halfHeight]);
+}
+
+describe("transformBox: the resize handles", () => {
+  it("drags a corner and holds the opposite one still", () => {
+    const start = cornerOf(box(), "se");
+    expect(start).toEqual([120, 60]);
+
+    // 10 mm right and 5 mm down from the corner: the box grew by both.
+    const next = transformBox({
+      box: box(),
+      handle: "se",
+      start,
+      point: [130, 65],
+    });
+    expect(next).toEqual({ x: 105, y: 52.5, width: 50, height: 25, rotation: 0 });
+
+    // The opposite corner, the north-west one, still sits where it did.
+    expect(cornerOf(next, "nw")).toEqual(cornerOf(box(), "nw"));
+  });
+
+  it("drags a side and holds the opposite side still", () => {
+    const next = transformBox({
+      box: box(),
+      handle: "e",
+      start: [120, 50],
+      point: [130, 50],
+    });
+    expect(next).toEqual({ x: 105, y: 50, width: 50, height: 20, rotation: 0 });
+  });
+
+  it("grows about the centre when Alt holds", () => {
+    const next = transformBox({
+      box: box(),
+      handle: "se",
+      start: [120, 60],
+      point: [130, 65],
+      fromCentre: true,
+    });
+    expect(next).toEqual({ x: 100, y: 50, width: 60, height: 30, rotation: 0 });
+  });
+
+  it("keeps the aspect of a uniform box, whichever side the drag favours", () => {
+    const wide = transformBox({
+      box: box(),
+      handle: "se",
+      start: [120, 60],
+      point: [140, 60],
+      aspect: true,
+    });
+    expect(wide).toEqual({ x: 110, y: 55, width: 60, height: 30, rotation: 0 });
+
+    const tall = transformBox({
+      box: box(),
+      handle: "se",
+      start: [120, 60],
+      point: [120, 80],
+      aspect: true,
+    });
+    expect(tall).toEqual({ x: 120, y: 60, width: 80, height: 40, rotation: 0 });
+  });
+
+  it("lets a free corner and a side move one axis each, for a Shape", () => {
+    const corner = transformBox({
+      box: box(),
+      handle: "se",
+      start: [120, 60],
+      point: [130, 65],
+      aspect: false,
+    });
+    expect(corner).toEqual({ x: 105, y: 52.5, width: 50, height: 25, rotation: 0 });
+
+    const side = transformBox({
+      box: box(),
+      handle: "n",
+      start: [100, 40],
+      point: [100, 30],
+      aspect: false,
+    });
+    expect(side).toEqual({ x: 100, y: 45, width: 40, height: 30, rotation: 0 });
+  });
+
+  it("works a turned box's handles in its own frame", () => {
+    const turned = box({ rotation: 90 });
+    const start = cornerOf(turned, "se");
+    expect(start[0]).toBeCloseTo(90, 10);
+    expect(start[1]).toBeCloseTo(70, 10);
+
+    // 10 mm along the page's +y is 10 mm along the box's own width.
+    const next = transformBox({
+      box: turned,
+      handle: "se",
+      start,
+      point: [start[0], start[1] + 10],
+    });
+    expect(next.width).toBeCloseTo(50, 10);
+    expect(next.height).toBeCloseTo(20, 10);
+    expect(next.rotation).toBe(90);
+    expect(next.x).toBeCloseTo(100, 10);
+    expect(next.y).toBeCloseTo(55, 10);
+
+    // The opposite corner, which is the box's north-west one, never moved.
+    const held = cornerOf(turned, "nw");
+    const still = cornerOf(next, "nw");
+    expect(still[0]).toBeCloseTo(held[0], 10);
+    expect(still[1]).toBeCloseTo(held[1], 10);
+  });
+
+  it("never reaches zero or flips when the drag crosses the anchor", () => {
+    const next = transformBox({
+      box: box(),
+      handle: "se",
+      start: [120, 60],
+      point: [60, 40],
+      minWidth: 1,
+      minHeight: 1,
+    });
+    expect(next.width).toBe(1);
+    expect(next.height).toBe(1);
+    // The box stays on its own side of the anchor: its left edge is the anchor.
+    expect(cornerOf(next, "nw")).toEqual([80, 40]);
+  });
+
+  it("keeps the smallest size its kind asks for", () => {
+    for (const handle of ["nw", "ne", "se", "sw", "n", "e", "s", "w"] as const) {
+      const next = transformBox({
+        box: box(),
+        handle,
+        start: pageOf(box(), [0, 0]),
+        point: [100, 50],
+        minWidth: 5,
+        minHeight: 6,
+      });
+      expect(next.width, handle).toBeGreaterThanOrEqual(5);
+      expect(next.height, handle).toBeGreaterThanOrEqual(6);
+    }
+  });
+});
+
+describe("transformBox: the rotate handle", () => {
+  it("turns the box about its centre by the angle the pointer sweeps", () => {
+    // From straight above the centre round to straight right: a quarter turn.
+    const next = transformBox({
+      box: box(),
+      handle: "rotate",
+      start: [100, 40],
+      point: [110, 50],
+    });
+    expect(next).toEqual({ x: 100, y: 50, width: 40, height: 20, rotation: 90 });
+  });
+
+  it("adds the sweep to the turn the box already had, inside one circle", () => {
+    const next = transformBox({
+      box: box({ rotation: 350 }),
+      handle: "rotate",
+      start: [100, 40],
+      point: [110, 50],
+    });
+    expect(next.rotation).toBe(80);
+    expect(next.width).toBe(40);
+    expect(next.height).toBe(20);
+  });
+
+  it("snaps to 15° steps with Shift", () => {
+    expect(TURN_SNAP_DEGREES).toBe(15);
+    const aim = (degrees: number): MapPoint => [
+      100 + 10 * Math.cos((degrees * Math.PI) / 180),
+      50 + 10 * Math.sin((degrees * Math.PI) / 180),
+    ];
+    // 44° is a degree short of 45°, and snaps onto it.
+    const snapped = transformBox({
+      box: box(),
+      handle: "rotate",
+      start: [110, 50],
+      point: aim(44),
+      snap: true,
+    });
+    expect(snapped.rotation).toBe(45);
+    // Without Shift the same pointer lands where it points.
+    const free = transformBox({
+      box: box(),
+      handle: "rotate",
+      start: [110, 50],
+      point: aim(44),
+    });
+    expect(free.rotation).toBeCloseTo(44, 6);
+  });
+
+  it("sticks to a right angle within 2°, without Shift", () => {
+    expect(RIGHT_ANGLE_STICK_DEGREES).toBe(2);
+    const aim = (degrees: number): MapPoint => [
+      100 + 10 * Math.cos((degrees * Math.PI) / 180),
+      50 + 10 * Math.sin((degrees * Math.PI) / 180),
+    ];
+    for (const [degrees, right] of [
+      [89, 90],
+      [1.5, 0],
+      [181, 180],
+      [268.5, 270],
+    ] as const) {
+      expect(
+        transformBox({ box: box(), handle: "rotate", start: [110, 50], point: aim(degrees) })
+          .rotation,
+        String(degrees)
+      ).toBe(right);
+    }
+    // Three degrees off is a turn the author meant.
+    expect(
+      transformBox({ box: box(), handle: "rotate", start: [110, 50], point: aim(93) }).rotation
+    ).toBeCloseTo(93, 6);
   });
 });

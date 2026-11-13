@@ -502,6 +502,167 @@ export function shapeFromCorners(
   };
 }
 
+/** A corner or side a transform handle grips, or the handle above the box that turns it (#795). */
+export type TransformHandle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "rotate";
+
+/**
+ * A box a transform handle resizes or turns (#795): its centre and size in page
+ * millimetres, and its turn in degrees clockwise about that centre.
+ */
+export interface TransformBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+}
+
+/** How far a turn sticks to a right angle, in degrees. */
+export const RIGHT_ANGLE_STICK_DEGREES = 2;
+
+/** The step a Shift turn snaps to, in degrees. */
+export const TURN_SNAP_DEGREES = 15;
+
+/** The smallest side a handle leaves when a caller names no minimum, in page millimetres. */
+const MIN_TRANSFORM_SIZE_MM = 0.01;
+
+/** One handle gesture: the box it starts on, where the pointer started and sits, and its modifiers. */
+export interface TransformGesture {
+  box: TransformBox;
+  handle: TransformHandle;
+  /** Where the press landed, in page millimetres. */
+  start: MapPoint;
+  /** Where the pointer sits now, in page millimetres. */
+  point: MapPoint;
+  /** Keep the box's aspect: always for a Stamp or a Map Image, and Shift on a Shape's corner. */
+  aspect?: boolean;
+  /** Resize about the centre (Alt) rather than anchor the opposite corner or side. */
+  fromCentre?: boolean;
+  /** Snap the turn to 15° steps (Shift). */
+  snap?: boolean;
+  /** The narrowest and shortest the box may become, in page millimetres. */
+  minWidth?: number;
+  minHeight?: number;
+}
+
+/** A turn inside one circle, in degrees. */
+function normalizeDegrees(degrees: number): number {
+  return ((degrees % 360) + 360) % 360;
+}
+
+/** The shortest way round from one angle to another, in degrees, between -180 and 180. */
+function turnedBy(from: number, to: number): number {
+  return ((to - from + 540) % 360) - 180;
+}
+
+/** The angle from a centre to a point, in degrees. */
+function angleAt(point: MapPoint, center: MapPoint): number {
+  return (Math.atan2(point[1] - center[1], point[0] - center[0]) * 180) / Math.PI;
+}
+
+/**
+ * The box a rotate-handle drag asks for (#795): the angle the pointer sweeps
+ * about the box's centre added to the turn it already had. With `snap` (Shift)
+ * the turn lands on a 15° step; without it, a turn within 2° of a right angle
+ * sticks to it, so straightening an Element needs no modifier. The centre and
+ * the size never change.
+ */
+function turnBox(gesture: TransformGesture): TransformBox {
+  const { box } = gesture;
+  const center: MapPoint = [box.x, box.y];
+  let rotation = normalizeDegrees(
+    box.rotation + turnedBy(angleAt(gesture.start, center), angleAt(gesture.point, center))
+  );
+  if (gesture.snap === true) {
+    rotation = normalizeDegrees(Math.round(rotation / TURN_SNAP_DEGREES) * TURN_SNAP_DEGREES);
+  } else {
+    const right = Math.round(rotation / 90) * 90;
+    if (Math.abs(turnedBy(rotation, right)) <= RIGHT_ANGLE_STICK_DEGREES) {
+      rotation = normalizeDegrees(right);
+    }
+  }
+  return { ...box, rotation };
+}
+
+/**
+ * The box a corner or side drag asks for (#795). The drag works in the box's
+ * own turned frame, so a turned Element's handles move along its sides. A corner
+ * anchors the opposite corner, a side the opposite side, and Alt anchors the
+ * centre. `aspect` keeps the box's proportions; a side handle always moves one
+ * axis. A drag can never reach zero or cross over its anchor: the side it grows
+ * stops at `minWidth`/`minHeight` instead of flipping.
+ */
+function resizeBox(gesture: TransformGesture): TransformBox {
+  const { box, handle } = gesture;
+  const angle = (box.rotation * Math.PI) / 180;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const toLocal = (point: MapPoint): MapPoint => [
+    (point[0] - box.x) * cos + (point[1] - box.y) * sin,
+    -(point[0] - box.x) * sin + (point[1] - box.y) * cos,
+  ];
+  const signX = handle.includes("w") ? -1 : handle.includes("e") ? 1 : 0;
+  const signY = handle.includes("n") ? -1 : handle.includes("s") ? 1 : 0;
+  const halfWidth = Math.max(MIN_TRANSFORM_SIZE_MM, box.width) / 2;
+  const halfHeight = Math.max(MIN_TRANSFORM_SIZE_MM, box.height) / 2;
+  const startLocal = toLocal(gesture.start);
+  const pointLocal = toLocal(gesture.point);
+  // Where the grabbed corner, or the middle of the grabbed side, sits now.
+  const grabbed: MapPoint = [signX * halfWidth, signY * halfHeight];
+  const reached: MapPoint = [
+    grabbed[0] + pointLocal[0] - startLocal[0],
+    grabbed[1] + pointLocal[1] - startLocal[1],
+  ];
+  const minWidth = Math.max(MIN_TRANSFORM_SIZE_MM, gesture.minWidth ?? MIN_TRANSFORM_SIZE_MM);
+  const minHeight = Math.max(MIN_TRANSFORM_SIZE_MM, gesture.minHeight ?? MIN_TRANSFORM_SIZE_MM);
+  const anchor: MapPoint = [-signX * halfWidth, -signY * halfHeight];
+  // An axis no handle grips keeps the size it had.
+  let width =
+    signX === 0
+      ? halfWidth * 2
+      : Math.max(
+          minWidth,
+          gesture.fromCentre === true
+            ? 2 * Math.abs(reached[0])
+            : signX * (reached[0] - anchor[0])
+        );
+  let height =
+    signY === 0
+      ? halfHeight * 2
+      : Math.max(
+          minHeight,
+          gesture.fromCentre === true
+            ? 2 * Math.abs(reached[1])
+            : signY * (reached[1] - anchor[1])
+        );
+  if (gesture.aspect === true) {
+    const scale = Math.max(width / (halfWidth * 2), height / (halfHeight * 2));
+    width = halfWidth * 2 * scale;
+    height = halfHeight * 2 * scale;
+  }
+  const center: MapPoint =
+    gesture.fromCentre === true
+      ? [0, 0]
+      : [anchor[0] + (signX * width) / 2, anchor[1] + (signY * height) / 2];
+  return {
+    x: box.x + center[0] * cos - center[1] * sin,
+    y: box.y + center[0] * sin + center[1] * cos,
+    width,
+    height,
+    rotation: box.rotation,
+  };
+}
+
+/**
+ * The box one handle gesture draws (#795): a corner or side resized in the box's
+ * own frame, or the whole box turned about its centre. Pure, so the Map editor,
+ * the Frame's live preview, and the tests share one set of rules.
+ */
+export function transformBox(gesture: TransformGesture): TransformBox {
+  if (gesture.handle === "rotate") return turnBox(gesture);
+  return resizeBox(gesture);
+}
+
 /**
  * A Map Line that stops being an exact Shape (#747): the Eraser cut it or
  * Roughen redrew it, so it keeps the points it had and remembers what it was.
