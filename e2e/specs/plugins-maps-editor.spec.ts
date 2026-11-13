@@ -414,7 +414,7 @@ test.describe("Maps editor @wf:plugins-maps-editor @sc:plugin.maibuk-maps.openMa
     await runRowMenu(page, "Map Line 1", "Properties");
     await expect(page.getByRole("textbox", { name: "Name" })).toBeFocused();
     const hidden = page.getByRole("button", { name: "Hidden", exact: true });
-    await tabTo(page, hidden, { max: 5 });
+    await tabTo(page, hidden, { max: 6, backwards: true });
     const start = firstPoint(await pathData(drawnLine(page)));
     await page.keyboard.press("ArrowRight");
     await expect

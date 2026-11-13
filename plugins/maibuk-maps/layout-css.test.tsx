@@ -324,7 +324,7 @@ const EXPECTATIONS: ReadonlyArray<Expectation> = [
     expected: (mounted) => slotFour(mounted),
   },
   {
-    selector: `${ROOT}:has(> div:nth-child(6) > div:first-child > div:last-child > button[aria-pressed="true"]) > div:nth-child(6)`,
+    selector: `${ROOT}:has(> div:nth-child(6) > div:first-child > div:first-child > div:last-child > button:nth-last-child(2)[aria-pressed="true"]) > div:nth-child(6)`,
     state: "open",
     expected: (mounted) => slotSix(mounted),
   },
@@ -352,16 +352,11 @@ const EXPECTATIONS: ReadonlyArray<Expectation> = [
     expected: () => screen.getByRole("button", { name: "Coast" }),
   },
   {
-    // The Properties header (#778): the name and its two toggles take the row,
-    // and the card's own two controls keep their width at its right.
-    selector: `${ROOT} > div:nth-child(6) > div:first-child > div:first-child`,
+    // The Properties header (#778): the selection's name takes the row and ends
+    // in an ellipsis, and every control keeps its width at its right.
+    selector: `${ROOT} > div:nth-child(6) > div:first-child > div:first-child > p`,
     state: "open",
     expected: () => headerRow().children.item(0) as Element,
-  },
-  {
-    selector: `${ROOT} > div:nth-child(6) > div:first-child > div:first-child > div`,
-    state: "open",
-    expected: () => nameFieldOf(headerRow().children.item(0) as Element),
   },
   {
     // Minimised, Properties is its restore button alone in a card that fits it.
@@ -423,7 +418,7 @@ const EXPECTATIONS: ReadonlyArray<Expectation> = [
     expected: (mounted) => slot(mounted.root, 8),
   },
   {
-    selector: `${ROOT}:has(> div:nth-child(6) > div:first-child > div:last-child > button[aria-pressed="true"]) > div:nth-child(8)`,
+    selector: `${ROOT}:has(> div:nth-child(6) > div:first-child > div:first-child > div:last-child > button:nth-last-child(2)[aria-pressed="true"]) > div:nth-child(8)`,
     state: "open",
     expected: (mounted) => slot(mounted.root, 8),
   },
@@ -435,7 +430,7 @@ const EXPECTATIONS: ReadonlyArray<Expectation> = [
     expected: () => screen.getByRole("button", { name: en["chrome.expandLayers"] }),
   },
   {
-    selector: `${ROOT} > div:nth-child(6) > div:first-child > div:last-child > button:first-child`,
+    selector: `${ROOT} > div:nth-child(6) > div:first-child > div:first-child > div:last-child > button:nth-last-child(2)`,
     state: "open",
     expected: () => screen.getByRole("button", { name: en["chrome.expandProperties"] }),
   },
@@ -506,14 +501,6 @@ function headerRow(): HTMLElement {
   const row = button.parentElement?.parentElement ?? null;
   if (row === null) throw new Error("the Minimise control has no header row");
   return row;
-}
-
-/** The name field's own box: the header group's child that holds the Name textbox. */
-function nameFieldOf(group: Element): Element {
-  const field = screen.getByRole("textbox", { name: en["properties.name"] });
-  const box = Array.from(group.children).find((child) => child.contains(field));
-  if (box === undefined) throw new Error("the header group holds no Name field");
-  return box;
 }
 
 /** The Elements list's one row button: the Map's only line, by name. */
@@ -641,7 +628,7 @@ describe("the floating editor's stylesheet against the host's DOM", () => {
       // the narrow page's bottom half nor lifts the zoom cluster.
       for (const selector of [
         `${ROOT}:has(> div:nth-child(6) > div) > div:nth-child(8)`,
-        `${ROOT} > div:nth-child(6) > div:first-child > div:first-child`,
+        `${ROOT} > div:nth-child(6) > div:first-child > div:first-child > p`,
       ]) {
         expect(document.querySelectorAll(`${scope} ${selector}`).length, selector).toBe(0);
       }

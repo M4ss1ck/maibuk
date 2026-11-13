@@ -488,10 +488,9 @@ div[data-plugin-ui] > div:nth-child(6) { top: 4.5rem; right: 0.75rem; width: 18.
 /* Minimised, Properties is its restore button alone, in a card that fits it,
    where the design draws it: under the top-right pill. */
 div[data-plugin-ui] > div:nth-child(6):has(> button:only-child) { width: auto; padding: 0.25rem; }
-/* The Properties header: the name and its two toggles take the row, and the
-   card's own controls keep their width at its right. */
-div[data-plugin-ui] > div:nth-child(6) > div:first-child > div:first-child { flex: 1 1 auto; min-width: 0; }
-div[data-plugin-ui] > div:nth-child(6) > div:first-child > div:first-child > div { flex: 1 1 auto; min-width: 0; }
+/* The Properties header: the name takes the row and ends in an ellipsis, and
+   the controls keep their width at its right. */
+div[data-plugin-ui] > div:nth-child(6) > div:first-child > div:first-child > p { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* An Elements list row: the row button takes the width and stacks the name
    over the kind, each cut to one line, and the eye and the menu keep theirs. */
 div[data-plugin-ui] > div:nth-child(4) > ul > li > div > button:first-child { flex: 1 1 auto; min-width: 0; height: auto; flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; padding: 0.25rem 0.5rem; text-align: left; }
@@ -553,7 +552,7 @@ div[data-plugin-ui] > div:nth-child(8) { right: 0.75rem; bottom: 0.75rem; }
      one toggle (#779). The Frame's own box never moves, so the drawing is not
      resized. */
   div[data-plugin-ui]:has(> div:nth-child(4) > div:first-child button[aria-pressed="true"]) > div:nth-child(4),
-  div[data-plugin-ui]:has(> div:nth-child(6) > div:first-child > div:last-child > button[aria-pressed="true"]) > div:nth-child(6) { top: 3.25rem; bottom: 4.25rem; max-height: none; }
+  div[data-plugin-ui]:has(> div:nth-child(6) > div:first-child > div:first-child > div:last-child > button:nth-last-child(2)[aria-pressed="true"]) > div:nth-child(6) { top: 3.25rem; bottom: 4.25rem; max-height: none; }
   /* The zoom cluster sits bottom right, just above the belt, or just above the
      bottom region that is open, so zoom in, zoom out, and the readout stay
      reachable whatever is open (#779, #775 review R2). */
@@ -564,7 +563,7 @@ div[data-plugin-ui] > div:nth-child(8) { right: 0.75rem; bottom: 0.75rem; }
   /* A region at full height leaves no room above the middle, so the cluster
      moves under the top bar instead of hiding (#775 review R2). */
   div[data-plugin-ui]:has(> div:nth-child(4) > div:first-child button[aria-pressed="true"]) > div:nth-child(8),
-  div[data-plugin-ui]:has(> div:nth-child(6) > div:first-child > div:last-child > button[aria-pressed="true"]) > div:nth-child(8) { top: 3.25rem; bottom: auto; }
+  div[data-plugin-ui]:has(> div:nth-child(6) > div:first-child > div:first-child > div:last-child > button:nth-last-child(2)[aria-pressed="true"]) > div:nth-child(8) { top: 3.25rem; bottom: auto; }
 }
 /* At the desktop width the pill's own three controls show again, and the
    overflow stays out of the page (#779). */
@@ -574,7 +573,7 @@ div[data-plugin-ui] > div:nth-child(8) { right: 0.75rem; bottom: 0.75rem; }
      desktop region already takes the room its content needs, so at this width
      the two controls leave the header (#775 review R2). */
   div[data-plugin-ui] > div:nth-child(4) > div:first-child > div > button:first-child { display: none; }
-  div[data-plugin-ui] > div:nth-child(6) > div:first-child > div:last-child > button:first-child { display: none; }
+  div[data-plugin-ui] > div:nth-child(6) > div:first-child > div:first-child > div:last-child > button:nth-last-child(2) { display: none; }
   /* Insert and Layers share one box beside the belt, so with both open they
      stack rather than cover each other: Insert above the middle, Layers below
      it, each held to its own half (#775 review R2). */
@@ -1374,51 +1373,58 @@ function MapEditorView({
               />
             ) : (
               <>
-                {/* The header (#778): the selection's name, its Hidden and Locked
-                    toggles, and the card's own controls at the right: the
-                    narrow page's full-height toggle and Minimise. */}
-                <ui.View direction="row" gap="sm" align="end" justify="between">
-                  <ui.View direction="row" gap="none" align="end">
-                    {selected === null ? null : (
-                      <ui.TextField
-                        key={`properties-name-${propertiesFocus}`}
-                        label={t("properties.name")}
-                        value={selected.name}
-                        isRequired
-                        autoFocus={propertiesFocus > 0}
-                        onChange={(event) => editor.rename(selected.id, event.detail)}
-                      />
-                    )}
-                    {selected === null ? null : (
+                {/* The header (#778): the selection's name (or the card's
+                    title with nothing selected) with every control on one
+                    centred row at its right (Hidden, Locked, the narrow page's
+                    full-height toggle, Minimise), and the Name field below it
+                    at the card's full width. The field stays inside the header
+                    block: inserted as a direct child of the card, beside the
+                    rows a new selection adds, the host refused the batch. */}
+                <ui.View direction="column" gap="sm">
+                  <ui.View direction="row" gap="sm" align="center" justify="between">
+                    <ui.Text weight="semibold">
+                      {selected === null ? t("properties.label") : selected.name}
+                    </ui.Text>
+                    <ui.View direction="row" gap="none" align="center">
+                      {selected === null ? null : (
+                        <ui.IconButton
+                          label={t("properties.hidden")}
+                          icon={selected.hidden ? "eye-off" : "eye"}
+                          isSelected={selected.hidden}
+                          onPress={() => editor.setHidden(selected.id, !selected.hidden)}
+                        />
+                      )}
+                      {selected === null ? null : (
+                        <ui.IconButton
+                          label={t("properties.locked")}
+                          icon={selected.locked ? "lock" : "lock-open"}
+                          isSelected={selected.locked}
+                          onPress={() => editor.setLocked(selected.id, !selected.locked)}
+                        />
+                      )}
                       <ui.IconButton
-                        label={t("properties.hidden")}
-                        icon={selected.hidden ? "eye-off" : "eye"}
-                        isSelected={selected.hidden}
-                        onPress={() => editor.setHidden(selected.id, !selected.hidden)}
+                        label={t("chrome.expandProperties")}
+                        icon="chevrons-down"
+                        isSelected={propertiesFullHeight}
+                        onPress={() => setPropertiesFullHeight((full) => !full)}
                       />
-                    )}
-                    {selected === null ? null : (
                       <ui.IconButton
-                        label={t("properties.locked")}
-                        icon={selected.locked ? "lock" : "lock-open"}
-                        isSelected={selected.locked}
-                        onPress={() => editor.setLocked(selected.id, !selected.locked)}
+                        label={t("chrome.minimiseProperties")}
+                        icon="minus"
+                        onPress={() => setPropertiesMinimised(true)}
                       />
-                    )}
+                    </ui.View>
                   </ui.View>
-                  <ui.View direction="row" gap="none" align="center">
-                    <ui.IconButton
-                      label={t("chrome.expandProperties")}
-                      icon="chevrons-down"
-                      isSelected={propertiesFullHeight}
-                      onPress={() => setPropertiesFullHeight((full) => !full)}
+                  {selected === null ? null : (
+                    <ui.TextField
+                      key={`properties-name-${propertiesFocus}`}
+                      label={t("properties.name")}
+                      value={selected.name}
+                      isRequired
+                      autoFocus={propertiesFocus > 0}
+                      onChange={(event) => editor.rename(selected.id, event.detail)}
                     />
-                    <ui.IconButton
-                      label={t("chrome.minimiseProperties")}
-                      icon="minus"
-                      onPress={() => setPropertiesMinimised(true)}
-                    />
-                  </ui.View>
+                  )}
                 </ui.View>
 
                 {/* With no Map Line selected the select shows the style a new Pen

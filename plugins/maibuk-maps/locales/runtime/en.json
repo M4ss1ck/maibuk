@@ -82,6 +82,7 @@
   "element.polygonName": "Polygon {{number}}",
   "element.labelName": "Map Label {{number}}",
   "element.labelText": "Label",
+  "properties.label": "Properties",
   "properties.name": "Name",
   "properties.mapStyle": "Map Style",
   "properties.mapStyle.atlas": "Atlas",
