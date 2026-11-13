@@ -188,14 +188,15 @@ test.describe("Maps pointer view @wf:plugins-maps-pointer-view @sc:plugin.maibuk
     await pickPencil(page);
     await drawStroke(page, surface(page));
     await expect(drawnElements(page)).toHaveCount(1);
-    const lineBefore = await drawnElements(page).first().innerHTML();
     const selected = mapFrame(page).locator('[data-element-id][data-selected="true"]');
-    const selectedBefore = await selected.count();
 
     // The Hand by its Shortcut, from the host page, as every tool is picked.
+    // Only the Select tool works on a selection, so the Hand drops it.
     await page.keyboard.press("h");
     await expect(page.getByRole("button", { name: "Hand", pressed: true })).toBeVisible();
     await expect(mapFrame(page).locator('svg[data-tool="hand"]')).toBeVisible();
+    await expect(selected).toHaveCount(0);
+    const lineBefore = await drawnElements(page).first().innerHTML();
 
     const pressed = await pagePointAt(surface(page), HAND_FROM);
     const pixel = await millimetresPerPixel(surface(page));
@@ -211,9 +212,9 @@ test.describe("Maps pointer view @wf:plugins-maps-pointer-view @sc:plugin.maibuk
       .toBeLessThan(2 * pixel);
     await capture(page, "maps-hand-pan", { around: [frameElement(page)] });
 
-    // The drag drew nothing, changed no selection, and left the Map Line where it was.
+    // The drag drew nothing, picked nothing, and left the Map Line where it was.
     await expect(drawnElements(page)).toHaveCount(1);
-    await expect(selected).toHaveCount(selectedBefore);
+    await expect(selected).toHaveCount(0);
     expect(await drawnElements(page).first().innerHTML()).toBe(lineBefore);
   });
 });

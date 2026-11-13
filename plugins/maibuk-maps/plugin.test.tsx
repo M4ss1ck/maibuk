@@ -2236,7 +2236,7 @@ describe("Map editor page", () => {
     }
   });
 
-  it("selects the Hand by its key and from the belt, and leaves the selection alone", async () => {
+  it("selects the Hand by its key and from the belt, and drops the selection", async () => {
     const storage = mapStorage([
       line("e1", "Line one", [
         [10, 10],
@@ -2256,8 +2256,8 @@ describe("Map editor page", () => {
       await user.keyboard("h");
       await waitFor(() => expect(runtime.editor?.getSnapshot().tool).toBe("hand"));
       expect(pickedTool(en["tools.hand"])).toHaveAttribute("aria-pressed", "true");
-      // Picking the Hand only changes what a drag does; the selection stays.
-      expect(runtime.editor?.getSnapshot().selectedId).toBe("e1");
+      // Only the Select tool works on a selection, so picking the Hand drops it.
+      expect(runtime.editor?.getSnapshot().selectedId).toBeNull();
 
       await user.keyboard("v");
       await waitFor(() => expect(runtime.editor?.getSnapshot().tool).toBe("select"));
