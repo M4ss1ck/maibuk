@@ -104,10 +104,15 @@ export function useLanguage(client: PluginClient): string {
 export const MAPS_CSS = `
 ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: 1.5rem 1rem; }
 li { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
-li > :first-child { aspect-ratio: 3 / 2; width: 100%; overflow: hidden; border-radius: 0.375rem; border: 1px solid var(--color-border); background: var(--color-muted); display: flex; align-items: center; justify-content: center; }
-li > :first-child img { width: 100%; height: 100%; max-width: none; object-fit: contain; border-radius: 0; }
-li > div:nth-child(2) { gap: 0.125rem; }
-li > div:nth-child(2) > p { overflow-wrap: anywhere; }
+li > button { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 0.5rem; padding: 0; text-align: start; font-weight: inherit; background: transparent; cursor: pointer; }
+li > button:hover { background: transparent; }
+li > button > :first-child { position: relative; aspect-ratio: 3 / 2; width: 100%; overflow: hidden; border-radius: 0.375rem; border: 1px solid var(--color-border); background: var(--color-muted); display: flex; align-items: center; justify-content: center; transition: border-color 150ms; }
+li > button > :first-child img { width: 100%; height: 100%; max-width: none; object-fit: contain; border-radius: 0; }
+li > button > :first-child > span { position: absolute; top: 0.5rem; right: 0.5rem; padding: 0.375rem; border-radius: 0.375rem; background: var(--color-background); border: 1px solid var(--color-border); opacity: 0; transition: opacity 150ms; }
+li > button:hover > :first-child, li > button:focus-visible > :first-child { border-color: var(--color-primary); }
+li > button:hover > :first-child > span, li > button:focus-visible > :first-child > span { opacity: 1; }
+li > button > div:nth-child(2) { gap: 0.125rem; }
+li > button > div:nth-child(2) > p { overflow-wrap: anywhere; }
 li > div:last-child { margin-top: auto; gap: 0; }
 `;
 
@@ -349,24 +354,22 @@ export function createMapsPage(deps: MapsPageDeps): ComponentType {
             <ui.List marker="none">
               {shown.map((entry) => (
                 <ui.ListItem key={entry.id}>
-                  <ui.View>
-                    <ui.Image src={entry.preview} alt={entry.name} />
-                  </ui.View>
-                  <ui.View direction="column">
-                    <ui.Text weight="semibold">{entry.name}</ui.Text>
-                    <ui.Text size="sm" tone="muted">
-                      {meta(entry)}
-                    </ui.Text>
-                    <ui.Text size="sm" tone="muted">
-                      {edited(entry)}
-                    </ui.Text>
-                  </ui.View>
+                  <ui.Button variant="ghost" isDisabled={busy} onPress={() => void open(entry.id)}>
+                    <ui.View>
+                      <ui.Image src={entry.preview} alt={entry.name} />
+                      <ui.Icon name="external-link" size="sm" />
+                    </ui.View>
+                    <ui.View direction="column">
+                      <ui.Text weight="semibold">{entry.name}</ui.Text>
+                      <ui.Text size="sm" tone="muted">
+                        {meta(entry)}
+                      </ui.Text>
+                      <ui.Text size="sm" tone="muted">
+                        {edited(entry)}
+                      </ui.Text>
+                    </ui.View>
+                  </ui.Button>
                   <ui.View direction="row" align="center">
-                    {action(
-                      `${t("list.open")} ${entry.name}`,
-                      "external-link",
-                      () => void open(entry.id)
-                    )}
                     {action(`${t("list.rename")} ${entry.name}`, "pencil", () =>
                       setDialog({ kind: "rename", entry, name: entry.name, error: null })
                     )}

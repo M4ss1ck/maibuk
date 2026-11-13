@@ -8,7 +8,6 @@
   "list.emptyBookTitle": "Este libro todavía no tiene mapas",
   "list.emptyBookDescription": "Los mapas que hagas para este libro aparecen aquí. Los mapas sin libro aparecen en Todos.",
   "list.edited": "Editado {{when}}",
-  "list.open": "Abrir",
   "list.rename": "Cambiar nombre",
   "list.delete": "Eliminar",
   "list.saveFailed": "No se pudieron guardar los mapas. Inténtalo de nuevo.",
