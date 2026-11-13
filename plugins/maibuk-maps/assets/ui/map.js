@@ -8,7 +8,7 @@
    a finished Pen line, a finished Area Fill outline, an
    Eraser drag, a drawn Shape, a Bucket pour, a dropped Stamp, the Element the
    author picked, a Select drag that moved one, a Map Label's bend dragged
-   from its handle, one step of a pointer zoom or pan, the encoded picture an
+   from its handle, one step of a pointer zoom, a finished pointer pan, the encoded picture an
    export asked for, and what one uploaded picture measured.
    Points cross the port in page millimetres, the same space as the page's
    `widthMm`/`heightMm`, so the pointer's own screen pixels are converted
@@ -66,7 +66,7 @@
    * @typedef {{ id: string, offset: MapPoint }} PendingMove
    * @typedef {{ pointerId: number, id: string, press: ClientPoint, label: FrameLabelLayout, moved: boolean, bend: number }} BendDrag
    * @typedef {{ id: string, bend: number }} PendingBend
-   * @typedef {{ pointers: number[], client: ClientPoint }} PanDrag
+   * @typedef {{ pointers: number[], client: ClientPoint, offset: MapPoint }} PanDrag
    * @typedef {{ clientX: number, clientY: number, touch: boolean }} PointerPlace
    * @typedef {{ start: MapPoint, control: MapPoint, apex: MapPoint, end: MapPoint }} BendGeometry
    */
@@ -134,6 +134,8 @@
   const MAX_WHEEL_FACTOR = 2;
   /** What one line of a wheel that counts lines rather than pixels is worth, in pixels. */
   const WHEEL_LINE_PX = 16;
+  /** A pan shorter than this on both axes, in page millimetres, is no pan at all. */
+  const PAN_EPSILON_MM = 1e-6;
 
   /** The Shape tools, which draw an exact Shape by dragging (#747). */
   const SHAPE_KINDS = ["ellipse", "rectangle", "polygon"];
@@ -183,12 +185,24 @@
   let pendingBend = null;
 
   /**
-   * The pan gesture in progress, or null (#777): the pointers it follows, and
-   * where their average sat when its last step was measured. A pan never draws
-   * and never edits, so it holds no draft of its own.
+   * The pan gesture in progress, or null (#777): the pointers it follows,
+   * where their average sat when its last step was measured, and how far it
+   * has slid the view so far, in page millimetres. The Frame slides its own
+   * view while the drag lasts and tells the Worker once, on release: a
+   * round-trip per pointermove rebuilt and redrew the whole scene sixty times
+   * a second, which a large Map could not keep up with. A pan never draws and
+   * never edits, so it holds no draft of its own.
    * @type {PanDrag | null}
    */
   let panDrag = null;
+  /**
+   * The pans sent to the Worker that no scene has answered yet, oldest first.
+   * The view keeps showing them, so a release never snaps back for the one
+   * round-trip it takes the Worker's pan to catch up. The Worker answers every
+   * pan with a scene whose pan moved, so each such scene settles the oldest.
+   * @type {MapPoint[]}
+   */
+  const unansweredPans = [];
   /** Whether Space is held, which turns every press into a pan (#777). */
   let spacePan = false;
   /**
@@ -566,6 +580,21 @@
   }
 
   /**
+   * How far the Frame's own pans slide the view past the Worker's pan: the
+   * drag in progress plus every pan the Worker has not answered yet.
+   * @returns {MapPoint}
+   */
+  function localPan() {
+    let x = panDrag === null ? 0 : panDrag.offset[0];
+    let y = panDrag === null ? 0 : panDrag.offset[1];
+    for (const [dx, dy] of unansweredPans) {
+      x += dx;
+      y += dy;
+    }
+    return [x, y];
+  }
+
+  /**
    * The page rectangle the view shows, in page millimetres: zoom crops around
    * the page's centre, and pan slides the page under the view.
    * @param {FrameSceneMessage} current
@@ -573,9 +602,10 @@
   function viewRect(current) {
     const width = current.widthMm / current.zoom;
     const height = current.heightMm / current.zoom;
+    const [slideX, slideY] = localPan();
     return {
-      x: (current.widthMm - width) / 2 + current.panX,
-      y: (current.heightMm - height) / 2 + current.panY,
+      x: (current.widthMm - width) / 2 + current.panX + slideX,
+      y: (current.heightMm - height) / 2 + current.panY + slideY,
       width,
       height,
     };
@@ -718,6 +748,8 @@
     pendingMove = null;
     bendDrag = null;
     pendingBend = null;
+    // The view a pan already slid stays where it is, so the Worker hears of it.
+    commitPan();
     panDrag = null;
   }
 
@@ -1379,6 +1411,7 @@
     panDrag = {
       pointers,
       client: gestureClient(pointers) ?? { clientX: event.clientX, clientY: event.clientY },
+      offset: [0, 0],
     };
     for (const id of pointers) capturePointerId(id);
     event.preventDefault();
@@ -1389,8 +1422,9 @@
    * Slides the view with the pan (#777): each step is the pointer's, or the
    * finger pair's, travel in page millimetres, measured through the screen
    * matrix of the moment as a Select drag measures its own. The drawing
-   * follows the gesture, so the view slides the other way; the Worker owns
-   * `panX` and `panY` and sends the scene that crops the view there.
+   * follows the gesture, so the view slides the other way. The step only
+   * rewrites the svg's viewBox: nothing else on the drawing changes while it
+   * slides, so neither the Worker nor a full redraw is needed until release.
    * @param {PointerEvent} event
    */
   function followPan(event) {
@@ -1405,8 +1439,33 @@
     const dy = to[1] - from[1];
     if (dx === 0 && dy === 0) return;
     event.preventDefault();
-    // A step that travelled one axis only carries a plain zero, never a -0.
-    post({ kind: "pan", dx: dx === 0 ? 0 : -dx, dy: dy === 0 ? 0 : -dy });
+    panDrag.offset = [panDrag.offset[0] - dx, panDrag.offset[1] - dy];
+    showView();
+  }
+
+  /** Points the drawn svg at the current view without redrawing what it shows. */
+  function showView() {
+    if (scene === null || surface === null) return;
+    const svg = surface.querySelector("svg");
+    if (svg === null) return;
+    const view = viewRect(scene);
+    svg.setAttribute("viewBox", `${n(view.x)} ${n(view.y)} ${n(view.width)} ${n(view.height)}`);
+  }
+
+  /**
+   * Sends the Worker what the pan in progress has slid so far, as one pan, and
+   * keeps showing it until the Worker's scene carries it. The drag goes on
+   * from zero, so a pan committed mid-gesture is never counted twice.
+   */
+  function commitPan() {
+    if (panDrag === null) return;
+    const [dx, dy] = panDrag.offset;
+    panDrag.offset = [0, 0];
+    // A travel too small to move the Worker's pan would never be answered.
+    if (Math.abs(dx) < PAN_EPSILON_MM && Math.abs(dy) < PAN_EPSILON_MM) return;
+    unansweredPans.push([dx, dy]);
+    // An axis the pan did not travel carries a plain zero, never a -0.
+    post({ kind: "pan", dx: dx === 0 ? 0 : dx, dy: dy === 0 ? 0 : dy });
   }
 
   /**
@@ -1418,6 +1477,7 @@
     if (panDrag === null) return;
     const pointers = panDrag.pointers;
     if (event !== null && !pointers.includes(event.pointerId)) return;
+    commitPan();
     panDrag = null;
     for (const id of pointers) releasePointerId(id);
     // The crosshair the pan dropped comes back with the tool it belongs to.
@@ -1712,6 +1772,9 @@
     const point = pagePoint(event);
     if (point === null) return;
     event.preventDefault();
+    // A zoom mid-pan zooms around a point of the slid view, so the Worker hears
+    // of the slide first.
+    commitPan();
     post({
       kind: "zoom",
       point,
@@ -2309,6 +2372,15 @@
     const next = readScene(event.data);
     if (next === null) return;
     const previousTool = scene === null ? null : scene.tool;
+    // A scene whose pan moved is the Worker's answer to the oldest unanswered
+    // pan, which its own pan now carries.
+    if (
+      scene !== null &&
+      unansweredPans.length > 0 &&
+      (next.panX !== scene.panX || next.panY !== scene.panY)
+    ) {
+      unansweredPans.shift();
+    }
     scene = next;
     // Any scene after a release draws the moved Element where the Worker put
     // it, or back at its start when the Worker refused the move, and the

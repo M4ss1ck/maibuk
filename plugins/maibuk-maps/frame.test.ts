@@ -2981,6 +2981,98 @@ describe("pointer zoom and pan (#777)", () => {
     expect(svg().getAttribute("data-panning")).toBe("false");
   });
 
+  it("slides the view in the Frame while a pan drags, and sends one pan on release", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "hand", elements: [sceneElement()] });
+    expect(svg().getAttribute("viewBox")).toBe("0 0 200 100");
+
+    // Every step moves the view at once, and none of them reaches the Worker:
+    // a step per pointermove made the Worker rebuild and resend the whole
+    // scene sixty times a second, which a large Map could not keep up with.
+    pointer(svg(), "pointerdown", 10, 10);
+    pointer(svg(), "pointermove", 15, 12);
+    expect(svg().getAttribute("viewBox")).toBe("-5 -2 200 100");
+    pointer(svg(), "pointermove", 20, 15);
+    pointer(svg(), "pointermove", 30, 20);
+    expect(svg().getAttribute("viewBox")).toBe("-20 -10 200 100");
+    expect(frame.port.messages).toEqual([]);
+
+    pointer(svg(), "pointerup", 30, 20);
+    expect(frame.port.messages).toEqual([{ kind: "pan", dx: -20, dy: -10 }]);
+    // Until the Worker answers, the view stays where the drag left it.
+    expect(svg().getAttribute("viewBox")).toBe("-20 -10 200 100");
+
+    // The Worker's answer carries the pan, so the Frame stops adding its own.
+    frame.scene({ tool: "hand", elements: [sceneElement()], panX: -20, panY: -10 });
+    expect(svg().getAttribute("viewBox")).toBe("-20 -10 200 100");
+    frame.scene({ tool: "hand", elements: [sceneElement()], panX: -20, panY: -10 });
+    expect(svg().getAttribute("viewBox")).toBe("-20 -10 200 100");
+  });
+
+  it("keeps the dragged view when an unrelated scene arrives mid-pan", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "hand" });
+
+    pointer(svg(), "pointerdown", 10, 10);
+    pointer(svg(), "pointermove", 20, 10);
+    // An edit elsewhere sends a scene whose pan is the Worker's, without the
+    // drag's; the drag keeps its place on top of it.
+    frame.scene({ tool: "hand", elements: [sceneElement()] });
+    expect(svg().getAttribute("viewBox")).toBe("-10 0 200 100");
+    pointer(svg(), "pointermove", 25, 10);
+    pointer(svg(), "pointerup", 25, 10);
+
+    expect(frame.port.messages).toEqual([{ kind: "pan", dx: -15, dy: 0 }]);
+  });
+
+  it("holds two quick pans until the Worker has answered both", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "hand" });
+
+    pointer(svg(), "pointerdown", 10, 10);
+    pointer(svg(), "pointermove", 20, 10);
+    pointer(svg(), "pointerup", 20, 10);
+    pointer(svg(), "pointerdown", 20, 10);
+    pointer(svg(), "pointermove", 20, 30);
+    pointer(svg(), "pointerup", 20, 30);
+    expect(svg().getAttribute("viewBox")).toBe("-10 -20 200 100");
+
+    // The first answer arrives: the second pan is still the Frame's to show.
+    frame.scene({ tool: "hand", panX: -10, panY: 0 });
+    expect(svg().getAttribute("viewBox")).toBe("-10 -20 200 100");
+    frame.scene({ tool: "hand", panX: -10, panY: -20 });
+    expect(svg().getAttribute("viewBox")).toBe("-10 -20 200 100");
+    expect(frame.port.messages).toEqual([
+      { kind: "pan", dx: -10, dy: 0 },
+      { kind: "pan", dx: 0, dy: -20 },
+    ]);
+  });
+
+  it("keeps a Hand pan's travel when a second finger joins it", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "hand" });
+
+    pointerOf("pointerdown", 10, 10, 1, "touch");
+    pointerOf("pointermove", 20, 10, 1, "touch");
+    // The second finger hands the pan to the pair: what the first finger slid
+    // goes to the Worker, and the view does not jump back.
+    pointerOf("pointerdown", 40, 40, 2, "touch");
+    expect(frame.port.messages).toEqual([{ kind: "pan", dx: -10, dy: 0 }]);
+    expect(svg().getAttribute("viewBox")).toBe("-10 0 200 100");
+
+    // Both fingers travel 5 mm down, so their average does too.
+    pointerOf("pointermove", 20, 15, 1, "touch");
+    pointerOf("pointermove", 40, 45, 2, "touch");
+    pointerOf("pointerup", 20, 15, 1, "touch");
+    pointerOf("pointerup", 40, 45, 2, "touch");
+
+    expect(frame.port.messages).toEqual([
+      { kind: "pan", dx: -10, dy: 0 },
+      { kind: "pan", dx: 0, dy: -5 },
+    ]);
+    expect(svg().getAttribute("viewBox")).toBe("-10 -5 200 100");
+  });
+
   it("pans on a one-finger drag with the Hand", () => {
     frame = loadFrame();
     frame.scene({ tool: "hand" });
