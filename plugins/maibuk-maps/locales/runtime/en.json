@@ -8,7 +8,6 @@
   "list.emptyBookTitle": "No Maps for this Book yet",
   "list.emptyBookDescription": "Maps you make for this Book show here. Maps with no Book show under All.",
   "list.edited": "Edited {{when}}",
-  "list.open": "Open",
   "list.rename": "Rename",
   "list.delete": "Delete",
   "list.saveFailed": "The Maps could not be saved. Try again.",

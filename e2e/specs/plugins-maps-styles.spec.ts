@@ -107,7 +107,7 @@ async function openEditorWithMap(page: Page): Promise<void> {
   await page.goto("/");
   await openMaps(page);
   await createMap(page, "Coastline");
-  await tabTo(page, page.getByRole("button", { name: "Open Coastline" }), { max: 60 });
+  await tabTo(page, page.getByRole("button", { name: /^Coastline\b/ }), { max: 60 });
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/maibuk-maps\/map$/);
   await expect(surface(page)).toBeVisible();
@@ -195,7 +195,7 @@ async function backToMaps(page: Page): Promise<void> {
 async function reopenMap(page: Page): Promise<void> {
   await page.reload();
   await expect(page.getByRole("heading", { name: "Maps", level: 1 })).toBeVisible();
-  await tabTo(page, page.getByRole("button", { name: "Open Coastline" }), { max: 60 });
+  await tabTo(page, page.getByRole("button", { name: /^Coastline\b/ }), { max: 60 });
   await page.keyboard.press("Enter");
   await expect(surface(page)).toBeVisible();
   // Layers starts shut in the floating editor (#778), so the list below is

@@ -72,7 +72,7 @@ async function createMap(page: Page, name: string): Promise<void> {
 
 /** Opens a Map from the list and waits for its editor's Frame to draw. */
 async function openMap(page: Page, name: string): Promise<void> {
-  await tabTo(page, page.getByRole("button", { name: `Open ${name}` }), { max: 60 });
+  await tabTo(page, page.getByRole("button", { name: new RegExp(`^${name}\\b`) }), { max: 60 });
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/maibuk-maps\/map$/);
   await expect(mapFrame(page).locator("svg")).toBeVisible();

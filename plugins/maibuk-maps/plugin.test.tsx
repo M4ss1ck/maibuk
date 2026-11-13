@@ -1187,7 +1187,7 @@ describe("Map editor page", () => {
     try {
       const mapsPage = await host.renderPage(MAPS_PAGE_ID);
       const user = userEvent.setup();
-      const open = await screen.findByRole("button", { name: `${en["list.open"]} Coast` });
+      const open = await screen.findByRole("button", { name: /^Coast\b/ });
       await tabTo(user, open, 120);
       await user.keyboard("{Enter}");
       await waitFor(() =>
