@@ -505,9 +505,12 @@ div[data-plugin-ui] > div:nth-child(2) { top: 50%; left: 0.75rem; transform: tra
    itself past that instead of covering the bar. */
 div[data-plugin-ui] > div:nth-child(3) { top: 50%; left: 3.75rem; width: 17rem; transform: translateY(-50%); max-height: calc(100% - 9rem); }
 /* The Insert card's Stamp grid: square tiles a thumb can hit, as many columns
-   as the card is wide, each tile filled by its Stamp's picture. */
+   as the card is wide, each tile filled by its Stamp's picture. A tile takes
+   its column's width: WebKitGTK aligns a grid item with an aspect ratio to the
+   start instead of stretching it, which shrank each tile to its picture's 16px
+   natural size. */
 div[data-plugin-ui] > div:nth-child(3) > div:first-child { display: grid; grid-template-columns: repeat(auto-fill, minmax(2.75rem, 1fr)); gap: 0.25rem; }
-div[data-plugin-ui] > div:nth-child(3) > div:first-child > button { height: auto; min-width: 0; aspect-ratio: 1; padding: 0.1875rem; }
+div[data-plugin-ui] > div:nth-child(3) > div:first-child > button { width: 100%; height: auto; min-width: 0; aspect-ratio: 1; padding: 0.1875rem; }
 div[data-plugin-ui] > div:nth-child(3) > div:first-child > button > img { width: 100%; height: 100%; max-width: none; object-fit: contain; border-radius: 0.25rem; }
 /* The picked tile is the one holding a second child: it takes the primary
    ring, and the child itself, which only marks it, is not drawn. */
