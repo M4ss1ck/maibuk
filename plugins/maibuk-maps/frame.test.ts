@@ -13,6 +13,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { MAP_FRAME_SRC } from "./map-page";
 import { parseFrameMessage, sceneMessage } from "./frame-protocol";
 import {
+  transformBox as geometryTransformBox,
+  type TransformBox,
+  type TransformGesture,
+} from "./geometry";
+import {
   MAP_LABEL_FONT_FAMILIES,
   MAP_LABEL_FONTS,
   bendFromPoint,
@@ -65,6 +70,11 @@ interface Frame {
    * the blob URL it keeps: jsdom has no canvas, so a test reads the swap here.
    */
   assetSvg(svg: string): string;
+  /**
+   * The Frame's mirrored copy of the handle maths (#795), which the parity test
+   * holds to `geometry.ts`'s results.
+   */
+  transformBox(gesture: TransformGesture): TransformBox;
 }
 
 /** Loads the Frame's markup, the vendored libraries, and its scripts. */
@@ -76,12 +86,16 @@ function loadFrame(): Frame {
   const origin: [number, number] = [0, 0];
   const sizes: { scale: number | null } = { scale: 4 };
   let assetSvg: (svg: string) => string = (svg) => svg;
+  let resolveTransformBox: ((gesture: TransformGesture) => TransformBox) | null = null;
   (globalThis as Record<string, unknown>).__mapTestHooks = {
     pagePoint: (event: MouseEvent) => [event.clientX - origin[0], event.clientY - origin[1]],
     pxPerMm: () => sizes.scale,
     onReady: (cleanup: () => void) => cleanups.push(cleanup),
     onAssetSvg: (resolve: (svg: string) => string) => {
       assetSvg = resolve;
+    },
+    onTransformBox: (resolve: (gesture: TransformGesture) => TransformBox) => {
+      resolveTransformBox = resolve;
     },
   };
   try {
@@ -121,6 +135,10 @@ function loadFrame(): Frame {
       });
     },
     assetSvg: (svg) => assetSvg(svg),
+    transformBox(gesture) {
+      if (resolveTransformBox === null) throw new Error("the Frame registered no handle maths");
+      return resolveTransformBox(gesture);
+    },
   };
 }
 
@@ -2730,6 +2748,20 @@ describe("the transform handles (#795)", () => {
     Number(element.getAttribute("y")) + Number(element.getAttribute("height")) / 2,
   ];
 
+  /** The box the overlay draws around the selection. */
+  const outline = (): Element => {
+    const element = overlay().querySelector("rect.map-transform-box");
+    if (element === null) throw new Error("the selection drew no box");
+    return element;
+  };
+
+  /** The selected Element's own group, where a drag previews the art. */
+  const elementGroup = (): Element => {
+    const group = document.querySelector('g[data-element-id="e1"]');
+    if (group === null) throw new Error("the Element drew no group");
+    return group;
+  };
+
   /** How many screen pixels wide a drawn rectangle is, at `scale` px per mm. */
   const pixels = (element: Element, scale: number): number =>
     Number(element.getAttribute("width")) * scale;
@@ -2881,7 +2913,10 @@ describe("the transform handles (#795)", () => {
     pointer(target("se"), "pointerdown", 120, 60);
     pointer(svg(), "pointermove", 130, 70);
     pointer(svg(), "pointerup", 130, 70);
-    expect(frame.port.messages).toEqual([]);
+    // The grip's own drag is the only edit it makes: no select and no move.
+    expect(frame.port.messages).not.toContainEqual(expect.objectContaining({ kind: "select" }));
+    expect(frame.port.messages).not.toContainEqual(expect.objectContaining({ kind: "move" }));
+    frame.port.messages.length = 0;
 
     // The Element's body still moves as it always did.
     const line = document.querySelector('g[data-element-id="e1"] path.map-line');
@@ -2893,6 +2928,133 @@ describe("the transform handles (#795)", () => {
       { kind: "select", id: "e1" },
       { kind: "move", id: "e1", dx: 8, dy: 0 },
     ]);
+  });
+
+  it("resizes from a corner, previews the box live, and sends one transform on release", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected({ movable: true })] });
+
+    pointer(target("se"), "pointerdown", 120, 60);
+    pointer(svg(), "pointermove", 130, 65);
+
+    // Nothing travels to the Worker until release: the box, its handles, and
+    // the art itself follow the pointer inside this Frame.
+    expect(frame.port.messages).toEqual([]);
+    expect(outline().getAttribute("width")).toBe("50");
+    expect(elementGroup().getAttribute("transform")).toBe(
+      "translate(105 52.5) scale(1.25) translate(-100 -50)"
+    );
+
+    pointer(svg(), "pointerup", 130, 65);
+    expect(frame.port.messages).toEqual([
+      {
+        kind: "transformElement",
+        id: "e1",
+        box: { x: 105, y: 52.5, width: 50, height: 25, rotation: 0 },
+      },
+    ]);
+  });
+
+  it("resizes about the centre while Alt holds", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected()] });
+
+    pointer(target("se"), "pointerdown", 120, 60);
+    pointer(svg(), "pointermove", 130, 65, { altKey: true });
+    expect(elementGroup().getAttribute("transform")).toBe(
+      "translate(100 50) scale(1.5) translate(-100 -50)"
+    );
+    pointer(svg(), "pointerup", 130, 65);
+
+    // Both sides grow away from the centre, which stays where it was.
+    expect(frame.port.messages).toEqual([
+      {
+        kind: "transformElement",
+        id: "e1",
+        box: { x: 100, y: 50, width: 60, height: 30, rotation: 0 },
+      },
+    ]);
+  });
+
+  it("turns about the centre from the rotate handle, Shift snapping to 15° steps", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected()] });
+
+    pointer(target("rotate"), "pointerdown", 100, 35);
+    pointer(svg(), "pointermove", 110, 50);
+    expect(overlay().getAttribute("transform")).toBe("translate(100 50) rotate(90)");
+    expect(elementGroup().getAttribute("transform")).toBe(
+      "translate(100 50) rotate(90) translate(-100 -50)"
+    );
+
+    // 44° round from the grip's start is 134° from the box's own upright, and
+    // Shift lands it on 135°.
+    const aim = (degrees: number): [number, number] => [
+      100 + 15 * Math.cos((degrees * Math.PI) / 180),
+      50 + 15 * Math.sin((degrees * Math.PI) / 180),
+    ];
+    const [x, y] = aim(44);
+    pointer(svg(), "pointermove", x, y, { shiftKey: true });
+    expect(overlay().getAttribute("transform")).toBe("translate(100 50) rotate(135)");
+    pointer(svg(), "pointerup", x, y);
+
+    expect(frame.port.messages).toEqual([
+      {
+        kind: "transformElement",
+        id: "e1",
+        box: { x: 100, y: 50, width: 40, height: 20, rotation: 135 },
+      },
+    ]);
+  });
+
+  it("sticks a turn to a right angle within 2°", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected()] });
+
+    pointer(target("rotate"), "pointerdown", 100, 35);
+    // 89° round from the grip's start is 179° from the box's own upright, a
+    // degree short of a half turn, which the drag treats as straight down.
+    const [x, y] = [
+      100 + 15 * Math.cos((89 * Math.PI) / 180),
+      50 + 15 * Math.sin((89 * Math.PI) / 180),
+    ];
+    pointer(svg(), "pointermove", x, y);
+    expect(overlay().getAttribute("transform")).toBe("translate(100 50) rotate(180)");
+  });
+
+  it("keeps the preview after release until the next scene arrives", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected()] });
+
+    pointer(target("se"), "pointerdown", 120, 60);
+    pointer(svg(), "pointermove", 130, 65);
+    pointer(svg(), "pointerup", 130, 65);
+
+    // The Worker has not answered, so the Element keeps the size the drag gave it.
+    expect(outline().getAttribute("width")).toBe("50");
+    expect(elementGroup().getAttribute("transform")).toContain("scale(1.25)");
+
+    // A scene that still holds the start box ends the preview, as a refused drag does.
+    frame.scene({ elements: [selected()] });
+    expect(outline().getAttribute("width")).toBe("40");
+    expect(elementGroup().getAttribute("transform")).toBeNull();
+  });
+
+  it("cancels the drag on Escape, restoring the box and sending nothing", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected()] });
+
+    pointer(target("se"), "pointerdown", 120, 60);
+    pointer(svg(), "pointermove", 130, 65);
+    expect(outline().getAttribute("width")).toBe("50");
+
+    // Escape takes the start box back and the Worker never hears of the drag.
+    expect(key("Escape").defaultPrevented).toBe(true);
+    expect(outline().getAttribute("width")).toBe("40");
+    expect(elementGroup().getAttribute("transform")).toBeNull();
+
+    pointer(svg(), "pointerup", 130, 65);
+    expect(frame.port.messages).toEqual([]);
   });
 
   it("draws no grips for an Element with no box, no other tool, and no selection", () => {
@@ -2931,6 +3093,119 @@ describe("the transform handles (#795)", () => {
     ]) {
       frame.scene({ elements: [sceneElement({ selected: true, transform })] });
       expect(document.querySelector("g.map-transform")).toBeNull();
+    }
+  });
+});
+
+describe("the Frame's mirrored handle maths (#795)", () => {
+  /** A box centred on the page, 40 mm wide and 20 mm high unless a case says otherwise. */
+  const box = (overrides: Partial<TransformBox> = {}): TransformBox => ({
+    x: 100,
+    y: 50,
+    width: 40,
+    height: 20,
+    rotation: 0,
+    ...overrides,
+  });
+
+  /** Where a point of a box's own frame sits on the page, in millimetres. */
+  const pageOf = (frame: TransformBox, local: [number, number]): [number, number] => {
+    const angle = (frame.rotation * Math.PI) / 180;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    return [frame.x + local[0] * cos - local[1] * sin, frame.y + local[0] * sin + local[1] * cos];
+  };
+
+  /** The page point of one corner of a box, named the way a handle is. */
+  const cornerOf = (frame: TransformBox, corner: "nw" | "ne" | "se" | "sw"): [number, number] => {
+    const signX = corner === "ne" || corner === "se" ? 1 : -1;
+    const signY = corner === "sw" || corner === "se" ? 1 : -1;
+    return pageOf(frame, [(signX * frame.width) / 2, (signY * frame.height) / 2]);
+  };
+
+  /** Where a point sits a given angle and distance from the page centre. */
+  const aim = (degrees: number, radius = 10): [number, number] => [
+    100 + radius * Math.cos((degrees * Math.PI) / 180),
+    50 + radius * Math.sin((degrees * Math.PI) / 180),
+  ];
+
+  const cases: { name: string; gesture: TransformGesture }[] = [
+    {
+      name: "a corner growing with its aspect kept",
+      gesture: { box: box(), handle: "se", start: [120, 60], point: [130, 65], aspect: true },
+    },
+    {
+      name: "a corner shrinking with its aspect kept",
+      gesture: { box: box(), handle: "nw", start: [80, 40], point: [85, 45], aspect: true },
+    },
+    {
+      name: "a corner growing about the centre with Alt",
+      gesture: {
+        box: box(),
+        handle: "se",
+        start: [120, 60],
+        point: [130, 65],
+        aspect: true,
+        fromCentre: true,
+      },
+    },
+    {
+      name: "a side moving one axis",
+      gesture: { box: box(), handle: "e", start: [120, 50], point: [130, 50], aspect: false },
+    },
+    {
+      name: "a corner of a turned box in its own frame",
+      gesture: {
+        box: box({ rotation: 90 }),
+        handle: "se",
+        start: cornerOf(box({ rotation: 90 }), "se"),
+        point: [90, 80],
+        aspect: true,
+      },
+    },
+    {
+      name: "a turn the pointer sweeps",
+      gesture: { box: box(), handle: "rotate", start: [100, 40], point: [110, 50] },
+    },
+    {
+      name: "a turn added to the angle the box had",
+      gesture: {
+        box: box({ rotation: 350 }),
+        handle: "rotate",
+        start: [100, 40],
+        point: [110, 50],
+      },
+    },
+    {
+      name: "a turn snapped to a 15° step with Shift",
+      gesture: { box: box(), handle: "rotate", start: [110, 50], point: aim(44), snap: true },
+    },
+    {
+      name: "a turn stuck to a right angle within 2°",
+      gesture: { box: box(), handle: "rotate", start: [110, 50], point: aim(89) },
+    },
+    {
+      name: "a drag past the anchor kept above zero",
+      gesture: {
+        box: box(),
+        handle: "se",
+        start: [120, 60],
+        point: [60, 40],
+        aspect: false,
+        minWidth: 1,
+        minHeight: 1,
+      },
+    },
+  ];
+
+  it("returns the same box as geometry.ts over the table of cases", () => {
+    frame = loadFrame();
+    for (const { name, gesture } of cases) {
+      const mirrored = frame.transformBox(gesture);
+      const geometry = geometryTransformBox(gesture);
+      for (const key of ["x", "y", "width", "height", "rotation"] as const) {
+        expect(mirrored[key], `${name}: ${key}`).toBeCloseTo(geometry[key], 6);
+      }
     }
   });
 });

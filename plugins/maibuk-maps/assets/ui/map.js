@@ -7,7 +7,8 @@
    picture, since only it has a DOM. The Frame answers a finished Pencil stroke,
    a finished Pen line, a finished Area Fill outline, an
    Eraser drag, a drawn Shape, a Bucket pour, a dropped Stamp, the Element the
-   author picked, a Select drag that moved one, a Map Label's bend dragged
+   author picked, a Select drag that moved one, a transform handle drag that
+   resized or turned a Stamp or Map Image, a Map Label's bend dragged
    from its handle, one step of a pointer zoom, a finished pointer pan, the encoded picture an
    export asked for, and what one uploaded picture measured.
    Points cross the port in page millimetres, the same space as the page's
@@ -70,6 +71,9 @@
    * @typedef {{ id: string, offset: MapPoint }} PendingMove
    * @typedef {{ pointerId: number, id: string, press: ClientPoint, label: FrameLabelLayout, moved: boolean, bend: number }} BendDrag
    * @typedef {{ id: string, bend: number }} PendingBend
+   * @typedef {{ box: FrameTransformBox, handle: string, start: MapPoint, point: MapPoint, aspect?: boolean, fromCentre?: boolean, snap?: boolean, minWidth?: number, minHeight?: number }} TransformGesture
+   * @typedef {{ pointerId: number, id: string, handle: string, press: ClientPoint, start: MapPoint, startBox: FrameTransformBox, box: FrameTransformBox, moved: boolean }} TransformDrag
+   * @typedef {{ id: string, startBox: FrameTransformBox, box: FrameTransformBox }} PendingTransform
    * @typedef {{ pointers: number[], client: ClientPoint, offset: MapPoint }} PanDrag
    * @typedef {{ clientX: number, clientY: number, touch: boolean }} PointerPlace
    * @typedef {{ start: MapPoint, control: MapPoint, apex: MapPoint, end: MapPoint }} BendGeometry
@@ -138,6 +142,16 @@
   const COARSE_HANDLE_HIT_PX = 44;
   const COARSE_TURN_HANDLE_PX = 18;
   const COARSE_TURN_STALK_PX = 26;
+
+  /**
+   * How the handle maths turns and grows a box (#795), mirroring `geometry.ts`
+   * so the Frame's preview obeys the rules the Worker writes: a turn within 2°
+   * of a right angle sticks to it, Shift snaps to 15° steps, and a side never
+   * reaches zero.
+   */
+  const RIGHT_ANGLE_STICK_DEGREES = 2;
+  const TURN_SNAP_DEGREES = 15;
+  const MIN_TRANSFORM_SIZE_MM = 0.01;
 
   /** The cursor the turn handle shows: no browser has a rotate arrow of its own. */
   const TURN_CURSOR = "grab";
@@ -230,6 +244,21 @@
    * between the release and the Worker's redraw. @type {PendingBend | null}
    */
   let pendingBend = null;
+  /**
+   * The transform handle drag in progress, or null (#795): the Element, the
+   * handle the pointer grips, where the press landed, and the box the drag asks
+   * for right now. The Frame previews the box and the Element's own art while
+   * the drag lasts, and tells the Worker once, on release.
+   * @type {TransformDrag | null}
+   */
+  let transformDrag = null;
+  /**
+   * A finished transform drag the Worker has not answered yet, or null. Its
+   * preview stays until the next scene, as a move's does, so the Element never
+   * jumps back between the release and the Worker's redraw.
+   * @type {PendingTransform | null}
+   */
+  let pendingTransform = null;
 
   /**
    * The pan gesture in progress, or null (#777): the pointers it follows,
@@ -823,6 +852,8 @@
     pendingMove = null;
     bendDrag = null;
     pendingBend = null;
+    transformDrag = null;
+    pendingTransform = null;
     // The view a pan already slid stays where it is, so the Worker hears of it.
     commitPan();
     panDrag = null;
@@ -1233,6 +1264,134 @@
   }
 
   /**
+   * The handle maths (#795), mirrored from `transformBox` in `geometry.ts` so the
+   * live preview agrees with what the Worker writes. The parity test in
+   * `frame.test.ts` holds the two copies to the same results.
+   */
+
+  /** A turn inside one circle, in degrees. */
+  function normalizeDegrees(degrees) {
+    return ((degrees % 360) + 360) % 360;
+  }
+
+  /** The shortest way round from one angle to another, in degrees, between -180 and 180. */
+  function turnedBy(from, to) {
+    return ((to - from + 540) % 360) - 180;
+  }
+
+  /** The angle from a centre to a point, in degrees. */
+  function angleAt(point, center) {
+    return (Math.atan2(point[1] - center[1], point[0] - center[0]) * 180) / Math.PI;
+  }
+
+  /**
+   * The box a rotate-handle drag asks for: the angle the pointer sweeps about
+   * the box's centre added to the turn it already had. With `snap` (Shift) the
+   * turn lands on a 15° step; without it, a turn within 2° of a right angle
+   * sticks to it. The centre and the size never change.
+   * @param {TransformGesture} gesture
+   * @returns {FrameTransformBox}
+   */
+  function turnBox(gesture) {
+    const { box } = gesture;
+    const center = [box.x, box.y];
+    let rotation = normalizeDegrees(
+      box.rotation + turnedBy(angleAt(gesture.start, center), angleAt(gesture.point, center))
+    );
+    if (gesture.snap === true) {
+      rotation = normalizeDegrees(Math.round(rotation / TURN_SNAP_DEGREES) * TURN_SNAP_DEGREES);
+    } else {
+      const right = Math.round(rotation / 90) * 90;
+      if (Math.abs(turnedBy(rotation, right)) <= RIGHT_ANGLE_STICK_DEGREES) {
+        rotation = normalizeDegrees(right);
+      }
+    }
+    return { ...box, rotation };
+  }
+
+  /**
+   * The box a corner or side drag asks for. The drag works in the box's own
+   * turned frame, so a turned Element's handles move along its sides. A corner
+   * anchors the opposite corner, a side the opposite side, and Alt anchors the
+   * centre. `aspect` keeps the box's proportions; a side handle always moves one
+   * axis. A drag can never reach zero or cross over its anchor: the side it
+   * grows stops at `minWidth`/`minHeight` instead of flipping.
+   * @param {TransformGesture} gesture
+   * @returns {FrameTransformBox}
+   */
+  function resizeBox(gesture) {
+    const { box, handle } = gesture;
+    const angle = (box.rotation * Math.PI) / 180;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const toLocal = (point) => [
+      (point[0] - box.x) * cos + (point[1] - box.y) * sin,
+      -(point[0] - box.x) * sin + (point[1] - box.y) * cos,
+    ];
+    const signX = handle.includes("w") ? -1 : handle.includes("e") ? 1 : 0;
+    const signY = handle.includes("n") ? -1 : handle.includes("s") ? 1 : 0;
+    const halfWidth = Math.max(MIN_TRANSFORM_SIZE_MM, box.width) / 2;
+    const halfHeight = Math.max(MIN_TRANSFORM_SIZE_MM, box.height) / 2;
+    const startLocal = toLocal(gesture.start);
+    const pointLocal = toLocal(gesture.point);
+    // Where the grabbed corner, or the middle of the grabbed side, sits now.
+    const grabbed = [signX * halfWidth, signY * halfHeight];
+    const reached = [
+      grabbed[0] + pointLocal[0] - startLocal[0],
+      grabbed[1] + pointLocal[1] - startLocal[1],
+    ];
+    const minWidth = Math.max(MIN_TRANSFORM_SIZE_MM, gesture.minWidth ?? MIN_TRANSFORM_SIZE_MM);
+    const minHeight = Math.max(MIN_TRANSFORM_SIZE_MM, gesture.minHeight ?? MIN_TRANSFORM_SIZE_MM);
+    const anchor = [-signX * halfWidth, -signY * halfHeight];
+    // An axis no handle grips keeps the size it had.
+    let width =
+      signX === 0
+        ? halfWidth * 2
+        : Math.max(
+            minWidth,
+            gesture.fromCentre === true
+              ? 2 * Math.abs(reached[0])
+              : signX * (reached[0] - anchor[0])
+          );
+    let height =
+      signY === 0
+        ? halfHeight * 2
+        : Math.max(
+            minHeight,
+            gesture.fromCentre === true
+              ? 2 * Math.abs(reached[1])
+              : signY * (reached[1] - anchor[1])
+          );
+    if (gesture.aspect === true) {
+      const scale = Math.max(width / (halfWidth * 2), height / (halfHeight * 2));
+      width = halfWidth * 2 * scale;
+      height = halfHeight * 2 * scale;
+    }
+    const center =
+      gesture.fromCentre === true
+        ? [0, 0]
+        : [anchor[0] + (signX * width) / 2, anchor[1] + (signY * height) / 2];
+    return {
+      x: box.x + center[0] * cos - center[1] * sin,
+      y: box.y + center[0] * sin + center[1] * cos,
+      width,
+      height,
+      rotation: box.rotation,
+    };
+  }
+
+  /**
+   * The box one handle gesture draws (#795): a corner or side resized in the
+   * box's own frame, or the whole box turned about its centre.
+   * @param {TransformGesture} gesture
+   * @returns {FrameTransformBox}
+   */
+  function transformBox(gesture) {
+    if (gesture.handle === "rotate") return turnBox(gesture);
+    return resizeBox(gesture);
+  }
+
+  /**
    * The selected Element whose transform handles the Frame draws, or null: one
    * the Worker gave a box, shown, under the Select tool, since every other
    * tool's press draws a new thing rather than sizing the one under it.
@@ -1243,6 +1402,19 @@
     const selected = scene.elements.find((element) => element.selected);
     if (selected === undefined || selected.transform === undefined || selected.hidden) return null;
     return selected;
+  }
+
+  /**
+   * The box the handles sit on for one Element (#795): the live box while its
+   * drag runs or its preview holds, and the scene's own box otherwise.
+   * @param {FrameSceneElement} target
+   * @returns {FrameTransformBox}
+   */
+  function liveTransformBox(target) {
+    if (target.transform === undefined) return { x: 0, y: 0, width: 0, height: 0, rotation: 0 };
+    if (transformDrag !== null && transformDrag.id === target.id) return transformDrag.box;
+    if (pendingTransform !== null && pendingTransform.id === target.id) return pendingTransform.box;
+    return target.transform.box;
   }
 
   /**
@@ -1261,7 +1433,7 @@
     const target = transformTarget();
     if (target === null || target.transform === undefined) return null;
     const { html } = lib;
-    const { box } = target.transform;
+    const box = liveTransformBox(target);
     const scale = screenScale();
     const sizes = scale === null ? null : handleSizes(scale);
     const halfWidth = box.width / 2;
@@ -1435,13 +1607,47 @@
   }
 
   /**
+   * A number for an SVG transform's scale, with three decimals at most, as
+   * `scene.ts` writes one.
+   * @param {number} value
+   * @returns {string}
+   */
+  function n3(value) {
+    return String(Math.round(value * 1000) / 1000);
+  }
+
+  /**
+   * The SVG transform that previews a handle drag on an Element's own group
+   * (#795): the start box moved, turned, and scaled onto the live one, so the
+   * art follows the grip and sits inside the box the drag draws.
+   * @param {string} id
+   * @returns {string | undefined}
+   */
+  function transformPreview(id) {
+    /** @type {{ startBox: FrameTransformBox, box: FrameTransformBox } | null} */
+    let preview = null;
+    if (transformDrag !== null && transformDrag.id === id) preview = transformDrag;
+    else if (pendingTransform !== null && pendingTransform.id === id) preview = pendingTransform;
+    if (preview === null) return undefined;
+    const { startBox, box } = preview;
+    const scale = startBox.width === 0 ? 1 : box.width / startBox.width;
+    const turn = box.rotation - startBox.rotation;
+    return `translate(${n(box.x)} ${n(box.y)})${
+      turn === 0 ? "" : ` rotate(${n(turn)})`
+    }${scale === 1 ? "" : ` scale(${n3(scale)})`} translate(${n(-startBox.x)} ${n(-startBox.y)})`;
+  }
+
+  /**
    * The live offset a Select drag draws an Element at, as an SVG translate, or
    * undefined when it sits where the scene put it. A finished drag keeps its
-   * offset until the Worker's next scene draws the Element there itself.
+   * offset until the Worker's next scene draws the Element there itself. A
+   * handle drag previews the Element in its new box the same way (#795).
    * @param {string} id
    * @returns {string | undefined}
    */
   function dragTransform(id) {
+    const preview = transformPreview(id);
+    if (preview !== undefined) return preview;
     /** @type {MapPoint | null} */
     let offset = null;
     if (isDragging(id) && moveDrag !== null) offset = moveDrag.offset;
@@ -1624,6 +1830,121 @@
     bendDrag = null;
     releasePointerId(pointerId);
     draw();
+  }
+
+  /**
+   * Starts a transform handle drag when the press lands on a grip (#795), and
+   * reports whether it did, so the press neither picks an Element nor moves it.
+   * A press on the edge of a grip that never travels leaves the box as it was,
+   * so a click posts nothing.
+   * @param {PointerEvent} event
+   * @returns {boolean}
+   */
+  function startTransform(event) {
+    const hit =
+      event.target instanceof Element ? event.target.closest("[data-transform-handle-hit]") : null;
+    if (hit === null || scene === null) return false;
+    const handle = hit.getAttribute("data-transform-handle-hit");
+    const overlay = hit.closest("[data-transform]");
+    const id = overlay === null ? null : overlay.getAttribute("data-transform");
+    if (handle === null || id === null) return false;
+    const target = scene.elements.find((element) => element.id === id);
+    if (target === undefined || target.transform === undefined || target.locked || target.hidden) {
+      return false;
+    }
+    const point = pagePoint(event);
+    if (point === null) return false;
+    event.preventDefault();
+    transformDrag = {
+      pointerId: event.pointerId,
+      id: target.id,
+      handle,
+      press: { clientX: event.clientX, clientY: event.clientY },
+      start: point,
+      startBox: { ...target.transform.box },
+      box: { ...target.transform.box },
+      moved: false,
+    };
+    capturePointer(event);
+    return true;
+  }
+
+  /**
+   * Follows the pointer with the transform drag: once the press has travelled
+   * past the Select drag's threshold, the box, its handles, and the Element's
+   * art preview what the pointer asks for, live and in this Frame only. A
+   * corner keeps its aspect, as a Stamp and a Map Image always do, Alt resizes
+   * about the centre, and Shift snaps a turn to 15°.
+   * @param {PointerEvent} event
+   */
+  function followTransform(event) {
+    if (transformDrag === null) return;
+    const point = pagePoint(event);
+    if (point === null) return;
+    if (!transformDrag.moved) {
+      const travelled = Math.hypot(
+        event.clientX - transformDrag.press.clientX,
+        event.clientY - transformDrag.press.clientY
+      );
+      if (travelled < DRAG_THRESHOLD_PX) return;
+      transformDrag.moved = true;
+    }
+    transformDrag.box = transformBox({
+      box: transformDrag.startBox,
+      handle: transformDrag.handle,
+      start: transformDrag.start,
+      point,
+      aspect: true,
+      fromCentre: event.altKey === true,
+      snap: event.shiftKey === true,
+    });
+    draw();
+  }
+
+  /**
+   * Ends the transform drag. A drag that moved the box goes to the Worker as
+   * one transformElement, which is one undo step, and its preview holds until
+   * the Worker answers; a press that never passed the threshold, or one that
+   * left the box as it was, sends nothing.
+   * @param {PointerEvent} event
+   * @param {boolean} send
+   */
+  function endTransform(event, send) {
+    if (transformDrag === null || event.pointerId !== transformDrag.pointerId) return;
+    const drag = transformDrag;
+    transformDrag = null;
+    releasePointer(event);
+    if (!send || !drag.moved || sameBox(drag.box, drag.startBox)) {
+      draw();
+      return;
+    }
+    pendingTransform = { id: drag.id, startBox: drag.startBox, box: drag.box };
+    draw();
+    post({ kind: "transformElement", id: drag.id, box: drag.box });
+  }
+
+  /** Drops the transform drag in progress, and its preview, without reporting it. */
+  function cancelTransform() {
+    if (transformDrag === null) return;
+    const pointerId = transformDrag.pointerId;
+    transformDrag = null;
+    releasePointerId(pointerId);
+    draw();
+  }
+
+  /**
+   * Whether two boxes place, size, and turn an Element the same way.
+   * @param {FrameTransformBox} one
+   * @param {FrameTransformBox} two
+   */
+  function sameBox(one, two) {
+    return (
+      one.x === two.x &&
+      one.y === two.y &&
+      one.width === two.width &&
+      one.height === two.height &&
+      one.rotation === two.rotation
+    );
   }
 
   /**
@@ -1981,16 +2302,10 @@
     }
 
     // A second finger while one drag is under way neither picks nor drags.
-    if (moveDrag !== null || bendDrag !== null) return;
+    if (moveDrag !== null || bendDrag !== null || transformDrag !== null) return;
     // A press on a transform handle belongs to the handle (#795): it never
     // picks the Element under it nor moves it, so a grip press posts nothing.
-    if (
-      event.target instanceof Element &&
-      event.target.closest("[data-transform-handle-hit]") !== null
-    ) {
-      event.preventDefault();
-      return;
-    }
+    if (startTransform(event)) return;
     // A press on the bend handle shapes the curve (#751) and never picks or
     // moves the label it belongs to, so a bend drag posts no move.
     if (startBend(event)) return;
@@ -2074,6 +2389,11 @@
 
     if (bendDrag !== null && event.pointerId === bendDrag.pointerId) {
       followBend(event);
+      return;
+    }
+
+    if (transformDrag !== null && event.pointerId === transformDrag.pointerId) {
+      followTransform(event);
       return;
     }
 
@@ -2241,6 +2561,13 @@
     if (event.key === "Escape" && moveDrag !== null) {
       event.preventDefault();
       cancelMove();
+      return;
+    }
+    // Escape cancels a transform handle drag (#795), putting the Element and
+    // its box back where the scene had them.
+    if (event.key === "Escape" && transformDrag !== null) {
+      event.preventDefault();
+      cancelTransform();
       return;
     }
     if (event.key === "Shift") constrainDrag(true);
@@ -2643,9 +2970,11 @@
     scene = next;
     // Any scene after a release draws the moved Element where the Worker put
     // it, or back at its start when the Worker refused the move, and the
-    // bent label by the bend the Worker kept.
+    // bent label by the bend the Worker kept, and a transformed Element by the
+    // box the Worker kept (#795).
     pendingMove = null;
     pendingBend = null;
+    pendingTransform = null;
     if (next.tool !== previousTool) resetGestures();
     // An Element locked, deleted, or undone away mid-drag stops moving.
     if (moveDrag !== null) {
@@ -2661,6 +2990,15 @@
       const bentBy = next.elements.find((element) => element.id === bent);
       if (bentBy === undefined || bentBy.label === undefined || bentBy.locked || bentBy.hidden) {
         cancelBend();
+        return;
+      }
+    }
+    // An Element locked, hidden, or undone away mid-drag stops transforming.
+    if (transformDrag !== null) {
+      const dragged = transformDrag.id;
+      const still = next.elements.find((element) => element.id === dragged);
+      if (still === undefined || still.transform === undefined || still.locked || still.hidden) {
+        cancelTransform();
         return;
       }
     }
@@ -2696,6 +3034,7 @@
     endShape(event, true);
     endMove(event, true);
     endBend(event, true);
+    endTransform(event, true);
   }
 
   /** @param {PointerEvent} event */
@@ -2707,19 +3046,21 @@
     endShape(event, false);
     endMove(event, false);
     endBend(event, false);
+    endTransform(event, false);
   }
 
   /**
-   * The engine took a Select drag's, a bend drag's, or a pan's capture away with
-   * no pointerup (#766, #751, #777): the gesture is dropped like a cancel, so
-   * the next press is not ignored as a second finger. After a pointerup the
-   * gesture is already over and this is a no-op.
+   * The engine took a Select drag's, a bend drag's, a transform drag's, or a
+   * pan's capture away with no pointerup (#766, #751, #795, #777): the gesture
+   * is dropped like a cancel, so the next press is not ignored as a second
+   * finger. After a pointerup the gesture is already over and this is a no-op.
    * @param {PointerEvent} event
    */
   function onLostPointerCapture(event) {
     pointerClients.delete(event.pointerId);
     endMove(event, false);
     endBend(event, false);
+    endTransform(event, false);
     endPan(event);
   }
 
@@ -2764,6 +3105,11 @@
   }
 
   if (hooks && typeof hooks.onReady === "function") hooks.onReady(cleanup);
+  // The Frame's handle maths is a mirror of `geometry.ts`, and a test holds the
+  // two copies to the same results through this seam (#795).
+  if (hooks && typeof hooks.onTransformBox === "function") {
+    hooks.onTransformBox(transformBox);
+  }
   // A test document may have no canvas, so the rasterize answer is out of reach:
   // this seam hands it the SVG the Frame would draw instead, which is the one
   // fact a test can assert about an export.
