@@ -1131,6 +1131,7 @@ describe("Map editor Commands", () => {
     "moveUpFar",
     "moveDownFar",
     "selectTool",
+    "handTool",
     "pencilTool",
     "penTool",
     "bucketTool",
@@ -1159,6 +1160,7 @@ describe("Map editor Commands", () => {
     expect(effectiveShortcuts("plugin.maibuk-maps.moveDownFar", {}, false)).toContainEqual([
       "Shift+ArrowDown",
     ]);
+    expect(effectiveShortcuts("plugin.maibuk-maps.handTool", {}, false)).toContainEqual(["h"]);
     expect(effectiveShortcuts("plugin.maibuk-maps.penTool", {}, false)).toContainEqual(["n"]);
     expect(effectiveShortcuts("plugin.maibuk-maps.bucketTool", {}, false)).toContainEqual(["b"]);
     expect(effectiveShortcuts("plugin.maibuk-maps.areaTool", {}, false)).toContainEqual(["a"]);
@@ -2211,6 +2213,41 @@ describe("Map editor page", () => {
           await screen.findByRole("button", { name: en[`properties.placeShape.${tool}`] })
         ).toBeInTheDocument();
       }
+
+      keys.unmount();
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("selects the Hand by its key and from the belt, and leaves the selection alone", async () => {
+    const storage = mapStorage([
+      line("e1", "Line one", [
+        [10, 10],
+        [20, 20],
+      ]),
+    ]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    registerMapCommands();
+    const keys = render(<CommandKeys host={host} />);
+    try {
+      const user = userEvent.setup();
+      await screen.findByRole("button", { name: en["tools.hand"] });
+      runtime.editor?.select("e1");
+      await focusPanelButton(user);
+
+      await user.keyboard("h");
+      await waitFor(() => expect(runtime.editor?.getSnapshot().tool).toBe("hand"));
+      expect(pickedTool(en["tools.hand"])).toHaveAttribute("aria-pressed", "true");
+      // Picking the Hand only changes what a drag does; the selection stays.
+      expect(runtime.editor?.getSnapshot().selectedId).toBe("e1");
+
+      await user.keyboard("v");
+      await waitFor(() => expect(runtime.editor?.getSnapshot().tool).toBe("select"));
+      await pickTool(user, en["tools.hand"]);
+      expect(runtime.editor?.getSnapshot().tool).toBe("hand");
 
       keys.unmount();
       await page.unmount();

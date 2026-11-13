@@ -428,12 +428,14 @@ const SHAPE_TOOL_ICONS: Readonly<Record<ShapeKind, string>> = {
 };
 
 /**
- * The tool belt's tools, in the order #775 Decision 3 fixes: the drawing and
+ * The tool belt's tools, in the order #775 Decision 3 fixes, with the Hand
+ * beside Select since both only look and pick rather than draw: the drawing and
  * pouring tools, the three Shape tools, then Insert and Eraser (#778). Each is a
  * `ui.IconButton` with `isSelected`, so the belt is one control per tool.
  */
 const TOOL_BELT: ReadonlyArray<{ tool: MapTool; label: MapsKey; icon: string }> = [
   { tool: "select", label: "tools.select", icon: "mouse-pointer-2" },
+  { tool: "hand", label: "tools.hand", icon: "hand" },
   { tool: "pencil", label: "tools.pencil", icon: "pencil" },
   { tool: "pen", label: "tools.pen", icon: "pen-tool" },
   { tool: "bucket", label: "tools.bucket", icon: "paint-bucket" },

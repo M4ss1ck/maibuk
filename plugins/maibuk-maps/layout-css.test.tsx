@@ -206,6 +206,7 @@ interface Expectation {
 /** The tool belt's controls in page order: every tool, then the Layers toggle. */
 const BELT_LABELS = [
   "tools.select",
+  "tools.hand",
   "tools.pencil",
   "tools.pen",
   "tools.bucket",

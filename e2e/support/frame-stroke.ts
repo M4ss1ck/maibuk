@@ -400,16 +400,19 @@ export async function wheelAt(
 }
 
 /**
- * Pans a Frame's view by holding Space and dragging between two points of its
- * drawing surface (#777), the pointer form of the pan Commands: with Space down
- * a press pans whatever tool is active and draws nothing. The caller Tabs into
- * the Frame first, because Space only reaches it while it holds focus.
+ * Pans a Frame's view by dragging between two points of its drawing surface
+ * (#777), the pointer form of the pan Commands. With `space` (the default) the
+ * drag holds Space, which pans whatever tool is active and draws nothing, so
+ * the caller Tabs into the Frame first: Space only reaches it while it holds
+ * focus. Without it the drag is a plain primary-button drag, which pans only
+ * with the Hand picked.
  */
-export async function spaceDragPan(
+export async function dragPan(
   page: Page,
   surface: Locator,
   from: BoxFraction,
-  to: BoxFraction
+  to: BoxFraction,
+  { space = true }: { space?: boolean } = {}
 ): Promise<void> {
   const box = await surface.boundingBox();
   if (box === null) throw new Error("the Frame's drawing surface has no box to draw on");
@@ -420,7 +423,7 @@ export async function spaceDragPan(
   const start = at(from);
   const end = at(to);
   await page.mouse.move(start.x, start.y);
-  await page.keyboard.down(" ");
+  if (space) await page.keyboard.down(" ");
   try {
     await page.mouse.down();
     for (let step = 1; step <= STEPS; step += 1) {
@@ -431,7 +434,7 @@ export async function spaceDragPan(
     }
     await page.mouse.up();
   } finally {
-    await page.keyboard.up(" ");
+    if (space) await page.keyboard.up(" ");
   }
 }
 

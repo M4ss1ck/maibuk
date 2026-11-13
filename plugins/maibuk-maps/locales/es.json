@@ -22,6 +22,7 @@
   "commands.moveUpFar.label": "Mover arriba 10 mm",
   "commands.moveDownFar.label": "Mover abajo 10 mm",
   "commands.selectTool.label": "Herramienta de selección",
+  "commands.handTool.label": "Herramienta de mano",
   "commands.pencilTool.label": "Herramienta de lápiz",
   "commands.penTool.label": "Herramienta de pluma",
   "commands.bucketTool.label": "Herramienta de bote de pintura",

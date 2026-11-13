@@ -16,7 +16,7 @@
  * Eraser
  * drag, a drawn Shape, a Bucket pour, a dropped Stamp, a picked Element, a
  * Select drag that moved one, a Map Label's bend dragged from its handle, one
- * step of a pointer zoom or pan, the pixels an export asked for, and what one
+ * step of a pointer zoom, a finished pointer pan, the pixels an export asked for, and what one
  * uploaded picture measured. Points
  * are page millimetres, the same space as `page.widthMm/heightMm`. Every
  * inbound message is validated here, and a malformed one is dropped. This
@@ -32,6 +32,7 @@ import { resolveColor, styleOf } from "./styles";
 /** The editor tool the Frame should honour. */
 export type MapTool =
   | "select"
+  | "hand"
   | "pencil"
   | "pen"
   | "bucket"

@@ -46,6 +46,7 @@
   "map.emptyTitle": "No hay ningún mapa abierto",
   "map.emptyDescription": "Abre un mapa desde la lista de Mapas para editarlo.",
   "tools.select": "Selección",
+  "tools.hand": "Mano",
   "tools.pencil": "Lápiz",
   "tools.pen": "Pluma",
   "tools.bucket": "Bote de pintura",

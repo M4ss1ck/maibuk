@@ -22,6 +22,7 @@
   "commands.moveUpFar.label": "Move up 10 mm",
   "commands.moveDownFar.label": "Move down 10 mm",
   "commands.selectTool.label": "Select tool",
+  "commands.handTool.label": "Hand tool",
   "commands.pencilTool.label": "Pencil tool",
   "commands.penTool.label": "Pen tool",
   "commands.bucketTool.label": "Bucket tool",
