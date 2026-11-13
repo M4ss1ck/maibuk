@@ -75,8 +75,12 @@ The editor tool that draws a Map Line point by point: each click adds a straight
 _Avoid_: polyline tool, path tool, polygon tool
 
 **Insert**:
-The editor tool that places a Stamp chosen from one picker where the author clicks, or at the view center from the keyboard. Its panel also uploads a picture, which becomes a Custom Stamp or, with As Map Image set, a Map Image placed at the view center.
-_Avoid_: stamp tool
+The editor tool that places a Stamp where the author clicks, or at the view center from the keyboard. Its card shows every Stamp as a picture in a grid, and the one the author picks there is the Stamp it places. The card also uploads a picture, which becomes a Custom Stamp or, with As Map Image set, a Map Image placed at the view center.
+_Avoid_: stamp tool, Stamp picker
+
+**Text**:
+The editor tool that places a Map Label where the author clicks, or at the view center from the keyboard. What it places is a Map Label, never "a text".
+_Avoid_: label tool, type tool
 
 **Ellipse**:
 The editor tool that draws a Shape as a closed oval: a drag sets its box, and Shift squares that box into a circle. Its keyboard form is its key and the Place button, which lands one at the view center.

@@ -1462,6 +1462,80 @@ export function sceneToSvg(
   return parts.join("");
 }
 
+/** The side of the square page a Stamp's preview draws on, in page millimetres. */
+const STAMP_PREVIEW_PAGE_MM = 16;
+
+/** The room the art takes on that page: its longer side, in page millimetres. */
+const STAMP_PREVIEW_ART_MM = 12;
+
+/** What a Stamp's preview is drawn from, beside its ref. */
+export interface StampPreviewOptions {
+  /** The Map Style the preview is painted in; absent reads as the default Style. */
+  styleId?: string;
+  /** The Library a Custom Stamp's ref is looked up in. */
+  library?: MapLibrary;
+  /** A Custom Stamp's picture as a data URI; absent draws a dashed frame in its place. */
+  picture?: string;
+}
+
+/**
+ * One Stamp as a small picture, for the Insert grid's tiles: the Stamp alone,
+ * centred on a square page in the Map Style's colours, as an SVG data URI. It
+ * is the scene's own drawing of that Stamp, so a tile shows what a click will
+ * place. A Stamp's size is its width, so art taller than wide is sized by its
+ * height and still fits. A Custom Stamp draws the `picture` it is given, since
+ * the Library value holds no bytes; without one, or with a ref the Library no
+ * longer holds, the tile is a dashed frame.
+ */
+export function stampPreview(stampRef: string, options: StampPreviewOptions = {}): string {
+  const side = STAMP_PREVIEW_PAGE_MM;
+  const library = options.library ?? EMPTY_MAP_LIBRARY;
+  const assetId = parseCustomStampRef(stampRef);
+  const asset = assetId === null ? undefined : library.assets.get(assetId);
+  const [width, height] =
+    asset !== undefined
+      ? [asset.width, asset.height]
+      : (stampArt(stampRef)?.viewBox.slice(2) ?? [1, 1]);
+  const drawable = assetId === null || (asset !== undefined && options.picture !== undefined);
+  const stamp: MapStampElement = {
+    id: "preview",
+    kind: "stamp",
+    name: "",
+    hidden: false,
+    locked: false,
+    stampRef,
+    transform: {
+      x: side / 2,
+      y: side / 2,
+      size: STAMP_PREVIEW_ART_MM * Math.min(1, width / height),
+      rotation: 0,
+    },
+  };
+  let svg = sceneToSvg(
+    {
+      page: { preset: "square", widthMm: side, heightMm: side },
+      elements: drawable ? [stamp] : [],
+      styleId: options.styleId,
+    },
+    { library }
+  );
+  if (drawable && assetId !== null && options.picture !== undefined) {
+    svg = svg.replace(
+      `href="asset:${escapeAttribute(assetId)}"`,
+      () => `href="${escapeAttribute(options.picture ?? "")}"`
+    );
+  }
+  if (!drawable) {
+    const inset = (side - STAMP_PREVIEW_ART_MM) / 2;
+    const ink = resolveColor(styleOf(options.styleId), undefined, "ink");
+    svg = svg.replace(
+      "</svg>",
+      `<rect x="${inset}" y="${inset}" width="${STAMP_PREVIEW_ART_MM}" height="${STAMP_PREVIEW_ART_MM}" rx="1.5" fill="none" stroke="${ink}" stroke-width="0.5" stroke-dasharray="1.5 1"/></svg>`
+    );
+  }
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
 /** Appends an Element, so it takes the top of the z-order. */
 export function addElement(elements: readonly MapElement[], element: MapElement): MapElement[] {
   return [...elements, element];

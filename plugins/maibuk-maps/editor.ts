@@ -341,8 +341,8 @@ export interface MapEditor {
   setStampScale(id: string, patch: Partial<MapStampScale>): void;
   /** Recolours one unlocked one-colour Stamp, as one undo step. */
   setStampColor(id: string, color: string): void;
-  /** Adds a Map Label at the view centre, writing the localized default, selected, as one undo step. */
-  insertLabel(): void;
+  /** Adds a Map Label at `point`, or at the view centre, writing the localized default, selected, as one undo step. */
+  insertLabel(point?: MapPoint): void;
   /** Writes one unlocked Map Label's text; a blank text is refused. */
   setLabelText(id: string, text: string): void;
   /** Sets one unlocked Map Label's font, one of the bundled faces or the PDF Font. */
@@ -1031,16 +1031,17 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
   }
 
   /**
-   * Places a Map Label at the view centre (#751), writing the localized
-   * "Label" so the author has a word to replace. The new label becomes the
-   * selection, and the whole placement is one undo step.
+   * Places a Map Label at `point`, where the Text tool was clicked, or at the
+   * view centre with no point (#751), writing the localized "Label" so the
+   * author has a word to replace. The new label becomes the selection, and the
+   * whole placement is one undo step.
    */
-  function insertLabel(): void {
+  function insertLabel(point?: MapPoint): void {
     const element = newLabel({
       id: randomMapId(),
       name: newLabelName(),
       text: translate(options.language(), "element.labelText"),
-      point: [doc.page.widthMm / 2 + panX, doc.page.heightMm / 2 + panY],
+      point: point ?? [doc.page.widthMm / 2 + panX, doc.page.heightMm / 2 + panY],
     });
     selectedId = element.id;
     edit(addElement(elements, element));
@@ -1136,7 +1137,10 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
         pour(message.point);
         break;
       case "insert":
-        insertStamp(message.point);
+        // The Frame reports the spot alone: the Text tool writes a Map Label
+        // there, and Insert drops the picked Stamp.
+        if (tool === "text") insertLabel(message.point);
+        else insertStamp(message.point);
         break;
       case "select":
         selectElement(message.id);

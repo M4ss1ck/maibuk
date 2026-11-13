@@ -28,6 +28,7 @@
   "commands.bucketTool.label": "Bucket tool",
   "commands.areaTool.label": "Area tool",
   "commands.insertTool.label": "Insert tool",
+  "commands.textTool.label": "Text tool",
   "commands.ellipseTool.label": "Ellipse tool",
   "commands.rectangleTool.label": "Rectangle tool",
   "commands.polygonTool.label": "Polygon tool",

@@ -82,6 +82,7 @@ import {
 } from "./runtime";
 import { DEFAULT_SCATTER_SPACING_MM } from "./scatter";
 import { smoothStroke } from "./scene";
+import { BASE_STAMP_IDS } from "./stamps";
 import { linePath, roughen, seedFor, shapeOutline } from "./geometry";
 import { MAP_STYLES } from "./styles";
 import { templateElements } from "./templates";
@@ -736,6 +737,22 @@ async function pickOption(
   await user.keyboard("{Enter}");
 }
 
+/** Picks a Stamp from the Insert grid by keyboard: Tab to its tile, then Enter. */
+async function pickStamp(user: User, name: string): Promise<HTMLElement> {
+  const tile = await screen.findByRole("button", { name });
+  await tabTo(user, tile, 200);
+  expect(tile).toHaveFocus();
+  await user.keyboard("{Enter}");
+  return tile;
+}
+
+/** The picture a Stamp's tile draws, as the SVG its data URI carries. */
+function tilePicture(tile: HTMLElement): string {
+  const src = within(tile).getByRole("img").getAttribute("src") ?? "";
+  expect(src.startsWith("data:image/svg+xml,")).toBe(true);
+  return decodeURIComponent(src.slice("data:image/svg+xml,".length));
+}
+
 function names(): string[] {
   const list = screen.queryByRole("list");
   if (list === null) return [];
@@ -1155,6 +1172,7 @@ describe("Map editor Commands", () => {
     "rectangleTool",
     "polygonTool",
     "insertTool",
+    "textTool",
     "eraserTool",
     "roughen",
     "deleteElement",
@@ -1180,6 +1198,7 @@ describe("Map editor Commands", () => {
     expect(effectiveShortcuts("plugin.maibuk-maps.bucketTool", {}, false)).toContainEqual(["b"]);
     expect(effectiveShortcuts("plugin.maibuk-maps.areaTool", {}, false)).toContainEqual(["a"]);
     expect(effectiveShortcuts("plugin.maibuk-maps.insertTool", {}, false)).toContainEqual(["i"]);
+    expect(effectiveShortcuts("plugin.maibuk-maps.textTool", {}, false)).toContainEqual(["t"]);
     expect(effectiveShortcuts("plugin.maibuk-maps.ellipseTool", {}, false)).toContainEqual(["o"]);
     expect(effectiveShortcuts("plugin.maibuk-maps.rectangleTool", {}, false)).toContainEqual(["r"]);
     expect(effectiveShortcuts("plugin.maibuk-maps.polygonTool", {}, false)).toContainEqual(["s"]);
@@ -2598,7 +2617,92 @@ describe("Map editor page", () => {
     }
   });
 
-  it("inserts a castle Stamp from the picker by keyboard, then moves, resizes, and deletes it", async () => {
+  it("draws the Insert card as a grid of Stamp pictures, then the size, Place, and the upload controls", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await pickTool(user, en["tools.insert"]);
+
+      // One tile per base Stamp, in the Stamps' own order, each a button named
+      // after its Stamp and drawing that Stamp as a picture.
+      const capital = await screen.findByRole("button", { name: en["stamp.capital"] });
+      const grid = capital.parentElement as HTMLElement;
+      const tiles = within(grid).getAllByRole("button");
+      expect(tiles.map((tile) => within(tile).getByRole("img").getAttribute("alt"))).toEqual(
+        BASE_STAMP_IDS.map((id) => en[`stamp.${id}` as keyof typeof en])
+      );
+      for (const tile of tiles) expect(tilePicture(tile)).toContain("<svg");
+      // No two Stamps share a picture.
+      expect(new Set(tiles.map(tilePicture)).size).toBe(tiles.length);
+
+      // The card reads top to bottom: the grid, the size, Place, the divider,
+      // the Map Image checkbox, then Upload.
+      const order = [
+        grid,
+        screen.getByRole("textbox", { name: en["properties.stamp.newSize"] }),
+        screen.getByRole("button", {
+          name: format(en["properties.placeStamp"], { stamp: en["stamp.capital"] }),
+        }),
+        screen.getByText(en["properties.uploadOwn"]),
+        screen.getByRole("checkbox", { name: en["properties.asMapImage"] }),
+        screen.getByRole("button", { name: en["properties.upload"] }),
+      ];
+      for (let i = 1; i < order.length; i++) {
+        expect(
+          order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING
+        ).toBeTruthy();
+      }
+      // Upload says what it does in words, not by an icon alone.
+      expect(order[5]).toHaveTextContent(en["properties.upload"]);
+
+      // A Map Label is the Text tool's, so Insert no longer offers one.
+      expect(screen.queryByRole("button", { name: en["properties.mapLabel.place"] })).toBeNull();
+      expect(runtime.editor?.getSnapshot().elements).toHaveLength(0);
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("selects the Text tool by its key and from the belt, and offers its Place path", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    registerMapCommands();
+    const keys = render(<CommandKeys host={host} />);
+    try {
+      const user = userEvent.setup();
+      await screen.findByRole("button", { name: en["tools.text"] });
+      await focusPanelButton(user);
+
+      await user.keyboard("t");
+      await waitFor(() => expect(runtime.editor?.getSnapshot().tool).toBe("text"));
+      expect(pickedTool(en["tools.text"])).toHaveAttribute("aria-pressed", "true");
+      expect(
+        await screen.findByRole("button", { name: en["properties.mapLabel.place"] })
+      ).toBeInTheDocument();
+      // The Text tool opens no Insert card.
+      expect(screen.queryByRole("button", { name: en["properties.upload"] })).toBeNull();
+
+      await user.keyboard("v");
+      await waitFor(() => expect(runtime.editor?.getSnapshot().tool).toBe("select"));
+      await waitFor(() =>
+        expect(screen.queryByRole("button", { name: en["properties.mapLabel.place"] })).toBeNull()
+      );
+      await pickTool(user, en["tools.text"]);
+      expect(runtime.editor?.getSnapshot().tool).toBe("text");
+
+      keys.unmount();
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("inserts a castle Stamp from the grid by keyboard, then moves, resizes, and deletes it", async () => {
     const storage = mapStorage([]);
     const { host, runtime } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
@@ -2607,13 +2711,16 @@ describe("Map editor page", () => {
     try {
       const user = userEvent.setup();
 
-      // The Insert tool by its place in the tool picker, and the Stamp picker it shows.
+      // The Insert tool by its place in the tool belt, and the Stamp grid it shows.
       await pickTool(user, en["tools.insert"]);
       expect(runtime.editor?.getSnapshot().tool).toBe("insert");
       expect(runtime.editor?.getSnapshot().currentStampId).toBe("capital");
 
-      await pickOption(user, en["properties.stamp"], en["stamp.castle"]);
+      const tile = await pickStamp(user, en["stamp.castle"]);
       await waitFor(() => expect(runtime.editor?.getSnapshot().currentStampId).toBe("castle"));
+      // The picked tile alone holds the mark the stylesheet rings it by.
+      await waitFor(() => expect(tile.children).toHaveLength(2));
+      expect(screen.getByRole("button", { name: en["stamp.capital"] }).children).toHaveLength(1);
 
       const place = await screen.findByRole("button", {
         name: format(en["properties.placeStamp"], { stamp: en["stamp.castle"] }),
@@ -2702,7 +2809,7 @@ describe("Map editor page", () => {
       const user = userEvent.setup();
 
       await pickTool(user, en["tools.insert"]);
-      await pickOption(user, en["properties.stamp"], en["stamp.scale-bar"]);
+      await pickStamp(user, en["stamp.scale-bar"]);
       const place = await screen.findByRole("button", {
         name: format(en["properties.placeStamp"], { stamp: en["stamp.scale-bar"] }),
       });
@@ -2772,9 +2879,10 @@ describe("Map editor page", () => {
     try {
       const user = userEvent.setup();
 
-      // The Insert tool offers a Map Label beside the Stamp picker; the button
-      // is the keyboard path that lands it at the view centre.
-      await pickTool(user, en["tools.insert"]);
+      // The Text tool's Properties offer the keyboard path that lands a Map
+      // Label at the view centre.
+      await pickTool(user, en["tools.text"]);
+      expect(runtime.editor?.getSnapshot().tool).toBe("text");
       const place = await screen.findByRole("button", { name: en["properties.mapLabel.place"] });
       await tabTo(user, place, 120);
       await user.keyboard("{Enter}");
@@ -3662,9 +3770,14 @@ describe("Map editor uploads (#756)", () => {
       expect(runtime.editor?.getSnapshot().selectedId).toBe(stamp.id);
       expect(runtime.editor?.getSnapshot().currentStampId).toBe(`custom:${row.id}`);
 
-      // The picker lists the Custom Stamp and the Place button names it.
+      // The grid lists the Custom Stamp as the picked tile, drawing the
+      // uploaded picture itself, and the Place button names it.
+      const tile = await screen.findByRole("button", { name: "banner" });
+      expect(tile.children).toHaveLength(2);
       await waitFor(() =>
-        expect(screen.getByLabelText(en["properties.stamp"])).toHaveTextContent("banner")
+        expect(tilePicture(tile)).toContain(
+          `href="data:image/svg+xml;base64,${Buffer.from(svgBytes()).toString("base64")}"`
+        )
       );
       expect(
         screen.getByRole("button", {
@@ -3798,7 +3911,46 @@ describe("Map editor uploads (#756)", () => {
     }
   });
 
-  it("fits the Insert Stamp picker to the host's cap, with a Library past 2,000 Custom Stamps", async () => {
+  it("draws a small Custom Stamp's own picture on its tile, and a dashed frame for one past the budget", async () => {
+    const storage = mapStorage([]);
+    const row = {
+      mime: "image/png",
+      width: 40,
+      height: 20,
+      recolorable: false,
+      use: "stamp",
+    } as const;
+    seedAsset(storage, { ...row, id: "a1", name: "Keep" });
+    // A picture past what one tile may carry inside the page's UI tree.
+    const heavy = "A".repeat(150_001);
+    storage.set(ASSETS_KEY, [...storedAssets(storage), { ...row, id: "a2", name: "Atlas scan" }]);
+    storage.set(assetKey("a2"), { ...row, id: "a2", name: "Atlas scan", data: heavy });
+    const { host } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      await pickTool(user, en["tools.insert"]);
+
+      const keep = await screen.findByRole("button", { name: "Keep" });
+      await waitFor(() =>
+        expect(tilePicture(keep)).toContain(`href="data:image/png;base64,${PICTURE_DATA}"`)
+      );
+      expect(tilePicture(keep)).not.toContain("stroke-dasharray");
+
+      // The heavy one stays a dashed frame under its name, and its bytes never
+      // enter the page.
+      const scan = screen.getByRole("button", { name: "Atlas scan" });
+      expect(tilePicture(scan)).toContain("stroke-dasharray");
+      expect(tilePicture(scan)).not.toContain("<image");
+      expect(page.violations).toEqual([]);
+
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("fits the Insert Stamp grid to the host's cap, with a Library past 2,000 Custom Stamps", async () => {
     // More uploaded pictures than the host accepts in one option list, each
     // named well past the length one label may carry.
     const longName = "Beacon of the Northern Reach ".repeat(20);
@@ -3827,21 +3979,23 @@ describe("Map editor uploads (#756)", () => {
         PLUGIN_UI_LIMITS.maxOptions + 100
       );
 
-      const trigger = await screen.findByLabelText(en["properties.stamp"]);
-      await tabTo(user, trigger, 120);
-      await user.keyboard("{Enter}");
-      const listbox = await screen.findByRole("listbox", { name: en["properties.stamp"] });
-      // By selector: a role query over 2000 rows is most of the test's time.
-      const options = [...listbox.querySelectorAll<HTMLElement>('[role="option"]')];
+      // By selector: a role query over 2000 tiles is most of the test's time.
+      const first = await waitFor(() => {
+        const picture = document.querySelector(`button > img[alt="${en["stamp.capital"]}"]`);
+        if (picture === null) throw new Error("the Stamp grid is not drawn yet");
+        return picture;
+      });
+      const grid = first.parentElement?.parentElement as HTMLElement;
+      const tiles = [...grid.querySelectorAll("button > img")];
 
-      // The page asked for no option list the host would refuse.
+      // The page asked for no grid the host would refuse.
       expect(page.violations).toEqual([]);
-      expect(options).toHaveLength(PLUGIN_UI_LIMITS.maxOptions);
+      expect(tiles).toHaveLength(PLUGIN_UI_LIMITS.maxOptions);
       // The Library's Custom Stamps follow the base Stamps, and the last one
       // kept is cut to the host's 512-code unit label cap instead of going whole.
-      const last = options[options.length - 1];
-      expect(last.textContent).toHaveLength(512);
-      expect(last.textContent?.endsWith("…")).toBe(true);
+      const last = tiles[tiles.length - 1].getAttribute("alt") ?? "";
+      expect(last).toHaveLength(512);
+      expect(last.endsWith("…")).toBe(true);
 
       await page.unmount();
     } finally {

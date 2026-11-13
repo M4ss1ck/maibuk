@@ -1671,7 +1671,7 @@ describe("a Fill's texture and scatter", () => {
   });
 });
 
-describe("placing a Map Label with the Insert tool", () => {
+describe("placing a Map Label with the Text tool", () => {
   /** The one Map Label an editor holds, which every label test starts from. */
   function onlyLabel(editor: MapEditor): MapLabelElement {
     const [element] = editor.getSnapshot().elements;
@@ -1708,6 +1708,32 @@ describe("placing a Map Label with the Insert tool", () => {
     editor.undo();
     expect(editor.getSnapshot().elements).toEqual([]);
     expect(editor.getSnapshot().selectedId).toBeNull();
+  });
+
+  it("places a Map Label where the Text tool was clicked, and a Stamp where Insert was", () => {
+    const { editor } = openEditor();
+
+    // The Frame reports one spot for both tools: the Worker's own tool decides
+    // what lands there.
+    editor.setTool("text");
+    editor.handleFrameMessage({ kind: "insert", point: [30, 40] });
+    const label = onlyLabel(editor);
+    expect(label).toMatchObject({ name: "Map Label 1", text: "Label", x: 30, y: 40 });
+    expect(editor.getSnapshot().selectedId).toBe(label.id);
+    // The Text tool stays picked, so the next click writes the next label.
+    expect(editor.getSnapshot().tool).toBe("text");
+
+    editor.setTool("insert");
+    editor.handleFrameMessage({ kind: "insert", point: [60, 20] });
+    expect(editor.getSnapshot().elements.map((element) => element.kind)).toEqual([
+      "label",
+      "stamp",
+    ]);
+
+    // One click is one undo step.
+    editor.undo();
+    editor.undo();
+    expect(editor.getSnapshot().elements).toEqual([]);
   });
 
   it("numbers each label in turn and lands it on the panned view centre", () => {

@@ -235,12 +235,13 @@ test.describe("Maps floating layout @wf:plugins-maps-layout @sandbox", () => {
     await openEditor(page);
 
     // Both cards take the one box beside the belt (#778), so opening the second
-    // while the first shows used to leave the Stamp picker under the Elements
+    // while the first shows used to leave the Stamp grid under the Elements
     // list (#775 review R2). They stack instead: Insert above the middle,
     // Layers below it.
     await pressControl(page, toolButton(page, "Insert"));
     const placeStamp = page.getByRole("button", { name: "Place Capital" });
     await expect(placeStamp).toBeVisible();
+    await capture(page, "maps-layout-insert");
     await openLayers(page);
 
     const insert = await boxOf(cardHolding(placeStamp), "the Insert card");
@@ -250,6 +251,13 @@ test.describe("Maps floating layout @wf:plugins-maps-layout @sandbox", () => {
     );
     expectNoOverlap(insert, layers, "the Insert and Layers cards");
     expect(insert.y + insert.height, "Insert sits above Layers").toBeLessThanOrEqual(layers.y + 1);
+    // The Stamp grid makes Insert the taller card, and its half stops under
+    // the top bar instead of covering Back to Maps and the Map's name.
+    const bar = await boxOf(
+      cardHolding(page.getByRole("button", { name: "Back to Maps" })),
+      "the top bar"
+    );
+    expectNoOverlap(insert, bar, "the Insert card and the top bar");
 
     await capture(page, "maps-layout-insert-layers");
   });

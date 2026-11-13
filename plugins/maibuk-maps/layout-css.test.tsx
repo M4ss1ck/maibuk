@@ -24,7 +24,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import { scopePluginCss, splitSelectorList } from "@/features/plugins/remote-ui/css-scope";
@@ -216,6 +216,7 @@ const BELT_LABELS = [
   "tools.rectangle",
   "tools.polygon",
   "tools.insert",
+  "tools.text",
   "tools.eraser",
   "chrome.layers",
 ] as const;
@@ -262,6 +263,49 @@ const EXPECTATIONS: ReadonlyArray<Expectation> = [
       cardHolding(mounted.root, () =>
         screen.getByRole("button", { name: en["properties.upload"] })
       ),
+  },
+  {
+    // The Insert card's Stamp grid: the row of tiles, each tile, and each
+    // tile's picture.
+    selector: `${ROOT} > div:nth-child(3) > div:first-child`,
+    state: "open",
+    expected: (mounted) => stampTiles(mounted)[0].parentElement as Element,
+  },
+  {
+    selector: `${ROOT} > div:nth-child(3) > div:first-child > button`,
+    state: "open",
+    expected: stampTiles,
+  },
+  {
+    selector: `${ROOT} > div:nth-child(3) > div:first-child > button > img`,
+    state: "open",
+    expected: stampPictures,
+  },
+  {
+    // The picked tile, told apart by the mark it holds, and the mark itself.
+    selector: `${ROOT} > div:nth-child(3) > div:first-child > button:has(> :nth-child(2))`,
+    state: "open",
+    expected: pickedStampTile,
+  },
+  {
+    selector: `${ROOT} > div:nth-child(3) > div:first-child > button > :nth-child(2)`,
+    state: "open",
+    expected: (mounted) => pickedStampTile(mounted).children.item(1) as Element,
+  },
+  {
+    // "or upload your own": the two rules, and the words between them.
+    selector: `${ROOT} > div:nth-child(3) > div:has(> hr) > hr`,
+    state: "open",
+    expected: (mounted) => {
+      const row = uploadOwnText().parentElement as Element;
+      expect(row.parentElement).toBe(slotThree(mounted));
+      return [row.firstElementChild as Element, row.lastElementChild as Element];
+    },
+  },
+  {
+    selector: `${ROOT} > div:nth-child(3) > div:has(> hr) > p`,
+    state: "open",
+    expected: uploadOwnText,
   },
   {
     selector: `${ROOT} > div:nth-child(4)`,
@@ -475,6 +519,28 @@ function slotFive(mounted: Mounted): Element {
 
 function slotThree(mounted: Mounted): Element {
   return slot(mounted.root, 3);
+}
+
+/** Every Stamp's picture in the Insert card, in page order. */
+function stampPictures(mounted: Mounted): HTMLElement[] {
+  return within(slotThree(mounted) as HTMLElement).getAllByRole("img");
+}
+
+/** The Insert grid's tiles: the button each Stamp's picture sits in. */
+function stampTiles(mounted: Mounted): HTMLElement[] {
+  return stampPictures(mounted).map((picture) => picture.parentElement as HTMLElement);
+}
+
+/** The tile of the Stamp a new Map starts with picked: the capital. */
+function pickedStampTile(mounted: Mounted): HTMLElement {
+  return within(slotThree(mounted) as HTMLElement).getByRole("button", {
+    name: en["stamp.capital"],
+  });
+}
+
+/** The words of the Insert card's divider. */
+function uploadOwnText(): HTMLElement {
+  return screen.getByText(en["properties.uploadOwn"]);
 }
 
 function slotFour(mounted: Mounted): Element {

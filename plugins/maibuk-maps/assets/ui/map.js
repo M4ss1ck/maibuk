@@ -29,7 +29,7 @@
   /**
    * @typedef {[number, number]} MapPoint
    * @typedef {"ellipse" | "rectangle" | "polygon"} ShapeKind
-   * @typedef {"select" | "hand" | "pencil" | "pen" | "bucket" | "area" | "eraser" | "insert" | ShapeKind} MapTool
+   * @typedef {"select" | "hand" | "pencil" | "pen" | "bucket" | "area" | "eraser" | "insert" | "text" | ShapeKind} MapTool
    * @typedef {{ d: string, stroke: string | null, strokeWidth: number, dash: string | null, fill: string | null, fillRule?: "evenodd", opacity: number, transform?: string, clip?: string, hitOnly?: true }} LineShape
    * @typedef {{ text: string, x: number, y: number, size: number, fill: string, font?: string, letterSpacing?: number, halo?: { color: string, width: number }, path?: { id: string, d: string }, anchor: "start" | "middle" | "end", transform?: string }} TextShape
    * @typedef {{ kind: "image", assetId: string, x: number, y: number, width: number, height: number, rotation: number, opacity: number, tint?: string, clip?: string }} ImageShape
@@ -254,7 +254,8 @@
       raw === "bucket" ||
       raw === "area" ||
       raw === "eraser" ||
-      raw === "insert"
+      raw === "insert" ||
+      raw === "text"
     ) {
       return raw;
     }
@@ -1693,8 +1694,9 @@
     }
 
     // Insert drops the Stamp the Worker has picked at the clicked or tapped
-    // point: the Frame knows no Stamp, so it only reports where one landed.
-    if (scene.tool === "insert") {
+    // point, and Text a Map Label: the Frame knows neither, so both tools only
+    // report where one landed, and the Worker's own tool decides which.
+    if (scene.tool === "insert" || scene.tool === "text") {
       const point = pagePoint(event);
       if (point === null) return;
       event.preventDefault();
@@ -2466,7 +2468,7 @@
 
   /**
    * A pointer that lifts or is cancelled anywhere in the Frame is no longer
-   * down, even where the surface never hears it: a Bucket, Insert, or Pen press
+   * down, even where the surface never hears it: a Bucket, Insert, Text, or Pen press
    * takes no capture, so a finger that slid off the drawing before it lifted
    * would stay counted and turn the next single-finger press into a pan (#777).
    * The surface's own handlers already forget it; deleting twice is harmless.

@@ -4,7 +4,7 @@
 // the Custom Stamp path with one small one-colour SVG: the Elements list lists
 // it under the file's own name, the Frame draws it as a picture, its single
 // paint takes the Stamp color picker, and because the picture belongs to the
-// Library rather than to the Map, a second Map's Stamp picker lists it too. The
+// Library rather than to the Map, a second Map's Stamp grid lists it too. The
 // same picture then has to survive Export: the PNG the Frame rasterizes carries
 // the picture's bytes as a data URI, since an SVG drawn as an image loads no
 // external subresource and would otherwise print bare paper.
@@ -59,17 +59,12 @@ const dpiField = (page: Page) => page.getByRole("textbox", { name: "DPI", exact:
 const saveButton = (page: Page) => page.getByRole("button", { name: /^Save/ });
 
 /**
- * The Insert tool's Stamp picker: its trigger button, its list, and one option.
- * The control names its trigger after the label and the picked value
- * ("Capital Stamp"); the list it opens in a dialog is named by the label alone.
+ * One tile of the Insert tool's Stamp grid: a button holding the Stamp's own
+ * picture, which names it. An Elements list row can carry the same name, so
+ * the picture is what tells a tile from a row.
  */
-// The Insert picker's trigger, named "<Stamp> Stamp"; an Elements list row is
-// named after its kind too, so rows (inside the list's items) are left out.
-const stampTrigger = (page: Page) =>
-  page.getByRole("button", { name: /Stamp$/ }).and(page.locator("button:not(li *)"));
-const stampList = (page: Page) => page.getByRole("listbox", { name: "Stamp", exact: true });
-const stampOption = (page: Page, name: string) =>
-  stampList(page).getByRole("option", { name, exact: true });
+const stampTile = (page: Page, name: string) =>
+  page.getByRole("button", { name, exact: true }).filter({ has: page.locator("img") });
 
 /** The name the uploaded picture takes: the file's own stem. */
 const UPLOADED_STAMP = "Beacon";
@@ -125,13 +120,6 @@ async function pickInsert(page: Page): Promise<void> {
   await expect(page.getByRole("button", { name: "Insert", exact: true, pressed: true }));
   // The scene round-trip is what proves the Frame is listening before an upload.
   await expect(mapFrame(page).locator('svg[data-tool="insert"]')).toBeVisible();
-}
-
-/** Opens the Insert tool's Stamp picker by keyboard. */
-async function openStampPicker(page: Page): Promise<void> {
-  await tabTo(page, stampTrigger(page), { max: 60 });
-  await page.keyboard.press("Enter");
-  await expect(stampList(page)).toBeVisible();
 }
 
 /**
@@ -190,7 +178,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe("Maps Insert upload @wf:plugins-maps-upload @sc:plugin.maibuk-maps.insertTool @sandbox", () => {
-  test("an SVG uploaded through Insert lands as a Custom Stamp the Frame draws, and a second Map's Stamp picker lists it", async ({
+  test("an SVG uploaded through Insert lands as a Custom Stamp the Frame draws, and a second Map's Stamp grid lists it", async ({
     page,
   }) => {
     await page.goto("/");
@@ -217,18 +205,25 @@ test.describe("Maps Insert upload @wf:plugins-maps-upload @sc:plugin.maibuk-maps
     await capture(page, "maps-upload-custom-stamp");
 
     // The picture belongs to the Library, not to this Map, so another Map's
-    // Stamp picker offers it beside the built-in Stamps.
+    // Stamp grid offers it beside the built-in Stamps, drawing the uploaded
+    // picture itself on its tile.
     await backToMaps(page);
     await createMap(page, "Second Coastline");
     await openMap(page, "Second Coastline");
     await pickInsert(page);
-    await openStampPicker(page);
-    await expect(stampOption(page, UPLOADED_STAMP)).toBeVisible();
+    const tile = stampTile(page, UPLOADED_STAMP);
+    await expect(tile).toBeVisible();
     await expect(elementRow(page, UPLOADED_STAMP)).toHaveCount(0);
+    await expect
+      .poll(async () => decodeURIComponent((await tile.locator("img").getAttribute("src")) ?? ""))
+      .toContain("<image");
 
-    await page.keyboard.press("Escape");
-    await expect(stampList(page)).toBeHidden();
-    await expect(stampTrigger(page)).toBeFocused();
+    // The keyboard picks it like any other Stamp: its tile, then Enter.
+    await tabTo(page, tile, { max: 120 });
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("button", { name: `Place ${UPLOADED_STAMP}`, exact: true })
+    ).toBeVisible();
   });
 
   test("the PNG the Map exports draws the uploaded picture instead of bare paper", async ({

@@ -1824,6 +1824,17 @@ describe("the Insert tool", () => {
     expect(frame.port.messages).toEqual([{ kind: "insert", point: [40, 30] }]);
   });
 
+  it("posts the page point of a Text tool click as the same insert message", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "text" });
+    // The Frame keeps the tool the Worker named, and knows no Map Label: it
+    // reports the spot, and the Worker's tool decides what lands there.
+    expect(svg().getAttribute("data-tool")).toBe("text");
+
+    pointer(svg(), "pointerdown", 40, 30);
+    expect(frame.port.messages).toEqual([{ kind: "insert", point: [40, 30] }]);
+  });
+
   it("keeps the tool's keys out of the Frame, so the host still moves the selection", () => {
     frame = loadFrame();
     frame.scene({ tool: "insert" });
@@ -1836,7 +1847,16 @@ describe("the Insert tool", () => {
 
   it("shows the crosshair every placing tool shows, and only Select shows the pointer", () => {
     frame = loadFrame();
-    const placing = ["pencil", "pen", "bucket", "insert", "ellipse", "rectangle", "polygon"];
+    const placing = [
+      "pencil",
+      "pen",
+      "bucket",
+      "insert",
+      "text",
+      "ellipse",
+      "rectangle",
+      "polygon",
+    ];
     for (const tool of placing) {
       frame.scene({ tool });
       expect(getComputedStyle(svg()).cursor, tool).toBe("crosshair");
