@@ -377,6 +377,18 @@ export interface MapEditor {
   moveDown(id: string): void;
   /** Moves the selection by page millimetres; a locked Element stays put. */
   move(dx: number, dy: number): void;
+  /**
+   * Scales the selected Stamp or Map Image about its centre by `factor`, as one
+   * undo step (#795). No selection, a locked Element, and another kind change
+   * nothing.
+   */
+  scaleSelection(factor: number): void;
+  /**
+   * Turns the selected Stamp or Map Image clockwise by `degrees`, as one undo
+   * step (#795). No selection, a locked Element, and another kind change
+   * nothing.
+   */
+  rotateSelection(degrees: number): void;
   undo(): void;
   redo(): void;
   zoomIn(): void;
@@ -1294,6 +1306,40 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     if (!written) sendScene();
   }
 
+  /**
+   * The Stamp or Map Image a keyboard transform Command may change (#795): the
+   * selected Element when it is one of those kinds and unlocked, else null.
+   * A Map Line, a Fill, or a Map Label stores a different shape, so the scale
+   * and turn Commands leave it alone.
+   */
+  function keyboardTransformTarget(): MapStampElement | MapImageElement | null {
+    const target = elementById(selectedId);
+    if (target === undefined || target.locked) return null;
+    return target.kind === "stamp" || target.kind === "image" ? target : null;
+  }
+
+  /**
+   * Scales the selected Stamp or Map Image about its centre as one undo step
+   * (#795), through the same `applyTransform` the handle drag and the panel use,
+   * so the size keeps above zero and an unchanged size is not an undo step.
+   */
+  function scaleSelection(factor: number): void {
+    const target = keyboardTransformTarget();
+    if (target === null || !Number.isFinite(factor) || factor <= 0) return;
+    applyTransform(target.id, { size: target.transform.size * factor });
+  }
+
+  /**
+   * Turns the selected Stamp or Map Image about its centre as one undo step
+   * (#795), through the same `applyTransform` the handle drag and the panel use,
+   * so the turn reads in one circle and the centre never drifts.
+   */
+  function rotateSelection(degrees: number): void {
+    const target = keyboardTransformTarget();
+    if (target === null || !Number.isFinite(degrees) || degrees === 0) return;
+    applyTransform(target.id, { rotation: target.transform.rotation + degrees });
+  }
+
   function setZoom(next: number): void {
     zoom = clamp(next, MIN_ZOOM, MAX_ZOOM);
     publish();
@@ -1945,6 +1991,10 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       if (target === undefined || !canMove(target)) return;
       moveBy(target, dx, dy);
     },
+
+    scaleSelection,
+
+    rotateSelection,
 
     undo() {
       if (!history.canUndo) return;

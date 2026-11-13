@@ -140,6 +140,54 @@
         "defaults": [["Shift+ArrowDown"]]
       },
       {
+        "id": "scaleUp",
+        "label": "Scale up",
+        "contexts": ["map"],
+        "defaults": [["]"]]
+      },
+      {
+        "id": "scaleDown",
+        "label": "Scale down",
+        "contexts": ["map"],
+        "defaults": [["["]]
+      },
+      {
+        "id": "scaleUpFine",
+        "label": "Scale up 1%",
+        "contexts": ["map"],
+        "defaults": [["Shift+]"]]
+      },
+      {
+        "id": "scaleDownFine",
+        "label": "Scale down 1%",
+        "contexts": ["map"],
+        "defaults": [["Shift+["]]
+      },
+      {
+        "id": "rotateClockwise",
+        "label": "Rotate clockwise",
+        "contexts": ["map"],
+        "defaults": [["."]]
+      },
+      {
+        "id": "rotateCounterClockwise",
+        "label": "Rotate counterclockwise",
+        "contexts": ["map"],
+        "defaults": [[","]]
+      },
+      {
+        "id": "rotateClockwiseFine",
+        "label": "Rotate clockwise 1°",
+        "contexts": ["map"],
+        "defaults": [["Shift+."]]
+      },
+      {
+        "id": "rotateCounterClockwiseFine",
+        "label": "Rotate counterclockwise 1°",
+        "contexts": ["map"],
+        "defaults": [["Shift+,"]]
+      },
+      {
         "id": "selectTool",
         "label": "Select tool",
         "contexts": ["map"],

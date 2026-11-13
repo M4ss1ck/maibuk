@@ -51,6 +51,14 @@ export const MOVE_LEFT_FAR = "moveLeftFar";
 export const MOVE_RIGHT_FAR = "moveRightFar";
 export const MOVE_UP_FAR = "moveUpFar";
 export const MOVE_DOWN_FAR = "moveDownFar";
+export const SCALE_UP = "scaleUp";
+export const SCALE_DOWN = "scaleDown";
+export const SCALE_UP_FINE = "scaleUpFine";
+export const SCALE_DOWN_FINE = "scaleDownFine";
+export const ROTATE_CLOCKWISE = "rotateClockwise";
+export const ROTATE_COUNTER_CLOCKWISE = "rotateCounterClockwise";
+export const ROTATE_CLOCKWISE_FINE = "rotateClockwiseFine";
+export const ROTATE_COUNTER_CLOCKWISE_FINE = "rotateCounterClockwiseFine";
 export const SELECT_TOOL = "selectTool";
 export const HAND_TOOL = "handTool";
 export const PENCIL_TOOL = "pencilTool";
@@ -70,6 +78,13 @@ export const DELETE_ELEMENT = "deleteElement";
 /** One step of an arrow-key move, in page millimetres; Shift moves ten. */
 const MOVE_STEP_MM = 1;
 const MOVE_FAR_STEP_MM = 10;
+
+/** How much one scale Command changes the selection: ten percent, or one with Shift (#795). */
+const SCALE_STEP = 0.1;
+const SCALE_FINE_STEP = 0.01;
+/** How far one rotate Command turns the selection: fifteen degrees, or one with Shift (#795). */
+const ROTATE_STEP_DEG = 15;
+const ROTATE_FINE_STEP_DEG = 1;
 
 /** The host's Remote UI and request entry (`servePluginUi`), Worker or test. */
 export type MapsServe = (
@@ -356,6 +371,30 @@ function runEditorCommand(editor: MapEditor | null, id: string): void {
       break;
     case MOVE_DOWN_FAR:
       editor.move(0, MOVE_FAR_STEP_MM);
+      break;
+    case SCALE_UP:
+      editor.scaleSelection(1 + SCALE_STEP);
+      break;
+    case SCALE_DOWN:
+      editor.scaleSelection(1 - SCALE_STEP);
+      break;
+    case SCALE_UP_FINE:
+      editor.scaleSelection(1 + SCALE_FINE_STEP);
+      break;
+    case SCALE_DOWN_FINE:
+      editor.scaleSelection(1 - SCALE_FINE_STEP);
+      break;
+    case ROTATE_CLOCKWISE:
+      editor.rotateSelection(ROTATE_STEP_DEG);
+      break;
+    case ROTATE_COUNTER_CLOCKWISE:
+      editor.rotateSelection(-ROTATE_STEP_DEG);
+      break;
+    case ROTATE_CLOCKWISE_FINE:
+      editor.rotateSelection(ROTATE_FINE_STEP_DEG);
+      break;
+    case ROTATE_COUNTER_CLOCKWISE_FINE:
+      editor.rotateSelection(-ROTATE_FINE_STEP_DEG);
       break;
     case SELECT_TOOL:
       editor.setTool("select");

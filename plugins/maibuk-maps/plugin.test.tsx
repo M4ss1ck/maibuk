@@ -1162,6 +1162,14 @@ describe("Map editor Commands", () => {
     "moveRightFar",
     "moveUpFar",
     "moveDownFar",
+    "scaleUp",
+    "scaleDown",
+    "scaleUpFine",
+    "scaleDownFine",
+    "rotateClockwise",
+    "rotateCounterClockwise",
+    "rotateClockwiseFine",
+    "rotateCounterClockwiseFine",
     "selectTool",
     "handTool",
     "pencilTool",
@@ -1193,6 +1201,26 @@ describe("Map editor Commands", () => {
     expect(effectiveShortcuts("plugin.maibuk-maps.moveDownFar", {}, false)).toContainEqual([
       "Shift+ArrowDown",
     ]);
+    expect(effectiveShortcuts("plugin.maibuk-maps.scaleUp", {}, false)).toContainEqual(["]"]);
+    expect(effectiveShortcuts("plugin.maibuk-maps.scaleDown", {}, false)).toContainEqual(["["]);
+    expect(effectiveShortcuts("plugin.maibuk-maps.scaleUpFine", {}, false)).toContainEqual([
+      "Shift+]",
+    ]);
+    expect(effectiveShortcuts("plugin.maibuk-maps.scaleDownFine", {}, false)).toContainEqual([
+      "Shift+[",
+    ]);
+    expect(effectiveShortcuts("plugin.maibuk-maps.rotateClockwise", {}, false)).toContainEqual([
+      ".",
+    ]);
+    expect(
+      effectiveShortcuts("plugin.maibuk-maps.rotateCounterClockwise", {}, false)
+    ).toContainEqual([","]);
+    expect(effectiveShortcuts("plugin.maibuk-maps.rotateClockwiseFine", {}, false)).toContainEqual([
+      "Shift+.",
+    ]);
+    expect(
+      effectiveShortcuts("plugin.maibuk-maps.rotateCounterClockwiseFine", {}, false)
+    ).toContainEqual(["Shift+,"]);
     expect(effectiveShortcuts("plugin.maibuk-maps.handTool", {}, false)).toContainEqual(["h"]);
     expect(effectiveShortcuts("plugin.maibuk-maps.penTool", {}, false)).toContainEqual(["n"]);
     expect(effectiveShortcuts("plugin.maibuk-maps.bucketTool", {}, false)).toContainEqual(["b"]);
@@ -1316,6 +1344,69 @@ describe("Map editor page", () => {
       );
       await runtime.editor?.flush();
       expect(linePoints(storage)[0]).toEqual([11, 20]);
+
+      keys.unmount();
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("scales and turns the selected Stamp with the bracket, period, and comma keys, one undo step a press", async () => {
+    const marker: MapStampElement = {
+      id: "s1",
+      kind: "stamp",
+      name: "City",
+      hidden: false,
+      locked: false,
+      stampRef: "base:marker",
+      transform: { x: 100, y: 50, size: 12, rotation: 0 },
+    };
+    const storage = mapStorage([marker]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    registerMapCommands();
+    const keys = render(<CommandKeys host={host} />);
+    try {
+      const user = userEvent.setup();
+      await selectRow(user, "City");
+      await focusPanelButton(user);
+      const transform = () =>
+        (runtime.editor?.getSnapshot().elements[0] as MapStampElement).transform;
+
+      // ] grows by ten percent and Shift+] by one; [ shrinks by ten percent.
+      await user.keyboard("]");
+      await waitFor(() => expect(transform().size).toBeCloseTo(13.2));
+      await user.keyboard("{Shift>}{]}{/Shift}");
+      await waitFor(() => expect(transform().size).toBeCloseTo(13.332));
+      await user.keyboard("[[");
+      await waitFor(() => expect(transform().size).toBeCloseTo(11.9988));
+
+      // . turns fifteen degrees clockwise, Shift+. one, , fifteen back, Shift+, one back.
+      await user.keyboard(".");
+      await waitFor(() => expect(transform().rotation).toBe(15));
+      await user.keyboard("{Shift>}{.}{/Shift}");
+      await waitFor(() => expect(transform().rotation).toBe(16));
+      await user.keyboard(",");
+      await waitFor(() => expect(transform().rotation).toBe(1));
+      await user.keyboard("{Shift>}{,}{/Shift}");
+      await waitFor(() => expect(transform().rotation).toBe(0));
+
+      // The centre never drifts, and the result is what the Map stores.
+      expect(transform().x).toBe(100);
+      expect(transform().y).toBe(50);
+      await runtime.editor?.flush();
+      const stored = (storedMap(storage).elements[0] as MapStampElement).transform;
+      expect(stored).toMatchObject({ x: 100, y: 50, rotation: 0 });
+      expect(stored.size).toBeCloseTo(11.9988);
+
+      // Undo walks back one key press at a time.
+      await user.keyboard("{Control>}z{/Control}");
+      await waitFor(() => expect(transform().rotation).toBe(1));
+      await user.keyboard("{Control>}z{/Control}");
+      await waitFor(() => expect(transform().rotation).toBe(16));
+      await user.keyboard("{Control>}z{/Control}");
+      await waitFor(() => expect(transform().rotation).toBe(15));
 
       keys.unmount();
       await page.unmount();

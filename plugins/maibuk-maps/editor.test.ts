@@ -2124,6 +2124,114 @@ describe("a transform handle drag from the Frame (#795)", () => {
   });
 });
 
+describe("scaling and turning the selection by keyboard (#795)", () => {
+  /** A marker Stamp 12 mm wide on (100, 50), and a Map Image 80 mm wide on (40, 60). */
+  const marker: MapStampElement = {
+    id: "marker",
+    kind: "stamp",
+    name: "City",
+    hidden: false,
+    locked: false,
+    stampRef: "base:marker",
+    transform: { x: 100, y: 50, size: 12, rotation: 0 },
+  };
+  const scan: MapImageElement = {
+    id: "scan",
+    kind: "image",
+    name: "Scan",
+    hidden: false,
+    locked: false,
+    assetRef: "a1",
+    transform: { x: 40, y: 60, size: 80, rotation: 0 },
+    opacity: 1,
+    exportable: true,
+  };
+
+  /** The stored transform of the Stamp or Map Image at `index`. */
+  function transformOf(editor: MapEditor, index = 0): MapStampElement["transform"] {
+    const element = editor.getSnapshot().elements[index];
+    if (element === undefined || (element.kind !== "stamp" && element.kind !== "image"))
+      throw new Error("no Stamp or Map Image");
+    return element.transform;
+  }
+
+  it("scales a Stamp about its centre as one undo step", () => {
+    const { editor } = openEditor([marker]);
+    editor.select("marker");
+
+    editor.scaleSelection(1.1);
+
+    expect(transformOf(editor)).toMatchObject({ x: 100, y: 50, rotation: 0 });
+    expect(transformOf(editor).size).toBeCloseTo(13.2);
+    editor.undo();
+    expect(editor.getSnapshot().elements[0]).toEqual(marker);
+  });
+
+  it("scales a Map Image, and a one-percent step nudges it less", () => {
+    const { editor } = openEditor([scan]);
+    editor.select("scan");
+
+    editor.scaleSelection(1.01);
+    expect(transformOf(editor).size).toBeCloseTo(80.8);
+
+    editor.scaleSelection(1.1);
+    expect(transformOf(editor).size).toBeCloseTo(88.88);
+
+    editor.undo();
+    expect(transformOf(editor).size).toBeCloseTo(80.8);
+  });
+
+  it("turns a Stamp clockwise and counterclockwise inside one circle, one step each", () => {
+    const { editor } = openEditor([marker]);
+    editor.select("marker");
+
+    editor.rotateSelection(15);
+    expect(transformOf(editor).rotation).toBe(15);
+    editor.rotateSelection(1);
+    expect(transformOf(editor).rotation).toBe(16);
+    editor.rotateSelection(-31);
+    expect(transformOf(editor).rotation).toBe(345);
+
+    editor.undo();
+    expect(transformOf(editor).rotation).toBe(16);
+  });
+
+  it("keeps a shrinking Stamp above zero, and a step that changes nothing is no undo step", () => {
+    const { editor } = openEditor([
+      { ...marker, transform: { ...marker.transform, size: MIN_STAMP_SIZE_MM } },
+    ]);
+    editor.select("marker");
+
+    editor.scaleSelection(0.9);
+
+    expect(transformOf(editor).size).toBe(MIN_STAMP_SIZE_MM);
+    expect(editor.getSnapshot().canUndo).toBe(false);
+  });
+
+  it("changes nothing, and takes no undo step, with nothing selected, a locked Element, or another kind", () => {
+    const line = squareLine("ring", "Ring", 10, 10, 80);
+    const { editor } = openEditor([{ ...marker, locked: true }, line]);
+
+    // No selection at all.
+    editor.scaleSelection(1.1);
+    editor.rotateSelection(15);
+    expect(editor.getSnapshot().canUndo).toBe(false);
+
+    // A locked Stamp keeps its place, size, and turn.
+    editor.select("marker");
+    editor.scaleSelection(1.1);
+    editor.rotateSelection(15);
+    expect(transformOf(editor)).toEqual({ x: 100, y: 50, size: 12, rotation: 0 });
+
+    // A Map Line is neither a Stamp nor a Map Image.
+    editor.select("ring");
+    editor.scaleSelection(1.1);
+    editor.rotateSelection(15);
+    expect(editor.getSnapshot().canUndo).toBe(false);
+    expect(editor.getSnapshot().elements[1]).toEqual(line);
+  });
+});
+
 describe("Map Styles in the editor", () => {
   /** A marker Stamp in a colour of its own, which the clear tests start from. */
   function markerStamp(overrides: Partial<MapStampElement> = {}): MapStampElement {
