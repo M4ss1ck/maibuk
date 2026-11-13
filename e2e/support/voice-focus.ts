@@ -79,13 +79,13 @@ export async function downloadSpanish(page: Page, tier: "Fast" | "Accurate") {
 
 // The first Book, Enter opens its last Chapter with the caret in the text.
 // After a model download the last path is Settings, which StartupRedirect
-// would restore, so an app already running returns Home with "g p".
+// would restore, so an app already running returns Home with "g b".
 export async function openChapter(page: Page) {
   const url = new URL(page.url());
   const onApp = url.hostname === "127.0.0.1" && !url.pathname.startsWith("/__e2e__");
   if (onApp && url.pathname !== "/") {
     await page.keyboard.press("g");
-    await page.keyboard.press("p");
+    await page.keyboard.press("b");
   } else {
     await page.goto("/");
   }

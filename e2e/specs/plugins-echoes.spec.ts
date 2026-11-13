@@ -213,7 +213,7 @@ test.describe("Echoes report @wf:plugins-echoes @sc:plugin.maibuk-echoes.openEch
 
     // Leaving and reopening the page reads the stored ignore list.
     await page.keyboard.press("g");
-    await page.keyboard.press("p");
+    await page.keyboard.press("b");
     await expect(page).toHaveURL(/\/$/);
     await openEchoesFromPalette(page);
     await expect(nearbyList(page).getByRole("option", { name: /^dark / })).toBeVisible({
@@ -233,7 +233,7 @@ test.describe("Echoes report @wf:plugins-echoes @sc:plugin.maibuk-echoes.openEch
     // report at once (before the editor's 1s autosave): the editor's flush on
     // leaving emits the Change that touches the Book.
     await page.keyboard.press("g");
-    await page.keyboard.press("p");
+    await page.keyboard.press("b");
     await expect(page).toHaveURL(/\/$/);
     const card = page.getByRole("grid", { name: "Books" }).getByRole("row");
     await expect(card).toHaveCount(1);

@@ -1455,7 +1455,7 @@
     "singleKeyOff": "Desactivado",
     "inactive": "Inactivo",
     "search": "Buscar comandos y teclas",
-    "searchPlaceholder": "Negrita, Ctrl+S, g p…",
+    "searchPlaceholder": "Negrita, Ctrl+S, g b…",
     "listLabel": "Comandos y sus atajos",
     "empty": "Ningún comando coincide.",
     "connectKeyboard": "Conecta un teclado para grabar un atajo.",

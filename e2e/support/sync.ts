@@ -364,7 +364,7 @@ export const chapterText = (page: Page): Locator =>
 export async function openHome(page: Page): Promise<void> {
   await openSettings(page);
   await page.keyboard.press("g");
-  await page.keyboard.press("p");
+  await page.keyboard.press("b");
   await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
 }
 

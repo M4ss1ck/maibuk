@@ -292,7 +292,7 @@ test.describe("Restore a Backup @wf:backup-restore", () => {
 
     // Nothing changed: the Book is still there.
     await page.keyboard.press("g");
-    await page.keyboard.press("p");
+    await page.keyboard.press("b");
     await expect(page.getByRole("grid", { name: "Books" })).toBeVisible();
     await expect(page.getByRole("grid", { name: "Books" }).getByRole("row")).toHaveCount(1);
   });

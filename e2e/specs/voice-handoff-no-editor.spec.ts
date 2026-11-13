@@ -44,7 +44,7 @@ test.describe("@wf:voice-commands-app @chromium-only", () => {
 
     // Back in the Chapter the mic is off: Dictation stayed stopped.
     await page.keyboard.press("g");
-    await page.keyboard.press("p");
+    await page.keyboard.press("b");
     await page.getByRole("grid", { name: "Books" }).getByRole("row").first().waitFor();
     await page.keyboard.press("1");
     await page.keyboard.press("Enter");

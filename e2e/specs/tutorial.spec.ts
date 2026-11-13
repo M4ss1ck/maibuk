@@ -406,7 +406,7 @@ test.describe("Tutorial reload mid-run @wf:tutorial-reload-mid-run", () => {
     // then go Home with the keyboard.
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await page.keyboard.press("g");
-    await page.keyboard.press("p");
+    await page.keyboard.press("b");
     await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
     const seeded = page.getByRole("row", { name: SEED_BOOK.title });
     await expect(seeded).toContainText(SEED_BOOK.authorName);

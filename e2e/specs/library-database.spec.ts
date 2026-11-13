@@ -24,12 +24,12 @@ async function openSettings(page: Page): Promise<void> {
 
 /**
  * Opens the Books gallery by keyboard and settles on its screen. `/` would
- * re-open the last visited screen instead, so use the global "g p" sequence.
+ * re-open the last visited screen instead, so use the global "g b" sequence.
  * The screen heading, not the grid, is the signal: an empty Library has no grid.
  */
 async function openBooksGallery(page: Page): Promise<void> {
   await page.keyboard.press("g");
-  await page.keyboard.press("p");
+  await page.keyboard.press("b");
   await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
 }
 

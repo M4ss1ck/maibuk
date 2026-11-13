@@ -1443,7 +1443,7 @@
     "singleKeyOff": "Off",
     "inactive": "Inactive",
     "search": "Search commands and keys",
-    "searchPlaceholder": "Bold, Ctrl+S, g p…",
+    "searchPlaceholder": "Bold, Ctrl+S, g b…",
     "listLabel": "Commands and their shortcuts",
     "empty": "No command matches.",
     "connectKeyboard": "Connect a keyboard to record a shortcut.",

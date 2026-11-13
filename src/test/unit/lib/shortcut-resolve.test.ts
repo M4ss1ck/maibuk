@@ -24,8 +24,8 @@ describe("defaultShortcuts", () => {
   });
 
   it("returns the registry defaults when a Command has no web variant", () => {
-    expect(defaultShortcuts("global.gotoProjects", false)).toEqual([["g", "p"]]);
-    expect(defaultShortcuts("global.gotoProjects", true)).toEqual([["g", "p"]]);
+    expect(defaultShortcuts("global.gotoProjects", false)).toEqual([["g", "b"]]);
+    expect(defaultShortcuts("global.gotoProjects", true)).toEqual([["g", "b"]]);
   });
 });
 

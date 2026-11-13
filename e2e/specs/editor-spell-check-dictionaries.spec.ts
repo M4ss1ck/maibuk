@@ -168,7 +168,7 @@ test.describe("Spell Check Dictionaries @wf:editor-spell-check-dictionaries @sc:
 
     // Back in the editor nothing is marked and the state says there is none.
     await page.keyboard.press("g");
-    await page.keyboard.press("p");
+    await page.keyboard.press("b");
     await expect(page.getByRole("grid", { name: "Books" }).getByRole("row").first()).toBeVisible();
     await page.keyboard.press("1");
     await page.keyboard.press("Enter");

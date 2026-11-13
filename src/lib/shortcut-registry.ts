@@ -172,7 +172,7 @@ export const COMMANDS = {
   "global.gotoProjects": {
     labelKey: "shortcuts.gotoProjects",
     contexts: ["global"],
-    defaults: [["g", "p"]],
+    defaults: [["g", "b"]],
     navigates: true,
   },
   "global.gotoNotes": {

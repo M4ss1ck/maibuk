@@ -231,7 +231,7 @@ test.describe("close Checkpoint @wf:versions-checkpoint-close", () => {
     // Leave the editor: the close trigger saves the Book as a Checkpoint.
     await focusChapterList(page);
     await page.keyboard.press("g");
-    await page.keyboard.press("p");
+    await page.keyboard.press("b");
     await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
 
     await enterBook(page);

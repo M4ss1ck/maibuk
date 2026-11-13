@@ -207,7 +207,7 @@ describe("useShortcuts modal blocking", () => {
     act(() => {
       vi.advanceTimersByTime(100);
     });
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "p", bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "b", bubbles: true }));
 
     expect(onTrigger).toHaveBeenCalledTimes(1);
   });
@@ -224,7 +224,7 @@ describe("useShortcuts modal blocking", () => {
     act(() => {
       vi.advanceTimersByTime(100);
     });
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "p", bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "b", bubbles: true }));
 
     expect(onTrigger).not.toHaveBeenCalled();
   });
@@ -244,7 +244,7 @@ describe("useShortcuts modal blocking", () => {
       useModalStore.getState().unregister("modal-1");
     });
 
-    window.dispatchEvent(new KeyboardEvent("keydown", { key: "p", bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "b", bubbles: true }));
 
     expect(onTrigger).not.toHaveBeenCalled();
   });
@@ -463,7 +463,7 @@ describe("useShortcuts resolves keys from the registry and Custom Shortcuts", ()
     act(() => {
       vi.advanceTimersByTime(700);
     });
-    press({ key: "p" });
+    press({ key: "b" });
     expect(onTrigger).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
@@ -533,7 +533,7 @@ describe("useShortcuts resolves keys from the registry and Custom Shortcuts", ()
     press({ key: "?", shiftKey: true });
     press({ key: "p" });
     press({ key: "g" });
-    press({ key: "p" });
+    press({ key: "b" });
     press({ key: "Escape" });
     press({ key: "Y", ctrlKey: true, shiftKey: true });
 
