@@ -89,6 +89,6 @@ test.describe("phone Maps editor @touch @wf:plugins-maps-touch", () => {
     const pen = page.getByRole("button", { name: "Pen", exact: true });
     await expect(pen).toBeVisible();
     await pen.tap();
-    await expect(drawnWith(page, "pencil")).toBeVisible();
+    await expect(drawnWith(page, "pen")).toBeVisible();
   });
 });

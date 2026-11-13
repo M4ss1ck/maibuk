@@ -263,17 +263,17 @@ test.describe("Maps floating layout @wf:plugins-maps-layout @sandbox", () => {
 
     // A region at the desktop width already takes the room its content needs,
     // so the toggle that gives it the whole page only exists on the narrow
-    // page: at 1440 it was drawn and did nothing (#775 review R2).
+    // page: at 1440 it was drawn and did nothing (#775 review R2). The
+    // stylesheet hides it, which also takes it out of the accessibility tree,
+    // so neither a pointer nor a screen reader finds it.
     await pressControl(page, toolButton(page, "Pen"));
     await expect(page.getByRole("button", { name: "Minimise Properties" })).toBeVisible();
     const propertiesToggle = toolButton(page, "Full-height Properties");
-    await expect(propertiesToggle).toHaveCount(1);
-    await expect(propertiesToggle).toBeHidden();
+    await expect(propertiesToggle).toHaveCount(0);
 
     await openLayers(page);
     const layersToggle = toolButton(page, "Full-height Layers");
-    await expect(layersToggle).toHaveCount(1);
-    await expect(layersToggle).toBeHidden();
+    await expect(layersToggle).toHaveCount(0);
   });
 });
 
