@@ -44,6 +44,7 @@ import {
   reorder,
   sceneShapes,
   sceneToSvg,
+  stampPreview,
   setHidden,
   setLocked,
   smoothStroke,
@@ -1771,5 +1772,80 @@ describe("Uploaded pictures (#756)", () => {
       ...image,
       locked: true,
     });
+  });
+});
+
+describe("a Stamp's preview picture (the Insert grid's tiles)", () => {
+  /** The SVG a preview's data URI carries. */
+  function svgOf(preview: string): string {
+    const prefix = "data:image/svg+xml,";
+    expect(preview.startsWith(prefix)).toBe(true);
+    return decodeURIComponent(preview.slice(prefix.length));
+  }
+
+  const banner: AssetIndexEntry = {
+    id: "a1",
+    name: "banner",
+    mime: "image/svg+xml",
+    width: 40,
+    height: 20,
+    recolorable: false,
+    use: "stamp",
+  };
+
+  it("draws a built-in Stamp's art on a square page in the Map Style's colours", () => {
+    const atlas = svgOf(stampPreview("base:castle"));
+    expect(atlas).toContain('viewBox="0 0 16 16"');
+    // The art itself, as the scene draws a Castle Stamp.
+    const placed: MapStampElement = {
+      id: "preview",
+      kind: "stamp",
+      name: "",
+      hidden: false,
+      locked: false,
+      stampRef: "base:castle",
+      transform: { x: 8, y: 8, size: 12, rotation: 0 },
+    };
+    expect(atlas).toBe(
+      sceneToSvg({ page: { preset: "square", widthMm: 16, heightMm: 16 }, elements: [placed] })
+    );
+    // Another Style paints another picture, so a tile follows the Map's Style.
+    expect(svgOf(stampPreview("base:castle", { styleId: "night" }))).not.toBe(atlas);
+  });
+
+  it("keeps art taller than it is wide inside the tile", () => {
+    // The scale a Stamp's size sets is its width, so a tall picture is sized
+    // by its height instead: 12 mm tall, 6 mm wide.
+    const tall: AssetIndexEntry = { ...banner, width: 20, height: 40 };
+    const svg = svgOf(
+      stampPreview("custom:a1", {
+        library: mapLibrary([tall]),
+        picture: "data:image/png;base64,AA",
+      })
+    );
+    expect(svg).toContain('width="6"');
+    expect(svg).toContain('height="12"');
+  });
+
+  it("draws the scale bar, which has no art of its own", () => {
+    expect(svgOf(stampPreview("base:scale-bar"))).toContain("<text");
+  });
+
+  it("carries a Custom Stamp's picture inside the preview", () => {
+    const picture = "data:image/svg+xml;base64,PHN2Zy8+";
+    const svg = svgOf(stampPreview("custom:a1", { library: mapLibrary([banner]), picture }));
+    expect(svg).toContain(`href="${picture}"`);
+    expect(svg).not.toContain("asset:");
+  });
+
+  it("draws a dashed frame for a Custom Stamp whose picture it was not given", () => {
+    for (const svg of [
+      svgOf(stampPreview("custom:a1", { library: mapLibrary([banner]) })),
+      // A ref the Library no longer holds draws the same frame.
+      svgOf(stampPreview("custom:gone", { picture: "data:image/png;base64,AA" })),
+    ]) {
+      expect(svg).not.toContain("<image");
+      expect(svg).toContain("stroke-dasharray");
+    }
   });
 });

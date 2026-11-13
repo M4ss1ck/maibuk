@@ -1,6 +1,7 @@
-// The Maps editor's Map Labels (#751): the Insert tool's Place Map Label button
+// The Maps editor's Map Labels (#751): the Text tool's Place Map Label button
 // adds one at the view centre, the Elements list lists it selected, and the
-// Frame draws its text along a baseline. From the properties panel the Text
+// Frame draws its text along a baseline; a click in the Frame with the Text
+// tool adds one where the pointer landed. From the properties panel the Text
 // field rewrites the label, the Font select moves it to a bundled face the
 // Frame's own folder declares, and the Bend field bows the baseline into a
 // quadratic off the chord; with the Select tool the label's bend handle drags
@@ -14,8 +15,14 @@
 
 import type { FrameLocator, Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
-import { dragBendHandle, fontLoaded, type LabelInk, labelInk } from "../support/frame-stroke";
-import { leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
+import {
+  clickPagePoint,
+  dragBendHandle,
+  fontLoaded,
+  type LabelInk,
+  labelInk,
+} from "../support/frame-stroke";
+import { leaveFrame, pressUntilFocused, tabTo, tabToEither } from "../support/keyboard";
 import { expect, test } from "../support/test";
 import { openLayers } from "../support/maps-layers";
 
@@ -51,7 +58,7 @@ const baselinePaths = (page: Page) => mapFrame(page).locator('defs path[id^="lab
 /** The bend handle a selected, unlocked Map Label draws under the Select tool. */
 const bendHandle = (page: Page) => mapFrame(page).locator("[data-bend-handle]");
 
-/** The Insert tool's Place button: the keyboard path to a label at the view centre. */
+/** The Text tool's Place button: the keyboard path to a label at the view centre. */
 const placeLabelButton = (page: Page) =>
   page.getByRole("button", { name: "Place Map Label", exact: true });
 
@@ -154,15 +161,17 @@ async function openEditorWithMap(page: Page): Promise<void> {
   await openLayers(page);
 }
 
-/** Picks the Insert tool with its key and waits for the Frame to honour it. */
-async function pickInsert(page: Page): Promise<void> {
-  await page.keyboard.press("i");
-  await expect(page.getByRole("button", { name: "Insert", exact: true, pressed: true }));
+/** Picks the Text tool with its key and waits for the Frame to honour it. */
+async function pickText(page: Page): Promise<void> {
+  await page.keyboard.press("t");
+  await expect(
+    page.getByRole("button", { name: "Text", exact: true, pressed: true })
+  ).toBeVisible();
   // The scene round-trip is what proves the Frame is listening before a press.
-  await expect(mapFrame(page).locator('svg[data-tool="insert"]')).toBeVisible();
+  await expect(mapFrame(page).locator('svg[data-tool="text"]')).toBeVisible();
 }
 
-/** Places a Map Label with the Insert tool's Place button, the keyboard's way. */
+/** Places a Map Label with the Text tool's Place button, the keyboard's way. */
 async function placeLabel(page: Page): Promise<void> {
   const place = placeLabelButton(page);
   await tabTo(page, place, { max: 60 });
@@ -173,7 +182,9 @@ async function placeLabel(page: Page): Promise<void> {
 /** Leaves the Frame and Tabs to a control in the properties panel. */
 async function focusProperties(page: Page, target: Locator): Promise<void> {
   await leaveFrame(page, frameElement(page));
-  await tabTo(page, target, { max: 60 });
+  // The Text tool's Place button sits in Properties after the label's fields,
+  // so a field can be behind focus, which Firefox only reaches going back.
+  await tabToEither(page, target, { max: 60 });
   await expect(target).toBeFocused();
 }
 
@@ -213,12 +224,12 @@ test.use({
   builtInPlugins: [{ id: "maibuk-maps" }],
 });
 
-test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.insertTool @sc:plugin.maibuk-maps.selectTool @sandbox", () => {
+test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.textTool @sc:plugin.maibuk-maps.selectTool @sandbox", () => {
   test("Place Map Label adds a label at the view centre, listed, selected, and drawn along its straight baseline", async ({
     page,
   }) => {
     await openEditorWithMap(page);
-    await pickInsert(page);
+    await pickText(page);
     await placeLabel(page);
 
     // The row calls it what it is, and the properties panel holds the new
@@ -242,9 +253,34 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.in
     expectInkOnBaseline(await labelInk(surface(page)));
   });
 
+  test("a click in the Frame with the Text tool places a Map Label where the pointer landed", async ({
+    page,
+  }) => {
+    await openEditorWithMap(page);
+    await pickText(page);
+
+    // A pointer-only gesture (see `support/frame-stroke.ts`): the Frame has no
+    // key that names a point on the page. The Text tool opens no Insert card,
+    // and Insert no longer offers a Map Label of its own.
+    await expect(page.getByRole("button", { name: "Upload…", exact: true })).toHaveCount(0);
+    const point = [150, 40] as const;
+    await clickPagePoint(page, surface(page), point);
+
+    await expect(elementRow(page, "Map Label 1")).toBeVisible();
+    await expect(drawnLabelPaths(page).first()).toHaveText("Label");
+    // The straight baseline's control point is the label's own page point.
+    const [x, y] = baseline(await baselineData(page)).control;
+    expect(x).toBeCloseTo(point[0], 0);
+    expect(y).toBeCloseTo(point[1], 0);
+
+    await page.keyboard.press("i");
+    await expect(page.getByRole("button", { name: "Upload…", exact: true })).toBeVisible();
+    await expect(placeLabelButton(page)).toHaveCount(0);
+  });
+
   test("the Text field rewrites the drawn label's text", async ({ page }) => {
     await openEditorWithMap(page);
-    await pickInsert(page);
+    await pickText(page);
     await placeLabel(page);
 
     await writeField(page, textField(page), "North Sea");
@@ -263,7 +299,7 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.in
     });
 
     await openEditorWithMap(page);
-    await pickInsert(page);
+    await pickText(page);
     await placeLabel(page);
 
     await pickOption(page, fontTrigger(page), "Cinzel");
@@ -287,7 +323,7 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.in
     page,
   }) => {
     await openEditorWithMap(page);
-    await pickInsert(page);
+    await pickText(page);
     await placeLabel(page);
 
     // The handle belongs to the Select tool, whose key runs from the Place
@@ -327,7 +363,7 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.in
     page,
   }) => {
     await openEditorWithMap(page);
-    await pickInsert(page);
+    await pickText(page);
     await placeLabel(page);
 
     await writeField(page, textField(page), "North Sea");

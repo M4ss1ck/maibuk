@@ -239,14 +239,12 @@ test.describe("Maps Select drag @wf:plugins-maps-move @sc:plugin.maibuk-maps.sel
   }) => {
     await openEditorWithMap(page);
     await pickTool(page, "i", "Insert", "insert");
-    // The Insert tool offers a Place button per Stamp, named after the pick,
-    // beside the Map Label's own "Place Map Label" (#751); this test means the
-    // Stamp one, whose name follows "Place " with the pick. The floating
-    // chrome's footer also offers "Place in a Chapter or Note…", which shares
-    // the prefix, so the name has to rule out both other Place buttons.
-    const place = page.getByRole("button", { name: /^Place (?!Map Label$|in a Chapter)/ });
-    // The floating chrome puts the pill, the eleven tool buttons and the cards
-    // between the author and the Insert card's footer.
+    // The Insert tool offers one Place button, named after the picked Stamp.
+    // The floating chrome's footer also offers "Place in a Chapter or Note…",
+    // which shares the prefix, so the name has to rule that one out.
+    const place = page.getByRole("button", { name: /^Place (?!in a Chapter)/ });
+    // The floating chrome puts the pill, the twelve tool buttons, the Stamp
+    // grid's tiles and the cards between the author and the Place button.
     await tabTo(page, place, { max: 120 });
     const stamp = (
       (await place.getAttribute("aria-label")) ??

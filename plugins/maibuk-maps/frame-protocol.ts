@@ -39,6 +39,7 @@ export type MapTool =
   | "area"
   | "eraser"
   | "insert"
+  | "text"
   | ShapeKind;
 
 /** One Element as the Frame draws it: its render primitives, its flags, and its selection. */
@@ -292,7 +293,8 @@ export interface FramePourMessage {
 }
 
 /**
- * Frame -> Worker: a Stamp dropped at one page point by the Insert tool (#749).
+ * Frame -> Worker: one page point clicked with the Insert tool (#749) or the
+ * Text tool, where the Worker places a Stamp or a Map Label by its own tool.
  * The point is where the author clicked or tapped, and the Worker centres the
  * Stamp it has picked there.
  */

@@ -23,7 +23,7 @@
 import { readFile } from "node:fs/promises";
 import type { Download, Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
-import { pressUntilFocused, tabTo } from "../support/keyboard";
+import { pressUntilFocused, tabTo, tabToEither } from "../support/keyboard";
 import { forceDownloadSaves } from "../support/save-picker";
 import { SEED_BOOK } from "../support/seed/names";
 import { expect, test } from "../support/test";
@@ -60,7 +60,7 @@ const elementsList = (page: Page) =>
 const elementRow = (page: Page, name: string) =>
   elementsList(page).getByRole("button", { name: new RegExp(`^${name}`) });
 
-/** The Insert tool's Place button, the keyboard's way to a label. */
+/** The Text tool's Place button, the keyboard's way to a label. */
 const placeLabelButton = (page: Page) => page.getByRole("button", { name: "Place Map Label" });
 
 /** The properties panel's fields the exports depend on. */
@@ -137,12 +137,14 @@ async function openEditorWithMap(page: Page): Promise<void> {
   await openLayers(page);
 }
 
-/** Places a Map Label at the view centre: the Insert tool's key, then its button. */
+/** Places a Map Label at the view centre: the Text tool's key, then its button. */
 async function placeLabel(page: Page): Promise<void> {
-  await page.keyboard.press("i");
-  await expect(page.getByRole("button", { name: "Insert", exact: true, pressed: true }));
+  await page.keyboard.press("t");
+  await expect(
+    page.getByRole("button", { name: "Text", exact: true, pressed: true })
+  ).toBeVisible();
   // The scene round-trip is what proves the Frame is listening before a press.
-  await expect(mapFrame(page).locator('svg[data-tool="insert"]')).toBeVisible();
+  await expect(mapFrame(page).locator('svg[data-tool="text"]')).toBeVisible();
   await tabTo(page, placeLabelButton(page), { max: 60 });
   await page.keyboard.press("Enter");
   await expect(elementRow(page, "Map Label 1")).toBeVisible();
@@ -150,7 +152,9 @@ async function placeLabel(page: Page): Promise<void> {
 
 /** Writes one field: focus it, select all, type the value, Enter to commit. */
 async function writeField(page: Page, field: Locator, value: string): Promise<void> {
-  await tabTo(page, field, { max: 120 });
+  // The Text tool's Place button sits in Properties after the label's fields,
+  // so a field can be behind focus, which Firefox only reaches going back.
+  await tabToEither(page, field, { max: 120 });
   await page.keyboard.press("ControlOrMeta+a");
   await page.keyboard.type(value);
   await page.keyboard.press("Enter");
@@ -221,7 +225,7 @@ test.use({
   builtInPlugins: [{ id: "maibuk-maps" }],
 });
 
-test.describe("Maps export: Place a Map in a Chapter @wf:plugins-maps-place @sc:plugin.maibuk-maps.insertTool @sandbox", () => {
+test.describe("Maps export: Place a Map in a Chapter @wf:plugins-maps-place @sc:plugin.maibuk-maps.textTool @sandbox", () => {
   test("Place in a Chapter opens it with the Map's picture in its editor", async ({ page }) => {
     await forceDownloadSaves(page);
     await openEditorWithMap(page);
@@ -281,7 +285,7 @@ test.describe("Maps export: Place a Map in a Chapter @wf:plugins-maps-place @sc:
   });
 });
 
-test.describe("Maps export: save a Map as PNG or SVG @wf:plugins-maps-export @sc:plugin.maibuk-maps.insertTool @sandbox", () => {
+test.describe("Maps export: save a Map as PNG or SVG @wf:plugins-maps-export @sc:plugin.maibuk-maps.textTool @sandbox", () => {
   test("Save downloads a PNG drawn at the print width and DPI the author picks", async ({
     page,
   }) => {

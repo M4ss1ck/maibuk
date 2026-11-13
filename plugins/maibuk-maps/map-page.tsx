@@ -8,7 +8,14 @@
  * schedules autosave. This module imports only `@/plugin-sdk` and its own files.
  */
 
-import { useEffect, useState, useSyncExternalStore, type ComponentType } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ComponentType,
+} from "react";
 import {
   FILE_READ_MAX_BYTES,
   PLUGIN_UI_LIMITS,
@@ -45,6 +52,7 @@ import {
   MAX_PRINT_WIDTH_IN,
   MIN_DPI,
   MIN_PRINT_WIDTH_IN,
+  assetDataUri,
   dataUri,
   defaultPrintWidthIn,
   exportFileName,
@@ -87,7 +95,7 @@ import {
   type StampScaleUnit,
 } from "./maps";
 import { MAX_SCATTER_SPACING_MM, MIN_SCATTER_SPACING_MM } from "./scatter";
-import { mapLibrary } from "./scene";
+import { mapLibrary, stampPreview } from "./scene";
 import {
   BASE_STAMP_IDS,
   baseStampRef,
@@ -430,8 +438,9 @@ const SHAPE_TOOL_ICONS: Readonly<Record<ShapeKind, string>> = {
 /**
  * The tool belt's tools, in the order #775 Decision 3 fixes, with the Hand
  * beside Select since both only look and pick rather than draw: the drawing and
- * pouring tools, the three Shape tools, then Insert and Eraser (#778). Each is a
- * `ui.IconButton` with `isSelected`, so the belt is one control per tool.
+ * pouring tools, the three Shape tools, then Insert, Text, and Eraser (#778).
+ * Each is a `ui.IconButton` with `isSelected`, so the belt is one control per
+ * tool.
  */
 const TOOL_BELT: ReadonlyArray<{ tool: MapTool; label: MapsKey; icon: string }> = [
   { tool: "select", label: "tools.select", icon: "mouse-pointer-2" },
@@ -444,8 +453,21 @@ const TOOL_BELT: ReadonlyArray<{ tool: MapTool; label: MapsKey; icon: string }> 
   { tool: "rectangle", label: "tools.rectangle", icon: "square" },
   { tool: "polygon", label: "tools.polygon", icon: "pentagon" },
   { tool: "insert", label: "tools.insert", icon: "stamp" },
+  { tool: "text", label: "tools.text", icon: "type" },
   { tool: "eraser", label: "tools.eraser", icon: "eraser" },
 ];
+
+/**
+ * The Insert grid draws a Custom Stamp's own picture only while it is small:
+ * the picture travels inside the tile's data URI, in the page's UI tree, which
+ * one host message carries. A picture past this many base64 characters, any
+ * past the grid's first {@link STAMP_TILE_PICTURES_MAX} Custom Stamps, and any
+ * once the tiles together hold {@link STAMP_TILE_PICTURES_MAX_CHARS}, draws
+ * the tile's dashed frame instead, under the picture's name.
+ */
+const STAMP_TILE_PICTURE_MAX_CHARS = 150_000;
+const STAMP_TILE_PICTURES_MAX_CHARS = 1_000_000;
+const STAMP_TILE_PICTURES_MAX = 60;
 
 /**
  * The floating editor's CSS (#778): the drawing fills the page body and every
@@ -478,7 +500,22 @@ div[data-plugin-ui] > div:nth-child(4):empty,
 div[data-plugin-ui] > div:nth-child(6):empty { display: none; }
 div[data-plugin-ui] > div:nth-child(1) { top: 0.75rem; left: 0.75rem; }
 div[data-plugin-ui] > div:nth-child(2) { top: 50%; left: 0.75rem; transform: translateY(-50%); }
-div[data-plugin-ui] > div:nth-child(3) { top: 50%; left: 3.75rem; width: 15rem; transform: translateY(-50%); }
+/* Insert is centred on the page's middle, so its height stops 4.5rem short of
+   each edge: the top bar's own 3.5rem and a gap, and the card scrolls inside
+   itself past that instead of covering the bar. */
+div[data-plugin-ui] > div:nth-child(3) { top: 50%; left: 3.75rem; width: 17rem; transform: translateY(-50%); max-height: calc(100% - 9rem); }
+/* The Insert card's Stamp grid: square tiles a thumb can hit, as many columns
+   as the card is wide, each tile filled by its Stamp's picture. */
+div[data-plugin-ui] > div:nth-child(3) > div:first-child { display: grid; grid-template-columns: repeat(auto-fill, minmax(2.75rem, 1fr)); gap: 0.25rem; }
+div[data-plugin-ui] > div:nth-child(3) > div:first-child > button { height: auto; min-width: 0; aspect-ratio: 1; padding: 0.1875rem; }
+div[data-plugin-ui] > div:nth-child(3) > div:first-child > button > img { width: 100%; height: 100%; max-width: none; object-fit: contain; border-radius: 0.25rem; }
+/* The picked tile is the one holding a second child: it takes the primary
+   ring, and the child itself, which only marks it, is not drawn. */
+div[data-plugin-ui] > div:nth-child(3) > div:first-child > button:has(> :nth-child(2)) { outline: 2px solid var(--color-primary); outline-offset: -2px; background: color-mix(in srgb, var(--color-primary) 10%, transparent); }
+div[data-plugin-ui] > div:nth-child(3) > div:first-child > button > :nth-child(2) { display: none; }
+/* "or upload your own": the words between two rules that share the row. */
+div[data-plugin-ui] > div:nth-child(3) > div:has(> hr) > hr { flex: 1 1 0; margin: 0; }
+div[data-plugin-ui] > div:nth-child(3) > div:has(> hr) > p { white-space: nowrap; }
 div[data-plugin-ui] > div:nth-child(4) { top: 50%; left: 3.75rem; width: 17rem; transform: translateY(-50%); }
 /* Properties sizes to what it holds, and stops above the zoom cluster in the
    same corner, scrolling inside itself past that: 4.5rem above it, and below
@@ -576,8 +613,9 @@ div[data-plugin-ui] > div:nth-child(8) { right: 0.75rem; bottom: 0.75rem; }
   div[data-plugin-ui] > div:nth-child(6) > div:first-child > div:first-child > div:last-child > button:nth-last-child(2) { display: none; }
   /* Insert and Layers share one box beside the belt, so with both open they
      stack rather than cover each other: Insert above the middle, Layers below
-     it, each held to its own half (#775 review R2). */
-  div[data-plugin-ui]:has(> div:nth-child(4):not(:empty)) > div:nth-child(3) { transform: translateY(calc(-100% - 0.25rem)); max-height: calc(50% - 1rem); }
+     it, each held to its own half, and Insert's half stops under the top bar
+     (#775 review R2). */
+  div[data-plugin-ui]:has(> div:nth-child(4):not(:empty)) > div:nth-child(3) { transform: translateY(calc(-100% - 0.25rem)); max-height: calc(50% - 4.75rem); }
   div[data-plugin-ui]:has(> div:nth-child(3):not(:empty)) > div:nth-child(4) { transform: translateY(0.25rem); max-height: calc(50% - 1rem); }
 }
 /* A coarse pointer gets a thumb-sized target on every control the page draws,
@@ -767,6 +805,7 @@ function MapEditorView({
   save,
   place,
   pickAsset,
+  loadAsset,
   saveCustomFill,
 }: {
   editor: MapEditor;
@@ -776,6 +815,8 @@ function MapEditorView({
   place: PlaceCallbacks;
   /** Picks, ingests, saves, and lists one uploaded picture for `use`; null when cancelled. */
   pickAsset(use: AssetUse): Promise<MapAsset | null>;
+  /** One Library picture with its bytes, or null when it is absent or damaged. */
+  loadAsset(id: string): Promise<MapAsset | null>;
   /** Saves one Custom Fill and lists it, so every Map draws it. */
   saveCustomFill(fill: CustomFill): Promise<void>;
 }) {
@@ -840,13 +881,13 @@ function MapEditorView({
   const image = selected?.kind === "image" ? selected : null;
   const scatter = snapshot.selectedFillScatter;
   const style = snapshot.styleId;
-  // The Custom Stamps the Library holds: the Insert picker names them after
+  // The Custom Stamps the Library holds: the Insert grid names them after
   // the base Stamps, and a new Custom Fill picks among them.
   const customStamps = [...snapshot.library.assets.values()]
     .filter((asset) => asset.use === "stamp")
     .map((asset) => ({ ref: customStampRef(asset.id), name: asset.name }));
   // Every Library picture the author uploaded grows these lists, so each one is
-  // fitted to the host's caps: a Select's options to `maxOptions`, and the
+  // fitted to the host's caps: the Insert grid's tiles to `maxOptions`, and the
   // Custom Stamps' rows (one node each) to the same list cap.
   const stampOptions = fitOptions(
     [
@@ -855,6 +896,66 @@ function MapEditorView({
     ],
     snapshot.currentStampId
   );
+  // The Custom Stamps whose own pictures the grid draws: the first few it
+  // lists, loaded once each while Insert is open, inside the tiles' budget.
+  const insertOpen = snapshot.tool === "insert";
+  const pictureIds = customStamps
+    .slice(0, STAMP_TILE_PICTURES_MAX)
+    .map((one) => parseCustomStampRef(one.ref) ?? "")
+    .join("\n");
+  const stampPictures = useRef(new Map<string, string | null>());
+  const [stampPicturesLoaded, setStampPicturesLoaded] = useState(0);
+  useEffect(() => {
+    if (!insertOpen || pictureIds === "") return;
+    let live = true;
+    void (async () => {
+      const pictures = stampPictures.current;
+      let spent = 0;
+      for (const picture of pictures.values()) spent += picture?.length ?? 0;
+      for (const id of pictureIds.split("\n")) {
+        if (pictures.has(id)) continue;
+        if (spent >= STAMP_TILE_PICTURES_MAX_CHARS) return;
+        // A picture that will not load keeps its dashed frame.
+        const asset = await loadAsset(id).catch(() => null);
+        if (!live) return;
+        const picture =
+          asset !== null && asset.data.length <= STAMP_TILE_PICTURE_MAX_CHARS
+            ? assetDataUri(asset)
+            : null;
+        pictures.set(id, picture);
+        spent += picture?.length ?? 0;
+        if (picture !== null) setStampPicturesLoaded((count) => count + 1);
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [insertOpen, pictureIds, loadAsset]);
+  // One tile per Stamp the grid offers: the scene's own drawing of it in the
+  // Map's Style, so a tile shows what a click places. A drawing is kept until
+  // the Style, the Library, or the loaded pictures change, so a render that
+  // changes none of them draws no tile again.
+  const library = snapshot.library;
+  const stampPreviews = useMemo(
+    () => new Map<string, string>(),
+    [style, library, stampPicturesLoaded]
+  );
+  function stampTileSrc(pick: string): string {
+    const picture = stampPictures.current.get(parseCustomStampRef(pick) ?? "") ?? undefined;
+    // Every Custom Stamp without a picture draws the same dashed frame, so a
+    // Library of thousands draws it once.
+    const key = isBaseStampId(pick) || picture !== undefined ? pick : "";
+    let src = stampPreviews.get(key);
+    if (src === undefined) {
+      src = stampPreview(isBaseStampId(pick) ? baseStampRef(pick) : pick, {
+        styleId: style,
+        library,
+        picture,
+      });
+      stampPreviews.set(key, src);
+    }
+    return src;
+  }
   const fillStampRows = customStamps.slice(0, PLUGIN_UI_LIMITS.maxOptions);
   // The scatter select offers the base Stamps, so it reads the one the Fill
   // scatters back from its art ref.
@@ -951,7 +1052,7 @@ function MapEditorView({
     setMapRename(null);
   }
 
-  /** What the Insert picker's current Stamp is called: a base Stamp or a Library picture. */
+  /** What the Insert grid's picked Stamp is called: a base Stamp or a Library picture. */
   function stampLabel(pick: string): string {
     if (isBaseStampId(pick)) return t(stampNameKey(pick));
     const assetId = parseCustomStampRef(pick);
@@ -1092,10 +1193,14 @@ function MapEditorView({
   // Top of the list is the topmost Element; the document array grows upward.
   const rows = [...snapshot.elements].reverse();
   // With nothing selected the Properties card still shows the defaults the
-  // active tool offers: the Pen's line style, a Shape's Place path, or the
-  // colour the Bucket pours (#778).
+  // active tool offers: the Pen's line style, a Shape's or the Text tool's
+  // Place path, or the colour the Bucket pours (#778).
   const showProperties =
-    selected !== null || snapshot.tool === "pen" || shapeTool !== null || pouring;
+    selected !== null ||
+    snapshot.tool === "pen" ||
+    snapshot.tool === "text" ||
+    shapeTool !== null ||
+    pouring;
   const zoomPercent = Math.round(snapshot.zoom * 100);
   // The narrow bar's overflow (#779, #775 Decision 6): the same three controls
   // the desktop pill holds, drawn once more inside the overflow popover. The
@@ -1222,44 +1327,56 @@ function MapEditorView({
         <ui.View direction="column" gap="sm">
           {snapshot.tool === "insert" ? (
             <>
-              <ui.Select
-                label={t("properties.stamp")}
-                options={stampOptions}
-                selectedKey={snapshot.currentStampId}
-                onChange={(event) => editor.setStamp(event.detail)}
-              />
+              {/* The Stamp grid: one tile per Stamp, each a button holding the
+                  Stamp's own picture and named after it. Pressing a tile picks
+                  the Stamp the next click places. The picked tile holds a
+                  second child, which is the stylesheet's only way to tell it
+                  from the rest: a host Button carries no pressed state. */}
+              <ui.View direction="row" gap="sm" wrap>
+                {stampOptions.map((option) => (
+                  <ui.Button
+                    key={option.value}
+                    variant="ghost"
+                    onPress={() => editor.setStamp(option.value)}
+                  >
+                    <ui.Image src={stampTileSrc(option.value)} alt={option.label} />
+                    {option.value === snapshot.currentStampId ? (
+                      <ui.Icon name="check" size="sm" />
+                    ) : null}
+                  </ui.Button>
+                ))}
+              </ui.View>
               <ui.NumberField
                 label={t("properties.stamp.newSize")}
                 value={snapshot.currentStampSize}
                 minValue={MIN_STAMP_SIZE_MM}
                 onChange={(event) => editor.setStampSize(event.detail)}
               />
-              {/* The keyboard paths: the Stamp lands at the view centre (#749),
-                  and a Map Label is not a Stamp, so it takes its own (#751). */}
-              <ui.IconButton
-                label={format(t("properties.placeStamp"), {
+              {/* The keyboard path: the picked Stamp lands at the view centre
+                  (#749). The button names the pick, which is also how the grid
+                  says in words which tile is the picked one. */}
+              <ui.Button variant="secondary" icon="stamp" onPress={() => editor.insertStamp()}>
+                {format(t("properties.placeStamp"), {
                   stamp: stampLabel(snapshot.currentStampId),
                 })}
-                icon="stamp"
-                onPress={() => editor.insertStamp()}
-              />
-              <ui.IconButton
-                label={t("properties.mapLabel.place")}
-                icon="type"
-                onPress={() => editor.insertLabel()}
-              />
+              </ui.Button>
               {/* An upload joins the Library, then lands at the view centre as a
                   Custom Stamp or a Map Image (#756). */}
+              <ui.View direction="row" gap="sm" align="center">
+                <ui.Separator />
+                <ui.Text size="sm" tone="muted">
+                  {t("properties.uploadOwn")}
+                </ui.Text>
+                <ui.Separator />
+              </ui.View>
               <ui.Checkbox
                 label={t("properties.asMapImage")}
                 isSelected={asMapImage}
                 onChange={(event) => setAsMapImage(event.detail)}
               />
-              <ui.IconButton
-                label={t("properties.upload")}
-                icon="upload"
-                onPress={() => void uploadPicture()}
-              />
+              <ui.Button variant="secondary" icon="upload" onPress={() => void uploadPicture()}>
+                {t("properties.upload")}
+              </ui.Button>
               {uploadError === null ? null : <ui.Status tone="warning">{uploadError}</ui.Status>}
             </>
           ) : null}
@@ -1935,6 +2052,15 @@ function MapEditorView({
                       onPress={() => editor.placeShape(shapeTool)}
                     />
                   )}
+                  {/* The Text tool's keyboard path: a Map Label at the view
+                      centre (#751). */}
+                  {snapshot.tool === "text" ? (
+                    <ui.IconButton
+                      label={t("properties.mapLabel.place")}
+                      icon="type"
+                      onPress={() => editor.insertLabel()}
+                    />
+                  ) : null}
                   {/* The same Stamps land in new spots, so the author can scatter
                       again without picking a different Stamp. */}
                   {scatter === null || selected === null ? null : (
@@ -2143,6 +2269,9 @@ export function createMapPage(deps: MapPageDeps): ComponentType {
    * while it is mounted draws from the same Library.
    */
   const assets = createAssetStore(client.storage);
+  // One function for the page's whole life, so the Insert grid's picture
+  // loader is not restarted by a render.
+  const loadAsset = (id: string) => assets.getAsset(id);
 
   return function MapPage() {
     const language = useLanguage(client);
@@ -2227,6 +2356,7 @@ export function createMapPage(deps: MapPageDeps): ComponentType {
           },
         }}
         pickAsset={pickAsset}
+        loadAsset={loadAsset}
         saveCustomFill={saveCustomFill}
       />
     );

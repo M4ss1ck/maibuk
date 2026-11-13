@@ -28,6 +28,7 @@
   "commands.bucketTool.label": "Herramienta de bote de pintura",
   "commands.areaTool.label": "Herramienta de área",
   "commands.insertTool.label": "Herramienta de insertar",
+  "commands.textTool.label": "Herramienta de texto",
   "commands.ellipseTool.label": "Herramienta de elipse",
   "commands.rectangleTool.label": "Herramienta de rectángulo",
   "commands.polygonTool.label": "Herramienta de polígono",

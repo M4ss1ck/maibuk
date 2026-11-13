@@ -1,7 +1,7 @@
-// The Maps editor's Insert tool and Stamps (#749): the tool picker gains Insert,
-// which opens a Stamp picker listing every built-in Stamp beside a Place button
-// named after the pick. From the keyboard alone the author picks Insert with its
-// key, picks a Stamp by its name in the picker, and presses Place: the Stamp
+// The Maps editor's Insert tool and Stamps (#749): the tool belt gains Insert,
+// which opens a grid of Stamp tiles, one picture per built-in Stamp, above a
+// Place button named after the pick. From the keyboard alone the author picks
+// Insert with its key, picks a Stamp by its tile, and presses Place: the Stamp
 // lands at the view centre, the Elements list lists it, and the Frame draws its
 // art; an arrow moves the selected Stamp 1 mm and Delete removes it. A click in
 // the Frame places the picked Stamp where the pointer landed. The scale bar has
@@ -17,7 +17,7 @@
 import type { FrameLocator, Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { clickPagePoint } from "../support/frame-stroke";
-import { leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
+import { leaveFrame, pressUntilFocused, tabTo, tabToEither } from "../support/keyboard";
 import { expect, test } from "../support/test";
 import { openLayers } from "../support/maps-layers";
 
@@ -50,17 +50,15 @@ const recolouredPaths = (page: Page) =>
   mapFrame(page).locator('g[data-element-id] path.map-line[fill="#EF4444"]');
 
 /**
- * The Insert tool's Stamp picker: its trigger button, its list, and one option.
- * The control names its trigger after the label and the picked value
- * ("Capital Stamp"); the list it opens in a dialog is named by the label alone.
+ * One tile of the Insert tool's Stamp grid: a button holding the Stamp's own
+ * picture, which names it. An Elements list row can carry the same name, so
+ * the picture is what tells a tile from a row.
  */
-// The Insert picker's trigger, named "<Stamp> Stamp"; an Elements list row is
-// named after its kind too, so rows (inside the list's items) are left out.
-const stampTrigger = (page: Page) =>
-  page.getByRole("button", { name: /Stamp$/ }).and(page.locator("button:not(li *)"));
-const stampList = (page: Page) => page.getByRole("listbox", { name: "Stamp", exact: true });
-const stampOption = (page: Page, name: string) =>
-  stampList(page).getByRole("option", { name, exact: true });
+const stampTile = (page: Page, name: string) =>
+  page.getByRole("button", { name, exact: true }).filter({ has: page.locator("img") });
+/** Every picture the Stamp grid draws. */
+const stampPictures = (page: Page) =>
+  stampTile(page, "Capital").locator("xpath=..").locator("button > img");
 
 /** The Insert tool's Place button, named after the Stamp it would place. */
 const placeButton = (page: Page, stamp: string) =>
@@ -117,19 +115,15 @@ async function pickInsert(page: Page): Promise<void> {
 }
 
 /**
- * Picks one built-in Stamp from the Insert tool's picker by keyboard: Tab to the
- * picker, Enter to open it, Home to its first entry (a previous pick leaves the
- * list where it was), then the arrows to the named Stamp, which Enter takes.
+ * Picks one built-in Stamp from the Insert tool's grid by keyboard: Tab to its
+ * tile, then Enter. The Place button names the pick once the editor took it.
+ * A tile can sit before the one focus is on, which Firefox only reaches going
+ * back.
  */
 async function pickStamp(page: Page, name: string): Promise<void> {
-  await tabTo(page, stampTrigger(page), { max: 60 });
+  await tabToEither(page, stampTile(page, name), { max: 90 });
   await page.keyboard.press("Enter");
-  await expect(stampList(page)).toBeVisible();
-  await page.keyboard.press("Home");
-  await pressUntilFocused(page, "ArrowDown", stampOption(page, name), { max: 40 });
-  await page.keyboard.press("Enter");
-  await expect(stampList(page)).toBeHidden();
-  await expect(stampTrigger(page)).toContainText(name);
+  await expect(placeButton(page, name)).toBeVisible();
 }
 
 /** Places the picked Stamp with its Place button, the keyboard's way to drop one. */
@@ -173,18 +167,21 @@ test.describe("Maps Insert tool and Stamps @wf:plugins-maps-stamps @sc:plugin.ma
     await openEditorWithMap(page);
     await pickInsert(page);
 
-    // The picker is the Insert tool's own UI, so it appears beside the tool list
-    // and names its Place button after the pick.
-    await tabTo(page, stampTrigger(page), { max: 60 });
-    await page.keyboard.press("Enter");
-    await expect(stampList(page)).toBeVisible();
-    await capture(page, "stamps-picker");
+    // The grid is the Insert tool's own UI, so it appears beside the tool belt:
+    // every tile draws its Stamp as a picture, and the Place button names the
+    // Stamp a new Map starts with picked.
+    await expect(stampTile(page, "Capital")).toBeVisible();
+    await expect(placeButton(page, "Capital")).toBeVisible();
+    await expect(stampPictures(page).last()).toBeVisible();
+    expect(await stampPictures(page).count()).toBeGreaterThan(10);
+    for (const picture of await stampPictures(page).all()) {
+      await expect(picture).toHaveAttribute("src", /^data:image\/svg\+xml,/);
+      await expect(picture).toHaveJSProperty("complete", true);
+    }
+    await capture(page, "stamps-grid");
 
-    // The keyboard pick: arrows move the list's own focus, Enter takes the pick.
-    await pressUntilFocused(page, "ArrowDown", stampOption(page, "Castle"), { max: 40 });
-    await page.keyboard.press("Enter");
-    await expect(stampList(page)).toBeHidden();
-    await expect(placeButton(page, "Castle")).toBeVisible();
+    // The keyboard pick: Tab to the Castle's tile, and Enter takes the pick.
+    await pickStamp(page, "Castle");
 
     // Enter on the Place button drops the Stamp at the view centre.
     await tabTo(page, placeButton(page, "Castle"), { max: 60 });
@@ -231,7 +228,7 @@ test.describe("Maps Insert tool and Stamps @wf:plugins-maps-stamps @sc:plugin.ma
     expect(y).toBeCloseTo(point[1], 0);
   });
 
-  test("the scale bar inserted from the picker draws its distance label in the Frame", async ({
+  test("the scale bar inserted from the grid draws its distance label in the Frame", async ({
     page,
   }) => {
     await openEditorWithMap(page);
@@ -259,7 +256,7 @@ test.describe("Maps Insert tool and Stamps @wf:plugins-maps-stamps @sc:plugin.ma
     // colour; the burg art, whose fills are its own, offers none.
     const trigger = page.getByRole("button", { name: "Stamp color" });
     await expect(trigger).toBeVisible();
-    await tabTo(page, trigger, { max: 60 });
+    await tabToEither(page, trigger, { max: 120 });
     await page.keyboard.press("Enter");
     const picker = page.getByRole("dialog", { name: "Stamp color" });
     await expect(picker).toBeVisible();
@@ -312,7 +309,8 @@ test.describe("Maps Insert tool and Stamps @wf:plugins-maps-stamps @sc:plugin.ma
     // The Town is one-colour art, so the panel recolours it; it is still the
     // selection the last click left.
     const trigger = page.getByRole("button", { name: "Stamp color" });
-    await tabTo(page, trigger, { max: 60 });
+    // The Stamp grid puts a Tab stop per tile between the belt and Properties.
+    await tabToEither(page, trigger, { max: 120 });
     await page.keyboard.press("Enter");
     const picker = page.getByRole("dialog", { name: "Stamp color" });
     await expect(picker).toBeVisible();
