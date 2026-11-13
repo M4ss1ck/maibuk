@@ -16,7 +16,7 @@
 
 import type { FrameLocator, Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
-import { isFocusWithin, leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
+import { leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
 import { openLayers } from "../support/maps-layers";
 
@@ -69,12 +69,16 @@ const mapFrame = (page: Page): FrameLocator =>
 const frameElement = (page: Page) => page.locator('[data-plugin-frame="embedded"] iframe');
 const surface = (page: Page) => mapFrame(page).locator("svg");
 
-/** The Elements list, one row in it, and the rows of one kind. */
-const elementsList = (page: Page) => page.getByRole("listbox", { name: "Elements" });
+/** The Elements list, one Element's row button in it, and the rows of one kind. */
+const elementsList = (page: Page) =>
+  page.getByRole("list").filter({ has: page.getByRole("button", { name: /^More actions for / }) });
 const elementRow = (page: Page, name: string) =>
-  elementsList(page).getByRole("option", { name: new RegExp(`^${name}`) });
-const fillRows = (page: Page) => elementsList(page).getByRole("option", { name: /^Fill \d/ });
-const lineRows = (page: Page) => elementsList(page).getByRole("option", { name: /^Map Line \d/ });
+  elementsList(page).getByRole("button", { name: new RegExp(`^${name}`) });
+const fillRows = (page: Page) => elementsList(page).getByRole("button", { name: /^Fill \d/ });
+const lineRows = (page: Page) => elementsList(page).getByRole("button", { name: /^Map Line \d/ });
+/** The row's More actions trigger, which opens its menu of plain buttons. */
+const rowMenuTrigger = (page: Page, name: string) =>
+  page.getByRole("button", { name: `More actions for ${name}`, exact: true });
 
 /**
  * The text the Template's title Map Label draws in the Frame. A label's halo is
@@ -143,7 +147,7 @@ async function openMap(page: Page, name: string): Promise<void> {
 async function backToMaps(page: Page): Promise<void> {
   await leaveFrame(page, frameElement(page));
   await tabTo(page, page.getByRole("button", { name: "Back to Maps" }), {
-    max: 80,
+    max: 400,
     backwards: true,
   });
   await page.keyboard.press("Enter");
@@ -160,37 +164,38 @@ async function focusBack(page: Page): Promise<void> {
   });
 }
 
-/** Focuses an Elements row, making it the selection. */
+/**
+ * Tabs from the panel's first control to an Element's row and selects it: the
+ * rows are plain buttons, so Tab is how the list is reached.
+ */
 async function selectElement(page: Page, name: string): Promise<Locator> {
   const row = elementRow(page, name);
-  const list = elementsList(page);
   // Start at Back to Maps, the first panel control, and Tab forward into the
-  // list: from either side of it, that is the one direction that always works.
-  // The floating chrome (#778) puts the belt's eleven tool buttons and the
-  // properties panel between the two, so the walk into the list allows for them.
+  // list: the floating chrome (#778) puts the belt's eleven tool buttons and the
+  // properties panel between the two, so the walk allows for them.
   await focusBack(page);
-  for (let i = 0; i < 60 && !(await isFocusWithin(list)); i++) await page.keyboard.press("Tab");
-  await page.keyboard.press("Home");
-  await pressUntilFocused(page, "ArrowDown", row, { max: 20 });
-  if ((await row.getAttribute("aria-selected")) !== "true") await page.keyboard.press(" ");
-  await expect(row).toHaveAttribute("aria-selected", "true");
+  await tabTo(page, row, { max: 200 });
+  await expect(row).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("textbox", { name: "Name" })).toHaveValue(new RegExp(`^${name}`));
   return row;
 }
 
-/** Runs one entry of the focused row's Item Menu by keyboard. */
+/** Runs one entry of an Element's row menu by keyboard. */
 async function runRowMenu(page: Page, name: string, label: string): Promise<void> {
   await selectElement(page, name);
-  await page.keyboard.press("Shift+F10");
-  const menu = page.getByRole("menu");
-  await expect(menu).toBeVisible();
-  await pressUntilFocused(page, "ArrowDown", menu.getByRole("menuitem", { name: label }), {
-    max: 20,
-  });
+  await tabTo(page, rowMenuTrigger(page, name), { max: 5 });
   await page.keyboard.press("Enter");
-  await expect(menu).toBeHidden();
+  const dialog = page
+    .getByRole("dialog")
+    .filter({ has: page.getByRole("button", { name: label, exact: true }) });
+  const item = dialog.getByRole("button", { name: label, exact: true });
+  await tabTo(page, item, { max: 15 });
+  await page.keyboard.press("Enter");
+  await expect(dialog).toBeHidden();
 }
 
-/** Renames an Element through its row's Item Menu and the dialog it opens. */
+/** Renames an Element through its row menu and the dialog it opens. */
 async function renameElement(page: Page, name: string, rename: string): Promise<void> {
   await runRowMenu(page, name, "Rename");
   const dialog = page.getByRole("dialog", { name: "Rename Element" });

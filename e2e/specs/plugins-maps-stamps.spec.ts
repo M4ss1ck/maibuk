@@ -34,10 +34,11 @@ const mapFrame = (page: Page): FrameLocator =>
 const frameElement = (page: Page) => page.locator('[data-plugin-frame="embedded"] iframe');
 const surface = (page: Page) => mapFrame(page).locator("svg");
 
-/** The Elements list and one row in it. */
-const elementsList = (page: Page) => page.getByRole("listbox", { name: "Elements" });
+/** The Layers card's Elements list, and one Element's row button in it. */
+const elementsList = (page: Page) =>
+  page.getByRole("list").filter({ has: page.getByRole("button", { name: /^More actions for / }) });
 const elementRow = (page: Page, name: string) =>
-  elementsList(page).getByRole("option", { name: new RegExp(`^${name}`) });
+  elementsList(page).getByRole("button", { name: new RegExp(`^${name}`) });
 
 /** Every Element the Frame draws, and the paths one Element's picture is made of. */
 const drawnElements = (page: Page) => mapFrame(page).locator("g[data-element-id]");
@@ -53,7 +54,10 @@ const recolouredPaths = (page: Page) =>
  * The control names its trigger after the label and the picked value
  * ("Capital Stamp"); the list it opens in a dialog is named by the label alone.
  */
-const stampTrigger = (page: Page) => page.getByRole("button", { name: /Stamp$/ });
+// The Insert picker's trigger, named "<Stamp> Stamp"; an Elements list row is
+// named after its kind too, so rows (inside the list's items) are left out.
+const stampTrigger = (page: Page) =>
+  page.getByRole("button", { name: /Stamp$/ }).and(page.locator("button:not(li *)"));
 const stampList = (page: Page) => page.getByRole("listbox", { name: "Stamp", exact: true });
 const stampOption = (page: Page, name: string) =>
   stampList(page).getByRole("option", { name, exact: true });

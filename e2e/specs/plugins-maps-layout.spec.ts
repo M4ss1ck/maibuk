@@ -156,14 +156,14 @@ test.describe("Maps floating layout @wf:plugins-maps-layout @sandbox", () => {
         name: "Layers opens",
         run: async () => {
           await pressControl(page, toolButton(page, "Layers"));
-          await expect(page.getByRole("listbox", { name: "Elements" })).toBeVisible();
+          await expect(page.getByRole("button", { name: "Close Layers" })).toBeVisible();
         },
       },
       {
         name: "Layers shuts",
         run: async () => {
           await pressControl(page, toolButton(page, "Layers"));
-          await expect(page.getByRole("listbox", { name: "Elements" })).toBeHidden();
+          await expect(page.getByRole("button", { name: "Close Layers" })).toBeHidden();
         },
       },
       {
@@ -245,7 +245,7 @@ test.describe("Maps floating layout @wf:plugins-maps-layout @sandbox", () => {
 
     const insert = await boxOf(cardHolding(placeStamp), "the Insert card");
     const layers = await boxOf(
-      cardHolding(page.getByRole("listbox", { name: "Elements" })),
+      cardHolding(page.getByRole("button", { name: "Close Layers" })),
       "the Layers card"
     );
     expectNoOverlap(insert, layers, "the Insert and Layers cards");
@@ -427,7 +427,7 @@ test.describe("Maps layout opened at 1440x900 then narrowed to 390x844 @wf:plugi
     // card is a bottom region until the toggle takes the page.
     await openLayers(page);
     const layers = () =>
-      boxOf(cardHolding(page.getByRole("listbox", { name: "Elements" })), "the Layers region");
+      boxOf(cardHolding(page.getByRole("button", { name: "Close Layers" })), "the Layers region");
     const halfPage = await layers();
     expectHalfPageRegion(halfPage, body, "Layers");
 
@@ -467,7 +467,7 @@ test.describe("Maps layout opened at 1440x900 then narrowed to 390x844 @wf:plugi
     // Layers holds the same bottom edge, so the cluster clears it too.
     await openLayers(page);
     const layers = await boxOf(
-      cardHolding(page.getByRole("listbox", { name: "Elements" })),
+      cardHolding(page.getByRole("button", { name: "Close Layers" })),
       "the Layers region"
     );
     const clusterWithLayers = await boxOf(zoomReadout(page), "the zoom cluster's readout");

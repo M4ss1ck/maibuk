@@ -56,7 +56,6 @@
   "tools.rectangle": "Rectangle",
   "tools.polygon": "Polygon",
   "tools.eraser": "Eraser",
-  "elements.label": "Elements",
   "elements.rename": "Rename",
   "elements.moveUp": "Move up",
   "elements.moveDown": "Move down",
@@ -66,8 +65,10 @@
   "elements.unlock": "Unlock",
   "elements.delete": "Delete",
   "elements.properties": "Properties",
-  "elements.hidden": "Hidden",
   "elements.locked": "Locked",
+  "elements.empty": "No Elements yet",
+  "elements.hideFor": "Hide {{name}}",
+  "elements.moreFor": "More actions for {{name}}",
   "element.kind.line": "Map Line",
   "element.kind.fill": "Fill",
   "element.kind.stamp": "Stamp",
@@ -81,7 +82,6 @@
   "element.polygonName": "Polygon {{number}}",
   "element.labelName": "Map Label {{number}}",
   "element.labelText": "Label",
-  "properties.label": "Properties",
   "properties.name": "Name",
   "properties.mapStyle": "Map Style",
   "properties.mapStyle.atlas": "Atlas",
@@ -226,5 +226,6 @@
   "chrome.zoom": "{{percent}}%",
   "chrome.more": "More actions",
   "chrome.expandProperties": "Full-height Properties",
-  "chrome.expandLayers": "Full-height Layers"
+  "chrome.expandLayers": "Full-height Layers",
+  "chrome.closeLayers": "Close Layers"
 }

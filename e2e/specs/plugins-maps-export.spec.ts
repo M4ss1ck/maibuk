@@ -54,11 +54,11 @@ const mapNames = (page: Page) => page.getByRole("list").getByRole("img");
 const mapFrame = (page: Page) => page.frameLocator('[data-plugin-frame="embedded"] iframe');
 const surface = (page: Page) => mapFrame(page).locator("svg");
 
-/** The Elements list and one row in it. */
+/** The Layers card's Elements list, and one Element's row button in it. */
+const elementsList = (page: Page) =>
+  page.getByRole("list").filter({ has: page.getByRole("button", { name: /^More actions for / }) });
 const elementRow = (page: Page, name: string) =>
-  page.getByRole("listbox", { name: "Elements" }).getByRole("option", {
-    name: new RegExp(`^${name}`),
-  });
+  elementsList(page).getByRole("button", { name: new RegExp(`^${name}`) });
 
 /** The Insert tool's Place button, the keyboard's way to a label. */
 const placeLabelButton = (page: Page) => page.getByRole("button", { name: "Place Map Label" });

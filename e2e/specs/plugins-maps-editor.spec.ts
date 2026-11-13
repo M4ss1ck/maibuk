@@ -4,9 +4,9 @@
 // Pencil stroke landing in the Frame as a Map Line (and reaching the Maps list
 // preview and the reopened Map), and the keyboard the Elements list owns: select
 // the line, move it 1 mm and 10 mm, undo and redo, then delete it through the
-// row's Item Menu. It also proves the Frame forwards a key its own code does
-// not handle to the host's Commands (#760): undo, pan, and a bare Arrow from
-// the properties panel's Hidden Switch. The pointer gesture itself is
+// row's More actions menu. It also proves the Frame forwards a key its own code
+// does not handle to the host's Commands (#760): undo, pan, and a bare Arrow from
+// the properties panel's Hidden button. The pointer gesture itself is
 // `support/frame-stroke.ts`, which explains why it sits outside the spec.
 // Tagged @sandbox because Maps runs in the Plugin sandbox: the lane runs it on
 // Chromium, WebKit, and Firefox.
@@ -14,14 +14,7 @@
 import type { FrameLocator, Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { drawStroke } from "../support/frame-stroke";
-import {
-  expectFocusWithin,
-  isFocusWithin,
-  leaveFrame,
-  pressUntilFocused,
-  tabTo,
-  tabToEither,
-} from "../support/keyboard";
+import { leaveFrame, pressUntilFocused, tabTo, tabToEither } from "../support/keyboard";
 import { expect, test } from "../support/test";
 import { openLayers } from "../support/maps-layers";
 
@@ -37,10 +30,13 @@ const mapFrame = (page: Page): FrameLocator =>
   page.frameLocator('[data-plugin-frame="embedded"] iframe');
 const frameElement = (page: Page) => page.locator('[data-plugin-frame="embedded"] iframe');
 
-/** The Elements list and one row in it. */
-const elementsList = (page: Page) => page.getByRole("listbox", { name: "Elements" });
+/** The Elements list, one row in it, and the row's More actions trigger. */
+const elementsList = (page: Page) =>
+  page.getByRole("list").filter({ has: page.getByRole("button", { name: /^More actions for / }) });
 const elementRow = (page: Page, name: string) =>
-  elementsList(page).getByRole("option", { name: new RegExp(`^${name}`) });
+  elementsList(page).getByRole("button", { name: new RegExp(`^${name}`) });
+const rowMenuTrigger = (page: Page, name: string) =>
+  page.getByRole("button", { name: `More actions for ${name}`, exact: true });
 
 /** Every non-hidden Element the Frame draws, and one Element's drawn line. */
 const drawnElements = (page: Page) => mapFrame(page).locator("[data-element-id]");
@@ -113,40 +109,43 @@ async function pathData(line: Locator): Promise<string> {
   return d;
 }
 
-/** Focuses an Elements row, making it the selection. */
+/**
+ * Focuses an Elements row and selects it with Enter: the rows are plain
+ * buttons, so Tab is how the list is reached, and the selection shows in the
+ * properties panel's Name field.
+ */
 async function selectElement(page: Page, name: string): Promise<Locator> {
   const row = elementRow(page, name);
-  const list = elementsList(page);
   // Start at Back to Maps, the first panel control, and Tab forward into the
-  // list: from either side of it, that is the one direction that always works.
-  // The floating chrome (#778) puts the pill's other three controls and the
-  // eleven belt buttons between it and the list, so the walk allows for them.
+  // list: the floating chrome (#778) puts the pill's other three controls and
+  // the eleven belt buttons between it and the list, so the walk allows for them.
   await focusBack(page);
-  for (let i = 0; i < 20 && !(await isFocusWithin(list)); i++) await page.keyboard.press("Tab");
-  await expectFocusWithin(list);
-  await page.keyboard.press("Home");
-  await pressUntilFocused(page, "ArrowDown", row, { max: 10 });
-  if ((await row.getAttribute("aria-selected")) !== "true") await page.keyboard.press(" ");
-  await expect(row).toHaveAttribute("aria-selected", "true");
+  await tabTo(page, row, { max: 200 });
+  await expect(row).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("textbox", { name: "Name" })).toHaveValue(new RegExp(`^${name}`));
   return row;
 }
 
-/** Runs one entry of the focused row's Item Menu by keyboard. */
+/** Runs one entry of an Element's row menu by keyboard. */
 async function runRowMenu(page: Page, name: string, label: string): Promise<void> {
   await selectElement(page, name);
-  await page.keyboard.press("Shift+F10");
-  const menu = page.getByRole("menu");
-  await expect(menu).toBeVisible();
-  await pressUntilFocused(page, "ArrowDown", menu.getByRole("menuitem", { name: label }), {
-    max: 20,
-  });
+  await tabTo(page, rowMenuTrigger(page, name), { max: 5 });
   await page.keyboard.press("Enter");
-  await expect(menu).toBeHidden();
+  const dialog = page
+    .getByRole("dialog")
+    .filter({ has: page.getByRole("button", { name: label, exact: true }) });
+  const item = dialog.getByRole("button", { name: label, exact: true });
+  await tabTo(page, item, { max: 15 });
+  await page.keyboard.press("Enter");
+  await expect(dialog).toBeHidden();
 }
 
-/** The Elements rows' text, top of the list first. */
+/** The Elements rows' names, top of the list first. */
 async function elementNames(page: Page): Promise<string[]> {
-  return elementsList(page).getByRole("option").allTextContents();
+  return elementsList(page)
+    .locator("li > div > button:first-child > p:first-child")
+    .allTextContents();
 }
 
 /** Every drawn Map Line's `d`, in document order. */
@@ -193,7 +192,7 @@ test.describe("Maps editor @wf:plugins-maps-editor @sc:plugin.maibuk-maps.openMa
     // The belt holds every tool as one button (#778), the Layers card shows the
     // Elements, and the top-left pill is still the way back.
     await expect(page.getByRole("button", { name: "Pencil", pressed: false })).toBeVisible();
-    await expect(elementsList(page)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Close Layers" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Back to Maps" })).toBeVisible();
   });
 
@@ -211,7 +210,7 @@ test.describe("Maps editor @wf:plugins-maps-editor @sc:plugin.maibuk-maps.openMa
     const line = elementRow(page, "Map Line 1");
     await leaveFrame(page, frameElement(page));
     await tabToEither(page, line, { max: 60 });
-    await expect(line).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByRole("textbox", { name: "Name" })).toHaveValue(/^Map Line 1/);
     await expect(drawnElements(page)).toHaveCount(1);
     const drawn = await pathData(drawnLine(page));
     expect(drawn).toMatch(/^M -?\d/);
@@ -241,14 +240,8 @@ test.describe("Maps editor @wf:plugins-maps-editor @sc:plugin.maibuk-maps.openMa
     await drawStroke(page, mapFrame(page).locator("svg"));
 
     // Select the line in the Elements list, then leave the list for a plain
-    // panel control: the list owns the vertical arrows, the Map Commands the rest.
-    const line = elementRow(page, "Map Line 1");
-    await leaveFrame(page, frameElement(page));
-    await tabToEither(page, line, { max: 60 });
-    // Drawing selects the new line, and Space on an already-selected row drops
-    // that selection, so only press it when the row is somehow unselected.
-    if ((await line.getAttribute("aria-selected")) !== "true") await page.keyboard.press(" ");
-    await expect(line).toHaveAttribute("aria-selected", "true");
+    // panel control: a bare Arrow there runs the Map Commands.
+    await selectElement(page, "Map Line 1");
     await tabTo(page, page.getByRole("button", { name: "Back to Maps" }), {
       max: 60,
       backwards: true,
@@ -276,23 +269,15 @@ test.describe("Maps editor @wf:plugins-maps-editor @sc:plugin.maibuk-maps.openMa
     await page.keyboard.press("ControlOrMeta+z");
     await expect(drawnLine(page)).toHaveAttribute("d", moved);
 
-    // Delete through the Elements list's Item Menu.
-    await tabTo(page, line, { max: 60 });
-    await page.keyboard.press("Shift+F10");
-    const menu = page.getByRole("menu");
-    await expect(menu).toBeVisible();
-    await pressUntilFocused(page, "ArrowDown", menu.getByRole("menuitem", { name: "Delete" }), {
-      max: 20,
-    });
-    await page.keyboard.press("Enter");
-    await expect(menu).toBeHidden();
+    // Delete through the Elements list's row menu.
+    await runRowMenu(page, "Map Line 1", "Delete");
     await expect(elementRow(page, "Map Line 1")).toHaveCount(0);
     await expect(drawnElements(page)).toHaveCount(0);
 
     // Reopening the Map proves the delete was saved, not just drawn.
     await backToMaps(page);
     await openMap(page, "Coastline");
-    await expect(elementsList(page)).toBeVisible();
+    await expect(page.getByText("No Elements yet")).toBeVisible();
     await expect(elementRow(page, "Map Line 1")).toHaveCount(0);
     await expect(drawnElements(page)).toHaveCount(0);
   });
@@ -408,7 +393,7 @@ test.describe("Maps editor @wf:plugins-maps-editor @sc:plugin.maibuk-maps.openMa
     await expect(page.getByRole("button", { name: "Back to Maps" })).toBeFocused();
   });
 
-  test("keys the Frame does not handle reach the host Commands, and a bare Arrow from the Hidden Switch moves the selection @wf:plugins-maps-frame-keys", async ({
+  test("keys the Frame does not handle reach the host Commands, and a bare Arrow from the Hidden button moves the selection @wf:plugins-maps-frame-keys", async ({
     page,
   }) => {
     await page.goto("/");
@@ -423,12 +408,12 @@ test.describe("Maps editor @wf:plugins-maps-editor @sc:plugin.maibuk-maps.openMa
     // has no focusable element traps Tab and Shift+Tab once focus is inside it,
     // so the test ends inside the Frame rather than leaving it.
     //
-    // The properties panel's Hidden Switch is a checkbox, not a typing target:
-    // a bare ArrowRight runs the host's move Command and leaves focus on it.
+    // The properties panel's Hidden button is a toggle, not a typing target: a
+    // bare ArrowRight runs the host's move Command and leaves focus on it.
     // Properties selects the Map Line and lands focus on the panel's Name field.
     await runRowMenu(page, "Map Line 1", "Properties");
     await expect(page.getByRole("textbox", { name: "Name" })).toBeFocused();
-    const hidden = page.getByRole("switch", { name: "Hidden" });
+    const hidden = page.getByRole("button", { name: "Hidden", exact: true });
     await tabTo(page, hidden, { max: 5 });
     const start = firstPoint(await pathData(drawnLine(page)));
     await page.keyboard.press("ArrowRight");
