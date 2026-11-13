@@ -2841,3 +2841,31 @@ describe("renaming the Map from its own name (#778)", () => {
     expect(painted).toBe(0);
   });
 });
+
+describe("switching tools", () => {
+  it("drops the selection when the Select tool hands over to any other tool", () => {
+    const { editor } = openEditor();
+    editor.placeShape("rectangle");
+    const id = onlyLine(editor).id;
+
+    for (const tool of ["hand", "pencil", "bucket", "insert", "eraser"] as const) {
+      editor.setTool("select");
+      editor.select(id);
+      editor.setTool(tool);
+      expect(editor.getSnapshot().selectedId).toBeNull();
+      expect(editor.getSnapshot().selectedShape).toBeNull();
+    }
+  });
+
+  it("keeps the selection when the Select tool is picked again", () => {
+    const { editor } = openEditor();
+    editor.placeShape("rectangle");
+    const id = onlyLine(editor).id;
+    editor.setTool("pencil");
+    editor.setTool("select");
+    editor.select(id);
+
+    editor.setTool("select");
+    expect(editor.getSnapshot().selectedId).toBe(id);
+  });
+});

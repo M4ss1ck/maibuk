@@ -1328,6 +1328,9 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     setTool(next) {
       if (next === tool) return;
       tool = next;
+      // Only the Select tool works on a selection, so any other tool drops it:
+      // otherwise its outline and handles stay drawn under the new tool.
+      if (next !== "select") selectedId = null;
       publish();
       sendScene();
     },
