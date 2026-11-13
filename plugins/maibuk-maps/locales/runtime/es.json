@@ -110,7 +110,7 @@
   "properties.newCustomFill": "Nuevo relleno personalizado",
   "properties.customFill.texture": "Desde una imagen de textura…",
   "properties.customFill.stamps": "Desde sellos",
-  "properties.customFill.create": "Crear",
+  "properties.customFill.create": "Crear con los sellos elegidos",
   "properties.texture.grass": "Hierba",
   "properties.texture.sand": "Arena",
   "properties.texture.marsh": "Marisma",

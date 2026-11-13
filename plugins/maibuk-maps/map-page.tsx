@@ -1783,13 +1783,14 @@ function MapEditorView({
                           }
                         />
                         <ui.Text weight="semibold">{t("properties.newCustomFill")}</ui.Text>
-                        <ui.Button
-                          variant="secondary"
+                        {/* Both ways to make one are icons with their label as
+                            the tooltip, like every card action (#775 Decision 5). */}
+                        <ui.IconButton
+                          label={t("properties.customFill.texture")}
+                          icon="image-plus"
                           isDisabled={selected.locked}
                           onPress={() => void createFillFromTexture()}
-                        >
-                          {t("properties.customFill.texture")}
-                        </ui.Button>
+                        />
                         {customStamps.length === 0 ? null : (
                           <>
                             <ui.Collection
@@ -1806,13 +1807,12 @@ function MapEditorView({
                                 />
                               ))}
                             </ui.Collection>
-                            <ui.Button
-                              variant="secondary"
+                            <ui.IconButton
+                              label={t("properties.customFill.create")}
+                              icon="plus"
                               isDisabled={selected.locked || fillStampRefs.length === 0}
                               onPress={() => void createFillFromStamps()}
-                            >
-                              {t("properties.customFill.create")}
-                            </ui.Button>
+                            />
                           </>
                         )}
                       </>

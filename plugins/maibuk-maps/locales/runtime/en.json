@@ -110,7 +110,7 @@
   "properties.newCustomFill": "New Custom Fill",
   "properties.customFill.texture": "From texture image…",
   "properties.customFill.stamps": "From Stamps",
-  "properties.customFill.create": "Create",
+  "properties.customFill.create": "Create from the picked Stamps",
   "properties.texture.grass": "Grass",
   "properties.texture.sand": "Sand",
   "properties.texture.marsh": "Marsh",
