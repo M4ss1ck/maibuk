@@ -3472,7 +3472,8 @@ describe("Map editor Place dialog", () => {
       await tabTo(user, trigger);
       await user.keyboard("{Enter}");
       const listbox = await screen.findByRole("listbox");
-      const options = within(listbox).getAllByRole("option");
+      // By selector: a role query over 2000 rows is most of the test's time.
+      const options = [...listbox.querySelectorAll<HTMLElement>('[role="option"]')];
       expect(options).toHaveLength(PLUGIN_UI_LIMITS.maxOptions);
       // The first Chapter is still offered, its title cut to the host's 512-code
       // unit cap instead of going whole.
@@ -3788,7 +3789,8 @@ describe("Map editor uploads (#756)", () => {
       await tabTo(user, trigger, 120);
       await user.keyboard("{Enter}");
       const listbox = await screen.findByRole("listbox", { name: en["properties.stamp"] });
-      const options = within(listbox).getAllByRole("option");
+      // By selector: a role query over 2000 rows is most of the test's time.
+      const options = [...listbox.querySelectorAll<HTMLElement>('[role="option"]')];
 
       // The page asked for no option list the host would refuse.
       expect(page.violations).toEqual([]);
@@ -3845,7 +3847,9 @@ describe("Map editor uploads (#756)", () => {
       const stamps = await screen.findByRole("listbox", {
         name: en["properties.customFill.stamps"],
       });
-      expect(within(stamps).getAllByRole("option")).toHaveLength(PLUGIN_UI_LIMITS.maxOptions);
+      // Counted by selector: a role query over 2000 rows computes each one's
+      // accessibility, which took most of this test's minute in CI.
+      expect(stamps.querySelectorAll('[role="option"]')).toHaveLength(PLUGIN_UI_LIMITS.maxOptions);
 
       const trigger = await screen.findByLabelText(en["properties.customFill"]);
       await tabTo(user, trigger);
@@ -3853,7 +3857,7 @@ describe("Map editor uploads (#756)", () => {
       const listbox = await screen.findByRole("listbox", { name: en["properties.customFill"] });
       // "None" is the first entry the page offers, so the cap keeps it and 1999
       // Custom Fills after it.
-      expect(within(listbox).getAllByRole("option")).toHaveLength(PLUGIN_UI_LIMITS.maxOptions);
+      expect(listbox.querySelectorAll('[role="option"]')).toHaveLength(PLUGIN_UI_LIMITS.maxOptions);
 
       await page.unmount();
     } finally {
