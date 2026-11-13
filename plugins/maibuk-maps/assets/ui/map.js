@@ -1,6 +1,6 @@
 // @ts-check
 /* The Map Frame's drawing surface (#745, #746, #748, #749, #750, #766, #751,
-   #756). The Frame's only host channel is `window.maibuk.port`: the Worker
+   #756, #777). The Frame's only host channel is `window.maibuk.port`: the Worker
    sends the whole `scene` on every change and when the Frame connects, an
    uploaded picture's bytes once per asset, and asks it to `rasterize` an export
    SVG, since only this document has a canvas, and to `ingest` one uploaded
@@ -8,8 +8,8 @@
    a finished Pen line, a finished Area Fill outline, an
    Eraser drag, a drawn Shape, a Bucket pour, a dropped Stamp, the Element the
    author picked, a Select drag that moved one, a Map Label's bend dragged
-   from its handle, the encoded picture an export asked for, and what one
-   uploaded picture measured.
+   from its handle, one step of a pointer zoom or pan, the encoded picture an
+   export asked for, and what one uploaded picture measured.
    Points cross the port in page millimetres, the same space as the page's
    `widthMm`/`heightMm`, so the pointer's own screen pixels are converted
    through the svg's `getScreenCTM`.
@@ -48,6 +48,8 @@
    * @typedef {{ kind: "insert", point: MapPoint }} FrameInsertMessage
    * @typedef {{ kind: "move", id: string, dx: number, dy: number }} FrameMoveMessage
    * @typedef {{ kind: "bendLabel", id: string, bend: number }} FrameBendMessage
+   * @typedef {{ kind: "zoom", point: MapPoint, factor: number }} FrameZoomMessage
+   * @typedef {{ kind: "pan", dx: number, dy: number }} FramePanMessage
    * @typedef {{ kind: "font", family: string, bytes: ArrayBuffer }} FrameFontMessage
    * @typedef {{ kind: "rasterize", requestId: number, svg: string, widthPx: number, heightPx: number, format: "png" | { jpeg: number } }} FrameRasterizeMessage
    * @typedef {{ kind: "rasterized", requestId: number, bytes?: ArrayBuffer, error?: string }} FrameRasterizedMessage
@@ -64,6 +66,8 @@
    * @typedef {{ id: string, offset: MapPoint }} PendingMove
    * @typedef {{ pointerId: number, id: string, press: ClientPoint, label: FrameLabelLayout, moved: boolean, bend: number }} BendDrag
    * @typedef {{ id: string, bend: number }} PendingBend
+   * @typedef {{ pointers: number[], client: ClientPoint }} PanDrag
+   * @typedef {{ clientX: number, clientY: number, touch: boolean }} PointerPlace
    * @typedef {{ start: MapPoint, control: MapPoint, apex: MapPoint, end: MapPoint }} BendGeometry
    */
 
@@ -121,6 +125,16 @@
   /** The size an uploaded picture falls back to, in pixels, when it names none. */
   const DEFAULT_ASSET_SIZE = 100;
 
+  /**
+   * How hard one wheel notch zooms (#777): a 100-pixel notch multiplies the
+   * zoom by about 1.22, near the 1.25 a zoom Command steps by. The most one
+   * event may zoom by is capped, so a fling cannot jump the view.
+   */
+  const WHEEL_ZOOM_RATE = 0.002;
+  const MAX_WHEEL_FACTOR = 2;
+  /** What one line of a wheel that counts lines rather than pixels is worth, in pixels. */
+  const WHEEL_LINE_PX = 16;
+
   /** The Shape tools, which draw an exact Shape by dragging (#747). */
   const SHAPE_KINDS = ["ellipse", "rectangle", "polygon"];
 
@@ -167,6 +181,23 @@
    * between the release and the Worker's redraw. @type {PendingBend | null}
    */
   let pendingBend = null;
+
+  /**
+   * The pan gesture in progress, or null (#777): the pointers it follows, and
+   * where their average sat when its last step was measured. A pan never draws
+   * and never edits, so it holds no draft of its own.
+   * @type {PanDrag | null}
+   */
+  let panDrag = null;
+  /** Whether Space is held, which turns every press into a pan (#777). */
+  let spacePan = false;
+  /**
+   * Where each pointer down on the surface sits, by pointer id (#777), so a
+   * two-finger pan follows the average of its two fingers, and a finger that
+   * lands while a mouse or a stylus is down is not mistaken for one.
+   * @type {Map<number, PointerPlace>}
+   */
+  const pointerClients = new Map();
 
   /**
    * Every uploaded picture the Worker has sent, as the URLs this document draws
@@ -686,6 +717,7 @@
     pendingMove = null;
     bendDrag = null;
     pendingBend = null;
+    panDrag = null;
   }
 
   /**
@@ -1312,6 +1344,86 @@
   }
 
   /**
+   * The client point a pan measures from: the average of the pointers it
+   * follows, so a two-finger drag pans by where the pair went.
+   * @param {number[]} pointers
+   * @returns {ClientPoint | null}
+   */
+  function gestureClient(pointers) {
+    let x = 0;
+    let y = 0;
+    let seen = 0;
+    for (const id of pointers) {
+      const client = pointerClients.get(id);
+      if (client === undefined) continue;
+      x += client.clientX;
+      y += client.clientY;
+      seen += 1;
+    }
+    if (seen === 0) return null;
+    return { clientX: x / seen, clientY: y / seen };
+  }
+
+  /**
+   * Starts a pan (#777), whatever tool is active: Space held, the middle
+   * button, or a second finger. A gesture that pans never draws, so a draft
+   * under way is dropped without reaching the Worker, as a tool change drops
+   * one, and the crosshair comes back when the pan ends.
+   * @param {PointerEvent} event
+   * @param {number[]} pointers
+   */
+  function beginPan(event, pointers) {
+    resetGestures();
+    panDrag = {
+      pointers,
+      client: gestureClient(pointers) ?? { clientX: event.clientX, clientY: event.clientY },
+    };
+    for (const id of pointers) capturePointerId(id);
+    event.preventDefault();
+    draw();
+  }
+
+  /**
+   * Slides the view with the pan (#777): each step is the pointer's, or the
+   * finger pair's, travel in page millimetres, measured through the screen
+   * matrix of the moment as a Select drag measures its own. The drawing
+   * follows the gesture, so the view slides the other way; the Worker owns
+   * `panX` and `panY` and sends the scene that crops the view there.
+   * @param {PointerEvent} event
+   */
+  function followPan(event) {
+    if (panDrag === null || !panDrag.pointers.includes(event.pointerId)) return;
+    const next = gestureClient(panDrag.pointers);
+    if (next === null) return;
+    const from = pagePoint(panDrag.client);
+    const to = pagePoint(next);
+    panDrag.client = next;
+    if (from === null || to === null) return;
+    const dx = to[0] - from[0];
+    const dy = to[1] - from[1];
+    if (dx === 0 && dy === 0) return;
+    event.preventDefault();
+    // A step that travelled one axis only carries a plain zero, never a -0.
+    post({ kind: "pan", dx: dx === 0 ? 0 : -dx, dy: dy === 0 ? 0 : -dy });
+  }
+
+  /**
+   * Ends the pan and releases the pointers it followed. Space lifted mid-drag
+   * ends it too, so the press stops panning the moment the modifier is gone.
+   * @param {PointerEvent | null} event the pointer that ended it, or null for Space
+   */
+  function endPan(event) {
+    if (panDrag === null) return;
+    const pointers = panDrag.pointers;
+    if (event !== null && !pointers.includes(event.pointerId)) return;
+    panDrag = null;
+    for (const id of pointers) releasePointerId(id);
+    // The crosshair the pan dropped comes back with the tool it belongs to.
+    syncCrosshair();
+    draw();
+  }
+
+  /**
    * Posts one validated message to the Worker; a missing port drops it. A
    * rasterize reply hands its bytes over as a transfer, so a full-size picture
    * is not copied.
@@ -1345,10 +1457,15 @@
 
   /** Keeps a stroke's pointer events coming while it leaves the svg. */
   function capturePointer(event) {
+    capturePointerId(event.pointerId);
+  }
+
+  /** @param {number} pointerId */
+  function capturePointerId(pointerId) {
     const svg = svgElement();
     if (svg === null || typeof svg.setPointerCapture !== "function") return;
     try {
-      svg.setPointerCapture(event.pointerId);
+      svg.setPointerCapture(pointerId);
     } catch {
       /* An id the engine no longer knows cannot be captured. */
     }
@@ -1448,9 +1565,34 @@
   /** @param {PointerEvent} event */
   function onPointerDown(event) {
     if (scene === null) return;
-    // A right or middle mouse button is never a drawing gesture; touch, pen,
-    // and the primary button are.
+    pointerClients.set(event.pointerId, {
+      clientX: event.clientX,
+      clientY: event.clientY,
+      touch: event.pointerType === "touch",
+    });
+    // Space turns any press into a pan (#777), so the author moves the view
+    // without leaving the tool they are drawing with.
+    if (spacePan) {
+      beginPan(event, [event.pointerId]);
+      return;
+    }
+    // The middle button pans too, and never draws.
+    if (event.button === 1) {
+      beginPan(event, [event.pointerId]);
+      return;
+    }
+    // A right mouse button is never a drawing gesture; touch, pen, and the
+    // primary button are.
     if (event.pointerType === "mouse" && event.button !== 0) return;
+    // A second finger on the glass pans (#777), dropping the draft the first
+    // began, so a two-finger drag never draws.
+    const fingers = [...pointerClients.entries()]
+      .filter(([, place]) => place.touch)
+      .map(([id]) => id);
+    if (event.pointerType === "touch" && fingers.length > 1) {
+      beginPan(event, fingers);
+      return;
+    }
 
     if (scene.tool === "pencil" || scene.tool === "area") {
       if (drawing !== null) return;
@@ -1547,6 +1689,29 @@
   }
 
   /**
+   * Zooms around the pointer on a Ctrl or Cmd wheel (#777), which is the wheel a
+   * trackpad reports a pinch as. A plain wheel keeps its behavior: the Frame
+   * never keeps it from the document.
+   * @param {WheelEvent} event
+   */
+  function onWheel(event) {
+    if (scene === null) return;
+    if (!event.ctrlKey && !event.metaKey) return;
+    // A wheel that counts lines rather than pixels stands for this many each.
+    const delta = event.deltaMode === 1 ? event.deltaY * WHEEL_LINE_PX : event.deltaY;
+    const zoom = Math.exp(-delta * WHEEL_ZOOM_RATE);
+    if (!isNumber(zoom) || zoom === 1) return;
+    const point = pagePoint(event);
+    if (point === null) return;
+    event.preventDefault();
+    post({
+      kind: "zoom",
+      point,
+      factor: Math.min(MAX_WHEEL_FACTOR, Math.max(1 / MAX_WHEEL_FACTOR, zoom)),
+    });
+  }
+
+  /**
    * A double click finishes an open Pen line. Its second click already landed
    * a duplicate point on the first, so that copy goes before the line ends.
    * @param {MouseEvent} event
@@ -1564,6 +1729,19 @@
 
   /** @param {PointerEvent} event */
   function onPointerMove(event) {
+    if (pointerClients.has(event.pointerId)) {
+      pointerClients.set(event.pointerId, {
+        clientX: event.clientX,
+        clientY: event.clientY,
+        touch: event.pointerType === "touch",
+      });
+    }
+
+    if (panDrag !== null && panDrag.pointers.includes(event.pointerId)) {
+      followPan(event);
+      return;
+    }
+
     if (bendDrag !== null && event.pointerId === bendDrag.pointerId) {
       followBend(event);
       return;
@@ -1713,6 +1891,14 @@
    * @param {KeyboardEvent} event
    */
   function onKeyDown(event) {
+    // Space turns the pointer into a pan (#777), whatever tool is active: the
+    // Frame keeps the key, so the host never acts on it and the tool the
+    // author was drawing with is the one that comes back.
+    if (event.key === " ") {
+      spacePan = true;
+      event.preventDefault();
+      return;
+    }
     // Escape drops a Shape drag in progress (#747); every key the Frame does
     // not handle forwards to the host as before (#760).
     if (event.key === "Escape" && shapeDraft !== null) {
@@ -1792,6 +1978,11 @@
   /** Lifting Shift frees a constrained Select drag at once. @param {KeyboardEvent} event */
   function onKeyUp(event) {
     if (event.key === "Shift") constrainDrag(false);
+    // Lifting Space stops the pan and gives the active tool back (#777).
+    if (event.key === " ") {
+      spacePan = false;
+      endPan(null);
+    }
   }
 
   /**
@@ -2143,6 +2334,10 @@
     document.removeEventListener("keyup", onKeyUp);
     for (const source of assetSources.values()) URL.revokeObjectURL(source.url);
     assetSources.clear();
+    // A press that slid off the surface is forgotten by its window event, not
+    // by the surface's, so that listener goes whatever the surface is.
+    window.removeEventListener("pointerup", forgetPointer);
+    window.removeEventListener("pointercancel", forgetPointer);
     if (surface === null) return;
     surface.removeEventListener("pointerdown", onPointerDown);
     surface.removeEventListener("pointermove", onPointerMove);
@@ -2150,10 +2345,13 @@
     surface.removeEventListener("pointercancel", onPointerCancel);
     surface.removeEventListener("lostpointercapture", onLostPointerCapture);
     surface.removeEventListener("dblclick", onDoubleClick);
+    surface.removeEventListener("wheel", onWheel);
   }
 
   /** @param {PointerEvent} event */
   function onPointerUp(event) {
+    endPan(event);
+    pointerClients.delete(event.pointerId);
     endStroke(event, true);
     endErase(event, true);
     endShape(event, true);
@@ -2163,6 +2361,8 @@
 
   /** @param {PointerEvent} event */
   function onPointerCancel(event) {
+    endPan(event);
+    pointerClients.delete(event.pointerId);
     endStroke(event, false);
     endErase(event, false);
     endShape(event, false);
@@ -2171,15 +2371,29 @@
   }
 
   /**
-   * The engine took a Select drag's or a bend drag's capture away with no
-   * pointerup (#766, #751): the drag is dropped like a cancel, so the next press
-   * is not ignored as a second finger. After a pointerup the drag is already
-   * over and this is a no-op.
+   * The engine took a Select drag's, a bend drag's, or a pan's capture away with
+   * no pointerup (#766, #751, #777): the gesture is dropped like a cancel, so
+   * the next press is not ignored as a second finger. After a pointerup the
+   * gesture is already over and this is a no-op.
    * @param {PointerEvent} event
    */
   function onLostPointerCapture(event) {
+    pointerClients.delete(event.pointerId);
     endMove(event, false);
     endBend(event, false);
+    endPan(event);
+  }
+
+  /**
+   * A pointer that lifts or is cancelled anywhere in the Frame is no longer
+   * down, even where the surface never hears it: a Bucket, Insert, or Pen press
+   * takes no capture, so a finger that slid off the drawing before it lifted
+   * would stay counted and turn the next single-finger press into a pan (#777).
+   * The surface's own handlers already forget it; deleting twice is harmless.
+   * @param {PointerEvent} event
+   */
+  function forgetPointer(event) {
+    pointerClients.delete(event.pointerId);
   }
 
   draw();
@@ -2194,7 +2408,16 @@
     surface.addEventListener("pointercancel", onPointerCancel);
     surface.addEventListener("lostpointercapture", onLostPointerCapture);
     surface.addEventListener("dblclick", onDoubleClick);
+    // A pinch arrives as a Ctrl wheel, which the page must not also zoom with,
+    // so the listener is not passive (#777).
+    surface.addEventListener("wheel", onWheel, { passive: false });
   }
+
+  // A finger that lifts off the surface sends its pointerup to the window
+  // alone, so the Frame forgets the pointer here (#777). The bubble phase
+  // reaches the window last, after the surface's own handlers ended the press.
+  window.addEventListener("pointerup", forgetPointer);
+  window.addEventListener("pointercancel", forgetPointer);
 
   if (port !== null) {
     port.onmessage = onMessage;

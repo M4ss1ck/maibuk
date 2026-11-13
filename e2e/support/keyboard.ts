@@ -23,6 +23,24 @@ export async function tabTo(
 }
 
 /**
+ * Tabs to `target` whichever side of focus it sits on: forward first, then
+ * back. Firefox never wraps Tab from the last control to the first, so a
+ * target behind focus is only reached going back; the backward walk retraces
+ * the forward one, so it gets twice the presses.
+ */
+export async function tabToEither(
+  page: Page,
+  target: Locator,
+  { max = 40 }: { max?: number } = {}
+): Promise<void> {
+  try {
+    await tabTo(page, target, { max });
+  } catch {
+    await tabTo(page, target, { max: max * 2, backwards: true });
+  }
+}
+
+/**
  * Presses `key` (an arrow, usually) until `target` has focus: movement inside
  * a roving-focus group such as a toolbar, menu, grid or listbox.
  */
@@ -90,8 +108,21 @@ export async function expectFocusWithin(region: Locator): Promise<void> {
   await expect.poll(() => isFocusWithin(region), { message: `focus within ${region}` }).toBe(true);
 }
 
+/**
+ * Whether focus is on `target`, `false` when the locator matches nothing. A
+ * locator matching more than one element throws: Playwright cannot say which
+ * element should hold focus, and answering "not focused" would read as a
+ * broken tab order instead of the ambiguous locator it is (#778).
+ */
 async function isFocused(target: Locator): Promise<boolean> {
-  return target.evaluate((el) => el === document.activeElement).catch(() => false);
+  const count = await target.count();
+  if (count === 0) return false;
+  if (count > 1) {
+    throw new Error(
+      `${target} matches ${count} elements: the keyboard helper cannot tell which one should hold focus. Narrow the locator.`
+    );
+  }
+  return target.evaluate((el) => el === document.activeElement);
 }
 
 /** Tag, role and accessible-ish name of the focused element, for failure messages. */

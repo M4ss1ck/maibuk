@@ -747,6 +747,45 @@ describe("the Remote UI renderer", () => {
       expect(pressed).toBe(1);
     });
 
+    it("marks a selected icon button pressed and presses it with Space @ui-kbd:maibuk-icon-button", async () => {
+      let pressed = 0;
+      harness = renderRemoteUi();
+      await harness.mount(
+        <ui.IconButton label="Pencil" icon="pencil" isSelected onPress={() => (pressed += 1)} />
+      );
+      const button = screen.getByRole("button", { name: "Pencil" });
+      expect(button).toHaveAttribute("aria-pressed", "true");
+      expect(button.className).toContain("bg-primary/10!");
+
+      await userEvent.tab();
+      await userEvent.keyboard(" ");
+      expect(pressed).toBe(1);
+      expect(button).toHaveAttribute("aria-pressed", "true");
+    });
+
+    it("shows an icon button's label as a tooltip on keyboard focus @ui-kbd:maibuk-icon-button", async () => {
+      harness = renderRemoteUi();
+      await harness.mount(<ui.IconButton label="Add chapter" icon="plus" />);
+      const button = screen.getByRole("button", { name: "Add chapter" });
+
+      await userEvent.tab();
+      expect(button).toHaveFocus();
+      expect(await screen.findByRole("tooltip")).toHaveTextContent("Add chapter");
+    });
+
+    it("leaves an icon button without isSelected unmarked and unstyled @ui:maibuk-icon-button", async () => {
+      harness = renderRemoteUi();
+      await harness.mount(<ui.IconButton label="Pencil" icon="pencil" />);
+      const plain = screen.getByRole("button", { name: "Pencil" });
+      expect(plain).not.toHaveAttribute("aria-pressed");
+      expect(plain.className).not.toContain("bg-primary/10!");
+
+      await harness.mount(<ui.IconButton label="Pencil" icon="pencil" isSelected={false} />);
+      const unselected = screen.getByRole("button", { name: "Pencil" });
+      expect(unselected).toHaveAttribute("aria-pressed", "false");
+      expect(unselected.className).not.toContain("bg-primary/10!");
+    });
+
     it("follows a link with the keyboard @ui-kbd:maibuk-link", async () => {
       let pressed = 0;
       harness = renderRemoteUi();

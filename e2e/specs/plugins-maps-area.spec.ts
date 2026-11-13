@@ -19,6 +19,7 @@ import { capture } from "../support/capture";
 import { drawArea, scatterPaint } from "../support/frame-stroke";
 import { leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
+import { openLayers } from "../support/maps-layers";
 
 const primaryNav = (page: Page) => page.getByRole("listbox", { name: "Primary navigation" });
 const navOption = (page: Page, name: string) =>
@@ -143,12 +144,13 @@ async function openEditorWithMap(page: Page): Promise<void> {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/maibuk-maps\/map$/);
   await expect(surface(page)).toBeVisible();
+  await openLayers(page);
 }
 
 /** Picks the Area tool with its key and waits for the Frame to honour it. */
 async function pickArea(page: Page): Promise<void> {
   await page.keyboard.press("a");
-  await expect(page.getByRole("radio", { name: "Area", exact: true })).toBeChecked();
+  await expect(page.getByRole("button", { name: "Area", exact: true, pressed: true }));
   // The scene round-trip is what proves the Frame is listening before a key.
   await expect(mapFrame(page).locator('svg[data-tool="area"]')).toBeVisible();
 }
@@ -338,13 +340,15 @@ test.describe("Maps Soft Edge and Fill content @wf:plugins-maps-fill-content @sc
     const [left, top, right, bottom] = pathBounds(await pathData(areaPath(page)));
 
     // The texture paints the area with its own pattern, defined once in the Frame.
-    await pickOption(page, page.getByRole("button", { name: "Texture", exact: true }), "Grass");
+    // A Select's trigger is named through `aria-labelledby` ("None Texture"),
+    // so it is found by its label, never by a whole accessible-name match (#778).
+    await pickOption(page, page.getByLabel("Texture"), "Grass");
     await expect(texturePatterns(page)).toHaveCount(1);
     await expect(texturePatterns(page).first()).toHaveAttribute("id", "texture-grass");
     await expect(texturedPaint(page, "texture-grass")).toHaveCount(1);
 
     // The scatter drops the picked Stamp over the area, clipped to its outline.
-    await pickOption(page, page.getByRole("button", { name: "Scatter" }), "Castle");
+    await pickOption(page, page.getByLabel("Scatter"), "Castle");
     await expect(scatterClips(page)).toHaveCount(1);
     const stamps = scatteredStamps(page);
     // Every Stamp the Fill scatters is clipped to its area, not only the ones

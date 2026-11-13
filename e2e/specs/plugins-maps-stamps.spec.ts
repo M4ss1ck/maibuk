@@ -19,6 +19,7 @@ import { capture } from "../support/capture";
 import { clickPagePoint } from "../support/frame-stroke";
 import { leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
+import { openLayers } from "../support/maps-layers";
 
 const primaryNav = (page: Page) => page.getByRole("listbox", { name: "Primary navigation" });
 const navOption = (page: Page, name: string) =>
@@ -100,12 +101,13 @@ async function openEditorWithMap(page: Page): Promise<void> {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/maibuk-maps\/map$/);
   await expect(surface(page)).toBeVisible();
+  await openLayers(page);
 }
 
 /** Picks the Insert tool with its key and waits for the Frame to honour it. */
 async function pickInsert(page: Page): Promise<void> {
   await page.keyboard.press("i");
-  await expect(page.getByRole("radio", { name: "Insert", exact: true })).toBeChecked();
+  await expect(page.getByRole("button", { name: "Insert", exact: true, pressed: true }));
   // The scene round-trip is what proves the Frame is listening before a click.
   await expect(mapFrame(page).locator('svg[data-tool="insert"]')).toBeVisible();
 }
@@ -211,8 +213,11 @@ test.describe("Maps Insert tool and Stamps @wf:plugins-maps-stamps @sc:plugin.ma
     await pickStamp(page, "Lone mountain");
 
     // A pointer-only gesture (see `support/frame-stroke.ts`): the Frame has no
-    // key that names a point on the page.
-    const point = [60, 50] as const;
+    // key that names a point on the page. The floating chrome (#778) draws its
+    // cards over the page's left edge, and the Insert card, which this test
+    // needs open, reaches a little past 70 mm across the middle of the page, so
+    // the point sits clear of it.
+    const point = [95, 50] as const;
     await clickPagePoint(page, surface(page), point);
 
     await expect(elementRow(page, "Lone mountain")).toBeVisible();
@@ -277,14 +282,19 @@ test.describe("Maps Insert tool and Stamps @wf:plugins-maps-stamps @sc:plugin.ma
     await pickInsert(page);
 
     // One of every kind of Stamp art the slice ships a look for, plus the scale
-    // bar, spread over the landscape page.
+    // bar, spread over the landscape page. The floating chrome (#778) floats its
+    // cards over the page's left edge and its top-right corner, so every point
+    // below sits in the page the cards leave uncovered: the Insert card and,
+    // with Layers open, the Layers card stacked under it (#775 review R2) reach
+    // a little past 70 mm across, down to about 120 mm, which is why the
+    // left-hand Stamps sit at 95 mm and the Compass rose below the stack.
     for (const [stamp, point] of [
-      ["Capital", [55, 45]],
-      ["Castle", [160, 40]],
-      ["Lone mountain", [150, 105]],
-      ["Lone tree", [175, 95]],
-      ["Compass rose", [50, 115]],
-      ["Ship", [175, 55]],
+      ["Capital", [95, 45]],
+      ["Castle", [145, 40]],
+      ["Lone mountain", [135, 105]],
+      ["Lone tree", [150, 95]],
+      ["Compass rose", [80, 135]],
+      ["Ship", [150, 60]],
       ["Scale bar", [114, 112]],
       ["Town", [90, 100]],
     ] as const) {

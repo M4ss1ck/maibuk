@@ -14,8 +14,15 @@
 import type { FrameLocator, Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { eraseAcross } from "../support/frame-stroke";
-import { isFocusWithin, leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
+import {
+  expectFocusWithin,
+  isFocusWithin,
+  leaveFrame,
+  pressUntilFocused,
+  tabTo,
+} from "../support/keyboard";
 import { expect, test } from "../support/test";
+import { openLayers } from "../support/maps-layers";
 
 const primaryNav = (page: Page) => page.getByRole("listbox", { name: "Primary navigation" });
 const navOption = (page: Page, name: string) =>
@@ -69,12 +76,13 @@ async function openMap(page: Page, name: string): Promise<void> {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/maibuk-maps\/map$/);
   await expect(mapFrame(page).locator("svg")).toBeVisible();
+  await openLayers(page);
 }
 
 /** Picks the Pen with its Command and waits for the Frame to honour it. */
 async function pickPen(page: Page): Promise<void> {
   await page.keyboard.press("n");
-  await expect(page.getByRole("radio", { name: "Pen", exact: true })).toBeChecked();
+  await expect(page.getByRole("button", { name: "Pen", exact: true, pressed: true }));
   // The scene round-trip is what proves the Frame is listening before a key.
   await expect(mapFrame(page).locator('svg[data-tool="pen"]')).toBeVisible();
 }
@@ -132,7 +140,10 @@ async function focusBack(page: Page): Promise<void> {
 async function focusElements(page: Page): Promise<void> {
   await focusBack(page);
   const list = elementsList(page);
-  for (let i = 0; i < 10 && !(await isFocusWithin(list)); i++) await page.keyboard.press("Tab");
+  // The floating chrome (#778) puts the belt's eleven tool buttons between the
+  // pill's Back button and the Elements list, so the walk allows for them.
+  for (let i = 0; i < 20 && !(await isFocusWithin(list)); i++) await page.keyboard.press("Tab");
+  await expectFocusWithin(list);
 }
 
 /** Focuses the selected Map Line's row in the Elements list. */
@@ -161,10 +172,21 @@ async function openProperties(page: Page, name: string): Promise<void> {
   await expect(page.getByRole("textbox", { name: "Name" })).toBeFocused();
 }
 
+/**
+ * The Properties panel's Line style select trigger. Its accessible name is its
+ * current value and the row's label ("Plain Line style"), so it is found by
+ * that name: the row's own "Line style" label belongs to the select's native
+ * control, which `getByLabel` resolves to and which the author can never focus
+ * (#778).
+ */
+const lineStyleTrigger = (page: Page) => page.getByRole("button", { name: /Line style$/ });
+
 /** Picks one option of the Line style select by keyboard. */
 async function pickLineStyle(page: Page, option: string): Promise<void> {
-  const trigger = page.getByRole("button", { name: "Line style" });
-  await tabTo(page, trigger, { max: 5, backwards: true });
+  const trigger = lineStyleTrigger(page);
+  // The panel's header (#778) puts the name, the two switches, and the
+  // Minimise button before the select, which is where focus starts.
+  await tabTo(page, trigger, { max: 20 });
   await page.keyboard.press("Enter");
   const item = page.getByRole("option", { name: option, exact: true });
   await expect(item).toBeVisible();
@@ -241,8 +263,8 @@ test.describe("Maps Pen, Eraser, line styles, and Roughen @wf:plugins-maps-pen @
     await openProperties(page, "Map Line 1");
 
     // A new Pen line is Plain, and Coast draws a thicker ink stroke.
-    const styleTrigger = page.getByRole("button", { name: "Line style" });
-    await tabTo(page, styleTrigger, { max: 5, backwards: true });
+    const styleTrigger = lineStyleTrigger(page);
+    await tabTo(page, styleTrigger, { max: 20 });
     await expect(styleTrigger).toHaveText("Plain");
     await expect(drawnLine(page).first()).toHaveAttribute("stroke-width", "0.6");
 
@@ -257,7 +279,7 @@ test.describe("Maps Pen, Eraser, line styles, and Roughen @wf:plugins-maps-pen @
     await expect(drawnLine(page).first()).toHaveAttribute("stroke-width", "0.6");
 
     // The switch is the author's own edit, one step apart from the style.
-    await tabTo(page, encloses, { max: 10 });
+    await tabTo(page, encloses, { max: 20 });
     await expect(encloses).toBeChecked();
     await page.keyboard.press(" ");
     await expect(encloses).not.toBeChecked();
@@ -286,7 +308,7 @@ test.describe("Maps Pen, Eraser, line styles, and Roughen @wf:plugins-maps-pen @
     await focusBack(page);
 
     await page.keyboard.press("e");
-    await expect(page.getByRole("radio", { name: "Eraser", exact: true })).toBeChecked();
+    await expect(page.getByRole("button", { name: "Eraser", exact: true, pressed: true }));
     await expect(mapFrame(page).locator('svg[data-tool="eraser"]')).toBeVisible();
 
     // A drag across the middle of the closed outline cuts it twice, once per

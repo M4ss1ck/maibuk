@@ -18,6 +18,7 @@ import type { FrameLocator, Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { isFocusWithin, leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
+import { openLayers } from "../support/maps-layers";
 
 /**
  * What the Archipelago Template lays down, as `templates.ts` declares it: six
@@ -135,6 +136,7 @@ async function openMap(page: Page, name: string): Promise<void> {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/maibuk-maps\/map$/);
   await expect(surface(page)).toBeVisible();
+  await openLayers(page);
 }
 
 /** Leaves the Map Frame and Tabs back to Back to Maps, then opens it by keyboard. */
@@ -164,8 +166,10 @@ async function selectElement(page: Page, name: string): Promise<Locator> {
   const list = elementsList(page);
   // Start at Back to Maps, the first panel control, and Tab forward into the
   // list: from either side of it, that is the one direction that always works.
+  // The floating chrome (#778) puts the belt's eleven tool buttons and the
+  // properties panel between the two, so the walk into the list allows for them.
   await focusBack(page);
-  for (let i = 0; i < 10 && !(await isFocusWithin(list)); i++) await page.keyboard.press("Tab");
+  for (let i = 0; i < 60 && !(await isFocusWithin(list)); i++) await page.keyboard.press("Tab");
   await page.keyboard.press("Home");
   await pressUntilFocused(page, "ArrowDown", row, { max: 20 });
   if ((await row.getAttribute("aria-selected")) !== "true") await page.keyboard.press(" ");

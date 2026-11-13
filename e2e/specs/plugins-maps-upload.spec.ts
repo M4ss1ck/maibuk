@@ -23,6 +23,7 @@ import { leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
 import { countInkPixels } from "../support/png-ink";
 import { forceDownloadSaves } from "../support/save-picker";
 import { expect, test } from "../support/test";
+import { openLayers } from "../support/maps-layers";
 
 const primaryNav = (page: Page) => page.getByRole("listbox", { name: "Primary navigation" });
 const navOption = (page: Page, name: string) =>
@@ -49,7 +50,10 @@ const drawnPictures = (page: Page) => mapFrame(page).locator("g[data-element-id]
 /** The Insert panel's Upload button, which picks a picture and places it. */
 const uploadButton = (page: Page) => page.getByRole("button", { name: "Upload…", exact: true });
 
-/** The Export panel's fields the picture test saves through. */
+/** The top-right pill's Export popover (#778), which holds the print fields. */
+const exportTrigger = (page: Page) => page.getByRole("button", { name: "Export", exact: true });
+
+/** The Export popover's fields the picture test saves through. */
 const dpiField = (page: Page) => page.getByRole("textbox", { name: "DPI", exact: true });
 const saveButton = (page: Page) => page.getByRole("button", { name: /^Save/ });
 
@@ -96,6 +100,7 @@ async function openMap(page: Page, name: string): Promise<void> {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/maibuk-maps\/map$/);
   await expect(surface(page)).toBeVisible();
+  await openLayers(page);
 }
 
 /** Leaves the Map Frame and Tabs back to Back to Maps, then presses it. */
@@ -113,7 +118,7 @@ async function backToMaps(page: Page): Promise<void> {
 /** Picks the Insert tool with its key and waits for the Frame to honour it. */
 async function pickInsert(page: Page): Promise<void> {
   await page.keyboard.press("i");
-  await expect(page.getByRole("radio", { name: "Insert", exact: true })).toBeChecked();
+  await expect(page.getByRole("button", { name: "Insert", exact: true, pressed: true }));
   // The scene round-trip is what proves the Frame is listening before an upload.
   await expect(mapFrame(page).locator('svg[data-tool="insert"]')).toBeVisible();
 }
@@ -123,6 +128,17 @@ async function openStampPicker(page: Page): Promise<void> {
   await tabTo(page, stampTrigger(page), { max: 60 });
   await page.keyboard.press("Enter");
   await expect(stampList(page)).toBeVisible();
+}
+
+/**
+ * Opens the top-right pill's Export popover (#778) and walks into its controls:
+ * an open popover holds focus itself, so one Tab is the author's way in.
+ */
+async function openExportPanel(page: Page): Promise<void> {
+  await tabTo(page, exportTrigger(page), { max: 90 });
+  await page.keyboard.press("Enter");
+  await expect(saveButton(page)).toBeVisible();
+  await page.keyboard.press("Tab");
 }
 
 /** Writes one field: focus it, select all, type the value, Enter to commit. */
@@ -228,6 +244,7 @@ test.describe("Maps Insert upload @wf:plugins-maps-upload @sc:plugin.maibuk-maps
 
     // A smaller print keeps the file quick to read back, and the panel says
     // what it will save before it saves it: the landscape page at 150 DPI.
+    await openExportPanel(page);
     await writeField(page, dpiField(page), "150");
     await expect(page.getByText(/1350 × 900 px/)).toBeVisible();
 

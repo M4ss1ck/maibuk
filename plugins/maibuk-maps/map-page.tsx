@@ -76,7 +76,6 @@ import {
   MIN_POLYGON_SIDES,
   MIN_SHAPE_SIZE_MM,
   MIN_STAMP_SIZE_MM,
-  SHAPE_KINDS,
   STAMP_SCALE_UNITS,
   isShapeKind,
   randomMapId,
@@ -414,19 +413,169 @@ const LINE_STYLE_KEYS: Readonly<Record<LineStyleId, MapsKey>> = {
   plain: "properties.style.plain",
 };
 
-/** The tool picker's label for each Shape it offers, in the order it offers them. */
-const SHAPE_TOOL_KEYS: Readonly<Record<ShapeKind, MapsKey>> = {
-  ellipse: "tools.ellipse",
-  rectangle: "tools.rectangle",
-  polygon: "tools.polygon",
-};
-
 /** The Place button's label for each Shape tool. */
 const PLACE_SHAPE_KEYS: Readonly<Record<ShapeKind, MapsKey>> = {
   ellipse: "properties.placeShape.ellipse",
   rectangle: "properties.placeShape.rectangle",
   polygon: "properties.placeShape.polygon",
 };
+
+/** The icon each Shape tool's Place button shows, so the footer's action reads as the shape. */
+const SHAPE_TOOL_ICONS: Readonly<Record<ShapeKind, string>> = {
+  ellipse: "circle",
+  rectangle: "square",
+  polygon: "pentagon",
+};
+
+/**
+ * The tool belt's tools, in the order #775 Decision 3 fixes: the drawing and
+ * pouring tools, the three Shape tools, then Insert and Eraser (#778). Each is a
+ * `ui.IconButton` with `isSelected`, so the belt is one control per tool.
+ */
+const TOOL_BELT: ReadonlyArray<{ tool: MapTool; label: MapsKey; icon: string }> = [
+  { tool: "select", label: "tools.select", icon: "mouse-pointer-2" },
+  { tool: "pencil", label: "tools.pencil", icon: "pencil" },
+  { tool: "pen", label: "tools.pen", icon: "pen-tool" },
+  { tool: "bucket", label: "tools.bucket", icon: "paint-bucket" },
+  { tool: "area", label: "tools.area", icon: "lasso-select" },
+  { tool: "ellipse", label: "tools.ellipse", icon: "circle" },
+  { tool: "rectangle", label: "tools.rectangle", icon: "square" },
+  { tool: "polygon", label: "tools.polygon", icon: "pentagon" },
+  { tool: "insert", label: "tools.insert", icon: "stamp" },
+  { tool: "eraser", label: "tools.eraser", icon: "eraser" },
+];
+
+/**
+ * The floating editor's CSS (#778): the drawing fills the page body and every
+ * control floats over it as a card, the way the app's own Canvas does. A host
+ * `ui.View` carries no nameable class or attribute, so the root is the editor's
+ * own nested `ui.Surface` (the one host element every engine marks with
+ * `data-plugin-ui`) and each card is one of its slots: its children in the order
+ * #775 Decision 7 fixes the tab order in. A shut card keeps its slot and empties
+ * it, so a card's place never depends on another card's state, and the Frame's
+ * box never changes when one opens or closes. The narrow page's block is a
+ * `@container` query on this root's own width, so a narrow editor inside a wide
+ * window gets the narrow chrome. `layout-css.test.tsx` mounts the page through
+ * the host renderer and holds every selector here to the element it is meant
+ * for.
+ */
+export const MAP_EDITOR_CSS = `
+div[data-plugin-ui] { position: relative; display: block; height: 100%; min-height: 0; overflow: hidden; container-type: inline-size; }
+div[data-plugin-ui] > div:nth-child(5) { position: absolute; inset: 0; }
+div[data-plugin-ui] > div:nth-child(5) > [data-plugin-frame="embedded"] { height: 100%; min-height: 0; }
+div[data-plugin-ui] > div:nth-child(5) > [data-plugin-frame="embedded"] > div { height: 100%; min-height: 0; border-width: 0; border-radius: 0; }
+div[data-plugin-ui] > div:nth-child(1),
+div[data-plugin-ui] > div:nth-child(2),
+div[data-plugin-ui] > div:nth-child(7),
+div[data-plugin-ui] > div:nth-child(8) { position: absolute; z-index: 2; padding: 0.25rem; border: 1px solid var(--color-border); border-radius: 0.5rem; background: var(--color-card); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); }
+div[data-plugin-ui] > div:nth-child(3),
+div[data-plugin-ui] > div:nth-child(4),
+div[data-plugin-ui] > div:nth-child(6) { position: absolute; z-index: 2; padding: 0.75rem; border: 1px solid var(--color-border); border-radius: 0.5rem; background: var(--color-card); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); max-height: calc(100% - 1.5rem); overflow-y: auto; }
+div[data-plugin-ui] > div:nth-child(3):empty,
+div[data-plugin-ui] > div:nth-child(4):empty,
+div[data-plugin-ui] > div:nth-child(6):empty { display: none; }
+div[data-plugin-ui] > div:nth-child(1) { top: 0.75rem; left: 0.75rem; }
+div[data-plugin-ui] > div:nth-child(2) { top: 50%; left: 0.75rem; transform: translateY(-50%); }
+div[data-plugin-ui] > div:nth-child(3) { top: 50%; left: 3.75rem; width: 15rem; transform: translateY(-50%); }
+div[data-plugin-ui] > div:nth-child(4) { top: 50%; left: 3.75rem; width: 15rem; transform: translateY(-50%); }
+div[data-plugin-ui] > div:nth-child(6) { top: 4.5rem; right: 0.75rem; width: 18.5rem; }
+div[data-plugin-ui] > div:nth-child(7) { top: 0.75rem; right: 0.75rem; }
+div[data-plugin-ui] > div:nth-child(8) { right: 0.75rem; bottom: 0.75rem; }
+/* The narrow page (#779, #775 Decision 6): the drawing still fills the page,
+   but the chrome turns into bars. The switch is on the editor's own container
+   width, not the viewport's, so a narrow editor inside a wide window (the app's
+   sidebar taking the rest) gets the narrow chrome too. The two top pills become
+   one top bar, the belt runs along the bottom and scrolls sideways, and
+   Properties and Layers become bottom regions at most half the page tall, the
+   pill's three controls fold into one overflow popover, and a toggle gives a
+   bottom region the whole page. */
+@container (max-width: 639px) {
+  /* The left pill spans the bar; the right pill gives up its own box, so the
+     bar shows through and the two read as one. */
+  div[data-plugin-ui] > div:nth-child(1) { top: 0; left: 0; right: 0; padding: 0.5rem 3.5rem 0.5rem 0.5rem; border-width: 0 0 1px; border-radius: 0; }
+  /* The back button keeps its icon and its words on one line, and the Map's
+     own name gives up the width instead, ending in an ellipsis (#779). The
+     right padding clears the overflow popover the other pill leaves there. */
+  div[data-plugin-ui] > div:nth-child(1) > button { flex: 0 0 auto; white-space: nowrap; }
+  /* Back shows its arrow alone and the Map's name takes the room: the host
+     draws the words as a bare text node inside the button, so the glyphs go
+     to zero rather than the node, which leaves the button's accessible name
+     the words it still holds (#779). */
+  div[data-plugin-ui] > div:nth-child(1) > button:nth-of-type(1) { gap: 0; font-size: 0; padding-inline: 0.75rem; }
+  div[data-plugin-ui] > div:nth-child(1) > button:nth-of-type(2) { display: block; flex: 1 1 auto; min-width: 2.75rem; overflow: hidden; text-align: left; text-overflow: ellipsis; }
+  div[data-plugin-ui] > div:nth-child(7) { top: 0; right: 0.5rem; left: auto; padding: 0.5rem 0; border-width: 0; border-radius: 0; background: none; box-shadow: none; }
+  /* The belt lies along the bottom, one row that scrolls sideways. */
+  div[data-plugin-ui] > div:nth-child(2) { top: auto; bottom: 0; left: 0; right: 0; flex-direction: row; overflow-x: auto; overflow-y: hidden; transform: none; padding: 0.5rem; border-width: 1px 0 0; border-radius: 0; }
+  /* Every tool stays its own width inside the scrolling row, so the belt never
+     squashes a control the author is aiming at (#779). */
+  div[data-plugin-ui] > div:nth-child(2) > button { flex: 0 0 auto; }
+  /* The three pill controls give way to one overflow popover, so the bar keeps
+     one row of icons the width of the page (#779, #775 Decision 6). */
+  div[data-plugin-ui] > div:nth-child(7) > div:nth-child(1) { display: none; }
+  /* Insert, Layers, and Properties are all bottom regions, each at most half
+     the page tall (#779). */
+  div[data-plugin-ui] > div:nth-child(3) { top: auto; bottom: 4.25rem; left: 0.5rem; right: 0.5rem; width: auto; transform: none; max-height: calc(50% - 4.25rem); }
+  div[data-plugin-ui] > div:nth-child(4) { top: auto; bottom: 4.25rem; left: 0.5rem; right: 0.5rem; width: auto; transform: none; max-height: calc(50% - 4.25rem); }
+  div[data-plugin-ui] > div:nth-child(6) { top: auto; bottom: 4.25rem; left: 0.5rem; right: 0.5rem; width: auto; max-height: calc(50% - 4.25rem); padding-top: 3.75rem; }
+  /* With Properties open too, the bottom half is split: Insert and Layers
+     above, from the middle of the page down, and Properties below them, so
+     none covers another (#779). */
+  div[data-plugin-ui]:has(> div:nth-child(6):not(:empty)) > div:nth-child(3),
+  div[data-plugin-ui]:has(> div:nth-child(6):not(:empty)) > div:nth-child(4) { top: 50%; bottom: auto; max-height: calc(25% - 0.25rem); }
+  div[data-plugin-ui]:has(> div:nth-child(3):not(:empty)) > div:nth-child(6),
+  div[data-plugin-ui]:has(> div:nth-child(4):not(:empty)) > div:nth-child(6) { top: 75%; bottom: 4.25rem; max-height: calc(25% - 4.25rem); }
+  /* The Properties header keeps its title and the card's two controls on the
+     card's own top band, right-aligned as on the desktop, instead of letting
+     them drop to a row of their own under the title: the title holds the band's
+     left, the two controls its right, and the selection's name and switches
+     start below them (#779). */
+  div[data-plugin-ui] > div:nth-child(6) > p:nth-child(1) { position: absolute; top: 0.75rem; left: 0.75rem; display: flex; align-items: center; height: 2.75rem; }
+  div[data-plugin-ui] > div:nth-child(6) > div:nth-child(2) { flex-wrap: nowrap; gap: 0.5rem; }
+  div[data-plugin-ui] > div:nth-child(6) > div:nth-child(2) > div:nth-child(1) { flex: 1 1 auto; min-width: 0; }
+  div[data-plugin-ui] > div:nth-child(6) > div:nth-child(2) > button { position: absolute; top: 0.75rem; flex: 0 0 auto; }
+  div[data-plugin-ui] > div:nth-child(6) > div:nth-child(2) > button:first-of-type { right: 3.75rem; }
+  div[data-plugin-ui] > div:nth-child(6) > div:nth-child(2) > button:last-of-type { right: 0.75rem; }
+  /* The full-height toggle: whichever region holds a pressed toggle takes all
+     the page but the bar and the belt, so Properties and Layers each own the
+     one toggle (#779). The Frame's own box never moves, so the drawing is not
+     resized. */
+  div[data-plugin-ui]:has(> div:nth-child(4) > button[aria-pressed="true"]) > div:nth-child(4),
+  div[data-plugin-ui]:has(> div:nth-child(6) button[aria-pressed="true"]) > div:nth-child(6) { top: 3.25rem; bottom: 4.25rem; max-height: none; }
+  /* The zoom cluster sits bottom right, just above the belt, or just above the
+     bottom region that is open, so zoom in, zoom out, and the readout stay
+     reachable whatever is open (#779, #775 review R2). */
+  div[data-plugin-ui] > div:nth-child(8) { top: auto; right: 0.5rem; bottom: 4.25rem; }
+  div[data-plugin-ui]:has(> div:nth-child(3):not(:empty)) > div:nth-child(8),
+  div[data-plugin-ui]:has(> div:nth-child(4):not(:empty)) > div:nth-child(8),
+  div[data-plugin-ui]:has(> div:nth-child(6):not(:empty)) > div:nth-child(8) { bottom: calc(50% + 0.5rem); }
+  /* A region at full height leaves no room above the middle, so the cluster
+     moves under the top bar instead of hiding (#775 review R2). */
+  div[data-plugin-ui]:has(> div:nth-child(4) > button[aria-pressed="true"]) > div:nth-child(8),
+  div[data-plugin-ui]:has(> div:nth-child(6) button[aria-pressed="true"]) > div:nth-child(8) { top: 3.25rem; bottom: auto; }
+}
+/* At the desktop width the pill's own three controls show again, and the
+   overflow stays out of the page (#779). */
+@container (min-width: 640px) {
+  div[data-plugin-ui] > div:nth-child(7) > div:nth-child(2) { display: none; }
+  /* The full-height toggles only exist where a region can react to them: a
+     desktop region already takes the room its content needs, so at this width
+     the two controls leave the header (#775 review R2). */
+  div[data-plugin-ui] > div:nth-child(4) > button { display: none; }
+  div[data-plugin-ui] > div:nth-child(6) > div:nth-child(2) > button:first-of-type { display: none; }
+  /* Insert and Layers share one box beside the belt, so with both open they
+     stack rather than cover each other: Insert above the middle, Layers below
+     it, each held to its own half (#775 review R2). */
+  div[data-plugin-ui]:has(> div:nth-child(4):not(:empty)) > div:nth-child(3) { transform: translateY(calc(-100% - 0.25rem)); max-height: calc(50% - 1rem); }
+  div[data-plugin-ui]:has(> div:nth-child(3):not(:empty)) > div:nth-child(4) { transform: translateY(0.25rem); max-height: calc(50% - 1rem); }
+}
+/* A coarse pointer gets a thumb-sized target on every control the page draws,
+   at any width (#779, #775 Decision 6): the host's icon buttons are 32px wide
+   at their default size, which a thumb cannot hit. This keys on the pointer,
+   not the width, so a touchscreen laptop at desktop size is served too. */
+@media (pointer: coarse) {
+  div[data-plugin-ui] button { min-width: 2.75rem; min-height: 2.75rem; }
+}
+`;
 
 /** What a line converted from a Shape says it was, one string per kind. */
 const CONVERTED_KEYS: Readonly<Record<ShapeKind, MapsKey>> = {
@@ -461,27 +610,6 @@ const MAP_STYLE_KEYS: Readonly<Record<MapStyleId, MapsKey>> = {
 /** Whether a colour field already follows the Map Style, so it has no override to clear. */
 function followsStyle(color: string | undefined): boolean {
   return color === undefined || isStyleRole(color);
-}
-
-/**
- * The button that hands one Element's colour back to the Map Style (#752):
- * every Element that overrides a role offers the same path, so it is one
- * component rather than four identical copies.
- */
-function UseMapStyleColor({
-  label,
-  isDisabled,
-  onPress,
-}: {
-  label: string;
-  isDisabled: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <ui.Button variant="secondary" isDisabled={isDisabled} onPress={onPress}>
-      {label}
-    </ui.Button>
-  );
 }
 
 /** The Font select's label for each bundled face a Map Label takes, in the order it offers them. */
@@ -665,6 +793,16 @@ function MapEditorView({
   // menu entry visibly lands focus on the panel even when the row already is
   // the selection (#745).
   const [propertiesFocus, setPropertiesFocus] = useState(0);
+  // The floating chrome's own state (#778): whether the Layers card shows, and
+  // whether the Properties card is shrunk to its restore icon.
+  const [layersOpen, setLayersOpen] = useState(false);
+  const [propertiesMinimised, setPropertiesMinimised] = useState(false);
+  // Whether the Properties region takes the whole page on a narrow screen (#779).
+  const [propertiesFullHeight, setPropertiesFullHeight] = useState(false);
+  // Whether the Layers region takes the whole page on a narrow screen (#779).
+  const [layersFullHeight, setLayersFullHeight] = useState(false);
+  // The Map's own name while its rename dialog holds it, or null when it is shut.
+  const [mapRename, setMapRename] = useState<string | null>(null);
   const selected =
     snapshot.selectedId === null
       ? null
@@ -706,6 +844,20 @@ function MapEditorView({
   const pouring = snapshot.tool === "bucket";
   const fillColor = pouring ? snapshot.currentFillColor : snapshot.selectedFillColor;
   const showFillColor = pouring || snapshot.selectedIsFill;
+  // The one colour override the footer can hand back to the Map Style (#752):
+  // whichever Element the selection is, its own colour is the one it clears.
+  const useMapStyleColorTarget: { color: string | undefined } | null =
+    selected === null
+      ? null
+      : showFillColor && !pouring && fillColor !== null
+        ? { color: fillColor }
+        : stamp !== null && stampRecolours(stamp.stampRef)
+          ? { color: stamp.color }
+          : label !== null
+            ? { color: label.color }
+            : selectedLine !== null
+              ? { color: selectedLine.color }
+              : null;
 
   // Leaving the page writes whatever the quiet period still holds; the Back
   // button already flushed, so this is a no-op there.
@@ -766,6 +918,12 @@ function MapEditorView({
     if (dialog === null) return;
     editor.rename(dialog.id, dialog.name);
     setDialog(null);
+  }
+
+  function submitMapRename(): void {
+    if (mapRename === null) return;
+    editor.renameMap(mapRename);
+    setMapRename(null);
   }
 
   /** What the Insert picker's current Stamp is called: a base Stamp or a Library picture. */
@@ -908,58 +1066,135 @@ function MapEditorView({
 
   // Top of the list is the topmost Element; the document array grows upward.
   const rows = [...snapshot.elements].reverse();
+  // With nothing selected the Properties card still shows the defaults the
+  // active tool offers: the Pen's line style, a Shape's Place path, or the
+  // colour the Bucket pours (#778).
+  const showProperties =
+    selected !== null || snapshot.tool === "pen" || shapeTool !== null || pouring;
+  const zoomPercent = Math.round(snapshot.zoom * 100);
+  // The narrow bar's overflow (#779, #775 Decision 6): the same three controls
+  // the desktop pill holds, drawn once more inside the overflow popover. The
+  // stylesheet swaps which set is reachable at each width, and both read this
+  // page's own state, so a pick made in either place lands the same way.
+  const mapStylePicker = (
+    <ui.RadioGroup
+      label={t("properties.mapStyle")}
+      orientation="vertical"
+      options={MAP_STYLE_IDS.map((styleId) => ({
+        value: styleId,
+        label: t(MAP_STYLE_KEYS[styleId]),
+      }))}
+      selectedKey={snapshot.styleId}
+      onChange={(event) => editor.setMapStyle(event.detail as MapStyleId)}
+    />
+  );
+  const placeButton = (
+    <ui.IconButton label={t("place.label")} icon="file-image" onPress={() => void openPlace()} />
+  );
+  const exportPanel = (
+    <>
+      <ui.RadioGroup
+        label={t("export.format")}
+        orientation="horizontal"
+        options={[
+          { value: "png", label: t("export.format.png") },
+          { value: "svg", label: t("export.format.svg") },
+        ]}
+        selectedKey={exportFormat}
+        onChange={(event) => setExportFormat(event.detail as "png" | "svg")}
+      />
+      {exportFormat === "png" ? (
+        <>
+          <ui.NumberField
+            label={t("export.printWidth")}
+            value={printWidthIn}
+            minValue={MIN_PRINT_WIDTH_IN}
+            maxValue={MAX_PRINT_WIDTH_IN}
+            step={0.1}
+            onChange={(event) => setPrintWidth(event.detail)}
+          />
+          {/* The DPI the canvas can still encode at this print width: 40 in
+              at 1200 DPI would be 48000x72000 px, which nothing draws. */}
+          <ui.NumberField
+            label={t("export.dpi")}
+            value={dpi}
+            minValue={MIN_DPI}
+            maxValue={dpiLimit}
+            step={1}
+            onChange={(event) => setDpi(event.detail)}
+          />
+          <ui.Text tone="muted">
+            {format(t("export.size"), {
+              width: exportSize.widthPx,
+              height: exportSize.heightPx,
+              heightIn: printHeightIn,
+            })}
+          </ui.Text>
+        </>
+      ) : null}
+      <ui.Button variant="secondary" onPress={() => void saveExport()}>
+        {t("export.save")}
+      </ui.Button>
+      {exportFailed ? <ui.Status tone="warning">{t("export.failed")}</ui.Status> : null}
+    </>
+  );
 
   return (
-    <ui.View direction="column" gap="md" grow>
-      <ui.View direction="row" gap="md" align="center" justify="between" wrap>
-        <ui.Text weight="semibold">{snapshot.doc.name}</ui.Text>
-        {/* The Map Style is Map-level: it recolours everything that follows a
-            role, and leaves every colour an Element overrides alone (#752). */}
-        <ui.Select
-          label={t("properties.mapStyle")}
-          options={MAP_STYLE_IDS.map((styleId) => ({
-            value: styleId,
-            label: t(MAP_STYLE_KEYS[styleId]),
-          }))}
-          selectedKey={snapshot.styleId}
-          onChange={(event) => editor.setMapStyle(event.detail as MapStyleId)}
-        />
-        <ui.Button variant="secondary" icon="arrow-left" onPress={() => void backToMaps()}>
-          {t("map.backToMaps")}
-        </ui.Button>
-      </ui.View>
-
-      {snapshot.saveFailed ? <ui.Status tone="warning">{t("map.saveFailed")}</ui.Status> : null}
-
-      <ui.View direction="row" gap="md" align="stretch" wrap grow>
-        <ui.View direction="column" gap="sm">
-          <ui.RadioGroup
-            label={t("tools.label")}
-            orientation="vertical"
-            options={[
-              { value: "select", label: t("tools.select") },
-              { value: "pencil", label: t("tools.pencil") },
-              { value: "pen", label: t("tools.pen") },
-              { value: "bucket", label: t("tools.bucket") },
-              { value: "area", label: t("tools.area") },
-              { value: "insert", label: t("tools.insert") },
-              ...SHAPE_KINDS.map((kind) => ({ value: kind, label: t(SHAPE_TOOL_KEYS[kind]) })),
-              { value: "eraser", label: t("tools.eraser") },
-            ]}
-            selectedKey={snapshot.tool}
-            onChange={(event) => editor.setTool(event.detail as MapTool)}
+    <ui.Surface css={MAP_EDITOR_CSS}>
+      {/* The editor's root: a Surface of its own, because a host `ui.View`
+          carries no attribute an engine can reach and this one carries the
+          Surface marker, so the stylesheet and its guard both find it. Its
+          children keep these eight slots whatever is open or shut, and a closed
+          card empties its own slot, which is what keeps the Frame's box the
+          same however the author opens and closes the chrome (#778). */}
+      <ui.Surface>
+        {/* 1: the top-left pill */}
+        <ui.View direction="row" gap="sm" align="center">
+          <ui.Button variant="ghost" icon="arrow-left" onPress={() => void backToMaps()}>
+            {t("map.backToMaps")}
+          </ui.Button>
+          {/* The Map's own name: pressing it renames the Map, not an Element. */}
+          <ui.Button variant="ghost" onPress={() => setMapRename(snapshot.doc.name)}>
+            {snapshot.doc.name}
+          </ui.Button>
+          <ui.IconButton
+            label={t("chrome.undo")}
+            icon="undo-2"
+            isDisabled={!snapshot.canUndo}
+            onPress={() => editor.undo()}
           />
-          {/* With a Shape tool active the Frame draws a preview from a pointer
-              drag; this button is the keyboard path that places one (#747). */}
-          {shapeTool === null ? null : (
-            <ui.Button variant="secondary" onPress={() => editor.placeShape(shapeTool)}>
-              {t(PLACE_SHAPE_KEYS[shapeTool])}
-            </ui.Button>
-          )}
-          {/* Insert picks one Stamp and drops it where the pointer lands; the
-              Place button is the keyboard path that lands it at the view
-              centre (#749). The picker lists the base Stamps and then the
-              Library's Custom Stamps (#756). */}
+          <ui.IconButton
+            label={t("chrome.redo")}
+            icon="redo-2"
+            isDisabled={!snapshot.canRedo}
+            onPress={() => editor.redo()}
+          />
+          {snapshot.saveFailed ? <ui.Status tone="warning">{t("map.saveFailed")}</ui.Status> : null}
+        </ui.View>
+
+        {/* 2: the tool belt. Every tool sits in it, with the Layers toggle last
+            (#778): no flyouts, so each tool is one control. */}
+        <ui.View direction="column" gap="sm" align="center">
+          {TOOL_BELT.map((entry) => (
+            <ui.IconButton
+              key={entry.tool}
+              label={t(entry.label)}
+              icon={entry.icon}
+              isSelected={snapshot.tool === entry.tool}
+              onPress={() => editor.setTool(entry.tool)}
+            />
+          ))}
+          <ui.IconButton
+            label={t("chrome.layers")}
+            icon="layers"
+            isSelected={layersOpen}
+            onPress={() => setLayersOpen((open) => !open)}
+          />
+        </ui.View>
+
+        {/* 3: the Insert card. It is a positioned card beside the belt, not a
+            Popover, so the Insert tool stays picked while it shows (#778). */}
+        <ui.View direction="column" gap="sm">
           {snapshot.tool === "insert" ? (
             <>
               <ui.Select
@@ -968,17 +1203,26 @@ function MapEditorView({
                 selectedKey={snapshot.currentStampId}
                 onChange={(event) => editor.setStamp(event.detail)}
               />
-              <ui.Button variant="secondary" onPress={() => editor.insertStamp()}>
-                {format(t("properties.placeStamp"), {
+              <ui.NumberField
+                label={t("properties.stamp.newSize")}
+                value={snapshot.currentStampSize}
+                minValue={MIN_STAMP_SIZE_MM}
+                onChange={(event) => editor.setStampSize(event.detail)}
+              />
+              {/* The keyboard paths: the Stamp lands at the view centre (#749),
+                  and a Map Label is not a Stamp, so it takes its own (#751). */}
+              <ui.IconButton
+                label={format(t("properties.placeStamp"), {
                   stamp: stampLabel(snapshot.currentStampId),
                 })}
-              </ui.Button>
-              {/* A Map Label is not a Stamp, so it takes its own button beside
-                  the Stamp picker; this is its keyboard path to the view
-                  centre (#751). */}
-              <ui.Button variant="secondary" onPress={() => editor.insertLabel()}>
-                {t("properties.mapLabel.place")}
-              </ui.Button>
+                icon="stamp"
+                onPress={() => editor.insertStamp()}
+              />
+              <ui.IconButton
+                label={t("properties.mapLabel.place")}
+                icon="type"
+                onPress={() => editor.insertLabel()}
+              />
               {/* An upload joins the Library, then lands at the view centre as a
                   Custom Stamp or a Map Image (#756). */}
               <ui.Checkbox
@@ -986,617 +1230,709 @@ function MapEditorView({
                 isSelected={asMapImage}
                 onChange={(event) => setAsMapImage(event.detail)}
               />
-              <ui.Button variant="secondary" onPress={() => void uploadPicture()}>
-                {t("properties.upload")}
-              </ui.Button>
+              <ui.IconButton
+                label={t("properties.upload")}
+                icon="upload"
+                onPress={() => void uploadPicture()}
+              />
+              {uploadError === null ? null : <ui.Status tone="warning">{uploadError}</ui.Status>}
             </>
           ) : null}
-          {uploadError === null ? null : <ui.Status tone="warning">{uploadError}</ui.Status>}
-          <ui.Text weight="semibold">{t("elements.label")}</ui.Text>
-          <ui.Collection
-            label={t("elements.label")}
-            selectionMode="single"
-            selectedKeys={snapshot.selectedId === null ? [] : [snapshot.selectedId]}
-            onSelectionChange={(event) => editor.select(event.detail[0] ?? null)}
-          >
-            {rows.map((element) => (
-              <ui.CollectionRow
-                key={element.id}
-                id={element.id}
-                label={element.name}
-                description={describe(element, t)}
-                menuItems={menuItems(element)}
-                onMenuAction={(event) => menuAction(element, event.detail)}
-              />
-            ))}
-          </ui.Collection>
         </ui.View>
 
-        <ui.Frame src={MAP_FRAME_SRC} title={t("map.frameTitle")} fill />
-
+        {/* 4: the Layers card, closed until the author asks for it (#778). It
+            keeps the Elements list's row menus as they were, and its own
+            full-height toggle, which the narrow stylesheet is the only one to
+            show (#779, #775 review R2). */}
         <ui.View direction="column" gap="sm">
-          <ui.Text weight="semibold">{t("properties.label")}</ui.Text>
-          {/* With no Map Line selected the select shows the style a new Pen line
-              takes; picking one then only sets that current style (#746). */}
-          <ui.Select
-            label={t("properties.lineStyle")}
-            options={LINE_STYLE_IDS.map((style) => ({
-              value: style,
-              label: t(LINE_STYLE_KEYS[style]),
-            }))}
-            selectedKey={snapshot.selectedLineStyle ?? snapshot.currentLineStyle}
-            onChange={(event) => editor.setLineStyle(event.detail as LineStyleId)}
-          />
-          {/* One Fill color control (#748): while the Bucket is active it holds
-              the colour the next pour uses, and otherwise it edits the selected
-              Fill, which a locked Fill refuses. */}
-          {showFillColor ? (
+          {layersOpen ? (
             <>
-              <ui.ColorPicker
-                label={t("properties.fillColor")}
-                value={fillColor === null ? undefined : resolveColor(style, fillColor, "land")}
-                swatches={styleSwatches(style)}
-                isDisabled={!pouring && selected?.locked === true}
-                onChange={(event) =>
-                  pouring || selected === null
-                    ? editor.setFillColor(event.detail)
-                    : editor.setElementFillColor(selected.id, event.detail)
-                }
+              <ui.IconButton
+                label={t("chrome.expandLayers")}
+                icon="chevrons-down"
+                isSelected={layersFullHeight}
+                onPress={() => setLayersFullHeight((full) => !full)}
               />
-              {/* The Bucket's next pour holds no Element's override, so only a
-                  selected Fill offers the path back to the Style's colour. */}
-              {pouring || selected === null ? null : (
-                <UseMapStyleColor
-                  label={t("properties.useMapStyleColor")}
-                  isDisabled={selected.locked || followsStyle(fillColor ?? undefined)}
-                  onPress={() => editor.clearElementColor(selected.id)}
-                />
-              )}
+              <ui.Collection
+                label={t("elements.label")}
+                selectionMode="single"
+                selectedKeys={snapshot.selectedId === null ? [] : [snapshot.selectedId]}
+                onSelectionChange={(event) => editor.select(event.detail[0] ?? null)}
+              >
+                {rows.map((element) => (
+                  <ui.CollectionRow
+                    key={element.id}
+                    id={element.id}
+                    label={element.name}
+                    description={describe(element, t)}
+                    menuItems={menuItems(element)}
+                    onMenuAction={(event) => menuAction(element, event.detail)}
+                  />
+                ))}
+              </ui.Collection>
             </>
           ) : null}
-          {selected === null ? (
-            <ui.Text tone="muted">{t("properties.empty")}</ui.Text>
-          ) : (
-            <>
-              <ui.TextField
-                key={`properties-name-${propertiesFocus}`}
-                label={t("properties.name")}
-                value={selected.name}
-                isRequired
-                autoFocus={propertiesFocus > 0}
-                onChange={(event) => editor.rename(selected.id, event.detail)}
+        </ui.View>
+
+        {/* 5: the drawing, which fills the page body under the cards. It sits
+            in a View of its own so the eight slots hold their places even where
+            the host draws no Frame (a kit mount, or a platform with Frames off),
+            which is what the stylesheet's slot rules and their guard rely on. */}
+        <ui.View direction="column" gap="none">
+          <ui.Frame src={MAP_FRAME_SRC} title={t("map.frameTitle")} fill />
+        </ui.View>
+
+        {/* 6: the Properties card, under the top-right pill. */}
+        <ui.View direction="column" gap="sm">
+          {showProperties ? (
+            propertiesMinimised ? (
+              <ui.IconButton
+                label={t("chrome.restoreProperties")}
+                icon="panel-right-open"
+                onPress={() => setPropertiesMinimised(false)}
               />
-              <ui.Switch
-                label={t("properties.hidden")}
-                isSelected={selected.hidden}
-                onChange={(event) => editor.setHidden(selected.id, event.detail)}
-              />
-              <ui.Switch
-                label={t("properties.locked")}
-                isSelected={selected.locked}
-                onChange={(event) => editor.setLocked(selected.id, event.detail)}
-              />
-              {shape === null ? null : (
-                <>
-                  <ui.NumberField
-                    label={t("properties.shape.centerX")}
-                    value={shape.cx}
-                    isDisabled={selected.locked}
-                    onChange={(event) => editor.setShapeGeometry(selected.id, { cx: event.detail })}
+            ) : (
+              <>
+                <ui.Text weight="semibold">{t("properties.label")}</ui.Text>
+                {/* The header (#778): the selection's name, its Hidden and Locked
+                    switches, and the Minimise button. */}
+                <ui.View direction="row" gap="sm" align="center" justify="between" wrap>
+                  <ui.View direction="row" gap="sm" align="center" wrap>
+                    {selected === null ? null : (
+                      <ui.TextField
+                        key={`properties-name-${propertiesFocus}`}
+                        label={t("properties.name")}
+                        value={selected.name}
+                        isRequired
+                        autoFocus={propertiesFocus > 0}
+                        onChange={(event) => editor.rename(selected.id, event.detail)}
+                      />
+                    )}
+                    {selected === null ? null : (
+                      <ui.Switch
+                        label={t("properties.hidden")}
+                        isSelected={selected.hidden}
+                        onChange={(event) => editor.setHidden(selected.id, event.detail)}
+                      />
+                    )}
+                    {selected === null ? null : (
+                      <ui.Switch
+                        label={t("properties.locked")}
+                        isSelected={selected.locked}
+                        onChange={(event) => editor.setLocked(selected.id, event.detail)}
+                      />
+                    )}
+                  </ui.View>
+                  <ui.IconButton
+                    label={t("chrome.expandProperties")}
+                    icon="chevrons-down"
+                    isSelected={propertiesFullHeight}
+                    onPress={() => setPropertiesFullHeight((full) => !full)}
                   />
-                  <ui.NumberField
-                    label={t("properties.shape.centerY")}
-                    value={shape.cy}
-                    isDisabled={selected.locked}
-                    onChange={(event) => editor.setShapeGeometry(selected.id, { cy: event.detail })}
+                  <ui.IconButton
+                    label={t("chrome.minimiseProperties")}
+                    icon="chevrons-up"
+                    onPress={() => setPropertiesMinimised(true)}
                   />
-                  <ui.NumberField
-                    label={t("properties.shape.width")}
-                    value={shape.width}
-                    minValue={MIN_SHAPE_SIZE_MM}
-                    isDisabled={selected.locked}
+                </ui.View>
+
+                {/* With no Map Line selected the select shows the style a new Pen
+                    line takes; picking one then only sets that current style (#746). */}
+                <ui.Select
+                  label={t("properties.lineStyle")}
+                  options={LINE_STYLE_IDS.map((style) => ({
+                    value: style,
+                    label: t(LINE_STYLE_KEYS[style]),
+                  }))}
+                  selectedKey={snapshot.selectedLineStyle ?? snapshot.currentLineStyle}
+                  onChange={(event) => editor.setLineStyle(event.detail as LineStyleId)}
+                />
+                {/* One Fill color control (#748): while the Bucket is active it
+                    holds the colour the next pour uses, and otherwise it edits the
+                    selected Fill, which a locked Fill refuses. */}
+                {showFillColor ? (
+                  <ui.ColorPicker
+                    label={t("properties.fillColor")}
+                    value={fillColor === null ? undefined : resolveColor(style, fillColor, "land")}
+                    swatches={styleSwatches(style)}
+                    isDisabled={!pouring && selected?.locked === true}
                     onChange={(event) =>
-                      editor.setShapeGeometry(selected.id, { width: event.detail })
+                      pouring || selected === null
+                        ? editor.setFillColor(event.detail)
+                        : editor.setElementFillColor(selected.id, event.detail)
                     }
                   />
-                  <ui.NumberField
-                    label={t("properties.shape.height")}
-                    value={shape.height}
-                    minValue={MIN_SHAPE_SIZE_MM}
-                    isDisabled={selected.locked}
-                    onChange={(event) =>
-                      editor.setShapeGeometry(selected.id, { height: event.detail })
-                    }
-                  />
-                  <ui.NumberField
-                    label={t("properties.shape.rotation")}
-                    value={shape.rotation}
-                    isDisabled={selected.locked}
-                    onChange={(event) =>
-                      editor.setShapeGeometry(selected.id, { rotation: event.detail })
-                    }
-                  />
-                  {shape.kind === "polygon" ? (
-                    <ui.NumberField
-                      label={t("properties.shape.sides")}
-                      value={shape.sides}
-                      minValue={MIN_POLYGON_SIDES}
-                      maxValue={MAX_POLYGON_SIDES}
-                      step={1}
-                      isDisabled={selected.locked}
-                      onChange={(event) =>
-                        editor.setShapeGeometry(selected.id, { sides: event.detail })
-                      }
-                    />
-                  ) : null}
-                  {shape.kind === "rectangle" ? (
-                    <ui.NumberField
-                      label={t("properties.shape.cornerRadius")}
-                      value={shape.cornerRadius}
-                      minValue={0}
-                      isDisabled={selected.locked}
-                      onChange={(event) =>
-                        editor.setShapeGeometry(selected.id, { cornerRadius: event.detail })
-                      }
-                    />
-                  ) : null}
-                </>
-              )}
-              {snapshot.selectedConvertedFrom === null ? null : (
-                <ui.Text tone="muted">{t(CONVERTED_KEYS[snapshot.selectedConvertedFrom])}</ui.Text>
-              )}
-              {stamp === null ? null : (
-                <>
-                  <ui.NumberField
-                    label={t("properties.stamp.x")}
-                    value={stamp.transform.x}
-                    isDisabled={selected.locked}
-                    onChange={(event) => editor.setStampTransform(selected.id, { x: event.detail })}
-                  />
-                  <ui.NumberField
-                    label={t("properties.stamp.y")}
-                    value={stamp.transform.y}
-                    isDisabled={selected.locked}
-                    onChange={(event) => editor.setStampTransform(selected.id, { y: event.detail })}
-                  />
-                  {/* The scale bar's size is the room its bar may draw in, so
-                      that field reads as the longest bar it can label. */}
-                  <ui.NumberField
-                    label={
-                      stamp.scale === undefined
-                        ? t("properties.stamp.size")
-                        : t("properties.stamp.maxLength")
-                    }
-                    value={stamp.transform.size}
-                    minValue={MIN_STAMP_SIZE_MM}
-                    isDisabled={selected.locked}
-                    onChange={(event) =>
-                      editor.setStampTransform(selected.id, { size: event.detail })
-                    }
-                  />
-                  <ui.NumberField
-                    label={t("properties.stamp.rotation")}
-                    value={stamp.transform.rotation}
-                    isDisabled={selected.locked}
-                    onChange={(event) =>
-                      editor.setStampTransform(selected.id, { rotation: event.detail })
-                    }
-                  />
-                  {/* Only art that leaves its fill to the Stamp recolours. */}
-                  {stampRecolours(stamp.stampRef) ? (
-                    <>
+                ) : null}
+                {selected === null ? (
+                  <ui.Text tone="muted">{t("properties.empty")}</ui.Text>
+                ) : (
+                  <>
+                    {shape === null ? null : (
+                      <>
+                        <ui.NumberField
+                          label={t("properties.shape.centerX")}
+                          value={shape.cx}
+                          isDisabled={selected.locked}
+                          onChange={(event) =>
+                            editor.setShapeGeometry(selected.id, { cx: event.detail })
+                          }
+                        />
+                        <ui.NumberField
+                          label={t("properties.shape.centerY")}
+                          value={shape.cy}
+                          isDisabled={selected.locked}
+                          onChange={(event) =>
+                            editor.setShapeGeometry(selected.id, { cy: event.detail })
+                          }
+                        />
+                        <ui.NumberField
+                          label={t("properties.shape.width")}
+                          value={shape.width}
+                          minValue={MIN_SHAPE_SIZE_MM}
+                          isDisabled={selected.locked}
+                          onChange={(event) =>
+                            editor.setShapeGeometry(selected.id, { width: event.detail })
+                          }
+                        />
+                        <ui.NumberField
+                          label={t("properties.shape.height")}
+                          value={shape.height}
+                          minValue={MIN_SHAPE_SIZE_MM}
+                          isDisabled={selected.locked}
+                          onChange={(event) =>
+                            editor.setShapeGeometry(selected.id, { height: event.detail })
+                          }
+                        />
+                        <ui.NumberField
+                          label={t("properties.shape.rotation")}
+                          value={shape.rotation}
+                          isDisabled={selected.locked}
+                          onChange={(event) =>
+                            editor.setShapeGeometry(selected.id, { rotation: event.detail })
+                          }
+                        />
+                        {shape.kind === "polygon" ? (
+                          <ui.NumberField
+                            label={t("properties.shape.sides")}
+                            value={shape.sides}
+                            minValue={MIN_POLYGON_SIDES}
+                            maxValue={MAX_POLYGON_SIDES}
+                            step={1}
+                            isDisabled={selected.locked}
+                            onChange={(event) =>
+                              editor.setShapeGeometry(selected.id, { sides: event.detail })
+                            }
+                          />
+                        ) : null}
+                        {shape.kind === "rectangle" ? (
+                          <ui.NumberField
+                            label={t("properties.shape.cornerRadius")}
+                            value={shape.cornerRadius}
+                            minValue={0}
+                            isDisabled={selected.locked}
+                            onChange={(event) =>
+                              editor.setShapeGeometry(selected.id, { cornerRadius: event.detail })
+                            }
+                          />
+                        ) : null}
+                      </>
+                    )}
+                    {snapshot.selectedConvertedFrom === null ? null : (
+                      <ui.Text tone="muted">
+                        {t(CONVERTED_KEYS[snapshot.selectedConvertedFrom])}
+                      </ui.Text>
+                    )}
+                    {stamp === null ? null : (
+                      <>
+                        <ui.NumberField
+                          label={t("properties.stamp.x")}
+                          value={stamp.transform.x}
+                          isDisabled={selected.locked}
+                          onChange={(event) =>
+                            editor.setStampTransform(selected.id, { x: event.detail })
+                          }
+                        />
+                        <ui.NumberField
+                          label={t("properties.stamp.y")}
+                          value={stamp.transform.y}
+                          isDisabled={selected.locked}
+                          onChange={(event) =>
+                            editor.setStampTransform(selected.id, { y: event.detail })
+                          }
+                        />
+                        {/* The scale bar's size is the room its bar may draw in, so
+                            that field reads as the longest bar it can label. */}
+                        <ui.NumberField
+                          label={
+                            stamp.scale === undefined
+                              ? t("properties.stamp.size")
+                              : t("properties.stamp.maxLength")
+                          }
+                          value={stamp.transform.size}
+                          minValue={MIN_STAMP_SIZE_MM}
+                          isDisabled={selected.locked}
+                          onChange={(event) =>
+                            editor.setStampTransform(selected.id, { size: event.detail })
+                          }
+                        />
+                        <ui.NumberField
+                          label={t("properties.stamp.rotation")}
+                          value={stamp.transform.rotation}
+                          isDisabled={selected.locked}
+                          onChange={(event) =>
+                            editor.setStampTransform(selected.id, { rotation: event.detail })
+                          }
+                        />
+                        {/* Only art that leaves its fill to the Stamp recolours. */}
+                        {stampRecolours(stamp.stampRef) ? (
+                          <ui.ColorPicker
+                            label={t("properties.stamp.color")}
+                            value={resolveColor(style, stamp.color, "ink")}
+                            swatches={styleSwatches(style)}
+                            isDisabled={selected.locked}
+                            onChange={(event) => editor.setStampColor(selected.id, event.detail)}
+                          />
+                        ) : null}
+                        {stamp.scale === undefined ? null : (
+                          <>
+                            <ui.RadioGroup
+                              label={t("properties.stamp.unit")}
+                              orientation="horizontal"
+                              options={STAMP_SCALE_UNITS.map((unit) => ({
+                                value: unit,
+                                label: t(STAMP_UNIT_KEYS[unit]),
+                              }))}
+                              selectedKey={stamp.scale.unit}
+                              isDisabled={selected.locked}
+                              onChange={(event) =>
+                                editor.setStampScale(selected.id, {
+                                  unit: event.detail as StampScaleUnit,
+                                })
+                              }
+                            />
+                            {/* A page width standing for no distance reads no bar, so
+                                the field's minimum is the smallest span the model keeps. */}
+                            <ui.NumberField
+                              label={t("properties.stamp.span")}
+                              value={stamp.scale.span}
+                              minValue={1}
+                              isDisabled={selected.locked}
+                              onChange={(event) =>
+                                editor.setStampScale(selected.id, { span: event.detail })
+                              }
+                            />
+                          </>
+                        )}
+                      </>
+                    )}
+                    {image === null ? null : (
+                      <>
+                        <ui.NumberField
+                          label={t("properties.image.size")}
+                          value={image.transform.size}
+                          minValue={MIN_STAMP_SIZE_MM}
+                          isDisabled={selected.locked}
+                          onChange={(event) => editor.setImageSize(selected.id, event.detail)}
+                        />
+                        {/* The slider reads a whole percentage; the model keeps a
+                            fraction from 0.05 to 1. */}
+                        <ui.Slider
+                          label={t("properties.image.opacity")}
+                          value={Math.round(image.opacity * 100)}
+                          minValue={Math.round(MIN_IMAGE_OPACITY * 100)}
+                          maxValue={Math.round(MAX_IMAGE_OPACITY * 100)}
+                          step={1}
+                          isDisabled={selected.locked}
+                          onChange={(event) =>
+                            editor.setImageOpacity(selected.id, event.detail / 100)
+                          }
+                        />
+                        <ui.Switch
+                          label={t("properties.image.exportable")}
+                          isSelected={image.exportable}
+                          isDisabled={selected.locked}
+                          onChange={(event) => editor.setImageExportable(selected.id, event.detail)}
+                        />
+                      </>
+                    )}
+                    {label === null ? null : (
+                      <>
+                        <ui.TextField
+                          label={t("properties.mapLabel.text")}
+                          value={label.text}
+                          isDisabled={selected.locked}
+                          onChange={(event) => editor.setLabelText(selected.id, event.detail)}
+                        />
+                        <ui.Select
+                          label={t("properties.mapLabel.font")}
+                          options={LABEL_FONT_IDS.map((font) => ({
+                            value: font,
+                            label:
+                              font === "pdf"
+                                ? snapshot.pdfFontFamily === null
+                                  ? t("font.pdfNotInstalled")
+                                  : format(t("font.pdfInstalled"), {
+                                      family: snapshot.pdfFontFamily,
+                                    })
+                                : t(LABEL_FONT_KEYS[font]),
+                          }))}
+                          selectedKey={label.font}
+                          isDisabled={selected.locked}
+                          onChange={(event) =>
+                            editor.setLabelFont(selected.id, event.detail as MapLabelFont)
+                          }
+                        />
+                        <ui.NumberField
+                          label={t("properties.mapLabel.size")}
+                          value={label.size}
+                          minValue={MIN_LABEL_SIZE_MM}
+                          isDisabled={selected.locked}
+                          onChange={(event) =>
+                            editor.setLabelLayout(selected.id, { size: event.detail })
+                          }
+                        />
+                        <ui.NumberField
+                          label={t("properties.mapLabel.letterSpacing")}
+                          value={label.letterSpacing}
+                          isDisabled={selected.locked}
+                          onChange={(event) =>
+                            editor.setLabelLayout(selected.id, { letterSpacing: event.detail })
+                          }
+                        />
+                        <ui.NumberField
+                          label={t("properties.mapLabel.halo")}
+                          value={label.halo}
+                          minValue={0}
+                          isDisabled={selected.locked}
+                          onChange={(event) =>
+                            editor.setLabelLayout(selected.id, { halo: event.detail })
+                          }
+                        />
+                        {/* With no colour of its own the label draws in the Style's
+                            label ink, which is what the picker shows until the author
+                            picks. */}
+                        <ui.ColorPicker
+                          label={t("properties.mapLabel.color")}
+                          value={resolveColor(style, label.color, "label")}
+                          swatches={styleSwatches(style)}
+                          isDisabled={selected.locked}
+                          onChange={(event) => editor.setLabelColor(selected.id, event.detail)}
+                        />
+                        <ui.NumberField
+                          label={t("properties.mapLabel.x")}
+                          value={label.x}
+                          isDisabled={selected.locked}
+                          onChange={(event) =>
+                            editor.setLabelLayout(selected.id, { x: event.detail })
+                          }
+                        />
+                        <ui.NumberField
+                          label={t("properties.mapLabel.y")}
+                          value={label.y}
+                          isDisabled={selected.locked}
+                          onChange={(event) =>
+                            editor.setLabelLayout(selected.id, { y: event.detail })
+                          }
+                        />
+                        <ui.NumberField
+                          label={t("properties.mapLabel.rotation")}
+                          value={label.rotation}
+                          isDisabled={selected.locked}
+                          onChange={(event) =>
+                            editor.setLabelLayout(selected.id, { rotation: event.detail })
+                          }
+                        />
+                        <ui.NumberField
+                          label={t("properties.mapLabel.width")}
+                          value={label.width}
+                          minValue={MIN_LABEL_WIDTH_MM}
+                          isDisabled={selected.locked}
+                          onChange={(event) =>
+                            editor.setLabelLayout(selected.id, { width: event.detail })
+                          }
+                        />
+                        {/* Bend is the curve: 0 draws the baseline straight. */}
+                        <ui.NumberField
+                          label={t("properties.mapLabel.bend")}
+                          value={label.bend}
+                          isDisabled={selected.locked}
+                          onChange={(event) =>
+                            editor.setLabelLayout(selected.id, { bend: event.detail })
+                          }
+                        />
+                      </>
+                    )}
+                    {snapshot.selectedIsLine ? (
+                      <ui.Switch
+                        label={t("properties.enclosesFills")}
+                        isSelected={snapshot.selectedEnclosesFills ?? false}
+                        onChange={(event) => editor.setEnclosesFills(selected.id, event.detail)}
+                      />
+                    ) : null}
+                    {selectedLine === null ? null : (
                       <ui.ColorPicker
-                        label={t("properties.stamp.color")}
-                        value={resolveColor(style, stamp.color, "ink")}
+                        label={t("properties.mapLine.color")}
+                        value={resolveColor(
+                          style,
+                          selectedLine.color,
+                          lineRole(selectedLine.style)
+                        )}
                         swatches={styleSwatches(style)}
                         isDisabled={selected.locked}
-                        onChange={(event) => editor.setStampColor(selected.id, event.detail)}
+                        onChange={(event) => editor.setLineColor(selectedLine.id, event.detail)}
                       />
-                      <UseMapStyleColor
-                        label={t("properties.useMapStyleColor")}
-                        isDisabled={selected.locked || followsStyle(stamp.color)}
-                        onPress={() => editor.clearElementColor(selected.id)}
+                    )}
+                    {snapshot.selectedIsLine || snapshot.selectedIsFill ? (
+                      <>
+                        <ui.Switch
+                          label={t("properties.softEdge")}
+                          isSelected={snapshot.selectedSoftEdge !== null}
+                          isDisabled={selected.locked}
+                          onChange={(event) =>
+                            editor.setSoftEdge(
+                              selected.id,
+                              event.detail ? DEFAULT_SOFT_EDGE_MM : null
+                            )
+                          }
+                        />
+                        {/* The amount stays mounted while an Element is selected, so a
+                            change of selection updates it in place; the host keeps the
+                            value it mounted with when a control is replaced at its
+                            slot. Moving it also turns the Soft Edge on. */}
+                        <ui.Slider
+                          label={t("properties.softEdgeAmount")}
+                          value={snapshot.selectedSoftEdge ?? DEFAULT_SOFT_EDGE_MM}
+                          minValue={MIN_SOFT_EDGE_MM}
+                          maxValue={MAX_SOFT_EDGE_MM}
+                          step={SOFT_EDGE_STEP_MM}
+                          isDisabled={selected.locked}
+                          onChange={(event) => editor.setSoftEdge(selected.id, event.detail)}
+                        />
+                      </>
+                    ) : null}
+                    {snapshot.selectedIsFill ? (
+                      <>
+                        {/* A Fill covers some of a colour, a texture, and a scatter of
+                            Stamps, in any combination; the last kind cannot go. */}
+                        <ui.Select
+                          label={t("properties.fillTexture")}
+                          options={[
+                            { value: NONE, label: t("properties.none") },
+                            ...TEXTURE_IDS.map((id) => ({ value: id, label: t(TEXTURE_KEYS[id]) })),
+                          ]}
+                          selectedKey={snapshot.selectedFillTexture ?? NONE}
+                          isDisabled={selected.locked}
+                          onChange={(event) =>
+                            editor.setFillTexture(
+                              selected.id,
+                              event.detail === NONE ? null : event.detail
+                            )
+                          }
+                        />
+                        <ui.Select
+                          label={t("properties.fillScatter")}
+                          options={[
+                            { value: NONE, label: t("properties.none") },
+                            ...BASE_STAMP_IDS.map((id) => ({
+                              value: id,
+                              label: t(stampNameKey(id)),
+                            })),
+                          ]}
+                          selectedKey={scatterStampId ?? NONE}
+                          isDisabled={selected.locked}
+                          onChange={(event) =>
+                            editor.setFillScatter(
+                              selected.id,
+                              event.detail === NONE ? null : event.detail
+                            )
+                          }
+                        />
+                        {scatter === null ? null : (
+                          <ui.Slider
+                            label={t("properties.scatterSpacing")}
+                            value={scatter.spacing}
+                            minValue={MIN_SCATTER_SPACING_MM}
+                            maxValue={MAX_SCATTER_SPACING_MM}
+                            isDisabled={selected.locked}
+                            onChange={(event) =>
+                              editor.setFillScatterSpacing(selected.id, event.detail)
+                            }
+                          />
+                        )}
+                        {/* A Custom Fill paints a Library texture or scatters Custom
+                            Stamps over the area (#756). */}
+                        <ui.Select
+                          label={t("properties.customFill")}
+                          options={fitOptions(
+                            [
+                              { value: NONE, label: t("properties.none") },
+                              ...[...snapshot.library.customFills.values()].map((customFill) => ({
+                                value: customFill.id,
+                                label: customFill.name,
+                              })),
+                            ],
+                            selectedFill?.content.customFill ?? NONE
+                          )}
+                          selectedKey={selectedFill?.content.customFill ?? NONE}
+                          isDisabled={selected.locked}
+                          onChange={(event) =>
+                            editor.setFillCustomFill(
+                              selected.id,
+                              event.detail === NONE ? null : event.detail
+                            )
+                          }
+                        />
+                        <ui.Text weight="semibold">{t("properties.newCustomFill")}</ui.Text>
+                        {/* Both ways to make one are icons with their label as
+                            the tooltip, like every card action (#775 Decision 5). */}
+                        <ui.IconButton
+                          label={t("properties.customFill.texture")}
+                          icon="image-plus"
+                          isDisabled={selected.locked}
+                          onPress={() => void createFillFromTexture()}
+                        />
+                        {customStamps.length === 0 ? null : (
+                          <>
+                            <ui.Collection
+                              label={t("properties.customFill.stamps")}
+                              selectionMode="multiple"
+                              selectedKeys={fillStampRefs}
+                              onSelectionChange={(event) => setFillStampRefs([...event.detail])}
+                            >
+                              {fillStampRows.map((customStamp) => (
+                                <ui.CollectionRow
+                                  key={customStamp.ref}
+                                  id={customStamp.ref}
+                                  label={clampLabel(customStamp.name)}
+                                />
+                              ))}
+                            </ui.Collection>
+                            <ui.IconButton
+                              label={t("properties.customFill.create")}
+                              icon="plus"
+                              isDisabled={selected.locked || fillStampRefs.length === 0}
+                              onPress={() => void createFillFromStamps()}
+                            />
+                          </>
+                        )}
+                      </>
+                    ) : null}
+                  </>
+                )}
+
+                {/* The footer: the card's one-off actions, as icons (#778). */}
+                <ui.View direction="row" gap="sm" align="center" wrap>
+                  {/* The path back to the Map Style's colour (#752), offered by
+                      every Element that overrides a role. */}
+                  {useMapStyleColorTarget === null ? null : (
+                    <ui.IconButton
+                      label={t("properties.useMapStyleColor")}
+                      icon="paintbrush"
+                      isDisabled={
+                        selected?.locked === true || followsStyle(useMapStyleColorTarget.color)
+                      }
+                      onPress={() =>
+                        selected === null ? undefined : editor.clearElementColor(selected.id)
+                      }
+                    />
+                  )}
+                  {/* The keyboard path that places a Shape (#747). */}
+                  {shapeTool === null ? null : (
+                    <ui.IconButton
+                      label={t(PLACE_SHAPE_KEYS[shapeTool])}
+                      icon={SHAPE_TOOL_ICONS[shapeTool]}
+                      onPress={() => editor.placeShape(shapeTool)}
+                    />
+                  )}
+                  {/* The same Stamps land in new spots, so the author can scatter
+                      again without picking a different Stamp. */}
+                  {scatter === null || selected === null ? null : (
+                    <ui.IconButton
+                      label={t("properties.reseed")}
+                      icon="dices"
+                      isDisabled={selected.locked}
+                      onPress={() => editor.reseedFillScatter(selected.id)}
+                    />
+                  )}
+                  {snapshot.selectedIsLine || snapshot.selectedIsAreaFill ? (
+                    <>
+                      <ui.IconButton
+                        label={t("properties.roughen")}
+                        icon="waves"
+                        onPress={() => editor.roughen()}
+                      />
+                      <ui.Slider
+                        label={t("properties.roughenStrength")}
+                        value={snapshot.roughenStrength}
+                        minValue={MIN_ROUGHEN_STRENGTH_MM}
+                        maxValue={MAX_ROUGHEN_STRENGTH_MM}
+                        step={0.1}
+                        onChange={(event) => editor.setRoughenStrength(event.detail)}
                       />
                     </>
                   ) : null}
-                  {stamp.scale === undefined ? null : (
-                    <>
-                      <ui.RadioGroup
-                        label={t("properties.stamp.unit")}
-                        orientation="horizontal"
-                        options={STAMP_SCALE_UNITS.map((unit) => ({
-                          value: unit,
-                          label: t(STAMP_UNIT_KEYS[unit]),
-                        }))}
-                        selectedKey={stamp.scale.unit}
-                        isDisabled={selected.locked}
-                        onChange={(event) =>
-                          editor.setStampScale(selected.id, {
-                            unit: event.detail as StampScaleUnit,
-                          })
-                        }
-                      />
-                      {/* A page width standing for no distance reads no bar, so
-                          the field's minimum is the smallest span the model keeps. */}
-                      <ui.NumberField
-                        label={t("properties.stamp.span")}
-                        value={stamp.scale.span}
-                        minValue={1}
-                        isDisabled={selected.locked}
-                        onChange={(event) =>
-                          editor.setStampScale(selected.id, { span: event.detail })
-                        }
-                      />
-                    </>
-                  )}
-                </>
-              )}
-              {image === null ? null : (
-                <>
-                  <ui.NumberField
-                    label={t("properties.image.size")}
-                    value={image.transform.size}
-                    minValue={MIN_STAMP_SIZE_MM}
-                    isDisabled={selected.locked}
-                    onChange={(event) => editor.setImageSize(selected.id, event.detail)}
-                  />
-                  {/* The slider reads a whole percentage; the model keeps a
-                      fraction from 0.05 to 1. */}
-                  <ui.Slider
-                    label={t("properties.image.opacity")}
-                    value={Math.round(image.opacity * 100)}
-                    minValue={Math.round(MIN_IMAGE_OPACITY * 100)}
-                    maxValue={Math.round(MAX_IMAGE_OPACITY * 100)}
-                    step={1}
-                    isDisabled={selected.locked}
-                    onChange={(event) => editor.setImageOpacity(selected.id, event.detail / 100)}
-                  />
-                  <ui.Switch
-                    label={t("properties.image.exportable")}
-                    isSelected={image.exportable}
-                    isDisabled={selected.locked}
-                    onChange={(event) => editor.setImageExportable(selected.id, event.detail)}
-                  />
-                </>
-              )}
-              {label === null ? null : (
-                <>
-                  <ui.TextField
-                    label={t("properties.mapLabel.text")}
-                    value={label.text}
-                    isDisabled={selected.locked}
-                    onChange={(event) => editor.setLabelText(selected.id, event.detail)}
-                  />
-                  <ui.Select
-                    label={t("properties.mapLabel.font")}
-                    options={LABEL_FONT_IDS.map((font) => ({
-                      value: font,
-                      label:
-                        font === "pdf"
-                          ? snapshot.pdfFontFamily === null
-                            ? t("font.pdfNotInstalled")
-                            : format(t("font.pdfInstalled"), { family: snapshot.pdfFontFamily })
-                          : t(LABEL_FONT_KEYS[font]),
-                    }))}
-                    selectedKey={label.font}
-                    isDisabled={selected.locked}
-                    onChange={(event) =>
-                      editor.setLabelFont(selected.id, event.detail as MapLabelFont)
-                    }
-                  />
-                  <ui.NumberField
-                    label={t("properties.mapLabel.size")}
-                    value={label.size}
-                    minValue={MIN_LABEL_SIZE_MM}
-                    isDisabled={selected.locked}
-                    onChange={(event) => editor.setLabelLayout(selected.id, { size: event.detail })}
-                  />
-                  <ui.NumberField
-                    label={t("properties.mapLabel.letterSpacing")}
-                    value={label.letterSpacing}
-                    isDisabled={selected.locked}
-                    onChange={(event) =>
-                      editor.setLabelLayout(selected.id, { letterSpacing: event.detail })
-                    }
-                  />
-                  <ui.NumberField
-                    label={t("properties.mapLabel.halo")}
-                    value={label.halo}
-                    minValue={0}
-                    isDisabled={selected.locked}
-                    onChange={(event) => editor.setLabelLayout(selected.id, { halo: event.detail })}
-                  />
-                  {/* With no colour of its own the label draws in the Style's
-                      label ink, which is what the picker shows until the author
-                      picks. */}
-                  <ui.ColorPicker
-                    label={t("properties.mapLabel.color")}
-                    value={resolveColor(style, label.color, "label")}
-                    swatches={styleSwatches(style)}
-                    isDisabled={selected.locked}
-                    onChange={(event) => editor.setLabelColor(selected.id, event.detail)}
-                  />
-                  <UseMapStyleColor
-                    label={t("properties.useMapStyleColor")}
-                    isDisabled={selected.locked || followsStyle(label.color)}
-                    onPress={() => editor.clearElementColor(selected.id)}
-                  />
-                  <ui.NumberField
-                    label={t("properties.mapLabel.x")}
-                    value={label.x}
-                    isDisabled={selected.locked}
-                    onChange={(event) => editor.setLabelLayout(selected.id, { x: event.detail })}
-                  />
-                  <ui.NumberField
-                    label={t("properties.mapLabel.y")}
-                    value={label.y}
-                    isDisabled={selected.locked}
-                    onChange={(event) => editor.setLabelLayout(selected.id, { y: event.detail })}
-                  />
-                  <ui.NumberField
-                    label={t("properties.mapLabel.rotation")}
-                    value={label.rotation}
-                    isDisabled={selected.locked}
-                    onChange={(event) =>
-                      editor.setLabelLayout(selected.id, { rotation: event.detail })
-                    }
-                  />
-                  <ui.NumberField
-                    label={t("properties.mapLabel.width")}
-                    value={label.width}
-                    minValue={MIN_LABEL_WIDTH_MM}
-                    isDisabled={selected.locked}
-                    onChange={(event) =>
-                      editor.setLabelLayout(selected.id, { width: event.detail })
-                    }
-                  />
-                  {/* Bend is the curve: 0 draws the baseline straight. */}
-                  <ui.NumberField
-                    label={t("properties.mapLabel.bend")}
-                    value={label.bend}
-                    isDisabled={selected.locked}
-                    onChange={(event) => editor.setLabelLayout(selected.id, { bend: event.detail })}
-                  />
-                </>
-              )}
-              {snapshot.selectedIsLine ? (
-                <ui.Switch
-                  label={t("properties.enclosesFills")}
-                  isSelected={snapshot.selectedEnclosesFills ?? false}
-                  onChange={(event) => editor.setEnclosesFills(selected.id, event.detail)}
-                />
-              ) : null}
-              {selectedLine === null ? null : (
-                <>
-                  <ui.ColorPicker
-                    label={t("properties.mapLine.color")}
-                    value={resolveColor(style, selectedLine.color, lineRole(selectedLine.style))}
-                    swatches={styleSwatches(style)}
-                    isDisabled={selected.locked}
-                    onChange={(event) => editor.setLineColor(selectedLine.id, event.detail)}
-                  />
-                  <UseMapStyleColor
-                    label={t("properties.useMapStyleColor")}
-                    isDisabled={selected.locked || followsStyle(selectedLine.color)}
-                    onPress={() => editor.clearElementColor(selectedLine.id)}
-                  />
-                </>
-              )}
-              {snapshot.selectedIsLine || snapshot.selectedIsFill ? (
-                <>
-                  <ui.Switch
-                    label={t("properties.softEdge")}
-                    isSelected={snapshot.selectedSoftEdge !== null}
-                    isDisabled={selected.locked}
-                    onChange={(event) =>
-                      editor.setSoftEdge(selected.id, event.detail ? DEFAULT_SOFT_EDGE_MM : null)
-                    }
-                  />
-                  {/* The amount stays mounted while an Element is selected, so a
-                      change of selection updates it in place; the host keeps the
-                      value it mounted with when a control is replaced at its
-                      slot. Moving it also turns the Soft Edge on. */}
-                  <ui.Slider
-                    label={t("properties.softEdgeAmount")}
-                    value={snapshot.selectedSoftEdge ?? DEFAULT_SOFT_EDGE_MM}
-                    minValue={MIN_SOFT_EDGE_MM}
-                    maxValue={MAX_SOFT_EDGE_MM}
-                    step={SOFT_EDGE_STEP_MM}
-                    isDisabled={selected.locked}
-                    onChange={(event) => editor.setSoftEdge(selected.id, event.detail)}
-                  />
-                </>
-              ) : null}
-              {snapshot.selectedIsFill ? (
-                <>
-                  {/* A Fill covers some of a colour, a texture, and a scatter of
-                      Stamps, in any combination; the last kind cannot go. */}
-                  <ui.Select
-                    label={t("properties.fillTexture")}
-                    options={[
-                      { value: NONE, label: t("properties.none") },
-                      ...TEXTURE_IDS.map((id) => ({ value: id, label: t(TEXTURE_KEYS[id]) })),
-                    ]}
-                    selectedKey={snapshot.selectedFillTexture ?? NONE}
-                    isDisabled={selected.locked}
-                    onChange={(event) =>
-                      editor.setFillTexture(
-                        selected.id,
-                        event.detail === NONE ? null : event.detail
-                      )
-                    }
-                  />
-                  <ui.Select
-                    label={t("properties.fillScatter")}
-                    options={[
-                      { value: NONE, label: t("properties.none") },
-                      ...BASE_STAMP_IDS.map((id) => ({
-                        value: id,
-                        label: t(stampNameKey(id)),
-                      })),
-                    ]}
-                    selectedKey={scatterStampId ?? NONE}
-                    isDisabled={selected.locked}
-                    onChange={(event) =>
-                      editor.setFillScatter(
-                        selected.id,
-                        event.detail === NONE ? null : event.detail
-                      )
-                    }
-                  />
-                  {scatter === null ? null : (
-                    <>
-                      <ui.Slider
-                        label={t("properties.scatterSpacing")}
-                        value={scatter.spacing}
-                        minValue={MIN_SCATTER_SPACING_MM}
-                        maxValue={MAX_SCATTER_SPACING_MM}
-                        isDisabled={selected.locked}
-                        onChange={(event) =>
-                          editor.setFillScatterSpacing(selected.id, event.detail)
-                        }
-                      />
-                      {/* The same Stamps land in new spots, so the author can
-                          scatter again without picking a different Stamp. */}
-                      <ui.Button
-                        variant="secondary"
-                        onPress={() => editor.reseedFillScatter(selected.id)}
-                      >
-                        {t("properties.reseed")}
-                      </ui.Button>
-                    </>
-                  )}
-                  {/* A Custom Fill paints a Library texture or scatters Custom
-                      Stamps over the area (#756). */}
-                  <ui.Select
-                    label={t("properties.customFill")}
-                    options={fitOptions(
-                      [
-                        { value: NONE, label: t("properties.none") },
-                        ...[...snapshot.library.customFills.values()].map((customFill) => ({
-                          value: customFill.id,
-                          label: customFill.name,
-                        })),
-                      ],
-                      selectedFill?.content.customFill ?? NONE
-                    )}
-                    selectedKey={selectedFill?.content.customFill ?? NONE}
-                    isDisabled={selected.locked}
-                    onChange={(event) =>
-                      editor.setFillCustomFill(
-                        selected.id,
-                        event.detail === NONE ? null : event.detail
-                      )
-                    }
-                  />
-                  <ui.Text weight="semibold">{t("properties.newCustomFill")}</ui.Text>
-                  <ui.Button
-                    variant="secondary"
-                    isDisabled={selected.locked}
-                    onPress={() => void createFillFromTexture()}
-                  >
-                    {t("properties.customFill.texture")}
-                  </ui.Button>
-                  {customStamps.length === 0 ? null : (
-                    <>
-                      <ui.Collection
-                        label={t("properties.customFill.stamps")}
-                        selectionMode="multiple"
-                        selectedKeys={fillStampRefs}
-                        onSelectionChange={(event) => setFillStampRefs([...event.detail])}
-                      >
-                        {fillStampRows.map((customStamp) => (
-                          <ui.CollectionRow
-                            key={customStamp.ref}
-                            id={customStamp.ref}
-                            label={clampLabel(customStamp.name)}
-                          />
-                        ))}
-                      </ui.Collection>
-                      <ui.Button
-                        variant="secondary"
-                        isDisabled={selected.locked || fillStampRefs.length === 0}
-                        onPress={() => void createFillFromStamps()}
-                      >
-                        {t("properties.customFill.create")}
-                      </ui.Button>
-                    </>
-                  )}
-                </>
-              ) : null}
-              {snapshot.selectedIsLine || snapshot.selectedIsAreaFill ? (
-                <>
-                  <ui.Slider
-                    label={t("properties.roughenStrength")}
-                    value={snapshot.roughenStrength}
-                    minValue={MIN_ROUGHEN_STRENGTH_MM}
-                    maxValue={MAX_ROUGHEN_STRENGTH_MM}
-                    step={0.1}
-                    onChange={(event) => editor.setRoughenStrength(event.detail)}
-                  />
-                  <ui.Button variant="secondary" onPress={() => editor.roughen()}>
-                    {t("properties.roughen")}
-                  </ui.Button>
-                </>
-              ) : null}
-            </>
-          )}
-
-          {/* Export (#753): PNG at a chosen print size and DPI, drawn by the
-              Frame which alone has a canvas, or the SVG itself. The panel is
-              the keyboard path that saves either picture. */}
-          <ui.Text weight="semibold">{t("export.label")}</ui.Text>
-          {/* Place copies the Map into a Chapter or Note as an image (#753);
-              the dialog holds the target picker and the alt text. */}
-          <ui.Button variant="secondary" onPress={() => void openPlace()}>
-            {t("place.label")}
-          </ui.Button>
-          {placeFailed ? <ui.Status tone="warning">{t("place.failed")}</ui.Status> : null}
-          <ui.RadioGroup
-            label={t("export.format")}
-            orientation="horizontal"
-            options={[
-              { value: "png", label: t("export.format.png") },
-              { value: "svg", label: t("export.format.svg") },
-            ]}
-            selectedKey={exportFormat}
-            onChange={(event) => setExportFormat(event.detail as "png" | "svg")}
-          />
-          {exportFormat === "png" ? (
-            <>
-              <ui.NumberField
-                label={t("export.printWidth")}
-                value={printWidthIn}
-                minValue={MIN_PRINT_WIDTH_IN}
-                maxValue={MAX_PRINT_WIDTH_IN}
-                step={0.1}
-                onChange={(event) => setPrintWidth(event.detail)}
-              />
-              {/* The DPI the canvas can still encode at this print width: 40 in
-                  at 1200 DPI would be 48000x72000 px, which nothing draws. */}
-              <ui.NumberField
-                label={t("export.dpi")}
-                value={dpi}
-                minValue={MIN_DPI}
-                maxValue={dpiLimit}
-                step={1}
-                onChange={(event) => setDpi(event.detail)}
-              />
-              <ui.Text tone="muted">
-                {format(t("export.size"), {
-                  width: exportSize.widthPx,
-                  height: exportSize.heightPx,
-                  heightIn: printHeightIn,
-                })}
-              </ui.Text>
-            </>
+                </ui.View>
+              </>
+            )
           ) : null}
-          <ui.Button variant="secondary" onPress={() => void saveExport()}>
-            {t("export.save")}
-          </ui.Button>
-          {exportFailed ? <ui.Status tone="warning">{t("export.failed")}</ui.Status> : null}
         </ui.View>
-      </ui.View>
+
+        {/* 7: the top-right pill. Map Style and Export are icon-only Popovers;
+            Place opens its dialog (#778). On a narrow page the three fold into
+            one overflow popover (#779), which the stylesheet shows in their
+            place, so the bar keeps a single row of icons. */}
+        <ui.View direction="row" gap="sm" align="center">
+          <ui.View direction="row" gap="sm" align="center">
+            <ui.Popover label={t("properties.mapStyle")} icon="palette" iconOnly>
+              {/* The Map Style is Map-level: it recolours everything that follows a
+                  role, and leaves every colour an Element overrides alone (#752). */}
+              {mapStylePicker}
+            </ui.Popover>
+            {/* Place copies the Map into a Chapter or Note as an image (#753);
+                the dialog holds the target picker and the alt text. */}
+            {placeButton}
+            {placeFailed ? <ui.Status tone="warning">{t("place.failed")}</ui.Status> : null}
+            {/* Export (#753): PNG at a chosen print size and DPI, drawn by the
+                Frame which alone has a canvas, or the SVG itself. The panel is
+                the keyboard path that saves either picture. */}
+            <ui.Popover label={t("export.label")} icon="download" iconOnly>
+              <ui.View direction="column" gap="sm">
+                {exportPanel}
+              </ui.View>
+            </ui.Popover>
+          </ui.View>
+          {/* The narrow page's one overflow control (#779): the same three
+              paths in a popover, styled into the bar at the narrow width only. */}
+          <ui.View direction="row" gap="sm" align="center">
+            <ui.Popover label={t("chrome.more")} icon="ellipsis" iconOnly>
+              <ui.View direction="column" gap="sm">
+                {mapStylePicker}
+                {placeButton}
+                <ui.Text weight="semibold">{t("export.label")}</ui.Text>
+                {exportPanel}
+              </ui.View>
+            </ui.Popover>
+          </ui.View>
+        </ui.View>
+
+        {/* 8: the zoom cluster. Reset zoom is fit, so the design's separate Fit
+            button is dropped (#778). */}
+        <ui.View direction="row" gap="sm" align="center">
+          <ui.IconButton
+            label={t("chrome.zoomOut")}
+            icon="zoom-out"
+            onPress={() => editor.zoomOut()}
+          />
+          <ui.Button variant="ghost" onPress={() => editor.zoomReset()}>
+            {format(t("chrome.zoom"), { percent: zoomPercent })}
+          </ui.Button>
+          <ui.IconButton
+            label={t("chrome.zoomIn")}
+            icon="zoom-in"
+            onPress={() => editor.zoomIn()}
+          />
+        </ui.View>
+      </ui.Surface>
 
       <ui.Modal
         title={t("place.title")}
@@ -1671,7 +2007,40 @@ function MapEditorView({
           </ui.View>
         )}
       </ui.Modal>
-    </ui.View>
+
+      {/* The Map's own name, renamed from the top-left pill (#778). */}
+      <ui.Modal
+        title={t("rename.title")}
+        isOpen={mapRename !== null}
+        onOpenChange={(event) => {
+          if (!event.detail) setMapRename(null);
+        }}
+      >
+        {mapRename === null ? null : (
+          <ui.View direction="column" gap="md">
+            <ui.TextField
+              label={t("properties.name")}
+              value={mapRename}
+              autoFocus
+              isRequired
+              onInput={(event) => setMapRename(event.detail)}
+            />
+            <ui.View direction="row" gap="sm" justify="end">
+              <ui.Button variant="secondary" onPress={() => setMapRename(null)}>
+                {t("dialog.cancel")}
+              </ui.Button>
+              <ui.Button
+                variant="primary"
+                isDisabled={mapRename.trim() === ""}
+                onPress={submitMapRename}
+              >
+                {t("rename.submit")}
+              </ui.Button>
+            </ui.View>
+          </ui.View>
+        )}
+      </ui.Modal>
+    </ui.Surface>
   );
 }
 

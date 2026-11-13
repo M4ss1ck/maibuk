@@ -617,6 +617,7 @@ Props:
 | `label` | `string` | yes | At most 512 characters. Accessible name. |
 | `icon` | `string` | yes | At most 64 characters. |
 | `variant` | `"primary" \| "secondary" \| "ghost" \| "destructive"` | no | One of `primary`, `secondary`, `ghost`, `destructive`. |
+| `isSelected` | `boolean` | no | Whether the button is a selected toggle: it reports its pressed state and takes the selected look. Leave it unset for a plain action. |
 | `isDisabled` | `boolean` | no |  |
 
 Events:
@@ -895,6 +896,7 @@ Props:
 | --- | --- | --- | --- |
 | `label` | `string` | yes | At most 512 characters. The trigger's accessible name. |
 | `icon` | `string` | no | At most 64 characters. An optional Lucide icon name for the trigger. |
+| `iconOnly` | `boolean` | no | Shows only the `icon` in the trigger, with `label` as its accessible name and tooltip. Ignored when `icon` is not set. |
 | `isOpen` | `boolean` | no |  |
 | `children` | `ReactNode` | no |  |
 

@@ -493,6 +493,40 @@ describe("the Remote UI kit, part 2", () => {
       await waitFor(() => expect(document.activeElement).toBe(trigger));
     });
 
+    it("opens an icon-only popover from the keyboard and shows its label as a tooltip @ui-kbd:maibuk-popover", async () => {
+      harness = renderRemoteUi();
+      await harness.mount(
+        <ui.Popover label="Map style" icon="palette" iconOnly>
+          <ui.Text>Style body</ui.Text>
+        </ui.Popover>
+      );
+
+      const trigger = screen.getByRole("button", { name: "Map style" });
+      expect(trigger).not.toHaveTextContent("Map style");
+      expect(trigger.querySelector("svg")).not.toBeNull();
+
+      await userEvent.tab();
+      expect(await screen.findByRole("tooltip")).toHaveTextContent("Map style");
+
+      await userEvent.keyboard("{Enter}");
+      expect(await screen.findByText("Style body")).toBeInTheDocument();
+
+      await userEvent.keyboard("{Escape}");
+      expect(screen.queryByText("Style body")).not.toBeInTheDocument();
+      await waitFor(() => expect(document.activeElement).toBe(trigger));
+    });
+
+    it("ignores iconOnly on a popover trigger without an icon @ui:maibuk-popover", async () => {
+      harness = renderRemoteUi();
+      await harness.mount(
+        <ui.Popover label="Options" iconOnly>
+          <ui.Text>Popover body</ui.Text>
+        </ui.Popover>
+      );
+
+      expect(screen.getByRole("button", { name: "Options" })).toHaveTextContent("Options");
+    });
+
     it("dismisses a modal on Escape and returns focus after the Worker stops @ui-kbd:maibuk-modal", async () => {
       harness = renderRemoteUi();
       function Plugin() {

@@ -17,6 +17,7 @@ import { capture } from "../support/capture";
 import { dragBendHandle, fontLoaded, type LabelInk, labelInk } from "../support/frame-stroke";
 import { leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
+import { openLayers } from "../support/maps-layers";
 
 const primaryNav = (page: Page) => page.getByRole("listbox", { name: "Primary navigation" });
 const navOption = (page: Page, name: string) =>
@@ -149,12 +150,13 @@ async function openEditorWithMap(page: Page): Promise<void> {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/maibuk-maps\/map$/);
   await expect(surface(page)).toBeVisible();
+  await openLayers(page);
 }
 
 /** Picks the Insert tool with its key and waits for the Frame to honour it. */
 async function pickInsert(page: Page): Promise<void> {
   await page.keyboard.press("i");
-  await expect(page.getByRole("radio", { name: "Insert", exact: true })).toBeChecked();
+  await expect(page.getByRole("button", { name: "Insert", exact: true, pressed: true }));
   // The scene round-trip is what proves the Frame is listening before a press.
   await expect(mapFrame(page).locator('svg[data-tool="insert"]')).toBeVisible();
 }
@@ -289,7 +291,7 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.in
     // The handle belongs to the Select tool, whose key runs from the Place
     // button without typing into anything.
     await page.keyboard.press("v");
-    await expect(page.getByRole("radio", { name: "Select", exact: true })).toBeChecked();
+    await expect(page.getByRole("button", { name: "Select", exact: true, pressed: true }));
     await expect(mapFrame(page).locator('svg[data-tool="select"]')).toBeVisible();
 
     // Bend by the number field: the keyboard path to the same curve.
@@ -346,7 +348,9 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.in
     await tabTo(page, page.getByRole("button", { name: "Open Coastline" }), { max: 60 });
     await page.keyboard.press("Enter");
     await expect(surface(page)).toBeVisible();
-
+    // The reload put the editor back, and the floating chrome (#778) starts with
+    // its Layers card shut, so the document opens it again.
+    await openLayers(page);
     await expect(elementRow(page, "Map Label 1")).toBeVisible();
     await expect(drawnLabelPaths(page).first()).toHaveText("North Sea");
     await expect(drawnLabelText(page).last()).toHaveAttribute("font-family", "Cinzel");

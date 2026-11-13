@@ -17,6 +17,7 @@ import { capture } from "../support/capture";
 import { clickPagePoint, dragPagePoint } from "../support/frame-stroke";
 import { pressUntilFocused, tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
+import { openLayers } from "../support/maps-layers";
 
 const primaryNav = (page: Page) => page.getByRole("listbox", { name: "Primary navigation" });
 const navOption = (page: Page, name: string) =>
@@ -79,12 +80,13 @@ async function openEditorWithMap(page: Page): Promise<void> {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/maibuk-maps\/map$/);
   await expect(surface(page)).toBeVisible();
+  await openLayers(page);
 }
 
 /** Places a Rectangle at the view centre with the Rectangle tool's Place button. */
 async function placeRectangle(page: Page): Promise<void> {
   await page.keyboard.press("r");
-  await expect(page.getByRole("radio", { name: "Rectangle", exact: true })).toBeChecked();
+  await expect(page.getByRole("button", { name: "Rectangle", exact: true, pressed: true }));
   await expect(mapFrame(page).locator('svg[data-tool="rectangle"]')).toBeVisible();
   const place = page.getByRole("button", { name: "Place rectangle" });
   await tabTo(page, place, { max: 60 });
@@ -95,7 +97,9 @@ async function placeRectangle(page: Page): Promise<void> {
 /** Picks a tool with its key and waits for the Frame to honour it. */
 async function pickTool(page: Page, key: string, name: string, tool: string): Promise<void> {
   await page.keyboard.press(key);
-  await expect(page.getByRole("radio", { name, exact: true })).toBeChecked();
+  // The floating belt (#778) presses its tool buttons rather than checking a
+  // radio, the way `plugins-maps-fills` already reports the Bucket.
+  await expect(page.getByRole("button", { name, exact: true, pressed: true })).toBeVisible();
   // The scene round-trip is what proves the Frame is listening before a press.
   await expect(mapFrame(page).locator(`svg[data-tool="${tool}"]`)).toBeVisible();
 }
@@ -236,9 +240,13 @@ test.describe("Maps Select drag @wf:plugins-maps-move @sc:plugin.maibuk-maps.sel
     await pickTool(page, "i", "Insert", "insert");
     // The Insert tool offers a Place button per Stamp, named after the pick,
     // beside the Map Label's own "Place Map Label" (#751); this test means the
-    // Stamp one, whose name follows "Place " with the pick.
-    const place = page.getByRole("button", { name: /^Place (?!Map Label$)/ });
-    await tabTo(page, place, { max: 60 });
+    // Stamp one, whose name follows "Place " with the pick. The floating
+    // chrome's footer also offers "Place in a Chapter or Note…", which shares
+    // the prefix, so the name has to rule out both other Place buttons.
+    const place = page.getByRole("button", { name: /^Place (?!Map Label$|in a Chapter)/ });
+    // The floating chrome puts the pill, the eleven tool buttons and the cards
+    // between the author and the Insert card's footer.
+    await tabTo(page, place, { max: 120 });
     const stamp = ((await place.textContent()) ?? "").replace(/^Place /, "");
     await page.keyboard.press("Enter");
     await expect(elementRow(page, stamp)).toBeVisible();

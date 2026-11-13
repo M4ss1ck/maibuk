@@ -16,8 +16,9 @@
 import type { FrameLocator, Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { dragShape } from "../support/frame-stroke";
-import { pressUntilFocused, tabTo } from "../support/keyboard";
+import { pressUntilFocused, tabTo, tabToEither } from "../support/keyboard";
 import { expect, test } from "../support/test";
+import { openLayers } from "../support/maps-layers";
 
 const primaryNav = (page: Page) => page.getByRole("listbox", { name: "Primary navigation" });
 const navOption = (page: Page, name: string) =>
@@ -72,6 +73,7 @@ async function openMap(page: Page, name: string): Promise<void> {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/maibuk-maps\/map$/);
   await expect(mapFrame(page).locator("svg")).toBeVisible();
+  await openLayers(page);
 }
 
 /** Opens an empty Map in its editor, where every test below starts. */
@@ -85,7 +87,9 @@ async function openEditorWithMap(page: Page): Promise<void> {
 /** Picks a Shape tool with its key and waits for the Frame to honour it. */
 async function pickShapeTool(page: Page, key: string, tool: string): Promise<void> {
   await page.keyboard.press(key);
-  await expect(page.getByRole("radio", { name: tool, exact: true })).toBeChecked();
+  // The floating belt (#778) presses its tool buttons rather than checking a
+  // radio, the way `plugins-maps-move` already reports its own tool.
+  await expect(page.getByRole("button", { name: tool, exact: true, pressed: true })).toBeVisible();
   // The scene round-trip is what proves the Frame is listening before a drag.
   await expect(mapFrame(page).locator(`svg[data-tool="${tool.toLowerCase()}"]`)).toBeVisible();
 }
@@ -93,7 +97,9 @@ async function pickShapeTool(page: Page, key: string, tool: string): Promise<voi
 /** Places the picked Shape with its Place button, the keyboard's way to draw one. */
 async function placeShape(page: Page, tool: string): Promise<void> {
   const place = page.getByRole("button", { name: `Place ${tool.toLowerCase()}` });
-  await tabTo(page, place, { max: 60 });
+  // The Place button is the Properties card's footer action (#778), past the
+  // pill, the eleven tool buttons, the Layers list, and the Frame.
+  await tabTo(page, place, { max: 120 });
   await page.keyboard.press("Enter");
 }
 
@@ -186,7 +192,9 @@ test.describe("Maps Shape tools, Place buttons, and Shape number fields @wf:plug
     });
 
     // A number field reshapes the exact Shape; the Frame draws what it stored.
-    await tabTo(page, width, { max: 60 });
+    // The fields sit in the Properties card, past the footer, the pills, and the
+    // page's own chrome, so the walk allows for all of it.
+    await tabToEither(page, width, { max: 120 });
     await page.keyboard.press("Control+a");
     await page.keyboard.type("60");
     await page.keyboard.press("Enter");

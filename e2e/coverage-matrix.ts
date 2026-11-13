@@ -2866,6 +2866,63 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-maps-pointer-view",
+    area: "plugins",
+    workflow:
+      "The Maps editor's pointer view (#777): with focus in the drawing Frame, the author zooms with a Ctrl+wheel (the wheel a trackpad reports a pinch as) around the pointer and pans by holding Space and dragging, while the Frame only posts each request and the editor, which owns zoom and pan, crops the view; asserts: the Frame's viewBox before and after the wheel, the page point under the pointer staying where it was on screen after a zoom, a plain wheel leaving the view as it was, and the viewBox a Space drag moved while the Pencil drew nothing until Space was lifted; persists: yes (the Map document is untouched by a gesture, and the view lives in the editor)",
+    edges: [
+      "A Ctrl+wheel zooms the view around the pointer, keeping the page point under it where it was on screen",
+      "A plain wheel leaves the view as it was",
+      "Space+drag pans the view with the Pencil picked and draws no Map Line; the Pencil draws again once Space is released",
+    ],
+    terms: [],
+    shortcuts: ["plugin.maibuk-maps.pencilTool"],
+    routes: ["/plugin/:pluginId/:pageId"],
+    fixture: "bookShelf",
+    tags: ["sandbox"],
+    status: "accepted",
+  },
+  {
+    id: "plugins-maps-layout",
+    area: "plugins",
+    workflow:
+      "The Maps editor's floating layout (#778): the drawing Frame takes the whole page body and every control floats over it as a card the way the app's own Canvas does — the top-left pill (Back to Maps, the Map's own name, Undo, Redo), the tool belt with Layers last, the Insert and Layers cards beside it, the Properties card under the top-right pill (Map Style, Place, Export), and the zoom cluster at the bottom right — so the author sees the drawing and not three host columns; at the narrow 390x844 the chrome turns into bars over the same Frame: one top bar whose three controls fold into an overflow popover, a sideways-scrolling tool belt along the bottom, and Insert, Layers and Properties as bottom regions that split the bottom half rather than cover each other; asserts: the Frame's bounding box equals the page body's at 1440x900, at 1024x768 and at 390x844, the Back to Maps pill and the tool belt sit inside that box, opening or shutting Layers, Insert, Properties, or the Export popover changes neither box, the narrow page never scrolls sideways and, on a coarse pointer, every control it draws is at least 44x44, opening the overflow popover or the full-height toggle at 390x844 leaves the Frame's box as it was, and pressing the Map's own name renames the Map; persists: yes (the rename autosaves to Plugin storage)",
+    edges: [
+      "The Frame's box equals the page body's at 1440x900, with the cards floating inside it",
+      "Opening or shutting Layers, Insert, Properties, or the Export popover never changes the Frame's size",
+      "The Map's own name in the top-left pill renames the Map",
+      "The Frame's box still equals the page body's at 1024x768",
+      "At 390x844 the page never scrolls sideways and, on a coarse pointer, every visible control is at least 44x44 px",
+      "At 390x844 opening the overflow popover or the full-height Properties toggle leaves the Frame's box unchanged",
+      "Insert and Layers open together at 1440x900 stack without covering each other",
+      "The desktop header has no full-height toggle for Properties or Layers",
+      "A wide window whose editor container is narrower than 640px gets the narrow chrome",
+      "At 390x844 the full-height Properties and Layers toggles grow the region to the page and give the room back, with the Frame's box unchanged",
+      "At 390x844 with a region open the zoom cluster stays visible and clear of it",
+    ],
+    terms: [],
+    shortcuts: [],
+    routes: ["/plugin/:pluginId/:pageId"],
+    fixture: "bookShelf",
+    tags: ["sandbox"],
+    status: "accepted",
+  },
+  {
+    id: "plugins-maps-touch",
+    area: "plugins",
+    workflow:
+      "Maps on a phone (#779): the editor's chrome is a touch path, so it is proven with a finger rather than a keyboard. The Maps page opens from the phone's navigation menu (a phone has no sidebar), a Map is made from the New Map dialog by tapping Create, its card opens the editor, and a tap on a belt control picks that tool: the Pen tapped in the belt is the tool the drawing Frame draws with; asserts: the Maps URL and heading, the New Map dialog's focused Name and its dismissal, the editor's Frame, and the Frame's tool after the tap; persists: yes (the Map is in Plugin storage)",
+    edges: [
+      "Phone (@touch): the Maps page opens from the navigation menu, a Map is created by tap, and tapping the Pen in the belt picks it in the Frame",
+    ],
+    terms: [],
+    shortcuts: [],
+    routes: ["/", "/plugin/:pluginId/:pageId"],
+    fixture: "bookShelf",
+    tags: ["sandbox", "touch"],
+    status: "accepted",
+  },
+  {
     id: "plugins-maps-pen",
     area: "plugins",
     workflow:

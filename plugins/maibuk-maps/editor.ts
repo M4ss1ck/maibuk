@@ -8,8 +8,8 @@
  *
  * Every edit goes through `history.commit` and schedules the whole Map document
  * for autosave. Zoom, pan, tool, selection, the current line style, the current
- * Fill colour, and the Roughen strength are view state: not saved and not
- * undoable. This module imports only its own files.
+ * Fill colour, the current Stamp size, and the Roughen strength are view state:
+ * not saved and not undoable. This module imports only its own files.
  */
 
 import type {
@@ -34,6 +34,7 @@ import type {
 import {
   DEFAULT_POLYGON_SIDES,
   DEFAULT_SHAPE_SIZE_MM,
+  DEFAULT_STAMP_SIZE_MM,
   LINE_STYLE_DEFAULT_ENCLOSES,
   MAX_IMAGE_OPACITY,
   MAX_NAME_LENGTH,
@@ -103,6 +104,7 @@ import {
 } from "./scene";
 import {
   DEFAULT_STAMP_ID,
+  SCALE_BAR_STAMP_REF,
   baseStampRef,
   isBaseStampId,
   stampNameKey,
@@ -188,6 +190,10 @@ export interface MapEditorSnapshot {
   selectedConvertedFrom: ShapeKind | null;
   /** The Stamp the Insert tool places next: a base Stamp id, or a Custom Stamp ref. */
   currentStampId: string;
+  /** The size the Insert tool gives the next Stamp it places, in page millimetres. */
+  currentStampSize: number;
+  /** How far in the view is: 1 draws the whole page, the zoom cluster reads this. */
+  zoom: number;
   /** The selected Stamp, or null when the selection is not a Stamp. */
   selectedStamp: MapStampElement | null;
   /**
@@ -254,6 +260,8 @@ export interface MapEditor {
   ): Promise<Uint8Array>;
   select(id: string | null): void;
   setTool(tool: MapTool): void;
+  /** Renames the Map itself, which is not an Element, so it takes no undo step. */
+  renameMap(name: string): void;
   rename(id: string, name: string): void;
   setHidden(id: string, hidden: boolean): void;
   setLocked(id: string, locked: boolean): void;
@@ -301,6 +309,8 @@ export interface MapEditor {
   setShapeGeometry(id: string, patch: Partial<Omit<MapShape, "kind">>): void;
   /** Picks the base Stamp the Insert tool places next. */
   setStamp(id: string): void;
+  /** Picks the size the Insert tool gives the next Stamp: a view setting, never saved. */
+  setStampSize(sizeMm: number): void;
   /** Drops the picked Stamp at `point`, or at the view centre, selected, as one undo step. */
   insertStamp(point?: MapPoint): void;
   /** Places a Custom Stamp of the Library picture `assetId` at the view centre, selected. */
@@ -454,6 +464,9 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
   // author overrides it.
   let currentFillColor = "land";
   let currentStampId: string = DEFAULT_STAMP_ID;
+  // The size the next Stamp takes, so the Insert card can place a stamp at the
+  // size the author reads there instead of the art's own default (#778).
+  let currentStampSize = DEFAULT_STAMP_SIZE_MM;
   let roughenStrength = DEFAULT_ROUGHEN_STRENGTH_MM;
   let pdfFontFamily: string | null = null;
   let zoom = 1;
@@ -539,7 +552,9 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       selectedShape: selectedLine === null ? null : (selectedLine.shape ?? null),
       selectedConvertedFrom: selectedLine === null ? null : (selectedLine.convertedFrom ?? null),
       currentStampId,
+      currentStampSize,
       selectedStamp,
+      zoom,
       pdfFontFamily,
       library: assetSource?.library ?? EMPTY_MAP_LIBRARY,
     };
@@ -946,11 +961,15 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
    */
   function insertStamp(point?: MapPoint): void {
     const at: MapPoint = point ?? [doc.page.widthMm / 2 + panX, doc.page.heightMm / 2 + panY];
+    const stampRef = stampRefOf(currentStampId);
     const element = newStamp({
       id: randomMapId(),
       name: stampNameOf(currentStampId),
-      stampRef: stampRefOf(currentStampId),
+      stampRef,
       point: at,
+      // The scale bar sizes itself to the page width's own reading, so the
+      // Insert card's size leaves it alone.
+      size: stampRef === SCALE_BAR_STAMP_REF ? undefined : currentStampSize,
     });
     selectedId = element.id;
     edit(addElement(elements, element));
@@ -970,6 +989,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       name: asset.name,
       stampRef: currentStampId,
       point: [doc.page.widthMm / 2 + panX, doc.page.heightMm / 2 + panY],
+      size: currentStampSize,
     });
     selectedId = element.id;
     edit(addElement(elements, element));
@@ -1127,6 +1147,12 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       case "bendLabel":
         bendDragged(message.id, message.bend);
         break;
+      case "zoom":
+        zoomAt(message.point, message.factor);
+        break;
+      case "pan":
+        panBy(message.dx, message.dy);
+        break;
     }
   }
 
@@ -1192,7 +1218,28 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     sendScene();
   }
 
-  function pan(dx: number, dy: number): void {
+  /**
+   * Zooms around one page point (#777), so the point under the pointer keeps
+   * its place on screen: the view crops about the page centre and slides by
+   * `panX`/`panY` (`viewRect` in `assets/ui/map.js`), so the point's distance
+   * from the centre shrinks with the zoom's own ratio.
+   */
+  function zoomAt(point: MapPoint, factor: number): void {
+    const next = clamp(zoom * factor, MIN_ZOOM, MAX_ZOOM);
+    // A gesture the minimum or the maximum refuses moves nothing: sliding the
+    // crop for a zoom that did not happen would drift the point instead.
+    if (next === zoom) return;
+    const reached = next / zoom;
+    const centreX = doc.page.widthMm / 2;
+    const centreY = doc.page.heightMm / 2;
+    panX = point[0] - centreX - (point[0] - centreX - panX) / reached;
+    panY = point[1] - centreY - (point[1] - centreY - panY) / reached;
+    zoom = next;
+    publish();
+    sendScene();
+  }
+
+  function panBy(dx: number, dy: number): void {
     panX += dx;
     panY += dy;
     publish();
@@ -1283,6 +1330,14 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       tool = next;
       publish();
       sendScene();
+    },
+
+    renameMap(name) {
+      const trimmed = name.trim().slice(0, MAX_NAME_LENGTH);
+      if (trimmed === "" || trimmed === doc.name) return;
+      doc = { ...doc, name: trimmed };
+      publish();
+      schedule();
     },
 
     rename(id, name) {
@@ -1625,6 +1680,14 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       publish();
     },
 
+    setStampSize(sizeMm) {
+      if (!Number.isFinite(sizeMm)) return;
+      const next = Math.max(MIN_STAMP_SIZE_MM, sizeMm);
+      if (next === currentStampSize) return;
+      currentStampSize = next;
+      publish();
+    },
+
     insertStamp,
 
     insertCustomStamp,
@@ -1861,19 +1924,19 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     },
 
     panLeft() {
-      pan(-PAN_STEP_MM, 0);
+      panBy(-PAN_STEP_MM, 0);
     },
 
     panRight() {
-      pan(PAN_STEP_MM, 0);
+      panBy(PAN_STEP_MM, 0);
     },
 
     panUp() {
-      pan(0, -PAN_STEP_MM);
+      panBy(0, -PAN_STEP_MM);
     },
 
     panDown() {
-      pan(0, PAN_STEP_MM);
+      panBy(0, PAN_STEP_MM);
     },
 
     flush() {

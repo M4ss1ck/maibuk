@@ -738,28 +738,43 @@ interface IconButtonHostProps {
   label: string;
   icon: string;
   variant?: "primary" | "secondary" | "ghost" | "destructive";
+  isSelected?: boolean;
   isDisabled?: boolean;
   onPress?: () => void;
 }
+
+/**
+ * The Canvas tool column's selected look (`CanvasToolPanel`), forced over the
+ * variant's own background so the default ghost button takes it too.
+ */
+const ICON_BUTTON_SELECTED_CLASS = "ring-1 ring-inset ring-primary bg-primary/10! text-primary";
 
 function IconButtonHost({
   label,
   icon,
   variant = "ghost",
+  isSelected,
   isDisabled,
   onPress,
 }: IconButtonHostProps) {
   return (
-    <Button
-      variant={variant}
-      size="sm"
-      aria-label={label}
-      disabled={isDisabled}
-      onClick={() => onPress?.()}
-      className="px-2 pointer-coarse:min-h-10 pointer-coarse:min-w-10"
-    >
-      <PluginIcon icon={icon} className="h-4 w-4" />
-    </Button>
+    // The button shows only an icon, so its label doubles as the tooltip.
+    <Tooltip content={label}>
+      <Button
+        variant={variant}
+        size="sm"
+        aria-label={label}
+        // Absent stays a plain action: no pressed state at all, not `false`.
+        aria-pressed={isSelected}
+        disabled={isDisabled}
+        onClick={() => onPress?.()}
+        className={`px-2 pointer-coarse:min-h-10 pointer-coarse:min-w-10 ${
+          isSelected === true ? ICON_BUTTON_SELECTED_CLASS : ""
+        }`}
+      >
+        <PluginIcon icon={icon} className="h-4 w-4" />
+      </Button>
+    </Tooltip>
   );
 }
 
@@ -1518,28 +1533,46 @@ function ConfirmDialogHost({
 interface PopoverHostProps {
   label: string;
   icon?: string;
+  iconOnly?: boolean;
   isOpen?: boolean;
   openSeq?: number;
   children?: ReactNode;
   onOpenChange?: (open: boolean) => void;
 }
 
-function PopoverHost({ label, icon, isOpen, openSeq, children, onOpenChange }: PopoverHostProps) {
+function PopoverHost({
+  label,
+  icon,
+  iconOnly,
+  isOpen,
+  openSeq,
+  children,
+  onOpenChange,
+}: PopoverHostProps) {
   const [open, setOpen] = useMirroredOpen(isOpen, onOpenChange, openSeq);
   const triggerRef = useRef<HTMLButtonElement>(null);
   // A non-modal popover does not return focus by itself when the host dismisses
   // it; the shared hook restores the trigger, immediately and without a Worker
   // echo.
   useRestoreFocus(open, { getTarget: () => triggerRef.current });
+  // Without an icon there is nothing to show in its place, so the label stays.
+  const iconOnlyTrigger = iconOnly === true && icon !== undefined && icon !== "";
+  const trigger = (
+    <AriaButton
+      ref={triggerRef}
+      // An icon-only trigger has no text, so `label` becomes its accessible name.
+      aria-label={iconOnlyTrigger ? label : undefined}
+      className={`inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-border bg-card ${
+        iconOnlyTrigger ? "px-2 pointer-coarse:min-h-10 pointer-coarse:min-w-10" : "px-3"
+      } py-1.5 text-sm text-foreground outline-none transition-colors hover:bg-muted data-focus-visible:ring-2 data-focus-visible:ring-primary`}
+    >
+      {icon ? <PluginIcon icon={icon} className="h-4 w-4" /> : null}
+      {iconOnlyTrigger ? null : label}
+    </AriaButton>
+  );
   return (
     <DialogTrigger isOpen={open} onOpenChange={setOpen}>
-      <AriaButton
-        ref={triggerRef}
-        className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm text-foreground outline-none transition-colors hover:bg-muted data-focus-visible:ring-2 data-focus-visible:ring-primary"
-      >
-        {icon ? <PluginIcon icon={icon} className="h-4 w-4" /> : null}
-        {label}
-      </AriaButton>
+      {iconOnlyTrigger ? <Tooltip content={label}>{trigger}</Tooltip> : trigger}
       <AriaPopover className="z-50 max-w-xs rounded-lg border border-border bg-card p-3 shadow-lg">
         <Dialog className="outline-none">{children}</Dialog>
       </AriaPopover>

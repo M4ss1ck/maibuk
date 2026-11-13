@@ -358,6 +358,57 @@ describe("the connection validator", () => {
     expect(receiver.root.children).toHaveLength(0);
   });
 
+  it("accepts the icon button's and popover's state props and refuses a non-boolean", () => {
+    const accepted = setup();
+    accepted.connection.mutate([
+      insert(
+        element("1", "maibuk-icon-button", {
+          properties: { label: "Pencil", icon: "pencil", isSelected: true },
+        })
+      ),
+      insert(
+        element("2", "maibuk-popover", {
+          properties: { label: "Map style", icon: "palette", iconOnly: true },
+        }),
+        1
+      ),
+    ]);
+    expect(accepted.violations).toEqual([]);
+    expect(accepted.receiver.root.children).toHaveLength(2);
+
+    const selected = setup();
+    selected.connection.mutate([
+      insert(
+        element("1", "maibuk-icon-button", {
+          properties: { label: "Pencil", icon: "pencil", isSelected: "yes" },
+        })
+      ),
+    ]);
+    expect(selected.violations[0]).toMatchObject({
+      code: "invalid-prop",
+      tag: "maibuk-icon-button",
+      prop: "isSelected",
+      message: "The prop maibuk-icon-button.isSelected must be a boolean",
+    });
+    expect(selected.receiver.root.children).toHaveLength(0);
+
+    const iconOnly = setup();
+    iconOnly.connection.mutate([
+      insert(
+        element("1", "maibuk-popover", {
+          properties: { label: "Map style", iconOnly: "yes" },
+        })
+      ),
+    ]);
+    expect(iconOnly.violations[0]).toMatchObject({
+      code: "invalid-prop",
+      tag: "maibuk-popover",
+      prop: "iconOnly",
+      message: "The prop maibuk-popover.iconOnly must be a boolean",
+    });
+    expect(iconOnly.receiver.root.children).toHaveLength(0);
+  });
+
   it("accepts a Frame fill boolean and refuses a non-boolean fill", () => {
     const accepted = setup();
     accepted.connection.mutate([

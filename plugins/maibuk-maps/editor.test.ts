@@ -11,7 +11,9 @@ import type { AssetIndexEntry, CustomFill, MapAsset } from "./assets";
 import {
   DEFAULT_SOFT_EDGE_MM,
   MAX_SOFT_EDGE_MM,
+  MAX_ZOOM,
   MIN_SOFT_EDGE_MM,
+  MIN_ZOOM,
   createMapEditor,
   type MapEditor,
 } from "./editor";
@@ -2552,5 +2554,290 @@ describe("an upload's ingest and the Elements it places (#756)", () => {
     expect(restored.opacity).toBe(MAX_IMAGE_OPACITY);
     expect(restored.exportable).toBe(true);
     expect(restored.transform.size).toBe(100);
+  });
+});
+
+describe("zooming and panning by gesture (#777)", () => {
+  /** A Frame port that records the scenes the editor sends it. */
+  function recordedPort(): { port: MessagePort; scenes: Array<Record<string, unknown>> } {
+    const scenes: Array<Record<string, unknown>> = [];
+    const port = {
+      onmessage: null,
+      start: () => {},
+      postMessage: (message: Record<string, unknown>) => scenes.push(message),
+    } as unknown as MessagePort;
+    return { port, scenes };
+  }
+
+  /**
+   * The page rectangle a scene draws, in page millimetres, read the way the
+   * Frame reads it: zoom crops around the page's centre and pan slides the
+   * crop. Mirrors `viewRect` in `assets/ui/map.js`.
+   */
+  function viewRect(scene: Record<string, unknown>) {
+    const widthMm = scene.widthMm as number;
+    const heightMm = scene.heightMm as number;
+    const zoom = scene.zoom as number;
+    const width = widthMm / zoom;
+    const height = heightMm / zoom;
+    return {
+      x: (widthMm - width) / 2 + (scene.panX as number),
+      y: (heightMm - height) / 2 + (scene.panY as number),
+      width,
+      height,
+    };
+  }
+
+  /** Where a page point sits across the view: 0 at its left or top edge, 1 at its right or bottom. */
+  function across(point: number, edge: number, size: number): number {
+    return (point - edge) / size;
+  }
+
+  it("keeps the page point under the pointer fixed as it zooms", () => {
+    const { editor } = openEditor();
+    const { port, scenes } = recordedPort();
+    editor.attachFrame(port);
+    const before = viewRect(scenes[0]);
+
+    editor.handleFrameMessage({ kind: "zoom", point: [60, 25], factor: 2 });
+
+    const after = viewRect(scenes[scenes.length - 1]);
+    expect(scenes[scenes.length - 1].zoom).toBe(2);
+    // Same place on screen at the new zoom: the page never slides out from
+    // under the pointer that asked for it.
+    expect(across(60, after.x, after.width)).toBeCloseTo(across(60, before.x, before.width), 10);
+    expect(across(25, after.y, after.height)).toBeCloseTo(across(25, before.y, before.height), 10);
+  });
+
+  it("keeps the point fixed however many gestures zoom in a row", () => {
+    const { editor } = openEditor();
+    const { port, scenes } = recordedPort();
+    editor.attachFrame(port);
+
+    editor.handleFrameMessage({ kind: "zoom", point: [150, 80], factor: 1.25 });
+    const middle = viewRect(scenes[scenes.length - 1]);
+    editor.handleFrameMessage({ kind: "zoom", point: [150, 80], factor: 0.5 });
+
+    const after = viewRect(scenes[scenes.length - 1]);
+    expect(scenes[scenes.length - 1].zoom as number).toBeCloseTo(0.625);
+    expect(across(150, after.x, after.width)).toBeCloseTo(across(150, middle.x, middle.width), 10);
+    expect(across(80, after.y, after.height)).toBeCloseTo(across(80, middle.y, middle.height), 10);
+  });
+
+  it("clamps the gesture's zoom to the editor's own range", () => {
+    const { editor } = openEditor();
+    const { port, scenes } = recordedPort();
+    editor.attachFrame(port);
+
+    editor.handleFrameMessage({ kind: "zoom", point: [100, 50], factor: 100 });
+    expect(scenes[scenes.length - 1].zoom).toBe(MAX_ZOOM);
+
+    editor.handleFrameMessage({ kind: "zoom", point: [100, 50], factor: 0.0001 });
+    expect(scenes[scenes.length - 1].zoom).toBe(MIN_ZOOM);
+  });
+
+  it("leaves the view alone when the zoom is already at its limit", () => {
+    const { editor } = openEditor();
+    const { port, scenes } = recordedPort();
+    editor.attachFrame(port);
+    editor.handleFrameMessage({ kind: "zoom", point: [100, 50], factor: 100 });
+    const atLimit = scenes[scenes.length - 1];
+    const sent = scenes.length;
+
+    // A gesture the maximum refuses moves neither the zoom nor the crop, so
+    // the point under the pointer cannot drift when nothing zooms.
+    editor.handleFrameMessage({ kind: "zoom", point: [40, 20], factor: 2 });
+
+    expect(scenes).toHaveLength(sent);
+    expect(scenes[scenes.length - 1]).toEqual(atLimit);
+  });
+
+  it("slides the view by the millimetres a pan measured", () => {
+    const { editor } = openEditor();
+    const { port, scenes } = recordedPort();
+    editor.attachFrame(port);
+
+    editor.handleFrameMessage({ kind: "pan", dx: 8, dy: -3 });
+    editor.handleFrameMessage({ kind: "pan", dx: 2, dy: -2 });
+
+    expect(scenes[scenes.length - 1].panX).toBe(10);
+    expect(scenes[scenes.length - 1].panY).toBe(-5);
+  });
+
+  it("takes no undo step for a zoom or a pan", () => {
+    const { editor } = openEditor();
+    editor.handleFrameMessage({
+      kind: "shape",
+      shape: "rectangle",
+      start: [10, 10],
+      end: [50, 30],
+      constrain: false,
+    });
+    const { port } = recordedPort();
+    editor.attachFrame(port);
+    const elements = editor.getSnapshot().elements;
+
+    editor.handleFrameMessage({ kind: "zoom", point: [60, 25], factor: 2 });
+    editor.handleFrameMessage({ kind: "pan", dx: 8, dy: -3 });
+
+    expect(editor.getSnapshot().elements).toEqual(elements);
+    expect(editor.getSnapshot().canUndo).toBe(true);
+    // The one undo step is still the Shape, which zooming never consumed.
+    editor.undo();
+    expect(editor.getSnapshot().elements).toEqual([]);
+  });
+
+  it("drops a malformed zoom or pan request", () => {
+    const { editor } = openEditor();
+    const { port, scenes } = recordedPort();
+    editor.attachFrame(port);
+    const sent = scenes.length;
+
+    for (const message of [
+      { kind: "zoom", point: [60, 25], factor: 0 },
+      { kind: "zoom", point: [60], factor: 2 },
+      { kind: "zoom", factor: 2 },
+      { kind: "pan", dx: Number.NaN, dy: 0 },
+      { kind: "pan", dx: 1 },
+    ]) {
+      editor.handleFrameMessage(message);
+    }
+
+    expect(scenes).toHaveLength(sent);
+  });
+});
+
+describe("the view the zoom cluster reads (#778)", () => {
+  it("reports the zoom every path that moves it leaves", () => {
+    const { editor } = openEditor();
+    expect(editor.getSnapshot().zoom).toBe(1);
+
+    editor.zoomIn();
+    expect(editor.getSnapshot().zoom).toBeCloseTo(1.25, 10);
+
+    // A gesture moves the same value the cluster's readout reads, so the two
+    // never disagree about how far in the view is.
+    editor.handleFrameMessage({ kind: "zoom", point: [100, 50], factor: 2 });
+    expect(editor.getSnapshot().zoom).toBeCloseTo(2.5, 10);
+
+    editor.zoomReset();
+    expect(editor.getSnapshot().zoom).toBe(1);
+  });
+
+  it("repaints the page when a gesture zooms or pans", () => {
+    const { editor } = openEditor();
+    let painted = 0;
+    const stop = editor.subscribe(() => {
+      painted += 1;
+    });
+
+    editor.handleFrameMessage({ kind: "zoom", point: [100, 50], factor: 2 });
+    editor.handleFrameMessage({ kind: "pan", dx: 4, dy: 0 });
+
+    stop();
+    expect(painted).toBe(2);
+  });
+});
+
+describe("the Stamp size the Insert card picks (#778)", () => {
+  /** The one Stamp an editor holds. */
+  function onlyStamp(editor: MapEditor): MapStampElement {
+    const [element] = editor.getSnapshot().elements;
+    if (element === undefined || element.kind !== "stamp") throw new Error("no Stamp");
+    return element;
+  }
+
+  it("places the next Stamp at the size the author picked", () => {
+    const { editor } = openEditor();
+    expect(editor.getSnapshot().currentStampSize).toBe(DEFAULT_STAMP_SIZE_MM);
+
+    editor.setStampSize(40);
+    editor.insertStamp();
+
+    expect(editor.getSnapshot().currentStampSize).toBe(40);
+    expect(onlyStamp(editor).transform.size).toBe(40);
+  });
+
+  it("keeps the size above the model's minimum", () => {
+    const { editor } = openEditor();
+    editor.setStampSize(0);
+    expect(editor.getSnapshot().currentStampSize).toBe(MIN_STAMP_SIZE_MM);
+  });
+
+  it("places an uploaded Custom Stamp at the same size, and takes no undo step to set it", () => {
+    const { editor } = openEditor();
+    const entry: AssetIndexEntry = {
+      id: "a1",
+      name: "Banner",
+      mime: "image/svg+xml",
+      width: 20,
+      height: 10,
+      recolorable: false,
+      use: "stamp",
+    };
+    editor.setAssetLibrary({
+      library: mapLibrary([entry], []),
+      load: async () => null,
+    });
+
+    editor.setStampSize(30);
+    editor.insertCustomStamp("a1");
+
+    expect(onlyStamp(editor).transform.size).toBe(30);
+    expect(editor.getSnapshot().canUndo).toBe(true);
+    editor.undo();
+    expect(editor.getSnapshot().elements).toEqual([]);
+  });
+});
+
+describe("renaming the Map from its own name (#778)", () => {
+  it("writes the trimmed name and saves the document once", async () => {
+    let saves = 0;
+    const saved: MapDocument[] = [];
+    const editor = createMapEditor({
+      store: {
+        save: async (doc: MapDocument) => {
+          saves += 1;
+          saved.push(doc);
+        },
+      },
+      doc: {
+        id: "map-1",
+        bookId: null,
+        name: "Map",
+        page: { preset: "square", widthMm: 200, heightMm: 100 },
+        styleId: "atlas",
+        overrides: {},
+        elements: [],
+        createdAt: 0,
+        updatedAt: 0,
+        dataVersion: DATA_VERSION,
+      },
+      language: () => "en",
+    });
+
+    editor.renameMap("  Coastline  ");
+    expect(editor.getSnapshot().doc.name).toBe("Coastline");
+    await editor.flush();
+
+    expect(saves).toBe(1);
+    expect(saved[0].name).toBe("Coastline");
+    // The Map is not one of its Elements: renaming it is no undo step.
+    expect(editor.getSnapshot().canUndo).toBe(false);
+  });
+
+  it("refuses a blank name and a name it already has", async () => {
+    const { editor } = openEditor();
+    let painted = 0;
+    const stop = editor.subscribe(() => {
+      painted += 1;
+    });
+
+    editor.renameMap("   ");
+    editor.renameMap("Map");
+
+    stop();
+    expect(editor.getSnapshot().doc.name).toBe("Map");
+    expect(painted).toBe(0);
   });
 });

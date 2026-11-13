@@ -16,8 +16,15 @@
 
 import type { FrameLocator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
-import { expectFocusWithin, leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
+import {
+  expectFocusWithin,
+  leaveFrame,
+  pressUntilFocused,
+  tabTo,
+  tabToEither,
+} from "../support/keyboard";
 import { expect, test } from "../support/test";
+import { openLayers } from "../support/maps-layers";
 
 /**
  * The colours the Frame draws, by Map Style, as `styles.ts` declares them: the
@@ -58,7 +65,7 @@ const elementRow = (page: Page, name: string) =>
   elementsList(page).getByRole("option", { name: new RegExp(`^${name}`) });
 
 /**
- * The header's Map Style picker, named "<Style> Map Style" (its value first), so
+ * The top-right pill's Map Style trigger (#778): icon-only, named "Map Style", so
  * anchoring the end keeps it apart from the "Use Map Style color" button.
  */
 const mapStyleTrigger = (page: Page) => page.getByRole("button", { name: /Map Style$/ });
@@ -104,6 +111,7 @@ async function openEditorWithMap(page: Page): Promise<void> {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/maibuk-maps\/map$/);
   await expect(surface(page)).toBeVisible();
+  await openLayers(page);
 }
 
 /**
@@ -113,7 +121,7 @@ async function openEditorWithMap(page: Page): Promise<void> {
  */
 async function placeRectangle(page: Page): Promise<void> {
   await page.keyboard.press("r");
-  await expect(page.getByRole("radio", { name: "Rectangle", exact: true })).toBeChecked();
+  await expect(page.getByRole("button", { name: "Rectangle", exact: true, pressed: true }));
   await expect(mapFrame(page).locator('svg[data-tool="rectangle"]')).toBeVisible();
   const place = page.getByRole("button", { name: "Place rectangle" });
   await tabTo(page, place, { max: 60 });
@@ -122,22 +130,31 @@ async function placeRectangle(page: Page): Promise<void> {
 }
 
 /**
- * Picks a Map Style from the header by keyboard: Enter opens its list, Home goes
- * to the first entry (a previous pick leaves the list where it was), and the
- * arrows walk to the named Style, which Enter takes.
+ * Picks a Map Style from the top-right pill's popover (#778) by keyboard: Enter
+ * opens it, the one Tab an open popover takes walks into the group from the
+ * Style it holds, and the group's own arrows go on to the named one, which takes
+ * effect as it is picked; Escape shuts the popover and returns focus to its
+ * trigger.
  */
 async function pickMapStyle(page: Page, style: string): Promise<void> {
   const trigger = mapStyleTrigger(page);
   await leaveFrame(page, frameElement(page));
-  await tabTo(page, trigger, { max: 80, backwards: true });
+  await tabToEither(page, trigger, { max: 80 });
   await expect(trigger).toBeFocused();
   await page.keyboard.press("Enter");
-  const item = page.getByRole("option", { name: style, exact: true });
-  await expect(item).toBeVisible();
-  await page.keyboard.press("Home");
-  await pressUntilFocused(page, "ArrowDown", item, { max: 40 });
-  await page.keyboard.press("Enter");
-  await expect(trigger).toContainText(style);
+  const group = page.getByRole("radiogroup", { name: "Map Style" });
+  await expect(group).toBeVisible();
+  // An open popover holds focus itself, so Tab is the author's way in: the group
+  // is one tab stop, the radio its Style already holds.
+  const current = group.getByRole("radio", { checked: true });
+  await tabTo(page, current, { max: 5 });
+  await expect(current).toBeFocused();
+  const item = group.getByRole("radio", { name: style, exact: true });
+  await pressUntilFocused(page, "ArrowDown", item, { max: 8 });
+  await expect(item).toBeChecked();
+  await page.keyboard.press("Escape");
+  await expect(group).toBeHidden();
+  await expect(trigger).toBeFocused();
 }
 
 /**
@@ -147,7 +164,7 @@ async function pickMapStyle(page: Page, style: string): Promise<void> {
  */
 async function pickLineColor(page: Page, value: string): Promise<void> {
   const trigger = lineColorTrigger(page);
-  await tabTo(page, trigger, { max: 80 });
+  await tabToEither(page, trigger, { max: 80 });
   await page.keyboard.press("Enter");
   const picker = page.getByRole("dialog", { name: "Map Line color" });
   await expect(picker).toBeVisible();
@@ -181,6 +198,9 @@ async function reopenMap(page: Page): Promise<void> {
   await tabTo(page, page.getByRole("button", { name: "Open Coastline" }), { max: 60 });
   await page.keyboard.press("Enter");
   await expect(surface(page)).toBeVisible();
+  // Layers starts shut in the floating editor (#778), so the list below is
+  // opened again the way an author opens it.
+  await openLayers(page);
   await expect(elementRow(page, "Rectangle 1")).toBeVisible();
 }
 
@@ -241,7 +261,7 @@ test.describe("Maps Map Styles @wf:plugins-maps-styles @sc:plugin.maibuk-maps.re
     await expect(drawnLine(page)).toHaveAttribute("stroke", hex(OVERRIDE));
 
     const clear = useMapStyleColor(page);
-    await tabTo(page, clear, { max: 80 });
+    await tabToEither(page, clear, { max: 80 });
     await expect(clear).toBeEnabled();
     await page.keyboard.press("Enter");
 
@@ -266,7 +286,14 @@ test.describe("Maps Map Styles @wf:plugins-maps-styles @sc:plugin.maibuk-maps.re
     await backToMaps(page);
     await reopenMap(page);
 
-    await expect(mapStyleTrigger(page)).toContainText("Night");
+    // The pill's trigger is icon-only, so the reopened Map Style shows in the
+    // popover it opens: Night is still the group's pick.
+    await expect(mapStyleTrigger(page)).toHaveAccessibleName("Map Style");
+    await tabToEither(page, mapStyleTrigger(page), { max: 80 });
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("radio", { name: "Night", exact: true })).toBeChecked();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("radio", { name: "Night", exact: true })).toBeHidden();
     await expect(pageBackground(page)).toHaveAttribute("fill", hex(STYLE_COLORS.night.water));
     await expect(drawnLine(page)).toHaveAttribute("stroke", hex(OVERRIDE));
   });

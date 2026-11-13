@@ -7,6 +7,10 @@
  *
  * The asset ingest pair (#756) is validated here too: the Frame cleans and
  * measures an uploaded picture, and the Worker keeps only what came back.
+ *
+ * The pointer zoom and pan requests (#777) are validated here as well: the
+ * Frame measures a wheel or a drag and the editor, which owns the view, applies
+ * it.
  */
 
 import { describe, expect, it } from "vitest";
@@ -145,6 +149,57 @@ describe("parseFrameMessage() for an asset ingest reply", () => {
       })
     ).toBeNull();
     expect(parseFrameMessage({ kind: "asset", id: "a1", mime: "image/png", data: SVG })).toBeNull();
+  });
+});
+
+describe("parseFrameMessage() for a zoom or a pan request", () => {
+  it("reads a zoom around one page point", () => {
+    expect(parseFrameMessage({ kind: "zoom", point: [60, 25], factor: 1.25 })).toEqual({
+      kind: "zoom",
+      point: [60, 25],
+      factor: 1.25,
+    });
+  });
+
+  it("reads one step of a pan", () => {
+    expect(parseFrameMessage({ kind: "pan", dx: -10, dy: 5 })).toEqual({
+      kind: "pan",
+      dx: -10,
+      dy: 5,
+    });
+  });
+
+  it("drops a zoom with no point, or a factor that cannot zoom", () => {
+    for (const message of [
+      { kind: "zoom", factor: 1.25 },
+      { kind: "zoom", point: [60, 25] },
+      { kind: "zoom", point: [60], factor: 1.25 },
+      { kind: "zoom", point: [60, Number.NaN], factor: 1.25 },
+      { kind: "zoom", point: "60,25", factor: 1.25 },
+      // A factor of zero or less would collapse or flip the view.
+      { kind: "zoom", point: [60, 25], factor: 0 },
+      { kind: "zoom", point: [60, 25], factor: -1 },
+      { kind: "zoom", point: [60, 25], factor: Number.POSITIVE_INFINITY },
+      { kind: "zoom", point: [60, 25], factor: "1.25" },
+    ]) {
+      expect(parseFrameMessage(message)).toBeNull();
+    }
+  });
+
+  it("drops a pan that is not a pair of finite millimetres", () => {
+    for (const message of [
+      { kind: "pan" },
+      { kind: "pan", dx: 10 },
+      { kind: "pan", dx: 10, dy: Number.NaN },
+      { kind: "pan", dx: 10, dy: Number.POSITIVE_INFINITY },
+      { kind: "pan", dx: "10", dy: 5 },
+    ]) {
+      expect(parseFrameMessage(message)).toBeNull();
+    }
+  });
+
+  it("does not read the scene that already carries the view as a gesture", () => {
+    expect(parseFrameMessage({ kind: "scene", zoom: 2, panX: 10, panY: -5 })).toBeNull();
   });
 });
 

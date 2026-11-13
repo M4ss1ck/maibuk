@@ -15,8 +15,9 @@
  * Area Fill outline, an
  * Eraser
  * drag, a drawn Shape, a Bucket pour, a dropped Stamp, a picked Element, a
- * Select drag that moved one, a Map Label's bend dragged from its handle, the
- * pixels an export asked for, and what one uploaded picture measured. Points
+ * Select drag that moved one, a Map Label's bend dragged from its handle, one
+ * step of a pointer zoom or pan, the pixels an export asked for, and what one
+ * uploaded picture measured. Points
  * are page millimetres, the same space as `page.widthMm/heightMm`. Every
  * inbound message is validated here, and a malformed one is dropped. This
  * module imports only its own files.
@@ -324,6 +325,32 @@ export interface FrameBendMessage {
   bend: number;
 }
 
+/**
+ * Frame -> Worker: zoom the view around one page point (#777), from a
+ * Ctrl/Cmd+wheel, a pinch, or any gesture that zooms. `point` is the page
+ * millimetres under the pointer, which the Worker keeps in the same place on
+ * screen, and `factor` is the multiplier asked for, above 1 to zoom in. The
+ * Worker owns the zoom, so this request takes its own clamp.
+ */
+export interface FrameZoomMessage {
+  kind: "zoom";
+  point: MapPoint;
+  /** The multiplier the gesture asks for: above 1 zooms in, below 1 zooms out. */
+  factor: number;
+}
+
+/**
+ * Frame -> Worker: slide the view by one step of a pan gesture (#777), in page
+ * millimetres, from a Space drag, a middle-button drag, or a two-finger drag.
+ * The Worker owns `panX` and `panY`, so the pan Commands and the readout stay
+ * in step with the gesture.
+ */
+export interface FramePanMessage {
+  kind: "pan";
+  dx: number;
+  dy: number;
+}
+
 /** Every message a Frame may send the Worker. */
 export type FrameToWorkerMessage =
   | FrameStrokeMessage
@@ -336,6 +363,8 @@ export type FrameToWorkerMessage =
   | FrameInsertMessage
   | FrameMoveMessage
   | FrameBendMessage
+  | FrameZoomMessage
+  | FramePanMessage
   | FrameRasterizedMessage
   | FrameRasterizeErrorMessage
   | AssetIngestedMessage
@@ -367,11 +396,12 @@ function isPositiveNumber(value: unknown): value is number {
  * Eraser drag needs at least one point and a finite reach; a Shape
  * needs a known kind, two finite corners, and a boolean `constrain`; a pour or
  * an insert needs one finite page point; a move needs an Element id and a
- * finite offset; a bend needs an Element id and a finite bend; a rasterize
- * reply needs a finite request id and either an `ArrayBuffer` of bytes or a
- * non-empty error, never both; an ingest reply needs a finite request id and
- * either a positive picture size with its bytes and whether it draws in one
- * paint, or the single reason an upload was refused.
+ * finite offset; a bend needs an Element id and a finite bend; a zoom needs one
+ * finite page point and a factor above zero; a pan needs a finite offset; a
+ * rasterize reply needs a finite request id and either an `ArrayBuffer` of
+ * bytes or a non-empty error, never both; an ingest reply needs a finite
+ * request id and either a positive picture size with its bytes and whether it
+ * draws in one paint, or the single reason an upload was refused.
  */
 export function parseFrameMessage(data: unknown): FrameToWorkerMessage | null {
   if (typeof data !== "object" || data === null) return null;
@@ -468,6 +498,18 @@ export function parseFrameMessage(data: unknown): FrameToWorkerMessage | null {
     if (typeof message.id !== "string" || message.id === "") return null;
     if (typeof message.bend !== "number" || !Number.isFinite(message.bend)) return null;
     return { kind: "bendLabel", id: message.id, bend: message.bend };
+  }
+  if (message.kind === "zoom") {
+    if (!isPoint(message.point)) return null;
+    // A factor of zero or less would collapse or flip the view instead of
+    // zooming it.
+    if (!isPositiveNumber(message.factor)) return null;
+    return { kind: "zoom", point: [message.point[0], message.point[1]], factor: message.factor };
+  }
+  if (message.kind === "pan") {
+    if (typeof message.dx !== "number" || !Number.isFinite(message.dx)) return null;
+    if (typeof message.dy !== "number" || !Number.isFinite(message.dy)) return null;
+    return { kind: "pan", dx: message.dx, dy: message.dy };
   }
   if (message.kind === "rasterized") {
     if (typeof message.requestId !== "number" || !Number.isFinite(message.requestId)) return null;

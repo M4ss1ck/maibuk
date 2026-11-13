@@ -17,6 +17,7 @@ import { capture } from "../support/capture";
 import { clickPagePoint } from "../support/frame-stroke";
 import { leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
+import { openLayers } from "../support/maps-layers";
 
 const primaryNav = (page: Page) => page.getByRole("listbox", { name: "Primary navigation" });
 const navOption = (page: Page, name: string) =>
@@ -76,12 +77,13 @@ async function openEditorWithMap(page: Page): Promise<void> {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/maibuk-maps\/map$/);
   await expect(surface(page)).toBeVisible();
+  await openLayers(page);
 }
 
 /** Places a Rectangle at the view centre from its key and its Place button. */
 async function placeRectangle(page: Page): Promise<void> {
   await page.keyboard.press("r");
-  await expect(page.getByRole("radio", { name: "Rectangle", exact: true })).toBeChecked();
+  await expect(page.getByRole("button", { name: "Rectangle", exact: true, pressed: true }));
   await expect(mapFrame(page).locator('svg[data-tool="rectangle"]')).toBeVisible();
   const place = page.getByRole("button", { name: "Place rectangle" });
   await tabTo(page, place, { max: 60 });
@@ -92,7 +94,7 @@ async function placeRectangle(page: Page): Promise<void> {
 /** Picks the Bucket with its key and waits for the Frame to honour it. */
 async function pickBucket(page: Page): Promise<void> {
   await page.keyboard.press("b");
-  await expect(page.getByRole("radio", { name: "Bucket", exact: true })).toBeChecked();
+  await expect(page.getByRole("button", { name: "Bucket", exact: true, pressed: true }));
   // The scene round-trip is what proves the Frame is listening before a pour.
   await expect(mapFrame(page).locator('svg[data-tool="bucket"]')).toBeVisible();
 }
@@ -150,8 +152,10 @@ test.describe("Maps Bucket and Fills @wf:plugins-maps-fills @sc:plugin.maibuk-ma
     await pickBucket(page);
 
     // The crosshair rests at the page centre, inside the Rectangle placed
-    // there, and Enter pours at it from inside the Frame.
-    await tabTo(page, frameElement(page), { max: 20 });
+    // there, and Enter pours at it from inside the Frame. The floating chrome
+    // (#778) puts the Frame past the belt's eleven tool buttons, so the walk to
+    // it allows for them.
+    await tabTo(page, frameElement(page), { max: 60 });
     await expect(frameElement(page)).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(elementRow(page, "Fill 1")).toBeVisible();
@@ -170,7 +174,7 @@ test.describe("Maps Bucket and Fills @wf:plugins-maps-fills @sc:plugin.maibuk-ma
     await openEditorWithMap(page);
     await placeRectangle(page);
     await pickBucket(page);
-    await tabTo(page, frameElement(page), { max: 20 });
+    await tabTo(page, frameElement(page), { max: 60 });
     await expect(frameElement(page)).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(elementRow(page, "Fill 1")).toBeVisible();
@@ -190,6 +194,9 @@ test.describe("Maps Bucket and Fills @wf:plugins-maps-fills @sc:plugin.maibuk-ma
     await tabTo(page, page.getByRole("button", { name: "Open Coastline" }), { max: 60 });
     await page.keyboard.press("Enter");
     await expect(surface(page)).toBeVisible();
+    // Layers starts shut in the floating editor (#778), so the list below is
+    // opened again the way an author opens it.
+    await openLayers(page);
     await expect(elementRow(page, "Fill 1")).toBeVisible();
     await expect(filledPaths(page)).toHaveCount(1);
   });
