@@ -82,7 +82,7 @@
   "element.rectangleName": "Rectangle {{number}}",
   "element.polygonName": "Polygon {{number}}",
   "element.labelName": "Map Label {{number}}",
-  "element.labelText": "Label",
+  "element.labelText": "Write your text here",
   "properties.label": "Properties",
   "properties.name": "Name",
   "properties.mapStyle": "Map Style",

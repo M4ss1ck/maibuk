@@ -1688,7 +1688,7 @@ describe("placing a Map Label with the Text tool", () => {
     expect(label).toMatchObject({
       kind: "label",
       name: "Map Label 1",
-      text: "Label",
+      text: "Write your text here",
       hidden: false,
       locked: false,
       x: 100,
@@ -1718,7 +1718,12 @@ describe("placing a Map Label with the Text tool", () => {
     editor.setTool("text");
     editor.handleFrameMessage({ kind: "insert", point: [30, 40] });
     const label = onlyLabel(editor);
-    expect(label).toMatchObject({ name: "Map Label 1", text: "Label", x: 30, y: 40 });
+    expect(label).toMatchObject({
+      name: "Map Label 1",
+      text: "Write your text here",
+      x: 30,
+      y: 40,
+    });
     expect(editor.getSnapshot().selectedId).toBe(label.id);
     // The Text tool stays picked, so the next click writes the next label.
     expect(editor.getSnapshot().tool).toBe("text");
@@ -1773,7 +1778,7 @@ describe("a Map Label's properties", () => {
 
     expect(labelOf(editor).text).toBe("The Reach");
     editor.undo();
-    expect(labelOf(editor).text).toBe("Label");
+    expect(labelOf(editor).text).toBe("Write your text here");
     editor.redo();
     expect(labelOf(editor).text).toBe("The Reach");
 

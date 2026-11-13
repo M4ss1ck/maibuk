@@ -1032,9 +1032,9 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
 
   /**
    * Places a Map Label at `point`, where the Text tool was clicked, or at the
-   * view centre with no point (#751), writing the localized "Label" so the
-   * author has a word to replace. The new label becomes the selection, and the
-   * whole placement is one undo step.
+   * view centre with no point (#751), writing the localized prompt so the
+   * author has a sentence to replace. The new label becomes the selection, and
+   * the whole placement is one undo step.
    */
   function insertLabel(point?: MapPoint): void {
     const element = newLabel({

@@ -73,6 +73,9 @@ const bendField = (page: Page) => page.getByRole("textbox", { name: "Bend (mm)",
  */
 const PAGE_CENTRE_MM: readonly [number, number] = [114.3, 76.2];
 
+/** The prompt a new Map Label carries until the author replaces it. */
+const DEFAULT_LABEL_TEXT = "Write your text here";
+
 /** A label baseline's three points, in page millimetres. */
 interface Baseline {
   start: readonly [number, number];
@@ -231,6 +234,9 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.te
     await openEditorWithMap(page);
     await pickText(page);
     await placeLabel(page);
+    // Capture before the assertions below: the base branch draws the old
+    // default text, which the text assertion would stop short of.
+    await capture(page, "labels-placed-straight");
 
     // The row calls it what it is, and the properties panel holds the new
     // label's selection.
@@ -239,7 +245,7 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.te
     await expect(page.getByRole("textbox", { name: "Name" })).toHaveValue(/^Map Label 1/);
 
     // The Frame draws the default text along the label's baseline.
-    await expect(drawnLabelPaths(page).first()).toHaveText("Label");
+    await expect(drawnLabelPaths(page).first()).toHaveText(DEFAULT_LABEL_TEXT);
     // The baseline runs through the page centre: a text on a path starts from
     // the path's startOffset, never from an x and y of its own (#751).
     expect(baseline(await baselineData(page)).control).toEqual(PAGE_CENTRE_MM);
@@ -247,7 +253,6 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.te
     // A new label bends 0, which the Frame draws as a quadratic whose control
     // point sits on the chord: straight.
     expect(offChord(baseline(await baselineData(page)))).toBe(0);
-    await capture(page, "labels-placed-straight");
 
     // The glyphs are laid out along that baseline, not collapsed at the origin.
     expectInkOnBaseline(await labelInk(surface(page)));
@@ -267,7 +272,7 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.te
     await clickPagePoint(page, surface(page), point);
 
     await expect(elementRow(page, "Map Label 1")).toBeVisible();
-    await expect(drawnLabelPaths(page).first()).toHaveText("Label");
+    await expect(drawnLabelPaths(page).first()).toHaveText(DEFAULT_LABEL_TEXT);
     // The straight baseline's control point is the label's own page point.
     const [x, y] = baseline(await baselineData(page)).control;
     expect(x).toBeCloseTo(point[0], 0);
@@ -341,7 +346,7 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.te
     // path it follows are what the assertion reads.)
     const pathId = await baselinePaths(page).first().getAttribute("id");
     await expect(drawnLabelPaths(page).first()).toHaveAttribute("href", `#${pathId}`);
-    await expect(drawnLabelPaths(page).first()).toHaveText("Label");
+    await expect(drawnLabelPaths(page).first()).toHaveText(DEFAULT_LABEL_TEXT);
     await capture(page, "labels-curved");
     // A curved label is painted too: its glyph box follows the bowed baseline.
     expectInkOnBaseline(await labelInk(surface(page)));
