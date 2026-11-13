@@ -728,4 +728,14 @@ describe("the floating editor's stylesheet against the host's DOM", () => {
       "min-width: 2.75rem; min-height: 2.75rem"
     );
   });
+
+  it("sizes each Stamp tile by its grid column, not by its picture", () => {
+    // WebKitGTK (the Linux desktop app) resolves a grid item's `normal`
+    // alignment to `start` once the item has an aspect ratio, so a tile with no
+    // width of its own shrank to its picture's 16px natural size inside a 46px
+    // column. The tile takes the column's width, and its square follows.
+    const tile = /div:nth-child\(3\) > div:first-child > button \{([^}]*)\}/.exec(MAP_EDITOR_CSS);
+    expect(tile?.[1]).toContain("width: 100%");
+    expect(tile?.[1]).toContain("aspect-ratio: 1");
+  });
 });
