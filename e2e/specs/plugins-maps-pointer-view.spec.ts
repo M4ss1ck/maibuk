@@ -22,15 +22,9 @@ import {
   spaceDragPan,
   wheelAt,
 } from "../support/frame-stroke";
-import { pressUntilFocused, tabTo } from "../support/keyboard";
+import { tabTo } from "../support/keyboard";
+import { createMap, openMap, openMaps } from "../support/maps-layers";
 import { expect, test } from "../support/test";
-
-const primaryNav = (page: Page) => page.getByRole("listbox", { name: "Primary navigation" });
-const navOption = (page: Page, name: string) =>
-  primaryNav(page).getByRole("option", { name: new RegExp(`^${name}`) });
-
-/** The Map cards, by their preview's alt text (the Map's name). */
-const mapNames = (page: Page) => page.getByRole("list").getByRole("img");
 
 /** The Map editor's embedded Frame, the iframe element around it, and its surface. */
 const mapFrame = (page: Page): FrameLocator =>
@@ -46,35 +40,12 @@ const POINTER: readonly [number, number] = [0.7, 0.3];
 const PAN_FROM: readonly [number, number] = [0.4, 0.45];
 const PAN_TO: readonly [number, number] = [0.6, 0.55];
 
-/** Opens Maps from the sidebar, waiting for the Plugin's launch scan. */
-async function openMaps(page: Page): Promise<void> {
-  await expect(navOption(page, "Maps")).toBeVisible({ timeout: 60_000 });
-  await tabTo(page, navOption(page, "Books"), { max: 60 });
-  await pressUntilFocused(page, "ArrowDown", navOption(page, "Maps"), { max: 20 });
-  await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\/plugin\/maibuk-maps\/maps$/);
-  await expect(page.getByRole("heading", { name: "Maps", level: 1 })).toBeVisible();
-}
-
-/** Creates a Map from the New Map dialog by keyboard. */
-async function createMap(page: Page, name: string): Promise<void> {
-  const trigger = page.getByRole("button", { name: "New Map" });
-  await tabTo(page, trigger, { max: 60 });
-  await page.keyboard.press("Enter");
-  const dialog = page.getByRole("dialog", { name: "New Map" });
-  await expect(dialog.getByRole("textbox", { name: "Name" })).toBeFocused();
-  await page.keyboard.type(name);
-  await tabTo(page, dialog.getByRole("button", { name: "Create" }), { max: 20 });
-  await page.keyboard.press("Enter");
-  await expect(dialog).toBeHidden();
-  await expect(mapNames(page).first()).toHaveAccessibleName(name);
-}
-
-/** Opens a Map from the list and waits for its editor's Frame to draw. */
-async function openMap(page: Page, name: string): Promise<void> {
-  await tabTo(page, page.getByRole("button", { name: `Open ${name}` }), { max: 60 });
-  await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\/plugin\/maibuk-maps\/map$/);
+/** Starts on an open Map called Coastline, whose Frame draws its surface. */
+async function openCoastline(page: Page): Promise<void> {
+  await page.goto("/");
+  await openMaps(page);
+  await createMap(page, "Coastline");
+  await openMap(page, "Coastline");
   await expect(surface(page)).toBeVisible();
 }
 
@@ -122,10 +93,7 @@ test.use({
 
 test.describe("Maps pointer view @wf:plugins-maps-pointer-view @sc:plugin.maibuk-maps.pencilTool @sandbox", () => {
   test("zooms around the pointer on a Ctrl+wheel", async ({ page }) => {
-    await page.goto("/");
-    await openMaps(page);
-    await createMap(page, "Coastline");
-    await openMap(page, "Coastline");
+    await openCoastline(page);
     await focusFrame(page);
 
     const before = await viewBox(page);
@@ -158,10 +126,7 @@ test.describe("Maps pointer view @wf:plugins-maps-pointer-view @sc:plugin.maibuk
   });
 
   test("leaves the view alone on a plain wheel", async ({ page }) => {
-    await page.goto("/");
-    await openMaps(page);
-    await createMap(page, "Coastline");
-    await openMap(page, "Coastline");
+    await openCoastline(page);
     await focusFrame(page);
 
     const before = await viewBox(page);
@@ -174,10 +139,7 @@ test.describe("Maps pointer view @wf:plugins-maps-pointer-view @sc:plugin.maibuk
   test("pans on Space+drag without drawing, and the Pencil draws once Space is lifted", async ({
     page,
   }) => {
-    await page.goto("/");
-    await openMaps(page);
-    await createMap(page, "Coastline");
-    await openMap(page, "Coastline");
+    await openCoastline(page);
     await pickPencil(page);
     await focusFrame(page);
 

@@ -52,3 +52,43 @@ test.describe("phone Book Item Menu @touch @wf:plugins-maps-list", () => {
     await chooseMaps(page);
   });
 });
+
+/** The Maps editor's drawing Frame, and the surface its tool shows on. */
+const frame = (page: Page) => page.locator('[data-plugin-frame="embedded"]');
+const drawnWith = (page: Page, tool: string) =>
+  page.frameLocator('[data-plugin-frame="embedded"] iframe').locator(`svg[data-tool="${tool}"]`);
+
+test.describe("phone Maps editor @touch @wf:plugins-maps-touch", () => {
+  test("the Maps page opens from the navigation menu and a tap on the belt picks the tool", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    // A phone has no sidebar: the destinations live behind the navigation menu.
+    const menu = page.getByRole("button", { name: "Open navigation menu" });
+    await expect(menu).toBeVisible({ timeout: 60_000 });
+    await menu.tap();
+    const navigation = page.getByRole("dialog", { name: "Primary navigation" });
+    await navigation.getByRole("option", { name: /^Maps/ }).tap();
+    await expect(page).toHaveURL(/\/plugin\/maibuk-maps\/maps$/);
+    await expect(page.getByRole("heading", { name: "Maps", level: 1 })).toBeVisible();
+
+    // A Map of its own, made by tapping: the dialog focuses Name, so the taps
+    // are the button's and the text is the keyboard's.
+    await page.getByRole("button", { name: "New Map" }).tap();
+    const dialog = page.getByRole("dialog", { name: "New Map" });
+    await expect(dialog.getByRole("textbox", { name: "Name" })).toBeFocused();
+    await page.keyboard.type("Coastline");
+    await dialog.getByRole("button", { name: "Create" }).tap();
+    await expect(dialog).toBeHidden();
+
+    await page.getByRole("button", { name: "Open Coastline" }).tap();
+    await expect(frame(page)).toBeVisible();
+    // The editor's belt is a row of thumb-sized targets along the bottom on a
+    // phone, and a tap on one of them picks that tool in the drawing (#779).
+    const pen = page.getByRole("button", { name: "Pen", exact: true });
+    await expect(pen).toBeVisible();
+    await pen.tap();
+    await expect(drawnWith(page, "pencil")).toBeVisible();
+  });
+});

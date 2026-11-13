@@ -2903,6 +2903,21 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-maps-touch",
+    area: "plugins",
+    workflow:
+      "Maps on a phone (#779): the editor's chrome is a touch path, so it is proven with a finger rather than a keyboard. The Maps page opens from the phone's navigation menu (a phone has no sidebar), a Map is made from the New Map dialog by tapping Create, its card opens the editor, and a tap on a belt control picks that tool: the Pen tapped in the belt is the tool the drawing Frame draws with; asserts: the Maps URL and heading, the New Map dialog's focused Name and its dismissal, the editor's Frame, and the Frame's tool after the tap; persists: yes (the Map is in Plugin storage)",
+    edges: [
+      "Phone (@touch): the Maps page opens from the navigation menu, a Map is created by tap, and tapping the Pen in the belt picks it in the Frame",
+    ],
+    terms: [],
+    shortcuts: [],
+    routes: ["/", "/plugin/:pluginId/:pageId"],
+    fixture: "bookShelf",
+    tags: ["sandbox", "touch"],
+    status: "accepted",
+  },
+  {
     id: "plugins-maps-pen",
     area: "plugins",
     workflow:
