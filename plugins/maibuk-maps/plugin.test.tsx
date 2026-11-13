@@ -4224,13 +4224,14 @@ describe("the narrow editor's bar and regions (#779)", () => {
 });
 
 describe("the floating editor's chrome (#778)", () => {
-  it("drives the belt, Insert, Layers, Properties, the zoom cluster, and Export by keyboard", async () => {
+  // The chrome's keyboard paths, one test each: walked in one test they took
+  // most of its timeout on a loaded CI shard.
+  it("picks a belt tool and opens the Layers card by keyboard", async () => {
     const storage = mapStorage([]);
     const { host, runtime } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
       const user = userEvent.setup();
-
       // A tool from the belt: one press picks it, and the belt says so.
       await pickTool(user, en["tools.pencil"]);
       expect(runtime.editor?.getSnapshot().tool).toBe("pencil");
@@ -4242,6 +4243,18 @@ describe("the floating editor's chrome (#778)", () => {
         await screen.findByRole("listbox", { name: en["elements.label"] })
       ).toBeInTheDocument();
 
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("places a Stamp from Insert, deletes it from a Layers row, and shuts Layers by keyboard", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
       // Insert's card places a Stamp at the view centre by keyboard.
       await pickTool(user, en["tools.insert"]);
       const place = await screen.findByRole("button", {
@@ -4267,6 +4280,18 @@ describe("the floating editor's chrome (#778)", () => {
         expect(screen.queryByRole("listbox", { name: en["elements.label"] })).toBeNull()
       );
 
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("minimises Properties to one icon and restores it by keyboard", async () => {
+    const storage = mapStorage([]);
+    const { host } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
       // Properties minimises to one icon, and comes back.
       await pickTool(user, en["tools.pen"]);
       const minimise = await screen.findByRole("button", {
@@ -4285,8 +4310,20 @@ describe("the floating editor's chrome (#778)", () => {
       // The controls are back: the Pen's line style is the card's first one.
       expect(await screen.findByLabelText(en["properties.lineStyle"])).toBeInTheDocument();
 
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("zooms in from the cluster and resets from its readout by keyboard", async () => {
+    const storage = mapStorage([]);
+    const { host, runtime } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
       // The zoom cluster: Zoom in moves the view, and the readout resets it.
-      const zoomIn = screen.getByRole("button", { name: en["chrome.zoomIn"] });
+      const zoomIn = await screen.findByRole("button", { name: en["chrome.zoomIn"] });
       await tabTo(user, zoomIn, 120);
       await user.keyboard("{Enter}");
       await waitFor(() => expect(runtime.editor?.getSnapshot().zoom).toBeCloseTo(1.25, 10));
@@ -4297,6 +4334,18 @@ describe("the floating editor's chrome (#778)", () => {
       await user.keyboard("{Enter}");
       await waitFor(() => expect(runtime.editor?.getSnapshot().zoom).toBe(1));
 
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("opens the Export popover by keyboard", async () => {
+    const storage = mapStorage([]);
+    const { host } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
       // Export opens its popover, which holds the Save path.
       await openExport(user);
       expect(screen.getByRole("button", { name: en["export.save"] })).toBeInTheDocument();
