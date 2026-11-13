@@ -2863,6 +2863,23 @@ describe("pointer zoom and pan (#777)", () => {
     svg().dispatchEvent(event);
   }
 
+  /**
+   * One pointer event of a named kind of pointer that never reaches the
+   * surface, the way a finger lifted past the drawing's edge does.
+   */
+  function pointerOffSurface(
+    type: string,
+    x: number,
+    y: number,
+    pointerId: number,
+    pointerType: string
+  ) {
+    const event = new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0 });
+    Object.defineProperty(event, "pointerId", { value: pointerId });
+    Object.defineProperty(event, "pointerType", { value: pointerType });
+    window.dispatchEvent(event);
+  }
+
   /** Lifting Space, which restores the tool the author was drawing with. */
   function releaseSpace(): void {
     document.body.dispatchEvent(new KeyboardEvent("keyup", { key: " ", bubbles: true }));
@@ -2965,5 +2982,26 @@ describe("pointer zoom and pan (#777)", () => {
     pointerOf("pointerup", 40, 40, 2, "touch");
 
     expect(frame.port.messages).toEqual([{ kind: "pan", dx: -5, dy: 0 }]);
+  });
+
+  it("forgets a finger that lifts off the surface, so the next tap draws", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "bucket" });
+
+    // A touch lands on the drawing and pours where it fell.
+    pointerOf("pointerdown", 20, 20, 1, "touch");
+    // It slides off the surface and lifts there, so the surface never hears
+    // its pointerup and no capture ever brings it back.
+    pointerOffSurface("pointerup", 20, 20, 1, "touch");
+
+    // The next tap is one finger alone, so it pours rather than panning.
+    pointerOf("pointerdown", 40, 30, 2, "touch");
+    pointerOf("pointermove", 45, 30, 2, "touch");
+    pointerOf("pointerup", 45, 30, 2, "touch");
+
+    expect(frame.port.messages).toEqual([
+      { kind: "pour", point: [20, 20] },
+      { kind: "pour", point: [40, 30] },
+    ]);
   });
 });

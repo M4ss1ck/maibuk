@@ -2334,6 +2334,10 @@
     document.removeEventListener("keyup", onKeyUp);
     for (const source of assetSources.values()) URL.revokeObjectURL(source.url);
     assetSources.clear();
+    // A press that slid off the surface is forgotten by its window event, not
+    // by the surface's, so that listener goes whatever the surface is.
+    window.removeEventListener("pointerup", forgetPointer);
+    window.removeEventListener("pointercancel", forgetPointer);
     if (surface === null) return;
     surface.removeEventListener("pointerdown", onPointerDown);
     surface.removeEventListener("pointermove", onPointerMove);
@@ -2380,6 +2384,18 @@
     endPan(event);
   }
 
+  /**
+   * A pointer that lifts or is cancelled anywhere in the Frame is no longer
+   * down, even where the surface never hears it: a Bucket, Insert, or Pen press
+   * takes no capture, so a finger that slid off the drawing before it lifted
+   * would stay counted and turn the next single-finger press into a pan (#777).
+   * The surface's own handlers already forget it; deleting twice is harmless.
+   * @param {PointerEvent} event
+   */
+  function forgetPointer(event) {
+    pointerClients.delete(event.pointerId);
+  }
+
   draw();
 
   document.addEventListener("keydown", onKeyDown);
@@ -2396,6 +2412,12 @@
     // so the listener is not passive (#777).
     surface.addEventListener("wheel", onWheel, { passive: false });
   }
+
+  // A finger that lifts off the surface sends its pointerup to the window
+  // alone, so the Frame forgets the pointer here (#777). The bubble phase
+  // reaches the window last, after the surface's own handlers ended the press.
+  window.addEventListener("pointerup", forgetPointer);
+  window.addEventListener("pointercancel", forgetPointer);
 
   if (port !== null) {
     port.onmessage = onMessage;
