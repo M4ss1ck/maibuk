@@ -1,7 +1,7 @@
 // @ts-check
 /* The Map Frame's drawing surface (#745, #746, #748, #749, #750, #766, #751,
-   #756, #777). The Frame's only host channel is `window.maibuk.port`: the Worker
-   sends the whole `scene` on every change and when the Frame connects, an
+   #756, #777, #795). The Frame's only host channel is `window.maibuk.port`: the
+   Worker sends the whole `scene` on every change and when the Frame connects, an
    uploaded picture's bytes once per asset, and asks it to `rasterize` an export
    SVG, since only this document has a canvas, and to `ingest` one uploaded
    picture, since only it has a DOM. The Frame answers a finished Pencil stroke,
@@ -12,11 +12,13 @@
    export asked for, and what one uploaded picture measured.
    Points cross the port in page millimetres, the same space as the page's
    `widthMm`/`heightMm`, so the pointer's own screen pixels are converted
-   through the svg's `getScreenCTM`.
+   through the svg's `getScreenCTM`; the surface's own pixel size says how many
+   page millimetres a screen pixel spans, so a transform handle keeps its size
+   on screen at every zoom (#795).
 
-   The wire shapes mirror `frame-protocol.ts`. Tests inject a point converter
-   and a cleanup seam through `globalThis.__mapTestHooks`; production never
-   defines it.
+   The wire shapes mirror `frame-protocol.ts`. Tests inject a point converter, a
+   screen scale, and a cleanup seam through `globalThis.__mapTestHooks`;
+   production never defines it.
 
    It is a classic script, not a module: a relative `import` cannot resolve in
    the Frame's opaque origin (docs/plugins/frame-ui.md). Preact and htm arrive
@@ -35,7 +37,9 @@
    * @typedef {{ kind: "image", assetId: string, x: number, y: number, width: number, height: number, rotation: number, opacity: number, tint?: string, clip?: string }} ImageShape
    * @typedef {LineShape | TextShape | ImageShape} SceneShape
    * @typedef {{ x: number, y: number, rotation: number, width: number, bend: number }} FrameLabelLayout
-   * @typedef {{ id: string, shapes: SceneShape[], filter: string | null, hidden: boolean, locked: boolean, selected: boolean, movable: boolean, label?: FrameLabelLayout }} FrameSceneElement
+   * @typedef {{ x: number, y: number, width: number, height: number, rotation: number }} FrameTransformBox
+   * @typedef {{ box: FrameTransformBox, handles: "corners" | "all" | "label" }} FrameElementTransform
+   * @typedef {{ id: string, shapes: SceneShape[], filter: string | null, hidden: boolean, locked: boolean, selected: boolean, movable: boolean, label?: FrameLabelLayout, transform?: FrameElementTransform }} FrameSceneElement
    * @typedef {{ one: string, other: string }} PenDraftLabel
    * @typedef {{ kind: "scene", widthMm: number, heightMm: number, background: string, elements: FrameSceneElement[], defs: string, tool: MapTool, zoom: number, panX: number, panY: number, penLabel: PenDraftLabel }} FrameSceneMessage
    * @typedef {{ kind: "stroke", points: MapPoint[] }} FrameStrokeMessage
@@ -118,6 +122,49 @@
    */
   const BEND_HANDLE_RADIUS_MM = 2;
   const BEND_SNAP_MM = 0.5;
+
+  /**
+   * A transform handle's size and hit target (#795), in screen pixels: a 9 px
+   * square inside a 24 px target is easy to see and, with a mouse, easy to
+   * grab. A finger needs more room, so a coarse pointer draws a larger square
+   * and gives it a 44 px target. The turn handle is a circle on a stalk above
+   * the box's top edge.
+   */
+  const HANDLE_PX = 9;
+  const HANDLE_HIT_PX = 24;
+  const TURN_HANDLE_PX = 12;
+  const TURN_STALK_PX = 20;
+  const COARSE_HANDLE_PX = 13;
+  const COARSE_HANDLE_HIT_PX = 44;
+  const COARSE_TURN_HANDLE_PX = 18;
+  const COARSE_TURN_STALK_PX = 26;
+
+  /** The cursor the turn handle shows: no browser has a rotate arrow of its own. */
+  const TURN_CURSOR = "grab";
+
+  /**
+   * The resize cursor a grip takes, by the direction it points on screen, in
+   * 45° steps from due east. The box's turn carries a corner's arrow round with
+   * it, so a turned Element still shows the cursor a drag would follow.
+   */
+  const RESIZE_CURSORS = [
+    "e-resize",
+    "nwse-resize",
+    "s-resize",
+    "nesw-resize",
+    "w-resize",
+    "nwse-resize",
+    "n-resize",
+    "nesw-resize",
+  ];
+
+  /** The box's four corners: the handle each names, and its signs from the centre. @type {Array<[string, number, number]>} */
+  const CORNER_HANDLES = [
+    ["nw", -1, -1],
+    ["ne", 1, -1],
+    ["se", 1, 1],
+    ["sw", -1, 1],
+  ];
 
   /** The characters a definitions id may hold, so a scene cannot write an attribute of its own. */
   const FILTER_ID = /^[A-Za-z0-9_-]+$/;
@@ -517,6 +564,31 @@
   }
 
   /**
+   * Reads the box a selected Element's transform handles sit on (#795), or
+   * null when it carries none or is malformed: a handle with no box to sit on
+   * would grip nothing, and a handle set this Frame does not know would draw
+   * the wrong grips.
+   * @param {unknown} raw
+   * @returns {FrameElementTransform | null}
+   */
+  function readTransform(raw) {
+    if (typeof raw !== "object" || raw === null) return null;
+    const transform = /** @type {Record<string, unknown>} */ (raw);
+    const handles = transform.handles;
+    if (handles !== "corners" && handles !== "all" && handles !== "label") return null;
+    if (typeof transform.box !== "object" || transform.box === null) return null;
+    const box = /** @type {Record<string, unknown>} */ (transform.box);
+    if (!isNumber(box.x) || !isNumber(box.y)) return null;
+    if (!isNumber(box.width) || box.width <= 0) return null;
+    if (!isNumber(box.height) || box.height <= 0) return null;
+    if (!isNumber(box.rotation)) return null;
+    return {
+      box: { x: box.x, y: box.y, width: box.width, height: box.height, rotation: box.rotation },
+      handles,
+    };
+  }
+
+  /**
    * Reads one scene message, or null when it is malformed and must be dropped.
    * A message needs a positive page size; everything else falls back to a
    * usable default, because a Frame with no picture is worse than one drawn
@@ -545,6 +617,7 @@
           if (shape !== null) shapes.push(shape);
         }
         const label = readLabelLayout(element.label);
+        const transform = readTransform(element.transform);
         elements.push({
           id: element.id,
           shapes,
@@ -558,6 +631,7 @@
           // A locked Element never moves, whatever else the scene says.
           movable: element.movable === true && element.locked !== true,
           ...(label === null ? {} : { label }),
+          ...(transform === null ? {} : { transform }),
         });
       }
     }
@@ -1100,6 +1174,177 @@
   }
 
   /**
+   * How many screen pixels one page millimetre spans right now, or null when
+   * this document cannot say (#795): a handle keeps its size on screen by being
+   * drawn in as many of those millimetres as its pixel size asks for. The svg
+   * fills the surface and fits the page into it with `meet`, so the tighter of
+   * the surface's two ratios is the scale every page millimetre is drawn at. It
+   * answers before the first draw has put an svg there, which a screen matrix
+   * cannot; a document with no layout has neither.
+   * @returns {number | null}
+   */
+  function screenScale() {
+    if (hooks && typeof hooks.pxPerMm === "function") {
+      const scale = hooks.pxPerMm();
+      return isNumber(scale) && scale > 0 ? scale : null;
+    }
+    if (surface === null || scene === null) return null;
+    const view = viewRect(scene);
+    const scale = Math.min(surface.clientWidth / view.width, surface.clientHeight / view.height);
+    return isNumber(scale) && scale > 0 ? scale : null;
+  }
+
+  /** Whether the pointer is a finger's, which needs larger handles (#795). */
+  function isCoarsePointer() {
+    return (
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(pointer: coarse)").matches === true
+    );
+  }
+
+  /**
+   * One handle's sizes in page millimetres at the current screen scale (#795):
+   * what it draws, the wider target that catches a press on it, the turn grip's
+   * diameter, and the stalk that lifts it off the box's top edge.
+   * @param {number} scale
+   */
+  function handleSizes(scale) {
+    const coarse = isCoarsePointer();
+    return {
+      drawn: (coarse ? COARSE_HANDLE_PX : HANDLE_PX) / scale,
+      hit: (coarse ? COARSE_HANDLE_HIT_PX : HANDLE_HIT_PX) / scale,
+      turn: (coarse ? COARSE_TURN_HANDLE_PX : TURN_HANDLE_PX) / scale,
+      stalk: (coarse ? COARSE_TURN_STALK_PX : TURN_STALK_PX) / scale,
+    };
+  }
+
+  /**
+   * The resize cursor one corner takes (#795): the box's own turn added to the
+   * corner's direction, taken to the nearest 45°.
+   * @param {number} rotation
+   * @param {number} signX
+   * @param {number} signY
+   * @returns {string}
+   */
+  function resizeCursor(rotation, signX, signY) {
+    const degrees = (Math.atan2(signY, signX) * 180) / Math.PI + rotation;
+    const step = Math.round((((degrees % 360) + 360) % 360) / 45) % 8;
+    return RESIZE_CURSORS[step];
+  }
+
+  /**
+   * The selected Element whose transform handles the Frame draws, or null: one
+   * the Worker gave a box, shown, under the Select tool, since every other
+   * tool's press draws a new thing rather than sizing the one under it.
+   * @returns {FrameSceneElement | null}
+   */
+  function transformTarget() {
+    if (scene === null || scene.tool !== "select") return null;
+    const selected = scene.elements.find((element) => element.selected);
+    if (selected === undefined || selected.transform === undefined || selected.hidden) return null;
+    return selected;
+  }
+
+  /**
+   * The box and handles a selected Stamp's or Map Image's transform draws
+   * (#795): its box, turned with the Element, a square grip on each corner, and
+   * a round grip on a stalk above the top edge for turning it. Each grip draws
+   * under a bigger invisible target, both sized from the screen scale, so they
+   * keep their size on screen at every zoom and grow for a finger.
+   *
+   * The overlay is drawn over the Elements, so a press on a grip reaches it
+   * before the Element's own hit target under it. A locked Element shows its
+   * box dashed and no grips: it cannot be resized or turned.
+   * @returns {any}
+   */
+  function transformOverlay() {
+    const target = transformTarget();
+    if (target === null || target.transform === undefined) return null;
+    const { html } = lib;
+    const { box } = target.transform;
+    const scale = screenScale();
+    const sizes = scale === null ? null : handleSizes(scale);
+    const halfWidth = box.width / 2;
+    const halfHeight = box.height / 2;
+    const locked = target.locked;
+    // Every handle set a scene names carries the four corners; a Shape's sides
+    // and a Map Label's sides come with the ticket that draws them.
+    const grips =
+      sizes === null || locked
+        ? []
+        : CORNER_HANDLES.map(([id, signX, signY]) => ({
+            id,
+            x: signX * halfWidth,
+            y: signY * halfHeight,
+            drawn: sizes.drawn,
+            hit: sizes.hit,
+            cursor: resizeCursor(box.rotation, signX, signY),
+          }));
+    const turn =
+      sizes === null || locked
+        ? null
+        : { y: -halfHeight - sizes.stalk, radius: sizes.turn / 2, hit: sizes.hit / 2 };
+    const frame = `translate(${n(box.x)} ${n(box.y)})${
+      box.rotation === 0 ? "" : ` rotate(${n(box.rotation)})`
+    }`;
+    return html`<g
+      class="map-transform"
+      data-transform="${target.id}"
+      data-locked="${locked ? "true" : undefined}"
+      transform="${frame}"
+    >
+      <rect
+        class="map-transform-box"
+        x="${n(-halfWidth)}"
+        y="${n(-halfHeight)}"
+        width="${n(box.width)}"
+        height="${n(box.height)}"
+      />
+      ${
+        turn === null
+          ? null
+          : html`<path class="map-transform-stalk" d="M 0 ${n(-halfHeight)} L 0 ${n(turn.y)}" />
+        <circle
+          class="map-transform-handle"
+          data-transform-handle="rotate"
+          cx="0"
+          cy="${n(turn.y)}"
+          r="${n(turn.radius)}"
+        />
+        <circle
+          class="map-transform-hit"
+          data-transform-handle-hit="rotate"
+          cx="0"
+          cy="${n(turn.y)}"
+          r="${n(turn.hit)}"
+          style="cursor: ${TURN_CURSOR}"
+        />`
+      }
+      ${grips.map(
+        (grip) => html`<rect
+          class="map-transform-handle"
+          data-transform-handle="${grip.id}"
+          x="${n(grip.x - grip.drawn / 2)}"
+          y="${n(grip.y - grip.drawn / 2)}"
+          width="${n(grip.drawn)}"
+          height="${n(grip.drawn)}"
+        />`
+      )}
+      ${grips.map(
+        (grip) => html`<rect
+          class="map-transform-hit"
+          data-transform-handle-hit="${grip.id}"
+          x="${n(grip.x - grip.hit / 2)}"
+          y="${n(grip.y - grip.hit / 2)}"
+          width="${n(grip.hit)}"
+          height="${n(grip.hit)}"
+          style="cursor: ${grip.cursor}"
+        />`
+      )}
+    </g>`;
+  }
+
+  /**
    * Draws the current scene and any live stroke into the Frame. The drawing is
    * `aria-hidden`: a Frame's contents sit outside Maibuk's accessibility gate
    * (`docs/plugins/frame-ui.md`), and the Elements list is the drawing's
@@ -1115,6 +1360,8 @@
     }
     const view = viewRect(current);
     const { html } = lib;
+    // The Element whose box marks it instead of a trace of its ink, if any.
+    const outlined = transformTarget();
     lib.render(
       html`<svg
         viewBox="${n(view.x)} ${n(view.y)} ${n(view.width)} ${n(view.height)}"
@@ -1150,7 +1397,7 @@
             >
               ${elementArt(element)}
               ${
-                element.selected
+                element.selected && element.id !== outlined?.id
                   ? highlightShapes(element).map(
                       (shape) => html`<path
                         class="map-selection"
@@ -1163,6 +1410,7 @@
             </g>`
           )}
         ${bendOverlay()}
+        ${transformOverlay()}
         ${drawing === null ? null : html`<path class="map-live" d="${polyline(drawing.points)}" />`}
         ${penDraft === null ? null : html`<path class="map-live" d="${penDraftPath()}" />`}
         ${crosshair === null ? null : html`<path class="map-crosshair" d="${crosshairPath()}" />`}
@@ -1734,6 +1982,15 @@
 
     // A second finger while one drag is under way neither picks nor drags.
     if (moveDrag !== null || bendDrag !== null) return;
+    // A press on a transform handle belongs to the handle (#795): it never
+    // picks the Element under it nor moves it, so a grip press posts nothing.
+    if (
+      event.target instanceof Element &&
+      event.target.closest("[data-transform-handle-hit]") !== null
+    ) {
+      event.preventDefault();
+      return;
+    }
     // A press on the bend handle shapes the curve (#751) and never picks or
     // moves the label it belongs to, so a bend drag posts no move.
     if (startBend(event)) return;

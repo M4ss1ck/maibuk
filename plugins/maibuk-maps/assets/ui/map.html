@@ -177,6 +177,40 @@
         stroke-linecap: round;
         pointer-events: none;
       }
+
+      /* A selected Stamp's or Map Image's transform handles (#795): its box, the
+         corner grips, and the turn grip on its stalk. Their geometry is sized in
+         page millimetres from the screen scale, so they keep their size on screen
+         at every zoom; the strokes stay a pixel wide by not scaling, so a grip's
+         edge is as crisp when zoomed in as the selection outline is. They mark
+         and grip the Element rather than paint it, so only the wider, invisible
+         targets under them take a pointer. */
+      .map-transform-box,
+      .map-transform-stalk,
+      .map-transform-handle {
+        fill: none;
+        stroke: var(--maibuk-color-primary);
+        stroke-width: 1.5;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+      }
+
+      .map-transform-handle {
+        fill: var(--maibuk-color-primary);
+        fill-opacity: 0.2;
+      }
+
+      /* A locked Element cannot be resized or turned: its box is dashed, and it
+         carries no grips at all. */
+      .map-transform[data-locked="true"] .map-transform-box {
+        stroke-dasharray: 4 3;
+      }
+
+      .map-transform-hit {
+        fill: transparent;
+        stroke: none;
+        pointer-events: all;
+      }
     </style>
   </head>
   <body>

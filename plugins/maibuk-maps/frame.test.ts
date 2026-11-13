@@ -51,6 +51,13 @@ interface Frame {
    * host layout shift that moves the Frame under a still pointer.
    */
   origin: [number, number];
+  /**
+   * How many screen pixels one page millimetre spans (#795), which the Frame
+   * asks for to keep a transform handle the same size on screen at every zoom.
+   * A browser answers from the surface's own pixel size; jsdom has no layout,
+   * so a test says it, and `null` stands for a document that cannot.
+   */
+  scale: number | null;
   /** Sends one scene, with the defaults a Select-tool, unzoomed view has. */
   scene(overrides?: Record<string, unknown>): void;
   /**
@@ -67,9 +74,11 @@ function loadFrame(): Frame {
   (window as unknown as { maibuk: unknown }).maibuk = { port };
   const cleanups: (() => void)[] = [];
   const origin: [number, number] = [0, 0];
+  const sizes: { scale: number | null } = { scale: 4 };
   let assetSvg: (svg: string) => string = (svg) => svg;
   (globalThis as Record<string, unknown>).__mapTestHooks = {
     pagePoint: (event: MouseEvent) => [event.clientX - origin[0], event.clientY - origin[1]],
+    pxPerMm: () => sizes.scale,
     onReady: (cleanup: () => void) => cleanups.push(cleanup),
     onAssetSvg: (resolve: (svg: string) => string) => {
       assetSvg = resolve;
@@ -89,6 +98,12 @@ function loadFrame(): Frame {
     port,
     cleanups,
     origin,
+    get scale() {
+      return sizes.scale;
+    },
+    set scale(value: number | null) {
+      sizes.scale = value;
+    },
     scene(overrides = {}) {
       port.deliver({
         kind: "scene",
@@ -2674,6 +2689,249 @@ describe("the Select tool", () => {
     if (surface === null) throw new Error("the Frame has no surface");
     pointer(surface, "pointerdown", 5, 5);
     expect(frame.port.messages).toEqual([]);
+  });
+});
+
+describe("the transform handles (#795)", () => {
+  /** The box a selected Stamp's handles sit on: 40 by 20 mm about (100, 50). */
+  const handleBox = (overrides: Record<string, unknown> = {}) => ({
+    box: { x: 100, y: 50, width: 40, height: 20, rotation: 0, ...overrides },
+    handles: "corners",
+  });
+
+  /** One Element carrying that box, selected. */
+  const selected = (overrides: Record<string, unknown> = {}) =>
+    sceneElement({ selected: true, transform: handleBox(), ...overrides });
+
+  /** The overlay the Frame drew for the selection. */
+  const overlay = (): Element => {
+    const group = document.querySelector("g.map-transform");
+    if (group === null) throw new Error("the Frame drew no transform handles");
+    return group;
+  };
+
+  /** One grip the Frame drew, under `data-transform-handle`. */
+  const grip = (id: string): Element => {
+    const element = document.querySelector(`[data-transform-handle="${id}"]`);
+    if (element === null) throw new Error(`the Frame drew no ${id} grip`);
+    return element;
+  };
+
+  /** The invisible shape that catches a press on one grip. */
+  const target = (id: string): Element => {
+    const element = document.querySelector(`[data-transform-handle-hit="${id}"]`);
+    if (element === null) throw new Error(`the Frame drew no ${id} target`);
+    return element;
+  };
+
+  /** The middle of a drawn rectangle, in the box's own millimetres. */
+  const centre = (element: Element): [number, number] => [
+    Number(element.getAttribute("x")) + Number(element.getAttribute("width")) / 2,
+    Number(element.getAttribute("y")) + Number(element.getAttribute("height")) / 2,
+  ];
+
+  /** How many screen pixels wide a drawn rectangle is, at `scale` px per mm. */
+  const pixels = (element: Element, scale: number): number =>
+    Number(element.getAttribute("width")) * scale;
+
+  /** The cursor a grip shows. */
+  const cursor = (id: string): string =>
+    (target(id) as unknown as SVGElement & { style: CSSStyleDeclaration }).style.cursor;
+
+  /** Makes the document report a finger's pointer, for the length of the call. */
+  function withCoarsePointer<T>(run: () => T): T {
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query === "(pointer: coarse)",
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+    try {
+      return run();
+    } finally {
+      window.matchMedia = original;
+    }
+  }
+
+  it("draws the selected Stamp's box, a grip on each corner, and the turn grip above it", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected()] });
+
+    // The box arrives from the Worker, so the Frame never guesses it from the
+    // art: it draws the box as given, in the Element's own turned frame.
+    const group = overlay();
+    expect(group.getAttribute("data-transform")).toBe("e1");
+    expect(group.getAttribute("transform")).toBe("translate(100 50)");
+    const outline = group.querySelector("rect.map-transform-box");
+    expect(outline?.getAttribute("x")).toBe("-20");
+    expect(outline?.getAttribute("y")).toBe("-10");
+    expect(outline?.getAttribute("width")).toBe("40");
+    expect(outline?.getAttribute("height")).toBe("20");
+
+    // A grip sits on each corner of the box, not on the art it marks.
+    expect(
+      document.querySelectorAll(
+        "[data-transform-handle='nw'], [data-transform-handle='ne'], [data-transform-handle='se'], [data-transform-handle='sw']"
+      )
+    ).toHaveLength(4);
+    expect(centre(grip("nw"))).toEqual([expect.closeTo(-20, 1), expect.closeTo(-10, 1)]);
+    expect(centre(grip("se"))).toEqual([expect.closeTo(20, 1), expect.closeTo(10, 1)]);
+
+    // The turn grip is a circle on a stalk above the top edge's middle.
+    const turn = grip("rotate");
+    expect(turn.tagName.toLowerCase()).toBe("circle");
+    expect(Number(turn.getAttribute("cx"))).toBe(0);
+    expect(Number(turn.getAttribute("cy"))).toBeLessThan(-10);
+    expect(group.querySelector("path.map-transform-stalk")).not.toBeNull();
+  });
+
+  it("turns the box and its grips with the Element", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected({ transform: handleBox({ rotation: 30 }) })] });
+
+    expect(overlay().getAttribute("transform")).toBe("translate(100 50) rotate(30)");
+    // The grips keep their corners of the box: the frame turns them, not the maths.
+    expect(centre(grip("nw"))).toEqual([expect.closeTo(-20, 1), expect.closeTo(-10, 1)]);
+  });
+
+  it("keeps each grip the same size on screen at every zoom", () => {
+    frame = loadFrame();
+    frame.scale = 4;
+    frame.scene({ elements: [selected()], zoom: 1 });
+    const atOne = pixels(grip("nw"), 4);
+
+    // Zooming in doubles every page millimetre on screen, so the grip is drawn
+    // in half as many of them: 9 px at either zoom, as the issue asks.
+    frame.scale = 8;
+    frame.scene({ elements: [selected()], zoom: 2 });
+    const atTwo = pixels(grip("nw"), 8);
+
+    expect(atOne).toBeCloseTo(9, 1);
+    expect(atTwo).toBeCloseTo(9, 1);
+  });
+
+  it("hits a wider target than it draws, and a finger's on a coarse pointer", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected()] });
+
+    // 24 px of slack around a 9 px square, so a mouse need not be precise.
+    expect(pixels(target("nw"), 4)).toBeCloseTo(24, 1);
+    expect(pixels(grip("nw"), 4)).toBeCloseTo(9, 1);
+
+    withCoarsePointer(() => {
+      frame = loadFrame();
+      frame.scene({ elements: [selected()] });
+
+      // A finger has no fine aim: larger grips and a 44 px target.
+      expect(pixels(target("nw"), 4)).toBeCloseTo(44, 1);
+      expect(pixels(grip("nw"), 4)).toBeGreaterThan(9);
+    });
+  });
+
+  it("picks the resize cursor from the corner's direction on screen, and a turn cursor", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected()] });
+
+    expect(cursor("nw")).toBe("nwse-resize");
+    expect(cursor("ne")).toBe("nesw-resize");
+    expect(cursor("se")).toBe("nwse-resize");
+    expect(cursor("sw")).toBe("nesw-resize");
+    expect(cursor("rotate")).toBe("grab");
+
+    // A quarter turn carries each corner's arrow round with it, so the cursor
+    // still shows the way a drag would go.
+    frame.scene({ elements: [selected({ transform: handleBox({ rotation: 90 }) })] });
+    expect(cursor("nw")).toBe("nesw-resize");
+    expect(cursor("ne")).toBe("nwse-resize");
+  });
+
+  it("marks a locked Element with a dashed box and no grips", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected({ locked: true })] });
+
+    expect(overlay().getAttribute("data-locked")).toBe("true");
+    expect(overlay().querySelector("rect.map-transform-box")).not.toBeNull();
+    expect(document.querySelector("[data-transform-handle]")).toBeNull();
+    expect(document.querySelector("[data-transform-handle-hit]")).toBeNull();
+    // The dash is the stylesheet's, on the box of a locked Element.
+    expect(HTML).toMatch(/\[data-locked="true"\][\s\S]*?stroke-dasharray/);
+  });
+
+  it("replaces the traced outline with the box, above the Element's own hit target", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected({ movable: true })] });
+
+    // One outline marks a selected Element: the box the grips sit on, not a
+    // second trace of the art under it.
+    expect(document.querySelector("path.map-selection")).toBeNull();
+    // The overlay is drawn last, so a press reaches a grip before the art.
+    const drawn = Array.from(svg().querySelectorAll("g[data-element-id], g.map-transform"));
+    expect(drawn.at(-1)).toBe(overlay());
+  });
+
+  it("never picks or moves the Element when the press lands on a grip", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected({ movable: true })] });
+
+    pointer(target("se"), "pointerdown", 120, 60);
+    pointer(svg(), "pointermove", 130, 70);
+    pointer(svg(), "pointerup", 130, 70);
+    expect(frame.port.messages).toEqual([]);
+
+    // The Element's body still moves as it always did.
+    const line = document.querySelector('g[data-element-id="e1"] path.map-line');
+    if (line === null) throw new Error("the Element drew no line");
+    pointer(line, "pointerdown", 12, 12);
+    pointer(svg(), "pointermove", 20, 12);
+    pointer(svg(), "pointerup", 20, 12);
+    expect(frame.port.messages).toEqual([
+      { kind: "select", id: "e1" },
+      { kind: "move", id: "e1", dx: 8, dy: 0 },
+    ]);
+  });
+
+  it("draws no grips for an Element with no box, no other tool, and no selection", () => {
+    frame = loadFrame();
+    // A Map Line keeps today's outline: nothing for a handle to resize.
+    frame.scene({ elements: [sceneElement({ selected: true })] });
+    expect(document.querySelector("g.map-transform")).toBeNull();
+    expect(document.querySelector("path.map-selection")).not.toBeNull();
+
+    // Every other tool's press draws or picks, so it shows no grips.
+    frame.scene({ tool: "pencil", elements: [selected()] });
+    expect(document.querySelector("g.map-transform")).toBeNull();
+
+    frame.scene({ elements: [sceneElement({ transform: handleBox() })] });
+    expect(document.querySelector("g.map-transform")).toBeNull();
+  });
+
+  it("draws the box without grips when the document cannot measure its screen", () => {
+    frame = loadFrame();
+    frame.scale = null;
+    frame.scene({ elements: [selected()] });
+
+    // The box's stroke needs no scale, but a grip's size does: a Frame that
+    // cannot say how large a pixel is draws no grip at all.
+    expect(overlay().querySelector("rect.map-transform-box")).not.toBeNull();
+    expect(document.querySelector("[data-transform-handle]")).toBeNull();
+  });
+
+  it("drops a box with no size or a handle set it does not know", () => {
+    frame = loadFrame();
+    for (const transform of [
+      { box: { x: 100, y: 50, width: 0, height: 20, rotation: 0 }, handles: "corners" },
+      { box: { x: 100, y: 50, width: 40, height: 20, rotation: 0 }, handles: "sides" },
+      { box: { x: 100, y: 50, width: 40, rotation: 0 }, handles: "corners" },
+      { handles: "corners" },
+    ]) {
+      frame.scene({ elements: [sceneElement({ selected: true, transform })] });
+      expect(document.querySelector("g.map-transform")).toBeNull();
+    }
   });
 });
 
