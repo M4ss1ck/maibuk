@@ -6,13 +6,14 @@
  */
 
 import { readFileSync } from "node:fs";
+import { useEffect } from "react";
 import { Blob as NodeBlob } from "node:buffer";
 import { join } from "node:path";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { parsePluginManifest } from "@/features/plugins/manifest-validate";
-import { createTestHost } from "@/features/plugins/test-kit";
+import { createTestHost as createKitHost } from "@/features/plugins/test-kit";
 import type { TestHost, TestPdfFont } from "@/features/plugins/types";
 import {
   registerPluginCommands,
@@ -121,6 +122,24 @@ const cleanups: Array<() => void> = [];
 afterEach(() => {
   while (cleanups.length > 0) cleanups.pop()?.();
 });
+
+/**
+ * Every host a test opened. A test that times out stops awaiting, but its body
+ * keeps running and its pages stay in the document, where the next test's
+ * `screen` queries find them (#770). Stopping each host here unmounts them even
+ * when the test never reached its own `host.stop()`; stopping twice is a no-op.
+ */
+const openHosts = new Set<TestHost>();
+afterEach(async () => {
+  for (const host of openHosts) await host.stop();
+  openHosts.clear();
+});
+
+function createTestHost(...args: Parameters<typeof createKitHost>): TestHost {
+  const host = createKitHost(...args);
+  openHosts.add(host);
+  return host;
+}
 
 function mapsManifest() {
   const result = parsePluginManifest(readFileSync(join(__dirname, "manifest.json"), "utf8"), {
@@ -509,19 +528,33 @@ function pictureStorage(): Map<string, unknown> {
 }
 
 /** Registers the manifest's Commands so the harness can bind their keys. */
+/** Whether this test registered the Maps Commands, so `pickTool` does not twice. */
+let mapCommandsRegistered = false;
+/** Whether a `CommandKeys` is mounted, so `pickTool` does not mount a second. */
+let commandKeysMounted = false;
+
 function registerMapCommands(): void {
-  cleanups.push(
-    registerPluginCommands("maibuk-maps", {
-      defaultLanguage: "en",
-      pages: ["maps", "map"],
-      commands: (mapsManifest().contributes?.commands ?? []) as PluginCommandDeclaration[],
-    })
-  );
+  const unregister = registerPluginCommands("maibuk-maps", {
+    defaultLanguage: "en",
+    pages: ["maps", "map"],
+    commands: (mapsManifest().contributes?.commands ?? []) as PluginCommandDeclaration[],
+  });
+  mapCommandsRegistered = true;
+  cleanups.push(() => {
+    unregister();
+    mapCommandsRegistered = false;
+  });
 }
 
 /** The host's PluginCommands stand-in: the same registry ids and `useShortcuts`. */
 function CommandKeys({ host }: { host: TestHost }) {
   const commands = (mapsManifest().contributes?.commands ?? []) as PluginCommandDeclaration[];
+  useEffect(() => {
+    commandKeysMounted = true;
+    return () => {
+      commandKeysMounted = false;
+    };
+  }, []);
   useShortcuts(
     commands
       .filter((command) => command.contexts.includes("map"))
@@ -557,8 +590,9 @@ function elementsList(): HTMLElement {
  */
 async function selectRow(user: User, name: string): Promise<HTMLElement> {
   await openLayers(user);
+  // The list can draw before its rows arrive: wait for the row itself.
   const list = await screen.findByRole("list");
-  const row = within(list).getByRole("button", { name: new RegExp(`^${name}`) });
+  const row = await within(list).findByRole("button", { name: new RegExp(`^${name}`) });
   await tabTo(user, row, 300);
   await user.keyboard("{Enter}");
   await waitFor(() =>
@@ -597,8 +631,33 @@ function linePoints(storage: Map<string, unknown>, index = 0): [number, number][
   return element.points.map(([x, y]) => [x, y]);
 }
 
+/** The page's Tab stops in order: what `user.tab()` walks. */
+function tabStops(): HTMLElement[] {
+  return Array.from(
+    document.querySelectorAll<HTMLElement>(
+      'a[href], button, input, select, textarea, [tabindex], [contenteditable="true"]'
+    )
+  ).filter(
+    (element) =>
+      element.tabIndex >= 0 &&
+      !(element as HTMLButtonElement).disabled &&
+      element.closest("[inert], [hidden]") === null
+  );
+}
+
+/**
+ * Tabs to `element`, by keyboard alone, the shorter way round: a control late in
+ * the order is a few Shift+Tabs away rather than dozens of Tabs, and each press
+ * crosses the Plugin's thread (#770). The order is read from the DOM; Tab wraps,
+ * so either way still arrives, and `max` bounds the presses.
+ */
 async function tabTo(user: User, element: HTMLElement, max = 120): Promise<void> {
-  for (let i = 0; i < max && document.activeElement !== element; i++) await user.tab();
+  const stops = tabStops();
+  const from = stops.indexOf(document.activeElement as HTMLElement);
+  const to = stops.indexOf(element);
+  const forward = (to - from + stops.length) % stops.length;
+  const shift = from >= 0 && to >= 0 && stops.length - forward < forward;
+  for (let i = 0; i < max && document.activeElement !== element; i++) await user.tab({ shift });
 }
 
 /** Tabs back into the Elements list, so a row can be picked again. */
@@ -646,14 +705,40 @@ function storedLine(storage: Map<string, unknown>): MapLineElement {
   return element;
 }
 
+/** Each tool's belt label, mapped to the key its `<tool>Tool` Command defaults to. */
+const TOOL_KEYS = new Map(
+  ((mapsManifest().contributes?.commands ?? []) as PluginCommandDeclaration[])
+    .filter((command) => command.id.endsWith("Tool"))
+    .map((command) => [
+      en[`tools.${command.id.slice(0, -"Tool".length)}` as keyof typeof en],
+      command.defaults?.[0]?.[0] ?? "",
+    ])
+);
+
 /**
- * Picks a tool from the belt (#778): every tool is one `ui.IconButton` there, so
- * it is its own Tab stop and reports its pressed state.
+ * Picks a tool by its Shortcut, the way an author does without the belt.
+ * Tabbing to the belt cost each call a dozen or more presses, which a loaded
+ * Release runner turned into most of a test's budget (#770); the belt's own
+ * Tab path is proven by the tests that pick from it. The host's shortcut layer
+ * is mounted here when the test did not mount it, and a letter is pressed from
+ * a plain button, never a text field or the Elements list, which take letters.
  */
 async function pickTool(user: User, name: string): Promise<HTMLElement> {
   const button = await screen.findByRole("button", { name });
-  await tabTo(user, button, 120);
-  await user.keyboard("{Enter}");
+  const key = TOOL_KEYS.get(name);
+  if (!key) throw new Error(`no Shortcut for the tool "${name}"`);
+  if (!mapCommandsRegistered) registerMapCommands();
+  const host = [...openHosts].at(-1);
+  if (!commandKeysMounted && host) render(<CommandKeys host={host} />);
+  const active = document.activeElement;
+  if (
+    active === null ||
+    active === document.body ||
+    active.matches("input, textarea, [contenteditable]") ||
+    active.closest('[role="list"], ul, [role="listbox"]') !== null
+  )
+    await focusPanelButton(user);
+  await user.keyboard(key);
   await waitFor(() => expect(button).toHaveAttribute("aria-pressed", "true"));
   return button;
 }
@@ -699,11 +784,20 @@ async function pickMapStyle(user: User, style: string): Promise<void> {
   const group = await screen.findByRole("radiogroup", { name: en["properties.mapStyle"] });
   const option = within(group).getByRole("radio", { name: style });
   const radios = within(group).getAllByRole("radio") as HTMLInputElement[];
-  const from = radios.find((radio) => radio.checked) ?? radios[0];
-  await tabTo(user, from, 4);
-  for (let i = 0; i < radios.length && !(option as HTMLInputElement).checked; i++)
+  const start = Math.max(
+    0,
+    radios.findIndex((radio) => radio.checked)
+  );
+  await tabTo(user, radios[start], 4);
+  // Each arrow's pick comes back one host batch later, so sampling `checked`
+  // between presses overshoots: count the steps, and wait for each one.
+  const steps =
+    (radios.indexOf(option as HTMLInputElement) - start + radios.length) % radios.length;
+  for (let i = 1; i <= steps; i++) {
     await user.keyboard("{ArrowDown}");
-  await waitFor(() => expect(option).toBeChecked());
+    await waitFor(() => expect(radios[(start + i) % radios.length]).toBeChecked());
+  }
+  expect(option).toBeChecked();
   await user.keyboard("{Escape}");
   await waitFor(() => expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument());
 }
@@ -1930,7 +2024,9 @@ describe("Map editor page", () => {
       // The Pen tool's own key selects it, and the belt follows.
       await user.keyboard("n");
       await waitFor(() => expect(runtime.editor?.getSnapshot().tool).toBe("pen"));
-      expect(pickedTool(en["tools.pen"])).toHaveAttribute("aria-pressed", "true");
+      await waitFor(() =>
+        expect(pickedTool(en["tools.pen"])).toHaveAttribute("aria-pressed", "true")
+      );
 
       // The keyboard pen draws a closed outline in the Frame; the Frame stand-in
       // hands the editor the line message the real Frame posts for it.
@@ -2333,7 +2429,7 @@ describe("Map editor page", () => {
       for (const [key, tool, label] of tools) {
         await user.keyboard(key);
         await waitFor(() => expect(runtime.editor?.getSnapshot().tool).toBe(tool));
-        expect(pickedTool(label)).toHaveAttribute("aria-pressed", "true");
+        await waitFor(() => expect(pickedTool(label)).toHaveAttribute("aria-pressed", "true"));
         expect(
           await screen.findByRole("button", { name: en[`properties.placeShape.${tool}`] })
         ).toBeInTheDocument();
@@ -2365,7 +2461,9 @@ describe("Map editor page", () => {
 
       await user.keyboard("h");
       await waitFor(() => expect(runtime.editor?.getSnapshot().tool).toBe("hand"));
-      expect(pickedTool(en["tools.hand"])).toHaveAttribute("aria-pressed", "true");
+      await waitFor(() =>
+        expect(pickedTool(en["tools.hand"])).toHaveAttribute("aria-pressed", "true")
+      );
       // Only the Select tool works on a selection, so picking the Hand drops it.
       expect(runtime.editor?.getSnapshot().selectedId).toBeNull();
 
@@ -2421,8 +2519,10 @@ describe("Map editor page", () => {
       expect((runtime.editor?.getSnapshot().elements[0] as MapLineElement).enclosesFills).toBe(
         true
       );
-      expect(screen.getByLabelText(en["properties.lineStyle"])).toHaveTextContent(
-        en["properties.style.coast"]
+      await waitFor(() =>
+        expect(screen.getByLabelText(en["properties.lineStyle"])).toHaveTextContent(
+          en["properties.style.coast"]
+        )
       );
 
       // The switch turns Encloses Fills off again, by the keyboard.
@@ -2771,7 +2871,9 @@ describe("Map editor page", () => {
 
       await user.keyboard("t");
       await waitFor(() => expect(runtime.editor?.getSnapshot().tool).toBe("text"));
-      expect(pickedTool(en["tools.text"])).toHaveAttribute("aria-pressed", "true");
+      await waitFor(() =>
+        expect(pickedTool(en["tools.text"])).toHaveAttribute("aria-pressed", "true")
+      );
       expect(
         await screen.findByRole("button", { name: en["properties.mapLabel.place"] })
       ).toBeInTheDocument();
@@ -2953,7 +3055,7 @@ describe("Map editor page", () => {
       await waitFor(() =>
         expect((runtime.editor?.getSnapshot().elements[0] as MapStampElement).scale?.span).toBe(1)
       );
-      expect(span).toHaveValue("1");
+      await waitFor(() => expect(span).toHaveValue("1"));
 
       await page.unmount();
     } finally {
@@ -3884,7 +3986,7 @@ describe("Map editor uploads (#756)", () => {
       // The grid lists the Custom Stamp as the picked tile, drawing the
       // uploaded picture itself, and the Place button names it.
       const tile = await screen.findByRole("button", { name: "banner" });
-      expect(tile.children).toHaveLength(2);
+      await waitFor(() => expect(tile.children).toHaveLength(2));
       await waitFor(() =>
         expect(tilePicture(tile)).toContain(
           `href="data:image/svg+xml;base64,${Buffer.from(svgBytes()).toString("base64")}"`
@@ -4635,7 +4737,7 @@ describe("the floating editor's chrome (#778)", () => {
     try {
       const user = userEvent.setup();
       await openLayers(user);
-      const row = within(await screen.findByRole("list")).getByRole("button", {
+      const row = await within(await screen.findByRole("list")).findByRole("button", {
         name: /^Etiqueta de Pinar del Río/,
       });
       const [name, kind] = Array.from(row.children);
