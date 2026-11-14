@@ -1154,6 +1154,11 @@ function trailingSpaceAfter(list: HTMLElement, scroller: HTMLElement): number {
   return Math.max(0, last.getBoundingClientRect().bottom - list.getBoundingClientRect().bottom);
 }
 
+/** A computed CSS length in pixels, 0 when absent or unparsable. */
+function pixelsOf(value: string | undefined): number {
+  return Number.parseFloat(value ?? "") || 0;
+}
+
 /**
  * The tallest a Collection may be so it fills the vertical space its scroll
  * container leaves it, while keeping room for the content that renders after it
@@ -1185,10 +1190,9 @@ function useCollectionMaxHeight(listRef: RefObject<HTMLElement | null>): number 
       // for the list. Counting a border made an auto-height scroller grow by
       // its width on every measure (#784). The window has no borders.
       const style = scroller ? getComputedStyle(scroller) : null;
-      const px = (value: string | undefined) => Number.parseFloat(value ?? "") || 0;
-      const borderTop = px(style?.borderTopWidth);
-      const borderBottom = px(style?.borderBottomWidth);
-      const paddingBottom = px(style?.paddingBottom);
+      const borderTop = pixelsOf(style?.borderTopWidth);
+      const borderBottom = pixelsOf(style?.borderBottomWidth);
+      const paddingBottom = pixelsOf(style?.paddingBottom);
       const trailing = scroller ? trailingSpaceAfter(list, scroller) : 0;
       // Offset of the list's top inside the scroller's borders, so the measure
       // does not depend on where the scroller happens to be scrolled.
