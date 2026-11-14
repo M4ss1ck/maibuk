@@ -864,6 +864,18 @@ export interface TestHostOptions {
   startReason?: PluginStartReason;
 }
 
+/** How `renderPage` and `renderSettingsRow` treat a batch the host refuses. */
+export interface TestPageOptions {
+  /**
+   * Whether the test expects the host to refuse a batch. By default a refusal
+   * is logged with `console.error` as it happens and fails the page's
+   * `unmount()` (and so `stop()`), because in the app it stops the Plugin.
+   * With `true` the refusal is only recorded in `violations`, for a test that
+   * asserts on it.
+   */
+  allowViolations?: boolean;
+}
+
 /**
  * One Plugin page `renderPage` opened: the host container it renders into, every
  * declaration the validator refused, and how to tear it back down.
@@ -875,7 +887,8 @@ export interface TestPage {
   violations: PluginUiViolation[];
   /**
    * Unmounts the host renderer and closes the mount; idempotent. Resolves once
-   * the Plugin's React tree has unmounted.
+   * the Plugin's React tree has unmounted, and rejects, after the same cleanup,
+   * when the host refused a batch the page did not allow (`TestPageOptions`).
    */
   unmount(): Promise<void>;
 }
@@ -1024,13 +1037,13 @@ export interface TestHost {
    * the Plugin has no such page. Every page opened this way is unmounted by
    * `stop()` too.
    */
-  renderPage(page: string): Promise<TestPage>;
+  renderPage(page: string, options?: TestPageOptions): Promise<TestPage>;
   /**
    * Renders one Settings row body the Plugin serves, the way the host mounts it
    * inside Settings, and resolves once the Plugin accepts it. Rejects when the
    * Plugin serves no body for that row. Unmounted by `stop()` too.
    */
-  renderSettingsRow(rowId: string): Promise<TestPage>;
+  renderSettingsRow(rowId: string, options?: TestPageOptions): Promise<TestPage>;
   /**
    * Stops the Worker: stops the broker and severs every open Remote UI mount,
    * while leaving the host renderer mounted. This is what a stopped Worker
@@ -1039,7 +1052,11 @@ export interface TestHost {
    * for the Worker.
    */
   stopWorker(): void;
-  /** Unmounts every open page, then stops the broker; resolves once each page's Plugin tree has unmounted. */
+  /**
+   * Unmounts every open page, then stops the broker; resolves once each page's
+   * Plugin tree has unmounted. Rejects with the first page's refused batch, if
+   * any, after everything is down.
+   */
   stop(): Promise<void>;
 }
 

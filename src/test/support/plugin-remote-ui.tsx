@@ -1,7 +1,7 @@
 /**
  * The Remote UI test harness: the real remote renderer in jsdom. It wires the
- * SDK's custom elements (the Plugin's React tree) through a
- * `RemoteMutationObserver` and the validated connection into a real
+ * SDK's custom elements (the Plugin's React tree) through the SDK's host-side
+ * `PluginUiMutationObserver` and the validated connection into a real
  * `RemoteReceiver`, then renders the host components with `RemoteRootRenderer`.
  *
  * Nothing here is simulated: a test mounts the Plugin's tree with `mount()`,
@@ -11,7 +11,6 @@
  */
 
 import { act, render } from "@testing-library/react";
-import { RemoteMutationObserver } from "@remote-dom/core/elements";
 import { RemoteRootRenderer } from "@remote-dom/react/host";
 import { createRoot, type Root } from "react-dom/client";
 import type { ComponentType, ReactNode } from "react";
@@ -19,6 +18,7 @@ import { createPluginRemoteUi } from "@/features/plugins/remote-ui/receiver";
 import type { PluginRemoteUi } from "@/features/plugins/remote-ui/receiver";
 import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
 import type { PluginFrameHost } from "@/components/plugins/PluginFrame";
+import { PluginUiMutationObserver } from "@/plugin-sdk/ui-observer";
 
 export interface RemoteUiHarness {
   ui: PluginRemoteUi;
@@ -53,7 +53,7 @@ export function renderRemoteUi(options?: {
   // Kept out of the document so RTL queries see only the host tree; a
   // MutationObserver still observes a detached subtree.
   const container = document.createElement("div");
-  const observer = new RemoteMutationObserver(ui.connection);
+  const observer = new PluginUiMutationObserver(ui.connection);
   observer.observe(container);
   let root: Root | null = createRoot(container);
 
