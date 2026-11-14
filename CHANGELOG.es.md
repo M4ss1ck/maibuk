@@ -5,6 +5,44 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 y este proyecto sigue el [Versionado Semántico](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.0] - 2026-11-14
+
+### Added
+- Añadir un plugin de Mapas integrado con una lista de Mapas, vistas previas, filtros de Libros, acciones de crear/renombrar/eliminar, un estado vacío y una entrada en el menú de elemento de Libro
+- Añadir un editor de Mapas a página completa con herramientas, deshacer/rehacer, guardado automático, zoom y desplazamiento, una lista de Elementos, Propiedades y atajos de teclado
+- Añadir Líneas de mapa con estilos de línea, herramientas Lápiz y Borrador, Rugosificar, borrar/dividir y arrastrar para mover
+- Añadir herramientas de forma Elipse, Rectángulo y Polígono con geometría editable
+- Añadir Rellenos con cubo y Rellenos de área con Borde suave, textura, dispersión y seguimiento de caras en vivo
+- Añadir Sellos y una cuadrícula de Insertar imagen, incluidas barras de escala, recoloración y subidas para Sellos personalizados, Rellenos personalizados e Imágenes de mapa
+- Añadir Etiquetas de mapa con fuentes incluidas, manijas de curvatura, diseño automático o de ancho fijo y edición de texto en el mapa
+- Añadir manijas de transformación y gestos con dos dedos para mover, redimensionar y girar elementos del mapa
+- Añadir Estilos de mapa con sobrescrituras de color por elemento y muestras de Estilo
+- Añadir Plantillas de mapa con un selector Iniciar desde, incluida una plantilla de Cuba
+- Añadir exportación a PNG y SVG y colocación de Mapas en Capítulos o Notas
+- Añadir una herramienta Mano para desplazar, un diseño de editor de escritorio flotante y un diseño estrecho adaptable
+- Añadir componentes de interfaz de usuario de control deslizante y selector de color para plugins y guardado de archivos de plugins en escritorio, web y Android
+
+### Changed
+- Abrir Mapas al hacer clic en sus tarjetas, con un icono de abrir al pasar el cursor que reemplaza el botón Abrir independiente
+- Iniciar las nuevas Etiquetas de mapa vacías con un marcador de posición en cursiva localizado en lugar del texto de indicación almacenado
+- Colocar Propiedades encima de los controles de zoom, hacer que se desplace internamente y minimizarlo a un único botón de restaurar
+- Mostrar las filas de Capas con el nombre encima del tipo, con un alternador de ojo y un menú de Más acciones
+- Borrar la selección actual al cambiar de Seleccionar a cualquier otra herramienta
+- Cambiar el atajo de Libros a G B
+- Actualizar el desplazamiento del mapa para mover la vista inmediatamente y confirmar la posición final al soltar
+
+### Fixed
+- Escribir en una Etiqueta de mapa al teclear inmediatamente después de colocarla, y editarla con doble clic
+- Evitar que los marcadores de posición de las Etiquetas de mapa y los contornos de selección multilínea recorten o crucen el texto
+- Alinear las manijas de transformación de las Etiquetas de mapa con la línea base de la etiqueta
+- Rellenar los mosaicos de Sellos en todas sus columnas de cuadrícula en la aplicación de escritorio para Linux
+- Mostrar las manijas de transformación en todos los niveles de zoom con un comportamiento consistente de caja pequeña y relación de aspecto
+- Rechazar el Cubo en Rellenos bloqueados
+- Dirigir los atajos de teclado de Marco y las teclas de flecha de Interruptor a los Comandos de la página
+- Evitar que el siguiente toque se convierta en un desplazamiento después de que un dedo salga del Marco del mapa
+- Conservar los Filtros de Libros y el foco del diálogo de renombrar/eliminar correctamente
+- Ajustar las Plantillas de mapa de geografía real a la página y hacer que las rosas de los vientos sigan los colores del Estilo de mapa
+
 ## [0.21.0] - 2026-11-06
 
 ### Added
