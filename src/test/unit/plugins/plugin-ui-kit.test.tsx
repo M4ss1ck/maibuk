@@ -973,8 +973,15 @@ describe("the Remote UI kit, part 2", () => {
 
     /** Gives an element the layout jsdom never computes. */
     function mockRect(element: Element, top: number, bottom: number) {
-      element.getBoundingClientRect = () =>
-        ({
+      mockRectFrom(element, () => [top, bottom]);
+    }
+
+    /** Like `mockRect`, but reads the edges on every call, for layout that
+     * follows the list's current height. */
+    function mockRectFrom(element: Element, edges: () => [top: number, bottom: number]) {
+      element.getBoundingClientRect = () => {
+        const [top, bottom] = edges();
+        return {
           top,
           bottom,
           height: bottom - top,
@@ -984,7 +991,8 @@ describe("the Remote UI kit, part 2", () => {
           x: 0,
           y: top,
           toJSON: () => ({}),
-        }) as DOMRect;
+        } as DOMRect;
+      };
     }
 
     /** The scroller a Plugin page gives a Collection, with a button after it. */
@@ -1099,6 +1107,74 @@ describe("the Remote UI kit, part 2", () => {
         for (const callback of observerCallbacks) callback([], {} as ResizeObserver);
       });
       expect(list.style.maxHeight).toBe("540px");
+    });
+
+    /** A card that scrolls itself, with a 1px border on top and bottom (#784). */
+    function borderedScrollerWrapper({ children }: { children: ReactNode }) {
+      return (
+        <div
+          data-testid="scroller"
+          style={{
+            overflowY: "auto",
+            borderStyle: "solid",
+            borderTopWidth: "1px",
+            borderBottomWidth: "1px",
+          }}
+        >
+          <div data-testid="content">{children}</div>
+        </div>
+      );
+    }
+
+    it("keeps the same height when an auto-height bordered scroller re-measures", async () => {
+      harness = renderRemoteUi({ wrapper: borderedScrollerWrapper });
+      await harness.mount(
+        <ui.Collection label="Layers" selectionMode="none">
+          {manyRows(40)}
+        </ui.Collection>
+      );
+
+      const list = screen.getByRole("listbox");
+      const scroller = screen.getByTestId("scroller");
+      // The rows are taller than any max-height here, so the list is as tall as
+      // its max-height. The scroller's height follows its content: 1px border,
+      // 100px above the list, the list, 1px border.
+      const listHeight = () => Number.parseFloat(list.style.maxHeight);
+      mockRectFrom(list, () => [101, 101 + listHeight()]);
+      mockRectFrom(scroller, () => [0, 101 + listHeight() + 1]);
+
+      const heights: string[] = [];
+      for (let tick = 0; tick < 5; tick++) {
+        remeasure();
+        heights.push(list.style.maxHeight);
+      }
+
+      // Before #784 each measure counted the bottom border as room: 321px, 322px, ...
+      expect(heights).toEqual(["320px", "320px", "320px", "320px", "320px"]);
+    });
+
+    it("fits a fixed-height bordered scroller inside its borders", async () => {
+      harness = renderRemoteUi({ wrapper: scrollerWrapper });
+      await harness.mount(
+        <ui.Collection label="Echoes" selectionMode="none">
+          {manyRows(40)}
+        </ui.Collection>
+      );
+
+      const list = screen.getByRole("listbox");
+      const scroller = screen.getByTestId("scroller");
+      scroller.style.borderStyle = "solid";
+      scroller.style.borderTopWidth = "2px";
+      scroller.style.borderBottomWidth = "3px";
+      scroller.style.paddingBottom = "10px";
+      mockRect(scroller, 0, 800);
+      // 200px inside the top border.
+      mockRect(list, 202, 520);
+      mockRect(screen.getByTestId("more"), 520, 580);
+      remeasure();
+
+      // 800 - 2 - 3 (borders) - 200 (list offset) - 10 (padding) - 60 (after) = 525.
+      expect(list.style.maxHeight).toBe("525px");
     });
 
     it("still navigates the rows with the arrow keys", async () => {

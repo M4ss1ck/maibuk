@@ -1181,14 +1181,20 @@ function useCollectionMaxHeight(listRef: RefObject<HTMLElement | null>): number 
       // jsdom and the first paint before layout report zeros: keep the
       // fallback so the Collection never collapses.
       if (listRect.bottom - listRect.top <= 0 || scrollerHeight <= 0) return;
-      const paddingBottom = scroller
-        ? Number.parseFloat(getComputedStyle(scroller).paddingBottom) || 0
-        : 0;
+      // The rect is the border box: only the space inside the borders is room
+      // for the list. Counting a border made an auto-height scroller grow by
+      // its width on every measure (#784). The window has no borders.
+      const style = scroller ? getComputedStyle(scroller) : null;
+      const px = (value: string | undefined) => Number.parseFloat(value ?? "") || 0;
+      const borderTop = px(style?.borderTopWidth);
+      const borderBottom = px(style?.borderBottomWidth);
+      const paddingBottom = px(style?.paddingBottom);
       const trailing = scroller ? trailingSpaceAfter(list, scroller) : 0;
-      // Offset of the list's top inside the scroller's content, so the measure
+      // Offset of the list's top inside the scroller's borders, so the measure
       // does not depend on where the scroller happens to be scrolled.
-      const listTop = listRect.top - scrollerRect.top + (scroller?.scrollTop ?? 0);
-      const available = scrollerHeight - listTop - paddingBottom - trailing;
+      const listTop = listRect.top - scrollerRect.top - borderTop + (scroller?.scrollTop ?? 0);
+      const innerHeight = scrollerHeight - borderTop - borderBottom;
+      const available = innerHeight - listTop - paddingBottom - trailing;
       setMaxHeight(Math.max(COLLECTION_MIN_HEIGHT_PX, available));
     };
 
