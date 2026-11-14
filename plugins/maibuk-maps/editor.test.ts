@@ -2544,6 +2544,16 @@ describe("scaling and turning Shapes and Map Labels by keyboard (#796)", () => {
     editor.rotateSelection(15);
     expect(editor.getSnapshot().elements).toEqual(afterLock);
   });
+
+  it("does nothing on a hidden selection", () => {
+    const { editor } = openEditor([shapeLine()]);
+    editor.select("shape");
+    editor.setHidden("shape", true);
+    const hidden = editor.getSnapshot().elements;
+    editor.scaleSelection(1.1);
+    editor.rotateSelection(15);
+    expect(editor.getSnapshot().elements).toEqual(hidden);
+  });
 });
 
 describe("the Shape and Map Label readout chips (#796)", () => {

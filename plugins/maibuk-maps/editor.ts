@@ -1402,7 +1402,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     | MapLabelElement
     | null {
     const target = elementById(selectedId);
-    if (target === undefined || target.locked) return null;
+    if (target === undefined || target.locked || target.hidden) return null;
     if (target.kind === "stamp" || target.kind === "image" || target.kind === "label")
       return target;
     if (

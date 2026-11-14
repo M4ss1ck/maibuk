@@ -3243,43 +3243,19 @@ describe("the transform handles (#795)", () => {
     ]);
   });
 
-  it("keeps one grip on a box under 48 px on screen, and only the turn grip under 20 px", () => {
+  it("draws every grip at every zoom, however small the box is on screen", () => {
     frame = loadFrame();
     frame.scale = 4;
-    const square = (sideMm: number) =>
-      selected({ transform: handleBox({ width: sideMm, height: sideMm }) });
     const grips = () => document.querySelectorAll("[data-transform-handle-hit]");
-
-    // 12 mm at 4 px/mm is 48 px: just enough room for all four corners.
-    frame.scene({ elements: [square(12)] });
-    expect(grips()).toHaveLength(5);
-
-    // 11 mm is 44 px: the art would vanish under four grips, so only the
-    // bottom-right stays, to resize away from the top-left.
-    frame.scene({ elements: [square(11)] });
-    expect(grips()).toHaveLength(2);
-    expect(document.querySelector('[data-transform-handle-hit="se"]')).not.toBeNull();
-    expect(document.querySelector('[data-transform-handle-hit="rotate"]')).not.toBeNull();
-    expect(document.querySelector('[data-transform-handle-hit="nw"]')).toBeNull();
-
-    // 5 mm is exactly 20 px: one corner still fits.
-    frame.scene({ elements: [square(5)] });
-    expect(document.querySelector('[data-transform-handle-hit="se"]')).not.toBeNull();
-
-    // 4 mm is 16 px: only the turn grip is left to grip.
-    frame.scene({ elements: [square(4)] });
-    expect(grips()).toHaveLength(1);
-    expect(document.querySelector('[data-transform-handle-hit="rotate"]')).not.toBeNull();
-  });
-
-  it("measures a long thin box such as a scale bar by its shorter side", () => {
-    frame = loadFrame();
-    frame.scale = 4;
-    // 40 mm by 8 mm is 160 px by 32 px: under 48 px on one side, so the
-    // bottom-right corner stays to resize it from.
-    frame.scene({ elements: [selected({ transform: handleBox({ width: 40, height: 8 }) })] });
-    expect(document.querySelectorAll("[data-transform-handle-hit]")).toHaveLength(2);
-    expect(document.querySelector('[data-transform-handle-hit="se"]')).not.toBeNull();
+    // 4 mm is 16 px, and 40 by 3 mm a long thin scale bar: all four corners
+    // and the turn grip still draw.
+    for (const [width, height] of [
+      [4, 4],
+      [40, 3],
+    ]) {
+      frame.scene({ elements: [selected({ transform: handleBox({ width, height }) })] });
+      expect(grips()).toHaveLength(5);
+    }
   });
 
   it("draws no grips for an Element with no box, no other tool, and no selection", () => {
@@ -3364,22 +3340,6 @@ describe("the transform handles (#795)", () => {
       expect(pixels(grip("e"), 4)).toBeGreaterThan(resting);
       pointer(svg(), "pointermove", 300, 300);
       expect(grip("e").getAttribute("data-hovered")).toBeNull();
-    });
-
-    it("keeps one corner on a small Shape, and only the turn grip on a tiny one", () => {
-      frame = loadFrame();
-      frame.scale = 4;
-      // 11 mm is 44 px: the sides go with the corners, and only the
-      // bottom-right stays, to resize away from the top-left.
-      frame.scene({ elements: [shaped({ transform: allBox({ width: 11, height: 11 }) })] });
-      expect(document.querySelectorAll("[data-transform-handle-hit]")).toHaveLength(2);
-      expect(document.querySelector('[data-transform-handle-hit="se"]')).not.toBeNull();
-      expect(document.querySelector('[data-transform-handle-hit="rotate"]')).not.toBeNull();
-
-      // 4 mm is 16 px: only the turn grip is left to grip.
-      frame.scene({ elements: [shaped({ transform: allBox({ width: 4, height: 4 }) })] });
-      expect(document.querySelectorAll("[data-transform-handle-hit]")).toHaveLength(1);
-      expect(document.querySelector('[data-transform-handle-hit="rotate"]')).not.toBeNull();
     });
 
     it("marks a locked Shape with a dashed box, a lock badge, and no grips", () => {
@@ -3573,6 +3533,13 @@ describe("the transform handles (#795)", () => {
       return circle;
     };
 
+    it("shows its sides at the default cap size, 28 px tall at the test zoom", () => {
+      frame = loadFrame();
+      frame.scene({ elements: [labelled()] });
+      expect(document.querySelectorAll("[data-transform-handle-hit]")).toHaveLength(7);
+      expect(document.querySelector('[data-transform-handle-hit="e"]')).not.toBeNull();
+    });
+
     it("draws four corners, the east and west sides, and the turn grip, but no north or south side", () => {
       frame = loadFrame();
       // 7 mm at 8 px per mm is 56 px: past the 48 px under which the sides go
@@ -3592,26 +3559,6 @@ describe("the transform handles (#795)", () => {
       // The sides sit on the middle of the left and right edges.
       expect(centre(grip("e"))).toEqual([expect.closeTo(42, 1), expect.closeTo(0, 1)]);
       expect(centre(grip("w"))).toEqual([expect.closeTo(-42, 1), expect.closeTo(0, 1)]);
-    });
-
-    it("keeps one corner on a small label, and only the turn grip on a tiny one", () => {
-      frame = loadFrame();
-      frame.scale = 4;
-      // 12 mm is 48 px: just enough room for every grip the label takes.
-      frame.scene({ elements: [labelled({ transform: labelBox({ width: 12, height: 12 }) })] });
-      expect(document.querySelectorAll("[data-transform-handle-hit]")).toHaveLength(7);
-
-      // 11 mm is 44 px: the sides go with the corners, and only the
-      // bottom-right stays, to resize away from the top-left.
-      frame.scene({ elements: [labelled({ transform: labelBox({ width: 11, height: 11 }) })] });
-      expect(document.querySelectorAll("[data-transform-handle-hit]")).toHaveLength(2);
-      expect(document.querySelector('[data-transform-handle-hit="se"]')).not.toBeNull();
-      expect(document.querySelector('[data-transform-handle-hit="rotate"]')).not.toBeNull();
-
-      // 4 mm is 16 px: only the turn grip is left to grip.
-      frame.scene({ elements: [labelled({ transform: labelBox({ width: 4, height: 4 }) })] });
-      expect(document.querySelectorAll("[data-transform-handle-hit]")).toHaveLength(1);
-      expect(document.querySelector('[data-transform-handle-hit="rotate"]')).not.toBeNull();
     });
 
     it("marks a locked label with a dashed box, a lock badge, and no grips", () => {

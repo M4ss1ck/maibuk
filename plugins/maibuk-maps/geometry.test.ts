@@ -538,6 +538,19 @@ describe("transformBox: the resize handles", () => {
     expect(cornerOf(next, "nw")).toEqual(cornerOf(box(), "nw"));
   });
 
+  it("keeps the aspect from a side with Shift, scaling by the axis it drags", () => {
+    // The east side drawn 10 mm in: the width shrinks to three quarters, the
+    // height follows, and the west side stays put.
+    const next = transformBox({
+      box: box(),
+      handle: "e",
+      start: [120, 50],
+      point: [110, 50],
+      aspect: true,
+    });
+    expect(next).toEqual({ x: 95, y: 50, width: 30, height: 15, rotation: 0 });
+  });
+
   it("drags a side and holds the opposite side still", () => {
     const next = transformBox({
       box: box(),

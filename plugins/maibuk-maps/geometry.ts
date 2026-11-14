@@ -632,7 +632,11 @@ function resizeBox(gesture: TransformGesture): TransformBox {
           gesture.fromCentre === true ? 2 * Math.abs(reached[1]) : signY * (reached[1] - anchor[1])
         );
   if (gesture.aspect === true) {
-    const scale = Math.max(width / (halfWidth * 2), height / (halfHeight * 2));
+    // A side scales from the one axis it drags; a corner from whichever grew more.
+    const widthScale = width / (halfWidth * 2);
+    const heightScale = height / (halfHeight * 2);
+    const scale =
+      signX === 0 ? heightScale : signY === 0 ? widthScale : Math.max(widthScale, heightScale);
     width = halfWidth * 2 * scale;
     height = halfHeight * 2 * scale;
   }

@@ -318,10 +318,10 @@ test.describe("Maps transform handles and scale and turn Commands @wf:plugins-ma
     await placeLabel(page);
     await pickSelect(page);
 
-    // The default 6 mm cap is under 48 px on screen, so the label keeps only
-    // the bottom-right grip and the turn grip: no side to take the press, and
-    // the corner that resizes it is the one that stays.
-    await expect(drawnHandles(page)).toHaveCount(2);
+    // Every grip draws at the default 6 mm cap: four corners, the two sides,
+    // and the turn grip. The sides' hit areas overlap the corners' on a label
+    // this short, and the corners stack above them, so the press takes the corner.
+    await expect(drawnHandles(page)).toHaveCount(7);
 
     // The bottom-right grip sits on the box's own corner, 27.5 mm right of the
     // centre and half the 6 mm cap below it; the drag ends 10.2 right and 0.8

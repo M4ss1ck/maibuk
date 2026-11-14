@@ -154,8 +154,6 @@
    * of its smaller side: under 48 px four grips would bury the art they mark, so
    * only the bottom-right corner stays, and under 20 px only the turn grip does.
    */
-  const SMALL_BOX_PX = 48;
-  const TINY_BOX_PX = 20;
 
   /** The padlock badge a locked Element's box carries (#795), in screen pixels. */
   const LOCK_BADGE_PX = 14;
@@ -242,7 +240,6 @@
    * The one corner a small box keeps (#795): the bottom-right, whose drag grows
    * the box away from the top-left.
    */
-  const SMALL_BOX_CORNER = CORNER_HANDLES[2];
 
   /** The characters a definitions id may hold, so a scene cannot write an attribute of its own. */
   const FILTER_ID = /^[A-Za-z0-9_-]+$/;
@@ -1369,24 +1366,6 @@
   }
 
   /**
-   * The corners a box shows grips on (#795): all four while each side is
-   * at least `SMALL_BOX_PX` on screen, the bottom-right alone below that, and
-   * none below `TINY_BOX_PX`, where the turn grip is all that is left to grip.
-   * A Frame that cannot measure its screen shows none either.
-   * @param {FrameTransformBox} box
-   * @param {number | null} scale
-   * @returns {Array<[string, number, number]>}
-   */
-  function shownCorners(box, scale) {
-    if (scale === null) return [];
-    // Either side under the threshold counts (#794 small-on-screen rule).
-    const onScreen = Math.min(box.width, box.height) * scale;
-    if (onScreen < TINY_BOX_PX) return [];
-    if (onScreen < SMALL_BOX_PX) return [SMALL_BOX_CORNER];
-    return CORNER_HANDLES;
-  }
-
-  /**
    * The resize cursor one grip takes (#795): the box's own turn added to the
    * grip's direction, taken to the nearest 45°.
    * @param {number} rotation
@@ -1500,7 +1479,11 @@
               : signY * (reached[1] - anchor[1])
           );
     if (gesture.aspect === true) {
-      const scale = Math.max(width / (halfWidth * 2), height / (halfHeight * 2));
+      // A side scales from the one axis it drags; a corner from whichever grew more.
+      const widthScale = width / (halfWidth * 2);
+      const heightScale = height / (halfHeight * 2);
+      const scale =
+        signX === 0 ? heightScale : signY === 0 ? widthScale : Math.max(widthScale, heightScale);
       width = halfWidth * 2 * scale;
       height = halfHeight * 2 * scale;
     }
@@ -1615,13 +1598,12 @@
     const halfHeight = box.height / 2;
     const locked = target.locked;
     const hovered = hoverGrip !== null && hoverGrip.id === target.id ? hoverGrip.handle : null;
-    // A small box keeps fewer corners, so its grips never bury the art they mark.
-    // A Shape shows its sides too, but only while the box is big enough for all
-    // four corners: below that only the bottom-right corner stays. A Map Label
-    // shows its left and right sides under the same rule, and never the top or
-    // the bottom middle, where its bend handle lives.
-    const corners = shownCorners(box, scale);
-    const full = sizes !== null && !locked && corners.length === CORNER_HANDLES.length;
+    // Every handle shows at every zoom, however small the box is on screen; a
+    // Frame that cannot measure its screen draws none. A Shape adds its four
+    // sides, and a Map Label its left and right sides, never the top or the
+    // bottom middle, where its bend handle lives.
+    const corners = scale === null ? [] : CORNER_HANDLES;
+    const full = sizes !== null && !locked && corners.length > 0;
     const sides = !full
       ? []
       : target.transform.handles === "all"
