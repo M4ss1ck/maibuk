@@ -42,7 +42,7 @@
    * @typedef {{ box: FrameTransformBox, handles: "corners" | "all" | "label", minSize?: number }} FrameElementTransform
    * @typedef {{ id: string, shapes: SceneShape[], filter: string | null, hidden: boolean, locked: boolean, selected: boolean, movable: boolean, label?: FrameLabelLayout, transform?: FrameElementTransform }} FrameSceneElement
    * @typedef {{ one: string, other: string }} PenDraftLabel
-   * @typedef {{ size: string, angle: string, shape: string }} TransformReadout
+   * @typedef {{ size: string, angle: string, shape: string, label: string }} TransformReadout
    * @typedef {{ kind: "scene", widthMm: number, heightMm: number, background: string, elements: FrameSceneElement[], defs: string, tool: MapTool, zoom: number, panX: number, panY: number, penLabel: PenDraftLabel, readout: TransformReadout }} FrameSceneMessage
    * @typedef {{ kind: "stroke", points: MapPoint[] }} FrameStrokeMessage
    * @typedef {{ kind: "line", points: MapPoint[], curves: boolean[], closed: boolean }} FrameLineMessage
@@ -222,6 +222,17 @@
     ["n", 0, -1],
     ["e", 1, 0],
     ["s", 0, 1],
+    ["w", -1, 0],
+  ];
+
+  /**
+   * A Map Label's two side midpoints (#796): the left and the right alone.
+   * The top and bottom middles stay empty, so the bend handle at the label's
+   * middle never shares its place with a transform grip.
+   * @type {Array<[string, number, number]>}
+   */
+  const LABEL_SIDE_HANDLES = [
+    ["e", 1, 0],
     ["w", -1, 0],
   ];
 
@@ -559,7 +570,8 @@
   /**
    * Reads the transform drag's readout templates (#795, #796); an unreadable
    * one leaves each empty, which draws no chip instead of falling back to
-   * English.
+   * English. A scene from before the Map Label handles takes no label
+   * template, so its label drag draws no chip rather than a wrong one.
    * @param {unknown} raw
    * @returns {TransformReadout}
    */
@@ -570,6 +582,7 @@
       size: typeof readout.size === "string" ? readout.size : "",
       angle: typeof readout.angle === "string" ? readout.angle : "",
       shape: typeof readout.shape === "string" ? readout.shape : "",
+      label: typeof readout.label === "string" ? readout.label : "",
     };
   }
 
@@ -1260,6 +1273,9 @@
    * its baseline, which the pointer drags to bow or straighten the name. A drag
    * previews the curve it would draw, dashed, so the author sees the shape
    * before the whole drag reaches the Worker as one message.
+   *
+   * It draws above the transform box (#796), so a press where the handle meets
+   * a grip reaches the handle first and still bends.
    * @returns {any}
    */
   function bendOverlay() {
@@ -1550,9 +1566,10 @@
   }
 
   /**
-   * The box and handles a selected Stamp's, Map Image's, or Shape's transform
-   * draws (#795, #796): its box, turned with the Element, a square grip on each
-   * corner, and on each side's middle for a Shape, and a round grip on a stalk
+   * The box and handles a selected Stamp's, Map Image's, Shape's, or Map
+   * Label's transform draws (#795, #796): its box, turned with the Element, a
+   * square grip on each corner, and on each side's middle for a Shape, or on
+   * the left and right middles for a Map Label, and a round grip on a stalk
    * above the top edge for turning it. Each grip draws under a bigger invisible
    * target, both sized from the screen scale, so they keep their size on screen
    * at every zoom and grow for a finger.
@@ -1576,13 +1593,17 @@
     const hovered = hoverGrip !== null && hoverGrip.id === target.id ? hoverGrip.handle : null;
     // A small box keeps fewer corners, so its grips never bury the art they mark.
     // A Shape shows its sides too, but only while the box is big enough for all
-    // four corners: below that only the bottom-right corner stays.
+    // four corners: below that only the bottom-right corner stays. A Map Label
+    // shows its left and right sides under the same rule, and never the top or
+    // the bottom middle, where its bend handle lives.
     const corners = shownCorners(box, scale);
-    const sides =
-      sizes === null || locked
-        ? []
-        : target.transform.handles === "all" && corners.length === CORNER_HANDLES.length
-          ? SIDE_HANDLES
+    const full = sizes !== null && !locked && corners.length === CORNER_HANDLES.length;
+    const sides = !full
+      ? []
+      : target.transform.handles === "all"
+        ? SIDE_HANDLES
+        : target.transform.handles === "label"
+          ? LABEL_SIDE_HANDLES
           : [];
     const grips =
       sizes === null || locked
@@ -1735,20 +1756,23 @@
    * The chip that reads the drag's size in millimetres, or its angle in
    * degrees, just down and right of the pointer (#795, #796). Its text is the
    * localized template the scene carries: the turn's angle or a Stamp's size
-   * with its number filled in, or a Shape's width and height. A scene that
-   * carries none, or a Frame that cannot measure its screen, draws no chip
-   * rather than a wrong one.
+   * with its number filled in, a Shape's width and height, or a Map Label's
+   * cap size and width. A scene that carries none, or a Frame that cannot
+   * measure its screen, draws no chip rather than a wrong one.
    * @returns {any}
    */
   function transformReadout() {
     if (transformDrag === null || !transformDrag.moved || scene === null) return null;
     const turning = transformDrag.handle === "rotate";
     const shape = transformDrag.handles === "all";
+    const label = transformDrag.handles === "label";
     const template = turning
       ? scene.readout.angle
       : shape
         ? scene.readout.shape
-        : scene.readout.size;
+        : label
+          ? scene.readout.label
+          : scene.readout.size;
     if (template === "") return null;
     const scale = screenScale();
     if (scale === null) return null;
@@ -1759,7 +1783,8 @@
         readoutNumber(turning ? transformDrag.box.rotation : transformDrag.box.width)
       )
       .replace("{{width}}", readoutNumber(transformDrag.box.width))
-      .replace("{{height}}", readoutNumber(transformDrag.box.height));
+      .replace("{{height}}", readoutNumber(transformDrag.box.height))
+      .replace("{{size}}", readoutNumber(transformDrag.box.height));
     const font = CHIP_FONT_PX / scale;
     const padX = CHIP_PAD_X_PX / scale;
     const padY = CHIP_PAD_Y_PX / scale;
@@ -1849,9 +1874,9 @@
               }
             </g>`
           )}
-        ${bendOverlay()}
         ${transformGhost()}
         ${transformOverlay()}
+        ${bendOverlay()}
         ${transformTicks()}
         ${transformReadout()}
         ${drawing === null ? null : html`<path class="map-live" d="${polyline(drawing.points)}" />`}
@@ -2186,8 +2211,10 @@
    * past the Select drag's threshold, the box, its handles, and the Element's
    * art preview what the pointer asks for, live and in this Frame only. A
    * Stamp's or a Map Image's corner keeps its aspect; a Shape's corner only
-   * does with Shift, and its sides move one axis. Alt resizes about the centre,
-   * and Shift snaps a turn to 15°.
+   * does with Shift, and its sides move one axis. A Map Label's corner grows
+   * its cap size and width together, and its sides move the width alone, all in
+   * the label's own turned frame. Alt resizes about the centre, and Shift
+   * snaps a turn to 15°.
    * @param {PointerEvent} event
    */
   function followTransform(event) {
@@ -2206,18 +2233,24 @@
     transformDrag.snap = event.shiftKey === true;
     // A Stamp and a Map Image store a width alone, and their aspect carries
     // the height with it, so the Worker's minimum is the width's (#795). A
-    // Shape keeps a width and a height of its own, so it takes both (#796).
+    // Shape keeps a width and a height of its own, so it takes both (#796). A
+    // Map Label's box height is its cap size, so it takes both too, and the
+    // corner's uniform growth never previews a cap size below the Worker's own
+    // floor, which the scene carries as the handle data's minimum size. Only a
+    // corner keeps the aspect: a side moves its one axis alone.
     const shape = transformDrag.handles === "all";
+    const label = transformDrag.handles === "label";
+    const corner = CORNER_HANDLES.some(([id]) => id === transformDrag.handle);
     transformDrag.box = transformBox({
       box: transformDrag.startBox,
       handle: transformDrag.handle,
       start: transformDrag.start,
       point,
-      aspect: shape ? event.shiftKey === true : true,
+      aspect: shape ? event.shiftKey === true : !label || corner,
       fromCentre: event.altKey === true,
       snap: transformDrag.snap,
       minWidth: transformDrag.minSize,
-      ...(shape ? { minHeight: transformDrag.minSize } : {}),
+      ...(shape || label ? { minHeight: transformDrag.minSize } : {}),
     });
     draw();
   }
@@ -2226,7 +2259,9 @@
    * Ends the transform drag. A drag that moved the box goes to the Worker as
    * one transformElement, which is one undo step, and its preview holds until
    * the Worker answers; a press that never passed the threshold, or one that
-   * left the box as it was, sends nothing.
+   * left the box as it was, sends nothing. A Map Label's drag carries its new
+   * cap size, which is the box height the drag previews, so the Worker writes
+   * the size the preview showed.
    * @param {PointerEvent} event
    * @param {boolean} send
    */
@@ -2241,7 +2276,12 @@
     }
     pendingTransform = { id: drag.id, startBox: drag.startBox, box: drag.box };
     draw();
-    post({ kind: "transformElement", id: drag.id, box: drag.box });
+    post({
+      kind: "transformElement",
+      id: drag.id,
+      box: drag.box,
+      ...(drag.handles === "label" ? { size: drag.box.height } : {}),
+    });
   }
 
   /** Drops the transform drag in progress, and its preview, without reporting it. */
@@ -2624,12 +2664,14 @@
 
     // A second finger while one drag is under way neither picks nor drags.
     if (moveDrag !== null || bendDrag !== null || transformDrag !== null) return;
+    // A press on the bend handle shapes the curve (#751) and never picks or
+    // moves the label it belongs to, so a bend drag posts no move. It goes
+    // before the transform handles, so a press where a Map Label's bend handle
+    // meets a grip still bends (#796).
+    if (startBend(event)) return;
     // A press on a transform handle belongs to the handle (#795): it never
     // picks the Element under it nor moves it, so a grip press posts nothing.
     if (startTransform(event)) return;
-    // A press on the bend handle shapes the curve (#751) and never picks or
-    // moves the label it belongs to, so a bend drag posts no move.
-    if (startBend(event)) return;
     const target =
       event.target instanceof Element ? event.target.closest("[data-element-id]") : null;
     const id = target === null ? null : target.getAttribute("data-element-id");
