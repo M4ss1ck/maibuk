@@ -4456,3 +4456,249 @@ describe("pointer zoom and pan (#777)", () => {
     ]);
   });
 });
+
+describe("pinching and twisting a selected Element (#796)", () => {
+  /** One touch event on a target, carrying the finger's pointer id. */
+  function touch(target: Element, type: string, x: number, y: number, pointerId: number): void {
+    const event = new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0 });
+    Object.defineProperty(event, "pointerId", { value: pointerId });
+    Object.defineProperty(event, "pointerType", { value: "touch" });
+    target.dispatchEvent(event);
+  }
+
+  /** The box a selected Stamp's pinch starts from: 20 by 10 mm about (100, 50). */
+  const pinchBox = (overrides: Record<string, unknown> = {}) => ({
+    box: { x: 100, y: 50, width: 20, height: 10, rotation: 0, ...overrides },
+    handles: "corners",
+  });
+
+  /** One selected Element carrying that box. */
+  const pinched = (overrides: Record<string, unknown> = {}) =>
+    sceneElement({ selected: true, movable: true, transform: pinchBox(), ...overrides });
+
+  /** The Element's own group, where a pinch previews the art. */
+  const elementGroup = (): Element => {
+    const group = document.querySelector('g[data-element-id="e1"]');
+    if (group === null) throw new Error("the Element drew no group");
+    return group;
+  };
+
+  /** The Element's art, which the first finger lands on. */
+  const art = (): Element => {
+    const line = document.querySelector('g[data-element-id="e1"] path.map-line');
+    if (line === null) throw new Error("the Element drew no art");
+    return line;
+  };
+
+  it("pinches a selected Element to size, previews live, and sends one transformElement on release", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [pinched()] });
+
+    // The first finger lands on the Element, which selects it as a tap would.
+    touch(art(), "pointerdown", 90, 50, 1);
+    expect(frame.port.messages).toEqual([{ kind: "select", id: "e1" }]);
+    // The second finger starts the pinch, not a pan: the view stays put.
+    touch(svg(), "pointerdown", 110, 50, 2);
+    expect(svg().getAttribute("viewBox")).toBe("0 0 200 100");
+
+    // Spreading the fingers to twice the distance doubles both sides live,
+    // through the same preview a handle drag draws.
+    touch(svg(), "pointermove", 80, 50, 1);
+    touch(svg(), "pointermove", 120, 50, 2);
+    expect(elementGroup().getAttribute("transform")).toBe(
+      "translate(100 50) scale(2) translate(-100 -50)"
+    );
+    expect(svg().getAttribute("viewBox")).toBe("0 0 200 100");
+    expect(frame.port.messages).toEqual([{ kind: "select", id: "e1" }]);
+
+    touch(svg(), "pointerup", 80, 50, 1);
+    touch(svg(), "pointerup", 120, 50, 2);
+    // One gesture is one message, so it is one undo step.
+    expect(frame.port.messages).toEqual([
+      { kind: "select", id: "e1" },
+      {
+        kind: "transformElement",
+        id: "e1",
+        box: { x: 100, y: 50, width: 40, height: 20, rotation: 0 },
+      },
+    ]);
+    // The preview holds until the Worker answers, so the art never jumps back.
+    expect(elementGroup().getAttribute("transform")).toBe(
+      "translate(100 50) scale(2) translate(-100 -50)"
+    );
+    frame.scene({ elements: [pinched()] });
+    expect(elementGroup().getAttribute("transform")).toBeNull();
+  });
+
+  it("twists the Element from the angle change, about the fingers' midpoint", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [pinched()] });
+
+    touch(art(), "pointerdown", 90, 50, 1);
+    touch(svg(), "pointerdown", 110, 50, 2);
+    // A quarter turn of the pair turns the Element a quarter turn, at the same size.
+    touch(svg(), "pointermove", 100, 40, 1);
+    touch(svg(), "pointermove", 100, 60, 2);
+    expect(elementGroup().getAttribute("transform")).toBe(
+      "translate(100 50) rotate(90) translate(-100 -50)"
+    );
+
+    touch(svg(), "pointerup", 100, 40, 1);
+    touch(svg(), "pointerup", 100, 60, 2);
+    expect(frame.port.messages).toEqual([
+      { kind: "select", id: "e1" },
+      {
+        kind: "transformElement",
+        id: "e1",
+        box: { x: 100, y: 50, width: 20, height: 10, rotation: 90 },
+      },
+    ]);
+  });
+
+  it("carries the Element with the fingers' midpoint", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [pinched()] });
+
+    touch(art(), "pointerdown", 90, 50, 1);
+    touch(svg(), "pointerdown", 110, 50, 2);
+    // Both fingers slide ten right and five down at the same spread and angle.
+    touch(svg(), "pointermove", 100, 55, 1);
+    touch(svg(), "pointermove", 120, 55, 2);
+
+    touch(svg(), "pointerup", 100, 55, 1);
+    touch(svg(), "pointerup", 120, 55, 2);
+    expect(frame.port.messages).toEqual([
+      { kind: "select", id: "e1" },
+      {
+        kind: "transformElement",
+        id: "e1",
+        box: { x: 110, y: 55, width: 20, height: 10, rotation: 0 },
+      },
+    ]);
+  });
+
+  it("carries a Map Label's cap size, scaling it with the width", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [
+        pinched({
+          transform: {
+            box: { x: 100, y: 50, width: 40, height: 6, rotation: 0 },
+            handles: "label",
+            minSize: 2,
+          },
+        }),
+      ],
+    });
+
+    touch(art(), "pointerdown", 90, 50, 1);
+    touch(svg(), "pointerdown", 110, 50, 2);
+    touch(svg(), "pointermove", 80, 50, 1);
+    touch(svg(), "pointermove", 120, 50, 2);
+    touch(svg(), "pointerup", 80, 50, 1);
+    touch(svg(), "pointerup", 120, 50, 2);
+
+    // The corner's uniform growth, as one message with the cap size the
+    // preview showed.
+    expect(frame.port.messages).toEqual([
+      { kind: "select", id: "e1" },
+      {
+        kind: "transformElement",
+        id: "e1",
+        box: { x: 100, y: 50, width: 80, height: 12, rotation: 0 },
+        size: 12,
+      },
+    ]);
+  });
+
+  it("clamps the pinch to the minimum size the scene gives", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [pinched({ transform: { ...pinchBox(), minSize: 8 } })] });
+
+    touch(art(), "pointerdown", 90, 50, 1);
+    touch(svg(), "pointerdown", 110, 50, 2);
+    // A tenth of the spread would shrink the width to 2 mm, under the 8 mm floor.
+    touch(svg(), "pointermove", 99, 50, 1);
+    touch(svg(), "pointermove", 101, 50, 2);
+    touch(svg(), "pointerup", 99, 50, 1);
+    touch(svg(), "pointerup", 101, 50, 2);
+
+    expect(frame.port.messages).toEqual([
+      { kind: "select", id: "e1" },
+      {
+        kind: "transformElement",
+        id: "e1",
+        box: { x: 100, y: 50, width: 8, height: 4, rotation: 0 },
+      },
+    ]);
+  });
+
+  it("sends nothing when the fingers lift without moving", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [pinched()] });
+
+    touch(art(), "pointerdown", 90, 50, 1);
+    touch(svg(), "pointerdown", 110, 50, 2);
+    touch(svg(), "pointerup", 90, 50, 1);
+    touch(svg(), "pointerup", 110, 50, 2);
+
+    // The press selected, but the gesture never shaped anything.
+    expect(frame.port.messages).toEqual([{ kind: "select", id: "e1" }]);
+  });
+
+  it("pans when the first finger lands anywhere but the selected Element", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [pinched()] });
+
+    // Both fingers land on empty page, missing the Element entirely.
+    touch(svg(), "pointerdown", 10, 10, 1);
+    touch(svg(), "pointerdown", 40, 40, 2);
+    touch(svg(), "pointermove", 22, 10, 1);
+    touch(svg(), "pointerup", 22, 10, 1);
+    touch(svg(), "pointerup", 40, 40, 2);
+
+    expect(frame.port.messages).toContainEqual(expect.objectContaining({ kind: "pan" }));
+    expect(frame.port.messages).not.toContainEqual(
+      expect.objectContaining({ kind: "transformElement" })
+    );
+  });
+
+  it("pans on a locked Element instead of pinching it", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [pinched({ locked: true, movable: false })] });
+
+    touch(art(), "pointerdown", 90, 50, 1);
+    touch(svg(), "pointerdown", 110, 50, 2);
+    // Both fingers slide right together, so their average does too.
+    touch(svg(), "pointermove", 100, 50, 1);
+    touch(svg(), "pointermove", 120, 50, 2);
+    touch(svg(), "pointerup", 100, 50, 1);
+    touch(svg(), "pointerup", 120, 50, 2);
+
+    expect(frame.port.messages).toContainEqual(expect.objectContaining({ kind: "pan" }));
+    expect(frame.port.messages).not.toContainEqual(
+      expect.objectContaining({ kind: "transformElement" })
+    );
+  });
+
+  it("cancels the pinch on Escape without posting it", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [pinched()] });
+
+    touch(art(), "pointerdown", 90, 50, 1);
+    touch(svg(), "pointerdown", 110, 50, 2);
+    touch(svg(), "pointermove", 80, 50, 1);
+    touch(svg(), "pointermove", 120, 50, 2);
+    expect(elementGroup().getAttribute("transform")).toBe(
+      "translate(100 50) scale(2) translate(-100 -50)"
+    );
+
+    key("Escape");
+    expect(elementGroup().getAttribute("transform")).toBeNull();
+    expect(frame.port.messages).toEqual([{ kind: "select", id: "e1" }]);
+
+    touch(svg(), "pointerup", 80, 50, 1);
+    touch(svg(), "pointerup", 120, 50, 2);
+    expect(frame.port.messages).toEqual([{ kind: "select", id: "e1" }]);
+  });
+});

@@ -76,6 +76,8 @@
    * @typedef {{ pointerId: number, id: string, handle: string, handles: string, press: ClientPoint, start: MapPoint, point: MapPoint, startBox: FrameTransformBox, box: FrameTransformBox, minSize: number, snap: boolean, moved: boolean }} TransformDrag
    * @typedef {{ id: string, startBox: FrameTransformBox, box: FrameTransformBox }} PendingTransform
    * @typedef {{ id: string, handle: string }} HoverGrip
+   * @typedef {{ pointers: number[], id: string, handles: string, startBox: FrameTransformBox, box: FrameTransformBox, minSize: number, startDistance: number, startAngle: number, startMid: MapPoint, mid: MapPoint, moved: boolean }} PinchDrag
+   * @typedef {{ pointerId: number, id: string }} PinchCandidate
    * @typedef {{ pointers: number[], client: ClientPoint, offset: MapPoint }} PanDrag
    * @typedef {{ clientX: number, clientY: number, touch: boolean }} PointerPlace
    * @typedef {{ start: MapPoint, control: MapPoint, apex: MapPoint, end: MapPoint }} BendGeometry
@@ -328,6 +330,24 @@
    * @type {HoverGrip | null}
    */
   let hoverGrip = null;
+
+  /**
+   * The pinch-and-twist gesture in progress (#796): the two fingers, the
+   * selected Element they size and turn, the box it started from and the one
+   * the fingers ask for right now, and the distance, angle, and midpoint the
+   * gesture started from. The preview reuses the handle drag's own path, and
+   * the Worker hears once, on release. A null `moved` drag never shaped
+   * anything, so its release posts nothing.
+   * @type {PinchDrag | null}
+   */
+  let pinchDrag = null;
+  /**
+   * The first finger of what may become a pinch (#796): its pointer id and the
+   * selected, unlocked Element with handles it landed on. The second finger
+   * landing turns the pair into a pinch; anything else turns it into a pan.
+   * @type {PinchCandidate | null}
+   */
+  let pinchCandidate = null;
 
   /**
    * The pan gesture in progress, or null (#777): the pointers it follows,
@@ -948,6 +968,8 @@
     pendingBend = null;
     transformDrag = null;
     pendingTransform = null;
+    pinchDrag = null;
+    pinchCandidate = null;
     // The view a pan already slid stays where it is, so the Worker hears of it.
     commitPan();
     panDrag = null;
@@ -1528,6 +1550,8 @@
   function liveTransformBox(target) {
     if (target.transform === undefined) return { x: 0, y: 0, width: 0, height: 0, rotation: 0 };
     if (transformDrag !== null && transformDrag.id === target.id) return transformDrag.box;
+    // A pinch previews through the same box, so its overlay and art follow it.
+    if (pinchDrag !== null && pinchDrag.id === target.id) return pinchDrag.box;
     if (pendingTransform !== null && pendingTransform.id === target.id) return pendingTransform.box;
     return target.transform.box;
   }
@@ -1698,10 +1722,15 @@
    * @returns {any}
    */
   function transformGhost() {
-    if (transformDrag === null || !transformDrag.moved) return null;
-    if (transformDrag.handle === "rotate") return null;
+    const start =
+      transformDrag !== null && transformDrag.moved && transformDrag.handle !== "rotate"
+        ? transformDrag.startBox
+        : pinchDrag !== null && pinchDrag.moved
+          ? pinchDrag.startBox
+          : null;
+    if (start === null) return null;
+    const startBox = start;
     const { html } = lib;
-    const { startBox } = transformDrag;
     const frame = `translate(${n(startBox.x)} ${n(startBox.y)})${
       startBox.rotation === 0 ? "" : ` rotate(${n(startBox.rotation)})`
     }`;
@@ -1762,10 +1791,28 @@
    * @returns {any}
    */
   function transformReadout() {
-    if (transformDrag === null || !transformDrag.moved || scene === null) return null;
-    const turning = transformDrag.handle === "rotate";
-    const shape = transformDrag.handles === "all";
-    const label = transformDrag.handles === "label";
+    // A pinch reads the same chip as a handle drag: it only ever resizes, so
+    // it takes the size text at the fingers' midpoint, never the turn's angle.
+    const active =
+      transformDrag !== null && transformDrag.moved
+        ? {
+            box: transformDrag.box,
+            handles: transformDrag.handles,
+            handle: transformDrag.handle,
+            point: transformDrag.point,
+          }
+        : pinchDrag !== null && pinchDrag.moved
+          ? {
+              box: pinchDrag.box,
+              handles: pinchDrag.handles,
+              handle: "pinch",
+              point: pinchDrag.mid,
+            }
+          : null;
+    if (active === null || scene === null) return null;
+    const turning = active.handle === "rotate";
+    const shape = active.handles === "all";
+    const label = active.handles === "label";
     const template = turning
       ? scene.readout.angle
       : shape
@@ -1778,13 +1825,10 @@
     if (scale === null) return null;
     const { html } = lib;
     const text = template
-      .replace(
-        "{{value}}",
-        readoutNumber(turning ? transformDrag.box.rotation : transformDrag.box.width)
-      )
-      .replace("{{width}}", readoutNumber(transformDrag.box.width))
-      .replace("{{height}}", readoutNumber(transformDrag.box.height))
-      .replace("{{size}}", readoutNumber(transformDrag.box.height));
+      .replace("{{value}}", readoutNumber(turning ? active.box.rotation : active.box.width))
+      .replace("{{width}}", readoutNumber(active.box.width))
+      .replace("{{height}}", readoutNumber(active.box.height))
+      .replace("{{size}}", readoutNumber(active.box.height));
     const font = CHIP_FONT_PX / scale;
     const padX = CHIP_PAD_X_PX / scale;
     const padY = CHIP_PAD_Y_PX / scale;
@@ -1792,7 +1836,7 @@
     // background behind its text; the Frame's body font is a system sans.
     const width = text.length * font * CHIP_ADVANCE + padX * 2;
     const height = font + padY * 2;
-    const [x, y] = transformDrag.point;
+    const [x, y] = active.point;
     return html`<g
       class="map-readout"
       transform="translate(${n(x + CHIP_GAP_PX / scale)} ${n(y + CHIP_GAP_PX / scale)})"
@@ -1924,6 +1968,7 @@
     /** @type {{ startBox: FrameTransformBox, box: FrameTransformBox } | null} */
     let preview = null;
     if (transformDrag !== null && transformDrag.id === id) preview = transformDrag;
+    else if (pinchDrag !== null && pinchDrag.id === id) preview = pinchDrag;
     else if (pendingTransform !== null && pendingTransform.id === id) preview = pendingTransform;
     if (preview === null) return undefined;
     const { startBox, box } = preview;
@@ -2309,6 +2354,221 @@
   }
 
   /**
+   * The selected, unlocked Element with handles the first finger landed on
+   * (#796), or null when the press cannot start a pinch: only a press on such
+   * an Element may pinch it, under the Select tool whose handles mark it.
+   * @param {PointerEvent} event
+   * @returns {PinchCandidate | null}
+   */
+  function pinchElement(event) {
+    if (scene === null || scene.tool !== "select") return null;
+    const target =
+      event.target instanceof Element ? event.target.closest("[data-element-id]") : null;
+    const id = target === null ? null : target.getAttribute("data-element-id");
+    if (id === null) return null;
+    const element = scene.elements.find((candidate) => candidate.id === id);
+    if (
+      element === undefined ||
+      !element.selected ||
+      element.locked ||
+      element.hidden ||
+      element.transform === undefined
+    ) {
+      return null;
+    }
+    return { pointerId: event.pointerId, id: element.id };
+  }
+
+  /**
+   * The box the fingers ask for (#796): the start box grown by the distance
+   * change, uniformly, turned by the angle change, and carried with the
+   * midpoint, so the Element scales and twists about the pair and follows it.
+   * A Map Label grows the same way, so its cap size follows its width. The
+   * box never shrinks under the minimum size the scene gave it.
+   * @param {FrameTransformBox} startBox
+   * @param {MapPoint} startMid
+   * @param {number} startDistance
+   * @param {number} startAngle
+   * @param {number} minSize
+   * @param {string} handles
+   * @param {MapPoint} mid
+   * @param {number} distance
+   * @param {number} angle
+   * @returns {FrameTransformBox}
+   */
+  function pinchBox(
+    startBox,
+    startMid,
+    startDistance,
+    startAngle,
+    minSize,
+    handles,
+    mid,
+    distance,
+    angle
+  ) {
+    const minWidth = Math.max(MIN_TRANSFORM_SIZE_MM, minSize);
+    const minHeight =
+      handles === "all" || handles === "label"
+        ? Math.max(MIN_TRANSFORM_SIZE_MM, minSize)
+        : MIN_TRANSFORM_SIZE_MM;
+    const scale = startDistance > 1e-6 ? distance / startDistance : 1;
+    // One uniform scale for both sides, stopping at the tighter minimum.
+    const floor = Math.max(
+      minWidth / Math.max(MIN_TRANSFORM_SIZE_MM, startBox.width),
+      minHeight / Math.max(MIN_TRANSFORM_SIZE_MM, startBox.height)
+    );
+    const grown = Math.max(scale, floor);
+    const delta = turnedBy(startAngle, angle);
+    const radians = (delta * Math.PI) / 180;
+    const cos = Math.cos(radians);
+    const sin = Math.sin(radians);
+    const dx = startBox.x - startMid[0];
+    const dy = startBox.y - startMid[1];
+    return {
+      x: mid[0] + (dx * cos - dy * sin) * grown,
+      y: mid[1] + (dx * sin + dy * cos) * grown,
+      width: startBox.width * grown,
+      height: startBox.height * grown,
+      rotation: normalizeDegrees(startBox.rotation + delta),
+    };
+  }
+
+  /**
+   * Starts the pinch-and-twist gesture (#796) when the second finger lands and
+   * the first one waits on a selected, unlocked Element with handles, and
+   * reports whether it did. Anything else is still a pan: the gesture under
+   * way is dropped without reaching the Worker, as a tool change drops one.
+   * @param {PointerEvent} event
+   * @param {number[]} fingers
+   * @returns {boolean}
+   */
+  function startPinch(event, fingers) {
+    if (pinchCandidate === null || fingers.length !== 2) {
+      pinchCandidate = null;
+      return false;
+    }
+    if (!fingers.includes(event.pointerId) || !fingers.includes(pinchCandidate.pointerId)) {
+      pinchCandidate = null;
+      return false;
+    }
+    const other = fingers[0] === event.pointerId ? /** @type {number} */ (fingers[1]) : fingers[0];
+    if (other !== pinchCandidate.pointerId || scene === null) {
+      pinchCandidate = null;
+      return false;
+    }
+    const target = scene.elements.find((element) => element.id === pinchCandidate.id);
+    const otherClient = pointerClients.get(other);
+    if (
+      target === undefined ||
+      !target.selected ||
+      target.locked ||
+      target.hidden ||
+      target.transform === undefined ||
+      otherClient === undefined ||
+      otherClient.touch !== true
+    ) {
+      pinchCandidate = null;
+      return false;
+    }
+    const first = pagePoint(otherClient);
+    const second = pagePoint(event);
+    if (first === null || second === null) return false;
+    const startDistance = Math.hypot(second[0] - first[0], second[1] - first[1]);
+    if (!(startDistance > 1e-6)) return false;
+    const candidate = pinchCandidate;
+    pinchCandidate = null;
+    resetGestures();
+    const startMid = [(first[0] + second[0]) / 2, (first[1] + second[1]) / 2];
+    pinchDrag = {
+      pointers: [candidate.pointerId, event.pointerId],
+      id: target.id,
+      handles: target.transform.handles,
+      startBox: { ...target.transform.box },
+      box: { ...target.transform.box },
+      // The Worker's own minimum size, so a preview never shows a box it would
+      // shrink: a scene without one lets the handle maths' floor apply.
+      minSize: target.transform.minSize ?? MIN_TRANSFORM_SIZE_MM,
+      startDistance,
+      startAngle: (Math.atan2(second[1] - first[1], second[0] - first[0]) * 180) / Math.PI,
+      startMid,
+      mid: startMid,
+      moved: false,
+    };
+    for (const pointerId of pinchDrag.pointers) capturePointerId(pointerId);
+    event.preventDefault();
+    draw();
+    return true;
+  }
+
+  /**
+   * Follows the fingers with the pinch (#796): the box the pair asks for
+   * previews live, in this Frame only, through the handle drag's own preview.
+   * @param {PointerEvent} event
+   */
+  function followPinch(event) {
+    if (pinchDrag === null || !pinchDrag.pointers.includes(event.pointerId)) return;
+    const firstClient = pointerClients.get(pinchDrag.pointers[0]);
+    const secondClient = pointerClients.get(pinchDrag.pointers[1]);
+    if (firstClient === undefined || secondClient === undefined) return;
+    const first = pagePoint(firstClient);
+    const second = pagePoint(secondClient);
+    if (first === null || second === null) return;
+    pinchDrag.moved = true;
+    pinchDrag.mid = [(first[0] + second[0]) / 2, (first[1] + second[1]) / 2];
+    pinchDrag.box = pinchBox(
+      pinchDrag.startBox,
+      pinchDrag.startMid,
+      pinchDrag.startDistance,
+      pinchDrag.startAngle,
+      pinchDrag.minSize,
+      pinchDrag.handles,
+      pinchDrag.mid,
+      Math.hypot(second[0] - first[0], second[1] - first[1]),
+      (Math.atan2(second[1] - first[1], second[0] - first[0]) * 180) / Math.PI
+    );
+    event.preventDefault();
+    draw();
+  }
+
+  /**
+   * Ends the pinch. A pinch that moved the box goes to the Worker as one
+   * transformElement, which is one undo step, and its preview holds until the
+   * Worker answers; lifting the fingers where they landed sends nothing. A Map
+   * Label's drag carries its new cap size, which is the box height the pinch
+   * previews.
+   * @param {PointerEvent} event
+   * @param {boolean} send
+   */
+  function endPinch(event, send) {
+    if (pinchDrag === null || !pinchDrag.pointers.includes(event.pointerId)) return;
+    const drag = pinchDrag;
+    pinchDrag = null;
+    for (const pointerId of drag.pointers) releasePointerId(pointerId);
+    if (!send || !drag.moved || sameBox(drag.box, drag.startBox)) {
+      draw();
+      return;
+    }
+    pendingTransform = { id: drag.id, startBox: drag.startBox, box: drag.box };
+    draw();
+    post({
+      kind: "transformElement",
+      id: drag.id,
+      box: drag.box,
+      ...(drag.handles === "label" ? { size: drag.box.height } : {}),
+    });
+  }
+
+  /** Drops the pinch in progress, and its preview, without reporting it. */
+  function cancelPinch() {
+    if (pinchDrag === null) return;
+    const drag = pinchDrag;
+    pinchDrag = null;
+    for (const pointerId of drag.pointers) releasePointerId(pointerId);
+    draw();
+  }
+
+  /**
    * The client point a pan measures from: the average of the pointers it
    * follows, so a two-finger drag pans by where the pair went.
    * @param {number[]} pointers
@@ -2563,6 +2823,8 @@
       clientY: event.clientY,
       touch: event.pointerType === "touch",
     });
+    // A third finger never joins a pinch: the pair owns the gesture.
+    if (pinchDrag !== null) return;
     // Space turns any press into a pan (#777), so the author moves the view
     // without leaving the tool they are drawing with.
     if (spacePan) {
@@ -2578,13 +2840,23 @@
     // primary button are.
     if (event.pointerType === "mouse" && event.button !== 0) return;
     // A second finger on the glass pans (#777), dropping the draft the first
-    // began, so a two-finger drag never draws.
+    // began, so a two-finger drag never draws. When the first finger waits on
+    // a selected, unlocked Element with handles, the pair pinches and twists
+    // it instead (#796).
     const fingers = [...pointerClients.entries()]
       .filter(([, place]) => place.touch)
       .map(([id]) => id);
     if (event.pointerType === "touch" && fingers.length > 1) {
+      if (startPinch(event, fingers)) return;
       beginPan(event, fingers);
       return;
+    }
+    // The first finger of a possible pinch (#796): what it landed on decides
+    // whether the second finger pinches the Element or pans the view.
+    if (event.pointerType === "touch" && fingers.length === 1) {
+      pinchCandidate = pinchElement(event);
+    } else {
+      pinchCandidate = null;
     }
     // The Hand pans with the primary button or one finger, and never picks or
     // draws. A second finger then hands the pan to the pair, as above.
@@ -2747,6 +3019,11 @@
 
     if (panDrag !== null && panDrag.pointers.includes(event.pointerId)) {
       followPan(event);
+      return;
+    }
+
+    if (pinchDrag !== null && pinchDrag.pointers.includes(event.pointerId)) {
+      followPinch(event);
       return;
     }
 
@@ -2935,6 +3212,13 @@
     if (event.key === "Escape" && transformDrag !== null) {
       event.preventDefault();
       cancelTransform();
+      return;
+    }
+    // Escape cancels a pinch (#796) the same way: the Element goes back and
+    // the Worker never hears of it.
+    if (event.key === "Escape" && pinchDrag !== null) {
+      event.preventDefault();
+      cancelPinch();
       return;
     }
     if (event.key === "Shift") constrainDrag(true);
@@ -3369,6 +3653,15 @@
         return;
       }
     }
+    // A pinched Element locked, hidden, or undone away mid-gesture stops too.
+    if (pinchDrag !== null) {
+      const pinched = pinchDrag.id;
+      const still = next.elements.find((element) => element.id === pinched);
+      if (still === undefined || still.transform === undefined || still.locked || still.hidden) {
+        cancelPinch();
+        return;
+      }
+    }
     syncCrosshair();
     draw();
   }
@@ -3405,24 +3698,32 @@
   function onPointerUp(event) {
     endPan(event);
     pointerClients.delete(event.pointerId);
+    if (pinchCandidate !== null && pinchCandidate.pointerId === event.pointerId) {
+      pinchCandidate = null;
+    }
     endStroke(event, true);
     endErase(event, true);
     endShape(event, true);
     endMove(event, true);
     endBend(event, true);
     endTransform(event, true);
+    endPinch(event, true);
   }
 
   /** @param {PointerEvent} event */
   function onPointerCancel(event) {
     endPan(event);
     pointerClients.delete(event.pointerId);
+    if (pinchCandidate !== null && pinchCandidate.pointerId === event.pointerId) {
+      pinchCandidate = null;
+    }
     endStroke(event, false);
     endErase(event, false);
     endShape(event, false);
     endMove(event, false);
     endBend(event, false);
     endTransform(event, false);
+    endPinch(event, false);
   }
 
   /**
@@ -3437,6 +3738,7 @@
     endMove(event, false);
     endBend(event, false);
     endTransform(event, false);
+    endPinch(event, false);
     endPan(event);
   }
 
@@ -3449,6 +3751,11 @@
    * @param {PointerEvent} event
    */
   function forgetPointer(event) {
+    // A finger that lifts off the surface ends its pinch there: the surface
+    // never hears the release, so the gesture would otherwise never finish.
+    if (pinchDrag !== null && pinchDrag.pointers.includes(event.pointerId)) {
+      endPinch(event, true);
+    }
     pointerClients.delete(event.pointerId);
   }
 
