@@ -25,8 +25,9 @@
  */
 
 import type { MapAsset, MapAssetMime } from "./assets";
-import type { MapDocument, MapPoint, ShapeKind } from "./maps";
-import { isShapeKind } from "./maps";
+import { labelFontExtent, layoutLabel } from "./label-layout";
+import type { LabelSizing, MapDocument, MapLabelElement, MapPoint, ShapeKind } from "./maps";
+import { isShapeKind, labelFontFamily } from "./maps";
 import {
   EMPTY_MAP_LIBRARY,
   canMove,
@@ -37,7 +38,7 @@ import {
   type SceneShape,
   sceneRender,
 } from "./scene";
-import { resolveColor, styleOf } from "./styles";
+import { type MapStyleId, resolveColor, styleOf } from "./styles";
 
 /** The editor tool the Frame should honour. */
 export type MapTool =
@@ -111,16 +112,47 @@ export interface TransformReadout {
   label: string;
 }
 
-/** The baseline a Map Label's bend handle is placed on and dragged against. */
+/**
+ * What the Frame needs of a Map Label: the baseline its bend handle is placed
+ * on and dragged against, and the type its on-map text box edits it in (#800).
+ */
 export interface FrameLabelLayout {
   x: number;
   y: number;
   /** The baseline's turn, in degrees clockwise about (x, y). */
   rotation: number;
-  /** The baseline chord's length, in page millimetres. */
+  /** The laid-out box's width, which a one-line label's chord spans, in page millimetres. */
   width: number;
   /** The signed sagitta the baseline bows by, in page millimetres. */
   bend: number;
+  /** The text as stored, with `\n` between lines, for the text box to start from. */
+  text: string;
+  /** How many lines the label lays out to; only a one-line label bends. */
+  lines: number;
+  /** Whether the box follows the text or wraps it at `width`. */
+  sizing: LabelSizing;
+  /** The family the label draws in, which the text box types in too. */
+  font: string;
+  /** The ink colour. */
+  fill: string;
+  /** The cap size, in page millimetres. */
+  size: number;
+  /** The room each letter takes beyond its own width, in page millimetres. */
+  letterSpacing: number;
+  /** How far apart the lines' baselines sit, in page millimetres. */
+  lineHeight: number;
+  /** How far the face rises above and falls below its baseline, per em. */
+  ascent: number;
+  descent: number;
+}
+
+/**
+ * The on-map text box's localized strings (#800): its accessible name, and the
+ * prompt an empty Map Label shows. The Frame cannot read the Plugin's catalogs.
+ */
+export interface LabelEditorStrings {
+  label: string;
+  placeholder: string;
 }
 
 /**
@@ -158,6 +190,13 @@ export interface FrameSceneMessage {
   penLabel: PenDraftLabel;
   /** The transform drag's readout chip text. */
   readout: TransformReadout;
+  /** The on-map text box's strings. */
+  labelEditor: LabelEditorStrings;
+  /**
+   * The Map Label whose on-map text box the Frame should open (#800), present
+   * on the one scene that answers a Text tool click or a Select double click.
+   */
+  editLabel?: string;
 }
 
 /**
@@ -310,6 +349,23 @@ export interface FrameSelectMessage {
   id: string | null;
 }
 
+/** Frame -> Worker: a Select-tool double click on a Map Label, to write its text (#800). */
+export interface FrameEditLabelMessage {
+  kind: "editLabel";
+  id: string;
+}
+
+/**
+ * Frame -> Worker: the text the on-map text box committed for one Map Label
+ * (#800), on Escape or when it lost focus: one message, one undo step. Lines
+ * are separated by `\n`.
+ */
+export interface FrameLabelTextMessage {
+  kind: "labelText";
+  id: string;
+  text: string;
+}
+
 /**
  * Frame -> Worker: a Shape drawn by dragging between two page-millimetre
  * corners (#747). `constrain` is Shift, which squares the box on its longer side.
@@ -417,6 +473,8 @@ export type FrameToWorkerMessage =
   | FrameAreaMessage
   | FrameEraseMessage
   | FrameSelectMessage
+  | FrameEditLabelMessage
+  | FrameLabelTextMessage
   | FrameShapeMessage
   | FramePourMessage
   | FrameInsertMessage
@@ -543,6 +601,15 @@ export function parseFrameMessage(data: unknown): FrameToWorkerMessage | null {
   if (message.kind === "select") {
     if (message.id !== null && typeof message.id !== "string") return null;
     return { kind: "select", id: message.id };
+  }
+  if (message.kind === "editLabel") {
+    if (typeof message.id !== "string") return null;
+    return { kind: "editLabel", id: message.id };
+  }
+  if (message.kind === "labelText") {
+    if (typeof message.id !== "string" || message.id === "") return null;
+    if (typeof message.text !== "string") return null;
+    return { kind: "labelText", id: message.id, text: message.text };
   }
   if (message.kind === "shape") {
     if (!isShapeKind(message.shape)) return null;
@@ -683,6 +750,10 @@ export function sceneMessage(
     penLabel: PenDraftLabel;
     /** The localized transform readout chip's text, with `{{value}}` for the number. */
     readout: TransformReadout;
+    /** The on-map text box's localized strings; absent sends them empty. */
+    labelEditor?: LabelEditorStrings;
+    /** The Map Label whose text box this scene opens, if any (#800). */
+    editLabel?: string | null;
   },
   context: SceneContext = {}
 ): FrameSceneMessage {
@@ -697,7 +768,10 @@ export function sceneMessage(
     elements: map.elements.map((element, index) => {
       // Only the selection carries handles, and only a kind that stores a box
       // to resize takes any yet (#795).
-      const transform = element.id === view.selectedId ? elementTransform(element, library) : null;
+      const transform =
+        element.id === view.selectedId
+          ? elementTransform(element, library, context.labelPlaceholder)
+          : null;
       return {
         id: element.id,
         shapes: render.shapes[index],
@@ -709,15 +783,7 @@ export function sceneMessage(
         // A Map Label carries the baseline its bend handle is placed on; no other
         // Element has a curve to drag.
         ...(element.kind === "label"
-          ? {
-              label: {
-                x: element.x,
-                y: element.y,
-                rotation: element.rotation,
-                width: element.width,
-                bend: element.bend,
-              },
-            }
+          ? { label: frameLabelLayout(element, style, context.labelPlaceholder) }
           : {}),
         ...(transform === null ? {} : { transform }),
       };
@@ -729,5 +795,36 @@ export function sceneMessage(
     panY: view.panY,
     penLabel: view.penLabel,
     readout: view.readout,
+    labelEditor: view.labelEditor ?? { label: "", placeholder: "" },
+    ...(view.editLabel === undefined || view.editLabel === null
+      ? {}
+      : { editLabel: view.editLabel }),
+  };
+}
+
+/** What the Frame draws and edits one Map Label from (#800), laid out by the Worker. */
+function frameLabelLayout(
+  element: MapLabelElement,
+  style: MapStyleId,
+  placeholder: string | undefined
+): FrameLabelLayout {
+  const layout = layoutLabel(element, placeholder);
+  const extent = labelFontExtent(element.font);
+  return {
+    x: element.x,
+    y: element.y,
+    rotation: element.rotation,
+    width: layout.width,
+    bend: element.bend,
+    text: element.text,
+    lines: layout.lines.length,
+    sizing: element.sizing,
+    font: labelFontFamily(element.font),
+    fill: resolveColor(style, element.color, "label"),
+    size: element.size,
+    letterSpacing: element.letterSpacing,
+    lineHeight: layout.lineHeight,
+    ascent: extent.ascent,
+    descent: extent.descent,
   };
 }

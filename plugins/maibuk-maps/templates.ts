@@ -598,7 +598,9 @@ export function templateElements(
     name: format(translate(language, "element.labelName"), { number: 1 }),
     text: title,
     point: cartouchePoint,
+    // The title keeps to the cartouche's plaque, wrapping inside it (#800).
     width: cartoucheSize * (CARTOUCHE_PLAQUE_WIDTH / CARTOUCHE_ART_WIDTH),
+    sizing: "fixed",
     size: cartoucheSize * (CARTOUCHE_PLAQUE_HEIGHT / CARTOUCHE_ART_WIDTH) * TITLE_SIZE_RATIO,
   });
   const provinceSize = landWidth * PROVINCE_LABEL_SIZE_RATIO;

@@ -69,6 +69,7 @@ function label(overrides: Partial<MapLabelElement> = {}): MapLabelElement {
     y: 30,
     rotation: 0,
     width: 40,
+    sizing: "fixed",
     bend: 0,
     font: DEFAULT_LABEL_FONT,
     size: DEFAULT_LABEL_SIZE_MM,

@@ -72,3 +72,50 @@ export async function countInkPixels(
     { data: pngBase64, regions: boxes, limit: paperMaxSum }
   );
 }
+
+/**
+ * The bands of rows of the PNG `pngBase64` that hold ink, top to bottom, as
+ * [first, last] row pairs (#800): a row is inked when any pixel in it is darker
+ * than {@link PAPER_MAX_SUM}. On a page holding one Map Label in capitals, each
+ * line of its text is one band, so a spec counts the lines the picture drew.
+ */
+export async function inkBands(
+  page: Page,
+  pngBase64: string,
+  paperMaxSum = PAPER_MAX_SUM
+): Promise<[number, number][]> {
+  return page.evaluate(
+    async ({ data, limit }) => {
+      const binary = atob(data);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index);
+      }
+      const bitmap = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
+      const canvas = document.createElement("canvas");
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const context = canvas.getContext("2d");
+      if (context === null) throw new Error("this page cannot draw a canvas");
+      context.drawImage(bitmap, 0, 0);
+      const { data: pixels } = context.getImageData(0, 0, bitmap.width, bitmap.height);
+      const bands: [number, number][] = [];
+      let start = -1;
+      for (let row = 0; row < bitmap.height; row += 1) {
+        let inked = false;
+        for (let column = 0; column < bitmap.width && !inked; column += 1) {
+          const at = (row * bitmap.width + column) * 4;
+          inked = pixels[at] + pixels[at + 1] + pixels[at + 2] <= limit;
+        }
+        if (inked && start === -1) start = row;
+        if (!inked && start !== -1) {
+          bands.push([start, row - 1]);
+          start = -1;
+        }
+      }
+      if (start !== -1) bands.push([start, bitmap.height - 1]);
+      return bands;
+    },
+    { data: pngBase64, limit: paperMaxSum }
+  );
+}

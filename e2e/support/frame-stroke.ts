@@ -194,6 +194,23 @@ export async function clickPagePoint(
 }
 
 /**
+ * Double-clicks one page point, in millimetres, on a Frame's drawing surface:
+ * the Select tool's way into a Map Label's text (#800).
+ */
+export async function dblclickPagePoint(
+  page: Page,
+  surface: Locator,
+  point: PagePoint
+): Promise<void> {
+  const box = await surface.boundingBox();
+  if (box === null) throw new Error("the Frame's drawing surface has no box to draw on");
+  const viewBox = await surface.getAttribute("viewBox");
+  if (viewBox === null) throw new Error("the Frame's drawing surface has no viewBox");
+  const at = fitToBox(box, viewBox.split(" ").map(Number))(point);
+  await page.mouse.dblclick(at.x, at.y);
+}
+
+/**
  * Drags the Eraser across a Frame's drawing surface, between two page points in
  * millimetres. The Frame's Eraser tool must already be selected; the caller
  * waits for the scene with `svg[data-tool="eraser"]` before calling this, and
@@ -641,4 +658,62 @@ export async function scatterPaint(surface: Locator): Promise<ScatterPaint> {
     };
     return { outline, outside, inside: painted(centre) };
   });
+}
+
+/**
+ * Double-clicks the middle of a Map Label's drawn ink (#800), in page pixels:
+ * the Select tool's way into the label's text box wherever a zoom or a turn
+ * put it. Answers the point it pressed, so the caller can hold the text box to
+ * it. A pointer-only gesture; the Properties Text field is its keyboard path.
+ */
+export async function dblclickLabelInk(
+  page: Page,
+  surface: Locator,
+  frame: Locator
+): Promise<{ x: number; y: number }> {
+  const { ink } = await labelInk(surface);
+  const box = await frame.boundingBox();
+  if (box === null) throw new Error("the Frame has no box");
+  const at = { x: box.x + (ink.left + ink.right) / 2, y: box.y + (ink.top + ink.bottom) / 2 };
+  await page.mouse.dblclick(at.x, at.y);
+  return at;
+}
+
+/** Where the Frame seats a Map Label's text box (#800), and the type it draws in. */
+export interface TextBoxGeometry {
+  /** The box's CSS transform, which turns it with its label. */
+  transform: string;
+  /** Its font size in Frame pixels, the label's cap size at the current zoom. */
+  fontPx: number;
+  /** Its inner width in Frame pixels. */
+  width: number;
+  /** How wide its placeholder's italic ink runs, slant included, in Frame pixels. */
+  promptInk: number;
+}
+
+/** Reads the text box's own transform, font size, width, and its prompt's ink width (#800). */
+export async function textBoxGeometry(field: Locator): Promise<TextBoxGeometry> {
+  return field.evaluate((element) => {
+    if (!(element instanceof HTMLTextAreaElement)) throw new Error("the text box is no textarea");
+    const style = getComputedStyle(element);
+    const context = document.createElement("canvas").getContext("2d");
+    if (context === null) throw new Error("the Frame has no 2D canvas to measure with");
+    context.font = `italic ${style.fontSize} ${style.fontFamily}`;
+    const ink = context.measureText(element.placeholder);
+    return {
+      transform: element.style.transform,
+      fontPx: Number.parseFloat(element.style.fontSize),
+      width: element.clientWidth,
+      promptInk: ink.actualBoundingBoxLeft + ink.actualBoundingBoxRight,
+    };
+  });
+}
+
+/** The baselines a multi-line Map Label draws its lines on (#800), first to last, in page millimetres. */
+export async function labelLineBaselines(surface: Locator): Promise<number[]> {
+  return surface
+    .locator("g[data-element-id] text.map-line")
+    .last()
+    .locator("tspan")
+    .evaluateAll((spans) => spans.map((span) => Number(span.getAttribute("y"))));
 }

@@ -1218,6 +1218,7 @@ describe("the Map Label bend arithmetic", () => {
     y: 50,
     rotation: 0,
     width: 40,
+    sizing: "fixed",
     bend: 8,
     font: "im-fell-english",
     size: 6,
@@ -1262,7 +1263,7 @@ describe("the Map Label bend arithmetic", () => {
       });
 
       // The handle sits on the midpoint of the baseline `maps.ts` draws.
-      const [mx, my] = midpoint(labelBaselinePath(one));
+      const [mx, my] = midpoint(labelBaselinePath(one, one.width));
       expect(Number(apex()[0])).toBeCloseTo(mx, 1);
       expect(Number(apex()[1])).toBeCloseTo(my, 1);
 
@@ -1860,6 +1861,7 @@ describe("the bendLabel message", () => {
           y: 50,
           rotation: 90,
           width: 40,
+          sizing: "fixed" as const,
           bend: 8,
           font: "im-fell-english" as const,
           size: 6,
@@ -1900,6 +1902,17 @@ describe("the bendLabel message", () => {
       rotation: 90,
       width: 40,
       bend: 8,
+      // The text box's type travels with it (#800).
+      text: "The Reach",
+      lines: 1,
+      sizing: "fixed",
+      font: "IM Fell English",
+      fill: expect.any(String),
+      size: 6,
+      letterSpacing: 0,
+      lineHeight: expect.closeTo(7.2, 9),
+      ascent: expect.any(Number),
+      descent: expect.any(Number),
     });
     expect(message.elements[1].label).toBeUndefined();
   });
@@ -2302,6 +2315,100 @@ describe("the Pen", () => {
       curves: [false],
       closed: false,
     });
+  });
+});
+
+describe("a double click on a Map Label with the Select tool (#800)", () => {
+  /** A Map Label's layout: a 84 mm wide cap at (100, 50), no bend. */
+  const labelLayout = {
+    x: 100,
+    y: 50,
+    rotation: 0,
+    width: 84,
+    bend: 0,
+  };
+
+  /** The drawn Element with the given id, as the Frame rendered it. */
+  const drawn = (id: string): Element => {
+    const element = document.querySelector(`[data-element-id="${id}"]`);
+    if (element === null) throw new Error(`the Frame drew no ${id} Element`);
+    return element;
+  };
+
+  it("asks the Worker to write the text of the Map Label double clicked", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "select", elements: [sceneElement({ id: "label1", label: labelLayout })] });
+
+    pointer(drawn("label1"), "dblclick", 120, 52);
+
+    expect(frame.port.messages).toEqual([{ kind: "editLabel", id: "label1" }]);
+  });
+
+  it("asks for the label when the double click lands on one of its drawn shapes", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "select", elements: [sceneElement({ id: "label1", label: labelLayout })] });
+
+    const art = drawn("label1").querySelector("path");
+    if (art === null) throw new Error("the Frame drew no shape for the label");
+    pointer(art, "dblclick", 120, 52);
+
+    expect(frame.port.messages).toEqual([{ kind: "editLabel", id: "label1" }]);
+  });
+
+  it("posts nothing when the double click lands on an Element that is not a Map Label", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "select", elements: [sceneElement({ id: "line1" })] });
+
+    pointer(drawn("line1"), "dblclick", 15, 15);
+
+    expect(frame.port.messages).toEqual([]);
+  });
+
+  it("posts nothing for a locked Map Label", () => {
+    frame = loadFrame();
+    frame.scene({
+      tool: "select",
+      elements: [sceneElement({ id: "label1", locked: true, label: labelLayout })],
+    });
+
+    pointer(drawn("label1"), "dblclick", 120, 52);
+
+    expect(frame.port.messages).toEqual([]);
+  });
+
+  it("asks for the label when the double click lands on its bend handle", () => {
+    frame = loadFrame();
+    frame.scene({
+      tool: "select",
+      elements: [sceneElement({ id: "label1", selected: true, label: labelLayout })],
+    });
+
+    const handle = document.querySelector("[data-bend-handle]");
+    if (handle === null) throw new Error("the Frame drew no bend handle");
+    pointer(handle, "dblclick", 100, 42);
+
+    expect(frame.port.messages).toEqual([{ kind: "editLabel", id: "label1" }]);
+  });
+
+  it("finds the label under the pointer when the double click's target is the svg", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "select", elements: [sceneElement({ id: "label1", label: labelLayout })] });
+
+    // The press's pointer capture retargets the double click to the <svg>. jsdom
+    // has no elementFromPoint, so the test stubs one that reports the label.
+    const elementFromPoint = vi.fn(() => drawn("label1"));
+    Object.defineProperty(document, "elementFromPoint", {
+      configurable: true,
+      value: elementFromPoint,
+    });
+    try {
+      pointer(svg(), "dblclick", 120, 52);
+    } finally {
+      delete (document as unknown as { elementFromPoint?: unknown }).elementFromPoint;
+    }
+
+    expect(elementFromPoint).toHaveBeenCalledWith(120, 52);
+    expect(frame.port.messages).toEqual([{ kind: "editLabel", id: "label1" }]);
   });
 });
 
@@ -3648,7 +3755,7 @@ describe("the transform handles (#795)", () => {
       ]);
     });
 
-    it("widens from a side handle without touching the cap size", () => {
+    it("widens from a side handle without touching the cap size, and names no size, which sets a fixed width (#800)", () => {
       frame = loadFrame();
       // The side grips need the label past 48 px on screen: 7 mm at 8 px per mm.
       frame.scale = 8;
@@ -3670,7 +3777,6 @@ describe("the transform handles (#795)", () => {
           kind: "transformElement",
           id: "e1",
           box: { x: 105, y: 50, width: 94, height: 7, rotation: 0 },
-          size: 7,
         },
       ]);
     });
@@ -3702,7 +3808,6 @@ describe("the transform handles (#795)", () => {
             height: expect.closeTo(7, 5),
             rotation: 18,
           },
-          size: expect.closeTo(7, 5),
         },
       ]);
     });
@@ -4713,5 +4818,301 @@ describe("pinching and twisting a selected Element (#796)", () => {
     touch(svg(), "pointerup", 80, 50, 1);
     touch(svg(), "pointerup", 120, 50, 2);
     expect(frame.port.messages).toEqual([{ kind: "select", id: "e1" }]);
+  });
+});
+
+describe("the on-map text box (#800)", () => {
+  /** A one-line Map Label's layout, as the Worker sends it. */
+  const layout = (overrides: Record<string, unknown> = {}) => ({
+    x: 100,
+    y: 50,
+    rotation: 30,
+    width: 40,
+    bend: 0,
+    text: "Gulf",
+    lines: 1,
+    sizing: "auto",
+    font: "Cinzel",
+    fill: "#8b1a1a",
+    size: 6,
+    letterSpacing: 0.5,
+    lineHeight: 7.2,
+    ascent: 0.9,
+    descent: 0.3,
+    ...overrides,
+  });
+  const STRINGS = { label: "Map Label text", placeholder: "Write your text here" };
+  const field = () => document.querySelector<HTMLTextAreaElement>("textarea.map-label-editor");
+  const open = (overrides: Record<string, unknown> = {}) => {
+    frame = loadFrame();
+    frame.scene({
+      labelEditor: STRINGS,
+      editLabel: "e1",
+      elements: [sceneElement({ selected: true, label: layout(), ...overrides })],
+    });
+  };
+  /** One key pressed in the text box, which answers whether anything handled it. */
+  const type = (name: string, init: KeyboardEventInit = {}) => {
+    const event = new KeyboardEvent("keydown", {
+      key: name,
+      bubbles: true,
+      cancelable: true,
+      ...init,
+    });
+    field()?.dispatchEvent(event);
+    return event;
+  };
+
+  it("opens focused over the label on the scene that asks, in its type, named and prompted", () => {
+    open();
+    const box = field();
+    if (box === null) throw new Error("the Frame opened no text box");
+    expect(document.activeElement).toBe(box);
+    expect(box.value).toBe("Gulf");
+    expect(box.getAttribute("aria-label")).toBe("Map Label text");
+    expect(box.placeholder).toBe("Write your text here");
+    // 4 px per mm: the box draws at the zoom's screen size, turned with the label.
+    expect(box.style.fontSize).toBe("24px");
+    expect(box.style.lineHeight).toBe("28.8px");
+    expect(box.style.letterSpacing).toBe("2px");
+    expect(box.style.fontFamily).toContain("Cinzel");
+    expect(box.style.whiteSpace).toBe("pre");
+    expect(box.style.transform).toContain("rotate(30deg)");
+    // The label's own ink hides while its text box stands in for it.
+    expect(document.querySelector('[data-element-id="e1"]')?.getAttribute("data-editing")).toBe(
+      "true"
+    );
+  });
+
+  it("wraps a fixed box at the label's width", () => {
+    open({ label: layout({ sizing: "fixed", width: 30 }) });
+    expect(field()?.style.whiteSpace).toBe("pre-wrap");
+    expect(field()?.style.width).toBe("120px");
+  });
+
+  it("fits an empty auto box to its italic prompt, slant included, and a written one to its text", () => {
+    // jsdom lays nothing out: the scroll width is 10 px a letter, in whatever
+    // style the box holds when it is read.
+    const styles: string[] = [];
+    const scrollWidth = vi
+      .spyOn(HTMLTextAreaElement.prototype, "scrollWidth", "get")
+      .mockImplementation(function (this: HTMLTextAreaElement) {
+        styles.push(this.style.fontStyle);
+        return this.value.length * 10;
+      });
+    try {
+      open({ label: layout({ text: "" }) });
+      const box = field();
+      if (box === null) throw new Error("the Frame opened no text box");
+      // 20 letters of prompt, a quarter em of slant at 24 px, and the caret's 2 px.
+      expect(box.style.width).toBe("208px");
+      expect(styles).toContain("italic");
+      expect(box.value).toBe("");
+      expect(box.style.fontStyle).toBe("");
+
+      box.value = "Gulf";
+      box.dispatchEvent(new Event("input"));
+      expect(box.style.width).toBe("42px");
+    } finally {
+      scrollWidth.mockRestore();
+    }
+  });
+
+  it("opens no box for a locked or hidden label, or on a scene that does not ask", () => {
+    open({ locked: true });
+    expect(field()).toBeNull();
+    open({ hidden: true });
+    expect(field()).toBeNull();
+    frame = loadFrame();
+    frame.scene({ elements: [sceneElement({ label: layout() })] });
+    expect(field()).toBeNull();
+  });
+
+  it("keeps every key from the tool Shortcuts and the host while it is open", () => {
+    open();
+    // A forwarded key is one the Frame left undefended; a stopped one never
+    // reaches the document listener or the shim's forwarder.
+    const seen: string[] = [];
+    window.addEventListener("keydown", (event) => seen.push(event.key));
+    for (const name of ["v", "e", " ", "z", "Enter"]) {
+      const event = type(name, name === "z" ? { ctrlKey: true } : {});
+      // Typing is never cancelled: the textarea writes the letter.
+      expect(event.defaultPrevented).toBe(false);
+    }
+    expect(seen).toEqual([]);
+    expect(frame?.port.messages).toEqual([]);
+  });
+
+  it("commits a changed text on Escape as one labelText and keeps the ink hidden until the Worker answers", () => {
+    open();
+    const box = field();
+    if (box === null) throw new Error("no text box");
+    box.value = "North\nSea";
+    const escapeKey = type("Escape");
+    expect(escapeKey.defaultPrevented).toBe(true);
+    expect(field()).toBeNull();
+    expect(frame?.port.messages).toEqual([{ kind: "labelText", id: "e1", text: "North\nSea" }]);
+    expect(document.querySelector('[data-element-id="e1"]')?.getAttribute("data-editing")).toBe(
+      "true"
+    );
+    frame?.scene({ elements: [sceneElement({ selected: true, label: layout() })] });
+    expect(
+      document.querySelector('[data-element-id="e1"]')?.getAttribute("data-editing")
+    ).toBeNull();
+  });
+
+  it("commits on Ctrl+Enter and when focus leaves, and posts nothing when the text is unchanged", () => {
+    open();
+    type("Enter", { ctrlKey: true });
+    expect(field()).toBeNull();
+    expect(frame?.port.messages).toEqual([]);
+
+    open();
+    const box = field();
+    if (box === null) throw new Error("no text box");
+    box.value = "Bay";
+    box.blur();
+    expect(field()).toBeNull();
+    expect(frame?.port.messages).toEqual([{ kind: "labelText", id: "e1", text: "Bay" }]);
+  });
+
+  it("commits on Tab, which still moves focus on, and when the Frame's window loses focus", () => {
+    open();
+    const box = field();
+    if (box === null) throw new Error("no text box");
+    box.value = "Sound";
+    const tab = type("Tab");
+    expect(tab.defaultPrevented).toBe(false);
+    expect(field()).toBeNull();
+    expect(frame?.port.messages).toEqual([{ kind: "labelText", id: "e1", text: "Sound" }]);
+
+    open();
+    const again = field();
+    if (again === null) throw new Error("no text box");
+    again.value = "Strait";
+    window.dispatchEvent(new Event("blur"));
+    expect(field()).toBeNull();
+    expect(frame?.port.messages).toEqual([{ kind: "labelText", id: "e1", text: "Strait" }]);
+  });
+
+  it("commits before a press on the Map does what it does", () => {
+    open();
+    const box = field();
+    if (box === null) throw new Error("no text box");
+    box.value = "Sound";
+    pointer(svg(), "pointerdown", 10, 10);
+    expect(frame?.port.messages[0]).toEqual({ kind: "labelText", id: "e1", text: "Sound" });
+    expect(frame?.port.messages[1]).toEqual({ kind: "select", id: null });
+  });
+
+  it("closes without a commit when the label is locked or undone away", () => {
+    open();
+    frame?.scene({ elements: [sceneElement({ locked: true, label: layout() })] });
+    expect(field()).toBeNull();
+    expect(frame?.port.messages).toEqual([]);
+  });
+
+  it("hides the bend handle and the grips while it is open, and a multi-line label never bends", () => {
+    open({
+      transform: { box: { x: 100, y: 47, width: 40, height: 6, rotation: 0 }, handles: "label" },
+    });
+    expect(document.querySelector("circle.map-bend-handle")).toBeNull();
+    expect(document.querySelector("[data-transform]")).toBeNull();
+    type("Escape");
+    expect(document.querySelector("circle.map-bend-handle")).not.toBeNull();
+
+    frame = loadFrame();
+    frame.scene({
+      elements: [sceneElement({ selected: true, label: layout({ lines: 3 }) })],
+    });
+    expect(document.querySelector("circle.map-bend-handle")).toBeNull();
+  });
+
+  it("draws a multi-line label as a tspan per line, one line height apart", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [
+        sceneElement({
+          shapes: [
+            {
+              text: "North\nSea",
+              x: 100,
+              y: 50,
+              size: 6,
+              fill: "#000",
+              anchor: "middle",
+              lines: ["North", "Sea"],
+              lineHeight: 7.2,
+              style: "font-kerning:none;font-variant-ligatures:none",
+            },
+          ],
+        }),
+      ],
+    });
+    const spans = [...document.querySelectorAll("text.map-line tspan")];
+    expect(spans.map((span) => span.textContent)).toEqual(["North", "Sea"]);
+    expect(spans.map((span) => span.getAttribute("y"))).toEqual(["50", "57.2"]);
+    expect(document.querySelector("text.map-line")?.getAttribute("style")).toMatch(
+      /font-kerning: ?none/
+    );
+  });
+
+  it("sends a corner drag's cap size scaled from the label's own, not the box height", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [
+        sceneElement({
+          selected: true,
+          movable: true,
+          label: layout({ rotation: 0, lines: 2 }),
+          transform: {
+            box: { x: 100, y: 50.6, width: 40, height: 13.2, rotation: 0 },
+            handles: "label",
+          },
+        }),
+      ],
+    });
+    // Drag the bottom-right corner out until the box is twice as tall.
+    pointer(
+      document.querySelector('[data-transform-handle-hit="se"]') as Element,
+      "pointerdown",
+      120,
+      57.2
+    );
+    pointer(svg(), "pointermove", 160, 70.4);
+    pointer(svg(), "pointerup", 160, 70.4);
+    const [message] = frame.port.messages as { size?: number; box: { height: number } }[];
+    expect(message.box.height).toBeCloseTo(26.4, 1);
+    expect(message.size).toBeCloseTo(12, 1);
+  });
+});
+
+describe("a short Map Label's side grips (#800)", () => {
+  it("keeps the middle of each side for its side grip, however tall the corners' hit areas", () => {
+    frame = loadFrame();
+    // 4 px per mm: a 24 px hit is 6 mm, as tall as this 6 mm label's whole box.
+    frame.scene({
+      elements: [
+        sceneElement({
+          selected: true,
+          transform: {
+            box: { x: 100, y: 47, width: 40, height: 6, rotation: 0 },
+            handles: "label",
+          },
+        }),
+      ],
+    });
+    const hit = (id: string) => {
+      const rect = document.querySelector(`[data-transform-handle-hit="${id}"]`);
+      if (rect === null) throw new Error(`no ${id} grip`);
+      return { y: Number(rect.getAttribute("y")), height: Number(rect.getAttribute("height")) };
+    };
+    // The corners reach 60% of the box's height, centred on their corner.
+    expect(hit("ne").height).toBeCloseTo(3.6, 5);
+    expect(hit("se").height).toBeCloseTo(3.6, 5);
+    // So the side's own middle, on the box's centre line, is no corner's.
+    expect(hit("ne").y + hit("ne").height).toBeLessThan(0);
+    expect(hit("se").y).toBeGreaterThan(0);
+    expect(hit("e").height).toBeCloseTo(6, 5);
   });
 });

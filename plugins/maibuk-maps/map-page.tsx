@@ -868,6 +868,16 @@ function MapEditorView({
     setPropertiesFocusPending(false);
     setPropertiesFocus((count) => count + 1);
   }, [propertiesFocusPending, rowMenuFor]);
+  // The last Text-field focus request the panel has answered (#800). A Map
+  // Label the Place button adds raises snapshot.labelTextFocus, which remounts
+  // the Text field with `autoFocus`; a later remount, such as picking another
+  // label, finds the request answered and leaves focus where it is. A label
+  // placed or double clicked in the Frame is written in the Frame's text box.
+  const answeredLabelFocus = useRef(0);
+  const labelFocusRequested = snapshot.labelTextFocus > answeredLabelFocus.current;
+  useEffect(() => {
+    answeredLabelFocus.current = snapshot.labelTextFocus;
+  }, [snapshot.labelTextFocus]);
   // The Map's own name while its rename dialog holds it, or null when it is shut.
   const [mapRename, setMapRename] = useState<string | null>(null);
   const selected =
@@ -1768,13 +1778,31 @@ function MapEditorView({
                     )}
                     {label === null ? null : (
                       <>
-                        <ui.TextField
-                          label={t("properties.mapLabel.text")}
-                          value={label.text}
-                          placeholder={t("element.labelPlaceholder")}
-                          isDisabled={selected.locked}
-                          onChange={(event) => editor.setLabelText(selected.id, event.detail)}
-                        />
+                        {/* A one-line field, as a name takes; a label written on
+                            several lines in the Frame's text box (#800) shows them
+                            all, since a one-line field would drop its breaks. */}
+                        {label.text.includes("\n") ? (
+                          <ui.TextArea
+                            key={`label-text-${snapshot.labelTextFocus}`}
+                            label={t("properties.mapLabel.text")}
+                            value={label.text}
+                            rows={Math.min(6, label.text.split("\n").length)}
+                            autoFocus={labelFocusRequested}
+                            placeholder={t("element.labelPlaceholder")}
+                            isDisabled={selected.locked}
+                            onChange={(event) => editor.setLabelText(selected.id, event.detail)}
+                          />
+                        ) : (
+                          <ui.TextField
+                            key={`label-text-${snapshot.labelTextFocus}`}
+                            label={t("properties.mapLabel.text")}
+                            value={label.text}
+                            autoFocus={labelFocusRequested}
+                            placeholder={t("element.labelPlaceholder")}
+                            isDisabled={selected.locked}
+                            onChange={(event) => editor.setLabelText(selected.id, event.detail)}
+                          />
+                        )}
                         <ui.Select
                           label={t("properties.mapLabel.font")}
                           options={LABEL_FONT_IDS.map((font) => ({
@@ -1854,20 +1882,41 @@ function MapEditorView({
                             editor.setLabelLayout(selected.id, { rotation: event.detail })
                           }
                         />
+                        {/* Auto width follows the text; a Width the author sets,
+                            here or with a side handle, wraps it (#800). */}
+                        <ui.Switch
+                          label={t("properties.mapLabel.autoWidth")}
+                          isSelected={label.sizing === "auto"}
+                          isDisabled={selected.locked}
+                          onChange={(event) =>
+                            editor.setLabelSizing(selected.id, event.detail ? "auto" : "fixed")
+                          }
+                        />
                         <ui.NumberField
                           label={t("properties.mapLabel.width")}
-                          value={label.width}
+                          value={
+                            Math.round((snapshot.selectedLabelLayout?.width ?? label.width) * 10) /
+                            10
+                          }
                           minValue={MIN_LABEL_WIDTH_MM}
                           isDisabled={selected.locked}
                           onChange={(event) =>
                             editor.setLabelLayout(selected.id, { width: event.detail })
                           }
                         />
-                        {/* Bend is the curve: 0 draws the baseline straight. */}
+                        {/* Bend is the curve: 0 draws the baseline straight. Only
+                            a one-line label bends (#800). */}
                         <ui.NumberField
                           label={t("properties.mapLabel.bend")}
                           value={label.bend}
-                          isDisabled={selected.locked}
+                          description={
+                            (snapshot.selectedLabelLayout?.lines ?? 1) > 1
+                              ? t("properties.mapLabel.bendOneLine")
+                              : undefined
+                          }
+                          isDisabled={
+                            selected.locked || (snapshot.selectedLabelLayout?.lines ?? 1) > 1
+                          }
                           onChange={(event) =>
                             editor.setLabelLayout(selected.id, { bend: event.detail })
                           }

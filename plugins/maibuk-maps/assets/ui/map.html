@@ -85,6 +85,41 @@
         -webkit-user-select: none;
       }
 
+      /* The Map Label being written in its on-map text box (#800) hides its
+         ink, so the box's own letters are the only ones on the page. */
+      #surface g[data-editing="true"] {
+        visibility: hidden;
+      }
+
+      /* The on-map text box (#800): a bare textarea seated over its label,
+         typing in the label's own face, size, spacing, and ink, which the
+         Frame sets on it. It draws no frame of its own beyond a dashed edge,
+         turns from its top-left corner, and keeps the layout's plain advances,
+         as the drawn label does. */
+      .map-label-editor {
+        position: fixed;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        outline: 1px dashed var(--maibuk-color-primary, #2563eb);
+        outline-offset: 2px;
+        background: transparent;
+        resize: none;
+        overflow: hidden;
+        text-align: center;
+        overflow-wrap: anywhere;
+        font-kerning: none;
+        font-variant-ligatures: none;
+        transform-origin: 0 0;
+        z-index: 1;
+      }
+      .map-label-editor::placeholder {
+        color: inherit;
+        font-style: italic;
+        opacity: 0.5;
+      }
+
       /* A Map Line is page ink: its width is page millimetres, so zooming in
          shows a thicker line, exactly as the Maps list preview does. The Map's
          paper is the Map Style's light water in both themes (a printed map, like

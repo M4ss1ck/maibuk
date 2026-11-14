@@ -34,16 +34,18 @@
    * @typedef {"ellipse" | "rectangle" | "polygon"} ShapeKind
    * @typedef {"select" | "hand" | "pencil" | "pen" | "bucket" | "area" | "eraser" | "insert" | "text" | ShapeKind} MapTool
    * @typedef {{ d: string, stroke: string | null, strokeWidth: number, dash: string | null, fill: string | null, fillRule?: "evenodd", opacity: number, transform?: string, clip?: string, hitOnly?: true }} LineShape
-   * @typedef {{ text: string, x: number, y: number, size: number, fill: string, font?: string, letterSpacing?: number, halo?: { color: string, width: number }, path?: { id: string, d: string }, anchor: "start" | "middle" | "end", transform?: string, placeholder?: true, opacity?: number }} TextShape
+   * @typedef {{ text: string, x: number, y: number, size: number, fill: string, font?: string, letterSpacing?: number, halo?: { color: string, width: number }, path?: { id: string, d: string }, anchor: "start" | "middle" | "end", transform?: string, placeholder?: true, opacity?: number, lines?: string[], lineHeight?: number, style?: string }} TextShape
    * @typedef {{ kind: "image", assetId: string, x: number, y: number, width: number, height: number, rotation: number, opacity: number, tint?: string, clip?: string }} ImageShape
    * @typedef {LineShape | TextShape | ImageShape} SceneShape
-   * @typedef {{ x: number, y: number, rotation: number, width: number, bend: number }} FrameLabelLayout
+   * @typedef {{ x: number, y: number, rotation: number, width: number, bend: number, text: string, lines: number, sizing: "auto" | "fixed", font: string, fill: string, size: number, letterSpacing: number, lineHeight: number, ascent: number, descent: number }} FrameLabelLayout
+   * @typedef {{ label: string, placeholder: string }} LabelEditorStrings
+   * @typedef {{ id: string, field: HTMLTextAreaElement, original: string }} LabelEdit
    * @typedef {{ x: number, y: number, width: number, height: number, rotation: number }} FrameTransformBox
    * @typedef {{ box: FrameTransformBox, handles: "corners" | "all" | "label", minSize?: number }} FrameElementTransform
    * @typedef {{ id: string, shapes: SceneShape[], filter: string | null, hidden: boolean, locked: boolean, selected: boolean, movable: boolean, label?: FrameLabelLayout, transform?: FrameElementTransform }} FrameSceneElement
    * @typedef {{ one: string, other: string }} PenDraftLabel
    * @typedef {{ size: string, angle: string, shape: string, label: string }} TransformReadout
-   * @typedef {{ kind: "scene", widthMm: number, heightMm: number, background: string, elements: FrameSceneElement[], defs: string, tool: MapTool, zoom: number, panX: number, panY: number, penLabel: PenDraftLabel, readout: TransformReadout }} FrameSceneMessage
+   * @typedef {{ kind: "scene", widthMm: number, heightMm: number, background: string, elements: FrameSceneElement[], defs: string, tool: MapTool, zoom: number, panX: number, panY: number, penLabel: PenDraftLabel, readout: TransformReadout, labelEditor: LabelEditorStrings, editLabel?: string }} FrameSceneMessage
    * @typedef {{ kind: "stroke", points: MapPoint[] }} FrameStrokeMessage
    * @typedef {{ kind: "line", points: MapPoint[], curves: boolean[], closed: boolean }} FrameLineMessage
    * @typedef {{ kind: "area", points: MapPoint[], curves: boolean[], freehand: boolean }} FrameAreaMessage
@@ -74,7 +76,7 @@
    * @typedef {{ id: string, bend: number }} PendingBend
    * @typedef {{ box: FrameTransformBox, handle: string, start: MapPoint, point: MapPoint, aspect?: boolean, fromCentre?: boolean, snap?: boolean, minWidth?: number, minHeight?: number }} TransformGesture
    * @typedef {{ pointerId: number, id: string, handle: string, handles: string, press: ClientPoint, start: MapPoint, point: MapPoint, startBox: FrameTransformBox, box: FrameTransformBox, minSize: number, snap: boolean, moved: boolean }} TransformDrag
-   * @typedef {{ id: string, startBox: FrameTransformBox, box: FrameTransformBox }} PendingTransform
+   * @typedef {{ id: string, startBox: FrameTransformBox, box: FrameTransformBox, holdArt?: boolean }} PendingTransform
    * @typedef {{ id: string, handle: string }} HoverGrip
    * @typedef {{ pointers: number[], id: string, handles: string, startBox: FrameTransformBox, box: FrameTransformBox, minSize: number, startDistance: number, startAngle: number, startMid: MapPoint, mid: MapPoint, moved: boolean }} PinchDrag
    * @typedef {{ pointerId: number, id: string }} PinchCandidate
@@ -321,6 +323,18 @@
    */
   let pendingTransform = null;
   /**
+   * The on-map text box a Map Label is being written in (#800), or null: the
+   * label's id, the textarea, and the text it opened with.
+   * @type {LabelEdit | null}
+   */
+  let labelEdit = null;
+  /**
+   * A label whose committed text the Worker has not answered yet, or null. Its
+   * ink stays hidden until the next scene, so the old text never flashes back.
+   * @type {string | null}
+   */
+  let pendingLabelText = null;
+  /**
    * The grip the pointer rests on (#795), the Element and handle it names, or
    * null. That grip fills and grows, so the author sees the one a press would
    * take. A touch screen has no hover, so nothing rests and no grip grows.
@@ -512,6 +526,15 @@
       ...(isNumber(shape.opacity) && shape.opacity >= 0 && shape.opacity < 1
         ? { opacity: shape.opacity }
         : {}),
+      // A multi-line Map Label's lines (#800), drawn one under the other.
+      ...(Array.isArray(shape.lines) &&
+      shape.lines.length > 0 &&
+      shape.lines.every((line) => typeof line === "string") &&
+      isNumber(shape.lineHeight) &&
+      shape.lineHeight > 0
+        ? { lines: /** @type {string[]} */ (shape.lines), lineHeight: shape.lineHeight }
+        : {}),
+      ...(typeof shape.style === "string" && shape.style !== "" ? { style: shape.style } : {}),
     };
   }
 
@@ -633,12 +656,41 @@
     if (!isNumber(label.x) || !isNumber(label.y) || !isNumber(label.rotation)) return null;
     if (!isNumber(label.width) || label.width <= 0) return null;
     if (!isNumber(label.bend)) return null;
+    // The text box's type (#800): a field the scene leaves out falls back to
+    // one plain line, so the bend handle and the box still work.
+    const size = isNumber(label.size) && label.size > 0 ? label.size : 1;
     return {
       x: label.x,
       y: label.y,
       rotation: label.rotation,
       width: label.width,
       bend: label.bend,
+      text: typeof label.text === "string" ? label.text : "",
+      lines: isNumber(label.lines) && label.lines >= 1 ? Math.floor(label.lines) : 1,
+      sizing: label.sizing === "auto" ? "auto" : "fixed",
+      font: typeof label.font === "string" ? label.font : "",
+      fill: typeof label.fill === "string" ? label.fill : "currentColor",
+      size,
+      letterSpacing: isNumber(label.letterSpacing) ? label.letterSpacing : 0,
+      lineHeight:
+        isNumber(label.lineHeight) && label.lineHeight > 0 ? label.lineHeight : size * 1.2,
+      ascent: isNumber(label.ascent) && label.ascent > 0 ? label.ascent : 0.8,
+      descent: isNumber(label.descent) && label.descent >= 0 ? label.descent : 0.2,
+    };
+  }
+
+  /**
+   * Reads the on-map text box's strings (#800); an unreadable one is empty, so
+   * the box goes unnamed rather than named in English.
+   * @param {unknown} raw
+   * @returns {LabelEditorStrings}
+   */
+  function readLabelEditor(raw) {
+    const strings =
+      typeof raw === "object" && raw !== null ? /** @type {Record<string, unknown>} */ (raw) : {};
+    return {
+      label: typeof strings.label === "string" ? strings.label : "",
+      placeholder: typeof strings.placeholder === "string" ? strings.placeholder : "",
     };
   }
 
@@ -795,6 +847,10 @@
       penLabel: readLabel(message.penLabel),
       // The chip's size and angle text arrive the same way (#795).
       readout: readReadout(message.readout),
+      labelEditor: readLabelEditor(message.labelEditor),
+      ...(typeof message.editLabel === "string" && message.editLabel !== ""
+        ? { editLabel: message.editLabel }
+        : {}),
     };
   }
 
@@ -1042,10 +1098,20 @@
    */
   function textNodes(shape) {
     const { html } = lib;
-    const content = () =>
-      shape.path === undefined
+    const { lines, lineHeight } = shape;
+    const content = () => {
+      // A multi-line Map Label (#800) draws a tspan per line, each centred on
+      // the label's point and one line height below the one before.
+      if (lines !== undefined && lineHeight !== undefined) {
+        return lines.map(
+          (line, index) =>
+            html`<tspan x="${n(shape.x)}" y="${n(shape.y + index * lineHeight)}">${line}</tspan>`
+        );
+      }
+      return shape.path === undefined
         ? shape.text
         : html`<textPath href="#${shape.path.id}" startOffset="50%">${shape.text}</textPath>`;
+    };
     // A text on a path starts where its textPath's startOffset puts it: Chromium
     // drops the textPath when the same <text> also carries an `x`, lays the run
     // out at the origin, and paints nothing (#751). So only a text drawn at a
@@ -1068,6 +1134,7 @@
       transform="${shape.transform ?? undefined}"
       font-style="${shape.placeholder === true ? "italic" : undefined}"
       opacity="${shape.opacity === undefined ? undefined : n(shape.opacity)}"
+      style="${shape.style ?? undefined}"
     >
       ${content()}
     </text>`;
@@ -1278,6 +1345,8 @@
     const selected = scene.elements.find((element) => element.selected);
     if (selected === undefined || selected.label === undefined) return null;
     if (selected.hidden || selected.locked) return null;
+    // Only a one-line label bends (#800), and one being written has no handle.
+    if (selected.label.lines > 1 || isEditingLabel(selected.id)) return null;
     return selected;
   }
 
@@ -1527,6 +1596,8 @@
     if (scene === null || scene.tool !== "select") return null;
     const selected = scene.elements.find((element) => element.selected);
     if (selected === undefined || selected.transform === undefined || selected.hidden) return null;
+    // A label being written shows its text box instead of its grips (#800).
+    if (isEditingLabel(selected.id)) return null;
     return selected;
   }
 
@@ -1629,6 +1700,14 @@
             // The grip under the pointer grows, so the one a press would take stands out.
             drawn: hovered === id ? sizes.drawn * HOVER_GROW : sizes.drawn,
             hit: sizes.hit,
+            // A Map Label's box is often shorter than two finger-sized corners,
+            // which would bury its side grips: there a corner reaches no further
+            // than 60% of the box's height, so the middle of each side is the
+            // side's, which a fixed width is dragged from (#800).
+            hitHeight:
+              target.transform?.handles === "label" && signY !== 0
+                ? Math.min(sizes.hit, box.height * 0.6)
+                : sizes.hit,
             cursor: resizeCursor(box.rotation, signX, signY),
             hovered: hovered === id,
           }));
@@ -1695,9 +1774,9 @@
           class="map-transform-hit"
           data-transform-handle-hit="${grip.id}"
           x="${n(grip.x - grip.hit / 2)}"
-          y="${n(grip.y - grip.hit / 2)}"
+          y="${n(grip.y - grip.hitHeight / 2)}"
           width="${n(grip.hit)}"
-          height="${n(grip.hit)}"
+          height="${n(grip.hitHeight)}"
           style="cursor: ${grip.cursor}"
         />`
       )}
@@ -1892,6 +1971,7 @@
               data-selected="${element.selected ? "true" : undefined}"
               data-movable="${element.movable ? "true" : undefined}"
               data-dragging="${isDragging(element.id) ? "true" : undefined}"
+              data-editing="${isEditingLabel(element.id) ? "true" : undefined}"
               transform="${dragTransform(element.id)}"
             >
               ${elementArt(element)}
@@ -1925,6 +2005,7 @@
       </svg>`,
       surface
     );
+    positionLabelEditor();
   }
 
   /**
@@ -1961,6 +2042,9 @@
     else if (pinchDrag !== null && pinchDrag.id === id) preview = pinchDrag;
     else if (pendingTransform !== null && pendingTransform.id === id) preview = pendingTransform;
     if (preview === null) return undefined;
+    // A Map Label's side sets the width its text wraps at (#800): the box
+    // previews it, and the text keeps its letters until the Worker rewraps it.
+    if (holdsArt(preview)) return undefined;
     const { startBox, box } = preview;
     const scaleX = startBox.width === 0 ? 1 : box.width / startBox.width;
     const scaleY = startBox.height === 0 ? 1 : box.height / startBox.height;
@@ -1974,6 +2058,35 @@
     return `translate(${n(box.x)} ${n(box.y)})${
       turn === 0 ? "" : ` rotate(${n(turn)})`
     }${zoom} translate(${n(-startBox.x)} ${n(-startBox.y)})`;
+  }
+
+  /**
+   * Whether a handle drag previews its box alone, leaving the Element's art
+   * where it was: a Map Label's side, which wraps the text instead of
+   * stretching it (#800).
+   * @param {{ handle?: string, handles?: string, holdArt?: boolean }} preview
+   */
+  function holdsArt(preview) {
+    if (preview.holdArt === true) return true;
+    return preview.handles === "label" && LABEL_SIDE_HANDLES.some(([id]) => id === preview.handle);
+  }
+
+  /**
+   * The cap size a Map Label's handle drag or pinch asks for: its own, scaled
+   * as its box's height was (#800), or none for a side, which keeps the size
+   * and sets a fixed width instead.
+   * @param {string} id
+   * @param {string} handle
+   * @param {FrameTransformBox} startBox
+   * @param {FrameTransformBox} box
+   * @returns {{ size?: number }}
+   */
+  function labelDragSize(id, handle, startBox, box) {
+    if (LABEL_SIDE_HANDLES.some(([side]) => side === handle)) return {};
+    const element = scene === null ? undefined : scene.elements.find((one) => one.id === id);
+    const size = element?.label?.size;
+    if (size === undefined || !(startBox.height > 0)) return { size: box.height };
+    return { size: (size * box.height) / startBox.height };
   }
 
   /**
@@ -2309,13 +2422,20 @@
       draw();
       return;
     }
-    pendingTransform = { id: drag.id, startBox: drag.startBox, box: drag.box };
+    pendingTransform = {
+      id: drag.id,
+      startBox: drag.startBox,
+      box: drag.box,
+      holdArt: holdsArt(drag),
+    };
     draw();
     post({
       kind: "transformElement",
       id: drag.id,
       box: drag.box,
-      ...(drag.handles === "label" ? { size: drag.box.height } : {}),
+      ...(drag.handles === "label"
+        ? labelDragSize(drag.id, drag.handle, drag.startBox, drag.box)
+        : {}),
     });
   }
 
@@ -2545,7 +2665,7 @@
       kind: "transformElement",
       id: drag.id,
       box: drag.box,
-      ...(drag.handles === "label" ? { size: drag.box.height } : {}),
+      ...(drag.handles === "label" ? labelDragSize(drag.id, "pinch", drag.startBox, drag.box) : {}),
     });
   }
 
@@ -2805,9 +2925,187 @@
     post({ kind: "area", points: draft.points, curves: draft.curves, freehand: false });
   }
 
+  /**
+   * Whether `id` is the Map Label the text box is writing, or one whose
+   * committed text the Worker has yet to draw (#800).
+   * @param {string} id
+   */
+  function isEditingLabel(id) {
+    return (labelEdit !== null && labelEdit.id === id) || pendingLabelText === id;
+  }
+
+  /**
+   * Opens the on-map text box on one shown, unlocked Map Label (#800): an HTML
+   * textarea over the label, in its face, size, spacing, and ink, turned with
+   * it, so the author writes where the name sits. Enter starts a new line;
+   * Escape, a press on the Map, or focus leaving commits. While it is open no
+   * key reaches the editor's Commands. A Frame that cannot take focus (the
+   * host holds it) shows no box at all.
+   * @param {string} id
+   */
+  function openLabelEditor(id) {
+    if (scene === null) return;
+    if (labelEdit !== null) commitLabelEditor();
+    const element = scene.elements.find((candidate) => candidate.id === id);
+    if (element === undefined || element.label === undefined) return;
+    if (element.locked || element.hidden) return;
+    const field = document.createElement("textarea");
+    field.className = "map-label-editor";
+    field.setAttribute("data-label-editor", id);
+    if (scene.labelEditor.label !== "") field.setAttribute("aria-label", scene.labelEditor.label);
+    field.placeholder = scene.labelEditor.placeholder;
+    field.value = element.label.text;
+    field.rows = 1;
+    field.addEventListener("keydown", onLabelEditorKey);
+    field.addEventListener("input", positionLabelEditor);
+    field.addEventListener("blur", onLabelEditorBlur);
+    window.addEventListener("blur", onLabelEditorBlur);
+    document.body.append(field);
+    labelEdit = { id, field, original: element.label.text };
+    draw();
+    // Firefox leaves the Frame's window unfocused after a press the Frame
+    // cancels, so the press's own user activation focuses it first; a Frame
+    // the host holds focus away from stays unfocused and shows no box.
+    if (!document.hasFocus()) window.focus();
+    field.focus({ preventScroll: true });
+    if (document.activeElement !== field) {
+      closeLabelEditor();
+      return;
+    }
+    // A double click opens on the whole name, as a design tool's text box does.
+    field.select();
+  }
+
+  /**
+   * How wide an empty text box's italic prompt runs, in screen pixels. A
+   * placeholder adds nothing to a textarea's scroll width, so the prompt is
+   * written into the box for the one read, in italic as `::placeholder` draws
+   * it, and taken out again; a quarter em more holds the slant the last letter
+   * leans past its advance.
+   * @param {HTMLTextAreaElement} field
+   * @param {number} fontPx
+   * @returns {number}
+   */
+  function promptWidth(field, fontPx) {
+    field.value = field.placeholder;
+    field.style.fontStyle = "italic";
+    const width = field.scrollWidth + fontPx / 4;
+    field.style.fontStyle = "";
+    field.value = "";
+    return width;
+  }
+
+  /**
+   * Seats the text box over its label (#800): its first line's baseline on
+   * the label's point, centred, turned with it, at the screen size the zoom
+   * draws it at. An auto box grows with its longest line; a fixed one keeps
+   * the label's width and wraps inside it. Both grow down with their lines.
+   */
+  function positionLabelEditor() {
+    if (labelEdit === null || scene === null) return;
+    const { field, id } = labelEdit;
+    const element = scene.elements.find((candidate) => candidate.id === id);
+    const label = element?.label;
+    if (label === undefined) return;
+    const svg = surface === null ? null : surface.querySelector("svg");
+    const matrix =
+      svg !== null && typeof svg.getScreenCTM === "function" ? svg.getScreenCTM() : null;
+    const scale = matrix === null ? (screenScale() ?? 1) : Math.hypot(matrix.a, matrix.b);
+    const origin =
+      matrix === null
+        ? { x: 0, y: 0 }
+        : {
+            x: matrix.a * label.x + matrix.c * label.y + matrix.e,
+            y: matrix.b * label.x + matrix.d * label.y + matrix.f,
+          };
+    const fontPx = label.size * scale;
+    const linePx = label.lineHeight * scale;
+    const style = field.style;
+    style.fontFamily = label.font === "" ? "serif" : `"${label.font}", serif`;
+    style.fontSize = `${fontPx}px`;
+    style.lineHeight = `${linePx}px`;
+    style.letterSpacing = `${label.letterSpacing * scale}px`;
+    style.color = label.fill;
+    style.whiteSpace = label.sizing === "auto" ? "pre" : "pre-wrap";
+    if (label.sizing === "auto") {
+      // The box's own scroll width is its longest line, caret included.
+      style.width = "0px";
+      const textWidth = field.value === "" ? promptWidth(field, fontPx) : field.scrollWidth;
+      style.width = `${Math.max(textWidth, fontPx / 2) + 2}px`;
+    } else {
+      style.width = `${label.width * scale}px`;
+    }
+    style.height = "0px";
+    const height = Math.max(field.scrollHeight, linePx);
+    style.height = `${height}px`;
+    const width = field.getBoundingClientRect().width || Number.parseFloat(style.width) || 0;
+    // A CSS line box puts its baseline half the leading plus the ascent down.
+    const baseline = (linePx - (label.ascent + label.descent) * fontPx) / 2 + label.ascent * fontPx;
+    style.left = `${origin.x}px`;
+    style.top = `${origin.y}px`;
+    style.transform = `rotate(${label.rotation}deg) translate(${-width / 2}px, ${-baseline}px)`;
+  }
+
+  /**
+   * Keeps every key inside the text box (#800): letters write the label, never
+   * the tool Shortcuts, and the host never hears them. Escape, or Ctrl or Cmd
+   * with Enter, commits.
+   * @param {KeyboardEvent} event
+   */
+  function onLabelEditorKey(event) {
+    event.stopPropagation();
+    if (event.key === "Escape" || (event.key === "Enter" && (event.ctrlKey || event.metaKey))) {
+      event.preventDefault();
+      commitLabelEditor();
+      return;
+    }
+    // Tab commits and still moves focus on: Firefox sends the box no blur when
+    // focus leaves the Frame for the host.
+    if (event.key === "Tab") commitLabelEditor();
+  }
+
+  /**
+   * Focus leaving the text box, to the host or by Tab, commits it; so does the
+   * Frame's window losing focus, which is all Firefox reports for a press on
+   * the host.
+   */
+  function onLabelEditorBlur() {
+    commitLabelEditor();
+  }
+
+  /** Takes the text box away, and the listeners it holds. */
+  function closeLabelEditor() {
+    if (labelEdit === null) return;
+    const { field } = labelEdit;
+    labelEdit = null;
+    field.removeEventListener("keydown", onLabelEditorKey);
+    field.removeEventListener("input", positionLabelEditor);
+    field.removeEventListener("blur", onLabelEditorBlur);
+    window.removeEventListener("blur", onLabelEditorBlur);
+    field.remove();
+    draw();
+  }
+
+  /**
+   * Commits the text box (#800): a changed text goes to the Worker as one
+   * labelText, which is one undo step, and the label's ink stays hidden until
+   * its scene draws the new lines. Focus stays in the Frame, so the next key
+   * is a tool Shortcut again.
+   */
+  function commitLabelEditor() {
+    if (labelEdit === null) return;
+    const { id, field, original } = labelEdit;
+    const text = field.value;
+    if (text !== original) pendingLabelText = id;
+    closeLabelEditor();
+    if (text !== original) post({ kind: "labelText", id, text });
+  }
+
   /** @param {PointerEvent} event */
   function onPointerDown(event) {
     if (scene === null) return;
+    // A press on the Map commits the text box first, then does what it does.
+    if (labelEdit !== null) commitLabelEditor();
     pointerClients.set(event.pointerId, {
       clientX: event.clientX,
       clientY: event.clientY,
@@ -2982,11 +3280,41 @@
   }
 
   /**
-   * A double click finishes an open Pen line. Its second click already landed
+   * A double click finishes an open Pen line: its second click already landed
    * a duplicate point on the first, so that copy goes before the line ends.
+   * With the Select tool, a double click on a shown, unlocked Map Label asks
+   * the Worker to put the caret in its Text field (#800).
    * @param {MouseEvent} event
    */
   function onDoubleClick(event) {
+    if (scene !== null && scene.tool === "select") {
+      // The press's pointer capture retargets a double click to the <svg>, so
+      // the point says what was under the pointer; a straight label's bend
+      // handle sits on its midpoint and stands for its label.
+      const ownerOf = (node) =>
+        node instanceof Element ? node.closest("[data-element-id], [data-bend-handle]") : null;
+      const hit =
+        typeof document.elementFromPoint === "function"
+          ? document.elementFromPoint(event.clientX, event.clientY)
+          : null;
+      const owner = ownerOf(hit) ?? ownerOf(event.target);
+      const id =
+        owner === null
+          ? null
+          : (owner.getAttribute("data-element-id") ?? owner.getAttribute("data-bend-handle"));
+      const element =
+        id === null ? undefined : scene.elements.find((candidate) => candidate.id === id);
+      if (
+        element !== undefined &&
+        element.label !== undefined &&
+        !element.locked &&
+        !element.hidden
+      ) {
+        event.preventDefault();
+        post({ kind: "editLabel", id: element.id });
+      }
+      return;
+    }
     if (scene === null || scene.tool !== "pen" || penDraft === null) return;
     event.preventDefault();
     const points = penDraft.points;
@@ -3616,7 +3944,16 @@
     pendingMove = null;
     pendingBend = null;
     pendingTransform = null;
+    pendingLabelText = null;
     if (next.tool !== previousTool) resetGestures();
+    // A label locked, hidden, or undone away while written loses its box.
+    if (labelEdit !== null) {
+      const editing = labelEdit.id;
+      const still = next.elements.find((element) => element.id === editing);
+      if (still === undefined || still.label === undefined || still.locked || still.hidden) {
+        closeLabelEditor();
+      }
+    }
     // An Element locked, deleted, or undone away mid-drag stops moving.
     if (moveDrag !== null) {
       const dragged = moveDrag.id;
@@ -3654,9 +3991,12 @@
     }
     syncCrosshair();
     draw();
+    // A Text tool click or a Select double click opens the label's text box.
+    if (next.editLabel !== undefined) openLabelEditor(next.editLabel);
   }
 
   function cleanup() {
+    closeLabelEditor();
     document.removeEventListener("keydown", onKeyDown);
     document.removeEventListener("keyup", onKeyUp);
     for (const source of assetSources.values()) URL.revokeObjectURL(source.url);

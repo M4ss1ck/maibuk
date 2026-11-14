@@ -26,6 +26,7 @@ import {
   type PagePreset,
 } from "./maps";
 import { linePath } from "./geometry";
+import { LABEL_LINE_HEIGHT, LABEL_TEXT_STYLE, layoutLabel } from "./label-layout";
 import {
   CUSTOM_FILL_TILE_MM,
   SMOOTH_TOLERANCE_MM,
@@ -885,6 +886,7 @@ describe("Map Label rendering", () => {
       y: 30,
       rotation: 0,
       width: 40,
+      sizing: "fixed",
       bend: 0,
       font: DEFAULT_LABEL_FONT,
       size: DEFAULT_LABEL_SIZE_MM,
@@ -999,15 +1001,16 @@ describe("Map Label rendering", () => {
   });
 
   it("draws an empty label's placeholder italic and muted, in the label's font and halo (#798)", () => {
+    // A short prompt, so the fixed 40 mm box keeps it on one line.
     const empty = label({ text: "", font: "cinzel", color: "#8b1a1a", bend: 8 });
     const [hit, text, ...rest] = sceneShapes([empty], 203.2, 203.2, undefined, {
-      labelPlaceholder: "Write your text here",
+      labelPlaceholder: "Write",
     })[0];
 
     // The baseline stays the hit path, so the empty label is picked as before.
     expect(hit).toMatchObject({ d: "M 0 30 Q 20 14 40 30", hitOnly: true });
     expect(text).toMatchObject({
-      text: "Write your text here",
+      text: "Write",
       placeholder: true,
       opacity: 0.5,
       font: "Cinzel",
@@ -1018,7 +1021,7 @@ describe("Map Label rendering", () => {
     expect(text).toMatchObject({ halo: { width: DEFAULT_LABEL_HALO_MM } });
     expect(rest).toEqual([]);
 
-    const svg = sceneToSvg(mapWith([empty]), { labelPlaceholder: "Write your text here" });
+    const svg = sceneToSvg(mapWith([empty]), { labelPlaceholder: "Write" });
     // Both copies, halo and ink, are italic and faded alike.
     const texts = [...svg.matchAll(/<text ([^>]*)>/g)].map(([, attributes]) => attributes);
     expect(texts).toHaveLength(2);
@@ -1055,9 +1058,69 @@ describe("Map Label rendering", () => {
   });
 
   it("XML-escapes a label's text", () => {
-    const svg = sceneToSvg(mapWith([label({ text: 'Ash & <Iron> "Keep"' })]));
+    const svg = sceneToSvg(mapWith([label({ text: 'Ash & <Iron> "Keep"', width: 200 })]));
 
     expect(svg).toContain(">Ash &amp; &lt;Iron&gt; &quot;Keep&quot;</textPath>");
+  });
+
+  it("draws a label of several lines as one tspan per line, straight, turned about its point (#800)", () => {
+    const lines = label({ text: "North\nSea", bend: 8, rotation: 30, sizing: "auto" });
+    const [hit, text] = sceneShapes([lines], 203.2, 203.2)[0];
+
+    // The hit path is the box's outline: no one baseline runs under both lines.
+    expect(hit).toMatchObject({ hitOnly: true });
+    expect((hit as { d: string }).d).toMatch(/^M .* Z$/);
+    expect(text).toMatchObject({
+      lines: ["North", "Sea"],
+      lineHeight: 6 * LABEL_LINE_HEIGHT,
+      transform: "rotate(30 20 30)",
+      style: LABEL_TEXT_STYLE,
+    });
+    expect(text).not.toHaveProperty("path");
+
+    // The outline clears the ink, so the selection stroke drawn on it does not
+    // run through the first line's capitals or the last line's descenders.
+    const straight = label({ text: "North\nSea", sizing: "auto" });
+    const [box] = sceneShapes([straight], 203.2, 203.2)[0];
+    const ys = [...(box as { d: string }).d.matchAll(/[ML] (-?[\d.]+) (-?[\d.]+)/g)].map((m) =>
+      Number(m[2])
+    );
+    const lastBaseline = straight.y + 6 * LABEL_LINE_HEIGHT;
+    expect(Math.min(...ys)).toBeLessThanOrEqual(straight.y - 6 - 2);
+    expect(Math.max(...ys)).toBeGreaterThanOrEqual(lastBaseline + 6 * 0.25 + 2);
+
+    const svg = sceneToSvg(mapWith([lines]));
+    // Bend shapes one line alone, so no baseline is defined and none is followed.
+    expect(svg).not.toContain("<textPath");
+    expect(svg).not.toContain('id="label-path-');
+    expect(svg).toContain('<tspan x="20" y="30">North</tspan><tspan x="20" y="37.2">Sea</tspan>');
+    expect(svg).toContain('style="font-kerning:none;font-variant-ligatures:none"');
+  });
+
+  it("wraps a fixed label at its width and keeps an auto one on one line (#800)", () => {
+    const words = "The Gulf of the Seven Kingdoms";
+    const fixed = sceneShapes([label({ text: words, width: 30 })], 203.2, 203.2)[0][1];
+    expect((fixed as { lines?: string[] }).lines?.join(" ")).toBe(words);
+    expect((fixed as { lines?: string[] }).lines?.length).toBeGreaterThan(1);
+    const auto = sceneShapes([label({ text: words, sizing: "auto" })], 203.2, 203.2)[0][1];
+    expect(auto).toMatchObject({ text: words });
+    expect(auto).not.toHaveProperty("lines");
+  });
+
+  it("gives a label's transform box its laid-out size, standing on the first baseline (#800)", () => {
+    const one = elementTransform(label({ text: "Sea", sizing: "auto" }));
+    const width = layoutLabel({ ...label({ text: "Sea" }), sizing: "auto" }).width;
+    expect(one?.box).toMatchObject({ x: 20, y: 27, width, height: 6 });
+    const two = elementTransform(label({ text: "North\nSea", width: 40 }));
+    expect(two?.box.height).toBeCloseTo(6 + 7.2, 9);
+    // The box's top stays a cap above the first baseline at y 30.
+    expect((two?.box.y ?? 0) - (two?.box.height ?? 0) / 2).toBeCloseTo(24, 9);
+    // An empty label's box fits the placeholder the editor draws.
+    const empty = elementTransform(label({ text: "", sizing: "auto" }), undefined, "Write here");
+    expect(empty?.box.width).toBeCloseTo(
+      layoutLabel({ ...label({ text: "" }), sizing: "auto" }, "Write here").width,
+      9
+    );
   });
 });
 
@@ -2094,6 +2157,7 @@ describe("the handle box an Element carries (#795)", () => {
         y: 20,
         rotation: 5,
         width: 84,
+        sizing: "fixed",
         bend: 0,
         font: DEFAULT_LABEL_FONT,
         size: 7,

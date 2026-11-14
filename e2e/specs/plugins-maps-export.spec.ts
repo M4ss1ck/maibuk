@@ -28,11 +28,15 @@ import { forceDownloadSaves } from "../support/save-picker";
 import { SEED_BOOK } from "../support/seed/names";
 import { expect, test } from "../support/test";
 import { openLayers } from "../support/maps-layers";
+import { labelLineBaselines } from "../support/frame-stroke";
+import { inkBands } from "../support/png-ink";
 
 /** The Map every test builds: a portrait page of the seed Book. */
 const MAP = "Coastline";
 /** The label the exports draw, so the SVG has a curved textPath to carry. */
 const LABEL_TEXT = "Cape Wrath";
+/** A label long enough to wrap in a 30 mm box, in capitals so its lines never touch. */
+const WRAPPED_TEXT = "CAPE OF THE NORTH WIND";
 
 /** A portrait page (6 x 9 in) printed at 150 DPI: 6 x 150 by 9 x 150. */
 const PRINTED_AT_150_DPI = { widthPx: 900, heightPx: 1350 };
@@ -66,6 +70,7 @@ const placeLabelButton = (page: Page) => page.getByRole("button", { name: "Place
 /** The properties panel's fields the exports depend on. */
 const textField = (page: Page) => page.getByRole("textbox", { name: "Text", exact: true });
 const bendField = (page: Page) => page.getByRole("textbox", { name: "Bend (mm)", exact: true });
+const widthField = (page: Page) => page.getByRole("textbox", { name: "Width (mm)", exact: true });
 
 /** The top-right pill's Place button and Export popover (#778). */
 const placeButton = (page: Page) =>
@@ -352,5 +357,46 @@ test.describe("Maps export: save a Map as PNG or SVG @wf:plugins-maps-export @sc
     // None of the editor's own marks travel with it.
     expect(svg).not.toContain("data-element-id");
     expect(svg).not.toContain("data-selected");
+  });
+
+  test("Save writes a wrapped Map Label as the lines the Frame drew, in the SVG and the PNG (#800)", async ({
+    page,
+  }) => {
+    await forceDownloadSaves(page);
+    await openEditorWithMap(page);
+    await placeLabel(page);
+    // Capitals with no descenders, so each drawn line is its own band of ink.
+    await writeField(page, textField(page), WRAPPED_TEXT);
+    await writeField(page, widthField(page), "30");
+    const frameLines = mapFrame(page)
+      .locator("g[data-element-id] text.map-line")
+      .last()
+      .locator("tspan");
+    await expect.poll(() => frameLines.count()).toBeGreaterThan(1);
+    const lines = await frameLines.allTextContents();
+    const baselines = await labelLineBaselines(surface(page));
+    expect(lines.join(" ")).toBe(WRAPPED_TEXT);
+
+    // The SVG writes the same lines on the same baselines.
+    await openExportPanel(page);
+    await tabTo(page, page.getByRole("radio", { name: "PNG", exact: true }), { max: 90 });
+    await page.keyboard.press("ArrowRight");
+    await expect(dpiField(page)).toHaveCount(0);
+    const svg = new TextDecoder().decode(
+      await downloadBytes(await saveByKeyboard(page, saveButton(page)))
+    );
+    const texts = [...svg.matchAll(/<text [^>]*fill="(?!none)[^"]*"[^>]*>(.*?)<\/text>/g)];
+    const ink = texts[texts.length - 1]?.[1] ?? "";
+    const spans = [...ink.matchAll(/<tspan x="[^"]+" y="([^"]+)">([^<]*)<\/tspan>/g)];
+    expect(spans.map(([, , line]) => line)).toEqual(lines);
+    expect(spans.map(([, y]) => Number(y))).toEqual(baselines);
+    expect(svg).not.toContain("<textPath");
+
+    // The PNG paints one band of ink per line.
+    await tabTo(page, page.getByRole("radio", { name: "SVG", exact: true }), { max: 90 });
+    await page.keyboard.press("ArrowLeft");
+    await expect(dpiField(page)).toBeVisible();
+    const png = await downloadBytes(await saveByKeyboard(page, saveButton(page)));
+    expect(await inkBands(page, Buffer.from(png).toString("base64"))).toHaveLength(lines.length);
   });
 });
