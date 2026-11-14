@@ -1,7 +1,7 @@
 /**
  * The Remote UI test harness: the real remote renderer in jsdom. It wires the
- * SDK's custom elements (the Plugin's React tree) through a
- * `PluginUiMutationObserver` (the SDK's host-side observer) and the validated connection into a real
+ * SDK's custom elements (the Plugin's React tree) through the SDK's host-side
+ * `PluginUiMutationObserver` and the validated connection into a real
  * `RemoteReceiver`, then renders the host components with `RemoteRootRenderer`.
  *
  * Nothing here is simulated: a test mounts the Plugin's tree with `mount()`,

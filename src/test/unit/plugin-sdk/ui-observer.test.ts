@@ -17,6 +17,9 @@ import {
 import { remoteId } from "@remote-dom/core/elements";
 import { RemoteReceiver } from "@remote-dom/core/receivers";
 import type { RemoteReceiverNode, RemoteReceiverRoot } from "@remote-dom/core/receivers";
+import { createPluginRemoteUi } from "@/features/plugins/remote-ui/receiver";
+import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
+import { installPluginUiElements } from "@/plugin-sdk/ui";
 import { PluginUiMutationObserver } from "@/plugin-sdk/ui-observer";
 
 /** The host's tree as nested ids, the way the receiver holds it. */
@@ -182,8 +185,21 @@ describe("PluginUiMutationObserver", () => {
     };
     const pick = <T>(list: readonly T[]): T => list[Math.floor(random() * list.length)] as T;
 
-    const { receiver, container, observer } = observed();
-    const parents = [container, ...elements(3, "div")];
+    // Through the host's validated connection, with kit elements, so the test
+    // also proves the host refuses nothing. The clock advances a second per
+    // batch, so the batch-rate cap never trips on a test this fast.
+    installPluginUiElements();
+    let clock = 0;
+    const violations: PluginUiViolation[] = [];
+    const ui = createPluginRemoteUi({
+      onViolation: (violation) => violations.push(violation),
+      now: () => (clock += 1000),
+    });
+    const receiver = ui.receiver;
+    const container = document.createElement("div");
+    const observer = new PluginUiMutationObserver(ui.connection);
+    observer.observe(container);
+    const parents = [container, ...elements(3, "maibuk-view")];
     container.append(...parents.slice(1));
     await synced(receiver, container);
 
@@ -197,7 +213,8 @@ describe("PluginUiMutationObserver", () => {
         const kids = Array.from(parent.childNodes);
         const roll = random();
         if (roll < 0.35 || kids.length === 0) {
-          const node = random() < 0.2 ? document.createTextNode("t") : document.createElement("i");
+          const node =
+            random() < 0.2 ? document.createTextNode("t") : document.createElement("maibuk-view");
           parent.insertBefore(node, kids.length === 0 ? null : pick([...kids, null]));
         } else if (roll < 0.6) {
           const node = pick(kids);
@@ -212,6 +229,8 @@ describe("PluginUiMutationObserver", () => {
       }
       await synced(receiver, container, `after tick ${tick}`);
     }
+    expect(violations).toEqual([]);
     observer.disconnect();
+    ui.dispose();
   });
 });

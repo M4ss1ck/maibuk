@@ -73,8 +73,8 @@ import type {
 } from "@/features/plugins/types";
 
 /** One refused batch, as the kit logs it and fails the page with. */
-function describeRefusal(surface: string, violation: PluginUiViolation): string {
-  return `The host refused a Remote UI batch from ${surface} (${violation.code}: ${violation.message})`;
+function describeRefusal(name: string, violation: PluginUiViolation): string {
+  return `The host refused a Remote UI batch from ${name} (${violation.code}: ${violation.message})`;
 }
 
 /**
@@ -1050,10 +1050,11 @@ export function createTestHost(options: TestHostOptions): TestHost {
     // page and leave a test waiting on an update that never comes (#788). So a
     // refusal is logged as it happens and fails this page's unmount, which
     // `stop()` runs too, unless the test said it expects refusals.
+    const failsOnRefusal = options.allowViolations !== true;
     const ui = createPluginRemoteUi({
       onViolation: (violation) => {
         violations.push(violation);
-        if (options.allowViolations !== true) console.error(describeRefusal(name, violation));
+        if (failsOnRefusal) console.error(describeRefusal(name, violation));
       },
     });
     const mount = openPluginUiMount(broker, name, kind);
@@ -1093,7 +1094,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
         });
         ui.dispose();
         container.remove();
-        if (options.allowViolations !== true && violations.length > 0) {
+        if (failsOnRefusal && violations.length > 0) {
           throw new Error(
             violations.map((violation) => describeRefusal(name, violation)).join("\n")
           );
@@ -1108,7 +1109,8 @@ export function createTestHost(options: TestHostOptions): TestHost {
         return testPage;
       },
       async (error: unknown) => {
-        await testPage.unmount();
+        // The mount's own failure is the cause; a refusal it led to must not mask it.
+        await testPage.unmount().catch(() => {});
         throw error;
       }
     );
@@ -1190,11 +1192,11 @@ export function createTestHost(options: TestHostOptions): TestHost {
     },
     endpoint,
     endpointStream,
-    renderPage(page: string, pageOptions?: TestPageOptions) {
-      return renderSurface(page, "page", pageOptions);
+    renderPage(page: string, surfaceOptions?: TestPageOptions) {
+      return renderSurface(page, "page", surfaceOptions);
     },
-    renderSettingsRow(rowId: string, pageOptions?: TestPageOptions) {
-      return renderSurface(rowId, "settingsRow", pageOptions);
+    renderSettingsRow(rowId: string, surfaceOptions?: TestPageOptions) {
+      return renderSurface(rowId, "settingsRow", surfaceOptions);
     },
     stopWorker() {
       broker.stop("requested");
