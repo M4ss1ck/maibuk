@@ -3318,6 +3318,218 @@ describe("the transform handles (#795)", () => {
       expect(document.querySelector("g.map-transform")).toBeNull();
     }
   });
+
+  describe("handle set all: a selected Shape (#796)", () => {
+    /** The box a selected Shape's handles sit on: 64 by 34 mm about (100, 50). */
+    const allBox = (overrides: Record<string, unknown> = {}) => ({
+      box: { x: 100, y: 50, width: 64, height: 34, rotation: 0, ...overrides },
+      handles: "all",
+    });
+
+    /** The selected Shape carrying that box. */
+    const shaped = (overrides: Record<string, unknown> = {}) =>
+      selected({ transform: allBox(), ...overrides });
+
+    it("draws eight handles plus the turn grip, hover growing the one under the pointer", () => {
+      frame = loadFrame();
+      frame.scene({ elements: [shaped()] });
+
+      expect(overlay().getAttribute("transform")).toBe("translate(100 50)");
+      expect(document.querySelectorAll("[data-transform-handle-hit]")).toHaveLength(9);
+      for (const id of ["nw", "ne", "se", "sw", "n", "e", "s", "w", "rotate"]) {
+        expect(document.querySelector(`[data-transform-handle="${id}"]`)).not.toBeNull();
+      }
+      // The sides sit on the middle of each edge, in the box's own millimetres.
+      expect(centre(grip("e"))).toEqual([expect.closeTo(32, 1), expect.closeTo(0, 1)]);
+      expect(centre(grip("n"))).toEqual([expect.closeTo(0, 1), expect.closeTo(-17, 1)]);
+
+      // A side grip answers the pointer the way a corner does.
+      const resting = pixels(grip("e"), 4);
+      pointer(target("e"), "pointermove", 132, 50);
+      expect(grip("e").getAttribute("data-hovered")).toBe("true");
+      expect(pixels(grip("e"), 4)).toBeGreaterThan(resting);
+      pointer(svg(), "pointermove", 300, 300);
+      expect(grip("e").getAttribute("data-hovered")).toBeNull();
+    });
+
+    it("keeps one corner on a small Shape, and only the turn grip on a tiny one", () => {
+      frame = loadFrame();
+      frame.scale = 4;
+      // 11 mm is 44 px: the sides go with the corners, and only the
+      // bottom-right stays, to resize away from the top-left.
+      frame.scene({ elements: [shaped({ transform: allBox({ width: 11, height: 11 }) })] });
+      expect(document.querySelectorAll("[data-transform-handle-hit]")).toHaveLength(2);
+      expect(document.querySelector('[data-transform-handle-hit="se"]')).not.toBeNull();
+      expect(document.querySelector('[data-transform-handle-hit="rotate"]')).not.toBeNull();
+
+      // 4 mm is 16 px: only the turn grip is left to grip.
+      frame.scene({ elements: [shaped({ transform: allBox({ width: 4, height: 4 }) })] });
+      expect(document.querySelectorAll("[data-transform-handle-hit]")).toHaveLength(1);
+      expect(document.querySelector('[data-transform-handle-hit="rotate"]')).not.toBeNull();
+    });
+
+    it("marks a locked Shape with a dashed box, a lock badge, and no grips", () => {
+      frame = loadFrame();
+      frame.scene({ elements: [shaped({ locked: true })] });
+
+      expect(overlay().getAttribute("data-locked")).toBe("true");
+      expect(document.querySelector("[data-transform-handle]")).toBeNull();
+      expect(document.querySelector("[data-transform-handle-hit]")).toBeNull();
+      expect(overlay().querySelector("[data-transform-lock]")).not.toBeNull();
+    });
+
+    it("resizes width and height freely from a corner, previews each axis, posts one transform", () => {
+      frame = loadFrame();
+      frame.scene({ elements: [shaped({ movable: true })] });
+
+      pointer(target("se"), "pointerdown", 132, 67);
+      pointer(svg(), "pointermove", 142, 77);
+
+      expect(frame.port.messages).toEqual([]);
+      expect(outline().getAttribute("width")).toBe("74");
+      expect(outline().getAttribute("height")).toBe("44");
+      // The art follows on each axis, not by one uniform scale.
+      expect(elementGroup().getAttribute("transform")).toBe(
+        "translate(105 55) scale(1.156 1.294) translate(-100 -50)"
+      );
+
+      pointer(svg(), "pointerup", 142, 77);
+      expect(frame.port.messages).toEqual([
+        {
+          kind: "transformElement",
+          id: "e1",
+          box: { x: 105, y: 55, width: 74, height: 44, rotation: 0 },
+        },
+      ]);
+    });
+
+    it("keeps a corner's aspect while Shift holds, and grows about the centre with Alt", () => {
+      frame = loadFrame();
+      frame.scene({ elements: [shaped()] });
+
+      pointer(target("se"), "pointerdown", 132, 67);
+      pointer(svg(), "pointermove", 142, 77, { shiftKey: true });
+      // The taller side rules: 44 mm keeps 64:34, so the width follows it.
+      expect(outline().getAttribute("height")).toBe("44");
+      expect(Number(outline().getAttribute("width"))).toBeCloseTo((64 * 44) / 34, 1);
+      pointer(svg(), "pointerup", 142, 77);
+      expect(frame.port.messages).toEqual([
+        {
+          kind: "transformElement",
+          id: "e1",
+          box: {
+            x: expect.closeTo(109.41, 1),
+            y: 55,
+            width: expect.closeTo(82.82, 1),
+            height: 44,
+            rotation: 0,
+          },
+        },
+      ]);
+      frame.port.messages.length = 0;
+
+      pointer(target("se"), "pointerdown", 132, 67);
+      pointer(svg(), "pointermove", 142, 77, { altKey: true });
+      pointer(svg(), "pointerup", 142, 77);
+      // Both sides grow away from the centre, which stays where it was.
+      expect(frame.port.messages).toEqual([
+        {
+          kind: "transformElement",
+          id: "e1",
+          box: { x: 100, y: 50, width: 84, height: 54, rotation: 0 },
+        },
+      ]);
+    });
+
+    it("stretches one axis from a side handle, along the Shape's own turned side", () => {
+      frame = loadFrame();
+      frame.scene({ elements: [shaped()] });
+
+      // Straight on: ten right and ten down still only widens, by ten.
+      pointer(target("e"), "pointerdown", 132, 50);
+      pointer(svg(), "pointermove", 142, 60);
+      pointer(svg(), "pointerup", 142, 60);
+      expect(frame.port.messages).toEqual([
+        {
+          kind: "transformElement",
+          id: "e1",
+          box: { x: 105, y: 50, width: 74, height: 34, rotation: 0 },
+        },
+      ]);
+
+      // Turned 18°: a pull along the side stretches the side, not a screen axis.
+      const angle = (18 * Math.PI) / 180;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      frame.scene({ elements: [shaped({ transform: allBox({ rotation: 18 }) })] });
+      const start: [number, number] = [100 + 32 * cos, 50 + 32 * sin];
+      const end: [number, number] = [start[0] + 10 * cos, start[1] + 10 * sin];
+      pointer(target("e"), "pointerdown", start[0], start[1]);
+      pointer(svg(), "pointermove", end[0], end[1]);
+      pointer(svg(), "pointerup", end[0], end[1]);
+      expect(frame.port.messages[1]).toEqual({
+        kind: "transformElement",
+        id: "e1",
+        box: {
+          x: expect.closeTo(100 + 5 * cos, 5),
+          y: expect.closeTo(50 + 5 * sin, 5),
+          width: expect.closeTo(74, 5),
+          height: expect.closeTo(34, 5),
+          rotation: 18,
+        },
+      });
+    });
+
+    it("reads width by height on the chip while resizing a Shape", () => {
+      frame = loadFrame();
+      frame.scene({ elements: [shaped()] });
+
+      pointer(target("se"), "pointerdown", 132, 67);
+      expect(document.querySelector("g.map-readout")).toBeNull();
+      pointer(svg(), "pointermove", 142, 77);
+
+      const chip = document.querySelector("g.map-readout");
+      if (chip === null) throw new Error("the Frame drew no readout chip");
+      expect(chip.querySelector("text")?.textContent).toBe("74 × 44 mm");
+
+      pointer(svg(), "pointerup", 142, 77);
+      expect(document.querySelector("g.map-readout")).toBeNull();
+    });
+
+    it("picks side cursors from the side's direction on screen, turning with the box", () => {
+      frame = loadFrame();
+      frame.scene({ elements: [shaped()] });
+
+      expect(cursor("n")).toBe("n-resize");
+      expect(cursor("e")).toBe("e-resize");
+      expect(cursor("s")).toBe("s-resize");
+      expect(cursor("w")).toBe("w-resize");
+
+      // A quarter turn carries each side's arrow round with it.
+      frame.scene({ elements: [shaped({ transform: allBox({ rotation: 90 }) })] });
+      expect(cursor("e")).toBe("s-resize");
+      expect(cursor("n")).toBe("e-resize");
+    });
+
+    it("cancels a side drag on Escape, restoring the box and sending nothing", () => {
+      frame = loadFrame();
+      frame.scene({ elements: [shaped()] });
+
+      pointer(target("e"), "pointerdown", 132, 50);
+      pointer(svg(), "pointermove", 142, 60);
+      expect(outline().getAttribute("width")).toBe("74");
+      expect(document.querySelector("rect.map-transform-ghost")).not.toBeNull();
+
+      expect(key("Escape").defaultPrevented).toBe(true);
+      expect(outline().getAttribute("width")).toBe("64");
+      expect(outline().getAttribute("height")).toBe("34");
+      expect(document.querySelector("g.map-readout")).toBeNull();
+      expect(document.querySelector("rect.map-transform-ghost")).toBeNull();
+
+      pointer(svg(), "pointerup", 142, 60);
+      expect(frame.port.messages).toEqual([]);
+    });
+  });
 });
 
 describe("the Frame's mirrored handle maths (#795)", () => {
@@ -3352,6 +3564,14 @@ describe("the Frame's mirrored handle maths (#795)", () => {
     50 + radius * Math.sin((degrees * Math.PI) / 180),
   ];
 
+  /** Ten millimetres along the local +x of an 18° box, from its east side. */
+  const turned18 = box({ rotation: 18 });
+  const east18 = pageOf(turned18, [20, 0]);
+  const along18: [number, number] = [
+    east18[0] + 10 * Math.cos((18 * Math.PI) / 180),
+    east18[1] + 10 * Math.sin((18 * Math.PI) / 180),
+  ];
+
   const cases: { name: string; gesture: TransformGesture }[] = [
     {
       name: "a corner growing with its aspect kept",
@@ -3375,6 +3595,19 @@ describe("the Frame's mirrored handle maths (#795)", () => {
     {
       name: "a side moving one axis",
       gesture: { box: box(), handle: "e", start: [120, 50], point: [130, 50], aspect: false },
+    },
+    {
+      name: "a free corner with no aspect kept",
+      gesture: { box: box(), handle: "se", start: [120, 60], point: [130, 65] },
+    },
+    {
+      name: "a side of an 18° box pulled along its own side",
+      gesture: {
+        box: turned18,
+        handle: "e",
+        start: east18,
+        point: along18,
+      },
     },
     {
       name: "a corner of a turned box in its own frame",

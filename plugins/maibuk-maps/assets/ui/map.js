@@ -42,7 +42,7 @@
    * @typedef {{ box: FrameTransformBox, handles: "corners" | "all" | "label", minSize?: number }} FrameElementTransform
    * @typedef {{ id: string, shapes: SceneShape[], filter: string | null, hidden: boolean, locked: boolean, selected: boolean, movable: boolean, label?: FrameLabelLayout, transform?: FrameElementTransform }} FrameSceneElement
    * @typedef {{ one: string, other: string }} PenDraftLabel
-   * @typedef {{ size: string, angle: string }} TransformReadout
+   * @typedef {{ size: string, angle: string, shape: string }} TransformReadout
    * @typedef {{ kind: "scene", widthMm: number, heightMm: number, background: string, elements: FrameSceneElement[], defs: string, tool: MapTool, zoom: number, panX: number, panY: number, penLabel: PenDraftLabel, readout: TransformReadout }} FrameSceneMessage
    * @typedef {{ kind: "stroke", points: MapPoint[] }} FrameStrokeMessage
    * @typedef {{ kind: "line", points: MapPoint[], curves: boolean[], closed: boolean }} FrameLineMessage
@@ -73,7 +73,7 @@
    * @typedef {{ pointerId: number, id: string, press: ClientPoint, label: FrameLabelLayout, moved: boolean, bend: number }} BendDrag
    * @typedef {{ id: string, bend: number }} PendingBend
    * @typedef {{ box: FrameTransformBox, handle: string, start: MapPoint, point: MapPoint, aspect?: boolean, fromCentre?: boolean, snap?: boolean, minWidth?: number, minHeight?: number }} TransformGesture
-   * @typedef {{ pointerId: number, id: string, handle: string, press: ClientPoint, start: MapPoint, point: MapPoint, startBox: FrameTransformBox, box: FrameTransformBox, minSize: number, snap: boolean, moved: boolean }} TransformDrag
+   * @typedef {{ pointerId: number, id: string, handle: string, handles: string, press: ClientPoint, start: MapPoint, point: MapPoint, startBox: FrameTransformBox, box: FrameTransformBox, minSize: number, snap: boolean, moved: boolean }} TransformDrag
    * @typedef {{ id: string, startBox: FrameTransformBox, box: FrameTransformBox }} PendingTransform
    * @typedef {{ id: string, handle: string }} HoverGrip
    * @typedef {{ pointers: number[], client: ClientPoint, offset: MapPoint }} PanDrag
@@ -215,6 +215,14 @@
     ["ne", 1, -1],
     ["se", 1, 1],
     ["sw", -1, 1],
+  ];
+
+  /** A Shape's four side midpoints (#796): the handle each names, and its signs from the centre. @type {Array<[string, number, number]>} */
+  const SIDE_HANDLES = [
+    ["n", 0, -1],
+    ["e", 1, 0],
+    ["s", 0, 1],
+    ["w", -1, 0],
   ];
 
   /**
@@ -549,8 +557,9 @@
   }
 
   /**
-   * Reads the transform drag's readout templates (#795); an unreadable one
-   * leaves both empty, which draws no chip instead of falling back to English.
+   * Reads the transform drag's readout templates (#795, #796); an unreadable
+   * one leaves each empty, which draws no chip instead of falling back to
+   * English.
    * @param {unknown} raw
    * @returns {TransformReadout}
    */
@@ -560,6 +569,7 @@
     return {
       size: typeof readout.size === "string" ? readout.size : "",
       angle: typeof readout.angle === "string" ? readout.angle : "",
+      shape: typeof readout.shape === "string" ? readout.shape : "",
     };
   }
 
@@ -1339,8 +1349,8 @@
   }
 
   /**
-   * The resize cursor one corner takes (#795): the box's own turn added to the
-   * corner's direction, taken to the nearest 45°.
+   * The resize cursor one grip takes (#795): the box's own turn added to the
+   * grip's direction, taken to the nearest 45°.
    * @param {number} rotation
    * @param {number} signX
    * @param {number} signY
@@ -1540,11 +1550,12 @@
   }
 
   /**
-   * The box and handles a selected Stamp's or Map Image's transform draws
-   * (#795): its box, turned with the Element, a square grip on each corner, and
-   * a round grip on a stalk above the top edge for turning it. Each grip draws
-   * under a bigger invisible target, both sized from the screen scale, so they
-   * keep their size on screen at every zoom and grow for a finger.
+   * The box and handles a selected Stamp's, Map Image's, or Shape's transform
+   * draws (#795, #796): its box, turned with the Element, a square grip on each
+   * corner, and on each side's middle for a Shape, and a round grip on a stalk
+   * above the top edge for turning it. Each grip draws under a bigger invisible
+   * target, both sized from the screen scale, so they keep their size on screen
+   * at every zoom and grow for a finger.
    *
    * The overlay is drawn over the Elements, so a press on a grip reaches it
    * before the Element's own hit target under it. A locked Element shows its
@@ -1564,11 +1575,19 @@
     const locked = target.locked;
     const hovered = hoverGrip !== null && hoverGrip.id === target.id ? hoverGrip.handle : null;
     // A small box keeps fewer corners, so its grips never bury the art they mark.
+    // A Shape shows its sides too, but only while the box is big enough for all
+    // four corners: below that only the bottom-right corner stays.
     const corners = shownCorners(box, scale);
+    const sides =
+      sizes === null || locked
+        ? []
+        : target.transform.handles === "all" && corners.length === CORNER_HANDLES.length
+          ? SIDE_HANDLES
+          : [];
     const grips =
       sizes === null || locked
         ? []
-        : corners.map(([id, signX, signY]) => ({
+        : [...corners, ...sides].map(([id, signX, signY]) => ({
             id,
             x: signX * halfWidth,
             y: signY * halfHeight,
@@ -1714,22 +1733,33 @@
 
   /**
    * The chip that reads the drag's size in millimetres, or its angle in
-   * degrees, just down and right of the pointer (#795). Its text is the
-   * localized template the scene carries, with the number filled in; a scene
-   * that carries none, or a Frame that cannot measure its screen, draws no chip
+   * degrees, just down and right of the pointer (#795, #796). Its text is the
+   * localized template the scene carries: the turn's angle or a Stamp's size
+   * with its number filled in, or a Shape's width and height. A scene that
+   * carries none, or a Frame that cannot measure its screen, draws no chip
    * rather than a wrong one.
    * @returns {any}
    */
   function transformReadout() {
     if (transformDrag === null || !transformDrag.moved || scene === null) return null;
     const turning = transformDrag.handle === "rotate";
-    const template = turning ? scene.readout.angle : scene.readout.size;
+    const shape = transformDrag.handles === "all";
+    const template = turning
+      ? scene.readout.angle
+      : shape
+        ? scene.readout.shape
+        : scene.readout.size;
     if (template === "") return null;
     const scale = screenScale();
     if (scale === null) return null;
     const { html } = lib;
-    const value = turning ? transformDrag.box.rotation : transformDrag.box.width;
-    const text = template.replace("{{value}}", readoutNumber(value));
+    const text = template
+      .replace(
+        "{{value}}",
+        readoutNumber(turning ? transformDrag.box.rotation : transformDrag.box.width)
+      )
+      .replace("{{width}}", readoutNumber(transformDrag.box.width))
+      .replace("{{height}}", readoutNumber(transformDrag.box.height));
     const font = CHIP_FONT_PX / scale;
     const padX = CHIP_PAD_X_PX / scale;
     const padY = CHIP_PAD_Y_PX / scale;
@@ -1859,8 +1889,9 @@
 
   /**
    * The SVG transform that previews a handle drag on an Element's own group
-   * (#795): the start box moved, turned, and scaled onto the live one, so the
-   * art follows the grip and sits inside the box the drag draws.
+   * (#795): the start box moved, turned, and scaled onto the live one, on each
+   * axis, so a Shape's free resize previews exactly and the art sits inside the
+   * box the drag draws.
    * @param {string} id
    * @returns {string | undefined}
    */
@@ -1871,11 +1902,18 @@
     else if (pendingTransform !== null && pendingTransform.id === id) preview = pendingTransform;
     if (preview === null) return undefined;
     const { startBox, box } = preview;
-    const scale = startBox.width === 0 ? 1 : box.width / startBox.width;
+    const scaleX = startBox.width === 0 ? 1 : box.width / startBox.width;
+    const scaleY = startBox.height === 0 ? 1 : box.height / startBox.height;
     const turn = box.rotation - startBox.rotation;
+    const zoom =
+      scaleX === scaleY
+        ? scaleX === 1
+          ? ""
+          : ` scale(${n3(scaleX)})`
+        : ` scale(${n3(scaleX)} ${n3(scaleY)})`;
     return `translate(${n(box.x)} ${n(box.y)})${
       turn === 0 ? "" : ` rotate(${n(turn)})`
-    }${scale === 1 ? "" : ` scale(${n3(scale)})`} translate(${n(-startBox.x)} ${n(-startBox.y)})`;
+    }${zoom} translate(${n(-startBox.x)} ${n(-startBox.y)})`;
   }
 
   /**
@@ -2127,6 +2165,7 @@
       pointerId: event.pointerId,
       id: target.id,
       handle,
+      handles: target.transform.handles,
       press: { clientX: event.clientX, clientY: event.clientY },
       start: point,
       point,
@@ -2146,8 +2185,9 @@
    * Follows the pointer with the transform drag: once the press has travelled
    * past the Select drag's threshold, the box, its handles, and the Element's
    * art preview what the pointer asks for, live and in this Frame only. A
-   * corner keeps its aspect, as a Stamp and a Map Image always do, Alt resizes
-   * about the centre, and Shift snaps a turn to 15°.
+   * Stamp's or a Map Image's corner keeps its aspect; a Shape's corner only
+   * does with Shift, and its sides move one axis. Alt resizes about the centre,
+   * and Shift snaps a turn to 15°.
    * @param {PointerEvent} event
    */
   function followTransform(event) {
@@ -2164,17 +2204,20 @@
     }
     transformDrag.point = point;
     transformDrag.snap = event.shiftKey === true;
+    // A Stamp and a Map Image store a width alone, and their aspect carries
+    // the height with it, so the Worker's minimum is the width's (#795). A
+    // Shape keeps a width and a height of its own, so it takes both (#796).
+    const shape = transformDrag.handles === "all";
     transformDrag.box = transformBox({
       box: transformDrag.startBox,
       handle: transformDrag.handle,
       start: transformDrag.start,
       point,
-      aspect: true,
+      aspect: shape ? event.shiftKey === true : true,
       fromCentre: event.altKey === true,
       snap: transformDrag.snap,
-      // A Stamp and a Map Image store a width alone, and their aspect carries
-      // the height with it, so the Worker's minimum is the width's (#795).
       minWidth: transformDrag.minSize,
+      ...(shape ? { minHeight: transformDrag.minSize } : {}),
     });
     draw();
   }
