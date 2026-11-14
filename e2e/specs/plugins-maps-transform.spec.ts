@@ -324,16 +324,21 @@ test.describe("Maps transform handles and scale and turn Commands @wf:plugins-ma
     await expect(drawnHandles(page)).toHaveCount(7);
 
     // The box stands on the baseline, so its bottom-right grip sits on the
-    // baseline's right end, 27.5 mm right of the label's anchor; the drag ends
-    // 10.2 right and 0.8 down from there.
+    // baseline's right end, half the box's width right of the label's anchor
+    // (a new label's box follows its placeholder, #800); the drag ends 10.2
+    // right and 0.8 down from there.
     await expect(transformHandle(page, "se")).toBeVisible();
-    await dragTransformHandle(page, surface(page), transformHandle(page, "se"), [152, 77]);
+    const width = await fieldValue(widthField(page));
+    await dragTransformHandle(page, surface(page), transformHandle(page, "se"), [
+      114.3 + width / 2 + 10.2,
+      77,
+    ]);
 
     // A corner drag grows the cap size and the width together: the Width the
-    // panel shows is the drag's own, 65.2 mm, and the cap Size follows the same
-    // scale, 7.1 mm.
-    await expect.poll(async () => fieldValue(widthField(page))).toBeCloseTo(65.2, 0);
-    await expect.poll(async () => fieldValue(sizeField(page))).toBeCloseTo(7.1, 0);
+    // panel shows is the drag's own, and the cap Size follows the same scale.
+    const scale = (width + 10.2) / width;
+    await expect.poll(async () => fieldValue(widthField(page))).toBeCloseTo(width + 10.2, 0);
+    await expect.poll(async () => fieldValue(sizeField(page))).toBeCloseTo(6 * scale, 0);
     await capture(page, "maps-transform-label-corner", {
       around: [frameElement(page), sizeField(page), widthField(page)],
     });
@@ -342,7 +347,7 @@ test.describe("Maps transform handles and scale and turn Commands @wf:plugins-ma
     // width and cap size together.
     await focusBack(page);
     await page.keyboard.press("ControlOrMeta+z");
-    await expect.poll(async () => fieldValue(widthField(page))).toBe(55);
+    await expect.poll(async () => fieldValue(widthField(page))).toBe(width);
     await expect.poll(async () => fieldValue(sizeField(page))).toBe(6);
   });
 });

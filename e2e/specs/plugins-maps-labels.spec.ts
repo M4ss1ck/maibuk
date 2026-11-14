@@ -21,9 +21,15 @@ import {
   clickPagePoint,
   dblclickPagePoint,
   dragBendHandle,
+  dblclickLabelInk,
+  dragTransformHandle,
   fontLoaded,
   type LabelInk,
   labelInk,
+  labelLineBaselines,
+  millimetresPerPixel,
+  textBoxGeometry,
+  wheelAt,
 } from "../support/frame-stroke";
 import { leaveFrame, pressUntilFocused, tabTo, tabToEither } from "../support/keyboard";
 import { expect, test } from "../support/test";
@@ -61,6 +67,16 @@ const drawnLabelPaths = (page: Page) =>
 const baselinePaths = (page: Page) => mapFrame(page).locator('defs path[id^="label-path-"]');
 /** The bend handle a selected, unlocked Map Label draws under the Select tool. */
 const bendHandle = (page: Page) => mapFrame(page).locator("[data-bend-handle]");
+/** The on-map text box a Map Label is written in (#800). */
+const labelEditor = (page: Page) => mapFrame(page).locator("textarea.map-label-editor");
+/** The lines a multi-line Map Label draws, one tspan each, ink copy only. */
+const drawnLines = (page: Page) =>
+  mapFrame(page).locator("g[data-element-id] text.map-line").last().locator("tspan");
+/** A selected label's transform grip by its handle id, such as `e` for its right side. */
+const transformGrip = (page: Page, id: string) =>
+  mapFrame(page).locator(`[data-transform-handle-hit="${id}"]`);
+/** The selected label's transform box outline. */
+const transformBox = (page: Page) => mapFrame(page).locator("[data-transform] .map-transform-box");
 
 /** The Text tool's Place button: the keyboard path to a label at the view centre. */
 const placeLabelButton = (page: Page) =>
@@ -128,8 +144,12 @@ function expectInkOnBaseline({ lengths, ink, baseline: line }: LabelInk): void {
   for (const length of lengths) expect(length).toBeGreaterThan(0);
   expect(ink.right - ink.left).toBeGreaterThan(0);
   expect(ink.bottom - ink.top).toBeGreaterThan(0);
-  expect(ink.left).toBeGreaterThanOrEqual(line.left - 2);
-  expect(ink.right).toBeLessThanOrEqual(line.right + 2);
+  // An auto-width label's baseline is exactly its letters' advances (#800), so
+  // a glyph's own overhang, such as the italic placeholder's slant, may reach a
+  // little past it: a fraction of the letters' height, never a clipped word.
+  const overhang = Math.max(2, (ink.bottom - ink.top) * 0.2);
+  expect(ink.left).toBeGreaterThanOrEqual(line.left - overhang);
+  expect(ink.right).toBeLessThanOrEqual(line.right + overhang);
 }
 
 /** Opens Maps from the sidebar, waiting for the Plugin's launch scan. */
@@ -282,12 +302,15 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.te
     expect(x).toBeCloseTo(point[0], 0);
     expect(y).toBeCloseTo(point[1], 0);
 
-    // The click hands the caret to the new label's Text field (#800): typing
-    // writes the label, never the editor's tool Shortcuts.
-    await expect(textField(page)).toBeFocused();
+    // The click opens the label's text box on the Map (#800): typing writes
+    // the label, never the editor's tool Shortcuts, and Escape commits it.
+    await expect(labelEditor(page)).toBeFocused();
     await page.keyboard.type("Gulf");
-    await page.keyboard.press("Enter");
+    await page.keyboard.press("Escape");
+    await expect(labelEditor(page)).toHaveCount(0);
     await expect(drawnLabelPaths(page).first()).toHaveText("Gulf");
+    // The Properties Text field follows the commit.
+    await expect(textField(page)).toHaveValue("Gulf");
     await expect(
       page.getByRole("button", { name: "Text", exact: true, pressed: true })
     ).toBeVisible();
@@ -349,16 +372,16 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.te
     await expect(elementRow(page, "Map Label 1")).toBeVisible();
   });
 
-  test("a double click on a Map Label with the Select tool puts the caret in its Text field", async ({
+  test("a double click on a Map Label with the Select tool opens its text box on the Map", async ({
     page,
   }) => {
     await openEditorWithMap(page);
     await pickText(page);
     const point = [150, 40] as const;
     await clickPagePoint(page, surface(page), point);
-    await expect(textField(page)).toBeFocused();
+    await expect(labelEditor(page)).toBeFocused();
     await page.keyboard.type("Gulf");
-    await page.keyboard.press("Enter");
+    await page.keyboard.press("Escape");
     await expect(drawnLabelPaths(page).first()).toHaveText("Gulf");
 
     // The Select tool, then a click on bare page to drop the selection, so the
@@ -369,15 +392,16 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.te
     await clickPagePoint(page, surface(page), [30, 130]);
     await expect(textField(page)).toHaveCount(0);
 
-    // A pointer-only gesture: the keyboard reaches the same field by Tab.
+    // A pointer-only gesture: the keyboard reaches the same text by Tab, in
+    // the Properties Text field. The box opens on the whole name, selected.
     await dblclickPagePoint(page, surface(page), point);
-    await expect(textField(page)).toBeFocused();
+    await expect(labelEditor(page)).toBeFocused();
+    await expect(labelEditor(page)).toHaveValue("Gulf");
     await expect(
       page.getByRole("button", { name: "Select", exact: true, pressed: true })
     ).toBeVisible();
-    await page.keyboard.press("ControlOrMeta+a");
     await page.keyboard.type("Gulf of Mexico");
-    await page.keyboard.press("Enter");
+    await page.keyboard.press("Escape");
     await expect(drawnLabelPaths(page).first()).toHaveText("Gulf of Mexico");
     // The keys wrote the label: "v" and "e" never switched the tool.
     await expect(
@@ -492,5 +516,286 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.te
     await expect(drawnLabelPaths(page).first()).toHaveText("North Sea");
     await expect(drawnLabelText(page).last()).toHaveAttribute("font-family", "Cinzel");
     expect(offChord(baseline(await baselineData(page)))).not.toBe(0);
+  });
+});
+
+/** The Width and Rotation fields and the Auto width switch a Map Label takes. */
+const widthField = (page: Page) => page.getByRole("textbox", { name: "Width (mm)", exact: true });
+const rotationField = (page: Page) =>
+  page.getByRole("textbox", { name: "Rotation (degrees)", exact: true });
+const autoWidth = (page: Page) => page.getByRole("switch", { name: "Auto width" });
+
+/** The selected label's box width, in page millimetres, from its transform outline. */
+async function boxWidth(page: Page): Promise<number> {
+  const width = await transformBox(page).getAttribute("width");
+  if (width === null) throw new Error("the Frame draws no transform box");
+  return Number(width);
+}
+
+/** Places a Map Label with a Text tool click, so its text box opens on the Map. */
+async function clickToPlace(page: Page, point: readonly [number, number]): Promise<void> {
+  await pickText(page);
+  await clickPagePoint(page, surface(page), point);
+  await expect(labelEditor(page)).toBeFocused();
+}
+
+/** Picks the Select tool from the Frame, where an Escape from the text box leaves focus. */
+async function pickSelectInFrame(page: Page): Promise<void> {
+  await page.keyboard.press("v");
+  await expect(mapFrame(page).locator('svg[data-tool="select"]')).toBeVisible();
+}
+
+test.describe("Maps Map Label text box @wf:plugins-maps-labels @sc:plugin.maibuk-maps.textTool @sc:plugin.maibuk-maps.selectTool @sandbox", () => {
+  const POINT = [114.3, 76.2] as const;
+  /** Words that fit the clear page between the Layers card and Properties on one line. */
+  const WORDS = "Gulf of the Seven Isles";
+
+  test("Escape commits the text box and hands the keys back to the tool Shortcuts, as one undo step", async ({
+    page,
+  }) => {
+    await openEditorWithMap(page);
+    await clickToPlace(page, POINT);
+    // The empty box holds its whole italic prompt: no letter is clipped.
+    const empty = await textBoxGeometry(labelEditor(page));
+    expect(empty.promptInk).toBeGreaterThan(0);
+    expect(empty.width).toBeGreaterThanOrEqual(empty.promptInk);
+    await capture(page, "labels-text-box-open");
+    // Every letter writes the label: "v" and "e" would pick Select and Eraser.
+    await page.keyboard.type("Seven Eves");
+    await expect(
+      page.getByRole("button", { name: "Text", exact: true, pressed: true })
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(labelEditor(page)).toHaveCount(0);
+    await expect(drawnLabelPaths(page).first()).toHaveText("Seven Eves");
+    await capture(page, "labels-text-box-committed");
+
+    // Focus stayed in the Frame, so the next key is a tool Shortcut again.
+    await pickSelectInFrame(page);
+
+    // The commit is one undo step: the label goes back to empty, then returns.
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect(drawnLabelPaths(page).last()).toHaveText(LABEL_PLACEHOLDER);
+    await expect(elementRow(page, "Map Label 1")).toBeVisible();
+    await page.keyboard.press("ControlOrMeta+Shift+z");
+    await expect(drawnLabelPaths(page).first()).toHaveText("Seven Eves");
+  });
+
+  test("a press on the Map and a Tab both commit the text box", async ({ page }) => {
+    await openEditorWithMap(page);
+    await clickToPlace(page, POINT);
+    await page.keyboard.type("Gulf");
+    await page.keyboard.press("Escape");
+    await pickSelectInFrame(page);
+
+    // A press on bare page commits and drops the selection.
+    await dblclickPagePoint(page, surface(page), POINT);
+    await expect(labelEditor(page)).toBeFocused();
+    await page.keyboard.type("Bay");
+    await clickPagePoint(page, surface(page), [30, 130]);
+    await expect(labelEditor(page)).toHaveCount(0);
+    await expect(drawnLabelPaths(page).first()).toHaveText("Bay");
+
+    // Tab moves focus on, and the box commits as it goes.
+    await dblclickPagePoint(page, surface(page), POINT);
+    await expect(labelEditor(page)).toBeFocused();
+    await page.keyboard.type("Sound");
+    await page.keyboard.press("Tab");
+    await expect(labelEditor(page)).toHaveCount(0);
+    await expect(drawnLabelPaths(page).first()).toHaveText("Sound");
+  });
+
+  test("an empty commit keeps the placeholder, and the box fits one letter or a long sentence on one line", async ({
+    page,
+  }) => {
+    await openEditorWithMap(page);
+    await clickToPlace(page, POINT);
+    // Empty: Escape stores nothing and the prompt stays, sized to the prompt.
+    await page.keyboard.press("Escape");
+    await expect(drawnLabelPaths(page).last()).toHaveText(LABEL_PLACEHOLDER);
+    await pickSelectInFrame(page);
+    await clickPagePoint(page, surface(page), POINT);
+    const promptWidth = await boxWidth(page);
+
+    // One letter: an auto box shrinks to it.
+    await dblclickPagePoint(page, surface(page), POINT);
+    await expect(labelEditor(page)).toBeFocused();
+    await page.keyboard.type("A");
+    await page.keyboard.press("Escape");
+    await expect(drawnLabelPaths(page).first()).toHaveText("A");
+    await expect.poll(() => boxWidth(page)).toBeLessThan(promptWidth / 4);
+    await expect.poll(() => boxWidth(page)).toBeGreaterThan(0);
+
+    // A long sentence: the box grows to hold it, so no letter is clipped.
+    const sentence = "The Great Southern Gulf of the Seven Kingdoms";
+    await dblclickPagePoint(page, surface(page), POINT);
+    await expect(labelEditor(page)).toBeFocused();
+    await page.keyboard.type(sentence);
+    await page.keyboard.press("Escape");
+    await expect(drawnLabelPaths(page).first()).toHaveText(sentence);
+    await expect.poll(() => boxWidth(page)).toBeGreaterThan(promptWidth);
+    await expect(autoWidth(page)).toBeChecked();
+    expectInkOnBaseline(await labelInk(surface(page)));
+    await capture(page, "labels-long-auto");
+  });
+
+  test("Enter writes three lines, drawn one under the other, and a multi-line label does not bend", async ({
+    page,
+  }) => {
+    await openEditorWithMap(page);
+    await clickToPlace(page, POINT);
+    await page.keyboard.type("North");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("Sea");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("Coast");
+    await expect(labelEditor(page)).toHaveValue("North\nSea\nCoast");
+    await page.keyboard.press("Escape");
+    await expect(drawnLines(page)).toHaveText(["North", "Sea", "Coast"]);
+    await capture(page, "labels-three-lines");
+
+    // The lines stack down from the first one's baseline.
+    const ys = await labelLineBaselines(surface(page));
+    expect(ys[1]).toBeGreaterThan(ys[0]);
+    expect(ys[2] - ys[1]).toBeCloseTo(ys[1] - ys[0], 5);
+
+    // Properties shows every line, and the Bend field and handle are off.
+    await expect(textField(page)).toHaveValue("North\nSea\nCoast");
+    await expect(bendField(page)).toBeDisabled();
+    await pickSelectInFrame(page);
+    await clickPagePoint(page, surface(page), POINT);
+    await expect(transformBox(page)).toBeVisible();
+    await expect(bendHandle(page)).toHaveCount(0);
+  });
+
+  test("a side handle drag sets a fixed width the text wraps at, and a bent one-line label keeps its curve", async ({
+    page,
+  }) => {
+    // Between the Layers card and Properties, so both side grips stay clear.
+    const at = [118, 76.2] as const;
+    await openEditorWithMap(page);
+    await clickToPlace(page, at);
+    await page.keyboard.type(WORDS);
+    await page.keyboard.press("Escape");
+    await pickSelectInFrame(page);
+    await clickPagePoint(page, surface(page), at);
+    const before = await boxWidth(page);
+    await expect(transformGrip(page, "e")).toBeVisible();
+
+    // Drag the right side in to about half the width.
+    await dragTransformHandle(page, surface(page), transformGrip(page, "e"), [
+      at[0] + before / 4,
+      at[1],
+    ]);
+    await expect(autoWidth(page)).not.toBeChecked();
+    await expect.poll(() => drawnLines(page).count()).toBeGreaterThan(1);
+    const lines = await drawnLines(page).allTextContents();
+    expect(lines.join(" ")).toBe(WORDS);
+    const fixed = await boxWidth(page);
+    expect(fixed).toBeLessThan(before * 0.8);
+    expect(Number(await widthField(page).inputValue())).toBeCloseTo(fixed, 0);
+    await capture(page, "labels-fixed-wrap");
+
+    // The Auto width switch puts it back on one line.
+    await focusProperties(page, autoWidth(page));
+    await page.keyboard.press("Space");
+    await expect(drawnLabelPaths(page).first()).toHaveText(WORDS);
+
+    // One line bends: the Bend field is on and bows the baseline.
+    await expect(bendField(page)).toBeEnabled();
+    await writeField(page, bendField(page), "6");
+    await expect.poll(async () => offChord(baseline(await baselineData(page)))).not.toBe(0);
+    await expect(drawnLabelPaths(page).first()).toHaveText(WORDS);
+  });
+
+  test("the text box sits over a turned label on a zoomed Map", async ({ page }) => {
+    await openEditorWithMap(page);
+    await clickToPlace(page, POINT);
+    await page.keyboard.type("Delta");
+    await page.keyboard.press("Escape");
+    await writeField(page, rotationField(page), "30");
+    // Zoom in around the label with a Ctrl wheel, then edit it there.
+    await wheelAt(page, surface(page), [0.5, 0.5], { notches: 3 });
+    // Out of the Rotation field to a button, so "v" is a tool Shortcut.
+    await tabTo(page, placeLabelButton(page), { max: 60 });
+    await page.keyboard.press("v");
+    await expect(mapFrame(page).locator('svg[data-tool="select"]')).toBeVisible();
+    const ink = await labelInk(surface(page));
+    const centre = await dblclickLabelInk(page, surface(page), frameElement(page));
+    await expect(labelEditor(page)).toBeFocused();
+    await expect(labelEditor(page)).toHaveValue("Delta");
+    await capture(page, "labels-zoomed-turned-edit");
+    // Turned with the label, and centred on the ink it replaces.
+    const geometry = await textBoxGeometry(labelEditor(page));
+    expect(geometry.transform).toContain("rotate(30deg)");
+    const box = await labelEditor(page).boundingBox();
+    if (box === null) throw new Error("the text box has no box");
+    expect(Math.abs(box.x + box.width / 2 - centre.x)).toBeLessThan(Math.max(12, box.width * 0.15));
+    expect(Math.abs(box.y + box.height / 2 - centre.y)).toBeLessThan(
+      Math.max(12, box.height * 0.5)
+    );
+    // The box is drawn at the zoomed size: the 6 mm cap at the Frame's own scale.
+    const mmPerPx = await millimetresPerPixel(surface(page));
+    expect(geometry.fontPx).toBeCloseTo(6 / mmPerPx, 0);
+    expect(ink.ink.right).toBeGreaterThan(ink.ink.left);
+    await page.keyboard.type("Delta Bay");
+    await page.keyboard.press("Escape");
+    await expect(drawnLabelPaths(page).first()).toHaveText("Delta Bay");
+  });
+
+  test("the text box works with Properties minimised and on a narrow window", async ({ page }) => {
+    await openEditorWithMap(page);
+    await pickText(page);
+    // Minimised: the Text field is not mounted, and typing still writes the label.
+    const minimise = page.getByRole("button", { name: "Minimise Properties" });
+    await tabTo(page, minimise, { max: 60 });
+    await page.keyboard.press("Enter");
+    await expect(textField(page)).toHaveCount(0);
+    await clickPagePoint(page, surface(page), POINT);
+    await expect(labelEditor(page)).toBeFocused();
+    await page.keyboard.type("Isle");
+    await page.keyboard.press("Escape");
+    await expect(drawnLabelPaths(page).first()).toHaveText("Isle");
+    await expect(
+      page.getByRole("button", { name: "Text", exact: true, pressed: true })
+    ).toBeVisible();
+
+    // Narrow: Properties is a bottom region, and the box still opens on the Map.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await pickSelectInFrame(page);
+    await dblclickPagePoint(page, surface(page), POINT);
+    await expect(labelEditor(page)).toBeFocused();
+    await page.keyboard.type("Isle of Mist");
+    await page.keyboard.press("Escape");
+    await expect(drawnLabelPaths(page).first()).toHaveText("Isle of Mist");
+    await capture(page, "labels-narrow-edit");
+  });
+
+  test("three lines in a fixed box survive a reload", async ({ page }) => {
+    await openEditorWithMap(page);
+    await clickToPlace(page, POINT);
+    await page.keyboard.type("North");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("Sea of the Long Winter");
+    await page.keyboard.press("Escape");
+    await writeField(page, widthField(page), "30");
+    await expect(autoWidth(page)).not.toBeChecked();
+    const lines = await drawnLines(page).allTextContents();
+    expect(lines.length).toBeGreaterThan(2);
+
+    await leaveFrame(page, frameElement(page));
+    await tabTo(page, page.getByRole("button", { name: "Back to Maps" }), {
+      max: 60,
+      backwards: true,
+    });
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/\/plugin\/maibuk-maps\/maps$/);
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Maps", level: 1 })).toBeVisible();
+    await tabTo(page, page.getByRole("button", { name: /^Coastline\b/ }), { max: 60 });
+    await page.keyboard.press("Enter");
+    await expect(surface(page)).toBeVisible();
+    await openLayers(page);
+    await expect(drawnLines(page)).toHaveText(lines);
   });
 });
