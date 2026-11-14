@@ -5,6 +5,44 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.0] - 2026-11-14
+
+### Added
+- Add a built-in Maps plugin with a Map list, previews, Book filtering, create/rename/delete actions, an empty state, and a Book Item Menu entry
+- Add a full-page Map editor with tools, undo/redo, autosave, zoom and pan, an Elements list, Properties, and keyboard shortcuts
+- Add Map Lines with line styles, Pen and Eraser tools, Roughen, erase/split, and drag-to-move
+- Add Ellipse, Rectangle, and Polygon Shape tools with editable geometry
+- Add Bucket Fills and Area Fills with Soft Edge, texture, scatter, and live face tracking
+- Add Stamps and an Insert picture grid, including scale bars, recoloring, and uploads for Custom Stamps, Custom Fills, and Map Images
+- Add Map Labels with bundled fonts, bend handles, automatic or fixed-width layout, and on-map text editing
+- Add transform handles and two-finger gestures for moving, resizing, and turning Map elements
+- Add Map Styles with per-element color overrides and Style swatches
+- Add Map Templates with a Start from picker, including a Cuba template
+- Add PNG and SVG export and placing Maps in Chapters or Notes
+- Add a Hand tool for panning, a floating desktop editor layout, and a responsive narrow layout
+- Add plugin Slider and color picker UI components and plugin file saving on desktop, web, and Android
+
+### Changed
+- Open Maps by clicking their cards, with a hover open icon replacing the separate Open button
+- Start new Map Labels empty with a localized italic placeholder instead of stored prompt text
+- Stop Properties above the zoom controls, make it scroll internally, and minimise it to a single restore button
+- Show Layers rows as name over kind with an eye toggle and More actions menu
+- Clear the current selection when switching from Select to any other tool
+- Change the Books shortcut to G B
+- Update Map panning to move the view immediately and commit the final position on release
+
+### Fixed
+- Write into a Map Label when typing immediately after placing it, and edit it on double-click
+- Prevent Map Label placeholders and multi-line selection outlines from clipping or crossing text
+- Align Map Label transform handles to the label baseline
+- Fill Stamp tiles across their grid columns in the Linux desktop app
+- Show transform handles at every zoom level with consistent small-box and aspect-ratio behavior
+- Refuse the Bucket on locked Fills
+- Route Frame keyboard shortcuts and Switch arrow keys to page Commands
+- Avoid turning the next tap into a pan after a finger leaves the Map Frame
+- Preserve Book filters and rename/delete dialog focus correctly
+- Fit real-geography Map Templates to the page and make compass roses follow Map Style colors
+
 ## [0.21.0] - 2026-11-06
 
 ### Added
