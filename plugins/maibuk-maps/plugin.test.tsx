@@ -2978,14 +2978,14 @@ describe("Map editor page", () => {
       await tabTo(user, place, 120);
       await user.keyboard("{Enter}");
 
-      // A Map Label at the centre of the portrait page, writing the default
-      // text, and selected.
+      // A Map Label at the centre of the portrait page, with empty text the
+      // placeholder stands in for (#798), and selected.
       await waitFor(() => expect(runtime.editor?.getSnapshot().elements).toHaveLength(1));
       const inserted = runtime.editor?.getSnapshot().elements[0] as MapLabelElement;
       expect(inserted).toMatchObject({
         kind: "label",
         name: "Map Label 1",
-        text: en["element.labelText"],
+        text: "",
         x: 76.2,
         y: 114.3,
         rotation: 0,
@@ -3007,10 +3007,13 @@ describe("Map editor page", () => {
         expect((runtime.editor?.getSnapshot().elements[0] as MapLabelElement).x).toBe(77.2)
       );
 
-      // The Text field writes what the author commits.
+      // The Text field starts empty and shows the prompt as its placeholder, so
+      // the first key typed is the label's text (#798).
       const text = await screen.findByRole("textbox", { name: en["properties.mapLabel.text"] });
+      expect(text).toHaveValue("");
+      expect(text).toHaveAttribute("placeholder", en["element.labelPlaceholder"]);
       await tabTo(user, text, 120);
-      await user.keyboard("{Control>}a{/Control}Northern Reach{Enter}");
+      await user.keyboard("Northern Reach{Enter}");
       await waitFor(() =>
         expect((runtime.editor?.getSnapshot().elements[0] as MapLabelElement).text).toBe(
           "Northern Reach"
@@ -3018,6 +3021,23 @@ describe("Map editor page", () => {
       );
       await runtime.editor?.flush();
       expect(storedMap(storage).elements[0]).toMatchObject({ text: "Northern Reach" });
+
+      // Clearing the field clears the label, and the placeholder comes back.
+      await user.keyboard("{Control>}a{/Control}{Backspace}{Enter}");
+      await waitFor(() =>
+        expect((runtime.editor?.getSnapshot().elements[0] as MapLabelElement).text).toBe("")
+      );
+      expect(text).toHaveValue("");
+      expect(text).toHaveAttribute("placeholder", en["element.labelPlaceholder"]);
+      await runtime.editor?.flush();
+      expect(storedMap(storage).elements[0]).toMatchObject({ text: "" });
+
+      await user.keyboard("Northern Reach{Enter}");
+      await waitFor(() =>
+        expect((runtime.editor?.getSnapshot().elements[0] as MapLabelElement).text).toBe(
+          "Northern Reach"
+        )
+      );
 
       // The Font select offers the bundled faces by family name.
       await pickOption(user, en["properties.mapLabel.font"], "Cinzel");

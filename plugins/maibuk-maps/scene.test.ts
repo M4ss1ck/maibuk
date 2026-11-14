@@ -998,6 +998,51 @@ describe("Map Label rendering", () => {
     expect(sceneToSvg(mapWith([label()])).match(/<path /g)).toHaveLength(1);
   });
 
+  it("draws an empty label's placeholder italic and muted, in the label's font and halo (#798)", () => {
+    const empty = label({ text: "", font: "cinzel", color: "#8b1a1a", bend: 8 });
+    const [hit, text, ...rest] = sceneShapes([empty], 203.2, 203.2, undefined, {
+      labelPlaceholder: "Write your text here",
+    })[0];
+
+    // The baseline stays the hit path, so the empty label is picked as before.
+    expect(hit).toMatchObject({ d: "M 0 30 Q 20 14 40 30", hitOnly: true });
+    expect(text).toMatchObject({
+      text: "Write your text here",
+      placeholder: true,
+      opacity: 0.5,
+      font: "Cinzel",
+      fill: "#8b1a1a",
+      anchor: "middle",
+    });
+    // The halo stays, faded with the ink, so the prompt reads over drawn land.
+    expect(text).toMatchObject({ halo: { width: DEFAULT_LABEL_HALO_MM } });
+    expect(rest).toEqual([]);
+
+    const svg = sceneToSvg(mapWith([empty]), { labelPlaceholder: "Write your text here" });
+    // Both copies, halo and ink, are italic and faded alike.
+    const texts = [...svg.matchAll(/<text ([^>]*)>/g)].map(([, attributes]) => attributes);
+    expect(texts).toHaveLength(2);
+    for (const attributes of texts) {
+      expect(attributes).toContain('font-style="italic"');
+      expect(attributes).toContain('opacity="0.5"');
+    }
+  });
+
+  it("draws nothing but the hit path for an empty label with no placeholder (#798)", () => {
+    const [shapes] = sceneShapes([label({ text: "" })], 203.2, 203.2);
+
+    expect(shapes).toHaveLength(1);
+    expect(shapes[0]).toMatchObject({ hitOnly: true });
+    expect(sceneToSvg(mapWith([label({ text: "" })]))).not.toContain("<text");
+    // A label with text ignores the placeholder entirely.
+    const [, text] = sceneShapes([label()], 203.2, 203.2, undefined, {
+      labelPlaceholder: "Write your text here",
+    })[0];
+    expect(text).toMatchObject({ text: "The Reach" });
+    expect(text).not.toHaveProperty("placeholder");
+    expect(text).not.toHaveProperty("opacity");
+  });
+
   it("moves a Label by shifting its centre", () => {
     const reach = label();
 

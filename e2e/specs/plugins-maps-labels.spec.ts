@@ -1,8 +1,10 @@
 // The Maps editor's Map Labels (#751): the Text tool's Place Map Label button
 // adds one at the view centre, the Elements list lists it selected, and the
 // Frame draws its text along a baseline; a click in the Frame with the Text
-// tool adds one where the pointer landed. From the properties panel the Text
-// field rewrites the label, the Font select moves it to a bundled face the
+// tool adds one where the pointer landed. A new label stores no text, so the
+// Frame draws its prompt as an italic placeholder and the Text field shows it
+// as its own, until typing replaces it (#798). From the properties panel the
+// Text field rewrites the label, the Font select moves it to a bundled face the
 // Frame's own folder declares, and the Bend field bows the baseline into a
 // quadratic off the chord; with the Select tool the label's bend handle drags
 // that curve with the pointer, which changes the Bend value. The label, its
@@ -47,7 +49,8 @@ const elementRow = (page: Page, name: string) =>
 
 /**
  * The text a Map Label draws in the Frame. A label's halo is a second copy of
- * the same text, so a label draws two, halo first.
+ * the same text, so a label draws two, halo first. An empty label's placeholder
+ * draws the same two, italic and faded (#798).
  */
 const drawnLabelText = (page: Page) => mapFrame(page).locator("g[data-element-id] text.map-line");
 /** The textPath each drawn copy writes, running along the label's baseline. */
@@ -73,8 +76,8 @@ const bendField = (page: Page) => page.getByRole("textbox", { name: "Bend (mm)",
  */
 const PAGE_CENTRE_MM: readonly [number, number] = [114.3, 76.2];
 
-/** The prompt a new Map Label carries until the author replaces it. */
-const DEFAULT_LABEL_TEXT = "Write your text here";
+/** The placeholder a new, empty Map Label draws until the author types (#798). */
+const LABEL_PLACEHOLDER = "Write your text here";
 
 /** A label baseline's three points, in page millimetres. */
 interface Baseline {
@@ -244,8 +247,8 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.te
     await expect(row).toBeVisible();
     await expect(page.getByRole("textbox", { name: "Name" })).toHaveValue(/^Map Label 1/);
 
-    // The Frame draws the default text along the label's baseline.
-    await expect(drawnLabelPaths(page).first()).toHaveText(DEFAULT_LABEL_TEXT);
+    // The Frame draws the placeholder along the label's baseline.
+    await expect(drawnLabelPaths(page).first()).toHaveText(LABEL_PLACEHOLDER);
     // The baseline runs through the page centre: a text on a path starts from
     // the path's startOffset, never from an x and y of its own (#751).
     expect(baseline(await baselineData(page)).control).toEqual(PAGE_CENTRE_MM);
@@ -272,7 +275,7 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.te
     await clickPagePoint(page, surface(page), point);
 
     await expect(elementRow(page, "Map Label 1")).toBeVisible();
-    await expect(drawnLabelPaths(page).first()).toHaveText(DEFAULT_LABEL_TEXT);
+    await expect(drawnLabelPaths(page).first()).toHaveText(LABEL_PLACEHOLDER);
     // The straight baseline's control point is the label's own page point.
     const [x, y] = baseline(await baselineData(page)).control;
     expect(x).toBeCloseTo(point[0], 0);
@@ -290,6 +293,42 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.te
 
     await writeField(page, textField(page), "North Sea");
     await expect(drawnLabelPaths(page).first()).toHaveText("North Sea");
+    await expect(elementRow(page, "Map Label 1")).toBeVisible();
+  });
+
+  test("a new Map Label shows its prompt as an italic placeholder the Text field replaces, and clearing the field brings it back", async ({
+    page,
+  }) => {
+    await openEditorWithMap(page);
+    await pickText(page);
+    await placeLabel(page);
+    // Capture before the assertions below, which the base branch fails: it
+    // stores the prompt as the label's text.
+    await capture(page, "labels-placeholder");
+
+    // The label stores no text: the field is empty and offers the prompt as
+    // its placeholder, and the Frame draws that prompt italic and muted.
+    await expect(textField(page)).toHaveValue("");
+    await expect(textField(page)).toHaveAttribute("placeholder", LABEL_PLACEHOLDER);
+    await expect(drawnLabelText(page).last()).toHaveAttribute("font-style", "italic");
+    await expect(drawnLabelText(page).last()).toHaveAttribute("opacity", "0.5");
+    await expect(drawnLabelPaths(page).last()).toHaveText(LABEL_PLACEHOLDER);
+
+    // The first keys typed are the label's text: nothing to select or delete.
+    await focusProperties(page, textField(page));
+    await page.keyboard.type("North Sea");
+    await page.keyboard.press("Enter");
+    await expect(drawnLabelPaths(page).first()).toHaveText("North Sea");
+    await expect(drawnLabelText(page).last()).not.toHaveAttribute("font-style", "italic");
+
+    // Clearing the field brings the placeholder back on the Map and in the field.
+    await focusProperties(page, textField(page));
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.press("Backspace");
+    await page.keyboard.press("Enter");
+    await expect(textField(page)).toHaveValue("");
+    await expect(drawnLabelText(page).last()).toHaveAttribute("font-style", "italic");
+    await expect(drawnLabelPaths(page).last()).toHaveText(LABEL_PLACEHOLDER);
     await expect(elementRow(page, "Map Label 1")).toBeVisible();
   });
 
@@ -346,7 +385,7 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.te
     // path it follows are what the assertion reads.)
     const pathId = await baselinePaths(page).first().getAttribute("id");
     await expect(drawnLabelPaths(page).first()).toHaveAttribute("href", `#${pathId}`);
-    await expect(drawnLabelPaths(page).first()).toHaveText(DEFAULT_LABEL_TEXT);
+    await expect(drawnLabelPaths(page).first()).toHaveText(LABEL_PLACEHOLDER);
     await capture(page, "labels-curved");
     // A curved label is painted too: its glyph box follows the bowed baseline.
     expectInkOnBaseline(await labelInk(surface(page)));

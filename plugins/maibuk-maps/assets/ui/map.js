@@ -34,7 +34,7 @@
    * @typedef {"ellipse" | "rectangle" | "polygon"} ShapeKind
    * @typedef {"select" | "hand" | "pencil" | "pen" | "bucket" | "area" | "eraser" | "insert" | "text" | ShapeKind} MapTool
    * @typedef {{ d: string, stroke: string | null, strokeWidth: number, dash: string | null, fill: string | null, fillRule?: "evenodd", opacity: number, transform?: string, clip?: string, hitOnly?: true }} LineShape
-   * @typedef {{ text: string, x: number, y: number, size: number, fill: string, font?: string, letterSpacing?: number, halo?: { color: string, width: number }, path?: { id: string, d: string }, anchor: "start" | "middle" | "end", transform?: string }} TextShape
+   * @typedef {{ text: string, x: number, y: number, size: number, fill: string, font?: string, letterSpacing?: number, halo?: { color: string, width: number }, path?: { id: string, d: string }, anchor: "start" | "middle" | "end", transform?: string, placeholder?: true, opacity?: number }} TextShape
    * @typedef {{ kind: "image", assetId: string, x: number, y: number, width: number, height: number, rotation: number, opacity: number, tint?: string, clip?: string }} ImageShape
    * @typedef {LineShape | TextShape | ImageShape} SceneShape
    * @typedef {{ x: number, y: number, rotation: number, width: number, bend: number }} FrameLabelLayout
@@ -508,6 +508,10 @@
       ...(halo === null ? {} : { halo }),
       anchor,
       ...(typeof shape.transform === "string" ? { transform: shape.transform } : {}),
+      ...(shape.placeholder === true ? { placeholder: /** @type {const} */ (true) } : {}),
+      ...(isNumber(shape.opacity) && shape.opacity >= 0 && shape.opacity < 1
+        ? { opacity: shape.opacity }
+        : {}),
     };
   }
 
@@ -1062,6 +1066,8 @@
       stroke-linejoin="${halo === undefined ? undefined : "round"}"
       text-anchor="${shape.anchor}"
       transform="${shape.transform ?? undefined}"
+      font-style="${shape.placeholder === true ? "italic" : undefined}"
+      opacity="${shape.opacity === undefined ? undefined : n(shape.opacity)}"
     >
       ${content()}
     </text>`;

@@ -44,6 +44,8 @@ import {
   type MapLabelElement,
   type MapPage,
 } from "./maps";
+import enRuntime from "./locales/runtime/en.json";
+import esRuntime from "./locales/runtime/es.json";
 import { mapLibrary } from "./scene";
 
 /** The four page sizes, exactly as `maps.ts` stores them. */
@@ -285,6 +287,22 @@ describe("embedFonts()", () => {
 });
 
 describe("exportSvg()", () => {
+  it("never writes an empty Map Label's placeholder, in either language (#798)", () => {
+    const map = mapWith([label({ text: "" }), label({ id: "other", x: 100 })]);
+    // Even a caller that hands over the editor's placeholder gets none drawn:
+    // an export and a Place are the Map's picture, not the editor's prompt.
+    for (const prompt of [
+      enRuntime["element.labelPlaceholder"],
+      esRuntime["element.labelPlaceholder"],
+    ]) {
+      const svg = exportSvg(map, bundledFonts(), { labelPlaceholder: prompt });
+      expect(svg).not.toContain(prompt);
+      expect(svg).not.toContain('font-style="italic"');
+      // The label with text still draws, halo and ink.
+      expect(svg.match(/<text /g)).toHaveLength(2);
+    }
+  });
+
   it("has no editor markers, keeps the textPath, and carries the print size and fonts", () => {
     const map = mapWith([label({ font: "cinzel", bend: 8 })]);
     const svg = exportSvg(map, bundledFonts());

@@ -1771,6 +1771,7 @@ function MapEditorView({
                         <ui.TextField
                           label={t("properties.mapLabel.text")}
                           value={label.text}
+                          placeholder={t("element.labelPlaceholder")}
                           isDisabled={selected.locked}
                           onChange={(event) => editor.setLabelText(selected.id, event.detail)}
                         />
