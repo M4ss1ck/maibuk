@@ -200,10 +200,32 @@
         fill-opacity: 0.2;
       }
 
-      /* A locked Element cannot be resized or turned: its box is dashed, and it
-         carries no grips at all. */
+      /* The grip under the pointer (#795) is the one a press would take, so it
+         fills solid; the Frame draws it larger too, in page millimetres. */
+      .map-transform-handle[data-hovered="true"] {
+        fill-opacity: 1;
+      }
+
+      /* A locked Element cannot be resized or turned: its box is dashed, and a
+         small padlock badge hangs on its corner instead of grips. */
       .map-transform[data-locked="true"] .map-transform-box {
         stroke-dasharray: 4 3;
+      }
+
+      .map-transform-lock {
+        pointer-events: none;
+      }
+
+      .map-transform-lock-body {
+        fill: var(--maibuk-color-primary);
+      }
+
+      .map-transform-lock-shackle {
+        fill: none;
+        stroke: var(--maibuk-color-primary);
+        stroke-width: 1.5;
+        stroke-linecap: round;
+        vector-effect: non-scaling-stroke;
       }
 
       .map-transform-hit {

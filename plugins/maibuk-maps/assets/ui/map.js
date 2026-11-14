@@ -75,6 +75,7 @@
    * @typedef {{ box: FrameTransformBox, handle: string, start: MapPoint, point: MapPoint, aspect?: boolean, fromCentre?: boolean, snap?: boolean, minWidth?: number, minHeight?: number }} TransformGesture
    * @typedef {{ pointerId: number, id: string, handle: string, press: ClientPoint, start: MapPoint, point: MapPoint, startBox: FrameTransformBox, box: FrameTransformBox, minSize: number, snap: boolean, moved: boolean }} TransformDrag
    * @typedef {{ id: string, startBox: FrameTransformBox, box: FrameTransformBox }} PendingTransform
+   * @typedef {{ id: string, handle: string }} HoverGrip
    * @typedef {{ pointers: number[], client: ClientPoint, offset: MapPoint }} PanDrag
    * @typedef {{ clientX: number, clientY: number, touch: boolean }} PointerPlace
    * @typedef {{ start: MapPoint, control: MapPoint, apex: MapPoint, end: MapPoint }} BendGeometry
@@ -133,7 +134,8 @@
    * square inside a 24 px target is easy to see and, with a mouse, easy to
    * grab. A finger needs more room, so a coarse pointer draws a larger square
    * and gives it a 44 px target. The turn handle is a circle on a stalk above
-   * the box's top edge.
+   * the box's top edge. A grip the pointer rests on grows, so the one a press
+   * would take stands out.
    */
   const HANDLE_PX = 9;
   const HANDLE_HIT_PX = 24;
@@ -143,6 +145,18 @@
   const COARSE_HANDLE_HIT_PX = 44;
   const COARSE_TURN_HANDLE_PX = 18;
   const COARSE_TURN_STALK_PX = 26;
+  const HOVER_GROW = 1.4;
+
+  /**
+   * How small a box may look on screen before it loses grips (#795), in pixels
+   * of its smaller side: under 48 px four grips would bury the art they mark, so
+   * only the bottom-right corner stays, and under 20 px only the turn grip does.
+   */
+  const SMALL_BOX_PX = 48;
+  const TINY_BOX_PX = 20;
+
+  /** The padlock badge a locked Element's box carries (#795), in screen pixels. */
+  const LOCK_BADGE_PX = 14;
 
   /**
    * The readout chip and the Shift turn's tick ring (#795), in screen pixels, so
@@ -202,6 +216,12 @@
     ["se", 1, 1],
     ["sw", -1, 1],
   ];
+
+  /**
+   * The one corner a small box keeps (#795): the bottom-right, whose drag grows
+   * the box away from the top-left.
+   */
+  const SMALL_BOX_CORNER = CORNER_HANDLES[2];
 
   /** The characters a definitions id may hold, so a scene cannot write an attribute of its own. */
   const FILTER_ID = /^[A-Za-z0-9_-]+$/;
@@ -282,6 +302,13 @@
    * @type {PendingTransform | null}
    */
   let pendingTransform = null;
+  /**
+   * The grip the pointer rests on (#795), the Element and handle it names, or
+   * null. That grip fills and grows, so the author sees the one a press would
+   * take. A touch screen has no hover, so nothing rests and no grip grows.
+   * @type {HoverGrip | null}
+   */
+  let hoverGrip = null;
 
   /**
    * The pan gesture in progress, or null (#777): the pointers it follows,
@@ -1294,6 +1321,24 @@
   }
 
   /**
+   * The corners a box shows grips on (#795): all four while its longer side is
+   * at least `SMALL_BOX_PX` on screen, the bottom-right alone below that, and
+   * none below `TINY_BOX_PX`, where the turn grip is all that is left to grip.
+   * A Frame that cannot measure its screen shows none either.
+   * @param {FrameTransformBox} box
+   * @param {number | null} scale
+   * @returns {Array<[string, number, number]>}
+   */
+  function shownCorners(box, scale) {
+    if (scale === null) return [];
+    // The longer side, so a long thin scale bar keeps its corners.
+    const onScreen = Math.max(box.width, box.height) * scale;
+    if (onScreen < TINY_BOX_PX) return [];
+    if (onScreen < SMALL_BOX_PX) return [SMALL_BOX_CORNER];
+    return CORNER_HANDLES;
+  }
+
+  /**
    * The resize cursor one corner takes (#795): the box's own turn added to the
    * corner's direction, taken to the nearest 45°.
    * @param {number} rotation
@@ -1462,6 +1507,39 @@
   }
 
   /**
+   * The padlock badge a locked Element's box carries (#795): a small lock hung
+   * on the box's top-left corner, sized from the screen scale so it stays
+   * legible at every zoom. It marks the box rather than grips it, so it takes
+   * no pointer.
+   * @param {number} scale
+   * @param {number} x
+   * @param {number} y
+   * @returns {any}
+   */
+  function lockBadge(scale, x, y) {
+    const { html } = lib;
+    const size = LOCK_BADGE_PX / scale;
+    const width = size * 0.7;
+    const height = size * 0.45;
+    const shackle = size * 0.22;
+    const top = y + shackle * 0.5;
+    return html`<g class="map-transform-lock" data-transform-lock>
+      <path
+        class="map-transform-lock-shackle"
+        d="M ${n(x - shackle)} ${n(top)} A ${n(shackle)} ${n(shackle)} 0 0 1 ${n(x + shackle)} ${n(top)}"
+      />
+      <rect
+        class="map-transform-lock-body"
+        x="${n(x - width / 2)}"
+        y="${n(top)}"
+        width="${n(width)}"
+        height="${n(height)}"
+        rx="${n(size * 0.08)}"
+      />
+    </g>`;
+  }
+
+  /**
    * The box and handles a selected Stamp's or Map Image's transform draws
    * (#795): its box, turned with the Element, a square grip on each corner, and
    * a round grip on a stalk above the top edge for turning it. Each grip draws
@@ -1470,7 +1548,8 @@
    *
    * The overlay is drawn over the Elements, so a press on a grip reaches it
    * before the Element's own hit target under it. A locked Element shows its
-   * box dashed and no grips: it cannot be resized or turned.
+   * box dashed with a small padlock badge and no grips: it cannot be resized or
+   * turned.
    * @returns {any}
    */
   function transformOverlay() {
@@ -1483,23 +1562,31 @@
     const halfWidth = box.width / 2;
     const halfHeight = box.height / 2;
     const locked = target.locked;
-    // Every handle set a scene names carries the four corners; a Shape's sides
-    // and a Map Label's sides come with the ticket that draws them.
+    const hovered = hoverGrip !== null && hoverGrip.id === target.id ? hoverGrip.handle : null;
+    // A small box keeps fewer corners, so its grips never bury the art they mark.
+    const corners = shownCorners(box, scale);
     const grips =
       sizes === null || locked
         ? []
-        : CORNER_HANDLES.map(([id, signX, signY]) => ({
+        : corners.map(([id, signX, signY]) => ({
             id,
             x: signX * halfWidth,
             y: signY * halfHeight,
-            drawn: sizes.drawn,
+            // The grip under the pointer grows, so the one a press would take stands out.
+            drawn: hovered === id ? sizes.drawn * HOVER_GROW : sizes.drawn,
             hit: sizes.hit,
             cursor: resizeCursor(box.rotation, signX, signY),
+            hovered: hovered === id,
           }));
     const turn =
       sizes === null || locked
         ? null
-        : { y: -halfHeight - sizes.stalk, radius: sizes.turn / 2, hit: sizes.hit / 2 };
+        : {
+            y: -halfHeight - sizes.stalk,
+            radius: (hovered === "rotate" ? sizes.turn * HOVER_GROW : sizes.turn) / 2,
+            hit: sizes.hit / 2,
+            hovered: hovered === "rotate",
+          };
     const frame = `translate(${n(box.x)} ${n(box.y)})${
       box.rotation === 0 ? "" : ` rotate(${n(box.rotation)})`
     }`;
@@ -1516,6 +1603,7 @@
         width="${n(box.width)}"
         height="${n(box.height)}"
       />
+      ${locked && scale !== null ? lockBadge(scale, -halfWidth, -halfHeight) : null}
       ${
         turn === null
           ? null
@@ -1523,6 +1611,7 @@
         <circle
           class="map-transform-handle"
           data-transform-handle="rotate"
+          data-hovered="${turn.hovered ? "true" : undefined}"
           cx="0"
           cy="${n(turn.y)}"
           r="${n(turn.radius)}"
@@ -1540,6 +1629,7 @@
         (grip) => html`<rect
           class="map-transform-handle"
           data-transform-handle="${grip.id}"
+          data-hovered="${grip.hovered ? "true" : undefined}"
           x="${n(grip.x - grip.drawn / 2)}"
           y="${n(grip.y - grip.drawn / 2)}"
           width="${n(grip.drawn)}"
@@ -1980,6 +2070,33 @@
     const pointerId = bendDrag.pointerId;
     bendDrag = null;
     releasePointerId(pointerId);
+    draw();
+  }
+
+  /**
+   * The grip under the pointer (#795), its Element and handle, or null when the
+   * pointer rests on anything else. A press reaches the invisible target, so
+   * that is what a hover reports.
+   * @param {PointerEvent} event
+   * @returns {HoverGrip | null}
+   */
+  function hoveredGrip(event) {
+    const hit =
+      event.target instanceof Element ? event.target.closest("[data-transform-handle-hit]") : null;
+    const handle = hit === null ? null : hit.getAttribute("data-transform-handle-hit");
+    const overlay = hit === null ? null : hit.closest("[data-transform]");
+    const id = overlay === null ? null : overlay.getAttribute("data-transform");
+    return handle === null || id === null ? null : { id, handle };
+  }
+
+  /**
+   * Sets the grip under the pointer (#795), redrawing only when it changed, so
+   * a pointer crossing the surface does not repaint the Map at every sample.
+   * @param {HoverGrip | null} grip
+   */
+  function setHoverGrip(grip) {
+    if (hoverGrip?.id === grip?.id && hoverGrip?.handle === grip?.handle) return;
+    hoverGrip = grip;
     draw();
   }
 
@@ -2562,6 +2679,10 @@
       followDrag(event);
       return;
     }
+
+    // A grip under the pointer fills and grows (#795), so the author sees the
+    // one a press would take. A gesture in progress already grips its own.
+    if (scene !== null && scene.tool === "select") setHoverGrip(hoveredGrip(event));
 
     if (scene !== null && scene.tool === "pen") {
       const hovered = pagePoint(event);
@@ -3180,10 +3301,19 @@
     surface.removeEventListener("pointerdown", onPointerDown);
     surface.removeEventListener("pointermove", onPointerMove);
     surface.removeEventListener("pointerup", onPointerUp);
+    surface.removeEventListener("pointerleave", onPointerLeave);
     surface.removeEventListener("pointercancel", onPointerCancel);
     surface.removeEventListener("lostpointercapture", onLostPointerCapture);
     surface.removeEventListener("dblclick", onDoubleClick);
     surface.removeEventListener("wheel", onWheel);
+  }
+
+  /**
+   * A pointer that leaves the Frame (#795) rests on no grip: the surface hears
+   * no further moves, so the grip it left would otherwise keep growing.
+   */
+  function onPointerLeave() {
+    setHoverGrip(null);
   }
 
   /** @param {PointerEvent} event */
@@ -3246,6 +3376,7 @@
     surface.addEventListener("pointerdown", onPointerDown);
     surface.addEventListener("pointermove", onPointerMove);
     surface.addEventListener("pointerup", onPointerUp);
+    surface.addEventListener("pointerleave", onPointerLeave);
     surface.addEventListener("pointercancel", onPointerCancel);
     surface.addEventListener("lostpointercapture", onLostPointerCapture);
     surface.addEventListener("dblclick", onDoubleClick);

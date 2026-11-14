@@ -2054,8 +2054,17 @@ describe("a transform handle drag from the Frame (#795)", () => {
       const [element] = scenes.at(-1)?.elements ?? [];
       return (element?.shapes ?? []).flatMap((shape) => ("text" in shape ? [shape.text] : []));
     };
+    /** How far the bar's first segment reaches past its centre, in page millimetres. */
+    const reach = (): number => {
+      const [element] = scenes.at(-1)?.elements ?? [];
+      const [bar] = element?.shapes ?? [];
+      const match = bar !== undefined && "d" in bar ? /^M (-?[\d.]+)/.exec(bar.d) : null;
+      if (match === null) throw new Error("the scene drew no scale bar");
+      return Math.abs(Number(match[1]));
+    };
     // 40 mm of a 200 mm page reading 1000 km labels 200 km.
     expect(reading()).toContain("200 km");
+    const shortBar = reach();
 
     editor.handleFrameMessage({
       kind: "transformElement",
@@ -2065,8 +2074,11 @@ describe("a transform handle drag from the Frame (#795)", () => {
 
     expect(editor.getSnapshot().elements[0]).toMatchObject({ transform: { size: 100 } });
     expect(reading()).toContain("500 km");
+    // A wider box draws a longer bar, which is why it reads further.
+    expect(reach()).toBeGreaterThan(shortBar);
     editor.undo();
     expect(reading()).toContain("200 km");
+    expect(reach()).toBe(shortBar);
   });
 
   it("changes nothing, and takes no undo step, for a locked or hidden Element", () => {

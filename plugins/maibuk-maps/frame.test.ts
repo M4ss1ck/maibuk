@@ -2891,7 +2891,32 @@ describe("the transform handles (#795)", () => {
     expect(cursor("ne")).toBe("nwse-resize");
   });
 
-  it("marks a locked Element with a dashed box and no grips", () => {
+  it("fills and grows the grip under the pointer, and lets it rest when the pointer moves off", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected()] });
+    const resting = pixels(grip("nw"), 4);
+    expect(grip("nw").getAttribute("data-hovered")).toBeNull();
+
+    // A grip under the pointer is the one a press would take, so it stands out.
+    pointer(target("nw"), "pointermove", 20, 20);
+    expect(grip("nw").getAttribute("data-hovered")).toBe("true");
+    expect(pixels(grip("nw"), 4)).toBeGreaterThan(resting);
+    // Filled solid by the stylesheet; the growth is drawn in page millimetres.
+    expect(HTML).toMatch(/\[data-hovered="true"\][\s\S]*?fill-opacity:\s*1/);
+
+    // The turn grip answers the pointer the same way.
+    pointer(target("rotate"), "pointermove", 100, 35);
+    expect(grip("rotate").getAttribute("data-hovered")).toBe("true");
+    expect(grip("nw").getAttribute("data-hovered")).toBeNull();
+
+    // Moving off the grips lets them rest again.
+    pointer(svg(), "pointermove", 300, 300);
+    expect(grip("nw").getAttribute("data-hovered")).toBeNull();
+    expect(grip("rotate").getAttribute("data-hovered")).toBeNull();
+    expect(pixels(grip("nw"), 4)).toBeCloseTo(resting, 1);
+  });
+
+  it("marks a locked Element with a dashed box, a lock badge, and no grips", () => {
     frame = loadFrame();
     frame.scene({ elements: [selected({ locked: true })] });
 
@@ -2900,7 +2925,37 @@ describe("the transform handles (#795)", () => {
     expect(document.querySelector("[data-transform-handle]")).toBeNull();
     expect(document.querySelector("[data-transform-handle-hit]")).toBeNull();
     // The dash is the stylesheet's, on the box of a locked Element.
-    expect(HTML).toMatch(/\[data-locked="true"\][\s\S]*?stroke-dasharray/);
+    expect(HTML).toMatch(/\[data-locked="true"\]\s+\.map-transform-box[\s\S]*?stroke-dasharray/);
+
+    // A small padlock at the box's corner says why it cannot be sized.
+    const badge = overlay().querySelector("[data-transform-lock]");
+    expect(badge).not.toBeNull();
+    const body = overlay().querySelector("rect.map-transform-lock-body");
+    expect(body).not.toBeNull();
+    expect(overlay().querySelector("path.map-transform-lock-shackle")).not.toBeNull();
+    // Sized from the screen scale, so it stays legible at every zoom.
+    const atOne = pixels(body as Element, 4);
+    expect(atOne).toBeGreaterThan(0);
+    frame.scale = 8;
+    frame.scene({ elements: [selected({ locked: true })], zoom: 2 });
+    expect(
+      pixels(overlay().querySelector("rect.map-transform-lock-body") as Element, 8)
+    ).toBeCloseTo(atOne, 1);
+
+    // An unlocked Element carries grips instead, and no badge.
+    frame.scale = 4;
+    frame.scene({ elements: [selected()] });
+    expect(document.querySelector("[data-transform-lock]")).toBeNull();
+  });
+
+  it("draws no grips for a hidden Element, even when it is selected", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected({ hidden: true })] });
+
+    expect(document.querySelector("g.map-transform")).toBeNull();
+    expect(document.querySelector("[data-transform-handle]")).toBeNull();
+    expect(document.querySelector("[data-transform-handle-hit]")).toBeNull();
+    expect(document.querySelector("[data-transform-lock]")).toBeNull();
   });
 
   it("replaces the traced outline with the box, above the Element's own hit target", () => {
@@ -3181,6 +3236,43 @@ describe("the transform handles (#795)", () => {
         box: { x: 80.5, y: 40.25, width: 1, height: 0.5, rotation: 0 },
       },
     ]);
+  });
+
+  it("keeps one grip on a box under 48 px on screen, and only the turn grip under 20 px", () => {
+    frame = loadFrame();
+    frame.scale = 4;
+    const square = (sideMm: number) =>
+      selected({ transform: handleBox({ width: sideMm, height: sideMm }) });
+    const grips = () => document.querySelectorAll("[data-transform-handle-hit]");
+
+    // 12 mm at 4 px/mm is 48 px: just enough room for all four corners.
+    frame.scene({ elements: [square(12)] });
+    expect(grips()).toHaveLength(5);
+
+    // 11 mm is 44 px: the art would vanish under four grips, so only the
+    // bottom-right stays, to resize away from the top-left.
+    frame.scene({ elements: [square(11)] });
+    expect(grips()).toHaveLength(2);
+    expect(document.querySelector('[data-transform-handle-hit="se"]')).not.toBeNull();
+    expect(document.querySelector('[data-transform-handle-hit="rotate"]')).not.toBeNull();
+    expect(document.querySelector('[data-transform-handle-hit="nw"]')).toBeNull();
+
+    // 5 mm is exactly 20 px: one corner still fits.
+    frame.scene({ elements: [square(5)] });
+    expect(document.querySelector('[data-transform-handle-hit="se"]')).not.toBeNull();
+
+    // 4 mm is 16 px: only the turn grip is left to grip.
+    frame.scene({ elements: [square(4)] });
+    expect(grips()).toHaveLength(1);
+    expect(document.querySelector('[data-transform-handle-hit="rotate"]')).not.toBeNull();
+  });
+
+  it("keeps all four corners on a long thin box such as a scale bar", () => {
+    frame = loadFrame();
+    frame.scale = 4;
+    // 40 mm by 3 mm is 160 px by 12 px: measured by its longer side.
+    frame.scene({ elements: [selected({ transform: handleBox({ width: 40, height: 3 }) })] });
+    expect(document.querySelectorAll("[data-transform-handle-hit]")).toHaveLength(5);
   });
 
   it("draws no grips for an Element with no box, no other tool, and no selection", () => {
