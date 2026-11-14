@@ -1117,6 +1117,7 @@ describe("Map Labels", () => {
       y: 30,
       rotation: 0,
       width: 40,
+      sizing: "fixed",
       bend: 0,
       font: DEFAULT_LABEL_FONT,
       size: DEFAULT_LABEL_SIZE_MM,
@@ -1146,8 +1147,26 @@ describe("Map Labels", () => {
     });
 
     // The model never names the label in English: the caller supplies the text.
-    // A new Label takes the default width, which its prompt fits on.
-    expect(created).toEqual(label({ text: "El Alcance", width: DEFAULT_LABEL_WIDTH_MM }));
+    // A new Label's box follows its text (#800), and keeps the default width
+    // for a switch to a fixed box.
+    expect(created).toEqual(
+      label({ text: "El Alcance", width: DEFAULT_LABEL_WIDTH_MM, sizing: "auto" })
+    );
+  });
+
+  it("reads a Label stored before boxes had a sizing as fixed at its width, so it never moves (#800)", async () => {
+    const { sizing: _, ...legacy } = label({ id: "old", width: 37 });
+    const [read] = (await loadElements([legacy])) as MapLabelElement[];
+    expect(read).toMatchObject({ sizing: "fixed", width: 37 });
+    // Both sizings round-trip, and an unknown one is malformed.
+    const auto = label({ id: "auto", sizing: "auto" });
+    expect(await loadElements([auto])).toEqual([auto]);
+    expect(await loadElements([{ ...auto, sizing: "stretch" }])).toBeNull();
+  });
+
+  it("keeps a Label's lines through a save (#800)", async () => {
+    const stored = label({ id: "lines", text: "North\nSea\nCoast" });
+    expect(await loadElements([stored])).toEqual([stored]);
   });
 
   it("keeps a Label's text, shape, font, spacing, halo, and colour through a save", async () => {
@@ -1230,19 +1249,19 @@ describe("Map Labels", () => {
   });
 
   it("draws a label's baseline as a quadratic, bowed by its bend", () => {
-    expect(labelBaselinePath(label())).toBe("M 0 30 Q 20 30 40 30");
+    expect(labelBaselinePath(label(), 40)).toBe("M 0 30 Q 20 30 40 30");
     // A bend of 8 lifts the apex 8 mm above the chord, so the control point,
     // which a quadratic only reaches half way to, sits 16 mm above it.
-    expect(labelBaselinePath(label({ bend: 8 }))).toBe("M 0 30 Q 20 14 40 30");
-    expect(labelBaselinePath(label({ bend: -3 }))).toBe("M 0 30 Q 20 36 40 30");
+    expect(labelBaselinePath(label({ bend: 8 }), 40)).toBe("M 0 30 Q 20 14 40 30");
+    expect(labelBaselinePath(label({ bend: -3 }), 40)).toBe("M 0 30 Q 20 36 40 30");
   });
 
   it("turns the baseline about the label's centre", () => {
     // A quarter turn clockwise: the chord runs down the page from the centre,
     // the label's right-hand end becomes its bottom end, and its arch, which
     // lifts toward -y upright, now lifts toward +x.
-    expect(labelBaselinePath(label({ rotation: 90 }))).toBe("M 20 10 Q 20 30 20 50");
-    expect(labelBaselinePath(label({ rotation: 90, bend: 8 }))).toBe("M 20 10 Q 36 30 20 50");
+    expect(labelBaselinePath(label({ rotation: 90 }), 40)).toBe("M 20 10 Q 20 30 20 50");
+    expect(labelBaselinePath(label({ rotation: 90, bend: 8 }), 40)).toBe("M 20 10 Q 36 30 20 50");
   });
 
   it("reads a pointer's distance from the chord as the bend it asks for", () => {

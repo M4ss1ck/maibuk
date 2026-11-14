@@ -301,22 +301,43 @@ export const DEFAULT_LABEL_HALO_MM = 0.8;
 export const BEND_SNAP_MM = 0.5;
 
 /**
- * A Map Label (#751): a name written on the Map. Its text runs along a baseline
- * `width` millimetres long, centred on (x, y) and turned by `rotation`; `bend`
- * lifts the middle of that baseline toward the top of the page, so a name can
- * arch over the land it names.
+ * How a Map Label's box takes its width (#800), as a design tool's text box
+ * does: `auto` follows the text, so each line is as long as its words and only
+ * Enter starts a new one; `fixed` keeps `width` and wraps the text inside it,
+ * so the box grows down instead.
+ */
+export const LABEL_SIZINGS = ["auto", "fixed"] as const;
+export type LabelSizing = (typeof LABEL_SIZINGS)[number];
+
+/** Whether a value names a way a Map Label's box takes its width. */
+export function isLabelSizing(value: unknown): value is LabelSizing {
+  return LABEL_SIZINGS.some((sizing) => sizing === value);
+}
+
+/**
+ * A Map Label (#751): a name written on the Map. Its first line runs along a
+ * baseline centred on (x, y) and turned by `rotation`, and each further line
+ * sits one line height below it (#800); `bend` lifts the middle of a one-line
+ * label's baseline toward the top of the page, so a name can arch over the
+ * land it names.
  */
 export interface MapLabelElement extends MapElementBase {
   kind: "label";
-  /** The name as the author wrote it. */
+  /** The name as the author wrote it; `\n` starts a new line (#800). */
   text: string;
   /** The centre of the baseline, in page millimetres. */
   x: number;
   y: number;
   /** How far the baseline turns, in degrees clockwise about (x, y). */
   rotation: number;
-  /** The baseline chord's length, in page millimetres. */
+  /**
+   * The box's width in page millimetres, which a `fixed` label wraps its text
+   * inside. An `auto` label's box follows its text instead, and keeps this
+   * only as the width a switch to `fixed` starts from.
+   */
   width: number;
+  /** Whether the box follows the text or wraps it at `width` (#800). */
+  sizing: LabelSizing;
   /**
    * The signed sagitta of the baseline, in page millimetres: how far its middle
    * leaves the chord, toward the top of the page when positive.
@@ -646,6 +667,7 @@ function isLabelFields(element: Record<string, unknown>): boolean {
   if (!isFiniteNumber(element.rotation)) return false;
   if (!isFiniteNumber(element.width) || element.width <= 0) return false;
   if (!isFiniteNumber(element.bend)) return false;
+  if (element.sizing !== undefined && !isLabelSizing(element.sizing)) return false;
   if (element.font !== undefined && typeof element.font !== "string") return false;
   if (!isFiniteNumber(element.size) || element.size <= 0) return false;
   if (!isFiniteNumber(element.letterSpacing)) return false;
@@ -786,6 +808,7 @@ export interface NewLabel {
   /** The centre of the baseline. */
   point: MapPoint;
   width?: number;
+  sizing?: LabelSizing;
   bend?: number;
   rotation?: number;
   font?: MapLabelFont;
@@ -797,7 +820,8 @@ export interface NewLabel {
 
 /**
  * A Map Label writing `text` along a baseline centred on `point`: upright and
- * straight, 55 mm long, with a halo, in the bundled IM Fell English.
+ * straight, its box following its text (#800), with a halo, in the bundled IM
+ * Fell English. A switch to a fixed box starts it 55 mm wide.
  */
 export function newLabel(input: NewLabel): MapLabelElement {
   return {
@@ -811,6 +835,7 @@ export function newLabel(input: NewLabel): MapLabelElement {
     y: input.point[1],
     rotation: input.rotation ?? 0,
     width: input.width ?? DEFAULT_LABEL_WIDTH_MM,
+    sizing: input.sizing ?? "auto",
     bend: input.bend ?? 0,
     font: input.font ?? DEFAULT_LABEL_FONT,
     size: input.size ?? DEFAULT_LABEL_SIZE_MM,
@@ -827,15 +852,19 @@ function roundedPathCoordinate(value: number): string {
 
 /**
  * The baseline a Map Label's text follows (#751), as one quadratic SVG path in
- * page millimetres: the chord, `width` long, centred on (x, y) and turned by
+ * page millimetres: the chord, `width` long (the laid-out box's width, which an
+ * `auto` label takes from its text, #800), centred on (x, y) and turned by
  * `rotation`, with its middle bowed `bend` millimetres toward the top of the
  * page. A quadratic reaches only half way to its control point, so the control
  * sits twice the bend off the chord and the apex lands where the author put it.
  * A bend of 0 keeps the control on the chord's middle, which draws straight, so
  * a straight label and a curved one take the same path.
  */
-export function labelBaselinePath(label: MapLabelElement): string {
-  const half = label.width / 2;
+export function labelBaselinePath(
+  label: Pick<MapLabelElement, "x" | "y" | "rotation" | "bend">,
+  width: number
+): string {
+  const half = width / 2;
   const angle = (label.rotation * Math.PI) / 180;
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
@@ -954,11 +983,15 @@ export function normalizeSoftEdge<T extends MapLineElement | MapFillElement>(ele
 
 /**
  * A Map Label read from a document: a font id this build does not know draws
- * IM Fell English, and every other field reads as it was stored.
+ * IM Fell English, a label written before boxes had a sizing (#800) keeps the
+ * fixed width it was drawn at, so nothing on an old Map moves, and every other
+ * field reads as it was stored.
  */
 function normalizeLabel(label: MapLabelElement): MapLabelElement {
-  if (isLabelFont(label.font)) return label;
-  return { ...label, font: DEFAULT_LABEL_FONT };
+  const font = isLabelFont(label.font) ? label.font : DEFAULT_LABEL_FONT;
+  const sizing = isLabelSizing(label.sizing) ? label.sizing : "fixed";
+  if (font === label.font && sizing === label.sizing) return label;
+  return { ...label, font, sizing };
 }
 
 /**

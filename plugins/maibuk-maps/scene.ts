@@ -41,6 +41,7 @@ import {
   type MapStampElement,
   type MapStampTransform,
 } from "./maps";
+import { LABEL_TEXT_STYLE, type LabelLayout, layoutLabel } from "./label-layout";
 import { DEFAULT_SCATTER_SPACING_MM, scatterPoints } from "./scatter";
 import { SCALE_BAR_STAMP_REF, type StampArt, scaleBarLayout, stampArt } from "./stamps";
 import { lineRole, resolveColor, styleOf, type MapStyleId } from "./styles";
@@ -232,6 +233,16 @@ export interface TextShape {
   placeholder?: true;
   /** How strongly the text is inked, 0 to 1; absent draws it at full strength. */
   opacity?: number;
+  /**
+   * The lines of a multi-line Map Label (#800), first to last, each drawn
+   * centred on `x` and one `lineHeight` below the one before, starting on `y`.
+   * Absent draws `text` as one run.
+   */
+  lines?: string[];
+  /** How far apart `lines` sit, in page millimetres. */
+  lineHeight?: number;
+  /** A CSS style the text carries, such as a Map Label's kerning off (#800). */
+  style?: string;
 }
 
 /** How strongly an empty Map Label's placeholder is inked, beside its full-strength text. */
@@ -1032,7 +1043,11 @@ function labelShapes(
   collector: SceneCollector,
   prompt: string | undefined
 ): SceneShape[] {
-  const d = labelBaselinePath(element);
+  const layout = layoutLabel(element, prompt);
+  // Bend shapes one line alone (#800): a label of several lines draws them
+  // straight, one under the other, and keeps the bend for when it is one again.
+  const multiline = layout.lines.length > 1;
+  const d = multiline ? labelBoxPath(element, layout) : labelBaselinePath(element, layout.width);
   const hit: LineShape = {
     d,
     stroke: null,
@@ -1047,16 +1062,27 @@ function labelShapes(
   const isEmpty = element.text === "";
   if (isEmpty && (prompt === undefined || prompt === "")) return [hit];
   const id = labelPathId(element.id);
-  collector.defs.push(`<path id="${id}" d="${escapeAttribute(d)}"/>`);
+  if (!multiline) collector.defs.push(`<path id="${id}" d="${escapeAttribute(d)}"/>`);
   const text: TextShape = {
-    text: isEmpty ? (prompt ?? "") : element.text,
+    text: layout.lines.join("\n"),
     x: element.x,
     y: element.y,
     size: element.size,
     fill: resolveColor(style, element.color, "label"),
     font: labelFontFamily(element.font),
     anchor: "middle",
-    path: { id, d },
+    style: LABEL_TEXT_STYLE,
+    ...(multiline
+      ? {
+          lines: layout.lines,
+          lineHeight: layout.lineHeight,
+          ...(element.rotation === 0
+            ? {}
+            : {
+                transform: `rotate(${roundedMm(element.rotation)} ${roundedMm(element.x)} ${roundedMm(element.y)})`,
+              }),
+        }
+      : { path: { id, d } }),
     ...(element.letterSpacing === 0 ? {} : { letterSpacing: element.letterSpacing }),
     // The placeholder keeps the halo, faded with it, so it still reads over land.
     ...(element.halo > 0
@@ -1065,6 +1091,33 @@ function labelShapes(
     ...(isEmpty ? { placeholder: true as const, opacity: PLACEHOLDER_OPACITY } : {}),
   };
   return [hit, text];
+}
+
+/**
+ * The outline of a multi-line Map Label's box (#800), as a closed path in page
+ * millimetres: the hit target the Frame picks it by, since no one baseline
+ * runs under all of its lines.
+ */
+function labelBoxPath(
+  element: Pick<MapLabelElement, "x" | "y" | "rotation" | "size">,
+  layout: Pick<LabelLayout, "width" | "height">
+): string {
+  const angle = (element.rotation * Math.PI) / 180;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const half = layout.width / 2;
+  // The box runs from a cap size above the first baseline to the last one.
+  const top = -element.size;
+  const bottom = layout.height - element.size;
+  const corners: MapPoint[] = [
+    [-half, top],
+    [half, top],
+    [half, bottom],
+    [-half, bottom],
+  ].map(([dx, dy]) => [element.x + dx * cos - dy * sin, element.y + dx * sin + dy * cos]);
+  return `${corners
+    .map(([x, y], index) => `${index === 0 ? "M" : "L"} ${roundedMm(x)} ${roundedMm(y)}`)
+    .join(" ")} Z`;
 }
 
 /**
@@ -1358,6 +1411,15 @@ function isHitOnlyShape(shape: SceneShape): boolean {
 
 /** The text's own markup, and the baseline path it follows when it has one. */
 function textContent(shape: TextShape): string {
+  const { lines, lineHeight } = shape;
+  if (lines !== undefined && lineHeight !== undefined) {
+    return lines
+      .map(
+        (line, index) =>
+          `<tspan x="${roundedMm(shape.x)}" y="${roundedMm(shape.y + index * lineHeight)}">${escapeAttribute(line)}</tspan>`
+      )
+      .join("");
+  }
   if (shape.path === undefined) return escapeAttribute(shape.text);
   return `<textPath href="#${escapeAttribute(shape.path.id)}" startOffset="50%">${escapeAttribute(
     shape.text
@@ -1384,6 +1446,7 @@ function shapeText(shape: TextShape): string {
   attributes.push(`text-anchor="${shape.anchor}"`);
   if (shape.placeholder === true) attributes.push('font-style="italic"');
   if (shape.opacity !== undefined) attributes.push(`opacity="${shape.opacity}"`);
+  if (shape.style !== undefined) attributes.push(`style="${escapeAttribute(shape.style)}"`);
   if (shape.transform !== undefined) {
     attributes.push(`transform="${escapeAttribute(shape.transform)}"`);
   }
@@ -1673,7 +1736,8 @@ function stampBoxRatio(element: MapStampElement, library: MapLibrary): number {
  */
 export function elementTransform(
   element: MapElement,
-  library: MapLibrary = EMPTY_MAP_LIBRARY
+  library: MapLibrary = EMPTY_MAP_LIBRARY,
+  labelPlaceholder?: string
 ): ElementTransform | null {
   if (element.kind === "stamp") {
     const { x, y, size, rotation } = element.transform;
@@ -1714,14 +1778,17 @@ export function elementTransform(
     };
   }
   if (element.kind === "label") {
-    // The box stands on the baseline, so the letters sit inside it.
-    const [x, y] = towardBoxTop([element.x, element.y], element.size / 2, element.rotation);
+    // The box stands on the first line's baseline and reaches down to the
+    // last one's (#800), so the letters sit inside it; an empty label's box
+    // fits the placeholder the editor draws in its place.
+    const layout = layoutLabel(element, labelPlaceholder);
+    const [x, y] = labelBoxCentre(element, layout.height);
     return {
       box: {
         x,
         y,
-        width: element.width,
-        height: element.size,
+        width: layout.width,
+        height: layout.height,
         rotation: element.rotation,
       },
       handles: "label",
@@ -1729,6 +1796,31 @@ export function elementTransform(
     };
   }
   return null;
+}
+
+/**
+ * The centre of a Map Label's box of `height` (#800): a cap size above the
+ * first baseline is its top, so its centre sits `size - height / 2` toward the
+ * top from the label's own point. A one-line box's centre is half a cap up.
+ */
+export function labelBoxCentre(
+  label: Pick<MapLabelElement, "x" | "y" | "rotation" | "size">,
+  height: number
+): MapPoint {
+  return towardBoxTop([label.x, label.y], label.size - height / 2, label.rotation);
+}
+
+/**
+ * The label point a box centre stands for: the inverse of `labelBoxCentre`, for
+ * a box of `height` drawn at cap `size` (#800).
+ */
+export function labelPointFromBox(
+  centre: MapPoint,
+  height: number,
+  size: number,
+  rotation: number
+): MapPoint {
+  return towardBoxTop(centre, height / 2 - size, rotation);
 }
 
 /**

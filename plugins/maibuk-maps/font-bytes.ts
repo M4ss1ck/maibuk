@@ -20,24 +20,40 @@ import uncialAntiqua from "./assets/ui/fonts/UncialAntiqua-Regular.ttf?inline";
 import type { ExportFont } from "./export";
 import { MAP_LABEL_FONT_FAMILIES } from "./maps";
 
-/** Each bundled face's inlined file, keyed by the family a Map Label names. */
-const INLINED_FONT_FILES: Readonly<Record<string, string>> = {
-  [MAP_LABEL_FONT_FAMILIES["im-fell-english"]]: imFellEnglish,
-  [MAP_LABEL_FONT_FAMILIES.cinzel]: cinzel,
-  [MAP_LABEL_FONT_FAMILIES["uncial-antiqua"]]: uncialAntiqua,
-  [MAP_LABEL_FONT_FAMILIES["medieval-sharp"]]: medievalSharp,
-};
+/**
+ * Each bundled face's inlined file, keyed by the family a Map Label names. It
+ * is built on first use: `maps.ts` reaches this module through the scene's
+ * label layout (#800), so the family names are not yet defined while it loads.
+ */
+function inlinedFontFiles(): Readonly<Record<string, string>> {
+  return {
+    [MAP_LABEL_FONT_FAMILIES["im-fell-english"]]: imFellEnglish,
+    [MAP_LABEL_FONT_FAMILIES.cinzel]: cinzel,
+    [MAP_LABEL_FONT_FAMILIES["uncial-antiqua"]]: uncialAntiqua,
+    [MAP_LABEL_FONT_FAMILIES["medieval-sharp"]]: medievalSharp,
+  };
+}
 
 /** The bytes every bundled face has been decoded to, once an export asks. */
 let decodedFonts: readonly ExportFont[] | null = null;
 
 /** The four bundled faces as bytes, each decoded on the first call and kept. */
 export function bundledFonts(): readonly ExportFont[] {
-  decodedFonts ??= Object.entries(INLINED_FONT_FILES).map(([family, data]) => ({
+  decodedFonts ??= Object.entries(inlinedFontFiles()).map(([family, data]) => ({
     family,
     ...decodeDataUri(data),
   }));
   return decodedFonts;
+}
+
+/**
+ * One bundled face's bytes, by the family a Map Label names, or null for a
+ * family the Plugin does not ship. The label layout reads a face's metrics
+ * from these once (#800), without decoding the other three.
+ */
+export function bundledFontBytes(family: string): Uint8Array | null {
+  const data = inlinedFontFiles()[family];
+  return data === undefined ? null : decodeDataUri(data).bytes;
 }
 
 /** The mime type and bytes a `data:` URI carries. */

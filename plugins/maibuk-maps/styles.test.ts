@@ -96,6 +96,7 @@ function label(overrides: Partial<MapLabelElement> = {}): MapLabelElement {
     y: 50,
     rotation: 0,
     width: 40,
+    sizing: "fixed",
     bend: 0,
     font: "im-fell-english",
     size: 6,
