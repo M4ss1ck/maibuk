@@ -3611,3 +3611,73 @@ describe("switching tools", () => {
     expect(editor.getSnapshot().selectedId).toBe(id);
   });
 });
+
+describe("the label text focus request (#800)", () => {
+  it("raises labelTextFocus by one for each new Map Label", () => {
+    const { editor } = openEditor();
+    expect(editor.getSnapshot().labelTextFocus).toBe(0);
+
+    editor.insertLabel();
+    expect(editor.getSnapshot().labelTextFocus).toBe(1);
+
+    editor.insertLabel();
+    expect(editor.getSnapshot().labelTextFocus).toBe(2);
+  });
+
+  it("selects an unlocked Map Label on an editLabel message and raises labelTextFocus", () => {
+    const label = newLabel({
+      id: "label",
+      name: "Map Label 1",
+      text: "The Reach",
+      point: [100, 50],
+    });
+    const { editor } = openEditor([label]);
+
+    editor.handleFrameMessage({ kind: "editLabel", id: "label" });
+
+    expect(editor.getSnapshot().selectedId).toBe("label");
+    expect(editor.getSnapshot().labelTextFocus).toBe(1);
+    expect(editor.getSnapshot().canUndo).toBe(false);
+  });
+
+  it("selects a locked Map Label on an editLabel message without raising labelTextFocus", () => {
+    const locked: MapLabelElement = {
+      ...newLabel({ id: "label", name: "Map Label 1", text: "The Reach", point: [100, 50] }),
+      locked: true,
+    };
+    const { editor } = openEditor([locked]);
+
+    editor.handleFrameMessage({ kind: "editLabel", id: "label" });
+
+    expect(editor.getSnapshot().selectedId).toBe("label");
+    expect(editor.getSnapshot().labelTextFocus).toBe(0);
+  });
+
+  it("selects a hidden Map Label on an editLabel message without raising labelTextFocus", () => {
+    const hidden: MapLabelElement = {
+      ...newLabel({ id: "label", name: "Map Label 1", text: "The Reach", point: [100, 50] }),
+      hidden: true,
+    };
+    const { editor } = openEditor([hidden]);
+
+    editor.handleFrameMessage({ kind: "editLabel", id: "label" });
+
+    expect(editor.getSnapshot().selectedId).toBe("label");
+    expect(editor.getSnapshot().labelTextFocus).toBe(0);
+  });
+
+  it("only selects, without raising labelTextFocus, for a select message", () => {
+    const label = newLabel({
+      id: "label",
+      name: "Map Label 1",
+      text: "The Reach",
+      point: [100, 50],
+    });
+    const { editor } = openEditor([label]);
+
+    editor.handleFrameMessage({ kind: "select", id: "label" });
+
+    expect(editor.getSnapshot().selectedId).toBe("label");
+    expect(editor.getSnapshot().labelTextFocus).toBe(0);
+  });
+});

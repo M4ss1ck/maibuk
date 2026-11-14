@@ -157,6 +157,11 @@ export interface MapEditorSnapshot {
   doc: MapDocument;
   elements: readonly MapElement[];
   selectedId: string | null;
+  /**
+   * Counts requests to put the caret in the selected Map Label's Text field:
+   * each new label and each Select double click on one adds one (#800).
+   */
+  labelTextFocus: number;
   tool: MapTool;
   /** The Map Style the whole Map is drawn in. */
   styleId: MapStyleId;
@@ -503,6 +508,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
   let elements: MapElement[] = doc.elements;
   const history = createHistory<EditorHistoryState>({ elements, styleId: doc.styleId });
   let selectedId: string | null = null;
+  let labelTextFocus = 0;
   let tool: MapTool = "select";
   let currentLineStyle: LineStyleId = "plain";
   // A new Fill takes the `land` role, so it follows the Map Style until the
@@ -577,6 +583,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       doc,
       elements,
       selectedId,
+      labelTextFocus,
       tool,
       styleId: styleOf(doc.styleId),
       canUndo: history.canUndo,
@@ -1100,6 +1107,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       point: point ?? [doc.page.widthMm / 2 + panX, doc.page.heightMm / 2 + panY],
     });
     selectedId = element.id;
+    labelTextFocus += 1;
     edit(addElement(elements, element));
   }
 
@@ -1229,6 +1237,21 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       case "select":
         selectElement(message.id);
         break;
+      case "editLabel": {
+        // A Select double click on a Map Label selects it and asks the
+        // Properties panel to put the caret in its Text field. A locked or
+        // hidden label, or any other Element, is only selected.
+        const target = elementById(message.id);
+        if (target === undefined || target.kind !== "label" || target.locked || target.hidden) {
+          selectElement(message.id);
+          break;
+        }
+        selectedId = message.id;
+        labelTextFocus += 1;
+        publish();
+        sendScene();
+        break;
+      }
       case "move":
         moveDragged(message.id, message.dx, message.dy);
         break;

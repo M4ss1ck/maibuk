@@ -19,6 +19,7 @@ import type { FrameLocator, Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import {
   clickPagePoint,
+  dblclickPagePoint,
   dragBendHandle,
   fontLoaded,
   type LabelInk,
@@ -281,6 +282,17 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.te
     expect(x).toBeCloseTo(point[0], 0);
     expect(y).toBeCloseTo(point[1], 0);
 
+    // The click hands the caret to the new label's Text field (#800): typing
+    // writes the label, never the editor's tool Shortcuts.
+    await expect(textField(page)).toBeFocused();
+    await page.keyboard.type("Gulf");
+    await page.keyboard.press("Enter");
+    await expect(drawnLabelPaths(page).first()).toHaveText("Gulf");
+    await expect(
+      page.getByRole("button", { name: "Text", exact: true, pressed: true })
+    ).toBeVisible();
+
+    await tabTo(page, placeLabelButton(page), { max: 60 });
     await page.keyboard.press("i");
     await expect(page.getByRole("button", { name: "Upload…", exact: true })).toBeVisible();
     await expect(placeLabelButton(page)).toHaveCount(0);
@@ -314,12 +326,17 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.te
     await expect(drawnLabelText(page).last()).toHaveAttribute("opacity", "0.5");
     await expect(drawnLabelPaths(page).last()).toHaveText(LABEL_PLACEHOLDER);
 
-    // The first keys typed are the label's text: nothing to select or delete.
-    await focusProperties(page, textField(page));
+    // Placing the label puts the caret in its Text field (#800), so the first
+    // keys typed are its text: nothing to select, delete, or Tab to, and no
+    // letter reaches the tool Shortcuts.
+    await expect(textField(page)).toBeFocused();
     await page.keyboard.type("North Sea");
     await page.keyboard.press("Enter");
     await expect(drawnLabelPaths(page).first()).toHaveText("North Sea");
     await expect(drawnLabelText(page).last()).not.toHaveAttribute("font-style", "italic");
+    await expect(
+      page.getByRole("button", { name: "Text", exact: true, pressed: true })
+    ).toBeVisible();
 
     // Clearing the field brings the placeholder back on the Map and in the field.
     await focusProperties(page, textField(page));
@@ -330,6 +347,42 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.te
     await expect(drawnLabelText(page).last()).toHaveAttribute("font-style", "italic");
     await expect(drawnLabelPaths(page).last()).toHaveText(LABEL_PLACEHOLDER);
     await expect(elementRow(page, "Map Label 1")).toBeVisible();
+  });
+
+  test("a double click on a Map Label with the Select tool puts the caret in its Text field", async ({
+    page,
+  }) => {
+    await openEditorWithMap(page);
+    await pickText(page);
+    const point = [150, 40] as const;
+    await clickPagePoint(page, surface(page), point);
+    await expect(textField(page)).toBeFocused();
+    await page.keyboard.type("Gulf");
+    await page.keyboard.press("Enter");
+    await expect(drawnLabelPaths(page).first()).toHaveText("Gulf");
+
+    // The Select tool, then a click on bare page to drop the selection, so the
+    // double click below is what picks the label again.
+    await tabTo(page, placeLabelButton(page), { max: 60 });
+    await page.keyboard.press("v");
+    await expect(mapFrame(page).locator('svg[data-tool="select"]')).toBeVisible();
+    await clickPagePoint(page, surface(page), [30, 130]);
+    await expect(textField(page)).toHaveCount(0);
+
+    // A pointer-only gesture: the keyboard reaches the same field by Tab.
+    await dblclickPagePoint(page, surface(page), point);
+    await expect(textField(page)).toBeFocused();
+    await expect(
+      page.getByRole("button", { name: "Select", exact: true, pressed: true })
+    ).toBeVisible();
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type("Gulf of Mexico");
+    await page.keyboard.press("Enter");
+    await expect(drawnLabelPaths(page).first()).toHaveText("Gulf of Mexico");
+    // The keys wrote the label: "v" and "e" never switched the tool.
+    await expect(
+      page.getByRole("button", { name: "Select", exact: true, pressed: true })
+    ).toBeVisible();
   });
 
   test("the Font select draws the label in a bundled face declared in the Plugin's own folder", async ({
@@ -371,7 +424,9 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.te
     await placeLabel(page);
 
     // The handle belongs to the Select tool, whose key runs from the Place
-    // button without typing into anything.
+    // button without typing into anything. Placing left the caret in the Text
+    // field (#800), so focus goes back to the button first.
+    await tabTo(page, placeLabelButton(page), { max: 60 });
     await page.keyboard.press("v");
     await expect(page.getByRole("button", { name: "Select", exact: true, pressed: true }));
     await expect(mapFrame(page).locator('svg[data-tool="select"]')).toBeVisible();

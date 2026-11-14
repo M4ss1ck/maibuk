@@ -310,6 +310,12 @@ export interface FrameSelectMessage {
   id: string | null;
 }
 
+/** Frame -> Worker: a Select-tool double click on a Map Label, to write its text (#800). */
+export interface FrameEditLabelMessage {
+  kind: "editLabel";
+  id: string;
+}
+
 /**
  * Frame -> Worker: a Shape drawn by dragging between two page-millimetre
  * corners (#747). `constrain` is Shift, which squares the box on its longer side.
@@ -417,6 +423,7 @@ export type FrameToWorkerMessage =
   | FrameAreaMessage
   | FrameEraseMessage
   | FrameSelectMessage
+  | FrameEditLabelMessage
   | FrameShapeMessage
   | FramePourMessage
   | FrameInsertMessage
@@ -543,6 +550,10 @@ export function parseFrameMessage(data: unknown): FrameToWorkerMessage | null {
   if (message.kind === "select") {
     if (message.id !== null && typeof message.id !== "string") return null;
     return { kind: "select", id: message.id };
+  }
+  if (message.kind === "editLabel") {
+    if (typeof message.id !== "string") return null;
+    return { kind: "editLabel", id: message.id };
   }
   if (message.kind === "shape") {
     if (!isShapeKind(message.shape)) return null;

@@ -406,3 +406,22 @@ describe("sceneMessage() with transform handles (#795)", () => {
     });
   });
 });
+
+describe("the editLabel message (#800)", () => {
+  it("reads the id of the Map Label a double click asks to edit", () => {
+    expect(parseFrameMessage({ kind: "editLabel", id: "l1" })).toEqual({
+      kind: "editLabel",
+      id: "l1",
+    });
+  });
+
+  it("drops an editLabel message with no id, or an id that is not text", () => {
+    for (const message of [
+      { kind: "editLabel" },
+      { kind: "editLabel", id: null },
+      { kind: "editLabel", id: 7 },
+    ]) {
+      expect(parseFrameMessage(message)).toBeNull();
+    }
+  });
+});

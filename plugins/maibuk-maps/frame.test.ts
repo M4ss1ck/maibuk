@@ -2305,6 +2305,100 @@ describe("the Pen", () => {
   });
 });
 
+describe("a double click on a Map Label with the Select tool (#800)", () => {
+  /** A Map Label's layout: a 84 mm wide cap at (100, 50), no bend. */
+  const labelLayout = {
+    x: 100,
+    y: 50,
+    rotation: 0,
+    width: 84,
+    bend: 0,
+  };
+
+  /** The drawn Element with the given id, as the Frame rendered it. */
+  const drawn = (id: string): Element => {
+    const element = document.querySelector(`[data-element-id="${id}"]`);
+    if (element === null) throw new Error(`the Frame drew no ${id} Element`);
+    return element;
+  };
+
+  it("asks the Worker to write the text of the Map Label double clicked", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "select", elements: [sceneElement({ id: "label1", label: labelLayout })] });
+
+    pointer(drawn("label1"), "dblclick", 120, 52);
+
+    expect(frame.port.messages).toEqual([{ kind: "editLabel", id: "label1" }]);
+  });
+
+  it("asks for the label when the double click lands on one of its drawn shapes", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "select", elements: [sceneElement({ id: "label1", label: labelLayout })] });
+
+    const art = drawn("label1").querySelector("path");
+    if (art === null) throw new Error("the Frame drew no shape for the label");
+    pointer(art, "dblclick", 120, 52);
+
+    expect(frame.port.messages).toEqual([{ kind: "editLabel", id: "label1" }]);
+  });
+
+  it("posts nothing when the double click lands on an Element that is not a Map Label", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "select", elements: [sceneElement({ id: "line1" })] });
+
+    pointer(drawn("line1"), "dblclick", 15, 15);
+
+    expect(frame.port.messages).toEqual([]);
+  });
+
+  it("posts nothing for a locked Map Label", () => {
+    frame = loadFrame();
+    frame.scene({
+      tool: "select",
+      elements: [sceneElement({ id: "label1", locked: true, label: labelLayout })],
+    });
+
+    pointer(drawn("label1"), "dblclick", 120, 52);
+
+    expect(frame.port.messages).toEqual([]);
+  });
+
+  it("asks for the label when the double click lands on its bend handle", () => {
+    frame = loadFrame();
+    frame.scene({
+      tool: "select",
+      elements: [sceneElement({ id: "label1", selected: true, label: labelLayout })],
+    });
+
+    const handle = document.querySelector("[data-bend-handle]");
+    if (handle === null) throw new Error("the Frame drew no bend handle");
+    pointer(handle, "dblclick", 100, 42);
+
+    expect(frame.port.messages).toEqual([{ kind: "editLabel", id: "label1" }]);
+  });
+
+  it("finds the label under the pointer when the double click's target is the svg", () => {
+    frame = loadFrame();
+    frame.scene({ tool: "select", elements: [sceneElement({ id: "label1", label: labelLayout })] });
+
+    // The press's pointer capture retargets the double click to the <svg>. jsdom
+    // has no elementFromPoint, so the test stubs one that reports the label.
+    const elementFromPoint = vi.fn(() => drawn("label1"));
+    Object.defineProperty(document, "elementFromPoint", {
+      configurable: true,
+      value: elementFromPoint,
+    });
+    try {
+      pointer(svg(), "dblclick", 120, 52);
+    } finally {
+      delete (document as unknown as { elementFromPoint?: unknown }).elementFromPoint;
+    }
+
+    expect(elementFromPoint).toHaveBeenCalledWith(120, 52);
+    expect(frame.port.messages).toEqual([{ kind: "editLabel", id: "label1" }]);
+  });
+});
+
 describe("the Eraser", () => {
   it("sends one erase message for the whole drag, its reach scaled by zoom", () => {
     frame = loadFrame();

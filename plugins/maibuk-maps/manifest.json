@@ -4,7 +4,7 @@
   "name": "Maps",
   "description": "Design maps of your world, a region, or a country and its provinces, in color or print-ready ink.",
   "author": "Maibuk",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "apiVersion": "^0.1.11",
   "entry": "index.js",
   "platforms": ["web", "desktop"],

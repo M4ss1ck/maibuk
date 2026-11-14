@@ -2982,11 +2982,41 @@
   }
 
   /**
-   * A double click finishes an open Pen line. Its second click already landed
+   * A double click finishes an open Pen line: its second click already landed
    * a duplicate point on the first, so that copy goes before the line ends.
+   * With the Select tool, a double click on a shown, unlocked Map Label asks
+   * the Worker to put the caret in its Text field (#800).
    * @param {MouseEvent} event
    */
   function onDoubleClick(event) {
+    if (scene !== null && scene.tool === "select") {
+      // The press's pointer capture retargets a double click to the <svg>, so
+      // the point says what was under the pointer; a straight label's bend
+      // handle sits on its midpoint and stands for its label.
+      const ownerOf = (node) =>
+        node instanceof Element ? node.closest("[data-element-id], [data-bend-handle]") : null;
+      const hit =
+        typeof document.elementFromPoint === "function"
+          ? document.elementFromPoint(event.clientX, event.clientY)
+          : null;
+      const owner = ownerOf(hit) ?? ownerOf(event.target);
+      const id =
+        owner === null
+          ? null
+          : (owner.getAttribute("data-element-id") ?? owner.getAttribute("data-bend-handle"));
+      const element =
+        id === null ? undefined : scene.elements.find((candidate) => candidate.id === id);
+      if (
+        element !== undefined &&
+        element.label !== undefined &&
+        !element.locked &&
+        !element.hidden
+      ) {
+        event.preventDefault();
+        post({ kind: "editLabel", id: element.id });
+      }
+      return;
+    }
     if (scene === null || scene.tool !== "pen" || penDraft === null) return;
     event.preventDefault();
     const points = penDraft.points;

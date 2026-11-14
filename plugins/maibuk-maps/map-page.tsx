@@ -868,6 +868,15 @@ function MapEditorView({
     setPropertiesFocusPending(false);
     setPropertiesFocus((count) => count + 1);
   }, [propertiesFocusPending, rowMenuFor]);
+  // The last Text-field focus request the panel has answered (#800). A new Map
+  // Label or a double click on one raises snapshot.labelTextFocus, which
+  // remounts the Text field with `autoFocus`; a later remount, such as picking
+  // another label, finds the request answered and leaves focus where it is.
+  const answeredLabelFocus = useRef(0);
+  const labelFocusRequested = snapshot.labelTextFocus > answeredLabelFocus.current;
+  useEffect(() => {
+    answeredLabelFocus.current = snapshot.labelTextFocus;
+  }, [snapshot.labelTextFocus]);
   // The Map's own name while its rename dialog holds it, or null when it is shut.
   const [mapRename, setMapRename] = useState<string | null>(null);
   const selected =
@@ -1769,8 +1778,10 @@ function MapEditorView({
                     {label === null ? null : (
                       <>
                         <ui.TextField
+                          key={`label-text-${snapshot.labelTextFocus}`}
                           label={t("properties.mapLabel.text")}
                           value={label.text}
+                          autoFocus={labelFocusRequested}
                           placeholder={t("element.labelPlaceholder")}
                           isDisabled={selected.locked}
                           onChange={(event) => editor.setLabelText(selected.id, event.detail)}
