@@ -13,6 +13,7 @@
  */
 
 import type {
+  LabelSizing,
   LineStyleId,
   MapDocument,
   MapElement,
@@ -46,6 +47,7 @@ import {
   curvedSegments,
   isAreaFill,
   isLabelFont,
+  isLabelSizing,
   isStampScaleUnit,
   newLabel,
   newStamp,
@@ -54,6 +56,7 @@ import {
   randomMapId,
 } from "./maps";
 import { createAutosave } from "./autosave";
+import { layoutLabel } from "./label-layout";
 import { type FillTranslation, insertFill, pourFill, reconcileFills } from "./fills";
 import { customStampRef, parseCustomStampRef, type MapAsset, type MapAssetMime } from "./assets";
 import {
@@ -79,7 +82,6 @@ import {
   seedFor,
   shapeFromCorners,
   shapeOutline,
-  towardBoxTop,
 } from "./geometry";
 import { createHistory } from "./history";
 import { assetDataUri } from "./export";
@@ -94,6 +96,7 @@ import {
   addElement,
   canMove,
   EMPTY_MAP_LIBRARY,
+  labelPointFromBox,
   moveElement,
   referencedAssetIds,
   removeElement,
@@ -159,7 +162,9 @@ export interface MapEditorSnapshot {
   selectedId: string | null;
   /**
    * Counts requests to put the caret in the selected Map Label's Text field:
-   * each new label and each Select double click on one adds one (#800).
+   * each label the Place Map Label button adds raises it (#800). A label placed
+   * or double clicked in the Frame is written in the Frame's own text box, and
+   * the host never takes the caret for it.
    */
   labelTextFocus: number;
   tool: MapTool;
@@ -186,6 +191,12 @@ export interface MapEditorSnapshot {
   selectedLineStyle: LineStyleId | null;
   /** How far the selected Fill's or Map Line's edge fades out, or null when it is sharp. */
   selectedSoftEdge: number | null;
+  /**
+   * The selected Map Label as the Worker lays it out (#800): how many lines it
+   * draws, which decides whether it can bend, and its box's width, which an
+   * `auto` label takes from its text. Null when no label is selected.
+   */
+  selectedLabelLayout: { lines: number; width: number } | null;
   /** The selected Fill's texture, or null when it has none. */
   selectedFillTexture: TextureId | null;
   /** The Stamps the selected Fill scatters, or null when it scatters none. */
@@ -351,8 +362,16 @@ export interface MapEditor {
   setStampColor(id: string, color: string): void;
   /** Adds a Map Label at `point`, or at the view centre, with empty text the Frame draws as a placeholder, selected, as one undo step. */
   insertLabel(point?: MapPoint): void;
-  /** Writes one unlocked Map Label's text, trimmed; a blank text clears it. */
+  /**
+   * Writes one unlocked Map Label's text, trimmed at both ends with its lines
+   * kept, as one undo step; a blank text clears it.
+   */
   setLabelText(id: string, text: string): void;
+  /**
+   * Sets whether one unlocked Map Label's box follows its text or wraps it
+   * (#800). A switch to `fixed` keeps the width the text had, so nothing moves.
+   */
+  setLabelSizing(id: string, sizing: LabelSizing): void;
   /** Sets one unlocked Map Label's font, one of the bundled faces or the PDF Font. */
   setLabelFont(id: string, font: MapLabelFont): void;
   /** Recolours one unlocked Map Label's text, as one undo step. */
@@ -509,6 +528,9 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
   const history = createHistory<EditorHistoryState>({ elements, styleId: doc.styleId });
   let selectedId: string | null = null;
   let labelTextFocus = 0;
+  // The Map Label whose on-map text box the next scene opens (#800): a label
+  // placed or double clicked in the Frame. One scene carries it, once.
+  let pendingLabelEdit: string | null = null;
   let tool: MapTool = "select";
   let currentLineStyle: LineStyleId = "plain";
   // A new Fill takes the `land` role, so it follows the Map Style until the
@@ -598,6 +620,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       selectedFillColor: selectedFill === null ? null : (selectedFill.content.color ?? null),
       selectedLineStyle: selectedLine === null ? null : selectedLine.style,
       selectedSoftEdge: faded === null ? null : softEdgeAmount(faded),
+      selectedLabelLayout: selectedLabelLayout(selected),
       selectedFillTexture: selectedFill === null ? null : (selectedFill.content.texture ?? null),
       selectedFillScatter: selectedFill === null ? null : (selectedFill.content.scatter ?? null),
       selectedEnclosesFills: selectedLine === null ? null : selectedLine.enclosesFills,
@@ -630,8 +653,22 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     };
   }
 
+  /** The prompt an empty Map Label draws in the editor, never stored (#798). */
+  function labelPlaceholder(): string {
+    return translate(options.language(), "element.labelPlaceholder");
+  }
+
+  /** The selected Map Label's line count and box width, as the snapshot reports them. */
+  function selectedLabelLayout(
+    selected: MapElement | undefined
+  ): MapEditorSnapshot["selectedLabelLayout"] {
+    if (selected === undefined || selected.kind !== "label") return null;
+    const layout = layoutLabel(selected, labelPlaceholder());
+    return { lines: layout.lines.length, width: layout.width };
+  }
+
   /** The scene message the Frame draws, from the editor's current state. */
-  function sceneForFrame(): FrameSceneMessage {
+  function sceneForFrame(editLabel: string | null = null): FrameSceneMessage {
     return sceneMessage(
       doc,
       {
@@ -647,18 +684,27 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
           shape: translate(options.language(), "map.shapeReadout"),
           label: translate(options.language(), "map.labelReadout"),
         },
+        labelEditor: {
+          label: translate(options.language(), "map.labelEditor"),
+          placeholder: labelPlaceholder(),
+        },
+        editLabel,
       },
       {
         library: assetSource?.library ?? EMPTY_MAP_LIBRARY,
         // The prompt an empty Map Label draws, here alone and never stored (#798).
-        labelPlaceholder: translate(options.language(), "element.labelPlaceholder"),
+        labelPlaceholder: labelPlaceholder(),
       }
     );
   }
 
   function sendScene(): void {
     if (frame === null) return;
-    frame.postMessage(sceneForFrame());
+    // A text box request rides on one scene only, so a later scene, or a
+    // Frame that connects again, never reopens it.
+    const editLabel = pendingLabelEdit;
+    pendingLabelEdit = null;
+    frame.postMessage(sceneForFrame(editLabel));
     sendAssets();
   }
 
@@ -1107,7 +1153,11 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       point: point ?? [doc.page.widthMm / 2 + panX, doc.page.heightMm / 2 + panY],
     });
     selectedId = element.id;
-    labelTextFocus += 1;
+    // A click in the Frame opens the Frame's own text box on the new label
+    // (#800); the Place button lives in Properties, where focus already is, so
+    // its label takes the caret in the Text field there instead.
+    if (point === undefined) labelTextFocus += 1;
+    else pendingLabelEdit = element.id;
     edit(addElement(elements, element));
   }
 
@@ -1238,18 +1288,27 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
         selectElement(message.id);
         break;
       case "editLabel": {
-        // A Select double click on a Map Label selects it and asks the
-        // Properties panel to put the caret in its Text field. A locked or
-        // hidden label, or any other Element, is only selected.
+        // A Select double click on a Map Label selects it and opens the
+        // Frame's text box on it (#800). A locked or hidden label, or any
+        // other Element, is only selected.
         const target = elementById(message.id);
         if (target === undefined || target.kind !== "label" || target.locked || target.hidden) {
           selectElement(message.id);
           break;
         }
         selectedId = message.id;
-        labelTextFocus += 1;
+        pendingLabelEdit = message.id;
         publish();
         sendScene();
+        break;
+      }
+      case "labelText": {
+        // The text box committed: one undo step when the text changed. The
+        // Frame hides the label's ink until a scene answers, so an unchanged
+        // or refused commit still gets one.
+        const before = elements;
+        writeLabelText(message.id, message.text);
+        if (elements === before) sendScene();
         break;
       }
       case "move":
@@ -1271,6 +1330,21 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
   }
 
   /**
+   * Writes one unlocked Map Label's text as one undo step (#751, #800): line
+   * breaks of any platform read as `\n`, and the text is trimmed at both ends.
+   * A blank text clears the label, which then draws its placeholder (#798).
+   */
+  function writeLabelText(id: string, text: string): void {
+    const target = labelForEdit(id);
+    if (target === null) return;
+    const cleaned = text.replace(/\r\n?/g, "\n").trim();
+    if (cleaned === target.text) return;
+    updateElement(id, (element) =>
+      element.kind === "label" ? { ...element, text: cleaned } : element
+    );
+  }
+
+  /**
    * Moves, turns, or reshapes one unlocked Map Label's baseline as one undo
    * step (#751): what the properties panel's number fields set, and what a bend
    * handle drag commits. A locked or missing label keeps every field, and an
@@ -1279,6 +1353,9 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
   function setLabelLayout(id: string, patch: MapLabelLayout): void {
     const target = labelForEdit(id);
     if (target === null) return;
+    // A width the author sets is a fixed box (#800): the Width field and a
+    // side handle both wrap the text there from now on.
+    const sizing: LabelSizing = patch.width === undefined ? target.sizing : "fixed";
     const base: Required<MapLabelLayout> = {
       x: target.x,
       y: target.y,
@@ -1304,9 +1381,9 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     };
     if (!Object.values(layout).every(Number.isFinite)) return;
     const keys = Object.keys(layout) as (keyof MapLabelLayout)[];
-    if (keys.every((key) => layout[key] === base[key])) return;
+    if (sizing === target.sizing && keys.every((key) => layout[key] === base[key])) return;
     updateElement(id, (element) =>
-      element.kind === "label" ? { ...element, ...layout } : element
+      element.kind === "label" ? { ...element, ...layout, sizing } : element
     );
   }
 
@@ -1405,15 +1482,17 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
         return;
       }
       const before = elements;
-      const capSize = size ?? box.height;
-      // The box's centre is half a cap above the baseline the label stores.
-      const [x, y] = towardBoxTop([box.x, box.y], -capSize / 2, box.rotation);
+      // A corner, a turn, or a pinch names the cap size it draws at, and
+      // scales the box with it: a fixed box takes the new width, an auto one
+      // follows its text. A side names none, and sets a fixed width (#800).
+      const capSize = size ?? target.size;
+      const [x, y] = labelPointFromBox([box.x, box.y], box.height, capSize, box.rotation);
       setLabelLayout(id, {
         x,
         y,
-        width: box.width,
         size: capSize,
         rotation: box.rotation,
+        ...(size === undefined || target.sizing === "fixed" ? { width: box.width } : {}),
       });
       if (elements === before) sendScene();
       return;
@@ -1470,8 +1549,9 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       return;
     }
     if (target.kind === "label") {
+      // An auto box follows its text, so its cap size is all that scales.
       setLabelLayout(target.id, {
-        width: target.width * factor,
+        ...(target.sizing === "fixed" ? { width: target.width * factor } : {}),
         size: target.size * factor,
       });
     }
@@ -1970,14 +2050,16 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
 
     insertLabel,
 
-    setLabelText(id, text) {
+    setLabelText: writeLabelText,
+
+    setLabelSizing(id, sizing) {
       const target = labelForEdit(id);
-      if (target === null) return;
-      // A blank text clears the label, which then draws its placeholder (#798).
-      const trimmed = text.trim();
-      if (trimmed === target.text) return;
+      if (target === null || !isLabelSizing(sizing) || target.sizing === sizing) return;
+      // A box that stops following its text keeps the width the text gave it.
+      const width =
+        sizing === "fixed" ? layoutLabel(target, labelPlaceholder()).width : target.width;
       updateElement(id, (element) =>
-        element.kind === "label" ? { ...element, text: trimmed } : element
+        element.kind === "label" ? { ...element, sizing, width } : element
       );
     },
 

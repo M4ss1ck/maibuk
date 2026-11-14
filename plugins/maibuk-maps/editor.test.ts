@@ -2381,7 +2381,7 @@ describe("a transform handle drag on Shapes and Map Labels (#796)", () => {
       x: expect.closeTo(90 - 3.5 * Math.sin(turn), 9),
       y: expect.closeTo(60 + 3.5 * Math.cos(turn), 9),
     };
-    const { editor } = openEditor([mapLabel()]);
+    const { editor } = openEditor([mapLabel({ sizing: "fixed" })]);
     editor.select("label");
 
     editor.handleFrameMessage({
@@ -2557,8 +2557,21 @@ describe("scaling and turning Shapes and Map Labels by keyboard (#796)", () => {
     );
   });
 
-  it("scales a Map Label's cap size and width together as one undo step", () => {
+  it("scales an auto-width Map Label's cap size alone, since its width follows its text (#800)", () => {
     const { editor } = labelEditor();
+
+    editor.scaleSelection(1.1);
+
+    const [element] = editor.getSnapshot().elements as MapLabelElement[];
+    expect(element.sizing).toBe("auto");
+    expect(element.width).toBe(DEFAULT_LABEL_WIDTH_MM);
+    expect(element.size).toBeCloseTo(DEFAULT_LABEL_SIZE_MM * 1.1);
+  });
+
+  it("scales a fixed-width Map Label's cap size and width together as one undo step", () => {
+    const { editor, id } = labelEditor();
+    editor.setLabelSizing(id, "fixed");
+    editor.setLabelLayout(id, { width: DEFAULT_LABEL_WIDTH_MM });
 
     editor.scaleSelection(1.1);
 
@@ -3613,7 +3626,7 @@ describe("switching tools", () => {
 });
 
 describe("the label text focus request (#800)", () => {
-  it("raises labelTextFocus by one for each new Map Label", () => {
+  it("raises labelTextFocus by one for each label the Place button adds", () => {
     const { editor } = openEditor();
     expect(editor.getSnapshot().labelTextFocus).toBe(0);
 
@@ -3622,48 +3635,6 @@ describe("the label text focus request (#800)", () => {
 
     editor.insertLabel();
     expect(editor.getSnapshot().labelTextFocus).toBe(2);
-  });
-
-  it("selects an unlocked Map Label on an editLabel message and raises labelTextFocus", () => {
-    const label = newLabel({
-      id: "label",
-      name: "Map Label 1",
-      text: "The Reach",
-      point: [100, 50],
-    });
-    const { editor } = openEditor([label]);
-
-    editor.handleFrameMessage({ kind: "editLabel", id: "label" });
-
-    expect(editor.getSnapshot().selectedId).toBe("label");
-    expect(editor.getSnapshot().labelTextFocus).toBe(1);
-    expect(editor.getSnapshot().canUndo).toBe(false);
-  });
-
-  it("selects a locked Map Label on an editLabel message without raising labelTextFocus", () => {
-    const locked: MapLabelElement = {
-      ...newLabel({ id: "label", name: "Map Label 1", text: "The Reach", point: [100, 50] }),
-      locked: true,
-    };
-    const { editor } = openEditor([locked]);
-
-    editor.handleFrameMessage({ kind: "editLabel", id: "label" });
-
-    expect(editor.getSnapshot().selectedId).toBe("label");
-    expect(editor.getSnapshot().labelTextFocus).toBe(0);
-  });
-
-  it("selects a hidden Map Label on an editLabel message without raising labelTextFocus", () => {
-    const hidden: MapLabelElement = {
-      ...newLabel({ id: "label", name: "Map Label 1", text: "The Reach", point: [100, 50] }),
-      hidden: true,
-    };
-    const { editor } = openEditor([hidden]);
-
-    editor.handleFrameMessage({ kind: "editLabel", id: "label" });
-
-    expect(editor.getSnapshot().selectedId).toBe("label");
-    expect(editor.getSnapshot().labelTextFocus).toBe(0);
   });
 
   it("only selects, without raising labelTextFocus, for a select message", () => {
@@ -3679,5 +3650,160 @@ describe("the label text focus request (#800)", () => {
 
     expect(editor.getSnapshot().selectedId).toBe("label");
     expect(editor.getSnapshot().labelTextFocus).toBe(0);
+  });
+});
+
+describe("the on-map text box (#800)", () => {
+  const reach = () =>
+    newLabel({ id: "label", name: "Map Label 1", text: "The Reach", point: [100, 50] });
+
+  /** An editor watched by a Frame, recording every scene it sends. */
+  function watched(elements: MapElement[] = []) {
+    const { editor } = openEditor(elements);
+    const scenes: FrameSceneMessage[] = [];
+    editor.attachFrame({
+      postMessage: (message: FrameSceneMessage) => scenes.push(message),
+    } as unknown as MessagePort);
+    scenes.length = 0;
+    return { editor, scenes };
+  }
+
+  function labelOf(editor: MapEditor): MapLabelElement {
+    const element = editor.getSnapshot().elements.find((one) => one.kind === "label");
+    if (element === undefined || element.kind !== "label") throw new Error("no Map Label");
+    return element;
+  }
+
+  it("opens the Frame's text box on a label a Text tool click places, on one scene only", () => {
+    const { editor, scenes } = watched();
+    editor.setTool("text");
+    scenes.length = 0;
+
+    editor.handleFrameMessage({ kind: "insert", point: [40, 30] });
+
+    const id = labelOf(editor).id;
+    expect(scenes.filter((scene) => scene.editLabel === id)).toHaveLength(1);
+    // The host never takes the caret for a label placed in the Frame.
+    expect(editor.getSnapshot().labelTextFocus).toBe(0);
+    editor.zoomIn();
+    expect(scenes.at(-1)?.editLabel).toBeUndefined();
+  });
+
+  it("puts the caret in the Text field, not the Frame, for a label the Place button adds", () => {
+    const { editor, scenes } = watched();
+    editor.insertLabel();
+    expect(editor.getSnapshot().labelTextFocus).toBe(1);
+    expect(scenes.some((scene) => scene.editLabel !== undefined)).toBe(false);
+  });
+
+  it("selects an unlocked label on an editLabel message and opens its text box", () => {
+    const { editor, scenes } = watched([reach()]);
+    editor.handleFrameMessage({ kind: "editLabel", id: "label" });
+    expect(editor.getSnapshot().selectedId).toBe("label");
+    expect(scenes.at(-1)?.editLabel).toBe("label");
+    expect(editor.getSnapshot().labelTextFocus).toBe(0);
+    expect(editor.getSnapshot().canUndo).toBe(false);
+  });
+
+  it("only selects a locked or hidden label on an editLabel message", () => {
+    for (const flag of [{ locked: true }, { hidden: true }]) {
+      const { editor, scenes } = watched([{ ...reach(), ...flag }]);
+      editor.handleFrameMessage({ kind: "editLabel", id: "label" });
+      expect(editor.getSnapshot().selectedId).toBe("label");
+      expect(scenes.some((scene) => scene.editLabel !== undefined)).toBe(false);
+    }
+  });
+
+  it("commits a labelText as one undo step, keeping its lines and reading CRLF as a line break", () => {
+    const { editor } = watched([reach()]);
+    editor.handleFrameMessage({ kind: "labelText", id: "label", text: "  North\r\nSea\n" });
+    expect(labelOf(editor).text).toBe("North\nSea");
+    editor.undo();
+    expect(labelOf(editor).text).toBe("The Reach");
+    editor.redo();
+    expect(labelOf(editor).text).toBe("North\nSea");
+  });
+
+  it("answers an unchanged or refused labelText with a scene and no undo step", () => {
+    const { editor, scenes } = watched([reach(), { ...reach(), id: "locked", locked: true }]);
+    editor.handleFrameMessage({ kind: "labelText", id: "label", text: "The Reach" });
+    editor.handleFrameMessage({ kind: "labelText", id: "locked", text: "Gone" });
+    expect(scenes).toHaveLength(2);
+    expect(editor.getSnapshot().canUndo).toBe(false);
+  });
+
+  it("reports a selected label's lines and its auto width from the layout", () => {
+    const { editor } = watched([reach()]);
+    editor.select("label");
+    const one = editor.getSnapshot().selectedLabelLayout;
+    expect(one?.lines).toBe(1);
+    expect(one?.width).toBeGreaterThan(0);
+    expect(one?.width).not.toBe(DEFAULT_LABEL_WIDTH_MM);
+    editor.setLabelText("label", "North\nSea\nCoast");
+    expect(editor.getSnapshot().selectedLabelLayout?.lines).toBe(3);
+  });
+
+  it("switches to a fixed box at the width the text had, and back to auto", () => {
+    const { editor } = watched([reach()]);
+    editor.select("label");
+    const auto = editor.getSnapshot().selectedLabelLayout?.width ?? 0;
+    editor.setLabelSizing("label", "fixed");
+    expect(labelOf(editor)).toMatchObject({ sizing: "fixed", width: auto });
+    editor.setLabelSizing("label", "auto");
+    expect(labelOf(editor).sizing).toBe("auto");
+    editor.undo();
+    expect(labelOf(editor).sizing).toBe("fixed");
+  });
+
+  it("makes a box fixed when the Width field sets its width", () => {
+    const { editor } = watched([reach()]);
+    editor.setLabelLayout("label", { width: 20 });
+    expect(labelOf(editor)).toMatchObject({ sizing: "fixed", width: 20 });
+  });
+
+  it("makes a box fixed at the width a side handle drags, keeping its cap size and top", () => {
+    const { editor } = watched([reach()]);
+    editor.select("label");
+    // A one-line box's centre is half a cap above the baseline.
+    editor.handleFrameMessage({
+      kind: "transformElement",
+      id: "label",
+      box: { x: 100, y: 47, width: 20, height: 6, rotation: 0 },
+    });
+    expect(labelOf(editor)).toMatchObject({ sizing: "fixed", width: 20, size: 6, x: 100, y: 50 });
+  });
+
+  it("scales an auto box's cap size from a corner and leaves its width to its text", () => {
+    const { editor } = watched([reach()]);
+    editor.select("label");
+    editor.handleFrameMessage({
+      kind: "transformElement",
+      id: "label",
+      box: { x: 100, y: 44, width: 90, height: 12, rotation: 0 },
+      size: 12,
+    });
+    expect(labelOf(editor)).toMatchObject({
+      sizing: "auto",
+      width: DEFAULT_LABEL_WIDTH_MM,
+      size: 12,
+      x: 100,
+      y: 50,
+    });
+  });
+
+  it("keeps the first baseline under a multi-line box's corner drag", () => {
+    const label: MapLabelElement = { ...reach(), text: "North\nSea" };
+    const { editor } = watched([label]);
+    editor.select("label");
+    // Two lines at cap 6: the box runs 6 above the first baseline to 7.2 below.
+    const height = 6 + 7.2;
+    editor.handleFrameMessage({
+      kind: "transformElement",
+      id: "label",
+      box: { x: 100, y: 50 + (height / 2 - 6), width: 30, height, rotation: 0 },
+      size: 6,
+    });
+    expect(labelOf(editor).x).toBeCloseTo(100, 9);
+    expect(labelOf(editor).y).toBeCloseTo(50, 9);
   });
 });
