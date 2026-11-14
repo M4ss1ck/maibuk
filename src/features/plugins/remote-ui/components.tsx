@@ -1154,6 +1154,11 @@ function trailingSpaceAfter(list: HTMLElement, scroller: HTMLElement): number {
   return Math.max(0, last.getBoundingClientRect().bottom - list.getBoundingClientRect().bottom);
 }
 
+/** A computed CSS length in pixels, 0 when absent or unparsable. */
+function pixelsOf(value: string | undefined): number {
+  return Number.parseFloat(value ?? "") || 0;
+}
+
 /**
  * The tallest a Collection may be so it fills the vertical space its scroll
  * container leaves it, while keeping room for the content that renders after it
@@ -1181,14 +1186,19 @@ function useCollectionMaxHeight(listRef: RefObject<HTMLElement | null>): number 
       // jsdom and the first paint before layout report zeros: keep the
       // fallback so the Collection never collapses.
       if (listRect.bottom - listRect.top <= 0 || scrollerHeight <= 0) return;
-      const paddingBottom = scroller
-        ? Number.parseFloat(getComputedStyle(scroller).paddingBottom) || 0
-        : 0;
+      // The rect is the border box: only the space inside the borders is room
+      // for the list. Counting a border made an auto-height scroller grow by
+      // its width on every measure (#784). The window has no borders.
+      const style = scroller ? getComputedStyle(scroller) : null;
+      const borderTop = pixelsOf(style?.borderTopWidth);
+      const borderBottom = pixelsOf(style?.borderBottomWidth);
+      const paddingBottom = pixelsOf(style?.paddingBottom);
       const trailing = scroller ? trailingSpaceAfter(list, scroller) : 0;
-      // Offset of the list's top inside the scroller's content, so the measure
+      // Offset of the list's top inside the scroller's borders, so the measure
       // does not depend on where the scroller happens to be scrolled.
-      const listTop = listRect.top - scrollerRect.top + (scroller?.scrollTop ?? 0);
-      const available = scrollerHeight - listTop - paddingBottom - trailing;
+      const listTop = listRect.top - scrollerRect.top - borderTop + (scroller?.scrollTop ?? 0);
+      const innerHeight = scrollerHeight - borderTop - borderBottom;
+      const available = innerHeight - listTop - paddingBottom - trailing;
       setMaxHeight(Math.max(COLLECTION_MIN_HEIGHT_PX, available));
     };
 
