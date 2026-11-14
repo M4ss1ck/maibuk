@@ -1369,7 +1369,7 @@
   }
 
   /**
-   * The corners a box shows grips on (#795): all four while its longer side is
+   * The corners a box shows grips on (#795): all four while each side is
    * at least `SMALL_BOX_PX` on screen, the bottom-right alone below that, and
    * none below `TINY_BOX_PX`, where the turn grip is all that is left to grip.
    * A Frame that cannot measure its screen shows none either.
@@ -1379,8 +1379,8 @@
    */
   function shownCorners(box, scale) {
     if (scale === null) return [];
-    // The longer side, so a long thin scale bar keeps its corners.
-    const onScreen = Math.max(box.width, box.height) * scale;
+    // Either side under the threshold counts (#794 small-on-screen rule).
+    const onScreen = Math.min(box.width, box.height) * scale;
     if (onScreen < TINY_BOX_PX) return [];
     if (onScreen < SMALL_BOX_PX) return [SMALL_BOX_CORNER];
     return CORNER_HANDLES;
@@ -1632,7 +1632,9 @@
     const grips =
       sizes === null || locked
         ? []
-        : [...corners, ...sides].map(([id, signX, signY]) => ({
+        : // Sides first: the corners paint later, so where a finger-sized hit area
+          // overlaps a side's, a press on the drawn corner takes the corner.
+          [...sides, ...corners].map(([id, signX, signY]) => ({
             id,
             x: signX * halfWidth,
             y: signY * halfHeight,

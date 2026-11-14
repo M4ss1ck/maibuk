@@ -1,10 +1,14 @@
 // The Maps editor's transform handles and keyboard scale and turn Commands
-// (#795): with Select picked, a selected Stamp draws a box with a grip on each
-// corner and a turn grip on a stalk above it. A corner drag resizes it
+// (#795, #796): with Select picked, a selected Stamp draws a box with a grip
+// on each corner and a turn grip on a stalk above it. A corner drag resizes it
 // uniformly and the turn grip turns it, and the properties panel's Size (mm)
 // and Rotation (degrees) follow; each committed drag is one undo step, so one
-// Mod+Z puts the number back. The scale and turn Commands do the same from the
-// keyboard: ] and [ scale 10% (Shift: 1%), . and , turn 15° (Shift: 1°).
+// Mod+Z puts the number back. A selected Shape draws eight grips plus the turn
+// grip: a side drag stretches the one axis the panel's Width (mm) and Height
+// (mm) report. A selected Map Label draws corners, its left and right sides,
+// and the turn grip: a corner drag scales its cap Size (mm) and Width (mm)
+// together. The scale and turn Commands do the same from the keyboard: ] and [
+// scale 10% (Shift: 1%), . and , turn 15° (Shift: 1°).
 //
 // The drags are `support/frame-stroke.ts`, which explains why the pointer
 // gestures sit outside the spec: the Commands are their keyboard form.
@@ -30,7 +34,9 @@ const elementsList = (page: Page) =>
 const elementRow = (page: Page, name: string) =>
   elementsList(page).getByRole("button", { name: new RegExp(`^${name}`) });
 
-/** The properties panel's number fields for the selected Stamp. */
+/** The properties panel's number fields for a selected Shape or Map Label. */
+const widthField = (page: Page) => page.getByRole("textbox", { name: "Width (mm)", exact: true });
+const heightField = (page: Page) => page.getByRole("textbox", { name: "Height (mm)", exact: true });
 const sizeField = (page: Page) => page.getByRole("textbox", { name: "Size (mm)", exact: true });
 const rotationField = (page: Page) =>
   page.getByRole("textbox", { name: "Rotation (degrees)", exact: true });
@@ -42,7 +48,7 @@ const rotationField = (page: Page) =>
 const transformHandle = (page: Page, id: string) =>
   mapFrame(page).locator(`[data-transform-handle-hit="${id}"]`);
 
-/** Every grip the Frame draws: four corners and the turn grip, unless it drops them. */
+/** Every grip the Frame draws: corners, sides, and the turn grip, unless it drops them. */
 const drawnHandles = (page: Page) => mapFrame(page).locator("[data-transform-handle]");
 
 /** One tile of the Insert tool's Stamp grid: a button holding the Stamp's own picture. */
@@ -102,6 +108,40 @@ async function focusBack(page: Page): Promise<void> {
   });
 }
 
+/** Picks the Rectangle tool with its key and waits for the Frame to honour it. */
+async function pickRectangle(page: Page): Promise<void> {
+  await page.keyboard.press("r");
+  await expect(
+    page.getByRole("button", { name: "Rectangle", exact: true, pressed: true })
+  ).toBeVisible();
+  await expect(mapFrame(page).locator('svg[data-tool="rectangle"]')).toBeVisible();
+}
+
+/** Places a Rectangle with its Place button, the keyboard's way to draw one. */
+async function placeRectangle(page: Page): Promise<void> {
+  const place = page.getByRole("button", { name: "Place rectangle", exact: true });
+  await tabTo(page, place, { max: 120 });
+  await page.keyboard.press("Enter");
+  await expect(elementRow(page, "Rectangle 1")).toBeVisible();
+}
+
+/** Picks the Text tool with its key and waits for the Frame to honour it. */
+async function pickText(page: Page): Promise<void> {
+  await page.keyboard.press("t");
+  await expect(
+    page.getByRole("button", { name: "Text", exact: true, pressed: true })
+  ).toBeVisible();
+  await expect(mapFrame(page).locator('svg[data-tool="text"]')).toBeVisible();
+}
+
+/** Places a Map Label with the Text tool's Place button, the keyboard's way. */
+async function placeLabel(page: Page): Promise<void> {
+  const place = page.getByRole("button", { name: "Place Map Label", exact: true });
+  await tabTo(page, place, { max: 60 });
+  await page.keyboard.press("Enter");
+  await expect(elementRow(page, "Map Label 1")).toBeVisible();
+}
+
 /** Picks the Select tool with its key, which is when the handles appear. */
 async function pickSelect(page: Page): Promise<void> {
   await focusBack(page);
@@ -116,8 +156,10 @@ async function pickSelect(page: Page): Promise<void> {
 /**
  * Gives the selected Stamp a size the author types into the properties panel.
  * The default 12 mm Stamp is only 58 px wide on this page, near the 48 px where
- * the Frame keeps one corner grip alone, so every drag below starts from a size
- * with room for a corner to be grabbed on its own.
+ * the Frame keeps one corner grip alone, so the Stamp drags below start from a
+ * size with room for a corner to be grabbed on its own. (A Map Label needs no
+ * such step: a default cap keeps only its bottom-right grip, which is the one
+ * the corner drag takes.)
  */
 async function setSize(page: Page, size: number): Promise<void> {
   const field = sizeField(page);
@@ -232,5 +274,75 @@ test.describe("Maps transform handles and scale and turn Commands @wf:plugins-ma
     // Each press was its own undo step, so one Mod+Z takes back the last turn.
     await page.keyboard.press("ControlOrMeta+z");
     await expect.poll(async () => fieldValue(rotationField(page))).toBe(1);
+  });
+
+  test("a side drag stretches the Shape's width, the panel follows, and Mod+Z puts it back", async ({
+    page,
+  }) => {
+    await openEditorWithMap(page);
+    await pickRectangle(page);
+    await placeRectangle(page);
+    await pickSelect(page);
+
+    // A Shape takes eight grips plus the turn grip, all with room at 40 mm.
+    await expect(drawnHandles(page)).toHaveCount(9);
+
+    // The east grip sits on the box's right edge, 134.3 mm about the centre of
+    // the 40 mm box; dragging it to 150 widens by that travel alone.
+    await expect(transformHandle(page, "e")).toBeVisible();
+    await dragTransformHandle(page, surface(page), transformHandle(page, "e"), [
+      150,
+      PAGE_CENTRE_MM[1],
+    ]);
+
+    // A side drag moves its one axis: the Width the panel shows is the drag's
+    // own, 55.7 mm, while the Height keeps the 40 the Place button gave.
+    await expect.poll(async () => fieldValue(widthField(page))).toBeCloseTo(55.7, 0);
+    await expect(heightField(page)).toHaveValue("40");
+    await capture(page, "maps-transform-shape-side", {
+      around: [frameElement(page), widthField(page), heightField(page)],
+    });
+
+    // The whole drag was one undo step: one Mod+Z hands the Shape back its width.
+    await focusBack(page);
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(async () => fieldValue(widthField(page))).toBe(40);
+    await expect(heightField(page)).toHaveValue("40");
+  });
+
+  test("a corner drag scales the Map Label's cap size and width, and Mod+Z puts both back", async ({
+    page,
+  }) => {
+    await openEditorWithMap(page);
+    await pickText(page);
+    await placeLabel(page);
+    await pickSelect(page);
+
+    // The default 6 mm cap is under 48 px on screen, so the label keeps only
+    // the bottom-right grip and the turn grip: no side to take the press, and
+    // the corner that resizes it is the one that stays.
+    await expect(drawnHandles(page)).toHaveCount(2);
+
+    // The bottom-right grip sits on the box's own corner, 27.5 mm right of the
+    // centre and half the 6 mm cap below it; the drag ends 10.2 right and 0.8
+    // down from there.
+    await expect(transformHandle(page, "se")).toBeVisible();
+    await dragTransformHandle(page, surface(page), transformHandle(page, "se"), [152, 80]);
+
+    // A corner drag grows the cap size and the width together: the Width the
+    // panel shows is the drag's own, 65.2 mm, and the cap Size follows the same
+    // scale, 7.1 mm.
+    await expect.poll(async () => fieldValue(widthField(page))).toBeCloseTo(65.2, 0);
+    await expect.poll(async () => fieldValue(sizeField(page))).toBeCloseTo(7.1, 0);
+    await capture(page, "maps-transform-label-corner", {
+      around: [frameElement(page), sizeField(page), widthField(page)],
+    });
+
+    // The whole drag was one undo step: one Mod+Z hands the label back its
+    // width and cap size together.
+    await focusBack(page);
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(async () => fieldValue(widthField(page))).toBe(55);
+    await expect.poll(async () => fieldValue(sizeField(page))).toBe(6);
   });
 });

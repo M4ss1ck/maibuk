@@ -3272,12 +3272,14 @@ describe("the transform handles (#795)", () => {
     expect(document.querySelector('[data-transform-handle-hit="rotate"]')).not.toBeNull();
   });
 
-  it("keeps all four corners on a long thin box such as a scale bar", () => {
+  it("measures a long thin box such as a scale bar by its shorter side", () => {
     frame = loadFrame();
     frame.scale = 4;
-    // 40 mm by 3 mm is 160 px by 12 px: measured by its longer side.
-    frame.scene({ elements: [selected({ transform: handleBox({ width: 40, height: 3 }) })] });
-    expect(document.querySelectorAll("[data-transform-handle-hit]")).toHaveLength(5);
+    // 40 mm by 8 mm is 160 px by 32 px: under 48 px on one side, so the
+    // bottom-right corner stays to resize it from.
+    frame.scene({ elements: [selected({ transform: handleBox({ width: 40, height: 8 }) })] });
+    expect(document.querySelectorAll("[data-transform-handle-hit]")).toHaveLength(2);
+    expect(document.querySelector('[data-transform-handle-hit="se"]')).not.toBeNull();
   });
 
   it("draws no grips for an Element with no box, no other tool, and no selection", () => {
@@ -3329,6 +3331,18 @@ describe("the transform handles (#795)", () => {
     /** The selected Shape carrying that box. */
     const shaped = (overrides: Record<string, unknown> = {}) =>
       selected({ transform: allBox(), ...overrides });
+
+    it("stacks the corner hit areas above the sides', so an overlapping press takes the corner", () => {
+      frame = loadFrame();
+      frame.scene({ elements: [shaped()] });
+      const order = [...document.querySelectorAll("[data-transform-handle-hit]")].map((hit) =>
+        hit.getAttribute("data-transform-handle-hit")
+      );
+      const lastSide = Math.max(...["n", "e", "s", "w"].map((id) => order.indexOf(id)));
+      const firstCorner = Math.min(...["nw", "ne", "se", "sw"].map((id) => order.indexOf(id)));
+      expect(lastSide).toBeGreaterThanOrEqual(0);
+      expect(firstCorner).toBeGreaterThan(lastSide);
+    });
 
     it("draws eight handles plus the turn grip, hover growing the one under the pointer", () => {
       frame = loadFrame();
@@ -3561,6 +3575,9 @@ describe("the transform handles (#795)", () => {
 
     it("draws four corners, the east and west sides, and the turn grip, but no north or south side", () => {
       frame = loadFrame();
+      // 7 mm at 8 px per mm is 56 px: past the 48 px under which the sides go
+      // with the corners, so the label shows every grip it takes.
+      frame.scale = 8;
       frame.scene({ elements: [labelled()] });
 
       expect(overlay().getAttribute("transform")).toBe("translate(100 50)");
@@ -3645,6 +3662,8 @@ describe("the transform handles (#795)", () => {
 
     it("widens from a side handle without touching the cap size", () => {
       frame = loadFrame();
+      // The side grips need the label past 48 px on screen: 7 mm at 8 px per mm.
+      frame.scale = 8;
       frame.scene({ elements: [labelled({ movable: true })] });
 
       // Ten right and ten down still only widen, by ten: the cap size stays 7 mm.
@@ -3670,6 +3689,8 @@ describe("the transform handles (#795)", () => {
 
     it("stretches along its own turned side", () => {
       frame = loadFrame();
+      // The side grips need the label past 48 px on screen: 7 mm at 8 px per mm.
+      frame.scale = 8;
       frame.scene({ elements: [labelled({ transform: labelBox({ rotation: 18 }) })] });
 
       // A pull along the side stretches the side, not a screen axis.
@@ -3729,6 +3750,8 @@ describe("the transform handles (#795)", () => {
 
     it("cancels a label drag on Escape, restoring the box and sending nothing", () => {
       frame = loadFrame();
+      // The side grips need the label past 48 px on screen: 7 mm at 8 px per mm.
+      frame.scale = 8;
       frame.scene({ elements: [labelled()] });
 
       pointer(target("e"), "pointerdown", 142, 50);
@@ -3801,12 +3824,14 @@ describe("the transform handles (#795)", () => {
 
     it("grows the side grip under the pointer, and reads side cursors", () => {
       frame = loadFrame();
+      // The side grips need the label past 48 px on screen: 7 mm at 8 px per mm.
+      frame.scale = 8;
       frame.scene({ elements: [labelled()] });
-      const resting = pixels(grip("e"), 4);
+      const resting = pixels(grip("e"), 8);
 
       pointer(target("e"), "pointermove", 142, 50);
       expect(grip("e").getAttribute("data-hovered")).toBe("true");
-      expect(pixels(grip("e"), 4)).toBeGreaterThan(resting);
+      expect(pixels(grip("e"), 8)).toBeGreaterThan(resting);
       pointer(svg(), "pointermove", 300, 300);
       expect(grip("e").getAttribute("data-hovered")).toBeNull();
 
