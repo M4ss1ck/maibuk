@@ -11,8 +11,11 @@ import { describe, expect, it } from "vitest";
 import {
   RIGHT_ANGLE_STICK_DEGREES,
   TURN_SNAP_DEGREES,
+  clampToPage,
   convertShapeLine,
   eraseLines,
+  onPage,
+  touchesPage,
   roughen,
   seedFor,
   shapeFromCorners,
@@ -740,5 +743,109 @@ describe("transformBox: the rotate handle", () => {
     expect(
       transformBox({ box: box(), handle: "rotate", start: [110, 50], point: aim(93) }).rotation
     ).toBeCloseTo(93, 6);
+  });
+});
+
+describe("the page an Element is placed on", () => {
+  const page = { widthMm: 200, heightMm: 100 };
+
+  it("holds a point on the page or its edge, and nothing past it", () => {
+    expect(onPage([100, 50], page)).toBe(true);
+    expect(onPage([0, 0], page)).toBe(true);
+    expect(onPage([200, 100], page)).toBe(true);
+    expect(onPage([-0.1, 50], page)).toBe(false);
+    expect(onPage([100, 100.1], page)).toBe(false);
+    expect(onPage([Number.NaN, 50], page)).toBe(false);
+  });
+
+  it("pulls a point onto the nearest spot of the page", () => {
+    expect(clampToPage([100, 50], page)).toEqual([100, 50]);
+    expect(clampToPage([-40, -30], page)).toEqual([0, 0]);
+    expect(clampToPage([250, 60], page)).toEqual([200, 60]);
+  });
+
+  it("says a line touches the page when a point lands on it", () => {
+    expect(
+      touchesPage(
+        [
+          [-50, -50],
+          [10, 10],
+        ],
+        false,
+        page
+      )
+    ).toBe(true);
+  });
+
+  it("says a line touches the page when a segment crosses it with both ends off it", () => {
+    // A Pen border clicked left of the page, then right of it.
+    expect(
+      touchesPage(
+        [
+          [-20, 50],
+          [220, 50],
+        ],
+        false,
+        page
+      )
+    ).toBe(true);
+    // Corner to corner, diagonally across.
+    expect(
+      touchesPage(
+        [
+          [-10, -10],
+          [210, 110],
+        ],
+        false,
+        page
+      )
+    ).toBe(true);
+  });
+
+  it("says a line drawn wholly beside the page does not touch it", () => {
+    expect(
+      touchesPage(
+        [
+          [-50, -50],
+          [-40, -45],
+          [-30, -40],
+        ],
+        false,
+        page
+      )
+    ).toBe(false);
+    // Past one corner: its box overlaps the page, the line does not.
+    expect(
+      touchesPage(
+        [
+          [-10, 5],
+          [5, -10],
+        ],
+        false,
+        page
+      )
+    ).toBe(false);
+    expect(touchesPage([], false, page)).toBe(false);
+  });
+
+  it("says a closed outline around the whole page covers it, and an open one does not", () => {
+    const around: MapPoint[] = [
+      [-10, -10],
+      [210, -10],
+      [210, 110],
+      [-10, 110],
+    ];
+    expect(touchesPage(around, true, page)).toBe(true);
+    expect(touchesPage(around, false, page)).toBe(false);
+  });
+
+  it("says a closed outline beside the page does not touch it", () => {
+    const beside: MapPoint[] = [
+      [-40, -40],
+      [-20, -40],
+      [-20, -20],
+      [-40, -20],
+    ];
+    expect(touchesPage(beside, true, page)).toBe(false);
   });
 });

@@ -3807,3 +3807,138 @@ describe("the on-map text box (#800)", () => {
     expect(labelOf(editor).y).toBeCloseTo(50, 9);
   });
 });
+
+describe("the page edge (export crops to the page, so nothing new starts off it)", () => {
+  /** The kinds the editor holds, in z-order. */
+  function kinds(editor: MapEditor): string[] {
+    return editor.getSnapshot().elements.map((element) => element.kind);
+  }
+
+  it("places no Stamp and no Map Label where a click lands off the page", () => {
+    const { editor } = openEditor();
+    editor.setStamp("castle");
+    editor.handleFrameMessage({ kind: "insert", point: [-40, -30] });
+    editor.handleFrameMessage({ kind: "insert", point: [230, 50] });
+    editor.setTool("text");
+    editor.handleFrameMessage({ kind: "insert", point: [100, 140] });
+    expect(kinds(editor)).toEqual([]);
+    expect(editor.getSnapshot().canUndo).toBe(false);
+
+    // The page's own edge is still the page.
+    editor.handleFrameMessage({ kind: "insert", point: [200, 100] });
+    expect(kinds(editor)).toEqual(["label"]);
+  });
+
+  it("draws no Pencil, Pen, or Area line that never touches the page", () => {
+    const { editor } = openEditor();
+    const beside: MapPoint[] = [
+      [-50, -50],
+      [-40, -45],
+      [-30, -40],
+      [-35, -30],
+    ];
+    editor.handleFrameMessage({ kind: "stroke", points: beside });
+    editor.handleFrameMessage({ kind: "line", points: beside, curves: [], closed: false });
+    editor.handleFrameMessage({ kind: "area", points: beside, curves: [], freehand: true });
+    editor.handleFrameMessage({
+      kind: "area",
+      points: beside,
+      curves: [false, false, false, false],
+      freehand: false,
+    });
+    expect(kinds(editor)).toEqual([]);
+  });
+
+  it("keeps a line that runs off the page edge, points and all", () => {
+    const { editor } = openEditor();
+    // A coast drawn in from off the page, and a Pen border clicked on both sides of it.
+    editor.handleFrameMessage({
+      kind: "stroke",
+      points: [
+        [-30, 50],
+        [-10, 50],
+        [10, 50],
+        [30, 50],
+      ],
+    });
+    editor.handleFrameMessage({
+      kind: "line",
+      points: [
+        [-20, 20],
+        [220, 20],
+      ],
+      curves: [false],
+      closed: false,
+    });
+    expect(kinds(editor)).toEqual(["line", "line"]);
+    expect(onlyLines(editor)[1].points).toEqual([
+      [-20, 20],
+      [220, 20],
+    ]);
+  });
+
+  it("keeps an Area outline drawn around the whole page, which covers it", () => {
+    const { editor } = openEditor();
+    editor.handleFrameMessage({
+      kind: "area",
+      points: [
+        [-10, -10],
+        [210, -10],
+        [210, 110],
+        [-10, 110],
+      ],
+      curves: [false, false, false, false],
+      freehand: false,
+    });
+    expect(kinds(editor)).toEqual(["fill"]);
+  });
+
+  it("draws no Shape whose box lies off the page, and keeps one dragged onto it", () => {
+    const { editor } = openEditor();
+    editor.handleFrameMessage({
+      kind: "shape",
+      shape: "rectangle",
+      start: [-60, -40],
+      end: [-20, -10],
+      constrain: false,
+    });
+    expect(kinds(editor)).toEqual([]);
+
+    editor.handleFrameMessage({
+      kind: "shape",
+      shape: "ellipse",
+      start: [-20, -10],
+      end: [30, 30],
+      constrain: false,
+    });
+    expect(kinds(editor)).toEqual(["line"]);
+  });
+
+  it("pours no Fill into a face off the page", () => {
+    const { editor } = openEditor([squareLine("ring", "Ring", -60, 10, 40)]);
+    editor.handleFrameMessage({ kind: "pour", point: [-40, 30] });
+    expect(kinds(editor)).toEqual(["line"]);
+    expect(editor.getSnapshot().canUndo).toBe(false);
+  });
+
+  it("lands a keyboard placement on the page when the view centre is panned off it", () => {
+    const { editor } = openEditor();
+    editor.handleFrameMessage({ kind: "pan", dx: -300, dy: 80 });
+
+    editor.insertStamp();
+    editor.insertLabel();
+    editor.placeShape("ellipse");
+
+    const [stamp, label, line] = editor.getSnapshot().elements;
+    expect(stamp.kind === "stamp" && [stamp.transform.x, stamp.transform.y]).toEqual([0, 100]);
+    expect(label.kind === "label" && [label.x, label.y]).toEqual([0, 100]);
+    expect(line.kind === "line" && line.shape && [line.shape.cx, line.shape.cy]).toEqual([0, 100]);
+  });
+});
+
+/** The Map Lines an editor holds, in z-order. */
+function onlyLines(editor: MapEditor): MapLineElement[] {
+  return editor
+    .getSnapshot()
+    .elements.filter((element): element is MapLineElement => element.kind === "line");
+}

@@ -108,6 +108,74 @@ export function pointsBounds(points: readonly MapPoint[]): MapBounds | null {
   return { minX, minY, maxX, maxY };
 }
 
+/** A page's size, which is all the page tests below read. */
+export interface PageSize {
+  widthMm: number;
+  heightMm: number;
+}
+
+/** Whether `point` lies on the page or its edge: the area an export draws. */
+export function onPage([x, y]: MapPoint, page: PageSize): boolean {
+  return x >= 0 && x <= page.widthMm && y >= 0 && y <= page.heightMm;
+}
+
+/** The spot of the page nearest `point`. */
+export function clampToPage([x, y]: MapPoint, page: PageSize): MapPoint {
+  return [Math.min(Math.max(x, 0), page.widthMm), Math.min(Math.max(y, 0), page.heightMm)];
+}
+
+/** Whether segment `a`-`b` passes over the page (Liang-Barsky clipping). */
+function segmentCrossesPage(a: MapPoint, b: MapPoint, page: PageSize): boolean {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  let enter = 0;
+  let leave = 1;
+  const edges: [number, number][] = [
+    [-dx, a[0]],
+    [dx, page.widthMm - a[0]],
+    [-dy, a[1]],
+    [dy, page.heightMm - a[1]],
+  ];
+  for (const [p, q] of edges) {
+    if (p === 0) {
+      if (q < 0) return false;
+      continue;
+    }
+    const t = q / p;
+    if (p < 0) enter = Math.max(enter, t);
+    else leave = Math.min(leave, t);
+    if (enter > leave) return false;
+  }
+  return true;
+}
+
+/** Whether `point` is inside the polygon `points` (even-odd rule). */
+function insidePolygon([x, y]: MapPoint, points: readonly MapPoint[]): boolean {
+  let inside = false;
+  for (let index = 0, previous = points.length - 1; index < points.length; previous = index++) {
+    const [xi, yi] = points[index];
+    const [xj, yj] = points[previous];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * Whether a line or an outline through `points` draws anything on the page: a
+ * point on it, a segment across it, or, for a closed outline, the whole page
+ * inside it. Curved segments are read as their straight chords, which a Pen or
+ * Area curve stays close to.
+ */
+export function touchesPage(points: readonly MapPoint[], closed: boolean, page: PageSize): boolean {
+  if (points.length === 0) return false;
+  if (points.some((point) => onPage(point, page))) return true;
+  const segments = closed ? points.length : points.length - 1;
+  for (let index = 0; index < segments; index += 1) {
+    if (segmentCrossesPage(points[index], points[(index + 1) % points.length], page)) return true;
+  }
+  return closed && insidePolygon([page.widthMm / 2, page.heightMm / 2], points);
+}
+
 /** The distance from a point to the nearest spot on segment `a`-`b`. */
 function distanceToSegment(point: MapPoint, a: MapPoint, b: MapPoint): number {
   const dx = b[0] - a[0];
