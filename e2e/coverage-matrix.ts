@@ -3115,6 +3115,35 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-maps-transform",
+    area: "plugins",
+    workflow:
+      "The Maps editor's transform handles and keyboard scale and turn Commands (#795): with Select picked, a selected Stamp draws a box with a grip on each corner and a turn grip on a stalk above it, and the author drags a corner to resize it uniformly, or the turn grip to turn it, and sees the properties panel's Size (mm) and Rotation (degrees) follow. Each committed drag is one undo step. The scale and turn Commands beside the move Commands do the same without a pointer: ] and [ scale 10%, Shift makes it 1%, . and , turn 15°, and Shift makes it 1°, and each press is one undo step too. The drags are pointer gestures by nature (documented exemption, `support/frame-stroke.ts`); the Commands are their keyboard form; asserts: the panel's size and rotation after a corner and a turn drag, the single undo step each drag and command press leaves, and the panel's values after every Command press; persists: yes (each drag and press is one autosaving, undoable edit)",
+    edges: [
+      "A corner drag resizes the selected Stamp, the panel's Size follows, and Mod+Z puts it back in one step",
+      "The turn handle turns the selected Stamp, the panel's Rotation follows, and Mod+Z puts it back in one step",
+      "The scale and turn Commands resize and turn the selection in steps, each press one undo step",
+    ],
+    terms: ["Command", "Shortcut"],
+    shortcuts: [
+      "plugin.maibuk-maps.insertTool",
+      "plugin.maibuk-maps.selectTool",
+      "plugin.maibuk-maps.scaleUp",
+      "plugin.maibuk-maps.scaleDown",
+      "plugin.maibuk-maps.scaleUpFine",
+      "plugin.maibuk-maps.scaleDownFine",
+      "plugin.maibuk-maps.rotateClockwise",
+      "plugin.maibuk-maps.rotateCounterClockwise",
+      "plugin.maibuk-maps.rotateClockwiseFine",
+      "plugin.maibuk-maps.rotateCounterClockwiseFine",
+      "plugin.maibuk-maps.undo",
+    ],
+    routes: ["/plugin/:pluginId/:pageId"],
+    fixture: "bookShelf",
+    tags: ["sandbox"],
+    status: "accepted",
+  },
+  {
     id: "plugins-maps-area",
     area: "plugins",
     workflow:
