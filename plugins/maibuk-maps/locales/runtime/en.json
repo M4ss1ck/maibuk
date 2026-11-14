@@ -44,6 +44,8 @@
   "map.penPoints_other": "Pen line, {{count}} points",
   "map.sizeReadout": "{{value}} mm",
   "map.angleReadout": "{{value}}°",
+  "map.shapeReadout": "{{width}} × {{height}} mm",
+  "map.labelReadout": "Cap {{size}} mm · {{width}} mm",
   "map.saveFailed": "The Map could not be saved. Your last change is not stored yet.",
   "map.emptyTitle": "No Map open",
   "map.emptyDescription": "Open a Map from the Maps list to edit it.",

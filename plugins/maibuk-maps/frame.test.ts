@@ -171,7 +171,12 @@ function key(name: string, init: KeyboardEventInit = {}): KeyboardEvent {
 const PEN_LABEL = { one: "Pen line, {{count}} point", other: "Pen line, {{count}} points" };
 
 /** The readout chip's text the Worker sends: `{{value}}` for the millimetres or degrees. */
-const READOUT = { size: "{{value}} mm", angle: "{{value}}°" };
+const READOUT = {
+  size: "{{value}} mm",
+  angle: "{{value}}°",
+  shape: "{{width}} × {{height}} mm",
+  label: "Cap {{size}} mm · {{width}} mm",
+};
 
 const shape = (overrides: Record<string, unknown> = {}) => ({
   d: "M 10 10 L 20 20",

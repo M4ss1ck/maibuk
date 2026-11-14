@@ -83,9 +83,9 @@ export interface FrameSceneElement {
   label?: FrameLabelLayout;
   /**
    * The box a transform handle resizes or turns, the handles the Element takes,
-   * and the smallest width the Worker keeps for it (#795). Only the selected
-   * Element carries one; a Map Line, a Fill, and (until ticket 2) a Shape or a
-   * Map Label carry none, and keep the selection outline they have always had.
+   * and the smallest width the Worker keeps for it (#795, #796). Only the
+   * selected Element carries one; a converted or freehand Map Line and a Fill
+   * carry none, and keep the selection outline they have always had.
    */
   transform?: FrameElementTransform;
 }
@@ -94,15 +94,21 @@ export interface FrameSceneElement {
 export type FrameElementTransform = ElementTransform;
 
 /**
- * The text a transform drag's readout chip shows (#795), in the app language,
- * with `{{value}}` where the millimetres or the degrees go. The Frame cannot
- * read the Plugin's catalogs, so the Worker sends both.
+ * The text a transform drag's readout chip shows (#795, #796), in the app
+ * language, with `{{value}}` where the millimetres or the degrees go, and
+ * `{{width}}`, `{{height}}`, and `{{size}}` where a Shape's or a Map Label's
+ * own numbers go. The Frame cannot read the Plugin's catalogs, so the Worker
+ * sends all four.
  */
 export interface TransformReadout {
   /** The chip while a resize runs, such as `{{value}} mm`. */
   size: string;
   /** The chip while a turn runs, such as `{{value}}°`. */
   angle: string;
+  /** The chip while a Shape resizes, such as `{{width}} × {{height}} mm`. */
+  shape: string;
+  /** The chip while a Map Label resizes, such as `Cap {{size}} mm · {{width}} mm`. */
+  label: string;
 }
 
 /** The baseline a Map Label's bend handle is placed on and dragged against. */

@@ -44,6 +44,8 @@
   "map.penPoints_other": "Línea de pluma, {{count}} puntos",
   "map.sizeReadout": "{{value}} mm",
   "map.angleReadout": "{{value}}°",
+  "map.shapeReadout": "{{width}} × {{height}} mm",
+  "map.labelReadout": "Tamaño {{size}} mm · {{width}} mm",
   "map.saveFailed": "No se pudo guardar el mapa. El último cambio todavía no está guardado.",
   "map.emptyTitle": "No hay ningún mapa abierto",
   "map.emptyDescription": "Abre un mapa desde la lista de Mapas para editarlo.",

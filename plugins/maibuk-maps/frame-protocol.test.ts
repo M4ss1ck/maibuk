@@ -249,7 +249,12 @@ describe("sceneMessage() with the Library's pictures", () => {
     panX: 0,
     panY: 0,
     penLabel: { one: "Pen line, {{count}} point", other: "Pen line, {{count}} points" },
-    readout: { size: "{{value}} mm", angle: "{{value}}°" },
+    readout: {
+      size: "{{value}} mm",
+      angle: "{{value}}°",
+      shape: "{{width}} × {{height}} mm",
+      label: "Cap {{size}} mm · {{width}} mm",
+    },
   };
 
   it("carries the picture's primitive, by id, in the scene the Frame draws", () => {
@@ -363,7 +368,12 @@ describe("sceneMessage() with transform handles (#795)", () => {
     panX: 0,
     panY: 0,
     penLabel: { one: "Pen line, {{count}} point", other: "Pen line, {{count}} points" },
-    readout: { size: "{{value}} mm", angle: "{{value}}°" },
+    readout: {
+      size: "{{value}} mm",
+      angle: "{{value}}°",
+      shape: "{{width}} × {{height}} mm",
+      label: "Cap {{size}} mm · {{width}} mm",
+    },
   };
 
   it("carries the selected Stamp's handle box, its handle set, and whether it is locked", () => {
@@ -388,6 +398,11 @@ describe("sceneMessage() with transform handles (#795)", () => {
 
   it("carries the readout's localized text for the Frame's chip", () => {
     const message = sceneMessage({ page, elements: [] }, view);
-    expect(message.readout).toEqual({ size: "{{value}} mm", angle: "{{value}}°" });
+    expect(message.readout).toEqual({
+      size: "{{value}} mm",
+      angle: "{{value}}°",
+      shape: "{{width}} × {{height}} mm",
+      label: "Cap {{size}} mm · {{width}} mm",
+    });
   });
 });

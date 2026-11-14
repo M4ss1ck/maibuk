@@ -11,6 +11,8 @@ import {
   DEFAULT_LABEL_HALO_MM,
   DEFAULT_LABEL_SIZE_MM,
   LINE_STROKE,
+  MIN_LABEL_WIDTH_MM,
+  MIN_SHAPE_SIZE_MM,
   MIN_STAMP_SIZE_MM,
   type MapDocument,
   type MapElement,
@@ -1929,7 +1931,7 @@ describe("the handle box an Element carries (#795)", () => {
     expect(elementTransform(bar)?.box.height).toBeCloseTo(40 * 0.12, 6);
   });
 
-  it("is only a Stamp's or a Map Image's: a line, a fill, and a label carry none", () => {
+  it("is none for a freehand line or a fill, which keep today's outline", () => {
     const plain = line("plain", [
       [0, 0],
       [1, 1],
@@ -1946,6 +1948,95 @@ describe("the handle box an Element carries (#795)", () => {
         content: { color: "#c8d5a3" },
       })
     ).toBeNull();
+  });
+
+  it("is a Shape's own box with all eight handles (#796)", () => {
+    expect(
+      elementTransform({
+        id: "shape",
+        kind: "line",
+        name: "Ellipse 1",
+        hidden: false,
+        locked: false,
+        points: [
+          [0, 0],
+          [1, 0],
+        ],
+        style: "plain",
+        enclosesFills: true,
+        closed: true,
+        curves: [false, false],
+        roughened: false,
+        shape: {
+          kind: "ellipse",
+          cx: 100,
+          cy: 50,
+          width: 64,
+          height: 34,
+          rotation: 18,
+          sides: 6,
+          cornerRadius: 0,
+        },
+      })
+    ).toEqual({
+      box: { x: 100, y: 50, width: 64, height: 34, rotation: 18 },
+      handles: "all",
+      minSize: MIN_SHAPE_SIZE_MM,
+    });
+  });
+
+  it("is none for a converted Shape, Roughened or cut (#796)", () => {
+    const shape = {
+      kind: "rectangle" as const,
+      cx: 30,
+      cy: 20,
+      width: 40,
+      height: 20,
+      rotation: 0,
+      sides: 6,
+      cornerRadius: 0,
+    };
+    const convertedFromCut: MapLineElement = {
+      id: "cut",
+      kind: "line",
+      name: "Rectangle 2",
+      hidden: false,
+      locked: false,
+      points: [
+        [10, 10],
+        [50, 10],
+      ],
+      style: "plain",
+      enclosesFills: true,
+      closed: false,
+      curves: [false],
+      roughened: false,
+      convertedFrom: "rectangle",
+    };
+    // A freehand line carries no Shape at all.
+    expect(elementTransform(convertedFromCut)).toBeNull();
+    // A Roughened line keeps no exact geometry either.
+    expect(
+      elementTransform({
+        ...convertedFromCut,
+        id: "rough",
+        roughened: true,
+        convertedFrom: undefined,
+      })
+    ).toBeNull();
+    // A line that somehow keeps both a Shape and the Roughen flag is converted.
+    expect(
+      elementTransform({
+        ...convertedFromCut,
+        id: "both",
+        shape,
+        roughened: true,
+        convertedFrom: undefined,
+      })
+    ).toBeNull();
+  });
+
+  it("is a Map Label's baseline box with the label handles (#796)", () => {
     expect(
       elementTransform({
         id: "label",
@@ -1955,15 +2046,19 @@ describe("the handle box an Element carries (#795)", () => {
         locked: false,
         text: "Sea",
         x: 10,
-        y: 10,
-        rotation: 0,
-        width: 30,
+        y: 20,
+        rotation: 5,
+        width: 84,
         bend: 0,
         font: DEFAULT_LABEL_FONT,
-        size: 6,
+        size: 7,
         letterSpacing: 0,
         halo: 0,
       })
-    ).toBeNull();
+    ).toEqual({
+      box: { x: 10, y: 20, width: 84, height: 7, rotation: 5 },
+      handles: "label",
+      minSize: MIN_LABEL_WIDTH_MM,
+    });
   });
 });

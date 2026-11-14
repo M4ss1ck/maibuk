@@ -25,6 +25,8 @@ import {
   isAreaFill,
   labelBaselinePath,
   labelFontFamily,
+  MIN_LABEL_WIDTH_MM,
+  MIN_SHAPE_SIZE_MM,
   MIN_STAMP_SIZE_MM,
   type MapDocument,
   type MapElement,
@@ -1622,11 +1624,13 @@ function stampBoxRatio(element: MapStampElement, library: MapLibrary): number {
 }
 
 /**
- * What the Frame needs to draw an Element's transform handles (#795): the box
- * they sit on, in page millimetres, the handles it takes, and the smallest size
- * the Worker keeps for it. A Stamp and a Map Image carry four corners, which
- * keep their aspect because both store a width alone. Every other kind carries
- * none here and keeps its selection outline.
+ * What the Frame needs to draw an Element's transform handles (#795, #796):
+ * the box they sit on, in page millimetres, the handles it takes, and the
+ * smallest size the Worker keeps for it. A Stamp and a Map Image carry four
+ * corners, which keep their aspect because both store a width alone. A Shape
+ * that still keeps its exact geometry carries all eight handles; a Map Label
+ * carries its corners and its left and right sides. A converted or freehand
+ * Map Line and a Fill carry none here and keep their selection outline.
  */
 export function elementTransform(
   element: MapElement,
@@ -1648,6 +1652,39 @@ export function elementTransform(
       box: { x, y, width: size, height: size * ratio, rotation },
       handles: "corners",
       minSize: MIN_STAMP_SIZE_MM,
+    };
+  }
+  if (element.kind === "line") {
+    // Only a Shape that still keeps its exact geometry takes handles: a line
+    // Roughened or cut by the Eraser, and a freehand line, keep today's
+    // outline with none.
+    const shape = element.shape;
+    if (shape === undefined || element.roughened || element.convertedFrom !== undefined) {
+      return null;
+    }
+    return {
+      box: {
+        x: shape.cx,
+        y: shape.cy,
+        width: shape.width,
+        height: shape.height,
+        rotation: shape.rotation,
+      },
+      handles: "all",
+      minSize: MIN_SHAPE_SIZE_MM,
+    };
+  }
+  if (element.kind === "label") {
+    return {
+      box: {
+        x: element.x,
+        y: element.y,
+        width: element.width,
+        height: element.size,
+        rotation: element.rotation,
+      },
+      handles: "label",
+      minSize: MIN_LABEL_WIDTH_MM,
     };
   }
   return null;
