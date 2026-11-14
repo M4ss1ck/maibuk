@@ -78,8 +78,60 @@ jobs:
             exit 1
           fi
 
-  quality:
+  # The suite in parallel shards, as ci.yml runs it. Unsharded on one runner it
+  # took 1775 s and pushed the heaviest tests past their 60 s budget (Release
+  # 43578411006, #770). Each shard records its results and coverage as a blob;
+  # `quality` merges them and enforces the thresholds on the whole.
+  tests:
+    name: Tests (shard ${{ matrix.shard }}/3)
     needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "lts/*"
+          cache: "pnpm"
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch dictation runtime
+        run: pnpm fetch:dictation
+
+      - name: Run tests
+        run: >-
+          pnpm exec vitest run --coverage
+          --coverage.thresholds.lines=0 --coverage.thresholds.functions=0
+          --coverage.thresholds.statements=0 --coverage.thresholds.branches=0
+          --shard=${{ matrix.shard }}/3 --reporter=default --reporter=blob
+
+      - name: Upload shard report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          # One name per attempt: "Re-run failed jobs" keeps the old report,
+          # and quality picks the newest (scripts/latest-shard-reports.mjs).
+          name: vitest-blob-${{ matrix.shard }}-attempt-${{ github.run_attempt }}
+          path: .vitest-reports/
+          include-hidden-files: true
+          retention-days: 1
+
+  # The gate every build waits for. It also runs when a shard failed, so the
+  # merge prints the time budget report that explains a timeout, then fails.
+  quality:
+    needs: tests
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -97,8 +149,25 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run test suite with coverage gates
-        run: pnpm test:coverage
+      - name: Download shard reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: vitest-blob-*
+          path: .vitest-artifacts
+
+      - name: Pick the newest report of each shard
+        run: node scripts/latest-shard-reports.mjs .vitest-artifacts .vitest-reports
+
+      - name: Merge reports and check coverage thresholds
+        run: pnpm exec vitest run --mergeReports --coverage
+
+      # A shard that died before uploading leaves no report to fail the merge,
+      # so the gate checks every shard's own result too.
+      - name: Fail when any shard failed
+        if: ${{ needs.tests.result != 'success' }}
+        run: |
+          echo "A test shard ended '${{ needs.tests.result }}'; see the Tests jobs."
+          exit 1
 
   # Build for Linux (deb, rpm, appimage)
   build-linux:
