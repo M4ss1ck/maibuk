@@ -51,7 +51,7 @@ A Stamp made from a picture the author uploaded, named after the file. It belong
 _Avoid_: uploaded icon, custom icon
 
 **Map Label**:
-A name written on a Map, straight or along a curve. A new one starts with no text, and the editor draws an italic prompt in its place that is never stored, exported, or placed.
+A name written on a Map, straight or along a curve. A new one starts with no text, and the editor shows a prompt in its place that is never stored or exported.
 _Avoid_: text, caption, title (that is a Book's)
 
 **Map Image**:

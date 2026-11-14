@@ -34,7 +34,7 @@
    * @typedef {"ellipse" | "rectangle" | "polygon"} ShapeKind
    * @typedef {"select" | "hand" | "pencil" | "pen" | "bucket" | "area" | "eraser" | "insert" | "text" | ShapeKind} MapTool
    * @typedef {{ d: string, stroke: string | null, strokeWidth: number, dash: string | null, fill: string | null, fillRule?: "evenodd", opacity: number, transform?: string, clip?: string, hitOnly?: true }} LineShape
-   * @typedef {{ text: string, x: number, y: number, size: number, fill: string, font?: string, letterSpacing?: number, halo?: { color: string, width: number }, path?: { id: string, d: string }, anchor: "start" | "middle" | "end", transform?: string, placeholder?: true }} TextShape
+   * @typedef {{ text: string, x: number, y: number, size: number, fill: string, font?: string, letterSpacing?: number, halo?: { color: string, width: number }, path?: { id: string, d: string }, anchor: "start" | "middle" | "end", transform?: string, placeholder?: true, opacity?: number }} TextShape
    * @typedef {{ kind: "image", assetId: string, x: number, y: number, width: number, height: number, rotation: number, opacity: number, tint?: string, clip?: string }} ImageShape
    * @typedef {LineShape | TextShape | ImageShape} SceneShape
    * @typedef {{ x: number, y: number, rotation: number, width: number, bend: number }} FrameLabelLayout
@@ -100,9 +100,6 @@
 
   /** How far the Eraser reaches at zoom 1, in page millimetres. */
   const ERASER_RADIUS_MM = 2;
-
-  /** How strongly an empty Map Label's placeholder is inked (#798); scene.ts's PLACEHOLDER_OPACITY. */
-  const PLACEHOLDER_OPACITY = 0.5;
 
   /** The crosshair's arm length, in page millimetres. */
   const CROSSHAIR_ARM_MM = 1.5;
@@ -512,6 +509,9 @@
       anchor,
       ...(typeof shape.transform === "string" ? { transform: shape.transform } : {}),
       ...(shape.placeholder === true ? { placeholder: /** @type {const} */ (true) } : {}),
+      ...(isNumber(shape.opacity) && shape.opacity >= 0 && shape.opacity < 1
+        ? { opacity: shape.opacity }
+        : {}),
     };
   }
 
@@ -1067,7 +1067,7 @@
       text-anchor="${shape.anchor}"
       transform="${shape.transform ?? undefined}"
       font-style="${shape.placeholder === true ? "italic" : undefined}"
-      opacity="${shape.placeholder === true ? PLACEHOLDER_OPACITY : undefined}"
+      opacity="${shape.opacity === undefined ? undefined : n(shape.opacity)}"
     >
       ${content()}
     </text>`;

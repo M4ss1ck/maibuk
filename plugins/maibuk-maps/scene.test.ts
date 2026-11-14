@@ -998,7 +998,7 @@ describe("Map Label rendering", () => {
     expect(sceneToSvg(mapWith([label()])).match(/<path /g)).toHaveLength(1);
   });
 
-  it("draws an empty label's placeholder italic and muted, in the label's font, with no halo (#798)", () => {
+  it("draws an empty label's placeholder italic and muted, in the label's font and halo (#798)", () => {
     const empty = label({ text: "", font: "cinzel", color: "#8b1a1a", bend: 8 });
     const [hit, text, ...rest] = sceneShapes([empty], 203.2, 203.2, undefined, {
       labelPlaceholder: "Write your text here",
@@ -1009,17 +1009,23 @@ describe("Map Label rendering", () => {
     expect(text).toMatchObject({
       text: "Write your text here",
       placeholder: true,
+      opacity: 0.5,
       font: "Cinzel",
       fill: "#8b1a1a",
       anchor: "middle",
     });
-    expect(text).not.toHaveProperty("halo");
+    // The halo stays, faded with the ink, so the prompt reads over drawn land.
+    expect(text).toMatchObject({ halo: { width: DEFAULT_LABEL_HALO_MM } });
     expect(rest).toEqual([]);
 
     const svg = sceneToSvg(mapWith([empty]), { labelPlaceholder: "Write your text here" });
-    expect(svg).toContain('font-style="italic"');
-    expect(svg).toContain('opacity="0.5"');
-    expect(svg.match(/<text /g)).toHaveLength(1);
+    // Both copies, halo and ink, are italic and faded alike.
+    const texts = [...svg.matchAll(/<text ([^>]*)>/g)].map(([, attributes]) => attributes);
+    expect(texts).toHaveLength(2);
+    for (const attributes of texts) {
+      expect(attributes).toContain('font-style="italic"');
+      expect(attributes).toContain('opacity="0.5"');
+    }
   });
 
   it("draws nothing but the hit path for an empty label with no placeholder (#798)", () => {
@@ -1034,6 +1040,7 @@ describe("Map Label rendering", () => {
     })[0];
     expect(text).toMatchObject({ text: "The Reach" });
     expect(text).not.toHaveProperty("placeholder");
+    expect(text).not.toHaveProperty("opacity");
   });
 
   it("moves a Label by shifting its centre", () => {

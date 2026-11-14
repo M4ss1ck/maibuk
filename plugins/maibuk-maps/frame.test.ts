@@ -1017,19 +1017,26 @@ describe("Map Label shapes", () => {
         sceneElement({
           shapes: [
             labelHit(),
-            labelText({ text: "Write your text here", placeholder: true, halo: undefined }),
+            labelText({
+              text: "Write your text here",
+              placeholder: true,
+              opacity: 0.5,
+            }),
           ],
         }),
       ],
     });
 
+    // Halo and ink alike are italic and faded, in the label's own font, so the
+    // prompt previews how the text will look.
     const texts = Array.from(document.querySelectorAll("text.map-line"));
-    expect(texts).toHaveLength(1);
-    expect(texts[0].textContent?.trim()).toBe("Write your text here");
-    expect(texts[0].getAttribute("font-style")).toBe("italic");
-    expect(texts[0].getAttribute("opacity")).toBe("0.5");
-    // It keeps the label's own font, so it previews how the text will look.
-    expect(texts[0].getAttribute("font-family")).toBe("IM Fell English");
+    expect(texts).toHaveLength(2);
+    for (const text of texts) {
+      expect(text.textContent?.trim()).toBe("Write your text here");
+      expect(text.getAttribute("font-style")).toBe("italic");
+      expect(text.getAttribute("opacity")).toBe("0.5");
+      expect(text.getAttribute("font-family")).toBe("IM Fell English");
+    }
 
     const hit = document.querySelector('g[data-element-id="e1"] path.map-hit');
     if (hit === null) throw new Error("the label drew no hit path");

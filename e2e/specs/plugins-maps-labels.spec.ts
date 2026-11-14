@@ -1,8 +1,10 @@
 // The Maps editor's Map Labels (#751): the Text tool's Place Map Label button
 // adds one at the view centre, the Elements list lists it selected, and the
 // Frame draws its text along a baseline; a click in the Frame with the Text
-// tool adds one where the pointer landed. From the properties panel the Text
-// field rewrites the label, the Font select moves it to a bundled face the
+// tool adds one where the pointer landed. A new label stores no text, so the
+// Frame draws its prompt as an italic placeholder and the Text field shows it
+// as its own, until typing replaces it (#798). From the properties panel the
+// Text field rewrites the label, the Font select moves it to a bundled face the
 // Frame's own folder declares, and the Bend field bows the baseline into a
 // quadratic off the chord; with the Select tool the label's bend handle drags
 // that curve with the pointer, which changes the Bend value. The label, its
@@ -48,7 +50,7 @@ const elementRow = (page: Page, name: string) =>
 /**
  * The text a Map Label draws in the Frame. A label's halo is a second copy of
  * the same text, so a label draws two, halo first. An empty label's placeholder
- * draws one, with no halo (#798).
+ * draws the same two, italic and faded (#798).
  */
 const drawnLabelText = (page: Page) => mapFrame(page).locator("g[data-element-id] text.map-line");
 /** The textPath each drawn copy writes, running along the label's baseline. */
@@ -305,13 +307,12 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.te
     await capture(page, "labels-placeholder");
 
     // The label stores no text: the field is empty and offers the prompt as
-    // its placeholder, and the Frame draws that prompt italic and muted, once.
+    // its placeholder, and the Frame draws that prompt italic and muted.
     await expect(textField(page)).toHaveValue("");
     await expect(textField(page)).toHaveAttribute("placeholder", LABEL_PLACEHOLDER);
-    await expect(drawnLabelText(page)).toHaveCount(1);
-    await expect(drawnLabelText(page)).toHaveAttribute("font-style", "italic");
-    await expect(drawnLabelText(page)).toHaveAttribute("opacity", "0.5");
-    await expect(drawnLabelPaths(page)).toHaveText(LABEL_PLACEHOLDER);
+    await expect(drawnLabelText(page).last()).toHaveAttribute("font-style", "italic");
+    await expect(drawnLabelText(page).last()).toHaveAttribute("opacity", "0.5");
+    await expect(drawnLabelPaths(page).last()).toHaveText(LABEL_PLACEHOLDER);
 
     // The first keys typed are the label's text: nothing to select or delete.
     await focusProperties(page, textField(page));
@@ -326,9 +327,8 @@ test.describe("Maps Map Labels @wf:plugins-maps-labels @sc:plugin.maibuk-maps.te
     await page.keyboard.press("Backspace");
     await page.keyboard.press("Enter");
     await expect(textField(page)).toHaveValue("");
-    await expect(drawnLabelText(page)).toHaveCount(1);
-    await expect(drawnLabelText(page)).toHaveAttribute("font-style", "italic");
-    await expect(drawnLabelPaths(page)).toHaveText(LABEL_PLACEHOLDER);
+    await expect(drawnLabelText(page).last()).toHaveAttribute("font-style", "italic");
+    await expect(drawnLabelPaths(page).last()).toHaveText(LABEL_PLACEHOLDER);
     await expect(elementRow(page, "Map Label 1")).toBeVisible();
   });
 
