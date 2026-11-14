@@ -4,7 +4,7 @@
   "name": "Maps",
   "description": "Design maps of your world, a region, or a country and its provinces, in color or print-ready ink.",
   "author": "Maibuk",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "apiVersion": "^0.1.11",
   "entry": "index.js",
   "platforms": ["web", "desktop"],
@@ -138,6 +138,54 @@
         "label": "Move down 10 mm",
         "contexts": ["map"],
         "defaults": [["Shift+ArrowDown"]]
+      },
+      {
+        "id": "scaleUp",
+        "label": "Scale up",
+        "contexts": ["map"],
+        "defaults": [["]"]]
+      },
+      {
+        "id": "scaleDown",
+        "label": "Scale down",
+        "contexts": ["map"],
+        "defaults": [["["]]
+      },
+      {
+        "id": "scaleUpFine",
+        "label": "Scale up 1%",
+        "contexts": ["map"],
+        "defaults": [["Shift+]"]]
+      },
+      {
+        "id": "scaleDownFine",
+        "label": "Scale down 1%",
+        "contexts": ["map"],
+        "defaults": [["Shift+["]]
+      },
+      {
+        "id": "rotateClockwise",
+        "label": "Rotate clockwise",
+        "contexts": ["map"],
+        "defaults": [["."]]
+      },
+      {
+        "id": "rotateCounterClockwise",
+        "label": "Rotate counterclockwise",
+        "contexts": ["map"],
+        "defaults": [[","]]
+      },
+      {
+        "id": "rotateClockwiseFine",
+        "label": "Rotate clockwise 1°",
+        "contexts": ["map"],
+        "defaults": [["Shift+."]]
+      },
+      {
+        "id": "rotateCounterClockwiseFine",
+        "label": "Rotate counterclockwise 1°",
+        "contexts": ["map"],
+        "defaults": [["Shift+,"]]
       },
       {
         "id": "selectTool",

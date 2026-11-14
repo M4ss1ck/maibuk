@@ -1,10 +1,11 @@
 // Pointer gestures for the Maps editor's drawing Frame (#745, #746, #747,
-// #766, #750, #751, #777): a straight Pencil stroke, an Area tool outline, an
-// Eraser drag across the Frame's svg, a Shape tool's drag, a Select drag that
-// moves an Element, a Map Label's bend handle, a wheel zoom, and a Space+drag
-// pan. Moving has a keyboard path (the arrow Commands), so does the Area tool's
-// outline (its arrows and Enter), and so does a label's bend (the panel's Bend
-// field); the drag here is the pointer form of each.
+// #766, #750, #751, #777, #795): a straight Pencil stroke, an Area tool
+// outline, an Eraser drag across the Frame's svg, a Shape tool's drag, a Select
+// drag that moves an Element, a Map Label's bend handle, a transform handle's
+// resize or turn, a wheel zoom, and a Space+drag pan. Moving has a keyboard
+// path (the arrow Commands), so does the Area tool's outline (its arrows and
+// Enter), a label's bend (the panel's Bend field), and a handle's resize or
+// turn (the scale and turn Commands); the drag here is the pointer form of each.
 //
 // Drawing a Map Line has no keyboard path in this slice (the keyboard acts on a
 // selected Map Line: the move Commands, the Elements list, undo), and the E2E
@@ -285,6 +286,44 @@ export async function dragBendHandle(
   if (cx === null || cy === null) throw new Error("the bend handle has no apex to drag from");
   const toScreen = fitToBox(box, viewBox.split(" ").map(Number));
   const start = toScreen([Number(cx), Number(cy)]);
+  const end = toScreen(to);
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  for (let step = 1; step <= STEPS; step += 1) {
+    await page.mouse.move(
+      start.x + ((end.x - start.x) * step) / STEPS,
+      start.y + ((end.y - start.y) * step) / STEPS
+    );
+  }
+  await page.mouse.up();
+}
+
+/**
+ * Drags one of a selected Stamp's or Map Image's transform handles (#795) to a
+ * page point in millimetres: a corner grip, which resizes the box uniformly, or
+ * the turn grip above the box, which turns it about its centre. The Select tool
+ * must be picked and the Element selected, which is when the Frame draws the
+ * handles. The caller hands the grip's own hit target, so the drag starts where
+ * the Frame draws it rather than where the panel's numbers say, and the target
+ * point is mapped through the surface's viewBox the way the Frame's own
+ * `getScreenCTM` reads it. The scale and turn Commands are the keyboard path to
+ * the same edit; this is their pointer form, the same exemption as the drags
+ * above.
+ */
+export async function dragTransformHandle(
+  page: Page,
+  surface: Locator,
+  handle: Locator,
+  to: PagePoint
+): Promise<void> {
+  const grip = await handle.boundingBox();
+  if (grip === null) throw new Error("the transform handle has no box to grab");
+  const box = await surface.boundingBox();
+  if (box === null) throw new Error("the Frame's drawing surface has no box to draw on");
+  const viewBox = await surface.getAttribute("viewBox");
+  if (viewBox === null) throw new Error("the Frame's drawing surface has no viewBox");
+  const toScreen = fitToBox(box, viewBox.split(" ").map(Number));
+  const start = { x: grip.x + grip.width / 2, y: grip.y + grip.height / 2 };
   const end = toScreen(to);
   await page.mouse.move(start.x, start.y);
   await page.mouse.down();

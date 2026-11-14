@@ -17,8 +17,9 @@ import {
   createMapEditor,
   type MapEditor,
 } from "./editor";
-import { parseFrameMessage } from "./frame-protocol";
+import { parseFrameMessage, type FrameSceneMessage } from "./frame-protocol";
 import { shapeOutline } from "./geometry";
+import { format } from "./i18n";
 import { mapLibrary, smoothStroke } from "./scene";
 import {
   DATA_VERSION,
@@ -1947,6 +1948,676 @@ describe("dragging a Map Label's bend handle", () => {
       newLabel({ id: "reach", name: "Map Label 2", text: "The Reach", point: [100, 50] }),
     ]);
     expect(editor.getSnapshot().canUndo).toBe(false);
+  });
+});
+
+describe("a transform handle drag from the Frame (#795)", () => {
+  /** A marker Stamp 12 mm wide on (100, 50), and a Map Image 80 mm wide on (40, 60). */
+  const marker: MapStampElement = {
+    id: "marker",
+    kind: "stamp",
+    name: "City",
+    hidden: false,
+    locked: false,
+    stampRef: "base:marker",
+    transform: { x: 100, y: 50, size: 12, rotation: 0 },
+  };
+  const scan: MapImageElement = {
+    id: "scan",
+    kind: "image",
+    name: "Scan",
+    hidden: false,
+    locked: false,
+    assetRef: "a1",
+    transform: { x: 40, y: 60, size: 80, rotation: 0 },
+    opacity: 1,
+    exportable: true,
+  };
+
+  /** An editor that records the scenes it draws its Frame from. */
+  function openWatched(elements: MapElement[]) {
+    const { editor } = openEditor(elements);
+    const scenes: FrameSceneMessage[] = [];
+    editor.attachFrame({
+      postMessage: (message: FrameSceneMessage) => scenes.push(message),
+    } as unknown as MessagePort);
+    scenes.length = 0;
+    return { editor, scenes };
+  }
+
+  it("writes a Stamp's centre, size, and turn in one undo step", () => {
+    const { editor } = openEditor([marker]);
+    editor.select("marker");
+
+    editor.handleFrameMessage({
+      kind: "transformElement",
+      id: "marker",
+      box: { x: 40, y: 30, width: 24, height: 24, rotation: 30 },
+    });
+
+    expect(editor.getSnapshot().elements[0]).toMatchObject({
+      transform: { x: 40, y: 30, size: 24, rotation: 30 },
+    });
+    // The panel's Size and Rotation fields read the same snapshot.
+    expect(editor.getSnapshot().selectedStamp?.transform).toEqual({
+      x: 40,
+      y: 30,
+      size: 24,
+      rotation: 30,
+    });
+
+    // One drag is one edit, not one per pointer move the Frame previewed.
+    editor.undo();
+    expect(editor.getSnapshot().elements[0]).toEqual(marker);
+    editor.redo();
+    expect(editor.getSnapshot().elements[0]).toMatchObject({
+      transform: { x: 40, y: 30, size: 24, rotation: 30 },
+    });
+  });
+
+  it("writes a Map Image's centre, size, and turn in one undo step", () => {
+    const { editor } = openEditor([scan]);
+
+    editor.handleFrameMessage({
+      kind: "transformElement",
+      id: "scan",
+      box: { x: 60, y: 40, width: 40, height: 20, rotation: 15 },
+    });
+
+    expect(editor.getSnapshot().elements[0]).toMatchObject({
+      transform: { x: 60, y: 40, size: 40, rotation: 15 },
+    });
+
+    editor.undo();
+    expect(editor.getSnapshot().elements[0]).toEqual(scan);
+  });
+
+  it("keeps the box above zero and the turn inside one circle", () => {
+    const { editor } = openEditor([marker]);
+
+    editor.handleFrameMessage({
+      kind: "transformElement",
+      id: "marker",
+      box: { x: 100, y: 50, width: 0.2, height: 0.2, rotation: -90 },
+    });
+
+    expect(editor.getSnapshot().elements[0]).toMatchObject({
+      transform: { x: 100, y: 50, size: MIN_STAMP_SIZE_MM, rotation: 270 },
+    });
+  });
+
+  it("turns the scale bar's length, and with it the distance it reads", () => {
+    const { editor, scenes } = openWatched([]);
+    editor.setStamp("scale-bar");
+    editor.insertStamp();
+    const { id } = editor.getSnapshot().elements[0] as MapStampElement;
+    const reading = (): string[] => {
+      const [element] = scenes.at(-1)?.elements ?? [];
+      return (element?.shapes ?? []).flatMap((shape) => ("text" in shape ? [shape.text] : []));
+    };
+    /** How far the bar's first segment reaches past its centre, in page millimetres. */
+    const reach = (): number => {
+      const [element] = scenes.at(-1)?.elements ?? [];
+      const [bar] = element?.shapes ?? [];
+      const match = bar !== undefined && "d" in bar ? /^M (-?[\d.]+)/.exec(bar.d) : null;
+      if (match === null) throw new Error("the scene drew no scale bar");
+      return Math.abs(Number(match[1]));
+    };
+    // 40 mm of a 200 mm page reading 1000 km labels 200 km.
+    expect(reading()).toContain("200 km");
+    const shortBar = reach();
+
+    editor.handleFrameMessage({
+      kind: "transformElement",
+      id,
+      box: { x: 100, y: 50, width: 100, height: 12, rotation: 0 },
+    });
+
+    expect(editor.getSnapshot().elements[0]).toMatchObject({ transform: { size: 100 } });
+    expect(reading()).toContain("500 km");
+    // A wider box draws a longer bar, which is why it reads further.
+    expect(reach()).toBeGreaterThan(shortBar);
+    editor.undo();
+    expect(reading()).toContain("200 km");
+    expect(reach()).toBe(shortBar);
+  });
+
+  it("changes nothing, and takes no undo step, for a locked or hidden Element", () => {
+    const { editor } = openEditor([
+      { ...marker, locked: true },
+      { ...marker, id: "hidden", hidden: true },
+    ]);
+
+    for (const id of ["marker", "hidden"]) {
+      editor.handleFrameMessage({
+        kind: "transformElement",
+        id,
+        box: { x: 10, y: 10, width: 30, height: 30, rotation: 45 },
+      });
+    }
+
+    expect(editor.getSnapshot().elements).toEqual([
+      { ...marker, locked: true },
+      { ...marker, id: "hidden", hidden: true },
+    ]);
+    expect(editor.getSnapshot().canUndo).toBe(false);
+  });
+
+  it("sends the Frame all four readout chip texts, so a drag can read millimetres or degrees", () => {
+    const { editor, scenes } = openWatched([]);
+
+    editor.zoomIn();
+
+    expect(scenes.at(-1)?.readout).toEqual({
+      size: "{{value}} mm",
+      angle: "{{value}}°",
+      shape: "{{width}} × {{height}} mm",
+      label: "Cap {{size}} mm · {{width}} mm",
+    });
+  });
+
+  it("leaves another kind of Element, a missing one, and the box it already has alone", () => {
+    const line = squareLine("ring", "Ring", 10, 10, 80);
+    const { editor } = openEditor([marker, line]);
+
+    editor.handleFrameMessage({
+      kind: "transformElement",
+      id: "ring",
+      box: { x: 40, y: 40, width: 20, height: 20, rotation: 0 },
+    });
+    editor.handleFrameMessage({
+      kind: "transformElement",
+      id: "gone",
+      box: { x: 40, y: 40, width: 20, height: 20, rotation: 0 },
+    });
+    // The box the Stamp already holds, and a whole turn back to its own.
+    editor.handleFrameMessage({
+      kind: "transformElement",
+      id: "marker",
+      box: { x: 100, y: 50, width: 12, height: 12, rotation: 360 },
+    });
+
+    expect(editor.getSnapshot().elements).toEqual([marker, line]);
+    expect(editor.getSnapshot().canUndo).toBe(false);
+  });
+});
+
+describe("scaling and turning the selection by keyboard (#795)", () => {
+  /** A marker Stamp 12 mm wide on (100, 50), and a Map Image 80 mm wide on (40, 60). */
+  const marker: MapStampElement = {
+    id: "marker",
+    kind: "stamp",
+    name: "City",
+    hidden: false,
+    locked: false,
+    stampRef: "base:marker",
+    transform: { x: 100, y: 50, size: 12, rotation: 0 },
+  };
+  const scan: MapImageElement = {
+    id: "scan",
+    kind: "image",
+    name: "Scan",
+    hidden: false,
+    locked: false,
+    assetRef: "a1",
+    transform: { x: 40, y: 60, size: 80, rotation: 0 },
+    opacity: 1,
+    exportable: true,
+  };
+
+  /** The stored transform of the Stamp or Map Image at `index`. */
+  function transformOf(editor: MapEditor, index = 0): MapStampElement["transform"] {
+    const element = editor.getSnapshot().elements[index];
+    if (element === undefined || (element.kind !== "stamp" && element.kind !== "image"))
+      throw new Error("no Stamp or Map Image");
+    return element.transform;
+  }
+
+  it("scales a Stamp about its centre as one undo step", () => {
+    const { editor } = openEditor([marker]);
+    editor.select("marker");
+
+    editor.scaleSelection(1.1);
+
+    expect(transformOf(editor)).toMatchObject({ x: 100, y: 50, rotation: 0 });
+    expect(transformOf(editor).size).toBeCloseTo(13.2);
+    editor.undo();
+    expect(editor.getSnapshot().elements[0]).toEqual(marker);
+  });
+
+  it("scales a Map Image, and a one-percent step nudges it less", () => {
+    const { editor } = openEditor([scan]);
+    editor.select("scan");
+
+    editor.scaleSelection(1.01);
+    expect(transformOf(editor).size).toBeCloseTo(80.8);
+
+    editor.scaleSelection(1.1);
+    expect(transformOf(editor).size).toBeCloseTo(88.88);
+
+    editor.undo();
+    expect(transformOf(editor).size).toBeCloseTo(80.8);
+  });
+
+  it("turns a Stamp clockwise and counterclockwise inside one circle, one step each", () => {
+    const { editor } = openEditor([marker]);
+    editor.select("marker");
+
+    editor.rotateSelection(15);
+    expect(transformOf(editor).rotation).toBe(15);
+    editor.rotateSelection(1);
+    expect(transformOf(editor).rotation).toBe(16);
+    editor.rotateSelection(-31);
+    expect(transformOf(editor).rotation).toBe(345);
+
+    editor.undo();
+    expect(transformOf(editor).rotation).toBe(16);
+  });
+
+  it("keeps a shrinking Stamp above zero, and a step that changes nothing is no undo step", () => {
+    const { editor } = openEditor([
+      { ...marker, transform: { ...marker.transform, size: MIN_STAMP_SIZE_MM } },
+    ]);
+    editor.select("marker");
+
+    editor.scaleSelection(0.9);
+
+    expect(transformOf(editor).size).toBe(MIN_STAMP_SIZE_MM);
+    expect(editor.getSnapshot().canUndo).toBe(false);
+  });
+
+  it("changes nothing, and takes no undo step, with nothing selected, a locked Element, or another kind", () => {
+    const line = squareLine("ring", "Ring", 10, 10, 80);
+    const { editor } = openEditor([{ ...marker, locked: true }, line]);
+
+    // No selection at all.
+    editor.scaleSelection(1.1);
+    editor.rotateSelection(15);
+    expect(editor.getSnapshot().canUndo).toBe(false);
+
+    // A locked Stamp keeps its place, size, and turn.
+    editor.select("marker");
+    editor.scaleSelection(1.1);
+    editor.rotateSelection(15);
+    expect(transformOf(editor)).toEqual({ x: 100, y: 50, size: 12, rotation: 0 });
+
+    // A freehand Map Line is neither a Stamp, a Map Image, a Shape, nor a Map Label.
+    editor.select("ring");
+    editor.scaleSelection(1.1);
+    editor.rotateSelection(15);
+    expect(editor.getSnapshot().canUndo).toBe(false);
+    expect(editor.getSnapshot().elements[1]).toEqual(line);
+  });
+});
+
+describe("a transform handle drag on Shapes and Map Labels (#796)", () => {
+  /** An exact rectangle Shape line 40 by 20 mm on (30, 20), hexagon with square corners. */
+  function shapeLine(overrides: Partial<MapLineElement> = {}): MapLineElement {
+    const shape: MapShape = {
+      kind: "rectangle",
+      cx: 30,
+      cy: 20,
+      width: 40,
+      height: 20,
+      rotation: 0,
+      sides: 6,
+      cornerRadius: 2,
+    };
+    return {
+      id: "shape",
+      kind: "line",
+      name: "Rectangle 1",
+      hidden: false,
+      locked: false,
+      points: [
+        [10, 10],
+        [50, 10],
+      ],
+      style: "plain",
+      enclosesFills: true,
+      closed: true,
+      curves: [false, false],
+      roughened: false,
+      shape,
+      ...overrides,
+    };
+  }
+
+  /** A Map Label 55 mm wide with a 6 mm cap size on (100, 50). */
+  function mapLabel(overrides: Partial<MapLabelElement> = {}): MapLabelElement {
+    return {
+      ...newLabel({ id: "label", name: "Map Label 1", text: "The Reach", point: [100, 50] }),
+      ...overrides,
+    };
+  }
+
+  function shapeOf(editor: MapEditor): MapShape {
+    const [element] = editor.getSnapshot().elements;
+    if (element === undefined || element.kind !== "line" || element.shape === undefined)
+      throw new Error("no Shape");
+    return element.shape;
+  }
+
+  function labelOf(editor: MapEditor): MapLabelElement {
+    const [element] = editor.getSnapshot().elements;
+    if (element === undefined || element.kind !== "label") throw new Error("no Map Label");
+    return element;
+  }
+
+  it("writes a Shape's width, height, rotation, and centre in one undo step, keeping sides and corner radius", () => {
+    const { editor } = openEditor([shapeLine()]);
+    editor.select("shape");
+
+    editor.handleFrameMessage({
+      kind: "transformElement",
+      id: "shape",
+      box: { x: 40, y: 30, width: 64, height: 34, rotation: 18 },
+    });
+
+    const shape = shapeOf(editor);
+    expect(shape).toMatchObject({
+      cx: 40,
+      cy: 30,
+      width: 64,
+      height: 34,
+      rotation: 18,
+      sides: 6,
+      cornerRadius: 2,
+    });
+    // The outline follows the numbers, so the Frame and the preview agree.
+    const [element] = editor.getSnapshot().elements as MapLineElement[];
+    expect(element.points).toEqual(shapeOutline(shape).points);
+
+    editor.undo();
+    expect(shapeOf(editor)).toMatchObject({ cx: 30, cy: 20, width: 40, height: 20, rotation: 0 });
+    editor.redo();
+    expect(shapeOf(editor)).toMatchObject({ cx: 40, cy: 30, width: 64, height: 34, rotation: 18 });
+  });
+
+  it("writes a Map Label's cap size, width, rotation, and centre in one undo step", () => {
+    // The box's centre is half the 7 mm cap above the baseline the label stores.
+    const turn = (10 * Math.PI) / 180;
+    const baselineUnder90x60 = {
+      x: expect.closeTo(90 - 3.5 * Math.sin(turn), 9),
+      y: expect.closeTo(60 + 3.5 * Math.cos(turn), 9),
+    };
+    const { editor } = openEditor([mapLabel()]);
+    editor.select("label");
+
+    editor.handleFrameMessage({
+      kind: "transformElement",
+      id: "label",
+      box: { x: 90, y: 60, width: 84, height: 7, rotation: 10 },
+      size: 7,
+    });
+
+    expect(labelOf(editor)).toMatchObject({
+      ...baselineUnder90x60,
+      width: 84,
+      size: 7,
+      rotation: 10,
+    });
+
+    editor.undo();
+    expect(labelOf(editor)).toMatchObject({
+      x: 100,
+      y: 50,
+      width: DEFAULT_LABEL_WIDTH_MM,
+      size: DEFAULT_LABEL_SIZE_MM,
+      rotation: 0,
+    });
+    editor.redo();
+    expect(labelOf(editor)).toMatchObject({
+      ...baselineUnder90x60,
+      width: 84,
+      size: 7,
+      rotation: 10,
+    });
+  });
+
+  it("never lets a Map Label's cap size drop below its minimum", () => {
+    const { editor } = openEditor([mapLabel({ size: MIN_LABEL_SIZE_MM })]);
+
+    editor.handleFrameMessage({
+      kind: "transformElement",
+      id: "label",
+      // Centred half the 0.2 mm cap above the baseline at (100, 50).
+      box: { x: 100, y: 50 - 0.1, width: DEFAULT_LABEL_WIDTH_MM, height: 0.2, rotation: 0 },
+      size: 0.2,
+    });
+
+    expect(labelOf(editor).size).toBe(MIN_LABEL_SIZE_MM);
+    expect(labelOf(editor).width).toBe(DEFAULT_LABEL_WIDTH_MM);
+    expect(editor.getSnapshot().canUndo).toBe(false);
+  });
+
+  it("changes nothing, and takes no undo step, for a locked, hidden, missing, or unchanged box", () => {
+    const { editor } = openEditor([
+      shapeLine({ id: "locked", locked: true }),
+      shapeLine({ id: "hidden", hidden: true }),
+      mapLabel({ id: "lockedLabel", locked: true } as Partial<MapLabelElement>),
+    ]);
+    const before = editor.getSnapshot().elements;
+
+    for (const id of ["locked", "hidden", "lockedLabel"]) {
+      editor.handleFrameMessage({
+        kind: "transformElement",
+        id,
+        box: { x: 1, y: 2, width: 10, height: 8, rotation: 5 },
+        ...(id === "lockedLabel" ? { size: 5 } : {}),
+      });
+    }
+    editor.handleFrameMessage({
+      kind: "transformElement",
+      id: "gone",
+      box: { x: 1, y: 2, width: 10, height: 8, rotation: 5 },
+    });
+    // The box the Shape already holds.
+    const { editor: same } = openEditor([shapeLine()]);
+    same.handleFrameMessage({
+      kind: "transformElement",
+      id: "shape",
+      box: { x: 30, y: 20, width: 40, height: 20, rotation: 0 },
+    });
+    expect(same.getSnapshot().canUndo).toBe(false);
+
+    expect(editor.getSnapshot().elements).toEqual(before);
+    expect(editor.getSnapshot().canUndo).toBe(false);
+  });
+
+  it("leaves a converted or freehand Map Line and a Fill alone", () => {
+    const freehand = squareLine("ring", "Ring", 10, 10, 80);
+    const cut = shapeLine({
+      id: "cut",
+      shape: undefined,
+      convertedFrom: "rectangle",
+      closed: false,
+    });
+    const fill: MapFillElement = {
+      id: "fill",
+      kind: "fill",
+      name: "Fill 1",
+      hidden: false,
+      locked: false,
+      anchor: [50, 50],
+      content: { color: "land" },
+    };
+    const { editor } = openEditor([freehand, cut, fill]);
+
+    for (const id of ["ring", "cut", "fill"]) {
+      editor.handleFrameMessage({
+        kind: "transformElement",
+        id,
+        box: { x: 40, y: 40, width: 20, height: 10, rotation: 0 },
+      });
+    }
+
+    expect(editor.getSnapshot().elements).toEqual([freehand, cut, fill]);
+    expect(editor.getSnapshot().canUndo).toBe(false);
+  });
+});
+
+describe("scaling and turning Shapes and Map Labels by keyboard (#796)", () => {
+  function shapeLine(): MapLineElement {
+    return {
+      id: "shape",
+      kind: "line",
+      name: "Rectangle 1",
+      hidden: false,
+      locked: false,
+      points: [
+        [10, 10],
+        [50, 10],
+      ],
+      style: "plain",
+      enclosesFills: true,
+      closed: true,
+      curves: [false, false],
+      roughened: false,
+      shape: {
+        kind: "rectangle",
+        cx: 30,
+        cy: 20,
+        width: 40,
+        height: 20,
+        rotation: 0,
+        sides: 6,
+        cornerRadius: 0,
+      },
+    };
+  }
+
+  function shapeEditor(): { editor: MapEditor; id: string } {
+    const { editor } = openEditor();
+    editor.placeShape("rectangle");
+    const [element] = editor.getSnapshot().elements as MapLineElement[];
+    editor.select(element.id);
+    return { editor, id: element.id };
+  }
+
+  function labelEditor(): { editor: MapEditor; id: string } {
+    const { editor } = openEditor();
+    editor.insertLabel();
+    const [element] = editor.getSnapshot().elements as MapLabelElement[];
+    editor.select(element.id);
+    return { editor, id: element.id };
+  }
+
+  it("scales a Shape's width and height as one undo step", () => {
+    const { editor } = shapeEditor();
+
+    editor.scaleSelection(1.1);
+
+    const [element] = editor.getSnapshot().elements as MapLineElement[];
+    expect(element.shape?.width).toBeCloseTo(DEFAULT_SHAPE_SIZE_MM * 1.1);
+    expect(element.shape?.height).toBeCloseTo(DEFAULT_SHAPE_SIZE_MM * 1.1);
+    editor.undo();
+    expect((editor.getSnapshot().elements[0] as MapLineElement).shape?.width).toBe(
+      DEFAULT_SHAPE_SIZE_MM
+    );
+  });
+
+  it("scales a Map Label's cap size and width together as one undo step", () => {
+    const { editor } = labelEditor();
+
+    editor.scaleSelection(1.1);
+
+    const [element] = editor.getSnapshot().elements as MapLabelElement[];
+    expect(element.width).toBeCloseTo(DEFAULT_LABEL_WIDTH_MM * 1.1);
+    expect(element.size).toBeCloseTo(DEFAULT_LABEL_SIZE_MM * 1.1);
+    editor.undo();
+    const [restored] = editor.getSnapshot().elements as MapLabelElement[];
+    expect(restored.width).toBe(DEFAULT_LABEL_WIDTH_MM);
+    expect(restored.size).toBe(DEFAULT_LABEL_SIZE_MM);
+  });
+
+  it("turns a Shape and a Map Label, one undo step per press", () => {
+    const { editor } = shapeEditor();
+    editor.rotateSelection(15);
+    expect((editor.getSnapshot().elements[0] as MapLineElement).shape?.rotation).toBe(15);
+    editor.undo();
+    expect((editor.getSnapshot().elements[0] as MapLineElement).shape?.rotation).toBe(0);
+
+    const labelled = labelEditor();
+    labelled.editor.rotateSelection(15);
+    expect((labelled.editor.getSnapshot().elements[0] as MapLabelElement).rotation).toBe(15);
+    labelled.editor.undo();
+    expect((labelled.editor.getSnapshot().elements[0] as MapLabelElement).rotation).toBe(0);
+  });
+
+  it("does nothing on a locked Shape or with nothing selected", () => {
+    const { editor } = openEditor([shapeLine()]);
+    const before = editor.getSnapshot().elements;
+    // No selection at all.
+    editor.scaleSelection(1.1);
+    editor.rotateSelection(15);
+    expect(editor.getSnapshot().elements).toEqual(before);
+    expect(editor.getSnapshot().canUndo).toBe(false);
+    // A locked Shape keeps its numbers.
+    editor.select("shape");
+    editor.setLocked("shape", true);
+    const afterLock = editor.getSnapshot().elements;
+    editor.scaleSelection(1.1);
+    editor.rotateSelection(15);
+    expect(editor.getSnapshot().elements).toEqual(afterLock);
+  });
+
+  it("does nothing on a hidden selection", () => {
+    const { editor } = openEditor([shapeLine()]);
+    editor.select("shape");
+    editor.setHidden("shape", true);
+    const hidden = editor.getSnapshot().elements;
+    editor.scaleSelection(1.1);
+    editor.rotateSelection(15);
+    expect(editor.getSnapshot().elements).toEqual(hidden);
+  });
+});
+
+describe("the Shape and Map Label readout chips (#796)", () => {
+  function openWatched(elements: MapElement[]) {
+    const doc: MapDocument = {
+      id: "map-1",
+      bookId: null,
+      name: "Map",
+      page: { preset: "square", widthMm: 200, heightMm: 100 },
+      styleId: "atlas",
+      overrides: {},
+      elements,
+      createdAt: 0,
+      updatedAt: 0,
+      dataVersion: DATA_VERSION,
+    };
+    const editor = createMapEditor({
+      store: {
+        save: async () => {},
+      },
+      doc,
+      language: () => "en",
+    });
+    const scenes: FrameSceneMessage[] = [];
+    editor.attachFrame({
+      postMessage: (message: FrameSceneMessage) => scenes.push(message),
+    } as unknown as MessagePort);
+    scenes.length = 0;
+    return { editor, scenes };
+  }
+
+  it("carries the Shape and Map Label templates the Frame's chip reads", () => {
+    const { scenes } = openWatched([]);
+    expect(scenes).toHaveLength(0);
+    const { editor, scenes: after } = openWatched([]);
+    editor.zoomIn();
+    expect(after.at(-1)?.readout.shape).toBe("{{width}} × {{height}} mm");
+    expect(after.at(-1)?.readout.label).toBe("Cap {{size}} mm · {{width}} mm");
+  });
+
+  it("reads 64 × 34 mm and Cap 7 mm · 84 mm from those templates", () => {
+    const { editor, scenes } = openWatched([]);
+    editor.zoomIn();
+    const readout = scenes.at(-1)?.readout;
+    if (readout === undefined) throw new Error("no scene");
+    expect(format(readout.shape, { width: 64, height: 34 })).toBe("64 × 34 mm");
+    expect(format(readout.label, { size: 7, width: 84 })).toBe("Cap 7 mm · 84 mm");
   });
 });
 

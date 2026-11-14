@@ -1,22 +1,25 @@
 // @ts-check
 /* The Map Frame's drawing surface (#745, #746, #748, #749, #750, #766, #751,
-   #756, #777). The Frame's only host channel is `window.maibuk.port`: the Worker
-   sends the whole `scene` on every change and when the Frame connects, an
+   #756, #777, #795). The Frame's only host channel is `window.maibuk.port`: the
+   Worker sends the whole `scene` on every change and when the Frame connects, an
    uploaded picture's bytes once per asset, and asks it to `rasterize` an export
    SVG, since only this document has a canvas, and to `ingest` one uploaded
    picture, since only it has a DOM. The Frame answers a finished Pencil stroke,
    a finished Pen line, a finished Area Fill outline, an
    Eraser drag, a drawn Shape, a Bucket pour, a dropped Stamp, the Element the
-   author picked, a Select drag that moved one, a Map Label's bend dragged
+   author picked, a Select drag that moved one, a transform handle drag that
+   resized or turned a Stamp or Map Image, a Map Label's bend dragged
    from its handle, one step of a pointer zoom, a finished pointer pan, the encoded picture an
    export asked for, and what one uploaded picture measured.
    Points cross the port in page millimetres, the same space as the page's
    `widthMm`/`heightMm`, so the pointer's own screen pixels are converted
-   through the svg's `getScreenCTM`.
+   through the svg's `getScreenCTM`; the surface's own pixel size says how many
+   page millimetres a screen pixel spans, so a transform handle keeps its size
+   on screen at every zoom (#795).
 
-   The wire shapes mirror `frame-protocol.ts`. Tests inject a point converter
-   and a cleanup seam through `globalThis.__mapTestHooks`; production never
-   defines it.
+   The wire shapes mirror `frame-protocol.ts`. Tests inject a point converter, a
+   screen scale, and a cleanup seam through `globalThis.__mapTestHooks`;
+   production never defines it.
 
    It is a classic script, not a module: a relative `import` cannot resolve in
    the Frame's opaque origin (docs/plugins/frame-ui.md). Preact and htm arrive
@@ -35,9 +38,12 @@
    * @typedef {{ kind: "image", assetId: string, x: number, y: number, width: number, height: number, rotation: number, opacity: number, tint?: string, clip?: string }} ImageShape
    * @typedef {LineShape | TextShape | ImageShape} SceneShape
    * @typedef {{ x: number, y: number, rotation: number, width: number, bend: number }} FrameLabelLayout
-   * @typedef {{ id: string, shapes: SceneShape[], filter: string | null, hidden: boolean, locked: boolean, selected: boolean, movable: boolean, label?: FrameLabelLayout }} FrameSceneElement
+   * @typedef {{ x: number, y: number, width: number, height: number, rotation: number }} FrameTransformBox
+   * @typedef {{ box: FrameTransformBox, handles: "corners" | "all" | "label", minSize?: number }} FrameElementTransform
+   * @typedef {{ id: string, shapes: SceneShape[], filter: string | null, hidden: boolean, locked: boolean, selected: boolean, movable: boolean, label?: FrameLabelLayout, transform?: FrameElementTransform }} FrameSceneElement
    * @typedef {{ one: string, other: string }} PenDraftLabel
-   * @typedef {{ kind: "scene", widthMm: number, heightMm: number, background: string, elements: FrameSceneElement[], defs: string, tool: MapTool, zoom: number, panX: number, panY: number, penLabel: PenDraftLabel }} FrameSceneMessage
+   * @typedef {{ size: string, angle: string, shape: string, label: string }} TransformReadout
+   * @typedef {{ kind: "scene", widthMm: number, heightMm: number, background: string, elements: FrameSceneElement[], defs: string, tool: MapTool, zoom: number, panX: number, panY: number, penLabel: PenDraftLabel, readout: TransformReadout }} FrameSceneMessage
    * @typedef {{ kind: "stroke", points: MapPoint[] }} FrameStrokeMessage
    * @typedef {{ kind: "line", points: MapPoint[], curves: boolean[], closed: boolean }} FrameLineMessage
    * @typedef {{ kind: "area", points: MapPoint[], curves: boolean[], freehand: boolean }} FrameAreaMessage
@@ -66,6 +72,12 @@
    * @typedef {{ id: string, offset: MapPoint }} PendingMove
    * @typedef {{ pointerId: number, id: string, press: ClientPoint, label: FrameLabelLayout, moved: boolean, bend: number }} BendDrag
    * @typedef {{ id: string, bend: number }} PendingBend
+   * @typedef {{ box: FrameTransformBox, handle: string, start: MapPoint, point: MapPoint, aspect?: boolean, fromCentre?: boolean, snap?: boolean, minWidth?: number, minHeight?: number }} TransformGesture
+   * @typedef {{ pointerId: number, id: string, handle: string, handles: string, press: ClientPoint, start: MapPoint, point: MapPoint, startBox: FrameTransformBox, box: FrameTransformBox, minSize: number, snap: boolean, moved: boolean }} TransformDrag
+   * @typedef {{ id: string, startBox: FrameTransformBox, box: FrameTransformBox }} PendingTransform
+   * @typedef {{ id: string, handle: string }} HoverGrip
+   * @typedef {{ pointers: number[], id: string, handles: string, startBox: FrameTransformBox, box: FrameTransformBox, minSize: number, startDistance: number, startAngle: number, startMid: MapPoint, mid: MapPoint, moved: boolean }} PinchDrag
+   * @typedef {{ pointerId: number, id: string }} PinchCandidate
    * @typedef {{ pointers: number[], client: ClientPoint, offset: MapPoint }} PanDrag
    * @typedef {{ clientX: number, clientY: number, touch: boolean }} PointerPlace
    * @typedef {{ start: MapPoint, control: MapPoint, apex: MapPoint, end: MapPoint }} BendGeometry
@@ -118,6 +130,116 @@
    */
   const BEND_HANDLE_RADIUS_MM = 2;
   const BEND_SNAP_MM = 0.5;
+
+  /**
+   * A transform handle's size and hit target (#795), in screen pixels: a 9 px
+   * square inside a 24 px target is easy to see and, with a mouse, easy to
+   * grab. A finger needs more room, so a coarse pointer draws a larger square
+   * and gives it a 44 px target. The turn handle is a circle on a stalk above
+   * the box's top edge. A grip the pointer rests on grows, so the one a press
+   * would take stands out.
+   */
+  const HANDLE_PX = 9;
+  const HANDLE_HIT_PX = 24;
+  const TURN_HANDLE_PX = 12;
+  const TURN_STALK_PX = 20;
+  const COARSE_HANDLE_PX = 13;
+  const COARSE_HANDLE_HIT_PX = 44;
+  const COARSE_TURN_HANDLE_PX = 18;
+  const COARSE_TURN_STALK_PX = 26;
+  const HOVER_GROW = 1.4;
+
+  /**
+   * How small a box may look on screen before it loses grips (#795), in pixels
+   * of its smaller side: under 48 px four grips would bury the art they mark, so
+   * only the bottom-right corner stays, and under 20 px only the turn grip does.
+   */
+
+  /** The padlock badge a locked Element's box carries (#795), in screen pixels. */
+  const LOCK_BADGE_PX = 14;
+
+  /**
+   * The readout chip and the Shift turn's tick ring (#795), in screen pixels, so
+   * both keep their size at every zoom. The chip sits just down and right of the
+   * pointer; its text is drawn at a small size, and each glyph is taken as
+   * `CHIP_ADVANCE` of that size because a Frame cannot measure text. The ticks
+   * stand a few pixels outside the box's corners.
+   */
+  const CHIP_FONT_PX = 12;
+  const CHIP_PAD_X_PX = 6;
+  const CHIP_PAD_Y_PX = 4;
+  const CHIP_GAP_PX = 14;
+  const CHIP_RADIUS_PX = 3;
+  const CHIP_ADVANCE = 0.6;
+  const TURN_TICK_PX = 5;
+  const TURN_TICK_GAP_PX = 8;
+
+  /**
+   * How the handle maths turns and grows a box (#795), mirroring `geometry.ts`
+   * so the Frame's preview obeys the rules the Worker writes: a turn within 2°
+   * of a right angle sticks to it, Shift snaps to 15° steps, and a side never
+   * reaches zero.
+   */
+  const RIGHT_ANGLE_STICK_DEGREES = 2;
+  const TURN_SNAP_DEGREES = 15;
+  const MIN_TRANSFORM_SIZE_MM = 0.01;
+
+  /** The turn steps a Shift turn marks, from the box's upright round one circle (#795). */
+  const TURN_STEPS = Array.from(
+    { length: 360 / TURN_SNAP_DEGREES },
+    (_step, index) => index * TURN_SNAP_DEGREES
+  );
+
+  /** The cursor the turn handle shows: no browser has a rotate arrow of its own. */
+  const TURN_CURSOR = "grab";
+
+  /**
+   * The resize cursor a grip takes, by the direction it points on screen, in
+   * 45° steps from due east. The box's turn carries a corner's arrow round with
+   * it, so a turned Element still shows the cursor a drag would follow.
+   */
+  const RESIZE_CURSORS = [
+    "e-resize",
+    "nwse-resize",
+    "s-resize",
+    "nesw-resize",
+    "w-resize",
+    "nwse-resize",
+    "n-resize",
+    "nesw-resize",
+  ];
+
+  /** The box's four corners: the handle each names, and its signs from the centre. @type {Array<[string, number, number]>} */
+  const CORNER_HANDLES = [
+    ["nw", -1, -1],
+    ["ne", 1, -1],
+    ["se", 1, 1],
+    ["sw", -1, 1],
+  ];
+
+  /** A Shape's four side midpoints (#796): the handle each names, and its signs from the centre. @type {Array<[string, number, number]>} */
+  const SIDE_HANDLES = [
+    ["n", 0, -1],
+    ["e", 1, 0],
+    ["s", 0, 1],
+    ["w", -1, 0],
+  ];
+
+  /**
+   * A Map Label's two side midpoints (#796): the left and the right alone.
+   * The top and bottom middles stay empty, so the bend handle at the label's
+   * middle never shares its place with a transform grip.
+   * @type {Array<[string, number, number]>}
+   */
+  const LABEL_SIDE_HANDLES = [
+    ["e", 1, 0],
+    ["w", -1, 0],
+  ];
+
+  /**
+   * The one corner a small box keeps (#795): the bottom-right, whose drag grows
+   * the box away from the top-left.
+   */
 
   /** The characters a definitions id may hold, so a scene cannot write an attribute of its own. */
   const FILTER_ID = /^[A-Za-z0-9_-]+$/;
@@ -183,6 +305,46 @@
    * between the release and the Worker's redraw. @type {PendingBend | null}
    */
   let pendingBend = null;
+  /**
+   * The transform handle drag in progress, or null (#795): the Element, the
+   * handle the pointer grips, where the press landed, and the box the drag asks
+   * for right now. The Frame previews the box and the Element's own art while
+   * the drag lasts, and tells the Worker once, on release.
+   * @type {TransformDrag | null}
+   */
+  let transformDrag = null;
+  /**
+   * A finished transform drag the Worker has not answered yet, or null. Its
+   * preview stays until the next scene, as a move's does, so the Element never
+   * jumps back between the release and the Worker's redraw.
+   * @type {PendingTransform | null}
+   */
+  let pendingTransform = null;
+  /**
+   * The grip the pointer rests on (#795), the Element and handle it names, or
+   * null. That grip fills and grows, so the author sees the one a press would
+   * take. A touch screen has no hover, so nothing rests and no grip grows.
+   * @type {HoverGrip | null}
+   */
+  let hoverGrip = null;
+
+  /**
+   * The pinch-and-twist gesture in progress (#796): the two fingers, the
+   * selected Element they size and turn, the box it started from and the one
+   * the fingers ask for right now, and the distance, angle, and midpoint the
+   * gesture started from. The preview reuses the handle drag's own path, and
+   * the Worker hears once, on release. A null `moved` drag never shaped
+   * anything, so its release posts nothing.
+   * @type {PinchDrag | null}
+   */
+  let pinchDrag = null;
+  /**
+   * The first finger of what may become a pinch (#796): its pointer id and the
+   * selected, unlocked Element with handles it landed on. The second finger
+   * landing turns the pair into a pinch; anything else turns it into a pan.
+   * @type {PinchCandidate | null}
+   */
+  let pinchCandidate = null;
 
   /**
    * The pan gesture in progress, or null (#777): the pointers it follows,
@@ -423,6 +585,25 @@
   }
 
   /**
+   * Reads the transform drag's readout templates (#795, #796); an unreadable
+   * one leaves each empty, which draws no chip instead of falling back to
+   * English. A scene from before the Map Label handles takes no label
+   * template, so its label drag draws no chip rather than a wrong one.
+   * @param {unknown} raw
+   * @returns {TransformReadout}
+   */
+  function readReadout(raw) {
+    const readout =
+      typeof raw === "object" && raw !== null ? /** @type {Record<string, unknown>} */ (raw) : {};
+    return {
+      size: typeof readout.size === "string" ? readout.size : "",
+      angle: typeof readout.angle === "string" ? readout.angle : "",
+      shape: typeof readout.shape === "string" ? readout.shape : "",
+      label: typeof readout.label === "string" ? readout.label : "",
+    };
+  }
+
+  /**
    * Reads the SVG definitions the shapes reference, joined into the one
    * `<defs>` body the Frame draws (#750): the Worker writes them exactly as the
    * exported SVG does, so the Frame and the export share one definition of
@@ -517,6 +698,35 @@
   }
 
   /**
+   * Reads the box a selected Element's transform handles sit on (#795), or
+   * null when it carries none or is malformed: a handle with no box to sit on
+   * would grip nothing, and a handle set this Frame does not know would draw
+   * the wrong grips. `minSize` is the smallest size the Worker keeps; a scene
+   * without one lets the drag reach the handle maths' own floor.
+   * @param {unknown} raw
+   * @returns {FrameElementTransform | null}
+   */
+  function readTransform(raw) {
+    if (typeof raw !== "object" || raw === null) return null;
+    const transform = /** @type {Record<string, unknown>} */ (raw);
+    const handles = transform.handles;
+    if (handles !== "corners" && handles !== "all" && handles !== "label") return null;
+    if (typeof transform.box !== "object" || transform.box === null) return null;
+    const box = /** @type {Record<string, unknown>} */ (transform.box);
+    if (!isNumber(box.x) || !isNumber(box.y)) return null;
+    if (!isNumber(box.width) || box.width <= 0) return null;
+    if (!isNumber(box.height) || box.height <= 0) return null;
+    if (!isNumber(box.rotation)) return null;
+    return {
+      box: { x: box.x, y: box.y, width: box.width, height: box.height, rotation: box.rotation },
+      handles,
+      ...(isNumber(transform.minSize) && transform.minSize > 0
+        ? { minSize: transform.minSize }
+        : {}),
+    };
+  }
+
+  /**
    * Reads one scene message, or null when it is malformed and must be dropped.
    * A message needs a positive page size; everything else falls back to a
    * usable default, because a Frame with no picture is worse than one drawn
@@ -545,6 +755,7 @@
           if (shape !== null) shapes.push(shape);
         }
         const label = readLabelLayout(element.label);
+        const transform = readTransform(element.transform);
         elements.push({
           id: element.id,
           shapes,
@@ -558,6 +769,7 @@
           // A locked Element never moves, whatever else the scene says.
           movable: element.movable === true && element.locked !== true,
           ...(label === null ? {} : { label }),
+          ...(transform === null ? {} : { transform }),
         });
       }
     }
@@ -577,6 +789,8 @@
       // access to the Plugin's catalogs, so it picks the plural form and fills
       // in the count alone.
       penLabel: readLabel(message.penLabel),
+      // The chip's size and angle text arrive the same way (#795).
+      readout: readReadout(message.readout),
     };
   }
 
@@ -749,6 +963,10 @@
     pendingMove = null;
     bendDrag = null;
     pendingBend = null;
+    transformDrag = null;
+    pendingTransform = null;
+    pinchDrag = null;
+    pinchCandidate = null;
     // The view a pan already slid stays where it is, so the Worker hears of it.
     commitPan();
     panDrag = null;
@@ -1074,6 +1292,9 @@
    * its baseline, which the pointer drags to bow or straighten the name. A drag
    * previews the curve it would draw, dashed, so the author sees the shape
    * before the whole drag reaches the Worker as one message.
+   *
+   * It draws above the transform box (#796), so a press where the handle meets
+   * a grip reaches the handle first and still bends.
    * @returns {any}
    */
   function bendOverlay() {
@@ -1100,6 +1321,523 @@
   }
 
   /**
+   * How many screen pixels one page millimetre spans right now, or null when
+   * this document cannot say (#795): a handle keeps its size on screen by being
+   * drawn in as many of those millimetres as its pixel size asks for. The svg
+   * fills the surface and fits the page into it with `meet`, so the tighter of
+   * the surface's two ratios is the scale every page millimetre is drawn at. It
+   * answers before the first draw has put an svg there, which a screen matrix
+   * cannot; a document with no layout has neither.
+   * @returns {number | null}
+   */
+  function screenScale() {
+    if (hooks && typeof hooks.pxPerMm === "function") {
+      const scale = hooks.pxPerMm();
+      return isNumber(scale) && scale > 0 ? scale : null;
+    }
+    if (surface === null || scene === null) return null;
+    const view = viewRect(scene);
+    const scale = Math.min(surface.clientWidth / view.width, surface.clientHeight / view.height);
+    return isNumber(scale) && scale > 0 ? scale : null;
+  }
+
+  /** Whether the pointer is a finger's, which needs larger handles (#795). */
+  function isCoarsePointer() {
+    return (
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(pointer: coarse)").matches === true
+    );
+  }
+
+  /**
+   * One handle's sizes in page millimetres at the current screen scale (#795):
+   * what it draws, the wider target that catches a press on it, the turn grip's
+   * diameter, and the stalk that lifts it off the box's top edge.
+   * @param {number} scale
+   */
+  function handleSizes(scale) {
+    const coarse = isCoarsePointer();
+    return {
+      drawn: (coarse ? COARSE_HANDLE_PX : HANDLE_PX) / scale,
+      hit: (coarse ? COARSE_HANDLE_HIT_PX : HANDLE_HIT_PX) / scale,
+      turn: (coarse ? COARSE_TURN_HANDLE_PX : TURN_HANDLE_PX) / scale,
+      stalk: (coarse ? COARSE_TURN_STALK_PX : TURN_STALK_PX) / scale,
+    };
+  }
+
+  /**
+   * The resize cursor one grip takes (#795): the box's own turn added to the
+   * grip's direction, taken to the nearest 45°.
+   * @param {number} rotation
+   * @param {number} signX
+   * @param {number} signY
+   * @returns {string}
+   */
+  function resizeCursor(rotation, signX, signY) {
+    const degrees = (Math.atan2(signY, signX) * 180) / Math.PI + rotation;
+    const step = Math.round((((degrees % 360) + 360) % 360) / 45) % 8;
+    return RESIZE_CURSORS[step];
+  }
+
+  /**
+   * The handle maths (#795), mirrored from `transformBox` in `geometry.ts` so the
+   * live preview agrees with what the Worker writes. The parity test in
+   * `frame.test.ts` holds the two copies to the same results.
+   */
+
+  /** A turn inside one circle, in degrees. */
+  function normalizeDegrees(degrees) {
+    return ((degrees % 360) + 360) % 360;
+  }
+
+  /** The shortest way round from one angle to another, in degrees, between -180 and 180. */
+  function turnedBy(from, to) {
+    return ((to - from + 540) % 360) - 180;
+  }
+
+  /** The angle from a centre to a point, in degrees. */
+  function angleAt(point, center) {
+    return (Math.atan2(point[1] - center[1], point[0] - center[0]) * 180) / Math.PI;
+  }
+
+  /**
+   * The box a rotate-handle drag asks for: the angle the pointer sweeps about
+   * the box's centre added to the turn it already had. With `snap` (Shift) the
+   * turn lands on a 15° step; without it, a turn within 2° of a right angle
+   * sticks to it. The centre and the size never change.
+   * @param {TransformGesture} gesture
+   * @returns {FrameTransformBox}
+   */
+  function turnBox(gesture) {
+    const { box } = gesture;
+    const center = [box.x, box.y];
+    let rotation = normalizeDegrees(
+      box.rotation + turnedBy(angleAt(gesture.start, center), angleAt(gesture.point, center))
+    );
+    if (gesture.snap === true) {
+      rotation = normalizeDegrees(Math.round(rotation / TURN_SNAP_DEGREES) * TURN_SNAP_DEGREES);
+    } else {
+      const right = Math.round(rotation / 90) * 90;
+      if (Math.abs(turnedBy(rotation, right)) <= RIGHT_ANGLE_STICK_DEGREES) {
+        rotation = normalizeDegrees(right);
+      }
+    }
+    return { ...box, rotation };
+  }
+
+  /**
+   * The box a corner or side drag asks for. The drag works in the box's own
+   * turned frame, so a turned Element's handles move along its sides. A corner
+   * anchors the opposite corner, a side the opposite side, and Alt anchors the
+   * centre. `aspect` keeps the box's proportions; a side handle always moves one
+   * axis. A drag can never reach zero or cross over its anchor: the side it
+   * grows stops at `minWidth`/`minHeight` instead of flipping.
+   * @param {TransformGesture} gesture
+   * @returns {FrameTransformBox}
+   */
+  function resizeBox(gesture) {
+    const { box, handle } = gesture;
+    const angle = (box.rotation * Math.PI) / 180;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const toLocal = (point) => [
+      (point[0] - box.x) * cos + (point[1] - box.y) * sin,
+      -(point[0] - box.x) * sin + (point[1] - box.y) * cos,
+    ];
+    const signX = handle.includes("w") ? -1 : handle.includes("e") ? 1 : 0;
+    const signY = handle.includes("n") ? -1 : handle.includes("s") ? 1 : 0;
+    const halfWidth = Math.max(MIN_TRANSFORM_SIZE_MM, box.width) / 2;
+    const halfHeight = Math.max(MIN_TRANSFORM_SIZE_MM, box.height) / 2;
+    const startLocal = toLocal(gesture.start);
+    const pointLocal = toLocal(gesture.point);
+    // Where the grabbed corner, or the middle of the grabbed side, sits now.
+    const grabbed = [signX * halfWidth, signY * halfHeight];
+    const reached = [
+      grabbed[0] + pointLocal[0] - startLocal[0],
+      grabbed[1] + pointLocal[1] - startLocal[1],
+    ];
+    const minWidth = Math.max(MIN_TRANSFORM_SIZE_MM, gesture.minWidth ?? MIN_TRANSFORM_SIZE_MM);
+    const minHeight = Math.max(MIN_TRANSFORM_SIZE_MM, gesture.minHeight ?? MIN_TRANSFORM_SIZE_MM);
+    const anchor = [-signX * halfWidth, -signY * halfHeight];
+    // An axis no handle grips keeps the size it had.
+    let width =
+      signX === 0
+        ? halfWidth * 2
+        : Math.max(
+            minWidth,
+            gesture.fromCentre === true
+              ? 2 * Math.abs(reached[0])
+              : signX * (reached[0] - anchor[0])
+          );
+    let height =
+      signY === 0
+        ? halfHeight * 2
+        : Math.max(
+            minHeight,
+            gesture.fromCentre === true
+              ? 2 * Math.abs(reached[1])
+              : signY * (reached[1] - anchor[1])
+          );
+    if (gesture.aspect === true) {
+      // A side scales from the one axis it drags; a corner from whichever grew more.
+      const widthScale = width / (halfWidth * 2);
+      const heightScale = height / (halfHeight * 2);
+      const scale =
+        signX === 0 ? heightScale : signY === 0 ? widthScale : Math.max(widthScale, heightScale);
+      width = halfWidth * 2 * scale;
+      height = halfHeight * 2 * scale;
+    }
+    const center =
+      gesture.fromCentre === true
+        ? [0, 0]
+        : [anchor[0] + (signX * width) / 2, anchor[1] + (signY * height) / 2];
+    return {
+      x: box.x + center[0] * cos - center[1] * sin,
+      y: box.y + center[0] * sin + center[1] * cos,
+      width,
+      height,
+      rotation: box.rotation,
+    };
+  }
+
+  /**
+   * The box one handle gesture draws (#795): a corner or side resized in the
+   * box's own frame, or the whole box turned about its centre.
+   * @param {TransformGesture} gesture
+   * @returns {FrameTransformBox}
+   */
+  function transformBox(gesture) {
+    if (gesture.handle === "rotate") return turnBox(gesture);
+    return resizeBox(gesture);
+  }
+
+  /**
+   * The selected Element whose transform handles the Frame draws, or null: one
+   * the Worker gave a box, shown, under the Select tool, since every other
+   * tool's press draws a new thing rather than sizing the one under it.
+   * @returns {FrameSceneElement | null}
+   */
+  function transformTarget() {
+    if (scene === null || scene.tool !== "select") return null;
+    const selected = scene.elements.find((element) => element.selected);
+    if (selected === undefined || selected.transform === undefined || selected.hidden) return null;
+    return selected;
+  }
+
+  /**
+   * The box the handles sit on for one Element (#795): the live box while its
+   * drag runs or its preview holds, and the scene's own box otherwise.
+   * @param {FrameSceneElement} target
+   * @returns {FrameTransformBox}
+   */
+  function liveTransformBox(target) {
+    if (target.transform === undefined) return { x: 0, y: 0, width: 0, height: 0, rotation: 0 };
+    if (transformDrag !== null && transformDrag.id === target.id) return transformDrag.box;
+    // A pinch previews through the same box, so its overlay and art follow it.
+    if (pinchDrag !== null && pinchDrag.id === target.id) return pinchDrag.box;
+    if (pendingTransform !== null && pendingTransform.id === target.id) return pendingTransform.box;
+    return target.transform.box;
+  }
+
+  /**
+   * The padlock badge a locked Element's box carries (#795): a small lock hung
+   * on the box's top-left corner, sized from the screen scale so it stays
+   * legible at every zoom. It marks the box rather than grips it, so it takes
+   * no pointer.
+   * @param {number} scale
+   * @param {number} x
+   * @param {number} y
+   * @returns {any}
+   */
+  function lockBadge(scale, x, y) {
+    const { html } = lib;
+    const size = LOCK_BADGE_PX / scale;
+    const width = size * 0.7;
+    const height = size * 0.45;
+    const shackle = size * 0.22;
+    const top = y + shackle * 0.5;
+    return html`<g class="map-transform-lock" data-transform-lock>
+      <path
+        class="map-transform-lock-shackle"
+        d="M ${n(x - shackle)} ${n(top)} A ${n(shackle)} ${n(shackle)} 0 0 1 ${n(x + shackle)} ${n(top)}"
+      />
+      <rect
+        class="map-transform-lock-body"
+        x="${n(x - width / 2)}"
+        y="${n(top)}"
+        width="${n(width)}"
+        height="${n(height)}"
+        rx="${n(size * 0.08)}"
+      />
+    </g>`;
+  }
+
+  /**
+   * The box and handles a selected Stamp's, Map Image's, Shape's, or Map
+   * Label's transform draws (#795, #796): its box, turned with the Element, a
+   * square grip on each corner, and on each side's middle for a Shape, or on
+   * the left and right middles for a Map Label, and a round grip on a stalk
+   * above the top edge for turning it. Each grip draws under a bigger invisible
+   * target, both sized from the screen scale, so they keep their size on screen
+   * at every zoom and grow for a finger.
+   *
+   * The overlay is drawn over the Elements, so a press on a grip reaches it
+   * before the Element's own hit target under it. A locked Element shows its
+   * box dashed with a small padlock badge and no grips: it cannot be resized or
+   * turned.
+   * @returns {any}
+   */
+  function transformOverlay() {
+    const target = transformTarget();
+    if (target === null || target.transform === undefined) return null;
+    const { html } = lib;
+    const box = liveTransformBox(target);
+    const scale = screenScale();
+    const sizes = scale === null ? null : handleSizes(scale);
+    const halfWidth = box.width / 2;
+    const halfHeight = box.height / 2;
+    const locked = target.locked;
+    const hovered = hoverGrip !== null && hoverGrip.id === target.id ? hoverGrip.handle : null;
+    // Every handle shows at every zoom, however small the box is on screen; a
+    // Frame that cannot measure its screen draws none. A Shape adds its four
+    // sides, and a Map Label its left and right sides, never the top or the
+    // bottom middle, where its bend handle lives.
+    const corners = scale === null ? [] : CORNER_HANDLES;
+    const full = sizes !== null && !locked && corners.length > 0;
+    const sides = !full
+      ? []
+      : target.transform.handles === "all"
+        ? SIDE_HANDLES
+        : target.transform.handles === "label"
+          ? LABEL_SIDE_HANDLES
+          : [];
+    const grips =
+      sizes === null || locked
+        ? []
+        : // Sides first: the corners paint later, so where a finger-sized hit area
+          // overlaps a side's, a press on the drawn corner takes the corner.
+          [...sides, ...corners].map(([id, signX, signY]) => ({
+            id,
+            x: signX * halfWidth,
+            y: signY * halfHeight,
+            // The grip under the pointer grows, so the one a press would take stands out.
+            drawn: hovered === id ? sizes.drawn * HOVER_GROW : sizes.drawn,
+            hit: sizes.hit,
+            cursor: resizeCursor(box.rotation, signX, signY),
+            hovered: hovered === id,
+          }));
+    const turn =
+      sizes === null || locked
+        ? null
+        : {
+            y: -halfHeight - sizes.stalk,
+            radius: (hovered === "rotate" ? sizes.turn * HOVER_GROW : sizes.turn) / 2,
+            hit: sizes.hit / 2,
+            hovered: hovered === "rotate",
+          };
+    const frame = `translate(${n(box.x)} ${n(box.y)})${
+      box.rotation === 0 ? "" : ` rotate(${n(box.rotation)})`
+    }`;
+    return html`<g
+      class="map-transform"
+      data-transform="${target.id}"
+      data-locked="${locked ? "true" : undefined}"
+      transform="${frame}"
+    >
+      <rect
+        class="map-transform-box"
+        x="${n(-halfWidth)}"
+        y="${n(-halfHeight)}"
+        width="${n(box.width)}"
+        height="${n(box.height)}"
+      />
+      ${locked && scale !== null ? lockBadge(scale, -halfWidth, -halfHeight) : null}
+      ${
+        turn === null
+          ? null
+          : html`<path class="map-transform-stalk" d="M 0 ${n(-halfHeight)} L 0 ${n(turn.y)}" />
+        <circle
+          class="map-transform-handle"
+          data-transform-handle="rotate"
+          data-hovered="${turn.hovered ? "true" : undefined}"
+          cx="0"
+          cy="${n(turn.y)}"
+          r="${n(turn.radius)}"
+        />
+        <circle
+          class="map-transform-hit"
+          data-transform-handle-hit="rotate"
+          cx="0"
+          cy="${n(turn.y)}"
+          r="${n(turn.hit)}"
+          style="cursor: ${TURN_CURSOR}"
+        />`
+      }
+      ${grips.map(
+        (grip) => html`<rect
+          class="map-transform-handle"
+          data-transform-handle="${grip.id}"
+          data-hovered="${grip.hovered ? "true" : undefined}"
+          x="${n(grip.x - grip.drawn / 2)}"
+          y="${n(grip.y - grip.drawn / 2)}"
+          width="${n(grip.drawn)}"
+          height="${n(grip.drawn)}"
+        />`
+      )}
+      ${grips.map(
+        (grip) => html`<rect
+          class="map-transform-hit"
+          data-transform-handle-hit="${grip.id}"
+          x="${n(grip.x - grip.hit / 2)}"
+          y="${n(grip.y - grip.hit / 2)}"
+          width="${n(grip.hit)}"
+          height="${n(grip.hit)}"
+          style="cursor: ${grip.cursor}"
+        />`
+      )}
+    </g>`;
+  }
+
+  /**
+   * The dashed ghost of the box a resize started from (#795), so the author
+   * compares the size the Element had with the one the drag asks for. A turn
+   * keeps the size it started with, so only a resize draws one, and it goes
+   * with the drag when it ends.
+   * @returns {any}
+   */
+  function transformGhost() {
+    const start =
+      transformDrag !== null && transformDrag.moved && transformDrag.handle !== "rotate"
+        ? transformDrag.startBox
+        : pinchDrag !== null && pinchDrag.moved
+          ? pinchDrag.startBox
+          : null;
+    if (start === null) return null;
+    const startBox = start;
+    const { html } = lib;
+    const frame = `translate(${n(startBox.x)} ${n(startBox.y)})${
+      startBox.rotation === 0 ? "" : ` rotate(${n(startBox.rotation)})`
+    }`;
+    return html`<rect
+      class="map-transform-ghost"
+      transform="${frame}"
+      x="${n(-startBox.width / 2)}"
+      y="${n(-startBox.height / 2)}"
+      width="${n(startBox.width)}"
+      height="${n(startBox.height)}"
+    />`;
+  }
+
+  /**
+   * The tick ring a Shift turn draws (#795): one tick at every 15° step, so the
+   * author sees where the snap will land. It sits a constant few pixels outside
+   * the box's corners, and goes with the drag when it ends.
+   * @returns {any}
+   */
+  function transformTicks() {
+    if (transformDrag === null || !transformDrag.moved) return null;
+    if (transformDrag.handle !== "rotate" || !transformDrag.snap) return null;
+    const scale = screenScale();
+    if (scale === null) return null;
+    const { html } = lib;
+    const { box } = transformDrag;
+    const outer = Math.hypot(box.width, box.height) / 2 + TURN_TICK_GAP_PX / scale;
+    const inner = outer - TURN_TICK_PX / scale;
+    return html`<g class="map-transform-ticks">
+      ${TURN_STEPS.map((degrees) => {
+        // A turn reads clockwise from the box's own upright, so 0° points up.
+        const angle = (degrees * Math.PI) / 180;
+        const dx = Math.sin(angle);
+        const dy = -Math.cos(angle);
+        return html`<line
+          class="map-transform-tick"
+          x1="${n(box.x + inner * dx)}"
+          y1="${n(box.y + inner * dy)}"
+          x2="${n(box.x + outer * dx)}"
+          y2="${n(box.y + outer * dy)}"
+        />`;
+      })}
+    </g>`;
+  }
+
+  /** A readout value with one decimal at most, so `50.0 mm` reads `50 mm`. */
+  function readoutNumber(value) {
+    return String(Math.round(value * 10) / 10);
+  }
+
+  /**
+   * The chip that reads the drag's size in millimetres, or its angle in
+   * degrees, just down and right of the pointer (#795, #796). Its text is the
+   * localized template the scene carries: the turn's angle or a Stamp's size
+   * with its number filled in, a Shape's width and height, or a Map Label's
+   * cap size and width. A scene that carries none, or a Frame that cannot
+   * measure its screen, draws no chip rather than a wrong one.
+   * @returns {any}
+   */
+  function transformReadout() {
+    // A pinch reads the same chip as a handle drag: it only ever resizes, so
+    // it takes the size text at the fingers' midpoint, never the turn's angle.
+    const active =
+      transformDrag !== null && transformDrag.moved
+        ? {
+            box: transformDrag.box,
+            handles: transformDrag.handles,
+            handle: transformDrag.handle,
+            point: transformDrag.point,
+          }
+        : pinchDrag !== null && pinchDrag.moved
+          ? {
+              box: pinchDrag.box,
+              handles: pinchDrag.handles,
+              handle: "pinch",
+              point: pinchDrag.mid,
+            }
+          : null;
+    if (active === null || scene === null) return null;
+    const turning = active.handle === "rotate";
+    const shape = active.handles === "all";
+    const label = active.handles === "label";
+    const template = turning
+      ? scene.readout.angle
+      : shape
+        ? scene.readout.shape
+        : label
+          ? scene.readout.label
+          : scene.readout.size;
+    if (template === "") return null;
+    const scale = screenScale();
+    if (scale === null) return null;
+    const { html } = lib;
+    const text = template
+      .replace("{{value}}", readoutNumber(turning ? active.box.rotation : active.box.width))
+      .replace("{{width}}", readoutNumber(active.box.width))
+      .replace("{{height}}", readoutNumber(active.box.height))
+      .replace("{{size}}", readoutNumber(active.box.height));
+    const font = CHIP_FONT_PX / scale;
+    const padX = CHIP_PAD_X_PX / scale;
+    const padY = CHIP_PAD_Y_PX / scale;
+    // The Frame cannot measure a glyph, so a fixed advance keeps the chip's
+    // background behind its text; the Frame's body font is a system sans.
+    const width = text.length * font * CHIP_ADVANCE + padX * 2;
+    const height = font + padY * 2;
+    const [x, y] = active.point;
+    return html`<g
+      class="map-readout"
+      transform="translate(${n(x + CHIP_GAP_PX / scale)} ${n(y + CHIP_GAP_PX / scale)})"
+    >
+      <rect
+        class="map-readout-chip"
+        width="${n(width)}"
+        height="${n(height)}"
+        rx="${n(CHIP_RADIUS_PX / scale)}"
+      />
+      <text class="map-readout-text" x="${n(padX)}" y="${n(padY + font * 0.8)}" font-size="${n(font)}"
+        >${text}</text
+      >
+    </g>`;
+  }
+
+  /**
    * Draws the current scene and any live stroke into the Frame. The drawing is
    * `aria-hidden`: a Frame's contents sit outside Maibuk's accessibility gate
    * (`docs/plugins/frame-ui.md`), and the Elements list is the drawing's
@@ -1115,6 +1853,8 @@
     }
     const view = viewRect(current);
     const { html } = lib;
+    // The Element whose box marks it instead of a trace of its ink, if any.
+    const outlined = transformTarget();
     lib.render(
       html`<svg
         viewBox="${n(view.x)} ${n(view.y)} ${n(view.width)} ${n(view.height)}"
@@ -1150,7 +1890,7 @@
             >
               ${elementArt(element)}
               ${
-                element.selected
+                element.selected && element.id !== outlined?.id
                   ? highlightShapes(element).map(
                       (shape) => html`<path
                         class="map-selection"
@@ -1162,7 +1902,11 @@
               }
             </g>`
           )}
+        ${transformGhost()}
+        ${transformOverlay()}
         ${bendOverlay()}
+        ${transformTicks()}
+        ${transformReadout()}
         ${drawing === null ? null : html`<path class="map-live" d="${polyline(drawing.points)}" />`}
         ${penDraft === null ? null : html`<path class="map-live" d="${penDraftPath()}" />`}
         ${crosshair === null ? null : html`<path class="map-crosshair" d="${crosshairPath()}" />`}
@@ -1187,13 +1931,56 @@
   }
 
   /**
+   * A number for an SVG transform's scale, with three decimals at most, as
+   * `scene.ts` writes one.
+   * @param {number} value
+   * @returns {string}
+   */
+  function n3(value) {
+    return String(Math.round(value * 1000) / 1000);
+  }
+
+  /**
+   * The SVG transform that previews a handle drag on an Element's own group
+   * (#795): the start box moved, turned, and scaled onto the live one, on each
+   * axis, so a Shape's free resize previews exactly and the art sits inside the
+   * box the drag draws.
+   * @param {string} id
+   * @returns {string | undefined}
+   */
+  function transformPreview(id) {
+    /** @type {{ startBox: FrameTransformBox, box: FrameTransformBox } | null} */
+    let preview = null;
+    if (transformDrag !== null && transformDrag.id === id) preview = transformDrag;
+    else if (pinchDrag !== null && pinchDrag.id === id) preview = pinchDrag;
+    else if (pendingTransform !== null && pendingTransform.id === id) preview = pendingTransform;
+    if (preview === null) return undefined;
+    const { startBox, box } = preview;
+    const scaleX = startBox.width === 0 ? 1 : box.width / startBox.width;
+    const scaleY = startBox.height === 0 ? 1 : box.height / startBox.height;
+    const turn = box.rotation - startBox.rotation;
+    const zoom =
+      scaleX === scaleY
+        ? scaleX === 1
+          ? ""
+          : ` scale(${n3(scaleX)})`
+        : ` scale(${n3(scaleX)} ${n3(scaleY)})`;
+    return `translate(${n(box.x)} ${n(box.y)})${
+      turn === 0 ? "" : ` rotate(${n(turn)})`
+    }${zoom} translate(${n(-startBox.x)} ${n(-startBox.y)})`;
+  }
+
+  /**
    * The live offset a Select drag draws an Element at, as an SVG translate, or
    * undefined when it sits where the scene put it. A finished drag keeps its
-   * offset until the Worker's next scene draws the Element there itself.
+   * offset until the Worker's next scene draws the Element there itself. A
+   * handle drag previews the Element in its new box the same way (#795).
    * @param {string} id
    * @returns {string | undefined}
    */
   function dragTransform(id) {
+    const preview = transformPreview(id);
+    if (preview !== undefined) return preview;
     /** @type {MapPoint | null} */
     let offset = null;
     if (isDragging(id) && moveDrag !== null) offset = moveDrag.offset;
@@ -1375,6 +2162,393 @@
     const pointerId = bendDrag.pointerId;
     bendDrag = null;
     releasePointerId(pointerId);
+    draw();
+  }
+
+  /**
+   * The grip under the pointer (#795), its Element and handle, or null when the
+   * pointer rests on anything else. A press reaches the invisible target, so
+   * that is what a hover reports.
+   * @param {PointerEvent} event
+   * @returns {HoverGrip | null}
+   */
+  function hoveredGrip(event) {
+    const hit =
+      event.target instanceof Element ? event.target.closest("[data-transform-handle-hit]") : null;
+    const handle = hit === null ? null : hit.getAttribute("data-transform-handle-hit");
+    const overlay = hit === null ? null : hit.closest("[data-transform]");
+    const id = overlay === null ? null : overlay.getAttribute("data-transform");
+    return handle === null || id === null ? null : { id, handle };
+  }
+
+  /**
+   * Sets the grip under the pointer (#795), redrawing only when it changed, so
+   * a pointer crossing the surface does not repaint the Map at every sample.
+   * @param {HoverGrip | null} grip
+   */
+  function setHoverGrip(grip) {
+    if (hoverGrip?.id === grip?.id && hoverGrip?.handle === grip?.handle) return;
+    hoverGrip = grip;
+    draw();
+  }
+
+  /**
+   * Starts a transform handle drag when the press lands on a grip (#795), and
+   * reports whether it did, so the press neither picks an Element nor moves it.
+   * A press on the edge of a grip that never travels leaves the box as it was,
+   * so a click posts nothing.
+   * @param {PointerEvent} event
+   * @returns {boolean}
+   */
+  function startTransform(event) {
+    const hit =
+      event.target instanceof Element ? event.target.closest("[data-transform-handle-hit]") : null;
+    if (hit === null || scene === null) return false;
+    const handle = hit.getAttribute("data-transform-handle-hit");
+    const overlay = hit.closest("[data-transform]");
+    const id = overlay === null ? null : overlay.getAttribute("data-transform");
+    if (handle === null || id === null) return false;
+    const target = scene.elements.find((element) => element.id === id);
+    if (target === undefined || target.transform === undefined || target.locked || target.hidden) {
+      return false;
+    }
+    const point = pagePoint(event);
+    if (point === null) return false;
+    event.preventDefault();
+    transformDrag = {
+      pointerId: event.pointerId,
+      id: target.id,
+      handle,
+      handles: target.transform.handles,
+      press: { clientX: event.clientX, clientY: event.clientY },
+      start: point,
+      point,
+      startBox: { ...target.transform.box },
+      box: { ...target.transform.box },
+      // The Worker's own minimum size, so a preview never shows a box it would
+      // shrink: a scene without one lets the maths' floor apply.
+      minSize: target.transform.minSize ?? MIN_TRANSFORM_SIZE_MM,
+      snap: false,
+      moved: false,
+    };
+    capturePointer(event);
+    return true;
+  }
+
+  /**
+   * Follows the pointer with the transform drag: once the press has travelled
+   * past the Select drag's threshold, the box, its handles, and the Element's
+   * art preview what the pointer asks for, live and in this Frame only. A
+   * Stamp's or a Map Image's corner keeps its aspect; a Shape's corner only
+   * does with Shift, and its sides move one axis. A Map Label's corner grows
+   * its cap size and width together, and its sides move the width alone, all in
+   * the label's own turned frame. Alt resizes about the centre, and Shift
+   * snaps a turn to 15°.
+   * @param {PointerEvent} event
+   */
+  function followTransform(event) {
+    if (transformDrag === null) return;
+    const point = pagePoint(event);
+    if (point === null) return;
+    if (!transformDrag.moved) {
+      const travelled = Math.hypot(
+        event.clientX - transformDrag.press.clientX,
+        event.clientY - transformDrag.press.clientY
+      );
+      if (travelled < DRAG_THRESHOLD_PX) return;
+      transformDrag.moved = true;
+    }
+    transformDrag.point = point;
+    transformDrag.snap = event.shiftKey === true;
+    // A Stamp and a Map Image store a width alone, and their aspect carries
+    // the height with it, so the Worker's minimum is the width's (#795). A
+    // Shape keeps a width and a height of its own, so it takes both (#796). A
+    // Map Label's box height is its cap size, so it takes both too, and the
+    // corner's uniform growth never previews a cap size below the Worker's own
+    // floor, which the scene carries as the handle data's minimum size. Only a
+    // corner keeps the aspect: a side moves its one axis alone.
+    const shape = transformDrag.handles === "all";
+    const label = transformDrag.handles === "label";
+    const corner = CORNER_HANDLES.some(([id]) => id === transformDrag.handle);
+    transformDrag.box = transformBox({
+      box: transformDrag.startBox,
+      handle: transformDrag.handle,
+      start: transformDrag.start,
+      point,
+      aspect: shape ? event.shiftKey === true : !label || corner,
+      fromCentre: event.altKey === true,
+      snap: transformDrag.snap,
+      minWidth: transformDrag.minSize,
+      ...(shape || label ? { minHeight: transformDrag.minSize } : {}),
+    });
+    draw();
+  }
+
+  /**
+   * Ends the transform drag. A drag that moved the box goes to the Worker as
+   * one transformElement, which is one undo step, and its preview holds until
+   * the Worker answers; a press that never passed the threshold, or one that
+   * left the box as it was, sends nothing. A Map Label's drag carries its new
+   * cap size, which is the box height the drag previews, so the Worker writes
+   * the size the preview showed.
+   * @param {PointerEvent} event
+   * @param {boolean} send
+   */
+  function endTransform(event, send) {
+    if (transformDrag === null || event.pointerId !== transformDrag.pointerId) return;
+    const drag = transformDrag;
+    transformDrag = null;
+    releasePointer(event);
+    if (!send || !drag.moved || sameBox(drag.box, drag.startBox)) {
+      draw();
+      return;
+    }
+    pendingTransform = { id: drag.id, startBox: drag.startBox, box: drag.box };
+    draw();
+    post({
+      kind: "transformElement",
+      id: drag.id,
+      box: drag.box,
+      ...(drag.handles === "label" ? { size: drag.box.height } : {}),
+    });
+  }
+
+  /** Drops the transform drag in progress, and its preview, without reporting it. */
+  function cancelTransform() {
+    if (transformDrag === null) return;
+    const pointerId = transformDrag.pointerId;
+    transformDrag = null;
+    releasePointerId(pointerId);
+    draw();
+  }
+
+  /**
+   * Whether two boxes place, size, and turn an Element the same way.
+   * @param {FrameTransformBox} one
+   * @param {FrameTransformBox} two
+   */
+  function sameBox(one, two) {
+    return (
+      one.x === two.x &&
+      one.y === two.y &&
+      one.width === two.width &&
+      one.height === two.height &&
+      one.rotation === two.rotation
+    );
+  }
+
+  /**
+   * The selected, unlocked Element with handles the first finger landed on
+   * (#796), or null when the press cannot start a pinch: only a press on such
+   * an Element may pinch it, under the Select tool whose handles mark it.
+   * @param {PointerEvent} event
+   * @returns {PinchCandidate | null}
+   */
+  function pinchElement(event) {
+    if (scene === null || scene.tool !== "select") return null;
+    const target =
+      event.target instanceof Element ? event.target.closest("[data-element-id]") : null;
+    const id = target === null ? null : target.getAttribute("data-element-id");
+    if (id === null) return null;
+    const element = scene.elements.find((candidate) => candidate.id === id);
+    if (
+      element === undefined ||
+      !element.selected ||
+      element.locked ||
+      element.hidden ||
+      element.transform === undefined
+    ) {
+      return null;
+    }
+    return { pointerId: event.pointerId, id: element.id };
+  }
+
+  /**
+   * The box the fingers ask for (#796): the start box grown by the distance
+   * change, uniformly, turned by the angle change, and carried with the
+   * midpoint, so the Element scales and twists about the pair and follows it.
+   * A Map Label grows the same way, so its cap size follows its width. The
+   * box never shrinks under the minimum size the scene gave it.
+   * @param {FrameTransformBox} startBox
+   * @param {MapPoint} startMid
+   * @param {number} startDistance
+   * @param {number} startAngle
+   * @param {number} minSize
+   * @param {string} handles
+   * @param {MapPoint} mid
+   * @param {number} distance
+   * @param {number} angle
+   * @returns {FrameTransformBox}
+   */
+  function pinchBox(
+    startBox,
+    startMid,
+    startDistance,
+    startAngle,
+    minSize,
+    handles,
+    mid,
+    distance,
+    angle
+  ) {
+    const minWidth = Math.max(MIN_TRANSFORM_SIZE_MM, minSize);
+    const minHeight =
+      handles === "all" || handles === "label"
+        ? Math.max(MIN_TRANSFORM_SIZE_MM, minSize)
+        : MIN_TRANSFORM_SIZE_MM;
+    const scale = startDistance > 1e-6 ? distance / startDistance : 1;
+    // One uniform scale for both sides, stopping at the tighter minimum.
+    const floor = Math.max(
+      minWidth / Math.max(MIN_TRANSFORM_SIZE_MM, startBox.width),
+      minHeight / Math.max(MIN_TRANSFORM_SIZE_MM, startBox.height)
+    );
+    const grown = Math.max(scale, floor);
+    const delta = turnedBy(startAngle, angle);
+    const radians = (delta * Math.PI) / 180;
+    const cos = Math.cos(radians);
+    const sin = Math.sin(radians);
+    const dx = startBox.x - startMid[0];
+    const dy = startBox.y - startMid[1];
+    return {
+      x: mid[0] + (dx * cos - dy * sin) * grown,
+      y: mid[1] + (dx * sin + dy * cos) * grown,
+      width: startBox.width * grown,
+      height: startBox.height * grown,
+      rotation: normalizeDegrees(startBox.rotation + delta),
+    };
+  }
+
+  /**
+   * Starts the pinch-and-twist gesture (#796) when the second finger lands and
+   * the first one waits on a selected, unlocked Element with handles, and
+   * reports whether it did. Anything else is still a pan: the gesture under
+   * way is dropped without reaching the Worker, as a tool change drops one.
+   * @param {PointerEvent} event
+   * @param {number[]} fingers
+   * @returns {boolean}
+   */
+  function startPinch(event, fingers) {
+    if (pinchCandidate === null || fingers.length !== 2) {
+      pinchCandidate = null;
+      return false;
+    }
+    if (!fingers.includes(event.pointerId) || !fingers.includes(pinchCandidate.pointerId)) {
+      pinchCandidate = null;
+      return false;
+    }
+    const other = fingers[0] === event.pointerId ? /** @type {number} */ (fingers[1]) : fingers[0];
+    if (other !== pinchCandidate.pointerId || scene === null) {
+      pinchCandidate = null;
+      return false;
+    }
+    const target = scene.elements.find((element) => element.id === pinchCandidate.id);
+    const otherClient = pointerClients.get(other);
+    if (
+      target === undefined ||
+      !target.selected ||
+      target.locked ||
+      target.hidden ||
+      target.transform === undefined ||
+      otherClient === undefined ||
+      otherClient.touch !== true
+    ) {
+      pinchCandidate = null;
+      return false;
+    }
+    const first = pagePoint(otherClient);
+    const second = pagePoint(event);
+    if (first === null || second === null) return false;
+    const startDistance = Math.hypot(second[0] - first[0], second[1] - first[1]);
+    if (!(startDistance > 1e-6)) return false;
+    const candidate = pinchCandidate;
+    pinchCandidate = null;
+    resetGestures();
+    const startMid = [(first[0] + second[0]) / 2, (first[1] + second[1]) / 2];
+    pinchDrag = {
+      pointers: [candidate.pointerId, event.pointerId],
+      id: target.id,
+      handles: target.transform.handles,
+      startBox: { ...target.transform.box },
+      box: { ...target.transform.box },
+      // The Worker's own minimum size, so a preview never shows a box it would
+      // shrink: a scene without one lets the handle maths' floor apply.
+      minSize: target.transform.minSize ?? MIN_TRANSFORM_SIZE_MM,
+      startDistance,
+      startAngle: (Math.atan2(second[1] - first[1], second[0] - first[0]) * 180) / Math.PI,
+      startMid,
+      mid: startMid,
+      moved: false,
+    };
+    for (const pointerId of pinchDrag.pointers) capturePointerId(pointerId);
+    event.preventDefault();
+    draw();
+    return true;
+  }
+
+  /**
+   * Follows the fingers with the pinch (#796): the box the pair asks for
+   * previews live, in this Frame only, through the handle drag's own preview.
+   * @param {PointerEvent} event
+   */
+  function followPinch(event) {
+    if (pinchDrag === null || !pinchDrag.pointers.includes(event.pointerId)) return;
+    const firstClient = pointerClients.get(pinchDrag.pointers[0]);
+    const secondClient = pointerClients.get(pinchDrag.pointers[1]);
+    if (firstClient === undefined || secondClient === undefined) return;
+    const first = pagePoint(firstClient);
+    const second = pagePoint(secondClient);
+    if (first === null || second === null) return;
+    pinchDrag.moved = true;
+    pinchDrag.mid = [(first[0] + second[0]) / 2, (first[1] + second[1]) / 2];
+    pinchDrag.box = pinchBox(
+      pinchDrag.startBox,
+      pinchDrag.startMid,
+      pinchDrag.startDistance,
+      pinchDrag.startAngle,
+      pinchDrag.minSize,
+      pinchDrag.handles,
+      pinchDrag.mid,
+      Math.hypot(second[0] - first[0], second[1] - first[1]),
+      (Math.atan2(second[1] - first[1], second[0] - first[0]) * 180) / Math.PI
+    );
+    event.preventDefault();
+    draw();
+  }
+
+  /**
+   * Ends the pinch. A pinch that moved the box goes to the Worker as one
+   * transformElement, which is one undo step, and its preview holds until the
+   * Worker answers; lifting the fingers where they landed sends nothing. A Map
+   * Label's drag carries its new cap size, which is the box height the pinch
+   * previews.
+   * @param {PointerEvent} event
+   * @param {boolean} send
+   */
+  function endPinch(event, send) {
+    if (pinchDrag === null || !pinchDrag.pointers.includes(event.pointerId)) return;
+    const drag = pinchDrag;
+    pinchDrag = null;
+    for (const pointerId of drag.pointers) releasePointerId(pointerId);
+    if (!send || !drag.moved || sameBox(drag.box, drag.startBox)) {
+      draw();
+      return;
+    }
+    pendingTransform = { id: drag.id, startBox: drag.startBox, box: drag.box };
+    draw();
+    post({
+      kind: "transformElement",
+      id: drag.id,
+      box: drag.box,
+      ...(drag.handles === "label" ? { size: drag.box.height } : {}),
+    });
+  }
+
+  /** Drops the pinch in progress, and its preview, without reporting it. */
+  function cancelPinch() {
+    if (pinchDrag === null) return;
+    const drag = pinchDrag;
+    pinchDrag = null;
+    for (const pointerId of drag.pointers) releasePointerId(pointerId);
     draw();
   }
 
@@ -1633,6 +2807,8 @@
       clientY: event.clientY,
       touch: event.pointerType === "touch",
     });
+    // A third finger never joins a pinch: the pair owns the gesture.
+    if (pinchDrag !== null) return;
     // Space turns any press into a pan (#777), so the author moves the view
     // without leaving the tool they are drawing with.
     if (spacePan) {
@@ -1648,13 +2824,23 @@
     // primary button are.
     if (event.pointerType === "mouse" && event.button !== 0) return;
     // A second finger on the glass pans (#777), dropping the draft the first
-    // began, so a two-finger drag never draws.
+    // began, so a two-finger drag never draws. When the first finger waits on
+    // a selected, unlocked Element with handles, the pair pinches and twists
+    // it instead (#796).
     const fingers = [...pointerClients.entries()]
       .filter(([, place]) => place.touch)
       .map(([id]) => id);
     if (event.pointerType === "touch" && fingers.length > 1) {
+      if (startPinch(event, fingers)) return;
       beginPan(event, fingers);
       return;
+    }
+    // The first finger of a possible pinch (#796): what it landed on decides
+    // whether the second finger pinches the Element or pans the view.
+    if (event.pointerType === "touch" && fingers.length === 1) {
+      pinchCandidate = pinchElement(event);
+    } else {
+      pinchCandidate = null;
     }
     // The Hand pans with the primary button or one finger, and never picks or
     // draws. A second finger then hands the pan to the pair, as above.
@@ -1733,10 +2919,15 @@
     }
 
     // A second finger while one drag is under way neither picks nor drags.
-    if (moveDrag !== null || bendDrag !== null) return;
+    if (moveDrag !== null || bendDrag !== null || transformDrag !== null) return;
     // A press on the bend handle shapes the curve (#751) and never picks or
-    // moves the label it belongs to, so a bend drag posts no move.
+    // moves the label it belongs to, so a bend drag posts no move. It goes
+    // before the transform handles, so a press where a Map Label's bend handle
+    // meets a grip still bends (#796).
     if (startBend(event)) return;
+    // A press on a transform handle belongs to the handle (#795): it never
+    // picks the Element under it nor moves it, so a grip press posts nothing.
+    if (startTransform(event)) return;
     const target =
       event.target instanceof Element ? event.target.closest("[data-element-id]") : null;
     const id = target === null ? null : target.getAttribute("data-element-id");
@@ -1815,8 +3006,18 @@
       return;
     }
 
+    if (pinchDrag !== null && pinchDrag.pointers.includes(event.pointerId)) {
+      followPinch(event);
+      return;
+    }
+
     if (bendDrag !== null && event.pointerId === bendDrag.pointerId) {
       followBend(event);
+      return;
+    }
+
+    if (transformDrag !== null && event.pointerId === transformDrag.pointerId) {
+      followTransform(event);
       return;
     }
 
@@ -1824,6 +3025,10 @@
       followDrag(event);
       return;
     }
+
+    // A grip under the pointer fills and grows (#795), so the author sees the
+    // one a press would take. A gesture in progress already grips its own.
+    if (scene !== null && scene.tool === "select") setHoverGrip(hoveredGrip(event));
 
     if (scene !== null && scene.tool === "pen") {
       const hovered = pagePoint(event);
@@ -1984,6 +3189,20 @@
     if (event.key === "Escape" && moveDrag !== null) {
       event.preventDefault();
       cancelMove();
+      return;
+    }
+    // Escape cancels a transform handle drag (#795), putting the Element and
+    // its box back where the scene had them.
+    if (event.key === "Escape" && transformDrag !== null) {
+      event.preventDefault();
+      cancelTransform();
+      return;
+    }
+    // Escape cancels a pinch (#796) the same way: the Element goes back and
+    // the Worker never hears of it.
+    if (event.key === "Escape" && pinchDrag !== null) {
+      event.preventDefault();
+      cancelPinch();
       return;
     }
     if (event.key === "Shift") constrainDrag(true);
@@ -2386,9 +3605,11 @@
     scene = next;
     // Any scene after a release draws the moved Element where the Worker put
     // it, or back at its start when the Worker refused the move, and the
-    // bent label by the bend the Worker kept.
+    // bent label by the bend the Worker kept, and a transformed Element by the
+    // box the Worker kept (#795).
     pendingMove = null;
     pendingBend = null;
+    pendingTransform = null;
     if (next.tool !== previousTool) resetGestures();
     // An Element locked, deleted, or undone away mid-drag stops moving.
     if (moveDrag !== null) {
@@ -2404,6 +3625,24 @@
       const bentBy = next.elements.find((element) => element.id === bent);
       if (bentBy === undefined || bentBy.label === undefined || bentBy.locked || bentBy.hidden) {
         cancelBend();
+        return;
+      }
+    }
+    // An Element locked, hidden, or undone away mid-drag stops transforming.
+    if (transformDrag !== null) {
+      const dragged = transformDrag.id;
+      const still = next.elements.find((element) => element.id === dragged);
+      if (still === undefined || still.transform === undefined || still.locked || still.hidden) {
+        cancelTransform();
+        return;
+      }
+    }
+    // A pinched Element locked, hidden, or undone away mid-gesture stops too.
+    if (pinchDrag !== null) {
+      const pinched = pinchDrag.id;
+      const still = next.elements.find((element) => element.id === pinched);
+      if (still === undefined || still.transform === undefined || still.locked || still.hidden) {
+        cancelPinch();
         return;
       }
     }
@@ -2424,45 +3663,66 @@
     surface.removeEventListener("pointerdown", onPointerDown);
     surface.removeEventListener("pointermove", onPointerMove);
     surface.removeEventListener("pointerup", onPointerUp);
+    surface.removeEventListener("pointerleave", onPointerLeave);
     surface.removeEventListener("pointercancel", onPointerCancel);
     surface.removeEventListener("lostpointercapture", onLostPointerCapture);
     surface.removeEventListener("dblclick", onDoubleClick);
     surface.removeEventListener("wheel", onWheel);
   }
 
+  /**
+   * A pointer that leaves the Frame (#795) rests on no grip: the surface hears
+   * no further moves, so the grip it left would otherwise keep growing.
+   */
+  function onPointerLeave() {
+    setHoverGrip(null);
+  }
+
   /** @param {PointerEvent} event */
   function onPointerUp(event) {
     endPan(event);
     pointerClients.delete(event.pointerId);
+    if (pinchCandidate !== null && pinchCandidate.pointerId === event.pointerId) {
+      pinchCandidate = null;
+    }
     endStroke(event, true);
     endErase(event, true);
     endShape(event, true);
     endMove(event, true);
     endBend(event, true);
+    endTransform(event, true);
+    endPinch(event, true);
   }
 
   /** @param {PointerEvent} event */
   function onPointerCancel(event) {
     endPan(event);
     pointerClients.delete(event.pointerId);
+    if (pinchCandidate !== null && pinchCandidate.pointerId === event.pointerId) {
+      pinchCandidate = null;
+    }
     endStroke(event, false);
     endErase(event, false);
     endShape(event, false);
     endMove(event, false);
     endBend(event, false);
+    endTransform(event, false);
+    endPinch(event, false);
   }
 
   /**
-   * The engine took a Select drag's, a bend drag's, or a pan's capture away with
-   * no pointerup (#766, #751, #777): the gesture is dropped like a cancel, so
-   * the next press is not ignored as a second finger. After a pointerup the
-   * gesture is already over and this is a no-op.
+   * The engine took a Select drag's, a bend drag's, a transform drag's, or a
+   * pan's capture away with no pointerup (#766, #751, #795, #777): the gesture
+   * is dropped like a cancel, so the next press is not ignored as a second
+   * finger. After a pointerup the gesture is already over and this is a no-op.
    * @param {PointerEvent} event
    */
   function onLostPointerCapture(event) {
     pointerClients.delete(event.pointerId);
     endMove(event, false);
     endBend(event, false);
+    endTransform(event, false);
+    endPinch(event, false);
     endPan(event);
   }
 
@@ -2475,6 +3735,11 @@
    * @param {PointerEvent} event
    */
   function forgetPointer(event) {
+    // A finger that lifts off the surface ends its pinch there: the surface
+    // never hears the release, so the gesture would otherwise never finish.
+    if (pinchDrag !== null && pinchDrag.pointers.includes(event.pointerId)) {
+      endPinch(event, true);
+    }
     pointerClients.delete(event.pointerId);
   }
 
@@ -2487,6 +3752,7 @@
     surface.addEventListener("pointerdown", onPointerDown);
     surface.addEventListener("pointermove", onPointerMove);
     surface.addEventListener("pointerup", onPointerUp);
+    surface.addEventListener("pointerleave", onPointerLeave);
     surface.addEventListener("pointercancel", onPointerCancel);
     surface.addEventListener("lostpointercapture", onLostPointerCapture);
     surface.addEventListener("dblclick", onDoubleClick);
@@ -2507,6 +3773,11 @@
   }
 
   if (hooks && typeof hooks.onReady === "function") hooks.onReady(cleanup);
+  // The Frame's handle maths is a mirror of `geometry.ts`, and a test holds the
+  // two copies to the same results through this seam (#795).
+  if (hooks && typeof hooks.onTransformBox === "function") {
+    hooks.onTransformBox(transformBox);
+  }
   // A test document may have no canvas, so the rasterize answer is out of reach:
   // this seam hands it the SVG the Frame would draw instead, which is the one
   // fact a test can assert about an export.

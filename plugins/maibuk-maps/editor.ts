@@ -41,6 +41,7 @@ import {
   MIN_IMAGE_OPACITY,
   MIN_LABEL_SIZE_MM,
   MIN_LABEL_WIDTH_MM,
+  MIN_SHAPE_SIZE_MM,
   MIN_STAMP_SIZE_MM,
   curvedSegments,
   isAreaFill,
@@ -78,6 +79,7 @@ import {
   seedFor,
   shapeFromCorners,
   shapeOutline,
+  towardBoxTop,
 } from "./geometry";
 import { createHistory } from "./history";
 import { assetDataUri } from "./export";
@@ -100,6 +102,7 @@ import {
   setHidden,
   setLocked,
   smoothStroke,
+  type ElementTransformBox,
   type MapLibrary,
 } from "./scene";
 import {
@@ -376,6 +379,18 @@ export interface MapEditor {
   moveDown(id: string): void;
   /** Moves the selection by page millimetres; a locked Element stays put. */
   move(dx: number, dy: number): void;
+  /**
+   * Scales the selection about its centre by `factor`, as one undo step
+   * (#795, #796): a Stamp or a Map Image grows its width, a Shape its width
+   * and height, and a Map Label its cap size and width together. No selection,
+   * a locked Element, and another kind change nothing.
+   */
+  scaleSelection(factor: number): void;
+  /**
+   * Turns the selection clockwise by `degrees`, as one undo step (#795, #796).
+   * No selection, a locked Element, and another kind change nothing.
+   */
+  rotateSelection(degrees: number): void;
   undo(): void;
   redo(): void;
   zoomIn(): void;
@@ -415,6 +430,36 @@ function sameShape(one: MapShape, two: MapShape): boolean {
 function normalizeRotation(rotation: number): number {
   const turned = rotation % 360;
   return turned < 0 ? turned + 360 : turned;
+}
+
+/**
+ * The transform a patch of numbers asks for, or null when one is unusable (#795):
+ * a field the patch leaves out keeps the transform's own, a size never reaches
+ * zero, and the turn reads in one circle.
+ */
+function resolvedTransform(
+  before: MapStampTransform,
+  patch: Partial<MapStampTransform>
+): MapStampTransform | null {
+  const x = patch.x ?? before.x;
+  const y = patch.y ?? before.y;
+  const size = patch.size ?? before.size;
+  const rotation = patch.rotation ?? before.rotation;
+  if (![x, y, size, rotation].every(Number.isFinite)) return null;
+  return {
+    x,
+    y,
+    // A Stamp or a Map Image with no box draws nothing, so the size keeps some room.
+    size: Math.max(MIN_STAMP_SIZE_MM, size),
+    rotation: normalizeRotation(rotation),
+  };
+}
+
+/** Whether two transforms place, size, and turn an Element the same way. */
+function sameTransform(one: MapStampTransform, two: MapStampTransform): boolean {
+  return (
+    one.x === two.x && one.y === two.y && one.size === two.size && one.rotation === two.rotation
+  );
 }
 
 /** How far a Fill's or Map Line's edge fades out, or null when it ends in a line. */
@@ -589,6 +634,12 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
         panX,
         panY,
         penLabel: penDraftLabel(),
+        readout: {
+          size: translate(options.language(), "map.sizeReadout"),
+          angle: translate(options.language(), "map.angleReadout"),
+          shape: translate(options.language(), "map.shapeReadout"),
+          label: translate(options.language(), "map.labelReadout"),
+        },
       },
       { library: assetSource?.library ?? EMPTY_MAP_LIBRARY }
     );
@@ -1116,6 +1167,34 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     ingestRequests.clear();
   }
 
+  /**
+   * Reshapes one unlocked exact Shape line from its number fields, as one undo
+   * step (#747): what the properties panel sets, and what a transform handle
+   * drag commits. A locked or missing line, one without a Shape, and an edit
+   * that changes nothing are not undo steps.
+   */
+  function writeShapeGeometry(id: string, patch: Partial<Omit<MapShape, "kind">>): void {
+    const target = elementById(id);
+    if (
+      target === undefined ||
+      target.kind !== "line" ||
+      target.locked ||
+      target.shape === undefined
+    ) {
+      return;
+    }
+    const shape = normalizeShape({ ...target.shape, ...patch });
+    if (shape === null || sameShape(shape, target.shape)) return;
+    const outline = shapeOutline(shape);
+    edit(
+      elements.map((element) =>
+        element.id === id && element.kind === "line"
+          ? { ...element, shape, points: outline.points, curves: outline.curves, closed: true }
+          : element
+      )
+    );
+  }
+
   function applyMessage(message: FrameToWorkerMessage): void {
     switch (message.kind) {
       case "stroke":
@@ -1150,6 +1229,9 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
         break;
       case "bendLabel":
         bendDragged(message.id, message.bend);
+        break;
+      case "transformElement":
+        transformDragged(message.id, message.box, message.size);
         break;
       case "zoom":
         zoomAt(message.point, message.factor);
@@ -1214,6 +1296,181 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       return;
     }
     setLabelLayout(id, { bend });
+  }
+
+  /**
+   * Writes one Stamp's or Map Image's stored transform — its centre, width, and
+   * turn — as one undo step, and answers whether it wrote anything (#795). Both
+   * kinds store a width alone, so the height a handle sends is only the art's
+   * own proportions and never lands here. A locked or missing Element, one of
+   * another kind, and a box the Element already holds all change nothing.
+   */
+  function applyTransform(id: string, patch: Partial<MapStampTransform>): boolean {
+    const target = elementById(id);
+    if (target === undefined || target.locked) return false;
+    if (target.kind !== "stamp" && target.kind !== "image") return false;
+    const transform = resolvedTransform(target.transform, patch);
+    if (transform === null || sameTransform(transform, target.transform)) return false;
+    updateElement(id, (element) =>
+      element.kind === "stamp" || element.kind === "image" ? { ...element, transform } : element
+    );
+    return true;
+  }
+
+  /**
+   * Commits one transform handle drag (#795, #796) through the same clamp and
+   * write the panel's numbers use, so the whole drag is one undo step. A Stamp
+   * or a Map Image writes its centre, width, and turn; a Shape writes its
+   * width, height, rotation, and centre through `setShapeGeometry`, keeping
+   * its side count and corner radius; a Map Label writes its cap size, width,
+   * rotation, and centre through `setLabelLayout`, never below its minimum
+   * cap size. A drag the Worker refuses still answers with a scene: the Frame
+   * keeps its preview until then, and that scene draws the box the Map really
+   * holds.
+   */
+  function transformDragged(id: string, box: ElementTransformBox, size?: number): void {
+    const target = elementById(id);
+    if (target === undefined || target.hidden || target.locked) {
+      sendScene();
+      return;
+    }
+    if (target.kind === "stamp" || target.kind === "image") {
+      const written = applyTransform(id, {
+        x: box.x,
+        y: box.y,
+        size: box.width,
+        rotation: box.rotation,
+      });
+      if (!written) sendScene();
+      return;
+    }
+    if (target.kind === "line") {
+      const shape = target.shape;
+      // A converted or freehand Map Line keeps today's outline with no handles,
+      // so a drag for one changes nothing.
+      if (shape === undefined || target.roughened || target.convertedFrom !== undefined) {
+        sendScene();
+        return;
+      }
+      if (![box.x, box.y, box.width, box.height, box.rotation].every(Number.isFinite)) {
+        sendScene();
+        return;
+      }
+      const before = elements;
+      writeShapeGeometry(id, {
+        cx: box.x,
+        cy: box.y,
+        width: Math.max(MIN_SHAPE_SIZE_MM, box.width),
+        height: Math.max(MIN_SHAPE_SIZE_MM, box.height),
+        rotation: normalizeRotation(box.rotation),
+      });
+      if (elements === before) sendScene();
+      return;
+    }
+    if (target.kind === "label") {
+      if (![box.x, box.y, box.width, box.rotation].every(Number.isFinite)) {
+        sendScene();
+        return;
+      }
+      if (size !== undefined && !(Number.isFinite(size) && size > 0)) {
+        sendScene();
+        return;
+      }
+      const before = elements;
+      const capSize = size ?? box.height;
+      // The box's centre is half a cap above the baseline the label stores.
+      const [x, y] = towardBoxTop([box.x, box.y], -capSize / 2, box.rotation);
+      setLabelLayout(id, {
+        x,
+        y,
+        width: box.width,
+        size: capSize,
+        rotation: box.rotation,
+      });
+      if (elements === before) sendScene();
+      return;
+    }
+    sendScene();
+  }
+
+  /**
+   * The Element a keyboard transform Command may change (#795, #796): the
+   * selected Stamp, Map Image, exact Shape, or Map Label when unlocked, else
+   * null. A converted or freehand Map Line and a Fill store a different shape,
+   * so the scale and turn Commands leave them alone.
+   */
+  function keyboardTransformTarget():
+    | MapStampElement
+    | MapImageElement
+    | MapLineElement
+    | MapLabelElement
+    | null {
+    const target = elementById(selectedId);
+    if (target === undefined || target.locked || target.hidden) return null;
+    if (target.kind === "stamp" || target.kind === "image" || target.kind === "label")
+      return target;
+    if (
+      target.kind === "line" &&
+      target.shape !== undefined &&
+      !target.roughened &&
+      target.convertedFrom === undefined
+    ) {
+      return target;
+    }
+    return null;
+  }
+
+  /**
+   * Scales the selection about its centre as one undo step (#795, #796),
+   * through the same setter the handle drag and the panel use, so the size
+   * keeps above its minimum and an unchanged size is not an undo step. A
+   * Shape scales its width and height; a Map Label scales its cap size and
+   * width together.
+   */
+  function scaleSelection(factor: number): void {
+    const target = keyboardTransformTarget();
+    if (target === null || !Number.isFinite(factor) || factor <= 0) return;
+    if (target.kind === "stamp" || target.kind === "image") {
+      applyTransform(target.id, { size: target.transform.size * factor });
+      return;
+    }
+    if (target.kind === "line" && target.shape !== undefined) {
+      writeShapeGeometry(target.id, {
+        width: Math.max(MIN_SHAPE_SIZE_MM, target.shape.width * factor),
+        height: Math.max(MIN_SHAPE_SIZE_MM, target.shape.height * factor),
+      });
+      return;
+    }
+    if (target.kind === "label") {
+      setLabelLayout(target.id, {
+        width: target.width * factor,
+        size: target.size * factor,
+      });
+    }
+  }
+
+  /**
+   * Turns the selection about its centre as one undo step (#795, #796),
+   * through the same setter the handle drag and the panel use, so the turn
+   * reads in one circle and the centre never drifts. Shapes and Map Labels
+   * turn like Stamps and Map Images do.
+   */
+  function rotateSelection(degrees: number): void {
+    const target = keyboardTransformTarget();
+    if (target === null || !Number.isFinite(degrees) || degrees === 0) return;
+    if (target.kind === "stamp" || target.kind === "image") {
+      applyTransform(target.id, { rotation: target.transform.rotation + degrees });
+      return;
+    }
+    if (target.kind === "line" && target.shape !== undefined) {
+      writeShapeGeometry(target.id, {
+        rotation: normalizeRotation(target.shape.rotation + degrees),
+      });
+      return;
+    }
+    if (target.kind === "label") {
+      setLabelLayout(target.id, { rotation: target.rotation + degrees });
+    }
   }
 
   function setZoom(next: number): void {
@@ -1657,25 +1914,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     },
 
     setShapeGeometry(id, patch) {
-      const target = elementById(id);
-      if (
-        target === undefined ||
-        target.kind !== "line" ||
-        target.locked ||
-        target.shape === undefined
-      ) {
-        return;
-      }
-      const shape = normalizeShape({ ...target.shape, ...patch });
-      if (shape === null || sameShape(shape, target.shape)) return;
-      const outline = shapeOutline(shape);
-      edit(
-        elements.map((element) =>
-          element.id === id && element.kind === "line"
-            ? { ...element, shape, points: outline.points, curves: outline.curves, closed: true }
-            : element
-        )
-      );
+      writeShapeGeometry(id, patch);
     },
 
     setStamp(id) {
@@ -1766,35 +2005,8 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
 
     setStampTransform(id, patch) {
       const target = elementById(id);
-      if (target === undefined || target.kind !== "stamp" || target.locked) return;
-      const before = target.transform;
-      const x = patch.x ?? before.x;
-      const y = patch.y ?? before.y;
-      const size = patch.size ?? before.size;
-      const rotation = patch.rotation ?? before.rotation;
-      if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-      if (!Number.isFinite(size) || !Number.isFinite(rotation)) return;
-      const transform: MapStampTransform = {
-        x,
-        y,
-        // A Stamp with no art box draws nothing, so the size keeps some room.
-        size: Math.max(MIN_STAMP_SIZE_MM, size),
-        // The turn reads in one circle, so a whole turn is no turn at all.
-        rotation: normalizeRotation(rotation),
-      };
-      if (
-        transform.x === before.x &&
-        transform.y === before.y &&
-        transform.size === before.size &&
-        transform.rotation === before.rotation
-      ) {
-        return;
-      }
-      edit(
-        elements.map((element) =>
-          element.id === id && element.kind === "stamp" ? { ...element, transform } : element
-        )
-      );
+      if (target === undefined || target.kind !== "stamp") return;
+      applyTransform(id, patch);
     },
 
     setImageOpacity(id, opacity) {
@@ -1825,15 +2037,8 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
 
     setImageSize(id, sizeMm) {
       const target = elementById(id);
-      if (target === undefined || target.kind !== "image" || target.locked) return;
-      if (!Number.isFinite(sizeMm)) return;
-      const size = Math.max(MIN_STAMP_SIZE_MM, sizeMm);
-      if (size === target.transform.size) return;
-      updateElement(id, (element) =>
-        element.kind === "image"
-          ? { ...element, transform: { ...element.transform, size } }
-          : element
-      );
+      if (target === undefined || target.kind !== "image") return;
+      applyTransform(id, { size: sizeMm });
     },
 
     setStampScale(id, patch) {
@@ -1901,6 +2106,10 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       if (target === undefined || !canMove(target)) return;
       moveBy(target, dx, dy);
     },
+
+    scaleSelection,
+
+    rotateSelection,
 
     undo() {
       if (!history.canUndo) return;

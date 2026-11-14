@@ -177,6 +177,102 @@
         stroke-linecap: round;
         pointer-events: none;
       }
+
+      /* A selected Stamp's or Map Image's transform handles (#795): its box, the
+         corner grips, and the turn grip on its stalk. Their geometry is sized in
+         page millimetres from the screen scale, so they keep their size on screen
+         at every zoom; the strokes stay a pixel wide by not scaling, so a grip's
+         edge is as crisp when zoomed in as the selection outline is. They mark
+         and grip the Element rather than paint it, so only the wider, invisible
+         targets under them take a pointer. */
+      .map-transform-box,
+      .map-transform-stalk,
+      .map-transform-handle {
+        fill: none;
+        stroke: var(--maibuk-color-primary);
+        stroke-width: 1.5;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+      }
+
+      .map-transform-handle {
+        fill: var(--maibuk-color-primary);
+        fill-opacity: 0.2;
+      }
+
+      /* The grip under the pointer (#795) is the one a press would take, so it
+         fills solid; the Frame draws it larger too, in page millimetres. */
+      .map-transform-handle[data-hovered="true"] {
+        fill-opacity: 1;
+      }
+
+      /* A locked Element cannot be resized or turned: its box is dashed, and a
+         small padlock badge hangs on its corner instead of grips. */
+      .map-transform[data-locked="true"] .map-transform-box {
+        stroke-dasharray: 4 3;
+      }
+
+      .map-transform-lock {
+        pointer-events: none;
+      }
+
+      .map-transform-lock-body {
+        fill: var(--maibuk-color-primary);
+      }
+
+      .map-transform-lock-shackle {
+        fill: none;
+        stroke: var(--maibuk-color-primary);
+        stroke-width: 1.5;
+        stroke-linecap: round;
+        vector-effect: non-scaling-stroke;
+      }
+
+      .map-transform-hit {
+        fill: transparent;
+        stroke: none;
+        pointer-events: all;
+      }
+
+      /* The box a resize started from (#795): dashed, so the author compares
+         the old size with the live one. It guides rather than grips, so it
+         never takes a pointer. */
+      .map-transform-ghost {
+        fill: none;
+        stroke: var(--maibuk-color-primary);
+        stroke-width: 1;
+        stroke-dasharray: 4 3;
+        vector-effect: non-scaling-stroke;
+        opacity: 0.6;
+        pointer-events: none;
+      }
+
+      /* One tick at every 15° step while a Shift turn runs (#795), so the
+         author sees where the snap will land. */
+      .map-transform-tick {
+        stroke: var(--maibuk-color-primary);
+        stroke-width: 1.5;
+        stroke-linecap: round;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+      }
+
+      /* The readout chip beside the pointer during a drag (#795): the host's
+         foreground as its surface and the page colour as its ink, so it reads
+         in both themes over the Map's own paper. Its geometry is sized in page
+         millimetres from the screen scale, like the handles. */
+      .map-readout {
+        pointer-events: none;
+      }
+
+      .map-readout-chip {
+        fill: var(--maibuk-color-foreground);
+        fill-opacity: 0.85;
+      }
+
+      .map-readout-text {
+        fill: var(--maibuk-color-background);
+      }
     </style>
   </head>
   <body>

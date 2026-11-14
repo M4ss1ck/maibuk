@@ -19,12 +19,16 @@ import {
   pointsBounds,
   roundedMm,
   seedFor,
+  towardBoxTop,
 } from "./geometry";
 import {
   DEFAULT_STAMP_SCALE,
   isAreaFill,
   labelBaselinePath,
   labelFontFamily,
+  MIN_LABEL_WIDTH_MM,
+  MIN_SHAPE_SIZE_MM,
+  MIN_STAMP_SIZE_MM,
   type MapDocument,
   type MapElement,
   type MapFillElement,
@@ -1571,6 +1575,122 @@ export function setLocked(
   locked: boolean
 ): MapElement[] {
   return elements.map((element) => (element.id === id ? { ...element, locked } : element));
+}
+
+/**
+ * The handles an Element's selection draws (#795): four corners, all eight, or
+ * a Map Label's own corners and sides. A Map Line and a Fill keep the selection
+ * outline they have always had.
+ */
+export const ELEMENT_HANDLE_SETS = ["corners", "all", "label"] as const;
+export type ElementHandleSet = (typeof ELEMENT_HANDLE_SETS)[number];
+
+/** The box a transform handle resizes or turns, in page millimetres (#795). */
+export interface ElementTransformBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+}
+
+/** What the Frame draws an Element's handles from (#795): its box, and which handles it takes. */
+export interface ElementTransform {
+  box: ElementTransformBox;
+  handles: ElementHandleSet;
+  /**
+   * The smallest width the Worker keeps for this Element, in page millimetres.
+   * A Stamp and a Map Image store a width alone, so a drag past the opposite
+   * corner stops here and the Frame's preview shows what the Worker stores.
+   */
+  minSize: number;
+}
+
+/**
+ * The height a Stamp's art box takes for each millimetre of its `size`: the
+ * art's own proportions, so a tall or a wide Stamp keeps its shape on the page.
+ * A Custom Stamp reads its Library picture, and the scale bar reads the bar it
+ * draws; a ref this build cannot measure reads square.
+ */
+function stampBoxRatio(element: MapStampElement, library: MapLibrary): number {
+  if (element.stampRef === SCALE_BAR_STAMP_REF) return SCALE_BAR_HEIGHT_RATIO;
+  const assetId = parseCustomStampRef(element.stampRef);
+  if (assetId !== null) {
+    const asset = library.assets.get(assetId);
+    return asset === undefined || !(asset.width > 0) ? 1 : asset.height / asset.width;
+  }
+  const art = stampArt(element.stampRef);
+  const [, , width, height] = art?.viewBox ?? [0, 0, 1, 1];
+  return width > 0 ? height / width : 1;
+}
+
+/**
+ * What the Frame needs to draw an Element's transform handles (#795, #796):
+ * the box they sit on, in page millimetres, the handles it takes, and the
+ * smallest size the Worker keeps for it. A Stamp and a Map Image carry four
+ * corners, which keep their aspect because both store a width alone. A Shape
+ * that still keeps its exact geometry carries all eight handles; a Map Label
+ * carries its corners and its left and right sides. A converted or freehand
+ * Map Line and a Fill carry none here and keep their selection outline.
+ */
+export function elementTransform(
+  element: MapElement,
+  library: MapLibrary = EMPTY_MAP_LIBRARY
+): ElementTransform | null {
+  if (element.kind === "stamp") {
+    const { x, y, size, rotation } = element.transform;
+    return {
+      box: { x, y, width: size, height: size * stampBoxRatio(element, library), rotation },
+      handles: "corners",
+      minSize: MIN_STAMP_SIZE_MM,
+    };
+  }
+  if (element.kind === "image") {
+    const asset = library.assets.get(element.assetRef);
+    const { x, y, size, rotation } = element.transform;
+    const ratio = asset === undefined || !(asset.width > 0) ? 1 : asset.height / asset.width;
+    return {
+      box: { x, y, width: size, height: size * ratio, rotation },
+      handles: "corners",
+      minSize: MIN_STAMP_SIZE_MM,
+    };
+  }
+  if (element.kind === "line") {
+    // Only a Shape that still keeps its exact geometry takes handles: a line
+    // Roughened or cut by the Eraser, and a freehand line, keep today's
+    // outline with none.
+    const shape = element.shape;
+    if (shape === undefined || element.roughened || element.convertedFrom !== undefined) {
+      return null;
+    }
+    return {
+      box: {
+        x: shape.cx,
+        y: shape.cy,
+        width: shape.width,
+        height: shape.height,
+        rotation: shape.rotation,
+      },
+      handles: "all",
+      minSize: MIN_SHAPE_SIZE_MM,
+    };
+  }
+  if (element.kind === "label") {
+    // The box stands on the baseline, so the letters sit inside it.
+    const [x, y] = towardBoxTop([element.x, element.y], element.size / 2, element.rotation);
+    return {
+      box: {
+        x,
+        y,
+        width: element.width,
+        height: element.size,
+        rotation: element.rotation,
+      },
+      handles: "label",
+      minSize: MIN_LABEL_WIDTH_MM,
+    };
+  }
+  return null;
 }
 
 /**

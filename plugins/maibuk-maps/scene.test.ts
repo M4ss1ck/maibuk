@@ -11,6 +11,9 @@ import {
   DEFAULT_LABEL_HALO_MM,
   DEFAULT_LABEL_SIZE_MM,
   LINE_STROKE,
+  MIN_LABEL_WIDTH_MM,
+  MIN_SHAPE_SIZE_MM,
+  MIN_STAMP_SIZE_MM,
   type MapDocument,
   type MapElement,
   type MapFillElement,
@@ -41,6 +44,7 @@ import {
   removeElement,
   renameElement,
   reorder,
+  elementTransform,
   sceneShapes,
   sceneToSvg,
   stampPreview,
@@ -1846,5 +1850,223 @@ describe("a Stamp's preview picture (the Insert grid's tiles)", () => {
       expect(svg).not.toContain("<image");
       expect(svg).toContain("stroke-dasharray");
     }
+  });
+});
+
+describe("the handle box an Element carries (#795)", () => {
+  const stamp = (overrides: Partial<MapStampElement> = {}): MapStampElement => ({
+    id: "stamp",
+    kind: "stamp",
+    name: "Marker",
+    hidden: false,
+    locked: false,
+    stampRef: "base:marker",
+    transform: { x: 100, y: 50, size: 12, rotation: 0 },
+    ...overrides,
+  });
+
+  const image = (overrides: Partial<MapImageElement> = {}): MapImageElement => ({
+    id: "image",
+    kind: "image",
+    name: "Scan",
+    hidden: false,
+    locked: false,
+    assetRef: "a1",
+    transform: { x: 60, y: 40, size: 80, rotation: 15 },
+    opacity: 1,
+    exportable: true,
+    ...overrides,
+  });
+
+  const library = () =>
+    mapLibrary([
+      {
+        id: "a1",
+        name: "Scan",
+        mime: "image/png",
+        width: 40,
+        height: 20,
+        recolorable: false,
+        use: "image",
+      },
+    ]);
+
+  it("is a Stamp's art box, centred on its transform and turned with it", () => {
+    expect(
+      elementTransform(stamp({ transform: { x: 100, y: 50, size: 12, rotation: 30 } }))
+    ).toEqual({
+      box: { x: 100, y: 50, width: 12, height: 12, rotation: 30 },
+      handles: "corners",
+      // The size the Worker keeps, so a preview stops where the Map does.
+      minSize: MIN_STAMP_SIZE_MM,
+    });
+  });
+
+  it("follows the art's own proportions rather than a square", () => {
+    const city = stamp({ stampRef: "base:city" });
+    expect(elementTransform(city)?.box.height).toBeCloseTo((12 * 8.92) / 9.74, 6);
+  });
+
+  it("is a Map Image's picture box, whose height follows the picture", () => {
+    expect(elementTransform(image(), library())).toEqual({
+      box: { x: 60, y: 40, width: 80, height: 40, rotation: 15 },
+      handles: "corners",
+      minSize: MIN_STAMP_SIZE_MM,
+    });
+    // A picture the Library does not hold yet still gets a box to grab.
+    expect(elementTransform(image())?.box).toEqual({
+      x: 60,
+      y: 40,
+      width: 80,
+      height: 80,
+      rotation: 15,
+    });
+  });
+
+  it("is the scale bar's own bar box, which is shorter than its room", () => {
+    const bar = stamp({
+      stampRef: SCALE_BAR_STAMP_REF,
+      transform: { x: 100, y: 50, size: 40, rotation: 0 },
+    });
+    expect(elementTransform(bar)?.box.height).toBeCloseTo(40 * 0.12, 6);
+  });
+
+  it("is none for a freehand line or a fill, which keep today's outline", () => {
+    const plain = line("plain", [
+      [0, 0],
+      [1, 1],
+    ]);
+    expect(elementTransform(plain)).toBeNull();
+    expect(
+      elementTransform({
+        id: "fill",
+        kind: "fill",
+        name: "Fill",
+        hidden: false,
+        locked: false,
+        anchor: [1, 1],
+        content: { color: "#c8d5a3" },
+      })
+    ).toBeNull();
+  });
+
+  it("is a Shape's own box with all eight handles (#796)", () => {
+    expect(
+      elementTransform({
+        id: "shape",
+        kind: "line",
+        name: "Ellipse 1",
+        hidden: false,
+        locked: false,
+        points: [
+          [0, 0],
+          [1, 0],
+        ],
+        style: "plain",
+        enclosesFills: true,
+        closed: true,
+        curves: [false, false],
+        roughened: false,
+        shape: {
+          kind: "ellipse",
+          cx: 100,
+          cy: 50,
+          width: 64,
+          height: 34,
+          rotation: 18,
+          sides: 6,
+          cornerRadius: 0,
+        },
+      })
+    ).toEqual({
+      box: { x: 100, y: 50, width: 64, height: 34, rotation: 18 },
+      handles: "all",
+      minSize: MIN_SHAPE_SIZE_MM,
+    });
+  });
+
+  it("is none for a converted Shape, Roughened or cut (#796)", () => {
+    const shape = {
+      kind: "rectangle" as const,
+      cx: 30,
+      cy: 20,
+      width: 40,
+      height: 20,
+      rotation: 0,
+      sides: 6,
+      cornerRadius: 0,
+    };
+    const convertedFromCut: MapLineElement = {
+      id: "cut",
+      kind: "line",
+      name: "Rectangle 2",
+      hidden: false,
+      locked: false,
+      points: [
+        [10, 10],
+        [50, 10],
+      ],
+      style: "plain",
+      enclosesFills: true,
+      closed: false,
+      curves: [false],
+      roughened: false,
+      convertedFrom: "rectangle",
+    };
+    // A freehand line carries no Shape at all.
+    expect(elementTransform(convertedFromCut)).toBeNull();
+    // A Roughened line keeps no exact geometry either.
+    expect(
+      elementTransform({
+        ...convertedFromCut,
+        id: "rough",
+        roughened: true,
+        convertedFrom: undefined,
+      })
+    ).toBeNull();
+    // A line that somehow keeps both a Shape and the Roughen flag is converted.
+    expect(
+      elementTransform({
+        ...convertedFromCut,
+        id: "both",
+        shape,
+        roughened: true,
+        convertedFrom: undefined,
+      })
+    ).toBeNull();
+  });
+
+  it("is a Map Label's baseline box with the label handles (#796)", () => {
+    expect(
+      elementTransform({
+        id: "label",
+        kind: "label",
+        name: "Label",
+        hidden: false,
+        locked: false,
+        text: "Sea",
+        x: 10,
+        y: 20,
+        rotation: 5,
+        width: 84,
+        bend: 0,
+        font: DEFAULT_LABEL_FONT,
+        size: 7,
+        letterSpacing: 0,
+        halo: 0,
+      })
+    ).toEqual({
+      // The box stands on the baseline at (10, 20): its centre is half the
+      // 7 mm cap above it, along the label's 5° turn.
+      box: {
+        x: expect.closeTo(10 + 3.5 * Math.sin((5 * Math.PI) / 180), 9),
+        y: expect.closeTo(20 - 3.5 * Math.cos((5 * Math.PI) / 180), 9),
+        width: 84,
+        height: 7,
+        rotation: 5,
+      },
+      handles: "label",
+      minSize: MIN_LABEL_WIDTH_MM,
+    });
   });
 });

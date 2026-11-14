@@ -13,6 +13,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { MAP_FRAME_SRC } from "./map-page";
 import { parseFrameMessage, sceneMessage } from "./frame-protocol";
 import {
+  transformBox as geometryTransformBox,
+  type TransformBox,
+  type TransformGesture,
+} from "./geometry";
+import {
   MAP_LABEL_FONT_FAMILIES,
   MAP_LABEL_FONTS,
   bendFromPoint,
@@ -51,6 +56,13 @@ interface Frame {
    * host layout shift that moves the Frame under a still pointer.
    */
   origin: [number, number];
+  /**
+   * How many screen pixels one page millimetre spans (#795), which the Frame
+   * asks for to keep a transform handle the same size on screen at every zoom.
+   * A browser answers from the surface's own pixel size; jsdom has no layout,
+   * so a test says it, and `null` stands for a document that cannot.
+   */
+  scale: number | null;
   /** Sends one scene, with the defaults a Select-tool, unzoomed view has. */
   scene(overrides?: Record<string, unknown>): void;
   /**
@@ -58,6 +70,11 @@ interface Frame {
    * the blob URL it keeps: jsdom has no canvas, so a test reads the swap here.
    */
   assetSvg(svg: string): string;
+  /**
+   * The Frame's mirrored copy of the handle maths (#795), which the parity test
+   * holds to `geometry.ts`'s results.
+   */
+  transformBox(gesture: TransformGesture): TransformBox;
 }
 
 /** Loads the Frame's markup, the vendored libraries, and its scripts. */
@@ -67,12 +84,18 @@ function loadFrame(): Frame {
   (window as unknown as { maibuk: unknown }).maibuk = { port };
   const cleanups: (() => void)[] = [];
   const origin: [number, number] = [0, 0];
+  const sizes: { scale: number | null } = { scale: 4 };
   let assetSvg: (svg: string) => string = (svg) => svg;
+  let resolveTransformBox: ((gesture: TransformGesture) => TransformBox) | null = null;
   (globalThis as Record<string, unknown>).__mapTestHooks = {
     pagePoint: (event: MouseEvent) => [event.clientX - origin[0], event.clientY - origin[1]],
+    pxPerMm: () => sizes.scale,
     onReady: (cleanup: () => void) => cleanups.push(cleanup),
     onAssetSvg: (resolve: (svg: string) => string) => {
       assetSvg = resolve;
+    },
+    onTransformBox: (resolve: (gesture: TransformGesture) => TransformBox) => {
+      resolveTransformBox = resolve;
     },
   };
   try {
@@ -89,6 +112,12 @@ function loadFrame(): Frame {
     port,
     cleanups,
     origin,
+    get scale() {
+      return sizes.scale;
+    },
+    set scale(value: number | null) {
+      sizes.scale = value;
+    },
     scene(overrides = {}) {
       port.deliver({
         kind: "scene",
@@ -101,10 +130,15 @@ function loadFrame(): Frame {
         panX: 0,
         panY: 0,
         penLabel: PEN_LABEL,
+        readout: READOUT,
         ...overrides,
       });
     },
     assetSvg: (svg) => assetSvg(svg),
+    transformBox(gesture) {
+      if (resolveTransformBox === null) throw new Error("the Frame registered no handle maths");
+      return resolveTransformBox(gesture);
+    },
   };
 }
 
@@ -135,6 +169,14 @@ function key(name: string, init: KeyboardEventInit = {}): KeyboardEvent {
 
 /** The Pen draft label the Worker sends: both plural forms, `{{count}}` to fill. */
 const PEN_LABEL = { one: "Pen line, {{count}} point", other: "Pen line, {{count}} points" };
+
+/** The readout chip's text the Worker sends: `{{value}}` for the millimetres or degrees. */
+const READOUT = {
+  size: "{{value}} mm",
+  angle: "{{value}}°",
+  shape: "{{width}} × {{height}} mm",
+  label: "Cap {{size}} mm · {{width}} mm",
+};
 
 const shape = (overrides: Record<string, unknown> = {}) => ({
   d: "M 10 10 L 20 20",
@@ -1228,6 +1270,7 @@ describe("the scene message", () => {
       panX: 0,
       panY: 0,
       penLabel: PEN_LABEL,
+      readout: READOUT,
     });
     expect(message.elements[0].shapes).toEqual([
       {
@@ -1271,6 +1314,7 @@ describe("the scene message", () => {
       panX: 0,
       panY: 0,
       penLabel: PEN_LABEL,
+      readout: READOUT,
     });
     expect(message.elements[0].shapes).toEqual([
       {
@@ -1324,6 +1368,7 @@ describe("the scene message", () => {
       panX: 0,
       panY: 0,
       penLabel: PEN_LABEL,
+      readout: READOUT,
     });
 
     const shape = message.elements[1].shapes[0];
@@ -1374,6 +1419,7 @@ describe("the scene message", () => {
       panX: 0,
       panY: 0,
       penLabel: PEN_LABEL,
+      readout: READOUT,
     });
 
     expect(message.elements[0].shapes).toEqual([
@@ -1427,6 +1473,7 @@ describe("the scene message", () => {
       panX: 0,
       panY: 0,
       penLabel: PEN_LABEL,
+      readout: READOUT,
     });
 
     const defs = message.defs.join("");
@@ -1469,6 +1516,7 @@ describe("the scene message", () => {
       panX: 0,
       panY: 0,
       penLabel: PEN_LABEL,
+      readout: READOUT,
     });
 
     expect(message.defs.join("")).toMatch(/<clipPath id="fill-clip-[0-9a-f]+">/);
@@ -1721,6 +1769,7 @@ describe("the move message", () => {
       panX: 0,
       panY: 0,
       penLabel: PEN_LABEL,
+      readout: READOUT,
     });
     expect(message.elements.map((element) => [element.id, element.movable])).toEqual([
       ["free", true],
@@ -1801,6 +1850,7 @@ describe("the bendLabel message", () => {
       panX: 0,
       panY: 0,
       penLabel: PEN_LABEL,
+      readout: READOUT,
     });
 
     expect(message.elements[0].label).toEqual({
@@ -2665,6 +2715,1219 @@ describe("the Select tool", () => {
   });
 });
 
+describe("the transform handles (#795)", () => {
+  /** The box a selected Stamp's handles sit on: 40 by 20 mm about (100, 50). */
+  const handleBox = (overrides: Record<string, unknown> = {}) => ({
+    box: { x: 100, y: 50, width: 40, height: 20, rotation: 0, ...overrides },
+    handles: "corners",
+  });
+
+  /** One Element carrying that box, selected. */
+  const selected = (overrides: Record<string, unknown> = {}) =>
+    sceneElement({ selected: true, transform: handleBox(), ...overrides });
+
+  /** The overlay the Frame drew for the selection. */
+  const overlay = (): Element => {
+    const group = document.querySelector("g.map-transform");
+    if (group === null) throw new Error("the Frame drew no transform handles");
+    return group;
+  };
+
+  /** One grip the Frame drew, under `data-transform-handle`. */
+  const grip = (id: string): Element => {
+    const element = document.querySelector(`[data-transform-handle="${id}"]`);
+    if (element === null) throw new Error(`the Frame drew no ${id} grip`);
+    return element;
+  };
+
+  /** The invisible shape that catches a press on one grip. */
+  const target = (id: string): Element => {
+    const element = document.querySelector(`[data-transform-handle-hit="${id}"]`);
+    if (element === null) throw new Error(`the Frame drew no ${id} target`);
+    return element;
+  };
+
+  /** The middle of a drawn rectangle, in the box's own millimetres. */
+  const centre = (element: Element): [number, number] => [
+    Number(element.getAttribute("x")) + Number(element.getAttribute("width")) / 2,
+    Number(element.getAttribute("y")) + Number(element.getAttribute("height")) / 2,
+  ];
+
+  /** Where a `translate(x y)` transform puts an element, in page millimetres. */
+  const translated = (element: Element): [number, number] => {
+    const match = /^translate\(\s*(-?[\d.]+)\s+(-?[\d.]+)/.exec(
+      element.getAttribute("transform") ?? ""
+    );
+    if (match === null) throw new Error("the element carries no translate");
+    return [Number(match[1]), Number(match[2])];
+  };
+
+  /** The box the overlay draws around the selection. */
+  const outline = (): Element => {
+    const element = overlay().querySelector("rect.map-transform-box");
+    if (element === null) throw new Error("the selection drew no box");
+    return element;
+  };
+
+  /** The selected Element's own group, where a drag previews the art. */
+  const elementGroup = (): Element => {
+    const group = document.querySelector('g[data-element-id="e1"]');
+    if (group === null) throw new Error("the Element drew no group");
+    return group;
+  };
+
+  /** How many screen pixels wide a drawn rectangle is, at `scale` px per mm. */
+  const pixels = (element: Element, scale: number): number =>
+    Number(element.getAttribute("width")) * scale;
+
+  /** The cursor a grip shows. */
+  const cursor = (id: string): string =>
+    (target(id) as unknown as SVGElement & { style: CSSStyleDeclaration }).style.cursor;
+
+  /** Makes the document report a finger's pointer, for the length of the call. */
+  function withCoarsePointer<T>(run: () => T): T {
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query === "(pointer: coarse)",
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+    try {
+      return run();
+    } finally {
+      window.matchMedia = original;
+    }
+  }
+
+  it("draws the selected Stamp's box, a grip on each corner, and the turn grip above it", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected()] });
+
+    // The box arrives from the Worker, so the Frame never guesses it from the
+    // art: it draws the box as given, in the Element's own turned frame.
+    const group = overlay();
+    expect(group.getAttribute("data-transform")).toBe("e1");
+    expect(group.getAttribute("transform")).toBe("translate(100 50)");
+    const outline = group.querySelector("rect.map-transform-box");
+    expect(outline?.getAttribute("x")).toBe("-20");
+    expect(outline?.getAttribute("y")).toBe("-10");
+    expect(outline?.getAttribute("width")).toBe("40");
+    expect(outline?.getAttribute("height")).toBe("20");
+
+    // A grip sits on each corner of the box, not on the art it marks.
+    expect(
+      document.querySelectorAll(
+        "[data-transform-handle='nw'], [data-transform-handle='ne'], [data-transform-handle='se'], [data-transform-handle='sw']"
+      )
+    ).toHaveLength(4);
+    expect(centre(grip("nw"))).toEqual([expect.closeTo(-20, 1), expect.closeTo(-10, 1)]);
+    expect(centre(grip("se"))).toEqual([expect.closeTo(20, 1), expect.closeTo(10, 1)]);
+
+    // The turn grip is a circle on a stalk above the top edge's middle.
+    const turn = grip("rotate");
+    expect(turn.tagName.toLowerCase()).toBe("circle");
+    expect(Number(turn.getAttribute("cx"))).toBe(0);
+    expect(Number(turn.getAttribute("cy"))).toBeLessThan(-10);
+    expect(group.querySelector("path.map-transform-stalk")).not.toBeNull();
+  });
+
+  it("turns the box and its grips with the Element", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected({ transform: handleBox({ rotation: 30 }) })] });
+
+    expect(overlay().getAttribute("transform")).toBe("translate(100 50) rotate(30)");
+    // The grips keep their corners of the box: the frame turns them, not the maths.
+    expect(centre(grip("nw"))).toEqual([expect.closeTo(-20, 1), expect.closeTo(-10, 1)]);
+  });
+
+  it("keeps each grip the same size on screen at every zoom", () => {
+    frame = loadFrame();
+    frame.scale = 4;
+    frame.scene({ elements: [selected()], zoom: 1 });
+    const atOne = pixels(grip("nw"), 4);
+
+    // Zooming in doubles every page millimetre on screen, so the grip is drawn
+    // in half as many of them: 9 px at either zoom, as the issue asks.
+    frame.scale = 8;
+    frame.scene({ elements: [selected()], zoom: 2 });
+    const atTwo = pixels(grip("nw"), 8);
+
+    expect(atOne).toBeCloseTo(9, 1);
+    expect(atTwo).toBeCloseTo(9, 1);
+  });
+
+  it("hits a wider target than it draws, and a finger's on a coarse pointer", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected()] });
+
+    // 24 px of slack around a 9 px square, so a mouse need not be precise.
+    expect(pixels(target("nw"), 4)).toBeCloseTo(24, 1);
+    expect(pixels(grip("nw"), 4)).toBeCloseTo(9, 1);
+
+    withCoarsePointer(() => {
+      frame = loadFrame();
+      frame.scene({ elements: [selected()] });
+
+      // A finger has no fine aim: larger grips and a 44 px target.
+      expect(pixels(target("nw"), 4)).toBeCloseTo(44, 1);
+      expect(pixels(grip("nw"), 4)).toBeGreaterThan(9);
+    });
+  });
+
+  it("picks the resize cursor from the corner's direction on screen, and a turn cursor", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected()] });
+
+    expect(cursor("nw")).toBe("nwse-resize");
+    expect(cursor("ne")).toBe("nesw-resize");
+    expect(cursor("se")).toBe("nwse-resize");
+    expect(cursor("sw")).toBe("nesw-resize");
+    expect(cursor("rotate")).toBe("grab");
+
+    // A quarter turn carries each corner's arrow round with it, so the cursor
+    // still shows the way a drag would go.
+    frame.scene({ elements: [selected({ transform: handleBox({ rotation: 90 }) })] });
+    expect(cursor("nw")).toBe("nesw-resize");
+    expect(cursor("ne")).toBe("nwse-resize");
+  });
+
+  it("fills and grows the grip under the pointer, and lets it rest when the pointer moves off", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected()] });
+    const resting = pixels(grip("nw"), 4);
+    expect(grip("nw").getAttribute("data-hovered")).toBeNull();
+
+    // A grip under the pointer is the one a press would take, so it stands out.
+    pointer(target("nw"), "pointermove", 20, 20);
+    expect(grip("nw").getAttribute("data-hovered")).toBe("true");
+    expect(pixels(grip("nw"), 4)).toBeGreaterThan(resting);
+    // Filled solid by the stylesheet; the growth is drawn in page millimetres.
+    expect(HTML).toMatch(/\[data-hovered="true"\][\s\S]*?fill-opacity:\s*1/);
+
+    // The turn grip answers the pointer the same way.
+    pointer(target("rotate"), "pointermove", 100, 35);
+    expect(grip("rotate").getAttribute("data-hovered")).toBe("true");
+    expect(grip("nw").getAttribute("data-hovered")).toBeNull();
+
+    // Moving off the grips lets them rest again.
+    pointer(svg(), "pointermove", 300, 300);
+    expect(grip("nw").getAttribute("data-hovered")).toBeNull();
+    expect(grip("rotate").getAttribute("data-hovered")).toBeNull();
+    expect(pixels(grip("nw"), 4)).toBeCloseTo(resting, 1);
+  });
+
+  it("marks a locked Element with a dashed box, a lock badge, and no grips", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected({ locked: true })] });
+
+    expect(overlay().getAttribute("data-locked")).toBe("true");
+    expect(overlay().querySelector("rect.map-transform-box")).not.toBeNull();
+    expect(document.querySelector("[data-transform-handle]")).toBeNull();
+    expect(document.querySelector("[data-transform-handle-hit]")).toBeNull();
+    // The dash is the stylesheet's, on the box of a locked Element.
+    expect(HTML).toMatch(/\[data-locked="true"\]\s+\.map-transform-box[\s\S]*?stroke-dasharray/);
+
+    // A small padlock at the box's corner says why it cannot be sized.
+    const badge = overlay().querySelector("[data-transform-lock]");
+    expect(badge).not.toBeNull();
+    const body = overlay().querySelector("rect.map-transform-lock-body");
+    expect(body).not.toBeNull();
+    expect(overlay().querySelector("path.map-transform-lock-shackle")).not.toBeNull();
+    // Sized from the screen scale, so it stays legible at every zoom.
+    const atOne = pixels(body as Element, 4);
+    expect(atOne).toBeGreaterThan(0);
+    frame.scale = 8;
+    frame.scene({ elements: [selected({ locked: true })], zoom: 2 });
+    expect(
+      pixels(overlay().querySelector("rect.map-transform-lock-body") as Element, 8)
+    ).toBeCloseTo(atOne, 1);
+
+    // An unlocked Element carries grips instead, and no badge.
+    frame.scale = 4;
+    frame.scene({ elements: [selected()] });
+    expect(document.querySelector("[data-transform-lock]")).toBeNull();
+  });
+
+  it("draws no grips for a hidden Element, even when it is selected", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected({ hidden: true })] });
+
+    expect(document.querySelector("g.map-transform")).toBeNull();
+    expect(document.querySelector("[data-transform-handle]")).toBeNull();
+    expect(document.querySelector("[data-transform-handle-hit]")).toBeNull();
+    expect(document.querySelector("[data-transform-lock]")).toBeNull();
+  });
+
+  it("replaces the traced outline with the box, above the Element's own hit target", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected({ movable: true })] });
+
+    // One outline marks a selected Element: the box the grips sit on, not a
+    // second trace of the art under it.
+    expect(document.querySelector("path.map-selection")).toBeNull();
+    // The overlay is drawn last, so a press reaches a grip before the art.
+    const drawn = Array.from(svg().querySelectorAll("g[data-element-id], g.map-transform"));
+    expect(drawn.at(-1)).toBe(overlay());
+  });
+
+  it("never picks or moves the Element when the press lands on a grip", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected({ movable: true })] });
+
+    pointer(target("se"), "pointerdown", 120, 60);
+    pointer(svg(), "pointermove", 130, 70);
+    pointer(svg(), "pointerup", 130, 70);
+    // The grip's own drag is the only edit it makes: no select and no move.
+    expect(frame.port.messages).not.toContainEqual(expect.objectContaining({ kind: "select" }));
+    expect(frame.port.messages).not.toContainEqual(expect.objectContaining({ kind: "move" }));
+    frame.port.messages.length = 0;
+
+    // The Element's body still moves as it always did.
+    const line = document.querySelector('g[data-element-id="e1"] path.map-line');
+    if (line === null) throw new Error("the Element drew no line");
+    pointer(line, "pointerdown", 12, 12);
+    pointer(svg(), "pointermove", 20, 12);
+    pointer(svg(), "pointerup", 20, 12);
+    expect(frame.port.messages).toEqual([
+      { kind: "select", id: "e1" },
+      { kind: "move", id: "e1", dx: 8, dy: 0 },
+    ]);
+  });
+
+  it("resizes from a corner, previews the box live, and sends one transform on release", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected({ movable: true })] });
+
+    pointer(target("se"), "pointerdown", 120, 60);
+    pointer(svg(), "pointermove", 130, 65);
+
+    // Nothing travels to the Worker until release: the box, its handles, and
+    // the art itself follow the pointer inside this Frame.
+    expect(frame.port.messages).toEqual([]);
+    expect(outline().getAttribute("width")).toBe("50");
+    expect(elementGroup().getAttribute("transform")).toBe(
+      "translate(105 52.5) scale(1.25) translate(-100 -50)"
+    );
+
+    pointer(svg(), "pointerup", 130, 65);
+    expect(frame.port.messages).toEqual([
+      {
+        kind: "transformElement",
+        id: "e1",
+        box: { x: 105, y: 52.5, width: 50, height: 25, rotation: 0 },
+      },
+    ]);
+  });
+
+  it("resizes about the centre while Alt holds", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected()] });
+
+    pointer(target("se"), "pointerdown", 120, 60);
+    pointer(svg(), "pointermove", 130, 65, { altKey: true });
+    expect(elementGroup().getAttribute("transform")).toBe(
+      "translate(100 50) scale(1.5) translate(-100 -50)"
+    );
+    pointer(svg(), "pointerup", 130, 65);
+
+    // Both sides grow away from the centre, which stays where it was.
+    expect(frame.port.messages).toEqual([
+      {
+        kind: "transformElement",
+        id: "e1",
+        box: { x: 100, y: 50, width: 60, height: 30, rotation: 0 },
+      },
+    ]);
+  });
+
+  it("turns about the centre from the rotate handle, Shift snapping to 15° steps", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected()] });
+
+    pointer(target("rotate"), "pointerdown", 100, 35);
+    pointer(svg(), "pointermove", 110, 50);
+    expect(overlay().getAttribute("transform")).toBe("translate(100 50) rotate(90)");
+    expect(elementGroup().getAttribute("transform")).toBe(
+      "translate(100 50) rotate(90) translate(-100 -50)"
+    );
+
+    // 44° round from the grip's start is 134° from the box's own upright, and
+    // Shift lands it on 135°.
+    const aim = (degrees: number): [number, number] => [
+      100 + 15 * Math.cos((degrees * Math.PI) / 180),
+      50 + 15 * Math.sin((degrees * Math.PI) / 180),
+    ];
+    const [x, y] = aim(44);
+    pointer(svg(), "pointermove", x, y, { shiftKey: true });
+    expect(overlay().getAttribute("transform")).toBe("translate(100 50) rotate(135)");
+    pointer(svg(), "pointerup", x, y);
+
+    expect(frame.port.messages).toEqual([
+      {
+        kind: "transformElement",
+        id: "e1",
+        box: { x: 100, y: 50, width: 40, height: 20, rotation: 135 },
+      },
+    ]);
+  });
+
+  it("sticks a turn to a right angle within 2°", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected()] });
+
+    pointer(target("rotate"), "pointerdown", 100, 35);
+    // 89° round from the grip's start is 179° from the box's own upright, a
+    // degree short of a half turn, which the drag treats as straight down.
+    const [x, y] = [
+      100 + 15 * Math.cos((89 * Math.PI) / 180),
+      50 + 15 * Math.sin((89 * Math.PI) / 180),
+    ];
+    pointer(svg(), "pointermove", x, y);
+    expect(overlay().getAttribute("transform")).toBe("translate(100 50) rotate(180)");
+  });
+
+  it("keeps the preview after release until the next scene arrives", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected()] });
+
+    pointer(target("se"), "pointerdown", 120, 60);
+    pointer(svg(), "pointermove", 130, 65);
+    pointer(svg(), "pointerup", 130, 65);
+
+    // The Worker has not answered, so the Element keeps the size the drag gave it.
+    expect(outline().getAttribute("width")).toBe("50");
+    expect(elementGroup().getAttribute("transform")).toContain("scale(1.25)");
+
+    // A scene that still holds the start box ends the preview, as a refused drag does.
+    frame.scene({ elements: [selected()] });
+    expect(outline().getAttribute("width")).toBe("40");
+    expect(elementGroup().getAttribute("transform")).toBeNull();
+  });
+
+  it("cancels the drag on Escape, restoring the box and sending nothing", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected()] });
+
+    pointer(target("se"), "pointerdown", 120, 60);
+    pointer(svg(), "pointermove", 130, 65);
+    expect(outline().getAttribute("width")).toBe("50");
+    expect(document.querySelector("g.map-readout")).not.toBeNull();
+    expect(document.querySelector("rect.map-transform-ghost")).not.toBeNull();
+
+    // Escape takes the start box back and the Worker never hears of the drag.
+    expect(key("Escape").defaultPrevented).toBe(true);
+    expect(outline().getAttribute("width")).toBe("40");
+    expect(elementGroup().getAttribute("transform")).toBeNull();
+    // The chip and the ghost go with the drag, as the preview does.
+    expect(document.querySelector("g.map-readout")).toBeNull();
+    expect(document.querySelector("rect.map-transform-ghost")).toBeNull();
+
+    pointer(svg(), "pointerup", 130, 65);
+    expect(frame.port.messages).toEqual([]);
+  });
+
+  it("reads the size in page millimetres on a chip beside the pointer while resizing", () => {
+    frame = loadFrame();
+    // The Worker's own readout text, so the chip reads in the app's language.
+    frame.scene({
+      elements: [selected()],
+      readout: { size: "Tamaño {{value}} mm", angle: "{{value}}°" },
+    });
+
+    pointer(target("se"), "pointerdown", 120, 60);
+    // The press alone has not moved the box yet, so there is nothing to read.
+    expect(document.querySelector("g.map-readout")).toBeNull();
+    pointer(svg(), "pointermove", 130, 65);
+
+    const chip = document.querySelector("g.map-readout");
+    if (chip === null) throw new Error("the Frame drew no readout chip");
+    expect(chip.querySelector("text")?.textContent).toBe("Tamaño 50 mm");
+    // Beside the pointer the drag follows, not at the box's own middle.
+    const [x, y] = translated(chip);
+    expect(Math.hypot(x - 130, y - 65)).toBeLessThan(10);
+
+    // The chip goes with the drag; a turn reads its angle instead (below).
+    pointer(svg(), "pointerup", 130, 65);
+    expect(document.querySelector("g.map-readout")).toBeNull();
+  });
+
+  it("reads the angle in degrees on the chip while turning", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected()] });
+
+    pointer(target("rotate"), "pointerdown", 100, 35);
+    pointer(svg(), "pointermove", 110, 50);
+
+    const chip = document.querySelector("g.map-readout");
+    if (chip === null) throw new Error("the Frame drew no readout chip");
+    expect(chip.querySelector("text")?.textContent).toBe("90°");
+  });
+
+  it("keeps a dashed ghost of the start box while resizing, and only then", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected()] });
+
+    pointer(target("se"), "pointerdown", 120, 60);
+    pointer(svg(), "pointermove", 130, 65);
+
+    // The ghost stays where the drag began, so the author compares old and new.
+    const ghost = document.querySelector("rect.map-transform-ghost");
+    if (ghost === null) throw new Error("the Frame drew no start-box ghost");
+    expect(ghost.getAttribute("width")).toBe("40");
+    expect(ghost.getAttribute("height")).toBe("20");
+    expect(ghost.getAttribute("transform")).toBe("translate(100 50)");
+    // Dashed by the stylesheet, so it reads as a guide rather than the live box.
+    expect(HTML).toMatch(/\.map-transform-ghost[\s\S]*?stroke-dasharray/);
+
+    pointer(svg(), "pointerup", 130, 65);
+    expect(document.querySelector("rect.map-transform-ghost")).toBeNull();
+
+    // A turn keeps the size it started with, so only a resize needs comparing.
+    pointer(target("rotate"), "pointerdown", 100, 35);
+    pointer(svg(), "pointermove", 110, 50);
+    expect(document.querySelector("rect.map-transform-ghost")).toBeNull();
+  });
+
+  it("marks each 15° step around the box while Shift turns", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [selected()] });
+
+    pointer(target("rotate"), "pointerdown", 100, 35);
+    pointer(svg(), "pointermove", 110, 50);
+    expect(document.querySelectorAll("line.map-transform-tick")).toHaveLength(0);
+
+    pointer(svg(), "pointermove", 110, 50, { shiftKey: true });
+    const ticks = Array.from(document.querySelectorAll("line.map-transform-tick"));
+    expect(ticks).toHaveLength(24);
+    // One tick per step, the first due up, which is a turn of 0°.
+    const angles = ticks
+      .map((tick) => {
+        const dx = (Number(tick.getAttribute("x1")) + Number(tick.getAttribute("x2"))) / 2 - 100;
+        const dy = (Number(tick.getAttribute("y1")) + Number(tick.getAttribute("y2"))) / 2 - 50;
+        return ((Math.atan2(dx, -dy) * 180) / Math.PI + 360) % 360;
+      })
+      .sort((one, two) => one - two);
+    expect(angles.map((angle) => Math.round(angle) % 15)).toEqual(Array(24).fill(0));
+    // Written to two decimals, so a tick's own angle is within a rounding step.
+    expect(angles[0]).toBeCloseTo(0, 1);
+    expect(angles[1]).toBeCloseTo(15, 1);
+
+    pointer(svg(), "pointerup", 110, 50);
+    expect(document.querySelectorAll("line.map-transform-tick")).toHaveLength(0);
+  });
+
+  it("previews the minimum size the Worker keeps when a drag passes the opposite corner", () => {
+    frame = loadFrame();
+    // The Worker clamps a Stamp's or Map Image's size to 1 mm, and says so
+    // through the handle data, so the preview stops where the Worker will.
+    frame.scene({ elements: [selected({ transform: { ...handleBox(), minSize: 1 } })] });
+
+    pointer(target("se"), "pointerdown", 120, 60);
+    // Well past the anchored corner at (80, 40): the box must not flip.
+    pointer(svg(), "pointermove", 0, 0);
+
+    expect(outline().getAttribute("width")).toBe("1");
+    expect(outline().getAttribute("height")).toBe("0.5");
+    pointer(svg(), "pointerup", 0, 0);
+    expect(frame.port.messages).toEqual([
+      {
+        kind: "transformElement",
+        id: "e1",
+        box: { x: 80.5, y: 40.25, width: 1, height: 0.5, rotation: 0 },
+      },
+    ]);
+  });
+
+  it("draws every grip at every zoom, however small the box is on screen", () => {
+    frame = loadFrame();
+    frame.scale = 4;
+    const grips = () => document.querySelectorAll("[data-transform-handle-hit]");
+    // 4 mm is 16 px, and 40 by 3 mm a long thin scale bar: all four corners
+    // and the turn grip still draw.
+    for (const [width, height] of [
+      [4, 4],
+      [40, 3],
+    ]) {
+      frame.scene({ elements: [selected({ transform: handleBox({ width, height }) })] });
+      expect(grips()).toHaveLength(5);
+    }
+  });
+
+  it("draws no grips for an Element with no box, no other tool, and no selection", () => {
+    frame = loadFrame();
+    // A Map Line keeps today's outline: nothing for a handle to resize.
+    frame.scene({ elements: [sceneElement({ selected: true })] });
+    expect(document.querySelector("g.map-transform")).toBeNull();
+    expect(document.querySelector("path.map-selection")).not.toBeNull();
+
+    // Every other tool's press draws or picks, so it shows no grips.
+    frame.scene({ tool: "pencil", elements: [selected()] });
+    expect(document.querySelector("g.map-transform")).toBeNull();
+
+    frame.scene({ elements: [sceneElement({ transform: handleBox() })] });
+    expect(document.querySelector("g.map-transform")).toBeNull();
+  });
+
+  it("draws the box without grips when the document cannot measure its screen", () => {
+    frame = loadFrame();
+    frame.scale = null;
+    frame.scene({ elements: [selected()] });
+
+    // The box's stroke needs no scale, but a grip's size does: a Frame that
+    // cannot say how large a pixel is draws no grip at all.
+    expect(overlay().querySelector("rect.map-transform-box")).not.toBeNull();
+    expect(document.querySelector("[data-transform-handle]")).toBeNull();
+  });
+
+  it("drops a box with no size or a handle set it does not know", () => {
+    frame = loadFrame();
+    for (const transform of [
+      { box: { x: 100, y: 50, width: 0, height: 20, rotation: 0 }, handles: "corners" },
+      { box: { x: 100, y: 50, width: 40, height: 20, rotation: 0 }, handles: "sides" },
+      { box: { x: 100, y: 50, width: 40, rotation: 0 }, handles: "corners" },
+      { handles: "corners" },
+    ]) {
+      frame.scene({ elements: [sceneElement({ selected: true, transform })] });
+      expect(document.querySelector("g.map-transform")).toBeNull();
+    }
+  });
+
+  describe("handle set all: a selected Shape (#796)", () => {
+    /** The box a selected Shape's handles sit on: 64 by 34 mm about (100, 50). */
+    const allBox = (overrides: Record<string, unknown> = {}) => ({
+      box: { x: 100, y: 50, width: 64, height: 34, rotation: 0, ...overrides },
+      handles: "all",
+    });
+
+    /** The selected Shape carrying that box. */
+    const shaped = (overrides: Record<string, unknown> = {}) =>
+      selected({ transform: allBox(), ...overrides });
+
+    it("stacks the corner hit areas above the sides', so an overlapping press takes the corner", () => {
+      frame = loadFrame();
+      frame.scene({ elements: [shaped()] });
+      const order = [...document.querySelectorAll("[data-transform-handle-hit]")].map((hit) =>
+        hit.getAttribute("data-transform-handle-hit")
+      );
+      const lastSide = Math.max(...["n", "e", "s", "w"].map((id) => order.indexOf(id)));
+      const firstCorner = Math.min(...["nw", "ne", "se", "sw"].map((id) => order.indexOf(id)));
+      expect(lastSide).toBeGreaterThanOrEqual(0);
+      expect(firstCorner).toBeGreaterThan(lastSide);
+    });
+
+    it("draws eight handles plus the turn grip, hover growing the one under the pointer", () => {
+      frame = loadFrame();
+      frame.scene({ elements: [shaped()] });
+
+      expect(overlay().getAttribute("transform")).toBe("translate(100 50)");
+      expect(document.querySelectorAll("[data-transform-handle-hit]")).toHaveLength(9);
+      for (const id of ["nw", "ne", "se", "sw", "n", "e", "s", "w", "rotate"]) {
+        expect(document.querySelector(`[data-transform-handle="${id}"]`)).not.toBeNull();
+      }
+      // The sides sit on the middle of each edge, in the box's own millimetres.
+      expect(centre(grip("e"))).toEqual([expect.closeTo(32, 1), expect.closeTo(0, 1)]);
+      expect(centre(grip("n"))).toEqual([expect.closeTo(0, 1), expect.closeTo(-17, 1)]);
+
+      // A side grip answers the pointer the way a corner does.
+      const resting = pixels(grip("e"), 4);
+      pointer(target("e"), "pointermove", 132, 50);
+      expect(grip("e").getAttribute("data-hovered")).toBe("true");
+      expect(pixels(grip("e"), 4)).toBeGreaterThan(resting);
+      pointer(svg(), "pointermove", 300, 300);
+      expect(grip("e").getAttribute("data-hovered")).toBeNull();
+    });
+
+    it("marks a locked Shape with a dashed box, a lock badge, and no grips", () => {
+      frame = loadFrame();
+      frame.scene({ elements: [shaped({ locked: true })] });
+
+      expect(overlay().getAttribute("data-locked")).toBe("true");
+      expect(document.querySelector("[data-transform-handle]")).toBeNull();
+      expect(document.querySelector("[data-transform-handle-hit]")).toBeNull();
+      expect(overlay().querySelector("[data-transform-lock]")).not.toBeNull();
+    });
+
+    it("resizes width and height freely from a corner, previews each axis, posts one transform", () => {
+      frame = loadFrame();
+      frame.scene({ elements: [shaped({ movable: true })] });
+
+      pointer(target("se"), "pointerdown", 132, 67);
+      pointer(svg(), "pointermove", 142, 77);
+
+      expect(frame.port.messages).toEqual([]);
+      expect(outline().getAttribute("width")).toBe("74");
+      expect(outline().getAttribute("height")).toBe("44");
+      // The art follows on each axis, not by one uniform scale.
+      expect(elementGroup().getAttribute("transform")).toBe(
+        "translate(105 55) scale(1.156 1.294) translate(-100 -50)"
+      );
+
+      pointer(svg(), "pointerup", 142, 77);
+      expect(frame.port.messages).toEqual([
+        {
+          kind: "transformElement",
+          id: "e1",
+          box: { x: 105, y: 55, width: 74, height: 44, rotation: 0 },
+        },
+      ]);
+    });
+
+    it("keeps a corner's aspect while Shift holds, and grows about the centre with Alt", () => {
+      frame = loadFrame();
+      frame.scene({ elements: [shaped()] });
+
+      pointer(target("se"), "pointerdown", 132, 67);
+      pointer(svg(), "pointermove", 142, 77, { shiftKey: true });
+      // The taller side rules: 44 mm keeps 64:34, so the width follows it.
+      expect(outline().getAttribute("height")).toBe("44");
+      expect(Number(outline().getAttribute("width"))).toBeCloseTo((64 * 44) / 34, 1);
+      pointer(svg(), "pointerup", 142, 77);
+      expect(frame.port.messages).toEqual([
+        {
+          kind: "transformElement",
+          id: "e1",
+          box: {
+            x: expect.closeTo(109.41, 1),
+            y: 55,
+            width: expect.closeTo(82.82, 1),
+            height: 44,
+            rotation: 0,
+          },
+        },
+      ]);
+      frame.port.messages.length = 0;
+
+      pointer(target("se"), "pointerdown", 132, 67);
+      pointer(svg(), "pointermove", 142, 77, { altKey: true });
+      pointer(svg(), "pointerup", 142, 77);
+      // Both sides grow away from the centre, which stays where it was.
+      expect(frame.port.messages).toEqual([
+        {
+          kind: "transformElement",
+          id: "e1",
+          box: { x: 100, y: 50, width: 84, height: 54, rotation: 0 },
+        },
+      ]);
+    });
+
+    it("stretches one axis from a side handle, along the Shape's own turned side", () => {
+      frame = loadFrame();
+      frame.scene({ elements: [shaped()] });
+
+      // Straight on: ten right and ten down still only widens, by ten.
+      pointer(target("e"), "pointerdown", 132, 50);
+      pointer(svg(), "pointermove", 142, 60);
+      pointer(svg(), "pointerup", 142, 60);
+      expect(frame.port.messages).toEqual([
+        {
+          kind: "transformElement",
+          id: "e1",
+          box: { x: 105, y: 50, width: 74, height: 34, rotation: 0 },
+        },
+      ]);
+
+      // Turned 18°: a pull along the side stretches the side, not a screen axis.
+      const angle = (18 * Math.PI) / 180;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      frame.scene({ elements: [shaped({ transform: allBox({ rotation: 18 }) })] });
+      const start: [number, number] = [100 + 32 * cos, 50 + 32 * sin];
+      const end: [number, number] = [start[0] + 10 * cos, start[1] + 10 * sin];
+      pointer(target("e"), "pointerdown", start[0], start[1]);
+      pointer(svg(), "pointermove", end[0], end[1]);
+      pointer(svg(), "pointerup", end[0], end[1]);
+      expect(frame.port.messages[1]).toEqual({
+        kind: "transformElement",
+        id: "e1",
+        box: {
+          x: expect.closeTo(100 + 5 * cos, 5),
+          y: expect.closeTo(50 + 5 * sin, 5),
+          width: expect.closeTo(74, 5),
+          height: expect.closeTo(34, 5),
+          rotation: 18,
+        },
+      });
+    });
+
+    it("reads width by height on the chip while resizing a Shape", () => {
+      frame = loadFrame();
+      frame.scene({ elements: [shaped()] });
+
+      pointer(target("se"), "pointerdown", 132, 67);
+      expect(document.querySelector("g.map-readout")).toBeNull();
+      pointer(svg(), "pointermove", 142, 77);
+
+      const chip = document.querySelector("g.map-readout");
+      if (chip === null) throw new Error("the Frame drew no readout chip");
+      expect(chip.querySelector("text")?.textContent).toBe("74 × 44 mm");
+
+      pointer(svg(), "pointerup", 142, 77);
+      expect(document.querySelector("g.map-readout")).toBeNull();
+    });
+
+    it("picks side cursors from the side's direction on screen, turning with the box", () => {
+      frame = loadFrame();
+      frame.scene({ elements: [shaped()] });
+
+      expect(cursor("n")).toBe("n-resize");
+      expect(cursor("e")).toBe("e-resize");
+      expect(cursor("s")).toBe("s-resize");
+      expect(cursor("w")).toBe("w-resize");
+
+      // A quarter turn carries each side's arrow round with it.
+      frame.scene({ elements: [shaped({ transform: allBox({ rotation: 90 }) })] });
+      expect(cursor("e")).toBe("s-resize");
+      expect(cursor("n")).toBe("e-resize");
+    });
+
+    it("cancels a side drag on Escape, restoring the box and sending nothing", () => {
+      frame = loadFrame();
+      frame.scene({ elements: [shaped()] });
+
+      pointer(target("e"), "pointerdown", 132, 50);
+      pointer(svg(), "pointermove", 142, 60);
+      expect(outline().getAttribute("width")).toBe("74");
+      expect(document.querySelector("rect.map-transform-ghost")).not.toBeNull();
+
+      expect(key("Escape").defaultPrevented).toBe(true);
+      expect(outline().getAttribute("width")).toBe("64");
+      expect(outline().getAttribute("height")).toBe("34");
+      expect(document.querySelector("g.map-readout")).toBeNull();
+      expect(document.querySelector("rect.map-transform-ghost")).toBeNull();
+
+      pointer(svg(), "pointerup", 142, 60);
+      expect(frame.port.messages).toEqual([]);
+    });
+  });
+
+  describe("handle set label: a selected Map Label (#796)", () => {
+    /** The box a selected Map Label's handles sit on: 84 mm wide, a 7 mm cap, about (100, 50). */
+    const labelBox = (overrides: Record<string, unknown> = {}) => ({
+      box: { x: 100, y: 50, width: 84, height: 7, rotation: 0, ...overrides },
+      handles: "label",
+    });
+
+    /** The selected Map Label carrying that box. */
+    const labelled = (overrides: Record<string, unknown> = {}) =>
+      selected({ transform: labelBox(), ...overrides });
+
+    /** The label's baseline fields, so its bend handle draws beside its transform box. */
+    const labelLayout = (overrides: Record<string, unknown> = {}) => ({
+      x: 100,
+      y: 50,
+      rotation: 0,
+      width: 84,
+      bend: 0,
+      ...overrides,
+    });
+
+    /** The one bend handle the Frame drew. */
+    const bendHandle = (): Element => {
+      const circle = document.querySelector("circle.map-bend-handle");
+      if (circle === null) throw new Error("the Frame drew no bend handle");
+      return circle;
+    };
+
+    it("shows its sides at the default cap size, 28 px tall at the test zoom", () => {
+      frame = loadFrame();
+      frame.scene({ elements: [labelled()] });
+      expect(document.querySelectorAll("[data-transform-handle-hit]")).toHaveLength(7);
+      expect(document.querySelector('[data-transform-handle-hit="e"]')).not.toBeNull();
+    });
+
+    it("draws four corners, the east and west sides, and the turn grip, but no north or south side", () => {
+      frame = loadFrame();
+      // 7 mm at 8 px per mm is 56 px: past the 48 px under which the sides go
+      // with the corners, so the label shows every grip it takes.
+      frame.scale = 8;
+      frame.scene({ elements: [labelled()] });
+
+      expect(overlay().getAttribute("transform")).toBe("translate(100 50)");
+      expect(document.querySelectorAll("[data-transform-handle-hit]")).toHaveLength(7);
+      for (const id of ["nw", "ne", "se", "sw", "e", "w", "rotate"]) {
+        expect(document.querySelector(`[data-transform-handle="${id}"]`)).not.toBeNull();
+      }
+      expect(document.querySelector('[data-transform-handle="n"]')).toBeNull();
+      expect(document.querySelector('[data-transform-handle="s"]')).toBeNull();
+      expect(document.querySelector('[data-transform-handle-hit="n"]')).toBeNull();
+      expect(document.querySelector('[data-transform-handle-hit="s"]')).toBeNull();
+      // The sides sit on the middle of the left and right edges.
+      expect(centre(grip("e"))).toEqual([expect.closeTo(42, 1), expect.closeTo(0, 1)]);
+      expect(centre(grip("w"))).toEqual([expect.closeTo(-42, 1), expect.closeTo(0, 1)]);
+    });
+
+    it("marks a locked label with a dashed box, a lock badge, and no grips", () => {
+      frame = loadFrame();
+      frame.scene({ elements: [labelled({ locked: true, label: labelLayout() })] });
+
+      expect(overlay().getAttribute("data-locked")).toBe("true");
+      expect(document.querySelector("[data-transform-handle]")).toBeNull();
+      expect(document.querySelector("[data-transform-handle-hit]")).toBeNull();
+      expect(overlay().querySelector("[data-transform-lock]")).not.toBeNull();
+      // A locked label neither bends nor resizes.
+      expect(document.querySelector("circle.map-bend-handle")).toBeNull();
+    });
+
+    it("grows the cap size and the width together from a corner, and posts one transform with its size", () => {
+      frame = loadFrame();
+      frame.scene({ elements: [labelled({ movable: true })] });
+
+      pointer(target("se"), "pointerdown", 142, 53.5);
+      pointer(svg(), "pointermove", 152, 53.5);
+
+      // Nothing travels to the Worker until release; the box follows the pointer.
+      expect(frame.port.messages).toEqual([]);
+      expect(outline().getAttribute("width")).toBe("94");
+      expect(Number(outline().getAttribute("height"))).toBeCloseTo(7.83, 1);
+      // The chip reads the cap size and the width in the scene's own template.
+      const chip = document.querySelector("g.map-readout");
+      if (chip === null) throw new Error("the Frame drew no readout chip");
+      expect(chip.querySelector("text")?.textContent).toBe("Cap 7.8 mm · 94 mm");
+      expect(document.querySelector("rect.map-transform-ghost")).not.toBeNull();
+
+      pointer(svg(), "pointerup", 152, 53.5);
+      expect(frame.port.messages).toEqual([
+        {
+          kind: "transformElement",
+          id: "e1",
+          box: {
+            x: 105,
+            y: expect.closeTo(50.42, 1),
+            width: 94,
+            height: expect.closeTo(7.83, 1),
+            rotation: 0,
+          },
+          size: expect.closeTo(7.83, 1),
+        },
+      ]);
+    });
+
+    it("widens from a side handle without touching the cap size", () => {
+      frame = loadFrame();
+      // The side grips need the label past 48 px on screen: 7 mm at 8 px per mm.
+      frame.scale = 8;
+      frame.scene({ elements: [labelled({ movable: true })] });
+
+      // Ten right and ten down still only widen, by ten: the cap size stays 7 mm.
+      pointer(target("e"), "pointerdown", 142, 50);
+      pointer(svg(), "pointermove", 152, 60);
+
+      expect(outline().getAttribute("width")).toBe("94");
+      expect(outline().getAttribute("height")).toBe("7");
+      const chip = document.querySelector("g.map-readout");
+      if (chip === null) throw new Error("the Frame drew no readout chip");
+      expect(chip.querySelector("text")?.textContent).toBe("Cap 7 mm · 94 mm");
+
+      pointer(svg(), "pointerup", 152, 60);
+      expect(frame.port.messages).toEqual([
+        {
+          kind: "transformElement",
+          id: "e1",
+          box: { x: 105, y: 50, width: 94, height: 7, rotation: 0 },
+          size: 7,
+        },
+      ]);
+    });
+
+    it("stretches along its own turned side", () => {
+      frame = loadFrame();
+      // The side grips need the label past 48 px on screen: 7 mm at 8 px per mm.
+      frame.scale = 8;
+      frame.scene({ elements: [labelled({ transform: labelBox({ rotation: 18 }) })] });
+
+      // A pull along the side stretches the side, not a screen axis.
+      const angle = (18 * Math.PI) / 180;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      const start: [number, number] = [100 + 42 * cos, 50 + 42 * sin];
+      const end: [number, number] = [start[0] + 10 * cos, start[1] + 10 * sin];
+      pointer(target("e"), "pointerdown", start[0], start[1]);
+      pointer(svg(), "pointermove", end[0], end[1]);
+      pointer(svg(), "pointerup", end[0], end[1]);
+
+      expect(frame.port.messages).toEqual([
+        {
+          kind: "transformElement",
+          id: "e1",
+          box: {
+            x: expect.closeTo(100 + 5 * cos, 5),
+            y: expect.closeTo(50 + 5 * sin, 5),
+            width: expect.closeTo(94, 5),
+            height: expect.closeTo(7, 5),
+            rotation: 18,
+          },
+          size: expect.closeTo(7, 5),
+        },
+      ]);
+    });
+
+    it("never previews a cap size below the scene's minimum", () => {
+      frame = loadFrame();
+      // The Worker clamps a label's width and cap size, and says the width's
+      // floor through the handle data, so the preview stops where it will.
+      frame.scene({ elements: [labelled({ transform: { ...labelBox(), minSize: 2 } })] });
+
+      pointer(target("se"), "pointerdown", 142, 53.5);
+      // Well past the anchored corner: the cap size must not sink below 2 mm.
+      pointer(svg(), "pointermove", 0, 0);
+
+      expect(outline().getAttribute("width")).toBe("24");
+      expect(outline().getAttribute("height")).toBe("2");
+      pointer(svg(), "pointerup", 0, 0);
+      expect(frame.port.messages).toEqual([
+        {
+          kind: "transformElement",
+          id: "e1",
+          box: {
+            x: 70,
+            y: 47.5,
+            width: expect.closeTo(24, 2),
+            height: expect.closeTo(2, 2),
+            rotation: 0,
+          },
+          size: expect.closeTo(2, 2),
+        },
+      ]);
+    });
+
+    it("cancels a label drag on Escape, restoring the box and sending nothing", () => {
+      frame = loadFrame();
+      // The side grips need the label past 48 px on screen: 7 mm at 8 px per mm.
+      frame.scale = 8;
+      frame.scene({ elements: [labelled()] });
+
+      pointer(target("e"), "pointerdown", 142, 50);
+      pointer(svg(), "pointermove", 152, 60);
+      expect(outline().getAttribute("width")).toBe("94");
+      expect(document.querySelector("rect.map-transform-ghost")).not.toBeNull();
+
+      expect(key("Escape").defaultPrevented).toBe(true);
+      expect(outline().getAttribute("width")).toBe("84");
+      expect(outline().getAttribute("height")).toBe("7");
+      expect(document.querySelector("g.map-readout")).toBeNull();
+      expect(document.querySelector("rect.map-transform-ghost")).toBeNull();
+
+      pointer(svg(), "pointerup", 152, 60);
+      expect(frame.port.messages).toEqual([]);
+    });
+
+    it("keeps the preview after release until the next scene arrives", () => {
+      frame = loadFrame();
+      frame.scene({ elements: [labelled()] });
+
+      pointer(target("se"), "pointerdown", 142, 53.5);
+      pointer(svg(), "pointermove", 152, 53.5);
+      pointer(svg(), "pointerup", 152, 53.5);
+
+      // The Worker has not answered, so the label keeps the size the drag gave it.
+      expect(outline().getAttribute("width")).toBe("94");
+      expect(Number(outline().getAttribute("height"))).toBeCloseTo(7.83, 1);
+
+      // A scene that still holds the start box ends the preview, as a refused drag does.
+      frame.scene({ elements: [labelled()] });
+      expect(outline().getAttribute("width")).toBe("84");
+      expect(outline().getAttribute("height")).toBe("7");
+    });
+
+    it("still bends from the bend handle, which no transform grip covers", () => {
+      frame = loadFrame();
+      frame.scene({ elements: [labelled({ movable: true, label: labelLayout() })] });
+
+      // The straight label's apex sits at its own middle, where no grip sits
+      // once the top and bottom middles are gone.
+      expect(bendHandle().getAttribute("cx")).toBe("100");
+      expect(bendHandle().getAttribute("cy")).toBe("50");
+
+      pointer(bendHandle(), "pointerdown", 100, 50);
+      pointer(svg(), "pointermove", 100, 36);
+      pointer(svg(), "pointerup", 100, 36);
+
+      // The press shaped the curve: it never picked, moved, or resized the label.
+      expect(frame.port.messages).toEqual([{ kind: "bendLabel", id: "e1", bend: 14 }]);
+      frame.port.messages.length = 0;
+
+      // A grip press still resizes, and never bends.
+      pointer(target("se"), "pointerdown", 142, 53.5);
+      pointer(svg(), "pointermove", 152, 53.5);
+      pointer(svg(), "pointerup", 152, 53.5);
+      expect(frame.port.messages).toHaveLength(1);
+      expect(frame.port.messages[0]).toMatchObject({ kind: "transformElement", id: "e1" });
+    });
+
+    it("draws the bend handle above the transform box, so it wins a tie", () => {
+      frame = loadFrame();
+      frame.scene({ elements: [labelled({ movable: true, label: labelLayout() })] });
+
+      // Later in the document paints above, so a press where a grip and the
+      // bend handle meet reaches the bend handle first.
+      const order = overlay().compareDocumentPosition(bendHandle());
+      expect(order & Node.DOCUMENT_POSITION_FOLLOWING).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+
+    it("grows the side grip under the pointer, and reads side cursors", () => {
+      frame = loadFrame();
+      // The side grips need the label past 48 px on screen: 7 mm at 8 px per mm.
+      frame.scale = 8;
+      frame.scene({ elements: [labelled()] });
+      const resting = pixels(grip("e"), 8);
+
+      pointer(target("e"), "pointermove", 142, 50);
+      expect(grip("e").getAttribute("data-hovered")).toBe("true");
+      expect(pixels(grip("e"), 8)).toBeGreaterThan(resting);
+      pointer(svg(), "pointermove", 300, 300);
+      expect(grip("e").getAttribute("data-hovered")).toBeNull();
+
+      expect(cursor("e")).toBe("e-resize");
+      expect(cursor("w")).toBe("w-resize");
+      expect(cursor("rotate")).toBe("grab");
+
+      // A quarter turn carries each side's arrow round with it.
+      frame.scene({ elements: [labelled({ transform: labelBox({ rotation: 90 }) })] });
+      expect(cursor("e")).toBe("s-resize");
+      expect(cursor("w")).toBe("n-resize");
+    });
+  });
+});
+
+describe("the Frame's mirrored handle maths (#795)", () => {
+  /** A box centred on the page, 40 mm wide and 20 mm high unless a case says otherwise. */
+  const box = (overrides: Partial<TransformBox> = {}): TransformBox => ({
+    x: 100,
+    y: 50,
+    width: 40,
+    height: 20,
+    rotation: 0,
+    ...overrides,
+  });
+
+  /** Where a point of a box's own frame sits on the page, in millimetres. */
+  const pageOf = (frame: TransformBox, local: [number, number]): [number, number] => {
+    const angle = (frame.rotation * Math.PI) / 180;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    return [frame.x + local[0] * cos - local[1] * sin, frame.y + local[0] * sin + local[1] * cos];
+  };
+
+  /** The page point of one corner of a box, named the way a handle is. */
+  const cornerOf = (frame: TransformBox, corner: "nw" | "ne" | "se" | "sw"): [number, number] => {
+    const signX = corner === "ne" || corner === "se" ? 1 : -1;
+    const signY = corner === "sw" || corner === "se" ? 1 : -1;
+    return pageOf(frame, [(signX * frame.width) / 2, (signY * frame.height) / 2]);
+  };
+
+  /** Where a point sits a given angle and distance from the page centre. */
+  const aim = (degrees: number, radius = 10): [number, number] => [
+    100 + radius * Math.cos((degrees * Math.PI) / 180),
+    50 + radius * Math.sin((degrees * Math.PI) / 180),
+  ];
+
+  /** Ten millimetres along the local +x of an 18° box, from its east side. */
+  const turned18 = box({ rotation: 18 });
+  const east18 = pageOf(turned18, [20, 0]);
+  const along18: [number, number] = [
+    east18[0] + 10 * Math.cos((18 * Math.PI) / 180),
+    east18[1] + 10 * Math.sin((18 * Math.PI) / 180),
+  ];
+
+  const cases: { name: string; gesture: TransformGesture }[] = [
+    {
+      name: "a corner growing with its aspect kept",
+      gesture: { box: box(), handle: "se", start: [120, 60], point: [130, 65], aspect: true },
+    },
+    {
+      name: "a corner shrinking with its aspect kept",
+      gesture: { box: box(), handle: "nw", start: [80, 40], point: [85, 45], aspect: true },
+    },
+    {
+      name: "a corner growing about the centre with Alt",
+      gesture: {
+        box: box(),
+        handle: "se",
+        start: [120, 60],
+        point: [130, 65],
+        aspect: true,
+        fromCentre: true,
+      },
+    },
+    {
+      name: "a side moving one axis",
+      gesture: { box: box(), handle: "e", start: [120, 50], point: [130, 50], aspect: false },
+    },
+    {
+      name: "a free corner with no aspect kept",
+      gesture: { box: box(), handle: "se", start: [120, 60], point: [130, 65] },
+    },
+    {
+      name: "a side of an 18° box pulled along its own side",
+      gesture: {
+        box: turned18,
+        handle: "e",
+        start: east18,
+        point: along18,
+      },
+    },
+    {
+      name: "a corner of a turned box in its own frame",
+      gesture: {
+        box: box({ rotation: 90 }),
+        handle: "se",
+        start: cornerOf(box({ rotation: 90 }), "se"),
+        point: [90, 80],
+        aspect: true,
+      },
+    },
+    {
+      name: "a turn the pointer sweeps",
+      gesture: { box: box(), handle: "rotate", start: [100, 40], point: [110, 50] },
+    },
+    {
+      name: "a turn added to the angle the box had",
+      gesture: {
+        box: box({ rotation: 350 }),
+        handle: "rotate",
+        start: [100, 40],
+        point: [110, 50],
+      },
+    },
+    {
+      name: "a turn snapped to a 15° step with Shift",
+      gesture: { box: box(), handle: "rotate", start: [110, 50], point: aim(44), snap: true },
+    },
+    {
+      name: "a turn stuck to a right angle within 2°",
+      gesture: { box: box(), handle: "rotate", start: [110, 50], point: aim(89) },
+    },
+    {
+      name: "a drag past the anchor kept above zero",
+      gesture: {
+        box: box(),
+        handle: "se",
+        start: [120, 60],
+        point: [60, 40],
+        aspect: false,
+        minWidth: 1,
+        minHeight: 1,
+      },
+    },
+  ];
+
+  it("returns the same box as geometry.ts over the table of cases", () => {
+    frame = loadFrame();
+    for (const { name, gesture } of cases) {
+      const mirrored = frame.transformBox(gesture);
+      const geometry = geometryTransformBox(gesture);
+      for (const key of ["x", "y", "width", "height", "rotation"] as const) {
+        expect(mirrored[key], `${name}: ${key}`).toBeCloseTo(geometry[key], 6);
+      }
+    }
+  });
+});
+
 describe("an uploaded picture on the Map (#756)", () => {
   /** One image primitive: an 80 by 40 mm box centred on (100, 50), upright and opaque. */
   const imageShape = (overrides: Record<string, unknown> = {}) => ({
@@ -3163,5 +4426,251 @@ describe("pointer zoom and pan (#777)", () => {
       { kind: "pour", point: [20, 20] },
       { kind: "pour", point: [40, 30] },
     ]);
+  });
+});
+
+describe("pinching and twisting a selected Element (#796)", () => {
+  /** One touch event on a target, carrying the finger's pointer id. */
+  function touch(target: Element, type: string, x: number, y: number, pointerId: number): void {
+    const event = new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0 });
+    Object.defineProperty(event, "pointerId", { value: pointerId });
+    Object.defineProperty(event, "pointerType", { value: "touch" });
+    target.dispatchEvent(event);
+  }
+
+  /** The box a selected Stamp's pinch starts from: 20 by 10 mm about (100, 50). */
+  const pinchBox = (overrides: Record<string, unknown> = {}) => ({
+    box: { x: 100, y: 50, width: 20, height: 10, rotation: 0, ...overrides },
+    handles: "corners",
+  });
+
+  /** One selected Element carrying that box. */
+  const pinched = (overrides: Record<string, unknown> = {}) =>
+    sceneElement({ selected: true, movable: true, transform: pinchBox(), ...overrides });
+
+  /** The Element's own group, where a pinch previews the art. */
+  const elementGroup = (): Element => {
+    const group = document.querySelector('g[data-element-id="e1"]');
+    if (group === null) throw new Error("the Element drew no group");
+    return group;
+  };
+
+  /** The Element's art, which the first finger lands on. */
+  const art = (): Element => {
+    const line = document.querySelector('g[data-element-id="e1"] path.map-line');
+    if (line === null) throw new Error("the Element drew no art");
+    return line;
+  };
+
+  it("pinches a selected Element to size, previews live, and sends one transformElement on release", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [pinched()] });
+
+    // The first finger lands on the Element, which selects it as a tap would.
+    touch(art(), "pointerdown", 90, 50, 1);
+    expect(frame.port.messages).toEqual([{ kind: "select", id: "e1" }]);
+    // The second finger starts the pinch, not a pan: the view stays put.
+    touch(svg(), "pointerdown", 110, 50, 2);
+    expect(svg().getAttribute("viewBox")).toBe("0 0 200 100");
+
+    // Spreading the fingers to twice the distance doubles both sides live,
+    // through the same preview a handle drag draws.
+    touch(svg(), "pointermove", 80, 50, 1);
+    touch(svg(), "pointermove", 120, 50, 2);
+    expect(elementGroup().getAttribute("transform")).toBe(
+      "translate(100 50) scale(2) translate(-100 -50)"
+    );
+    expect(svg().getAttribute("viewBox")).toBe("0 0 200 100");
+    expect(frame.port.messages).toEqual([{ kind: "select", id: "e1" }]);
+
+    touch(svg(), "pointerup", 80, 50, 1);
+    touch(svg(), "pointerup", 120, 50, 2);
+    // One gesture is one message, so it is one undo step.
+    expect(frame.port.messages).toEqual([
+      { kind: "select", id: "e1" },
+      {
+        kind: "transformElement",
+        id: "e1",
+        box: { x: 100, y: 50, width: 40, height: 20, rotation: 0 },
+      },
+    ]);
+    // The preview holds until the Worker answers, so the art never jumps back.
+    expect(elementGroup().getAttribute("transform")).toBe(
+      "translate(100 50) scale(2) translate(-100 -50)"
+    );
+    frame.scene({ elements: [pinched()] });
+    expect(elementGroup().getAttribute("transform")).toBeNull();
+  });
+
+  it("twists the Element from the angle change, about the fingers' midpoint", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [pinched()] });
+
+    touch(art(), "pointerdown", 90, 50, 1);
+    touch(svg(), "pointerdown", 110, 50, 2);
+    // A quarter turn of the pair turns the Element a quarter turn, at the same size.
+    touch(svg(), "pointermove", 100, 40, 1);
+    touch(svg(), "pointermove", 100, 60, 2);
+    expect(elementGroup().getAttribute("transform")).toBe(
+      "translate(100 50) rotate(90) translate(-100 -50)"
+    );
+
+    touch(svg(), "pointerup", 100, 40, 1);
+    touch(svg(), "pointerup", 100, 60, 2);
+    expect(frame.port.messages).toEqual([
+      { kind: "select", id: "e1" },
+      {
+        kind: "transformElement",
+        id: "e1",
+        box: { x: 100, y: 50, width: 20, height: 10, rotation: 90 },
+      },
+    ]);
+  });
+
+  it("carries the Element with the fingers' midpoint", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [pinched()] });
+
+    touch(art(), "pointerdown", 90, 50, 1);
+    touch(svg(), "pointerdown", 110, 50, 2);
+    // Both fingers slide ten right and five down at the same spread and angle.
+    touch(svg(), "pointermove", 100, 55, 1);
+    touch(svg(), "pointermove", 120, 55, 2);
+
+    touch(svg(), "pointerup", 100, 55, 1);
+    touch(svg(), "pointerup", 120, 55, 2);
+    expect(frame.port.messages).toEqual([
+      { kind: "select", id: "e1" },
+      {
+        kind: "transformElement",
+        id: "e1",
+        box: { x: 110, y: 55, width: 20, height: 10, rotation: 0 },
+      },
+    ]);
+  });
+
+  it("carries a Map Label's cap size, scaling it with the width", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [
+        pinched({
+          transform: {
+            box: { x: 100, y: 50, width: 40, height: 6, rotation: 0 },
+            handles: "label",
+            minSize: 2,
+          },
+        }),
+      ],
+    });
+
+    touch(art(), "pointerdown", 90, 50, 1);
+    touch(svg(), "pointerdown", 110, 50, 2);
+    touch(svg(), "pointermove", 80, 50, 1);
+    touch(svg(), "pointermove", 120, 50, 2);
+    touch(svg(), "pointerup", 80, 50, 1);
+    touch(svg(), "pointerup", 120, 50, 2);
+
+    // The corner's uniform growth, as one message with the cap size the
+    // preview showed.
+    expect(frame.port.messages).toEqual([
+      { kind: "select", id: "e1" },
+      {
+        kind: "transformElement",
+        id: "e1",
+        box: { x: 100, y: 50, width: 80, height: 12, rotation: 0 },
+        size: 12,
+      },
+    ]);
+  });
+
+  it("clamps the pinch to the minimum size the scene gives", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [pinched({ transform: { ...pinchBox(), minSize: 8 } })] });
+
+    touch(art(), "pointerdown", 90, 50, 1);
+    touch(svg(), "pointerdown", 110, 50, 2);
+    // A tenth of the spread would shrink the width to 2 mm, under the 8 mm floor.
+    touch(svg(), "pointermove", 99, 50, 1);
+    touch(svg(), "pointermove", 101, 50, 2);
+    touch(svg(), "pointerup", 99, 50, 1);
+    touch(svg(), "pointerup", 101, 50, 2);
+
+    expect(frame.port.messages).toEqual([
+      { kind: "select", id: "e1" },
+      {
+        kind: "transformElement",
+        id: "e1",
+        box: { x: 100, y: 50, width: 8, height: 4, rotation: 0 },
+      },
+    ]);
+  });
+
+  it("sends nothing when the fingers lift without moving", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [pinched()] });
+
+    touch(art(), "pointerdown", 90, 50, 1);
+    touch(svg(), "pointerdown", 110, 50, 2);
+    touch(svg(), "pointerup", 90, 50, 1);
+    touch(svg(), "pointerup", 110, 50, 2);
+
+    // The press selected, but the gesture never shaped anything.
+    expect(frame.port.messages).toEqual([{ kind: "select", id: "e1" }]);
+  });
+
+  it("pans when the first finger lands anywhere but the selected Element", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [pinched()] });
+
+    // Both fingers land on empty page, missing the Element entirely.
+    touch(svg(), "pointerdown", 10, 10, 1);
+    touch(svg(), "pointerdown", 40, 40, 2);
+    touch(svg(), "pointermove", 22, 10, 1);
+    touch(svg(), "pointerup", 22, 10, 1);
+    touch(svg(), "pointerup", 40, 40, 2);
+
+    expect(frame.port.messages).toContainEqual(expect.objectContaining({ kind: "pan" }));
+    expect(frame.port.messages).not.toContainEqual(
+      expect.objectContaining({ kind: "transformElement" })
+    );
+  });
+
+  it("pans on a locked Element instead of pinching it", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [pinched({ locked: true, movable: false })] });
+
+    touch(art(), "pointerdown", 90, 50, 1);
+    touch(svg(), "pointerdown", 110, 50, 2);
+    // Both fingers slide right together, so their average does too.
+    touch(svg(), "pointermove", 100, 50, 1);
+    touch(svg(), "pointermove", 120, 50, 2);
+    touch(svg(), "pointerup", 100, 50, 1);
+    touch(svg(), "pointerup", 120, 50, 2);
+
+    expect(frame.port.messages).toContainEqual(expect.objectContaining({ kind: "pan" }));
+    expect(frame.port.messages).not.toContainEqual(
+      expect.objectContaining({ kind: "transformElement" })
+    );
+  });
+
+  it("cancels the pinch on Escape without posting it", () => {
+    frame = loadFrame();
+    frame.scene({ elements: [pinched()] });
+
+    touch(art(), "pointerdown", 90, 50, 1);
+    touch(svg(), "pointerdown", 110, 50, 2);
+    touch(svg(), "pointermove", 80, 50, 1);
+    touch(svg(), "pointermove", 120, 50, 2);
+    expect(elementGroup().getAttribute("transform")).toBe(
+      "translate(100 50) scale(2) translate(-100 -50)"
+    );
+
+    key("Escape");
+    expect(elementGroup().getAttribute("transform")).toBeNull();
+    expect(frame.port.messages).toEqual([{ kind: "select", id: "e1" }]);
+
+    touch(svg(), "pointerup", 80, 50, 1);
+    touch(svg(), "pointerup", 120, 50, 2);
+    expect(frame.port.messages).toEqual([{ kind: "select", id: "e1" }]);
   });
 });

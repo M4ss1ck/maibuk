@@ -15,7 +15,8 @@
  * Area Fill outline, an
  * Eraser
  * drag, a drawn Shape, a Bucket pour, a dropped Stamp, a picked Element, a
- * Select drag that moved one, a Map Label's bend dragged from its handle, one
+ * Select drag that moved one, a Map Label's bend dragged from its handle, a
+ * Stamp's or Map Image's box dragged from a transform handle, one
  * step of a pointer zoom, a finished pointer pan, the pixels an export asked for, and what one
  * uploaded picture measured. Points
  * are page millimetres, the same space as `page.widthMm/heightMm`. Every
@@ -26,7 +27,16 @@
 import type { MapAsset, MapAssetMime } from "./assets";
 import type { MapDocument, MapPoint, ShapeKind } from "./maps";
 import { isShapeKind } from "./maps";
-import { canMove, type SceneContext, type SceneShape, sceneRender } from "./scene";
+import {
+  EMPTY_MAP_LIBRARY,
+  canMove,
+  elementTransform,
+  type ElementTransform,
+  type ElementTransformBox,
+  type SceneContext,
+  type SceneShape,
+  sceneRender,
+} from "./scene";
 import { resolveColor, styleOf } from "./styles";
 
 /** The editor tool the Frame should honour. */
@@ -71,6 +81,34 @@ export interface FrameSceneElement {
    * every other Element.
    */
   label?: FrameLabelLayout;
+  /**
+   * The box a transform handle resizes or turns, the handles the Element takes,
+   * and the smallest width the Worker keeps for it (#795, #796). Only the
+   * selected Element carries one; a converted or freehand Map Line and a Fill
+   * carry none, and keep the selection outline they have always had.
+   */
+  transform?: FrameElementTransform;
+}
+
+/** What the Frame draws an Element's handles from (#795): its box, which handles it takes, and its minimum size. */
+export type FrameElementTransform = ElementTransform;
+
+/**
+ * The text a transform drag's readout chip shows (#795, #796), in the app
+ * language, with `{{value}}` where the millimetres or the degrees go, and
+ * `{{width}}`, `{{height}}`, and `{{size}}` where a Shape's or a Map Label's
+ * own numbers go. The Frame cannot read the Plugin's catalogs, so the Worker
+ * sends all four.
+ */
+export interface TransformReadout {
+  /** The chip while a resize runs, such as `{{value}} mm`. */
+  size: string;
+  /** The chip while a turn runs, such as `{{value}}°`. */
+  angle: string;
+  /** The chip while a Shape resizes, such as `{{width}} × {{height}} mm`. */
+  shape: string;
+  /** The chip while a Map Label resizes, such as `Cap {{size}} mm · {{width}} mm`. */
+  label: string;
 }
 
 /** The baseline a Map Label's bend handle is placed on and dragged against. */
@@ -118,6 +156,8 @@ export interface FrameSceneMessage {
   panY: number;
   /** The surface's accessible name while a Pen line is in progress. */
   penLabel: PenDraftLabel;
+  /** The transform drag's readout chip text. */
+  readout: TransformReadout;
 }
 
 /**
@@ -329,6 +369,22 @@ export interface FrameBendMessage {
 }
 
 /**
+ * Frame -> Worker: a transform handle drag (#795). `box` is the Element's box
+ * in page millimetres — its centre, size, and turn — and `size` is the new cap
+ * size a Map Label's corner asks for, absent on every other kind. The Frame
+ * previews the drag itself and sends this once, on release, so the whole drag
+ * is one undo step; a press that never passed the drag threshold, one Escape
+ * cancelled, and one the Worker would refuse all send none.
+ */
+export interface FrameTransformMessage {
+  kind: "transformElement";
+  id: string;
+  box: ElementTransformBox;
+  /** A Map Label's new cap size, in page millimetres; absent on every other kind. */
+  size?: number;
+}
+
+/**
  * Frame -> Worker: zoom the view around one page point (#777), from a
  * Ctrl/Cmd+wheel, a pinch, or any gesture that zooms. `point` is the page
  * millimetres under the pointer, which the Worker keeps in the same place on
@@ -366,6 +422,7 @@ export type FrameToWorkerMessage =
   | FrameInsertMessage
   | FrameMoveMessage
   | FrameBendMessage
+  | FrameTransformMessage
   | FrameZoomMessage
   | FramePanMessage
   | FrameRasterizedMessage
@@ -387,6 +444,22 @@ function isPoint(value: unknown): value is MapPoint {
 /** Whether a value is a finite number a picture may be measured by. */
 function isPositiveNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+/** Whether a value is a box a transform handle may resize or turn. */
+function isTransformBox(value: unknown): value is ElementTransformBox {
+  if (typeof value !== "object" || value === null) return false;
+  const box = value as Record<string, unknown>;
+  return (
+    typeof box.x === "number" &&
+    Number.isFinite(box.x) &&
+    typeof box.y === "number" &&
+    Number.isFinite(box.y) &&
+    isPositiveNumber(box.width) &&
+    isPositiveNumber(box.height) &&
+    typeof box.rotation === "number" &&
+    Number.isFinite(box.rotation)
+  );
 }
 
 /**
@@ -502,6 +575,23 @@ export function parseFrameMessage(data: unknown): FrameToWorkerMessage | null {
     if (typeof message.bend !== "number" || !Number.isFinite(message.bend)) return null;
     return { kind: "bendLabel", id: message.id, bend: message.bend };
   }
+  if (message.kind === "transformElement") {
+    if (typeof message.id !== "string" || message.id === "") return null;
+    if (!isTransformBox(message.box)) return null;
+    // A cap size is the only extra a Map Label's corner asks for, and a name
+    // with no size draws nothing.
+    if (message.size !== undefined && !isPositiveNumber(message.size)) return null;
+    const box = {
+      x: message.box.x,
+      y: message.box.y,
+      width: message.box.width,
+      height: message.box.height,
+      rotation: message.box.rotation,
+    };
+    return message.size === undefined
+      ? { kind: "transformElement", id: message.id, box }
+      : { kind: "transformElement", id: message.id, box, size: message.size };
+  }
   if (message.kind === "zoom") {
     if (!isPoint(message.point)) return null;
     // A factor of zero or less would collapse or flip the view instead of
@@ -591,43 +681,53 @@ export function sceneMessage(
     panY: number;
     /** The localized Pen draft label's plural forms, with `{{count}}` for the point count. */
     penLabel: PenDraftLabel;
+    /** The localized transform readout chip's text, with `{{value}}` for the number. */
+    readout: TransformReadout;
   },
   context: SceneContext = {}
 ): FrameSceneMessage {
   const style = styleOf(map.styleId);
+  const library = context.library ?? EMPTY_MAP_LIBRARY;
   const render = sceneRender(map.elements, map.page.widthMm, map.page.heightMm, style, context);
   return {
     kind: "scene",
     widthMm: map.page.widthMm,
     heightMm: map.page.heightMm,
     background: resolveColor(style, undefined, "water"),
-    elements: map.elements.map((element, index) => ({
-      id: element.id,
-      shapes: render.shapes[index],
-      filter: render.filters[index],
-      hidden: element.hidden,
-      locked: element.locked,
-      selected: element.id === view.selectedId,
-      movable: !element.hidden && canMove(element),
-      // A Map Label carries the baseline its bend handle is placed on; no other
-      // Element has a curve to drag.
-      ...(element.kind === "label"
-        ? {
-            label: {
-              x: element.x,
-              y: element.y,
-              rotation: element.rotation,
-              width: element.width,
-              bend: element.bend,
-            },
-          }
-        : {}),
-    })),
+    elements: map.elements.map((element, index) => {
+      // Only the selection carries handles, and only a kind that stores a box
+      // to resize takes any yet (#795).
+      const transform = element.id === view.selectedId ? elementTransform(element, library) : null;
+      return {
+        id: element.id,
+        shapes: render.shapes[index],
+        filter: render.filters[index],
+        hidden: element.hidden,
+        locked: element.locked,
+        selected: element.id === view.selectedId,
+        movable: !element.hidden && canMove(element),
+        // A Map Label carries the baseline its bend handle is placed on; no other
+        // Element has a curve to drag.
+        ...(element.kind === "label"
+          ? {
+              label: {
+                x: element.x,
+                y: element.y,
+                rotation: element.rotation,
+                width: element.width,
+                bend: element.bend,
+              },
+            }
+          : {}),
+        ...(transform === null ? {} : { transform }),
+      };
+    }),
     defs: render.defs,
     tool: view.tool,
     zoom: view.zoom,
     panX: view.panX,
     panY: view.panY,
     penLabel: view.penLabel,
+    readout: view.readout,
   };
 }
