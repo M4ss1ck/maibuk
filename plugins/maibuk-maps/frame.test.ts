@@ -4890,6 +4890,34 @@ describe("the on-map text box (#800)", () => {
     expect(field()?.style.width).toBe("120px");
   });
 
+  it("fits an empty auto box to its italic prompt, slant included, and a written one to its text", () => {
+    // jsdom lays nothing out: the scroll width is 10 px a letter, in whatever
+    // style the box holds when it is read.
+    const styles: string[] = [];
+    const scrollWidth = vi
+      .spyOn(HTMLTextAreaElement.prototype, "scrollWidth", "get")
+      .mockImplementation(function (this: HTMLTextAreaElement) {
+        styles.push(this.style.fontStyle);
+        return this.value.length * 10;
+      });
+    try {
+      open({ label: layout({ text: "" }) });
+      const box = field();
+      if (box === null) throw new Error("the Frame opened no text box");
+      // 20 letters of prompt, a quarter em of slant at 24 px, and the caret's 2 px.
+      expect(box.style.width).toBe("208px");
+      expect(styles).toContain("italic");
+      expect(box.value).toBe("");
+      expect(box.style.fontStyle).toBe("");
+
+      box.value = "Gulf";
+      box.dispatchEvent(new Event("input"));
+      expect(box.style.width).toBe("42px");
+    } finally {
+      scrollWidth.mockRestore();
+    }
+  });
+
   it("opens no box for a locked or hidden label, or on a scene that does not ask", () => {
     open({ locked: true });
     expect(field()).toBeNull();

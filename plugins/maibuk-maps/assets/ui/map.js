@@ -2977,6 +2977,25 @@
   }
 
   /**
+   * How wide an empty text box's italic prompt runs, in screen pixels. A
+   * placeholder adds nothing to a textarea's scroll width, so the prompt is
+   * written into the box for the one read, in italic as `::placeholder` draws
+   * it, and taken out again; a quarter em more holds the slant the last letter
+   * leans past its advance.
+   * @param {HTMLTextAreaElement} field
+   * @param {number} fontPx
+   * @returns {number}
+   */
+  function promptWidth(field, fontPx) {
+    field.value = field.placeholder;
+    field.style.fontStyle = "italic";
+    const width = field.scrollWidth + fontPx / 4;
+    field.style.fontStyle = "";
+    field.value = "";
+    return width;
+  }
+
+  /**
    * Seats the text box over its label (#800): its first line's baseline on
    * the label's point, centred, turned with it, at the screen size the zoom
    * draws it at. An auto box grows with its longest line; a fixed one keeps
@@ -3011,7 +3030,8 @@
     if (label.sizing === "auto") {
       // The box's own scroll width is its longest line, caret included.
       style.width = "0px";
-      style.width = `${Math.max(field.scrollWidth, fontPx / 2) + 2}px`;
+      const textWidth = field.value === "" ? promptWidth(field, fontPx) : field.scrollWidth;
+      style.width = `${Math.max(textWidth, fontPx / 2) + 2}px`;
     } else {
       style.width = `${label.width * scale}px`;
     }

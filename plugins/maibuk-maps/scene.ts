@@ -41,7 +41,7 @@ import {
   type MapStampElement,
   type MapStampTransform,
 } from "./maps";
-import { LABEL_TEXT_STYLE, type LabelLayout, layoutLabel } from "./label-layout";
+import { LABEL_TEXT_STYLE, type LabelLayout, labelFontExtent, layoutLabel } from "./label-layout";
 import { DEFAULT_SCATTER_SPACING_MM, scatterPoints } from "./scatter";
 import { SCALE_BAR_STAMP_REF, type StampArt, scaleBarLayout, stampArt } from "./stamps";
 import { lineRole, resolveColor, styleOf, type MapStyleId } from "./styles";
@@ -1094,21 +1094,33 @@ function labelShapes(
 }
 
 /**
+ * How far a multi-line Map Label's outline stands off its ink, in page
+ * millimetres: half the Frame's 2.4 mm selection stroke and nearly a millimetre of air, so
+ * the stroke drawn on the outline never crosses a letter.
+ */
+const LABEL_BOX_CLEARANCE_MM = 2;
+
+/**
  * The outline of a multi-line Map Label's box (#800), as a closed path in page
  * millimetres: the hit target the Frame picks it by, since no one baseline
- * runs under all of its lines.
+ * runs under all of its lines, and the path its selection is stroked along.
  */
 function labelBoxPath(
-  element: Pick<MapLabelElement, "x" | "y" | "rotation" | "size">,
+  element: Pick<MapLabelElement, "x" | "y" | "rotation" | "size" | "font">,
   layout: Pick<LabelLayout, "width" | "height">
 ): string {
   const angle = (element.rotation * Math.PI) / 180;
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
-  const half = layout.width / 2;
-  // The box runs from a cap size above the first baseline to the last one.
-  const top = -element.size;
-  const bottom = layout.height - element.size;
+  const half = layout.width / 2 + LABEL_BOX_CLEARANCE_MM;
+  // A cap size above the first baseline to the last line's descenders, with
+  // the clearance all round.
+  const top = -element.size - LABEL_BOX_CLEARANCE_MM;
+  const bottom =
+    layout.height -
+    element.size +
+    labelFontExtent(element.font).descent * element.size +
+    LABEL_BOX_CLEARANCE_MM;
   const corners: MapPoint[] = [
     [-half, top],
     [half, top],

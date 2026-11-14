@@ -1078,6 +1078,17 @@ describe("Map Label rendering", () => {
     });
     expect(text).not.toHaveProperty("path");
 
+    // The outline clears the ink, so the selection stroke drawn on it does not
+    // run through the first line's capitals or the last line's descenders.
+    const straight = label({ text: "North\nSea", sizing: "auto" });
+    const [box] = sceneShapes([straight], 203.2, 203.2)[0];
+    const ys = [...(box as { d: string }).d.matchAll(/[ML] (-?[\d.]+) (-?[\d.]+)/g)].map((m) =>
+      Number(m[2])
+    );
+    const lastBaseline = straight.y + 6 * LABEL_LINE_HEIGHT;
+    expect(Math.min(...ys)).toBeLessThanOrEqual(straight.y - 6 - 2);
+    expect(Math.max(...ys)).toBeGreaterThanOrEqual(lastBaseline + 6 * 0.25 + 2);
+
     const svg = sceneToSvg(mapWith([lines]));
     // Bend shapes one line alone, so no baseline is defined and none is followed.
     expect(svg).not.toContain("<textPath");
