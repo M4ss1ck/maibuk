@@ -998,6 +998,44 @@ describe("Map Label rendering", () => {
     expect(sceneToSvg(mapWith([label()])).match(/<path /g)).toHaveLength(1);
   });
 
+  it("draws an empty label's placeholder italic and muted, in the label's font, with no halo (#798)", () => {
+    const empty = label({ text: "", font: "cinzel", color: "#8b1a1a", bend: 8 });
+    const [hit, text, ...rest] = sceneShapes([empty], 203.2, 203.2, undefined, {
+      labelPlaceholder: "Write your text here",
+    })[0];
+
+    // The baseline stays the hit path, so the empty label is picked as before.
+    expect(hit).toMatchObject({ d: "M 0 30 Q 20 14 40 30", hitOnly: true });
+    expect(text).toMatchObject({
+      text: "Write your text here",
+      placeholder: true,
+      font: "Cinzel",
+      fill: "#8b1a1a",
+      anchor: "middle",
+    });
+    expect(text).not.toHaveProperty("halo");
+    expect(rest).toEqual([]);
+
+    const svg = sceneToSvg(mapWith([empty]), { labelPlaceholder: "Write your text here" });
+    expect(svg).toContain('font-style="italic"');
+    expect(svg).toContain('opacity="0.5"');
+    expect(svg.match(/<text /g)).toHaveLength(1);
+  });
+
+  it("draws nothing but the hit path for an empty label with no placeholder (#798)", () => {
+    const [shapes] = sceneShapes([label({ text: "" })], 203.2, 203.2);
+
+    expect(shapes).toHaveLength(1);
+    expect(shapes[0]).toMatchObject({ hitOnly: true });
+    expect(sceneToSvg(mapWith([label({ text: "" })]))).not.toContain("<text");
+    // A label with text ignores the placeholder entirely.
+    const [, text] = sceneShapes([label()], 203.2, 203.2, undefined, {
+      labelPlaceholder: "Write your text here",
+    })[0];
+    expect(text).toMatchObject({ text: "The Reach" });
+    expect(text).not.toHaveProperty("placeholder");
+  });
+
   it("moves a Label by shifting its centre", () => {
     const reach = label();
 

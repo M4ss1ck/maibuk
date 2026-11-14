@@ -344,9 +344,9 @@ export interface MapEditor {
   setStampScale(id: string, patch: Partial<MapStampScale>): void;
   /** Recolours one unlocked one-colour Stamp, as one undo step. */
   setStampColor(id: string, color: string): void;
-  /** Adds a Map Label at `point`, or at the view centre, writing the localized default, selected, as one undo step. */
+  /** Adds a Map Label at `point`, or at the view centre, with empty text the Frame draws as a placeholder, selected, as one undo step. */
   insertLabel(point?: MapPoint): void;
-  /** Writes one unlocked Map Label's text; a blank text is refused. */
+  /** Writes one unlocked Map Label's text, trimmed; a blank text clears it. */
   setLabelText(id: string, text: string): void;
   /** Sets one unlocked Map Label's font, one of the bundled faces or the PDF Font. */
   setLabelFont(id: string, font: MapLabelFont): void;
@@ -641,7 +641,11 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
           label: translate(options.language(), "map.labelReadout"),
         },
       },
-      { library: assetSource?.library ?? EMPTY_MAP_LIBRARY }
+      {
+        library: assetSource?.library ?? EMPTY_MAP_LIBRARY,
+        // The prompt an empty Map Label draws, here alone and never stored (#798).
+        labelPlaceholder: translate(options.language(), "element.labelPlaceholder"),
+      }
     );
   }
 
@@ -1083,15 +1087,16 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
 
   /**
    * Places a Map Label at `point`, where the Text tool was clicked, or at the
-   * view centre with no point (#751), writing the localized prompt so the
-   * author has a sentence to replace. The new label becomes the selection, and
-   * the whole placement is one undo step.
+   * view centre with no point (#751). It starts with empty text, which the
+   * Frame draws as the localized placeholder (#798), so the author types over
+   * nothing. The new label becomes the selection, and the whole placement is
+   * one undo step.
    */
   function insertLabel(point?: MapPoint): void {
     const element = newLabel({
       id: randomMapId(),
       name: newLabelName(),
-      text: translate(options.language(), "element.labelText"),
+      text: "",
       point: point ?? [doc.page.widthMm / 2 + panX, doc.page.heightMm / 2 + panY],
     });
     selectedId = element.id;
@@ -1945,9 +1950,9 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     setLabelText(id, text) {
       const target = labelForEdit(id);
       if (target === null) return;
-      // A Map Label always writes a word, so a blank text keeps the old one.
+      // A blank text clears the label, which then draws its placeholder (#798).
       const trimmed = text.trim();
-      if (trimmed === "" || trimmed === target.text) return;
+      if (trimmed === target.text) return;
       updateElement(id, (element) =>
         element.kind === "label" ? { ...element, text: trimmed } : element
       );

@@ -1010,6 +1010,40 @@ describe("Map Label shapes", () => {
     expect(document.querySelector("path.map-selection")?.getAttribute("d")).toBe(BASELINE);
   });
 
+  it("draws an empty label's placeholder italic and muted, still picked by its baseline (#798)", () => {
+    frame = loadFrame();
+    frame.scene({
+      elements: [
+        sceneElement({
+          shapes: [
+            labelHit(),
+            labelText({ text: "Write your text here", placeholder: true, halo: undefined }),
+          ],
+        }),
+      ],
+    });
+
+    const texts = Array.from(document.querySelectorAll("text.map-line"));
+    expect(texts).toHaveLength(1);
+    expect(texts[0].textContent?.trim()).toBe("Write your text here");
+    expect(texts[0].getAttribute("font-style")).toBe("italic");
+    expect(texts[0].getAttribute("opacity")).toBe("0.5");
+    // It keeps the label's own font, so it previews how the text will look.
+    expect(texts[0].getAttribute("font-family")).toBe("IM Fell English");
+
+    const hit = document.querySelector('g[data-element-id="e1"] path.map-hit');
+    if (hit === null) throw new Error("the label drew no hit path");
+    pointer(hit, "pointerdown", 20, 30);
+    expect(frame.port.messages).toEqual([{ kind: "select", id: "e1" }]);
+
+    // A label with text carries neither mark.
+    frame.scene({ elements: [sceneElement({ shapes: [labelHit(), labelText()] })] });
+    for (const text of document.querySelectorAll("text.map-line")) {
+      expect(text.getAttribute("font-style")).toBeNull();
+      expect(text.getAttribute("opacity")).toBeNull();
+    }
+  });
+
   it("draws a label without its baseline when the scene names an id it could write into", () => {
     frame = loadFrame();
     frame.scene({

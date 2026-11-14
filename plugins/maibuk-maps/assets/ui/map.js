@@ -34,7 +34,7 @@
    * @typedef {"ellipse" | "rectangle" | "polygon"} ShapeKind
    * @typedef {"select" | "hand" | "pencil" | "pen" | "bucket" | "area" | "eraser" | "insert" | "text" | ShapeKind} MapTool
    * @typedef {{ d: string, stroke: string | null, strokeWidth: number, dash: string | null, fill: string | null, fillRule?: "evenodd", opacity: number, transform?: string, clip?: string, hitOnly?: true }} LineShape
-   * @typedef {{ text: string, x: number, y: number, size: number, fill: string, font?: string, letterSpacing?: number, halo?: { color: string, width: number }, path?: { id: string, d: string }, anchor: "start" | "middle" | "end", transform?: string }} TextShape
+   * @typedef {{ text: string, x: number, y: number, size: number, fill: string, font?: string, letterSpacing?: number, halo?: { color: string, width: number }, path?: { id: string, d: string }, anchor: "start" | "middle" | "end", transform?: string, placeholder?: true }} TextShape
    * @typedef {{ kind: "image", assetId: string, x: number, y: number, width: number, height: number, rotation: number, opacity: number, tint?: string, clip?: string }} ImageShape
    * @typedef {LineShape | TextShape | ImageShape} SceneShape
    * @typedef {{ x: number, y: number, rotation: number, width: number, bend: number }} FrameLabelLayout
@@ -100,6 +100,9 @@
 
   /** How far the Eraser reaches at zoom 1, in page millimetres. */
   const ERASER_RADIUS_MM = 2;
+
+  /** How strongly an empty Map Label's placeholder is inked (#798); scene.ts's PLACEHOLDER_OPACITY. */
+  const PLACEHOLDER_OPACITY = 0.5;
 
   /** The crosshair's arm length, in page millimetres. */
   const CROSSHAIR_ARM_MM = 1.5;
@@ -508,6 +511,7 @@
       ...(halo === null ? {} : { halo }),
       anchor,
       ...(typeof shape.transform === "string" ? { transform: shape.transform } : {}),
+      ...(shape.placeholder === true ? { placeholder: /** @type {const} */ (true) } : {}),
     };
   }
 
@@ -1062,6 +1066,8 @@
       stroke-linejoin="${halo === undefined ? undefined : "round"}"
       text-anchor="${shape.anchor}"
       transform="${shape.transform ?? undefined}"
+      font-style="${shape.placeholder === true ? "italic" : undefined}"
+      opacity="${shape.placeholder === true ? PLACEHOLDER_OPACITY : undefined}"
     >
       ${content()}
     </text>`;

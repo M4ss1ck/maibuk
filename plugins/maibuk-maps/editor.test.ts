@@ -58,7 +58,7 @@ import {
 import { MAP_STYLES, resolveColor, type MapStyleId } from "./styles";
 
 /** An editor over a square 200 by 100 mm Map, with a store that drops its saves. */
-function openEditor(elements: MapElement[] = []) {
+function openEditor(elements: MapElement[] = [], language = "en") {
   const doc: MapDocument = {
     id: "map-1",
     bookId: null,
@@ -78,7 +78,7 @@ function openEditor(elements: MapElement[] = []) {
       },
     },
     doc,
-    language: () => "en",
+    language: () => language,
   });
   return { editor };
 }
@@ -1680,7 +1680,7 @@ describe("placing a Map Label with the Text tool", () => {
     return element;
   }
 
-  it("places a Map Label at the view centre, selected, with the default text", () => {
+  it("places a Map Label at the view centre, selected, with empty text for the placeholder", () => {
     const { editor } = openEditor();
 
     editor.insertLabel();
@@ -1689,7 +1689,8 @@ describe("placing a Map Label with the Text tool", () => {
     expect(label).toMatchObject({
       kind: "label",
       name: "Map Label 1",
-      text: "Write your text here",
+      // The prompt is a placeholder the Frame draws, never stored text (#798).
+      text: "",
       hidden: false,
       locked: false,
       x: 100,
@@ -1721,7 +1722,7 @@ describe("placing a Map Label with the Text tool", () => {
     const label = onlyLabel(editor);
     expect(label).toMatchObject({
       name: "Map Label 1",
-      text: "Write your text here",
+      text: "",
       x: 30,
       y: 40,
     });
@@ -1740,6 +1741,31 @@ describe("placing a Map Label with the Text tool", () => {
     editor.undo();
     editor.undo();
     expect(editor.getSnapshot().elements).toEqual([]);
+  });
+
+  it("draws an empty label's placeholder on the Frame in the app language, until it has text (#798)", () => {
+    for (const [language, prompt] of [
+      ["en", "Write your text here"],
+      ["es", "Escribe tu texto aquí"],
+    ]) {
+      const { editor } = openEditor([], language);
+      const scenes: FrameSceneMessage[] = [];
+      editor.attachFrame({
+        postMessage: (message: FrameSceneMessage) => scenes.push(message),
+      } as unknown as MessagePort);
+      const drawn = () => scenes.at(-1)?.elements[0]?.shapes.find((shape) => "text" in shape);
+
+      editor.insertLabel();
+      expect(drawn()).toMatchObject({ text: prompt, placeholder: true });
+
+      const { id } = onlyLabel(editor);
+      editor.setLabelText(id, "Havana");
+      expect(drawn()).toMatchObject({ text: "Havana" });
+      expect(drawn()).not.toHaveProperty("placeholder");
+
+      editor.setLabelText(id, "");
+      expect(drawn()).toMatchObject({ text: prompt, placeholder: true });
+    }
   });
 
   it("numbers each label in turn and lands it on the panned view centre", () => {
@@ -1772,18 +1798,32 @@ describe("a Map Label's properties", () => {
     return element;
   }
 
-  it("writes the text as one undo step and refuses a blank one", () => {
+  it("writes the text as one undo step, trimmed", () => {
     const { editor, id } = labelEditor();
 
     editor.setLabelText(id, "  The Reach  ");
 
     expect(labelOf(editor).text).toBe("The Reach");
     editor.undo();
-    expect(labelOf(editor).text).toBe("Write your text here");
+    expect(labelOf(editor).text).toBe("");
     editor.redo();
     expect(labelOf(editor).text).toBe("The Reach");
+  });
+
+  it("clears the text as one undo step, so the placeholder shows again (#798)", () => {
+    const { editor, id } = labelEditor();
+    editor.setLabelText(id, "The Reach");
 
     editor.setLabelText(id, "   ");
+    expect(labelOf(editor).text).toBe("");
+    editor.undo();
+    expect(labelOf(editor).text).toBe("The Reach");
+    editor.redo();
+    expect(labelOf(editor).text).toBe("");
+
+    // Clearing an already empty label is not an edit: undo goes back past it.
+    editor.setLabelText(id, "");
+    editor.undo();
     expect(labelOf(editor).text).toBe("The Reach");
   });
 

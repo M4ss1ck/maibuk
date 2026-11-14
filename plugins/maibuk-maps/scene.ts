@@ -225,7 +225,15 @@ export interface TextShape {
   letterSpacing?: number;
   /** The halo drawn behind the text, so it reads over drawn land and water. */
   halo?: TextHalo;
+  /**
+   * The text is an empty Map Label's placeholder (#798), drawn italic and at
+   * `PLACEHOLDER_OPACITY` so it reads as a prompt, never as the label's text.
+   */
+  placeholder?: true;
 }
+
+/** How strongly an empty Map Label's placeholder is inked, beside its full-strength text. */
+export const PLACEHOLDER_OPACITY = 0.5;
 
 /** The path a piece of text follows, and the definitions id it is drawn under. */
 export interface TextPathShape {
@@ -1019,13 +1027,27 @@ function labelPathId(elementId: string): string {
 function labelShapes(
   element: MapLabelElement,
   style: MapStyleId,
-  collector: SceneCollector
+  collector: SceneCollector,
+  context: ResolvedSceneContext
 ): SceneShape[] {
   const d = labelBaselinePath(element);
+  const hit: LineShape = {
+    d,
+    stroke: null,
+    strokeWidth: 0,
+    dash: null,
+    fill: null,
+    opacity: 1,
+    hitOnly: true,
+  };
+  // An empty label draws its placeholder only where the scene carries one, the
+  // editor's Frame; an export or a Place draws nothing but keeps no ink (#798).
+  const placeholder = element.text === "" ? (context.labelPlaceholder ?? "") : null;
+  if (placeholder === "") return [hit];
   const id = labelPathId(element.id);
   collector.defs.push(`<path id="${id}" d="${escapeAttribute(d)}"/>`);
   const text: TextShape = {
-    text: element.text,
+    text: placeholder ?? element.text,
     x: element.x,
     y: element.y,
     size: element.size,
@@ -1034,14 +1056,13 @@ function labelShapes(
     anchor: "middle",
     path: { id, d },
     ...(element.letterSpacing === 0 ? {} : { letterSpacing: element.letterSpacing }),
-    ...(element.halo > 0
+    // A placeholder is a muted prompt, so it carries no halo to lift it.
+    ...(element.halo > 0 && placeholder === null
       ? { halo: { color: resolveColor(style, undefined, "halo"), width: element.halo } }
       : {}),
+    ...(placeholder === null ? {} : { placeholder: true as const }),
   };
-  return [
-    { d, stroke: null, strokeWidth: 0, dash: null, fill: null, opacity: 1, hitOnly: true },
-    text,
-  ];
+  return [hit, text];
 }
 
 /**
@@ -1056,16 +1077,27 @@ export interface SceneContext {
    * of exports is dropped. The editor draws it.
    */
   forExport?: boolean;
+  /**
+   * The localized prompt an empty Map Label draws in its place (#798). Only the
+   * editor's Frame scene passes it, so an export or a Place never holds it.
+   */
+  labelPlaceholder?: string;
 }
 
 /** A context with every field at its default, so one pass reads each once. */
 interface ResolvedSceneContext {
   library: MapLibrary;
   forExport: boolean;
+  labelPlaceholder: string | undefined;
 }
 
 function sceneContext(context: SceneContext = {}): ResolvedSceneContext {
-  return { library: context.library ?? EMPTY_MAP_LIBRARY, forExport: context.forExport === true };
+  return {
+    library: context.library ?? EMPTY_MAP_LIBRARY,
+    forExport: context.forExport === true,
+    // An export never draws a placeholder, whatever its caller passed.
+    labelPlaceholder: context.forExport === true ? undefined : context.labelPlaceholder,
+  };
 }
 
 /** The render primitives one Element is drawn from: a line's, a fill's content, a Stamp's picture, or a Map Image. */
@@ -1085,7 +1117,7 @@ function elementShapes(
       : fillShapes(element, area, pageWidthMm, pageHeightMm, style, collector, context);
   }
   if (element.kind === "stamp") return stampShapes(element, pageWidthMm, style, context.library);
-  if (element.kind === "label") return labelShapes(element, style, collector);
+  if (element.kind === "label") return labelShapes(element, style, collector, context);
   // A Map Image the author keeps out of exports draws in the editor alone.
   if (element.kind === "image") {
     return context.forExport && !element.exportable
@@ -1346,6 +1378,9 @@ function shapeText(shape: TextShape): string {
     attributes.push(`letter-spacing="${roundedMm(shape.letterSpacing)}"`);
   }
   attributes.push(`text-anchor="${shape.anchor}"`);
+  if (shape.placeholder === true) {
+    attributes.push('font-style="italic"', `opacity="${PLACEHOLDER_OPACITY}"`);
+  }
   if (shape.transform !== undefined) {
     attributes.push(`transform="${escapeAttribute(shape.transform)}"`);
   }
