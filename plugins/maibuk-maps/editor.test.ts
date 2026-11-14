@@ -2335,6 +2335,12 @@ describe("a transform handle drag on Shapes and Map Labels (#796)", () => {
   });
 
   it("writes a Map Label's cap size, width, rotation, and centre in one undo step", () => {
+    // The box's centre is half the 7 mm cap above the baseline the label stores.
+    const turn = (10 * Math.PI) / 180;
+    const baselineUnder90x60 = {
+      x: expect.closeTo(90 - 3.5 * Math.sin(turn), 9),
+      y: expect.closeTo(60 + 3.5 * Math.cos(turn), 9),
+    };
     const { editor } = openEditor([mapLabel()]);
     editor.select("label");
 
@@ -2345,7 +2351,12 @@ describe("a transform handle drag on Shapes and Map Labels (#796)", () => {
       size: 7,
     });
 
-    expect(labelOf(editor)).toMatchObject({ x: 90, y: 60, width: 84, size: 7, rotation: 10 });
+    expect(labelOf(editor)).toMatchObject({
+      ...baselineUnder90x60,
+      width: 84,
+      size: 7,
+      rotation: 10,
+    });
 
     editor.undo();
     expect(labelOf(editor)).toMatchObject({
@@ -2356,7 +2367,12 @@ describe("a transform handle drag on Shapes and Map Labels (#796)", () => {
       rotation: 0,
     });
     editor.redo();
-    expect(labelOf(editor)).toMatchObject({ x: 90, y: 60, width: 84, size: 7, rotation: 10 });
+    expect(labelOf(editor)).toMatchObject({
+      ...baselineUnder90x60,
+      width: 84,
+      size: 7,
+      rotation: 10,
+    });
   });
 
   it("never lets a Map Label's cap size drop below its minimum", () => {
@@ -2365,7 +2381,8 @@ describe("a transform handle drag on Shapes and Map Labels (#796)", () => {
     editor.handleFrameMessage({
       kind: "transformElement",
       id: "label",
-      box: { x: 100, y: 50, width: DEFAULT_LABEL_WIDTH_MM, height: 0.2, rotation: 0 },
+      // Centred half the 0.2 mm cap above the baseline at (100, 50).
+      box: { x: 100, y: 50 - 0.1, width: DEFAULT_LABEL_WIDTH_MM, height: 0.2, rotation: 0 },
       size: 0.2,
     });
 

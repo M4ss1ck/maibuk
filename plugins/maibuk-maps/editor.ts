@@ -79,6 +79,7 @@ import {
   seedFor,
   shapeFromCorners,
   shapeOutline,
+  towardBoxTop,
 } from "./geometry";
 import { createHistory } from "./history";
 import { assetDataUri } from "./export";
@@ -1376,11 +1377,14 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
         return;
       }
       const before = elements;
+      const capSize = size ?? box.height;
+      // The box's centre is half a cap above the baseline the label stores.
+      const [x, y] = towardBoxTop([box.x, box.y], -capSize / 2, box.rotation);
       setLabelLayout(id, {
-        x: box.x,
-        y: box.y,
+        x,
+        y,
         width: box.width,
-        size: size ?? box.height,
+        size: capSize,
         rotation: box.rotation,
       });
       if (elements === before) sendScene();

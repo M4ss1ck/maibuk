@@ -19,6 +19,7 @@ import {
   pointsBounds,
   roundedMm,
   seedFor,
+  towardBoxTop,
 } from "./geometry";
 import {
   DEFAULT_STAMP_SCALE,
@@ -1675,10 +1676,12 @@ export function elementTransform(
     };
   }
   if (element.kind === "label") {
+    // The box stands on the baseline, so the letters sit inside it.
+    const [x, y] = towardBoxTop([element.x, element.y], element.size / 2, element.rotation);
     return {
       box: {
-        x: element.x,
-        y: element.y,
+        x,
+        y,
         width: element.width,
         height: element.size,
         rotation: element.rotation,

@@ -654,6 +654,16 @@ function resizeBox(gesture: TransformGesture): TransformBox {
 }
 
 /**
+ * A point moved `distance` mm toward the top of a box turned `rotation`
+ * degrees (#796): a Map Label's box stands on its baseline, so its centre is
+ * half a cap above the baseline's middle, and back again with a negative distance.
+ */
+export function towardBoxTop(point: MapPoint, distance: number, rotation: number): MapPoint {
+  const turn = (rotation * Math.PI) / 180;
+  return [point[0] + distance * Math.sin(turn), point[1] - distance * Math.cos(turn)];
+}
+
+/**
  * The box one handle gesture draws (#795): a corner or side resized in the box's
  * own frame, or the whole box turned about its centre. Pure, so the Map editor,
  * the Frame's live preview, and the tests share one set of rules.

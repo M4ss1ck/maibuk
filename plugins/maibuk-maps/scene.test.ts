@@ -2056,7 +2056,15 @@ describe("the handle box an Element carries (#795)", () => {
         halo: 0,
       })
     ).toEqual({
-      box: { x: 10, y: 20, width: 84, height: 7, rotation: 5 },
+      // The box stands on the baseline at (10, 20): its centre is half the
+      // 7 mm cap above it, along the label's 5° turn.
+      box: {
+        x: expect.closeTo(10 + 3.5 * Math.sin((5 * Math.PI) / 180), 9),
+        y: expect.closeTo(20 - 3.5 * Math.cos((5 * Math.PI) / 180), 9),
+        width: 84,
+        height: 7,
+        rotation: 5,
+      },
       handles: "label",
       minSize: MIN_LABEL_WIDTH_MM,
     });

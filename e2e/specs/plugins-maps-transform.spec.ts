@@ -323,11 +323,11 @@ test.describe("Maps transform handles and scale and turn Commands @wf:plugins-ma
     // this short, and the corners stack above them, so the press takes the corner.
     await expect(drawnHandles(page)).toHaveCount(7);
 
-    // The bottom-right grip sits on the box's own corner, 27.5 mm right of the
-    // centre and half the 6 mm cap below it; the drag ends 10.2 right and 0.8
-    // down from there.
+    // The box stands on the baseline, so its bottom-right grip sits on the
+    // baseline's right end, 27.5 mm right of the label's anchor; the drag ends
+    // 10.2 right and 0.8 down from there.
     await expect(transformHandle(page, "se")).toBeVisible();
-    await dragTransformHandle(page, surface(page), transformHandle(page, "se"), [152, 80]);
+    await dragTransformHandle(page, surface(page), transformHandle(page, "se"), [152, 77]);
 
     // A corner drag grows the cap size and the width together: the Width the
     // panel shows is the drag's own, 65.2 mm, and the cap Size follows the same
