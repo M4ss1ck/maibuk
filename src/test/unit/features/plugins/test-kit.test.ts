@@ -768,6 +768,65 @@ describe("renderPage", () => {
       await host.stop();
     }
   });
+
+  describe("a batch the host refuses (#788)", () => {
+    /** A Plugin page that renders a plain `div`, which the host never declares. */
+    function UndeclaredPage() {
+      return createElement("div", null, "not a kit element");
+    }
+
+    let consoleError: ReturnType<typeof vi.spyOn>;
+    beforeEach(() => {
+      consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    });
+    afterEach(() => {
+      consoleError.mockRestore();
+    });
+
+    it("logs the refusal at once and fails the page's unmount with its code and message", async () => {
+      const host = createTestHost({ manifest: fixtureManifest() });
+      try {
+        servePluginUi(createPluginClient(host.port), { pages: { main: UndeclaredPage } });
+        const page = await host.renderPage("main");
+        await waitFor(() => {
+          expect(consoleError).toHaveBeenCalledWith(expect.stringContaining("unknown-element"));
+        });
+
+        await expect(page.unmount()).rejects.toThrow(
+          "The host refused a Remote UI batch from main (unknown-element: The element div is not part of the Maibuk UI kit)"
+        );
+      } finally {
+        await host.stop();
+      }
+    });
+
+    it("fails stop() with the refusal when the page is still open", async () => {
+      const host = createTestHost({ manifest: fixtureManifest() });
+      servePluginUi(createPluginClient(host.port), { pages: { main: UndeclaredPage } });
+      const page = await host.renderPage("main");
+      await waitFor(() => {
+        expect(page.violations).toHaveLength(1);
+      });
+
+      await expect(host.stop()).rejects.toThrow(/unknown-element/);
+    });
+
+    it("only records the refusal when the page allows violations", async () => {
+      const host = createTestHost({ manifest: fixtureManifest() });
+      try {
+        servePluginUi(createPluginClient(host.port), { pages: { main: UndeclaredPage } });
+        const page = await host.renderPage("main", { allowViolations: true });
+        await waitFor(() => {
+          expect(page.violations).toMatchObject([{ code: "unknown-element" }]);
+        });
+
+        await page.unmount();
+        expect(consoleError).not.toHaveBeenCalled();
+      } finally {
+        await host.stop();
+      }
+    });
+  });
 });
 
 describe("createTestHost() activation", () => {

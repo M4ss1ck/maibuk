@@ -10,6 +10,7 @@ A Plugin tests itself with the kit `@maibuk/plugin-test-kit`, the supported entr
 - The Plugin Endpoint: `endpoint()` reads the `serve` grant the way the app does, so a request without it is answered 404, a Plugin with no handler answers 404, and a throwing handler answers 500.
 - The Plugin Endpoint address: `setEndpointAddress()` fakes the bound port, so `endpoint.address` and `endpoint.addressChanged` behave as they do in the app.
 - The host renderer: `renderPage(pageId)` and `renderSettingsRow(rowId)` mount the page or Settings row the way the app does, and the records the host keeps (notifications, navigations, page navigations, toolbar pressed state) are what the test asserts against.
+- A refused batch: in the app, a page whose Remote UI batch the host refuses stops the Plugin. In the kit, the refusal is logged with `console.error` as it happens, and the page's `unmount()` (so `stop()` too) rejects with the violation's code and message, so the test fails on the cause, not on a `waitFor` timeout. A test that expects a refusal passes `{ allowViolations: true }` to `renderPage` or `renderSettingsRow` and asserts on `page.violations`.
 
 The kit does not simulate the sandbox; the browser lanes prove that. It proves the host logic around a Plugin in the same jsdom the app's other suites use.
 

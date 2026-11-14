@@ -69,7 +69,13 @@ import type {
   TestNotification,
   TestPage,
   TestPageNavigation,
+  TestPageOptions,
 } from "@/features/plugins/types";
+
+/** One refused batch, as the kit logs it and fails the page with. */
+function describeRefusal(surface: string, violation: PluginUiViolation): string {
+  return `The host refused a Remote UI batch from ${surface} (${violation.code}: ${violation.message})`;
+}
 
 /**
  * Runs a render step inside `act()` only where the test enabled the act
@@ -1034,9 +1040,22 @@ export function createTestHost(options: TestHostOptions): TestHost {
   /** The live mount behind each open page, so `stopWorker` can sever it. */
   const openMounts = new Map<TestPage, { mount: PluginUiMount; thread: { close(): void } }>();
 
-  function renderSurface(name: string, kind: PluginUiMountKind): Promise<TestPage> {
+  function renderSurface(
+    name: string,
+    kind: PluginUiMountKind,
+    options: TestPageOptions = {}
+  ): Promise<TestPage> {
     const violations: PluginUiViolation[] = [];
-    const ui = createPluginRemoteUi({ onViolation: (violation) => violations.push(violation) });
+    // In the app a refused batch stops the Plugin; here it would only freeze the
+    // page and leave a test waiting on an update that never comes (#788). So a
+    // refusal is logged as it happens and fails this page's unmount, which
+    // `stop()` runs too, unless the test said it expects refusals.
+    const ui = createPluginRemoteUi({
+      onViolation: (violation) => {
+        violations.push(violation);
+        if (options.allowViolations !== true) console.error(describeRefusal(name, violation));
+      },
+    });
     const mount = openPluginUiMount(broker, name, kind);
     // The thread listens through `addEventListener`, which a MessagePort only
     // dispatches after `start()`.
@@ -1074,6 +1093,11 @@ export function createTestHost(options: TestHostOptions): TestHost {
         });
         ui.dispose();
         container.remove();
+        if (options.allowViolations !== true && violations.length > 0) {
+          throw new Error(
+            violations.map((violation) => describeRefusal(name, violation)).join("\n")
+          );
+        }
       },
     };
     openPages.add(testPage);
@@ -1166,11 +1190,11 @@ export function createTestHost(options: TestHostOptions): TestHost {
     },
     endpoint,
     endpointStream,
-    renderPage(page: string) {
-      return renderSurface(page, "page");
+    renderPage(page: string, pageOptions?: TestPageOptions) {
+      return renderSurface(page, "page", pageOptions);
     },
-    renderSettingsRow(rowId: string) {
-      return renderSurface(rowId, "settingsRow");
+    renderSettingsRow(rowId: string, pageOptions?: TestPageOptions) {
+      return renderSurface(rowId, "settingsRow", pageOptions);
     },
     stopWorker() {
       broker.stop("requested");
@@ -1183,10 +1207,20 @@ export function createTestHost(options: TestHostOptions): TestHost {
     },
     async stop() {
       // One at a time: each unmount awaits inside act(), and act() calls must not overlap.
-      for (const page of [...openPages]) await page.unmount();
+      // Every page is unmounted and the broker stopped even when a page reports
+      // a refused batch; the first refusal is rethrown once everything is down.
+      let refused: unknown;
+      for (const page of [...openPages]) {
+        try {
+          await page.unmount();
+        } catch (error) {
+          refused ??= error;
+        }
+      }
       broker.stop("requested");
       channel.port1.close();
       channel.port2.close();
+      if (refused !== undefined) throw refused;
     },
   };
 }

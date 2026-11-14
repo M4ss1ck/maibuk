@@ -1507,9 +1507,7 @@ function MapEditorView({
                     title with nothing selected) with every control on one
                     centred row at its right (Hidden, Locked, the narrow page's
                     full-height toggle, Minimise), and the Name field below it
-                    at the card's full width. The field stays inside the header
-                    block: inserted as a direct child of the card, beside the
-                    rows a new selection adds, the host refused the batch. */}
+                    at the card's full width. */}
                 <ui.View direction="column" gap="sm">
                   <ui.View direction="row" gap="sm" align="center" justify="between">
                     <ui.Text weight="semibold">

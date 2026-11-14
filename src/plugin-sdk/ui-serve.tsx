@@ -8,14 +8,15 @@
  * This is the entry a host-side test imports (jsdom and the web lane), because
  * it loads no Remote DOM polyfill: it leaves the real DOM and its own
  * `MutationObserver` alone, and attaches through a plain element watched by
- * `RemoteMutationObserver` — the native observer a browser (and jsdom) provides.
+ * `PluginUiMutationObserver`, over the native `MutationObserver` a browser (and
+ * jsdom) provides.
  * A real Worker has no such observer, so it imports `worker-ui.tsx` instead,
  * which installs the polyfill and attaches through a `remote-root` whose
  * polyfill hooks drive the connection directly. See `worker-ui.tsx` for why the
  * two paths exist.
  */
 
-import { BatchingRemoteConnection, RemoteMutationObserver } from "@remote-dom/core/elements";
+import { BatchingRemoteConnection } from "@remote-dom/core/elements";
 import type { RemoteConnection, RemoteMutationRecord } from "@remote-dom/core";
 import { ThreadMessagePort } from "@quilted/threads";
 import type { ComponentType } from "react";
@@ -35,6 +36,7 @@ import {
   renderingWithin,
   type MountBudget,
 } from "@/plugin-sdk/ui-node-budget";
+import { PluginUiMutationObserver } from "@/plugin-sdk/ui-observer";
 import { PLUGIN_UI_LIMITS } from "@/plugin-sdk/ui-table";
 
 /**
@@ -76,13 +78,14 @@ export type PluginUiAttach = (connection: RemoteConnection) => {
 
 /**
  * The default attachment, for a real DOM: a plain `div` watched by a
- * `RemoteMutationObserver`, which turns the DOM's own mutation records into
- * Remote DOM's. `detach` disconnects the observer.
+ * `PluginUiMutationObserver`, which turns the DOM's own mutation records into
+ * Remote DOM's with indexes the host can apply in order (#788). `detach`
+ * disconnects the observer.
  */
 export function observeContainer(): PluginUiAttach {
   return (connection) => {
     const container = document.createElement("div");
-    const observer = new RemoteMutationObserver(connection);
+    const observer = new PluginUiMutationObserver(connection);
     observer.observe(container);
     return {
       container,
