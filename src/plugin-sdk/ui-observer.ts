@@ -226,6 +226,11 @@ function longestInOrder(values: readonly (number | undefined)[]): Set<number> {
     tails[low] = position;
   }
   const run = new Set<number>();
-  for (let at = tails.at(-1) ?? -1; at !== -1; at = previous[at] as number) run.add(at);
+  for (
+    let at = tails.length === 0 ? -1 : (tails[tails.length - 1] as number);
+    at !== -1;
+    at = previous[at] as number
+  )
+    run.add(at);
   return run;
 }
