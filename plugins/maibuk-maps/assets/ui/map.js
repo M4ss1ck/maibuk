@@ -246,6 +246,14 @@
   /** The characters a definitions id may hold, so a scene cannot write an attribute of its own. */
   const FILTER_ID = /^[A-Za-z0-9_-]+$/;
 
+  /**
+   * The Clip Path that keeps the drawing inside the page, as an export crops
+   * it: the view pans and zooms past the page edge, and art beyond it would
+   * show here yet never reach the picture. Overlays, handles, and the live
+   * stroke sit outside it, so the author still sees what the hand is doing.
+   */
+  const PAGE_CLIP_ID = "map-page-clip";
+
   /** The size an uploaded picture falls back to, in pixels, when it names none. */
   const DEFAULT_ASSET_SIZE = 100;
 
@@ -1955,6 +1963,9 @@
           height="${n(current.heightMm)}"
           fill="${current.background}"
         />
+        <clipPath id="${PAGE_CLIP_ID}">
+          <rect x="0" y="0" width="${n(current.widthMm)}" height="${n(current.heightMm)}" />
+        </clipPath>
         ${
           current.defs === ""
             ? null
@@ -1962,6 +1973,7 @@
                 dangerouslySetInnerHTML=${{ __html: withAssetHrefs(current.defs, liveUrl) }}
               />`
         }
+        <g clip-path="url(#${PAGE_CLIP_ID})">
         ${current.elements
           .filter((element) => !element.hidden && element.shapes.length > 0)
           .map(
@@ -1988,6 +2000,7 @@
               }
             </g>`
           )}
+        </g>
         ${transformGhost()}
         ${transformOverlay()}
         ${bendOverlay()}

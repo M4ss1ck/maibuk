@@ -84,6 +84,37 @@ export async function drawStroke(page: Page, surface: Locator): Promise<void> {
 }
 
 /**
+ * Draws one stroke between two page points, in millimetres, with the mouse:
+ * a Pencil stroke that starts or ends off the page (the page edge's clip). The
+ * view must show both points, which a zoom out past the page edge does, and
+ * the Pencil must already be selected.
+ */
+export async function strokeBetween(
+  page: Page,
+  surface: Locator,
+  from: PagePoint,
+  to: PagePoint
+): Promise<void> {
+  const box = await surface.boundingBox();
+  if (box === null) throw new Error("the Frame's drawing surface has no box to draw on");
+  const at = async (point: PagePoint) => {
+    const [fx, fy] = await fractionOfPagePoint(surface, point);
+    return { x: box.x + box.width * fx, y: box.y + box.height * fy };
+  };
+  const start = await at(from);
+  const end = await at(to);
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  for (let step = 1; step <= STEPS; step += 1) {
+    await page.mouse.move(
+      start.x + ((end.x - start.x) * step) / STEPS,
+      start.y + ((end.y - start.y) * step) / STEPS
+    );
+  }
+  await page.mouse.up();
+}
+
+/**
  * Traces one closed outline in a Frame's drawing surface with the mouse: the
  * Area tool's pointer form (#750). The Frame smooths the traced stroke into an
  * Area Fill exactly as the Pencil's stroke becomes a Map Line, so the outline

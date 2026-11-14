@@ -13,7 +13,7 @@
 
 import type { FrameLocator, Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
-import { drawStroke } from "../support/frame-stroke";
+import { drawStroke, strokeBetween } from "../support/frame-stroke";
 import { leaveFrame, pressUntilFocused, tabTo, tabToEither } from "../support/keyboard";
 import { expect, test } from "../support/test";
 import { openLayers } from "../support/maps-layers";
@@ -452,5 +452,37 @@ test.describe("Maps editor @wf:plugins-maps-editor @sc:plugin.maibuk-maps.openMa
     const base = await viewBox(page);
     await page.keyboard.press("Alt+ArrowRight");
     await expect.poll(async () => (await viewBox(page))[0]).toBeCloseTo(base[0] + 20, 1);
+  });
+
+  test("draws nothing off the page, and clips a line that runs past its edge", async ({ page }) => {
+    await page.goto("/");
+    await openMaps(page);
+    await createMap(page, "Edge Map");
+    await openMap(page, "Edge Map");
+    await focusBack(page);
+    // Zoom out until the view shows the space around the page.
+    await page.keyboard.press("ControlOrMeta+-");
+    await page.keyboard.press("ControlOrMeta+-");
+    await page.keyboard.press("ControlOrMeta+-");
+    const [x, y, width] = await viewBox(page);
+    await expect.poll(async () => (await viewBox(page))[0]).toBeLessThan(0);
+    await pickPencil(page);
+
+    // Wholly left of the page, then from off the page onto it: only the
+    // second is a Map Line, and the Frame draws it inside the page clip.
+    const left = x / 2;
+    await strokeBetween(page, mapFrame(page).locator("svg"), [left, 20], [left, 60]);
+    await strokeBetween(
+      page,
+      mapFrame(page).locator("svg"),
+      [left, 30],
+      [width / 4 + x / 2, 50 + y / 4]
+    );
+    await expect.poll(async () => drawnElements(page).count()).toBeGreaterThan(0);
+    await capture(page, "maps-page-edge", { around: [frameElement(page)] });
+    await expect(drawnElements(page)).toHaveCount(1);
+    await expect(
+      mapFrame(page).locator('[clip-path="url(#map-page-clip)"] [data-element-id]')
+    ).toHaveCount(1);
   });
 });

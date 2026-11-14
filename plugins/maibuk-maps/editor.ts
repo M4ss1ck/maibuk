@@ -76,12 +76,15 @@ import {
   type RasterFormat,
 } from "./frame-protocol";
 import {
+  clampToPage,
   convertShapeLine,
   eraseLines,
+  onPage,
   roughen as roughenPoints,
   seedFor,
   shapeFromCorners,
   shapeOutline,
+  touchesPage,
 } from "./geometry";
 import { createHistory } from "./history";
 import { assetDataUri } from "./export";
@@ -842,9 +845,17 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     };
   }
 
+  /**
+   * The view centre, where a keyboard placement lands, pulled onto the page:
+   * the view can pan past the page edge, and an export crops to the page.
+   */
+  function viewCentre(): MapPoint {
+    return clampToPage([doc.page.widthMm / 2 + panX, doc.page.heightMm / 2 + panY], doc.page);
+  }
+
   function addStroke(raw: readonly MapPoint[]): void {
     const points = smoothStroke(raw);
-    if (points.length < 2) return;
+    if (points.length < 2 || !touchesPage(points, false, doc.page)) return;
     const element = newLine(points, curvedSegments(points.length, false), false);
     selectedId = element.id;
     edit(addElement(elements, element));
@@ -852,7 +863,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
 
   /** Keeps a finished Pen line: its points, its segment curves, and whether it closes. */
   function addLine(raw: readonly MapPoint[], curves: readonly boolean[], closed: boolean): void {
-    if (raw.length < 2) return;
+    if (raw.length < 2 || !touchesPage(raw, closed, doc.page)) return;
     const points = raw.map(([x, y]): MapPoint => [x, y]);
     const segments = points.length - 1 + (closed ? 1 : 0);
     const segmentCurves = Array.from(
@@ -898,7 +909,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
   /** Adds the Shape a drag between two corners drew, as one undo step. */
   function addShape(kind: ShapeKind, start: MapPoint, end: MapPoint, constrain: boolean): void {
     const shape = shapeFromCorners(kind, start, end, constrain);
-    if (shape === null) return;
+    if (shape === null || !touchesPage(shapeOutline(shape).points, true, doc.page)) return;
     const element = newShapeLine(shape);
     selectedId = element.id;
     edit(addElement(elements, element));
@@ -991,7 +1002,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
   function addArea(raw: readonly MapPoint[], curves: readonly boolean[], freehand: boolean): void {
     const points = freehand ? smoothStroke(raw) : raw.map(([x, y]): MapPoint => [x, y]);
     // An outline encloses nothing with fewer than three corners.
-    if (points.length < 3) return;
+    if (points.length < 3 || !touchesPage(points, true, doc.page)) return;
     const segmentCurves = freehand
       ? curvedSegments(points.length, true)
       : Array.from({ length: points.length }, (_flag, index) => curves[index] === true);
@@ -1017,6 +1028,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
    * edit at all, so it leaves the undo history as it was.
    */
   function pour(point: MapPoint): void {
+    if (!onPage(point, doc.page)) return;
     const next = pourFill(elements, point, currentFillColor, makeFill);
     if (next === elements) return;
     // Every other Element comes back as it was, so the one object the before
@@ -1068,7 +1080,8 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
    * placement is one undo step.
    */
   function insertStamp(point?: MapPoint): void {
-    const at: MapPoint = point ?? [doc.page.widthMm / 2 + panX, doc.page.heightMm / 2 + panY];
+    if (point !== undefined && !onPage(point, doc.page)) return;
+    const at: MapPoint = point ?? viewCentre();
     const stampRef = stampRefOf(currentStampId);
     const element = newStamp({
       id: randomMapId(),
@@ -1096,7 +1109,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       id: randomMapId(),
       name: asset.name,
       stampRef: currentStampId,
-      point: [doc.page.widthMm / 2 + panX, doc.page.heightMm / 2 + panY],
+      point: viewCentre(),
       size: currentStampSize,
     });
     selectedId = element.id;
@@ -1112,6 +1125,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     const asset = assetSource?.library.assets.get(assetId);
     if (asset === undefined) return;
     const widthMm = doc.page.widthMm / 2;
+    const [x, y] = viewCentre();
     const element: MapImageElement = {
       id: randomMapId(),
       kind: "image",
@@ -1120,8 +1134,8 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       locked: false,
       assetRef: assetId,
       transform: {
-        x: doc.page.widthMm / 2 + panX,
-        y: doc.page.heightMm / 2 + panY,
+        x,
+        y,
         size: widthMm,
         rotation: 0,
       },
@@ -1146,11 +1160,12 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
    * one undo step.
    */
   function insertLabel(point?: MapPoint): void {
+    if (point !== undefined && !onPage(point, doc.page)) return;
     const element = newLabel({
       id: randomMapId(),
       name: newLabelName(),
       text: "",
-      point: point ?? [doc.page.widthMm / 2 + panX, doc.page.heightMm / 2 + panY],
+      point: point ?? viewCentre(),
     });
     selectedId = element.id;
     // A click in the Frame opens the Frame's own text box on the new label
@@ -2007,10 +2022,11 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
     },
 
     placeShape(kind) {
+      const [cx, cy] = viewCentre();
       const element = newShapeLine({
         kind,
-        cx: doc.page.widthMm / 2 + panX,
-        cy: doc.page.heightMm / 2 + panY,
+        cx,
+        cy,
         width: DEFAULT_SHAPE_SIZE_MM,
         height: DEFAULT_SHAPE_SIZE_MM,
         rotation: 0,

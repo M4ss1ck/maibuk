@@ -758,6 +758,29 @@ describe("drawing the scene", () => {
     expect(highlights[0].getAttribute("transform")).toBeNull();
   });
 
+  it("clips every Element to the page, as an export crops it, and leaves the live stroke whole", () => {
+    frame = loadFrame();
+    frame.scene({
+      tool: "pencil",
+      zoom: 0.5,
+      elements: [sceneElement({ id: "e1", shapes: [shape({ d: "M -40 50 L 240 50" })] })],
+    });
+
+    const clip = document.querySelector("clipPath#map-page-clip");
+    const rect = clip?.querySelector("rect");
+    expect(rect?.getAttribute("width")).toBe("200");
+    expect(rect?.getAttribute("height")).toBe("100");
+    const element = document.querySelector('[data-element-id="e1"]');
+    expect(element?.closest('[clip-path="url(#map-page-clip)"]')).not.toBeNull();
+
+    // What the hand is drawing right now still shows past the edge, so the
+    // author sees the stroke they are making.
+    pointer(svg(), "pointerdown", -30, 20);
+    pointer(svg(), "pointermove", -20, 25);
+    const live = document.querySelector("path.map-live");
+    expect(live?.closest("[clip-path]") ?? null).toBeNull();
+  });
+
   it("crops and slides the viewBox with zoom and pan", () => {
     frame = loadFrame();
     frame.scene({ zoom: 2, panX: 10, panY: -5 });
@@ -879,7 +902,9 @@ describe("the scene's definitions", () => {
       elements: [sceneElement({ shapes: [shape({ clip: 'x" onload="alert(1)' })] })],
     });
 
-    expect(document.querySelector("[clip-path]")).toBeNull();
+    // Only the page's own clip is drawn; the scene's id never reaches an attribute.
+    const clips = Array.from(document.querySelectorAll("[clip-path]"));
+    expect(clips.map((node) => node.getAttribute("clip-path"))).toEqual(["url(#map-page-clip)"]);
   });
 });
 
