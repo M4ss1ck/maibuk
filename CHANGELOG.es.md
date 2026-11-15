@@ -5,6 +5,12 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 y este proyecto sigue el [Versionado Semántico](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.2] - 2026-11-15
+
+### Fixed
+- Limpiar los avisos obsoletos de actualización de complementos después de reemplazar, mantener, revisar o eliminar un complemento en Ajustes
+- Cargar imágenes y audio de pronunciación en el cuadro de diálogo Diccionario resolviendo las URL de medios relativas al protocolo mediante HTTPS
+
 ## [0.22.1] - 2026-11-14
 
 ### Added
