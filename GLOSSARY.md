@@ -189,8 +189,8 @@ A Note Reference whose Note no longer exists in the Library; it stays on the Can
 _UI_: en "Missing note" / es "Nota no disponible" when no title was kept
 
 **Connection**:
-A line joining two items on a Canvas, with an optional direction and caption.
-_UI_: en "Connection label" / es "Etiqueta de conexión"
+A line joining two items on a Canvas, with an optional direction, caption, color, thickness, and line style (solid, dashed, or dotted). An unset color follows the theme.
+_UI_: en "Connection label" / es "Etiqueta de conexión"; en "Connection color" / es "Color de la conexión"; en "Connection thickness" / es "Grosor de la conexión"; en "Line style" / es "Estilo de línea"
 _Avoid_: edge, arrow
 
 **Drawing**:

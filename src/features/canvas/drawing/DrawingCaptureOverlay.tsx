@@ -7,8 +7,21 @@ import {
 } from "react";
 import { useReactFlow, type Node } from "@xyflow/react";
 import { useCanvasStore } from "@/features/canvas/store";
-import type { CanvasPosition } from "@/features/canvas/types";
+import { DEFAULT_CONNECTION_WIDTH, type CanvasPosition } from "@/features/canvas/types";
 import { strokeToPath } from "@/features/canvas/drawing/strokePath";
+
+/**
+ * How far from a Connection's center line the eraser still hits it: the eraser
+ * radius, a few screen pixels of slack, and half the drawn thickness, so touching
+ * the visible edge of a thick line erases it.
+ */
+export function connectionEraseTolerance(
+  threshold: number,
+  zoom: number,
+  width: number = DEFAULT_CONNECTION_WIDTH
+): number {
+  return threshold + 4 / zoom + width / 2;
+}
 
 function distanceToSegment(p: CanvasPosition, a: CanvasPosition, b: CanvasPosition): number {
   const dx = b.x - a.x;
@@ -193,7 +206,10 @@ export function DrawingCaptureOverlay({
       const source = nodeById.get(edge.source);
       const target = nodeById.get(edge.target);
       if (!source || !target) continue;
-      if (distanceToSegment(flow, centerOf(source), centerOf(target)) <= threshold + 4 / zoom) {
+      if (
+        distanceToSegment(flow, centerOf(source), centerOf(target)) <=
+        connectionEraseTolerance(threshold, zoom, edge.width)
+      ) {
         edgeIds.add(edge.id);
       }
     }

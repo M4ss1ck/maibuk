@@ -39,6 +39,8 @@ async function openCanvas(page: Page, name: RegExp, { ready = true } = {}) {
   await page.goto("/canvas");
   const grid = page.getByRole("grid", { name: "Canvases" });
   const row = grid.getByRole("row", { name });
+  // Tab presses sent before the gallery renders land on an empty body.
+  await expect(row).toBeVisible();
   await tabTo(page, grid.getByRole("row").first(), { max: 40 });
   await page.keyboard.press("Home");
   await pressUntilFocused(page, "ArrowRight", row, { max: 12 });
@@ -62,6 +64,8 @@ async function selectNode(page: Page, node: Locator) {
  */
 async function selectEdge(page: Page, name: string | RegExp) {
   const edge = page.getByRole("group", { name });
+  // After a reload, Tab presses sent before the Canvas renders land on an empty body.
+  await expect(edge).toBeVisible();
   await tabTo(page, edge, { max: 60 });
   await page.waitForTimeout(200);
   await tabTo(page, edge, { max: 5 });
@@ -440,7 +444,9 @@ test.describe("no notes @wf:canvas-note-ref", () => {
 
   test("N on a Canvas with no Notes says there are none", async ({ page }) => {
     await page.goto("/canvas");
-    await tabTo(page, page.getByRole("button", { name: "New canvas" }).first(), { max: 40 });
+    const newCanvas = page.getByRole("button", { name: "New canvas" }).first();
+    await expect(newCanvas).toBeVisible();
+    await tabTo(page, newCanvas, { max: 40 });
     await page.keyboard.press("Enter");
     await expectCanvasReady(page);
 
@@ -538,7 +544,9 @@ test.describe("no connect targets @wf:canvas-connect", () => {
 
   test("the dialog says there is nothing else on the canvas", async ({ page }) => {
     await page.goto("/canvas");
-    await tabTo(page, page.getByRole("button", { name: "New canvas" }).first(), { max: 40 });
+    const newCanvas = page.getByRole("button", { name: "New canvas" }).first();
+    await expect(newCanvas).toBeVisible();
+    await tabTo(page, newCanvas, { max: 40 });
     await page.keyboard.press("Enter");
     await expectCanvasReady(page);
 
@@ -561,6 +569,7 @@ test.describe("Connection inspector @wf:canvas-edge-inspector", () => {
   }) => {
     await openMap(page);
     await selectEdge(page, "Edge from text-storm to text-second");
+    await capture(page, "canvas-connection-inspector");
 
     await expect(page.getByRole("button", { name: "Close", exact: true })).toBeFocused();
 
@@ -586,11 +595,59 @@ test.describe("Connection inspector @wf:canvas-edge-inspector", () => {
     await expect(page.getByLabel("Connection label")).toBeHidden();
   });
 
+  test("color, thickness, and line style are set by keyboard and persist", async ({ page }) => {
+    await openMap(page);
+    const edgeName = "Edge from text-storm to text-second";
+    await selectEdge(page, edgeName);
+    // The drawn line has no role or name; React Flow's path class inside the
+    // named Connection is the only handle on the color, width, and dashes it shows.
+    const edgePath = () =>
+      page.getByRole("group", { name: edgeName }).locator(".react-flow__edge-path");
+    const path = edgePath();
+
+    const color = page.getByRole("button", { name: "Connection color" });
+    await tabTo(page, color, { max: 10 });
+    await page.keyboard.press("Enter");
+    const picker = page.getByRole("dialog", { name: "Connection color" });
+    await expectFocusWithin(picker);
+    const hex = picker.getByRole("textbox", { name: "Hex color" });
+    await tabTo(page, hex, { max: 25 });
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type("#10B981");
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Escape");
+    await expect(picker).toBeHidden();
+    await expect(color).toBeFocused();
+    await expect(path).toHaveAttribute("style", /stroke: (#10b981|rgb\(16, 185, 129\))/i);
+
+    const thin = page.getByRole("radio", { name: "Thin" });
+    await tabTo(page, thin, { max: 10 });
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByRole("radio", { name: "Thick", exact: true })).toBeChecked();
+    await expect(path).toHaveAttribute("style", /stroke-width: 4/);
+
+    const solid = page.getByRole("radio", { name: "Solid" });
+    await tabTo(page, solid, { max: 10 });
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByRole("radio", { name: "Dashed" })).toBeChecked();
+    await capture(page, "canvas-connection-styled");
+    await expect(path).toHaveAttribute("style", /stroke-dasharray: 16(px)?,? 12/);
+
+    await expect(page.getByText("Saved", { exact: true })).toBeVisible();
+    await page.reload();
+    await selectEdge(page, edgeName);
+    await expect(page.getByRole("radio", { name: "Thick", exact: true })).toBeChecked();
+    await expect(page.getByRole("radio", { name: "Dashed" })).toBeChecked();
+    await expect(edgePath()).toHaveAttribute("style", /stroke-width: 4/);
+    await expect(edgePath()).toHaveAttribute("style", /stroke: (#10b981|rgb\(16, 185, 129\))/i);
+  });
+
   test("Delete connection removes the Connection", async ({ page }) => {
     await openMap(page);
     await selectEdge(page, /Edge from text-storm/);
 
-    await tabTo(page, page.getByRole("button", { name: "Delete connection" }), { max: 5 });
+    await tabTo(page, page.getByRole("button", { name: "Delete connection" }), { max: 12 });
     await page.keyboard.press("Enter");
     await expect(page.getByRole("group", { name: /Edge from text-storm/ })).toHaveCount(0);
   });

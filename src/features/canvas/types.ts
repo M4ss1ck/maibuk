@@ -44,6 +44,29 @@ export function isPlacementTool(mode: CanvasToolMode): boolean {
 /** A just-placed Text Node, and the revision it was placed at. */
 export type PristineTextNode = { id: string; revision: number };
 
+/** The swatches offered by the pen and Connection color pickers. */
+export const CANVAS_COLOR_PRESETS = [
+  "#ef4444",
+  "#f59e0b",
+  "#10b981",
+  "#3b82f6",
+  "#8b5cf6",
+  "#ec4899",
+];
+
+export const CONNECTION_WIDTHS = [1, 2, 4, 6] as const;
+
+export type ConnectionWidth = (typeof CONNECTION_WIDTHS)[number];
+
+export const DEFAULT_CONNECTION_WIDTH: ConnectionWidth = 1;
+
+export const CONNECTION_LINE_STYLES = ["solid", "dashed", "dotted"] as const;
+
+export type ConnectionLineStyle = (typeof CONNECTION_LINE_STYLES)[number];
+
+/** A hovered swatch color, shown on a Connection before it is committed. */
+export type EdgeColorPreview = { edgeId: string; color: string };
+
 export type CanvasEdge = {
   id: string;
   source: string;
@@ -52,6 +75,12 @@ export type CanvasEdge = {
   targetHandle?: string;
   label?: string;
   directed?: boolean;
+  /** Stroke color; unset means the theme default. */
+  color?: string;
+  /** Stroke width; unset means DEFAULT_CONNECTION_WIDTH. */
+  width?: ConnectionWidth;
+  /** Stroke pattern; unset means solid. */
+  lineStyle?: ConnectionLineStyle;
 };
 
 export type CanvasStroke = {
@@ -92,7 +121,10 @@ export type ResizeTextNodeInput = {
 export type UpdateNoteRefNodePatch = Partial<Pick<NoteRefCanvasNode, "noteId" | "label">>;
 
 export type UpdateEdgePatch = Partial<
-  Pick<CanvasEdge, "label" | "directed" | "sourceHandle" | "targetHandle">
+  Pick<
+    CanvasEdge,
+    "label" | "directed" | "sourceHandle" | "targetHandle" | "color" | "width" | "lineStyle"
+  >
 >;
 
 export type CreateCanvasInput = {

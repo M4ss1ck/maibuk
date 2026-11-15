@@ -1,6 +1,13 @@
-import { MarkerType, type Connection, type Edge, type Node } from "@xyflow/react";
+import { MarkerType, type Connection, type Edge, type EdgeMarker, type Node } from "@xyflow/react";
 import { CANVAS_TEXT_NODE_DEFAULT_WIDTH, CANVAS_TEXT_NODE_MIN_HEIGHT } from "@/constants";
-import type { CanvasEdge, CanvasNode } from "@/features/canvas/types";
+import {
+  DEFAULT_CONNECTION_WIDTH,
+  type CanvasEdge,
+  type CanvasNode,
+  type ConnectionLineStyle,
+  type ConnectionWidth,
+  type EdgeColorPreview,
+} from "@/features/canvas/types";
 
 export type Side = "top" | "right" | "bottom" | "left";
 export type SideConnection = {
@@ -60,6 +67,8 @@ export type ToFlowNodesOptions = {
 
 export type ToFlowEdgesOptions = {
   selectedEdgeId: string | null;
+  /** A hovered swatch color, shown on the selected Connection before it is committed. */
+  colorPreview?: EdgeColorPreview | null;
 };
 
 export function toFlowNodes(
@@ -88,17 +97,79 @@ export function toFlowNodes(
   }));
 }
 
+/**
+ * The stroke pattern for a line style at a given width, in the shape an SVG
+ * line or a React Flow edge style wants. Solid (and unset) draw a plain line.
+ */
+export function connectionDash(
+  lineStyle: ConnectionLineStyle | undefined,
+  width: number
+): { strokeDasharray?: string; strokeLinecap?: "round" } {
+  if (lineStyle === "dashed") return { strokeDasharray: `${4 * width} ${3 * width}` };
+  if (lineStyle === "dotted") return { strokeDasharray: `0 ${3 * width}`, strokeLinecap: "round" };
+  return {};
+}
+
+/**
+ * Only the style keys a Connection actually sets reach React Flow; an unstyled
+ * Connection returns undefined so the theme CSS keeps control of the stroke.
+ */
+function connectionStyle(
+  edge: CanvasEdge,
+  color: string | undefined,
+  width: ConnectionWidth
+): Edge["style"] {
+  const style: NonNullable<Edge["style"]> = {};
+  if (color) style.stroke = color;
+  if (width !== DEFAULT_CONNECTION_WIDTH) style.strokeWidth = width;
+  const dash = connectionDash(edge.lineStyle, width);
+  if (dash.strokeDasharray !== undefined) style.strokeDasharray = dash.strokeDasharray;
+  if (dash.strokeLinecap !== undefined) style.strokeLinecap = dash.strokeLinecap;
+  return Object.keys(style).length > 0 ? style : undefined;
+}
+
+/**
+ * React Flow markers scale with the stroke width (`markerUnits="strokeWidth"`),
+ * so shrinking the marker by sqrt(width) keeps the drawn arrow growing with the
+ * square root of the width instead of linearly.
+ */
+function connectionMarker(
+  edge: CanvasEdge,
+  color: string | undefined,
+  width: ConnectionWidth
+): EdgeMarker | undefined {
+  if (!edge.directed) return undefined;
+  const marker: EdgeMarker = { type: MarkerType.ArrowClosed };
+  if (color) marker.color = color;
+  if (width !== DEFAULT_CONNECTION_WIDTH) {
+    marker.width = 12.5 / Math.sqrt(width);
+    marker.height = marker.width;
+  }
+  return marker;
+}
+
 export function toFlowEdges(edges: CanvasEdge[], options: ToFlowEdgesOptions): Edge[] {
-  return edges.map((edge) => ({
-    id: edge.id,
-    source: edge.source,
-    target: edge.target,
-    sourceHandle: edge.sourceHandle,
-    targetHandle: edge.targetHandle,
-    selected: edge.id === options.selectedEdgeId,
-    label: edge.label,
-    markerEnd: edge.directed ? { type: MarkerType.ArrowClosed } : undefined,
-  }));
+  return edges.map((edge) => {
+    const preview =
+      options.colorPreview &&
+      options.colorPreview.edgeId === edge.id &&
+      edge.id === options.selectedEdgeId
+        ? options.colorPreview.color
+        : undefined;
+    const color = preview ?? edge.color;
+    const width = edge.width ?? DEFAULT_CONNECTION_WIDTH;
+    return {
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      sourceHandle: edge.sourceHandle,
+      targetHandle: edge.targetHandle,
+      selected: edge.id === options.selectedEdgeId,
+      label: edge.label,
+      style: connectionStyle(edge, color, width),
+      markerEnd: connectionMarker(edge, color, width),
+    };
+  });
 }
 
 /**

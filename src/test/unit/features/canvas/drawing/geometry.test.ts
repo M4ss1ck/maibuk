@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  connectionEraseTolerance,
   isPointInRect,
   rectsIntersect,
   segmentsIntersect,
@@ -97,5 +98,16 @@ describe("rectangle geometry helpers", () => {
         )
       ).toBe(false);
     });
+  });
+});
+
+describe("connectionEraseTolerance", () => {
+  it("adds half the Connection's thickness to the eraser reach", () => {
+    expect(connectionEraseTolerance(10, 1, 6) - connectionEraseTolerance(10, 1, 1)).toBe(2.5);
+  });
+
+  it("treats an unset thickness as the default width", () => {
+    expect(connectionEraseTolerance(10, 2)).toBe(connectionEraseTolerance(10, 2, 1));
+    expect(connectionEraseTolerance(10, 2)).toBe(12.5);
   });
 });

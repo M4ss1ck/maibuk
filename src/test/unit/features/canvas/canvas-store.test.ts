@@ -582,6 +582,92 @@ describe("useCanvasStore", () => {
     expect(useCanvasStore.getState().doc.edges[0].label).toBeUndefined();
   });
 
+  it("updates an edge style and undoes it in one step", () => {
+    useCanvasStore.getState().addNode(textNode("a"));
+    useCanvasStore.getState().addNode(textNode("b"));
+    useCanvasStore.getState().addEdge({ id: "edge", source: "a", target: "b" });
+    useCanvasStore.getState().updateEdge("edge", {
+      color: "#FF5500",
+      width: 4,
+      lineStyle: "dashed",
+    });
+    expect(useCanvasStore.getState().doc.edges[0]).toMatchObject({
+      color: "#FF5500",
+      width: 4,
+      lineStyle: "dashed",
+    });
+    useCanvasStore.getState().undo();
+    const edge = useCanvasStore.getState().doc.edges[0];
+    expect(edge.color).toBeUndefined();
+    expect(edge.width).toBeUndefined();
+    expect(edge.lineStyle).toBeUndefined();
+  });
+
+  it("clears edge style fields with an empty color, the default width, and a solid line", () => {
+    useCanvasStore.getState().addNode(textNode("a"));
+    useCanvasStore.getState().addNode(textNode("b"));
+    useCanvasStore.getState().addEdge({
+      id: "edge",
+      source: "a",
+      target: "b",
+      color: "#FF5500",
+      width: 6,
+      lineStyle: "dotted",
+    });
+    useCanvasStore.getState().updateEdge("edge", { color: "", width: 1, lineStyle: "solid" });
+    const edge = useCanvasStore.getState().doc.edges[0];
+    expect(edge.color).toBeUndefined();
+    expect(edge.width).toBeUndefined();
+    expect(edge.lineStyle).toBeUndefined();
+  });
+
+  it("commits nothing when an edge style update matches the current values", () => {
+    useCanvasStore.getState().addNode(textNode("a"));
+    useCanvasStore.getState().addNode(textNode("b"));
+    useCanvasStore.getState().addEdge({ id: "edge", source: "a", target: "b" });
+    useCanvasStore.getState().updateEdge("edge", {
+      color: "#FF5500",
+      width: 4,
+      lineStyle: "dashed",
+    });
+    const revision = useCanvasStore.getState().revision;
+    const pastLength = useCanvasStore.getState().past.length;
+    useCanvasStore.getState().updateEdge("edge", {
+      color: "#FF5500",
+      width: 4,
+      lineStyle: "dashed",
+    });
+    expect(useCanvasStore.getState().revision).toBe(revision);
+    expect(useCanvasStore.getState().past).toHaveLength(pastLength);
+
+    // Clearing fields that are already unset is not a change either.
+    useCanvasStore.getState().addEdge({ id: "other", source: "b", target: "a" });
+    const revisionAfterAdd = useCanvasStore.getState().revision;
+    const pastAfterAdd = useCanvasStore.getState().past.length;
+    useCanvasStore.getState().updateEdge("other", { color: "   ", width: 1, lineStyle: "solid" });
+    expect(useCanvasStore.getState().revision).toBe(revisionAfterAdd);
+    expect(useCanvasStore.getState().past).toHaveLength(pastAfterAdd);
+  });
+
+  it("previews an edge color without a revision or undo entry", () => {
+    useCanvasStore.setState({ loadState: "ready" });
+    useCanvasStore.getState().addNode(textNode("a"));
+    useCanvasStore.getState().addNode(textNode("b"));
+    useCanvasStore.getState().addEdge({ id: "edge", source: "a", target: "b" });
+    const before = useCanvasStore.getState();
+    const docBefore = before.doc;
+    before.previewEdgeColor("edge", "#FF5500");
+    const previewing = useCanvasStore.getState();
+    expect(previewing.edgeColorPreview).toEqual({ edgeId: "edge", color: "#FF5500" });
+    expect(previewing.revision).toBe(before.revision);
+    expect(previewing.past).toHaveLength(before.past.length);
+    expect(previewing.dirty).toBe(before.dirty);
+    expect(previewing.doc).toBe(docBefore);
+    previewing.updateEdge("edge", { color: "#FF5500" });
+    expect(useCanvasStore.getState().edgeColorPreview).toBeNull();
+    expect(useCanvasStore.getState().past).toHaveLength(before.past.length + 1);
+  });
+
   it("writes JSON and marks only the matching revision saved", async () => {
     const canvas = await useCanvasStore.getState().createCanvas();
     await useCanvasStore.getState().loadCanvas(canvas.id);

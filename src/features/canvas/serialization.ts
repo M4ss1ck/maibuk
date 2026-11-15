@@ -1,12 +1,16 @@
 import { CURRENT_CANVAS_SCHEMA_VERSION } from "@/lib/canvas/defaultDoc";
 import {
+  CONNECTION_WIDTHS,
   createDefaultCanvasDoc,
+  DEFAULT_CONNECTION_WIDTH,
   type CanvasDoc,
   type CanvasEdge,
   type CanvasNode,
   type CanvasPosition,
   type CanvasStroke,
   type CanvasViewport,
+  type ConnectionLineStyle,
+  type ConnectionWidth,
 } from "@/features/canvas/types";
 
 export type CanvasDocLoadErrorCode = "corrupt-json" | "unsupported-version" | "invalid-shape";
@@ -33,6 +37,14 @@ function normalizedOptionalString(value: unknown): string | undefined {
 
 function normalizedOptionalWidth(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) && value >= 160 ? value : undefined;
+}
+
+function normalizedConnectionWidth(value: unknown): ConnectionWidth | undefined {
+  return CONNECTION_WIDTHS.find((width) => width === value && width !== DEFAULT_CONNECTION_WIDTH);
+}
+
+function normalizedLineStyle(value: unknown): ConnectionLineStyle | undefined {
+  return value === "dashed" || value === "dotted" ? value : undefined;
 }
 
 function escapeHtml(value: string): string {
@@ -178,6 +190,9 @@ function normalizeEdge(edge: CanvasEdge): CanvasEdge {
     targetHandle: normalizedOptionalString(edge.targetHandle),
     label: normalizedOptionalString(edge.label),
     directed: typeof edge.directed === "boolean" ? edge.directed : undefined,
+    color: normalizedOptionalString(edge.color),
+    width: normalizedConnectionWidth(edge.width),
+    lineStyle: normalizedLineStyle(edge.lineStyle),
   };
 }
 

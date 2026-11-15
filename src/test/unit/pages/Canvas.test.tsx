@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => {
     placeTextNode: vi.fn(),
     addEdge: vi.fn(),
     updateEdge: vi.fn(),
+    previewEdgeColor: vi.fn(),
     updateTextNode: vi.fn(),
     moveNodeLive: vi.fn(),
     beginLiveChange: vi.fn(),
@@ -665,6 +666,24 @@ describe("Canvas page", () => {
     fireEvent.click(screen.getByRole("switch"));
     expect(mocks.actions.updateEdge).toHaveBeenCalledWith("edge", { label: "New label" });
     expect(mocks.actions.updateEdge).toHaveBeenCalledWith("edge", { directed: true });
+  });
+
+  it("sends the selected edge's thickness and line style picks to the store by keyboard", async () => {
+    const user = userEvent.setup();
+    renderCanvas();
+    act(() =>
+      screen.getByRole("radio", { name: "canvas.connectionThicknessOptions.thin" }).focus()
+    );
+    await user.keyboard("{ArrowRight}");
+    act(() => screen.getByRole("radio", { name: "canvas.lineStyles.solid" }).focus());
+    await user.keyboard("{ArrowRight}");
+    expect(mocks.actions.updateEdge).toHaveBeenCalledWith("edge", { width: 2 });
+    expect(mocks.actions.updateEdge).toHaveBeenCalledWith("edge", { lineStyle: "dashed" });
+  });
+
+  it("gives an uncolored arrowhead the theme's line color", () => {
+    renderCanvas();
+    expect(mocks.flowProps.current?.defaultMarkerColor).toBe("var(--xy-edge-stroke-default)");
   });
 
   it("dismisses the edge inspector from its close button", () => {

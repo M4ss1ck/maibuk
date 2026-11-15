@@ -1796,7 +1796,7 @@ export const ROWS: MatrixRow[] = [
     id: "canvas-edge-inspector",
     area: "canvas",
     workflow:
-      "Open Connection inspector by keyboard; edit caption, toggle direction, delete; asserts: Card focus, Esc closes; persists: yes",
+      "Open Connection inspector by keyboard; edit caption, toggle direction, set color, thickness, and line style, delete; asserts: Card focus, picker focus, radio arrows, path style, Esc closes; persists: yes",
     edges: [],
     terms: ["Connection", "Canvas"],
     shortcuts: [],

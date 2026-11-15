@@ -95,6 +95,70 @@ describe("canvas document serialization", () => {
     expect(result.doc.viewport).toEqual({ x: 12, y: 34, zoom: 2 });
   });
 
+  it("keeps valid connection styles", () => {
+    const result = normalizeParsedCanvasDoc({
+      schemaVersion: CURRENT_CANVAS_SCHEMA_VERSION,
+      nodes: [
+        { id: "a", kind: "text", html: "<p>a</p>", position: { x: 0, y: 0 } },
+        { id: "b", kind: "text", html: "<p>b</p>", position: { x: 1, y: 1 } },
+      ],
+      edges: [
+        { id: "edge", source: "a", target: "b", color: "#ef4444", width: 4, lineStyle: "dotted" },
+      ],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    });
+    expect(result.ok).toBe(true);
+    expect(result.doc.edges[0]).toMatchObject({
+      color: "#ef4444",
+      width: 4,
+      lineStyle: "dotted",
+    });
+  });
+
+  it.each([
+    { name: "width 3", style: { width: 3 } },
+    { name: 'width "4"', style: { width: "4" } },
+    { name: "width 1", style: { width: 1 } },
+    { name: 'lineStyle "solid"', style: { lineStyle: "solid" } },
+    { name: 'lineStyle "wavy"', style: { lineStyle: "wavy" } },
+    { name: 'color "  "', style: { color: "  " } },
+  ])("drops an invalid connection style ($name) and keeps the connection", ({ style }) => {
+    const result = normalizeParsedCanvasDoc({
+      schemaVersion: CURRENT_CANVAS_SCHEMA_VERSION,
+      nodes: [
+        { id: "a", kind: "text", html: "<p>a</p>", position: { x: 0, y: 0 } },
+        { id: "b", kind: "text", html: "<p>b</p>", position: { x: 1, y: 1 } },
+      ],
+      edges: [{ id: "edge", source: "a", target: "b", ...style }],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    });
+    expect(result.ok).toBe(true);
+    expect(result.doc.edges.map((edge) => edge.id)).toEqual(["edge"]);
+    expect(result.doc.edges[0]).toMatchObject({
+      color: undefined,
+      width: undefined,
+      lineStyle: undefined,
+    });
+  });
+
+  it("leaves connection styles undefined when absent", () => {
+    const result = normalizeParsedCanvasDoc({
+      schemaVersion: CURRENT_CANVAS_SCHEMA_VERSION,
+      nodes: [
+        { id: "a", kind: "text", html: "<p>a</p>", position: { x: 0, y: 0 } },
+        { id: "b", kind: "text", html: "<p>b</p>", position: { x: 1, y: 1 } },
+      ],
+      edges: [{ id: "edge", source: "a", target: "b" }],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    });
+    expect(result.ok).toBe(true);
+    expect(result.doc.edges[0]).toMatchObject({
+      color: undefined,
+      width: undefined,
+      lineStyle: undefined,
+    });
+  });
+
   it("uses the canonical default JSON", () => {
     expect(serializeCanvasDoc(createDefaultCanvasDoc())).toBe(DEFAULT_CANVAS_DOC_JSON);
   });

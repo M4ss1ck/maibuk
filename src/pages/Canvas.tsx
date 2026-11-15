@@ -59,6 +59,9 @@ import { useShortcuts } from "@/lib/shortcuts";
 const DEFAULT_SESSION_VIEWPORT = { x: 0, y: 0, zoom: 1 };
 
 /** The doc as the Edit Session sees it: content only, viewport neutralized. */
+/** Resolved per theme by React Flow's own stylesheet. */
+const THEME_MARKER_COLOR = "var(--xy-edge-stroke-default)";
+
 function sessionDocKey(doc: CanvasDoc): string {
   const { viewport: _viewport, ...content } = doc;
   return JSON.stringify(content);
@@ -265,6 +268,8 @@ function CanvasEditor() {
   const future = useCanvasStore((state) => state.future);
   const selectedNodeId = useCanvasStore((state) => state.selectedNodeId);
   const selectedEdgeId = useCanvasStore((state) => state.selectedEdgeId);
+  const edgeColorPreview = useCanvasStore((state) => state.edgeColorPreview);
+  const previewEdgeColor = useCanvasStore((state) => state.previewEdgeColor);
   const toolMode = useCanvasStore((state) => state.toolMode);
   const setToolMode = useCanvasStore((state) => state.setToolMode);
   const interactivityLocked = useCanvasStore((state) => state.interactivityLocked);
@@ -417,8 +422,8 @@ function CanvasEditor() {
     [canvasId, current?.title, doc.nodes, doc.edges, selectedNodeId]
   );
   const flowEdges = useMemo(
-    () => toFlowEdges(doc.edges, { selectedEdgeId }),
-    [doc.edges, selectedEdgeId]
+    () => toFlowEdges(doc.edges, { selectedEdgeId, colorPreview: edgeColorPreview }),
+    [doc.edges, selectedEdgeId, edgeColorPreview]
   );
 
   const viewportCenter = useCallback(() => {
@@ -768,6 +773,9 @@ function CanvasEditor() {
           // Arrows move the focused node (ADR 0025: the Canvas surface owns them).
           data-owns-arrows=""
           colorMode={theme}
+          // React Flow writes an unset arrowhead color inline as #b1b1b7, which
+          // beats the theme CSS; a variable keeps it on the theme's line color.
+          defaultMarkerColor={THEME_MARKER_COLOR}
           className={connecting ? "canvas-connecting" : undefined}
           style={{ backgroundColor: "transparent" }}
           nodes={flowNodes as Node[]}
@@ -835,6 +843,8 @@ function CanvasEditor() {
                 onLabelChange={setEdgeLabelDraft}
                 onLabelCommit={() => updateEdge(selectedEdge.id, { label: edgeLabelDraft })}
                 onDirectedChange={(directed) => updateEdge(selectedEdge.id, { directed })}
+                onStyleChange={(patch) => updateEdge(selectedEdge.id, patch)}
+                onColorPreview={(color) => previewEdgeColor(selectedEdge.id, color)}
                 onDelete={deleteSelection}
                 onClose={clearSelection}
               />
