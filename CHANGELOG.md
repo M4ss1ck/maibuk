@@ -5,6 +5,17 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.1] - 2026-11-14
+
+### Added
+- New map labels use the font last selected for that map, falling back to IM Fell English when that font is unavailable without clearing the map's choice
+
+### Fixed
+- Map elements are clipped to the page in the editor so off-page content matches exports
+- New map elements, text, fills, and drawing strokes no longer start entirely outside the page
+- Keyboard-placed map items snap to the nearest page point when the view is panned off the page
+- Plugin UI Collections with bordered auto-height scrollers no longer grow by 1px on each measurement
+
 ## [0.22.0] - 2026-11-14
 
 ### Added

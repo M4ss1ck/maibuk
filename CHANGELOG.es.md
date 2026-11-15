@@ -5,6 +5,17 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 y este proyecto sigue el [Versionado Semántico](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.1] - 2026-11-14
+
+### Added
+- Las nuevas etiquetas de mapa usan la fuente seleccionada por última vez para ese mapa, recurriendo a IM Fell English cuando esa fuente no está disponible sin borrar la elección del mapa
+
+### Fixed
+- Los elementos del mapa se recortan a la página en el editor para que el contenido fuera de la página coincida con las exportaciones
+- Los nuevos elementos de mapa, texto, rellenos y trazos de dibujo ya no comienzan completamente fuera de la página
+- Los elementos del mapa colocados con el teclado se ajustan al punto de página más cercano cuando la vista se desplaza fuera de la página
+- Las colecciones de UI de plugins con contenedores desplazables con borde y altura automática ya no crecen 1px en cada medición
+
 ## [0.22.0] - 2026-11-14
 
 ### Added
