@@ -1,4 +1,5 @@
 import { MarkerType, type Connection, type Edge, type EdgeMarker, type Node } from "@xyflow/react";
+import type { CSSProperties } from "react";
 import { CANVAS_TEXT_NODE_DEFAULT_WIDTH, CANVAS_TEXT_NODE_MIN_HEIGHT } from "@/constants";
 import {
   DEFAULT_CONNECTION_WIDTH,
@@ -71,6 +72,30 @@ export type ToFlowEdgesOptions = {
   colorPreview?: EdgeColorPreview | null;
 };
 
+/** The box React Flow draws a node in, when the node's own size decides it. */
+function nodeStyle(node: CanvasNode): CSSProperties | undefined {
+  if (node.kind === "text") return node.width ? { width: node.width } : undefined;
+  // A Canvas Image is drawn in a box of exactly the size it stores.
+  if (node.kind === "image") return { width: node.width, height: node.height };
+  return undefined;
+}
+
+/**
+ * The dimensions a node is seeded with before React Flow measures it: a Text
+ * Node's editor cannot take focus while hidden, and a Canvas Image has no
+ * content to measure.
+ */
+function initialNodeSize(node: CanvasNode): { initialWidth?: number; initialHeight?: number } {
+  if (node.kind === "text") {
+    return {
+      initialWidth: node.width ?? CANVAS_TEXT_NODE_DEFAULT_WIDTH,
+      initialHeight: CANVAS_TEXT_NODE_MIN_HEIGHT,
+    };
+  }
+  if (node.kind === "image") return { initialWidth: node.width, initialHeight: node.height };
+  return {};
+}
+
 export function toFlowNodes(
   nodes: CanvasNode[],
   options: ToFlowNodesOptions
@@ -80,14 +105,14 @@ export function toFlowNodes(
     type: node.kind,
     position: node.position,
     selected: node.id === options.selectedNodeId,
-    style: node.kind === "text" && node.width ? { width: node.width } : undefined,
+    style: nodeStyle(node),
     // React Flow keeps a node hidden until it has dimensions. A Text Node's
     // editor mounts inside it, and a hidden element cannot take focus, so a
     // brand-new node's editor would open unfocused (its keystrokes then hit the
-    // canvas). Seed the dimensions so the node is visible the moment its
-    // editor mounts; React Flow refines the height after measuring.
-    initialWidth: node.kind === "text" ? (node.width ?? CANVAS_TEXT_NODE_DEFAULT_WIDTH) : undefined,
-    initialHeight: node.kind === "text" ? CANVAS_TEXT_NODE_MIN_HEIGHT : undefined,
+    // canvas). A Canvas Image stores its own size, and has no content to
+    // measure. Seed the dimensions so the node is visible the moment it mounts;
+    // React Flow refines a Text Node's height after measuring.
+    ...initialNodeSize(node),
     data: {
       node,
       canvasId: options.canvasId,

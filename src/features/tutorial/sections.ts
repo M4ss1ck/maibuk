@@ -221,6 +221,8 @@ export const TUTORIAL_OUT_OF_SCOPE_TERMS: Readonly<Record<string, string>> = {
   "Shortcut Conflict": "appears only while recording a Shortcut inside the Shortcut Editor",
   "Shortcut File": "its buttons are inside the Shortcut Editor, which the Tutorial does not open",
   "Node Colors": "set from a Text Node's Item Menu, which the Tutorial does not open",
+  "Canvas Image":
+    "placed from a Canvas tool the Tutorial does not demonstrate yet; the tool carries its data-tutorial hook",
   Release: "app metadata, not part of writing: the badge in the sidebar and Settings names it",
   "Release Notes":
     "app metadata, not part of writing; it lives in a dialog, and steps never open dialogs",

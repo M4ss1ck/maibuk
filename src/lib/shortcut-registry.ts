@@ -1088,6 +1088,26 @@ export const COMMANDS = {
   },
 
   "canvasNode.connect": { labelKey: "canvas.connectTo", contexts: ["canvasNode"], defaults: [] },
+  "canvasNode.replaceImage": {
+    labelKey: "canvas.replaceImage",
+    contexts: ["canvasNode"],
+    defaults: [],
+  },
+  "canvasNode.editAltText": {
+    labelKey: "canvas.editAltText",
+    contexts: ["canvasNode"],
+    defaults: [],
+  },
+  "canvasNode.imageLarger": {
+    labelKey: "canvas.imageLarger",
+    contexts: ["canvasNode"],
+    defaults: [["="]],
+  },
+  "canvasNode.imageSmaller": {
+    labelKey: "canvas.imageSmaller",
+    contexts: ["canvasNode"],
+    defaults: [["-"]],
+  },
   "canvasNode.delete": {
     labelKey: "common.delete",
     contexts: ["canvasNode"],

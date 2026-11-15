@@ -40,6 +40,25 @@ describe("Canvas React Flow adapter", () => {
     expect(nodes[1].style).toBeUndefined();
   });
 
+  it("sizes an Image node's box from its stored width and height", () => {
+    const nodes = toFlowNodes(
+      [
+        {
+          id: "image",
+          kind: "image",
+          src: "data:image/png;base64,AA",
+          width: 320,
+          height: 240,
+          position: { x: 0, y: 0 },
+        },
+      ],
+      { selectedNodeId: null, canvasId: "canvas", canvasTitle: "Map", edges: [] }
+    );
+    expect(nodes[0].style).toEqual({ width: 320, height: 240 });
+    expect(nodes[0].initialWidth).toBe(320);
+    expect(nodes[0].initialHeight).toBe(240);
+  });
+
   it("preserves handle IDs when creating a domain edge", () => {
     expect(
       fromConnection({ source: "a", target: "b", sourceHandle: "out", targetHandle: "in" })

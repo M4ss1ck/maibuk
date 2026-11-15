@@ -168,7 +168,7 @@ _Avoid_: scratchpad, scratch editor, draft
 ## Canvas
 
 **Canvas**:
-An infinite surface where an author lays out Text Nodes, Note References, Connections, and Drawings.
+An infinite surface where an author lays out Text Nodes, Note References, Canvas Images, Connections, and Drawings.
 _UI_: es "Lienzos" for the Gallery, "Lienzo sin título" for an untitled Canvas
 _Avoid_: mind map, board, and "canvas" for the Cover Designer
 
@@ -187,6 +187,11 @@ _Avoid_: note node, embed
 **Missing Note Reference**:
 A Note Reference whose Note no longer exists in the Library; it stays on the Canvas.
 _UI_: en "Missing note" / es "Nota no disponible" when no title was kept
+
+**Canvas Image**:
+A picture placed on a Canvas as its own item, as opposed to an image inside a Text Node.
+_UI_: en "Image" / es "Imagen"
+_Avoid_: picture, photo, image node
 
 **Connection**:
 A line joining two items on a Canvas, with an optional direction, caption, color, thickness, and line style (solid, dashed, or dotted). An unset color follows the theme.
@@ -700,7 +705,7 @@ A Custom Shortcut or custom Voice Command under `plugin.<pluginId>.` kept on thi
 - A **Library** holds many **Books**, **Notes**, and **Canvases**.
 - A **Book** has ordered **Chapters**, one **Cover**, and many **Versions**.
 - A **Note** belongs to zero or one **Book**: a **Book Note** or an **Unfiled Note**.
-- A **Canvas** holds **Text Nodes**, **Note References**, **Connections**, and **Drawings**; a **Note Reference** points at one **Note**.
+- A **Canvas** holds **Text Nodes**, **Note References**, **Canvas Images**, **Connections**, and **Drawings**; a **Note Reference** points at one **Note**.
 - A **Version** saves one **Book**; a **Backup** saves the whole **Library**.
 - A **Database File** is not a **Backup**, and loading one is not a **Restore**.
 - **Books**, **Notes**, and **Canvases** are **Synced Items**; each has one **Sync Base** per device.

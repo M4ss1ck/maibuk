@@ -30,6 +30,8 @@ interface CanvasNodeMenuOptions {
   contextLinkRef?: RefObject<CanvasNodeLink | null>;
   /** Follows a Link from the menu: internal targets navigate, external ones confirm. */
   onOpenLink?: (link: CanvasNodeLink) => void;
+  /** A node kind's own actions, listed between Connect and Delete. */
+  extraActions?: ItemAction[];
 }
 
 function linkActions(
@@ -85,7 +87,13 @@ function linkActions(
  */
 export function useCanvasNodeMenu(
   nodeId: string,
-  { isDisabled, links = [], contextLinkRef, onOpenLink = () => undefined }: CanvasNodeMenuOptions
+  {
+    isDisabled,
+    links = [],
+    contextLinkRef,
+    onOpenLink = () => undefined,
+    extraActions = [],
+  }: CanvasNodeMenuOptions
 ) {
   const { t } = useTranslation();
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -118,6 +126,7 @@ export function useCanvasNodeMenu(
       commandId: "canvasNode.connect",
       onAction: () => openConnectPicker(nodeId),
     },
+    ...extraActions,
     {
       id: "delete",
       label: t("common.delete"),
