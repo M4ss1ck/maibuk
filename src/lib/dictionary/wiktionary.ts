@@ -78,6 +78,34 @@ function cleanupBody(body: Element, pageUrl: string) {
       anchor.removeAttribute("href");
     }
   }
+
+  // Wiktionary serves images and pronunciation audio with protocol-relative
+  // URLs (//thumb.wikimedia.org/…). Those resolve against the app's origin,
+  // which is tauri://localhost on desktop, so they never load. Pin them to
+  // the page's https origin.
+  for (const media of body.querySelectorAll("[src]")) {
+    const src = media.getAttribute("src");
+    if (!src) continue;
+    const absolute = resolveHref(src, pageUrl);
+    if (absolute) media.setAttribute("src", absolute);
+    else media.removeAttribute("src");
+  }
+  for (const media of body.querySelectorAll("[srcset]")) {
+    media.setAttribute("srcset", resolveSrcset(media.getAttribute("srcset") ?? "", pageUrl));
+  }
+}
+
+/** Resolves each `url descriptor` candidate; a comma followed by whitespace separates them. */
+function resolveSrcset(srcset: string, pageUrl: string): string {
+  return srcset
+    .split(/,\s+/)
+    .map((candidate) => {
+      const [url, ...descriptor] = candidate.trim().split(/\s+/);
+      const absolute = url ? resolveHref(url, pageUrl) : null;
+      return absolute ? [absolute, ...descriptor].join(" ") : null;
+    })
+    .filter((candidate): candidate is string => candidate !== null)
+    .join(", ");
 }
 
 function resolveHref(href: string, pageUrl: string): string | null {

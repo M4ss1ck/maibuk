@@ -49,3 +49,44 @@ describe("lookupWord()", () => {
     expect(url.pathname).toBe("/w/api.php");
   });
 });
+
+describe("lookupWord() media", () => {
+  // Trimmed from the real parse output for "thickness": Wiktionary serves
+  // media with protocol-relative URLs, which resolve against the app's own
+  // origin (tauri://thumb.wikimedia.org on desktop) and never load.
+  const thicknessHtml = `<div class="mw-parser-output">
+    <figure><img src="//thumb.wikimedia.org/wikipedia/commons/thumb/3/36/Pick_thickness.jpg/250px-Pick_thickness.jpg?utm_source=en.wiktionary.org" srcset="//thumb.wikimedia.org/wikipedia/commons/thumb/3/36/Pick_thickness.jpg/500px-Pick_thickness.jpg 1.5x, //thumb.wikimedia.org/wikipedia/commons/thumb/3/36/Pick_thickness.jpg/750px-Pick_thickness.jpg 2x" width="250" height="389"></figure>
+    <audio controls preload="none"><source src="//upload.wikimedia.org/wikipedia/commons/transcoded/e/eb/thickness.wav.ogg" type="audio/ogg"></audio>
+  </div>`;
+
+  async function lookupThickness() {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, json: async () => ({ parse: { text: thicknessHtml } }) }))
+    );
+    const html = await lookupWord("thickness", "en");
+    return new DOMParser().parseFromString(html ?? "", "text/html");
+  }
+
+  it("gives every image an absolute https src", async () => {
+    const doc = await lookupThickness();
+    const img = doc.querySelector("img");
+    expect(img?.getAttribute("src")).toBe(
+      "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/36/Pick_thickness.jpg/250px-Pick_thickness.jpg?utm_source=en.wiktionary.org"
+    );
+  });
+
+  it("gives every srcset candidate an absolute https URL and keeps its descriptor", async () => {
+    const doc = await lookupThickness();
+    expect(doc.querySelector("img")?.getAttribute("srcset")).toBe(
+      "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/36/Pick_thickness.jpg/500px-Pick_thickness.jpg 1.5x, https://thumb.wikimedia.org/wikipedia/commons/thumb/3/36/Pick_thickness.jpg/750px-Pick_thickness.jpg 2x"
+    );
+  });
+
+  it("gives pronunciation audio sources an absolute https src", async () => {
+    const doc = await lookupThickness();
+    expect(doc.querySelector("source")?.getAttribute("src")).toBe(
+      "https://upload.wikimedia.org/wikipedia/commons/transcoded/e/eb/thickness.wav.ogg"
+    );
+  });
+});
