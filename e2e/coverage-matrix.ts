@@ -1695,6 +1695,28 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "canvas-image",
+    area: "canvas",
+    workflow:
+      "I arms Image, Enter opens the image dialog for the view center; a URL is fetched once and embedded; Escape in the dialog places nothing; = and - resize a focused Canvas Image; Shift+F10 menu Edit alt text changes what a screen reader hears; asserts: image alt, size, dialog; persists: yes",
+    edges: [
+      "An unsupported or unreachable URL shows an inline error in the dialog and places nothing: the Vitest CanvasImageDialog suite owns it",
+      "Corner-grip resize is pointer input and the file picker is native input, neither expressible in a spec: the Vitest CanvasImageDialog and image-encoding suites own both",
+    ],
+    terms: ["Canvas Image"],
+    shortcuts: [
+      "canvas.addImage",
+      "canvasNode.imageLarger",
+      "canvasNode.imageSmaller",
+      "canvasNode.editAltText",
+      "canvasNode.replaceImage",
+    ],
+    routes: ["/canvas/:canvasId"],
+    fixture: "canvasWithNodes",
+    tags: [],
+    status: "accepted",
+  },
+  {
     id: "canvas-text-node",
     area: "canvas",
     workflow:
