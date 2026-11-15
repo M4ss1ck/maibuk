@@ -136,6 +136,12 @@ export type UpdateImageNodePatch = Partial<
   Pick<ImageCanvasNode, "src" | "width" | "height" | "alt" | "fileName" | "position">
 >;
 
+/** What the Canvas Image dialog is open for: placing a picture, replacing one, or its alt text. */
+export type CanvasImageDialogTarget =
+  | { kind: "place"; position: CanvasPosition }
+  | { kind: "replace"; nodeId: string }
+  | { kind: "altText"; nodeId: string };
+
 export type UpdateEdgePatch = Partial<
   Pick<
     CanvasEdge,

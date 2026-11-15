@@ -25,6 +25,7 @@ import {
   type Canvas,
   type CanvasDoc,
   type CanvasEdge,
+  type CanvasImageDialogTarget,
   type CanvasNode,
   type CanvasPosition,
   type CanvasStroke,
@@ -252,6 +253,7 @@ function editorResetState() {
     externalDocNonce: 0,
     interactivityLocked: false,
     connectSourceNodeId: null as string | null,
+    imageDialog: null as CanvasImageDialogTarget | null,
   };
 }
 
@@ -300,6 +302,10 @@ export interface CanvasStoreState {
   connectSourceNodeId: string | null;
   openConnectPicker: (nodeId: string) => void;
   closeConnectPicker: () => void;
+  /** What the Canvas Image dialog is open for, if it is open. */
+  imageDialog: CanvasImageDialogTarget | null;
+  openImageDialog: (target: CanvasImageDialogTarget) => void;
+  closeImageDialog: () => void;
   /** Adds a Connection between two nodes unless they are already connected. */
   connectNodes: (sourceId: string, targetId: string) => void;
   addStroke: (stroke: CanvasStroke) => void;
@@ -965,6 +971,8 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   openConnectPicker: (nodeId) =>
     set({ connectSourceNodeId: nodeId, selectedNodeId: nodeId, selectedEdgeId: null }),
   closeConnectPicker: () => set({ connectSourceNodeId: null }),
+  openImageDialog: (target) => set({ imageDialog: target }),
+  closeImageDialog: () => set({ imageDialog: null }),
   connectNodes: (sourceId, targetId) => {
     const { doc } = get();
     const source = doc.nodes.find((node) => node.id === sourceId);
