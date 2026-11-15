@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseAdapter } from "@/lib/platform/types";
-import { createDefaultCanvasDoc } from "@/features/canvas/types";
+import { createDefaultCanvasDoc, type ImageCanvasNode } from "@/features/canvas/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
 
 let testDb: DatabaseAdapter;
@@ -958,5 +958,171 @@ describe("placing with armed tools (#696)", () => {
     store.setToolMode("pen");
     store.toggleInteractivityLocked();
     expect(useCanvasStore.getState().toolMode).toBe("pen");
+  });
+});
+
+describe("canvas images (#813)", () => {
+  const imageNode = (id: string, overrides: Partial<ImageCanvasNode> = {}): ImageCanvasNode => ({
+    id,
+    kind: "image",
+    src: "data:image/png;base64,iVBORw0KGgo=",
+    width: 320,
+    height: 200,
+    position: { x: 0, y: 0 },
+    ...overrides,
+  });
+  const imageAt = (id: string) => {
+    const node = useCanvasStore.getState().doc.nodes.find((candidate) => candidate.id === id);
+    return node?.kind === "image" ? node : undefined;
+  };
+
+  beforeEach(() => {
+    useCanvasStore.getState().resetEditorState();
+    useCanvasStore.setState({ loadState: "ready" });
+  });
+
+  it("places an image node and undoes the placement", () => {
+    useCanvasStore.getState().addNode(imageNode("img"));
+    expect(useCanvasStore.getState().doc.nodes.map((node) => node.id)).toEqual(["img"]);
+    expect(useCanvasStore.getState().past).toHaveLength(1);
+    useCanvasStore.getState().undo();
+    expect(useCanvasStore.getState().doc.nodes).toEqual([]);
+  });
+
+  it("resizes an image node in one undo step", () => {
+    const store = useCanvasStore.getState();
+    store.addNode(imageNode("img"));
+    const beforeRevision = useCanvasStore.getState().revision;
+    const beforeHistory = useCanvasStore.getState().past.length;
+
+    store.updateImageNode("img", { position: { x: 40, y: 20 }, width: 480, height: 300 });
+
+    expect(imageAt("img")).toMatchObject({
+      position: { x: 40, y: 20 },
+      width: 480,
+      height: 300,
+    });
+    expect(useCanvasStore.getState().revision).toBe(beforeRevision + 1);
+    expect(useCanvasStore.getState().past).toHaveLength(beforeHistory + 1);
+
+    useCanvasStore.getState().undo();
+    expect(imageAt("img")).toMatchObject({
+      position: { x: 0, y: 0 },
+      width: 320,
+      height: 200,
+    });
+  });
+
+  it("edits alt text in one undo step, trimming it and clearing an empty one", () => {
+    const store = useCanvasStore.getState();
+    store.addNode(imageNode("img"));
+
+    store.updateImageNode("img", { alt: "  A cat  " });
+    expect(imageAt("img")).toMatchObject({ alt: "A cat" });
+
+    // Nothing changes: neither a commit nor a revision.
+    const revision = useCanvasStore.getState().revision;
+    store.updateImageNode("img", { alt: "A cat", width: 320, height: 200 });
+    expect(useCanvasStore.getState().revision).toBe(revision);
+
+    store.updateImageNode("img", { alt: "   " });
+    expect(imageAt("img")).toMatchObject({ alt: undefined });
+
+    useCanvasStore.getState().undo();
+    expect(imageAt("img")).toMatchObject({ alt: "A cat" });
+  });
+
+  it("replaces the source in one undo step", () => {
+    const store = useCanvasStore.getState();
+    store.addNode(imageNode("img", { fileName: "cat.png" }));
+
+    store.updateImageNode("img", { src: "data:image/jpeg;base64,BBBB", fileName: "dog.jpg" });
+    expect(imageAt("img")).toMatchObject({
+      src: "data:image/jpeg;base64,BBBB",
+      fileName: "dog.jpg",
+    });
+
+    useCanvasStore.getState().undo();
+    expect(imageAt("img")).toMatchObject({
+      src: "data:image/png;base64,iVBORw0KGgo=",
+      fileName: "cat.png",
+    });
+  });
+
+  it("rejects a resize whose short edge falls below 48", () => {
+    const store = useCanvasStore.getState();
+    store.addNode(imageNode("img", { width: 48, height: 96 }));
+    const revision = useCanvasStore.getState().revision;
+
+    store.updateImageNode("img", { width: 47, height: 94 });
+    store.updateImageNode("img", { width: 480, height: 20 });
+    store.updateImageNode("img", { width: Number.NaN, height: 300 });
+    store.updateImageNode("img", { position: { x: Number.POSITIVE_INFINITY, y: 0 } });
+
+    expect(useCanvasStore.getState().revision).toBe(revision);
+    expect(imageAt("img")).toMatchObject({ width: 48, height: 96 });
+  });
+
+  it("creates exactly one undo step for a live image resize", () => {
+    const store = useCanvasStore.getState();
+    store.addNode(imageNode("img"));
+    const before = useCanvasStore.getState().past.length;
+
+    store.beginLiveChange();
+    store.resizeImageNodeLive("img", { position: { x: 0, y: 0 }, width: 400, height: 250 });
+    store.resizeImageNodeLive("img", { position: { x: 0, y: 0 }, width: 480, height: 300 });
+    expect(imageAt("img")).toMatchObject({ width: 480, height: 300 });
+    store.endLiveChange();
+
+    expect(useCanvasStore.getState().past).toHaveLength(before + 1);
+    useCanvasStore.getState().undo();
+    expect(imageAt("img")).toMatchObject({ width: 320, height: 200 });
+  });
+
+  it("erases an image node and its Connections in one undoable step", () => {
+    const store = useCanvasStore.getState();
+    store.addNode(imageNode("img"));
+    store.addNode(textNode("text", 400));
+    store.addEdge({ id: "edge", source: "img", target: "text" });
+    const beforeHistory = useCanvasStore.getState().past.length;
+
+    store.selectNode("img");
+    store.eraseElements([], ["img"], []);
+
+    const state = useCanvasStore.getState();
+    expect(state.doc.nodes.map((node) => node.id)).toEqual(["text"]);
+    expect(state.doc.edges).toEqual([]);
+    expect(state.past).toHaveLength(beforeHistory + 1);
+    expect(state.selectedNodeId).toBeNull();
+
+    useCanvasStore.getState().undo();
+    expect(useCanvasStore.getState().doc.nodes.map((node) => node.id)).toEqual(["img", "text"]);
+    expect(useCanvasStore.getState().doc.edges.map((edge) => edge.id)).toEqual(["edge"]);
+  });
+
+  it("refuses image actions while the editor is read-only", () => {
+    const store = useCanvasStore.getState();
+    store.addNode(imageNode("img"));
+    const revision = useCanvasStore.getState().revision;
+
+    useCanvasStore.setState({ editorReadOnly: true });
+    store.updateImageNode("img", { width: 480, height: 300 });
+    store.resizeImageNodeLive("img", { position: { x: 0, y: 0 }, width: 480, height: 300 });
+
+    expect(useCanvasStore.getState().revision).toBe(revision);
+    expect(imageAt("img")).toMatchObject({ width: 320, height: 200 });
+  });
+
+  it("kind-specific update actions ignore an image node", () => {
+    const store = useCanvasStore.getState();
+    store.addNode(imageNode("img"));
+    const revision = useCanvasStore.getState().revision;
+
+    store.updateTextNode("img", { html: "<p>wrong</p>" });
+    store.resizeTextNode("img", { position: { x: 5, y: 5 }, width: 360 });
+    store.updateNoteRefNode("img", { noteId: "wrong" });
+
+    expect(useCanvasStore.getState().revision).toBe(revision);
+    expect(imageAt("img")).toMatchObject({ width: 320, height: 200 });
   });
 });

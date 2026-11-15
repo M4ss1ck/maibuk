@@ -95,6 +95,18 @@ export function isValidCanvasNode(value: unknown): value is CanvasNode {
 
   if (value.kind === "text") return typeof value.html === "string";
   if (value.kind === "noteRef") return typeof value.noteId === "string";
+  if (value.kind === "image") {
+    return (
+      typeof value.src === "string" &&
+      value.src.startsWith("data:image/") &&
+      typeof value.width === "number" &&
+      Number.isFinite(value.width) &&
+      value.width > 0 &&
+      typeof value.height === "number" &&
+      Number.isFinite(value.height) &&
+      value.height > 0
+    );
+  }
   return false;
 }
 
@@ -134,6 +146,19 @@ function normalizeNode(node: CanvasNode): CanvasNode {
       textColor: normalizedOptionalString(node.textColor),
       backgroundColor: normalizedOptionalString(node.backgroundColor),
       width: normalizedOptionalWidth(node.width),
+    };
+  }
+
+  if (node.kind === "image") {
+    return {
+      id: node.id,
+      kind: "image",
+      position: { ...node.position },
+      src: node.src,
+      width: node.width,
+      height: node.height,
+      alt: normalizedOptionalString(node.alt),
+      fileName: normalizedOptionalString(node.fileName),
     };
   }
 

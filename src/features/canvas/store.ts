@@ -17,6 +17,7 @@ import {
   type CanvasDocLoadError,
 } from "@/features/canvas/serialization";
 import { CANVAS_TEXT_NODE_MIN_WIDTH } from "@/constants";
+import { CANVAS_IMAGE_MIN_EDGE } from "@/features/canvas/imageEncoding";
 import {
   createDefaultCanvasDoc,
   DEFAULT_CONNECTION_WIDTH,
@@ -37,6 +38,7 @@ import {
   type UpdateCanvasInput,
   type UpdateEdgePatch,
   type ResizeTextNodeInput,
+  type UpdateImageNodePatch,
   type UpdateNoteRefNodePatch,
   type UpdateTextNodePatch,
 } from "@/features/canvas/types";
@@ -181,6 +183,21 @@ function capHistory(history: CanvasDoc[]): CanvasDoc[] {
   return history.length > HISTORY_LIMIT ? history.slice(history.length - HISTORY_LIMIT) : history;
 }
 
+/**
+ * A Canvas Image's size is usable when both edges are finite and the short edge
+ * stays at or above the minimum: the picture is never cropped, so a smaller
+ * edge would only stretch or squash it.
+ */
+function isUsableImageSize(width: number, height: number): boolean {
+  return (
+    Number.isFinite(width) &&
+    Number.isFinite(height) &&
+    width > 0 &&
+    height > 0 &&
+    Math.min(width, height) >= CANVAS_IMAGE_MIN_EDGE
+  );
+}
+
 /** The doc without a node or the Connections that touch it. */
 function docWithoutNode(doc: CanvasDoc, id: string): CanvasDoc {
   return {
@@ -315,6 +332,11 @@ export interface CanvasStoreState {
   placeTextNode: (node: LightweightCanvasNode) => void;
   updateTextNode: (id: string, patch: UpdateTextNodePatch) => void;
   resizeTextNode: (id: string, input: ResizeTextNodeInput) => void;
+  updateImageNode: (id: string, patch: UpdateImageNodePatch) => void;
+  resizeImageNodeLive: (
+    id: string,
+    input: { position: CanvasPosition; width: number; height: number }
+  ) => void;
   updateNoteRefNode: (id: string, patch: UpdateNoteRefNodePatch) => void;
   removeNode: (id: string) => void;
   addEdge: (edge: CanvasEdge) => void;
@@ -641,13 +663,18 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     const changed = state.doc.nodes.some((node) => {
       const baseNode = state.liveBaseDoc?.nodes.find((candidate) => candidate.id === node.id);
       if (baseNode === undefined) return false;
+      if (baseNode.position.x !== node.position.x || baseNode.position.y !== node.position.y) {
+        return true;
+      }
+      if (node.kind === "image") {
+        return (
+          baseNode.kind === "image" &&
+          (baseNode.width !== node.width || baseNode.height !== node.height)
+        );
+      }
+      if (node.kind !== "text") return false;
       const baseWidth = baseNode.kind === "text" ? baseNode.width : undefined;
-      const nextWidth = node.kind === "text" ? node.width : undefined;
-      return (
-        baseNode.position.x !== node.position.x ||
-        baseNode.position.y !== node.position.y ||
-        baseWidth !== nextWidth
-      );
+      return baseWidth !== node.width;
     });
     set({
       liveBaseDoc: null,
@@ -732,6 +759,69 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
           ? { ...node, position: { ...input.position }, width: input.width }
           : candidate
       ),
+    });
+  },
+
+  updateImageNode: (id, patch) => {
+    const state = get();
+    if (state.editorReadOnly) return;
+    const node = state.doc.nodes.find((candidate) => candidate.id === id);
+    if (!node || node.kind !== "image") return;
+    const position = patch.position ?? node.position;
+    if (!isFinitePosition(position)) return;
+    const width = patch.width ?? node.width;
+    const height = patch.height ?? node.height;
+    if (!isUsableImageSize(width, height)) return;
+    // Alt text is what a screen reader announces; blank means the author cleared it.
+    const alt = patch.alt === undefined ? node.alt : patch.alt.trim() || undefined;
+    const src = patch.src ?? node.src;
+    const fileName = patch.fileName ?? node.fileName;
+    if (
+      src === node.src &&
+      width === node.width &&
+      height === node.height &&
+      alt === node.alt &&
+      fileName === node.fileName &&
+      position.x === node.position.x &&
+      position.y === node.position.y
+    ) {
+      return;
+    }
+    const next = { ...node, src, width, height, alt, fileName, position: { ...position } };
+    get().commit({
+      ...state.doc,
+      nodes: state.doc.nodes.map((candidate) => (candidate.id === id ? next : candidate)),
+    });
+  },
+
+  resizeImageNodeLive: (id, input) => {
+    const state = get();
+    if (state.editorReadOnly || !state.liveBaseDoc) return;
+    if (!isFinitePosition(input.position)) return;
+    if (!isUsableImageSize(input.width, input.height)) return;
+    const node = state.doc.nodes.find((candidate) => candidate.id === id);
+    if (!node || node.kind !== "image") return;
+    if (
+      node.width === input.width &&
+      node.height === input.height &&
+      node.position.x === input.position.x &&
+      node.position.y === input.position.y
+    ) {
+      return;
+    }
+    const next = {
+      ...node,
+      position: { ...input.position },
+      width: input.width,
+      height: input.height,
+    };
+    set({
+      doc: {
+        ...state.doc,
+        nodes: state.doc.nodes.map((candidate) => (candidate.id === id ? next : candidate)),
+      },
+      dirty: true,
+      revision: state.revision + 1,
     });
   },
 

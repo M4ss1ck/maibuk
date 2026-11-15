@@ -317,6 +317,7 @@
     "emptyDescription": "Crea un lienzo para conectar notas, ideas y relaciones.",
     "addTextNode": "Añadir nodo de texto",
     "addNoteRef": "Añadir referencia a nota",
+    "image": "Imagen",
     "editTextNode": "Editar nodo de texto",
     "searchPlaceholder": "Buscar lienzos…",
     "searchNotesPlaceholder": "Buscar notas…",

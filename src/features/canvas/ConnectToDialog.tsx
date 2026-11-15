@@ -26,6 +26,7 @@ export function ConnectToDialog() {
       const note = notes.find((candidate) => candidate.id === node.noteId);
       return note?.title || node.label || t("canvas.missingNote");
     }
+    if (node.kind === "image") return node.alt || node.fileName || t("canvas.image");
     const text = notePlainText(node.html);
     if (!text) return t("canvas.emptyTextNode");
     return text.length > LABEL_LENGTH ? `${text.slice(0, LABEL_LENGTH)}…` : text;
