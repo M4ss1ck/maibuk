@@ -599,7 +599,11 @@ test.describe("Connection inspector @wf:canvas-edge-inspector", () => {
     await openMap(page);
     const edgeName = "Edge from text-storm to text-second";
     await selectEdge(page, edgeName);
-    const path = page.getByRole("group", { name: edgeName }).locator(".react-flow__edge-path");
+    // The drawn line has no role or name; React Flow's path class inside the
+    // named Connection is the only handle on the color, width, and dashes it shows.
+    const edgePath = () =>
+      page.getByRole("group", { name: edgeName }).locator(".react-flow__edge-path");
+    const path = edgePath();
 
     const color = page.getByRole("button", { name: "Connection color" });
     await tabTo(page, color, { max: 10 });
@@ -613,6 +617,7 @@ test.describe("Connection inspector @wf:canvas-edge-inspector", () => {
     await page.keyboard.press("Enter");
     await page.keyboard.press("Escape");
     await expect(picker).toBeHidden();
+    await expect(color).toBeFocused();
     await expect(path).toHaveAttribute("style", /stroke: (#10b981|rgb\(16, 185, 129\))/i);
 
     const thin = page.getByRole("radio", { name: "Thin" });
@@ -634,9 +639,8 @@ test.describe("Connection inspector @wf:canvas-edge-inspector", () => {
     await selectEdge(page, edgeName);
     await expect(page.getByRole("radio", { name: "Thick", exact: true })).toBeChecked();
     await expect(page.getByRole("radio", { name: "Dashed" })).toBeChecked();
-    await expect(
-      page.getByRole("group", { name: edgeName }).locator(".react-flow__edge-path")
-    ).toHaveAttribute("style", /stroke-width: 4/);
+    await expect(edgePath()).toHaveAttribute("style", /stroke-width: 4/);
+    await expect(edgePath()).toHaveAttribute("style", /stroke: (#10b981|rgb\(16, 185, 129\))/i);
   });
 
   test("Delete connection removes the Connection", async ({ page }) => {

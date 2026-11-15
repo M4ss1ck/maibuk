@@ -30,6 +30,7 @@ import {
   type CanvasToolMode,
   type CanvasViewport,
   type CreateCanvasInput,
+  type EdgeColorPreview,
   type LightweightCanvasNode,
   type PristineTextNode,
   type ReorderCanvasItem,
@@ -253,7 +254,7 @@ export interface CanvasStoreState {
     patch: Pick<UpdateTextNodePatch, "textColor" | "backgroundColor"> | null
   ) => void;
   selectedEdgeId: string | null;
-  edgeColorPreview: { edgeId: string; color: string } | null;
+  edgeColorPreview: EdgeColorPreview | null;
   previewEdgeColor: (edgeId: string, color: string | null) => void;
   /** The Text Node whose rich-text editor is open, if any (keyboard F2 or a double click). */
   editingNodeId: string | null;

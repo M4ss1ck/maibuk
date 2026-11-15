@@ -6,16 +6,16 @@ import { Button } from "@/components/ui/Button";
 import { ColorPickerControl } from "@/components/ui/ColorPickerControl";
 import { Input } from "@/components/ui/Input";
 import { Switch } from "@/components/ui/Switch";
-import { PEN_COLORS } from "@/features/canvas/PenSettingsPanel";
 import {
+  CANVAS_COLOR_PRESETS,
   CONNECTION_LINE_STYLES,
   CONNECTION_WIDTHS,
   DEFAULT_CONNECTION_WIDTH,
-  type ConnectionLineStyle,
   type ConnectionWidth,
   type CanvasEdge,
   type UpdateEdgePatch,
 } from "@/features/canvas/types";
+import { connectionDash } from "@/features/canvas/reactFlowAdapter";
 import { readThemeColor } from "@/lib/color";
 
 const THICKNESS_NAMES = {
@@ -27,12 +27,6 @@ const THICKNESS_NAMES = {
 
 const OPTION_CLASSES =
   "inline-flex min-h-8 cursor-pointer items-center rounded-lg border-2 border-transparent px-1.5 py-1 text-sm text-muted-foreground outline-none transition-colors hover:text-foreground data-selected:border-primary data-selected:text-foreground data-focus-visible:ring-2 data-focus-visible:ring-primary data-focus-visible:ring-offset-1";
-
-const LINE_STYLE_DASHES: Record<ConnectionLineStyle, string | undefined> = {
-  solid: undefined,
-  dashed: "8 6",
-  dotted: "0 6",
-};
 
 export function EdgeInspectorCard({
   edge,
@@ -116,7 +110,7 @@ export function EdgeInspectorCard({
           label={t("canvas.connectionColor")}
           value={edge.color ?? ""}
           fallbackColor="#94a3b8"
-          presets={PEN_COLORS}
+          presets={CANVAS_COLOR_PRESETS}
           onPreview={onColorPreview}
           onCommit={(color) => onStyleChange({ color })}
           onClear={() => onStyleChange({ color: "" })}
@@ -128,7 +122,10 @@ export function EdgeInspectorCard({
       <RadioGroup
         orientation="horizontal"
         value={String(edge.width ?? DEFAULT_CONNECTION_WIDTH)}
-        onChange={(value) => onStyleChange({ width: Number(value) as ConnectionWidth })}
+        onChange={(value) => {
+          const width = CONNECTION_WIDTHS.find((candidate) => String(candidate) === value);
+          if (width !== undefined) onStyleChange({ width });
+        }}
         className="flex flex-wrap items-center gap-1"
       >
         <Label className="w-full text-xs text-muted-foreground">
@@ -156,7 +153,10 @@ export function EdgeInspectorCard({
       <RadioGroup
         orientation="horizontal"
         value={edge.lineStyle ?? "solid"}
-        onChange={(value) => onStyleChange({ lineStyle: value as ConnectionLineStyle })}
+        onChange={(value) => {
+          const lineStyle = CONNECTION_LINE_STYLES.find((style) => style === value);
+          if (lineStyle !== undefined) onStyleChange({ lineStyle });
+        }}
         className="flex flex-wrap items-center gap-1"
       >
         <Label className="w-full text-xs text-muted-foreground">{t("canvas.lineStyle")}</Label>
@@ -177,8 +177,7 @@ export function EdgeInspectorCard({
                   y2="8"
                   stroke="currentColor"
                   strokeWidth={2}
-                  strokeDasharray={LINE_STYLE_DASHES[style]}
-                  strokeLinecap={style === "dotted" ? "round" : undefined}
+                  {...connectionDash(style, 2)}
                 />
               </svg>
               <span className="sr-only">{t(`canvas.lineStyles.${style}`)}</span>

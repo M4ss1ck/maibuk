@@ -357,6 +357,11 @@ option {
  * A selected Connection keeps its own color, so selection reads as a halo
  * around the line rather than a stroke change a picked color would override.
  */
+.react-flow {
+  /* An uncolored selected Connection keeps the theme line color; the halo shows selection. */
+  --xy-edge-stroke-selected: var(--xy-edge-stroke-default);
+}
+
 .react-flow__edge.selected .react-flow__edge-path {
   filter: drop-shadow(0 0 2px var(--color-primary)) drop-shadow(0 0 1px var(--color-primary));
 }

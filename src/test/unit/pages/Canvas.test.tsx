@@ -668,12 +668,22 @@ describe("Canvas page", () => {
     expect(mocks.actions.updateEdge).toHaveBeenCalledWith("edge", { directed: true });
   });
 
-  it("sends the selected edge's thickness and line style picks to the store", () => {
+  it("sends the selected edge's thickness and line style picks to the store by keyboard", async () => {
+    const user = userEvent.setup();
     renderCanvas();
-    fireEvent.click(screen.getByRole("radio", { name: "canvas.connectionThicknessOptions.thick" }));
-    fireEvent.click(screen.getByRole("radio", { name: "canvas.lineStyles.dotted" }));
-    expect(mocks.actions.updateEdge).toHaveBeenCalledWith("edge", { width: 4 });
-    expect(mocks.actions.updateEdge).toHaveBeenCalledWith("edge", { lineStyle: "dotted" });
+    act(() =>
+      screen.getByRole("radio", { name: "canvas.connectionThicknessOptions.thin" }).focus()
+    );
+    await user.keyboard("{ArrowRight}");
+    act(() => screen.getByRole("radio", { name: "canvas.lineStyles.solid" }).focus());
+    await user.keyboard("{ArrowRight}");
+    expect(mocks.actions.updateEdge).toHaveBeenCalledWith("edge", { width: 2 });
+    expect(mocks.actions.updateEdge).toHaveBeenCalledWith("edge", { lineStyle: "dashed" });
+  });
+
+  it("gives an uncolored arrowhead the theme's line color", () => {
+    renderCanvas();
+    expect(mocks.flowProps.current?.defaultMarkerColor).toBe("var(--xy-edge-stroke-default)");
   });
 
   it("dismisses the edge inspector from its close button", () => {

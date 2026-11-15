@@ -44,6 +44,16 @@ export function isPlacementTool(mode: CanvasToolMode): boolean {
 /** A just-placed Text Node, and the revision it was placed at. */
 export type PristineTextNode = { id: string; revision: number };
 
+/** The swatches offered by the pen and Connection color pickers. */
+export const CANVAS_COLOR_PRESETS = [
+  "#ef4444",
+  "#f59e0b",
+  "#10b981",
+  "#3b82f6",
+  "#8b5cf6",
+  "#ec4899",
+];
+
 export const CONNECTION_WIDTHS = [1, 2, 4, 6] as const;
 
 export type ConnectionWidth = (typeof CONNECTION_WIDTHS)[number];
@@ -53,6 +63,9 @@ export const DEFAULT_CONNECTION_WIDTH: ConnectionWidth = 1;
 export const CONNECTION_LINE_STYLES = ["solid", "dashed", "dotted"] as const;
 
 export type ConnectionLineStyle = (typeof CONNECTION_LINE_STYLES)[number];
+
+/** A hovered swatch color, shown on a Connection before it is committed. */
+export type EdgeColorPreview = { edgeId: string; color: string };
 
 export type CanvasEdge = {
   id: string;

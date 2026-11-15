@@ -59,6 +59,9 @@ import { useShortcuts } from "@/lib/shortcuts";
 const DEFAULT_SESSION_VIEWPORT = { x: 0, y: 0, zoom: 1 };
 
 /** The doc as the Edit Session sees it: content only, viewport neutralized. */
+/** Resolved per theme by React Flow's own stylesheet. */
+const THEME_MARKER_COLOR = "var(--xy-edge-stroke-default)";
+
 function sessionDocKey(doc: CanvasDoc): string {
   const { viewport: _viewport, ...content } = doc;
   return JSON.stringify(content);
@@ -770,6 +773,9 @@ function CanvasEditor() {
           // Arrows move the focused node (ADR 0025: the Canvas surface owns them).
           data-owns-arrows=""
           colorMode={theme}
+          // React Flow writes an unset arrowhead color inline as #b1b1b7, which
+          // beats the theme CSS; a variable keeps it on the theme's line color.
+          defaultMarkerColor={THEME_MARKER_COLOR}
           className={connecting ? "canvas-connecting" : undefined}
           style={{ backgroundColor: "transparent" }}
           nodes={flowNodes as Node[]}

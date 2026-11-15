@@ -4,6 +4,7 @@ import type { CanvasEdge } from "@/features/canvas/types";
 import {
   computeConnectedSides,
   connectionBetween,
+  connectionDash,
   fromConnection,
   toFlowEdges,
   toFlowNodes,
@@ -110,6 +111,15 @@ describe("toFlowEdges Connection styles", () => {
       colorPreview: { edgeId: "edge", color: "#00ff00" },
     });
     expect(flow.style).toEqual({ stroke: "#111111" });
+  });
+});
+
+describe("connectionDash", () => {
+  it("dashes at the width and leaves solid plain", () => {
+    expect(connectionDash(undefined, 2)).toEqual({});
+    expect(connectionDash("solid", 2)).toEqual({});
+    expect(connectionDash("dashed", 2)).toEqual({ strokeDasharray: "8 6" });
+    expect(connectionDash("dotted", 2)).toEqual({ strokeDasharray: "0 6", strokeLinecap: "round" });
   });
 });
 

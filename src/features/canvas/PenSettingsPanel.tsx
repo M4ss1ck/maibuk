@@ -1,9 +1,8 @@
 import { useTranslation } from "react-i18next";
 import { ColorPickerControl } from "@/components/ui/ColorPickerControl";
 import { useCanvasStore } from "@/features/canvas/store";
+import { CANVAS_COLOR_PRESETS } from "@/features/canvas/types";
 import { readThemeColor } from "@/lib/color";
-
-export const PEN_COLORS = ["#ef4444", "#f59e0b", "#10b981", "#3b82f6", "#8b5cf6", "#ec4899"];
 
 export function PenSettingsPanel() {
   const { t } = useTranslation();
@@ -30,7 +29,7 @@ export function PenSettingsPanel() {
         <ColorPickerControl
           label={t("canvas.penColor")}
           value={penColor}
-          presets={PEN_COLORS}
+          presets={CANVAS_COLOR_PRESETS}
           onCommit={setPenColor}
           contrastAgainst={() => readThemeColor("--color-background")}
           contrastKind="non-text"

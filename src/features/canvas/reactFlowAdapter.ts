@@ -4,7 +4,9 @@ import {
   DEFAULT_CONNECTION_WIDTH,
   type CanvasEdge,
   type CanvasNode,
+  type ConnectionLineStyle,
   type ConnectionWidth,
+  type EdgeColorPreview,
 } from "@/features/canvas/types";
 
 export type Side = "top" | "right" | "bottom" | "left";
@@ -66,7 +68,7 @@ export type ToFlowNodesOptions = {
 export type ToFlowEdgesOptions = {
   selectedEdgeId: string | null;
   /** A hovered swatch color, shown on the selected Connection before it is committed. */
-  colorPreview?: { edgeId: string; color: string } | null;
+  colorPreview?: EdgeColorPreview | null;
 };
 
 export function toFlowNodes(
@@ -96,6 +98,19 @@ export function toFlowNodes(
 }
 
 /**
+ * The stroke pattern for a line style at a given width, in the shape an SVG
+ * line or a React Flow edge style wants. Solid (and unset) draw a plain line.
+ */
+export function connectionDash(
+  lineStyle: ConnectionLineStyle | undefined,
+  width: number
+): { strokeDasharray?: string; strokeLinecap?: "round" } {
+  if (lineStyle === "dashed") return { strokeDasharray: `${4 * width} ${3 * width}` };
+  if (lineStyle === "dotted") return { strokeDasharray: `0 ${3 * width}`, strokeLinecap: "round" };
+  return {};
+}
+
+/**
  * Only the style keys a Connection actually sets reach React Flow; an unstyled
  * Connection returns undefined so the theme CSS keeps control of the stroke.
  */
@@ -107,11 +122,9 @@ function connectionStyle(
   const style: NonNullable<Edge["style"]> = {};
   if (color) style.stroke = color;
   if (width !== DEFAULT_CONNECTION_WIDTH) style.strokeWidth = width;
-  if (edge.lineStyle === "dashed") style.strokeDasharray = `${4 * width} ${3 * width}`;
-  if (edge.lineStyle === "dotted") {
-    style.strokeDasharray = `0 ${3 * width}`;
-    style.strokeLinecap = "round";
-  }
+  const dash = connectionDash(edge.lineStyle, width);
+  if (dash.strokeDasharray !== undefined) style.strokeDasharray = dash.strokeDasharray;
+  if (dash.strokeLinecap !== undefined) style.strokeLinecap = dash.strokeLinecap;
   return Object.keys(style).length > 0 ? style : undefined;
 }
 
