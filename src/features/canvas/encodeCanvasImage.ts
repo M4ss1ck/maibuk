@@ -1,9 +1,9 @@
 import { planImageEncoding } from "@/features/canvas/imageEncoding";
 
-/** A image ready to store in a Canvas Image, with its natural pixel size. */
+/** An image ready to store in a Canvas Image, with its natural pixel size. */
 export type EncodedCanvasImage = { src: string; width: number; height: number };
 
-/** Why a image could not become a Canvas Image. */
+/** Why an image could not become a Canvas Image. */
 export class CanvasImageError extends Error {
   constructor(readonly reason: "fetch" | "unsupported") {
     super(reason);
@@ -41,7 +41,7 @@ function hasTransparentPixel(context: CanvasRenderingContext2D, width: number, h
 }
 
 /**
- * Fetches a image once (a data: URL from the file picker, or a web URL) and
+ * Fetches an image once (a data: URL from the file picker, or a web URL) and
  * returns it as a data URL per the Canvas Image Encoding: GIF and SVG up to the
  * passthrough cap stay as they are, everything else is redrawn at no more than
  * the size cap as JPEG, or PNG when it has transparency. Never hotlinks.

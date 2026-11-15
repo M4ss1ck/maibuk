@@ -16,7 +16,7 @@ import type { CanvasImageDialogTarget, ImageCanvasNode } from "@/features/canvas
 type PlaceTarget = Extract<CanvasImageDialogTarget, { kind: "place" }>;
 type ReplaceTarget = Extract<CanvasImageDialogTarget, { kind: "replace" }>;
 
-/** The file name a image chosen by URL carries: its last path segment, decoded. */
+/** The file name an image chosen by URL carries: its last path segment, decoded. */
 function fileNameFromSource(source: string): string | undefined {
   if (!/^https?:\/\//i.test(source)) return undefined;
   try {
@@ -93,7 +93,8 @@ function CanvasImageInsertDialog({
     updateImageNode(target.nodeId, {
       src: encoded.src,
       fileName,
-      alt: image.alt,
+      // A blank alt field keeps the alt text the image already had.
+      alt: image.alt.trim() || undefined,
       ...sizeKeepingLongEdge(node, encoded),
     });
   };

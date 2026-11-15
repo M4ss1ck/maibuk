@@ -65,7 +65,7 @@ beforeEach(() => {
 });
 
 describe("CanvasImageDialog", () => {
-  it("places the picked picture fitted to the box at the target and selects it", async () => {
+  it("places the picked image fitted to the box at the target and selects it", async () => {
     const user = userEvent.setup();
     mockEncode.mockResolvedValue({ src: "data:image/jpeg;base64,NEW", width: 640, height: 480 });
     seed();
@@ -88,7 +88,7 @@ describe("CanvasImageDialog", () => {
     expect(useCanvasStore.getState().selectedNodeId).toBe(node.id);
   });
 
-  it("reports an unsupported picture on the URL field and places nothing", async () => {
+  it("reports an unsupported image on the URL field and places nothing", async () => {
     const user = userEvent.setup();
     mockEncode.mockRejectedValue(new CanvasImageError("unsupported"));
     seed();
@@ -115,7 +115,7 @@ describe("CanvasImageDialog", () => {
     expect(mockEncode).not.toHaveBeenCalled();
   });
 
-  it("replaces the picture and keeps the node's long edge", async () => {
+  it("replaces the image, keeping the node's long edge and its alt text", async () => {
     const user = userEvent.setup();
     mockEncode.mockResolvedValue({ src: "data:image/jpeg;base64,NEW", width: 1000, height: 500 });
     seed([imageNode()]);
@@ -129,6 +129,8 @@ describe("CanvasImageDialog", () => {
       src: "data:image/jpeg;base64,NEW",
       width: 400,
       height: 200,
+      // A blank alt field on Replace keeps the alt text it had.
+      alt: "Old alt",
     });
   });
 

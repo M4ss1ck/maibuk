@@ -1097,16 +1097,24 @@ export const COMMANDS = {
     labelKey: "canvas.editAltText",
     contexts: ["canvasNode"],
     defaults: [],
+    voice: {
+      phrases: {
+        en: ["edit canvas image alt text"],
+        es: ["editar texto alternativo de la imagen del lienzo"],
+      },
+    },
   },
   "canvasNode.imageLarger": {
     labelKey: "canvas.imageLarger",
     contexts: ["canvasNode"],
     defaults: [["="]],
+    voice: { phrases: { en: ["make image larger"], es: ["agrandar imagen"] } },
   },
   "canvasNode.imageSmaller": {
     labelKey: "canvas.imageSmaller",
     contexts: ["canvasNode"],
     defaults: [["-"]],
+    voice: { phrases: { en: ["make image smaller"], es: ["achicar imagen"] } },
   },
   "canvasNode.delete": {
     labelKey: "common.delete",
@@ -1172,7 +1180,12 @@ export const COMMANDS = {
   },
   "canvas.addTextNode": { labelKey: "canvas.addTextNode", contexts: ["canvas"], defaults: [["t"]] },
   "canvas.addNoteRef": { labelKey: "canvas.addNoteRef", contexts: ["canvas"], defaults: [["n"]] },
-  "canvas.addImage": { labelKey: "canvas.addImage", contexts: ["canvas"], defaults: [["i"]] },
+  "canvas.addImage": {
+    labelKey: "canvas.addImage",
+    contexts: ["canvas"],
+    defaults: [["i"]],
+    voice: { phrases: { en: ["add image to canvas"], es: ["añadir imagen al lienzo"] } },
+  },
   "canvas.placeArmedTool": {
     labelKey: "canvas.placeArmedTool",
     contexts: ["canvas"],
