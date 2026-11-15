@@ -349,6 +349,22 @@ describe("createMapStore", () => {
     expect((await store.load("m1"))?.styleId).toBe("atlas");
   });
 
+  it("keeps the font a Map remembers for new Map Labels, known or not, through a save", async () => {
+    const { storage, values } = memoryStorage();
+    const store = storeOver(storage);
+    await store.create({ name: "Lettered", bookId: null, preset: "square" });
+    const created = values.get(mapKey("m1")) as MapDocument;
+    expect(created.labelFont).toBeUndefined();
+
+    await store.save({ ...created, labelFont: "cinzel" });
+    expect((await store.load("m1"))?.labelFont).toBe("cinzel");
+
+    // A font a later build added still opens the Map; the editor falls back
+    // at insert time, and the stored pick stays for that later build.
+    await storage.set({ key: mapKey("m1"), value: { ...created, labelFont: "future-face" } });
+    expect((await store.load("m1"))?.labelFont).toBe("future-face");
+  });
+
   it("saves the Map and its index entry, with the line in the preview and a new time", async () => {
     const { storage, values } = memoryStorage();
     const store = storeOver(storage);

@@ -9,7 +9,8 @@
  * Every edit goes through `history.commit` and schedules the whole Map document
  * for autosave. Zoom, pan, tool, selection, the current line style, the current
  * Fill colour, the current Stamp size, and the Roughen strength are view state:
- * not saved and not undoable. This module imports only its own files.
+ * not saved and not undoable. The font a new Map Label takes is saved with the
+ * Map (`labelFont`) but is not undoable either. This module imports only its own files.
  */
 
 import type {
@@ -1153,6 +1154,19 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
   }
 
   /**
+   * The font a new Map Label takes: the one last picked on this Map, unless
+   * this build has no face for it or it is the PDF Font and this device has
+   * none installed. Then the label takes the default, and the Map keeps the
+   * pick for when it can be drawn.
+   */
+  function nextLabelFont(): MapLabelFont | undefined {
+    const font = doc.labelFont;
+    if (!isLabelFont(font)) return undefined;
+    if (font === "pdf" && pdfFontFamily === null) return undefined;
+    return font;
+  }
+
+  /**
    * Places a Map Label at `point`, where the Text tool was clicked, or at the
    * view centre with no point (#751). It starts with empty text, which the
    * Frame draws as the localized placeholder (#798), so the author types over
@@ -1166,6 +1180,7 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       name: newLabelName(),
       text: "",
       point: point ?? viewCentre(),
+      font: nextLabelFont(),
     });
     selectedId = element.id;
     // A click in the Frame opens the Frame's own text box on the new label
@@ -2085,6 +2100,10 @@ export function createMapEditor(options: MapEditorOptions): MapEditor {
       // so only the bundled faces and the PDF Font are picks.
       if (target === null) return;
       if (!isLabelFont(font) || target.font === font) return;
+      // The pick is also this Map's font for the next Map Label. It rides on
+      // the document, so this edit's autosave stores it, and undo, which
+      // restores Elements and the Map Style only, leaves it the pick.
+      doc = { ...doc, labelFont: font };
       updateElement(id, (element) => (element.kind === "label" ? { ...element, font } : element));
     },
 

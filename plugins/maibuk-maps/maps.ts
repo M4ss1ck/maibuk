@@ -444,6 +444,12 @@ export interface MapDocument {
   createdAt: number;
   updatedAt: number;
   dataVersion: number;
+  /**
+   * The font a new Map Label on this Map takes: the one last picked for a Map
+   * Label here. Absent until the first pick, and kept as stored even when this
+   * build or device cannot draw it; the editor falls back at insert time.
+   */
+  labelFont?: MapLabelFont;
 }
 
 /** One row of `index`: what the list page draws, without the Map's elements. */
