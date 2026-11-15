@@ -40,6 +40,16 @@ describe("code block syntax highlighting", () => {
     editor.destroy();
   });
 
+  it("leaves a snake_case word upright in a Markdown block's quote", () => {
+    const editor = makeEditor(
+      '<pre><code class="language-markdown">&gt; a snake_case word and _real_ emphasis</code></pre>'
+    );
+
+    const emphasis = Array.from(editor.view.dom.querySelectorAll(".hljs-emphasis"));
+    expect(emphasis.map((el) => el.textContent)).toEqual(["_real_"]);
+    editor.destroy();
+  });
+
   it("registers common languages (js, ts, python)", () => {
     expect(lowlight.registered("javascript")).toBe(true);
     expect(lowlight.registered("typescript")).toBe(true);
