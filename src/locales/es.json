@@ -332,6 +332,21 @@
     "unpinCanvas": "Quitar fijado",
     "edgeLabel": "Etiqueta de conexión",
     "directedEdge": "Conexión dirigida",
+    "connectionColor": "Color de la conexión",
+    "defaultConnectionColor": "Color predeterminado",
+    "connectionThickness": "Grosor de la conexión",
+    "connectionThicknessOptions": {
+      "thin": "Fina",
+      "medium": "Media",
+      "thick": "Gruesa",
+      "extraThick": "Muy gruesa"
+    },
+    "lineStyle": "Estilo de línea",
+    "lineStyles": {
+      "solid": "Continua",
+      "dashed": "Discontinua",
+      "dotted": "Punteada"
+    },
     "deleteEdge": "Eliminar conexión",
     "deleteSelection": "Eliminar selección",
     "connectTo": "Conectar con…",

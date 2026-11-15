@@ -19,6 +19,7 @@ import {
 import { CANVAS_TEXT_NODE_MIN_WIDTH } from "@/constants";
 import {
   createDefaultCanvasDoc,
+  DEFAULT_CONNECTION_WIDTH,
   isPlacementTool,
   type Canvas,
   type CanvasDoc,
@@ -214,6 +215,7 @@ function editorResetState() {
     selectedNodeId: null,
     colorPreview: null,
     selectedEdgeId: null,
+    edgeColorPreview: null,
     editingNodeId: null,
     pristineTextNode: null as PristineTextNode | null,
     loadState: "idle" as CanvasLoadState,
@@ -251,6 +253,8 @@ export interface CanvasStoreState {
     patch: Pick<UpdateTextNodePatch, "textColor" | "backgroundColor"> | null
   ) => void;
   selectedEdgeId: string | null;
+  edgeColorPreview: { edgeId: string; color: string } | null;
+  previewEdgeColor: (edgeId: string, color: string | null) => void;
   /** The Text Node whose rich-text editor is open, if any (keyboard F2 or a double click). */
   editingNodeId: string | null;
   /** The just-placed Text Node, while it is open and has never had text. */
@@ -347,6 +351,8 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   penWidth: 3,
   penColor: "#ef4444",
   previewNodeColor: (nodeId, patch) => set({ colorPreview: patch ? { nodeId, ...patch } : null }),
+  previewEdgeColor: (edgeId, color) =>
+    set({ edgeColorPreview: color === null ? null : { edgeId, color } }),
   interactivityLocked: false,
 
   loadCanvases: async () => {
@@ -524,6 +530,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     set({
       doc: next,
       colorPreview: null,
+      edgeColorPreview: null,
       past,
       future: [],
       dirty: true,
@@ -886,15 +893,27 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     const state = get();
     const edge = state.doc.edges.find((candidate) => candidate.id === id);
     if (!edge) return;
+    // Unset is the stored form of "the theme default": an empty string, the
+    // default width, and a solid line all clear the field.
     const normalized = {
       ...patch,
       ...(patch.label !== undefined ? { label: patch.label.trim() || undefined } : {}),
+      ...(patch.color !== undefined ? { color: patch.color.trim() || undefined } : {}),
+      ...(patch.width !== undefined
+        ? { width: patch.width === DEFAULT_CONNECTION_WIDTH ? undefined : patch.width }
+        : {}),
+      ...(patch.lineStyle !== undefined
+        ? { lineStyle: patch.lineStyle === "solid" ? undefined : patch.lineStyle }
+        : {}),
     };
     const changed =
       ("label" in patch && normalized.label !== edge.label) ||
       ("directed" in patch && normalized.directed !== edge.directed) ||
       ("sourceHandle" in patch && normalized.sourceHandle !== edge.sourceHandle) ||
-      ("targetHandle" in patch && normalized.targetHandle !== edge.targetHandle);
+      ("targetHandle" in patch && normalized.targetHandle !== edge.targetHandle) ||
+      ("color" in patch && normalized.color !== edge.color) ||
+      ("width" in patch && normalized.width !== edge.width) ||
+      ("lineStyle" in patch && normalized.lineStyle !== edge.lineStyle);
     if (!changed) return;
     get().commit({
       ...state.doc,
@@ -993,6 +1012,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
       liveBaseDoc: null,
       selectedNodeId: null,
       selectedEdgeId: null,
+      edgeColorPreview: null,
       saveState: "saving",
     });
     try {

@@ -265,6 +265,8 @@ function CanvasEditor() {
   const future = useCanvasStore((state) => state.future);
   const selectedNodeId = useCanvasStore((state) => state.selectedNodeId);
   const selectedEdgeId = useCanvasStore((state) => state.selectedEdgeId);
+  const edgeColorPreview = useCanvasStore((state) => state.edgeColorPreview);
+  const previewEdgeColor = useCanvasStore((state) => state.previewEdgeColor);
   const toolMode = useCanvasStore((state) => state.toolMode);
   const setToolMode = useCanvasStore((state) => state.setToolMode);
   const interactivityLocked = useCanvasStore((state) => state.interactivityLocked);
@@ -417,8 +419,8 @@ function CanvasEditor() {
     [canvasId, current?.title, doc.nodes, doc.edges, selectedNodeId]
   );
   const flowEdges = useMemo(
-    () => toFlowEdges(doc.edges, { selectedEdgeId }),
-    [doc.edges, selectedEdgeId]
+    () => toFlowEdges(doc.edges, { selectedEdgeId, colorPreview: edgeColorPreview }),
+    [doc.edges, selectedEdgeId, edgeColorPreview]
   );
 
   const viewportCenter = useCallback(() => {
@@ -835,6 +837,8 @@ function CanvasEditor() {
                 onLabelChange={setEdgeLabelDraft}
                 onLabelCommit={() => updateEdge(selectedEdge.id, { label: edgeLabelDraft })}
                 onDirectedChange={(directed) => updateEdge(selectedEdge.id, { directed })}
+                onStyleChange={(patch) => updateEdge(selectedEdge.id, patch)}
+                onColorPreview={(color) => previewEdgeColor(selectedEdge.id, color)}
                 onDelete={deleteSelection}
                 onClose={clearSelection}
               />

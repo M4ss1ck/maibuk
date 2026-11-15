@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => {
     placeTextNode: vi.fn(),
     addEdge: vi.fn(),
     updateEdge: vi.fn(),
+    previewEdgeColor: vi.fn(),
     updateTextNode: vi.fn(),
     moveNodeLive: vi.fn(),
     beginLiveChange: vi.fn(),
@@ -665,6 +666,14 @@ describe("Canvas page", () => {
     fireEvent.click(screen.getByRole("switch"));
     expect(mocks.actions.updateEdge).toHaveBeenCalledWith("edge", { label: "New label" });
     expect(mocks.actions.updateEdge).toHaveBeenCalledWith("edge", { directed: true });
+  });
+
+  it("sends the selected edge's thickness and line style picks to the store", () => {
+    renderCanvas();
+    fireEvent.click(screen.getByRole("radio", { name: "canvas.connectionThicknessOptions.thick" }));
+    fireEvent.click(screen.getByRole("radio", { name: "canvas.lineStyles.dotted" }));
+    expect(mocks.actions.updateEdge).toHaveBeenCalledWith("edge", { width: 4 });
+    expect(mocks.actions.updateEdge).toHaveBeenCalledWith("edge", { lineStyle: "dotted" });
   });
 
   it("dismisses the edge inspector from its close button", () => {

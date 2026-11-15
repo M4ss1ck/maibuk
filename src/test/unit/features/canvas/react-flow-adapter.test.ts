@@ -1,5 +1,6 @@
 import { MarkerType } from "@xyflow/react";
 import { describe, expect, it } from "vitest";
+import type { CanvasEdge } from "@/features/canvas/types";
 import {
   computeConnectedSides,
   connectionBetween,
@@ -48,6 +49,67 @@ describe("Canvas React Flow adapter", () => {
       targetHandle: "in",
       directed: false,
     });
+  });
+});
+
+describe("toFlowEdges Connection styles", () => {
+  const edge = (overrides: Partial<CanvasEdge> = {}): CanvasEdge => ({
+    id: "edge",
+    source: "a",
+    target: "b",
+    ...overrides,
+  });
+
+  it("leaves an unstyled Connection to the theme", () => {
+    const [flow] = toFlowEdges([edge({ directed: true })], { selectedEdgeId: null });
+    expect(flow.style).toBeUndefined();
+    expect(flow.markerEnd).toEqual({ type: MarkerType.ArrowClosed });
+  });
+
+  it("draws color, width, and a dashed pattern, scaling the arrow by sqrt(width)", () => {
+    const [flow] = toFlowEdges(
+      [edge({ directed: true, color: "#cc0000", width: 4, lineStyle: "dashed" })],
+      { selectedEdgeId: null }
+    );
+    expect(flow.style).toEqual({
+      stroke: "#cc0000",
+      strokeWidth: 4,
+      strokeDasharray: "16 12",
+    });
+    expect(flow.markerEnd).toEqual({
+      type: MarkerType.ArrowClosed,
+      color: "#cc0000",
+      width: 6.25,
+      height: 6.25,
+    });
+  });
+
+  it("draws a dotted pattern with round caps", () => {
+    const [flow] = toFlowEdges([edge({ width: 2, lineStyle: "dotted" })], {
+      selectedEdgeId: null,
+    });
+    expect(flow.style).toEqual({
+      strokeWidth: 2,
+      strokeDasharray: "0 6",
+      strokeLinecap: "round",
+    });
+    expect(flow.markerEnd).toBeUndefined();
+  });
+
+  it("previews a color on the selected Connection", () => {
+    const [flow] = toFlowEdges([edge({ color: "#111111" })], {
+      selectedEdgeId: "edge",
+      colorPreview: { edgeId: "edge", color: "#00ff00" },
+    });
+    expect(flow.style).toEqual({ stroke: "#00ff00" });
+  });
+
+  it("ignores a color preview for a Connection that is not selected", () => {
+    const [flow] = toFlowEdges([edge({ color: "#111111" })], {
+      selectedEdgeId: null,
+      colorPreview: { edgeId: "edge", color: "#00ff00" },
+    });
+    expect(flow.style).toEqual({ stroke: "#111111" });
   });
 });
 

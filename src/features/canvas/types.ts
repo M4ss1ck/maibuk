@@ -44,6 +44,16 @@ export function isPlacementTool(mode: CanvasToolMode): boolean {
 /** A just-placed Text Node, and the revision it was placed at. */
 export type PristineTextNode = { id: string; revision: number };
 
+export const CONNECTION_WIDTHS = [1, 2, 4, 6] as const;
+
+export type ConnectionWidth = (typeof CONNECTION_WIDTHS)[number];
+
+export const DEFAULT_CONNECTION_WIDTH: ConnectionWidth = 1;
+
+export const CONNECTION_LINE_STYLES = ["solid", "dashed", "dotted"] as const;
+
+export type ConnectionLineStyle = (typeof CONNECTION_LINE_STYLES)[number];
+
 export type CanvasEdge = {
   id: string;
   source: string;
@@ -52,6 +62,12 @@ export type CanvasEdge = {
   targetHandle?: string;
   label?: string;
   directed?: boolean;
+  /** Stroke color; unset means the theme default. */
+  color?: string;
+  /** Stroke width; unset means DEFAULT_CONNECTION_WIDTH. */
+  width?: ConnectionWidth;
+  /** Stroke pattern; unset means solid. */
+  lineStyle?: ConnectionLineStyle;
 };
 
 export type CanvasStroke = {
@@ -92,7 +108,10 @@ export type ResizeTextNodeInput = {
 export type UpdateNoteRefNodePatch = Partial<Pick<NoteRefCanvasNode, "noteId" | "label">>;
 
 export type UpdateEdgePatch = Partial<
-  Pick<CanvasEdge, "label" | "directed" | "sourceHandle" | "targetHandle">
+  Pick<
+    CanvasEdge,
+    "label" | "directed" | "sourceHandle" | "targetHandle" | "color" | "width" | "lineStyle"
+  >
 >;
 
 export type CreateCanvasInput = {
