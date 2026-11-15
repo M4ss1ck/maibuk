@@ -51,7 +51,7 @@ A Stamp made from a picture the author uploaded, named after the file. It belong
 _Avoid_: uploaded icon, custom icon
 
 **Map Label**:
-A name written on a Map, straight or along a curve, on one line or several. A new one starts with no text, and the editor shows a prompt in its place that is never stored or exported. The author writes it in a text box on the Map itself. Its box is **Auto width**, as wide as its longest line, until the author sets a width; then it is **Fixed width** and wraps its text at that width. Only a one-line Map Label bends.
+A name written on a Map, straight or along a curve, on one line or several. A new one starts with no text, and the editor shows a prompt in its place that is never stored or exported. The author writes it in a text box on the Map itself. Its box is **Auto width**, as wide as its longest line, until the author sets a width; then it is **Fixed width** and wraps its text at that width. Only a one-line Map Label bends. A new one takes the font last picked for a Map Label on that Map.
 _Avoid_: text, caption, title (that is a Book's), text box (that is where a Map Label is written)
 
 **Map Image**:

@@ -1842,6 +1842,111 @@ describe("a Map Label's properties", () => {
     expect(labelOf(editor).font).toBe("pdf");
   });
 
+  describe("the font a new Map Label takes", () => {
+    /** An editor over a Map that may already remember a font, keeping what it saves. */
+    function fontEditor(labelFont?: string) {
+      const saved: MapDocument[] = [];
+      const editor = createMapEditor({
+        store: {
+          save: async (doc) => {
+            saved.push(doc);
+          },
+        },
+        doc: {
+          id: "map-1",
+          bookId: null,
+          name: "Map",
+          page: { preset: "square", widthMm: 200, heightMm: 100 },
+          styleId: "atlas",
+          overrides: {},
+          elements: [],
+          createdAt: 0,
+          updatedAt: 0,
+          dataVersion: DATA_VERSION,
+          ...(labelFont === undefined ? {} : { labelFont: labelFont as MapLabelFont }),
+        },
+        language: () => "en",
+      });
+      return { editor, saved };
+    }
+
+    /** The Map Label the editor placed last, which is the topmost one. */
+    function newestLabel(editor: MapEditor): MapLabelElement {
+      const element = editor.getSnapshot().elements.at(-1);
+      if (element === undefined || element.kind !== "label") throw new Error("no Map Label");
+      return element;
+    }
+
+    it("is IM Fell English on a Map where no font was picked", () => {
+      const { editor } = fontEditor();
+      editor.insertLabel();
+      expect(newestLabel(editor).font).toBe(DEFAULT_LABEL_FONT);
+    });
+
+    it("is the font last picked on this Map, from a click and from the keyboard", () => {
+      const { editor, id } = labelEditor();
+      editor.setLabelFont(id, "cinzel");
+
+      editor.insertLabel([50, 50]);
+      expect(newestLabel(editor).font).toBe("cinzel");
+      editor.insertLabel();
+      expect(newestLabel(editor).font).toBe("cinzel");
+    });
+
+    it("stays the pick after undo, which only gives the label its old font back", () => {
+      const { editor, id } = labelEditor();
+      editor.setLabelFont(id, "cinzel");
+      editor.undo();
+      expect(labelOf(editor).font).toBe(DEFAULT_LABEL_FONT);
+
+      editor.insertLabel();
+      expect(newestLabel(editor).font).toBe("cinzel");
+    });
+
+    it("is not changed by a refused pick", () => {
+      const { editor, id } = labelEditor();
+      editor.setLabelFont(id, "cinzel");
+      editor.setLabelFont(id, "not-a-font" as MapLabelFont);
+
+      editor.insertLabel();
+      expect(newestLabel(editor).font).toBe("cinzel");
+    });
+
+    it("is saved with the Map, so the Map opens with it next time", async () => {
+      const first = fontEditor();
+      first.editor.insertLabel();
+      const [label] = first.editor.getSnapshot().elements;
+      first.editor.setLabelFont(label.id, "cinzel");
+      await first.editor.flush();
+
+      const stored = first.saved.at(-1) as MapDocument;
+      expect(stored.labelFont).toBe("cinzel");
+
+      const reopened = fontEditor(stored.labelFont);
+      reopened.editor.insertLabel();
+      expect(newestLabel(reopened.editor).font).toBe("cinzel");
+    });
+
+    it("falls back to IM Fell English for the PDF Font until one is installed", async () => {
+      const { editor, saved } = fontEditor("pdf");
+      editor.insertLabel();
+      expect(newestLabel(editor).font).toBe(DEFAULT_LABEL_FONT);
+      await editor.flush();
+      // The fallback is for this label alone: the Map still remembers the pick.
+      expect(saved.at(-1)?.labelFont).toBe("pdf");
+
+      editor.setPdfFontFamily("Garamond");
+      editor.insertLabel();
+      expect(newestLabel(editor).font).toBe("pdf");
+    });
+
+    it("falls back to IM Fell English for a font id this build does not know", () => {
+      const { editor } = fontEditor("not-a-font");
+      editor.insertLabel();
+      expect(newestLabel(editor).font).toBe(DEFAULT_LABEL_FONT);
+    });
+  });
+
   it("takes a colour as one undo step, and draws the map ink until it has one", () => {
     const { editor, id } = labelEditor();
     expect(labelOf(editor).color).toBeUndefined();
