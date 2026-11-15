@@ -37,6 +37,7 @@ import { SyncStatusButton } from "@/components/sync/SyncStatusButton";
 import { DictationBar } from "@/components/dictation";
 import { useBookStore } from "@/features/books/store";
 import { CanvasToolPanel } from "@/features/canvas/CanvasToolPanel";
+import { CanvasImageDialog } from "@/features/canvas/CanvasImageDialog";
 import { ConnectToDialog } from "@/features/canvas/ConnectToDialog";
 import { EdgeInspectorCard } from "@/features/canvas/EdgeInspectorCard";
 import { NodeColorPanel } from "@/features/canvas/NodeColorPanel";
@@ -272,6 +273,7 @@ function CanvasEditor() {
   const previewEdgeColor = useCanvasStore((state) => state.previewEdgeColor);
   const toolMode = useCanvasStore((state) => state.toolMode);
   const setToolMode = useCanvasStore((state) => state.setToolMode);
+  const openImageDialog = useCanvasStore((state) => state.openImageDialog);
   const interactivityLocked = useCanvasStore((state) => state.interactivityLocked);
   const toggleInteractivityLocked = useCanvasStore((state) => state.toggleInteractivityLocked);
   const loadCanvas = useCanvasStore((state) => state.loadCanvas);
@@ -459,6 +461,11 @@ function CanvasEditor() {
       placeTextNodeAt(position, width);
       return;
     }
+    if (useCanvasStore.getState().toolMode === "image") {
+      setToolMode("select");
+      openImageDialog({ kind: "place", position });
+      return;
+    }
     // Every way out of the picker ends in Select, so the tool can end here.
     notePlacementRef.current = position;
     setToolMode("select");
@@ -611,6 +618,7 @@ function CanvasEditor() {
       { id: "canvas.toolEraser", onTrigger: () => setToolMode("eraser") },
       { id: "canvas.addTextNode", onTrigger: () => setToolMode("textNode") },
       { id: "canvas.addNoteRef", onTrigger: () => setToolMode("noteRef") },
+      { id: "canvas.addImage", onTrigger: () => setToolMode("image") },
       {
         id: "canvas.placeArmedTool",
         enabled: isPlacementTool(toolMode),
@@ -854,6 +862,8 @@ function CanvasEditor() {
       </main>
 
       <ConnectToDialog />
+
+      <CanvasImageDialog />
 
       <Modal isOpen={notePickerOpen} onClose={closeNotePicker} title={t("canvas.addNoteRef")}>
         <Input

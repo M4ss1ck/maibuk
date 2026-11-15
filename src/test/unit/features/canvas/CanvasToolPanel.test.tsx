@@ -58,6 +58,7 @@ describe("CanvasToolPanel", () => {
         "{Enter}",
         () => expect(useCanvasStore.getState().toolMode).toBe("noteRef"),
       ],
+      ["canvas.addImage", " ", () => expect(useCanvasStore.getState().toolMode).toBe("image")],
       ["canvas.zoomIn", " ", () => expect(handlers.onZoomIn).toHaveBeenCalledOnce()],
       ["canvas.zoomOut", "{Enter}", () => expect(handlers.onZoomOut).toHaveBeenCalledOnce()],
       ["canvas.fitView", " ", () => expect(handlers.onFitView).toHaveBeenCalledOnce()],
@@ -121,6 +122,23 @@ describe("CanvasToolPanel", () => {
     );
   });
 
+  it("shows the Image tool as pressed only while it is armed", () => {
+    useCanvasStore.setState({ toolMode: "image" });
+    render(<CanvasToolPanel {...callbacks()} />);
+
+    const image = screen.getByRole("button", { name: "canvas.addImage" });
+    expect(image).toHaveAttribute("aria-pressed", "true");
+    expect(image).toHaveAttribute("data-tutorial", "canvas.image");
+    expect(screen.getByRole("button", { name: "canvas.addNoteRef" })).toHaveAttribute(
+      "aria-pressed",
+      "false"
+    );
+    expect(screen.getByRole("button", { name: "canvas.addTextNode" })).toHaveAttribute(
+      "aria-pressed",
+      "false"
+    );
+  });
+
   it("moves focus vertically and activates the focused canvas tool", async () => {
     const user = userEvent.setup();
     render(<CanvasToolPanel {...callbacks()} />);
@@ -142,6 +160,7 @@ describe("CanvasToolPanel", () => {
   describe.each([
     ["canvas.addTextNode", "textNode"],
     ["canvas.addNoteRef", "noteRef"],
+    ["canvas.addImage", "image"],
   ] as const)("placement tool %s", (label, mode) => {
     it("arms with the first Enter and places at the center with the second", async () => {
       const user = userEvent.setup();

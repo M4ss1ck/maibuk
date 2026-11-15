@@ -1172,6 +1172,7 @@ export const COMMANDS = {
   },
   "canvas.addTextNode": { labelKey: "canvas.addTextNode", contexts: ["canvas"], defaults: [["t"]] },
   "canvas.addNoteRef": { labelKey: "canvas.addNoteRef", contexts: ["canvas"], defaults: [["n"]] },
+  "canvas.addImage": { labelKey: "canvas.addImage", contexts: ["canvas"], defaults: [["i"]] },
   "canvas.placeArmedTool": {
     labelKey: "canvas.placeArmedTool",
     contexts: ["canvas"],
