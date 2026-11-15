@@ -291,6 +291,22 @@ describe("Plugin management: changed files", () => {
     expect(h.frames).toHaveLength(1);
     expect(h.lifecycle.state("tracer")?.status).toBe("ready");
   });
+
+  it("markReviewed withdraws the copy's changed notice and leaves other notices", async () => {
+    const h = await setup({ changed: true });
+    await h.lifecycle.launch();
+    await h.store.getState().refresh();
+    const other = { pluginId: "other", name: "Other", hash: "", kind: "size" } as const;
+    h.store.setState((state) => ({ notifications: [...state.notifications, other] }));
+    expect(h.store.getState().notifications).toMatchObject([
+      { pluginId: "tracer", kind: "changed" },
+      other,
+    ]);
+
+    await h.store.getState().markReviewed("tracer");
+
+    expect(h.store.getState().notifications).toEqual([other]);
+  });
 });
 
 describe("Plugin management: enable and disable", () => {
