@@ -777,7 +777,10 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     if (!isFinitePosition(position)) return;
     const width = patch.width ?? node.width;
     const height = patch.height ?? node.height;
-    if (!isUsableImageSize(width, height)) return;
+    // Only a new size is held to the floor: a small image placed at its natural
+    // size below it must still take alt text or a replacement.
+    const resized = patch.width !== undefined || patch.height !== undefined;
+    if (resized && !isUsableImageSize(width, height)) return;
     // Alt text is what a screen reader announces; blank means the author cleared it.
     const alt = patch.alt === undefined ? node.alt : patch.alt.trim() || undefined;
     const src = patch.src ?? node.src;

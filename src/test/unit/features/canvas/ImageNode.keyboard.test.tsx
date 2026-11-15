@@ -127,7 +127,7 @@ beforeEach(() => {
 });
 
 describe("a Canvas Image's Commands from the keyboard", () => {
-  it("grows the focused picture 10% with =", async () => {
+  it("grows the focused Canvas Image 10% with =", async () => {
     const user = userEvent.setup();
     render(<FlowNode node={imageNode()} />);
     await focusNode(user);
@@ -137,7 +137,7 @@ describe("a Canvas Image's Commands from the keyboard", () => {
     expect(imageSize()).toEqual({ width: 330, height: 220 });
   });
 
-  it("shrinks the focused picture 10% with -", async () => {
+  it("shrinks the focused Canvas Image 10% with -", async () => {
     const user = userEvent.setup();
     render(<FlowNode node={imageNode()} />);
     await focusNode(user);
@@ -163,7 +163,7 @@ describe("a Canvas Image's Commands from the keyboard", () => {
 });
 
 describe("a Canvas Image's Item Menu from the keyboard", () => {
-  it("opens Edit alt text for the focused picture", async () => {
+  it("opens Edit alt text for the focused Canvas Image", async () => {
     const user = userEvent.setup();
     render(<FlowNode node={imageNode()} />);
     await focusNode(user);
@@ -173,7 +173,7 @@ describe("a Canvas Image's Item Menu from the keyboard", () => {
     expect(useCanvasStore.getState().imageDialog).toEqual({ kind: "altText", nodeId: "image" });
   });
 
-  it("opens Replace image for the focused picture", async () => {
+  it("opens Replace image for the focused Canvas Image", async () => {
     const user = userEvent.setup();
     render(<FlowNode node={imageNode()} />);
     await focusNode(user);
@@ -184,7 +184,7 @@ describe("a Canvas Image's Item Menu from the keyboard", () => {
   });
 });
 
-describe("a Canvas Image's picture", () => {
+describe("a Canvas Image's img", () => {
   it("announces the alt text, and the file name when none is set", () => {
     const { unmount } = render(<FlowNode node={imageNode({ alt: "A cat on a fence" })} />);
     expect(screen.getByRole("img", { name: "A cat on a fence" })).toBeInTheDocument();
@@ -194,11 +194,11 @@ describe("a Canvas Image's picture", () => {
     expect(screen.getByRole("img", { name: "cat.jpg" })).toBeInTheDocument();
   });
 
-  it("shows the Image unavailable placeholder when the picture fails to decode", () => {
+  it("shows the Image unavailable placeholder when the image fails to decode", () => {
     render(<FlowNode node={imageNode({ alt: "A cat" })} />);
-    const picture = screen.getByRole("img", { name: "A cat" });
+    const image = screen.getByRole("img", { name: "A cat" });
 
-    fireEvent.error(picture);
+    fireEvent.error(image);
 
     const placeholder = screen.getByRole("img", { name: "canvas.imageUnavailable" });
     expect(placeholder).toHaveTextContent("canvas.imageUnavailable");

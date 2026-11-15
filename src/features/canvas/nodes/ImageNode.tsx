@@ -31,7 +31,7 @@ export function ImageNode({ data, selected }: NodeProps<ImageFlowNode>) {
   const openImageDialog = useCanvasStore((state) => state.openImageDialog);
   // The src whose data did not decode. Stored data that no longer decodes
   // (corrupt sync data) keeps its box and Connections and says so; a
-  // replacement picture clears it, since it is a different src.
+  // replacement image clears it, since it is a different src.
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
 
   // The node menu is a hook, so it is set up before the guard below narrows
@@ -82,7 +82,7 @@ export function ImageNode({ data, selected }: NodeProps<ImageFlowNode>) {
     <div
       ref={nodeMenu.setOwnerRef}
       {...nodeMenu.itemProps}
-      className={`group relative rounded-md text-foreground pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] ${
+      className={`group relative rounded-lg text-foreground pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] ${
         selected ? "ring-2 ring-primary/40" : ""
       }`}
       style={{ width: node.width, height: node.height }}
@@ -94,7 +94,7 @@ export function ImageNode({ data, selected }: NodeProps<ImageFlowNode>) {
         <div
           role="img"
           aria-label={t("canvas.imageUnavailable")}
-          className="flex h-full w-full items-center justify-center rounded-md border border-border bg-muted p-2 text-center text-xs text-muted-foreground"
+          className="flex h-full w-full items-center justify-center rounded-lg border border-border bg-muted p-2 text-center text-xs text-muted-foreground"
         >
           {t("canvas.imageUnavailable")}
         </div>
@@ -110,7 +110,7 @@ export function ImageNode({ data, selected }: NodeProps<ImageFlowNode>) {
 
       {resizable &&
         CORNERS.map((position) => (
-          // The picture never crops, so both edges hold the same floor: the
+          // The image never crops, so both edges hold the same floor: the
           // aspect ratio then keeps the short edge at the minimum.
           <NodeResizeControl
             key={position}

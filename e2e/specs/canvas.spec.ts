@@ -304,6 +304,7 @@ test.describe("Canvas Image @wf:canvas-image @sc:canvas.addImage @sc:canvas.plac
     // The Canvas shortcuts bind only once the stored doc has loaded.
     await expect(textNodes(page)).toHaveCount(2);
     await expect(imageNodes(page)).toHaveCount(0);
+    await capture(page, "canvas-image-toolbar");
 
     await page.keyboard.press("i");
     await expect(page.getByRole("button", { name: "Add image", exact: true })).toHaveAttribute(
@@ -327,6 +328,7 @@ test.describe("Canvas Image @wf:canvas-image @sc:canvas.addImage @sc:canvas.plac
     const picture = page.getByRole("img", { name: "A lighthouse" });
     await expect(picture).toBeVisible();
     await expect(picture).toHaveAttribute("src", /^data:image\//);
+    await capture(page, "canvas-image-placed");
 
     await expect(page.getByText("Saved", { exact: true })).toBeVisible();
     await page.reload();

@@ -34,7 +34,7 @@ export type NoteRefCanvasNode = BaseCanvasNode & {
 
 export type ImageCanvasNode = BaseCanvasNode & {
   kind: "image";
-  /** The picture embedded as a `data:image/` URL; never a hotlink. */
+  /** The image embedded as a `data:image/` URL; never a hotlink. */
   src: string;
   /** Width in Canvas units. */
   width: number;
@@ -136,7 +136,7 @@ export type UpdateImageNodePatch = Partial<
   Pick<ImageCanvasNode, "src" | "width" | "height" | "alt" | "fileName" | "position">
 >;
 
-/** What the Canvas Image dialog is open for: placing a picture, replacing one, or its alt text. */
+/** What the Canvas Image dialog is open for: placing a image, replacing one, or its alt text. */
 export type CanvasImageDialogTarget =
   | { kind: "place"; position: CanvasPosition }
   | { kind: "replace"; nodeId: string }

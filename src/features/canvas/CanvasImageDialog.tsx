@@ -16,7 +16,7 @@ import type { CanvasImageDialogTarget, ImageCanvasNode } from "@/features/canvas
 type PlaceTarget = Extract<CanvasImageDialogTarget, { kind: "place" }>;
 type ReplaceTarget = Extract<CanvasImageDialogTarget, { kind: "replace" }>;
 
-/** The file name a picture chosen by URL carries: its last path segment, decoded. */
+/** The file name a image chosen by URL carries: its last path segment, decoded. */
 function fileNameFromSource(source: string): string | undefined {
   if (!/^https?:\/\//i.test(source)) return undefined;
   try {
@@ -28,17 +28,17 @@ function fileNameFromSource(source: string): string | undefined {
 }
 
 /**
- * The size a replaced picture takes: the node's current long edge, with the new
- * picture's aspect ratio, never below the minimum short edge.
+ * The size a replaced image takes: the node's current long edge, with the new
+ * image's aspect ratio, never below the minimum short edge.
  */
 function sizeKeepingLongEdge(
   node: ImageCanvasNode,
-  picture: EncodedCanvasImage
+  image: EncodedCanvasImage
 ): { width: number; height: number } {
   const longEdge = Math.max(node.width, node.height);
-  const ratio = picture.width / picture.height;
+  const ratio = image.width / image.height;
   const size =
-    picture.width >= picture.height
+    image.width >= image.height
       ? { width: longEdge, height: longEdge / ratio }
       : { width: longEdge * ratio, height: longEdge };
   return scaleCanvasImageSize(

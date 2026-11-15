@@ -89,7 +89,7 @@ describe("ImageInsertDialog", () => {
 });
 
 describe("ImageInsertDialog with a submit handler", () => {
-  it("hands the picture to the handler, then closes once it resolves", async () => {
+  it("hands the image to the handler, then closes once it resolves", async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();
     let release: () => void = () => {};

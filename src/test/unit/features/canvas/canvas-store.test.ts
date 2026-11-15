@@ -1063,6 +1063,20 @@ describe("canvas images (#813)", () => {
     expect(imageAt("img")).toMatchObject({ width: 48, height: 96 });
   });
 
+  it("edits the alt text and position of an image placed below 48 at its natural size", () => {
+    const store = useCanvasStore.getState();
+    store.addNode(imageNode("img", { width: 20, height: 20 }));
+
+    store.updateImageNode("img", { alt: "An icon", position: { x: 5, y: 5 } });
+
+    expect(imageAt("img")).toMatchObject({
+      width: 20,
+      height: 20,
+      alt: "An icon",
+      position: { x: 5, y: 5 },
+    });
+  });
+
   it("creates exactly one undo step for a live image resize", () => {
     const store = useCanvasStore.getState();
     store.addNode(imageNode("img"));

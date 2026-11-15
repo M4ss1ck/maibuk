@@ -1,9 +1,9 @@
 import { planImageEncoding } from "@/features/canvas/imageEncoding";
 
-/** A picture ready to store in a Canvas Image, with its natural pixel size. */
+/** A image ready to store in a Canvas Image, with its natural pixel size. */
 export type EncodedCanvasImage = { src: string; width: number; height: number };
 
-/** Why a picture could not become a Canvas Image. */
+/** Why a image could not become a Canvas Image. */
 export class CanvasImageError extends Error {
   constructor(readonly reason: "fetch" | "unsupported") {
     super(reason);
@@ -41,7 +41,7 @@ function hasTransparentPixel(context: CanvasRenderingContext2D, width: number, h
 }
 
 /**
- * Fetches a picture once (a data: URL from the file picker, or a web URL) and
+ * Fetches a image once (a data: URL from the file picker, or a web URL) and
  * returns it as a data URL per the Canvas Image Encoding: GIF and SVG up to the
  * passthrough cap stay as they are, everything else is redrawn at no more than
  * the size cap as JPEG, or PNG when it has transparency. Never hotlinks.
@@ -67,13 +67,8 @@ export async function encodeCanvasImage(source: string): Promise<EncodedCanvasIm
   const height = image.naturalHeight;
   if (!width || !height) throw new CanvasImageError("unsupported");
 
-  const plan = planImageEncoding({
-    mimeType: blob.type,
-    byteLength: blob.size,
-    width,
-    height,
-    hasAlpha: false,
-  });
+  const input = { mimeType: blob.type, byteLength: blob.size, width, height, hasAlpha: false };
+  const plan = planImageEncoding(input);
   if (plan.kind === "passthrough") return { src: await blobToDataUrl(blob), width, height };
 
   const canvas = document.createElement("canvas");
@@ -82,9 +77,10 @@ export async function encodeCanvasImage(source: string): Promise<EncodedCanvasIm
   const context = canvas.getContext("2d");
   if (!context) throw new CanvasImageError("unsupported");
   context.drawImage(image, 0, 0, plan.width, plan.height);
-  const opaqueSource = blob.type === "image/jpeg";
-  if (!opaqueSource && hasTransparentPixel(context, plan.width, plan.height)) {
-    return { src: canvas.toDataURL("image/png"), width, height };
-  }
-  return { src: canvas.toDataURL(plan.mimeType, plan.quality), width, height };
+  // Transparency is only known once drawn, so the format is planned again with it.
+  const hasAlpha =
+    blob.type !== "image/jpeg" && hasTransparentPixel(context, plan.width, plan.height);
+  const output = planImageEncoding({ ...input, hasAlpha });
+  if (output.kind === "passthrough") throw new CanvasImageError("unsupported");
+  return { src: canvas.toDataURL(output.mimeType, output.quality), width, height };
 }
