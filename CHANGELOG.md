@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.2] - 2026-11-15
+
+### Fixed
+- Clear stale plugin update notices after replacing, keeping, reviewing, or removing a plugin in Settings
+- Load images and pronunciation audio in the Dictionary dialog by resolving protocol-relative media URLs over HTTPS
+
 ## [0.22.1] - 2026-11-14
 
 ### Added
