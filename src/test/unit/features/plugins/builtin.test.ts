@@ -263,6 +263,8 @@ describe("Built-in Plugins: update available", () => {
     expect(getPluginApproval(ID)?.builtIn?.keptModifiedHash).toBe(
       await hashPluginDirectory(update.files)
     );
+    // Keeping answers the notice, so Settings withdraws it.
+    expect(h.store.getState().notifications).toEqual([]);
 
     await h.refresh();
 
@@ -415,5 +417,31 @@ describe("Built-in Plugins: replace", () => {
     // The installed copy is now the shipped one.
     const index = h.installed()!.files.find((file) => file.path === "index.js");
     expect(new TextDecoder().decode(index?.bytes)).toBe("export const a = 3;");
+  });
+
+  it("withdraws the Update available notice once Settings replaces the copy", async () => {
+    const h = await setup();
+    await h.refresh();
+    h.setInstalled(builtInFolder({ "index.js": "export const a = 2;" }));
+    await h.ship(builtInFolder({ "index.js": "export const a = 3;" }));
+    await h.refresh();
+    expect(h.store.getState().notifications).toMatchObject([{ pluginId: ID, kind: "available" }]);
+
+    await h.store.getState().replaceBuiltIn(ID, true);
+
+    // Left up, its Review would open Settings on a copy with nothing to review.
+    expect(h.store.getState().notifications).toEqual([]);
+  });
+
+  it("keeps the notice when the replace does not happen", async () => {
+    const h = await setup();
+    await h.refresh();
+    h.setInstalled(builtInFolder({ "index.js": "export const a = 2;" }));
+    await h.ship(builtInFolder({ "index.js": "export const a = 3;" }));
+    await h.refresh();
+
+    await h.store.getState().replaceBuiltIn(ID, false);
+
+    expect(h.store.getState().notifications).toMatchObject([{ pluginId: ID, kind: "available" }]);
   });
 });

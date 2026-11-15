@@ -406,6 +406,20 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
     }
 
     /**
+     * Withdraws a Plugin's notice once Settings has acted on what it announced:
+     * a changed copy reviewed, or a Built-in update kept or replaced. Left up,
+     * the notice's Review would open Settings on a copy with nothing left to
+     * review. Only the listed kinds go, so a size warning outlives a review.
+     */
+    function withdrawNotice(pluginId: string, kinds: PluginNotification["kind"][]): void {
+      set((state) => ({
+        notifications: state.notifications.filter(
+          (current) => current.pluginId !== pluginId || !kinds.includes(current.kind)
+        ),
+      }));
+    }
+
+    /**
      * Warns once per Plugin when its refreshed data size passes 50 MB (#401).
      * The warning is recorded on the known row before it is shown, so a reload
      * or a second refresh never repeats it; a Plugin with no known row is
@@ -991,6 +1005,7 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
         // versus the shipped one, and any update stays offered.
         if (builtIn) next.builtIn = approval.builtIn ?? { shippedHash: builtIn.hash };
         savePluginApproval(next);
+        withdrawNotice(pluginId, ["changed"]);
         await applyApproval(pluginId, copy, next, builtIn);
         await start(pluginId);
         // The review may grant or drop an optional Permission of a Plugin that
@@ -1011,6 +1026,7 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
           builtIn: { ...approval.builtIn, keptModifiedHash: builtIn.hash },
         };
         savePluginApproval(next);
+        withdrawNotice(pluginId, ["available"]);
         set((state) => ({
           plugins: {
             ...state.plugins,
@@ -1043,6 +1059,7 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
         // no update is offered for it.
         const next = repinnedBuiltInApproval(approval, copy, builtIn);
         savePluginApproval(next);
+        withdrawNotice(pluginId, ["changed", "available"]);
         await applyApproval(pluginId, copy, next, builtIn);
         return true;
       },
@@ -1064,6 +1081,7 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
         // clearing it after the removal is a no-op kept for the decided order.
         removePluginApproval(pluginId);
         clearStartupError(pluginId);
+        withdrawNotice(pluginId, ["changed", "available"]);
         markPluginRemoved(pluginId);
         // The Plugin's saved credentials always go, not only when the "also
         // delete this Plugin's data" choice is on: that choice covers Library

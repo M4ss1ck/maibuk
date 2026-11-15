@@ -309,6 +309,21 @@ describe("Plugin management actions: remove", () => {
     expect(clearPluginStorage).not.toHaveBeenCalled();
   });
 
+  it("withdraws the removed Plugin's changed notice", async () => {
+    const folder = pluginFolder({}, { id: "tracer", name: "Tracer" });
+    const dir = makeDirectory("web", [folder]);
+    await approveFolder(folder);
+    const store = makeStore(dir.adapter);
+    await store.getState().refresh();
+    store.setState({
+      notifications: [{ pluginId: "tracer", name: "Tracer", hash: "h1:x", kind: "changed" }],
+    });
+
+    await store.getState().remove("tracer", { deleteData: false });
+
+    expect(store.getState().notifications).toEqual([]);
+  });
+
   it("clears the retained data when deleteData is true", async () => {
     const folder = pluginFolder({}, { id: "tracer", name: "Tracer" });
     const dir = makeDirectory("web", [folder]);
