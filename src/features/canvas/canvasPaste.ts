@@ -1,8 +1,10 @@
 import type { CanvasPosition } from "@/features/canvas/types";
 
-function isEditableTarget(target: EventTarget): boolean {
+// A paste into a field, or anywhere in a dialog open over the Canvas, is not a
+// paste onto the Canvas.
+function isOwnedTarget(target: EventTarget): boolean {
   if (!(target instanceof Element)) return false;
-  return target.closest("input, textarea, select, [contenteditable]") !== null;
+  return target.closest('input, textarea, select, [contenteditable], [role="dialog"]') !== null;
 }
 
 function imageFileOnClipboard(clipboard: DataTransfer): File | null {
@@ -18,8 +20,9 @@ function imageFileOnClipboard(clipboard: DataTransfer): File | null {
 /**
  * Routes a paste over the Canvas: the image File to place and where, or null
  * when something else owns the paste (a Text Node being edited, a read-only
- * Canvas, an editable field, or no image on the clipboard). A pointer over the
- * Canvas places the image there, otherwise it lands at the viewport center.
+ * Canvas, an editable field or an open dialog, or no image on the clipboard).
+ * A pointer over the Canvas places the image there, otherwise it lands at the
+ * viewport center.
  */
 export function routeCanvasPaste({
   clipboard,
@@ -43,7 +46,7 @@ export function routeCanvasPaste({
 }): { file: File; position: CanvasPosition } | null {
   if (editingNodeId) return null;
   if (readOnly) return null;
-  if (target && isEditableTarget(target)) return null;
+  if (target && isOwnedTarget(target)) return null;
   if (!clipboard) return null;
 
   const file = imageFileOnClipboard(clipboard);

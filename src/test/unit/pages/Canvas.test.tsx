@@ -1,5 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { toast } from "@/components/ui";
+import { CanvasImageError } from "@/features/canvas/encodeCanvasImage";
 import { useBoundShortcutStore } from "@/lib/bound-shortcuts";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -79,6 +81,13 @@ vi.mock("../../../features/books/store", () => ({
 }));
 
 vi.mock("../../../features/canvas/nodes", () => ({ nodeTypes: {} }));
+
+const { mockEncode } = vi.hoisted(() => ({ mockEncode: vi.fn() }));
+
+vi.mock("@/features/canvas/encodeCanvasImage", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/features/canvas/encodeCanvasImage")>();
+  return { ...actual, encodeCanvasImage: mockEncode };
+});
 
 vi.mock("@xyflow/react", () => ({
   ConnectionMode: { Loose: "loose" },
@@ -546,6 +555,72 @@ describe("Canvas page", () => {
       );
       expect(mocks.actions.addNode).not.toHaveBeenCalled();
       expect(mocks.actions.placeTextNode).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("pasting an image", () => {
+    const imageFile = () => new File(["png"], "cat.png", { type: "image/png" });
+
+    // jsdom has no DataTransfer: this keeps the shapes the router reads.
+    function imageClipboard(file: File): DataTransfer {
+      return {
+        files: [file] as unknown as FileList,
+        items: [
+          { kind: "file", type: file.type, getAsFile: () => file } as DataTransferItem,
+        ] as unknown as DataTransferItemList,
+      } as DataTransfer;
+    }
+
+    beforeEach(() => {
+      mockEncode.mockReset();
+    });
+
+    it("places the pasted image at the viewport center and selects it", async () => {
+      const user = userEvent.setup();
+      mockEncode.mockResolvedValue({ src: "data:image/jpeg;base64,NEW", width: 640, height: 320 });
+      renderCanvas();
+
+      await user.paste(imageClipboard(imageFile()));
+
+      await waitFor(() => expect(mocks.actions.addNode).toHaveBeenCalledTimes(1));
+      expect(mockEncode).toHaveBeenCalledWith(expect.any(File));
+      const added = mocks.actions.addNode.mock.calls[0][0];
+      expect(added).toEqual({
+        id: expect.any(String),
+        kind: "image",
+        src: "data:image/jpeg;base64,NEW",
+        width: 320,
+        height: 160,
+        // The pointer left the surface, so the image lands at the view center.
+        position: { x: 0, y: 0 },
+        fileName: "cat.png",
+      });
+      expect(mocks.actions.selectNode).toHaveBeenCalledWith(added.id);
+    });
+
+    it("reports an unsupported image and places nothing", async () => {
+      const user = userEvent.setup();
+      const toastError = vi.spyOn(toast, "error");
+      mockEncode.mockRejectedValue(new CanvasImageError("unsupported"));
+      renderCanvas();
+
+      await user.paste(imageClipboard(imageFile()));
+
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith("canvas.imageUnsupported"));
+      expect(mocks.actions.addNode).not.toHaveBeenCalled();
+      expect(mocks.actions.selectNode).not.toHaveBeenCalled();
+      toastError.mockRestore();
+    });
+
+    it("places nothing while a Text Node is being edited", async () => {
+      const user = userEvent.setup();
+      Object.assign(mocks.state, { editingNodeId: "node" });
+      renderCanvas();
+
+      await user.paste(imageClipboard(imageFile()));
+
+      expect(mockEncode).not.toHaveBeenCalled();
+      expect(mocks.actions.addNode).not.toHaveBeenCalled();
     });
   });
 

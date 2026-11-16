@@ -59,6 +59,15 @@ describe("routeCanvasPaste", () => {
     expect(routeCanvasPaste(buildInput({ target: child }))).toBeNull();
   });
 
+  it("does nothing when the paste lands in a dialog open over the Canvas", () => {
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "dialog");
+    const button = document.createElement("button");
+    dialog.append(button);
+
+    expect(routeCanvasPaste(buildInput({ target: button }))).toBeNull();
+  });
+
   it("ignores a text-only clipboard", () => {
     expect(
       routeCanvasPaste(
