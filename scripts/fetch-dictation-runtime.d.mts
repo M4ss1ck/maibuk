@@ -45,3 +45,6 @@ export function createCrc32c(): Crc32c;
 export function crc32cBase64(bytes: Uint8Array): string;
 
 export function fetchTestAssets(root: string, options?: FetchTestAssetsOptions): Promise<void>;
+
+/** The `pnpm install` hook: fetches the WASM runtime, warns instead of failing. */
+export function postinstall(root: string, warn?: (message: string) => void): Promise<void>;
