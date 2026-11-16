@@ -214,6 +214,41 @@ describe("image blocks (PDF)", () => {
     expect(images).toHaveLength(1);
     expect(images[0]?.props?.src).toBe(src);
   });
+
+  // The sanitizer feeds the PDF renderer the figure's export class (the
+  // alignment word) and the picture's stored width as an inline percent.
+  it.each([
+    ["left", "flex-start"],
+    ["center", "center"],
+    ["right", "flex-end"],
+  ])("lays out a figure aligned %s with alignItems %s", (align, alignItems) => {
+    const tree = renderHtmlContent(
+      `<figure class="image-figure align-${align}"><img src="data:image/png;base64,AA"><figcaption>Caption</figcaption></figure>`,
+      styles
+    );
+    const figure = tree[0] as { props?: { style?: { alignItems?: unknown } } };
+
+    expect(figure.props?.style?.alignItems).toBe(alignItems);
+  });
+
+  it("draws a figure's picture at its stored width", () => {
+    const tree = renderHtmlContent(
+      '<figure class="image-figure align-center"><img src="data:image/png;base64,AA" style="width: 40%"></figure>',
+      styles
+    );
+    const image = collectImages(tree)[0] as { props?: { style?: unknown } };
+
+    expect(image.props?.style).toEqual([styles.image, { width: "40%" }]);
+  });
+
+  it("draws a figure with no class and no width at its own size, aligned left", () => {
+    const tree = renderHtmlContent('<figure><img src="data:image/png;base64,AA"></figure>', styles);
+    const figure = tree[0] as { props?: { style?: { alignItems?: unknown } } };
+    const image = collectImages(tree)[0] as { props?: { style?: unknown } };
+
+    expect(figure.props?.style?.alignItems).toBe("flex-start");
+    expect(image.props?.style).toBe(styles.image);
+  });
 });
 
 describe("code blocks (PDF)", () => {

@@ -13,6 +13,11 @@ import { Text, View, Image, Link } from "@react-pdf/renderer";
 import type { PdfStyles } from "@/features/export/pdf-styles";
 import { ENDNOTE_BACKLINK } from "@/features/export/html-sanitizer";
 import { parseLinkUri } from "@/features/links/link-uri";
+import {
+  imageAlignment,
+  imageWidthPercent,
+  type ImageAlignment,
+} from "@/components/editor/image-figure-box";
 
 // ---------------------------------------------------------------------------
 // CSS → react-pdf style helpers
@@ -240,7 +245,11 @@ function renderBlockNode(node: Node, styles: PdfStyles, key: string): ReactNode 
       if (el.classList.contains("scene-break")) {
         return renderSceneBreak(el, styles, key);
       }
-      return createElement(View, { key }, ...renderBlockChildren(el, styles, key));
+      return createElement(
+        View,
+        { key, style: { alignItems: FIGURE_ALIGN_ITEMS[figureAlignment(el)] } },
+        ...renderBlockChildren(el, styles, key)
+      );
     case "pre":
       return renderCodeBlock(el, styles, key);
     case "table":
@@ -263,6 +272,34 @@ function renderBlockNode(node: Node, styles: PdfStyles, key: string): ReactNode 
 // ---------------------------------------------------------------------------
 // Specific block renderers
 // ---------------------------------------------------------------------------
+
+const FIGURE_ALIGN_ITEMS: Record<ImageAlignment, "flex-start" | "center" | "flex-end"> = {
+  left: "flex-start",
+  center: "center",
+  right: "flex-end",
+};
+
+/** The figure's side, read from the sanitizer's `align-*` class. */
+function figureAlignment(el: Element): ImageAlignment {
+  const alignClass = Array.from(el.classList).find((name) => name.startsWith("align-"));
+  return imageAlignment(alignClass?.slice("align-".length));
+}
+
+/** The `width` declaration of an inline style attribute, or undefined. */
+function inlineWidth(styleStr: string | null): string | undefined {
+  if (!styleStr) return undefined;
+
+  for (const prop of styleStr.split(";")) {
+    const colonIdx = prop.indexOf(":");
+    if (colonIdx < 0) continue;
+
+    if (prop.substring(0, colonIdx).trim().toLowerCase() === "width") {
+      return prop.substring(colonIdx + 1).trim();
+    }
+  }
+
+  return undefined;
+}
 
 function renderParagraph(el: Element, styles: PdfStyles, key: string): ReactNode {
   const lineHeight = blockLineHeight(el);
@@ -386,7 +423,11 @@ function renderImage(el: Element, styles: PdfStyles, key: string): ReactNode {
   const src = el.getAttribute("src");
   if (!src) return null;
 
-  return createElement(Image, { key, src, style: styles.image });
+  const widthPercent = imageWidthPercent(inlineWidth(el.getAttribute("style")));
+  const style =
+    widthPercent === null ? styles.image : [styles.image, { width: `${widthPercent}%` }];
+
+  return createElement(Image, { key, src, style });
 }
 
 function renderTable(el: Element, styles: PdfStyles, key: string): ReactNode {
