@@ -42,7 +42,7 @@ import { CanvasImageDialog } from "@/features/canvas/CanvasImageDialog";
 import { routeCanvasPaste } from "@/features/canvas/canvasPaste";
 import { ConnectToDialog } from "@/features/canvas/ConnectToDialog";
 import { EdgeInspectorCard } from "@/features/canvas/EdgeInspectorCard";
-import { CanvasImageError, encodeCanvasImage } from "@/features/canvas/encodeCanvasImage";
+import { encodeCanvasImage } from "@/features/canvas/encodeCanvasImage";
 import { fitCanvasImageSize } from "@/features/canvas/imageEncoding";
 import { NodeColorPanel } from "@/features/canvas/NodeColorPanel";
 import { NodeConnectButton } from "@/features/canvas/NodeConnectButton";
@@ -480,8 +480,9 @@ function CanvasEditor() {
           });
           selectNode(id);
         })
-        .catch((error: unknown) => {
-          if (!(error instanceof CanvasImageError)) throw error;
+        .catch(() => {
+          // Any failure (an undecodable image, a clipboard file the OS dropped)
+          // means this device can't use the image; nothing is placed.
           if (active) toast.error(t("canvas.imageUnsupported"));
         });
     };

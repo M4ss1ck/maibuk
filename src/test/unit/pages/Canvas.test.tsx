@@ -612,6 +612,19 @@ describe("Canvas page", () => {
       toastError.mockRestore();
     });
 
+    it("reports an image that fails to read, rather than rejecting unhandled", async () => {
+      const user = userEvent.setup();
+      const toastError = vi.spyOn(toast, "error");
+      mockEncode.mockRejectedValue(new DOMException("read failed", "NotReadableError"));
+      renderCanvas();
+
+      await user.paste(imageClipboard(imageFile()));
+
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith("canvas.imageUnsupported"));
+      expect(mocks.actions.addNode).not.toHaveBeenCalled();
+      toastError.mockRestore();
+    });
+
     it("places nothing while a Text Node is being edited", async () => {
       const user = userEvent.setup();
       Object.assign(mocks.state, { editingNodeId: "node" });
