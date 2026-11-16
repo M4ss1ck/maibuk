@@ -866,6 +866,24 @@ describe("Canvas page", () => {
       expect(mocks.actions.selectNode).not.toHaveBeenCalled();
     });
 
+    it("claims a drop onto a Text Node's editor, so the editor never inlines it", async () => {
+      mockEncode.mockResolvedValue({ src: "data:image/png;base64,DROP", width: 640, height: 320 });
+      renderCanvas();
+      // Stands in for ProseMirror's own drop handler on a Text Node.
+      const editor = document.createElement("div");
+      editor.setAttribute("contenteditable", "true");
+      const editorDrop = vi.fn();
+      editor.addEventListener("drop", editorDrop);
+      screen.getByTestId("react-flow").appendChild(editor);
+
+      act(() => {
+        editor.dispatchEvent(dragEvent("drop", [imageFile("one.png")]));
+      });
+
+      await waitFor(() => expect(mocks.actions.addNodes).toHaveBeenCalledTimes(1));
+      expect(editorDrop).not.toHaveBeenCalled();
+    });
+
     it("accepts a file drag over the surface", () => {
       renderCanvas();
       const event = dragEvent("dragover", [imageFile("one.png")]);
