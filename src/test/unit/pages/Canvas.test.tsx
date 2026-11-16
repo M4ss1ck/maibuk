@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => {
     saveDoc: vi.fn().mockResolvedValue(null),
     replaceCorruptDocWithDefault: vi.fn().mockResolvedValue(undefined),
     addNode: vi.fn(),
+    addNodes: vi.fn(),
     placeTextNode: vi.fn(),
     addEdge: vi.fn(),
     updateEdge: vi.fn(),
@@ -91,9 +92,11 @@ vi.mock("@/features/canvas/encodeCanvasImage", async (importOriginal) => {
 
 const { mockReadCopiedImageFile } = vi.hoisted(() => ({ mockReadCopiedImageFile: vi.fn() }));
 
-// The OS clipboard, read only for a file a file manager copied.
+// The OS clipboard, read only for a file a file manager copied. The page runs
+// as the web build here: drops arrive as DOM events, not Tauri webview events.
 vi.mock("@/lib/platform", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/platform")>()),
+  IS_TAURI: false,
   getClipboard: async () => ({
     readText: vi.fn(),
     writeText: vi.fn(),
@@ -120,9 +123,12 @@ vi.mock("@xyflow/react", () => ({
   ViewportPortal: ({ children }: { children: React.ReactNode }) => children,
 }));
 
+// The real keys, so a test can assert the options a key is asked for.
+const { mockT } = vi.hoisted(() => ({ mockT: vi.fn((key: string) => key) }));
+
 vi.mock("react-i18next", async (importOriginal) => ({
   ...(await importOriginal<typeof import("react-i18next")>()),
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({ t: mockT }),
 }));
 
 // The header hosts the real sync button; isolate the flow here while still
@@ -764,6 +770,109 @@ describe("Canvas page", () => {
 
       expect(mockEncode).not.toHaveBeenCalled();
       expect(mocks.actions.addNode).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("dropping image files", () => {
+    const imageFile = (name: string) => new File(["png"], name, { type: "image/png" });
+
+    // jsdom has no DataTransfer: this keeps the shapes the drop handler reads.
+    function fileTransfer(files: File[]): DataTransfer {
+      return {
+        files: files as unknown as FileList,
+        items: files.map(
+          (file) => ({ kind: "file", type: file.type, getAsFile: () => file }) as DataTransferItem
+        ) as unknown as DataTransferItemList,
+        types: ["Files"],
+        getData: () => "",
+        dropEffect: "none",
+      } as unknown as DataTransfer;
+    }
+
+    // jsdom's events carry none of the drag payload, so it is attached directly.
+    function dragEvent(type: string, files: File[], at = { x: 100, y: 200 }): Event {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "dataTransfer", { value: fileTransfer(files) });
+      Object.defineProperty(event, "clientX", { value: at.x });
+      Object.defineProperty(event, "clientY", { value: at.y });
+      return event;
+    }
+
+    function dropOnSurface(event: Event) {
+      act(() => {
+        screen.getByTestId("react-flow").dispatchEvent(event);
+      });
+    }
+
+    beforeEach(() => {
+      mockEncode.mockReset();
+    });
+
+    it("places every dropped image cascaded from the drop point, in one history step", async () => {
+      const toastError = vi.spyOn(toast, "error");
+      mockEncode.mockImplementation(async (source: Blob) => {
+        if (source.type !== "image/png") throw new CanvasImageError("unsupported");
+        return { src: "data:image/png;base64,DROP", width: 640, height: 320 };
+      });
+      // Undo is only enabled with history behind it.
+      Object.assign(mocks.state, { past: [{ nodes: [], edges: [] }] });
+      renderCanvas();
+
+      dropOnSurface(
+        dragEvent("drop", [
+          imageFile("one.png"),
+          new File(["notes"], "notes.txt", { type: "text/plain" }),
+          imageFile("two.png"),
+        ])
+      );
+
+      await waitFor(() => expect(mocks.actions.addNodes).toHaveBeenCalledTimes(1));
+      const added = mocks.actions.addNodes.mock.calls[0][0] as Array<{
+        id: string;
+        position: { x: number; y: number };
+        fileName?: string;
+      }>;
+      expect(added).toHaveLength(2);
+      expect(added[0]).toMatchObject({
+        kind: "image",
+        src: "data:image/png;base64,DROP",
+        position: { x: 100, y: 200 },
+        fileName: "one.png",
+      });
+      // The second image cascades; the skipped text file does not advance it.
+      expect(added[1].position).toEqual({ x: 124, y: 224 });
+      expect(added[1].fileName).toBe("two.png");
+      expect(mocks.actions.selectNode).toHaveBeenCalledWith(added[1].id);
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith("canvas.dropSkipped"));
+      expect(mockT).toHaveBeenCalledWith("canvas.dropSkipped", { count: 1 });
+
+      // Both images went in through one addNodes, so one Undo takes them back.
+      fireEvent.click(screen.getByRole("button", { name: "canvas.undo" }));
+      expect(mocks.actions.undo).toHaveBeenCalledTimes(1);
+      expect(mocks.actions.addNodes).toHaveBeenCalledTimes(1);
+      toastError.mockRestore();
+    });
+
+    it("places nothing while the Canvas is read-only", async () => {
+      mockEncode.mockResolvedValue({ src: "data:image/png;base64,DROP", width: 640, height: 320 });
+      Object.assign(mocks.state, { editorReadOnly: true });
+      renderCanvas();
+
+      dropOnSurface(dragEvent("drop", [imageFile("one.png")]));
+      await act(async () => {});
+
+      expect(mockEncode).not.toHaveBeenCalled();
+      expect(mocks.actions.addNodes).not.toHaveBeenCalled();
+      expect(mocks.actions.selectNode).not.toHaveBeenCalled();
+    });
+
+    it("accepts a file drag over the surface", () => {
+      renderCanvas();
+      const event = dragEvent("dragover", [imageFile("one.png")]);
+
+      dropOnSurface(event);
+
+      expect(event.defaultPrevented).toBe(true);
     });
   });
 

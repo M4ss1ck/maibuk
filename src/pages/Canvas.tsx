@@ -40,6 +40,7 @@ import { useBookStore } from "@/features/books/store";
 import { CanvasToolPanel } from "@/features/canvas/CanvasToolPanel";
 import { CanvasImageDialog } from "@/features/canvas/CanvasImageDialog";
 import { routeCanvasPaste } from "@/features/canvas/canvasPaste";
+import { droppedImageNodes, imageMimeFromPath } from "@/features/canvas/canvasDrop";
 import { ConnectToDialog } from "@/features/canvas/ConnectToDialog";
 import { EdgeInspectorCard } from "@/features/canvas/EdgeInspectorCard";
 import { encodeCanvasImage } from "@/features/canvas/encodeCanvasImage";
@@ -60,6 +61,7 @@ import { useThemeStore } from "@/features/theme";
 import { CANVAS_TEXT_NODE_DEFAULT_WIDTH } from "@/constants";
 import { isPlacementTool, type CanvasPosition } from "@/features/canvas/types";
 import { claimPastedImage } from "@/lib/pasted-image";
+import { IS_TAURI, getFileSystem } from "@/lib/platform";
 import { useShortcuts } from "@/lib/shortcuts";
 
 const DEFAULT_SESSION_VIEWPORT = { x: 0, y: 0, zoom: 1 };
@@ -290,6 +292,7 @@ function CanvasEditor() {
     (state) => state.replaceCorruptDocWithDefault
   );
   const addNode = useCanvasStore((state) => state.addNode);
+  const addNodes = useCanvasStore((state) => state.addNodes);
   const placeTextNode = useCanvasStore((state) => state.placeTextNode);
   const addEdge = useCanvasStore((state) => state.addEdge);
   const updateEdge = useCanvasStore((state) => state.updateEdge);
@@ -500,6 +503,121 @@ function CanvasEditor() {
       document.removeEventListener("paste", handlePaste, true);
     };
   }, [addNode, editorReadOnly, loadState, reactFlow, selectNode, t, viewportCenter]);
+
+  // Files dropped onto the Canvas become Canvas Images at the drop point. On the
+  // web the drop is captured before a Text Node's editor can inline the file; on
+  // Tauri the webview reports the drop itself, with paths this side reads.
+  useEffect(() => {
+    if (loadState !== "ready" || editorReadOnly) return;
+    // A drop that finishes after this Canvas closed (or turned read-only)
+    // places nothing.
+    let active = true;
+    const place = async (files: File[], position: CanvasPosition, unreadable = 0) => {
+      const { nodes, skipped } = await droppedImageNodes(files, position);
+      if (!active) return;
+      if (nodes.length > 0) {
+        // One addNodes is one history step, so a single Undo takes the drop back.
+        addNodes(nodes);
+        selectNode(nodes[nodes.length - 1].id);
+      }
+      const refused = skipped + unreadable;
+      if (refused > 0) toast.error(t("canvas.dropSkipped", { count: refused }));
+    };
+
+    if (!IS_TAURI) {
+      const onSurface = (event: DragEvent) => {
+        const target = event.target;
+        return (
+          target instanceof Node &&
+          surfaceRef.current?.contains(target) === true &&
+          event.dataTransfer?.types.includes("Files") === true
+        );
+      };
+      const handleDragOver = (event: DragEvent) => {
+        if (!onSurface(event)) return;
+        event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+      };
+      // Capture phase: the drop is claimed before a Text Node's editor inlines
+      // the file into its own content.
+      const handleDrop = (event: DragEvent) => {
+        if (!onSurface(event)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const dataTransfer = event.dataTransfer;
+        if (!dataTransfer) return;
+        void place(
+          Array.from(dataTransfer.files),
+          reactFlow.screenToFlowPosition({ x: event.clientX, y: event.clientY })
+        );
+      };
+      document.addEventListener("dragover", handleDragOver, true);
+      document.addEventListener("drop", handleDrop, true);
+      return () => {
+        active = false;
+        document.removeEventListener("dragover", handleDragOver, true);
+        document.removeEventListener("drop", handleDrop, true);
+      };
+    }
+
+    // The Tauri OS drop never reaches the DOM, so the webview reports it and the
+    // paths are read into Files here. A path that fails to read counts skipped.
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+    void (async () => {
+      let dispose: (() => void) | undefined;
+      try {
+        const { getCurrentWebview } = await import("@tauri-apps/api/webview");
+        dispose = await getCurrentWebview().onDragDropEvent((event) => {
+          const payload = event.payload;
+          if (payload.type !== "drop") return;
+          const bounds = surfaceRef.current?.getBoundingClientRect();
+          if (!bounds) return;
+          const dpr = window.devicePixelRatio || 1;
+          const point = { x: payload.position.x / dpr, y: payload.position.y / dpr };
+          if (
+            point.x < bounds.left ||
+            point.x > bounds.right ||
+            point.y < bounds.top ||
+            point.y > bounds.bottom
+          ) {
+            return;
+          }
+          void (async () => {
+            const files: File[] = [];
+            let unreadable = 0;
+            const fileSystem = await getFileSystem();
+            for (const path of payload.paths) {
+              // A path that names no image is skipped unread: it could be any size.
+              const type = imageMimeFromPath(path);
+              if (!type.startsWith("image/")) {
+                unreadable += 1;
+                continue;
+              }
+              const name = path.split(/[\\/]/).pop() ?? path;
+              try {
+                const bytes = await fileSystem.readFile(path);
+                files.push(new File([bytes as BlobPart], name, { type }));
+              } catch {
+                unreadable += 1;
+              }
+            }
+            await place(files, reactFlow.screenToFlowPosition(point), unreadable);
+          })();
+        });
+      } catch {
+        return;
+      }
+      if (cancelled) dispose();
+      else unlisten = dispose;
+    })();
+
+    return () => {
+      active = false;
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [addNodes, editorReadOnly, loadState, reactFlow, selectNode, t]);
 
   const placeTextNodeAt = (position: CanvasPosition, width?: number) => {
     // The store lives outside React's event system (the T shortcut is a native
