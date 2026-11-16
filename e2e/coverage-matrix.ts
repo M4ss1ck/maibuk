@@ -1943,6 +1943,19 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "book-title-bar",
+    area: "books",
+    workflow:
+      "Book Editor title bar by width: from 1152px Export / Design Cover / Book Settings show two-line labels and no tooltip, Enter acts; mid width icon-only with tooltip; narrow More menu rows never wrap; asserts: label lines stacked, tooltip text, dialog opens and focus returns",
+    edges: ["Spanish labels split at the balanced space"],
+    terms: ["Book"],
+    shortcuts: [],
+    routes: ["/book/:bookId"],
+    fixture: "oneBookThreeChapters",
+    tags: [],
+    status: "accepted",
+  },
+  {
     id: "cover-templates",
     area: "cover",
     workflow:

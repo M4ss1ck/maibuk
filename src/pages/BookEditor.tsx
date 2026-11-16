@@ -8,6 +8,7 @@ import {
   useCallback,
   useRef,
   useMemo,
+  type ReactNode,
 } from "react";
 import { FocusScope, useOverlay } from "react-aria";
 import { useBookStore } from "@/features/books/store";
@@ -95,6 +96,97 @@ const CHAPTER_EDITOR_TUTORIAL_ANCHORS: EditorTutorialAnchors = {
   text: "book-editor.text",
 };
 
+/**
+ * The Book title bar width at which Export, Design Cover, and Book Settings
+ * show their labels beside their icons. Below it they are icon-only (from the
+ * `@4xl` container width, 56rem) or live in the More menu.
+ */
+export const TITLE_BAR_LABELS_MIN = 1152;
+
+export function titleBarShowsLabels(width: number): boolean {
+  return width >= TITLE_BAR_LABELS_MIN;
+}
+
+/**
+ * Whether the title bar is wide enough for labelled actions, read from its own
+ * box. Takes the element itself (from a callback ref) because the bar unmounts
+ * in Focus mode and while the Book loads.
+ */
+function useTitleBarLabels(bar: HTMLElement | null) {
+  const [showLabels, setShowLabels] = useState(false);
+
+  useLayoutEffect(() => {
+    if (!bar) return;
+    const measure = () => setShowLabels(titleBarShowsLabels(bar.clientWidth));
+    measure();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", measure);
+      return () => window.removeEventListener("resize", measure);
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, [bar]);
+
+  return showLabels;
+}
+
+/**
+ * Splits a label into two lines at the space that keeps the longer line
+ * shortest ("Configuración del Libro" becomes "Configuración" / "del Libro").
+ * Done in code, not with CSS wrapping, so every engine draws the same lines.
+ */
+export function splitTitleBarLabel(label: string): [string] | [string, string] {
+  const words = label.trim().split(/\s+/);
+  if (words.length < 2) return [label.trim()];
+  let best: [string, string] = [words[0], words.slice(1).join(" ")];
+  for (let i = 2; i < words.length; i++) {
+    const candidate: [string, string] = [words.slice(0, i).join(" "), words.slice(i).join(" ")];
+    const longest = (pair: [string, string]) => Math.max(pair[0].length, pair[1].length);
+    if (longest(candidate) < longest(best)) best = candidate;
+  }
+  return best;
+}
+
+interface TitleBarActionProps {
+  label: string;
+  icon: ReactNode;
+  showLabel: boolean;
+  onPress: () => void;
+  tutorialId?: string;
+}
+
+/**
+ * An icon button in the Book title bar that adds its label, wrapped onto two
+ * lines, when the bar has room. The visible label and the accessible name are
+ * the same string, and the tooltip only appears while the label is hidden.
+ */
+function TitleBarAction({ label, icon, showLabel, onPress, tutorialId }: TitleBarActionProps) {
+  return (
+    <Tooltip content={label} disabled={showLabel}>
+      <button
+        type="button"
+        onClick={onPress}
+        className="inline-flex shrink-0 items-center gap-1.5 p-2 hover:bg-muted rounded transition-colors"
+        aria-label={label}
+        data-tutorial={tutorialId}
+      >
+        {icon}
+        {showLabel && (
+          <span
+            aria-hidden="true"
+            className="flex flex-col text-left text-[11px] leading-3.25 font-medium whitespace-nowrap"
+          >
+            {splitTitleBarLabel(label).map((line) => (
+              <span key={line}>{line}</span>
+            ))}
+          </span>
+        )}
+      </button>
+    </Tooltip>
+  );
+}
+
 export function BookEditor() {
   const { t } = useTranslation();
   const { bookId } = useParams<{ bookId: string }>();
@@ -141,6 +233,8 @@ export function BookEditor() {
   const [editorStats, setEditorStats] = useState<EditorStats | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+  const [titleBar, setTitleBar] = useState<HTMLElement | null>(null);
+  const showTitleBarLabels = useTitleBarLabels(titleBar);
   const [showMobileChapters, setShowMobileChapters] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [tocEditor, setTocEditor] = useState<TiptapEditor | null>(null);
@@ -937,60 +1031,64 @@ export function BookEditor() {
             data-focus-pane="book-title-bar"
             tabIndex={-1}
             aria-label={t("panes.bookTitleBar")}
-            className="@container h-12 shrink-0 border-b border-border flex items-center px-2 sm:px-4 gap-1 sm:gap-2 md:gap-4"
+            ref={setTitleBar}
+            className="@container h-12 shrink-0 border-b border-border flex items-center px-2 sm:px-4 gap-2 md:gap-4"
           >
-            {/* Mobile chapter toggle */}
-            <Tooltip content={t("chapters.title")}>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowMobileMenu(false);
-                  setShowMobileChapters(true);
-                  requestAnimationFrame(() => {
-                    mobilePaneRef.current?.focus();
-                  });
-                }}
-                className="md:hidden p-2 hover:bg-muted rounded transition-colors"
-                aria-label={t("chapters.title")}
-              >
-                <Menu className="w-5 h-5" />
-              </button>
-            </Tooltip>
+            {/* Navigation group: one gap-1 rhythm, like the actions group */}
+            <div className="flex shrink-0 items-center gap-1">
+              {/* Mobile chapter toggle */}
+              <Tooltip content={t("chapters.title")}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMobileMenu(false);
+                    setShowMobileChapters(true);
+                    requestAnimationFrame(() => {
+                      mobilePaneRef.current?.focus();
+                    });
+                  }}
+                  className="md:hidden p-2 hover:bg-muted rounded transition-colors"
+                  aria-label={t("chapters.title")}
+                >
+                  <Menu className="w-5 h-5 shrink-0" />
+                </button>
+              </Tooltip>
 
-            <Tooltip content={t("nav.backToHome")}>
-              <button
-                type="button"
-                onClick={() => navigate("/")}
-                className="p-2 hover:bg-muted rounded transition-colors"
-                aria-label={t("nav.backToHome")}
-              >
-                <BackIcon className="w-5 h-5" />
-              </button>
-            </Tooltip>
+              <Tooltip content={t("nav.backToHome")}>
+                <button
+                  type="button"
+                  onClick={() => navigate("/")}
+                  className="p-2 hover:bg-muted rounded transition-colors"
+                  aria-label={t("nav.backToHome")}
+                >
+                  <BackIcon className="w-5 h-5 shrink-0" />
+                </button>
+              </Tooltip>
 
-            {/* Desktop sidebar toggle */}
-            <Tooltip
-              content={showSidebar ? t("chapters.hideSidebar") : t("chapters.showSidebar")}
-              shortcut="bookEditor.toggleSidebar"
-            >
-              <button
-                type="button"
-                onClick={() =>
-                  setShowSidebar((prev) => {
-                    if (!prev) setSidebarWidth(256);
-                    return !prev;
-                  })
-                }
-                className="hidden md:block p-2 hover:bg-muted rounded transition-colors"
-                aria-label={showSidebar ? t("chapters.hideSidebar") : t("chapters.showSidebar")}
+              {/* Desktop sidebar toggle */}
+              <Tooltip
+                content={showSidebar ? t("chapters.hideSidebar") : t("chapters.showSidebar")}
+                shortcut="bookEditor.toggleSidebar"
               >
-                {showSidebar ? (
-                  <PanelLeftClose className="w-5 h-5" />
-                ) : (
-                  <PanelLeftOpen className="w-5 h-5" />
-                )}
-              </button>
-            </Tooltip>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowSidebar((prev) => {
+                      if (!prev) setSidebarWidth(256);
+                      return !prev;
+                    })
+                  }
+                  className="hidden md:block p-2 hover:bg-muted rounded transition-colors"
+                  aria-label={showSidebar ? t("chapters.hideSidebar") : t("chapters.showSidebar")}
+                >
+                  {showSidebar ? (
+                    <PanelLeftClose className="w-5 h-5 shrink-0" />
+                  ) : (
+                    <PanelLeftOpen className="w-5 h-5 shrink-0" />
+                  )}
+                </button>
+              </Tooltip>
+            </div>
 
             <div className="flex-1 min-w-0">
               <TruncatedText
@@ -1008,255 +1106,241 @@ export function BookEditor() {
               )}
             </div>
 
-            {/* Save status */}
-            <span data-tutorial="book-editor.save-status" className="inline-flex">
-              <SaveStatus
-                status={saveStatus}
-                onSave={() => {
-                  handleSaveNow();
-                }}
-                disabled={!currentChapter?.content}
-              />
-            </span>
+            {/* Actions group: every item sits gap-1 apart */}
+            <div className="flex shrink-0 items-center gap-1">
+              {/* Save status */}
+              <span data-tutorial="book-editor.save-status" className="inline-flex">
+                <SaveStatus
+                  status={saveStatus}
+                  onSave={() => {
+                    handleSaveNow();
+                  }}
+                  disabled={!currentChapter?.content}
+                />
+              </span>
 
-            {/* Sync */}
-            <span data-tutorial="book-editor.sync" className="inline-flex">
-              <SyncStatusButton defaultScope="books" />
-            </span>
-            <div className="hidden @2xl:block" data-tutorial="book-editor.history">
-              <HistoryMenuButton
-                onOpenPanel={() => setShowVersionPanel(true)}
-                onSaveVersion={() => void handleSaveVersion()}
-                saveVersionShortcut={saveVersionShortcut}
-                panelShortcut={panelShortcut}
-              />
-            </div>
-            <Tooltip content={t("nav.bookNotes")}>
-              <button
-                type="button"
-                onClick={() => {
-                  setBookSidePanelTab("notes");
-                  setShowNotesChapter(true);
-                }}
-                disabled={showNotesChapter && bookSidePanelTab === "notes"}
-                data-tutorial="book-editor.book-notes"
-                className="hidden @2xl:inline-flex p-2 hover:bg-muted rounded transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
-                aria-label={t("nav.bookNotes")}
-              >
-                <NotebookText className="w-5 h-5" />
-              </button>
-            </Tooltip>
-
-            {/* Word count - hidden on narrow content */}
-            <div className="hidden @2xl:block text-sm text-muted-foreground">
-              {editorStats?.hasSelection ? (
-                <Tooltip content={t("editor.selectionStats")}>
-                  <span>
-                    {editorStats.words.toLocaleString()} {t("common.words")} /{" "}
-                    {editorStats.characters.toLocaleString()} {t("common.chars")}
-                  </span>
-                </Tooltip>
-              ) : (
-                <span>
-                  {wordCount.toLocaleString()} {t("common.words")}
-                </span>
-              )}
-            </div>
-
-            {/* Desktop action buttons */}
-            <div className="hidden @4xl:flex items-center gap-1">
-              {/* Export button */}
-              <Tooltip content={t("nav.exportBook")}>
-                <button
-                  type="button"
-                  onClick={() => setShowExportDialog(true)}
-                  className="p-2 hover:bg-muted rounded transition-colors"
-                  aria-label={t("nav.exportBook")}
-                  data-tutorial="book-editor.export"
-                >
-                  <ExportIcon className="w-5 h-5" />
-                </button>
-              </Tooltip>
-
-              {/* Design Cover button */}
-              <Tooltip content={t("nav.designCover")}>
-                <button
-                  type="button"
-                  onClick={() => navigate(`/book/${bookId}/cover`)}
-                  className="p-2 hover:bg-muted rounded transition-colors"
-                  aria-label={t("nav.designCover")}
-                  data-tutorial="book-editor.cover"
-                >
-                  <CoverDesignIcon className="w-5 h-5" />
-                </button>
-              </Tooltip>
-
-              {/* Book Settings button */}
-              <Tooltip content={t("bookSettings.title")}>
-                <button
-                  type="button"
-                  onClick={() => setShowSettingsDialog(true)}
-                  className="p-2 hover:bg-muted rounded transition-colors"
-                  aria-label={t("bookSettings.title")}
-                >
-                  <SettingsIcon className="w-5 h-5" />
-                </button>
-              </Tooltip>
-
-              {/** Theme toggle */}
-              <ThemeToggle variant="dropdown" />
-
-              {IS_DESKTOP && (
-                <Tooltip content={t("settings.alwaysOnTop")} shortcut="global.toggleAlwaysOnTop">
-                  <button
-                    type="button"
-                    onClick={() => setAlwaysOnTop(!alwaysOnTop)}
-                    className={`p-2 rounded transition-colors ${
-                      alwaysOnTop ? "bg-muted text-primary" : "hover:bg-muted text-foreground"
-                    }`}
-                    aria-label={t("settings.alwaysOnTop")}
-                  >
-                    <Pin className="w-5 h-5" />
-                  </button>
-                </Tooltip>
-              )}
-
-              {/* Focus mode toggle */}
-              <Tooltip content={t("nav.focusMode")} shortcut="bookEditor.focusMode">
-                <button
-                  type="button"
-                  onClick={toggleFocusMode}
-                  className="p-2 hover:bg-muted rounded transition-colors"
-                  aria-label={t("nav.focusMode")}
-                  data-tutorial="book-editor.focus"
-                >
-                  <FocusModeIcon className="w-5 h-5" />
-                </button>
-              </Tooltip>
-            </div>
-
-            {/* Mobile more menu */}
-            <div className="relative @4xl:hidden">
-              <Tooltip content={t("common.more")}>
+              {/* Sync */}
+              <span data-tutorial="book-editor.sync" className="inline-flex">
+                <SyncStatusButton defaultScope="books" />
+              </span>
+              <div className="hidden @2xl:block" data-tutorial="book-editor.history">
+                <HistoryMenuButton
+                  onOpenPanel={() => setShowVersionPanel(true)}
+                  onSaveVersion={() => void handleSaveVersion()}
+                  saveVersionShortcut={saveVersionShortcut}
+                  panelShortcut={panelShortcut}
+                />
+              </div>
+              <Tooltip content={t("nav.bookNotes")}>
                 <button
                   type="button"
                   onClick={() => {
-                    setShowMobileChapters(false);
-                    setShowMobileMenu(!showMobileMenu);
+                    setBookSidePanelTab("notes");
+                    setShowNotesChapter(true);
                   }}
-                  className="p-2 hover:bg-muted rounded transition-colors"
-                  aria-label={t("common.more")}
+                  disabled={showNotesChapter && bookSidePanelTab === "notes"}
+                  data-tutorial="book-editor.book-notes"
+                  className="hidden @2xl:inline-flex p-2 hover:bg-muted rounded transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
+                  aria-label={t("nav.bookNotes")}
                 >
-                  <MoreVertical className="w-5 h-5" />
+                  <NotebookText className="w-5 h-5 shrink-0" />
                 </button>
               </Tooltip>
 
-              {showMobileMenu && (
-                <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setShowMobileMenu(false)}
-                    onKeyDown={() => setShowMobileMenu(false)}
-                  />
-                  <div className="absolute right-0 top-full mt-1 w-48 bg-background border border-border rounded-lg shadow-lg z-50 dropdown-enter">
+              {/* Word count - hidden on narrow content */}
+              <div className="hidden @2xl:block px-2 text-sm text-muted-foreground whitespace-nowrap">
+                {editorStats?.hasSelection ? (
+                  <Tooltip content={t("editor.selectionStats")}>
+                    <span>
+                      {editorStats.words.toLocaleString()} {t("common.words")} /{" "}
+                      {editorStats.characters.toLocaleString()} {t("common.chars")}
+                    </span>
+                  </Tooltip>
+                ) : (
+                  <span>
+                    {wordCount.toLocaleString()} {t("common.words")}
+                  </span>
+                )}
+              </div>
+
+              {/* Desktop action buttons */}
+              <div className="hidden @4xl:flex items-center gap-1">
+                <TitleBarAction
+                  label={t("nav.exportBook")}
+                  icon={<ExportIcon className="w-5 h-5 shrink-0" />}
+                  showLabel={showTitleBarLabels}
+                  onPress={() => setShowExportDialog(true)}
+                  tutorialId="book-editor.export"
+                />
+                <TitleBarAction
+                  label={t("nav.designCover")}
+                  icon={<CoverDesignIcon className="w-5 h-5 shrink-0" />}
+                  showLabel={showTitleBarLabels}
+                  onPress={() => navigate(`/book/${bookId}/cover`)}
+                  tutorialId="book-editor.cover"
+                />
+                <TitleBarAction
+                  label={t("bookSettings.title")}
+                  icon={<SettingsIcon className="w-5 h-5 shrink-0" />}
+                  showLabel={showTitleBarLabels}
+                  onPress={() => setShowSettingsDialog(true)}
+                />
+
+                {/** Theme toggle */}
+                <ThemeToggle variant="dropdown" />
+
+                {IS_DESKTOP && (
+                  <Tooltip content={t("settings.alwaysOnTop")} shortcut="global.toggleAlwaysOnTop">
                     <button
                       type="button"
-                      onClick={() => {
-                        setBookSidePanelTab("notes");
-                        setShowNotesChapter(true);
-                        setShowMobileMenu(false);
-                      }}
-                      disabled={showNotesChapter && bookSidePanelTab === "notes"}
-                      className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2 disabled:opacity-40 disabled:hover:bg-transparent"
+                      onClick={() => setAlwaysOnTop(!alwaysOnTop)}
+                      className={`p-2 rounded transition-colors ${
+                        alwaysOnTop ? "bg-muted text-primary" : "hover:bg-muted text-foreground"
+                      }`}
+                      aria-label={t("settings.alwaysOnTop")}
                     >
-                      <NotebookText className="w-4 h-4" />
-                      {t("nav.bookNotes")}
+                      <Pin className="w-5 h-5 shrink-0" />
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowExportDialog(true);
-                        setShowMobileMenu(false);
-                      }}
-                      className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
-                    >
-                      <ExportIcon className="w-4 h-4" />
-                      {t("nav.exportBook")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigate(`/book/${bookId}/cover`);
-                        setShowMobileMenu(false);
-                      }}
-                      className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
-                    >
-                      <CoverDesignIcon className="w-4 h-4" />
-                      {t("nav.designCover")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowSettingsDialog(true);
-                        setShowMobileMenu(false);
-                      }}
-                      className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
-                    >
-                      <SettingsIcon className="w-4 h-4" />
-                      {t("bookSettings.title")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void handleSaveVersion();
-                        setShowMobileMenu(false);
-                      }}
-                      className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
-                    >
-                      <History className="w-4 h-4" />
-                      {t("versions.saveVersion")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowVersionPanel(true);
-                        setShowMobileMenu(false);
-                      }}
-                      className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
-                    >
-                      <History className="w-4 h-4" />
-                      {t("versions.showHistory")}
-                    </button>
-                    {IS_DESKTOP && (
+                  </Tooltip>
+                )}
+
+                {/* Focus mode toggle */}
+                <Tooltip content={t("nav.focusMode")} shortcut="bookEditor.focusMode">
+                  <button
+                    type="button"
+                    onClick={toggleFocusMode}
+                    className="p-2 hover:bg-muted rounded transition-colors"
+                    aria-label={t("nav.focusMode")}
+                    data-tutorial="book-editor.focus"
+                  >
+                    <FocusModeIcon className="w-5 h-5 shrink-0" />
+                  </button>
+                </Tooltip>
+              </div>
+
+              {/* Mobile more menu */}
+              <div className="relative @4xl:hidden">
+                <Tooltip content={t("common.more")}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowMobileChapters(false);
+                      setShowMobileMenu(!showMobileMenu);
+                    }}
+                    className="p-2 hover:bg-muted rounded transition-colors"
+                    aria-label={t("common.more")}
+                  >
+                    <MoreVertical className="w-5 h-5 shrink-0" />
+                  </button>
+                </Tooltip>
+
+                {showMobileMenu && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setShowMobileMenu(false)}
+                      onKeyDown={() => setShowMobileMenu(false)}
+                    />
+                    <div className="absolute right-0 top-full mt-1 w-max min-w-48 max-w-[min(20rem,calc(100vw-2rem))] bg-background border border-border rounded-lg shadow-lg z-50 dropdown-enter">
                       <button
                         type="button"
                         onClick={() => {
-                          setAlwaysOnTop(!alwaysOnTop);
+                          setBookSidePanelTab("notes");
+                          setShowNotesChapter(true);
                           setShowMobileMenu(false);
                         }}
-                        className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
+                        disabled={showNotesChapter && bookSidePanelTab === "notes"}
+                        className="w-full px-4 py-2 text-left hover:bg-muted flex items-start gap-3 leading-5 disabled:opacity-40 disabled:hover:bg-transparent"
                       >
-                        <Pin className="w-4 h-4" />
-                        {t("settings.alwaysOnTop")}
+                        <NotebookText className="w-5 h-5 shrink-0" />
+                        {t("nav.bookNotes")}
                       </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        toggleFocusMode();
-                        setShowMobileMenu(false);
-                      }}
-                      className="w-full px-4 py-2 text-left hover:bg-muted flex items-center gap-2"
-                    >
-                      <FocusModeIcon className="w-4 h-4" />
-                      {t("nav.focusMode")}
-                    </button>
-                    <div className="px-4 py-2 border-t border-border">
-                      <ThemeToggle />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowExportDialog(true);
+                          setShowMobileMenu(false);
+                        }}
+                        className="w-full px-4 py-2 text-left hover:bg-muted flex items-start gap-3 leading-5"
+                      >
+                        <ExportIcon className="w-5 h-5 shrink-0" />
+                        {t("nav.exportBook")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigate(`/book/${bookId}/cover`);
+                          setShowMobileMenu(false);
+                        }}
+                        className="w-full px-4 py-2 text-left hover:bg-muted flex items-start gap-3 leading-5"
+                      >
+                        <CoverDesignIcon className="w-5 h-5 shrink-0" />
+                        {t("nav.designCover")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowSettingsDialog(true);
+                          setShowMobileMenu(false);
+                        }}
+                        className="w-full px-4 py-2 text-left hover:bg-muted flex items-start gap-3 leading-5"
+                      >
+                        <SettingsIcon className="w-5 h-5 shrink-0" />
+                        {t("bookSettings.title")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void handleSaveVersion();
+                          setShowMobileMenu(false);
+                        }}
+                        className="w-full px-4 py-2 text-left hover:bg-muted flex items-start gap-3 leading-5"
+                      >
+                        <History className="w-5 h-5 shrink-0" />
+                        {t("versions.saveVersion")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowVersionPanel(true);
+                          setShowMobileMenu(false);
+                        }}
+                        className="w-full px-4 py-2 text-left hover:bg-muted flex items-start gap-3 leading-5"
+                      >
+                        <History className="w-5 h-5 shrink-0" />
+                        {t("versions.showHistory")}
+                      </button>
+                      {IS_DESKTOP && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAlwaysOnTop(!alwaysOnTop);
+                            setShowMobileMenu(false);
+                          }}
+                          className="w-full px-4 py-2 text-left hover:bg-muted flex items-start gap-3 leading-5"
+                        >
+                          <Pin className="w-5 h-5 shrink-0" />
+                          {t("settings.alwaysOnTop")}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          toggleFocusMode();
+                          setShowMobileMenu(false);
+                        }}
+                        className="w-full px-4 py-2 text-left hover:bg-muted flex items-start gap-3 leading-5"
+                      >
+                        <FocusModeIcon className="w-5 h-5 shrink-0" />
+                        {t("nav.focusMode")}
+                      </button>
+                      <div className="px-4 py-2 border-t border-border">
+                        <ThemeToggle />
+                      </div>
                     </div>
-                  </div>
-                </>
-              )}
+                  </>
+                )}
+              </div>
             </div>
           </header>
         </TooltipGroup>
