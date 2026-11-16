@@ -7,6 +7,7 @@ import {
 } from "../support/keyboard";
 import { capture } from "../support/capture";
 import { writeClipboard } from "../support/clipboard";
+import { dropFiles } from "../support/file-drop";
 import { expect, test } from "../support/test";
 
 // The Canvas editor (issue #210): tools, Text Nodes, Note References, Canvas
@@ -465,6 +466,53 @@ test.describe("pasting a Canvas Image @wf:canvas-image-paste @chromium-only", ()
     await expect(page.locator(".react-flow__node-text .ProseMirror")).toHaveCount(0);
     await expect(node.locator("figure.editor-image-figure")).toHaveClass(/natural-width/);
     expect(await pictureWidth()).toBeLessThan((await textWidth()) / 2);
+  });
+});
+
+test.describe("dropping Canvas Images @wf:canvas-image-drop", () => {
+  test("two image files make two cascaded Canvas Images and the text file is refused", async ({
+    page,
+  }) => {
+    await openMap(page);
+    // The drop listener binds only once the stored doc has loaded.
+    await expect(textNodes(page)).toHaveCount(2);
+    await expect(imageNodes(page)).toHaveCount(0);
+
+    await dropFiles(page.locator(".react-flow__pane"), [
+      { name: "a.png", type: "image/png", image: { width: 96, height: 60 } },
+      { name: "b.png", type: "image/png", image: { width: 60, height: 96 } },
+      { name: "notes.txt", type: "text/plain", text: "hello" },
+    ]);
+
+    const dropped = imageNodes(page);
+    await expect(dropped).toHaveCount(2);
+    const pictures = dropped.getByRole("img");
+    await expect(pictures).toHaveCount(2);
+    await expect(pictures.first()).toHaveAttribute("src", /^data:image\//);
+    await expect(pictures.last()).toHaveAttribute("src", /^data:image\//);
+
+    // The one file that is no image is named in the toast, not dropped silently.
+    // A toast lives 2 s, so it is read before the slower box checks.
+    await expect(page.getByRole("status").filter({ hasText: /1 file skipped/ })).toBeVisible();
+
+    // Each drop after the first sits one cascade step down and to the right, so
+    // a stack of drops stays readable: whichever node is the further right is
+    // also the lower one, whatever order the nodes are painted in.
+    const boxes = await Promise.all(
+      [dropped.nth(0), dropped.nth(1)].map((node) => node.boundingBox())
+    );
+    const [one, other] = boxes;
+    if (one === null || other === null) throw new Error("a dropped Canvas Image has no box");
+    const [left, right] = one.x <= other.x ? [one, other] : [other, one];
+    expect(right.x).toBeGreaterThan(left.x);
+    expect(right.y).toBeGreaterThan(left.y);
+    await capture(page, "canvas-image-dropped");
+
+    await expect(page.getByText("Saved", { exact: true })).toBeVisible();
+    await page.reload();
+    await expectCanvasReady(page);
+    await expect(imageNodes(page)).toHaveCount(2);
+    await expect(imageNodes(page).getByRole("img").first()).toHaveAttribute("src", /^data:image\//);
   });
 });
 
