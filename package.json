@@ -48,6 +48,7 @@
     "generate:plugin-api": "tsx scripts/generate-plugin-api.ts",
     "generate:plugin-ui": "tsx scripts/generate-plugin-ui.ts",
     "generate:plugin-manifest": "node scripts/generate-lucide-icon-names.mjs && tsx scripts/generate-manifest-schema.ts",
+    "postinstall": "node scripts/fetch-dictation-runtime.mjs --postinstall",
     "fetch:dictation": "node scripts/fetch-dictation-runtime.mjs",
     "fetch:sync-server": "node scripts/fetch-sync-server.mjs",
     "conformance:dictation": "node scripts/dictation-conformance/web.mjs && cd src-tauri && cargo test --release dictation::runner::tests::conformance -- --ignored --nocapture && python3 ../scripts/dictation-conformance/report.py",

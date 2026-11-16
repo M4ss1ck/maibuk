@@ -6,6 +6,7 @@ import {
   RUNTIMES,
   crc32cBase64,
   fetchTestAssets,
+  postinstall,
   runtimesFor,
 } from "../../../../scripts/fetch-dictation-runtime.mjs";
 import { crc32cBase64 as appCrc32cBase64 } from "@/features/dictation/crc32c";
@@ -146,5 +147,56 @@ describe("fetchTestAssets()", () => {
 
     const written = readFileSync(join(root, "vendor/moonshine/models/test-model/tokenizer.bin"));
     expect(new Uint8Array(written)).toEqual(content);
+  });
+});
+
+describe("postinstall()", () => {
+  let root: string;
+  const wasm = RUNTIMES.find((runtime) => runtime.name === "wasm");
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    if (root) rmSync(root, { recursive: true, force: true });
+  });
+
+  it("skips the download when the pinned WASM runtime is already in place", async () => {
+    root = mkdtempSync(join(tmpdir(), "maibuk-postinstall-"));
+    mkdirSync(join(root, "vendor/moonshine/wasm"), { recursive: true });
+    writeFileSync(join(root, "vendor/moonshine/wasm/.sha256"), wasm?.sha256 ?? "");
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await postinstall(root, vi.fn());
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("downloads only the WASM runtime", async () => {
+    root = mkdtempSync(join(tmpdir(), "maibuk-postinstall-"));
+    const fetchSpy = vi.fn(async (_url: string): Promise<Response> => {
+      throw new Error("offline");
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await postinstall(root, vi.fn());
+
+    expect(fetchSpy.mock.calls.map(([url]) => url)).toEqual([wasm?.url]);
+  });
+
+  it("warns and lets the install finish when the download fails", async () => {
+    root = mkdtempSync(join(tmpdir(), "maibuk-postinstall-"));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("getaddrinfo ENOTFOUND github.com");
+      })
+    );
+    const warn = vi.fn();
+
+    await expect(postinstall(root, warn)).resolves.toBeUndefined();
+
+    const message = warn.mock.calls.flat().join("\n");
+    expect(message).toContain("ENOTFOUND");
+    expect(message).toContain("pnpm fetch:dictation --web");
   });
 });

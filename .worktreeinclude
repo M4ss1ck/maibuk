@@ -1,0 +1,8 @@
+# Git-ignored files Claude Code copies into every worktree it creates
+# (https://code.claude.com/docs/en/worktrees#copy-gitignored-files-into-worktrees).
+# `pnpm install` downloads vendor/moonshine/wasm when it is missing; copying it
+# saves that download and works offline.
+# The models and test assets (`pnpm fetch:dictation --test-assets`, ~1.5 GB)
+# stay out; fetch them in the worktree when a test needs them.
+vendor/moonshine/wasm/**
+vendor/moonshine/linux-x86_64/**

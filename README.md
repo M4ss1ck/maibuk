@@ -200,6 +200,8 @@ Install JavaScript dependencies:
 pnpm install
 ```
 
+`pnpm install` also downloads the Dictation WASM runtime into `vendor/moonshine/wasm`, which typecheck and every build need. If the install was offline, run `pnpm fetch:dictation --web` once you are back online.
+
 For the native app, fetch the Dictation runtimes before starting Tauri:
 
 ```bash
@@ -210,7 +212,6 @@ pnpm tauri dev
 For web-only development:
 
 ```bash
-pnpm fetch:dictation --web
 pnpm dev:web
 ```
 

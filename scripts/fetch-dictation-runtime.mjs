@@ -3,6 +3,7 @@
 //   pnpm fetch:dictation
 //   pnpm fetch:dictation --test-assets
 //   pnpm fetch:dictation --web
+//   (pnpm install runs it with --postinstall: the WASM runtime, never fatal)
 // `--web` fetches only the WASM runtime, which is all the web build needs;
 // `pnpm build:web` runs it first so hosts that only run that script (Cloudflare
 // Pages) can build.
@@ -255,8 +256,27 @@ export function runtimesFor(argv) {
   return argv.includes("--web") ? RUNTIMES.filter((runtime) => runtime.name === "wasm") : RUNTIMES;
 }
 
+// `pnpm install` runs this (package.json "postinstall") so a fresh clone or
+// worktree typechecks and builds: `moonshine-wasm` resolves to
+// vendor/moonshine/wasm (tsconfig.json paths, vite.config.ts aliases). A failed
+// download (offline, GitHub down) warns and lets the install finish.
+export async function postinstall(root, warn = console.warn) {
+  try {
+    for (const runtime of runtimesFor(["--web"])) await fetchRuntime(root, runtime);
+  } catch (error) {
+    warn(
+      `[fetch:dictation] Dictation WASM runtime not downloaded (${error instanceof Error ? error.message : error}).\n` +
+        "[fetch:dictation] typecheck and builds need it: run `pnpm fetch:dictation --web` once online."
+    );
+  }
+}
+
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-  for (const runtime of runtimesFor(process.argv)) await fetchRuntime(root, runtime);
-  if (process.argv.includes("--test-assets")) await fetchTestAssets(root);
+  if (process.argv.includes("--postinstall")) {
+    await postinstall(root);
+  } else {
+    for (const runtime of runtimesFor(process.argv)) await fetchRuntime(root, runtime);
+    if (process.argv.includes("--test-assets")) await fetchTestAssets(root);
+  }
 }
