@@ -5,6 +5,38 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 y este proyecto sigue el [Versionado Semántico](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.0] - 2026-11-16
+
+### Added
+- Colocar imágenes en un Canvas desde la barra de herramientas o con el atajo I
+- Añadir, reemplazar y editar el texto alternativo de las imágenes de Canvas en un cuadro de diálogo dedicado
+- Soltar archivos de imagen sobre un Canvas para colocar imágenes de Canvas
+- Pegar imágenes en un Canvas o en un capítulo desde el portapapeles, incluidas las imágenes copiadas desde administradores de archivos de escritorio
+- Personalizar las conexiones de Canvas con colores predefinidos, cuatro grosores y estilos de línea sólida, discontinua o punteada
+- Restablecer los colores de las conexiones al valor predeterminado del tema con vista previa en vivo y un paso de deshacer por cada confirmación
+- Usar frases de voz para los comandos de imágenes de Canvas
+
+### Changed
+- Mostrar etiquetas para Exportar, Diseñar portada y Ajustes del libro en las barras de título anchas del editor de libros
+- Las exportaciones a EPUB y PDF conservan la alineación y el ancho de las imágenes
+- Las imágenes nuevas se alinean a la izquierda de forma predeterminada, mientras que las imágenes guardadas conservan su alineación almacenada
+- Los controles de ancho para imágenes sin tamaño parten de su ancho dibujado y permanecen desactivados hasta que la imagen se carga
+- Las barras de herramientas de las imágenes se anclan al lado de la imagen y ajustan su tamaño a su contenido
+- Las conexiones seleccionadas muestran un halo para que su color siga siendo visible
+- Las puntas de flecha de las conexiones y el espaciado de los guiones se escalan con el grosor de la línea
+
+### Fixed
+- Las imágenes pegadas conservan su propio ancho en lugar de llenar la página
+- El redimensionamiento arrastrando desde las esquinas ya no duplica el movimiento de las imágenes alineadas a la izquierda o a la derecha
+- Los nodos de texto de Canvas conservan las imágenes pegadas en ellos
+- Los nodos de texto de Canvas en reposo dibujan las imágenes al mismo tamaño que el editor
+- Un pegado que comienza en un nodo de texto nunca se convierte en una imagen de Canvas
+- Un pegado de imagen fallido muestra un aviso emergente en lugar de producir un rechazo no controlado
+- En los nodos de texto de Canvas, la barra de herramientas de selección se aparta mientras hay una imagen seleccionada
+- Las puntas de flecha sin color y las conexiones seleccionadas conservan el color de línea del tema
+- Los bloques de código Markdown ya no ponen en cursiva el texto después de guiones bajos dentro de una palabra
+- Reemplazar una imagen de Canvas conserva su texto alternativo
+
 ## [0.22.2] - 2026-11-15
 
 ### Fixed

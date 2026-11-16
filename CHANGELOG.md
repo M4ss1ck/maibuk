@@ -5,6 +5,38 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.0] - 2026-11-16
+
+### Added
+- Place images on a Canvas from the toolbar or with the I shortcut
+- Add, replace, and edit alt text for Canvas Images in a dedicated dialog
+- Drop image files onto a Canvas to place Canvas Images
+- Paste images onto a Canvas or into a chapter from the clipboard, including images copied from desktop file managers
+- Customize Canvas Connections with color presets, four thicknesses, and solid, dashed, or dotted line styles
+- Reset Connection colors to the theme default with live preview and one undo step per commit
+- Use voice phrases for Canvas Image commands
+
+### Changed
+- Show labels for Export, Design Cover, and Book Settings in wide book editor title bars
+- EPUB and PDF exports preserve image alignment and width
+- New pictures default to left alignment while saved pictures keep their stored alignment
+- Width controls for unsized pictures step from their drawn width and are disabled until the picture loads
+- Picture toolbars anchor to the picture side and size to their content
+- Selected Connections show a halo so their color stays visible
+- Connection arrowheads and dash spacing scale with line thickness
+
+### Fixed
+- Pasted pictures keep their own width instead of filling the page
+- Corner-drag resize no longer doubles movement for left- or right-aligned pictures
+- Canvas Text Nodes keep pictures pasted into them
+- Resting Canvas Text Nodes draw images at the same size as the editor
+- A paste that starts in a Text Node never becomes a Canvas Image
+- A failed image paste shows a toast instead of rejecting unhandled
+- In Canvas Text Nodes, the Selection toolbar steps aside while a picture is selected
+- Uncolored arrowheads and selected Connections keep the theme line color
+- Markdown code blocks no longer italicize text after intraword underscores
+- Replacing a Canvas Image keeps its alt text
+
 ## [0.22.2] - 2026-11-15
 
 ### Fixed
