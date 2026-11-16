@@ -8,6 +8,8 @@
  * - Preserving standard HTML formatting
  */
 
+import { imageAlignment, imageWidthPercent } from "@/components/editor/image-figure-box";
+
 /** The link back from an endnote to its marker: an arrow the PDF's built-in fonts cannot show. */
 export const ENDNOTE_BACKLINK = '.endnote a[href^="#fnref-"]';
 
@@ -20,6 +22,48 @@ interface Footnote {
 interface SanitizeResult {
   html: string;
   footnotes: Footnote[];
+}
+
+/**
+ * Gives an Image figure its export class and inline width. EPUB readers cannot
+ * read the editor's data-alignment and data-width, which the next step strips.
+ */
+function carryImageFigureLayout(html: string): string {
+  if (!html.includes("<figure")) return html;
+
+  return html.replace(
+    /<figure([^>]*)>(\s*<img)([^>]*?)(\/?>)/gi,
+    (
+      match: string,
+      figureAttrs: string,
+      imgOpen: string,
+      imgAttrs: string,
+      imgClose: string
+    ): string => {
+      if (/\bclass="[^"]*\bscene-break\b[^"]*"/.test(figureAttrs)) return match;
+
+      const alignment = imageAlignment((/\bdata-alignment="([^"]*)"/i.exec(figureAttrs) ?? [])[1]);
+      const width = imageWidthPercent((/\bdata-width="([^"]*)"/i.exec(figureAttrs) ?? [])[1]);
+      const classes = `image-figure align-${alignment}`;
+
+      const nextFigureAttrs = /\bclass="/i.test(figureAttrs)
+        ? figureAttrs.replace(/\bclass="([^"]*)"/i, (_match, existing: string) =>
+            existing ? `class="${existing} ${classes}"` : `class="${classes}"`
+          )
+        : `${figureAttrs} class="${classes}"`;
+
+      const nextImgAttrs =
+        width === null
+          ? imgAttrs
+          : /\bstyle="/i.test(imgAttrs)
+            ? imgAttrs.replace(/\bstyle="([^"]*)"/i, (_match, existing: string) =>
+                existing ? `style="${existing}; width: ${width}%"` : `style="width: ${width}%"`
+              )
+            : `${imgAttrs} style="width: ${width}%"`;
+
+      return `<figure${nextFigureAttrs}>${imgOpen}${nextImgAttrs}${imgClose}`;
+    }
+  );
 }
 
 function convertSceneBreaks(html: string): string {
@@ -119,6 +163,9 @@ export function sanitizeHtmlForEpub(html: string): SanitizeResult {
   // Clean up empty class attributes
   sanitized = sanitized.replace(/class=""/g, "");
   sanitized = sanitized.replace(/class="\s+"/g, "");
+
+  // Keep an Image figure's alignment and width now that data-* attributes go
+  sanitized = carryImageFigureLayout(sanitized);
 
   // Remove data attributes that aren't needed (except for scene-break hr)
   sanitized = sanitized.replace(/\s+data-[^=]+="[^"]*"/gi, (match) => {
