@@ -327,6 +327,8 @@
     "imageUnavailable": "Imagen no disponible",
     "imageFetchFailed": "No se pudo cargar la imagen. Revisa la dirección o elige un archivo.",
     "imageUnsupported": "Este formato de imagen no es compatible con este dispositivo",
+    "dropSkipped_one": "Se omitió {{count}} archivo: no se pudo abrir como imagen",
+    "dropSkipped_other": "Se omitieron {{count}} archivos: no se pudieron abrir como imágenes",
     "editTextNode": "Editar nodo de texto",
     "searchPlaceholder": "Buscar lienzos…",
     "searchNotesPlaceholder": "Buscar notas…",

@@ -334,6 +334,8 @@ export interface CanvasStoreState {
   resizeNodeLive: (id: string, input: ResizeTextNodeInput) => void;
   endLiveChange: () => void;
   addNode: (node: CanvasNode) => void;
+  /** Add several nodes in one history step, so a single undo removes them all. */
+  addNodes: (nodes: CanvasNode[]) => void;
   /** Add an empty Text Node, open it, and return to Select. It enters history with its first text. */
   placeTextNode: (node: LightweightCanvasNode) => void;
   updateTextNode: (id: string, patch: UpdateTextNodePatch) => void;
@@ -694,6 +696,16 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     const id = node.id || generateId();
     if (state.doc.nodes.some((candidate) => candidate.id === id)) return;
     get().commit({ ...state.doc, nodes: [...state.doc.nodes, { ...node, id }] });
+  },
+
+  addNodes: (nodes) => {
+    const state = get();
+    if (state.editorReadOnly) return;
+    const added = nodes.filter(
+      (node) => !state.doc.nodes.some((candidate) => candidate.id === node.id)
+    );
+    if (added.length === 0) return;
+    get().commit({ ...state.doc, nodes: [...state.doc.nodes, ...added] });
   },
 
   placeTextNode: (node) => {

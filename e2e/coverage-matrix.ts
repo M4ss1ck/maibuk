@@ -1747,6 +1747,22 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "canvas-image-drop",
+    area: "canvas",
+    workflow:
+      "Dropping two image files and one text file on the Canvas places two cascaded Canvas Images and a toast naming one skipped file; asserts: two images visible, offset down-right, skip toast; persists: yes",
+    edges: [
+      "Cascade offsets, the skip count, read-only, and one-step Undo are owned by the Vitest canvas-drop, canvas-store and Canvas page suites",
+      "Tauri desktop drops arrive through the webview drag-drop event, not DOM events; Android has no file drop and uses the toolbar button",
+    ],
+    terms: ["Canvas Image"],
+    shortcuts: [],
+    routes: ["/canvas/:canvasId"],
+    fixture: "canvasWithNodes",
+    tags: [],
+    status: "accepted",
+  },
+  {
     id: "canvas-text-node",
     area: "canvas",
     workflow:
