@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Editor } from "@tiptap/core";
 import { EditorContent } from "@tiptap/react";
@@ -85,5 +85,57 @@ describe("ImageInsertDialog", () => {
     expect(imagePositions).toHaveLength(2);
     // The new image lands before the paragraph; the old one stays after it.
     expect(editor.state.selection.from).toBe(imagePositions[0]);
+  });
+});
+
+describe("ImageInsertDialog with a submit handler", () => {
+  it("hands the image to the handler, then closes once it resolves", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    let release: () => void = () => {};
+    const onSubmit = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        })
+    );
+    render(<ImageInsertDialog isOpen onClose={onClose} onSubmit={onSubmit} />);
+
+    const url = screen.getByRole("textbox", { name: "editor.imageUrl" });
+    await user.type(url, "https://example.com/cat.png");
+    await user.type(screen.getByRole("textbox", { name: "editor.altTextOptional" }), "A cat");
+    await user.click(screen.getByRole("button", { name: "common.insert" }));
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      src: "https://example.com/cat.png",
+      alt: "A cat",
+      fileName: undefined,
+    });
+
+    // Insert cannot start a second run while the first is still working.
+    await user.click(screen.getByRole("button", { name: "common.insert" }));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+
+    release();
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  it("shows the handler's message and stays open when it rejects", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const onSubmit = vi.fn(async () => {
+      throw new Error("canvas.imageUnsupported");
+    });
+    render(<ImageInsertDialog isOpen onClose={onClose} onSubmit={onSubmit} />);
+
+    await user.type(
+      screen.getByRole("textbox", { name: "editor.imageUrl" }),
+      "https://example.com/broken.heic"
+    );
+    await user.click(screen.getByRole("button", { name: "common.insert" }));
+
+    expect(await screen.findByText("canvas.imageUnsupported")).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

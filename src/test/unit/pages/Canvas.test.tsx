@@ -40,6 +40,10 @@ const mocks = vi.hoisted(() => {
     openConnectPicker: vi.fn(),
     closeConnectPicker: vi.fn(),
     connectNodes: vi.fn(),
+    openImageDialog: vi.fn((target: unknown) => {
+      state.imageDialog = target;
+    }),
+    closeImageDialog: vi.fn(),
   };
   const flowActions = {
     fitView: vi.fn(),
@@ -144,6 +148,7 @@ function readyState() {
     penColor: "#ef4444",
     interactivityLocked: false,
     connectSourceNodeId: null,
+    imageDialog: null,
   });
 }
 
@@ -287,7 +292,7 @@ describe("Canvas page", () => {
 
   describe("placement tools", () => {
     // The mocked store has no reducer, so the tool a key sets is read back from the mocked state.
-    function armTool(toolMode: "textNode" | "noteRef") {
+    function armTool(toolMode: "textNode" | "noteRef" | "image") {
       Object.assign(mocks.state, { toolMode });
     }
 
@@ -321,6 +326,46 @@ describe("Canvas page", () => {
 
       await user.keyboard("n");
       expect(mocks.actions.setToolMode).toHaveBeenCalledWith("noteRef");
+    });
+
+    it("arms the image tool with I from the keyboard", async () => {
+      const user = userEvent.setup();
+      renderCanvas();
+
+      await user.keyboard("i");
+
+      expect(mocks.actions.setToolMode).toHaveBeenCalledWith("image");
+    });
+
+    it("opens the image dialog for the view center with the second Enter", async () => {
+      const user = userEvent.setup();
+      armTool("image");
+      renderCanvas();
+
+      await user.keyboard("{Enter}");
+
+      expect(mocks.actions.openImageDialog).toHaveBeenCalledWith({
+        kind: "place",
+        position: { x: 24, y: 24 },
+      });
+      expect(mocks.state.imageDialog).toEqual({ kind: "place", position: { x: 24, y: 24 } });
+      expect(mocks.actions.setToolMode).toHaveBeenCalledWith("select");
+      expect(mocks.actions.addNode).not.toHaveBeenCalled();
+      expect(mocks.actions.placeTextNode).not.toHaveBeenCalled();
+    });
+
+    it("places nothing when the image dialog is dismissed with Escape", async () => {
+      const user = userEvent.setup();
+      Object.assign(mocks.state, {
+        imageDialog: { kind: "place", position: { x: 24, y: 24 } },
+      });
+      renderCanvas();
+
+      await screen.findByRole("dialog", { name: "canvas.addImage" });
+      await user.keyboard("{Escape}");
+
+      expect(mocks.actions.closeImageDialog).toHaveBeenCalled();
+      expect(mocks.actions.addNode).not.toHaveBeenCalled();
     });
 
     it("places an armed Text Node at the view center with the second Enter", async () => {

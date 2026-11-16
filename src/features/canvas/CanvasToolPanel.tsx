@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Toolbar } from "react-aria-components/Toolbar";
 import {
   FilePlus2,
+  Image as ImageIcon,
   Link2,
   Lock,
   Maximize,
@@ -143,6 +144,16 @@ export function CanvasToolPanel({
               data-tutorial="canvas.note-ref"
             >
               <Link2 className="size-4" aria-hidden="true" />
+            </ToolbarButton>
+          </Tooltip>
+          <Tooltip content={t("canvas.addImage")} shortcut="canvas.addImage">
+            <ToolbarButton
+              active={toolMode === "image"}
+              onClick={handlePlacementToolClick("image")}
+              aria-label={t("canvas.addImage")}
+              data-tutorial="canvas.image"
+            >
+              <ImageIcon className="size-4" aria-hidden="true" />
             </ToolbarButton>
           </Tooltip>
         </ToolbarGroup>

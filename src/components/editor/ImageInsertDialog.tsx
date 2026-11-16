@@ -10,27 +10,72 @@ import { IS_WEB, getDialog, getFileSystem, getWebDialog } from "@/lib/platform";
 import { extensionFromPath } from "@/lib/platform/uri";
 
 interface ImageInsertDialogProps {
-  editor: Editor;
+  /** The Chapter editor the picture is inserted into; not used when `onSubmit` is set. */
+  editor?: Editor;
   isOpen: boolean;
   onClose: () => void;
+  /** Takes the picture instead of the editor. The dialog stays open when it rejects. */
+  onSubmit?: (image: { src: string; alt: string; fileName?: string }) => Promise<void>;
+  title?: string;
 }
 
-export function ImageInsertDialog({ editor, isOpen, onClose }: ImageInsertDialogProps) {
+const BASE64_CHUNK_BYTES = 0x8000;
+
+/** btoa over a whole photo in one spread overflows the call stack: chunk the bytes. */
+function toBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += BASE64_CHUNK_BYTES) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + BASE64_CHUNK_BYTES));
+  }
+  return btoa(binary);
+}
+
+/** The picked file's name, whichever separator the platform's path used. */
+function fileNameFromPath(path: string): string | undefined {
+  return path.split(/[\\/]/).pop() || undefined;
+}
+
+export function ImageInsertDialog({
+  editor,
+  isOpen,
+  onClose,
+  onSubmit,
+  title,
+}: ImageInsertDialogProps) {
   const { t } = useTranslation();
   const [url, setUrl] = useState("");
   const [alt, setAlt] = useState("");
   const [error, setError] = useState("");
+  const [fileName, setFileName] = useState<string | undefined>(undefined);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleInsert = () => {
+  const handleInsert = async () => {
     if (!url.trim()) {
       setError(t("editor.imageUrlRequired"));
       return;
     }
 
+    const src = url.trim();
+
+    if (onSubmit) {
+      setSubmitting(true);
+      try {
+        await onSubmit({ src, alt: alt.trim(), fileName });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : String(err));
+        setSubmitting(false);
+        return;
+      }
+      setSubmitting(false);
+      handleClose();
+      return;
+    }
+
+    if (!editor) return;
+
     // Leave the new image selected: Shift+F10 reaches its menu from the keyboard.
     // Only the ranges this insertion changed are searched, so an existing image
     // next to the caret is never picked instead.
-    const src = url.trim();
     let firstStep = 0;
     editor
       .chain()
@@ -73,6 +118,7 @@ export function ImageInsertDialog({ editor, isOpen, onClose }: ImageInsertDialog
     setUrl("");
     setAlt("");
     setError("");
+    setFileName(undefined);
     onClose();
   };
 
@@ -96,9 +142,10 @@ export function ImageInsertDialog({ editor, isOpen, onClose }: ImageInsertDialog
         if (result) {
           const extension = result.name.split(".").pop()?.toLowerCase() || "png";
           const mimeType = extension === "svg" ? "image/svg+xml" : `image/${extension}`;
-          const base64 = btoa(String.fromCharCode(...result.data));
+          const base64 = toBase64(result.data);
           const dataUrl = `data:${mimeType};base64,${base64}`;
           setUrl(dataUrl);
+          setFileName(result.name);
         }
       } else {
         // On Tauri, use dialog + filesystem
@@ -113,9 +160,10 @@ export function ImageInsertDialog({ editor, isOpen, onClose }: ImageInsertDialog
           const contents = await fs.readFile(selected);
           const extension = extensionFromPath(selected, "png");
           const mimeType = extension === "svg" ? "image/svg+xml" : `image/${extension}`;
-          const base64 = btoa(String.fromCharCode(...contents));
+          const base64 = toBase64(contents);
           const dataUrl = `data:${mimeType};base64,${base64}`;
           setUrl(dataUrl);
+          setFileName(fileNameFromPath(selected));
         }
       }
     } catch (err) {
@@ -128,13 +176,15 @@ export function ImageInsertDialog({ editor, isOpen, onClose }: ImageInsertDialog
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
-      title={t("editor.insertImage")}
+      title={title ?? t("editor.insertImage")}
       footer={
         <>
           <Button variant="secondary" onClick={handleClose}>
             {t("common.cancel")}
           </Button>
-          <Button onClick={handleInsert}>{t("common.insert")}</Button>
+          <Button onClick={handleInsert} disabled={submitting}>
+            {t("common.insert")}
+          </Button>
         </>
       }
     >
@@ -159,6 +209,7 @@ export function ImageInsertDialog({ editor, isOpen, onClose }: ImageInsertDialog
           onChange={(e) => {
             setUrl(e.target.value);
             setError("");
+            setFileName(undefined);
           }}
           error={error}
         />

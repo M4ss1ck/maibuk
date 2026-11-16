@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseAdapter } from "@/lib/platform/types";
-import { createDefaultCanvasDoc } from "@/features/canvas/types";
+import { createDefaultCanvasDoc, CURRENT_CANVAS_SCHEMA_VERSION } from "@/features/canvas/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
 import type { Change } from "@/features/sync/change-feed";
 
@@ -173,7 +173,7 @@ describe("canvas write path", () => {
           title: "Map",
           pinned: true,
           order: canvas.order,
-          doc: { schemaVersion: 3, nodes: [], edges: [], strokes: [] },
+          doc: { schemaVersion: CURRENT_CANVAS_SCHEMA_VERSION, nodes: [], edges: [], strokes: [] },
           createdAt: canvas.createdAt,
           updatedAt: canvas.updatedAt + 10,
           contentUpdatedAt: canvas.updatedAt + 10,
@@ -187,6 +187,42 @@ describe("canvas write path", () => {
     expect(changes).toEqual([
       { entity: "canvas", id: canvas.id, origin: "remote", kind: "metadata" },
     ]);
+  });
+
+  it("remote apply carries a Canvas Image through sync", async () => {
+    const canvas = await createCanvasRow({ title: "Map" }, "local");
+    const image = {
+      id: "img1",
+      kind: "image" as const,
+      src: "data:image/png;base64,iVBORw0KGgo=",
+      width: 320,
+      height: 200,
+      alt: "A lighthouse",
+      position: { x: 10, y: 20 },
+    };
+
+    const stored = await applyCanvasSnapshotData(
+      {
+        canvas: {
+          id: canvas.id,
+          title: "Map",
+          pinned: false,
+          order: canvas.order,
+          doc: {
+            schemaVersion: CURRENT_CANVAS_SCHEMA_VERSION,
+            nodes: [image],
+            edges: [],
+            strokes: [],
+          },
+          createdAt: canvas.createdAt,
+          updatedAt: canvas.updatedAt + 10,
+          contentUpdatedAt: canvas.updatedAt + 10,
+        },
+      },
+      "remote"
+    );
+
+    expect(stored.doc.nodes).toEqual([{ ...image, fileName: undefined }]);
   });
 
   it("remote apply of a doc change is a content Change", async () => {

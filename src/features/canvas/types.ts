@@ -32,13 +32,25 @@ export type NoteRefCanvasNode = BaseCanvasNode & {
   label?: string;
 };
 
-export type CanvasNode = LightweightCanvasNode | NoteRefCanvasNode;
+export type ImageCanvasNode = BaseCanvasNode & {
+  kind: "image";
+  /** The image embedded as a `data:image/` URL; never a hotlink. */
+  src: string;
+  /** Width in Canvas units. */
+  width: number;
+  /** Height in Canvas units. */
+  height: number;
+  alt?: string;
+  fileName?: string;
+};
 
-export type CanvasToolMode = "select" | "pen" | "eraser" | "textNode" | "noteRef";
+export type CanvasNode = LightweightCanvasNode | NoteRefCanvasNode | ImageCanvasNode;
+
+export type CanvasToolMode = "select" | "pen" | "eraser" | "textNode" | "noteRef" | "image";
 
 /** The tools that place one item and then return to Select. */
 export function isPlacementTool(mode: CanvasToolMode): boolean {
-  return mode === "textNode" || mode === "noteRef";
+  return mode === "textNode" || mode === "noteRef" || mode === "image";
 }
 
 /** A just-placed Text Node, and the revision it was placed at. */
@@ -119,6 +131,16 @@ export type ResizeTextNodeInput = {
 };
 
 export type UpdateNoteRefNodePatch = Partial<Pick<NoteRefCanvasNode, "noteId" | "label">>;
+
+export type UpdateImageNodePatch = Partial<
+  Pick<ImageCanvasNode, "src" | "width" | "height" | "alt" | "fileName" | "position">
+>;
+
+/** What the Canvas Image dialog is open for: placing an image, replacing one, or its alt text. */
+export type CanvasImageDialogTarget =
+  | { kind: "place"; position: CanvasPosition }
+  | { kind: "replace"; nodeId: string }
+  | { kind: "altText"; nodeId: string };
 
 export type UpdateEdgePatch = Partial<
   Pick<

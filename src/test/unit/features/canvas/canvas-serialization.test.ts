@@ -244,6 +244,98 @@ describe("canvas schema v1 -> v2 migration", () => {
   });
 });
 
+describe("canvas image nodes (#813)", () => {
+  const imageNode = {
+    id: "img",
+    kind: "image" as const,
+    src: "data:image/png;base64,iVBORw0KGgo=",
+    width: 320,
+    height: 200,
+    position: { x: 4, y: 5 },
+  };
+
+  it("round-trips an image node with its alt text and file name", () => {
+    const doc = {
+      ...createDefaultCanvasDoc(),
+      nodes: [{ ...imageNode, alt: "A cat", fileName: "cat.png" }],
+    };
+    expect(parseCanvasDoc(serializeCanvasDoc(doc))).toEqual({ ok: true, doc, migrated: false });
+  });
+
+  it("drops an empty alt text and keeps the file name", () => {
+    const result = normalizeParsedCanvasDoc({
+      schemaVersion: CURRENT_CANVAS_SCHEMA_VERSION,
+      nodes: [{ ...imageNode, alt: "   ", fileName: "  cat.png  " }],
+      edges: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    });
+    expect(result.ok).toBe(true);
+    expect(result.doc.nodes[0]).toMatchObject({ alt: undefined, fileName: "cat.png" });
+  });
+
+  it.each([
+    { name: "a hotlinked source", override: { src: "https://example.com/cat.png" } },
+    { name: "a zero width", override: { width: 0 } },
+    { name: "a negative height", override: { height: -120 } },
+    { name: "a NaN width", override: { width: Number.NaN } },
+    { name: "a non-number height", override: { height: "200" } },
+  ])("drops an image node with $name and its Connections", ({ override }) => {
+    const result = normalizeParsedCanvasDoc({
+      schemaVersion: CURRENT_CANVAS_SCHEMA_VERSION,
+      nodes: [
+        { id: "text", kind: "text", html: "<p>t</p>", position: { x: 0, y: 0 } },
+        { ...imageNode, ...override },
+      ],
+      edges: [{ id: "edge", source: "img", target: "text" }],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    });
+    expect(result.ok).toBe(true);
+    expect(result.doc.nodes.map((node) => node.id)).toEqual(["text"]);
+    expect(result.doc.edges).toEqual([]);
+  });
+
+  it("reads a v3 document with text and note references unchanged at the current version", () => {
+    const result = normalizeParsedCanvasDoc({
+      schemaVersion: 3,
+      nodes: [
+        {
+          id: "text",
+          kind: "text",
+          html: "<p>Idea</p>",
+          textColor: "#ef4444",
+          position: { x: 1, y: 2 },
+        },
+        { id: "ref", kind: "noteRef", noteId: "note-1", label: "Note", position: { x: 3, y: 4 } },
+      ],
+      edges: [],
+      strokes: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(CURRENT_CANVAS_SCHEMA_VERSION).toBe(4);
+      expect(result.doc.schemaVersion).toBe(4);
+      expect(result.migrated).toBe(false);
+      expect(result.doc.nodes).toMatchObject([
+        { id: "text", kind: "text", html: "<p>Idea</p>", textColor: "#ef4444" },
+        { id: "ref", kind: "noteRef", noteId: "note-1", label: "Note" },
+      ]);
+    }
+  });
+
+  it("rejects a schema version 5 document as future", () => {
+    const result = normalizeParsedCanvasDoc({
+      schemaVersion: 5,
+      nodes: [{ ...imageNode }],
+      edges: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("unsupported-version");
+    expect(result.doc).toEqual(createDefaultCanvasDoc());
+  });
+});
+
 describe("canvas schema v2 -> v3 migration", () => {
   it("renames the existing text color and keeps the background transparent", () => {
     const result = normalizeParsedCanvasDoc({

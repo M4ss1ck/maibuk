@@ -8,10 +8,10 @@ import {
 import { capture } from "../support/capture";
 import { expect, test } from "../support/test";
 
-// The Canvas editor (issue #210): tools, Text Nodes, Note References, moving
-// and connecting nodes, node colors, delete/undo, zoom/lock, Save Status,
-// rename/back, and the missing/corrupt paths — all by keyboard alone, over the
-// seeded `canvasWithNodes` Library.
+// The Canvas editor (issue #210): tools, Text Nodes, Note References, Canvas
+// Images, moving and connecting nodes, node colors, delete/undo, zoom/lock,
+// Save Status, rename/back, and the missing/corrupt paths — all by keyboard
+// alone, over the seeded `canvasWithNodes` Library.
 
 test.use({ library: "canvasWithNodes" });
 
@@ -22,6 +22,7 @@ const flowNode = (page: Page, id: string) => page.getByTestId(`rf__node-${id}`);
 const nodeBody = (page: Page, id: string) => flowNode(page, id).locator(":scope > div").first();
 const textNodes = (page: Page) => page.locator(".react-flow__node-text");
 const noteRefs = (page: Page) => page.locator(".react-flow__node-noteRef");
+const imageNodes = (page: Page) => page.locator(".react-flow__node-image");
 
 /** Opens a Canvas from the gallery the way an author would: Tab in, arrows, Enter. */
 /**
@@ -269,6 +270,136 @@ test.describe("adding nodes @wf:canvas-tools @sc:canvas.addTextNode @sc:canvas.a
 
     await page.keyboard.press("ControlOrMeta+z");
     await expect(textNodes(page)).toHaveCount(2);
+  });
+});
+
+test.describe("Canvas Image @wf:canvas-image @sc:canvas.addImage @sc:canvas.placeArmedTool", () => {
+  // A 96x64 opaque PNG, inline so the URL field needs no network: the dialog
+  // fetches it once and embeds the picture as a data URL, like any other URL.
+  // Both edges sit well over the 48-unit minimum, so the 10% size steps show.
+  const IMAGE_PNG =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABACAIAAABqVuVZAAAAaUlEQVR42u3QMQ0AAAgDsHnBDZJQjwNujiZV0FQPhygQJEiQIEGCBAlCkCBBggQJEiQIQYIECRIkSJAgBAkSJEiQIEGCBCFIkCBBggQJEoQgQYIECRIkSBCCBAkSJEiQIEGCECRIkKB/FvlmqTxsqxNeAAAAAElFTkSuQmCC";
+
+  /** Arms Image, Enter places it at the view's center, and the dialog adds a picture there. */
+  async function insertImage(page: Page, alt: string) {
+    await page.keyboard.press("i");
+    await page.keyboard.press("Enter");
+    const dialog = page.getByRole("dialog", { name: "Add image" });
+    await expect(dialog).toBeVisible();
+
+    await tabTo(page, dialog.getByRole("textbox", { name: "Image URL" }), { max: 10 });
+    await page.keyboard.type(IMAGE_PNG);
+    await tabTo(page, dialog.getByRole("textbox", { name: "Alt Text (optional)" }), { max: 5 });
+    await page.keyboard.type(alt);
+
+    await tabTo(page, dialog.getByRole("button", { name: "Insert", exact: true }), { max: 10 });
+    await page.keyboard.press("Enter");
+    await expect(dialog).toBeHidden();
+  }
+
+  test("I arms Image, Enter opens the dialog, and a pasted image URL is embedded with its alt text", async ({
+    page,
+  }) => {
+    await openMap(page);
+    // The Canvas shortcuts bind only once the stored doc has loaded.
+    await expect(textNodes(page)).toHaveCount(2);
+    await expect(imageNodes(page)).toHaveCount(0);
+    await capture(page, "canvas-image-toolbar");
+
+    await page.keyboard.press("i");
+    await expect(page.getByRole("button", { name: "Add image", exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+    await page.keyboard.press("Enter");
+
+    const dialog = page.getByRole("dialog", { name: "Add image" });
+    await expect(dialog).toBeVisible();
+    await tabTo(page, dialog.getByRole("textbox", { name: "Image URL" }), { max: 10 });
+    await page.keyboard.type(IMAGE_PNG);
+    await tabTo(page, dialog.getByRole("textbox", { name: "Alt Text (optional)" }), { max: 5 });
+    await page.keyboard.type("A lighthouse");
+    await tabTo(page, dialog.getByRole("button", { name: "Insert", exact: true }), { max: 10 });
+    await page.keyboard.press("Enter");
+
+    // The URL is fetched once and stored embedded, never hotlinked.
+    await expect(dialog).toBeHidden();
+    await expect(imageNodes(page)).toHaveCount(1);
+    const picture = page.getByRole("img", { name: "A lighthouse" });
+    await expect(picture).toBeVisible();
+    await expect(picture).toHaveAttribute("src", /^data:image\//);
+    await capture(page, "canvas-image-placed");
+
+    await expect(page.getByText("Saved", { exact: true })).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole("img", { name: "A lighthouse" })).toHaveAttribute(
+      "src",
+      /^data:image\//
+    );
+  });
+
+  test("Escape in the image dialog places nothing @sc:canvas.clearSelection", async ({ page }) => {
+    await openMap(page);
+    await expect(textNodes(page)).toHaveCount(2);
+    await page.keyboard.press("i");
+    await page.keyboard.press("Enter");
+    const dialog = page.getByRole("dialog", { name: "Add image" });
+    await expect(dialog).toBeVisible();
+
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(imageNodes(page)).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Select", exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+  });
+
+  test("= and - resize a focused Canvas Image, and its menu edits the alt text @sc:canvasNode.imageLarger @sc:canvasNode.imageSmaller @sc:canvasNode.editAltText @sc:canvasNode.replaceImage", async ({
+    page,
+  }) => {
+    await openMap(page);
+    await expect(textNodes(page)).toHaveCount(2);
+    await insertImage(page, "A lighthouse");
+
+    const node = imageNodes(page);
+    await expect(node).toHaveCount(1);
+    await tabTo(page, node, { max: 60 });
+    await expect(node).toBeFocused();
+
+    const width = async () => (await node.boundingBox())?.width ?? 0;
+    const placed = await width();
+    await page.keyboard.press("=");
+    await expect.poll(width).toBeGreaterThan(placed);
+    const larger = await width();
+    await page.keyboard.press("-");
+    await expect.poll(width).toBeLessThan(larger);
+
+    // Shift+F10 opens the focused node's Item Menu, the keyboard route to the
+    // actions no Shortcut reaches. A resize re-renders the node, so the node
+    // is tabbed to again first (a no-op while it still holds focus).
+    await tabTo(page, node, { max: 60 });
+    await page.keyboard.press("Shift+F10");
+    const menu = page.getByRole("menu", { name: "Node actions" });
+    await expect(menu).toBeVisible();
+    await expect(menu.getByRole("menuitem", { name: "Replace image" })).toBeVisible();
+
+    const editAltText = menu.getByRole("menuitem", { name: "Edit alt text" });
+    await pressUntilFocused(page, "ArrowDown", editAltText, { max: 8 });
+    await page.keyboard.press("Enter");
+
+    // What a screen reader hears is the alt text the dialog saves.
+    const altDialog = page.getByRole("dialog", { name: "Edit alt text" });
+    await expect(altDialog).toBeVisible();
+    const altField = altDialog.getByRole("textbox", { name: "Alt text" });
+    await expect(altField).toBeFocused();
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type("The harbour lamp");
+    await page.keyboard.press("Enter");
+
+    await expect(altDialog).toBeHidden();
+    await expect(page.getByRole("img", { name: "The harbour lamp" })).toBeVisible();
+    await expect(page.getByRole("img", { name: "A lighthouse" })).toHaveCount(0);
   });
 });
 
