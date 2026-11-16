@@ -1717,6 +1717,21 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "canvas-image-paste",
+    area: "canvas",
+    workflow:
+      "Ctrl/Cmd+V with an image on the clipboard places a Canvas Image at the view center; asserts: image visible with its size; persists: yes",
+    edges: [
+      "Pointer placement, the Text Node inline paste, and the unsupported-image toast are routing rules: the Vitest canvas-paste and Canvas page suites own them",
+    ],
+    terms: ["Canvas Image"],
+    shortcuts: [],
+    routes: ["/canvas/:canvasId"],
+    fixture: "canvasWithNodes",
+    tags: ["chromium-only"],
+    status: "accepted",
+  },
+  {
     id: "canvas-text-node",
     area: "canvas",
     workflow:

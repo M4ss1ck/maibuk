@@ -6,6 +6,7 @@ import {
   tabTo,
 } from "../support/keyboard";
 import { capture } from "../support/capture";
+import { writeClipboard } from "../support/clipboard";
 import { expect, test } from "../support/test";
 
 // The Canvas editor (issue #210): tools, Text Nodes, Note References, Canvas
@@ -400,6 +401,40 @@ test.describe("Canvas Image @wf:canvas-image @sc:canvas.addImage @sc:canvas.plac
     await expect(altDialog).toBeHidden();
     await expect(page.getByRole("img", { name: "The harbour lamp" })).toBeVisible();
     await expect(page.getByRole("img", { name: "A lighthouse" })).toHaveCount(0);
+  });
+});
+
+test.describe("pasting a Canvas Image @wf:canvas-image-paste @chromium-only", () => {
+  // WebKit cannot grant the clipboard permission a real paste needs, so this
+  // row runs in Chromium only. The clipboard holds a solid 96x60 PNG, drawn in
+  // the page by the clipboard helper.
+  test.use({ permissions: ["clipboard-read", "clipboard-write"] });
+
+  test("Ctrl+V places a Canvas Image at the view center, and it persists", async ({ page }) => {
+    await openMap(page);
+    // The Canvas paste listener binds only once the stored doc has loaded.
+    await expect(textNodes(page)).toHaveCount(2);
+    await expect(imageNodes(page)).toHaveCount(0);
+
+    await writeClipboard(page, { image: { width: 96, height: 60 } });
+    await page.keyboard.press("ControlOrMeta+v");
+
+    // The picture is under the 320-unit fit box, so it keeps its own size, and
+    // the zoom-scaled node keeps its landscape shape.
+    const pasted = imageNodes(page);
+    await expect(pasted).toHaveCount(1);
+    const picture = pasted.getByRole("img");
+    await expect(picture).toBeVisible();
+    await expect(picture).toHaveAttribute("src", /^data:image\//);
+    const box = await pasted.boundingBox();
+    expect((box?.width ?? 0) / (box?.height ?? 1)).toBeCloseTo(96 / 60, 1);
+    await capture(page, "canvas-image-pasted");
+
+    await expect(page.getByText("Saved", { exact: true })).toBeVisible();
+    await page.reload();
+    await expectCanvasReady(page);
+    await expect(imageNodes(page)).toHaveCount(1);
+    await expect(imageNodes(page).getByRole("img")).toHaveAttribute("src", /^data:image\//);
   });
 });
 
