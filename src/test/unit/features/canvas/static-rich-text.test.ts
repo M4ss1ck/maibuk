@@ -74,18 +74,18 @@ describe("prepareStaticCanvasHtml", () => {
       expect(shown?.querySelector("img")?.getAttribute("src")).toBe(PNG);
     });
 
-    it("fills the node at center when it was never resized", () => {
+    it("draws a picture never resized at its own size", () => {
       const shown = render(figure('data-alignment="center"'));
 
-      expect(shown?.className).toBe("editor-image-figure align-center");
-      expect(shown?.style.width).toBe("100%");
+      expect(shown?.className).toBe("editor-image-figure align-center natural-width");
+      expect(shown?.style.width).toBe("");
     });
 
     it("ignores a width or alignment the editor could not have written", () => {
       const shown = render(figure('data-alignment="x y" data-width="calc(100vw)"'));
 
-      expect(shown?.className).toBe("editor-image-figure align-center");
-      expect(shown?.style.width).toBe("100%");
+      expect(shown?.className).toBe("editor-image-figure align-left natural-width");
+      expect(shown?.style.width).toBe("");
     });
 
     it("shows a caption the way the editor does, and drops an empty one", () => {

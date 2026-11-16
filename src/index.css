@@ -1152,6 +1152,27 @@ ul.task-list-caret > .task-list-menu,
   pointer-events: none;
 }
 
+/*
+ * A picture never resized draws at its own width, capped at the page. The
+ * caption wraps to the picture instead of widening the figure.
+ */
+.editor-image-figure.natural-width {
+  width: fit-content;
+  max-width: 100%;
+}
+
+.editor-image-figure.natural-width img {
+  width: auto;
+}
+
+/* Under a small picture the caption wraps between words, never inside one. */
+.editor-image-figure.natural-width .image-caption {
+  contain: inline-size;
+  text-wrap: balance;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
 .image-caption [data-node-view-content-react] {
   outline: none;
   white-space: pre-wrap;
@@ -1225,6 +1246,20 @@ ul.task-list-caret > .task-list-menu,
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   z-index: 10;
+  /* A small picture's figure is narrower than its toolbar. */
+  width: max-content;
+}
+
+/* A picture pinned to one side keeps its toolbar on that side, inside the page. */
+.editor-image-figure.align-left .image-floating-toolbar {
+  left: 0;
+  transform: none;
+}
+
+.editor-image-figure.align-right .image-floating-toolbar {
+  left: auto;
+  right: 0;
+  transform: none;
 }
 
 .image-floating-toolbar button {

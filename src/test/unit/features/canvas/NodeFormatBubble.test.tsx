@@ -2,7 +2,8 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import userEvent from "@testing-library/user-event";
 import { useLayoutEffect } from "react";
 import StarterKit from "@tiptap/starter-kit";
-import { Editor } from "@tiptap/core";
+import { Editor, Node } from "@tiptap/core";
+import { NodeSelection, TextSelection } from "@tiptap/pm/state";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -308,5 +309,48 @@ describe("NodeFormatBubble", () => {
     // The keyboard made a non-empty selection, so the bubble offers its actions.
     expect(editor.state.selection.empty).toBe(false);
     expect(await screen.findByRole("button", { name: "Format selection" })).toBeInTheDocument();
+  });
+
+  // A selected picture shows its own toolbar just above it, where this bubble
+  // would sit and cover it, so the bubble steps aside while the picture is
+  // selected and comes back when the caret returns to the text.
+  it("steps aside while a picture is selected", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const Picture = Node.create({
+      name: "image",
+      group: "block",
+      content: "text*",
+      selectable: true,
+      addAttributes: () => ({ src: { default: null } }),
+      parseHTML: () => [{ tag: "figure" }],
+      renderHTML: () => ["figure", 0],
+    });
+    const editor = new Editor({
+      extensions: [StarterKit, Picture],
+      content: "<p>Hello</p><figure></figure>",
+      element: host,
+    });
+    realEditors.push(editor);
+    editor.view.coordsAtPos = () =>
+      ({ top: 100, bottom: 120, left: 50, right: 60 }) as unknown as DOMRect;
+    render(<NodeFormatBubble editor={editor as never} />);
+    act(() => editor.view.focus());
+    expect(await screen.findByRole("toolbar")).toBeInTheDocument();
+
+    const picturePos = editor.state.doc.child(0).nodeSize;
+    act(() => {
+      editor.view.dispatch(
+        editor.state.tr.setSelection(NodeSelection.create(editor.state.doc, picturePos))
+      );
+    });
+    await waitFor(() => expect(screen.queryByRole("toolbar")).toBeNull());
+
+    act(() => {
+      editor.view.dispatch(
+        editor.state.tr.setSelection(TextSelection.create(editor.state.doc, 1, 3))
+      );
+    });
+    expect(await screen.findByRole("toolbar")).toBeInTheDocument();
   });
 });

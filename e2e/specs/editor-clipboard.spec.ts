@@ -210,3 +210,45 @@ test.describe("symbol copy @wf:editor-symbols-copy @chromium-only", () => {
     await expect(editorText(page)).toHaveText(before ?? "");
   });
 });
+
+test.describe("pasting an image into a chapter @wf:editor-image-paste @chromium-only", () => {
+  // A pasted picture has no alt text yet, so its <img> has no img role.
+  const figures = (page: Page) => editorText(page).locator("figure.editor-image-figure");
+
+  test("a small picture keeps its own width, left-aligned, and it persists", async ({ page }) => {
+    await openEditor(page);
+    await page.keyboard.press("End");
+    await writeClipboard(page, { image: { width: 64, height: 64 } });
+
+    await page.keyboard.press("ControlOrMeta+v");
+
+    const figure = figures(page);
+    await expect(figure).toHaveCount(1);
+    await expect(figure.locator("img")).toHaveAttribute("src", /^data:image\//);
+    const picture = await figure.locator("img").boundingBox();
+    expect(picture?.width).toBeCloseTo(64, 0);
+    await expect(figure).toHaveAttribute("data-alignment", "left");
+    await capture(page, "editor-image-pasted-small");
+
+    await saveNow(page);
+    await page.reload();
+    const reloaded = await figures(page).locator("img").boundingBox();
+    expect(reloaded?.width).toBeCloseTo(64, 0);
+  });
+
+  test("a picture wider than the page shrinks to the page width", async ({ page }) => {
+    await openEditor(page);
+    await page.keyboard.press("End");
+    await writeClipboard(page, { image: { width: 4000, height: 40 } });
+
+    await page.keyboard.press("ControlOrMeta+v");
+
+    const figure = figures(page);
+    await expect(figure).toHaveCount(1);
+    // A paragraph spans the page's text width.
+    const line = await editorText(page).locator("p").first().boundingBox();
+    const picture = await figure.locator("img").boundingBox();
+    // Within sub-pixel layout of a 6px-tall picture.
+    expect(Math.abs((picture?.width ?? 0) - (line?.width ?? 0))).toBeLessThan(2);
+  });
+});

@@ -1012,6 +1012,19 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "editor-image-paste",
+    area: "editor",
+    workflow:
+      "Mod+V with an image on the clipboard inserts it at its own width, capped at the page width, left-aligned; asserts: rendered image width, alignment; persists: yes",
+    edges: ["Picture wider than the page"],
+    terms: [],
+    shortcuts: [],
+    routes: ["/book/:bookId"],
+    fixture: "oneBookThreeChapters",
+    tags: ["chromium-only"],
+    status: "accepted",
+  },
+  {
     id: "editor-image-menu",
     area: "editor",
     workflow: "Image context menu by keyboard: resize/align/delete; persists: yes",
@@ -1722,6 +1735,8 @@ export const ROWS: MatrixRow[] = [
     workflow:
       "Ctrl/Cmd+V with an image on the clipboard places a Canvas Image at the view center; asserts: image visible with its size; persists: yes",
     edges: [
+      "A picture pasted into a Text Node lands left-aligned at its own size",
+      "Selecting a picture in a Text Node hides the Selection toolbar so the picture's own toolbar shows: the selection is a pointer press, so the Vitest NodeFormatBubble suite owns it",
       "Pointer placement, the Text Node inline paste, and the unsupported-image toast are routing rules: the Vitest canvas-paste and Canvas page suites own them",
     ],
     terms: ["Canvas Image"],

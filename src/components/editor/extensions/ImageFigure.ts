@@ -1,6 +1,7 @@
 import { Node, mergeAttributes } from "@tiptap/core";
 import { ReactNodeViewRenderer } from "@tiptap/react";
 import { ImageView } from "@/components/editor/ImageView";
+import { DEFAULT_IMAGE_ALIGNMENT } from "@/components/editor/image-figure-box";
 
 export interface ImageFigureOptions {
   HTMLAttributes: Record<string, unknown>;
@@ -77,10 +78,11 @@ export const ImageFigure = Node.create<ImageFigureOptions>({
           attributes.width ? { "data-width": attributes.width } : {},
       },
       alignment: {
-        default: "center",
-        parseHTML: (el: HTMLElement) => el.getAttribute("data-alignment") || "center",
+        default: DEFAULT_IMAGE_ALIGNMENT,
+        parseHTML: (el: HTMLElement) =>
+          el.getAttribute("data-alignment") || DEFAULT_IMAGE_ALIGNMENT,
         renderHTML: (attributes: { alignment: string }) => ({
-          "data-alignment": attributes.alignment || "center",
+          "data-alignment": attributes.alignment || DEFAULT_IMAGE_ALIGNMENT,
         }),
       },
     };
@@ -99,7 +101,7 @@ export const ImageFigure = Node.create<ImageFigureOptions>({
             alt: img.getAttribute("alt") || null,
             title: img.getAttribute("title") || null,
             width: el.getAttribute("data-width") || null,
-            alignment: el.getAttribute("data-alignment") || "center",
+            alignment: el.getAttribute("data-alignment") || DEFAULT_IMAGE_ALIGNMENT,
             caption: el.getAttribute("data-caption") || "",
           };
         },
@@ -116,7 +118,7 @@ export const ImageFigure = Node.create<ImageFigureOptions>({
             alt: img.getAttribute("alt") || null,
             title: img.getAttribute("title") || null,
             width: el.getAttribute("data-width") || null,
-            alignment: el.getAttribute("data-alignment") || "center",
+            alignment: el.getAttribute("data-alignment") || DEFAULT_IMAGE_ALIGNMENT,
             caption: el.getAttribute("data-caption") || "",
           };
         },
