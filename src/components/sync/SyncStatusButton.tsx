@@ -41,27 +41,27 @@ export function SyncStatusButton({ defaultScope = "all" }: { defaultScope?: Sync
 
   const renderIcon = () => {
     if (authStatus === "logged-out") {
-      return <CloudOff className="w-5 h-5" />;
+      return <CloudOff className="w-5 h-5 shrink-0" />;
     }
     if (syncStatus === "awaiting-confirmation") {
-      return <AlertTriangle className="w-5 h-5" />;
+      return <AlertTriangle className="w-5 h-5 shrink-0" />;
     }
     if (syncStatus === "cancelled") {
-      return <AlertTriangle className="w-5 h-5" />;
+      return <AlertTriangle className="w-5 h-5 shrink-0" />;
     }
     if (syncStatus === "syncing") {
-      return <Loader2 className="w-5 h-5 animate-spin" />;
+      return <Loader2 className="w-5 h-5 shrink-0 animate-spin" />;
     }
     if (syncStatus === "partial") {
-      return <CloudAlert className="w-5 h-5" />;
+      return <CloudAlert className="w-5 h-5 shrink-0" />;
     }
     if (syncStatus === "error") {
-      return <CloudAlert className="w-5 h-5" />;
+      return <CloudAlert className="w-5 h-5 shrink-0" />;
     }
     if (hasPendingChanges) {
-      return <CloudUpload className="w-5 h-5" />;
+      return <CloudUpload className="w-5 h-5 shrink-0" />;
     }
-    return <Cloud className="w-5 h-5" />;
+    return <Cloud className="w-5 h-5 shrink-0" />;
   };
 
   const statusClass =

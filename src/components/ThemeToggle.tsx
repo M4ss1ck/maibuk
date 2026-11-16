@@ -42,7 +42,7 @@ export function ThemeToggle({ variant = "inline" }: ThemeToggleProps) {
             className="p-2 hover:bg-muted rounded transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary"
             aria-label={label}
           >
-            <CurrentIcon className="w-5 h-5" />
+            <CurrentIcon className="w-5 h-5 shrink-0" />
           </Button>
         </Tooltip>
         <Popover

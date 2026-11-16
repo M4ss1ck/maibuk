@@ -21,23 +21,24 @@ export function HistoryMenuButton({
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <div className="relative inline-flex items-center rounded-lg border border-border bg-card">
+    <div className="relative inline-flex shrink-0 items-center">
       <Tooltip content={t("versions.title")} shortcut="bookEditor.versionHistory">
         <button
           type="button"
           onClick={onOpenPanel}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-l-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="inline-flex p-2 items-center justify-center rounded-l transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           aria-label={t("versions.openHistory")}
         >
-          <History className="h-4 w-4" />
+          <History className="h-5 w-5 shrink-0" />
         </button>
       </Tooltip>
+      <span aria-hidden="true" className="h-5 w-px bg-border" />
       <MenuTrigger isOpen={menuOpen} onOpenChange={setMenuOpen}>
         <AriaButton
-          className="inline-flex h-9 w-7 items-center justify-center rounded-r-lg border-l border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="inline-flex h-9 w-6 items-center justify-center rounded-r transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           aria-label={t("versions.moreActions")}
         >
-          <ChevronDown className="h-3.5 w-3.5" />
+          <ChevronDown className="h-3.5 w-3.5 shrink-0" />
         </AriaButton>
         <Popover
           placement="bottom end"

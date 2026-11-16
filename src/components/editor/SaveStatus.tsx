@@ -25,7 +25,7 @@ export function SaveStatus({ status, onSave, disabled }: SaveStatusProps) {
             aria-label={t("editor.retrySave")}
             className="p-2 rounded transition-colors text-destructive hover:text-primary"
           >
-            <SaveIcon className="w-5 h-5" />
+            <SaveIcon className="w-5 h-5 shrink-0" />
           </button>
         </Tooltip>
       </span>
@@ -35,7 +35,7 @@ export function SaveStatus({ status, onSave, disabled }: SaveStatusProps) {
   if (status === "saving") {
     return (
       <span className="flex items-center gap-1 text-sm text-muted-foreground">
-        <SpinnerIcon className="w-4 h-4 animate-spin" />
+        <SpinnerIcon className="w-5 h-5 shrink-0 animate-spin" />
         <span className="hidden sm:inline">{t("editor.saving")}</span>
       </span>
     );
@@ -44,7 +44,7 @@ export function SaveStatus({ status, onSave, disabled }: SaveStatusProps) {
   if (status === "saved") {
     return (
       <span className="flex items-center gap-1 text-sm text-success">
-        <CheckIcon className="w-4 h-4" />
+        <CheckIcon className="w-5 h-5 shrink-0" />
         <span className="hidden sm:inline">{t("editor.saved")}</span>
       </span>
     );
@@ -59,7 +59,7 @@ export function SaveStatus({ status, onSave, disabled }: SaveStatusProps) {
         aria-label={t("common.save")}
         className="p-2 rounded transition-colors text-muted-foreground hover:text-primary"
       >
-        <SaveIcon className="w-5 h-5" />
+        <SaveIcon className="w-5 h-5 shrink-0" />
       </button>
     </Tooltip>
   );
