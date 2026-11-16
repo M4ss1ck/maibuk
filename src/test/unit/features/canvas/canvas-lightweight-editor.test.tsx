@@ -16,8 +16,13 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@tiptap/react", () => ({
-  EditorContent: (props: { onKeyDown?: (event: unknown) => void }) => (
-    <div data-testid="editor-content" onKeyDown={props.onKeyDown} />
+  EditorContent: (props: {
+    onKeyDown?: (event: unknown) => void;
+    onBlur?: (event: unknown) => void;
+  }) => (
+    <div data-testid="editor-content" onKeyDown={props.onKeyDown} onBlur={props.onBlur}>
+      <div data-testid="prosemirror" />
+    </div>
   ),
   useEditor: mocks.useEditor,
 }));
@@ -347,6 +352,38 @@ describe("LightweightNode editor lifecycle", () => {
     // Escape is the commit path: without it the typed text would be lost.
     expect(mocks.updateTextNode).toHaveBeenCalledWith("node", { html: "<p>Idea edited</p>" });
     expect(mocks.endNodeEdit).toHaveBeenCalled();
+  });
+
+  it("commits and leaves editing when focus leaves the text", async () => {
+    mocks.state.editingNodeId = "node";
+    mockOpenEditor();
+    renderNode();
+    await waitFor(() => expect(mocks.useEditor).toHaveBeenCalled());
+    const outside = document.createElement("button");
+    document.body.append(outside);
+
+    fireEvent.focusOut(screen.getByTestId("prosemirror"), { relatedTarget: outside });
+
+    expect(mocks.updateTextNode).toHaveBeenCalledWith("node", { html: "<p>Idea</p>" });
+    expect(mocks.endNodeEdit).toHaveBeenCalled();
+    outside.remove();
+  });
+
+  it("keeps editing while ProseMirror's paste capture holds focus inside the editor", async () => {
+    // WebKitGTK gives a copied picture only to a native paste, so ProseMirror's
+    // capturePaste focuses a hidden field it appends beside the text, then
+    // inserts the image 50ms later. Committing on that blur lost the image.
+    mocks.state.editingNodeId = "node";
+    mockOpenEditor();
+    renderNode();
+    await waitFor(() => expect(mocks.useEditor).toHaveBeenCalled());
+    const captureField = document.createElement("div");
+    screen.getByTestId("editor-content").append(captureField);
+
+    fireEvent.focusOut(screen.getByTestId("prosemirror"), { relatedTarget: captureField });
+
+    expect(mocks.updateTextNode).not.toHaveBeenCalled();
+    expect(mocks.endNodeEdit).not.toHaveBeenCalled();
   });
 
   it("drops a just-placed Text Node that is still blank when it is left", async () => {

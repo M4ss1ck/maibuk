@@ -251,6 +251,15 @@ function ActiveNodeEditor({
             menuOpen.current = false;
           }}
           onBlur={(event) => {
+            // Focus that stays inside the editor is not leaving it: ProseMirror's
+            // capturePaste focuses a hidden field beside the text while WebKitGTK
+            // pastes a copied picture into it, then inserts the image.
+            if (
+              event.relatedTarget instanceof Node &&
+              event.currentTarget.contains(event.relatedTarget)
+            ) {
+              return;
+            }
             // Focus moving into this node's Selection toolbar is not leaving
             // the text: the toolbar acts on the selection made here.
             if (
