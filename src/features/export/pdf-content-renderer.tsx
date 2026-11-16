@@ -123,28 +123,23 @@ function parseInlineStyles(el: Element, families: string[] | undefined): ParsedI
  * ("150%") to 1.5. Missing values, px, and "normal" return undefined.
  */
 function blockLineHeight(el: Element): number | undefined {
-  const styleStr = el.getAttribute("style");
-  if (!styleStr) return undefined;
+  const value = inlineDeclaration(el, "line-height");
+  if (value === undefined) return undefined;
 
-  const props = styleStr
-    .split(";")
-    .map((p) => p.trim())
-    .filter(Boolean);
+  const percentMatch = value.match(/^(\d+(?:\.\d+)?)%$/);
+  const numeric = percentMatch ? parseFloat(percentMatch[1]) / 100 : Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined;
+}
 
-  for (const prop of props) {
+/** The value of one declaration in an element's own style attribute. */
+function inlineDeclaration(el: Element, property: string): string | undefined {
+  for (const prop of (el.getAttribute("style") ?? "").split(";")) {
     const colonIdx = prop.indexOf(":");
     if (colonIdx < 0) continue;
-
-    const name = prop.substring(0, colonIdx).trim().toLowerCase();
-    if (name !== "line-height") continue;
-
-    const value = prop.substring(colonIdx + 1).trim();
-    const percentMatch = value.match(/^(\d+(?:\.\d+)?)%$/);
-    const numeric = percentMatch ? parseFloat(percentMatch[1]) / 100 : Number(value);
-
-    return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined;
+    if (prop.substring(0, colonIdx).trim().toLowerCase() === property) {
+      return prop.substring(colonIdx + 1).trim();
+    }
   }
-
   return undefined;
 }
 
@@ -245,11 +240,14 @@ function renderBlockNode(node: Node, styles: PdfStyles, key: string): ReactNode 
       if (el.classList.contains("scene-break")) {
         return renderSceneBreak(el, styles, key);
       }
-      return createElement(
-        View,
-        { key, style: { alignItems: FIGURE_ALIGN_ITEMS[figureAlignment(el)] } },
-        ...renderBlockChildren(el, styles, key)
-      );
+      if (el.classList.contains("image-figure")) {
+        return createElement(
+          View,
+          { key, style: { alignItems: FIGURE_ALIGN_ITEMS[figureAlignment(el)] } },
+          ...renderBlockChildren(el, styles, key)
+        );
+      }
+      return createElement(View, { key }, ...renderBlockChildren(el, styles, key));
     case "pre":
       return renderCodeBlock(el, styles, key);
     case "table":
@@ -283,22 +281,6 @@ const FIGURE_ALIGN_ITEMS: Record<ImageAlignment, "flex-start" | "center" | "flex
 function figureAlignment(el: Element): ImageAlignment {
   const alignClass = Array.from(el.classList).find((name) => name.startsWith("align-"));
   return imageAlignment(alignClass?.slice("align-".length));
-}
-
-/** The `width` declaration of an inline style attribute, or undefined. */
-function inlineWidth(styleStr: string | null): string | undefined {
-  if (!styleStr) return undefined;
-
-  for (const prop of styleStr.split(";")) {
-    const colonIdx = prop.indexOf(":");
-    if (colonIdx < 0) continue;
-
-    if (prop.substring(0, colonIdx).trim().toLowerCase() === "width") {
-      return prop.substring(colonIdx + 1).trim();
-    }
-  }
-
-  return undefined;
 }
 
 function renderParagraph(el: Element, styles: PdfStyles, key: string): ReactNode {
@@ -423,7 +405,7 @@ function renderImage(el: Element, styles: PdfStyles, key: string): ReactNode {
   const src = el.getAttribute("src");
   if (!src) return null;
 
-  const widthPercent = imageWidthPercent(inlineWidth(el.getAttribute("style")));
+  const widthPercent = imageWidthPercent(inlineDeclaration(el, "width"));
   const style =
     widthPercent === null ? styles.image : [styles.image, { width: `${widthPercent}%` }];
 
