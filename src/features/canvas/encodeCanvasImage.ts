@@ -41,19 +41,24 @@ function hasTransparentPixel(context: CanvasRenderingContext2D, width: number, h
 }
 
 /**
- * Fetches an image once (a data: URL from the file picker, or a web URL) and
- * returns it as a data URL per the Canvas Image Encoding: GIF and SVG up to the
- * passthrough cap stay as they are, everything else is redrawn at no more than
- * the size cap as JPEG, or PNG when it has transparency. Never hotlinks.
+ * Takes an image once, either by fetching it (a data: URL from the file picker,
+ * or a web URL) or straight from a Blob pasted off the clipboard, and returns it
+ * as a data URL per the Canvas Image Encoding: GIF and SVG up to the passthrough
+ * cap stay as they are, everything else is redrawn at no more than the size cap
+ * as JPEG, or PNG when it has transparency. Never hotlinks.
  */
-export async function encodeCanvasImage(source: string): Promise<EncodedCanvasImage> {
+export async function encodeCanvasImage(source: string | Blob): Promise<EncodedCanvasImage> {
   let blob: Blob;
-  try {
-    const response = await fetch(source);
-    if (!response.ok) throw new Error(String(response.status));
-    blob = await response.blob();
-  } catch {
-    throw new CanvasImageError("fetch");
+  if (typeof source === "string") {
+    try {
+      const response = await fetch(source);
+      if (!response.ok) throw new Error(String(response.status));
+      blob = await response.blob();
+    } catch {
+      throw new CanvasImageError("fetch");
+    }
+  } else {
+    blob = source;
   }
   if (!blob.type.startsWith("image/")) throw new CanvasImageError("fetch");
 

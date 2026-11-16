@@ -1,0 +1,110 @@
+import { describe, expect, it } from "vitest";
+import { routeCanvasPaste } from "@/features/canvas/canvasPaste";
+
+// jsdom has no DataTransfer: these keep the two shapes the router reads, a
+// FileList-alike and a DataTransferItemList-alike.
+function buildClipboard({
+  files = [],
+  items = [],
+}: {
+  files?: File[];
+  items?: DataTransferItem[];
+} = {}): DataTransfer {
+  return { files, items } as unknown as DataTransfer;
+}
+
+function buildFile(name = "pasted.png", type = "image/png"): File {
+  return new File(["image-bytes"], name, { type });
+}
+
+function buildItem(type: string, file: File | null = null): DataTransferItem {
+  return { kind: file ? "file" : "string", type, getAsFile: () => file } as DataTransferItem;
+}
+
+const CENTER = { x: 10, y: 20 };
+const POINTER = { x: 3, y: 4 };
+
+function buildInput(overrides: Partial<Parameters<typeof routeCanvasPaste>[0]> = {}) {
+  return {
+    clipboard: buildClipboard({ files: [buildFile()] }),
+    target: null,
+    editingNodeId: null,
+    readOnly: false,
+    pointer: null,
+    center: CENTER,
+    ...overrides,
+  };
+}
+
+describe("routeCanvasPaste", () => {
+  it("leaves the paste to the Text Node being edited", () => {
+    expect(routeCanvasPaste(buildInput({ editingNodeId: "node-1" }))).toBeNull();
+  });
+
+  it("does nothing on a read-only Canvas", () => {
+    expect(routeCanvasPaste(buildInput({ readOnly: true }))).toBeNull();
+  });
+
+  it("does nothing when the paste lands in an input", () => {
+    const input = document.createElement("input");
+    expect(routeCanvasPaste(buildInput({ target: input }))).toBeNull();
+  });
+
+  it("does nothing when the paste lands inside a contenteditable", () => {
+    const editable = document.createElement("div");
+    editable.setAttribute("contenteditable", "true");
+    const child = document.createElement("span");
+    editable.append(child);
+
+    expect(routeCanvasPaste(buildInput({ target: child }))).toBeNull();
+  });
+
+  it("ignores a text-only clipboard", () => {
+    expect(
+      routeCanvasPaste(
+        buildInput({
+          clipboard: buildClipboard({ items: [buildItem("text/plain")] }),
+        })
+      )
+    ).toBeNull();
+  });
+
+  it("ignores an html-only clipboard", () => {
+    expect(
+      routeCanvasPaste(
+        buildInput({
+          clipboard: buildClipboard({ items: [buildItem("text/html")] }),
+        })
+      )
+    ).toBeNull();
+  });
+
+  it("places the pasted image at the pointer when it is over the Canvas", () => {
+    const file = buildFile();
+    expect(
+      routeCanvasPaste(
+        buildInput({ clipboard: buildClipboard({ files: [file] }), pointer: POINTER })
+      )
+    ).toEqual({ file, position: POINTER });
+  });
+
+  it("places the pasted image at the viewport center without a pointer", () => {
+    const file = buildFile();
+    expect(routeCanvasPaste(buildInput({ clipboard: buildClipboard({ files: [file] }) }))).toEqual({
+      file,
+      position: CENTER,
+    });
+  });
+
+  it("falls back to the clipboard item when files is empty", () => {
+    const file = buildFile();
+    expect(
+      routeCanvasPaste(
+        buildInput({
+          clipboard: buildClipboard({ items: [buildItem("image/png", file)] }),
+          pointer: POINTER,
+        })
+      )
+    ).toEqual({ file, position: POINTER });
+  });
+});
