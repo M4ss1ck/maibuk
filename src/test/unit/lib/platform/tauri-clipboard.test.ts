@@ -1,15 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockInvoke, mockReadImage } = vi.hoisted(() => ({
-  mockInvoke: vi.fn(),
-  mockReadImage: vi.fn(),
-}));
+const { mockInvoke } = vi.hoisted(() => ({ mockInvoke: vi.fn() }));
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: mockInvoke }));
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({
   readText: vi.fn(),
   writeText: vi.fn(),
-  readImage: mockReadImage,
 }));
 
 const { tauriClipboard } = await import("@/lib/platform/tauri/clipboard");
@@ -22,31 +18,28 @@ function copiedFileResponse(type: string, bytes: number[]): ArrayBuffer {
 
 beforeEach(() => {
   mockInvoke.mockReset();
-  mockReadImage.mockReset();
 });
 
-describe("tauriClipboard.readImage", () => {
+describe("tauriClipboard.readCopiedImageFile", () => {
   it("builds the copied file's Blob from the command's response", async () => {
     mockInvoke.mockResolvedValue(copiedFileResponse("image/png", [1, 2, 3]));
 
-    const blob = await tauriClipboard.readImage();
+    const blob = await tauriClipboard.readCopiedImageFile();
 
     expect(mockInvoke).toHaveBeenCalledWith("read_clipboard_image_file");
     expect(blob?.type).toBe("image/png");
     expect(new Uint8Array(await blob!.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
   });
 
-  it("returns null when no file is copied and no picture is on the clipboard", async () => {
+  it("returns null when the clipboard names no copied image file", async () => {
     mockInvoke.mockResolvedValue(new ArrayBuffer(0));
-    mockReadImage.mockRejectedValue(new Error("no image on the clipboard"));
 
-    await expect(tauriClipboard.readImage()).resolves.toBeNull();
+    await expect(tauriClipboard.readCopiedImageFile()).resolves.toBeNull();
   });
 
   it("lets a rejected command reject, as it means the copied file is too large", async () => {
     mockInvoke.mockRejectedValue("too large");
 
-    await expect(tauriClipboard.readImage()).rejects.toBe("too large");
-    expect(mockReadImage).not.toHaveBeenCalled();
+    await expect(tauriClipboard.readCopiedImageFile()).rejects.toBe("too large");
   });
 });

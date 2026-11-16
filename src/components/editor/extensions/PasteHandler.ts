@@ -7,6 +7,7 @@ import { cleanPastedHtml } from "@/components/editor/paste-cleanup";
 import { looksLikeMarkdown } from "@/features/markdown";
 import { shouldPromptMarkdownPaste } from "@/components/editor/extensions/paste-markdown-guard";
 import { hasRichFormatting } from "@/components/editor/clipboard";
+import { claimPastedImage } from "@/lib/pasted-image";
 
 export interface PasteHandlerOptions {
   /**
@@ -46,15 +47,15 @@ export const PasteHandler = Extension.create<PasteHandlerOptions>({
             const clipboardData = event.clipboardData;
             if (!clipboardData) return false;
 
-            const items = Array.from(clipboardData.items);
-            const imageItem = items.find((item) => item.type.startsWith("image/"));
-
-            if (imageItem) {
-              const file = imageItem.getAsFile();
-              if (file) {
-                readImageAsDataUrl(file, view);
-                return true;
-              }
+            // ProseMirror's own capturePaste already takes the pictures
+            // WebKitGTK only pastes natively, so the helper does not capture.
+            const pastedImage = claimPastedImage(event, { capture: false });
+            if (pastedImage) {
+              pastedImage
+                .then((image) => image && readImageAsDataUrl(image, view))
+                // A copied file too large or gone inserts nothing.
+                .catch(() => {});
+              return true;
             }
 
             // Offer Markdown conversion when the clipboard is plain Markdown
@@ -187,10 +188,10 @@ export const PasteHandler = Extension.create<PasteHandlerOptions>({
 });
 
 /**
- * Read an image file as a data URL and insert it into the editor.
+ * Read an image as a data URL and insert it into the editor.
  * Used by both paste and drop handlers to avoid blob: URLs that don't persist.
  */
-function readImageAsDataUrl(file: File, view: EditorView, dropEvent?: DragEvent): void {
+function readImageAsDataUrl(file: Blob, view: EditorView, dropEvent?: DragEvent): void {
   const reader = new FileReader();
   reader.onload = () => {
     const src = typeof reader.result === "string" ? reader.result : null;

@@ -12,8 +12,8 @@ export const webClipboard: ClipboardAdapter = {
   async writeText(text: string): Promise<void> {
     await navigator.clipboard.writeText(text);
   },
-  // Browsers put the image in the paste event itself, so there is none to read.
-  async readImage(): Promise<Blob | null> {
+  // Browsers put a copied file in the paste event itself, so there is none to read.
+  async readCopiedImageFile(): Promise<Blob | null> {
     return null;
   },
 };

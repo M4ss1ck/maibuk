@@ -13,25 +13,14 @@ function isCanvasFocus(focused: Element | null, surface: Element | null): boolea
   return surface !== null && surface.contains(focused);
 }
 
-function imageFileOnClipboard(clipboard: DataTransfer): File | null {
-  const pastedFile = Array.from(clipboard.files).find((file) => file.type.startsWith("image/"));
-  if (pastedFile) return pastedFile;
-
-  const itemFile = Array.from(clipboard.items)
-    .map((item) => (item.kind === "file" ? item.getAsFile() : null))
-    .find((file): file is File => file !== null && file.type.startsWith("image/"));
-  return itemFile ?? null;
-}
-
 /**
- * Routes a paste over the Canvas: the image File the event carries (null when it
- * carries none, as WebKitGTK's does) and where it lands, or null when something
- * else owns the paste (a Text Node being edited, a read-only Canvas, or an
- * editable field or open dialog). A pointer over the Canvas places the image
- * there, otherwise it lands at the viewport center.
+ * Routes a paste over the Canvas: where a pasted image lands, or null when
+ * something else owns the paste (a Text Node being edited, a read-only Canvas,
+ * or an editable field or open dialog). A pointer over the Canvas places the
+ * image there, otherwise it lands at the viewport center. Whether the paste
+ * brings an image at all is `claimPastedImage`'s call.
  */
 export function routeCanvasPaste({
-  clipboard,
   target,
   focused,
   surface,
@@ -40,7 +29,6 @@ export function routeCanvasPaste({
   pointer,
   center,
 }: {
-  clipboard: DataTransfer | null;
   /** The paste event target. */
   target: EventTarget | null;
   /** `document.activeElement` when the paste fired. */
@@ -55,11 +43,9 @@ export function routeCanvasPaste({
   pointer: CanvasPosition | null;
   /** Flow position of the viewport center. */
   center: CanvasPosition;
-}): { file: File | null; position: CanvasPosition } | null {
+}): CanvasPosition | null {
   if (editingNodeId || readOnly) return null;
   if (isOwnedElement(target) || isOwnedElement(focused)) return null;
   if (!isCanvasFocus(focused, surface)) return null;
-  if (!clipboard) return null;
-
-  return { file: imageFileOnClipboard(clipboard), position: pointer ?? center };
+  return pointer ?? center;
 }
