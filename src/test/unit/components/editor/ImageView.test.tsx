@@ -292,28 +292,137 @@ describe("ImageView", () => {
     expect(props.updateAttributes).not.toHaveBeenCalled();
   });
 
+  const unsized = (width: unknown, alignment = "center") =>
+    createProps({
+      node: {
+        attrs: { src: "data:image/png;base64,test", width, alignment },
+        textContent: "",
+      } as unknown as NodeViewProps["node"],
+    });
+
+  // A pasted 64px picture once filled the page: a figure with no width of its
+  // own drew at 100%. It draws at the picture's own width, which CSS caps at
+  // the page (.natural-width in index.css).
   it.each([
     null,
     "auto",
     "malformed",
     42,
-  ])("normalizes a %s persisted width before a keyboard change", async (width) => {
-    const user = userEvent.setup();
-    const props = createProps({
-      node: {
-        attrs: { src: "data:image/png;base64,test", width, alignment: "center" },
-        textContent: "",
-      } as unknown as NodeViewProps["node"],
-    });
-    renderImage(props);
+  ])("draws a %s width at the picture's own size", (width) => {
+    renderImage(unsized(width));
 
+    const figure = document.querySelector("figure");
+    expect(figure).toHaveClass("natural-width");
+    expect(figure?.style.width).toBe("");
+  });
+
+  it("gives a resized picture its stored width", () => {
+    renderImage();
+
+    const figure = document.querySelector("figure");
+    expect(figure).not.toHaveClass("natural-width");
+    expect(figure).toHaveStyle({ width: "50%" });
+  });
+
+  // jsdom never loads a picture; mark it loaded so its drawn width counts.
+  function loadPicture() {
+    const picture = document.querySelector("img");
+    if (!picture) throw new Error("Missing picture");
+    Object.defineProperty(picture, "complete", { configurable: true, value: true });
+    Object.defineProperty(picture, "naturalWidth", { configurable: true, value: 64 });
+    fireEvent.load(picture);
+  }
+
+  function drawFigureAt(width: number) {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: HTMLElement
+    ) {
+      const isPage =
+        this.classList.contains("editor-content") || this.classList.contains("ProseMirror");
+      const w = isPage ? 1000 : width;
+      return {
+        x: 0,
+        y: 0,
+        width: w,
+        height: 100,
+        top: 0,
+        right: w,
+        bottom: 100,
+        left: 0,
+        toJSON: () => ({}),
+      };
+    });
+  }
+
+  it.each([
+    null,
+    "auto",
+    "malformed",
+    42,
+  ])("steps a %s width from the size the picture is drawn at", async (width) => {
+    const user = userEvent.setup();
+    const props = unsized(width);
+    renderImage(props);
+    loadPicture();
+
+    // The picture is drawn 500px wide on a 1000px page: 50%.
     const decrease = screen.getByRole("button", { name: "editor.decreaseImageWidth" });
     const increase = screen.getByRole("button", { name: "editor.increaseImageWidth" });
     expect(decrease).toBeEnabled();
-    expect(increase).toBeDisabled();
+    expect(increase).toBeEnabled();
     decrease.focus();
     await user.keyboard("{Enter}");
 
-    expect(props.updateAttributes).toHaveBeenCalledWith({ width: "90%" });
+    expect(props.updateAttributes).toHaveBeenCalledWith({ width: "40%" });
+  });
+
+  it("does not grow an unsized picture already as wide as the page", () => {
+    drawFigureAt(1000);
+    renderImage(unsized(null));
+    loadPicture();
+
+    expect(screen.getByRole("button", { name: "editor.increaseImageWidth" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "editor.decreaseImageWidth" })).toBeEnabled();
+  });
+
+  // A 64px picture on a 1000px page is drawn at 6%: smaller than a step allows,
+  // so it cannot shrink, and growing starts from 6%, not from the 10% floor.
+  it("grows a picture smaller than the minimum one step from its own size", async () => {
+    drawFigureAt(64);
+    const user = userEvent.setup();
+    const props = unsized(null);
+    renderImage(props);
+    loadPicture();
+
+    expect(screen.getByRole("button", { name: "editor.decreaseImageWidth" })).toBeDisabled();
+    screen.getByRole("button", { name: "editor.increaseImageWidth" }).focus();
+    await user.keyboard("{Enter}");
+
+    expect(props.updateAttributes).toHaveBeenCalledWith({ width: "16%" });
+  });
+
+  it("offers no width step before an unsized picture has loaded", () => {
+    renderImage(unsized(null));
+
+    expect(screen.getByRole("button", { name: "editor.decreaseImageWidth" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "editor.increaseImageWidth" })).toBeDisabled();
+  });
+
+  // A centered picture grows on both sides, so a corner drag counts twice; a
+  // picture pinned to one side grows only on the dragged side.
+  it.each([
+    ["left", "se", 50, "55%"],
+    ["right", "sw", -50, "55%"],
+    ["center", "se", 50, "60%"],
+  ])("follows the pointer when resizing a %s-aligned picture", (alignment, corner, dx, expected) => {
+    const { props } = renderImage(unsized("50%", alignment));
+    const handle = document.querySelector(`.image-resize-handle.${corner}`) as HTMLElement;
+    installPointerCapture(handle);
+
+    fireEvent.pointerDown(handle, { pointerId: 11, pointerType: "touch", clientX: 0 });
+    fireEvent.pointerMove(document, { pointerId: 11, pointerType: "touch", clientX: dx });
+    fireEvent.pointerUp(document, { pointerId: 11, pointerType: "touch", clientX: dx });
+
+    expect(props.updateAttributes).toHaveBeenCalledWith({ width: expected });
   });
 });

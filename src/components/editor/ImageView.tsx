@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useEffect } from "react";
+import { useRef, useState, useCallback, useEffect, useLayoutEffect } from "react";
 import { NodeViewWrapper, NodeViewContent } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
@@ -6,6 +6,11 @@ import { Toolbar } from "react-aria-components/Toolbar";
 import { AlignLeft, AlignCenter, AlignRight, Minus, Plus, Trash2 } from "lucide-react";
 import { NodeSelection } from "@tiptap/pm/state";
 import { Button, Tooltip } from "@/components/ui";
+import {
+  imageAlignment,
+  imageFigureBox,
+  imageWidthPercent,
+} from "@/components/editor/image-figure-box";
 
 const HANDLES = ["nw", "ne", "sw", "se"] as const;
 const MIN_WIDTH_PERCENT = 10;
@@ -25,13 +30,28 @@ interface ResizeSession {
 
 let activeResize: { owner: symbol; cancel: () => void } | null = null;
 
-function normalizeImageWidth(value: unknown): number {
-  if (typeof value !== "string") return MAX_WIDTH_PERCENT;
-  const match = value.match(/^\s*(\d+(?:\.\d+)?)%\s*$/);
-  if (!match) return MAX_WIDTH_PERCENT;
-  const width = Number(match[1]);
-  if (!Number.isFinite(width)) return MAX_WIDTH_PERCENT;
+function clampWidthPercent(width: number): number {
   return Math.min(Math.max(width, MIN_WIDTH_PERCENT), MAX_WIDTH_PERCENT);
+}
+
+// The element whose width a percent width is measured against: the page.
+function pageOf(figureEl: HTMLElement): Element | null {
+  const directParent = figureEl.parentElement;
+  const fallbackParent =
+    directParent?.tagName === "FIGURE" ? directParent.parentElement : directParent;
+  return figureEl.closest(".editor-content, .ProseMirror") || fallbackParent;
+}
+
+// How wide a picture with no width of its own is drawn, as a percent of the
+// page. Null until the picture has loaded: before that its box has no width.
+// Not clamped to the minimum, so a small picture never jumps to it.
+function drawnWidthPercent(figureEl: HTMLElement | null): number | null {
+  const picture = figureEl?.querySelector("img");
+  if (!figureEl || !picture?.complete || picture.naturalWidth === 0) return null;
+  const pageWidth = pageOf(figureEl)?.getBoundingClientRect().width ?? 0;
+  if (pageWidth <= 0) return null;
+  const drawn = Math.round((figureEl.getBoundingClientRect().width / pageWidth) * 100);
+  return Math.min(drawn, MAX_WIDTH_PERCENT);
 }
 
 export function ImageView({
@@ -49,6 +69,7 @@ export function ImageView({
   const resizeSessionRef = useRef<ResizeSession | null>(null);
   const resizeOwnerRef = useRef(Symbol("image-resize"));
   const updateAttributesRef = useRef(updateAttributes);
+  const alignment = imageAlignment(node.attrs.alignment);
 
   // Keep ref in sync for use in event handlers
   useEffect(() => {
@@ -155,10 +176,7 @@ export function ImageView({
       const figureEl = containerRef.current;
       if (!figureEl) return;
 
-      const directParent = figureEl.parentElement;
-      const fallbackParent =
-        directParent?.tagName === "FIGURE" ? directParent.parentElement : directParent;
-      const parentEl = figureEl.closest(".editor-content, .ProseMirror") || fallbackParent;
+      const parentEl = pageOf(figureEl);
       if (!parentEl) return;
 
       activeResize?.cancel();
@@ -167,6 +185,7 @@ export function ImageView({
       const startWidth = figureEl.getBoundingClientRect().width;
       const startX = e.clientX;
       const isLeft = handle === "nw" || handle === "sw";
+      const growth = alignment === "center" ? 2 : 1;
       const pointerId = e.pointerId;
       const target = e.currentTarget;
 
@@ -174,8 +193,8 @@ export function ImageView({
         if (moveEvent.pointerId !== pointerId) return;
         const dx = moveEvent.clientX - startX;
         const effectiveDx = isLeft ? -dx : dx;
-        // Multiply by 2 because the image is centered, so moving one side effectively doubles the visual change
-        const newWidthPx = Math.max(startWidth + effectiveDx * 2, containerWidth * 0.1);
+        // A centered picture grows on both sides, so one side's move counts twice.
+        const newWidthPx = Math.max(startWidth + effectiveDx * growth, containerWidth * 0.1);
         const newWidthPercent = Math.min(Math.round((newWidthPx / containerWidth) * 100), 100);
         const widthStr = `${newWidthPercent}%`;
         setResizingWidth(widthStr);
@@ -214,7 +233,7 @@ export function ImageView({
         cancel: () => finishResize(false),
       };
     },
-    [finishResize]
+    [alignment, finishResize]
   );
 
   const handleImagePointerDown = useCallback(
@@ -233,28 +252,36 @@ export function ImageView({
     [editor, getPos]
   );
 
-  const currentWidth = normalizeImageWidth(node.attrs.width);
+  // A picture never resized has no stored width: a step starts from the size
+  // it is drawn at, so it never jumps to fill the page.
+  const storedWidth = imageWidthPercent(node.attrs.width);
+  const [drawnWidth, setDrawnWidth] = useState<number | null>(null);
+  const measureDrawnWidth = useCallback(() => {
+    setDrawnWidth(drawnWidthPercent(containerRef.current));
+  }, []);
+  // The width controls show only while selected, so measure then.
+  useLayoutEffect(() => {
+    if (selected && storedWidth === null) measureDrawnWidth();
+  }, [measureDrawnWidth, selected, storedWidth]);
+  const currentWidth = storedWidth === null ? drawnWidth : clampWidthPercent(storedWidth);
+  const canShrink = currentWidth !== null && currentWidth > MIN_WIDTH_PERCENT;
+  const canGrow = currentWidth !== null && currentWidth < MAX_WIDTH_PERCENT;
   const changeWidth = useCallback(
     (delta: number) => {
-      const nextWidth = Math.min(
-        Math.max(currentWidth + delta, MIN_WIDTH_PERCENT),
-        MAX_WIDTH_PERCENT
-      );
-      if (nextWidth === currentWidth) return;
-      updateAttributes({ width: `${nextWidth}%` });
+      if (currentWidth === null || (delta < 0 ? !canShrink : !canGrow)) return;
+      updateAttributes({ width: `${clampWidthPercent(currentWidth + delta)}%` });
     },
-    [currentWidth, updateAttributes]
+    [canGrow, canShrink, currentWidth, updateAttributes]
   );
 
-  const alignment = node.attrs.alignment || "center";
-  const width = resizingWidth || node.attrs.width || "100%";
+  const box = imageFigureBox({ width: resizingWidth ?? node.attrs.width, alignment });
   const isCaptionEmpty = node.textContent.trim().length === 0;
 
   return (
     <NodeViewWrapper
       as="figure"
-      className={`editor-image-figure align-${alignment}`}
-      style={{ width }}
+      className={box.className}
+      style={box.width ? { width: box.width } : undefined}
       data-image=""
       data-alignment={alignment}
     >
@@ -303,7 +330,7 @@ export function ImageView({
                 size="sm"
                 onClick={() => changeWidth(-WIDTH_STEP_PERCENT)}
                 aria-label={t("editor.decreaseImageWidth")}
-                disabled={currentWidth <= MIN_WIDTH_PERCENT}
+                disabled={!canShrink}
                 type="button"
               >
                 <Minus className="w-4 h-4" />
@@ -315,7 +342,7 @@ export function ImageView({
                 size="sm"
                 onClick={() => changeWidth(WIDTH_STEP_PERCENT)}
                 aria-label={t("editor.increaseImageWidth")}
-                disabled={currentWidth >= MAX_WIDTH_PERCENT}
+                disabled={!canGrow}
                 type="button"
               >
                 <Plus className="w-4 h-4" />
@@ -342,6 +369,7 @@ export function ImageView({
           alt={node.attrs.alt || ""}
           title={node.attrs.title || undefined}
           draggable={false}
+          onLoad={measureDrawnWidth}
         />
 
         {/* Resize handles */}

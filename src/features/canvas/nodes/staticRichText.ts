@@ -1,11 +1,8 @@
 import DOMPurify from "dompurify";
+import { imageFigureBox } from "@/components/editor/image-figure-box";
 
 const CANVAS_LINK_URI =
   /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|maibuk):|[^a-z]|[-a-z+.]+(?:[^-a-z+.:]|$))/i;
-
-// The widths and alignments the editor's ImageView writes on an Image figure.
-const IMAGE_WIDTH = /^\d+(?:\.\d+)?%$/;
-const IMAGE_ALIGNMENTS = new Set(["left", "center", "right"]);
 
 const BLANK_TEXT_TAGS = new Set(
   "P BR DIV SPAN H1 H2 H3 H4 H5 H6 UL OL LI BLOCKQUOTE STRONG B EM I U S CODE PRE MARK A".split(" ")
@@ -87,10 +84,12 @@ export function prepareStaticCanvasHtml(html: string): string {
   // An Image draws the box the editor's ImageView draws (its classes, width,
   // and caption), so it keeps its size when the node stops editing.
   body.querySelectorAll<HTMLElement>("figure[data-image]").forEach((figure) => {
-    const alignment = figure.getAttribute("data-alignment") ?? "";
-    const width = figure.getAttribute("data-width") ?? "";
-    figure.className = `editor-image-figure align-${IMAGE_ALIGNMENTS.has(alignment) ? alignment : "center"}`;
-    figure.style.width = IMAGE_WIDTH.test(width) ? width : "100%";
+    const box = imageFigureBox({
+      alignment: figure.getAttribute("data-alignment"),
+      width: figure.getAttribute("data-width"),
+    });
+    figure.className = box.className;
+    figure.style.width = box.width ?? "";
     figure.querySelectorAll("figcaption").forEach((caption) => {
       if (caption.textContent?.trim()) caption.className = "image-caption";
       else caption.remove();

@@ -436,6 +436,36 @@ test.describe("pasting a Canvas Image @wf:canvas-image-paste @chromium-only", ()
     await expect(imageNodes(page)).toHaveCount(1);
     await expect(imageNodes(page).getByRole("img")).toHaveAttribute("src", /^data:image\//);
   });
+
+  test("a picture pasted into a Text Node keeps its own size, at the left", async ({ page }) => {
+    await openMap(page);
+    await expect(textNodes(page)).toHaveCount(2);
+    await page.keyboard.press("t");
+    await page.keyboard.press("Enter");
+    const editor = page.locator(".react-flow__node-text .ProseMirror");
+    await expect(editor).toBeFocused();
+    await page.keyboard.type("Lamp room with a long line of text");
+    await page.keyboard.press("Enter");
+
+    await writeClipboard(page, { image: { width: 64, height: 64 } });
+    await page.keyboard.press("ControlOrMeta+v");
+
+    const figure = editor.locator("figure.editor-image-figure");
+    await expect(figure).toHaveCount(1);
+    // A stretched picture would span the node's text width; a 64px one stays
+    // well inside it, at any zoom, while editing and once the node rests.
+    const node = textNodes(page).last();
+    const textWidth = async () => (await node.locator("p").first().boundingBox())?.width ?? 0;
+    const pictureWidth = async () => (await node.locator("img").boundingBox())?.width ?? 0;
+    expect(await pictureWidth()).toBeLessThan((await textWidth()) / 2);
+    await expect(figure).toHaveAttribute("data-alignment", "left");
+    await capture(page, "canvas-text-node-image-pasted");
+
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".react-flow__node-text .ProseMirror")).toHaveCount(0);
+    await expect(node.locator("figure.editor-image-figure")).toHaveClass(/natural-width/);
+    expect(await pictureWidth()).toBeLessThan((await textWidth()) / 2);
+  });
 });
 
 test.describe("Text Node @wf:canvas-text-node @sc:canvas.editTextNode @sc:canvas.placeArmedTool", () => {

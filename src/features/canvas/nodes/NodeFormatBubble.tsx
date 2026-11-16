@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useStore } from "@xyflow/react";
 import type { Editor } from "@tiptap/react";
 import { useEditorState } from "@tiptap/react";
+import { NodeSelection } from "@tiptap/pm/state";
 import { FormattingButtons, LinkClickHandler, LinkDialog } from "@/components/editor";
 import {
   SelectionToolbarControls,
@@ -56,7 +57,11 @@ export function NodeFormatBubble({
   const loadBooks = useBookStore((state) => state.loadBooks);
   const state = useEditorState({
     editor,
-    selector: ({ editor: e }) => ({ hasSelection: !e.state.selection.empty }),
+    selector: ({ editor: e }) => ({
+      hasSelection: !e.state.selection.empty,
+      pictureSelected:
+        e.state.selection instanceof NodeSelection && e.state.selection.node.type.name === "image",
+    }),
   });
 
   const internalTargets = useMemo<InternalTarget[]>(
@@ -119,9 +124,14 @@ export function NodeFormatBubble({
   }, [loadBooks]);
 
   // The bubble stays up while its own toolbar holds focus: the keyboard Command
-  // moves focus out of the text, and the controls must stay reachable.
+  // moves focus out of the text, and the controls must stay reachable. A
+  // selected picture shows its own toolbar where this one would sit, so the
+  // bubble steps aside for it, as the Chapter selection toolbar does.
   const visible =
-    (editorFocused || menuOverlayOpen || toolbarFocused) && !linkDialogOpen && pos !== null;
+    (editorFocused || menuOverlayOpen || toolbarFocused) &&
+    !linkDialogOpen &&
+    !(state.pictureSelected && !toolbarFocused) &&
+    pos !== null;
 
   // Read during a blur, before React has rendered the latest open state.
   const overlayOpenRef = useRef(false);
@@ -243,9 +253,7 @@ export function NodeFormatBubble({
 
   return (
     <>
-      {(editorFocused || menuOverlayOpen || toolbarFocused) &&
-        !linkDialogOpen &&
-        pos &&
+      {visible &&
         createPortal(
           <div
             ref={measureToolbar}
