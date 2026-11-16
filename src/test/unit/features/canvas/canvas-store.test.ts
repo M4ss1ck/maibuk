@@ -334,6 +334,24 @@ describe("useCanvasStore", () => {
     expect(useCanvasStore.getState().doc.strokes).toHaveLength(1);
   });
 
+  it("adds several nodes in a single undoable step", () => {
+    useCanvasStore.setState({ loadState: "ready" });
+    const store = useCanvasStore.getState();
+    const image = (id: string) => ({
+      id,
+      kind: "image" as const,
+      src: "data:image/png;base64,iVBORw0KGgo=",
+      width: 320,
+      height: 200,
+      position: { x: 0, y: 0 },
+    });
+    store.addNodes([image("a"), image("b")]);
+    expect(useCanvasStore.getState().doc.nodes.map((node) => node.id)).toEqual(["a", "b"]);
+    expect(useCanvasStore.getState().past).toHaveLength(1);
+    useCanvasStore.getState().undo();
+    expect(useCanvasStore.getState().doc.nodes).toEqual([]);
+  });
+
   it("eraseElements removes edges attached to erased nodes even if not listed", () => {
     useCanvasStore.setState({ loadState: "ready" });
     const store = useCanvasStore.getState();
