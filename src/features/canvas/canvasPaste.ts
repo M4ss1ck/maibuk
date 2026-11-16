@@ -1,10 +1,16 @@
 import type { CanvasPosition } from "@/features/canvas/types";
 
-// A paste into a field, or anywhere in a dialog open over the Canvas, is not a
-// paste onto the Canvas.
-function isOwnedTarget(target: EventTarget): boolean {
-  if (!(target instanceof Element)) return false;
-  return target.closest('input, textarea, select, [contenteditable], [role="dialog"]') !== null;
+// A field, an editor, or anything in a dialog owns its own paste.
+function isOwnedElement(element: EventTarget | null): boolean {
+  if (!(element instanceof Element)) return false;
+  return element.closest('input, textarea, select, [contenteditable], [role="dialog"]') !== null;
+}
+
+// The Canvas owns a paste only while focus rests on the bare page (a click on
+// the pane focuses nothing) or inside the Canvas surface.
+function isCanvasFocus(focused: Element | null, surface: Element | null): boolean {
+  if (focused === null || focused === focused.ownerDocument.body) return true;
+  return surface !== null && surface.contains(focused);
 }
 
 function imageFileOnClipboard(clipboard: DataTransfer): File | null {
@@ -27,6 +33,8 @@ function imageFileOnClipboard(clipboard: DataTransfer): File | null {
 export function routeCanvasPaste({
   clipboard,
   target,
+  focused,
+  surface,
   editingNodeId,
   readOnly,
   pointer,
@@ -35,6 +43,10 @@ export function routeCanvasPaste({
   clipboard: DataTransfer | null;
   /** The paste event target. */
   target: EventTarget | null;
+  /** `document.activeElement` when the paste fired. */
+  focused: Element | null;
+  /** The Canvas surface element. */
+  surface: Element | null;
   /** From the canvas store. */
   editingNodeId: string | null;
   /** `editorReadOnly`. */
@@ -44,9 +56,9 @@ export function routeCanvasPaste({
   /** Flow position of the viewport center. */
   center: CanvasPosition;
 }): { file: File | null; position: CanvasPosition } | null {
-  if (editingNodeId) return null;
-  if (readOnly) return null;
-  if (target && isOwnedTarget(target)) return null;
+  if (editingNodeId || readOnly) return null;
+  if (isOwnedElement(target) || isOwnedElement(focused)) return null;
+  if (!isCanvasFocus(focused, surface)) return null;
   if (!clipboard) return null;
 
   return { file: imageFileOnClipboard(clipboard), position: pointer ?? center };

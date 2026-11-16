@@ -461,6 +461,8 @@ function CanvasEditor() {
       const route = routeCanvasPaste({
         clipboard: event.clipboardData,
         target: event.target,
+        focused: document.activeElement,
+        surface: surfaceRef.current,
         editingNodeId: state.editingNodeId,
         readOnly: state.editorReadOnly,
         pointer: pointer ? reactFlow.screenToFlowPosition(pointer) : null,
@@ -493,10 +495,14 @@ function CanvasEditor() {
         if (active) toast.error(t("canvas.imageUnsupported"));
       });
     };
-    document.addEventListener("paste", handlePaste);
+    // Capture phase: the decision is made before any editor sees the event. On
+    // WebKitGTK ProseMirror's capturePaste moves focus while the paste is still
+    // dispatching, so the Text Node blurs and stops editing before the event
+    // would bubble here, and the paste would look like one onto the Canvas.
+    document.addEventListener("paste", handlePaste, true);
     return () => {
       active = false;
-      document.removeEventListener("paste", handlePaste);
+      document.removeEventListener("paste", handlePaste, true);
     };
   }, [addNode, editorReadOnly, loadState, reactFlow, selectNode, t, viewportCenter]);
 

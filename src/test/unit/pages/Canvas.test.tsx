@@ -686,6 +686,41 @@ describe("Canvas page", () => {
       toastError.mockRestore();
     });
 
+    it("leaves a paste that began in a Text Node even after the editor ends editing mid-event", async () => {
+      // WebKitGTK: the event carries only text/uri-list, so ProseMirror's
+      // capturePaste moves focus out of the editor while the paste is still
+      // being dispatched; the Text Node blurs, commits, and stops editing
+      // before the event bubbles up to the document.
+      mockReadImage.mockResolvedValue(new Blob(["png"], { type: "image/png" }));
+      Object.assign(mocks.state, { editingNodeId: "node" });
+      renderCanvas();
+      const editor = document.createElement("div");
+      editor.setAttribute("contenteditable", "true");
+      const trailingBreak = document.createElement("br");
+      editor.append(trailingBreak);
+      document.body.append(editor);
+      editor.focus();
+      // The Text Node commits on that blur and its editor view is destroyed,
+      // which strips contenteditable and detaches the DOM the event targets.
+      editor.addEventListener("paste", () => {
+        Object.assign(mocks.state, { editingNodeId: null });
+        editor.removeAttribute("contenteditable");
+        editor.remove();
+      });
+
+      const event = new Event("paste", { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "clipboardData", {
+        value: { files: [], items: [], types: ["text/uri-list"], getData: () => "" },
+      });
+      act(() => {
+        trailingBreak.dispatchEvent(event);
+      });
+      await act(async () => {});
+
+      expect(mockReadImage).not.toHaveBeenCalled();
+      expect(mocks.actions.addNode).not.toHaveBeenCalled();
+    });
+
     it("places nothing while a Text Node is being edited", async () => {
       const user = userEvent.setup();
       Object.assign(mocks.state, { editingNodeId: "node" });

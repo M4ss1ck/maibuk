@@ -28,6 +28,8 @@ function buildInput(overrides: Partial<Parameters<typeof routeCanvasPaste>[0]> =
   return {
     clipboard: buildClipboard({ files: [buildFile()] }),
     target: null,
+    focused: null,
+    surface: null,
     editingNodeId: null,
     readOnly: false,
     pointer: null,
@@ -66,6 +68,41 @@ describe("routeCanvasPaste", () => {
     dialog.append(button);
 
     expect(routeCanvasPaste(buildInput({ target: button }))).toBeNull();
+  });
+
+  it("leaves the paste to a focused editor even when the event targets the page", () => {
+    const surface = document.createElement("main");
+    const editor = document.createElement("div");
+    editor.setAttribute("contenteditable", "true");
+    surface.append(editor);
+    document.body.append(surface);
+
+    expect(
+      routeCanvasPaste(buildInput({ target: document.body, focused: editor, surface }))
+    ).toBeNull();
+    surface.remove();
+  });
+
+  it("leaves a paste whose focus is outside the Canvas surface", () => {
+    const surface = document.createElement("main");
+    const headerButton = document.createElement("button");
+    document.body.append(surface, headerButton);
+
+    expect(routeCanvasPaste(buildInput({ focused: headerButton, surface }))).toBeNull();
+    surface.remove();
+    headerButton.remove();
+  });
+
+  it("takes a paste while focus rests on the page or inside the Canvas surface", () => {
+    const surface = document.createElement("main");
+    const node = document.createElement("div");
+    node.tabIndex = 0;
+    surface.append(node);
+    document.body.append(surface);
+
+    expect(routeCanvasPaste(buildInput({ focused: document.body, surface }))).not.toBeNull();
+    expect(routeCanvasPaste(buildInput({ focused: node, surface }))).not.toBeNull();
+    surface.remove();
   });
 
   it("routes a text-only clipboard with no file for the OS clipboard to answer", () => {
