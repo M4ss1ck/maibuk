@@ -13,6 +13,11 @@ import { Text, View, Image, Link } from "@react-pdf/renderer";
 import type { PdfStyles } from "@/features/export/pdf-styles";
 import { ENDNOTE_BACKLINK } from "@/features/export/html-sanitizer";
 import { parseLinkUri } from "@/features/links/link-uri";
+import {
+  imageAlignment,
+  imageWidthPercent,
+  type ImageAlignment,
+} from "@/components/editor/image-figure-box";
 
 // ---------------------------------------------------------------------------
 // CSS → react-pdf style helpers
@@ -118,28 +123,23 @@ function parseInlineStyles(el: Element, families: string[] | undefined): ParsedI
  * ("150%") to 1.5. Missing values, px, and "normal" return undefined.
  */
 function blockLineHeight(el: Element): number | undefined {
-  const styleStr = el.getAttribute("style");
-  if (!styleStr) return undefined;
+  const value = inlineDeclaration(el, "line-height");
+  if (value === undefined) return undefined;
 
-  const props = styleStr
-    .split(";")
-    .map((p) => p.trim())
-    .filter(Boolean);
+  const percentMatch = value.match(/^(\d+(?:\.\d+)?)%$/);
+  const numeric = percentMatch ? parseFloat(percentMatch[1]) / 100 : Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined;
+}
 
-  for (const prop of props) {
+/** The value of one declaration in an element's own style attribute. */
+function inlineDeclaration(el: Element, property: string): string | undefined {
+  for (const prop of (el.getAttribute("style") ?? "").split(";")) {
     const colonIdx = prop.indexOf(":");
     if (colonIdx < 0) continue;
-
-    const name = prop.substring(0, colonIdx).trim().toLowerCase();
-    if (name !== "line-height") continue;
-
-    const value = prop.substring(colonIdx + 1).trim();
-    const percentMatch = value.match(/^(\d+(?:\.\d+)?)%$/);
-    const numeric = percentMatch ? parseFloat(percentMatch[1]) / 100 : Number(value);
-
-    return Number.isFinite(numeric) && numeric > 0 ? numeric : undefined;
+    if (prop.substring(0, colonIdx).trim().toLowerCase() === property) {
+      return prop.substring(colonIdx + 1).trim();
+    }
   }
-
   return undefined;
 }
 
@@ -240,6 +240,13 @@ function renderBlockNode(node: Node, styles: PdfStyles, key: string): ReactNode 
       if (el.classList.contains("scene-break")) {
         return renderSceneBreak(el, styles, key);
       }
+      if (el.classList.contains("image-figure")) {
+        return createElement(
+          View,
+          { key, style: { alignItems: FIGURE_ALIGN_ITEMS[figureAlignment(el)] } },
+          ...renderBlockChildren(el, styles, key)
+        );
+      }
       return createElement(View, { key }, ...renderBlockChildren(el, styles, key));
     case "pre":
       return renderCodeBlock(el, styles, key);
@@ -263,6 +270,18 @@ function renderBlockNode(node: Node, styles: PdfStyles, key: string): ReactNode 
 // ---------------------------------------------------------------------------
 // Specific block renderers
 // ---------------------------------------------------------------------------
+
+const FIGURE_ALIGN_ITEMS: Record<ImageAlignment, "flex-start" | "center" | "flex-end"> = {
+  left: "flex-start",
+  center: "center",
+  right: "flex-end",
+};
+
+/** The figure's side, read from the sanitizer's `align-*` class. */
+function figureAlignment(el: Element): ImageAlignment {
+  const alignClass = Array.from(el.classList).find((name) => name.startsWith("align-"));
+  return imageAlignment(alignClass?.slice("align-".length));
+}
 
 function renderParagraph(el: Element, styles: PdfStyles, key: string): ReactNode {
   const lineHeight = blockLineHeight(el);
@@ -386,7 +405,11 @@ function renderImage(el: Element, styles: PdfStyles, key: string): ReactNode {
   const src = el.getAttribute("src");
   if (!src) return null;
 
-  return createElement(Image, { key, src, style: styles.image });
+  const widthPercent = imageWidthPercent(inlineDeclaration(el, "width"));
+  const style =
+    widthPercent === null ? styles.image : [styles.image, { width: `${widthPercent}%` }];
+
+  return createElement(Image, { key, src, style });
 }
 
 function renderTable(el: Element, styles: PdfStyles, key: string): ReactNode {

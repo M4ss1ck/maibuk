@@ -168,6 +168,41 @@ figcaption {
   margin-top: 0.5em;
 }
 
+/* Image figures - vertical space comes from the figure, width may be inline */
+figure.image-figure img {
+  margin: 0;
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+figure.image-figure.align-left {
+  text-align: left;
+}
+
+figure.image-figure.align-left img {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+figure.image-figure.align-center {
+  text-align: center;
+}
+
+figure.image-figure.align-center img {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+figure.image-figure.align-right {
+  text-align: right;
+}
+
+figure.image-figure.align-right img {
+  margin-left: auto;
+  margin-right: 0;
+}
+
 /* Text formatting */
 strong, b {
   font-weight: bold;

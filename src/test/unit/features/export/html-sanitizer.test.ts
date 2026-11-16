@@ -139,6 +139,48 @@ describe("sanitizeHtmlForEpub()", () => {
   });
 });
 
+describe("sanitizeHtmlForEpub() image figures", () => {
+  it("keeps the alignment as a class and the width as an inline style", () => {
+    const html =
+      '<figure data-image="" data-alignment="right" data-width="40%"><img src="cat.png" alt="cat"><figcaption>A cat</figcaption></figure>';
+
+    const result = sanitizeHtmlForEpub(html);
+
+    expect(result.html).toContain('class="image-figure align-right"');
+    expect(result.html).toContain('style="width: 40%"');
+    expect(result.html).toContain("<figcaption>A cat</figcaption>");
+    expect(result.html).not.toContain("data-");
+  });
+
+  it.each([
+    ["center", '<figure data-image="" data-alignment="center"><img src="cat.png"></figure>'],
+    ["left", '<figure data-image="" data-alignment="left"><img src="cat.png"></figure>'],
+  ])("writes the %s alignment class without an img width", (alignment, html) => {
+    const result = sanitizeHtmlForEpub(html);
+
+    expect(result.html).toContain(`class="image-figure align-${alignment}"`);
+    expect(result.html).not.toContain("style=");
+  });
+
+  it("defaults an imported figure with no data attributes to a left alignment", () => {
+    const result = sanitizeHtmlForEpub("<figure><img src=x></figure>");
+
+    expect(result.html).toContain('class="image-figure align-left"');
+    expect(result.html).not.toContain("style=");
+  });
+
+  it("leaves a scene-break image figure unchanged", () => {
+    const html =
+      '<div data-scene-break data-kind="image" class="scene-break"><img src="data:image/png;base64,AA" alt="o"></div>';
+
+    const result = sanitizeHtmlForEpub(html);
+
+    expect(result.html).toBe(
+      '<figure class="scene-break"><img src="data:image/png;base64,AA" alt="o"></figure>'
+    );
+  });
+});
+
 describe("generateEndnotesHtml()", () => {
   it("returns empty string when no footnotes exist", () => {
     expect(generateEndnotesHtml([])).toBe("");

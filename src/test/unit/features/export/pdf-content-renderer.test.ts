@@ -9,6 +9,7 @@ vi.mock("@react-pdf/renderer", () => ({
   StyleSheet: { create: (s: Record<string, unknown>) => s },
 }));
 
+import { processChapterHtml } from "@/features/export/html-sanitizer";
 import { renderHtmlContent } from "@/features/export/pdf-content-renderer";
 import { mapCssFontToPdf } from "@/features/export/pdf-content-renderer";
 import { createPdfStyles } from "@/features/export/pdf-styles";
@@ -213,6 +214,51 @@ describe("image blocks (PDF)", () => {
 
     expect(images).toHaveLength(1);
     expect(images[0]?.props?.src).toBe(src);
+  });
+
+  // The sanitizer feeds the PDF renderer the figure's export class (the
+  // alignment word) and the image's stored width as an inline percent.
+  it.each([
+    ["left", "flex-start"],
+    ["center", "center"],
+    ["right", "flex-end"],
+  ])("lays out a figure aligned %s with alignItems %s", (align, alignItems) => {
+    const tree = renderHtmlContent(
+      `<figure class="image-figure align-${align}"><img src="data:image/png;base64,AA"><figcaption>Caption</figcaption></figure>`,
+      styles
+    );
+    const figure = tree[0] as { props?: { style?: { alignItems?: unknown } } };
+
+    expect(figure.props?.style?.alignItems).toBe(alignItems);
+  });
+
+  it("draws a figure's image at its stored width", () => {
+    const tree = renderHtmlContent(
+      '<figure class="image-figure align-center"><img src="data:image/png;base64,AA" style="width: 40%"></figure>',
+      styles
+    );
+    const image = collectImages(tree)[0] as { props?: { style?: unknown } };
+
+    expect(image.props?.style).toEqual([styles.image, { width: "40%" }]);
+  });
+
+  it("draws an imported figure with no alignment or width at its own size, aligned left", () => {
+    const tree = renderHtmlContent(
+      processChapterHtml('<figure><img src="data:image/png;base64,AA"></figure>'),
+      styles
+    );
+    const figure = tree[0] as { props?: { style?: { alignItems?: unknown } } };
+    const image = collectImages(tree)[0] as { props?: { style?: unknown } };
+
+    expect(figure.props?.style?.alignItems).toBe("flex-start");
+    expect(image.props?.style).toBe(styles.image);
+  });
+
+  it("leaves a figure that holds no Image at its default layout", () => {
+    const tree = renderHtmlContent("<figure><p>Quote</p></figure>", styles);
+    const figure = tree[0] as { props?: { style?: unknown } };
+
+    expect(figure.props?.style).toBeUndefined();
   });
 });
 
