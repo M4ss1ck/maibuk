@@ -114,6 +114,12 @@ export interface ClipboardAdapter {
   readText(): Promise<string>;
   /** Replaces the clipboard with `text`. */
   writeText(text: string): Promise<void>;
+  /**
+   * The image file a file manager copied, which the page itself cannot read
+   * (WebKitGTK hands it only an empty `text/uri-list`); null when the OS
+   * clipboard names no image file. Rejects when the file is too large.
+   */
+  readCopiedImageFile(): Promise<Blob | null>;
 }
 
 /**

@@ -28,6 +28,7 @@ import { ArrowLeft, Network, Redo2, Trash2, Undo2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { maibukArt } from "@/assets/ascii/maibuk";
+import { toast } from "@/components/ui";
 import { Button } from "@/components/ui/Button";
 import { CommandPaletteButton } from "@/components/command-palette/CommandPaletteButton";
 import { Input } from "@/components/ui/Input";
@@ -38,8 +39,11 @@ import { DictationBar } from "@/components/dictation";
 import { useBookStore } from "@/features/books/store";
 import { CanvasToolPanel } from "@/features/canvas/CanvasToolPanel";
 import { CanvasImageDialog } from "@/features/canvas/CanvasImageDialog";
+import { routeCanvasPaste } from "@/features/canvas/canvasPaste";
 import { ConnectToDialog } from "@/features/canvas/ConnectToDialog";
 import { EdgeInspectorCard } from "@/features/canvas/EdgeInspectorCard";
+import { encodeCanvasImage } from "@/features/canvas/encodeCanvasImage";
+import { fitCanvasImageSize } from "@/features/canvas/imageEncoding";
 import { NodeColorPanel } from "@/features/canvas/NodeColorPanel";
 import { NodeConnectButton } from "@/features/canvas/NodeConnectButton";
 import { PenSettingsPanel } from "@/features/canvas/PenSettingsPanel";
@@ -55,6 +59,7 @@ import { useNoteStore } from "@/features/notes";
 import { useThemeStore } from "@/features/theme";
 import { CANVAS_TEXT_NODE_DEFAULT_WIDTH } from "@/constants";
 import { isPlacementTool, type CanvasPosition } from "@/features/canvas/types";
+import { claimPastedImage } from "@/lib/pasted-image";
 import { useShortcuts } from "@/lib/shortcuts";
 
 const DEFAULT_SESSION_VIEWPORT = { x: 0, y: 0, zoom: 1 };
@@ -257,6 +262,9 @@ function CanvasEditor() {
   const { canvasId = "" } = useParams();
   const reactFlow = useReactFlow();
   const surfaceRef = useRef<HTMLDivElement>(null);
+  // The last pointer position over the surface, in screen coordinates: a paste
+  // lands there, and at the viewport center when the pointer is elsewhere.
+  const pointerRef = useRef<{ x: number; y: number } | null>(null);
   const current = useCanvasStore((state) => state.current);
   const doc = useCanvasStore((state) => state.doc);
   const loadState = useCanvasStore((state) => state.loadState);
@@ -436,6 +444,62 @@ function CanvasEditor() {
       y: bounds.top + bounds.height / 2,
     });
   }, [reactFlow]);
+
+  // A paste over the Canvas that brings an image places a Canvas Image at the
+  // pointer, or at the viewport center. Everything else on the clipboard is left
+  // to its own handler, and a Text Node being edited keeps its inline paste.
+  useEffect(() => {
+    if (loadState !== "ready" || editorReadOnly) return;
+    // An encode that finishes after this Canvas closed (or turned read-only)
+    // places nothing.
+    let active = true;
+    const handlePaste = (event: ClipboardEvent) => {
+      const state = useCanvasStore.getState();
+      const pointer = pointerRef.current;
+      const position = routeCanvasPaste({
+        target: event.target,
+        focused: document.activeElement,
+        surface: surfaceRef.current,
+        editingNodeId: state.editingNodeId,
+        readOnly: state.editorReadOnly,
+        pointer: pointer ? reactFlow.screenToFlowPosition(pointer) : null,
+        center: viewportCenter(),
+      });
+      if (!position) return;
+      const pasted = claimPastedImage(event, { capture: true });
+      if (!pasted) return;
+      void (async () => {
+        const source = await pasted;
+        if (!source) return;
+        const encoded = await encodeCanvasImage(source);
+        if (!active) return;
+        const id = crypto.randomUUID();
+        // One addNode is one history step, so a single Undo takes it back.
+        addNode({
+          id,
+          kind: "image",
+          src: encoded.src,
+          ...fitCanvasImageSize(encoded.width, encoded.height),
+          position,
+          fileName: (source instanceof File && source.name) || undefined,
+        });
+        selectNode(id);
+      })().catch(() => {
+        // Any failure (an undecodable image, a copied file too large or gone)
+        // means this device can't use the image; nothing is placed.
+        if (active) toast.error(t("canvas.imageUnsupported"));
+      });
+    };
+    // Capture phase: the decision is made before any editor sees the event. On
+    // WebKitGTK ProseMirror's capturePaste moves focus while the paste is still
+    // dispatching, so the Text Node blurs and stops editing before the event
+    // would bubble here, and the paste would look like one onto the Canvas.
+    document.addEventListener("paste", handlePaste, true);
+    return () => {
+      active = false;
+      document.removeEventListener("paste", handlePaste, true);
+    };
+  }, [addNode, editorReadOnly, loadState, reactFlow, selectNode, t, viewportCenter]);
 
   const placeTextNodeAt = (position: CanvasPosition, width?: number) => {
     // The store lives outside React's event system (the T shortcut is a native
@@ -776,6 +840,12 @@ function CanvasEditor() {
         ref={surfaceRef}
         className="relative min-h-0 flex-1 overflow-hidden"
         data-tutorial="canvas.surface"
+        onPointerMove={(event) => {
+          pointerRef.current = { x: event.clientX, y: event.clientY };
+        }}
+        onPointerLeave={() => {
+          pointerRef.current = null;
+        }}
       >
         <ReactFlow
           // Arrows move the focused node (ADR 0025: the Canvas surface owns them).

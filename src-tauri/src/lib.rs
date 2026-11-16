@@ -1,5 +1,6 @@
 mod android_exit;
 mod backup;
+mod clipboard_image;
 mod dictation;
 mod library_db;
 mod plugins;
@@ -113,6 +114,7 @@ pub fn run() {
             window_background::set_window_background,
             android_exit::exit_app,
             library_db::library_execute_atomic,
+            clipboard_image::read_clipboard_image_file,
             backup::pick_backup_directory,
             backup::request_backup_directory,
             backup::restore_backup_directory,

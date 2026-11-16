@@ -1,5 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { toast } from "@/components/ui";
+import { CanvasImageError } from "@/features/canvas/encodeCanvasImage";
 import { useBoundShortcutStore } from "@/lib/bound-shortcuts";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -79,6 +81,25 @@ vi.mock("../../../features/books/store", () => ({
 }));
 
 vi.mock("../../../features/canvas/nodes", () => ({ nodeTypes: {} }));
+
+const { mockEncode } = vi.hoisted(() => ({ mockEncode: vi.fn() }));
+
+vi.mock("@/features/canvas/encodeCanvasImage", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/features/canvas/encodeCanvasImage")>();
+  return { ...actual, encodeCanvasImage: mockEncode };
+});
+
+const { mockReadCopiedImageFile } = vi.hoisted(() => ({ mockReadCopiedImageFile: vi.fn() }));
+
+// The OS clipboard, read only for a file a file manager copied.
+vi.mock("@/lib/platform", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/platform")>()),
+  getClipboard: async () => ({
+    readText: vi.fn(),
+    writeText: vi.fn(),
+    readCopiedImageFile: mockReadCopiedImageFile,
+  }),
+}));
 
 vi.mock("@xyflow/react", () => ({
   ConnectionMode: { Loose: "loose" },
@@ -546,6 +567,203 @@ describe("Canvas page", () => {
       );
       expect(mocks.actions.addNode).not.toHaveBeenCalled();
       expect(mocks.actions.placeTextNode).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("pasting an image", () => {
+    const imageFile = () => new File(["png"], "cat.png", { type: "image/png" });
+
+    // jsdom has no DataTransfer: this keeps the shapes the router reads.
+    function imageClipboard(file: File): DataTransfer {
+      return {
+        files: [file] as unknown as FileList,
+        items: [
+          { kind: "file", type: file.type, getAsFile: () => file } as DataTransferItem,
+        ] as unknown as DataTransferItemList,
+        types: ["Files"],
+        getData: () => "",
+      } as unknown as DataTransfer;
+    }
+
+    beforeEach(() => {
+      mockEncode.mockReset();
+      mockReadCopiedImageFile.mockReset();
+      mockReadCopiedImageFile.mockResolvedValue(null);
+    });
+
+    it("places the pasted image at the viewport center and selects it", async () => {
+      const user = userEvent.setup();
+      mockEncode.mockResolvedValue({ src: "data:image/jpeg;base64,NEW", width: 640, height: 320 });
+      renderCanvas();
+
+      await user.paste(imageClipboard(imageFile()));
+
+      await waitFor(() => expect(mocks.actions.addNode).toHaveBeenCalledTimes(1));
+      expect(mockEncode).toHaveBeenCalledWith(expect.any(File));
+      const added = mocks.actions.addNode.mock.calls[0][0];
+      expect(added).toEqual({
+        id: expect.any(String),
+        kind: "image",
+        src: "data:image/jpeg;base64,NEW",
+        width: 320,
+        height: 160,
+        // The pointer left the surface, so the image lands at the view center.
+        position: { x: 0, y: 0 },
+        fileName: "cat.png",
+      });
+      expect(mocks.actions.selectNode).toHaveBeenCalledWith(added.id);
+    });
+
+    // WebKitGTK gives a file-manager copy only an empty text/uri-list.
+    function copiedFileClipboard(): DataTransfer {
+      return {
+        files: [] as unknown as FileList,
+        items: [
+          { kind: "string", type: "text/uri-list", getAsFile: () => null } as DataTransferItem,
+        ] as unknown as DataTransferItemList,
+        types: ["text/uri-list"],
+        getData: () => "",
+      } as unknown as DataTransfer;
+    }
+
+    it("places the image file a file manager copied", async () => {
+      const user = userEvent.setup();
+      mockEncode.mockResolvedValue({ src: "data:image/png;base64,OS", width: 640, height: 320 });
+      mockReadCopiedImageFile.mockResolvedValue(new Blob(["png"], { type: "image/png" }));
+      renderCanvas();
+
+      await user.paste(copiedFileClipboard());
+
+      await waitFor(() => expect(mocks.actions.addNode).toHaveBeenCalledTimes(1));
+      expect(mockReadCopiedImageFile).toHaveBeenCalledTimes(1);
+      expect(mockEncode).toHaveBeenCalledWith(expect.any(Blob));
+      const added = mocks.actions.addNode.mock.calls[0][0];
+      expect(added).toEqual({
+        id: expect.any(String),
+        kind: "image",
+        src: "data:image/png;base64,OS",
+        width: 320,
+        height: 160,
+        position: { x: 0, y: 0 },
+      });
+      expect(mocks.actions.selectNode).toHaveBeenCalledWith(added.id);
+    });
+
+    it("places the picture WebKitGTK pastes natively when the event carries no data", async () => {
+      const picture = new Blob(["png"], { type: "image/png" });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => ({ blob: async () => picture }))
+      );
+      mockEncode.mockResolvedValue({ src: "data:image/png;base64,PIC", width: 640, height: 320 });
+      renderCanvas();
+      const event = new Event("paste", { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "clipboardData", {
+        value: { files: [], items: [], types: [], getData: () => "" },
+      });
+
+      act(() => {
+        document.body.dispatchEvent(event);
+        // The native paste lands in the field focused during the event.
+        const img = document.createElement("img");
+        img.setAttribute("src", "blob:http://localhost/1");
+        (document.activeElement as HTMLElement).append(img);
+      });
+
+      await waitFor(() => expect(mocks.actions.addNode).toHaveBeenCalledTimes(1));
+      expect(mockEncode).toHaveBeenCalledWith(picture);
+      expect(mocks.actions.addNode.mock.calls[0][0]).toMatchObject({
+        kind: "image",
+        src: "data:image/png;base64,PIC",
+      });
+      vi.unstubAllGlobals();
+    });
+
+    it("places nothing and reports nothing when no clipboard holds an image", async () => {
+      const user = userEvent.setup();
+      const toastError = vi.spyOn(toast, "error");
+      renderCanvas();
+
+      await user.paste(copiedFileClipboard());
+
+      await waitFor(() => expect(mockReadCopiedImageFile).toHaveBeenCalledTimes(1));
+      expect(mockEncode).not.toHaveBeenCalled();
+      expect(mocks.actions.addNode).not.toHaveBeenCalled();
+      expect(toastError).not.toHaveBeenCalled();
+      toastError.mockRestore();
+    });
+
+    it("reports an unsupported image and places nothing", async () => {
+      const user = userEvent.setup();
+      const toastError = vi.spyOn(toast, "error");
+      mockEncode.mockRejectedValue(new CanvasImageError("unsupported"));
+      renderCanvas();
+
+      await user.paste(imageClipboard(imageFile()));
+
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith("canvas.imageUnsupported"));
+      expect(mocks.actions.addNode).not.toHaveBeenCalled();
+      expect(mocks.actions.selectNode).not.toHaveBeenCalled();
+      toastError.mockRestore();
+    });
+
+    it("reports an image that fails to read, rather than rejecting unhandled", async () => {
+      const user = userEvent.setup();
+      const toastError = vi.spyOn(toast, "error");
+      mockEncode.mockRejectedValue(new DOMException("read failed", "NotReadableError"));
+      renderCanvas();
+
+      await user.paste(imageClipboard(imageFile()));
+
+      await waitFor(() => expect(toastError).toHaveBeenCalledWith("canvas.imageUnsupported"));
+      expect(mocks.actions.addNode).not.toHaveBeenCalled();
+      toastError.mockRestore();
+    });
+
+    it("leaves a paste that began in a Text Node even after the editor ends editing mid-event", async () => {
+      // WebKitGTK: the event carries only text/uri-list, so ProseMirror's
+      // capturePaste moves focus out of the editor while the paste is still
+      // being dispatched; the Text Node blurs, commits, and stops editing
+      // before the event bubbles up to the document.
+      mockReadCopiedImageFile.mockResolvedValue(new Blob(["png"], { type: "image/png" }));
+      Object.assign(mocks.state, { editingNodeId: "node" });
+      renderCanvas();
+      const editor = document.createElement("div");
+      editor.setAttribute("contenteditable", "true");
+      const trailingBreak = document.createElement("br");
+      editor.append(trailingBreak);
+      document.body.append(editor);
+      editor.focus();
+      // The Text Node commits on that blur and its editor view is destroyed,
+      // which strips contenteditable and detaches the DOM the event targets.
+      editor.addEventListener("paste", () => {
+        Object.assign(mocks.state, { editingNodeId: null });
+        editor.removeAttribute("contenteditable");
+        editor.remove();
+      });
+
+      const event = new Event("paste", { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "clipboardData", {
+        value: { files: [], items: [], types: ["text/uri-list"], getData: () => "" },
+      });
+      act(() => {
+        trailingBreak.dispatchEvent(event);
+      });
+      await act(async () => {});
+
+      expect(mockReadCopiedImageFile).not.toHaveBeenCalled();
+      expect(mocks.actions.addNode).not.toHaveBeenCalled();
+    });
+
+    it("places nothing while a Text Node is being edited", async () => {
+      const user = userEvent.setup();
+      Object.assign(mocks.state, { editingNodeId: "node" });
+      renderCanvas();
+
+      await user.paste(imageClipboard(imageFile()));
+
+      expect(mockEncode).not.toHaveBeenCalled();
+      expect(mocks.actions.addNode).not.toHaveBeenCalled();
     });
   });
 
