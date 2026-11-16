@@ -18,11 +18,11 @@ function imageFileOnClipboard(clipboard: DataTransfer): File | null {
 }
 
 /**
- * Routes a paste over the Canvas: the image File to place and where, or null
- * when something else owns the paste (a Text Node being edited, a read-only
- * Canvas, an editable field or an open dialog, or no image on the clipboard).
- * A pointer over the Canvas places the image there, otherwise it lands at the
- * viewport center.
+ * Routes a paste over the Canvas: the image File the event carries (null when it
+ * carries none, as WebKitGTK's does) and where it lands, or null when something
+ * else owns the paste (a Text Node being edited, a read-only Canvas, or an
+ * editable field or open dialog). A pointer over the Canvas places the image
+ * there, otherwise it lands at the viewport center.
  */
 export function routeCanvasPaste({
   clipboard,
@@ -43,13 +43,11 @@ export function routeCanvasPaste({
   pointer: CanvasPosition | null;
   /** Flow position of the viewport center. */
   center: CanvasPosition;
-}): { file: File; position: CanvasPosition } | null {
+}): { file: File | null; position: CanvasPosition } | null {
   if (editingNodeId) return null;
   if (readOnly) return null;
   if (target && isOwnedTarget(target)) return null;
   if (!clipboard) return null;
 
-  const file = imageFileOnClipboard(clipboard);
-  if (!file) return null;
-  return { file, position: pointer ?? center };
+  return { file: imageFileOnClipboard(clipboard), position: pointer ?? center };
 }

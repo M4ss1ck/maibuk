@@ -89,6 +89,18 @@ vi.mock("@/features/canvas/encodeCanvasImage", async (importOriginal) => {
   return { ...actual, encodeCanvasImage: mockEncode };
 });
 
+const { mockReadImage } = vi.hoisted(() => ({ mockReadImage: vi.fn() }));
+
+// The OS clipboard, which only WebKitGTK's image-less paste events fall back to.
+vi.mock("@/lib/platform", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/platform")>()),
+  getClipboard: async () => ({
+    readText: vi.fn(),
+    writeText: vi.fn(),
+    readImage: mockReadImage,
+  }),
+}));
+
 vi.mock("@xyflow/react", () => ({
   ConnectionMode: { Loose: "loose" },
   MarkerType: { ArrowClosed: "arrowclosed" },
@@ -573,6 +585,8 @@ describe("Canvas page", () => {
 
     beforeEach(() => {
       mockEncode.mockReset();
+      mockReadImage.mockReset();
+      mockReadImage.mockResolvedValue(null);
     });
 
     it("places the pasted image at the viewport center and selects it", async () => {
@@ -596,6 +610,53 @@ describe("Canvas page", () => {
         fileName: "cat.png",
       });
       expect(mocks.actions.selectNode).toHaveBeenCalledWith(added.id);
+    });
+
+    // WebKitGTK's paste event carries only an empty text/uri-list: no files.
+    function imageLessClipboard(): DataTransfer {
+      return {
+        files: [] as unknown as FileList,
+        items: [
+          { kind: "string", type: "text/uri-list", getAsFile: () => null } as DataTransferItem,
+        ] as unknown as DataTransferItemList,
+      } as DataTransfer;
+    }
+
+    it("places the image the OS clipboard holds when the event carries none", async () => {
+      const user = userEvent.setup();
+      mockEncode.mockResolvedValue({ src: "data:image/png;base64,OS", width: 640, height: 320 });
+      mockReadImage.mockResolvedValue(new Blob(["png"], { type: "image/png" }));
+      renderCanvas();
+
+      await user.paste(imageLessClipboard());
+
+      await waitFor(() => expect(mocks.actions.addNode).toHaveBeenCalledTimes(1));
+      expect(mockReadImage).toHaveBeenCalledTimes(1);
+      expect(mockEncode).toHaveBeenCalledWith(expect.any(Blob));
+      const added = mocks.actions.addNode.mock.calls[0][0];
+      expect(added).toEqual({
+        id: expect.any(String),
+        kind: "image",
+        src: "data:image/png;base64,OS",
+        width: 320,
+        height: 160,
+        position: { x: 0, y: 0 },
+      });
+      expect(mocks.actions.selectNode).toHaveBeenCalledWith(added.id);
+    });
+
+    it("places nothing and reports nothing when no clipboard holds an image", async () => {
+      const user = userEvent.setup();
+      const toastError = vi.spyOn(toast, "error");
+      renderCanvas();
+
+      await user.paste(imageLessClipboard());
+
+      await waitFor(() => expect(mockReadImage).toHaveBeenCalledTimes(1));
+      expect(mockEncode).not.toHaveBeenCalled();
+      expect(mocks.actions.addNode).not.toHaveBeenCalled();
+      expect(toastError).not.toHaveBeenCalled();
+      toastError.mockRestore();
     });
 
     it("reports an unsupported image and places nothing", async () => {

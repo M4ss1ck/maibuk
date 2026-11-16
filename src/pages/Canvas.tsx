@@ -59,6 +59,7 @@ import { useNoteStore } from "@/features/notes";
 import { useThemeStore } from "@/features/theme";
 import { CANVAS_TEXT_NODE_DEFAULT_WIDTH } from "@/constants";
 import { isPlacementTool, type CanvasPosition } from "@/features/canvas/types";
+import { getClipboard } from "@/lib/platform";
 import { useShortcuts } from "@/lib/shortcuts";
 
 const DEFAULT_SESSION_VIEWPORT = { x: 0, y: 0, zoom: 1 };
@@ -444,9 +445,11 @@ function CanvasEditor() {
     });
   }, [reactFlow]);
 
-  // A paste of an image over the Canvas places a Canvas Image at the pointer, or
-  // at the viewport center. Everything else on the clipboard is left to its own
-  // handler, and a Text Node being edited keeps its inline paste.
+  // A paste over the Canvas places a Canvas Image at the pointer, or at the
+  // viewport center. WebKitGTK's paste event never carries image data, so when
+  // it carries no image the OS clipboard is read instead. Everything else on the
+  // clipboard is left to its own handler, and a Text Node being edited keeps its
+  // inline paste.
   useEffect(() => {
     if (loadState !== "ready" || editorReadOnly) return;
     // An encode that finishes after this Canvas closed (or turned read-only)
@@ -464,27 +467,31 @@ function CanvasEditor() {
         center: viewportCenter(),
       });
       if (!route) return;
-      event.preventDefault();
-      void encodeCanvasImage(route.file)
-        .then((encoded) => {
-          if (!active) return;
-          const id = crypto.randomUUID();
-          // One addNode is one history step, so a single Undo takes it back.
-          addNode({
-            id,
-            kind: "image",
-            src: encoded.src,
-            ...fitCanvasImageSize(encoded.width, encoded.height),
-            position: route.position,
-            fileName: route.file.name || undefined,
-          });
-          selectNode(id);
-        })
-        .catch(() => {
-          // Any failure (an undecodable image, a clipboard file the OS dropped)
-          // means this device can't use the image; nothing is placed.
-          if (active) toast.error(t("canvas.imageUnsupported"));
+      const { file, position } = route;
+      // Only the event's own image is claimed here: taking the paste away from
+      // the rest of the document has to happen before the async read below.
+      if (file) event.preventDefault();
+      void (async () => {
+        const source = file ?? (await (await getClipboard()).readImage());
+        if (!source) return;
+        const encoded = await encodeCanvasImage(source);
+        if (!active) return;
+        const id = crypto.randomUUID();
+        // One addNode is one history step, so a single Undo takes it back.
+        addNode({
+          id,
+          kind: "image",
+          src: encoded.src,
+          ...fitCanvasImageSize(encoded.width, encoded.height),
+          position,
+          fileName: file?.name || undefined,
         });
+        selectNode(id);
+      })().catch(() => {
+        // Any failure (an undecodable image, a clipboard file the OS dropped)
+        // means this device can't use the image; nothing is placed.
+        if (active) toast.error(t("canvas.imageUnsupported"));
+      });
     };
     document.addEventListener("paste", handlePaste);
     return () => {

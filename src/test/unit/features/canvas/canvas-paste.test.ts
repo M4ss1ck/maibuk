@@ -68,24 +68,24 @@ describe("routeCanvasPaste", () => {
     expect(routeCanvasPaste(buildInput({ target: button }))).toBeNull();
   });
 
-  it("ignores a text-only clipboard", () => {
+  it("routes a text-only clipboard with no file for the OS clipboard to answer", () => {
     expect(
       routeCanvasPaste(
         buildInput({
           clipboard: buildClipboard({ items: [buildItem("text/plain")] }),
         })
       )
-    ).toBeNull();
+    ).toEqual({ file: null, position: CENTER });
   });
 
-  it("ignores an html-only clipboard", () => {
+  it("routes an html-only clipboard with no file", () => {
     expect(
       routeCanvasPaste(
         buildInput({
           clipboard: buildClipboard({ items: [buildItem("text/html")] }),
         })
       )
-    ).toBeNull();
+    ).toEqual({ file: null, position: CENTER });
   });
 
   it("places the pasted image at the pointer when it is over the Canvas", () => {

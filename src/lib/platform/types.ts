@@ -114,6 +114,11 @@ export interface ClipboardAdapter {
   readText(): Promise<string>;
   /** Replaces the clipboard with `text`. */
   writeText(text: string): Promise<void>;
+  /**
+   * An image on the OS clipboard: a copied image file, else a copied picture;
+   * null when it holds neither.
+   */
+  readImage(): Promise<Blob | null>;
 }
 
 /**
