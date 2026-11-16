@@ -3,6 +3,10 @@ import DOMPurify from "dompurify";
 const CANVAS_LINK_URI =
   /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|maibuk):|[^a-z]|[-a-z+.]+(?:[^-a-z+.:]|$))/i;
 
+// The widths and alignments the editor's ImageView writes on an Image figure.
+const IMAGE_WIDTH = /^\d+(?:\.\d+)?%$/;
+const IMAGE_ALIGNMENTS = new Set(["left", "center", "right"]);
+
 const BLANK_TEXT_TAGS = new Set(
   "P BR DIV SPAN H1 H2 H3 H4 H5 H6 UL OL LI BLOCKQUOTE STRONG B EM I U S CODE PRE MARK A".split(" ")
 );
@@ -65,7 +69,7 @@ export function canvasLinkAnchors(html: string): CanvasLinkAnchor[] {
  * Prepares stored canvas node HTML for idle (non-editing) rendering so it matches
  * the active editor: sanitizes with the canvas link policy, takes Links out of the
  * Tab order (their keyboard route is the Item Menu), restores hard breaks
- * inside empty paragraphs, numbers footnote references in DOM order, and appends a
+ * inside empty paragraphs, sizes Images as the editor does, numbers footnote references in DOM order, and appends a
  * footnote definition section. Footnote definitions are assigned through
  * `textContent`, never interpolated as HTML. Stored HTML remains canonical TipTap
  * output; this transformation is for display only.
@@ -78,6 +82,19 @@ export function prepareStaticCanvasHtml(html: string): string {
   // (Shift+F10), which lists the node's Links.
   body.querySelectorAll("a[href]").forEach((anchor) => {
     anchor.setAttribute("tabindex", "-1");
+  });
+
+  // An Image draws the box the editor's ImageView draws (its classes, width,
+  // and caption), so it keeps its size when the node stops editing.
+  body.querySelectorAll<HTMLElement>("figure[data-image]").forEach((figure) => {
+    const alignment = figure.getAttribute("data-alignment") ?? "";
+    const width = figure.getAttribute("data-width") ?? "";
+    figure.className = `editor-image-figure align-${IMAGE_ALIGNMENTS.has(alignment) ? alignment : "center"}`;
+    figure.style.width = IMAGE_WIDTH.test(width) ? width : "100%";
+    figure.querySelectorAll("figcaption").forEach((caption) => {
+      if (caption.textContent?.trim()) caption.className = "image-caption";
+      else caption.remove();
+    });
   });
 
   body.querySelectorAll("p").forEach((paragraph) => {
