@@ -1036,8 +1036,9 @@ ul.task-list-caret > .task-list-menu,
   font-weight: 600;
 }
 
+/* A partial tint of the border color: a full-strength fill would hide the cell borders. */
 .editor-content table tr:hover td {
-  background-color: var(--color-table-border);
+  background-color: color-mix(in srgb, var(--color-table-border) 40%, transparent);
 }
 
 /* Table column resize feedback */
