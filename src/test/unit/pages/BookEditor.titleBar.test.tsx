@@ -420,6 +420,47 @@ describe("BookEditor return target", () => {
     expect(mockNavigateFn).toHaveBeenCalledWith("/canvas/c1");
   });
 
+  it("opens the named Chapter when the store still holds another Book's Chapters", async () => {
+    const setStore = (patch: Record<string, unknown>) => {
+      mockChapterStore.state = { ...mockChapterStore.state, ...patch };
+      for (const notify of mockChapterStore.listeners) notify();
+    };
+    const chapter = (id: string, bookId: string, order: number) => ({
+      id,
+      bookId,
+      title: id,
+      content: `<p>${id}</p>`,
+      order,
+      chapterType: "chapter",
+      wordCount: 1,
+    });
+    // The last Book opened left its Chapters behind; loading this Book empties
+    // the store at once and fills it later, as the real loadChapters does.
+    mockChapterStore.state = {
+      ...defaultChapterStoreState,
+      chapters: [chapter("other", "book-0", 0)],
+      currentBookId: "book-0",
+      currentChapter: null,
+      // The mocked Book store hands out a new loadBook each render, so the load
+      // effect reruns; only the first call for a Book loads.
+      loadChapters: (bookId: string) => {
+        if (mockChapterStore.state?.currentBookId === bookId) return Promise.resolve();
+        setStore({ chapters: [], currentChapter: null, currentBookId: bookId });
+        return Promise.resolve().then(() =>
+          setStore({ chapters: [chapter("c1", bookId, 0), chapter("c2", bookId, 1)] })
+        );
+      },
+    };
+    mockLocationState.value = { openChapterId: "c1", returnTo: "/canvas/c1", returnLabel: "Plot" };
+    mockNavigateFn.mockImplementation((_to: string, options?: { state?: unknown }) => {
+      if (options && "state" in options) mockLocationState.value = options.state;
+    });
+
+    renderAtWidth(TITLE_BAR_LABELS_MIN);
+
+    await waitFor(() => expect(mockChapterStore.state?.currentChapter?.id).toBe("c1"));
+  });
+
   it("goes home when nothing opened the Book", async () => {
     renderAtWidth(TITLE_BAR_LABELS_MIN);
 
