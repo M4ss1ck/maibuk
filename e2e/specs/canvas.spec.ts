@@ -666,6 +666,8 @@ test.describe("Canvas Reference @wf:canvas-note-ref @sc:canvas.addReference @sc:
     await page.keyboard.press("n");
     await page.keyboard.press("Enter");
     const dialog = page.getByRole("dialog", { name: "Add reference" });
+    await expect(dialog).toBeVisible();
+    await capture(page, "canvas-reference-picker", { around: [dialog] });
     await expect(dialog.getByPlaceholder("Search…")).toBeFocused();
     await page.keyboard.type("Keep");
     const option = dialog.getByRole("option", { name: "Keeper's Log" });
@@ -720,6 +722,9 @@ test.describe("Canvas Reference @wf:canvas-note-ref @sc:canvas.addReference @sc:
   }) => {
     await openMap(page);
     const missing = flowNode(page, "ref-missing");
+    const present = flowNode(page, "ref-log");
+    await expect(present).toContainText("Keeper's Log");
+    await capture(page, "canvas-reference-cards", { around: [present, missing] });
     // The card keeps the label it was stored with — none, so "Untitled".
     await expect(missing).toContainText("Untitled");
     await expect(missing).toContainText("This item no longer exists");
