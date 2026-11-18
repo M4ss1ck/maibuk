@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { type ComponentType, useState } from "react";
 import { BookOpen, ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -9,51 +9,39 @@ import { NoteTagsRow } from "@/components/notes/NoteTagsRow";
 import { notePreviewText } from "@/components/notes/notes-list-model";
 import { timeAgo } from "@/components/notes/timeAgo";
 import { useBookStore } from "@/features/books/store";
-import { useNoteStore } from "@/features/notes";
+import type { Note } from "@/features/notes";
 import type { CanvasFlowNodeData } from "@/features/canvas/reactFlowAdapter";
+import {
+  CANVAS_REFERENCE_CARD_SIZES,
+  type CanvasReferenceCardKind,
+  getCanvasReferenceSource,
+  openCanvasReference,
+  useCanvasReferenceResolution,
+} from "@/features/canvas/references";
+import type { ReferenceCanvasNode } from "@/features/canvas/types";
 import { CanvasNodeHandles } from "@/features/canvas/nodes/CanvasNodeHandles";
 import { useCanvasNodeMenu } from "@/features/canvas/nodes/CanvasNodeMenu";
 import { useCanvasStore } from "@/features/canvas/store";
 
 type ReferenceFlowNode = Node<CanvasFlowNodeData, "reference">;
 
-export function ReferenceNode({ data, selected }: NodeProps<ReferenceFlowNode>) {
+interface CanvasReferenceCardBodyProps {
+  /** The source's answer; only the card body for its kind knows the shape. */
+  value: unknown;
+  title: string;
+}
+
+/** A Note draws its preview, its Book, and its tags, as its card always has. */
+function NoteReferenceCardBody({ value, title }: CanvasReferenceCardBodyProps) {
   const { t, i18n } = useTranslation();
-  const navigate = useNavigate();
-  // The Router keeps this Canvas up until the Notes page has rendered, which a
-  // dense Canvas drags out. This is the answer to the press in the meantime.
-  const [isOpening, setIsOpening] = useState(false);
-  const node = data.node;
-  const note = useNoteStore((state) =>
-    node.kind === "reference" && node.source === "note"
-      ? state.notes.find((candidate) => candidate.id === node.targetId)
-      : undefined
-  );
   const books = useBookStore((state) => state.books);
-  const editorReadOnly = useCanvasStore((state) => state.editorReadOnly);
-  const interactivityLocked = useCanvasStore((state) => state.interactivityLocked);
-  const nodeMenu = useCanvasNodeMenu(node.id, {
-    isDisabled: editorReadOnly || interactivityLocked,
-  });
-
-  if (node.kind !== "reference") return null;
-
-  const title = note?.title || node.label || t("canvas.missingNote");
-  const preview = note ? notePreviewText(note.content) : "";
-  const bookTitle = note?.bookId ? books.find((book) => book.id === note.bookId)?.title : null;
-  const dateLabel = note ? timeAgo(note.contentUpdatedAt, i18n?.language ?? "en", t) : "";
+  const note = value as Note;
+  const preview = notePreviewText(note.content);
+  const bookTitle = note.bookId ? books.find((book) => book.id === note.bookId)?.title : null;
+  const dateLabel = timeAgo(note.contentUpdatedAt, i18n?.language ?? "en", t);
 
   return (
-    <div
-      ref={nodeMenu.anchorRef}
-      {...nodeMenu.itemProps}
-      className={`group relative flex min-h-44 w-56 flex-col rounded-xl border bg-card p-4 text-left text-foreground shadow-sm pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] ${
-        selected ? "border-primary ring-2 ring-primary/20" : "border-border"
-      }`}
-    >
-      <CanvasNodeHandles connectedSides={data.connectedSides} variant="card" selected={selected} />
-      {nodeMenu.menu}
-
+    <>
       <h3 className="line-clamp-2 font-medium text-foreground">{title}</h3>
 
       {preview && (
@@ -68,33 +56,116 @@ export function ReferenceNode({ data, selected }: NodeProps<ReferenceFlowNode>) 
       )}
 
       <div className="mt-auto pt-2">
-        <NoteTagsRow tags={note?.tags ?? []} dateLabel={dateLabel} interactiveOverflow={false} />
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="nodrag nopan mt-2 w-full"
-          disabled={!note}
-          aria-busy={isOpening}
-          onClick={() => {
-            if (isOpening) return;
-            setIsOpening(true);
-            navigate(`/notes/${node.targetId}`, {
-              state: {
-                returnTo: `/canvas/${data.canvasId}`,
-                returnLabel: data.canvasTitle || t("canvas.untitled"),
-              },
-            });
-          }}
-        >
-          {isOpening ? (
-            <SpinnerIcon className="size-4 animate-spin" />
-          ) : (
-            <ExternalLink className="size-4" aria-hidden="true" />
-          )}
-          {t("canvas.openNote")}
-        </Button>
+        <NoteTagsRow tags={note.tags} dateLabel={dateLabel} interactiveOverflow={false} />
       </div>
+    </>
+  );
+}
+
+/** What a card kind draws once its source answered: the one place a value is read. */
+const CANVAS_REFERENCE_CARD_BODIES: Record<
+  CanvasReferenceCardKind,
+  ComponentType<CanvasReferenceCardBodyProps>
+> = {
+  note: NoteReferenceCardBody,
+};
+
+/** A state with nothing to draw beyond its label and, sometimes, one line saying why. */
+function ReferenceStateBody({ title, detail }: { title: string; detail?: string }) {
+  return (
+    <>
+      <h3 className="line-clamp-2 font-medium text-foreground">{title}</h3>
+      {detail && <p className="mt-1 text-sm text-muted-foreground">{detail}</p>}
+    </>
+  );
+}
+
+export function ReferenceNode({ data, selected }: NodeProps<ReferenceFlowNode>) {
+  const node = data.node;
+  // React Flow only routes a reference here, so the card's hooks run below this.
+  if (node.kind !== "reference") return null;
+  return <CanvasReferenceCard node={node} data={data} selected={selected ?? false} />;
+}
+
+function CanvasReferenceCard({
+  node,
+  data,
+  selected,
+}: {
+  node: ReferenceCanvasNode;
+  data: CanvasFlowNodeData;
+  selected: boolean;
+}) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  // The Router keeps this Canvas up until the target's page has rendered, which
+  // a dense Canvas drags out. This is the answer to the press in the meantime.
+  const [isOpening, setIsOpening] = useState(false);
+  const editorReadOnly = useCanvasStore((state) => state.editorReadOnly);
+  const interactivityLocked = useCanvasStore((state) => state.interactivityLocked);
+  const nodeMenu = useCanvasNodeMenu(node.id, {
+    isDisabled: editorReadOnly || interactivityLocked,
+  });
+
+  const source = getCanvasReferenceSource(node.source);
+  const resolution = useCanvasReferenceResolution(node.source, node.targetId);
+  // An unregistered source has no card kind yet; it borrows the note box.
+  const size = CANVAS_REFERENCE_CARD_SIZES[source?.card ?? "note"];
+  const storedLabel = node.label || t("canvas.referenceUntitled");
+  const CardBody = source ? CANVAS_REFERENCE_CARD_BODIES[source.card] : null;
+  const title = resolution?.status === "present" ? resolution.title || storedLabel : storedLabel;
+  const canOpen = Boolean(source) && resolution?.status !== "missing";
+
+  return (
+    <div
+      ref={nodeMenu.anchorRef}
+      {...nodeMenu.itemProps}
+      style={{ width: size.width, height: size.height }}
+      className={`group relative flex flex-col rounded-xl border bg-card p-4 text-left text-foreground shadow-sm pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] ${
+        selected ? "border-primary ring-2 ring-primary/20" : "border-border"
+      }`}
+    >
+      <CanvasNodeHandles connectedSides={data.connectedSides} variant="card" selected={selected} />
+      {nodeMenu.menu}
+
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {!source ? (
+          <ReferenceStateBody title={storedLabel} detail={t("canvas.referenceUnavailable")} />
+        ) : resolution?.status === "missing" ? (
+          <ReferenceStateBody title={storedLabel} detail={t("canvas.referenceMissing")} />
+        ) : resolution?.status === "present" && CardBody ? (
+          <CardBody value={resolution.value} title={title} />
+        ) : (
+          <ReferenceStateBody title={storedLabel} />
+        )}
+      </div>
+
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="nodrag nopan mt-2 w-full"
+        disabled={!canOpen}
+        aria-busy={isOpening}
+        aria-label={t("canvas.openReferenceNamed", { title })}
+        onClick={async () => {
+          if (isOpening) return;
+          setIsOpening(true);
+          const result = await openCanvasReference(node, {
+            canvasId: data.canvasId,
+            canvasTitle: data.canvasTitle || t("canvas.untitled"),
+            navigate,
+          });
+          if (result !== "opened") setIsOpening(false);
+        }}
+      >
+        {isOpening ? (
+          <SpinnerIcon className="size-4 animate-spin" />
+        ) : (
+          <ExternalLink className="size-4" aria-hidden="true" />
+        )}
+        {t("canvas.openReference")}
+      </Button>
     </div>
   );
 }

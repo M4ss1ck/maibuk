@@ -251,7 +251,7 @@ async function paletteLibrary(): Promise<void> {
 }
 
 // A Canvas library with two Text Nodes connected, a Note Reference, a dangling
-// Note Reference that reads "Missing note", a second Canvas, and a Canvas whose
+// Note Reference that reads Missing ("This item no longer exists"), a second Canvas, and a Canvas whose
 // stored doc cannot be parsed (the recovery path's seed).
 export async function canvasWithNodes(): Promise<void> {
   // A Note the Canvas references, so the Note Reference has a live target.
@@ -289,7 +289,7 @@ export async function canvasWithNodes(): Promise<void> {
           position: { x: 0, y: 320 },
         },
         {
-          // No label, so a note deleted elsewhere reads as "Missing note".
+          // No label, so a note deleted elsewhere reads as Missing.
           id: "ref-missing",
           kind: "reference",
           source: "note",

@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Note } from "@/features/notes";
 import { installPointerEvent, touchLongPress, touchTap } from "@/test/support/pointer-events";
 
 installPointerEvent();
@@ -23,14 +24,6 @@ const mocks = vi.hoisted(() => ({
   editingNodeId: null as string | null,
   editorReadOnly: false,
   interactivityLocked: false,
-  notes: [] as Array<{
-    id: string;
-    bookId?: string | null;
-    title: string;
-    content: string;
-    tags: string[];
-    contentUpdatedAt: number;
-  }>,
   books: [] as Array<{ id: string; title: string }>,
 }));
 
@@ -73,11 +66,6 @@ vi.mock("../../../../features/canvas/store", () => ({
     }),
 }));
 
-vi.mock("../../../../features/notes", () => ({
-  useNoteStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({ notes: mocks.notes }),
-}));
-
 vi.mock("../../../../features/books/store", () => ({
   useBookStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({ books: mocks.books }),
@@ -90,14 +78,69 @@ vi.mock("react-i18next", () => ({
 
 const { LightweightNode } = await import("@/features/canvas/nodes/LightweightNode");
 const { ReferenceNode } = await import("@/features/canvas/nodes/ReferenceNode");
+const { noteReferenceSource } = await import("@/features/canvas/noteReferenceSource");
+const { CANVAS_REFERENCE_CARD_SIZES, useCanvasReferenceResolutions } = await import(
+  "@/features/canvas/references"
+);
+const { useNoteStore } = await import("@/features/notes");
+
+function noteRow(overrides: Partial<Note> = {}): Note {
+  return {
+    id: "note-1",
+    title: "Log",
+    content: "<p>Body</p>",
+    language: "en",
+    tags: [],
+    pinned: false,
+    order: 0,
+    wordCount: 0,
+    collapsedHeadings: [],
+    createdAt: 1,
+    updatedAt: 1,
+    contentUpdatedAt: 1,
+    ...overrides,
+  };
+}
+
+/** The answers the source store holds for one target. */
+function answer(
+  source: string,
+  targetId: string,
+  resolution: { status: "present"; title: string; value: unknown } | { status: "missing" }
+) {
+  useCanvasReferenceResolutions.getState().mergeAnswers(source, { [targetId]: resolution });
+}
+
+const referenceData = (node: Record<string, unknown> = {}) => ({
+  node: {
+    id: "ref",
+    kind: "reference",
+    source: "note",
+    targetId: "note-1",
+    position: { x: 0, y: 0 },
+    ...node,
+  },
+  canvasId: "canvas",
+  canvasTitle: "Map",
+  connectedSides: {},
+});
+
+function renderReference(data: ReturnType<typeof referenceData> = referenceData()) {
+  return render(
+    <MemoryRouter>
+      <ReferenceNode {...({ selected: false, data } as Parameters<typeof ReferenceNode>[0])} />
+    </MemoryRouter>
+  );
+}
 
 describe("Canvas custom nodes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.notes = [];
     mocks.books = [];
     mocks.editorReadOnly = false;
     mocks.interactivityLocked = false;
+    useCanvasReferenceResolutions.getState().clear();
+    useNoteStore.setState({ notes: [] });
   });
 
   const textNodeData = (overrides: Record<string, unknown> = {}) => ({
@@ -476,137 +519,159 @@ describe("Canvas custom nodes", () => {
     );
   });
 
-  it("shows a cached label and disables opening when the note is missing", () => {
-    render(
-      <MemoryRouter>
-        <ReferenceNode
-          {...({
-            selected: false,
-            data: {
-              node: {
-                id: "ref",
-                kind: "reference",
-                source: "note",
-                targetId: "missing",
-                label: "Cached title",
-                position: { x: 0, y: 0 },
-              },
-              canvasId: "canvas",
-              canvasTitle: "Map",
-              connectedSides: {
-                top: { connected: false, incoming: false, outgoing: false },
-                right: { connected: false, incoming: false, outgoing: false },
-                bottom: { connected: false, incoming: false, outgoing: false },
-                left: { connected: false, incoming: false, outgoing: false },
-              },
-            },
-          } as Parameters<typeof ReferenceNode>[0])}
-        />
-      </MemoryRouter>
-    );
+  it("shows the stored label and disables opening when the source answers missing", () => {
+    answer("note", "missing", { status: "missing" });
+
+    renderReference(referenceData({ targetId: "missing", label: "Cached title" }));
+
     expect(screen.getByText("Cached title")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "canvas.openNote" })).toBeDisabled();
+    expect(screen.getByText("canvas.referenceMissing")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "canvas.openReferenceNamed" })).toBeDisabled();
     expect(screen.getAllByTestId("handle")).toHaveLength(4);
   });
 
-  it("renders a reference from another source with its stored label and Open disabled", () => {
-    render(
-      <MemoryRouter>
-        <ReferenceNode
-          {...({
-            selected: false,
-            data: {
-              node: {
-                id: "ref",
-                kind: "reference",
-                source: "plugin.maps.maps",
-                targetId: "map-1",
-                label: "Harbour map",
-                position: { x: 0, y: 0 },
-              },
-              canvasId: "canvas",
-              canvasTitle: "Map",
-              connectedSides: {
-                top: { connected: false, incoming: false, outgoing: false },
-                right: { connected: false, incoming: false, outgoing: false },
-                bottom: { connected: false, incoming: false, outgoing: false },
-                left: { connected: false, incoming: false, outgoing: false },
-              },
-            },
-          } as Parameters<typeof ReferenceNode>[0])}
-        />
-      </MemoryRouter>
+  it("shows the stored label while the source has not answered yet", () => {
+    renderReference(referenceData({ label: "Pending" }));
+
+    expect(screen.getByText("Pending")).toBeInTheDocument();
+    expect(screen.queryByText("canvas.referenceMissing")).toBeNull();
+    expect(screen.queryByText("canvas.referenceUnavailable")).toBeNull();
+    expect(screen.getByRole("button", { name: "canvas.openReferenceNamed" })).toBeEnabled();
+  });
+
+  it("renders a reference from an unregistered source as unavailable", () => {
+    renderReference(
+      referenceData({ source: "plugin.maps.maps", targetId: "map-1", label: "Harbour map" })
     );
+
     expect(screen.getByText("Harbour map")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "canvas.openNote" })).toBeDisabled();
+    expect(screen.getByText("canvas.referenceUnavailable")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "canvas.openReferenceNamed" })).toBeDisabled();
+  });
+
+  it("draws Present, Missing, Unavailable, and unresolved in one fixed box", () => {
+    const states: Array<{
+      name: string;
+      seed?: () => void;
+      data: ReturnType<typeof referenceData>;
+    }> = [
+      {
+        name: "present",
+        seed: () => answer("note", "note-1", { status: "present", title: "Log", value: noteRow() }),
+        data: referenceData(),
+      },
+      {
+        name: "missing",
+        seed: () => answer("note", "note-1", { status: "missing" }),
+        data: referenceData(),
+      },
+      {
+        name: "unavailable",
+        data: referenceData({ source: "plugin.x.y", targetId: "item-1" }),
+      },
+      { name: "unresolved", data: referenceData() },
+    ];
+
+    const boxes: Array<{ name: string; width: string; height: string }> = [];
+    for (const state of states) {
+      useCanvasReferenceResolutions.getState().clear();
+      state.seed?.();
+      const { container, unmount } = renderReference(state.data);
+      const card = container.firstElementChild as HTMLElement;
+      boxes.push({ name: state.name, width: card.style.width, height: card.style.height });
+      unmount();
+    }
+
+    expect(boxes.map((box) => box.name)).toEqual([
+      "present",
+      "missing",
+      "unavailable",
+      "unresolved",
+    ]);
+    for (const box of boxes) {
+      expect({ width: box.width, height: box.height }).toEqual({
+        width: `${CANVAS_REFERENCE_CARD_SIZES.note.width}px`,
+        height: `${CANVAS_REFERENCE_CARD_SIZES.note.height}px`,
+      });
+    }
+  });
+
+  it("disables Open for Missing and Unavailable, and enables it for unresolved and Present", () => {
+    const openButton = () => screen.getByRole("button", { name: "canvas.openReferenceNamed" });
+
+    answer("note", "note-1", { status: "present", title: "Log", value: noteRow() });
+    const present = renderReference();
+    expect(openButton()).toBeEnabled();
+    present.unmount();
+
+    useCanvasReferenceResolutions.getState().clear();
+    answer("note", "note-1", { status: "missing" });
+    const missing = renderReference();
+    expect(openButton()).toBeDisabled();
+    missing.unmount();
+
+    const unavailable = renderReference(
+      referenceData({ source: "plugin.x.y", targetId: "item-1" })
+    );
+    expect(openButton()).toBeDisabled();
+    unavailable.unmount();
+
+    useCanvasReferenceResolutions.getState().clear();
+    const unresolved = renderReference();
+    expect(openButton()).toBeEnabled();
+    unresolved.unmount();
+  });
+
+  it("reaches Open with Tab from the card", async () => {
+    const user = userEvent.setup();
+    answer("note", "note-1", { status: "present", title: "Log", value: noteRow() });
+
+    renderReference();
+    await user.tab();
+
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "canvas.openReferenceNamed" })
+    );
+  });
+
+  it("opens through the source and turns Missing when the source says it is gone", async () => {
+    const user = userEvent.setup();
+    const open = vi.spyOn(noteReferenceSource, "open").mockResolvedValue("missing");
+    answer("note", "note-1", { status: "present", title: "Log", value: noteRow() });
+
+    renderReference();
+    await user.click(screen.getByRole("button", { name: "canvas.openReferenceNamed" }));
+
+    expect(open).toHaveBeenCalledWith(
+      "note-1",
+      expect.objectContaining({
+        canvasId: "canvas",
+        canvasTitle: "Map",
+        navigate: expect.any(Function),
+      })
+    );
+    await waitFor(() => expect(screen.getByText("canvas.referenceMissing")).toBeInTheDocument());
+    expect(screen.getByText("canvas.referenceUntitled")).toBeInTheDocument();
   });
 
   it("keeps only the start of a long note in its preview", () => {
-    mocks.notes = [
-      {
-        id: "long",
-        title: "Long",
-        content: `<p>${"word ".repeat(20000)}</p>`,
-        tags: [],
-        contentUpdatedAt: 1,
-      },
-    ] as never;
-    const { container } = render(
-      <MemoryRouter>
-        <ReferenceNode
-          {...({
-            selected: false,
-            data: {
-              node: {
-                id: "ref",
-                kind: "reference",
-                source: "note",
-                targetId: "long",
-                position: { x: 0, y: 0 },
-              },
-              canvasId: "canvas",
-              canvasTitle: "Map",
-              connectedSides: {
-                top: { connected: false, incoming: false, outgoing: false },
-                right: { connected: false, incoming: false, outgoing: false },
-                bottom: { connected: false, incoming: false, outgoing: false },
-                left: { connected: false, incoming: false, outgoing: false },
-              },
-            },
-          } as Parameters<typeof ReferenceNode>[0])}
-        />
-      </MemoryRouter>
-    );
+    answer("note", "long", {
+      status: "present",
+      title: "Long",
+      value: noteRow({ id: "long", title: "Long", content: `<p>${"word ".repeat(20000)}</p>` }),
+    });
+
+    const { container } = renderReference(referenceData({ targetId: "long" }));
+
     expect(container.querySelector("p")?.textContent?.length).toBeLessThanOrEqual(400);
   });
 
-  it("answers Enter on Open note right away, before the route has changed screens", async () => {
+  it("answers Enter on Open right away, before the route has changed screens", async () => {
     const user = userEvent.setup();
-    mocks.notes = [
-      { id: "note-1", title: "Log", content: "<p>Body</p>", tags: [], contentUpdatedAt: 1 },
-    ] as never;
-    const { container } = render(
-      <MemoryRouter>
-        <ReferenceNode
-          {...({
-            selected: false,
-            data: {
-              node: {
-                id: "ref",
-                kind: "reference",
-                source: "note",
-                targetId: "note-1",
-                position: { x: 0, y: 0 },
-              },
-              canvasId: "canvas",
-              canvasTitle: "Map",
-              connectedSides: {},
-            },
-          } as Parameters<typeof ReferenceNode>[0])}
-        />
-      </MemoryRouter>
-    );
-    const open = screen.getByRole("button", { name: "canvas.openNote" });
+    useNoteStore.setState({ notes: [noteRow()] });
+
+    const { container } = renderReference();
+    const open = screen.getByRole("button", { name: "canvas.openReferenceNamed" });
     expect(container.querySelector(".animate-spin")).toBeNull();
 
     open.focus();
@@ -616,11 +681,9 @@ describe("Canvas custom nodes", () => {
     expect(open).toHaveFocus();
   });
 
-  it("opens the note once however many times Open note is pressed", async () => {
+  it("opens the note once however many times Open is pressed", async () => {
     const user = userEvent.setup();
-    mocks.notes = [
-      { id: "note-1", title: "Log", content: "<p>Body</p>", tags: [], contentUpdatedAt: 1 },
-    ] as never;
+    useNoteStore.setState({ notes: [noteRow()] });
     const visited = new Set<string>();
     function LocationProbe() {
       visited.add(useLocation().key);
@@ -630,26 +693,12 @@ describe("Canvas custom nodes", () => {
       <MemoryRouter>
         <LocationProbe />
         <ReferenceNode
-          {...({
-            selected: false,
-            data: {
-              node: {
-                id: "ref",
-                kind: "reference",
-                source: "note",
-                targetId: "note-1",
-                position: { x: 0, y: 0 },
-              },
-              canvasId: "canvas",
-              canvasTitle: "Map",
-              connectedSides: {},
-            },
-          } as Parameters<typeof ReferenceNode>[0])}
+          {...({ selected: false, data: referenceData() } as Parameters<typeof ReferenceNode>[0])}
         />
       </MemoryRouter>
     );
 
-    screen.getByRole("button", { name: "canvas.openNote" }).focus();
+    screen.getByRole("button", { name: "canvas.openReferenceNamed" }).focus();
     await user.keyboard("{Enter}");
     await user.keyboard("{Enter}");
 
@@ -658,75 +707,31 @@ describe("Canvas custom nodes", () => {
   });
 
   it("renders the preview for a note without a linked book", () => {
-    mocks.notes = [
-      {
-        id: "note-1",
-        title: "Loose note",
-        content: "A long standalone note preview",
-        tags: [],
-        contentUpdatedAt: 1,
-      },
-    ];
+    answer("note", "note-1", {
+      status: "present",
+      title: "Loose note",
+      value: noteRow({ title: "Loose note", content: "A long standalone note preview" }),
+    });
 
-    render(
-      <MemoryRouter>
-        <ReferenceNode
-          {...({
-            selected: false,
-            data: {
-              node: {
-                id: "ref",
-                kind: "reference",
-                source: "note",
-                targetId: "note-1",
-                position: { x: 0, y: 0 },
-              },
-              canvasId: "canvas",
-              canvasTitle: "Map",
-              connectedSides: {},
-            },
-          } as Parameters<typeof ReferenceNode>[0])}
-        />
-      </MemoryRouter>
-    );
+    renderReference();
 
+    expect(screen.getByText("Loose note")).toBeInTheDocument();
     expect(screen.getByText("A long standalone note preview")).toHaveClass("line-clamp-3");
   });
 
   it("shows the book title and previews a linked note the same as a loose one", () => {
-    mocks.notes = [
-      {
-        id: "note-1",
+    mocks.books = [{ id: "book-1", title: "The Novel" }];
+    answer("note", "note-1", {
+      status: "present",
+      title: "Filed note",
+      value: noteRow({
         bookId: "book-1",
         title: "Filed note",
         content: "A long linked note preview",
-        tags: [],
-        contentUpdatedAt: 1,
-      },
-    ];
-    mocks.books = [{ id: "book-1", title: "The Novel" }];
+      }),
+    });
 
-    render(
-      <MemoryRouter>
-        <ReferenceNode
-          {...({
-            selected: false,
-            data: {
-              node: {
-                id: "ref",
-                kind: "reference",
-                source: "note",
-                targetId: "note-1",
-                position: { x: 0, y: 0 },
-              },
-              canvasId: "canvas",
-              canvasTitle: "Map",
-              connectedSides: {},
-            },
-          } as Parameters<typeof ReferenceNode>[0])}
-        />
-      </MemoryRouter>
-    );
+    renderReference();
 
     expect(screen.getByText("Filed note")).toBeInTheDocument();
     expect(screen.getByText("The Novel")).toBeInTheDocument();

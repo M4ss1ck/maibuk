@@ -1817,10 +1817,10 @@ export const ROWS: MatrixRow[] = [
     id: "canvas-note-ref",
     area: "canvas",
     workflow:
-      "N arms Canvas Reference, Enter opens note search; arrows + Enter adds Canvas Reference; Enter on reference opens Note; asserts: Search listbox; persists: yes",
+      "N arms Add reference, Enter opens the picker on the Notes tab; type + arrows + Enter adds a Canvas Reference; Open by Tab opens the Note; Delete removes it; asserts: tab list, Search listbox; persists: yes",
     edges: [
-      "No notes state",
-      'Missing Canvas Reference after Note deleted shows "Missing note"',
+      "Empty Notes tab",
+      'Missing Canvas Reference after Note deleted shows "This item no longer exists"',
       "Escape on the picker after an armed Canvas Reference places nothing",
       "Click a spot, then choose a Note: the click is pointer input, not a spec; the Vitest placement-capture-overlay suite owns it",
     ],

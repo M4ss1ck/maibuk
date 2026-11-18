@@ -10,7 +10,7 @@ import { writeClipboard } from "../support/clipboard";
 import { dropFiles } from "../support/file-drop";
 import { expect, test } from "../support/test";
 
-// The Canvas editor (issue #210): tools, Text Nodes, Note References, Canvas
+// The Canvas editor (issue #210): tools, Text Nodes, Canvas References, Canvas
 // Images, moving and connecting nodes, node colors, delete/undo, zoom/lock,
 // Save Status, rename/back, and the missing/corrupt paths — all by keyboard
 // alone, over the seeded `canvasWithNodes` Library.
@@ -166,7 +166,7 @@ test.describe("adding nodes @wf:canvas-tools @sc:canvas.addTextNode @sc:canvas.a
     await page.keyboard.press("Escape");
   });
 
-  test("N arms a Note Reference, Enter opens the note picker, and choosing a Note adds it", async ({
+  test("N arms a Canvas Reference, Enter opens the picker, and choosing a Note adds it", async ({
     page,
   }) => {
     await openMap(page);
@@ -177,7 +177,12 @@ test.describe("adding nodes @wf:canvas-tools @sc:canvas.addTextNode @sc:canvas.a
     await page.keyboard.press("Enter");
     const dialog = page.getByRole("dialog", { name: "Add reference" });
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByPlaceholder("Search notes…")).toBeFocused();
+    await expect(dialog.getByPlaceholder("Search…")).toBeFocused();
+    // The picker opens on its Notes tab, the only source the Canvas has today.
+    await expect(dialog.getByRole("tab", { name: "Notes" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
 
     await page.keyboard.type("Keeper");
     const option = dialog.getByRole("option", { name: "Keeper's Log" });
@@ -590,10 +595,10 @@ test.describe("Text Node @wf:canvas-text-node @sc:canvas.editTextNode @sc:canvas
 });
 
 test.describe("Canvas Reference @wf:canvas-note-ref @sc:canvas.addReference @sc:canvas.placeArmedTool", () => {
-  test("N searches notes and adds a reference that opens its Note", async ({ page }) => {
+  test("N searches Notes and adds a Canvas Reference that opens its Note", async ({ page }) => {
     await openMap(page);
-    // Wait for the loaded Canvas (and its seeded Note References) before the N
-    // shortcut, which is unbound until then.
+    // Wait for the loaded Canvas (and its seeded Canvas References) before the
+    // N shortcut, which is unbound until then.
     await expect(references(page)).toHaveCount(2);
     await page.keyboard.press("n");
     await page.keyboard.press("Enter");
@@ -601,7 +606,7 @@ test.describe("Canvas Reference @wf:canvas-note-ref @sc:canvas.addReference @sc:
     // Wait for the picker and its search input to be ready before typing, so
     // the query lands in the input instead of the Canvas.
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByPlaceholder("Search notes…")).toBeFocused();
+    await expect(dialog.getByPlaceholder("Search…")).toBeFocused();
     await page.keyboard.type("Keeper");
 
     const option = dialog.getByRole("option", { name: "Keeper's Log" });
@@ -614,20 +619,18 @@ test.describe("Canvas Reference @wf:canvas-note-ref @sc:canvas.addReference @sc:
     // Enter on the seeded reference opens its Note.
     const refLog = flowNode(page, "ref-log");
     await tabTo(page, refLog, { max: 60 });
-    await tabTo(page, refLog.getByRole("button", { name: "Open note" }), { max: 5 });
+    await tabTo(page, refLog.getByRole("button", { name: "Open Keeper's Log" }), { max: 5 });
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/notes\/[\w-]+$/);
     await expect(page.getByRole("heading", { name: "Keeper's Log", level: 1 })).toBeVisible();
   });
 
-  test("Open note answers at once and shows the loading state before the editor", async ({
-    page,
-  }) => {
+  test("Open answers at once and shows the loading state before the editor", async ({ page }) => {
     await openMap(page);
     const refLog = flowNode(page, "ref-log");
-    await expect(refLog.getByRole("button", { name: "Open note" })).toBeEnabled();
+    await expect(refLog.getByRole("button", { name: "Open Keeper's Log" })).toBeEnabled();
     await tabTo(page, refLog, { max: 60 });
-    await tabTo(page, refLog.getByRole("button", { name: "Open note" }), { max: 5 });
+    await tabTo(page, refLog.getByRole("button", { name: "Open Keeper's Log" }), { max: 5 });
 
     // Frozen timers hold the read that follows the first paint, so the loading
     // state stays on screen long enough to assert. React's scheduler is not a timer.
@@ -655,7 +658,47 @@ test.describe("Canvas Reference @wf:canvas-note-ref @sc:canvas.addReference @sc:
     await expect(loading).toHaveCount(0);
   });
 
-  test("Escape on the note picker after an armed Note Reference places nothing", async ({
+  test("places, opens, and deletes a Canvas Reference to a Note", async ({ page }) => {
+    await openMap(page);
+    await expect(references(page)).toHaveCount(2);
+
+    // N, Enter, part of the seeded Note's title, then arrows and Enter: one more card.
+    await page.keyboard.press("n");
+    await page.keyboard.press("Enter");
+    const dialog = page.getByRole("dialog", { name: "Add reference" });
+    await expect(dialog).toBeVisible();
+    await capture(page, "canvas-reference-picker", { around: [dialog] });
+    await expect(dialog.getByPlaceholder("Search…")).toBeFocused();
+    await page.keyboard.type("Keep");
+    const option = dialog.getByRole("option", { name: "Keeper's Log" });
+    await expect(option).toHaveCount(1);
+    await tabTo(page, option, { max: 5 });
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+    await expect(dialog).toBeHidden();
+    await expect(references(page)).toHaveCount(3);
+
+    // A placed node's id is random, so the new card is the last one in the list.
+    const placed = references(page).last();
+    await tabTo(page, placed, { max: 60 });
+    await tabTo(page, placed.getByRole("button", { name: "Open Keeper's Log" }), { max: 5 });
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/\/notes\/[\w-]+$/);
+    await expect(page.getByRole("heading", { name: "Keeper's Log", level: 1 })).toBeVisible();
+
+    // The Note's back control leads to the Canvas it was opened from.
+    await tabTo(page, page.getByRole("button", { name: "Back to Map" }), { max: 40 });
+    await page.keyboard.press("Enter");
+    await expectCanvasReady(page);
+    await expect(references(page)).toHaveCount(3);
+
+    // Space is React Flow's keyboard select, and Delete removes the selection.
+    await selectNode(page, placed);
+    await page.keyboard.press("Delete");
+    await expect(references(page)).toHaveCount(2);
+  });
+
+  test("Escape on the reference picker after an armed Canvas Reference places nothing", async ({
     page,
   }) => {
     await openMap(page);
@@ -663,7 +706,7 @@ test.describe("Canvas Reference @wf:canvas-note-ref @sc:canvas.addReference @sc:
     await page.keyboard.press("n");
     await page.keyboard.press("Enter");
     const dialog = page.getByRole("dialog", { name: "Add reference" });
-    await expect(dialog.getByPlaceholder("Search notes…")).toBeFocused();
+    await expect(dialog.getByPlaceholder("Search…")).toBeFocused();
 
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
@@ -674,12 +717,19 @@ test.describe("Canvas Reference @wf:canvas-note-ref @sc:canvas.addReference @sc:
     );
   });
 
-  test("a reference whose Note is gone reads Missing note and cannot open", async ({ page }) => {
+  test("a reference whose Note is gone shows This item no longer exists and cannot open", async ({
+    page,
+  }) => {
     await openMap(page);
     const missing = flowNode(page, "ref-missing");
-    await expect(missing).toContainText("Missing note");
+    const present = flowNode(page, "ref-log");
+    await expect(present).toContainText("Keeper's Log");
+    await capture(page, "canvas-reference-cards", { around: [present, missing] });
+    // The card keeps the label it was stored with — none, so "Untitled".
+    await expect(missing).toContainText("Untitled");
+    await expect(missing).toContainText("This item no longer exists");
     await tabTo(page, missing, { max: 60 });
-    await expect(missing.getByRole("button", { name: "Open note" })).toBeDisabled();
+    await expect(missing.getByRole("button", { name: "Open Untitled" })).toBeDisabled();
   });
 });
 
@@ -696,8 +746,13 @@ test.describe("no notes @wf:canvas-note-ref", () => {
 
     await page.keyboard.press("n");
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("dialog", { name: "Add reference" })).toBeVisible();
-    await expect(page.getByText("No notes available")).toBeVisible();
+    const dialog = page.getByRole("dialog", { name: "Add reference" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("tab", { name: "Notes" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+    await expect(dialog.getByText("Nothing to show")).toBeVisible();
   });
 });
 
