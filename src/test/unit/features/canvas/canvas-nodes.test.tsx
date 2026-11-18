@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Book } from "@/features/books/types";
 import type { Note } from "@/features/notes";
 import { installPointerEvent, touchLongPress, touchTap } from "@/test/support/pointer-events";
 
@@ -24,7 +25,7 @@ const mocks = vi.hoisted(() => ({
   editingNodeId: null as string | null,
   editorReadOnly: false,
   interactivityLocked: false,
-  books: [] as Array<{ id: string; title: string }>,
+  books: [] as Book[],
 }));
 
 vi.mock("@xyflow/react", () => ({
@@ -73,7 +74,7 @@ vi.mock("../../../../features/books/store", () => ({
 
 vi.mock("react-i18next", () => ({
   initReactI18next: { type: "3rdParty", init: () => {} },
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({ t: (key: string) => key, i18n: { language: "en" } }),
 }));
 
 const { LightweightNode } = await import("@/features/canvas/nodes/LightweightNode");
@@ -98,6 +99,21 @@ function noteRow(overrides: Partial<Note> = {}): Note {
     createdAt: 1,
     updatedAt: 1,
     contentUpdatedAt: 1,
+    ...overrides,
+  };
+}
+
+function bookRow(overrides: Partial<Book> = {}): Book {
+  return {
+    id: "book-1",
+    title: "Harbour light",
+    authorName: "Ada Reyes",
+    language: "en",
+    wordCount: 1200,
+    status: "draft",
+    createdAt: new Date("2024-01-02"),
+    updatedAt: new Date("2024-01-03"),
+    contentUpdatedAt: new Date("2024-01-04"),
     ...overrides,
   };
 }
@@ -634,6 +650,84 @@ describe("Canvas custom nodes", () => {
     );
   });
 
+  it("draws a Book reference in one fixed box whatever its state", () => {
+    const bookData = referenceData({ source: "book", targetId: "book-1" });
+    const states: Array<{ name: string; seed?: () => void }> = [
+      {
+        name: "present",
+        seed: () =>
+          answer("book", "book-1", {
+            status: "present",
+            title: "Harbour light",
+            value: bookRow(),
+          }),
+      },
+      { name: "missing", seed: () => answer("book", "book-1", { status: "missing" }) },
+      { name: "unresolved" },
+    ];
+
+    const boxes: Array<{ name: string; width: string; height: string }> = [];
+    for (const state of states) {
+      useCanvasReferenceResolutions.getState().clear();
+      state.seed?.();
+      const { container, unmount } = renderReference(bookData);
+      const card = container.firstElementChild as HTMLElement;
+      boxes.push({ name: state.name, width: card.style.width, height: card.style.height });
+      unmount();
+    }
+
+    expect(boxes.map((box) => box.name)).toEqual(["present", "missing", "unresolved"]);
+    for (const box of boxes) {
+      expect({ width: box.width, height: box.height }).toEqual({
+        width: `${CANVAS_REFERENCE_CARD_SIZES.book.width}px`,
+        height: `${CANVAS_REFERENCE_CARD_SIZES.book.height}px`,
+      });
+    }
+  });
+
+  it("draws the Library Book card's face for a Present Book reference", () => {
+    answer("book", "book-1", {
+      status: "present",
+      title: "Harbour light",
+      value: bookRow(),
+    });
+
+    renderReference(referenceData({ source: "book", targetId: "book-1" }));
+
+    expect(screen.getByText("Harbour light")).toBeInTheDocument();
+    expect(screen.getByText("Ada Reyes")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "canvas.openReferenceNamed" })).toBeEnabled();
+  });
+
+  it("shows the stored label, a neutral placeholder, and a disabled Open for a Missing Book", () => {
+    answer("book", "book-1", { status: "missing" });
+
+    const { container } = renderReference(
+      referenceData({ source: "book", targetId: "book-1", label: "Cached book" })
+    );
+
+    expect(screen.getByText("Cached book")).toBeInTheDocument();
+    expect(screen.getByText("canvas.referenceMissing")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "canvas.openReferenceNamed" })).toBeDisabled();
+    expect(container.querySelector('[aria-hidden="true"].bg-muted')).not.toBeNull();
+  });
+
+  it("reaches Open with Tab from a Present Book card", async () => {
+    const user = userEvent.setup();
+    answer("book", "book-1", {
+      status: "present",
+      title: "Harbour light",
+      value: bookRow(),
+    });
+
+    renderReference(referenceData({ source: "book", targetId: "book-1" }));
+    await user.tab();
+
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "canvas.openReferenceNamed" })
+    );
+  });
+
   it("opens through the source and turns Missing when the source says it is gone", async () => {
     const user = userEvent.setup();
     const open = vi.spyOn(noteReferenceSource, "open").mockResolvedValue("missing");
@@ -720,7 +814,7 @@ describe("Canvas custom nodes", () => {
   });
 
   it("shows the book title and previews a linked note the same as a loose one", () => {
-    mocks.books = [{ id: "book-1", title: "The Novel" }];
+    mocks.books = [bookRow({ id: "book-1", title: "The Novel" })];
     answer("note", "note-1", {
       status: "present",
       title: "Filed note",

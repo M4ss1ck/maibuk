@@ -2,9 +2,10 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { mockNavigateFn, mockUpdateChapter } = vi.hoisted(() => ({
+const { mockNavigateFn, mockUpdateChapter, mockLocationState } = vi.hoisted(() => ({
   mockNavigateFn: vi.fn(),
   mockUpdateChapter: vi.fn().mockResolvedValue(undefined),
+  mockLocationState: { value: null as unknown },
 }));
 
 vi.mock("react-i18next", () => ({
@@ -15,7 +16,7 @@ vi.mock("react-i18next", () => ({
 vi.mock("react-router-dom", () => ({
   useParams: () => ({ bookId: "book-1" }),
   useNavigate: () => mockNavigateFn,
-  useLocation: () => ({ state: null, pathname: "/book/book-1" }),
+  useLocation: () => ({ state: mockLocationState.value, pathname: "/book/book-1" }),
 }));
 
 vi.mock("../../../lib/shortcuts", () => ({ useShortcuts: vi.fn() }));
@@ -284,5 +285,50 @@ describe("BookEditor title bar actions", () => {
 
     expect(screen.getByRole("dialog", { name: "settings dialog" })).toBeInTheDocument();
     expect(settingsRow).not.toBeInTheDocument();
+  });
+});
+
+describe("BookEditor return target", () => {
+  afterEach(() => {
+    mockLocationState.value = null;
+    mockNavigateFn.mockClear();
+    vi.restoreAllMocks();
+  });
+
+  /** Tabs from the start of the document until the title-bar button has focus. */
+  async function tabToBackButton(name: string) {
+    const user = userEvent.setup();
+    const button = await waitFor(() => {
+      const found = titleBarButton(name);
+      if (!found) throw new Error(`no title-bar button named ${name}`);
+      return found;
+    });
+    for (let press = 0; press < 60 && document.activeElement !== button; press++) {
+      await user.tab();
+    }
+    expect(button).toHaveFocus();
+    return { user, button };
+  }
+
+  it("returns to the Canvas that opened the Book", async () => {
+    mockLocationState.value = { returnTo: "/canvas/c1", returnLabel: "Plot" };
+    renderAtWidth(TITLE_BAR_LABELS_MIN);
+
+    const { user, button } = await tabToBackButton("nav.backTo");
+    // i18n is mocked to return keys, so the label is the key, not "Back to Plot".
+    expect(button).toHaveAccessibleName("nav.backTo");
+
+    await user.keyboard("{Enter}");
+    expect(mockNavigateFn).toHaveBeenCalledWith("/canvas/c1");
+  });
+
+  it("goes home when nothing opened the Book", async () => {
+    renderAtWidth(TITLE_BAR_LABELS_MIN);
+
+    const { user, button } = await tabToBackButton("nav.backToHome");
+    expect(button).toHaveAccessibleName("nav.backToHome");
+
+    await user.keyboard("{Enter}");
+    expect(mockNavigateFn).toHaveBeenCalledWith("/");
   });
 });

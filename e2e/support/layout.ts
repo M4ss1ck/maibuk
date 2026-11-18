@@ -243,3 +243,18 @@ export async function capCenterOffset(
   const i = await icon.evaluate(read);
   return { offset: Math.abs(t.center - i.center), trimmed: t.height < t.lineHeight };
 }
+
+/**
+ * Whether each element matched by `elements` is the topmost thing at its own
+ * center: an ancestor that clips it (overflow) or a sibling that covers it
+ * answers false, since clipped regions are not hit-tested.
+ */
+export function hitAtOwnCenter(elements: Locator): Promise<boolean[]> {
+  return elements.evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const box = node.getBoundingClientRect();
+      const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+      return hit === node || node.contains(hit);
+    })
+  );
+}

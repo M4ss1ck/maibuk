@@ -4,11 +4,13 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { type Node, type NodeProps } from "@xyflow/react";
 import { SpinnerIcon } from "@/components/icons";
+import { BookCardFace } from "@/components/project/BookCard";
 import { Button } from "@/components/ui/Button";
 import { NoteTagsRow } from "@/components/notes/NoteTagsRow";
 import { notePreviewText } from "@/components/notes/notes-list-model";
 import { timeAgo } from "@/components/notes/timeAgo";
 import { useBookStore } from "@/features/books/store";
+import type { Book } from "@/features/books/types";
 import type { Note } from "@/features/notes";
 import type { CanvasFlowNodeData } from "@/features/canvas/reactFlowAdapter";
 import {
@@ -62,12 +64,18 @@ function NoteReferenceCardBody({ value, title }: CanvasReferenceCardBodyProps) {
   );
 }
 
+/** A Book draws the Library Book card's face, edge to edge. */
+function BookReferenceCardBody({ value }: CanvasReferenceCardBodyProps) {
+  return <BookCardFace book={value as Book} fill />;
+}
+
 /** What a card kind draws once its source answered: the one place a value is read. */
 const CANVAS_REFERENCE_CARD_BODIES: Record<
   CanvasReferenceCardKind,
   ComponentType<CanvasReferenceCardBodyProps>
 > = {
   note: NoteReferenceCardBody,
+  book: BookReferenceCardBody,
 };
 
 /** A state with nothing to draw beyond its label and, sometimes, one line saying why. */
@@ -111,6 +119,8 @@ function CanvasReferenceCard({
   const resolution = useCanvasReferenceResolution(node.source, node.targetId);
   // An unregistered source has no card kind yet; it borrows the note box.
   const size = CANVAS_REFERENCE_CARD_SIZES[source?.card ?? "note"];
+  // The Book card fills its box edge to edge, like the Library Book card.
+  const isBookCard = source?.card === "book";
   const storedLabel = node.label || t("canvas.referenceUntitled");
   const CardBody = source ? CANVAS_REFERENCE_CARD_BODIES[source.card] : null;
   const title = resolution?.status === "present" ? resolution.title || storedLabel : storedLabel;
@@ -121,16 +131,29 @@ function CanvasReferenceCard({
       ref={nodeMenu.anchorRef}
       {...nodeMenu.itemProps}
       style={{ width: size.width, height: size.height }}
-      className={`group relative flex flex-col rounded-xl border bg-card p-4 text-left text-foreground shadow-sm pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] ${
+      className={`group relative flex flex-col rounded-xl border bg-card text-left text-foreground shadow-sm pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] ${
         selected ? "border-primary ring-2 ring-primary/20" : "border-border"
       }`}
     >
       <CanvasNodeHandles connectedSides={data.connectedSides} variant="card" selected={selected} />
       {nodeMenu.menu}
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div
+        className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-xl ${isBookCard ? "" : "p-4 pb-0"}`}
+      >
         {!source ? (
           <ReferenceStateBody title={storedLabel} detail={t("canvas.referenceUnavailable")} />
+        ) : isBookCard && resolution?.status !== "present" ? (
+          <>
+            <div aria-hidden="true" className="min-h-0 flex-1 bg-muted" />
+            <div className="p-4">
+              {resolution?.status === "missing" ? (
+                <ReferenceStateBody title={storedLabel} detail={t("canvas.referenceMissing")} />
+              ) : (
+                <ReferenceStateBody title={storedLabel} />
+              )}
+            </div>
+          </>
         ) : resolution?.status === "missing" ? (
           <ReferenceStateBody title={storedLabel} detail={t("canvas.referenceMissing")} />
         ) : resolution?.status === "present" && CardBody ? (
@@ -140,32 +163,34 @@ function CanvasReferenceCard({
         )}
       </div>
 
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="nodrag nopan mt-2 w-full"
-        disabled={!canOpen}
-        aria-busy={isOpening}
-        aria-label={t("canvas.openReferenceNamed", { title })}
-        onClick={async () => {
-          if (isOpening) return;
-          setIsOpening(true);
-          const result = await openCanvasReference(node, {
-            canvasId: data.canvasId,
-            canvasTitle: data.canvasTitle || t("canvas.untitled"),
-            navigate,
-          });
-          if (result !== "opened") setIsOpening(false);
-        }}
-      >
-        {isOpening ? (
-          <SpinnerIcon className="size-4 animate-spin" />
-        ) : (
-          <ExternalLink className="size-4" aria-hidden="true" />
-        )}
-        {t("canvas.openReference")}
-      </Button>
+      <div className="p-4 pt-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="nodrag nopan w-full"
+          disabled={!canOpen}
+          aria-busy={isOpening}
+          aria-label={t("canvas.openReferenceNamed", { title })}
+          onClick={async () => {
+            if (isOpening) return;
+            setIsOpening(true);
+            const result = await openCanvasReference(node, {
+              canvasId: data.canvasId,
+              canvasTitle: data.canvasTitle || t("canvas.untitled"),
+              navigate,
+            });
+            if (result !== "opened") setIsOpening(false);
+          }}
+        >
+          {isOpening ? (
+            <SpinnerIcon className="size-4 animate-spin" />
+          ) : (
+            <ExternalLink className="size-4" aria-hidden="true" />
+          )}
+          {t("canvas.openReference")}
+        </Button>
+      </div>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import { useEffect } from "react";
 import type { NavigateFunction } from "react-router-dom";
 import { create } from "zustand";
+import { bookReferenceSource } from "@/features/canvas/bookReferenceSource";
 import { noteReferenceSource } from "@/features/canvas/noteReferenceSource";
 import type { CanvasNode } from "@/features/canvas/types";
 
@@ -13,13 +14,14 @@ import type { CanvasNode } from "@/features/canvas/types";
  */
 
 /** Each card kind draws in one fixed box, whatever state it is in. */
-export type CanvasReferenceCardKind = "note";
+export type CanvasReferenceCardKind = "note" | "book";
 
 export const CANVAS_REFERENCE_CARD_SIZES: Record<
   CanvasReferenceCardKind,
   { width: number; height: number }
 > = {
   note: { width: 224, height: 176 },
+  book: { width: 192, height: 480 },
 };
 
 export interface CanvasReferenceRow {
@@ -63,7 +65,10 @@ export interface CanvasReferenceSource {
  * The one place listing the Canvas Reference sources: every registered source
  * appears here exactly once, and nowhere else.
  */
-export const CANVAS_REFERENCE_SOURCES: readonly CanvasReferenceSource[] = [noteReferenceSource];
+export const CANVAS_REFERENCE_SOURCES: readonly CanvasReferenceSource[] = [
+  noteReferenceSource,
+  bookReferenceSource,
+];
 
 export function getCanvasReferenceSource(id: string): CanvasReferenceSource | undefined {
   return CANVAS_REFERENCE_SOURCES.find((source) => source.id === id);

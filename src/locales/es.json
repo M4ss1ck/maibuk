@@ -89,6 +89,7 @@
     "openMenu": "Abrir menú de navegación",
     "closeMenu": "Cerrar menú de navegación",
     "backToHome": "Inicio",
+    "backTo": "Volver a {{title}}",
     "exportBook": "Exportar Libro",
     "designCover": "Diseñar Portada",
     "focusMode": "Modo Enfocado (F11)",
@@ -318,7 +319,8 @@
     "addTextNode": "Añadir nodo de texto",
     "addReference": "Añadir referencia",
     "referenceSources": {
-      "note": "Notas"
+      "note": "Notas",
+      "book": "Libros"
     },
     "referenceSearchPlaceholder": "Buscar…",
     "referenceEmpty": "No hay nada que mostrar",
