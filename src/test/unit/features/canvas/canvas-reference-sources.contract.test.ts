@@ -1,5 +1,7 @@
 import { StickyNote } from "lucide-react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useBookStore } from "@/features/books/store";
+import type { Book } from "@/features/books/types";
 import { type Note, useNoteStore } from "@/features/notes";
 import {
   CANVAS_REFERENCE_SOURCES,
@@ -8,6 +10,7 @@ import {
   type CanvasReferenceSource,
   getCanvasReferenceSource,
 } from "@/features/canvas/references";
+import { bookReferenceSource } from "@/features/canvas/bookReferenceSource";
 import { noteReferenceSource } from "@/features/canvas/noteReferenceSource";
 
 /**
@@ -33,6 +36,20 @@ function noteRow(id: string, title: string, order: number): Note {
   };
 }
 
+function bookRow(id: string, title: string): Book {
+  return {
+    id,
+    title,
+    authorName: "Ada",
+    language: "en",
+    wordCount: 0,
+    status: "draft",
+    createdAt: new Date(1),
+    updatedAt: new Date(1),
+    contentUpdatedAt: new Date(1),
+  };
+}
+
 interface HostSourceFixture {
   /** The id `query` matches, and the only row `list(query)` returns. */
   presentId: string;
@@ -41,15 +58,32 @@ interface HostSourceFixture {
   /** An id no source holds. */
   missingId: string;
   query: string;
+  /** The route a present id opens. */
+  path: string;
   seed(): void;
 }
 
 const HOST_SOURCE_FIXTURES: Record<string, HostSourceFixture> = {
+  book: {
+    presentId: "book-alpha",
+    otherId: "book-beta",
+    missingId: "book-gone",
+    query: "alpha",
+    path: "/book",
+    seed() {
+      useBookStore.setState({
+        books: [bookRow("book-alpha", "Alpha harbor"), bookRow("book-beta", "Beta")],
+        error: null,
+        loadBooks: vi.fn().mockResolvedValue(undefined),
+      });
+    },
+  },
   note: {
     presentId: "note-alpha",
     otherId: "note-beta",
     missingId: "note-gone",
     query: "alpha",
+    path: "/notes",
     seed() {
       useNoteStore.setState({
         notes: [noteRow("note-alpha", "Alpha harbor", 2), noteRow("note-beta", "Beta", 1)],
@@ -101,6 +135,8 @@ interface ContractCase {
   otherId: string;
   missingId: string;
   query: string;
+  /** The route a present id opens; only read when the source navigates. */
+  path: string;
   seed?(): void;
   /** Host sources navigate in-app; a fake may resolve without leaving. */
   callsNavigate: boolean;
@@ -116,6 +152,7 @@ const contractCases: ContractCase[] = [
       otherId: fixture.otherId,
       missingId: fixture.missingId,
       query: fixture.query,
+      path: fixture.path,
       seed: () => fixture.seed(),
       callsNavigate: true,
     };
@@ -127,6 +164,7 @@ const contractCases: ContractCase[] = [
     otherId: "fake-beta",
     missingId: "fake-gone",
     query: "alpha",
+    path: "",
     callsNavigate: false,
   },
 ];
@@ -157,9 +195,28 @@ describe("canvas reference sources registry", () => {
     );
   });
 
-  it("finds a registered source by id", () => {
+  it("registers the Book source beside the Note source", () => {
+    expect(CANVAS_REFERENCE_SOURCES.map((source) => source.id).sort()).toEqual(["book", "note"]);
+    expect(getCanvasReferenceSource("book")).toBe(bookReferenceSource);
     expect(getCanvasReferenceSource("note")).toBe(noteReferenceSource);
     expect(getCanvasReferenceSource("unknown")).toBeUndefined();
+  });
+});
+
+describe("the real Book source", () => {
+  it("opens a present Book at its own route", async () => {
+    HOST_SOURCE_FIXTURES.book.seed();
+    const { navigate, calls } = spyNavigate();
+
+    const result = await bookReferenceSource.open("book-alpha", openContext(navigate));
+
+    expect(result).toBe("opened");
+    expect(calls).toEqual([
+      {
+        to: "/book/book-alpha",
+        options: { state: { returnTo: "/canvas/canvas-1", returnLabel: "My canvas" } },
+      },
+    ]);
   });
 });
 
@@ -191,7 +248,7 @@ describe.each(contractCases)("canvas reference source: $name", (testCase) => {
     if (testCase.callsNavigate) {
       expect(calls).toEqual([
         {
-          to: `/notes/${testCase.presentId}`,
+          to: `${testCase.path}/${testCase.presentId}`,
           options: { state: { returnTo: "/canvas/canvas-1", returnLabel: "My canvas" } },
         },
       ]);

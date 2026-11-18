@@ -1,5 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useBookStore } from "@/features/books/store";
+import type { Book } from "@/features/books/types";
 import { noteReferenceSource } from "@/features/canvas/noteReferenceSource";
 import {
   canvasReferenceKey,
@@ -46,6 +48,21 @@ function noteRow(overrides: Partial<Note> = {}): Note {
     createdAt: 1,
     updatedAt: 1,
     contentUpdatedAt: 1,
+    ...overrides,
+  };
+}
+
+function bookRow(overrides: Partial<Book> = {}): Book {
+  return {
+    id: "book-a",
+    title: "Alpha harbour",
+    authorName: "Ada",
+    language: "en",
+    wordCount: 0,
+    status: "draft",
+    createdAt: new Date(1),
+    updatedAt: new Date(1),
+    contentUpdatedAt: new Date(1),
     ...overrides,
   };
 }
@@ -288,6 +305,40 @@ describe("the real Note source", () => {
 
     await waitFor(() => expect(result.current).toEqual({ status: "missing" }));
     expect(nodes).toEqual([referenceNode("node-1", "note", "note-a")]);
+  });
+});
+
+describe("the real Book source", () => {
+  it("turns a reference Missing when its Book is deleted, keeping the node", async () => {
+    useBookStore.setState({
+      books: [bookRow()],
+      error: null,
+      loadBooks: vi.fn().mockResolvedValue(undefined),
+    });
+    const nodes = [referenceNode("node-1", "book", "book-a")];
+    const before = useCanvasStore.getState();
+
+    const { result } = renderHook(
+      ({ current }: { current: CanvasNode[] }) => {
+        useResolveCanvasReferences(current);
+        return useCanvasReferenceResolution("book", "book-a");
+      },
+      { initialProps: { current: nodes } }
+    );
+
+    await waitFor(() =>
+      expect(result.current).toEqual(
+        expect.objectContaining({ status: "present", title: "Alpha harbour" })
+      )
+    );
+
+    act(() => {
+      useBookStore.setState({ books: [] });
+    });
+
+    await waitFor(() => expect(result.current).toEqual({ status: "missing" }));
+    expect(nodes).toEqual([referenceNode("node-1", "book", "book-a")]);
+    expect(useCanvasStore.getState().revision).toBe(before.revision);
   });
 });
 

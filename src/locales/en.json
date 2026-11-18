@@ -319,7 +319,8 @@
     "addTextNode": "Add text node",
     "addReference": "Add reference",
     "referenceSources": {
-      "note": "Notes"
+      "note": "Notes",
+      "book": "Books"
     },
     "referenceSearchPlaceholder": "Search…",
     "referenceEmpty": "Nothing to show",
