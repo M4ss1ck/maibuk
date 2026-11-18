@@ -407,9 +407,14 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     }
   }
 
-  async function savePosition(message: FramePositionMessage): Promise<void> {
-    if (entry === null) return;
-    const current = entry;
+  // `current` is the Document the Frame was reading when it sent the position,
+  // captured as the message is queued: a switch while an earlier save is still
+  // running must not file the position under the next Document.
+  async function savePosition(
+    message: FramePositionMessage,
+    current: ShelfEntry | null
+  ): Promise<void> {
+    if (current === null) return;
     try {
       await client.storage.set({
         key: positionKey(current.id),
@@ -430,7 +435,7 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
       );
       await library.saveShelf(next);
       const updated = next.find((candidate) => candidate.id === current.id);
-      if (updated !== undefined) entry = updated;
+      if (updated !== undefined && entry?.id === current.id) entry = updated;
     } catch {
       // The Shelf keeps its previous row; the Position is already stored.
     }
@@ -482,7 +487,7 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
       );
       await library.saveShelf(next);
       const updated = next.find((candidate) => candidate.id === current.id);
-      if (updated !== undefined) entry = updated;
+      if (updated !== undefined && entry?.id === current.id) entry = updated;
     } catch {
       // The Shelf's state is advisory; the Frame already told the author.
     }
@@ -517,9 +522,11 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
       case "settings":
         void applySettings(message);
         return;
-      case "position":
-        pendingPosition = pendingPosition.then(() => savePosition(message));
+      case "position": {
+        const current = entry;
+        pendingPosition = pendingPosition.then(() => savePosition(message, current));
         return;
+      }
       case "meta":
         void applyMeta(message);
         return;

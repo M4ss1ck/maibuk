@@ -400,6 +400,56 @@ describe("position", () => {
       await harness.stop();
     }
   });
+  it("saves a Reading Position queued before a switch under the Document it was read in", async () => {
+    const first = shelfEntry({ id: "doc-1", grant: "grant-1" });
+    const second = shelfEntry({ id: "doc-2", grant: "grant-2", title: "Emma" });
+    const storage = new Map<string, unknown>([[SHELF_KEY, [first, second]]]);
+    const harness = setup({ entry: first, storage });
+    try {
+      await opened(harness);
+      // The first save stalls, so the second position waits in the queue while
+      // a drop switches the Frame to another Document.
+      const set = harness.client.storage.set.bind(harness.client.storage);
+      let release: () => void = () => {};
+      const stalled = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const spy = vi.spyOn(harness.client.storage, "set").mockImplementationOnce(async (params) => {
+        await stalled;
+        return set(params);
+      });
+      harness.send({
+        kind: "position",
+        position: { kind: "page", page: 5, zoom: 1 },
+        progress: { page: 6, pageCount: 12 },
+      });
+      harness.send({
+        kind: "position",
+        position: { kind: "page", page: 7, zoom: 1 },
+        progress: { page: 8, pageCount: 12 },
+      });
+      await vi.waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      harness.session.setEntry(second);
+      release();
+      await vi.waitFor(() =>
+        expect(storage.get(positionKey("doc-1"))).toEqual({ kind: "page", page: 7, zoom: 1 })
+      );
+      expect(storage.get(positionKey("doc-2"))).toBeUndefined();
+      // The Frame now reads the new Document, and its position stays with it.
+      harness.send({
+        kind: "position",
+        position: { kind: "page", page: 2, zoom: 1 },
+        progress: { page: 3, pageCount: 12 },
+      });
+      await vi.waitFor(() =>
+        expect(storage.get(positionKey("doc-2"))).toEqual({ kind: "page", page: 2, zoom: 1 })
+      );
+      expect(storage.get(positionKey("doc-1"))).toEqual({ kind: "page", page: 7, zoom: 1 });
+    } finally {
+      await harness.stop();
+    }
+  });
 });
 
 describe("meta", () => {
