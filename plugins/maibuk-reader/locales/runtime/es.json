@@ -16,6 +16,8 @@
   "shelf.locate.mismatch": "Ese archivo es otro documento. Lector mantuvo el documento perdido en tu estante.",
   "shelf.loading": "Cargando tu estante…",
   "shelf.openFailed": "Lector no puede abrir ese archivo.",
+  "shelf.dropSkipped.one": "Lector no puede abrir 1 archivo soltado.",
+  "shelf.dropSkipped.other": "Lector no puede abrir {{count}} archivos soltados.",
   "shelf.reopenFailed": "El navegador no dio acceso a este archivo.",
   "viewer.back": "Volver al estante",
   "viewer.contents": "Contenido",

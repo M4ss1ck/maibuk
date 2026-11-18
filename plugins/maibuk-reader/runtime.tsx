@@ -15,11 +15,12 @@ import type { ComponentType } from "react";
 import {
   PLUGIN_COMMAND_RUN_REQUEST,
   type HostRequestHandler,
+  type PluginApiEvents,
   type PluginClient,
   type PluginFrame,
 } from "@/plugin-sdk";
 import type { FrameCommandId } from "./frame-protocol";
-import { translate } from "./i18n";
+import { format, translate } from "./i18n";
 import { createShelfService, type ShelfService } from "./library";
 import { createReaderSession, type ReaderSession } from "./session";
 import { SHELF_PAGE_ID, createShelfPage } from "./shelf-page";
@@ -118,6 +119,8 @@ export function startReader(client: PluginClient, serve: ReaderServe): void {
     sessions: new Map(),
     language: "en",
   };
+  /** Drops run one at a time: the next waits for the one being fingerprinted. */
+  let pendingDrops: Promise<void> = Promise.resolve();
 
   void client.language
     .get()
@@ -129,6 +132,13 @@ export function startReader(client: PluginClient, serve: ReaderServe): void {
     .on("language.changed", (payload) => {
       runtime.language = payload.language;
       for (const session of runtime.sessions.values()) session.setLanguage(payload.language);
+    })
+    .catch(() => {});
+  void client
+    .on("files.dropped", (payload) => {
+      pendingDrops = pendingDrops
+        .then(() => handleDrop(client, library, runtime, payload))
+        .catch(() => {});
     })
     .catch(() => {});
 
@@ -152,11 +162,7 @@ export function startReader(client: PluginClient, serve: ReaderServe): void {
   });
 
   function openDocument(entry: ShelfEntry): void {
-    runtime.currentEntry = entry;
-    runtime.currentDocumentId = entry.id;
-    void library.rememberCurrent(entry.id);
-    for (const session of runtime.sessions.values()) session.setEntry(entry);
-    void client.navigation.openPage({ pageId: DOCUMENT_PAGE_ID });
+    void openEntry(client, library, runtime, entry);
   }
 
   const ShelfPage = createShelfPage({ client, library, onOpenDocument: openDocument });
@@ -170,6 +176,56 @@ export function startReader(client: PluginClient, serve: ReaderServe): void {
 /** Posts `message` to every mounted Frame. */
 function broadcastCommand(runtime: ReaderRuntime, id: FrameCommandId): void {
   for (const session of runtime.sessions.values()) session.command(id);
+}
+
+/**
+ * Shows `entry` in every mounted Frame, remembers it as the Document to reopen,
+ * and opens the Document page. Every way in (the Shelf, Open file…, a drop) ends
+ * here, so switching saves the current Reading Position the same way.
+ */
+async function openEntry(
+  client: PluginClient,
+  library: Pick<ShelfService, "rememberCurrent">,
+  runtime: Pick<ReaderRuntime, "currentDocumentId" | "currentEntry" | "sessions">,
+  entry: ShelfEntry
+): Promise<void> {
+  runtime.currentEntry = entry;
+  runtime.currentDocumentId = entry.id;
+  void library.rememberCurrent(entry.id);
+  for (const session of runtime.sessions.values()) session.setEntry(entry);
+  await client.navigation.openPage({ pageId: DOCUMENT_PAGE_ID });
+}
+
+/**
+ * Handles one `files.dropped` event the way a drop should read: each grant is
+ * shelved in the order it was dropped, a grant Reader cannot shelve counts as
+ * skipped, and the first shelved Document opens. One notification reports the
+ * skipped files, so a `.docx` in a set of books is never silently ignored.
+ */
+async function handleDrop(
+  client: PluginClient,
+  library: Pick<ShelfService, "shelveGrant" | "rememberCurrent">,
+  runtime: Pick<ReaderRuntime, "currentDocumentId" | "currentEntry" | "sessions" | "language">,
+  payload: PluginApiEvents["files.dropped"]
+): Promise<void> {
+  let first: ShelfEntry | null = null;
+  let skipped = 0;
+  for (const grant of payload.grants) {
+    try {
+      const entry = await library.shelveGrant(grant);
+      if (first === null) first = entry;
+    } catch {
+      skipped += 1;
+    }
+  }
+  if (first !== null) await openEntry(client, library, runtime, first);
+  if (skipped > 0) {
+    const key = skipped === 1 ? "shelf.dropSkipped.one" : "shelf.dropSkipped.other";
+    await client.notifications.show({
+      variant: "error",
+      message: format(translate(runtime.language, key), { count: skipped }),
+    });
+  }
 }
 
 function isFrameCommand(id: string): id is FrameCommandId {
@@ -215,13 +271,7 @@ async function runReaderCommand(
   if (id === OPEN_FILE) {
     try {
       const entry = await library.openFileFlow();
-      if (entry !== null) {
-        runtime.currentEntry = entry;
-        runtime.currentDocumentId = entry.id;
-        void library.rememberCurrent(entry.id);
-        for (const session of runtime.sessions.values()) session.setEntry(entry);
-        await client.navigation.openPage({ pageId: DOCUMENT_PAGE_ID });
-      }
+      if (entry !== null) await openEntry(client, library, runtime, entry);
     } catch {
       await client.notifications.show({
         variant: "error",

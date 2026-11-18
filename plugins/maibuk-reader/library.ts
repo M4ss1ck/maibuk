@@ -54,6 +54,22 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** A file the author picked or dropped, as the host grants it. */
+export interface ShelvedFile {
+  grant: string;
+  name: string;
+  size: number;
+}
+
+/** Ends a File Grant, ignoring a host that says it is already gone. */
+async function releaseGrant(client: ReaderClient, grant: string): Promise<void> {
+  try {
+    await client.files.release({ grant });
+  } catch {
+    // The grant may already be gone; the caller still reports the failure.
+  }
+}
+
 /** A stable, Plugin-local id for a new Document. */
 function newDocumentId(): string {
   const random = globalThis.crypto?.randomUUID;
@@ -89,6 +105,13 @@ export interface ShelfService {
   saveSettings(settings: ReaderSettings): Promise<void>;
   /** Picks a file, fingerprints it, and adds it to the Shelf or finds its Document. */
   openFileFlow(): Promise<ShelfEntry | null>;
+  /**
+   * Shelves a File Grant the author picked or dropped: fingerprints its bytes,
+   * sniffs its format with the file name as a fallback, and adds it to the Shelf
+   * or finds its Document by Fingerprint. A format Reader cannot open, or bytes
+   * it cannot read, releases the grant and throws.
+   */
+  shelveGrant(picked: ShelvedFile): Promise<ShelfEntry>;
   /** Marks every Document the device can no longer read, and returns the Shelf. */
   refreshStates(): Promise<ShelfEntry[]>;
   /** Forgets a Document and ends its File Grant; the author's file stays. */
@@ -150,15 +173,23 @@ export function createShelfService(client: ReaderClient): ShelfService {
     async openFileFlow(): Promise<ShelfEntry | null> {
       const picked = await client.files.pick({ extensions: [...SUPPORTED_EXTENSIONS] });
       if (picked === null) return null;
-      const { head, print } = await fingerprintBytes(client, picked.grant, picked.size);
+      return library.shelveGrant(picked);
+    },
+
+    async shelveGrant(picked): Promise<ShelfEntry> {
+      let head: Uint8Array;
+      let print: string;
+      try {
+        ({ head, print } = await fingerprintBytes(client, picked.grant, picked.size));
+      } catch {
+        // The bytes are gone or unreadable: the author still learns the drop failed.
+        await releaseGrant(client, picked.grant);
+        throw new Error(`Reader cannot read ${picked.name}`);
+      }
       const format: DocumentFormat | null =
         sniffFormat(head, picked.name) ?? formatFromName(picked.name);
       if (format === null) {
-        try {
-          await client.files.release({ grant: picked.grant });
-        } catch {
-          // The grant may already be gone; the throw below still surfaces.
-        }
+        await releaseGrant(client, picked.grant);
         throw new Error(`Reader cannot open ${picked.name}`);
       }
       const entry: ShelfEntry = {

@@ -25,7 +25,7 @@ describe("Reader manifest", () => {
     expect(parsed.platforms).toEqual(["desktop", "web"]);
     expect(parsed.lifecycle).toBe("on-demand");
     expect(parsed.customUi).toBe(true);
-    expect(parsed.apiVersion).toBe("^0.1.9");
+    expect(parsed.apiVersion).toBe("^0.1.12");
   });
 
   it("asks only for File Grants, never Library or editor access", () => {
