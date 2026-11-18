@@ -518,6 +518,22 @@ export function BookEditor() {
     }
   }, [chapters, currentChapter, currentBook, bookId, setCurrentChapter]);
 
+  // A Canvas that opened this Book hands back where to return, kept in state so
+  // the deep-link effect below clearing the navigation state does not drop it.
+  const [returnTarget, setReturnTarget] = useState<{ to: string; label: string } | null>(null);
+  useEffect(() => {
+    const state = location.state as {
+      returnTo?: string;
+      returnLabel?: string;
+    } | null;
+    if (state?.returnTo) {
+      setReturnTarget({ to: state.returnTo, label: state.returnLabel ?? "" });
+    }
+  }, [location.state]);
+  const backLabel = returnTarget?.label
+    ? t("nav.backTo", { title: returnTarget.label })
+    : t("nav.backToHome");
+
   // Deep-link: open target chapter and scroll to heading from navigation state
   useEffect(() => {
     const state = location.state as {
@@ -969,7 +985,7 @@ export function BookEditor() {
     {
       id: "common.back",
       onTrigger: () => {
-        navigate("/");
+        navigate(returnTarget?.to ?? "/");
       },
     },
     {
@@ -1054,12 +1070,12 @@ export function BookEditor() {
                 </button>
               </Tooltip>
 
-              <Tooltip content={t("nav.backToHome")}>
+              <Tooltip content={backLabel}>
                 <button
                   type="button"
-                  onClick={() => navigate("/")}
+                  onClick={() => navigate(returnTarget?.to ?? "/")}
                   className="p-2 hover:bg-muted rounded transition-colors"
-                  aria-label={t("nav.backToHome")}
+                  aria-label={backLabel}
                 >
                   <BackIcon className="w-5 h-5 shrink-0" />
                 </button>

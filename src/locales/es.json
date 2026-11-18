@@ -89,6 +89,7 @@
     "openMenu": "Abrir menú de navegación",
     "closeMenu": "Cerrar menú de navegación",
     "backToHome": "Inicio",
+    "backTo": "Volver a {{title}}",
     "exportBook": "Exportar Libro",
     "designCover": "Diseñar Portada",
     "focusMode": "Modo Enfocado (F11)",
