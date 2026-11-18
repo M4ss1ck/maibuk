@@ -260,6 +260,10 @@ export async function canvasWithNodes(): Promise<void> {
     "local"
   );
 
+  // A Book the Book Reference spec adds to the Map itself: it is not in the
+  // stored doc, so only that spec sees it on the Canvas.
+  await createBookRow({ ...SEED_BOOK }, "local");
+
   const map = await createCanvasRow({ title: SEED_CANVASES.map }, "local");
   await updateCanvasDocRow(
     map.id,
