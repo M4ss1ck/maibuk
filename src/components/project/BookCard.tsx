@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { GridListItem } from "react-aria-components/GridList";
 import { Button, Dialog, ListBox, ListBoxItem, Popover } from "react-aria-components";
@@ -24,8 +24,84 @@ const statusIcons = {
   archived: Archive,
 };
 
-export function BookCard({ book, index = 0, onPress, onStatusChange }: BookCardProps) {
+const statusColors = {
+  draft: "bg-status-draft-bg text-status-draft-text",
+  "in-progress": "bg-status-progress-bg text-status-progress-text",
+  completed: "bg-status-complete-bg text-status-complete-text",
+  archived: "bg-status-archived-bg text-status-archived-text",
+};
+
+const formatDate = (date: Date, language: string) =>
+  new Intl.DateTimeFormat(language, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+
+interface BookCardFaceProps {
+  book: Book;
+  statusControl?: ReactNode;
+  fill?: boolean;
+}
+
+/**
+ * Cover and info block shared by the Library Book card and the Canvas Book card.
+ * Display only: it renders no handlers, so each card keeps its own interactions.
+ *
+ * `statusControl` is the touch status pill from the owning card: when given, the
+ * plain status badge next to it hides on touch pointers (the control replaces it).
+ * `fill` stretches the face to its container instead of the cover's 2/3 ratio.
+ */
+export function BookCardFace({ book, statusControl, fill = false }: BookCardFaceProps) {
   const { t, i18n } = useTranslation();
+  const statusLabel = t(`common.${book.status}`);
+  const isArchived = book.status === "archived";
+
+  return (
+    <div className={fill ? "flex h-full min-h-0 flex-col" : ""}>
+      <div
+        className={`${
+          fill ? "min-h-0 flex-1" : "aspect-2/3"
+        } bg-linear-to-br from-muted/80 via-muted/40 to-background flex items-center justify-center ${
+          isArchived ? "opacity-60" : ""
+        }`}
+      >
+        {book.coverImagePath ? (
+          <img src={book.coverImagePath} alt={book.title} className="w-full h-full object-cover" />
+        ) : (
+          <MaibukLogo className="w-16 h-16 text-primary opacity-85" />
+        )}
+      </div>
+
+      <div className="p-4">
+        <h2 className="font-semibold text-lg truncate text-foreground">{book.title}</h2>
+        <p className="text-sm text-muted-foreground truncate">{book.authorName}</p>
+
+        <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
+          {statusControl}
+          <span
+            className={`text-xs px-2 py-1 rounded-full capitalize ${
+              statusControl ? "pointer-coarse:hidden" : ""
+            } ${statusColors[book.status]}`}
+          >
+            {statusLabel}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {book.wordCount.toLocaleString()} {t("common.words")}
+          </span>
+        </div>
+
+        <p className="text-xs text-muted-foreground mt-2">
+          {t("books.lastEdited")}{" "}
+          {formatDate(book.contentUpdatedAt ?? book.updatedAt, i18n.language)}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+export function BookCard({ book, index = 0, onPress, onStatusChange }: BookCardProps) {
+  const { t } = useTranslation();
   const [isStatusOpen, setIsStatusOpen] = useState(false);
   const [statusAnchor, setStatusAnchor] = useState<"corner" | "pill">("corner");
   const cornerRef = useRef<HTMLButtonElement>(null);
@@ -48,24 +124,8 @@ export function BookCard({ book, index = 0, onPress, onStatusChange }: BookCardP
     anchorRef: menuAnchorRef,
   });
   useItemCommands(cardRef, actions);
-  const isArchived = book.status === "archived";
   const StatusIcon = statusIcons[book.status];
   const statusLabel = t(`common.${book.status}`);
-
-  const formatDate = (date: Date) => {
-    return new Intl.DateTimeFormat(i18n.language, {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    }).format(date);
-  };
-
-  const statusColors = {
-    draft: "bg-status-draft-bg text-status-draft-text",
-    "in-progress": "bg-status-progress-bg text-status-progress-text",
-    completed: "bg-status-complete-bg text-status-complete-text",
-    archived: "bg-status-archived-bg text-status-archived-text",
-  };
 
   const indexHint = index < 9 ? index + 1 : undefined;
 
@@ -160,28 +220,10 @@ export function BookCard({ book, index = 0, onPress, onStatusChange }: BookCardP
         {...itemProps}
         className="flex flex-col pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none]"
       >
-        <div
-          className={`aspect-2/3 bg-linear-to-br from-muted/80 via-muted/40 to-background flex items-center justify-center ${
-            isArchived ? "opacity-60" : ""
-          }`}
-        >
-          {book.coverImagePath ? (
-            <img
-              src={book.coverImagePath}
-              alt={book.title}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <MaibukLogo className="w-16 h-16 text-primary opacity-85" />
-          )}
-        </div>
-
-        <div className="p-4">
-          <h2 className="font-semibold text-lg truncate text-foreground">{book.title}</h2>
-          <p className="text-sm text-muted-foreground truncate">{book.authorName}</p>
-
-          <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
-            {/* Touch has no hover to reveal the corner button: the pill itself opens the menu. */}
+        <BookCardFace
+          book={book}
+          statusControl={
+            // Touch has no hover to reveal the corner button: the pill itself opens the menu.
             <Button
               ref={pillRef}
               // Starts with the visible status so voice control can target it by what it shows.
@@ -193,20 +235,8 @@ export function BookCard({ book, index = 0, onPress, onStatusChange }: BookCardP
               <span className="capitalize">{statusLabel}</span>
               <ChevronDown className="h-3 w-3" aria-hidden="true" />
             </Button>
-            <span
-              className={`text-xs px-2 py-1 rounded-full capitalize pointer-coarse:hidden ${statusColors[book.status]}`}
-            >
-              {statusLabel}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {book.wordCount.toLocaleString()} {t("common.words")}
-            </span>
-          </div>
-
-          <p className="text-xs text-muted-foreground mt-2">
-            {t("books.lastEdited")} {formatDate(book.contentUpdatedAt ?? book.updatedAt)}
-          </p>
-        </div>
+          }
+        />
       </div>
       {hasActions && (
         <ItemActionsMenu
