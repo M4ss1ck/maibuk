@@ -890,11 +890,11 @@ test.describe("Canvas Reference @wf:canvas-note-ref @sc:canvas.addReference @sc:
     );
     await capture(page, "canvas-reference-picker-chapters", { around: [dialog] });
 
-    // The seeded Book's Chapters in order: Arrival, then The Lamp.
+    // The seeded Book's Chapters in order: Arrival, then The Lamp. Arrival is
+    // not the Chapter the Book opens on by default (the last), so landing on it proves the deep link.
     const options = dialog.getByRole("option");
     await expect(options).toHaveCount(2);
     await tabTo(page, options.first(), { max: 5 });
-    await page.keyboard.press("ArrowDown");
     await page.keyboard.press("Enter");
     await expect(dialog).toBeHidden();
     await expect(references(page)).toHaveCount(3);
@@ -903,7 +903,7 @@ test.describe("Canvas Reference @wf:canvas-note-ref @sc:canvas.addReference @sc:
     const placed = references(page).last();
     await expect(placed).toBeVisible();
     await capture(page, "canvas-reference-chapter-card", { around: [placed] });
-    await expect(placed).toContainText("The Lamp");
+    await expect(placed).toContainText("Arrival");
     await expect(placed).toContainText("The Lighthouse Keeper");
     const placedId = ((await placed.getAttribute("data-testid")) ?? "").replace("rf__node-", "");
     expect(placedId).not.toBe("");
@@ -914,7 +914,7 @@ test.describe("Canvas Reference @wf:canvas-note-ref @sc:canvas.addReference @sc:
     const connect = page.getByRole("button", { name: "Connect to…" });
     await tabTo(page, connect, { max: 40 });
     await page.keyboard.press("Enter");
-    const connectDialog = page.getByRole("dialog", { name: "Connect “The Lamp” to…" });
+    const connectDialog = page.getByRole("dialog", { name: "Connect “Arrival” to…" });
     await expect(connectDialog).toBeVisible();
     await expect(connectDialog.getByPlaceholder("Search this canvas…")).toBeFocused();
     await page.keyboard.type("Keeper");
@@ -935,16 +935,16 @@ test.describe("Canvas Reference @wf:canvas-note-ref @sc:canvas.addReference @sc:
       .toBeGreaterThan(before?.x ?? 0);
 
     // Open reaches the Chapter at its Book, not the Book's first Chapter.
-    await tabTo(page, placed.getByRole("button", { name: "Open The Lamp" }), { max: 5 });
+    await tabTo(page, placed.getByRole("button", { name: "Open Arrival" }), { max: 5 });
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/book\/[\w-]+$/);
     const chapterGrid = page.getByRole("grid", { name: "Chapters" });
-    await expect(page.getByRole("textbox", { name: "Text of The Lamp" })).toBeVisible();
-    await expect(chapterGrid.getByRole("row", { name: "The Lamp" })).toHaveAttribute(
+    await expect(page.getByRole("textbox", { name: "Text of Arrival" })).toBeVisible();
+    await expect(chapterGrid.getByRole("row", { name: "Arrival" })).toHaveAttribute(
       "aria-selected",
       "true"
     );
-    await expect(chapterGrid.getByRole("row", { name: "Arrival" })).toHaveAttribute(
+    await expect(chapterGrid.getByRole("row", { name: "The Lamp" })).toHaveAttribute(
       "aria-selected",
       "false"
     );
