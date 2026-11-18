@@ -282,16 +282,18 @@ export async function canvasWithNodes(): Promise<void> {
         },
         {
           id: "ref-log",
-          kind: "noteRef",
-          noteId: note.id,
+          kind: "reference",
+          source: "note",
+          targetId: note.id,
           label: SEED_CANVAS_NODES.note,
           position: { x: 0, y: 320 },
         },
         {
           // No label, so a note deleted elsewhere reads as "Missing note".
           id: "ref-missing",
-          kind: "noteRef",
-          noteId: "missing-note-id",
+          kind: "reference",
+          source: "note",
+          targetId: "missing-note-id",
           position: { x: 460, y: 320 },
         },
       ],

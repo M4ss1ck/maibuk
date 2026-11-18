@@ -48,7 +48,7 @@ describe("canvasBlocks()", () => {
       schemaVersion: 1,
       nodes: [
         { id: "n1", kind: "text", html: "<p>Card one</p><p>Card one b</p>" },
-        { id: "n2", kind: "noteRef", noteId: "note-1" },
+        { id: "n2", kind: "reference", source: "note", targetId: "note-1" },
         { id: "n3", kind: "text", html: "<p>Card two</p>" },
       ],
       edges: [{ id: "e1", source: "n1", target: "n3", label: "Edge label" }],

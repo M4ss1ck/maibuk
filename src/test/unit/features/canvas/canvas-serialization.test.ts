@@ -61,14 +61,15 @@ describe("canvas document serialization", () => {
     expect(result.doc.edges).toEqual([]);
   });
 
-  it("preserves note references without resolving notes", () => {
+  it("preserves references without resolving their targets", () => {
     const result = normalizeParsedCanvasDoc({
       schemaVersion: 1,
       nodes: [
         {
           id: "ref",
-          kind: "noteRef",
-          noteId: "deleted-note",
+          kind: "reference",
+          source: "note",
+          targetId: "deleted-note",
           label: "  Cached title  ",
           position: { x: 2, y: 3 },
         },
@@ -77,7 +78,11 @@ describe("canvas document serialization", () => {
       viewport: { x: 0, y: 0, zoom: 1 },
     });
     expect(result.ok).toBe(true);
-    expect(result.doc.nodes[0]).toMatchObject({ noteId: "deleted-note", label: "Cached title" });
+    expect(result.doc.nodes[0]).toMatchObject({
+      source: "note",
+      targetId: "deleted-note",
+      label: "Cached title",
+    });
   });
 
   it("normalizes empty edge labels and restores viewport", () => {
@@ -294,7 +299,7 @@ describe("canvas image nodes (#813)", () => {
     expect(result.doc.edges).toEqual([]);
   });
 
-  it("reads a v3 document with text and note references unchanged at the current version", () => {
+  it("reads a v3 document's text and reference nodes at the current version", () => {
     const result = normalizeParsedCanvasDoc({
       schemaVersion: 3,
       nodes: [
@@ -305,7 +310,13 @@ describe("canvas image nodes (#813)", () => {
           textColor: "#ef4444",
           position: { x: 1, y: 2 },
         },
-        { id: "ref", kind: "noteRef", noteId: "note-1", label: "Note", position: { x: 3, y: 4 } },
+        {
+          id: "ref",
+          kind: "noteRef",
+          noteId: "note-1",
+          label: "Note",
+          position: { x: 3, y: 4 },
+        },
       ],
       edges: [],
       strokes: [],
@@ -313,19 +324,30 @@ describe("canvas image nodes (#813)", () => {
     });
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(CURRENT_CANVAS_SCHEMA_VERSION).toBe(4);
-      expect(result.doc.schemaVersion).toBe(4);
-      expect(result.migrated).toBe(false);
+      expect(CURRENT_CANVAS_SCHEMA_VERSION).toBe(5);
+      expect(result.doc.schemaVersion).toBe(5);
+      expect(result.migrated).toBe(true);
       expect(result.doc.nodes).toMatchObject([
         { id: "text", kind: "text", html: "<p>Idea</p>", textColor: "#ef4444" },
-        { id: "ref", kind: "noteRef", noteId: "note-1", label: "Note" },
+        { id: "ref", kind: "reference", source: "note", targetId: "note-1", label: "Note" },
       ]);
     }
   });
 
-  it("rejects a schema version 5 document as future", () => {
+  it("does not flag a v4 document without noteRef nodes as migrated", () => {
     const result = normalizeParsedCanvasDoc({
-      schemaVersion: 5,
+      schemaVersion: 4,
+      nodes: [{ ...imageNode }],
+      edges: [],
+      strokes: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    });
+    expect(result).toMatchObject({ ok: true, migrated: false, doc: { schemaVersion: 5 } });
+  });
+
+  it("rejects a schema version 6 document as future", () => {
+    const result = normalizeParsedCanvasDoc({
+      schemaVersion: 6,
       nodes: [{ ...imageNode }],
       edges: [],
       viewport: { x: 0, y: 0, zoom: 1 },
@@ -333,6 +355,91 @@ describe("canvas image nodes (#813)", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("unsupported-version");
     expect(result.doc).toEqual(createDefaultCanvasDoc());
+  });
+});
+
+describe("canvas schema v4 -> v5 migration", () => {
+  it("renames a noteRef node to a reference node with source note", () => {
+    const result = normalizeParsedCanvasDoc({
+      schemaVersion: 4,
+      nodes: [
+        {
+          id: "ref",
+          kind: "noteRef",
+          noteId: "note-1",
+          label: "  Note  ",
+          position: { x: 1, y: 2 },
+        },
+      ],
+      edges: [],
+      strokes: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.migrated).toBe(true);
+    expect(result.doc.schemaVersion).toBe(5);
+    expect(result.doc.nodes[0]).toEqual({
+      id: "ref",
+      kind: "reference",
+      source: "note",
+      targetId: "note-1",
+      label: "Note",
+      position: { x: 1, y: 2 },
+    });
+
+    const raw = serializeCanvasDoc(result.doc);
+    expect(raw).not.toContain("noteRef");
+    expect(JSON.parse(raw).schemaVersion).toBe(5);
+    expect(parseCanvasDoc(raw)).toEqual({ ok: true, doc: result.doc, migrated: false });
+  });
+
+  it("keeps an unknown reference source and round-trips it unchanged", () => {
+    const doc = {
+      ...createDefaultCanvasDoc(),
+      nodes: [
+        {
+          id: "ref",
+          kind: "reference" as const,
+          source: "plugin.maps.maps",
+          targetId: "map-1",
+          position: { x: 1, y: 2 },
+        },
+      ],
+    };
+    const parsed = parseCanvasDoc(serializeCanvasDoc(doc));
+    expect(parsed).toEqual({ ok: true, doc, migrated: false });
+    if (parsed.ok) {
+      expect(parsed.doc.nodes[0]).toMatchObject({ source: "plugin.maps.maps" });
+      expect(parseCanvasDoc(serializeCanvasDoc(parsed.doc))).toEqual(parsed);
+    }
+  });
+
+  it("drops a reference node without a targetId or with an empty source", () => {
+    const result = normalizeParsedCanvasDoc({
+      schemaVersion: CURRENT_CANVAS_SCHEMA_VERSION,
+      nodes: [
+        { id: "no-target", kind: "reference", source: "note", position: { x: 0, y: 0 } },
+        {
+          id: "empty-source",
+          kind: "reference",
+          source: "",
+          targetId: "note-1",
+          position: { x: 0, y: 0 },
+        },
+        {
+          id: "kept",
+          kind: "reference",
+          source: "note",
+          targetId: "note-1",
+          position: { x: 0, y: 0 },
+        },
+      ],
+      edges: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.doc.nodes.map((node) => node.id)).toEqual(["kept"]);
   });
 });
 

@@ -40,7 +40,7 @@ import {
   type UpdateEdgePatch,
   type ResizeTextNodeInput,
   type UpdateImageNodePatch,
-  type UpdateNoteRefNodePatch,
+  type UpdateReferenceNodePatch,
   type UpdateTextNodePatch,
 } from "@/features/canvas/types";
 
@@ -345,7 +345,7 @@ export interface CanvasStoreState {
     id: string,
     input: { position: CanvasPosition; width: number; height: number }
   ) => void;
-  updateNoteRefNode: (id: string, patch: UpdateNoteRefNodePatch) => void;
+  updateReferenceNode: (id: string, patch: UpdateReferenceNodePatch) => void;
   removeNode: (id: string) => void;
   addEdge: (edge: CanvasEdge) => void;
   updateEdge: (id: string, patch: UpdateEdgePatch) => void;
@@ -846,13 +846,13 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     });
   },
 
-  updateNoteRefNode: (id, patch) => {
+  updateReferenceNode: (id, patch) => {
     const state = get();
     const node = state.doc.nodes.find((candidate) => candidate.id === id);
-    if (!node || node.kind !== "noteRef") return;
+    if (!node || node.kind !== "reference") return;
     const label = patch.label?.trim() || undefined;
     if (
-      (patch.noteId === undefined || patch.noteId === node.noteId) &&
+      (patch.targetId === undefined || patch.targetId === node.targetId) &&
       (patch.label === undefined || label === node.label)
     ) {
       return;

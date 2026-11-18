@@ -225,7 +225,7 @@ describe("PlacementCaptureOverlay", () => {
   });
 
   it("places a note reference at the press with no width, even after a drag", () => {
-    setTool("noteRef");
+    setTool("reference");
     renderOverlay();
 
     press({ clientX: 100, clientY: 50 });

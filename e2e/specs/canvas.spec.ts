@@ -23,7 +23,7 @@ test.use({ library: "canvasWithNodes" });
 const flowNode = (page: Page, id: string) => page.getByTestId(`rf__node-${id}`);
 const nodeBody = (page: Page, id: string) => flowNode(page, id).locator(":scope > div").first();
 const textNodes = (page: Page) => page.locator(".react-flow__node-text");
-const noteRefs = (page: Page) => page.locator(".react-flow__node-noteRef");
+const references = (page: Page) => page.locator(".react-flow__node-reference");
 const imageNodes = (page: Page) => page.locator(".react-flow__node-image");
 
 /** Opens a Canvas from the gallery the way an author would: Tab in, arrows, Enter. */
@@ -170,10 +170,10 @@ test.describe("adding nodes @wf:canvas-tools @sc:canvas.addTextNode @sc:canvas.a
     page,
   }) => {
     await openMap(page);
-    await expect(noteRefs(page)).toHaveCount(2);
+    await expect(references(page)).toHaveCount(2);
 
     await page.keyboard.press("n");
-    await expect(noteRefs(page)).toHaveCount(2);
+    await expect(references(page)).toHaveCount(2);
     await page.keyboard.press("Enter");
     const dialog = page.getByRole("dialog", { name: "Add note reference" });
     await expect(dialog).toBeVisible();
@@ -187,7 +187,7 @@ test.describe("adding nodes @wf:canvas-tools @sc:canvas.addTextNode @sc:canvas.a
     await page.keyboard.press("Enter");
 
     await expect(dialog).toBeHidden();
-    await expect(noteRefs(page)).toHaveCount(3);
+    await expect(references(page)).toHaveCount(3);
   });
 
   test("Enter places an armed Text Node at the view's center, and a second one steps 24px away from a taken spot @sc:canvas.placeArmedTool", async ({
@@ -594,7 +594,7 @@ test.describe("Note Reference @wf:canvas-note-ref @sc:canvas.addNoteRef @sc:canv
     await openMap(page);
     // Wait for the loaded Canvas (and its seeded Note References) before the N
     // shortcut, which is unbound until then.
-    await expect(noteRefs(page)).toHaveCount(2);
+    await expect(references(page)).toHaveCount(2);
     await page.keyboard.press("n");
     await page.keyboard.press("Enter");
     const dialog = page.getByRole("dialog", { name: "Add note reference" });
@@ -609,7 +609,7 @@ test.describe("Note Reference @wf:canvas-note-ref @sc:canvas.addNoteRef @sc:canv
     await tabTo(page, option, { max: 5 });
     await page.keyboard.press("Enter");
     await expect(dialog).toBeHidden();
-    await expect(noteRefs(page)).toHaveCount(3);
+    await expect(references(page)).toHaveCount(3);
 
     // Enter on the seeded reference opens its Note.
     const refLog = flowNode(page, "ref-log");
@@ -659,7 +659,7 @@ test.describe("Note Reference @wf:canvas-note-ref @sc:canvas.addNoteRef @sc:canv
     page,
   }) => {
     await openMap(page);
-    await expect(noteRefs(page)).toHaveCount(2);
+    await expect(references(page)).toHaveCount(2);
     await page.keyboard.press("n");
     await page.keyboard.press("Enter");
     const dialog = page.getByRole("dialog", { name: "Add note reference" });
@@ -667,7 +667,7 @@ test.describe("Note Reference @wf:canvas-note-ref @sc:canvas.addNoteRef @sc:canv
 
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
-    await expect(noteRefs(page)).toHaveCount(2);
+    await expect(references(page)).toHaveCount(2);
     await expect(page.getByRole("button", { name: "Select", exact: true })).toHaveAttribute(
       "aria-pressed",
       "true"

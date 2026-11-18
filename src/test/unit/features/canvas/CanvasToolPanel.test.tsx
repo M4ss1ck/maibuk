@@ -56,7 +56,7 @@ describe("CanvasToolPanel", () => {
       [
         "canvas.addNoteRef",
         "{Enter}",
-        () => expect(useCanvasStore.getState().toolMode).toBe("noteRef"),
+        () => expect(useCanvasStore.getState().toolMode).toBe("reference"),
       ],
       ["canvas.addImage", " ", () => expect(useCanvasStore.getState().toolMode).toBe("image")],
       ["canvas.zoomIn", " ", () => expect(handlers.onZoomIn).toHaveBeenCalledOnce()],
@@ -159,7 +159,7 @@ describe("CanvasToolPanel", () => {
 
   describe.each([
     ["canvas.addTextNode", "textNode"],
-    ["canvas.addNoteRef", "noteRef"],
+    ["canvas.addNoteRef", "reference"],
     ["canvas.addImage", "image"],
   ] as const)("placement tool %s", (label, mode) => {
     it("arms with the first Enter and places at the center with the second", async () => {

@@ -35,8 +35,8 @@ function distanceToSegment(p: CanvasPosition, a: CanvasPosition, b: CanvasPositi
 }
 
 function centerOf(node: Node): CanvasPosition {
-  const width = node.width ?? (node.type === "noteRef" ? 224 : 288);
-  const height = node.height ?? (node.type === "noteRef" ? 176 : 48);
+  const width = node.width ?? (node.type === "reference" ? 224 : 288);
+  const height = node.height ?? (node.type === "reference" ? 176 : 48);
   return {
     x: node.position.x + width / 2,
     y: node.position.y + height / 2,
@@ -188,8 +188,8 @@ export function DrawingCaptureOverlay({
     }
 
     for (const node of nodes) {
-      const width = node.width ?? (node.type === "noteRef" ? 224 : 288);
-      const height = node.height ?? (node.type === "noteRef" ? 176 : 48);
+      const width = node.width ?? (node.type === "reference" ? 224 : 288);
+      const height = node.height ?? (node.type === "reference" ? 176 : 48);
       const hit =
         flow.x >= node.position.x - threshold &&
         flow.x <= node.position.x + width + threshold &&
@@ -236,8 +236,8 @@ export function DrawingCaptureOverlay({
     }
 
     for (const node of nodes) {
-      const width = node.width ?? (node.type === "noteRef" ? 224 : 288);
-      const height = node.height ?? (node.type === "noteRef" ? 176 : 48);
+      const width = node.width ?? (node.type === "reference" ? 224 : 288);
+      const height = node.height ?? (node.type === "reference" ? 176 : 48);
       const nodeRect: Rect = { x: node.position.x, y: node.position.y, width, height };
       if (rectsIntersect(rect, nodeRect)) {
         nodeIds.add(node.id);

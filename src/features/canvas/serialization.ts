@@ -94,7 +94,13 @@ export function isValidCanvasNode(value: unknown): value is CanvasNode {
   }
 
   if (value.kind === "text") return typeof value.html === "string";
-  if (value.kind === "noteRef") return typeof value.noteId === "string";
+  if (value.kind === "reference") {
+    return (
+      typeof value.source === "string" &&
+      value.source.length > 0 &&
+      typeof value.targetId === "string"
+    );
+  }
   if (value.kind === "image") {
     return (
       typeof value.src === "string" &&
@@ -164,9 +170,10 @@ function normalizeNode(node: CanvasNode): CanvasNode {
 
   return {
     id: node.id,
-    kind: "noteRef",
+    kind: "reference",
     position: { ...node.position },
-    noteId: node.noteId,
+    source: node.source,
+    targetId: node.targetId,
     label: normalizedOptionalString(node.label),
   };
 }
@@ -200,6 +207,17 @@ function migrateToCurrent(
       if (!isRecord(node) || node.kind !== "text") return node;
       const { color, ...rest } = node;
       return { ...rest, textColor: color };
+    });
+  }
+
+  // Only a Canvas that held a noteRef node is flagged; v4 is otherwise v5.
+  if (fromVersion < 5) {
+    nodes = nodes.map((node) => {
+      if (!isRecord(node) || node.kind !== "noteRef" || typeof node.noteId !== "string")
+        return node;
+      migrated = true;
+      const { noteId, ...rest } = node;
+      return { ...rest, kind: "reference", source: "note", targetId: noteId };
     });
   }
 

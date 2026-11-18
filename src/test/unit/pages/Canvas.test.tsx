@@ -233,7 +233,7 @@ describe("Canvas page", () => {
     expect(boundIds()).not.toContain("canvas.placeArmedTool");
     unmount();
 
-    Object.assign(mocks.state, { toolMode: "noteRef" });
+    Object.assign(mocks.state, { toolMode: "reference" });
     renderCanvas();
     expect(boundIds()).toContain("canvas.placeArmedTool");
   });
@@ -319,7 +319,7 @@ describe("Canvas page", () => {
 
   describe("placement tools", () => {
     // The mocked store has no reducer, so the tool a key sets is read back from the mocked state.
-    function armTool(toolMode: "textNode" | "noteRef" | "image") {
+    function armTool(toolMode: "textNode" | "reference" | "image") {
       Object.assign(mocks.state, { toolMode });
     }
 
@@ -352,7 +352,7 @@ describe("Canvas page", () => {
       expect(mocks.actions.setToolMode).toHaveBeenCalledWith("textNode");
 
       await user.keyboard("n");
-      expect(mocks.actions.setToolMode).toHaveBeenCalledWith("noteRef");
+      expect(mocks.actions.setToolMode).toHaveBeenCalledWith("reference");
     });
 
     it("arms the image tool with I from the keyboard", async () => {
@@ -534,7 +534,7 @@ describe("Canvas page", () => {
     it("opens the note picker on Enter and places the chosen note there", async () => {
       const user = userEvent.setup();
       mocks.notes = [{ id: "note-1", title: "Chapter notes" }];
-      armTool("noteRef");
+      armTool("reference");
       renderCanvas();
 
       await user.keyboard("{Enter}");
@@ -547,8 +547,9 @@ describe("Canvas page", () => {
       expect(mocks.actions.addNode).toHaveBeenCalledWith(
         expect.objectContaining({
           id: expect.any(String),
-          kind: "noteRef",
-          noteId: "note-1",
+          kind: "reference",
+          source: "note",
+          targetId: "note-1",
           label: "Chapter notes",
           position: { x: 24, y: 24 },
         })
@@ -561,7 +562,7 @@ describe("Canvas page", () => {
     it("places nothing when the note picker is cancelled with Escape", async () => {
       const user = userEvent.setup();
       mocks.notes = [{ id: "note-1", title: "Chapter notes" }];
-      armTool("noteRef");
+      armTool("reference");
       renderCanvas();
 
       await user.keyboard("{Enter}");
