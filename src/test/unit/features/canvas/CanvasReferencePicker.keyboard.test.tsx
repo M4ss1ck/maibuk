@@ -135,8 +135,10 @@ describe("CanvasReferencePicker keyboard", () => {
     renderPicker();
     await screen.findByRole("option", { name: /^Alpha/ });
 
-    const list = screen.getByRole("listbox", { name: "canvas.addReference" });
-    act(() => list.focus());
+    // Search field, then the tab list, then the rows.
+    await user.tab();
+    expect(screen.getByRole("tab", { name: "source.a" })).toHaveFocus();
+    await user.tab();
     expect(screen.getByRole("option", { name: /^Alpha/ })).toHaveFocus();
 
     await user.keyboard("{ArrowDown}");

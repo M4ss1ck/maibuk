@@ -467,6 +467,8 @@ export default defineConfig(() => ({
         "src/features/canvas/reactFlowAdapter.ts",
         "src/features/canvas/store.ts",
         "src/features/canvas/write.ts",
+        "src/features/canvas/references.ts",
+        "src/features/canvas/noteReferenceSource.ts",
         // Phase 14: Canvas rich-text parity
         "src/components/editor/extensions/createRichTextExtensions.ts",
         "src/components/editor/plain-text-html.ts",

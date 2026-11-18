@@ -184,6 +184,21 @@ describe("openCanvasReference()", () => {
     navigate: (() => {}) as unknown as CanvasReferenceOpenContext["navigate"],
   };
 
+  it("answers failed, logs it, and never throws when the source's open rejects", async () => {
+    vi.spyOn(noteReferenceSource, "open").mockRejectedValue(new Error("boom"));
+    const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+
+    const result = await openCanvasReference({ source: "note", targetId: "note-a" }, context);
+
+    expect(result).toBe("failed");
+    expect(debug).toHaveBeenCalledTimes(1);
+    expect(debug).toHaveBeenCalledWith("[canvas] reference open", {
+      source: "note",
+      result: "failed",
+    });
+    expect(useCanvasReferenceResolutions.getState().resolutions).toEqual({});
+  });
+
   it("opens a present target and logs the result", async () => {
     vi.spyOn(noteReferenceSource, "open").mockResolvedValue("opened");
     const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
@@ -273,5 +288,27 @@ describe("the real Note source", () => {
 
     await waitFor(() => expect(result.current).toEqual({ status: "missing" }));
     expect(nodes).toEqual([referenceNode("node-1", "note", "note-a")]);
+  });
+});
+
+describe("the Note source's first read", () => {
+  it("fails instead of answering missing when the Notes read failed, and reads again next time", async () => {
+    vi.resetModules();
+    const notes = await import("@/features/notes");
+    const { noteReferenceSource: source } = await import("@/features/canvas/noteReferenceSource");
+    const note = { id: "n1", title: "Lighthouse", order: 0 } as Note;
+    const loadNotes = vi
+      .fn()
+      .mockImplementationOnce(async () => notes.useNoteStore.setState({ error: "read failed" }))
+      .mockImplementationOnce(async () =>
+        notes.useNoteStore.setState({ error: null, notes: [note] })
+      );
+    notes.useNoteStore.setState({ notes: [], error: null, loadNotes });
+
+    await expect(source.resolve(["n1"])).rejects.toThrow("read failed");
+    await expect(source.resolve(["n1"])).resolves.toEqual({
+      n1: { status: "present", title: "Lighthouse", value: note },
+    });
+    expect(loadNotes).toHaveBeenCalledTimes(2);
   });
 });

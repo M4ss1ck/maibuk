@@ -33,6 +33,7 @@ import { Button } from "@/components/ui/Button";
 import { CommandPaletteButton } from "@/components/command-palette/CommandPaletteButton";
 import { SyncStatusButton } from "@/components/sync/SyncStatusButton";
 import { DictationBar } from "@/components/dictation";
+import { useNoteStore } from "@/features/notes";
 import { useBookStore } from "@/features/books/store";
 import { CanvasToolPanel } from "@/features/canvas/CanvasToolPanel";
 import { CanvasImageDialog } from "@/features/canvas/CanvasImageDialog";
@@ -310,6 +311,8 @@ function CanvasEditor() {
   const undo = useCanvasStore((state) => state.undo);
   const redo = useCanvasStore((state) => state.redo);
   const renameCanvas = useCanvasStore((state) => state.renameCanvas);
+  // A Text Node's Link dialog offers Notes, Canvas References or not.
+  const loadNotes = useNoteStore((state) => state.loadNotes);
   const loadBooks = useBookStore((state) => state.loadBooks);
   const theme = useThemeStore((state) => state.theme);
   const [referencePickerOpen, setReferencePickerOpen] = useState(false);
@@ -377,6 +380,7 @@ function CanvasEditor() {
 
   useEffect(() => {
     void loadCanvas(canvasId);
+    void loadNotes();
     void loadBooks();
     return () => {
       // Leaving always Flushes: unsaved content lands before the editor
@@ -391,7 +395,7 @@ function CanvasEditor() {
         closeCanvas();
       }
     };
-  }, [canvasId, closeCanvas, loadBooks, loadCanvas, sessionRef]);
+  }, [canvasId, closeCanvas, loadBooks, loadCanvas, loadNotes, sessionRef]);
 
   useEffect(() => {
     setTitleDraft(current?.title ?? "");

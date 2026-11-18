@@ -149,7 +149,7 @@ function referenceGroups(nodes: readonly CanvasNode[]): CanvasReferenceGroup[] {
   return groups;
 }
 
-/** One stable string per set of grouped references, so a reorder never re-resolves. */
+/** One string per set of grouped references; the effect re-runs only when it changes. */
 function referenceGroupsKey(groups: readonly CanvasReferenceGroup[]): string {
   return groups
     .map((group) => group.ids.map((id) => canvasReferenceKey(group.source.id, id)).join("|"))
@@ -216,9 +216,17 @@ export function useResolveCanvasReferences(nodes: readonly CanvasNode[]): void {
 export async function openCanvasReference(
   node: { source: string; targetId: string },
   context: CanvasReferenceOpenContext
-): Promise<CanvasReferenceOpenResult | "unavailable"> {
+): Promise<CanvasReferenceOpenResult | "unavailable" | "failed"> {
   const source = getCanvasReferenceSource(node.source);
-  const result = source ? await source.open(node.targetId, context) : "unavailable";
+  let result: CanvasReferenceOpenResult | "unavailable" | "failed" = "unavailable";
+  if (source) {
+    try {
+      result = await source.open(node.targetId, context);
+    } catch {
+      // A source that throws leaves the card as it was, ready to try again.
+      result = "failed";
+    }
+  }
   if (result === "missing") markCanvasReferenceMissing(node.source, node.targetId);
   console.debug("[canvas] reference open", { source: node.source, result });
   return result;

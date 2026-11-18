@@ -8,15 +8,20 @@ import type {
 } from "@/features/canvas/references";
 
 // The picker can open before the Library has ever read the Notes table, so the
-// first answer waits for that read. Only the first: the host re-resolves when
-// the store changes, and loading again from inside resolve would loop.
+// first answer waits for that read. Only the first good one: the host
+// re-resolves when the store changes, and loading again from inside resolve
+// would loop. loadNotes never rejects; a failed read shows up as the store's
+// error, and must fail the ask rather than answer every Note missing.
 let loaded: Promise<void> | null = null;
 
 function loadOnce(): Promise<void> {
-  // A failed read is retried on the next ask instead of leaving the source empty.
   loaded ??= useNoteStore
     .getState()
     .loadNotes()
+    .then(() => {
+      const { error } = useNoteStore.getState();
+      if (error) throw new Error(error);
+    })
     .catch((error: unknown) => {
       loaded = null;
       throw error;

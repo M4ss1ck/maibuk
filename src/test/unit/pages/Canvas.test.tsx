@@ -202,9 +202,11 @@ describe("Canvas page", () => {
     readyState();
   });
 
-  it("loads the books the canvas page shares with the Library", () => {
+  it("loads the books and Notes the canvas page shares with the Library", () => {
     renderCanvas();
     expect(mocks.actions.loadBooks).toHaveBeenCalledTimes(1);
+    // A Text Node's Link dialog offers Notes even on a Canvas with no references.
+    expect(mocks.actions.loadNotes).toHaveBeenCalledTimes(1);
   });
 
   it("lists the canvas tool shortcuts as bound once the canvas is ready", () => {
