@@ -1179,7 +1179,11 @@ export const COMMANDS = {
     voice: { phrases: { en: ["eraser tool"], es: ["herramienta de borrador"] } },
   },
   "canvas.addTextNode": { labelKey: "canvas.addTextNode", contexts: ["canvas"], defaults: [["t"]] },
-  "canvas.addNoteRef": { labelKey: "canvas.addNoteRef", contexts: ["canvas"], defaults: [["n"]] },
+  "canvas.addReference": {
+    labelKey: "canvas.addReference",
+    contexts: ["canvas"],
+    defaults: [["n"]],
+  },
   "canvas.addImage": {
     labelKey: "canvas.addImage",
     contexts: ["canvas"],
@@ -2045,4 +2049,6 @@ export function commandSection(id: CommandId): ShortcutSectionId {
  * Old Command id to its current id, so Custom Shortcuts stored under an old
  * id survive a rename (ADR 0012). Add an entry whenever a Command id changes.
  */
-export const COMMAND_RENAMES: Readonly<Record<string, CommandId>> = {};
+export const COMMAND_RENAMES: Readonly<Record<string, CommandId>> = {
+  "canvas.addNoteRef": "canvas.addReference",
+};

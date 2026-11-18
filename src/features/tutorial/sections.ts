@@ -129,7 +129,7 @@ export const TUTORIAL_SECTIONS: readonly TutorialSection[] = [
     steps: [
       step("canvas.surface", ["Canvas", "Connection"]),
       step("canvas.text-node", ["Text Node"]),
-      step("canvas.note-ref", ["Note Reference", "Missing Note Reference"]),
+      step("canvas.note-ref", ["Canvas Reference", "Missing Canvas Reference"]),
       step("canvas.pen", ["Drawing"]),
     ],
   },

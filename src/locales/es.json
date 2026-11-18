@@ -316,7 +316,7 @@
     "empty": "Aún no hay lienzos",
     "emptyDescription": "Crea un lienzo para conectar notas, ideas y relaciones.",
     "addTextNode": "Añadir nodo de texto",
-    "addNoteRef": "Añadir referencia a nota",
+    "addReference": "Añadir referencia",
     "image": "Imagen",
     "addImage": "Añadir imagen",
     "replaceImage": "Reemplazar imagen",
@@ -1926,8 +1926,8 @@
           "body": "Añade un nodo de texto, luego haz clic donde irá o arrastra para fijar su ancho. Al hacer doble clic en el Lienzo vacío también se crea uno. Es un bloque de texto enriquecido que puedes colocar en cualquier parte del Lienzo."
         },
         "note-ref": {
-          "title": "Referencias a Notas",
-          "body": "Añade una referencia a Nota, haz clic en un lugar y elige una Nota. Representa esa Nota y la abre. Si la Nota se elimina, la referencia se queda como Nota no disponible."
+          "title": "Referencias del Lienzo",
+          "body": "Añade una referencia, haz clic en un lugar y elige una Nota. Representa esa Nota y la abre. Si la Nota se elimina, la referencia se queda en el Lienzo como referencia no disponible."
         },
         "pen": {
           "title": "Dibujo",

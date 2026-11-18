@@ -800,7 +800,7 @@ function CanvasEditor() {
       { id: "canvas.toolPen", onTrigger: () => setToolMode("pen") },
       { id: "canvas.toolEraser", onTrigger: () => setToolMode("eraser") },
       { id: "canvas.addTextNode", onTrigger: () => setToolMode("textNode") },
-      { id: "canvas.addNoteRef", onTrigger: () => setToolMode("reference") },
+      { id: "canvas.addReference", onTrigger: () => setToolMode("reference") },
       { id: "canvas.addImage", onTrigger: () => setToolMode("image") },
       {
         id: "canvas.placeArmedTool",
@@ -1054,7 +1054,7 @@ function CanvasEditor() {
 
       <CanvasImageDialog />
 
-      <Modal isOpen={notePickerOpen} onClose={closeNotePicker} title={t("canvas.addNoteRef")}>
+      <Modal isOpen={notePickerOpen} onClose={closeNotePicker} title={t("canvas.addReference")}>
         <Input
           autoFocus
           value={noteQuery}
@@ -1065,7 +1065,7 @@ function CanvasEditor() {
           <p className="py-8 text-center text-sm text-muted-foreground">{t("canvas.noNotes")}</p>
         ) : (
           <ListBox
-            aria-label={t("canvas.addNoteRef")}
+            aria-label={t("canvas.addReference")}
             items={filteredNotes}
             selectionMode="none"
             onAction={(key) => handleAddReference(String(key))}

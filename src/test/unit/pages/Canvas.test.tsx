@@ -217,7 +217,7 @@ describe("Canvas page", () => {
         "canvas.toolPen",
         "canvas.toolEraser",
         "canvas.addTextNode",
-        "canvas.addNoteRef",
+        "canvas.addReference",
         "canvas.placeArmedTool",
         "canvas.editTextNode",
         "common.zoomIn",
@@ -539,7 +539,7 @@ describe("Canvas page", () => {
 
       await user.keyboard("{Enter}");
 
-      const dialog = await screen.findByRole("dialog", { name: "canvas.addNoteRef" });
+      const dialog = await screen.findByRole("dialog", { name: "canvas.addReference" });
       expect(mocks.actions.setToolMode).toHaveBeenCalledWith("select");
 
       await user.click(within(dialog).getByRole("option", { name: "Chapter notes" }));
@@ -566,11 +566,13 @@ describe("Canvas page", () => {
       renderCanvas();
 
       await user.keyboard("{Enter}");
-      await screen.findByRole("dialog", { name: "canvas.addNoteRef" });
+      await screen.findByRole("dialog", { name: "canvas.addReference" });
       await user.keyboard("{Escape}");
 
       await waitFor(() =>
-        expect(screen.queryByRole("dialog", { name: "canvas.addNoteRef" })).not.toBeInTheDocument()
+        expect(
+          screen.queryByRole("dialog", { name: "canvas.addReference" })
+        ).not.toBeInTheDocument()
       );
       expect(mocks.actions.addNode).not.toHaveBeenCalled();
       expect(mocks.actions.placeTextNode).not.toHaveBeenCalled();
