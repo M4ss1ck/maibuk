@@ -50,7 +50,9 @@ export const noteReferenceSource: CanvasReferenceSource = {
     const answers: Record<string, CanvasReferenceResolution> = {};
     for (const id of ids) {
       const note = findNote(id);
-      answers[id] = note ? { status: "present", value: note } : { status: "missing" };
+      answers[id] = note
+        ? { status: "present", title: note.title, value: note }
+        : { status: "missing" };
     }
     return answers;
   },

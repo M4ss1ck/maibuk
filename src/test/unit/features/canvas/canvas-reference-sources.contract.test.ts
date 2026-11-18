@@ -77,7 +77,9 @@ const fakeSource: CanvasReferenceSource = {
     const answers: Record<string, CanvasReferenceResolution> = {};
     for (const id of ids) {
       const row = fakeRows.find((candidate) => candidate.id === id);
-      answers[id] = row ? { status: "present", value: row } : { status: "missing" };
+      answers[id] = row
+        ? { status: "present", title: row.title, value: row }
+        : { status: "missing" };
     }
     return answers;
   },
