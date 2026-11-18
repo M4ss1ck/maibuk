@@ -14,10 +14,20 @@
  * seam, so the orchestrator never reaches into a platform store directly.
  */
 
-import type { PluginFileGrant, PluginFileGrantStore, PluginFileStat } from "@/lib/platform/types";
+import type {
+  PluginDroppedFile,
+  PluginFileGrant,
+  PluginFileGrantStore,
+  PluginFileStat,
+} from "@/lib/platform/types";
 import { PluginApiError } from "@/plugin-sdk/protocol";
 
-export type { PluginFileGrant, PluginFileGrantStore, PluginFileStat } from "@/lib/platform/types";
+export type {
+  PluginDroppedFile,
+  PluginFileGrant,
+  PluginFileGrantStore,
+  PluginFileStat,
+} from "@/lib/platform/types";
 
 let installedStore: PluginFileGrantStore | null = null;
 
@@ -138,6 +148,27 @@ export function createMemoryPluginFileGrantStore(
       const file = queues.get(pluginId)?.shift() ?? null;
       if (file === null) return null;
       return addGrant(pluginId, file);
+    },
+    async drop(pluginId, files: readonly PluginDroppedFile[]): Promise<PluginFileGrant[]> {
+      const grants: PluginFileGrant[] = [];
+      for (const entry of files) {
+        // A path names a file only this device's own store can open; the memory
+        // store has no desktop behind it, so it leaves those out.
+        if ("path" in entry) continue;
+        try {
+          const bytes = new Uint8Array(await entry.file.arrayBuffer());
+          grants.push(
+            addGrant(pluginId, {
+              name: entry.file.name,
+              bytes,
+              modified: entry.file.lastModified,
+            })
+          );
+        } catch {
+          // A File the browser cannot read is not one this store can grant.
+        }
+      }
+      return grants;
     },
     async read(pluginId, grant, offset, length): Promise<ArrayBuffer> {
       const record = requireGrant(pluginId, grant);
