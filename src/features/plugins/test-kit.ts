@@ -26,7 +26,10 @@ import {
   endpointUrlFor,
 } from "@/features/plugins/endpoint";
 import { createMemoryPluginFileSaver, savePluginFile } from "@/features/plugins/file-save";
-import { createMemoryPluginFileGrantStore } from "@/features/plugins/file-grants";
+import {
+  createMemoryPluginFileGrantStore,
+  deliverPluginFileDrop,
+} from "@/features/plugins/file-grants";
 import { assertToggleButton } from "@/features/plugins/handlers";
 import { fragmentToHtml, htmlToPlainText } from "@/features/plugins/library";
 import {
@@ -1143,6 +1146,21 @@ export function createTestHost(options: TestHostOptions): TestHost {
     files: {
       queuePick(file) {
         fileGrants.queuePick(options.manifest.id, file);
+      },
+      async drop(page, files) {
+        const pages = options.manifest.contributes?.pages ?? [];
+        if (!pages.some((entry) => entry.id === page)) {
+          throw new Error(`The Plugin ${options.manifest.id} contributes no page named "${page}"`);
+        }
+        return deliverPluginFileDrop(
+          { pluginId: options.manifest.id, page, broker, store: fileGrants },
+          files.map((file) => ({
+            file: new File([file.bytes as BlobPart], file.name, {
+              lastModified: file.modified ?? Date.now(),
+            }),
+            handle: null,
+          }))
+        );
       },
       setMissing(grant) {
         fileGrants.setMissing(grant);

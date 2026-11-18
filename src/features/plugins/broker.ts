@@ -898,6 +898,12 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
       post({ kind: "event", event, payload: checked });
       return true;
     },
+    accepts(event) {
+      if (stopped || !subscriptions.has(event)) return false;
+      const row = events.get(event);
+      if (!row) return false;
+      return row.permission === null || holds(row.permission);
+    },
     stop,
     hasOpenWork,
     get stopped() {

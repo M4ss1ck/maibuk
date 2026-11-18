@@ -17,7 +17,7 @@ import type { McpToolProjection, PluginApiEventRow, PluginApiRow } from "@/featu
 import { FILE_READ_MAX_BYTES } from "@/plugin-sdk/protocol";
 
 /** The Plugin API's own semver, separate from Maibuk's release number. */
-export const PLUGIN_API_VERSION = "0.1.11";
+export const PLUGIN_API_VERSION = "0.1.12";
 
 export const PLUGIN_API_NAMESPACES = [
   "library",
@@ -864,6 +864,18 @@ export const PLUGIN_API_EVENTS = [
     payload: z.strictObject({ permissions: z.array(z.string()) }),
     permission: null,
     replays: true,
+  }),
+  defineApiEvent({
+    id: "files.dropped",
+    description:
+      "The author dropped files on one of this Plugin's pages. Every dropped file arrives as a File Grant whatever its type, with the same shape and dedupe as files.pick, so release the ones you cannot use. Only drops on this Plugin's own pages are delivered; `page` names the page that received them.",
+    payload: z.strictObject({
+      page: z.string().min(1).describe("The id of the Plugin's page that received the drop."),
+      grants: z
+        .array(z.strictObject({ grant: z.string().min(1), name: z.string(), size: z.int() }))
+        .describe("One File Grant per dropped file, in the order they were dropped."),
+    }),
+    permission: "files:pick",
   }),
   defineApiEvent({
     id: "editor.contentChanged",

@@ -14,6 +14,7 @@
  * seam, so the orchestrator never reaches into a platform store directly.
  */
 
+import type { PluginBroker } from "@/features/plugins/types";
 import type {
   PluginDroppedFile,
   PluginFileGrant,
@@ -75,6 +76,46 @@ function fileMissing(): PluginApiError {
     code: "file-missing",
     message: "The file behind this File Grant is gone or unreadable",
   });
+}
+
+/** Drops still being delivered, per Plugin, so a second one never overtakes the first. */
+const dropChains = new Map<string, Promise<unknown>>();
+
+/**
+ * Delivers one drop to a Plugin that is subscribed to `files.dropped` and
+ * holds `files:pick`: mints one File Grant per dropped file through the store,
+ * then emits the event with the grants it minted. Resolves with whether the
+ * event reached the Plugin; false when it would not (the broker's `accepts`
+ * says so) without minting anything. Deliveries for one Plugin run strictly in
+ * call order, so two quick drops arrive in the order the author made them, and
+ * a mint that throws emits nothing and leaves the chain running.
+ */
+export function deliverPluginFileDrop(
+  target: {
+    pluginId: string;
+    page: string;
+    broker: Pick<PluginBroker, "accepts" | "emit">;
+    store: PluginFileGrantStore;
+  },
+  files: readonly PluginDroppedFile[]
+): Promise<boolean> {
+  if (!target.broker.accepts("files.dropped")) return Promise.resolve(false);
+  const previous = dropChains.get(target.pluginId) ?? Promise.resolve();
+  const run = previous.then(async () => {
+    let grants: PluginFileGrant[];
+    try {
+      grants = await target.store.drop(target.pluginId, files);
+    } catch {
+      return false;
+    }
+    return target.broker.emit("files.dropped", { page: target.page, grants });
+  });
+  // A drop that fails must not block the ones behind it.
+  dropChains.set(
+    target.pluginId,
+    run.catch(() => false)
+  );
+  return run;
 }
 
 function sameBytes(a: Uint8Array, b: Uint8Array): boolean {

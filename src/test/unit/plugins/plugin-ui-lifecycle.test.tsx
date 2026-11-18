@@ -20,6 +20,7 @@ function fakeRuntime(): Pick<PluginRuntime, "broker" | "manifest" | "files" | "s
       request: () => new Promise<unknown>(() => {}),
       requestEndpoint: () => {},
       emit: () => false,
+      accepts: () => false,
       stop: () => {},
       hasOpenWork: () => false,
       stopped: false,
