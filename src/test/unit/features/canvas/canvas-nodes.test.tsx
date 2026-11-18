@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Book } from "@/features/books/types";
+import type { ChapterReferenceValue } from "@/features/canvas/chapterReferenceSource";
 import type { Note } from "@/features/notes";
 import { installPointerEvent, touchLongPress, touchTap } from "@/test/support/pointer-events";
 
@@ -80,6 +81,7 @@ vi.mock("react-i18next", () => ({
 const { LightweightNode } = await import("@/features/canvas/nodes/LightweightNode");
 const { ReferenceNode } = await import("@/features/canvas/nodes/ReferenceNode");
 const { noteReferenceSource } = await import("@/features/canvas/noteReferenceSource");
+const { chapterReferenceSource } = await import("@/features/canvas/chapterReferenceSource");
 const { CANVAS_REFERENCE_CARD_SIZES, useCanvasReferenceResolutions } = await import(
   "@/features/canvas/references"
 );
@@ -114,6 +116,18 @@ function bookRow(overrides: Partial<Book> = {}): Book {
     createdAt: new Date("2024-01-02"),
     updatedAt: new Date("2024-01-03"),
     contentUpdatedAt: new Date("2024-01-04"),
+    ...overrides,
+  };
+}
+
+function chapterRow(overrides: Partial<ChapterReferenceValue> = {}): ChapterReferenceValue {
+  return {
+    id: "chapter-1",
+    bookId: "book-1",
+    title: "Harbour light",
+    content: "<p>Rain on the pier</p>",
+    updatedAt: new Date(),
+    bookTitle: "The Novel",
     ...overrides,
   };
 }
@@ -725,6 +739,96 @@ describe("Canvas custom nodes", () => {
 
     expect(document.activeElement).toBe(
       screen.getByRole("button", { name: "canvas.openReferenceNamed" })
+    );
+  });
+
+  it("draws a Chapter reference in one fixed box whatever its state", () => {
+    const chapterData = referenceData({ source: "chapter", targetId: "chapter-1" });
+    const states: Array<{ name: string; seed?: () => void }> = [
+      {
+        name: "present",
+        seed: () =>
+          answer("chapter", "chapter-1", {
+            status: "present",
+            title: "Harbour light",
+            value: chapterRow(),
+          }),
+      },
+      { name: "missing", seed: () => answer("chapter", "chapter-1", { status: "missing" }) },
+      { name: "unresolved" },
+    ];
+
+    const boxes: Array<{ name: string; width: string; height: string }> = [];
+    for (const state of states) {
+      useCanvasReferenceResolutions.getState().clear();
+      state.seed?.();
+      const { container, unmount } = renderReference(chapterData);
+      const card = container.firstElementChild as HTMLElement;
+      boxes.push({ name: state.name, width: card.style.width, height: card.style.height });
+      unmount();
+    }
+
+    expect(boxes.map((box) => box.name)).toEqual(["present", "missing", "unresolved"]);
+    for (const box of boxes) {
+      expect({ width: box.width, height: box.height }).toEqual({
+        width: `${CANVAS_REFERENCE_CARD_SIZES.chapter.width}px`,
+        height: `${CANVAS_REFERENCE_CARD_SIZES.chapter.height}px`,
+      });
+    }
+  });
+
+  it("shows a Present Chapter's title, preview, Book, and last edit with no tags", () => {
+    answer("chapter", "chapter-1", {
+      status: "present",
+      title: "Harbour light",
+      value: chapterRow(),
+    });
+
+    const { container } = renderReference(
+      referenceData({ source: "chapter", targetId: "chapter-1" })
+    );
+
+    expect(screen.getByText("Harbour light")).toBeInTheDocument();
+    expect(screen.getByText("Rain on the pier")).toHaveClass("line-clamp-3");
+    expect(screen.getByText("The Novel")).toBeInTheDocument();
+    expect(screen.getByText("notes.secondsAgo")).toBeInTheDocument();
+    expect(container.querySelector(".rounded-full")).toBeNull();
+    expect(screen.getByRole("button", { name: "canvas.openReferenceNamed" })).toBeEnabled();
+  });
+
+  it("shows the stored label and a disabled Open for a Missing Chapter", () => {
+    answer("chapter", "chapter-1", { status: "missing" });
+
+    renderReference(
+      referenceData({ source: "chapter", targetId: "chapter-1", label: "Cached chapter" })
+    );
+
+    expect(screen.getByText("Cached chapter")).toBeInTheDocument();
+    expect(screen.getByText("canvas.referenceMissing")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "canvas.openReferenceNamed" })).toBeDisabled();
+  });
+
+  it("reaches Open with Tab and answers Enter from a Present Chapter card", async () => {
+    const user = userEvent.setup();
+    const open = vi.spyOn(chapterReferenceSource, "open").mockResolvedValue("opened");
+    answer("chapter", "chapter-1", {
+      status: "present",
+      title: "Harbour light",
+      value: chapterRow(),
+    });
+
+    renderReference(referenceData({ source: "chapter", targetId: "chapter-1" }));
+    await user.tab();
+
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "canvas.openReferenceNamed" })
+    );
+
+    await user.keyboard("{Enter}");
+
+    expect(open).toHaveBeenCalledWith(
+      "chapter-1",
+      expect.objectContaining({ canvasId: "canvas", canvasTitle: "Map" })
     );
   });
 

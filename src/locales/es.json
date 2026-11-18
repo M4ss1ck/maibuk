@@ -320,7 +320,8 @@
     "addReference": "Añadir referencia",
     "referenceSources": {
       "note": "Notas",
-      "book": "Libros"
+      "book": "Libros",
+      "chapter": "Capítulos"
     },
     "referenceSearchPlaceholder": "Buscar…",
     "referenceEmpty": "No hay nada que mostrar",
