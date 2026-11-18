@@ -7,10 +7,19 @@
 
 import type { Locator } from "@playwright/test";
 
-/** A file to drop: a PNG drawn in the page, or plain text for a file to refuse. */
+/**
+ * A file to drop: a real document's bytes, a PNG drawn in the page, or plain
+ * text for a file to refuse.
+ */
 export interface DroppedFile {
   name: string;
   type: string;
+  /**
+   * The file's own bytes, base64, for a document the page cannot draw: the
+   * spec reads a committed fixture (a PDF, an EPUB) and hands it over. Read
+   * before every other body, so the dropped file is that file byte for byte.
+   */
+  base64?: string;
   /** Draw a PNG of this size inside the file, so it is a real picture. */
   image?: { width: number; height: number };
   /** The file's text, for a file that is not an image. */
@@ -21,7 +30,8 @@ export interface DroppedFile {
  * Drops `files` onto `target`, at `at` (viewport coordinates) or at the middle
  * of `target`: the `dragover` a file manager sends before it, then the `drop`
  * carrying the files. Nothing else happens: a file that is no picture is left
- * for the app to see and refuse.
+ * for the app to see and refuse. A file with `base64` is decoded back into the
+ * bytes it was read from, so a dropped document is the fixture's own file.
  */
 export async function dropFiles(
   target: Locator,
@@ -48,10 +58,20 @@ export async function dropFiles(
         return blob;
       };
 
+      // The bytes a real file carries, decoded from the base64 the spec read.
+      const bytesOf = (base64: string): ArrayBuffer => {
+        const binary = atob(base64);
+        return Uint8Array.from(binary, (char) => char.charCodeAt(0)).buffer as ArrayBuffer;
+      };
+
       const transfer = new DataTransfer();
       for (const file of dropped) {
         const body: BlobPart[] =
-          file.image === undefined ? [file.text ?? ""] : [await draw(file.image)];
+          file.base64 !== undefined
+            ? [bytesOf(file.base64)]
+            : file.image === undefined
+              ? [file.text ?? ""]
+              : [await draw(file.image)];
         transfer.items.add(new File(body, file.name, { type: file.type }));
       }
 
