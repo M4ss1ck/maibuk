@@ -12,7 +12,12 @@
  * breaking a Plugin's pick.
  */
 
-import type { PluginFileGrant, PluginFileGrantStore, PluginFileStat } from "@/lib/platform/types";
+import type {
+  PluginDroppedFile,
+  PluginFileGrant,
+  PluginFileGrantStore,
+  PluginFileStat,
+} from "@/lib/platform/types";
 import { PluginApiError } from "@/plugin-sdk/protocol";
 
 const DB_NAME = "maibuk-plugin-file-grants";
@@ -307,6 +312,39 @@ export function createWebPluginFileGrantStore(
     }
   }
 
+  // A handle the browser handed over, whether through the picker or a drop:
+  // the entry this Plugin already holds wins, otherwise the grant is persisted
+  // and falls back to the session when IndexedDB refuses it.
+  async function grantHandle(pluginId: string, handle: StoredFileGrant): Promise<PluginFileGrant> {
+    const size = await fileSize(handle);
+    const existing = await findSameEntry(pluginId, handle);
+    if (existing) return { grant: existing.grant, name: existing.name, size };
+
+    const grant = randomId();
+    const record: PersistedGrant = { pluginId, grant, name: handle.name, handle };
+    const persisted = await write((store) => store.put(record, grantKey(pluginId, grant)));
+    if (!persisted) await rememberSessionFile(pluginId, grant, handle);
+    return { grant, name: handle.name, size };
+  }
+
+  // A File with no handle to persist: the same File the Plugin already holds
+  // returns that grant, otherwise the session keeps it.
+  function sessionGrant(pluginId: string, file: File): PluginFileGrant {
+    for (const entry of session.values()) {
+      if (entry.pluginId !== pluginId) continue;
+      if (
+        entry.file.name === file.name &&
+        entry.file.size === file.size &&
+        entry.file.lastModified === file.lastModified
+      ) {
+        return { grant: entry.grant, name: entry.name, size: entry.file.size };
+      }
+    }
+    const grant = randomId();
+    session.set(grantKey(pluginId, grant), { pluginId, grant, name: file.name, file });
+    return { grant, name: file.name, size: file.size };
+  }
+
   async function pickHandle(
     pluginId: string,
     extensions: readonly string[],
@@ -341,15 +379,7 @@ export function createWebPluginFileGrantStore(
     const handle = handles[0];
     if (!handle) return null;
 
-    const size = await fileSize(handle);
-    const existing = await findSameEntry(pluginId, handle);
-    if (existing) return { grant: existing.grant, name: existing.name, size };
-
-    const grant = randomId();
-    const record: PersistedGrant = { pluginId, grant, name: handle.name, handle };
-    const persisted = await write((store) => store.put(record, grantKey(pluginId, grant)));
-    if (!persisted) await rememberSessionFile(pluginId, grant, handle);
-    return { grant, name: handle.name, size };
+    return grantHandle(pluginId, handle);
   }
 
   async function pickSessionOnly(
@@ -358,19 +388,7 @@ export function createWebPluginFileGrantStore(
   ): Promise<PluginFileGrant | null> {
     const file = await pickWithInput(extensions);
     if (!file) return null;
-    for (const entry of session.values()) {
-      if (entry.pluginId !== pluginId) continue;
-      if (
-        entry.file.name === file.name &&
-        entry.file.size === file.size &&
-        entry.file.lastModified === file.lastModified
-      ) {
-        return { grant: entry.grant, name: entry.name, size: entry.file.size };
-      }
-    }
-    const grant = randomId();
-    session.set(grantKey(pluginId, grant), { pluginId, grant, name: file.name, file });
-    return { grant, name: file.name, size: file.size };
+    return sessionGrant(pluginId, file);
   }
 
   return {
@@ -378,6 +396,28 @@ export function createWebPluginFileGrantStore(
       const showOpenFilePicker = deps.showOpenFilePicker ?? windowPicker();
       if (showOpenFilePicker) return pickHandle(pluginId, extensions, showOpenFilePicker);
       return pickSessionOnly(pluginId, extensions);
+    },
+
+    async drop(pluginId, files: readonly PluginDroppedFile[]): Promise<PluginFileGrant[]> {
+      const grants: PluginFileGrant[] = [];
+      for (const entry of files) {
+        // A path is a desktop report; the browser has no way to open one.
+        if ("path" in entry) continue;
+        const handle = entry.handle === null ? null : await entry.handle.catch(() => null);
+        if (handle?.kind === "file") {
+          // The drop event's handle is the file entry itself, so the store can
+          // hold it exactly as a picked one and survive a reload. A handle the
+          // store cannot hold still leaves the File for this session.
+          try {
+            grants.push(await grantHandle(pluginId, handle as unknown as StoredFileGrant));
+            continue;
+          } catch {
+            /* fall through to the session grant */
+          }
+        }
+        grants.push(sessionGrant(pluginId, entry.file));
+      }
+      return grants;
     },
 
     async read(pluginId, grant, offset, length): Promise<ArrayBuffer> {

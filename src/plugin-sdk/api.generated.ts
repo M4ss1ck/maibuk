@@ -2,7 +2,7 @@
 
 import type { PluginStreamListener } from "@/plugin-sdk/protocol";
 
-export const PLUGIN_API_VERSION = "0.1.11";
+export const PLUGIN_API_VERSION = "0.1.12";
 
 export const PLUGIN_API_METHODS = [
   "library.books.list",
@@ -786,6 +786,7 @@ export const PLUGIN_API_EVENT_IDS = [
   "language.changed",
   "endpoint.addressChanged",
   "permissions.changed",
+  "files.dropped",
   "editor.contentChanged",
   "editor.focusChanged",
 ] as const;
@@ -821,6 +822,17 @@ export interface PluginApiEvents {
   /** This Plugin's Plugin Permissions changed: one was granted or revoked. The current list is delivered on subscription, so a Plugin that starts after a change never misses it. */
   "permissions.changed": {
     permissions: string[];
+  };
+  /** The author dropped files on one of this Plugin's pages. Every dropped file arrives as a File Grant whatever its type, with the same shape and dedupe as files.pick, so release the ones you cannot use. Only drops on this Plugin's own pages are delivered; `page` names the page that received them. */
+  "files.dropped": {
+    /** The id of the Plugin's page that received the drop. */
+    page: string;
+    /** One File Grant per dropped file, in the order they were dropped. */
+    grants: {
+      grant: string;
+      name: string;
+      size: number;
+    }[];
   };
   /** The target editor's content or language changed; sent once per typing burst. */
   "editor.contentChanged": {

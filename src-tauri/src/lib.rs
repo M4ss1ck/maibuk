@@ -51,10 +51,23 @@ pub fn run() {
     let builder = builder
         .manage(window_restore::PendingWindowRestore::default())
         .manage(plugins::watch::PluginWatcher::default())
+        // The paths the newest OS drop carried: the only paths the webview may
+        // turn into File Grants (ADR 0036), so nothing else widens what a
+        // Plugin can read.
+        .manage(plugins::files::LastDrop::default())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             window_restore::show_main_window(app);
         }))
         .plugin(tauri_plugin_deep_link::init())
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
+                use tauri::Manager;
+
+                window
+                    .state::<plugins::files::LastDrop>()
+                    .remember(paths.clone());
+            }
+        })
         .on_page_load(|webview, payload| {
             if payload.event() == tauri::webview::PageLoadEvent::Finished
                 && webview.label() == "main"
@@ -145,6 +158,8 @@ pub fn run() {
             plugins::endpoint::plugin_endpoint_end,
             #[cfg(desktop)]
             plugins::files::plugin_files_pick,
+            #[cfg(desktop)]
+            plugins::files::plugin_files_drop,
             #[cfg(desktop)]
             plugins::files::plugin_files_read,
             #[cfg(desktop)]

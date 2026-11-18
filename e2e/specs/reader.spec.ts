@@ -1,22 +1,28 @@
 // Reader, the Built-in Plugin that opens the author's own files (#653): the
 // Shelf lists Documents it remembers, opening one hands the frame to the
 // Document's Reading Position, a Missing Document can be located again without
-// losing that Position, and Remove forgets it. The file dialog is the E2E
-// lane's File System Access double (`support/file-picker.ts`): a real `File`
-// stands in for the browser's handle, so the grant persists in IndexedDB and
-// the reload proves the Reading Position survives a restart. Tagged @sandbox
-// because Reader is a Frame and a Worker plugin: the lane runs it on Chromium,
-// WebKit, and Firefox.
+// losing that Position, and Remove forgets it. A file dropped from the file
+// manager is the one way in no key reaches (#828), so that path goes through
+// `support/file-drop.ts`, which sends the events a real drag sends. The file
+// dialog is the E2E lane's File System Access double (`support/file-picker.ts`):
+// a real `File` stands in for the browser's handle, so the grant persists in
+// IndexedDB and the reload proves the Reading Position survives a restart.
+// Tagged @sandbox because Reader is a Frame and a Worker plugin: the lane runs
+// it on Chromium, WebKit, and Firefox.
 //
 // Every pick is opened by a key press (the "Open file…" button, or the Command
 // of the same name); the double only answers the dialog the browser would have
 // shown.
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import type { FrameLocator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
+import { dropFiles, type DroppedFile } from "../support/file-drop";
 import { chooseNextFile, installFilePicker, setFileMissing } from "../support/file-picker";
 import { leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
 import { runPaletteCommand } from "../support/palette";
+import { REPO_ROOT } from "../support/seed/seeds";
 import { expect, test } from "../support/test";
 
 const PDF = "twelve-pages.pdf";
@@ -35,6 +41,32 @@ const FIXTURES = [
 const primaryNav = (page: Page) => page.getByRole("listbox", { name: "Primary navigation" });
 const navOption = (page: Page, name: string) =>
   primaryNav(page).getByRole("option", { name: new RegExp(`^${name}`) });
+
+/** A fixture as the file manager would hand it over: its own bytes, base64. */
+function droppedFixture(name: string): DroppedFile {
+  const fixture = FIXTURES.find((candidate) => candidate.name === name);
+  if (fixture === undefined) throw new Error(`no fixture named ${name}`);
+  return {
+    name: fixture.name,
+    type: fixture.type,
+    base64: readFileSync(resolve(REPO_ROOT, fixture.path)).toString("base64"),
+  };
+}
+
+/**
+ * Where a drop lands on the Shelf: the page's own heading, so the event bubbles
+ * to the host page root that owns the drop listeners. No `data-testid` marks
+ * that root and its classes say nothing, while the heading is the stable name
+ * the page proves it has.
+ */
+const shelfDropTarget = (page: Page) => page.getByRole("heading", { name: "Shelf", level: 2 });
+
+/**
+ * Where a drop lands on the open Document: the whole-page Frame's wrapper, the
+ * host element around the iframe. The document itself is inside the sandboxed
+ * Frame, which the author's drop never reaches.
+ */
+const documentDropTarget = (page: Page) => page.locator('[data-plugin-frame="page"]');
 
 /** The whole-page Frame the Document page renders. */
 const documentFrame = (page: Page): FrameLocator =>
@@ -307,5 +339,41 @@ test.describe("Reader", () => {
     await page.keyboard.press("Enter");
     await expect(page.getByText("twelve-pages", { exact: true })).toHaveCount(0);
     await expect(page.getByText("Your Shelf is empty", { exact: true })).toBeVisible();
+  });
+
+  test("drop the EPUB on the Shelf, then the PDF on the open Document @wf:reader-drop @sandbox", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await openReader(page);
+    await expect(page.getByText("Your Shelf is empty", { exact: true })).toBeVisible();
+
+    // A drop on the Shelf shelves the Document and opens it, the same way the
+    // "Open file…" button's pick does.
+    await dropFiles(shelfDropTarget(page), [droppedFixture(EPUB)]);
+    await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/document$/);
+    const frame = await focusDocument(page);
+    await expect(frame.getByRole("heading", { name: "One" })).toBeVisible({ timeout: 30_000 });
+    await expect(
+      frame.getByText(
+        /The spice must flow across Arrakis\.|The journey continues past the desert\./
+      )
+    ).toBeVisible();
+    await capture(page, "reader-drop-epub");
+
+    // A drop on the open Document, outside its Frame, switches to the PDF.
+    await dropFiles(documentDropTarget(page), [droppedFixture(PDF)]);
+    await expect(pageIndicator(page)).toContainText("of 12", { timeout: 30_000 });
+    await capture(page, "reader-drop-pdf");
+
+    // Escape leaves the Frame for the Shelf, which lists both Documents. The
+    // Frame keeps focus through the switch; re-entering it is a no-op there and
+    // finds it again if the drop happened to move focus.
+    await focusDocument(page);
+    await page.keyboard.press("Escape");
+    await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
+    await expect(page.getByText("Dune", { exact: true })).toBeVisible();
+    await expect(page.getByText("twelve-pages", { exact: true })).toBeVisible();
+    await capture(page, "reader-shelf-dropped");
   });
 });

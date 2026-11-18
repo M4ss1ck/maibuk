@@ -202,6 +202,62 @@ describe("openFileFlow()", () => {
   });
 });
 
+describe("shelveGrant()", () => {
+  it("adds a picked or dropped file to the Shelf as a Document", async () => {
+    const { host, storage, client, library } = setup();
+    try {
+      host.files.queuePick({ name: "Dune.pdf", bytes: pdfBytes("a dropped PDF") });
+      const picked = await client.files.pick({ extensions: ["pdf"] });
+      if (picked === null) throw new Error("no File Grant to shelve");
+      const entry = await library.shelveGrant(picked);
+      expect(entry).toMatchObject({
+        grant: picked.grant,
+        title: "Dune",
+        format: "pdf",
+        state: "ok",
+      });
+      const shelf = storage.get(SHELF_KEY) as ShelfEntry[];
+      expect(shelf).toHaveLength(1);
+      expect(shelf[0].grant).toBe(picked.grant);
+      await expect(host.files.grants()).resolves.toHaveLength(1);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("releases the grant and throws for a file Reader cannot open", async () => {
+    const { host, storage, client, library } = setup();
+    try {
+      host.files.queuePick({
+        name: "notes.docx",
+        bytes: new TextEncoder().encode("notes, not a book"),
+      });
+      const picked = await client.files.pick({ extensions: ["pdf"] });
+      if (picked === null) throw new Error("no File Grant to shelve");
+      await expect(library.shelveGrant(picked)).rejects.toThrow();
+      await expect(host.files.grants()).resolves.toEqual([]);
+      expect(storage.has(SHELF_KEY)).toBe(false);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("releases the grant and throws when the file's bytes cannot be read", async () => {
+    const { host, storage, client, library } = setup();
+    try {
+      host.files.queuePick({ name: "Dune.pdf", bytes: pdfBytes() });
+      const picked = await client.files.pick({ extensions: ["pdf"] });
+      if (picked === null) throw new Error("no File Grant to shelve");
+      host.files.setMissing(picked.grant);
+      await expect(library.shelveGrant(picked)).rejects.toThrow();
+      await expect(host.files.grants()).resolves.toEqual([]);
+      expect(storage.has(SHELF_KEY)).toBe(false);
+    } finally {
+      await host.stop();
+    }
+  });
+});
+
 describe("refreshStates()", () => {
   it("marks a Document whose file is gone as missing", async () => {
     const { host, storage, library } = setup();

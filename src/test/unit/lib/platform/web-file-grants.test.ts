@@ -8,7 +8,11 @@
 import "fake-indexeddb/auto";
 import { IDBDatabase, IDBFactory } from "fake-indexeddb";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { PluginFileGrant, PluginFileGrantStore } from "@/features/plugins/file-grants";
+import type {
+  PluginFileGrant,
+  PluginFileGrantStore,
+  PluginDroppedFile,
+} from "@/features/plugins/file-grants";
 import { createWebPluginFileGrantStore } from "@/lib/platform/web/file-grants";
 import { PluginApiError } from "@/plugin-sdk/protocol";
 
@@ -26,6 +30,7 @@ interface TestHandleOptions {
 
 /** A `FileSystemFileHandle` stand-in: named bytes, a shared entry, and a permission answer. */
 class TestHandle {
+  readonly kind = "file";
   readonly name: string;
   readonly entry: string;
   readonly lastModified: number;
@@ -83,6 +88,11 @@ function sequentialIds(): () => string {
 /** The same `File` the fallback input would hand over. */
 function pickedFile(name: string, bytes: string, lastModified = 1_700_000_000_000): File {
   return new File([bytes], name, { lastModified });
+}
+
+/** A dropped file whose browser handed back a handle promise, as a drop event does. */
+function droppedHandle(file: File, handle: Promise<TestHandle | null> | null): PluginDroppedFile {
+  return { file, handle: handle as unknown as Promise<FileSystemHandle | null> | null };
 }
 
 /** The grant a pick must return; a cancelled pick fails here, not a later line. */
@@ -440,5 +450,69 @@ describe("createWebPluginFileGrantStore()", () => {
       refuse.mockRestore();
     }
     await expect(store.list("reader")).resolves.toEqual([picked]);
+  });
+});
+
+describe("createWebPluginFileGrantStore(): dropping", () => {
+  it("persists a dropped file handle, and a new store over the same IndexedDB lists it", async () => {
+    const indexedDB = new IDBFactory();
+    const handle = new TestHandle({ name: "dropped.pdf", bytes: "hello" });
+    const store = createWebPluginFileGrantStore({ indexedDB, randomId: sequentialIds() });
+
+    await expect(
+      store.drop("reader", [
+        droppedHandle(pickedFile("dropped.pdf", "hello"), Promise.resolve(handle)),
+      ])
+    ).resolves.toEqual([{ grant: "grant-1", name: "dropped.pdf", size: 5 }]);
+
+    const next = createWebPluginFileGrantStore({ indexedDB, randomId: sequentialIds() });
+    await expect(next.list("reader")).resolves.toEqual([
+      { grant: "grant-1", name: "dropped.pdf", size: 5 },
+    ]);
+    const range = await next.read("reader", "grant-1", 0, 5);
+    expect(new TextDecoder().decode(range)).toBe("hello");
+  });
+
+  it("keeps a session grant from the File when the handle is null or refuses", async () => {
+    const indexedDB = new IDBFactory();
+    const store = createWebPluginFileGrantStore({ indexedDB, randomId: sequentialIds() });
+
+    const dropped = await store.drop("reader", [
+      droppedHandle(pickedFile("notes.epub", "bytes"), Promise.resolve(null)),
+      droppedHandle(
+        pickedFile("other.epub", "more"),
+        Promise.reject(new Error("The browser gave no handle"))
+      ),
+    ]);
+
+    expect(dropped).toEqual([
+      { grant: "grant-1", name: "notes.epub", size: 5 },
+      { grant: "grant-2", name: "other.epub", size: 4 },
+    ]);
+    const range = await store.read("reader", "grant-1", 0, 5);
+    expect(new TextDecoder().decode(range)).toBe("bytes");
+
+    const next = createWebPluginFileGrantStore({ indexedDB, randomId: sequentialIds() });
+    await expect(next.list("reader")).resolves.toEqual([]);
+  });
+
+  it("returns the same grant when the same handle is dropped twice", async () => {
+    const store = createWebPluginFileGrantStore({
+      indexedDB: new IDBFactory(),
+      randomId: sequentialIds(),
+    });
+    const handle = new TestHandle({ name: "dropped.pdf", bytes: "hello", entry: "entry-1" });
+
+    const first = await store.drop("reader", [
+      droppedHandle(pickedFile("dropped.pdf", "hello"), Promise.resolve(handle)),
+    ]);
+    const second = await store.drop("reader", [
+      droppedHandle(pickedFile("dropped.pdf", "hello"), Promise.resolve(handle)),
+    ]);
+
+    expect(second).toEqual(first);
+    await expect(store.list("reader")).resolves.toEqual([
+      { grant: "grant-1", name: "dropped.pdf", size: 5 },
+    ]);
   });
 });

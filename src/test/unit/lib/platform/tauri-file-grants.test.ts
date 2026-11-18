@@ -172,4 +172,32 @@ describe("createTauriPluginFileGrantStore()", () => {
 
     await expect(store.clearAll()).rejects.toBe(failure);
   });
+
+  it("drops files through Rust, sending only the paths it was reported", async () => {
+    mockInvoke.mockResolvedValue([{ grant: "a1b2", name: "book.pdf", size: 2048 }]);
+    const store = createTauriPluginFileGrantStore();
+
+    await expect(
+      store.drop("tracer", [
+        { path: "/home/author/book.pdf" },
+        { file: new File(["x"], "notes.txt", { lastModified: 1 }), handle: null },
+      ])
+    ).resolves.toEqual([{ grant: "a1b2", name: "book.pdf", size: 2048 }]);
+    expect(mockInvoke).toHaveBeenCalledWith("plugin_files_drop", {
+      pluginId: "tracer",
+      paths: ["/home/author/book.pdf"],
+    });
+  });
+
+  it("answers [] for a drop with no path, without invoking Rust", async () => {
+    const store = createTauriPluginFileGrantStore();
+
+    await expect(
+      store.drop("tracer", [
+        { file: new File(["x"], "notes.txt", { lastModified: 1 }), handle: null },
+      ])
+    ).resolves.toEqual([]);
+    await expect(store.drop("tracer", [])).resolves.toEqual([]);
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
 });

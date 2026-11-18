@@ -2081,6 +2081,123 @@ describe("createTestHost() File Grants", () => {
   });
 });
 
+describe("createTestHost() files.dropped", () => {
+  // ASCII on purpose: a test reads the range back as text.
+  const BYTES = new TextEncoder().encode("A dropped file is a File Grant like any other.");
+  const FILE = { name: "chapter.txt", bytes: BYTES, modified: 1_700_000_000_000 };
+
+  function dropManifest(): PluginManifest {
+    return { ...fixtureManifest(), permissions: { required: ["files:pick"], optional: [] } };
+  }
+
+  type DroppedPayload = {
+    page: string;
+    grants: { grant: string; name: string; size: number }[];
+  };
+
+  it("delivers a drop on the Plugin's own page as grants it can read", async () => {
+    const host = createTestHost({ manifest: dropManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      const events: DroppedPayload[] = [];
+      await client.on("files.dropped", (payload) => events.push(payload));
+
+      await expect(host.files.drop("report", [FILE])).resolves.toBe(true);
+      await vi.waitFor(() => expect(events).toHaveLength(1));
+
+      expect(events[0].page).toBe("report");
+      expect(events[0].grants).toEqual([
+        { grant: expect.any(String), name: FILE.name, size: BYTES.length },
+      ]);
+
+      const range = await client.files.read({
+        grant: events[0].grants[0].grant,
+        offset: 0,
+        length: 5,
+      });
+      expect([...new Uint8Array(range)]).toEqual([...BYTES.subarray(0, 5)]);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("gives an unsubscribed Plugin nothing and mints no grant", async () => {
+    const host = createTestHost({ manifest: dropManifest() });
+    try {
+      await expect(host.files.drop("report", [FILE])).resolves.toBe(false);
+      await expect(host.files.grants()).resolves.toEqual([]);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("gives a Plugin without files:pick nothing, even after it subscribed", async () => {
+    const host = createTestHost({ manifest: dropManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      const events: DroppedPayload[] = [];
+      await client.on("files.dropped", (payload) => events.push(payload));
+
+      host.setGranted([]);
+
+      await expect(host.files.drop("report", [FILE])).resolves.toBe(false);
+      expect(events).toEqual([]);
+      await expect(host.files.grants()).resolves.toEqual([]);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("refuses a page the manifest does not contribute", async () => {
+    const host = createTestHost({ manifest: dropManifest() });
+    try {
+      await expect(host.files.drop("shelf", [FILE])).rejects.toThrow(
+        'contributes no page named "shelf"'
+      );
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("re-dropping the same file returns the same grant id", async () => {
+    const host = createTestHost({ manifest: dropManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      const events: DroppedPayload[] = [];
+      await client.on("files.dropped", (payload) => events.push(payload));
+
+      await host.files.drop("report", [FILE]);
+      await host.files.drop("report", [FILE]);
+      await vi.waitFor(() => expect(events).toHaveLength(2));
+
+      expect(events[1].grants[0].grant).toBe(events[0].grants[0].grant);
+      await expect(host.files.grants()).resolves.toHaveLength(1);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("delivers two drops started back to back in order", async () => {
+    const FIRST = { name: "first.txt", bytes: new TextEncoder().encode("first") };
+    const SECOND = { name: "second.txt", bytes: new TextEncoder().encode("second") };
+    const host = createTestHost({ manifest: dropManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      const events: DroppedPayload[] = [];
+      await client.on("files.dropped", (payload) => events.push(payload));
+
+      const first = host.files.drop("report", [FIRST]);
+      const second = host.files.drop("report", [SECOND]);
+      await expect(Promise.all([first, second])).resolves.toEqual([true, true]);
+      await vi.waitFor(() => expect(events).toHaveLength(2));
+
+      expect(events.map((event) => event.grants[0].name)).toEqual(["first.txt", "second.txt"]);
+    } finally {
+      await host.stop();
+    }
+  });
+});
+
 describe("createTestHost() file saves (ADR 0040)", () => {
   const BYTES = new Uint8Array([0, 9, 8, 7, 253, 254, 255]);
 

@@ -7,7 +7,12 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
-import type { PluginFileGrant, PluginFileGrantStore, PluginFileStat } from "@/lib/platform/types";
+import type {
+  PluginDroppedFile,
+  PluginFileGrant,
+  PluginFileGrantStore,
+  PluginFileStat,
+} from "@/lib/platform/types";
 import { PluginApiError, type PluginApiErrorCode } from "@/plugin-sdk/protocol";
 
 /** The stable prefixes the Rust commands open their messages with. */
@@ -46,6 +51,14 @@ export function createTauriPluginFileGrantStore(): PluginFileGrantStore {
         pluginId,
         extensions: [...extensions],
       });
+    },
+
+    async drop(pluginId: string, files: readonly PluginDroppedFile[]): Promise<PluginFileGrant[]> {
+      const paths = files.flatMap((entry) => ("path" in entry ? [entry.path] : []));
+      // Desktop grants a dropped file from the path Rust reported, so a drop of
+      // nothing it can open asks Rust for nothing.
+      if (paths.length === 0) return [];
+      return call<PluginFileGrant[]>("plugin_files_drop", { pluginId, paths });
     },
 
     async read(

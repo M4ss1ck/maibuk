@@ -192,19 +192,20 @@ function propertyNames(schema: unknown): string[] {
 }
 
 describe("PLUGIN_API_EVENTS", () => {
-  it("lists the events: library, availability, language, the endpoint address, permissions, and the two editor events", () => {
+  it("lists the events: library, availability, language, the endpoint address, permissions, dropped files, and the two editor events", () => {
     expect(PLUGIN_API_EVENTS.map((event) => event.id)).toEqual([
       "library.changed",
       "library.availabilityChanged",
       "language.changed",
       "endpoint.addressChanged",
       "permissions.changed",
+      "files.dropped",
       "editor.contentChanged",
       "editor.focusChanged",
     ]);
   });
 
-  it("gates each event by its namespace's read permission, availability, language, and permissions by none, and the endpoint by serve", () => {
+  it("gates each event by its namespace's read permission, availability, language, and permissions by none, files by pick, and the endpoint by serve", () => {
     for (const event of PLUGIN_API_EVENTS) {
       const namespace = event.id.split(".")[0];
       expect(PLUGIN_API_NAMESPACES).toContain(namespace);
@@ -212,7 +213,13 @@ describe("PLUGIN_API_EVENTS", () => {
         event.id === "library.availabilityChanged" ||
         event.id === "language.changed" ||
         event.id === "permissions.changed";
-      const expected = ungated ? null : namespace === "endpoint" ? "serve" : `${namespace}:read`;
+      const expected = ungated
+        ? null
+        : namespace === "endpoint"
+          ? "serve"
+          : event.id === "files.dropped"
+            ? "files:pick"
+            : `${namespace}:read`;
       expect(event.permission, event.id).toBe(expected);
     }
   });

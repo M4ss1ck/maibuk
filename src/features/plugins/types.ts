@@ -959,6 +959,13 @@ export interface TestEndpointStream {
 export interface TestHostFiles {
   /** Queues the file the Plugin's next `files.pick` returns; null means the author cancelled. */
   queuePick(file: MemoryPluginFileGrantFile | null): void;
+  /**
+   * Simulates the author dropping `files` on the Plugin's `page`: mints a File
+   * Grant per file and emits `files.dropped` to a Plugin that subscribed and
+   * holds `files:pick`. Resolves with whether the event was delivered. Throws
+   * when `page` is not one of the manifest's contributed pages.
+   */
+  drop(page: string, files: readonly MemoryPluginFileGrantFile[]): Promise<boolean>;
   /** Makes the file behind a grant unreadable: `files.read` and `files.stat` refuse `file-missing`. */
   setMissing(grant: string): void;
   /** The live File Grants the host holds for this Plugin right now. */
@@ -1507,6 +1514,13 @@ export interface PluginBroker {
    * breaks the event's schema, so content can never leak through an event.
    */
   emit<E extends PluginApiEventId>(event: E, payload: PluginApiEventPayload<E>): boolean;
+  /**
+   * True when `emit` would deliver this event right now: the Plugin is not
+   * stopped, subscribed to the event, and still holds its Plugin Permission.
+   * Lets the host decide synchronously (inside a dragover) whether a drop
+   * would reach the Plugin.
+   */
+  accepts(event: PluginApiEventId): boolean;
   stop(reason: PluginStopReason): void;
   readonly stopped: boolean;
 }

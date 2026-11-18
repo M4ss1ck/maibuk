@@ -16,6 +16,8 @@
   "shelf.locate.mismatch": "That file is a different Document. Reader kept the Missing Document on your Shelf.",
   "shelf.loading": "Loading your Shelf…",
   "shelf.openFailed": "Reader can't open that file.",
+  "shelf.dropSkipped.one": "Reader can't open 1 dropped file.",
+  "shelf.dropSkipped.other": "Reader can't open {{count}} dropped files.",
   "shelf.reopenFailed": "The browser didn't give access to this file.",
   "viewer.back": "Back to Shelf",
   "viewer.contents": "Contents",

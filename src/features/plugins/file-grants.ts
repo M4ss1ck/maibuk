@@ -14,10 +14,21 @@
  * seam, so the orchestrator never reaches into a platform store directly.
  */
 
-import type { PluginFileGrant, PluginFileGrantStore, PluginFileStat } from "@/lib/platform/types";
+import type { PluginBroker } from "@/features/plugins/types";
+import type {
+  PluginDroppedFile,
+  PluginFileGrant,
+  PluginFileGrantStore,
+  PluginFileStat,
+} from "@/lib/platform/types";
 import { PluginApiError } from "@/plugin-sdk/protocol";
 
-export type { PluginFileGrant, PluginFileGrantStore, PluginFileStat } from "@/lib/platform/types";
+export type {
+  PluginDroppedFile,
+  PluginFileGrant,
+  PluginFileGrantStore,
+  PluginFileStat,
+} from "@/lib/platform/types";
 
 let installedStore: PluginFileGrantStore | null = null;
 
@@ -65,6 +76,46 @@ function fileMissing(): PluginApiError {
     code: "file-missing",
     message: "The file behind this File Grant is gone or unreadable",
   });
+}
+
+/** Drops still being delivered, per Plugin, so a second one never overtakes the first. */
+const dropChains = new Map<string, Promise<unknown>>();
+
+/**
+ * Delivers one drop to a Plugin that is subscribed to `files.dropped` and
+ * holds `files:pick`: mints one File Grant per dropped file through the store,
+ * then emits the event with the grants it minted. Resolves with whether the
+ * event reached the Plugin; false when it would not (the broker's `accepts`
+ * says so) without minting anything. Deliveries for one Plugin run strictly in
+ * call order, so two quick drops arrive in the order the author made them, and
+ * a mint that throws emits nothing and leaves the chain running.
+ */
+export function deliverPluginFileDrop(
+  target: {
+    pluginId: string;
+    page: string;
+    broker: Pick<PluginBroker, "accepts" | "emit">;
+    store: PluginFileGrantStore;
+  },
+  files: readonly PluginDroppedFile[]
+): Promise<boolean> {
+  if (!target.broker.accepts("files.dropped")) return Promise.resolve(false);
+  const previous = dropChains.get(target.pluginId) ?? Promise.resolve();
+  const run = previous.then(async () => {
+    let grants: PluginFileGrant[];
+    try {
+      grants = await target.store.drop(target.pluginId, files);
+    } catch {
+      return false;
+    }
+    return target.broker.emit("files.dropped", { page: target.page, grants });
+  });
+  // A drop that fails must not block the ones behind it.
+  dropChains.set(
+    target.pluginId,
+    run.catch(() => false)
+  );
+  return run;
 }
 
 function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
@@ -138,6 +189,27 @@ export function createMemoryPluginFileGrantStore(
       const file = queues.get(pluginId)?.shift() ?? null;
       if (file === null) return null;
       return addGrant(pluginId, file);
+    },
+    async drop(pluginId, files: readonly PluginDroppedFile[]): Promise<PluginFileGrant[]> {
+      const grants: PluginFileGrant[] = [];
+      for (const entry of files) {
+        // A path names a file only this device's own store can open; the memory
+        // store has no desktop behind it, so it leaves those out.
+        if ("path" in entry) continue;
+        try {
+          const bytes = new Uint8Array(await entry.file.arrayBuffer());
+          grants.push(
+            addGrant(pluginId, {
+              name: entry.file.name,
+              bytes,
+              modified: entry.file.lastModified,
+            })
+          );
+        } catch {
+          // A File the browser cannot read is not one this store can grant.
+        }
+      }
+      return grants;
     },
     async read(pluginId, grant, offset, length): Promise<ArrayBuffer> {
       const record = requireGrant(pluginId, grant);

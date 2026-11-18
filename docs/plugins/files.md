@@ -16,7 +16,7 @@ Declare `files:pick` for reading and `files:save` for saving, under `permissions
 
 A required entry makes the author approve it to enable the Plugin. An optional entry lets the author revoke it on its own, and revoking `files:pick` ends every File Grant the Plugin holds.
 
-`files.pick`, `files.read`, `files.stat`, `files.requestAccess`, `files.release`, and `files.list` need `files:pick`. `files.save` needs `files:save` instead, so a Plugin that only exports files never holds a way to the author's files. A call without the permission it needs is refused with `permission-denied`.
+`files.pick`, `files.read`, `files.stat`, `files.requestAccess`, `files.release`, `files.list`, and the `files.dropped` event need `files:pick`. `files.save` needs `files:save` instead, so a Plugin that only exports files never holds a way to the author's files. A call without the permission it needs is refused with `permission-denied`.
 
 ## Picking a file
 
@@ -25,6 +25,26 @@ A required entry makes the author approve it to enable the Plugin. An optional e
 Picking a file the Plugin already holds a grant for returns the same grant id, so a re-pick after a restart never duplicates a document in your own list.
 
 `files.pick` is a user action: Maibuk refuses it with `user-action-required` unless the author's own click, key press, or Command run caused the call. Call it from a button's handler or from a Command you registered, never from startup code, a timer, or an event handler that fires without the author. `files.requestAccess` has the same rule.
+
+## Dropping files
+
+Subscribe to `files.dropped` and the author can drag files from their device onto your Plugin's pages instead of walking the file dialog:
+
+```ts
+await client.on("files.dropped", async ({ page, grants }) => {
+  for (const { grant, name } of grants) {
+    if (!name.endsWith(".pdf")) await client.files.release({ grant });
+  }
+});
+```
+
+The event needs `files:pick`, like picking does. `page` is the id of your page that received the drop, so each page can respond in its own way. `grants` holds one File Grant per dropped file, in the order the author dropped them, with the same shape `files.pick` returns and the same dedupe: dropping a file you already hold a grant for hands back that grant id. Every dropped file arrives whatever its type, because an event takes no filter, so release the grants you can't use. A dropped folder is not expanded.
+
+Maibuk delivers a drop only to the Plugin whose page, a host-rendered page or a Frame, is under the drop point, and only while that Plugin is subscribed and holds `files:pick`. A drop on Maibuk's own chrome, on the sidebar, or on another Plugin's page never reaches you, and a Plugin that never subscribed sees drops behave as they did before. Over a page that takes drops the author sees the system's copy cursor; Maibuk draws no dropzone, so any drop feedback is yours to draw. Drops reach your Plugin in the order the author made them.
+
+The event is not a user action: Maibuk mints the grants itself as part of the author's drop, and it opens no window for a later `files.pick` or `files.requestAccess`.
+
+Grants from a drop persist exactly like picked ones. On desktop, Rust grants only the paths its own drag-and-drop handler saw in the most recent drop, so webview code cannot turn a path it made up into a grant. In a Chromium browser the dropped file's handle is kept in IndexedDB and the grant survives a reload; in a browser without file handles the grant lasts for the session, as a picked one does there.
 
 ## Reading in ranges
 
@@ -117,4 +137,4 @@ export async function readOpening(client: PluginClient): Promise<string | null> 
 
 ## Testing
 
-`createTestHost()` takes a `files` list, which seeds the host's File Grant store, and exposes the rest through `host.files`: `queuePick()` is the file the next `files.pick` returns, `setMissing()` makes a grant unreadable, and `grants()` lists what the host holds. It records saves too: `saves` lists every file the host wrote, in order, with its name, MIME type, and bytes, and `queueSaveCancel()` plays the author closing the next save dialog, after which that call resolves `cancelled` and records nothing. The test host saves in memory instead of opening a dialog, so a test asserts the bytes the host received. A pick and a save count as the author's action inside the test host, so a test never has to fake a click. See [Testing](testing.md).
+`createTestHost()` takes a `files` list, which seeds the host's File Grant store, and exposes the rest through `host.files`: `queuePick()` is the file the next `files.pick` returns, `drop(pageId, files)` plays the author dropping files on one of your pages and resolves with whether `files.dropped` reached your Plugin, `setMissing()` makes a grant unreadable, and `grants()` lists what the host holds. It records saves too: `saves` lists every file the host wrote, in order, with its name, MIME type, and bytes, and `queueSaveCancel()` plays the author closing the next save dialog, after which that call resolves `cancelled` and records nothing. The test host saves in memory instead of opening a dialog, so a test asserts the bytes the host received. A pick and a save count as the author's action inside the test host, so a test never has to fake a click. See [Testing](testing.md).

@@ -239,6 +239,16 @@ export interface PluginFileGrant {
   size: number;
 }
 
+/**
+ * One file the author dropped on the host, as the platform can describe it: a
+ * browser hands over the dropped `File` and the handle promise taken from
+ * `DataTransferItem.getAsFileSystemHandle()` inside the drop event (null where
+ * the browser has no such call), while desktop reports the path Tauri saw.
+ */
+export type PluginDroppedFile =
+  | { file: File; handle: Promise<FileSystemHandle | null> | null }
+  | { path: string };
+
 /** What `files.stat` reads without opening the file's bytes. */
 export interface PluginFileStat {
   name: string;
@@ -264,6 +274,15 @@ export interface PluginFileGrantStore {
    * already holds a grant for returns the same grant id.
    */
   pick(pluginId: string, extensions: readonly string[]): Promise<PluginFileGrant | null>;
+  /**
+   * Mints one File Grant per dropped file the store can grant, in order, with
+   * the same per-Plugin scoping and the same dedupe as `pick`: a file this
+   * Plugin already holds a grant for returns that grant id rather than a new
+   * one. An entry it cannot grant (the wrong kind for this platform, or
+   * unreadable) is left out. Not a user-action call: the drop event already
+   * carried the author's intent.
+   */
+  drop(pluginId: string, files: readonly PluginDroppedFile[]): Promise<PluginFileGrant[]>;
   /**
    * Reads `length` bytes from `offset`. A range past the end returns the bytes
    * that exist: shorter than asked, empty at or past the end of the file.

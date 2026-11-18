@@ -336,6 +336,62 @@ impl GrantStore {
     }
 }
 
+/// The paths the OS named in the most recent drop on the window, as the only
+/// paths the webview may turn into File Grants: a path Rust never saw in that
+/// drop is one the webview invented. Replacing them on every drop keeps a file
+/// dropped long ago from being granted after a newer drop.
+#[cfg_attr(mobile, allow(dead_code))]
+#[derive(Default)]
+pub struct LastDrop(Mutex<Vec<PathBuf>>);
+
+#[cfg_attr(mobile, allow(dead_code))]
+impl LastDrop {
+    /// Replaces the remembered paths with the ones the newest drop carried.
+    pub fn remember(&self, paths: Vec<PathBuf>) {
+        *self.lock() = paths;
+    }
+
+    /// Grants the dropped files the webview names to `plugin_id`, in request
+    /// order, never a file the last drop did not carry: naming one refuses the
+    /// whole request and mints nothing. A remembered folder and a file that is
+    /// gone or unreadable are left out, because a grant names one readable file.
+    /// A Plugin that already holds a grant for a file gets that grant back.
+    pub fn grant_dropped(
+        &self,
+        store: &GrantStore,
+        plugin_id: &str,
+        paths: &[String],
+    ) -> Result<Vec<GrantInfo>, String> {
+        validate_plugin_id(plugin_id)?;
+        // The request is checked whole before a grant is minted, so a path the
+        // drop never carried grants nothing of the ones it did.
+        let remembered = self.lock().clone();
+        for path in paths {
+            if !remembered.iter().any(|seen| seen == Path::new(path)) {
+                return Err(invalid_params("this path is not part of the last drop"));
+            }
+        }
+        let mut grants = Vec::with_capacity(paths.len());
+        for path in paths {
+            // A folder, a file that is gone, and a refused grant leave a gap in
+            // the reply; a failure of Maibuk's own record still reports.
+            match store.grant(plugin_id, Path::new(path)) {
+                Ok(info) => grants.push(info),
+                Err(error) if error.starts_with(FILE_MISSING) => {}
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(grants)
+    }
+
+    fn lock(&self) -> MutexGuard<'_, Vec<PathBuf>> {
+        // A poisoned lock still holds the drop: there is nothing to undo.
+        self.0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+}
+
 /// One save in progress: the handle the bytes go to, plus how the save puts
 /// them in place. Every field stays in Rust.
 struct PendingSave {
@@ -627,6 +683,22 @@ pub async fn plugin_files_pick<R: tauri::Runtime>(
         .into_path()
         .map_err(|_| file_missing("the picked file is not on this device"))?;
     state.grant(&plugin_id, &path).map(Some)
+}
+
+/// Grant the files the author dropped on the window to `plugin_id`. The webview
+/// names the paths, and Rust mints a grant only for a path its own drop handler
+/// saw, so a Plugin can read what the author dropped and never a path it made
+/// up. A file already held keeps its grant; a folder and a file that is gone
+/// are left out. The paths stay in Rust: the webview only ever sees grant ids.
+#[cfg(desktop)]
+#[tauri::command]
+pub fn plugin_files_drop(
+    state: tauri::State<'_, GrantStore>,
+    last_drop: tauri::State<'_, LastDrop>,
+    plugin_id: String,
+    paths: Vec<String>,
+) -> Result<Vec<GrantInfo>, String> {
+    last_drop.grant_dropped(&state, &plugin_id, &paths)
 }
 
 /// Read a byte range through a grant. The bytes cross as raw IPC, so the
@@ -1069,6 +1141,122 @@ mod tests {
         assert!(error.starts_with("file-missing:"), "{error}");
         let absent = store.grant("tracer", &dir.join("absent.pdf")).unwrap_err();
         assert!(absent.starts_with("file-missing:"), "{absent}");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A dropped path as the webview names it.
+    fn dropped(path: &Path) -> String {
+        path.to_string_lossy().into_owned()
+    }
+
+    #[test]
+    fn grants_a_file_the_last_drop_named() {
+        let dir = temp_dir("drop");
+        let path = file_in(&dir, "book.pdf", b"contents");
+        let store = store_in(&dir);
+        let last_drop = LastDrop::default();
+        last_drop.remember(vec![path.clone()]);
+
+        let grants = last_drop
+            .grant_dropped(&store, "tracer", &[dropped(&path)])
+            .unwrap();
+
+        assert_eq!(grants.len(), 1);
+        assert_eq!(
+            grants[0].name, "book.pdf",
+            "the name is the file's own name"
+        );
+        assert_eq!(grants[0].size, 8);
+        assert_eq!(grants, store.list("tracer").unwrap());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn refuses_a_path_the_last_drop_never_named() {
+        let dir = temp_dir("drop-unknown");
+        let path = file_in(&dir, "book.pdf", b"contents");
+        let absent = dir.join("invented.pdf");
+        let store = store_in(&dir);
+        let last_drop = LastDrop::default();
+        last_drop.remember(vec![path.clone()]);
+
+        // Naming one file the drop did not carry refuses the whole request, so
+        // no grant is minted for the file it did.
+        let error = last_drop
+            .grant_dropped(&store, "tracer", &[dropped(&path), dropped(&absent)])
+            .unwrap_err();
+        assert!(error.starts_with("invalid-params:"), "{error}");
+        assert!(store.list("tracer").unwrap().is_empty());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn refuses_a_path_from_an_earlier_drop() {
+        let dir = temp_dir("drop-earlier");
+        let first = file_in(&dir, "first.pdf", b"a");
+        let second = file_in(&dir, "second.pdf", b"b");
+        let store = store_in(&dir);
+        let last_drop = LastDrop::default();
+        last_drop.remember(vec![first.clone()]);
+        last_drop.remember(vec![second.clone()]);
+
+        let error = last_drop
+            .grant_dropped(&store, "tracer", &[dropped(&first)])
+            .unwrap_err();
+        assert!(error.starts_with("invalid-params:"), "{error}");
+        assert!(store.list("tracer").unwrap().is_empty());
+
+        // The drop the window saw last still grants.
+        let grants = last_drop
+            .grant_dropped(&store, "tracer", &[dropped(&second)])
+            .unwrap();
+        assert_eq!(grants.len(), 1);
+        assert_eq!(grants[0].name, "second.pdf");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn re_dropping_a_held_file_returns_the_same_grant() {
+        let dir = temp_dir("drop-again");
+        let path = file_in(&dir, "book.pdf", b"contents");
+        let store = store_in(&dir);
+        let last_drop = LastDrop::default();
+
+        last_drop.remember(vec![path.clone()]);
+        let first = last_drop
+            .grant_dropped(&store, "tracer", &[dropped(&path)])
+            .unwrap();
+        last_drop.remember(vec![path.clone()]);
+        let again = last_drop
+            .grant_dropped(&store, "tracer", &[dropped(&path)])
+            .unwrap();
+
+        assert_eq!(first[0].grant, again[0].grant);
+        assert_eq!(store.list("tracer").unwrap().len(), 1);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn leaves_out_a_remembered_directory() {
+        let dir = temp_dir("drop-directory");
+        let first = file_in(&dir, "a.pdf", b"a");
+        let second = file_in(&dir, "b.pdf", b"b");
+        let store = store_in(&dir);
+        let last_drop = LastDrop::default();
+        // A folder dragged along with the files says nothing a grant can read.
+        last_drop.remember(vec![dir.clone(), first.clone(), second.clone()]);
+
+        let grants = last_drop
+            .grant_dropped(
+                &store,
+                "tracer",
+                &[dropped(&dir), dropped(&first), dropped(&second)],
+            )
+            .unwrap();
+
+        let names: Vec<&str> = grants.iter().map(|info| info.name.as_str()).collect();
+        assert_eq!(names, ["a.pdf", "b.pdf"], "the files keep request order");
+        assert_eq!(store.list("tracer").unwrap().len(), 2);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

@@ -256,6 +256,7 @@ export default defineConfig(() => ({
         "src/features/sync/store.ts",
         "src/hooks/useAutoSave.ts",
         "src/hooks/usePluginSecrets.ts",
+        "src/components/plugins/usePluginFileDrop.ts",
         "src/hooks/useItemContextMenu.ts",
         "src/hooks/useParkSelectionWhileDragging.ts",
         "src/hooks/useNoteFilter.ts",

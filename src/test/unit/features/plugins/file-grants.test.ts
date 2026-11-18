@@ -73,6 +73,79 @@ describe("createMemoryPluginFileGrantStore(): picking", () => {
   });
 });
 
+describe("createMemoryPluginFileGrantStore(): dropping", () => {
+  it("mints one grant per dropped file, scoped to the Plugin and in order", async () => {
+    const store = createMemoryPluginFileGrantStore();
+
+    const dropped = await store.drop("tracer", [
+      { file: new File(["one"], "a.pdf", { lastModified: 1_000 }), handle: null },
+      { file: new File(["two"], "b.pdf", { lastModified: 2_000 }), handle: null },
+    ]);
+
+    expect(dropped).toEqual([
+      { grant: expect.any(String), name: "a.pdf", size: 3 },
+      { grant: expect.any(String), name: "b.pdf", size: 3 },
+    ]);
+    await expect(store.list("tracer")).resolves.toEqual(dropped);
+    await expect(store.stat("tracer", dropped[0].grant)).resolves.toEqual({
+      name: "a.pdf",
+      size: 3,
+      modified: 1_000,
+    });
+  });
+
+  it("returns the same grant when the same dropped file comes again", async () => {
+    const store = createMemoryPluginFileGrantStore();
+    const file = new File(["one"], "a.pdf", { lastModified: 1_000 });
+
+    const [first] = await store.drop("tracer", [{ file, handle: null }]);
+    const [second] = await store.drop("tracer", [{ file, handle: null }]);
+
+    expect(second.grant).toBe(first.grant);
+    await expect(store.list("tracer")).resolves.toHaveLength(1);
+  });
+
+  it("returns the picked grant for a dropped file identical to the picked one", async () => {
+    const store = createMemoryPluginFileGrantStore();
+    store.queuePick("tracer", { name: "a.pdf", bytes: new Uint8Array([1]) });
+    const picked = await store.pick("tracer", ["pdf"]);
+
+    const [dropped] = await store.drop("tracer", [
+      { file: new File([new Uint8Array([1])], "a.pdf"), handle: null },
+    ]);
+
+    expect(dropped.grant).toBe(picked?.grant);
+    await expect(store.list("tracer")).resolves.toHaveLength(1);
+  });
+
+  it("leaves out a dropped path, which this platform cannot grant", async () => {
+    const store = createMemoryPluginFileGrantStore();
+
+    await expect(store.drop("tracer", [{ path: "/home/author/a.pdf" }])).resolves.toEqual([]);
+    await expect(store.list("tracer")).resolves.toEqual([]);
+
+    const dropped = await store.drop("tracer", [
+      { path: "/home/author/a.pdf" },
+      { file: new File(["one"], "a.pdf", { lastModified: 1_000 }), handle: null },
+    ]);
+
+    expect(dropped).toHaveLength(1);
+    expect(dropped[0].name).toBe("a.pdf");
+  });
+
+  it("keeps a dropped grant out of another Plugin's reach", async () => {
+    const store = createMemoryPluginFileGrantStore();
+
+    const [dropped] = await store.drop("tracer", [
+      { file: new File(["one"], "a.pdf", { lastModified: 1_000 }), handle: null },
+    ]);
+
+    await missing(store.read("echoes", dropped.grant, 0, 1));
+    await missing(store.stat("echoes", dropped.grant));
+    await expect(store.list("echoes")).resolves.toEqual([]);
+  });
+});
+
 describe("createMemoryPluginFileGrantStore(): reading", () => {
   async function seededStore() {
     const store = createMemoryPluginFileGrantStore([
