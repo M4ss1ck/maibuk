@@ -317,6 +317,9 @@
     "emptyDescription": "Create a canvas to map notes, ideas, and relationships.",
     "addTextNode": "Add text node",
     "addReference": "Add reference",
+    "referenceSources": {
+      "note": "Notes"
+    },
     "image": "Image",
     "addImage": "Add image",
     "replaceImage": "Replace image",
