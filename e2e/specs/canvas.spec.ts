@@ -791,6 +791,58 @@ test.describe("Canvas Reference @wf:canvas-note-ref @sc:canvas.addReference @sc:
     await expect(references(page)).toHaveCount(2);
   });
 
+  test("deleting a referenced Book turns its card Missing and keeps it on the Canvas", async ({
+    page,
+  }) => {
+    await openMap(page);
+    await expect(references(page)).toHaveCount(2);
+    const mapUrl = page.url();
+    await page.keyboard.press("n");
+    await page.keyboard.press("Enter");
+    const dialog = page.getByRole("dialog", { name: "Add reference" });
+    await expect(dialog.getByPlaceholder("Search…")).toBeFocused();
+    await tabTo(page, dialog.getByRole("tab", { name: "Notes" }), { max: 5 });
+    await page.keyboard.press("ArrowRight");
+    const option = dialog.getByRole("option", { name: "The Lighthouse Keeper" });
+    await tabTo(page, option, { max: 5 });
+    await page.keyboard.press("Enter");
+    await expect(references(page)).toHaveCount(3);
+    const placed = references(page).last();
+
+    await tabTo(page, placed.getByRole("button", { name: "Open The Lighthouse Keeper" }), {
+      max: 60,
+    });
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/\/book\/[\w-]+$/);
+    await tabTo(page, page.getByRole("button", { name: "Book Settings" }), {
+      max: 80,
+      backwards: true,
+    });
+    await page.keyboard.press("Enter");
+    const settings = page.getByRole("dialog", { name: "Book Settings" });
+    await tabTo(page, settings.getByRole("button", { name: "Danger Zone" }));
+    await page.keyboard.press("Enter");
+    await tabTo(page, settings.getByRole("button", { name: "Delete Book" }));
+    await page.keyboard.press("Enter");
+    await tabTo(page, settings.getByRole("button", { name: "Yes, delete book" }), {
+      backwards: true,
+    });
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("heading", { name: "My Books", level: 1 })).toBeVisible();
+
+    // The card stays where it was, with its stored label, and cannot open.
+    await page.goto(mapUrl);
+    await expectCanvasReady(page);
+    await expect(references(page)).toHaveCount(3);
+    const missing = references(page).last();
+    await expect(missing).toContainText("The Lighthouse Keeper");
+    await expect(missing).toContainText("This item no longer exists");
+    await expect(
+      missing.getByRole("button", { name: "Open The Lighthouse Keeper" })
+    ).toBeDisabled();
+    await capture(page, "canvas-reference-book-card-missing", { around: [missing] });
+  });
+
   test("Escape on the reference picker after an armed Canvas Reference places nothing", async ({
     page,
   }) => {

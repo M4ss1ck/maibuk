@@ -1821,6 +1821,7 @@ export const ROWS: MatrixRow[] = [
     edges: [
       "Empty Notes tab",
       'Missing Canvas Reference after Note deleted shows "This item no longer exists"',
+      "Missing Canvas Reference after its Book is deleted keeps the card and disables Open",
       "Escape on the picker after an armed Canvas Reference places nothing",
       "Click a spot, then choose a Note: the click is pointer input, not a spec; the Vitest placement-capture-overlay suite owns it",
     ],
