@@ -42,9 +42,15 @@ function mount(accepts: boolean) {
   );
   registerPluginFileGrantStore({ drop } as unknown as PluginFileGrantStore);
   const element = document.createElement("div");
-  element.getBoundingClientRect = () =>
-    ({ left: 100, top: 100, right: 300, bottom: 300 }) as DOMRect;
-  document.body.append(element);
+  const inside = document.createElement("span");
+  element.append(inside);
+  const overlay = document.createElement("div");
+  document.body.append(element, overlay);
+  // Stands in for layout: the page covers 100-300, a dialog sits over 250-300.
+  document.elementFromPoint = (x: number, y: number) => {
+    if (x >= 250 && x <= 300 && y >= 250 && y <= 300) return overlay;
+    return x >= 100 && x <= 300 && y >= 100 && y <= 300 ? inside : document.body;
+  };
   const hook = renderHook(() => usePluginFileDrop(lifecycle, PLUGIN, PAGE, element));
   return { ...hook, broker, drop };
 }
@@ -85,6 +91,17 @@ describe("usePluginFileDrop() on desktop", () => {
     await waitFor(() => expect(webview.handler).not.toBeNull());
 
     osDrop(20, 20, ["/home/a/Dune.epub"]);
+
+    await Promise.resolve();
+    expect(drop).not.toHaveBeenCalled();
+    expect(broker.emit).not.toHaveBeenCalled();
+  });
+
+  it("grants nothing for a drop on a dialog over the page", async () => {
+    const { broker, drop } = mount(true);
+    await waitFor(() => expect(webview.handler).not.toBeNull());
+
+    osDrop(270, 270, ["/home/a/Dune.epub"]);
 
     await Promise.resolve();
     expect(drop).not.toHaveBeenCalled();

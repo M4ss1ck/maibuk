@@ -48,17 +48,14 @@ export function usePluginFileDrop(
             const broker = lifecycle?.runtime(pluginId)?.broker;
             const store = getPluginFileGrantStore();
             if (!broker?.accepts("files.dropped") || !store) return;
-            const bounds = element.getBoundingClientRect();
             const dpr = window.devicePixelRatio || 1;
-            const point = { x: payload.position.x / dpr, y: payload.position.y / dpr };
-            if (
-              point.x < bounds.left ||
-              point.x > bounds.right ||
-              point.y < bounds.top ||
-              point.y > bounds.bottom
-            ) {
-              return;
-            }
+            // The topmost element at the point must sit inside the page, so a
+            // dialog or menu portaled over it keeps the drop from the Plugin.
+            const hit = document.elementFromPoint(
+              payload.position.x / dpr,
+              payload.position.y / dpr
+            );
+            if (hit === null || !element.contains(hit)) return;
             void deliverPluginFileDrop(
               { pluginId, page: pageId, broker, store },
               payload.paths.map((path) => ({ path }))
