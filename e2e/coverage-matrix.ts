@@ -1817,15 +1817,16 @@ export const ROWS: MatrixRow[] = [
     id: "canvas-note-ref",
     area: "canvas",
     workflow:
-      "N arms Add reference, Enter opens the picker on the Notes tab; type + arrows + Enter adds a Canvas Reference; Open by Tab opens the Note; Delete removes it; the picker's Books tab adds a Canvas Reference to a Book the same way, which connects to the seeded Note Reference and moves by ArrowRight; Open on a Book card returns via Back to <Canvas>; asserts: tab list, Search listbox, Book card title and author; persists: yes",
+      "N arms Add reference, Enter opens the picker on the Notes tab; type + arrows + Enter adds a Canvas Reference; Open by Tab opens the Note; Delete removes it; the picker's Books tab adds a Canvas Reference to a Book the same way, which connects to the seeded Note Reference and moves by ArrowRight; Open on a Book card returns via Back to <Canvas>; its Chapters tab adds a Canvas Reference to the seeded Book's second Chapter the same way, whose card shows the Chapter title and the Book title, connects, moves, and opens the Chapter at its Book with that Chapter current; asserts: tab list, Search listbox, Book card title and author, Chapter card title and Book title, the opened Chapter selected in the Book editor; persists: yes",
     edges: [
       "Empty Notes tab",
       'Missing Canvas Reference after Note deleted shows "This item no longer exists"',
       "Missing Canvas Reference after its Book is deleted keeps the card and disables Open",
+      "Missing Canvas Reference after its Chapter is deleted keeps the stored label and disables Open",
       "Escape on the picker after an armed Canvas Reference places nothing",
       "Click a spot, then choose a Note: the click is pointer input, not a spec; the Vitest placement-capture-overlay suite owns it",
     ],
-    terms: ["Canvas Reference", "Missing Canvas Reference", "Note", "Book", "Canvas"],
+    terms: ["Canvas Reference", "Missing Canvas Reference", "Note", "Book", "Chapter", "Canvas"],
     shortcuts: ["canvas.addReference"],
     routes: ["/canvas/:canvasId", "/notes/:noteId", "/book/:bookId"],
     fixture: "canvasWithNodes",
