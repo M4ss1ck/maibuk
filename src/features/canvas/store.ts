@@ -860,7 +860,9 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     get().commit({
       ...state.doc,
       nodes: state.doc.nodes.map((candidate) =>
-        candidate.id === id ? { ...node, ...patch, label } : candidate
+        candidate.id === id
+          ? { ...node, ...patch, ...(patch.label === undefined ? {} : { label }) }
+          : candidate
       ),
     });
   },

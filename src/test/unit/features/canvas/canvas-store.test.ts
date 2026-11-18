@@ -1159,4 +1159,23 @@ describe("canvas images (#813)", () => {
     expect(useCanvasStore.getState().revision).toBe(revision);
     expect(imageAt("img")).toMatchObject({ width: 320, height: 200 });
   });
+
+  it("updateReferenceNode keeps the stored label when only the target changes", () => {
+    const store = useCanvasStore.getState();
+    store.addNode({
+      id: "ref",
+      kind: "reference",
+      source: "note",
+      targetId: "note-1",
+      label: "Chapter notes",
+      position: { x: 0, y: 0 },
+    });
+
+    store.updateReferenceNode("ref", { targetId: "note-2" });
+
+    expect(useCanvasStore.getState().doc.nodes.find((n) => n.id === "ref")).toMatchObject({
+      targetId: "note-2",
+      label: "Chapter notes",
+    });
+  });
 });
