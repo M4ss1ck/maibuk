@@ -682,6 +682,15 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
     post({ kind: "result", id, ok: true, result: outcome });
   }
 
+  // Whether an event would reach the Plugin now: running, subscribed, and
+  // holding the event's permission. `emit` and the host's drop routing share it.
+  function accepts(event: string): boolean {
+    if (stopped || !subscriptions.has(event)) return false;
+    const row = events.get(event);
+    if (!row) return false;
+    return row.permission === null || holds(row.permission);
+  }
+
   function handleSubscription(kind: "subscribe" | "unsubscribe", id: number, event: string) {
     const row = events.get(event);
     if (!row) {
@@ -890,20 +899,12 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
       } satisfies HostToPluginMessage);
     },
     emit(event, payload) {
-      if (stopped || !subscriptions.has(event)) return false;
       const row = events.get(event);
-      if (!row) return false;
-      const checked = row.payload.parse(payload);
-      if (row.permission !== null && !holds(row.permission)) return false;
-      post({ kind: "event", event, payload: checked });
+      if (!row || !accepts(event)) return false;
+      post({ kind: "event", event, payload: row.payload.parse(payload) });
       return true;
     },
-    accepts(event) {
-      if (stopped || !subscriptions.has(event)) return false;
-      const row = events.get(event);
-      if (!row) return false;
-      return row.permission === null || holds(row.permission);
-    },
+    accepts,
     stop,
     hasOpenWork,
     get stopped() {

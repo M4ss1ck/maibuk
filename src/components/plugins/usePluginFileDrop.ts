@@ -47,8 +47,8 @@ export function usePluginFileDrop(
             if (payload.type !== "drop") return;
             const broker = lifecycle?.runtime(pluginId)?.broker;
             const store = getPluginFileGrantStore();
+            if (!broker?.accepts("files.dropped") || !store) return;
             const bounds = element.getBoundingClientRect();
-            if (!broker?.accepts("files.dropped") || !store || !bounds) return;
             const dpr = window.devicePixelRatio || 1;
             const point = { x: payload.position.x / dpr, y: payload.position.y / dpr };
             if (
