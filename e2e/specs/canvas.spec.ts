@@ -8,6 +8,7 @@ import {
 import { capture } from "../support/capture";
 import { writeClipboard } from "../support/clipboard";
 import { dropFiles } from "../support/file-drop";
+import { hitAtOwnCenter } from "../support/layout";
 import { expect, test } from "../support/test";
 
 // The Canvas editor (issue #210): tools, Text Nodes, Canvas References, Canvas
@@ -55,6 +56,14 @@ async function openCanvas(page: Page, name: RegExp, { ready = true } = {}) {
 const openMap = (page: Page) => openCanvas(page, /Map/);
 
 /** Tabs to a node and selects it with Space (React Flow's keyboard select). */
+/** A Book card is taller than the default viewport leaves below it, so the shot grows the page first. */
+async function captureTallCard(page: Page, name: string, card: Locator) {
+  const viewport = page.viewportSize();
+  if (viewport) await page.setViewportSize({ width: viewport.width, height: 1200 });
+  await capture(page, name, { around: [card] });
+  if (viewport) await page.setViewportSize(viewport);
+}
+
 async function selectNode(page: Page, node: Locator) {
   await tabTo(page, node, { max: 60 });
   await page.keyboard.press(" ");
@@ -734,11 +743,24 @@ test.describe("Canvas Reference @wf:canvas-note-ref @sc:canvas.addReference @sc:
     // The placed card draws the Library Book card's face: title and author.
     const placed = references(page).last();
     await expect(placed).toBeVisible();
-    await capture(page, "canvas-reference-book-card", { around: [placed] });
+    await captureTallCard(page, "canvas-reference-book-card", placed);
     await expect(placed).toContainText("The Lighthouse Keeper");
     await expect(placed).toContainText("Ada Marsh");
     const placedId = ((await placed.getAttribute("data-testid")) ?? "").replace("rf__node-", "");
     expect(placedId).not.toBe("");
+
+    // The Connection ports sit just outside the card's edge; nothing may clip them.
+    // A tall viewport keeps the Book card's bottom port on screen, where hit-testing works.
+    const viewport = page.viewportSize();
+    if (viewport) await page.setViewportSize({ width: viewport.width, height: 1200 });
+    for (const card of [placed, flowNode(page, "ref-log")]) {
+      const ports = card.locator(".react-flow__handle");
+      await expect(ports.first()).toBeAttached();
+      const hits = await hitAtOwnCenter(ports);
+      expect(hits.length).toBeGreaterThan(0);
+      expect(hits).toEqual(hits.map(() => true));
+    }
+    if (viewport) await page.setViewportSize(viewport);
 
     // Connect the placed card to the seeded Note Reference.
     await selectNode(page, placed);
@@ -840,7 +862,7 @@ test.describe("Canvas Reference @wf:canvas-note-ref @sc:canvas.addReference @sc:
     await expect(
       missing.getByRole("button", { name: "Open The Lighthouse Keeper" })
     ).toBeDisabled();
-    await capture(page, "canvas-reference-book-card-missing", { around: [missing] });
+    await captureTallCard(page, "canvas-reference-book-card-missing", missing);
   });
 
   test("Escape on the reference picker after an armed Canvas Reference places nothing", async ({

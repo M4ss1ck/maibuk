@@ -67,7 +67,12 @@ export function BookCardFace({ book, statusControl, fill = false }: BookCardFace
         }`}
       >
         {book.coverImagePath ? (
-          <img src={book.coverImagePath} alt={book.title} className="w-full h-full object-cover" />
+          <img
+            src={book.coverImagePath}
+            alt={book.title}
+            draggable={false}
+            className="w-full h-full object-cover"
+          />
         ) : (
           <MaibukLogo className="w-16 h-16 text-primary opacity-85" />
         )}

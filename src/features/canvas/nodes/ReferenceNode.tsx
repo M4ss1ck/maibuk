@@ -131,7 +131,7 @@ function CanvasReferenceCard({
       ref={nodeMenu.anchorRef}
       {...nodeMenu.itemProps}
       style={{ width: size.width, height: size.height }}
-      className={`group relative flex flex-col overflow-hidden rounded-xl border bg-card text-left text-foreground shadow-sm pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] ${
+      className={`group relative flex flex-col rounded-xl border bg-card text-left text-foreground shadow-sm pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] ${
         selected ? "border-primary ring-2 ring-primary/20" : "border-border"
       }`}
     >
@@ -139,7 +139,7 @@ function CanvasReferenceCard({
       {nodeMenu.menu}
 
       <div
-        className={`flex min-h-0 flex-1 flex-col overflow-hidden ${isBookCard ? "" : "p-4 pb-0"}`}
+        className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-xl ${isBookCard ? "" : "p-4 pb-0"}`}
       >
         {!source ? (
           <ReferenceStateBody title={storedLabel} detail={t("canvas.referenceUnavailable")} />
