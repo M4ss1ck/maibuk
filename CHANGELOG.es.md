@@ -5,6 +5,18 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 y este proyecto sigue el [Versionado Semántico](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.1] - 2026-11-18
+
+### Added
+- Los documentos se pueden abrir soltando archivos sobre el Estante o un Documento abierto
+- Los complementos pueden recibir archivos soltados en su página mediante el evento `files.dropped` en web y escritorio
+- Los permisos de archivo para archivos soltados se limitan a las rutas de la última operación de soltar del sistema operativo
+
+### Fixed
+- Una posición de lectura guardada permanece con su Documento al cambiar entre Documentos
+- Los bordes de la tabla permanecen visibles en las filas al pasar el cursor
+- Las operaciones de soltar archivos del escritorio en diálogos sobre páginas de complementos ya no llegan al complemento
+
 ## [0.23.0] - 2026-11-16
 
 ### Added

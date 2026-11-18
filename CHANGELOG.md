@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.1] - 2026-11-18
+
+### Added
+- Documents can be opened by dropping files onto the Shelf or an open Document
+- Plugins can receive files dropped on their page through the `files.dropped` event on web and desktop
+- File Grants for dropped files are scoped to paths from the most recent OS drop
+
+### Fixed
+- A saved Reading Position stays with its Document when switching Documents
+- Table borders remain visible on hovered rows
+- Desktop file drops on dialogs over Plugin pages no longer reach the Plugin
+
 ## [0.23.0] - 2026-11-16
 
 ### Added
