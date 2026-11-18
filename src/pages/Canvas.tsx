@@ -31,14 +31,12 @@ import { maibukArt } from "@/assets/ascii/maibuk";
 import { toast } from "@/components/ui";
 import { Button } from "@/components/ui/Button";
 import { CommandPaletteButton } from "@/components/command-palette/CommandPaletteButton";
-import { Input } from "@/components/ui/Input";
-import { Modal } from "@/components/ui/Modal";
-import { ListBox, ListBoxItem } from "react-aria-components/ListBox";
 import { SyncStatusButton } from "@/components/sync/SyncStatusButton";
 import { DictationBar } from "@/components/dictation";
 import { useBookStore } from "@/features/books/store";
 import { CanvasToolPanel } from "@/features/canvas/CanvasToolPanel";
 import { CanvasImageDialog } from "@/features/canvas/CanvasImageDialog";
+import { CanvasReferencePicker } from "@/features/canvas/CanvasReferencePicker";
 import { routeCanvasPaste } from "@/features/canvas/canvasPaste";
 import { droppedImageNodes, imageMimeFromPath } from "@/features/canvas/canvasDrop";
 import { ConnectToDialog } from "@/features/canvas/ConnectToDialog";
@@ -53,10 +51,14 @@ import { DrawingCaptureOverlay } from "@/features/canvas/drawing/DrawingCaptureO
 import { PlacementCaptureOverlay, freeSpotNear } from "@/features/canvas/PlacementCaptureOverlay";
 import { nodeTypes } from "@/features/canvas/nodes";
 import { fromConnection, toFlowEdges, toFlowNodes } from "@/features/canvas/reactFlowAdapter";
+import {
+  logCanvasReferencePlaced,
+  useResolveCanvasReferences,
+  type CanvasReferenceRow,
+} from "@/features/canvas/references";
 import { canvasWriteQueue, useCanvasStore } from "@/features/canvas/store";
 import type { CanvasDoc } from "@/features/canvas/types";
 import { useEditSession } from "@/features/edit-session";
-import { useNoteStore } from "@/features/notes";
 import { useThemeStore } from "@/features/theme";
 import { CANVAS_TEXT_NODE_DEFAULT_WIDTH } from "@/constants";
 import { isPlacementTool, type CanvasPosition } from "@/features/canvas/types";
@@ -308,17 +310,18 @@ function CanvasEditor() {
   const undo = useCanvasStore((state) => state.undo);
   const redo = useCanvasStore((state) => state.redo);
   const renameCanvas = useCanvasStore((state) => state.renameCanvas);
-  const notes = useNoteStore((state) => state.notes);
-  const loadNotes = useNoteStore((state) => state.loadNotes);
   const loadBooks = useBookStore((state) => state.loadBooks);
   const theme = useThemeStore((state) => state.theme);
-  const [notePickerOpen, setNotePickerOpen] = useState(false);
-  const [noteQuery, setNoteQuery] = useState("");
-  // Where the Note Reference lands once the picker opened for that spot has a choice.
-  const notePlacementRef = useRef<CanvasPosition | null>(null);
+  const [referencePickerOpen, setReferencePickerOpen] = useState(false);
+  // Where the Canvas Reference lands once the picker opened for that spot has a choice.
+  const referencePlacementRef = useRef<CanvasPosition | null>(null);
   const [titleDraft, setTitleDraft] = useState("");
   const [edgeLabelDraft, setEdgeLabelDraft] = useState("");
   const [connecting, setConnecting] = useState(false);
+
+  // What each Canvas Reference shows comes from its source, asked on open and
+  // again whenever the source says it changed: the answers stay in memory.
+  useResolveCanvasReferences(doc.nodes);
 
   // The Edit Session owns doc saving: content commits flow in through the
   // revision below and are saved once the author pauses; leaving the page or a
@@ -374,7 +377,6 @@ function CanvasEditor() {
 
   useEffect(() => {
     void loadCanvas(canvasId);
-    void loadNotes();
     void loadBooks();
     return () => {
       // Leaving always Flushes: unsaved content lands before the editor
@@ -389,7 +391,7 @@ function CanvasEditor() {
         closeCanvas();
       }
     };
-  }, [canvasId, closeCanvas, loadBooks, loadCanvas, loadNotes, sessionRef]);
+  }, [canvasId, closeCanvas, loadBooks, loadCanvas, sessionRef]);
 
   useEffect(() => {
     setTitleDraft(current?.title ?? "");
@@ -649,18 +651,17 @@ function CanvasEditor() {
       return;
     }
     // Every way out of the picker ends in Select, so the tool can end here.
-    notePlacementRef.current = position;
+    referencePlacementRef.current = position;
     setToolMode("select");
-    setNotePickerOpen(true);
+    setReferencePickerOpen(true);
   };
 
   const placeAtViewportCenter = () =>
     handlePlace(freeSpotNear(viewportCenter(), useCanvasStore.getState().doc.nodes));
 
-  const closeNotePicker = useCallback(() => {
-    notePlacementRef.current = null;
-    setNotePickerOpen(false);
-    setNoteQuery("");
+  const closeReferencePicker = useCallback(() => {
+    referencePlacementRef.current = null;
+    setReferencePickerOpen(false);
   }, []);
 
   const handleSurfaceDoubleClick = (event: ReactMouseEvent) => {
@@ -675,22 +676,21 @@ function CanvasEditor() {
   }, [editorReadOnly, setToolMode, toolMode]);
 
   const handleAddReference = useCallback(
-    (noteId: string) => {
-      const note = notes.find((candidate) => candidate.id === noteId);
-      if (!note) return;
+    (sourceId: string, row: CanvasReferenceRow) => {
       const id = crypto.randomUUID();
       addNode({
         id,
         kind: "reference",
-        source: "note",
-        targetId: note.id,
-        label: note.title,
-        position: notePlacementRef.current ?? viewportCenter(),
+        source: sourceId,
+        targetId: row.id,
+        label: row.title,
+        position: referencePlacementRef.current ?? viewportCenter(),
       });
       selectNode(id);
-      closeNotePicker();
+      logCanvasReferencePlaced(sourceId);
+      closeReferencePicker();
     },
-    [addNode, closeNotePicker, notes, selectNode, viewportCenter]
+    [addNode, closeReferencePicker, selectNode, viewportCenter]
   );
 
   const handleConnect = useCallback(
@@ -891,10 +891,6 @@ function CanvasEditor() {
           ? t("canvas.unsaved")
           : t("canvas.saved");
 
-  const filteredNotes = notes
-    .filter((note) => note.title.toLocaleLowerCase().includes(noteQuery.trim().toLocaleLowerCase()))
-    .sort((a, b) => a.order - b.order);
-
   return (
     <div className="flex h-full flex-col bg-background text-foreground">
       <h1 data-route-heading className="sr-only">
@@ -1054,35 +1050,12 @@ function CanvasEditor() {
 
       <CanvasImageDialog />
 
-      <Modal isOpen={notePickerOpen} onClose={closeNotePicker} title={t("canvas.addReference")}>
-        <Input
-          autoFocus
-          value={noteQuery}
-          onChange={(event) => setNoteQuery(event.target.value)}
-          placeholder={t("canvas.searchNotesPlaceholder")}
-        />
-        {filteredNotes.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">{t("canvas.noNotes")}</p>
-        ) : (
-          <ListBox
-            aria-label={t("canvas.addReference")}
-            items={filteredNotes}
-            selectionMode="none"
-            onAction={(key) => handleAddReference(String(key))}
-            className="mt-4 max-h-80 overflow-auto outline-none"
-          >
-            {(note) => (
-              <ListBoxItem
-                id={note.id}
-                textValue={note.title || t("notes.untitled")}
-                className="cursor-default rounded-lg px-3 py-2 text-sm outline-none data-focused:bg-muted"
-              >
-                {note.title || t("notes.untitled")}
-              </ListBoxItem>
-            )}
-          </ListBox>
-        )}
-      </Modal>
+      <CanvasReferencePicker
+        isOpen={referencePickerOpen}
+        canvasId={canvasId}
+        onClose={closeReferencePicker}
+        onChoose={handleAddReference}
+      />
 
       <DictationBar />
     </div>

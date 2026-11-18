@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import userEvent from "@testing-library/user-event";
 import { toast } from "@/components/ui";
 import { CanvasImageError } from "@/features/canvas/encodeCanvasImage";
+import { noteReferenceSource } from "@/features/canvas/noteReferenceSource";
 import { useBoundShortcutStore } from "@/lib/bound-shortcuts";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -201,9 +202,8 @@ describe("Canvas page", () => {
     readyState();
   });
 
-  it("loads books with notes so linked note references can resolve book titles", () => {
+  it("loads the books the canvas page shares with the Library", () => {
     renderCanvas();
-    expect(mocks.actions.loadNotes).toHaveBeenCalledTimes(1);
     expect(mocks.actions.loadBooks).toHaveBeenCalledTimes(1);
   });
 
@@ -531,9 +531,14 @@ describe("Canvas page", () => {
       expect(mocks.actions.setToolMode).toHaveBeenCalledWith("select");
     });
 
-    it("opens the note picker on Enter and places the chosen note there", async () => {
+    it("opens the reference picker on Enter and places the chosen note there", async () => {
       const user = userEvent.setup();
-      mocks.notes = [{ id: "note-1", title: "Chapter notes" }];
+      vi.spyOn(noteReferenceSource, "list").mockResolvedValue([
+        { id: "note-1", title: "Chapter notes" },
+      ]);
+      vi.spyOn(noteReferenceSource, "resolve").mockResolvedValue({});
+      vi.spyOn(noteReferenceSource, "subscribe").mockReturnValue(() => {});
+      const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
       armTool("reference");
       renderCanvas();
 
@@ -542,7 +547,9 @@ describe("Canvas page", () => {
       const dialog = await screen.findByRole("dialog", { name: "canvas.addReference" });
       expect(mocks.actions.setToolMode).toHaveBeenCalledWith("select");
 
-      await user.click(within(dialog).getByRole("option", { name: "Chapter notes" }));
+      const option = await within(dialog).findByRole("option", { name: "Chapter notes" });
+      act(() => option.focus());
+      await user.keyboard("{Enter}");
 
       expect(mocks.actions.addNode).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -557,11 +564,20 @@ describe("Canvas page", () => {
       const added = mocks.actions.addNode.mock.calls[0][0];
       expect(mocks.actions.selectNode).toHaveBeenCalledWith(added.id);
       expect(mocks.actions.placeTextNode).not.toHaveBeenCalled();
+      expect(debug).toHaveBeenCalledWith("[canvas] reference placed", {
+        source: "note",
+        result: "placed",
+      });
+      vi.restoreAllMocks();
     });
 
-    it("places nothing when the note picker is cancelled with Escape", async () => {
+    it("places nothing when the reference picker is cancelled with Escape", async () => {
       const user = userEvent.setup();
-      mocks.notes = [{ id: "note-1", title: "Chapter notes" }];
+      vi.spyOn(noteReferenceSource, "list").mockResolvedValue([
+        { id: "note-1", title: "Chapter notes" },
+      ]);
+      vi.spyOn(noteReferenceSource, "resolve").mockResolvedValue({});
+      vi.spyOn(noteReferenceSource, "subscribe").mockReturnValue(() => {});
       armTool("reference");
       renderCanvas();
 
@@ -576,6 +592,8 @@ describe("Canvas page", () => {
       );
       expect(mocks.actions.addNode).not.toHaveBeenCalled();
       expect(mocks.actions.placeTextNode).not.toHaveBeenCalled();
+      expect(mocks.actions.setToolMode).toHaveBeenCalledWith("select");
+      vi.restoreAllMocks();
     });
   });
 
