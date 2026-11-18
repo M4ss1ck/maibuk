@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useParams } from "react-router-dom";
 import { PluginFrameSurface } from "@/components/plugins/PluginFrame";
 import { PluginStoppedPanel } from "@/components/plugins/PluginStoppedPanel";
+import { usePluginFileDrop } from "@/components/plugins/usePluginFileDrop";
 import { pluginPageCommandBindings, pluginPageCommands } from "@/features/plugins/commands";
 import { getPluginPage, getPluginSidebarEntries } from "@/features/plugins/contributions-registry";
 import { useCommandRegistryRevision } from "@/hooks/useCommandRegistryRevision";
@@ -48,6 +49,10 @@ export function PluginPage() {
   // until the Plugin is ready or stops again.
   const [retrying, setRetrying] = useState(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const [pageElement, setPageElement] = useState<HTMLDivElement | null>(null);
+  // A file dropped on this page goes to this Plugin, and while a file drag is
+  // over it an embedded Frame must not swallow the drop (#828).
+  const acceptsFileDrop = usePluginFileDrop(lifecycle, pluginId, pageId, pageElement);
   const tryAgain = () => {
     if (!lifecycle) return;
     setRetrying(true);
@@ -115,11 +120,16 @@ export function PluginPage() {
   const hideTitle = page?.hideTitle === true && !showPanel;
   return (
     <div
-      className={
+      ref={setPageElement}
+      className={[
         isFrame
-          ? `flex h-full min-h-0 flex-col overflow-hidden px-4 sm:px-6 ${hideTitle ? "py-4" : "py-6"}`
-          : `flex h-full min-h-0 flex-col overflow-y-auto px-4 sm:px-6 ${hideTitle ? "py-4" : "py-6"}`
-      }
+          ? "flex h-full min-h-0 flex-col overflow-hidden px-4 sm:px-6"
+          : "flex h-full min-h-0 flex-col overflow-y-auto px-4 sm:px-6",
+        hideTitle ? "py-4" : "py-6",
+        acceptsFileDrop ? "[&_iframe]:pointer-events-none" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
     >
       <h1
         ref={headingRef}
