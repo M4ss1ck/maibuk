@@ -1,11 +1,24 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { mockNavigateFn, mockUpdateChapter, mockLocationState } = vi.hoisted(() => ({
+const {
+  mockNavigateFn,
+  mockUpdateChapter,
+  mockLocationState,
+  mockBookLastChapterId,
+  mockChapterStore,
+} = vi.hoisted(() => ({
   mockNavigateFn: vi.fn(),
   mockUpdateChapter: vi.fn().mockResolvedValue(undefined),
   mockLocationState: { value: null as unknown },
+  mockBookLastChapterId: { value: null as string | null },
+  // Stands in for the real Chapter store: switching Chapter re-renders its
+  // readers, so a test sees the Chapter the page makes current.
+  mockChapterStore: {
+    state: null as Record<string, any> | null,
+    listeners: new Set<() => void>(),
+  },
 }));
 
 vi.mock("react-i18next", () => ({
@@ -41,6 +54,7 @@ vi.mock("../../../features/books/store", () => ({
       language: "en",
       wordCount: 0,
       status: "draft",
+      lastChapterId: mockBookLastChapterId.value,
       createdAt: new Date("2026-01-01"),
       updatedAt: new Date("2026-01-01"),
     },
@@ -52,27 +66,49 @@ vi.mock("../../../features/books/store", () => ({
   }),
 }));
 
-vi.mock("../../../features/chapters/store", () => ({
-  useChapterStore: () => ({
+vi.mock("../../../features/chapters/store", async () => {
+  const { useSyncExternalStore } = await import("react");
+  const firstChapter = {
+    id: "c1",
+    title: "Ch1",
+    content: "<p>x</p>",
+    wordCount: 1,
+    order: 0,
+    chapterType: "chapter",
+  };
+  mockChapterStore.state = {
     chapters: [],
     currentBookId: "book-1",
     isLoading: false,
-    currentChapter: {
-      id: "c1",
-      title: "Ch1",
-      content: "<p>x</p>",
-      wordCount: 1,
-      order: 0,
-      chapterType: "chapter",
-    },
+    currentChapter: firstChapter,
     loadChapters: vi.fn(),
     createChapter: vi.fn(),
     updateChapter: mockUpdateChapter,
     deleteChapter: vi.fn(),
     reorderChapters: vi.fn(),
-    setCurrentChapter: vi.fn(),
-  }),
-}));
+    setCurrentChapter: (chapter: Record<string, unknown> | null) => {
+      const state = mockChapterStore.state;
+      if (!state || state.currentChapter === chapter) return;
+      mockChapterStore.state = { ...state, currentChapter: chapter };
+      for (const notify of mockChapterStore.listeners) notify();
+    },
+  };
+  const getSnapshot = () => mockChapterStore.state;
+  const subscribe = (listener: () => void) => {
+    mockChapterStore.listeners.add(listener);
+    return () => {
+      mockChapterStore.listeners.delete(listener);
+    };
+  };
+  const useChapterStore = Object.assign(
+    (selector?: (state: Record<string, any>) => unknown) => {
+      const state = useSyncExternalStore(subscribe, getSnapshot);
+      return selector && state ? selector(state) : state;
+    },
+    { getState: getSnapshot }
+  );
+  return { useChapterStore };
+});
 
 vi.mock("../../../features/settings/store", async () => {
   const { DEFAULT_SHORTCUT_SETTINGS } =
@@ -181,6 +217,9 @@ import {
   TITLE_BAR_LABELS_MIN,
   titleBarShowsLabels,
 } from "@/pages/BookEditor";
+
+/** The Chapter store's starting state, restored between tests that seed it. */
+const defaultChapterStoreState = mockChapterStore.state;
 
 /** Sets the width every element reports, which the title bar reads on mount. */
 function renderAtWidth(width: number) {
@@ -292,6 +331,8 @@ describe("BookEditor return target", () => {
   afterEach(() => {
     mockLocationState.value = null;
     mockNavigateFn.mockClear();
+    mockBookLastChapterId.value = null;
+    mockChapterStore.state = defaultChapterStoreState;
     vi.restoreAllMocks();
   });
 
@@ -316,6 +357,63 @@ describe("BookEditor return target", () => {
 
     const { user, button } = await tabToBackButton("nav.backTo");
     // i18n is mocked to return keys, so the label is the key, not "Back to Plot".
+    expect(button).toHaveAccessibleName("nav.backTo");
+
+    await user.keyboard("{Enter}");
+    expect(mockNavigateFn).toHaveBeenCalledWith("/canvas/c1");
+  });
+
+  it("opens the Chapter a Canvas reference names, not the last edited or last one", async () => {
+    // The reference names c2: neither the Book's last-edited Chapter (c1) nor
+    // the last Chapter in the list (c3).
+    const chapters = [
+      {
+        id: "c1",
+        title: "Ch1",
+        content: "<p>one</p>",
+        order: 0,
+        chapterType: "chapter",
+        wordCount: 1,
+      },
+      {
+        id: "c2",
+        title: "Ch2",
+        content: "<p>two</p>",
+        order: 1,
+        chapterType: "chapter",
+        wordCount: 1,
+      },
+      {
+        id: "c3",
+        title: "Ch3",
+        content: "<p>three</p>",
+        order: 2,
+        chapterType: "chapter",
+        wordCount: 1,
+      },
+    ];
+    mockBookLastChapterId.value = "c1";
+    mockChapterStore.state = { ...defaultChapterStoreState, chapters, currentChapter: null };
+    mockLocationState.value = {
+      openChapterId: "c2",
+      returnTo: "/canvas/c1",
+      returnLabel: "Plot",
+    };
+    // The deep-link effect replaces the navigation state with null; model that,
+    // because the return target has to survive it.
+    mockNavigateFn.mockImplementation((_to: string, options?: { state?: unknown }) => {
+      if (options && "state" in options) mockLocationState.value = options.state;
+    });
+
+    renderAtWidth(TITLE_BAR_LABELS_MIN);
+
+    await waitFor(() => expect(mockChapterStore.state?.currentChapter?.id).toBe("c2"));
+    expect(mockChapterStore.state?.currentChapter?.title).toBe("Ch2");
+    expect(
+      within(screen.getByRole("banner", { name: "panes.bookTitleBar" })).getByText("Ch2")
+    ).toBeInTheDocument();
+
+    const { user, button } = await tabToBackButton("nav.backTo");
     expect(button).toHaveAccessibleName("nav.backTo");
 
     await user.keyboard("{Enter}");
