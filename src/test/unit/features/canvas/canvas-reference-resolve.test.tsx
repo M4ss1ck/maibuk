@@ -14,6 +14,7 @@ import {
 } from "@/features/canvas/references";
 import { useCanvasStore } from "@/features/canvas/store";
 import type { CanvasNode } from "@/features/canvas/types";
+import { type Note, useNoteStore } from "@/features/notes";
 
 /**
  * The answers a Canvas Reference gets live only in memory: one ask per source
@@ -30,6 +31,24 @@ const present = (label: string): CanvasReferenceResolution => ({
   title: label,
   value: { label },
 });
+
+function noteRow(overrides: Partial<Note> = {}): Note {
+  return {
+    id: "note-a",
+    title: "Alpha",
+    content: "",
+    language: "en",
+    tags: [],
+    pinned: false,
+    order: 0,
+    wordCount: 0,
+    collapsedHeadings: [],
+    createdAt: 1,
+    updatedAt: 1,
+    contentUpdatedAt: 1,
+    ...overrides,
+  };
+}
 
 function renderReferences(nodes: CanvasNode[]) {
   return renderHook(
@@ -225,5 +244,34 @@ describe("canvas reference logs", () => {
       source: "note",
       result: "placed",
     });
+  });
+});
+
+describe("the real Note source", () => {
+  it("turns a reference Missing when its Note is deleted, keeping the node", async () => {
+    useNoteStore.setState({
+      notes: [noteRow()],
+      loadNotes: vi.fn().mockResolvedValue(undefined),
+    });
+    const nodes = [referenceNode("node-1", "note", "note-a")];
+
+    const { result } = renderHook(
+      ({ current }: { current: CanvasNode[] }) => {
+        useResolveCanvasReferences(current);
+        return useCanvasReferenceResolution("note", "note-a");
+      },
+      { initialProps: { current: nodes } }
+    );
+
+    await waitFor(() =>
+      expect(result.current).toEqual(expect.objectContaining({ status: "present", title: "Alpha" }))
+    );
+
+    act(() => {
+      useNoteStore.setState({ notes: [] });
+    });
+
+    await waitFor(() => expect(result.current).toEqual({ status: "missing" }));
+    expect(nodes).toEqual([referenceNode("node-1", "note", "note-a")]);
   });
 });

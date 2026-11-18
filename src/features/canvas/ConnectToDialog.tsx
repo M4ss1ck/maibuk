@@ -4,9 +4,9 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { notePlainText } from "@/components/notes/notes-list-model";
+import { canvasReferenceKey, useCanvasReferenceResolutions } from "@/features/canvas/references";
 import { useCanvasStore } from "@/features/canvas/store";
 import type { CanvasNode } from "@/features/canvas/types";
-import { useNoteStore } from "@/features/notes";
 
 const LABEL_LENGTH = 60;
 
@@ -18,16 +18,14 @@ export function ConnectToDialog() {
   const edges = useCanvasStore((state) => state.doc.edges);
   const closeConnectPicker = useCanvasStore((state) => state.closeConnectPicker);
   const connectNodes = useCanvasStore((state) => state.connectNodes);
-  const notes = useNoteStore((state) => state.notes);
+  const resolutions = useCanvasReferenceResolutions((state) => state.resolutions);
   const [query, setQuery] = useState("");
 
   const labelOf = (node: CanvasNode) => {
     if (node.kind === "reference") {
-      const note =
-        node.source === "note"
-          ? notes.find((candidate) => candidate.id === node.targetId)
-          : undefined;
-      return note?.title || node.label || t("canvas.missingNote");
+      const resolution = resolutions[canvasReferenceKey(node.source, node.targetId)];
+      const title = resolution?.status === "present" ? resolution.title : "";
+      return title || node.label || t("canvas.referenceUntitled");
     }
     if (node.kind === "image") return node.alt || node.fileName || t("canvas.image");
     const text = notePlainText(node.html);
