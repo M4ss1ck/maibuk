@@ -89,7 +89,7 @@ vi.mock("react-i18next", () => ({
 }));
 
 const { LightweightNode } = await import("@/features/canvas/nodes/LightweightNode");
-const { NoteRefNode } = await import("@/features/canvas/nodes/NoteRefNode");
+const { ReferenceNode } = await import("@/features/canvas/nodes/ReferenceNode");
 
 describe("Canvas custom nodes", () => {
   beforeEach(() => {
@@ -207,7 +207,7 @@ describe("Canvas custom nodes", () => {
 
     it.each([
       "text",
-      "noteRef",
+      "reference",
     ])("positions the %s node Item Menu beside the visible node", async (kind) => {
       const { container } = render(
         kind === "text" ? (
@@ -217,20 +217,21 @@ describe("Canvas custom nodes", () => {
             >[0])}
           />
         ) : (
-          <NoteRefNode
+          <ReferenceNode
             {...({
               selected: false,
               data: {
                 ...textNodeData(),
                 node: {
                   id: "ref",
-                  kind: "noteRef",
-                  noteId: "n1",
+                  kind: "reference",
+                  source: "note",
+                  targetId: "n1",
                   label: "Linked",
                   position: { x: 0, y: 0 },
                 },
               },
-            } as unknown as Parameters<typeof NoteRefNode>[0])}
+            } as unknown as Parameters<typeof ReferenceNode>[0])}
           />
         ),
         { wrapper: MemoryRouter }
@@ -255,20 +256,21 @@ describe("Canvas custom nodes", () => {
               typeof LightweightNode
             >[0])}
           />
-          <NoteRefNode
+          <ReferenceNode
             {...({
               selected: false,
               data: {
                 ...textNodeData(),
                 node: {
                   id: "ref",
-                  kind: "noteRef",
-                  noteId: "n1",
+                  kind: "reference",
+                  source: "note",
+                  targetId: "n1",
                   label: "Linked",
                   position: { x: 0, y: 0 },
                 },
               },
-            } as unknown as Parameters<typeof NoteRefNode>[0])}
+            } as unknown as Parameters<typeof ReferenceNode>[0])}
           />
         </>,
         { wrapper: MemoryRouter }
@@ -301,20 +303,21 @@ describe("Canvas custom nodes", () => {
     it("opens on right click and deletes the node by keyboard", async () => {
       const user = userEvent.setup();
       render(
-        <NoteRefNode
+        <ReferenceNode
           {...({
             selected: false,
             data: {
               ...textNodeData(),
               node: {
                 id: "ref",
-                kind: "noteRef",
-                noteId: "n1",
+                kind: "reference",
+                source: "note",
+                targetId: "n1",
                 label: "Linked",
                 position: { x: 0, y: 0 },
               },
             },
-          } as unknown as Parameters<typeof NoteRefNode>[0])}
+          } as unknown as Parameters<typeof ReferenceNode>[0])}
         />,
         { wrapper: MemoryRouter }
       );
@@ -476,14 +479,15 @@ describe("Canvas custom nodes", () => {
   it("shows a cached label and disables opening when the note is missing", () => {
     render(
       <MemoryRouter>
-        <NoteRefNode
+        <ReferenceNode
           {...({
             selected: false,
             data: {
               node: {
                 id: "ref",
-                kind: "noteRef",
-                noteId: "missing",
+                kind: "reference",
+                source: "note",
+                targetId: "missing",
                 label: "Cached title",
                 position: { x: 0, y: 0 },
               },
@@ -496,13 +500,45 @@ describe("Canvas custom nodes", () => {
                 left: { connected: false, incoming: false, outgoing: false },
               },
             },
-          } as Parameters<typeof NoteRefNode>[0])}
+          } as Parameters<typeof ReferenceNode>[0])}
         />
       </MemoryRouter>
     );
     expect(screen.getByText("Cached title")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "canvas.openNote" })).toBeDisabled();
     expect(screen.getAllByTestId("handle")).toHaveLength(4);
+  });
+
+  it("renders a reference from another source with its stored label and Open disabled", () => {
+    render(
+      <MemoryRouter>
+        <ReferenceNode
+          {...({
+            selected: false,
+            data: {
+              node: {
+                id: "ref",
+                kind: "reference",
+                source: "plugin.maps.maps",
+                targetId: "map-1",
+                label: "Harbour map",
+                position: { x: 0, y: 0 },
+              },
+              canvasId: "canvas",
+              canvasTitle: "Map",
+              connectedSides: {
+                top: { connected: false, incoming: false, outgoing: false },
+                right: { connected: false, incoming: false, outgoing: false },
+                bottom: { connected: false, incoming: false, outgoing: false },
+                left: { connected: false, incoming: false, outgoing: false },
+              },
+            },
+          } as Parameters<typeof ReferenceNode>[0])}
+        />
+      </MemoryRouter>
+    );
+    expect(screen.getByText("Harbour map")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "canvas.openNote" })).toBeDisabled();
   });
 
   it("keeps only the start of a long note in its preview", () => {
@@ -517,11 +553,17 @@ describe("Canvas custom nodes", () => {
     ] as never;
     const { container } = render(
       <MemoryRouter>
-        <NoteRefNode
+        <ReferenceNode
           {...({
             selected: false,
             data: {
-              node: { id: "ref", kind: "noteRef", noteId: "long", position: { x: 0, y: 0 } },
+              node: {
+                id: "ref",
+                kind: "reference",
+                source: "note",
+                targetId: "long",
+                position: { x: 0, y: 0 },
+              },
               canvasId: "canvas",
               canvasTitle: "Map",
               connectedSides: {
@@ -531,7 +573,7 @@ describe("Canvas custom nodes", () => {
                 left: { connected: false, incoming: false, outgoing: false },
               },
             },
-          } as Parameters<typeof NoteRefNode>[0])}
+          } as Parameters<typeof ReferenceNode>[0])}
         />
       </MemoryRouter>
     );
@@ -545,16 +587,22 @@ describe("Canvas custom nodes", () => {
     ] as never;
     const { container } = render(
       <MemoryRouter>
-        <NoteRefNode
+        <ReferenceNode
           {...({
             selected: false,
             data: {
-              node: { id: "ref", kind: "noteRef", noteId: "note-1", position: { x: 0, y: 0 } },
+              node: {
+                id: "ref",
+                kind: "reference",
+                source: "note",
+                targetId: "note-1",
+                position: { x: 0, y: 0 },
+              },
               canvasId: "canvas",
               canvasTitle: "Map",
               connectedSides: {},
             },
-          } as Parameters<typeof NoteRefNode>[0])}
+          } as Parameters<typeof ReferenceNode>[0])}
         />
       </MemoryRouter>
     );
@@ -581,16 +629,22 @@ describe("Canvas custom nodes", () => {
     render(
       <MemoryRouter>
         <LocationProbe />
-        <NoteRefNode
+        <ReferenceNode
           {...({
             selected: false,
             data: {
-              node: { id: "ref", kind: "noteRef", noteId: "note-1", position: { x: 0, y: 0 } },
+              node: {
+                id: "ref",
+                kind: "reference",
+                source: "note",
+                targetId: "note-1",
+                position: { x: 0, y: 0 },
+              },
               canvasId: "canvas",
               canvasTitle: "Map",
               connectedSides: {},
             },
-          } as Parameters<typeof NoteRefNode>[0])}
+          } as Parameters<typeof ReferenceNode>[0])}
         />
       </MemoryRouter>
     );
@@ -616,21 +670,22 @@ describe("Canvas custom nodes", () => {
 
     render(
       <MemoryRouter>
-        <NoteRefNode
+        <ReferenceNode
           {...({
             selected: false,
             data: {
               node: {
                 id: "ref",
-                kind: "noteRef",
-                noteId: "note-1",
+                kind: "reference",
+                source: "note",
+                targetId: "note-1",
                 position: { x: 0, y: 0 },
               },
               canvasId: "canvas",
               canvasTitle: "Map",
               connectedSides: {},
             },
-          } as Parameters<typeof NoteRefNode>[0])}
+          } as Parameters<typeof ReferenceNode>[0])}
         />
       </MemoryRouter>
     );
@@ -653,21 +708,22 @@ describe("Canvas custom nodes", () => {
 
     render(
       <MemoryRouter>
-        <NoteRefNode
+        <ReferenceNode
           {...({
             selected: false,
             data: {
               node: {
                 id: "ref",
-                kind: "noteRef",
-                noteId: "note-1",
+                kind: "reference",
+                source: "note",
+                targetId: "note-1",
                 position: { x: 0, y: 0 },
               },
               canvasId: "canvas",
               canvasTitle: "Map",
               connectedSides: {},
             },
-          } as Parameters<typeof NoteRefNode>[0])}
+          } as Parameters<typeof ReferenceNode>[0])}
         />
       </MemoryRouter>
     );

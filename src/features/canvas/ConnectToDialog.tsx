@@ -22,8 +22,11 @@ export function ConnectToDialog() {
   const [query, setQuery] = useState("");
 
   const labelOf = (node: CanvasNode) => {
-    if (node.kind === "noteRef") {
-      const note = notes.find((candidate) => candidate.id === node.noteId);
+    if (node.kind === "reference") {
+      const note =
+        node.source === "note"
+          ? notes.find((candidate) => candidate.id === node.targetId)
+          : undefined;
       return note?.title || node.label || t("canvas.missingNote");
     }
     if (node.kind === "image") return node.alt || node.fileName || t("canvas.image");

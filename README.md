@@ -45,7 +45,7 @@ A cross-platform writing app for authors. Built with Tauri, React, and TypeScrip
 - Tags, pinning, search, and filtering
 - Internal Links and Backlinks
 - Ephemeral
-- Canvas with Text Nodes, Note References, Connections, and Drawings
+- Canvas with Text Nodes, Canvas References, Connections, and Drawings
 
 ### Covers, import, and export
 

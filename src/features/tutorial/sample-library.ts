@@ -391,9 +391,10 @@ export async function buildTutorialLibrary(
       },
       {
         id: "tutorial-node-characters",
-        kind: "noteRef",
+        kind: "reference",
+        source: "note",
         position: { x: 0, y: 260 },
-        noteId: SAMPLE_IDS.noteCharacters,
+        targetId: SAMPLE_IDS.noteCharacters,
         label: text("notes.characters.title"),
       },
     ],

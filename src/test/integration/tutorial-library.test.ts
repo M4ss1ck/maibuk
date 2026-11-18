@@ -149,7 +149,7 @@ describe("entering the Tutorial Library", () => {
     const doc = JSON.parse(canvas.doc);
     expect(canvas.id).toBe("tutorial-canvas-plot");
     expect(doc.nodes.map((node: { kind: string }) => node.kind).sort()).toEqual([
-      "noteRef",
+      "reference",
       "text",
       "text",
     ]);

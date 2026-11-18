@@ -176,6 +176,37 @@ describe("entity sync — canvas adapter", () => {
     expect(logs.some((l) => l.event === "push")).toBe(true);
   });
 
+  it("pushes a reference node intact at schema version 5", async () => {
+    const remote = new InMemoryRemote();
+    const { ctx } = makeCtx(remote);
+    const canvas = await createCanvasRow({ title: "Refs" }, "local");
+    const reference = {
+      id: "ref-1",
+      kind: "reference" as const,
+      source: "note",
+      targetId: "note-1",
+      label: "Note",
+      position: { x: 1, y: 2 },
+    };
+    await updateCanvasDocRow(
+      canvas.id,
+      { ...createDefaultCanvasDoc(), nodes: [reference] },
+      "local"
+    );
+
+    const batch = await syncEntityBatch(canvasAdapter, ctx);
+
+    expect(batch).toEqual({ actions: ["pushed"], cancelled: false });
+    const row = remote.getObject("canvas", canvas.id);
+    expect(row).toBeDefined();
+    const json = await decryptBufferToText(row!.data, PASS);
+    const obj = await parseJsonAsync<{
+      canvas: { doc: { schemaVersion: number; nodes: unknown[] } };
+    }>(json);
+    expect(obj.canvas.doc.schemaVersion).toBe(5);
+    expect(obj.canvas.doc.nodes).toEqual([reference]);
+  });
+
   it("pulls a new remote canvas and lands a pre-sync backup first", async () => {
     const remote = new InMemoryRemote();
     const { ctx } = makeCtx(remote);
@@ -678,7 +709,15 @@ describe("entity sync — deleting a note never edits canvases", () => {
       canvas.id,
       {
         ...createDefaultCanvasDoc(),
-        nodes: [{ id: "ref-1", kind: "noteRef", noteId: "doomed-note", position: { x: 1, y: 2 } }],
+        nodes: [
+          {
+            id: "ref-1",
+            kind: "reference",
+            source: "note",
+            targetId: "doomed-note",
+            position: { x: 1, y: 2 },
+          },
+        ],
       },
       "local"
     );
@@ -688,7 +727,15 @@ describe("entity sync — deleting a note never edits canvases", () => {
       canvas.id,
       {
         ...createDefaultCanvasDoc(),
-        nodes: [{ id: "ref-1", kind: "noteRef", noteId: note.id, position: { x: 1, y: 2 } }],
+        nodes: [
+          {
+            id: "ref-1",
+            kind: "reference",
+            source: "note",
+            targetId: note.id,
+            position: { x: 1, y: 2 },
+          },
+        ],
       },
       "local"
     );

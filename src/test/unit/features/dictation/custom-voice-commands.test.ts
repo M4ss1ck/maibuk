@@ -109,6 +109,14 @@ describe("normalizeCustomVoiceCommands()", () => {
     });
   });
 
+  it("carries Custom Voice Commands stored under canvas.addNoteRef to canvas.addReference", () => {
+    const custom = normalizeCustomVoiceCommands({
+      "canvas.addNoteRef": { en: ["add a reference here"] },
+    });
+    expect(custom["canvas.addReference"]).toEqual({ en: ["add a reference here"] });
+    expect(custom).not.toHaveProperty("canvas.addNoteRef");
+  });
+
   it("drops phrases under two words or empty after normalizing, and duplicates", () => {
     expect(
       normalizeCustomVoiceCommands({

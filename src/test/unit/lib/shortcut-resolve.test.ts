@@ -197,7 +197,7 @@ describe("normalizeShortcuts", () => {
   });
 
   it("carries a renamed Command id to its current id", () => {
-    // The rename table ships empty; a future entry is proven through it here.
+    // A synthetic entry proves the resolution path for any future rename.
     const renames = COMMAND_RENAMES as Record<string, string>;
     renames["global.oldGoto"] = "global.gotoProjects";
     try {
@@ -209,6 +209,15 @@ describe("normalizeShortcuts", () => {
     } finally {
       delete renames["global.oldGoto"];
     }
+  });
+
+  it("carries a Custom Shortcut stored under canvas.addNoteRef to canvas.addReference", () => {
+    const settings = normalizeShortcuts({
+      version: 1,
+      custom: { "canvas.addNoteRef": [["Shift+n"]] },
+    });
+    expect(settings.custom["canvas.addReference"]).toEqual([["Shift+n"]]);
+    expect(settings.custom).not.toHaveProperty("canvas.addNoteRef");
   });
 });
 

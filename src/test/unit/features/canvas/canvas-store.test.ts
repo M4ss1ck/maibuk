@@ -220,8 +220,9 @@ describe("useCanvasStore", () => {
     useCanvasStore.setState({ loadState: "ready" });
     useCanvasStore.getState().addNode({
       id: "ref",
-      kind: "noteRef",
-      noteId: "note",
+      kind: "reference",
+      source: "note",
+      targetId: "note",
       position: { x: 0, y: 0 },
     });
     const revision = useCanvasStore.getState().revision;
@@ -400,8 +401,9 @@ describe("useCanvasStore", () => {
     useCanvasStore.setState({ loadState: "ready" });
     useCanvasStore.getState().addNode({
       id: "ref",
-      kind: "noteRef",
-      noteId: "note",
+      kind: "reference",
+      source: "note",
+      targetId: "note",
       position: { x: 0, y: 0 },
     });
     useCanvasStore.getState().addNode({
@@ -931,7 +933,7 @@ describe("placing with armed tools (#696)", () => {
 
   it("refuses to arm or place while locked or read-only, and lock disarms", () => {
     const store = useCanvasStore.getState();
-    store.setToolMode("noteRef");
+    store.setToolMode("reference");
     store.toggleInteractivityLocked();
     expect(useCanvasStore.getState().toolMode).toBe("select");
 
@@ -942,7 +944,7 @@ describe("placing with armed tools (#696)", () => {
     store.toggleInteractivityLocked();
 
     useCanvasStore.setState({ editorReadOnly: true });
-    store.setToolMode("noteRef");
+    store.setToolMode("reference");
     expect(useCanvasStore.getState().toolMode).toBe("select");
     store.placeTextNode(placed());
     expect(ids()).toEqual(["existing"]);
@@ -1152,9 +1154,28 @@ describe("canvas images (#813)", () => {
 
     store.updateTextNode("img", { html: "<p>wrong</p>" });
     store.resizeTextNode("img", { position: { x: 5, y: 5 }, width: 360 });
-    store.updateNoteRefNode("img", { noteId: "wrong" });
+    store.updateReferenceNode("img", { targetId: "wrong" });
 
     expect(useCanvasStore.getState().revision).toBe(revision);
     expect(imageAt("img")).toMatchObject({ width: 320, height: 200 });
+  });
+
+  it("updateReferenceNode keeps the stored label when only the target changes", () => {
+    const store = useCanvasStore.getState();
+    store.addNode({
+      id: "ref",
+      kind: "reference",
+      source: "note",
+      targetId: "note-1",
+      label: "Chapter notes",
+      position: { x: 0, y: 0 },
+    });
+
+    store.updateReferenceNode("ref", { targetId: "note-2" });
+
+    expect(useCanvasStore.getState().doc.nodes.find((n) => n.id === "ref")).toMatchObject({
+      targetId: "note-2",
+      label: "Chapter notes",
+    });
   });
 });

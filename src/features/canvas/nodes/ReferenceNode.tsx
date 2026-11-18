@@ -15,9 +15,9 @@ import { CanvasNodeHandles } from "@/features/canvas/nodes/CanvasNodeHandles";
 import { useCanvasNodeMenu } from "@/features/canvas/nodes/CanvasNodeMenu";
 import { useCanvasStore } from "@/features/canvas/store";
 
-type NoteRefFlowNode = Node<CanvasFlowNodeData, "noteRef">;
+type ReferenceFlowNode = Node<CanvasFlowNodeData, "reference">;
 
-export function NoteRefNode({ data, selected }: NodeProps<NoteRefFlowNode>) {
+export function ReferenceNode({ data, selected }: NodeProps<ReferenceFlowNode>) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   // The Router keeps this Canvas up until the Notes page has rendered, which a
@@ -25,8 +25,8 @@ export function NoteRefNode({ data, selected }: NodeProps<NoteRefFlowNode>) {
   const [isOpening, setIsOpening] = useState(false);
   const node = data.node;
   const note = useNoteStore((state) =>
-    node.kind === "noteRef"
-      ? state.notes.find((candidate) => candidate.id === node.noteId)
+    node.kind === "reference" && node.source === "note"
+      ? state.notes.find((candidate) => candidate.id === node.targetId)
       : undefined
   );
   const books = useBookStore((state) => state.books);
@@ -36,7 +36,7 @@ export function NoteRefNode({ data, selected }: NodeProps<NoteRefFlowNode>) {
     isDisabled: editorReadOnly || interactivityLocked,
   });
 
-  if (node.kind !== "noteRef") return null;
+  if (node.kind !== "reference") return null;
 
   const title = note?.title || node.label || t("canvas.missingNote");
   const preview = note ? notePreviewText(note.content) : "";
@@ -79,7 +79,7 @@ export function NoteRefNode({ data, selected }: NodeProps<NoteRefFlowNode>) {
           onClick={() => {
             if (isOpening) return;
             setIsOpening(true);
-            navigate(`/notes/${node.noteId}`, {
+            navigate(`/notes/${node.targetId}`, {
               state: {
                 returnTo: `/canvas/${data.canvasId}`,
                 returnLabel: data.canvasTitle || t("canvas.untitled"),

@@ -26,9 +26,11 @@ export type LightweightCanvasNode = BaseCanvasNode & {
   width?: number;
 };
 
-export type NoteRefCanvasNode = BaseCanvasNode & {
-  kind: "noteRef";
-  noteId: string;
+export type ReferenceCanvasNode = BaseCanvasNode & {
+  kind: "reference";
+  /** Where the target lives; "note" is the only source today. An unknown source is kept as is. */
+  source: string;
+  targetId: string;
   label?: string;
 };
 
@@ -44,13 +46,13 @@ export type ImageCanvasNode = BaseCanvasNode & {
   fileName?: string;
 };
 
-export type CanvasNode = LightweightCanvasNode | NoteRefCanvasNode | ImageCanvasNode;
+export type CanvasNode = LightweightCanvasNode | ReferenceCanvasNode | ImageCanvasNode;
 
-export type CanvasToolMode = "select" | "pen" | "eraser" | "textNode" | "noteRef" | "image";
+export type CanvasToolMode = "select" | "pen" | "eraser" | "textNode" | "reference" | "image";
 
 /** The tools that place one item and then return to Select. */
 export function isPlacementTool(mode: CanvasToolMode): boolean {
-  return mode === "textNode" || mode === "noteRef" || mode === "image";
+  return mode === "textNode" || mode === "reference" || mode === "image";
 }
 
 /** A just-placed Text Node, and the revision it was placed at. */
@@ -130,7 +132,7 @@ export type ResizeTextNodeInput = {
   width: number;
 };
 
-export type UpdateNoteRefNodePatch = Partial<Pick<NoteRefCanvasNode, "noteId" | "label">>;
+export type UpdateReferenceNodePatch = Partial<Pick<ReferenceCanvasNode, "targetId" | "label">>;
 
 export type UpdateImageNodePatch = Partial<
   Pick<ImageCanvasNode, "src" | "width" | "height" | "alt" | "fileName" | "position">

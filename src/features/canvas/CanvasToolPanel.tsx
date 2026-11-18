@@ -136,11 +136,11 @@ export function CanvasToolPanel({
               <FilePlus2 className="size-4" aria-hidden="true" />
             </ToolbarButton>
           </Tooltip>
-          <Tooltip content={t("canvas.addNoteRef")} shortcut="canvas.addNoteRef">
+          <Tooltip content={t("canvas.addReference")} shortcut="canvas.addReference">
             <ToolbarButton
-              active={toolMode === "noteRef"}
-              onClick={handlePlacementToolClick("noteRef")}
-              aria-label={t("canvas.addNoteRef")}
+              active={toolMode === "reference"}
+              onClick={handlePlacementToolClick("reference")}
+              aria-label={t("canvas.addReference")}
               data-tutorial="canvas.note-ref"
             >
               <Link2 className="size-4" aria-hidden="true" />

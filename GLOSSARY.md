@@ -17,7 +17,7 @@ The browsable list of an author's Books, Notes, or Canvases.
 _Avoid_: dashboard, home (for the Book Gallery)
 
 **Item Menu**:
-The actions for one Book, Note, Chapter, Text Node, Note Reference, Symbol in the picker, or Task List, opened from its ⋯ button (lists, Task Lists, and Gallery cards on touch), a long-press on touch, or a right click. On a Task List, a long-press or right click shows them inside the editor's own menu.
+The actions for one Book, Note, Chapter, Text Node, Canvas Reference, Symbol in the picker, or Task List, opened from its ⋯ button (lists, Task Lists, and Gallery cards on touch), a long-press on touch, or a right click. On a Task List, a long-press or right click shows them inside the editor's own menu.
 _Avoid_: context menu, kebab menu, overflow menu
 
 **Tutorial**:
@@ -151,7 +151,7 @@ _Avoid_: checklist, todo list
 
 **Link**:
 A pointer from a Note, Chapter, or Text Node to a Book, Chapter, Note, heading, or web address that opens what it points to.
-_Avoid_: mention, reference (reserved for Note Reference)
+_Avoid_: mention, reference (reserved for Canvas Reference)
 
 **Backlink**:
 A Link from one Note to another, seen from the Note it points to; Links from Chapters and Text Nodes have no Backlink.
@@ -168,7 +168,7 @@ _Avoid_: scratchpad, scratch editor, draft
 ## Canvas
 
 **Canvas**:
-An infinite surface where an author lays out Text Nodes, Note References, Canvas Images, Connections, and Drawings.
+An infinite surface where an author lays out Text Nodes, Canvas References, Canvas Images, Connections, and Drawings.
 _UI_: es "Lienzos" for the Gallery, "Lienzo sin título" for an untitled Canvas
 _Avoid_: mind map, board, and "canvas" for the Cover Designer
 
@@ -180,12 +180,13 @@ _Avoid_: lightweight node, idea, card
 The text and background color of a whole Text Node, set from its Item Menu. A text color set inside the Text Node colors only the selected text and shows over the Node Colors.
 _UI_: en "Node colors" / es "Colores del nodo"
 
-**Note Reference**:
-An item on a Canvas that stands for a Note and opens it.
-_Avoid_: note node, embed
+**Canvas Reference**:
+An item on a Canvas that stands for a Note, Book, Chapter, Canvas, or something a Plugin offers, and opens it.
+_UI_: en "Add reference" / es "Añadir referencia"
+_Avoid_: Note Reference, note node, embed, reference on its own
 
-**Missing Note Reference**:
-A Note Reference whose Note no longer exists in the Library; it stays on the Canvas.
+**Missing Canvas Reference**:
+A Canvas Reference whose target no longer exists; it stays on the Canvas.
 _UI_: en "Missing note" / es "Nota no disponible" when no title was kept
 
 **Canvas Image**:
@@ -705,7 +706,7 @@ A Custom Shortcut or custom Voice Command under `plugin.<pluginId>.` kept on thi
 - A **Library** holds many **Books**, **Notes**, and **Canvases**.
 - A **Book** has ordered **Chapters**, one **Cover**, and many **Versions**.
 - A **Note** belongs to zero or one **Book**: a **Book Note** or an **Unfiled Note**.
-- A **Canvas** holds **Text Nodes**, **Note References**, **Canvas Images**, **Connections**, and **Drawings**; a **Note Reference** points at one **Note**.
+- A **Canvas** holds **Text Nodes**, **Canvas References**, **Canvas Images**, **Connections**, and **Drawings**; a **Canvas Reference** points at one **Note**, **Book**, **Chapter**, **Canvas**, or Plugin item.
 - A **Version** saves one **Book**; a **Backup** saves the whole **Library**.
 - A **Database File** is not a **Backup**, and loading one is not a **Restore**.
 - **Books**, **Notes**, and **Canvases** are **Synced Items**; each has one **Sync Base** per device.

@@ -674,15 +674,16 @@ function CanvasEditor() {
     if (editorReadOnly && isPlacementTool(toolMode)) setToolMode("select");
   }, [editorReadOnly, setToolMode, toolMode]);
 
-  const handleAddNoteRef = useCallback(
+  const handleAddReference = useCallback(
     (noteId: string) => {
       const note = notes.find((candidate) => candidate.id === noteId);
       if (!note) return;
       const id = crypto.randomUUID();
       addNode({
         id,
-        kind: "noteRef",
-        noteId: note.id,
+        kind: "reference",
+        source: "note",
+        targetId: note.id,
         label: note.title,
         position: notePlacementRef.current ?? viewportCenter(),
       });
@@ -799,7 +800,7 @@ function CanvasEditor() {
       { id: "canvas.toolPen", onTrigger: () => setToolMode("pen") },
       { id: "canvas.toolEraser", onTrigger: () => setToolMode("eraser") },
       { id: "canvas.addTextNode", onTrigger: () => setToolMode("textNode") },
-      { id: "canvas.addNoteRef", onTrigger: () => setToolMode("noteRef") },
+      { id: "canvas.addReference", onTrigger: () => setToolMode("reference") },
       { id: "canvas.addImage", onTrigger: () => setToolMode("image") },
       {
         id: "canvas.placeArmedTool",
@@ -1053,7 +1054,7 @@ function CanvasEditor() {
 
       <CanvasImageDialog />
 
-      <Modal isOpen={notePickerOpen} onClose={closeNotePicker} title={t("canvas.addNoteRef")}>
+      <Modal isOpen={notePickerOpen} onClose={closeNotePicker} title={t("canvas.addReference")}>
         <Input
           autoFocus
           value={noteQuery}
@@ -1064,10 +1065,10 @@ function CanvasEditor() {
           <p className="py-8 text-center text-sm text-muted-foreground">{t("canvas.noNotes")}</p>
         ) : (
           <ListBox
-            aria-label={t("canvas.addNoteRef")}
+            aria-label={t("canvas.addReference")}
             items={filteredNotes}
             selectionMode="none"
-            onAction={(key) => handleAddNoteRef(String(key))}
+            onAction={(key) => handleAddReference(String(key))}
             className="mt-4 max-h-80 overflow-auto outline-none"
           >
             {(note) => (

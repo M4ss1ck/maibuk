@@ -54,9 +54,9 @@ describe("CanvasToolPanel", () => {
         () => expect(useCanvasStore.getState().toolMode).toBe("textNode"),
       ],
       [
-        "canvas.addNoteRef",
+        "canvas.addReference",
         "{Enter}",
-        () => expect(useCanvasStore.getState().toolMode).toBe("noteRef"),
+        () => expect(useCanvasStore.getState().toolMode).toBe("reference"),
       ],
       ["canvas.addImage", " ", () => expect(useCanvasStore.getState().toolMode).toBe("image")],
       ["canvas.zoomIn", " ", () => expect(handlers.onZoomIn).toHaveBeenCalledOnce()],
@@ -116,7 +116,7 @@ describe("CanvasToolPanel", () => {
       "aria-pressed",
       "true"
     );
-    expect(screen.getByRole("button", { name: "canvas.addNoteRef" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "canvas.addReference" })).toHaveAttribute(
       "aria-pressed",
       "false"
     );
@@ -129,7 +129,7 @@ describe("CanvasToolPanel", () => {
     const image = screen.getByRole("button", { name: "canvas.addImage" });
     expect(image).toHaveAttribute("aria-pressed", "true");
     expect(image).toHaveAttribute("data-tutorial", "canvas.image");
-    expect(screen.getByRole("button", { name: "canvas.addNoteRef" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "canvas.addReference" })).toHaveAttribute(
       "aria-pressed",
       "false"
     );
@@ -159,7 +159,7 @@ describe("CanvasToolPanel", () => {
 
   describe.each([
     ["canvas.addTextNode", "textNode"],
-    ["canvas.addNoteRef", "noteRef"],
+    ["canvas.addReference", "reference"],
     ["canvas.addImage", "image"],
   ] as const)("placement tool %s", (label, mode) => {
     it("arms with the first Enter and places at the center with the second", async () => {
