@@ -179,7 +179,10 @@ test.describe("adding nodes @wf:canvas-tools @sc:canvas.addTextNode @sc:canvas.a
     await expect(dialog).toBeVisible();
     await expect(dialog.getByPlaceholder("Search…")).toBeFocused();
     // The picker opens on its Notes tab, the only source the Canvas has today.
-    await expect(dialog.getByRole("tab", { name: "Notes" })).toHaveAttribute("aria-selected", "true");
+    await expect(dialog.getByRole("tab", { name: "Notes" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
 
     await page.keyboard.type("Keeper");
     const option = dialog.getByRole("option", { name: "Keeper's Log" });
@@ -740,7 +743,10 @@ test.describe("no notes @wf:canvas-note-ref", () => {
     await page.keyboard.press("Enter");
     const dialog = page.getByRole("dialog", { name: "Add reference" });
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole("tab", { name: "Notes" })).toHaveAttribute("aria-selected", "true");
+    await expect(dialog.getByRole("tab", { name: "Notes" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
     await expect(dialog.getByText("Nothing to show")).toBeVisible();
   });
 });
