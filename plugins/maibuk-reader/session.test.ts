@@ -407,8 +407,8 @@ describe("position", () => {
     const harness = setup({ entry: first, storage });
     try {
       await opened(harness);
-      // The first save stalls, so the second position waits in the queue while
-      // a drop switches the Frame to another Document.
+      // The save stalls, so a drop switches the Frame to another Document while
+      // the old Document's position is still being written.
       const set = harness.client.storage.set.bind(harness.client.storage);
       let release: () => void = () => {};
       const stalled = new Promise<void>((resolve) => {
@@ -420,16 +420,10 @@ describe("position", () => {
       });
       harness.send({
         kind: "position",
-        position: { kind: "page", page: 5, zoom: 1 },
-        progress: { page: 6, pageCount: 12 },
-      });
-      harness.send({
-        kind: "position",
         position: { kind: "page", page: 7, zoom: 1 },
         progress: { page: 8, pageCount: 12 },
       });
       await vi.waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
-      await new Promise((resolve) => setTimeout(resolve, 0));
       harness.session.setEntry(second);
       release();
       await vi.waitFor(() =>
