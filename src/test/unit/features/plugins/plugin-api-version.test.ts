@@ -43,6 +43,8 @@ import type { PluginManifest } from "@/features/plugins/types";
 // 0.1.14 adds navigation.return and navigation.returnTargetChanged, so a
 // Plugin page returns to where it was opened and learns that target (#786),
 // additive: a ^0.1.13 Plugin keeps loading.
+// 0.1.15 lets canvasReference.resolve answer an image and a source declare
+// preview (#847), additive: a ^0.1.14 Plugin keeps loading.
 
 function manifestWith(apiVersion: string): PluginManifest {
   const result = validateManifestValue({
@@ -66,8 +68,16 @@ function manifestWith(apiVersion: string): PluginManifest {
 const APP = "0.12.0";
 
 describe("Plugin API patch compatibility (ADR 0029)", () => {
-  it("the host reports Plugin API 0.1.14", () => {
-    expect(PLUGIN_API_VERSION).toBe("0.1.14");
+  it("the host reports Plugin API 0.1.15", () => {
+    expect(PLUGIN_API_VERSION).toBe("0.1.15");
+  });
+
+  it("a ^0.1.14 Plugin still loads against the 0.1.15 host", () => {
+    const verdict = checkPluginCompatibility(manifestWith("^0.1.14"), {
+      apiVersion: "0.1.15",
+      appVersion: APP,
+    });
+    expect(verdict.verdict).toBe("ok");
   });
 
   it("a ^0.1.13 Plugin still loads against the 0.1.14 host", () => {

@@ -30,6 +30,19 @@ export const CANVAS_REFERENCE_MAX_ROWS = 200;
 /** The most characters one title or subtitle keeps, whatever the Plugin answered. */
 export const CANVAS_REFERENCE_MAX_TEXT = 200;
 
+/** The most characters a present answer's image data URL keeps, whatever the Plugin answered. */
+export const CANVAS_REFERENCE_MAX_IMAGE = 1024 * 1024;
+
+/**
+ * Keeps an image the host can draw: a png, jpeg, webp, or svg+xml data URL
+ * within the image cap; anything else is dropped.
+ */
+function keptImage(image: unknown): string | undefined {
+  if (typeof image !== "string") return undefined;
+  if (image.length > CANVAS_REFERENCE_MAX_IMAGE) return undefined;
+  return /^data:image\/(png|jpeg|webp|svg\+xml)[;,]/.test(image) ? image : undefined;
+}
+
 /**
  * Cuts `text` to the text limit by code point, so an emoji is never split in
  * half; the UI renders the result as plain text.
@@ -113,8 +126,9 @@ export async function listPluginCanvasReferences(
 
 /**
  * Resolves the asked ids against one Plugin source. Only asked ids are kept;
- * a `present` answer keeps its title and subtitle (capped), a `missing` one is
- * kept as missing, and anything else is dropped as unresolved.
+ * a `present` answer keeps its title (capped), and its subtitle (capped) and
+ * image when they pass their checks, a `missing` one is kept as missing, and
+ * anything else is dropped as unresolved.
  */
 export async function resolvePluginCanvasReferences(
   lifecycle: PluginLifecycle | null,
@@ -135,20 +149,25 @@ export async function resolvePluginCanvasReferences(
   for (const id of ids) {
     const entry = (result as Record<string, unknown>)[id];
     if (typeof entry !== "object" || entry === null) continue;
-    const { status, title, subtitle } = entry as {
+    const { status, title, subtitle, image } = entry as {
       status?: unknown;
       title?: unknown;
       subtitle?: unknown;
+      image?: unknown;
     };
     if (status === "missing") {
       answers[id] = { status: "missing" };
       continue;
     }
     if (status !== "present" || typeof title !== "string") continue;
+    const kept = keptImage(image);
     answers[id] = {
       status: "present",
       title: capText(title),
-      value: typeof subtitle === "string" ? { subtitle: capText(subtitle) } : {},
+      value: {
+        ...(typeof subtitle === "string" ? { subtitle: capText(subtitle) } : {}),
+        ...(kept === undefined ? {} : { image: kept }),
+      },
     };
   }
   return answers;
