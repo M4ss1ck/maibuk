@@ -15,6 +15,7 @@ import {
   onPluginContributionsChange,
 } from "@/features/plugins/contributions-registry";
 import { getPluginLifecycle } from "@/features/plugins/lifecycle-instance";
+import { usePluginManagementStore } from "@/features/plugins/management";
 
 /**
  * Canvas References reach their targets only through a source. The picker, the
@@ -128,7 +129,7 @@ export function getCanvasReferenceSource(id: string): CanvasReferenceSource | un
 
 /**
  * The installed Plugin's name for a Plugin source id (`plugin.<pluginId>.<localId>`),
- * or undefined for a host source, a malformed id, or a Plugin not installed.
+ * or undefined for a host source, a malformed id, or a Plugin this app does not know.
  */
 export function canvasReferencePluginName(sourceId: string): string | undefined {
   const prefix = "plugin.";
@@ -138,7 +139,10 @@ export function canvasReferencePluginName(sourceId: string): string | undefined 
   if (lastDot <= 0) return undefined;
   const pluginId = rest.slice(0, lastDot);
   const installed = getPluginLifecycle()?.installed() ?? [];
-  return installed.find((plugin) => plugin.pluginId === pluginId)?.manifest.name;
+  const running = installed.find((plugin) => plugin.pluginId === pluginId);
+  // A turned-off Plugin leaves the lifecycle; Settings still knows its manifest.
+  const known = running ?? usePluginManagementStore.getState().plugins[pluginId];
+  return known?.manifest.name;
 }
 
 /** The key an answer is filed under: a target only means something inside its source. */

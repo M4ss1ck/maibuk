@@ -7,6 +7,8 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
+import { usePluginManagementStore } from "@/features/plugins/management";
+import type { PluginManagementEntry } from "@/features/plugins/types";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "@/i18n";
 import type { PluginCanvasReferenceSourceDef } from "@/features/plugins/contributions-registry";
@@ -243,6 +245,24 @@ describe("the Generic Canvas Reference card", () => {
 
     expect(screen.getByText("Needs the Fixture Plugin")).toBeInTheDocument();
     expect(screen.queryByText("Not available here")).toBeNull();
+  });
+
+  it("names a turned-off Plugin that Settings still knows", () => {
+    unregisterFixturePlugin();
+    installLifecycle([]);
+    const before = usePluginManagementStore.getState().plugins;
+    usePluginManagementStore.setState({
+      plugins: {
+        ...before,
+        acme: { manifest: { name: "Fixture" } } as unknown as PluginManagementEntry,
+      },
+    });
+    try {
+      renderReference({ label: "Stored card" });
+      expect(screen.getByText("Needs the Fixture Plugin")).toBeInTheDocument();
+    } finally {
+      usePluginManagementStore.setState({ plugins: before });
+    }
   });
 
   it("falls back to the plain unavailable line when the Plugin is not installed", () => {

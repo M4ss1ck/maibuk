@@ -15,7 +15,9 @@
 // body back, ask an ungranted host and draw the refusal, list the secret names,
 // and round-trip the clipboard; each draws its result into the page, and the
 // granted fetch also reports whether the secret ever reappears in what the
-// Worker can observe. Built from this source into
+// Worker can observe. Its `items` Canvas Reference source (#836) answers the
+// host's list, resolve, and open requests with two deterministic rows, one of
+// which has gone. Built from this source into
 // e2e/.output/plugins/fixture-everything (persistent) and
 // .../fixture-everything-on-demand (on-demand) by the E2E global setup; the
 // bundles are never committed and never shipped.
@@ -25,10 +27,14 @@
 import { servePluginUi } from "@/plugin-sdk/worker-ui";
 import { useState } from "react";
 import {
+  type CanvasReferenceSourceResolution,
+  type CanvasReferenceSourceRequests,
+  type CanvasReferenceSourceRow,
   PLUGIN_COMMAND_RUN_REQUEST,
+  type PluginClient,
+  canvasReferenceRequests,
   createPluginClient,
   ui,
-  type PluginClient,
 } from "@/plugin-sdk";
 
 /** The credential store's one secret: the name it is saved under and the header
@@ -339,6 +345,56 @@ async function runCommand(client: PluginClient, params: unknown): Promise<null> 
   return null;
 }
 
+/** The `items` Canvas Reference source's present row (#836): an id, a title, and
+ * the one line of subtitle its Generic card draws. */
+const ITEM_ALPHA: CanvasReferenceSourceRow = {
+  id: "alpha",
+  title: "Fixture Alpha",
+  subtitle: "Fixture subtitle",
+};
+
+/** The row that has gone: the card it leaves keeps its stored label. */
+const ITEM_GONE: CanvasReferenceSourceRow = { id: "gone", title: "Fixture Gone" };
+
+/** The two rows the source lists, in the order the picker shows them. */
+const ITEM_ROWS: readonly CanvasReferenceSourceRow[] = [ITEM_ALPHA, ITEM_GONE];
+
+/** What opening the present row reports, spelled out so a spec can read it. */
+const ITEM_OPENED_MESSAGE = `Fixture opened ${ITEM_ALPHA.title}`;
+
+/**
+ * The Plugin's `items` Canvas Reference source (#836): two deterministic rows, a
+ * case-insensitive title filter, `alpha` present with its subtitle and `gone`
+ * missing, and an `open` that reports through a notification. The host asks it
+ * through `canvasReference.list`, `canvasReference.resolve`, and
+ * `canvasReference.open`.
+ */
+function fixtureItemSource(client: PluginClient): CanvasReferenceSourceRequests {
+  return {
+    list(query) {
+      const needle = query.trim().toLocaleLowerCase();
+      return ITEM_ROWS.filter((row) => row.title.toLocaleLowerCase().includes(needle));
+    },
+
+    resolve(ids) {
+      const answers: Record<string, CanvasReferenceSourceResolution> = {};
+      for (const id of ids) {
+        answers[id] =
+          id === ITEM_ALPHA.id
+            ? { status: "present", title: ITEM_ALPHA.title, subtitle: ITEM_ALPHA.subtitle }
+            : { status: "missing" };
+      }
+      return answers;
+    },
+
+    async open(id) {
+      if (id !== ITEM_ALPHA.id) return "missing";
+      await client.notifications.show({ variant: "info", message: ITEM_OPENED_MESSAGE });
+      return "opened";
+    },
+  };
+}
+
 if (
   typeof self !== "undefined" &&
   typeof WorkerGlobalScope !== "undefined" &&
@@ -352,11 +408,14 @@ if (
     servePluginUi(client, {
       pages: { panel: Panel },
       settingsRows: { about: AboutRow },
-      onHostRequest: (method, params) => {
-        if (method === "health.check") return "pong";
-        if (method === PLUGIN_COMMAND_RUN_REQUEST) return runCommand(client, params);
-        throw new Error(`No handler for ${method}`);
-      },
+      onHostRequest: canvasReferenceRequests(
+        { items: fixtureItemSource(client) },
+        (method, params) => {
+          if (method === "health.check") return "pong";
+          if (method === PLUGIN_COMMAND_RUN_REQUEST) return runCommand(client, params);
+          throw new Error(`No handler for ${method}`);
+        }
+      ),
     });
     self.postMessage({ kind: "maibuk:plugin-ready" });
   };
