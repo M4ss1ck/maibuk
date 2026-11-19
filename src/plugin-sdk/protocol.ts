@@ -122,6 +122,43 @@ export const PLUGIN_MIGRATE_DATA_REQUEST = "migrateData";
 export const PLUGIN_COMMAND_RUN_REQUEST = "command.run";
 
 /**
+ * The host request a ready Plugin answers to list the rows one of its Canvas
+ * Reference sources offers the picker. `params` is `{ source, query }`:
+ * `source` is the Plugin-local source id from the manifest's
+ * `contributes.canvasReferenceSources[].id`, and `query` is the author's
+ * filter. The result is `{ rows }`, each row a {@link CanvasReferenceSourceRow};
+ * the host caps the count and the text.
+ */
+export const PLUGIN_CANVAS_REFERENCE_LIST_REQUEST = "canvasReference.list";
+
+/** One row a Plugin's Canvas Reference source lists: an id, a title, and an optional subtitle. */
+export interface CanvasReferenceSourceRow {
+  id: string;
+  title: string;
+  subtitle?: string;
+}
+
+/**
+ * The host request a ready Plugin answers to resolve the Canvas References it
+ * answers for. `params` is `{ source, ids }`, `source` the Plugin-local source
+ * id. The result maps each asked id to a {@link CanvasReferenceSourceResolution};
+ * an id left out of the answer counts as unresolved.
+ */
+export const PLUGIN_CANVAS_REFERENCE_RESOLVE_REQUEST = "canvasReference.resolve";
+
+/** What one resolved id is: present with a title, or gone. */
+export type CanvasReferenceSourceResolution =
+  | { status: "present"; title: string; subtitle?: string }
+  | { status: "missing" };
+
+/**
+ * The host request a ready Plugin answers to open the target of one Canvas
+ * Reference. `params` is `{ source, id }`, `source` the Plugin-local source id.
+ * The result is `"opened"` or `"missing"`.
+ */
+export const PLUGIN_CANVAS_REFERENCE_OPEN_REQUEST = "canvasReference.open";
+
+/**
  * The host request a Plugin answers to mount one Remote UI surface. `params` is
  * `PluginUiMountParams`: `surface` is the host-chosen id of this one mount,
  * `kind` is the registry it renders from (`page`, the default, or
