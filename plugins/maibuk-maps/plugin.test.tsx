@@ -2935,6 +2935,65 @@ describe("Map editor page", () => {
     }
   });
 
+  it("backs out to the place a return target names, without opening the list", async () => {
+    const storage = mapStorage([
+      line("e1", "Line one", [
+        [10, 10],
+        [20, 20],
+      ]),
+    ]);
+    const { host } = await openEditor(storage);
+    // The host replays its return target on subscription, so the page knows the
+    // place that opened it without asking (#786).
+    host.setReturnTarget("Plot");
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      const back = await screen.findByRole("button", {
+        name: en["map.backTo"].replace("{label}", "Plot"),
+      });
+      await tabTo(user, back, 120);
+      await user.keyboard("{Enter}");
+      await waitFor(() =>
+        expect(host.returns).toEqual([{ pluginId: "maibuk-maps", status: "returned" }])
+      );
+      expect(host.pageNavigations).not.toContainEqual({
+        pluginId: "maibuk-maps",
+        pageId: MAPS_PAGE_ID,
+      });
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("reads Back to Maps, and opens the list, when the page has no return target", async () => {
+    const storage = mapStorage([
+      line("e1", "Line one", [
+        [10, 10],
+        [20, 20],
+      ]),
+    ]);
+    const { host } = await openEditor(storage);
+    const page = await host.renderPage(MAP_PAGE_ID);
+    try {
+      const user = userEvent.setup();
+      const back = await screen.findByRole("button", { name: en["map.backToMaps"] });
+      await tabTo(user, back, 120);
+      await user.keyboard("{Enter}");
+      await waitFor(() =>
+        expect(host.pageNavigations).toContainEqual({
+          pluginId: "maibuk-maps",
+          pageId: MAPS_PAGE_ID,
+        })
+      );
+      expect(host.returns).toEqual([]);
+      await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+
   it("draws the Insert card as a grid of Stamp pictures, then the size, Place, and the upload controls", async () => {
     const storage = mapStorage([]);
     const { host, runtime } = await openEditor(storage);

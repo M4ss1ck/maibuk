@@ -62,7 +62,12 @@ describe("Maps manifest", () => {
     const parsed = manifest();
     expect(parsed.customUi).toBe(true);
     const page = parsed.contributes?.pages?.find((candidate) => candidate.id === "map");
-    expect(page).toMatchObject({ title: "Map", command: "openMap", hideTitle: true });
+    expect(page).toMatchObject({
+      title: "Map",
+      command: "openMap",
+      hideTitle: true,
+      hideBack: true,
+    });
     expect(
       parsed.contributes?.commands?.find((command) => command.id === "openMap")?.navigates
     ).toBe(true);
@@ -139,7 +144,7 @@ describe("Maps manifest", () => {
 
   it("declares the Maps Canvas Reference source and the API version it needs", () => {
     const parsed = manifest();
-    expect(parsed.apiVersion).toBe("^0.1.13");
+    expect(parsed.apiVersion).toBe("^0.1.14");
     expect(parsed.contributes?.canvasReferenceSources).toEqual([
       { id: "maps", label: "Maps", icon: "map" },
     ]);

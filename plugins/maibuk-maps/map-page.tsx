@@ -123,11 +123,14 @@ export const MAP_PAGE_ID = "map";
  */
 export const MAP_FRAME_SRC = "assets/ui/map.html";
 
+/** Flushes autosave, then returns to the place that opened this page or opens the Maps list. */
+type BackToMaps = (options?: { toReturnTarget?: boolean }) => Promise<void>;
+
 export interface MapPageDeps {
   client: PluginClient;
   runtime: Pick<MapsRuntime, "editor" | "currentMapId" | "exportFonts">;
-  /** Flushes autosave and opens the Maps list. */
-  backToMaps(): Promise<void>;
+  /** Flushes autosave and opens the place that opened this page, or the Maps list. */
+  backToMaps: BackToMaps;
 }
 
 /** What the Export panel asks for: the format, and a PNG's print size and DPI. */
@@ -804,6 +807,7 @@ async function pickAndSaveAsset(
 function MapEditorView({
   editor,
   t,
+  returnTarget,
   backToMaps,
   save,
   place,
@@ -813,7 +817,9 @@ function MapEditorView({
 }: {
   editor: MapEditor;
   t: (key: MapsKey) => string;
-  backToMaps: () => Promise<void>;
+  /** The place the host's Back returns to, or null when this page has none. */
+  returnTarget: string | null;
+  backToMaps: BackToMaps;
   save(options: SaveImageOptions): Promise<void>;
   place: PlaceCallbacks;
   /** Picks, ingests, saves, and lists one uploaded picture for `use`; null when cancelled. */
@@ -1293,8 +1299,14 @@ function MapEditorView({
       <ui.Surface>
         {/* 1: the top-left pill */}
         <ui.View direction="row" gap="sm" align="center">
-          <ui.Button variant="ghost" icon="arrow-left" onPress={() => void backToMaps()}>
-            {t("map.backToMaps")}
+          <ui.Button
+            variant="ghost"
+            icon="arrow-left"
+            onPress={() => void backToMaps({ toReturnTarget: returnTarget !== null })}
+          >
+            {returnTarget === null
+              ? t("map.backToMaps")
+              : t("map.backTo").replace("{label}", returnTarget)}
           </ui.Button>
           {/* The Map's own name: pressing it renames the Map, not an Element. */}
           <ui.Button variant="ghost" onPress={() => setMapRename(snapshot.doc.name)}>
@@ -2312,6 +2324,34 @@ function MapEditorView({
   );
 }
 
+/**
+ * The place the host's Back returns to: the current label at mount, then every
+ * change. The host replays its target on subscription (#786), so a page that
+ * mounts after the move still knows where Back goes.
+ */
+function useReturnTarget(client: PluginClient): string | null {
+  const [label, setLabel] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    let unsubscribe: (() => Promise<void>) | null = null;
+    void client
+      .on("navigation.returnTargetChanged", (payload) => {
+        if (active) setLabel(payload.label);
+      })
+      .then((off) => {
+        // A page that unmounted before the subscription landed drops it now.
+        if (active) unsubscribe = off;
+        else void off();
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+      if (unsubscribe !== null) void unsubscribe();
+    };
+  }, [client]);
+  return label;
+}
+
 export function createMapPage(deps: MapPageDeps): ComponentType {
   const { client, runtime, backToMaps } = deps;
   /**
@@ -2326,6 +2366,7 @@ export function createMapPage(deps: MapPageDeps): ComponentType {
 
   return function MapPage() {
     const language = useLanguage(client);
+    const returnTarget = useReturnTarget(client);
     const editor = runtime.editor;
 
     // The pictures, and the Custom Fills built from them, reach the editor once
@@ -2394,6 +2435,7 @@ export function createMapPage(deps: MapPageDeps): ComponentType {
       <MapEditorView
         editor={editor}
         t={t}
+        returnTarget={returnTarget}
         backToMaps={backToMaps}
         save={(options) =>
           saveMapImage({ client, editor, exportFonts: runtime.exportFonts }, options)

@@ -109,8 +109,8 @@ export interface MapsRuntime {
   language: string;
   /** Loads one Map, opens its editor, and navigates; false when it cannot load. */
   openMap(id: string): Promise<boolean>;
-  /** Flushes autosave, closes the open Map, and opens the Maps list. */
-  backToMaps(): Promise<void>;
+  /** Flushes autosave, closes the open Map, and opens the Maps list, or the place that opened this page. */
+  backToMaps(options?: { toReturnTarget?: boolean }): Promise<void>;
   /**
    * The fonts an SVG export embeds (#753): the bundled Map Label faces, plus
    * the author's PDF Font when this device has one, under the family a label
@@ -188,7 +188,7 @@ export function startMaps(client: PluginClient, serve: MapsServe): MapsRuntime {
     return true;
   }
 
-  async function backToMaps(): Promise<void> {
+  async function backToMaps(options: { toReturnTarget?: boolean } = {}): Promise<void> {
     const editor = runtime.editor;
     if (editor !== null) {
       await editor.flush();
@@ -200,6 +200,13 @@ export function startMaps(client: PluginClient, serve: MapsServe): MapsRuntime {
     }
     runtime.editor = null;
     runtime.currentMapId = null;
+    // A page the author opened from somewhere else returns there (#786): the
+    // host moves on, and only a page it cannot return from falls back to the
+    // Maps list.
+    if (options.toReturnTarget === true) {
+      const answer = await client.navigation.return();
+      if (answer.status === "returned") return;
+    }
     await client.navigation.openPage({ pageId: MAPS_PAGE_ID });
   }
 
