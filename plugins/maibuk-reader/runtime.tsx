@@ -28,7 +28,7 @@ import { format, translate } from "./i18n";
 import { createShelfService, type ShelfService } from "./library";
 import { createReaderSession, type ReaderSession } from "./session";
 import { SHELF_PAGE_ID, createShelfPage } from "./shelf-page";
-import type { ShelfEntry } from "./shelf";
+import { SHELF_KEY, type ShelfEntry, parseShelf, sortShelf } from "./shelf";
 
 /** The Shelf page id, exactly as the manifest declares it. */
 export { SHELF_PAGE_ID };
@@ -177,10 +177,19 @@ export function startReader(client: PluginClient, serve: ReaderServe): void {
    * through one Shelf read, and opened onto the Reading page. A Document whose
    * file is lost is still on the Shelf, so it resolves present.
    */
+  /**
+   * The Shelf for the Canvas Reference source. Unlike `loadShelf`, a failed
+   * read rejects, so the host keeps the stored labels instead of marking every
+   * Document reference Missing.
+   */
+  async function readShelf(): Promise<ShelfEntry[]> {
+    return sortShelf(parseShelf(await client.storage.get({ key: SHELF_KEY })));
+  }
+
   const documentSource: CanvasReferenceSourceRequests = {
     async list(query) {
       const needle = query.trim().toLocaleLowerCase();
-      const shelf = await library.loadShelf();
+      const shelf = await readShelf();
       return shelf
         .filter((entry) => entry.title.toLocaleLowerCase().includes(needle))
         .map(
@@ -193,7 +202,7 @@ export function startReader(client: PluginClient, serve: ReaderServe): void {
     },
 
     async resolve(ids) {
-      const shelf = await library.loadShelf();
+      const shelf = await readShelf();
       const answers: Record<string, CanvasReferenceSourceResolution> = {};
       for (const id of ids) {
         const entry = shelf.find((candidate) => candidate.id === id);
@@ -210,7 +219,7 @@ export function startReader(client: PluginClient, serve: ReaderServe): void {
     },
 
     async open(id) {
-      const entry = (await library.loadShelf()).find((candidate) => candidate.id === id);
+      const entry = (await readShelf()).find((candidate) => candidate.id === id);
       if (entry === undefined) return "missing";
       await openEntry(client, library, runtime, entry);
       return "opened";

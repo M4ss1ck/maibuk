@@ -503,4 +503,38 @@ describe("Reader Canvas Reference source", () => {
       await host.stop();
     }
   });
+
+  it("fails every request when the Shelf cannot be read, rather than calling Documents missing", async () => {
+    // A blocked storage read must not read as an empty Shelf: the host keeps the
+    // stored labels for a failed request, but marks a `missing` answer Missing.
+    class BlockedShelf extends Map<string, unknown> {
+      override get(key: string): unknown {
+        if (key === SHELF_KEY) throw new Error("storage blocked");
+        return super.get(key);
+      }
+    }
+    const { host } = hostFor({ storage: new BlockedShelf() });
+    try {
+      await expect(
+        host.broker.request(PLUGIN_CANVAS_REFERENCE_LIST_REQUEST, {
+          source: "documents",
+          query: "",
+        })
+      ).rejects.toThrow();
+      await expect(
+        host.broker.request(PLUGIN_CANVAS_REFERENCE_RESOLVE_REQUEST, {
+          source: "documents",
+          ids: ["doc-1"],
+        })
+      ).rejects.toThrow();
+      await expect(
+        host.broker.request(PLUGIN_CANVAS_REFERENCE_OPEN_REQUEST, {
+          source: "documents",
+          id: "doc-1",
+        })
+      ).rejects.toThrow();
+    } finally {
+      await host.stop();
+    }
+  });
 });
