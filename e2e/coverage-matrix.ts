@@ -2745,6 +2745,8 @@ export const ROWS: MatrixRow[] = [
       "A Missing item keeps its stored label on the card and cannot open",
       "A Plugin turned off leaves its reference Unavailable with its stored label and cannot open",
       "Turning the Plugin back on resolves its reference again, with its subtitle and Open",
+      "The Maps Plugin answers a Maps tab whose Map card opens the Map, turns Unavailable with Maps off, and Missing when the Map is deleted",
+      "The Reader answers a Documents tab whose Document card opens the Document, turns Unavailable with the Reader off, and Missing when it leaves the Shelf",
     ],
     terms: ["Plugin", "Canvas Reference", "Missing Canvas Reference"],
     shortcuts: ["canvas.addReference"],
