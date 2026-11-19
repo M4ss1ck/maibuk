@@ -386,13 +386,16 @@ describe("Reader file drop", () => {
 // Shelf is the `documents` source, subtitled by each Document's format, and a
 // Document the author forgot is reported missing.
 describe("Reader Canvas Reference source", () => {
-  /** A Shelf of two Documents, newest first. */
+  /** The cover the Shelf made when doc-1 first opened. */
+  const COVER = "data:image/jpeg;base64,COVER";
+
+  /** A Shelf of two Documents, newest first; only doc-1 has a cover. */
   async function seededShelf(): Promise<Map<string, unknown>> {
     const dune = pdfBytes("a PDF on the shelf");
     const emma = epubBytes("an EPUB on the shelf");
     const storage = readerStorage();
     storage.set(SHELF_KEY, [
-      await seededEntry(dune),
+      { ...(await seededEntry(dune)), coverDataUrl: COVER },
       shelfEntry({
         id: "doc-2",
         grant: "grant-2",
@@ -444,7 +447,7 @@ describe("Reader Canvas Reference source", () => {
         host.broker.request(PLUGIN_CANVAS_REFERENCE_RESOLVE_REQUEST, { source: "documents", ids });
 
       await expect(request(["doc-1", "doc-2"])).resolves.toEqual({
-        "doc-1": { status: "present", title: "Dune", subtitle: "PDF" },
+        "doc-1": { status: "present", title: "Dune", subtitle: "PDF", image: COVER },
         "doc-2": { status: "present", title: "Emma", subtitle: "EPUB" },
       });
 
