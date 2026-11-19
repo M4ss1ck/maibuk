@@ -346,6 +346,7 @@ export function registerPluginContributions(source: PluginContributionsSource): 
           id: `${PLUGIN_PREFIX}${manifest.id}.${source.id}` as PluginContributionId,
           label: source.label,
           icon: source.icon,
+          ...(source.preview ? { preview: source.preview } : {}),
         })
       );
 

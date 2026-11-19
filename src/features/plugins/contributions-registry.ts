@@ -79,6 +79,8 @@ export interface PluginCanvasReferenceSourceDef {
   /** The label for the current UI language. */
   label: string;
   icon: PluginIconSpec;
+  /** The card's image shape; absent for a text-only card. */
+  preview?: "landscape" | "portrait";
 }
 
 /** A Command explicitly listed for the Item Menus of its target kinds. */
@@ -130,6 +132,7 @@ export function pluginPageRoute(pluginId: string, pageId: string): string {
 const contributions = new Map<string, RegisteredContributions>();
 const listeners = new Set<() => void>();
 const knownPluginNames = new Map<string, string>();
+const knownCanvasReferencePreviews = new Map<string, "landscape" | "portrait">();
 // Referentially stable snapshots for useSyncExternalStore, refreshed on change.
 let cachedPages: PluginPageDef[] | null = null;
 let cachedSidebar: PluginSidebarEntryDef[] | null = null;
@@ -165,6 +168,9 @@ export function setRegisteredContributions(
 ): void {
   contributions.set(pluginId, record);
   knownPluginNames.set(pluginId, record.displayName);
+  for (const source of record.canvasReferenceSources) {
+    if (source.preview !== undefined) knownCanvasReferencePreviews.set(source.id, source.preview);
+  }
 }
 
 /**
@@ -174,6 +180,16 @@ export function setRegisteredContributions(
  */
 export function getKnownPluginName(pluginId: string): string | undefined {
   return knownPluginNames.get(pluginId);
+}
+
+/**
+ * A source's declared preview, kept after its Plugin unregisters like the
+ * Plugin's name, so an Unavailable card keeps its box.
+ */
+export function getKnownCanvasReferencePreview(
+  sourceId: string
+): "landscape" | "portrait" | undefined {
+  return knownCanvasReferencePreviews.get(sourceId);
 }
 
 /** Removes one Plugin's record; the registration side notifies when it does. */
@@ -302,5 +318,6 @@ export function currentUILanguage(): Language {
 export function resetPluginContributionsForTests(): void {
   contributions.clear();
   knownPluginNames.clear();
+  knownCanvasReferencePreviews.clear();
   notifyContributionsChange();
 }
