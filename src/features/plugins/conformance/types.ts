@@ -126,6 +126,24 @@ export interface FileSaveObservation {
 }
 
 /**
+ * What the Canvas Reference probe observed (#836): the answers the healthy
+ * fixture gave to `canvasReference.list`, `.resolve`, and `.open` for its
+ * `items` source. Every field is a fact; `checks.ts` compares them with the row
+ * the fixture declares.
+ */
+export interface CanvasReferenceObservation {
+  /** The rows `canvasReference.list` answered. */
+  rows: { id: string; title: string; subtitle?: string }[];
+  /** The answers `canvasReference.resolve` gave, keyed by the asked id. */
+  resolutions: Record<
+    string,
+    { status: "present"; title: string; subtitle?: string } | { status: "missing" }
+  >;
+  /** The answer `canvasReference.open` gave; `opened` is the only passing one. */
+  opened: string;
+}
+
+/**
  * T8's allocation cap (MB). A Worker that reaches it unstopped, with the host
  * still answering, has shown the engine sets no per-Worker memory limit below
  * the cap; the lane stops there rather than take the test machine to its limit.
@@ -190,6 +208,13 @@ export interface ConformanceSeam {
    * name, MIME type, and bytes the host received for a known Blob.
    */
   probeFileSave(): Promise<FileSaveObservation>;
+  /**
+   * The Canvas Reference requests (#836) against the healthy fixture's `items`
+   * source: the rows `canvasReference.list` answered, the resolutions
+   * `canvasReference.resolve` gave for one known id and one unknown id, and
+   * what `canvasReference.open` answered.
+   */
+  probeCanvasReferences(): Promise<CanvasReferenceObservation>;
   /** A host heartbeat posted after T8; false when the renderer no longer answers. */
   heartbeat(): Promise<boolean>;
   /**

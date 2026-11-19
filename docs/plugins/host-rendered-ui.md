@@ -59,6 +59,7 @@ A Plugin declares what it adds under `contributes` in manifest.json. The validat
 - `settingsRows`: an `id`, a `label`, an optional `description`, and optional `keywords`.
 - `toolbarButtons`: an `id`, the `command` it runs, an `icon`, and an optional `toggle`. A `toggle` button shows whether what it switches is on or off as the Plugin sets it with `toolbar.setPressed`.
 - `itemMenuEntries`: a `command` that declares `targets`.
+- `canvasReferenceSources`: an `id`, a `label` in the Plugin's default language (a locale file overrides it as `canvasReferenceSources.<id>.label`), and an `icon`, validated like a `sidebarEntries` icon. Maibuk derives the source's full id as `plugin.<pluginId>.<id>`. The Canvas Reference picker draws one tab per source after the host's own tabs, ordered by Plugin name, while the Plugin is on. Every source draws the same Generic card: the icon, the source name, the title, an optional subtitle, and Open. There are no thumbnails, and a Plugin declares at most 20 sources.
 
 Every contribution may carry its own `platforms` list, and the host filters each surface by the device platform. Maibuk derives a Command's full id as `plugin.<pluginId>.<localId>`, so a Plugin never claims Maibuk's or another Plugin's ids. Registering is metadata only, so the Command Palette, Settings search, the toolbar, and the sidebar find an installed Plugin before its Worker is ready.
 
@@ -77,6 +78,14 @@ The template's manifest declares one Command, one page, and one sidebar entry:
   ],
   "pages": [{ "id": "hello", "title": "Hello", "command": "openHello" }],
   "sidebarEntries": [{ "page": "hello", "icon": "hand" }]
+}
+```
+
+A Plugin that adds Canvas Reference sources puts them in the same `contributes` object:
+
+```json
+"contributes": {
+  "canvasReferenceSources": [{ "id": "items", "label": "Items", "icon": "box" }]
 }
 ```
 
@@ -134,6 +143,30 @@ async function runCommand(client: PluginClient, params: unknown): Promise<null> 
   return null;
 }
 ```
+
+A Plugin that declares `canvasReferenceSources` answers three more requests through the same `onHostRequest`; `canvasReferenceRequests` dispatches each one to the source it names and leaves every other method to your handler. `canvasReference.list` carries `{ source, query }` and answers `{ rows }` of `{ id, title, subtitle? }`; `canvasReference.resolve` carries `{ source, ids }` and answers a map from each asked id to `{ status: "present", title, subtitle? }` or `{ status: "missing" }`; `canvasReference.open` carries `{ source, id }` and answers `"opened"` or `"missing"`. From a Plugin that lists two items:
+
+```ts
+import { type CanvasReferenceSourceRequests, canvasReferenceRequests } from "@maibuk/plugin-sdk";
+
+const items: CanvasReferenceSourceRequests = {
+  list: (query) => rows.filter((row) => row.title.toLowerCase().includes(query.toLowerCase())),
+  resolve: (ids) => resolutionFor(ids),
+  open: (id) => "opened",
+};
+
+export function start(client: PluginClient, serve: HelloServe): void {
+  serve(client, {
+    pages: { [PAGE_ID]: HelloPage },
+    // Every other host request still goes to the handler above.
+    onHostRequest: canvasReferenceRequests({ items }, (method, params) =>
+      handleHostRequest(client, method, params)
+    ),
+  });
+}
+```
+
+The host caps what it keeps from an answer: at most 200 rows, and a title or subtitle cut to 200 characters and shown as plain text. A request that takes more than 5 seconds is abandoned: a list that timed out shows an error row in that source's tab only, and a resolve that failed keeps the labels the Canvas already stored. `resolve` warm-starts an on-demand Plugin's sandbox when it is stopped, but not its Frame. `missing` from `open` flips the card to Missing, and a Plugin that is off makes its references show as Unavailable. None of the three requests needs a Plugin Permission.
 
 A Plugin holding the `serve` Plugin Permission answers one more host request: `endpoint.request`, which carries one HTTP request that reached its [Plugin Endpoint](endpoint.md). Handle it with `client.onEndpointRequest`, not `onHostRequest`, because its answer may stream.
 

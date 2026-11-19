@@ -38,6 +38,9 @@
  *   - `files.save` (ADR 0040) passes when the call reported `saved` and the
  *     host's saver received the exact name, MIME type, and bytes the probe
  *     sent; every drifted field is named.
+ *   - The Canvas Reference requests (#836) pass when the healthy fixture's
+ *     `items` source lists its one row, resolves that row present and an
+ *     unknown id missing, and opens as `opened`; every drifted answer is named.
  */
 
 import {
@@ -52,6 +55,7 @@ import {
 } from "@/features/plugins/conformance/file-grants";
 import { CONFORMANCE_SAVE, CONFORMANCE_SAVE_HEX } from "@/features/plugins/conformance/file-save";
 import {
+  type CanvasReferenceObservation,
   type CommandObservation,
   type ConformanceCheck,
   type ConformanceSeam,
@@ -74,6 +78,15 @@ export const FILE_GRANTS_CHECK_ID = "files-read-stat-release";
 
 /** The `files.save` row (ADR 0040): one Blob reaches the host byte for byte. */
 export const FILE_SAVE_CHECK_ID = "files-save";
+
+/** The Canvas Reference requests (#836): one Plugin source lists, resolves, and opens. */
+export const CANVAS_REFERENCE_CHECK_ID = "canvas-reference-requests";
+
+/** The one row the healthy fixture's `items` source lists (#836). */
+const CANVAS_REFERENCE_ROW = { id: "one", title: "One" };
+
+/** An id the healthy fixture's source never lists, so `resolve` answers it missing. */
+const CANVAS_REFERENCE_UNKNOWN_ID = "absent";
 
 /** T7's only acceptable stop: the heartbeat missed until the Plugin was closed. */
 export const T7_STOP_REASON = "unresponsive";
@@ -270,10 +283,52 @@ function fileSaveCheck(observation: FileSaveObservation): ConformanceCheck {
 }
 
 /**
+ * The Canvas Reference requests agree with the row the healthy fixture declares
+ * (#836): `canvasReference.list` returned that one row, `canvasReference.resolve`
+ * answered it present and an unknown id missing, and `canvasReference.open`
+ * answered `opened`. A disagreement names every answer that drifted.
+ */
+function canvasReferenceCheck(observation: CanvasReferenceObservation): ConformanceCheck {
+  const problems: string[] = [];
+  const [row, ...extra] = observation.rows;
+  if (
+    observation.rows.length !== 1 ||
+    extra.length > 0 ||
+    row?.id !== CANVAS_REFERENCE_ROW.id ||
+    row?.title !== CANVAS_REFERENCE_ROW.title
+  ) {
+    const listed =
+      observation.rows.map((candidate) => `${candidate.id}:${candidate.title}`).join(", ") ||
+      "no rows";
+    problems.push(
+      `list returned ${listed}, expected one ${CANVAS_REFERENCE_ROW.id} row titled ${CANVAS_REFERENCE_ROW.title}`
+    );
+  }
+  const known = observation.resolutions[CANVAS_REFERENCE_ROW.id];
+  if (known?.status !== "present") {
+    problems.push(
+      `resolve answered ${known?.status ?? "nothing"} for ${CANVAS_REFERENCE_ROW.id}, expected present`
+    );
+  }
+  const unknown = observation.resolutions[CANVAS_REFERENCE_UNKNOWN_ID];
+  if (unknown?.status !== "missing") {
+    problems.push(
+      `resolve answered ${unknown?.status ?? "nothing"} for ${CANVAS_REFERENCE_UNKNOWN_ID}, expected missing`
+    );
+  }
+  if (observation.opened !== "opened") {
+    problems.push(`open answered ${observation.opened}, expected opened`);
+  }
+  return problems.length > 0
+    ? fail(CANVAS_REFERENCE_CHECK_ID, problems.join("; "))
+    : pass(CANVAS_REFERENCE_CHECK_ID, "list, resolve, and open agree with the fixture's one row");
+}
+
+/**
  * Runs every check, in schema order (T2 frame, T2 worker, the fixture Commands,
- * T7, the tight allocation, T8, the File Grant rows, then `files.save`), and
- * hands each result to `onCheck` as soon as it is known, so the route can POST
- * `/progress` before the run ends.
+ * T7, the tight allocation, T8, the File Grant rows, `files.save`, then the
+ * Canvas Reference requests), and hands each result to `onCheck` as soon as it
+ * is known, so the route can POST `/progress` before the run ends.
  */
 export interface RunConformanceOptions {
   /**
@@ -392,6 +447,12 @@ export async function runConformanceChecks(
 
   await record(
     await measure(FILE_SAVE_CHECK_ID, async () => fileSaveCheck(await seam.probeFileSave()))
+  );
+
+  await record(
+    await measure(CANVAS_REFERENCE_CHECK_ID, async () =>
+      canvasReferenceCheck(await seam.probeCanvasReferences())
+    )
   );
 
   return checks;

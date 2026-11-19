@@ -37,6 +37,9 @@ import type { PluginManifest } from "@/features/plugins/types";
 // 0.1.12 adds files.dropped, so a Plugin holding `files:pick` receives the
 // files the author drops on its own pages (#828), additive: a ^0.1.11 Plugin
 // keeps loading.
+// 0.1.13 adds Canvas Reference sources and the canvasReference host requests,
+// so a Plugin lists and opens its own items in the Canvas picker (#836),
+// additive: a ^0.1.12 Plugin keeps loading.
 
 function manifestWith(apiVersion: string): PluginManifest {
   const result = validateManifestValue({
@@ -60,27 +63,27 @@ function manifestWith(apiVersion: string): PluginManifest {
 const APP = "0.12.0";
 
 describe("Plugin API patch compatibility (ADR 0029)", () => {
-  it("the host reports Plugin API 0.1.12", () => {
-    expect(PLUGIN_API_VERSION).toBe("0.1.12");
+  it("the host reports Plugin API 0.1.13", () => {
+    expect(PLUGIN_API_VERSION).toBe("0.1.13");
   });
 
-  it("a ^0.1.11 Plugin still loads against the 0.1.12 host", () => {
-    const verdict = checkPluginCompatibility(manifestWith("^0.1.11"), {
-      apiVersion: "0.1.12",
+  it("a ^0.1.12 Plugin still loads against the 0.1.13 host", () => {
+    const verdict = checkPluginCompatibility(manifestWith("^0.1.12"), {
+      apiVersion: "0.1.13",
       appVersion: APP,
     });
     expect(verdict.verdict).toBe("ok");
   });
 
-  it("a ^0.1.12 Plugin is refused by a 0.1.11 host with the usual message", () => {
-    const verdict = checkPluginCompatibility(manifestWith("^0.1.12"), {
-      apiVersion: "0.1.11",
+  it("a ^0.1.13 Plugin is refused by a 0.1.12 host with the usual message", () => {
+    const verdict = checkPluginCompatibility(manifestWith("^0.1.13"), {
+      apiVersion: "0.1.12",
       appVersion: APP,
     });
     expect(verdict).toEqual({
       verdict: "needs-newer-app",
       reason: "api-version",
-      message: "Needs Plugin API ^0.1.12; this app provides 0.1.11",
+      message: "Needs Plugin API ^0.1.13; this app provides 0.1.12",
     });
   });
 
