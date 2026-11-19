@@ -404,6 +404,8 @@ test.describe("Maps and Documents Canvas References @wf:plugins-canvas-reference
 
     // The Map page offers the way back to the Canvas it was opened from.
     const back = page.getByRole("button", { name: "Back to Map", exact: true });
+    // Maps' own Back to Maps marks its page drawn, so the capture shows the Map.
+    await expect(page.getByRole("button", { name: "Back to Maps" })).toBeVisible();
     await capture(page, "plugin-page-back-to-canvas");
     await tabTo(page, back, { max: 10 });
     await page.keyboard.press("Enter");
