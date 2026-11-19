@@ -17,6 +17,7 @@ import type { CanvasFlowNodeData } from "@/features/canvas/reactFlowAdapter";
 import type { Note } from "@/features/notes";
 import {
   CANVAS_REFERENCE_CARD_SIZES,
+  CANVAS_REFERENCE_PREVIEW_SIZES,
   type CanvasReferenceCardKind,
   type CanvasReferenceSource,
   canvasReferencePluginName,
@@ -26,6 +27,7 @@ import {
   useCanvasReferenceSource,
 } from "@/features/canvas/references";
 import type { Canvas, ReferenceCanvasNode } from "@/features/canvas/types";
+import { getKnownCanvasReferencePreview } from "@/features/plugins/contributions-registry";
 import { isPluginContributionId } from "@/features/plugins/ids";
 import { CanvasNodeHandles } from "@/features/canvas/nodes/CanvasNodeHandles";
 import { useCanvasNodeMenu } from "@/features/canvas/nodes/CanvasNodeMenu";
@@ -146,6 +148,44 @@ function ReferenceStateBody({ title, detail }: { title: string; detail?: string 
   );
 }
 
+/**
+ * The card's image slot (#847): the source's picture edge to edge, or one muted
+ * block carrying the source icon, so a card keeps one box either way.
+ */
+function PreviewImage({
+  preview,
+  image,
+  Icon,
+}: {
+  preview: "landscape" | "portrait";
+  image?: string;
+  Icon?: CanvasReferenceSource["icon"];
+}) {
+  const box = preview === "landscape" ? "h-40 w-full shrink-0" : "min-h-0 w-full flex-1";
+
+  if (image) {
+    return (
+      <img
+        src={image}
+        alt=""
+        draggable={false}
+        data-testid="canvas-reference-image"
+        className={`${box} bg-muted ${preview === "landscape" ? "object-contain" : "object-cover"}`}
+      />
+    );
+  }
+
+  return (
+    <div
+      data-testid="canvas-reference-image-placeholder"
+      aria-hidden="true"
+      className={`${box} flex items-center justify-center bg-muted`}
+    >
+      {Icon && <Icon className="size-8 text-muted-foreground" />}
+    </div>
+  );
+}
+
 /** A Generic card names the source it belongs to, above whatever state body it draws. */
 function ReferenceSourceHeader({ source }: { source: CanvasReferenceSource }) {
   const { t } = useTranslation();
@@ -192,20 +232,34 @@ function CanvasReferenceCard({
 
   const source = useCanvasReferenceSource(node.source);
   const resolution = useCanvasReferenceResolution(node.source, node.targetId);
+  // A Plugin source that declares a preview draws its image; the answer keeps the
+  // shape even after the Plugin unregisters, so an Unavailable card holds its box.
+  const preview = source
+    ? source.preview
+    : isPluginContributionId(node.source)
+      ? getKnownCanvasReferencePreview(node.source)
+      : undefined;
   // A source this app does not know still keeps the box its kind would draw: a
   // Plugin reference is always Generic, anything else borrows the note box.
-  const size =
-    CANVAS_REFERENCE_CARD_SIZES[
-      source?.card ?? (isPluginContributionId(node.source) ? "generic" : "note")
-    ];
+  const size = preview
+    ? CANVAS_REFERENCE_PREVIEW_SIZES[preview]
+    : CANVAS_REFERENCE_CARD_SIZES[
+        source?.card ?? (isPluginContributionId(node.source) ? "generic" : "note")
+      ];
   // The Book card fills its box edge to edge, like the Library Book card.
   const isBookCard = source?.card === "book";
   const storedLabel = node.label || t("canvas.referenceUntitled");
   // An Unavailable reference names the Plugin that owns the source when it is installed here.
   const unavailablePlugin = source ? undefined : canvasReferencePluginName(node.source);
+  const unavailableDetail = unavailablePlugin
+    ? t("canvas.referenceUnavailablePlugin", { name: unavailablePlugin })
+    : t("canvas.referenceUnavailable");
   const CardBody = source ? CANVAS_REFERENCE_CARD_BODIES[source.card] : null;
   const title = resolution?.status === "present" ? resolution.title || storedLabel : storedLabel;
   const canOpen = Boolean(source) && resolution?.status !== "missing";
+  // Only a Present answer carries a picture; every other state draws the placeholder.
+  const image =
+    resolution?.status === "present" ? (resolution.value as { image?: string }).image : undefined;
 
   return (
     <div
@@ -220,19 +274,29 @@ function CanvasReferenceCard({
       {nodeMenu.menu}
 
       <div
-        className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-xl ${isBookCard ? "" : "p-4 pb-0"}`}
+        className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-xl ${isBookCard || preview ? "" : "p-4 pb-0"}`}
       >
-        {source?.card === "generic" && <ReferenceSourceHeader source={source} />}
+        {source?.card === "generic" && !preview && <ReferenceSourceHeader source={source} />}
 
-        {!source ? (
-          <ReferenceStateBody
-            title={storedLabel}
-            detail={
-              unavailablePlugin
-                ? t("canvas.referenceUnavailablePlugin", { name: unavailablePlugin })
-                : t("canvas.referenceUnavailable")
-            }
-          />
+        {preview ? (
+          <>
+            <PreviewImage preview={preview} image={image} Icon={source?.icon} />
+            <div className="p-4 pb-0">
+              {source && <ReferenceSourceHeader source={source} />}
+
+              {!source ? (
+                <ReferenceStateBody title={storedLabel} detail={unavailableDetail} />
+              ) : resolution?.status === "missing" ? (
+                <ReferenceStateBody title={storedLabel} detail={t("canvas.referenceMissing")} />
+              ) : resolution?.status === "present" ? (
+                <GenericReferenceCardBody value={resolution.value} title={title} />
+              ) : (
+                <ReferenceStateBody title={storedLabel} />
+              )}
+            </div>
+          </>
+        ) : !source ? (
+          <ReferenceStateBody title={storedLabel} detail={unavailableDetail} />
         ) : isBookCard && resolution?.status !== "present" ? (
           <>
             <div aria-hidden="true" className="min-h-0 flex-1 bg-muted" />
