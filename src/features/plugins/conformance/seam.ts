@@ -38,6 +38,7 @@ import {
 } from "@/features/plugins/conformance/file-save";
 import { waitForReasonWithinGrace } from "@/features/plugins/conformance/oom-grace";
 import {
+  type CanvasReferenceObservation,
   type CommandObservation,
   type ConformanceEngine,
   type ConformancePlatform,
@@ -74,12 +75,25 @@ import type {
 } from "@/features/plugins/types";
 import { IS_ANDROID, IS_DESKTOP } from "@/lib/platform";
 import type { PluginDirectoryAdapter } from "@/lib/platform/types";
-import { PLUGIN_COMMAND_RUN_REQUEST } from "@/plugin-sdk/protocol";
+import {
+  PLUGIN_CANVAS_REFERENCE_LIST_REQUEST,
+  PLUGIN_CANVAS_REFERENCE_OPEN_REQUEST,
+  PLUGIN_CANVAS_REFERENCE_RESOLVE_REQUEST,
+  PLUGIN_COMMAND_RUN_REQUEST,
+} from "@/plugin-sdk/protocol";
 
 /** The fixture Plugin's folder name and id (see `fixture.ts`). */
 const FIXTURE_HOSTILE_ID = "fixture-hostile";
 /** The healthy neighbour fixture's id (#516): it stays ready beside the hostile one. */
 const FIXTURE_HEALTHY_ID = "fixture-healthy";
+
+/**
+ * The healthy fixture's one Canvas Reference source (#836), and the ids the
+ * probe asks: the row the fixture lists, and one it never lists.
+ */
+const CANVAS_REFERENCE_SOURCE_ID = "items";
+const CANVAS_REFERENCE_ROW_ID = "one";
+const CANVAS_REFERENCE_UNKNOWN_ID = "absent";
 
 /** How long a UI Command's page may take to mount or be refused. */
 const PAGE_SETTLE_MS = 4_000;
@@ -412,30 +426,38 @@ export async function createRuntimeSeam(
   }
 
   /**
-   * Whether the healthy neighbour Plugin still answers a call (#516). The seam
-   * starts it beside the hostile one; once the hostile has stopped, this asks its
-   * `health.check` once more. A started-but-unready neighbour is polled first, so
-   * a slow start is not reported as a death.
+   * The healthy neighbour's runtime once it is ready, starting it again when it
+   * stopped; `null` when it never became ready. A started-but-unready neighbour
+   * is polled first, so a slow start is not reported as a death.
    */
-  async function neighbourAnswers(): Promise<boolean> {
+  async function awaitHealthyRuntime(): Promise<PluginRuntime | null> {
     for (let attempt = 0; attempt < 100; attempt += 1) {
       const runtime = lifecycle.runtime(FIXTURE_HEALTHY_ID);
       const status = lifecycle.state(FIXTURE_HEALTHY_ID)?.status;
-      if (runtime && !runtime.broker.stopped && status === "ready") {
-        try {
-          await runtime.broker.request("health.check", {});
-          return true;
-        } catch {
-          return false;
-        }
-      }
+      if (runtime && !runtime.broker.stopped && status === "ready") return runtime;
       if (status === "stopped") {
         const result = await lifecycle.start(FIXTURE_HEALTHY_ID, "restart");
-        if (!result.ok) return false;
+        if (!result.ok) return null;
       }
       await sleep(150);
     }
-    return false;
+    return null;
+  }
+
+  /**
+   * Whether the healthy neighbour Plugin still answers a call (#516). The seam
+   * starts it beside the hostile one; once the hostile has stopped, this asks its
+   * `health.check` once more.
+   */
+  async function neighbourAnswers(): Promise<boolean> {
+    const runtime = await awaitHealthyRuntime();
+    if (runtime === null) return false;
+    try {
+      await runtime.broker.request("health.check", {});
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /** Waits for the lifecycle to stop the Plugin and returns its reason. */
@@ -699,6 +721,70 @@ export async function createRuntimeSeam(
     }
   }
 
+  /** One listed Canvas Reference row, as plain text, or nothing when it is malformed. */
+  function readCanvasReferenceRow(row: unknown): CanvasReferenceObservation["rows"] {
+    if (typeof row !== "object" || row === null) return [];
+    const { id, title, subtitle } = row as { id?: unknown; title?: unknown; subtitle?: unknown };
+    if (typeof id !== "string" || typeof title !== "string") return [];
+    return [{ id, title, ...(typeof subtitle === "string" ? { subtitle } : {}) }];
+  }
+
+  /** One resolve answer, kept only in the shape the host accepts, or `null` when malformed. */
+  function readCanvasReferenceResolution(
+    entry: unknown
+  ): CanvasReferenceObservation["resolutions"][string] | null {
+    if (typeof entry !== "object" || entry === null) return null;
+    const { status, title, subtitle } = entry as {
+      status?: unknown;
+      title?: unknown;
+      subtitle?: unknown;
+    };
+    if (status === "missing") return { status: "missing" };
+    if (status !== "present" || typeof title !== "string") return null;
+    return { status: "present", title, ...(typeof subtitle === "string" ? { subtitle } : {}) };
+  }
+
+  /**
+   * The healthy fixture's Canvas Reference source (#836), asked through the
+   * three broker requests the host sends: the rows `canvasReference.list`
+   * answers for source `items`, the resolutions `canvasReference.resolve` gives
+   * for the row the fixture lists and for one it never lists, and what
+   * `canvasReference.open` answers. The answers are reported as facts;
+   * `checks.ts` compares them with the row the fixture declares.
+   */
+  async function probeCanvasReferences(): Promise<CanvasReferenceObservation> {
+    const runtime = await awaitHealthyRuntime();
+    if (runtime === null) throw new Error("the fixture-healthy Plugin did not become ready");
+    const listed = await runtime.broker.request(PLUGIN_CANVAS_REFERENCE_LIST_REQUEST, {
+      source: CANVAS_REFERENCE_SOURCE_ID,
+      query: "",
+    });
+    const answers = await runtime.broker.request(PLUGIN_CANVAS_REFERENCE_RESOLVE_REQUEST, {
+      source: CANVAS_REFERENCE_SOURCE_ID,
+      ids: [CANVAS_REFERENCE_ROW_ID, CANVAS_REFERENCE_UNKNOWN_ID],
+    });
+    const opened = await runtime.broker.request(PLUGIN_CANVAS_REFERENCE_OPEN_REQUEST, {
+      source: CANVAS_REFERENCE_SOURCE_ID,
+      id: CANVAS_REFERENCE_ROW_ID,
+    });
+
+    const rows = (listed as { rows?: unknown } | null)?.rows;
+    const resolutions: CanvasReferenceObservation["resolutions"] = {};
+    for (const id of [CANVAS_REFERENCE_ROW_ID, CANVAS_REFERENCE_UNKNOWN_ID]) {
+      const answer = readCanvasReferenceResolution(
+        typeof answers === "object" && answers !== null
+          ? (answers as Record<string, unknown>)[id]
+          : undefined
+      );
+      if (answer !== null) resolutions[id] = answer;
+    }
+    return {
+      rows: Array.isArray(rows) ? rows.flatMap(readCanvasReferenceRow) : [],
+      resolutions,
+      opened: typeof opened === "string" ? opened : String(opened),
+    };
+  }
+
   async function probeFrameIpc(): Promise<IpcObservation> {
     return new Promise<IpcObservation>((resolve, reject) => {
       let iframe: HTMLIFrameElement;
@@ -770,6 +856,7 @@ export async function createRuntimeSeam(
     probeOom,
     probeFileGrants,
     probeFileSave,
+    probeCanvasReferences,
     heartbeat,
     leaks,
     dispose() {

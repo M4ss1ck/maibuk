@@ -124,6 +124,7 @@ function registerPluginSidebarEntry({ entryTitle = "Report" } = {}) {
       },
     ],
     itemMenuEntries: [],
+    canvasReferenceSources: [],
     token: Symbol("sample"),
   });
   notifyContributionsChange();

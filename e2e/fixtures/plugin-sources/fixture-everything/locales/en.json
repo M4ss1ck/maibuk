@@ -8,5 +8,6 @@
   "commands.insertGreeting.label": "Insert greeting",
   "pages.panel.title": "Everything fixture",
   "settingsRows.about.label": "Fixture row",
-  "settingsRows.about.description": "A deterministic Settings row."
+  "settingsRows.about.description": "A deterministic Settings row.",
+  "canvasReferenceSources.items.label": "Fixture items"
 }

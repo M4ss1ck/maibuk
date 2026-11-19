@@ -58,6 +58,7 @@ export const CONTRIBUTION_LIMITS = {
   settingsRows: 50,
   toolbarButtons: 20,
   itemMenuEntries: 50,
+  canvasReferenceSources: 20,
 } as const;
 
 const LUCIDE_ICON_NAMES_SET: ReadonlySet<string> = new Set(LUCIDE_ICON_NAMES);
@@ -403,6 +404,7 @@ function collectProblems(
   const toolbarButtons = contributes?.toolbarButtons ?? [];
   const sidebarEntries = contributes?.sidebarEntries ?? [];
   const itemMenuEntries = contributes?.itemMenuEntries ?? [];
+  const canvasReferenceSources = contributes?.canvasReferenceSources ?? [];
   const commandById = new Map(commands.map((command) => [command.id, command]));
   const pageIds = new Set(pages.map((page) => page.id));
   const pageById = new Map(pages.map((page) => [page.id, page]));
@@ -422,6 +424,7 @@ function collectProblems(
   checkCount("settingsRows", settingsRows);
   checkCount("toolbarButtons", toolbarButtons);
   checkCount("itemMenuEntries", itemMenuEntries);
+  checkCount("canvasReferenceSources", canvasReferenceSources);
 
   checkDuplicateIds(commands, "contributes.commands", "Command", add);
   commands.forEach((command, commandIndex) => {
@@ -526,6 +529,18 @@ function collectProblems(
     const iconIssue = iconProblem(entry.icon);
     if (iconIssue !== null) add(`${base}.icon`, iconIssue);
     checkContributionPlatforms(entry.platforms, `${base}.platforms`, manifest, add);
+  });
+
+  checkDuplicateIds(
+    canvasReferenceSources,
+    "contributes.canvasReferenceSources",
+    "Canvas Reference source",
+    add
+  );
+  canvasReferenceSources.forEach((source, index) => {
+    const base = `contributes.canvasReferenceSources[${index}]`;
+    const iconIssue = iconProblem(source.icon);
+    if (iconIssue !== null) add(`${base}.icon`, iconIssue);
   });
 
   checkDuplicateIds(settingsRows, "contributes.settingsRows", "Settings row", add);

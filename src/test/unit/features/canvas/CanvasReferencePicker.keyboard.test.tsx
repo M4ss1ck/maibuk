@@ -30,7 +30,7 @@ vi.mock("@/features/canvas/references", async (importOriginal) => {
     resolve: async () => ({}),
     open: async () => "opened",
   };
-  return { ...actual, CANVAS_REFERENCE_SOURCES: [sourceA, sourceB] };
+  return { ...actual, useCanvasReferenceSources: () => [sourceA, sourceB] };
 });
 
 vi.mock("react-i18next", () => ({

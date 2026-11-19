@@ -19,8 +19,10 @@ import { noteReferenceSource } from "@/features/canvas/noteReferenceSource";
 
 /**
  * Every source has to answer the same way: filter its rows by the query, answer
- * present and missing ids, and open only what it can find. A new source joins
- * CANVAS_REFERENCE_SOURCES and adds its fixture here, or the registry test fails.
+ * present and missing ids, and open only what it can find. A new host source
+ * joins CANVAS_REFERENCE_SOURCES and adds its fixture here, or the registry test
+ * fails. Plugin sources join through the contributions registry and are covered
+ * by canvas-reference-plugin-sources.test.tsx.
  */
 
 // The Chapter source reads its rows and its targets from the Chapters store, so

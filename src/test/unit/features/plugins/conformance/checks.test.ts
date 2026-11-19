@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  CANVAS_REFERENCE_CHECK_ID,
   ESCAPE_ALLOCATE_CHECK_ID,
   FILE_GRANTS_CHECK_ID,
   FILE_SAVE_CHECK_ID,
@@ -26,6 +27,7 @@ import {
 } from "@/features/plugins/conformance/file-grants";
 import { CONFORMANCE_SAVE, CONFORMANCE_SAVE_HEX } from "@/features/plugins/conformance/file-save";
 import type {
+  CanvasReferenceObservation,
   CommandObservation,
   CommandOutcome,
   ConformanceCheck,
@@ -84,6 +86,16 @@ const FILE_SAVE_OBSERVATION: FileSaveObservation = {
   hex: CONFORMANCE_SAVE_HEX,
 };
 
+/** The answers a healthy Canvas Reference source gives (#836). */
+const CANVAS_REFERENCE_OBSERVATION: CanvasReferenceObservation = {
+  rows: [{ id: "one", title: "One" }],
+  resolutions: {
+    one: { status: "present", title: "One" },
+    absent: { status: "missing" },
+  },
+  opened: "opened",
+};
+
 /** The seam the runner sees, with every check passing unless overridden. */
 function makeSeam(overrides: Partial<ConformanceSeam> = {}): ConformanceSeam {
   return {
@@ -102,6 +114,7 @@ function makeSeam(overrides: Partial<ConformanceSeam> = {}): ConformanceSeam {
     }),
     probeFileGrants: async () => FILE_GRANT_OBSERVATION,
     probeFileSave: async () => FILE_SAVE_OBSERVATION,
+    probeCanvasReferences: async () => CANVAS_REFERENCE_OBSERVATION,
     heartbeat: async () => true,
     leaks: async () => 0,
     ...overrides,
@@ -618,6 +631,50 @@ describe("runConformanceChecks File Save", () => {
   });
 });
 
+describe("runConformanceChecks Canvas References", () => {
+  it("passes when list, resolve, and open answer the fixture's one row", async () => {
+    const checks = await runConformanceChecks(makeSeam());
+    const check = byId(checks, CANVAS_REFERENCE_CHECK_ID);
+    expect(check.status).toBe("pass");
+    expect(check.detail).toContain("agree");
+  });
+
+  it("names every answer that drifted from the fixture's row", async () => {
+    const checks = await runConformanceChecks(
+      makeSeam({
+        probeCanvasReferences: async () => ({
+          rows: [{ id: "two", title: "Two" }],
+          resolutions: {
+            one: { status: "missing" },
+            absent: { status: "present", title: "Absent" },
+          },
+          opened: "missing",
+        }),
+      })
+    );
+    const check = byId(checks, CANVAS_REFERENCE_CHECK_ID);
+    expect(check.status).toBe("fail");
+    expect(check.detail).toContain("list returned two:Two");
+    expect(check.detail).toContain("resolve answered missing for one");
+    expect(check.detail).toContain("resolve answered present for absent");
+    expect(check.detail).toContain("open answered missing");
+  });
+
+  it("fails when the source lists more than its one row", async () => {
+    const checks = await runConformanceChecks(
+      makeSeam({
+        probeCanvasReferences: async () => ({
+          ...CANVAS_REFERENCE_OBSERVATION,
+          rows: [...CANVAS_REFERENCE_OBSERVATION.rows, { id: "extra", title: "Extra" }],
+        }),
+      })
+    );
+    const check = byId(checks, CANVAS_REFERENCE_CHECK_ID);
+    expect(check.status).toBe("fail");
+    expect(check.detail).toContain("one:One, extra:Extra");
+  });
+});
+
 describe("runConformanceChecks reporting", () => {
   it("hands every check to onCheck in run order, before returning", async () => {
     const streamed: string[] = [];
@@ -626,7 +683,7 @@ describe("runConformanceChecks reporting", () => {
     });
     expect(streamed).toEqual(checks.map((check) => check.id));
     expect(streamed[0]).toBe(T2_FRAME_CHECK_ID);
-    expect(streamed.at(-1)).toBe(FILE_SAVE_CHECK_ID);
+    expect(streamed.at(-1)).toBe(CANVAS_REFERENCE_CHECK_ID);
   });
 });
 

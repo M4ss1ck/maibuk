@@ -2735,6 +2735,25 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-canvas-references",
+    area: "plugins",
+    workflow:
+      "A Plugin's Canvas Reference source answers the picker in a tab of its own: choosing one of its items places a Generic card that names the source, the item's title, and its subtitle, and Open runs the Plugin's own open into a notification, while an item the Plugin has lost leaves a Missing card whose Open stays disabled, and turning the Plugin off leaves that card Unavailable with its stored label until it is turned on again; asserts: the picker's tab list, the Generic card's source, title, and subtitle, the opened notification, the Missing and Unavailable lines, the disabled Open; persists: yes",
+    edges: [
+      "A Plugin tab lists its items and places a Generic card that names the source, its title, and its subtitle",
+      "Open on a Plugin card runs the Plugin's own open and reports it in a notification",
+      "A Missing item keeps its stored label on the card and cannot open",
+      "A Plugin turned off leaves its reference Unavailable with its stored label and cannot open",
+      "Turning the Plugin back on resolves its reference again, with its subtitle and Open",
+    ],
+    terms: ["Plugin", "Canvas Reference", "Missing Canvas Reference"],
+    shortcuts: ["canvas.addReference"],
+    routes: ["/canvas/:canvasId", "/settings"],
+    fixture: "canvasWithNodes",
+    tags: ["sandbox"],
+    status: "accepted",
+  },
+  {
     id: "plugins-writes",
     area: "plugins",
     workflow:

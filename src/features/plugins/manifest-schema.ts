@@ -164,6 +164,12 @@ const itemMenuEntryContribution = strictObject({
   platforms: contributionPlatforms.optional(),
 });
 
+const canvasReferenceSourceContribution = strictObject({
+  id: localId,
+  label: z.string().min(1).describe("The source's label in the Plugin's default language."),
+  icon,
+});
+
 const contributes = strictObject({
   commands: z.array(commandContribution).optional(),
   pages: z.array(pageContribution).optional(),
@@ -171,6 +177,7 @@ const contributes = strictObject({
   settingsRows: z.array(settingsRowContribution).optional(),
   toolbarButtons: z.array(toolbarButtonContribution).optional(),
   itemMenuEntries: z.array(itemMenuEntryContribution).optional(),
+  canvasReferenceSources: z.array(canvasReferenceSourceContribution).optional(),
 });
 
 const renames = z

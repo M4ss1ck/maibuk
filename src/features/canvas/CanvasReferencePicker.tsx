@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
-import type { ParseKeys } from "i18next";
 import { useTranslation } from "react-i18next";
 import { Tab, TabList, TabPanel, Tabs } from "react-aria-components";
 import { ListBox, ListBoxItem } from "react-aria-components/ListBox";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { CANVAS_REFERENCE_SOURCES, type CanvasReferenceRow } from "@/features/canvas/references";
+import {
+  canvasReferenceSourceLabel,
+  type CanvasReferenceRow,
+  useCanvasReferenceSources,
+} from "@/features/canvas/references";
 
 /**
  * How long a source's list may take before the picker reports it failed: a
@@ -15,8 +18,6 @@ export const CANVAS_REFERENCE_LIST_TIMEOUT_MS = 5000;
 
 const TAB_CLASS =
   "flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 pointer-coarse:py-2 text-sm font-medium outline-none transition-colors text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary data-[selected]:bg-card data-[selected]:text-foreground data-[selected]:shadow-sm";
-
-const FIRST_SOURCE_ID = CANVAS_REFERENCE_SOURCES[0]?.id ?? "";
 
 /** What the active tab's source answered for one query, or that it failed. */
 interface ReferenceListAnswer {
@@ -44,21 +45,23 @@ export function CanvasReferencePicker({
   onChoose,
 }: CanvasReferencePickerProps) {
   const { t } = useTranslation();
-  const [sourceId, setSourceId] = useState(FIRST_SOURCE_ID);
+  const sources = useCanvasReferenceSources();
+  const firstSourceId = sources[0]?.id ?? "";
+  const [sourceId, setSourceId] = useState(firstSourceId);
   const [query, setQuery] = useState("");
   const [answer, setAnswer] = useState<ReferenceListAnswer | null>(null);
 
   // Every open starts on the first tab with an empty query.
   useEffect(() => {
     if (!isOpen) return;
-    setSourceId(FIRST_SOURCE_ID);
+    setSourceId(firstSourceId);
     setQuery("");
     setAnswer(null);
-  }, [isOpen]);
+  }, [isOpen, firstSourceId]);
 
   useEffect(() => {
     if (!isOpen) return;
-    const source = CANVAS_REFERENCE_SOURCES.find((candidate) => candidate.id === sourceId);
+    const source = sources.find((candidate) => candidate.id === sourceId);
     if (!source) return;
     // One answer per tab and query: an answer that lands after the tab or the
     // query moved on is stale and dropped, and so is one that comes too late.
@@ -81,7 +84,7 @@ export function CanvasReferencePicker({
       live = false;
       clearTimeout(timeout);
     };
-  }, [canvasId, isOpen, query, sourceId]);
+  }, [canvasId, isOpen, query, sourceId, sources]);
 
   const current = answer && answer.sourceId === sourceId && answer.query === query ? answer : null;
 
@@ -103,12 +106,14 @@ export function CanvasReferencePicker({
           aria-label={t("canvas.addReference")}
           className="inline-flex max-w-full flex-wrap gap-1 rounded-lg bg-muted/60 p-1"
         >
-          {CANVAS_REFERENCE_SOURCES.map((entry) => {
+          {sources.map((entry) => {
             const Icon = entry.icon;
             return (
               <Tab key={entry.id} id={entry.id} className={TAB_CLASS}>
-                <Icon className="size-4" aria-hidden="true" />
-                {t(entry.label as ParseKeys)}
+                <span aria-hidden="true">
+                  <Icon className="size-4" />
+                </span>
+                {canvasReferenceSourceLabel(entry, t)}
               </Tab>
             );
           })}

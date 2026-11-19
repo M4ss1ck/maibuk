@@ -17,9 +17,14 @@ import {
   type PluginApiEvents,
 } from "@/plugin-sdk/api.generated";
 import {
+  type CanvasReferenceSourceResolution,
+  type CanvasReferenceSourceRow,
   type EndpointAnswer,
   type EndpointRequest,
   type HostToPluginMessage,
+  PLUGIN_CANVAS_REFERENCE_LIST_REQUEST,
+  PLUGIN_CANVAS_REFERENCE_OPEN_REQUEST,
+  PLUGIN_CANVAS_REFERENCE_RESOLVE_REQUEST,
   PLUGIN_ENDPOINT_REQUEST,
   PLUGIN_FRAME_MESSAGE,
   PLUGIN_MESSAGE_MAX_BYTES,
@@ -45,6 +50,58 @@ export * from "@/plugin-sdk/protocol";
 export * from "@/plugin-sdk/ui";
 
 export type HostRequestHandler = (method: string, params: unknown) => unknown;
+
+/**
+ * One Canvas Reference source a Plugin answers for. The host sends three
+ * requests, each naming the source by the id the manifest's
+ * `contributes.canvasReferenceSources[].id` declared.
+ */
+export interface CanvasReferenceSourceRequests {
+  list(query: string): CanvasReferenceSourceRow[] | Promise<CanvasReferenceSourceRow[]>;
+  resolve(
+    ids: string[]
+  ):
+    | Record<string, CanvasReferenceSourceResolution>
+    | Promise<Record<string, CanvasReferenceSourceResolution>>;
+  open(id: string): "opened" | "missing" | Promise<"opened" | "missing">;
+}
+
+/**
+ * Builds the `onHostRequest` handler for a Plugin's Canvas Reference sources:
+ * `canvasReference.list` answers `{ rows }` from the named source's `list`,
+ * `canvasReference.resolve` and `canvasReference.open` dispatch to its
+ * `resolve` and `open`, and every other method goes to `next` (or throws when
+ * there is none). An unknown source throws an error naming it.
+ *
+ * ```ts
+ * client.onHostRequest(canvasReferenceRequests({ items: { list, resolve, open } }, handler));
+ * ```
+ */
+export function canvasReferenceRequests(
+  sources: Record<string, CanvasReferenceSourceRequests>,
+  next?: HostRequestHandler
+): HostRequestHandler {
+  function sourceFor(source: unknown): CanvasReferenceSourceRequests {
+    const found = typeof source === "string" ? sources[source] : undefined;
+    if (!found) throw new Error(`Unknown Canvas Reference source: ${String(source)}`);
+    return found;
+  }
+
+  return async (method, params) => {
+    const input = (params ?? {}) as { source?: unknown; query: string; ids: string[]; id: string };
+    switch (method) {
+      case PLUGIN_CANVAS_REFERENCE_LIST_REQUEST:
+        return { rows: await sourceFor(input.source).list(input.query) };
+      case PLUGIN_CANVAS_REFERENCE_RESOLVE_REQUEST:
+        return sourceFor(input.source).resolve(input.ids);
+      case PLUGIN_CANVAS_REFERENCE_OPEN_REQUEST:
+        return sourceFor(input.source).open(input.id);
+      default:
+        if (next) return next(method, params);
+        throw new Error(`No handler for ${method}`);
+    }
+  };
+}
 
 /**
  * One Endpoint request as the SDK hands it to an author's handler: the raw

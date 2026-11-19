@@ -18,11 +18,15 @@ import type { Note } from "@/features/notes";
 import {
   CANVAS_REFERENCE_CARD_SIZES,
   type CanvasReferenceCardKind,
-  getCanvasReferenceSource,
+  type CanvasReferenceSource,
+  canvasReferencePluginName,
+  canvasReferenceSourceLabel,
   openCanvasReference,
   useCanvasReferenceResolution,
+  useCanvasReferenceSource,
 } from "@/features/canvas/references";
 import type { Canvas, ReferenceCanvasNode } from "@/features/canvas/types";
+import { isPluginContributionId } from "@/features/plugins/ids";
 import { CanvasNodeHandles } from "@/features/canvas/nodes/CanvasNodeHandles";
 import { useCanvasNodeMenu } from "@/features/canvas/nodes/CanvasNodeMenu";
 import { useCanvasStore } from "@/features/canvas/store";
@@ -107,6 +111,19 @@ function ChapterReferenceCardBody({ value, title }: CanvasReferenceCardBodyProps
   );
 }
 
+/** A Generic card draws the Plugin source's title and its one line of subtitle (#836). */
+function GenericReferenceCardBody({ value, title }: CanvasReferenceCardBodyProps) {
+  const { subtitle } = value as { subtitle?: string };
+
+  return (
+    <>
+      <h3 className="line-clamp-2 font-medium text-foreground">{title}</h3>
+
+      {subtitle && <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">{subtitle}</p>}
+    </>
+  );
+}
+
 /** What a card kind draws once its source answered: the one place a value is read. */
 const CANVAS_REFERENCE_CARD_BODIES: Record<
   CanvasReferenceCardKind,
@@ -116,6 +133,7 @@ const CANVAS_REFERENCE_CARD_BODIES: Record<
   book: BookReferenceCardBody,
   chapter: ChapterReferenceCardBody,
   canvas: CanvasReferenceCardBody,
+  generic: GenericReferenceCardBody,
 };
 
 /** A state with nothing to draw beyond its label and, sometimes, one line saying why. */
@@ -125,6 +143,23 @@ function ReferenceStateBody({ title, detail }: { title: string; detail?: string 
       <h3 className="line-clamp-2 font-medium text-foreground">{title}</h3>
       {detail && <p className="mt-1 text-sm text-muted-foreground">{detail}</p>}
     </>
+  );
+}
+
+/** A Generic card names the source it belongs to, above whatever state body it draws. */
+function ReferenceSourceHeader({ source }: { source: CanvasReferenceSource }) {
+  const { t } = useTranslation();
+  const SourceIcon = source.icon;
+
+  return (
+    <div className="mb-2 flex min-w-0 items-center gap-1">
+      <span aria-hidden="true" className="shrink-0">
+        <SourceIcon className="size-4" />
+      </span>
+      <span className="truncate text-xs text-muted-foreground">
+        {canvasReferenceSourceLabel(source, t)}
+      </span>
+    </div>
   );
 }
 
@@ -155,13 +190,19 @@ function CanvasReferenceCard({
     isDisabled: editorReadOnly || interactivityLocked,
   });
 
-  const source = getCanvasReferenceSource(node.source);
+  const source = useCanvasReferenceSource(node.source);
   const resolution = useCanvasReferenceResolution(node.source, node.targetId);
-  // An unregistered source has no card kind yet; it borrows the note box.
-  const size = CANVAS_REFERENCE_CARD_SIZES[source?.card ?? "note"];
+  // A source this app does not know still keeps the box its kind would draw: a
+  // Plugin reference is always Generic, anything else borrows the note box.
+  const size =
+    CANVAS_REFERENCE_CARD_SIZES[
+      source?.card ?? (isPluginContributionId(node.source) ? "generic" : "note")
+    ];
   // The Book card fills its box edge to edge, like the Library Book card.
   const isBookCard = source?.card === "book";
   const storedLabel = node.label || t("canvas.referenceUntitled");
+  // An Unavailable reference names the Plugin that owns the source when it is installed here.
+  const unavailablePlugin = source ? undefined : canvasReferencePluginName(node.source);
   const CardBody = source ? CANVAS_REFERENCE_CARD_BODIES[source.card] : null;
   const title = resolution?.status === "present" ? resolution.title || storedLabel : storedLabel;
   const canOpen = Boolean(source) && resolution?.status !== "missing";
@@ -181,8 +222,17 @@ function CanvasReferenceCard({
       <div
         className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-xl ${isBookCard ? "" : "p-4 pb-0"}`}
       >
+        {source?.card === "generic" && <ReferenceSourceHeader source={source} />}
+
         {!source ? (
-          <ReferenceStateBody title={storedLabel} detail={t("canvas.referenceUnavailable")} />
+          <ReferenceStateBody
+            title={storedLabel}
+            detail={
+              unavailablePlugin
+                ? t("canvas.referenceUnavailablePlugin", { name: unavailablePlugin })
+                : t("canvas.referenceUnavailable")
+            }
+          />
         ) : isBookCard && resolution?.status !== "present" ? (
           <>
             <div aria-hidden="true" className="min-h-0 flex-1 bg-muted" />

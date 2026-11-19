@@ -80,6 +80,7 @@ function seedPages(): void {
     ],
     sidebarEntries: [],
     itemMenuEntries: [],
+    canvasReferenceSources: [],
     token: Symbol("sample"),
   });
   notifyContributionsChange();

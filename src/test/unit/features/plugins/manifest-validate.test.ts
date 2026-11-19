@@ -54,6 +54,7 @@ function baseManifest(): Mutable {
       settingsRows: [{ id: "ignore", label: "Ignored words", keywords: ["skip"] }],
       toolbarButtons: [{ id: "toggle", command: "showReport", icon: "highlighter" }],
       itemMenuEntries: [{ command: "showReport" }],
+      canvasReferenceSources: [{ id: "swatches", label: "Swatches", icon: "swatch-book" }],
     },
     commandRenames: { oldReport: "showReport" },
     rowRenames: { oldRow: "ignore" },
@@ -948,6 +949,66 @@ describe("validateManifestValue: pages, sidebar entries, toolbar buttons, Item M
     expectProblem(
       problemsFor((m) => (m.contributes.settingsRows[0].description = "")),
       "contributes.settingsRows[0].description"
+    );
+  });
+});
+
+describe("validateManifestValue: canvas reference sources", () => {
+  it("accepts a well-formed source", () => {
+    const result = validateManifestValue(baseManifest());
+    if (!result.ok) throw new Error(JSON.stringify(result.problems));
+    expect(result.manifest.contributes?.canvasReferenceSources?.[0]).toEqual({
+      id: "swatches",
+      label: "Swatches",
+      icon: "swatch-book",
+    });
+  });
+
+  it("refuses an id that is not a Plugin-local id", () => {
+    expectProblem(
+      problemsFor((m) => (m.contributes.canvasReferenceSources[0].id = "Swatches_List")),
+      "contributes.canvasReferenceSources[0].id"
+    );
+  });
+
+  it("refuses an empty label", () => {
+    expectProblem(
+      problemsFor((m) => (m.contributes.canvasReferenceSources[0].label = "")),
+      "contributes.canvasReferenceSources[0].label"
+    );
+  });
+
+  it("refuses an icon that is not a Lucide name or a relative .svg path", () => {
+    expectProblem(
+      problemsFor((m) => (m.contributes.canvasReferenceSources[0].icon = "not-an-icon")),
+      "contributes.canvasReferenceSources[0].icon",
+      /Lucide/
+    );
+  });
+
+  it("refuses a duplicate id", () => {
+    expectProblem(
+      problemsFor((m) =>
+        m.contributes.canvasReferenceSources.push({
+          id: "swatches",
+          label: "Again",
+          icon: "palette",
+        })
+      ),
+      "contributes.canvasReferenceSources[1].id",
+      /duplicate/i
+    );
+  });
+
+  it("refuses more sources than the cap allows", () => {
+    const sources = Array.from(
+      { length: CONTRIBUTION_LIMITS.canvasReferenceSources + 1 },
+      (_, index) => ({ id: `source${index}`, label: `Source ${index}`, icon: "palette" })
+    );
+    expectProblem(
+      problemsFor((m) => (m.contributes.canvasReferenceSources = sources)),
+      "contributes.canvasReferenceSources",
+      /at most 20/
     );
   });
 });

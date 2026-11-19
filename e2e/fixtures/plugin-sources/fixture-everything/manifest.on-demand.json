@@ -5,7 +5,7 @@
   "description": "The E2E fixture-everything Plugin (issue #446): one Plugin that declares every contribution point and every Plugin Permission, with a deterministic target Command, so the E2E lane can prove the host's surfaces and the broker's permission checks against one fixture.",
   "author": "Maibuk",
   "version": "1.0.0",
-  "apiVersion": "^0.1",
+  "apiVersion": "^0.1.13",
   "entry": "index.js",
   "platforms": ["web"],
   "lifecycle": "on-demand",
@@ -55,6 +55,7 @@
     ],
     "pages": [{ "id": "panel", "title": "Everything fixture", "command": "openPage" }],
     "sidebarEntries": [{ "page": "panel", "icon": "book-open" }],
+    "canvasReferenceSources": [{ "id": "items", "label": "Fixture items", "icon": "box" }],
     "settingsRows": [
       {
         "id": "about",

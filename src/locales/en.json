@@ -345,6 +345,7 @@
     "referenceUntitled": "Untitled",
     "referenceMissing": "This item no longer exists",
     "referenceUnavailable": "Not available here",
+    "referenceUnavailablePlugin": "Needs the {{name}} Plugin",
     "openReference": "Open",
     "openReferenceNamed": "Open {{title}}",
     "noMatches": "No canvases match your search",
