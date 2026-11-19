@@ -212,7 +212,7 @@ export function createPluginHandlers(manifest: PluginHandlersManifest): PluginAp
     "navigation.openEntity": ({ entity, reveal }) =>
       openPluginEntity(entity, reveal).then(() => null),
     "navigation.openPage": ({ pageId, pluginId }, context) =>
-      openPluginPage(pluginId ?? context.pluginId, pageId),
+      openPluginPage(pluginId ?? context.pluginId, pageId, context.pluginId),
     "language.get": async () => ({ language: currentPluginLanguage() }),
     "fonts.list": () => listPluginPdfFonts(),
     "fonts.read": ({ id }) => readPluginPdfFont(id),

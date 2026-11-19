@@ -20,6 +20,14 @@ import { getDatabase } from "@/lib/db";
 
 let navigator: PluginNavigator | null = null;
 
+/** Where an `openPage` returns to, as a route and the label the host shows. */
+export interface PluginPageReturnTarget {
+  to: string;
+  label: string;
+}
+
+let pendingPageReturn: { callerId: string; target: PluginPageReturnTarget } | null = null;
+
 /**
  * Registers the app shell's navigator; returns the unregister. The last
  * mounted navigator wins, so a remount replaces a stale one.
@@ -85,16 +93,49 @@ export async function openPluginEntity(
 }
 
 /**
- * Opens a Plugin page through the registered navigator. A Plugin that is not
+ * Runs `run` with a return target parked for `callerId`'s own next
+ * `openPluginPage`, which spends it as navigation state. The slot is cleared
+ * when the run settles, so a run that never opens a page carries nothing.
+ */
+export async function withPluginPageReturnTarget<T>(
+  callerId: string,
+  target: PluginPageReturnTarget,
+  run: () => Promise<T>
+): Promise<T> {
+  const entry = { callerId, target };
+  pendingPageReturn = entry;
+  try {
+    return await run();
+  } finally {
+    if (pendingPageReturn === entry) pendingPageReturn = null;
+  }
+}
+
+/**
+ * Opens a Plugin page through the registered navigator, carrying `callerId`'s
+ * parked return target as navigation state and spending it. A Plugin that is not
  * installed or does not declare the page is a typed `not-found`; the call never
  * rejects the Plugin. Like `openPluginEntity`, no registered navigator is a
  * no-op (the page still resolves for the caller).
  */
 export async function openPluginPage(
   pluginId: string,
-  pageId: string
+  pageId: string,
+  callerId?: string
 ): Promise<PluginPageOpenResult> {
   if (getPluginPage(pluginId, pageId) === undefined) return { status: "not-found" };
-  navigator?.(pluginPageRoute(pluginId, pageId));
+  const route = pluginPageRoute(pluginId, pageId);
+  const pending =
+    pendingPageReturn !== null && pendingPageReturn.callerId === callerId
+      ? pendingPageReturn
+      : null;
+  if (pending === null) {
+    navigator?.(route);
+  } else {
+    pendingPageReturn = null;
+    navigator?.(route, {
+      state: { returnTo: pending.target.to, returnLabel: pending.target.label },
+    });
+  }
   return { status: "opened" };
 }
