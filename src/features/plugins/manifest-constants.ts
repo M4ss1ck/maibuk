@@ -75,6 +75,16 @@ export function localeField(path: string, manifest: PluginManifest): LocaleField
       },
     };
   }
+  if (section === "canvasReferenceSources") {
+    const source = manifest.contributes?.canvasReferenceSources?.find((item) => item.id === id);
+    if (source === undefined || field !== "label") return null;
+    return {
+      kind: "string",
+      write: (value) => {
+        if (typeof value === "string") source.label = value;
+      },
+    };
+  }
   if (section === "settingsRows") {
     const row = manifest.contributes?.settingsRows?.find((item) => item.id === id);
     if (row === undefined) return null;

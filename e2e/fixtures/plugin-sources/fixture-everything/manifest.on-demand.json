@@ -55,6 +55,7 @@
     ],
     "pages": [{ "id": "panel", "title": "Everything fixture", "command": "openPage" }],
     "sidebarEntries": [{ "page": "panel", "icon": "book-open" }],
+    "canvasReferenceSources": [{ "id": "items", "label": "Fixture items", "icon": "box" }],
     "settingsRows": [
       {
         "id": "about",

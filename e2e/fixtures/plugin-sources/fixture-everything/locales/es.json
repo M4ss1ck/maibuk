@@ -7,5 +7,6 @@
   "commands.insertGreeting.label": "Insertar saludo",
   "pages.panel.title": "Fixture completo",
   "settingsRows.about.label": "Fila del fixture",
-  "settingsRows.about.description": "Una fila de ajustes determinista."
+  "settingsRows.about.description": "Una fila de ajustes determinista.",
+  "canvasReferenceSources.items.label": "Elementos del fixture"
 }

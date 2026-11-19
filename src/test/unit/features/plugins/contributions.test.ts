@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  getPluginCanvasReferenceSources,
   getPluginCommand,
   getPluginItemMenuEntries,
   getPluginPage,
@@ -41,6 +42,7 @@ function sampleFolder(overrides: Partial<PluginManifest> = {}): PluginFolder {
         "commands.report.label": "Informe",
         "pages.report.title": "Informe de la muestra",
         "settingsRows.threshold.label": "Umbral",
+        "canvasReferenceSources.swatches.label": "Muestras",
       }),
     },
     {
@@ -58,6 +60,7 @@ function sampleFolder(overrides: Partial<PluginManifest> = {}): PluginFolder {
         settingsRows: [{ id: "threshold", label: "Threshold" }],
         toolbarButtons: [{ id: "reportButton", command: "report", icon: "book-open" }],
         itemMenuEntries: [{ command: "report" }],
+        canvasReferenceSources: [{ id: "swatches", label: "Swatches", icon: "swatch-book" }],
       },
       ...overrides,
     }
@@ -243,6 +246,55 @@ describe("registerPluginContributions", () => {
       "maibuk",
       "alpha",
       "zebra",
+    ]);
+  });
+
+  it("registers canvas reference sources with a derived id and a localized label", async () => {
+    cleanups.push(registerPluginContributions(sourceOf(sampleFolder())));
+
+    const [source] = getPluginCanvasReferenceSources();
+    expect(source.id).toBe("plugin.sample.swatches");
+    expect(source.pluginId).toBe("sample");
+    expect(source.localId).toBe("swatches");
+    expect(source.label).toBe("Swatches");
+    expect(source.icon).toBe("swatch-book");
+
+    await i18n.changeLanguage("es");
+    expect(getPluginCanvasReferenceSources()[0].label).toBe("Muestras");
+  });
+
+  it("orders canvas reference sources by Plugin display name, then declared order, and removes them on unregister", () => {
+    const make = (id: string, name: string) =>
+      sourceOf(
+        pluginFolder(
+          {},
+          {
+            id,
+            name,
+            platforms: ["desktop"],
+            contributes: {
+              canvasReferenceSources: [
+                { id: "first", label: `${name} first`, icon: "palette" },
+                { id: "second", label: `${name} second`, icon: "swatch-book" },
+              ],
+            },
+          }
+        )
+      );
+    cleanups.push(registerPluginContributions(make("zebra", "Zebra")));
+    const unregisterAlpha = registerPluginContributions(make("alpha", "Alpha"));
+
+    expect(getPluginCanvasReferenceSources().map((source) => source.id)).toEqual([
+      "plugin.alpha.first",
+      "plugin.alpha.second",
+      "plugin.zebra.first",
+      "plugin.zebra.second",
+    ]);
+
+    unregisterAlpha();
+    expect(getPluginCanvasReferenceSources().map((source) => source.id)).toEqual([
+      "plugin.zebra.first",
+      "plugin.zebra.second",
     ]);
   });
 

@@ -61,6 +61,21 @@ export interface PluginSidebarEntryDef {
   seeded?: true;
 }
 
+/**
+ * A Canvas Reference source a Plugin declares: one tab in the Canvas Reference
+ * picker, answered by the Plugin's `list`, `resolve`, and `open` requests.
+ */
+export interface PluginCanvasReferenceSourceDef {
+  pluginId: string;
+  displayName: string;
+  localId: string;
+  /** `plugin.<pluginId>.<localId>`, derived like a page id. */
+  id: PluginContributionId;
+  /** The label for the current UI language. */
+  label: string;
+  icon: PluginIconSpec;
+}
+
 /** A Command explicitly listed for the Item Menus of its target kinds. */
 export interface PluginItemMenuEntryDef {
   pluginId: string;
@@ -96,6 +111,7 @@ export interface RegisteredContributions {
   pages: readonly PluginPageDef[];
   sidebarEntries: readonly PluginSidebarEntryDef[];
   itemMenuEntries: readonly PluginItemMenuEntryDef[];
+  canvasReferenceSources: readonly PluginCanvasReferenceSourceDef[];
   token: symbol;
   /** A sidebar-only record seeded from the snapshot until the scan replaces it. */
   seeded?: true;
@@ -111,12 +127,14 @@ const listeners = new Set<() => void>();
 // Referentially stable snapshots for useSyncExternalStore, refreshed on change.
 let cachedPages: PluginPageDef[] | null = null;
 let cachedSidebar: PluginSidebarEntryDef[] | null = null;
+let cachedCanvasReferenceSources: PluginCanvasReferenceSourceDef[] | null = null;
 const cachedItemMenu = new Map<PluginTarget, PluginItemMenuEntryDef[]>();
 
 /** Runs after every contribution register and unregister. */
 export function notifyContributionsChange(): void {
   cachedPages = null;
   cachedSidebar = null;
+  cachedCanvasReferenceSources = null;
   cachedItemMenu.clear();
   for (const listener of [...listeners]) listener();
 }
@@ -169,6 +187,7 @@ export function seedPluginSidebarEntries(entries: readonly PluginSidebarEntryDef
       pages: [],
       sidebarEntries,
       itemMenuEntries: [],
+      canvasReferenceSources: [],
       token: Symbol(pluginId),
       seeded: true,
     });
@@ -219,6 +238,16 @@ export function getPluginSidebarEntries(): PluginSidebarEntryDef[] {
   const records = [...contributions.values()].sort(compareOwners);
   cachedSidebar = records.flatMap((record) => [...record.sidebarEntries]);
   return cachedSidebar;
+}
+
+/** Every Canvas reference source, ordered by Plugin display name then declared order. */
+export function getPluginCanvasReferenceSources(): PluginCanvasReferenceSourceDef[] {
+  if (cachedCanvasReferenceSources !== null) return cachedCanvasReferenceSources;
+  const records = [...contributions.values()].sort((a, b) =>
+    a.displayName.localeCompare(b.displayName)
+  );
+  cachedCanvasReferenceSources = records.flatMap((record) => [...record.canvasReferenceSources]);
+  return cachedCanvasReferenceSources;
 }
 
 /** The Item Menu entries for one item kind, ordered by owner then declaration. */

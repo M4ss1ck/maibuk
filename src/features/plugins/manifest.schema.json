@@ -538,6 +538,74 @@
               "^x-": {}
             }
           }
+        },
+        "canvasReferenceSources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-zA-Z0-9]{0,47}$",
+                "description": "A camelCase id, unique within its contribution kind for this Plugin."
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The source's label in the Plugin's default language."
+              },
+              "icon": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "elements": {
+                        "minItems": 1,
+                        "type": "array",
+                        "items": {
+                          "type": "array",
+                          "prefixItems": [
+                            {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {
+                                "type": "string"
+                              }
+                            }
+                          ],
+                          "items": false,
+                          "minItems": 2,
+                          "maxItems": 2
+                        },
+                        "description": "SVG elements on a 24x24 grid: [tag, attributes] pairs. The validator sets the allowed tags, attributes, and count."
+                      }
+                    },
+                    "required": ["elements"],
+                    "additionalProperties": false,
+                    "patternProperties": {
+                      "^x-": {}
+                    }
+                  }
+                ],
+                "description": "A Lucide icon name (kebab-case), a relative .svg path inside the Plugin folder, or an inline icon { elements: [[tag, attrs], ...] } on a 24x24 grid."
+              }
+            },
+            "required": ["id", "label", "icon"],
+            "additionalProperties": false,
+            "patternProperties": {
+              "^x-": {}
+            }
+          }
         }
       },
       "additionalProperties": false,

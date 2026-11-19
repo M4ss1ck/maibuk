@@ -49,9 +49,10 @@ describe("manifest.schema.json", () => {
     ]);
   });
 
-  it("lists the six contribution kinds", () => {
+  it("lists the seven contribution kinds", () => {
     const properties = committed.properties as Record<string, any>;
     expect(Object.keys(properties.contributes.properties).sort()).toEqual([
+      "canvasReferenceSources",
       "commands",
       "itemMenuEntries",
       "pages",

@@ -32,6 +32,7 @@ import {
   pluginPageRoute,
   setRegisteredContributions,
   type PluginCommandDef,
+  type PluginCanvasReferenceSourceDef,
   type PluginItemMenuEntryDef,
   type PluginPageDef,
   type PluginSidebarEntryDef,
@@ -66,6 +67,7 @@ import {
 // import path. New UI code imports `contributions-registry.ts` directly.
 export {
   currentUILanguage,
+  getPluginCanvasReferenceSources,
   getPluginCommand,
   getPluginCommands,
   getPluginItemMenuEntries,
@@ -78,6 +80,7 @@ export {
 export { pluginPageRoute };
 export type {
   PluginCommandDef,
+  PluginCanvasReferenceSourceDef,
   PluginItemMenuEntryDef,
   PluginPageDef,
   PluginSidebarEntryDef,
@@ -216,6 +219,7 @@ export function registerPluginContributions(source: PluginContributionsSource): 
         (button) => onPlatform(button) && commandById.has(button.command)
       );
       const itemMenuEntries = (contributes.itemMenuEntries ?? []).filter(onPlatform);
+      const canvasReferenceSources = contributes.canvasReferenceSources ?? [];
 
       // Every registry below replaces its entries by Plugin id on re-register,
       // so a re-apply (a language change) updates in place instead of stacking
@@ -333,13 +337,25 @@ export function registerPluginContributions(source: PluginContributionsSource): 
         };
       });
 
+      const canvasSourceDefs: PluginCanvasReferenceSourceDef[] = canvasReferenceSources.map(
+        (source) => ({
+          pluginId: manifest.id,
+          displayName: localized.name,
+          localId: source.id,
+          id: `${PLUGIN_PREFIX}${manifest.id}.${source.id}` as PluginContributionId,
+          label: source.label,
+          icon: source.icon,
+        })
+      );
+
       const previous = getRegisteredContributions(manifest.id);
       const token = Symbol(manifest.id);
       if (
         commandDefs.length > 0 ||
         pageDefs.length > 0 ||
         sidebarDefs.length > 0 ||
-        itemMenuDefs.length > 0
+        itemMenuDefs.length > 0 ||
+        canvasSourceDefs.length > 0
       ) {
         setRegisteredContributions(manifest.id, {
           pluginId: manifest.id,
@@ -348,6 +364,7 @@ export function registerPluginContributions(source: PluginContributionsSource): 
           pages: pageDefs,
           sidebarEntries: sidebarDefs,
           itemMenuEntries: itemMenuDefs,
+          canvasReferenceSources: canvasSourceDefs,
           token,
         });
       } else if (previous !== undefined) {
