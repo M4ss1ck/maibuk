@@ -986,6 +986,23 @@ describe("validateManifestValue: canvas reference sources", () => {
     );
   });
 
+  it("accepts a source preview of landscape or portrait and keeps it", () => {
+    for (const preview of ["landscape", "portrait"]) {
+      const result = validateManifestValue(
+        baseManifestWith((m) => (m.contributes.canvasReferenceSources[0].preview = preview))
+      );
+      if (!result.ok) throw new Error(JSON.stringify(result.problems));
+      expect(result.manifest.contributes?.canvasReferenceSources?.[0].preview).toBe(preview);
+    }
+  });
+
+  it("refuses a preview that is neither landscape nor portrait", () => {
+    expectProblem(
+      problemsFor((m) => (m.contributes.canvasReferenceSources[0].preview = "square")),
+      "contributes.canvasReferenceSources[0].preview"
+    );
+  });
+
   it("refuses a duplicate id", () => {
     expectProblem(
       problemsFor((m) =>

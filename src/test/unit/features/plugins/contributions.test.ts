@@ -9,6 +9,7 @@ import {
   registerPluginContributions,
   resetPluginContributionsForTests,
 } from "@/features/plugins/contributions";
+import { getKnownCanvasReferenceSource } from "@/features/plugins/contributions-registry";
 import { readPluginManifest } from "@/features/plugins/runtime";
 import type { PluginFolder, PluginManifest } from "@/features/plugins/types";
 import { getPluginSettingsOwners, getPluginSettingsRows } from "@/features/settings/rows";
@@ -261,6 +262,43 @@ describe("registerPluginContributions", () => {
 
     await i18n.changeLanguage("es");
     expect(getPluginCanvasReferenceSources()[0].label).toBe("Muestras");
+  });
+
+  it("carries a declared preview to the registered source", () => {
+    const folder = sampleFolder({
+      contributes: {
+        canvasReferenceSources: [
+          { id: "swatches", label: "Swatches", icon: "swatch-book", preview: "portrait" },
+        ],
+      },
+    });
+    cleanups.push(registerPluginContributions(sourceOf(folder)));
+
+    expect(getPluginCanvasReferenceSources()[0].preview).toBe("portrait");
+  });
+
+  it("leaves preview off a source that does not declare one", () => {
+    cleanups.push(registerPluginContributions(sourceOf(sampleFolder())));
+
+    expect(getPluginCanvasReferenceSources()[0]).not.toHaveProperty("preview");
+  });
+
+  it("remembers a source's preview after its Plugin unregisters", () => {
+    const folder = sampleFolder({
+      contributes: {
+        canvasReferenceSources: [
+          { id: "swatches", label: "Swatches", icon: "swatch-book", preview: "landscape" },
+        ],
+      },
+    });
+    const unregister = registerPluginContributions(sourceOf(folder));
+    unregister();
+
+    expect(getPluginCanvasReferenceSources()).toEqual([]);
+    expect(getKnownCanvasReferenceSource("plugin.sample.swatches")).toMatchObject({
+      preview: "landscape",
+      icon: "swatch-book",
+    });
   });
 
   it("orders canvas reference sources by Plugin display name, then declared order, and removes them on unregister", () => {

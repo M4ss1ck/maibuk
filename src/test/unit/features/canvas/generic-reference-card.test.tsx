@@ -54,9 +54,11 @@ vi.mock("@/features/books/store", () => ({
 }));
 
 const { ReferenceNode } = await import("@/features/canvas/nodes/ReferenceNode");
-const { CANVAS_REFERENCE_CARD_SIZES, useCanvasReferenceResolutions } = await import(
-  "@/features/canvas/references"
-);
+const {
+  CANVAS_REFERENCE_CARD_SIZES,
+  CANVAS_REFERENCE_PREVIEW_SIZES,
+  useCanvasReferenceResolutions,
+} = await import("@/features/canvas/references");
 const {
   deleteRegisteredContributions,
   notifyContributionsChange,
@@ -78,7 +80,12 @@ const fixtureDef: PluginCanvasReferenceSourceDef = {
   icon: cardsIcon,
 };
 
-function registerFixturePlugin(): void {
+/** The same source, declaring the card image shape it draws (#847). */
+const landscapeDef: PluginCanvasReferenceSourceDef = { ...fixtureDef, preview: "landscape" };
+const portraitDef: PluginCanvasReferenceSourceDef = { ...fixtureDef, preview: "portrait" };
+const IMAGE = "blob:card-image";
+
+function registerFixturePlugin(def: PluginCanvasReferenceSourceDef = fixtureDef): void {
   setRegisteredContributions("acme", {
     pluginId: "acme",
     displayName: "Fixture",
@@ -86,7 +93,7 @@ function registerFixturePlugin(): void {
     pages: [],
     sidebarEntries: [],
     itemMenuEntries: [],
-    canvasReferenceSources: [fixtureDef],
+    canvasReferenceSources: [def],
     token: Symbol("acme"),
   });
   notifyContributionsChange();
@@ -280,5 +287,125 @@ describe("the Generic Canvas Reference card", () => {
     unregisterFixturePlugin();
     renderReference();
     expect(openButton()).toBeDisabled();
+  });
+
+  it("draws a landscape source's image edge to edge above its title and subtitle", () => {
+    registerFixturePlugin(landscapeDef);
+    answer("card-1", {
+      status: "present",
+      title: "Harbour map",
+      value: { subtitle: "Porto", image: IMAGE },
+    });
+
+    const { container } = renderReference();
+
+    const image = screen.getByTestId("canvas-reference-image");
+    expect(image).toHaveAttribute("src", IMAGE);
+    expect(image).toHaveAttribute("alt", "");
+    expect(image).toHaveClass("w-full", "h-40", "object-contain");
+    expect(image.closest(".p-4")).toBeNull();
+    expect(screen.queryByTestId("canvas-reference-image-placeholder")).toBeNull();
+    expect(screen.getByText("Harbour map")).toHaveClass("line-clamp-2");
+    expect(screen.getByText("Porto")).toHaveClass("line-clamp-1");
+    expect(screen.getByText(SOURCE_LABEL)).toBeInTheDocument();
+
+    const card = container.firstElementChild as HTMLElement;
+    expect({ width: card.style.width, height: card.style.height }).toEqual({
+      width: `${CANVAS_REFERENCE_PREVIEW_SIZES.landscape.width}px`,
+      height: `${CANVAS_REFERENCE_PREVIEW_SIZES.landscape.height}px`,
+    });
+  });
+
+  it("draws a portrait source's image filling the height above its text", () => {
+    registerFixturePlugin(portraitDef);
+    answer("card-1", {
+      status: "present",
+      title: "Harbour map",
+      value: { subtitle: "Porto", image: IMAGE },
+    });
+
+    const { container } = renderReference();
+
+    const image = screen.getByTestId("canvas-reference-image");
+    expect(image).toHaveAttribute("src", IMAGE);
+    expect(image).toHaveClass("w-full", "min-h-0", "flex-1", "object-cover");
+    expect(screen.getByText("Harbour map")).toBeInTheDocument();
+    expect(screen.getByText("Porto")).toBeInTheDocument();
+
+    const card = container.firstElementChild as HTMLElement;
+    expect({ width: card.style.width, height: card.style.height }).toEqual({
+      width: `${CANVAS_REFERENCE_PREVIEW_SIZES.portrait.width}px`,
+      height: `${CANVAS_REFERENCE_PREVIEW_SIZES.portrait.height}px`,
+    });
+  });
+
+  it("holds a landscape source's box with one placeholder block whenever it has no image", () => {
+    const states: Array<{ name: string; seed?: () => void; registered?: boolean }> = [
+      { name: "unresolved" },
+      { name: "missing", seed: () => answer("card-1", { status: "missing" }) },
+      {
+        name: "present without image",
+        seed: () =>
+          answer("card-1", {
+            status: "present",
+            title: "Harbour map",
+            value: { subtitle: "Porto" },
+          }),
+      },
+      { name: "unavailable", registered: false },
+    ];
+
+    const boxes: Array<{ name: string; width: string; height: string }> = [];
+    for (const state of states) {
+      useCanvasReferenceResolutions.getState().clear();
+      if (state.registered === false) unregisterFixturePlugin();
+      else registerFixturePlugin(landscapeDef);
+      state.seed?.();
+      const { container, unmount } = renderReference({ label: "Stored card" });
+      const card = container.firstElementChild as HTMLElement;
+      boxes.push({ name: state.name, width: card.style.width, height: card.style.height });
+
+      expect(screen.queryByTestId("canvas-reference-image")).toBeNull();
+      const placeholder = screen.getByTestId("canvas-reference-image-placeholder");
+      expect(placeholder).toHaveAttribute("aria-hidden", "true");
+      expect(placeholder).toHaveClass("w-full", "h-40", "bg-muted");
+      // Unavailable too: the registry still knows the source's icon this session.
+      expect(placeholder.querySelector("svg")).not.toBeNull();
+      unmount();
+    }
+
+    expect(boxes.map((box) => box.name)).toEqual([
+      "unresolved",
+      "missing",
+      "present without image",
+      "unavailable",
+    ]);
+    for (const box of boxes) {
+      expect({ width: box.width, height: box.height }).toEqual({
+        width: `${CANVAS_REFERENCE_PREVIEW_SIZES.landscape.width}px`,
+        height: `${CANVAS_REFERENCE_PREVIEW_SIZES.landscape.height}px`,
+      });
+    }
+  });
+
+  it("ignores an image in the value of a source that declares no preview", () => {
+    answer("card-1", {
+      status: "present",
+      title: "Harbour map",
+      value: { subtitle: "Porto", image: IMAGE },
+    });
+
+    const { container } = renderReference();
+
+    expect(screen.queryByTestId("canvas-reference-image")).toBeNull();
+    expect(screen.queryByTestId("canvas-reference-image-placeholder")).toBeNull();
+    expect(screen.getByText("Harbour map")).toHaveClass("line-clamp-2");
+    expect(screen.getByText("Porto")).toHaveClass("line-clamp-1");
+
+    const card = container.firstElementChild as HTMLElement;
+    expect({ width: card.style.width, height: card.style.height }).toEqual({
+      width: `${CANVAS_REFERENCE_CARD_SIZES.generic.width}px`,
+      height: `${CANVAS_REFERENCE_CARD_SIZES.generic.height}px`,
+    });
   });
 });

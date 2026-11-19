@@ -603,6 +603,11 @@
                   }
                 ],
                 "description": "A Lucide icon name (kebab-case), a relative .svg path inside the Plugin folder, or an inline icon { elements: [[tag, attrs], ...] } on a 24x24 grid."
+              },
+              "preview": {
+                "description": "The card's image shape: landscape draws a 3:2 image, portrait a cover. Leave out for a text-only card.",
+                "type": "string",
+                "enum": ["landscape", "portrait"]
               }
             },
             "required": ["id", "label", "icon"],

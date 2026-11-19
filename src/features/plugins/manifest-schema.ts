@@ -174,6 +174,12 @@ const canvasReferenceSourceContribution = strictObject({
   id: localId,
   label: z.string().min(1).describe("The source's label in the Plugin's default language."),
   icon,
+  preview: z
+    .enum(["landscape", "portrait"])
+    .optional()
+    .describe(
+      "The card's image shape: landscape draws a 3:2 image, portrait a cover. Leave out for a text-only card."
+    ),
 });
 
 const contributes = strictObject({

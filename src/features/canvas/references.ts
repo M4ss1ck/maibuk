@@ -38,6 +38,15 @@ export const CANVAS_REFERENCE_CARD_SIZES: Record<
   generic: { width: 224, height: 160 },
 };
 
+/** A card that draws a source's image takes the box its declared preview shape asks for. */
+export const CANVAS_REFERENCE_PREVIEW_SIZES: Record<
+  "landscape" | "portrait",
+  { width: number; height: number }
+> = {
+  landscape: { width: 240, height: 320 },
+  portrait: { width: 192, height: 480 },
+};
+
 export interface CanvasReferenceRow {
   id: string;
   title: string;
@@ -71,6 +80,8 @@ export interface CanvasReferenceSource {
   /** Drawn in the picker tab; a Lucide icon or a Plugin's own icon component. */
   icon: ComponentType<{ className?: string }>;
   card: CanvasReferenceCardKind;
+  /** The card image shape a Plugin source declares; only Plugin sources set it. */
+  preview?: "landscape" | "portrait";
   /** Set on a source a Plugin declares, whose `label` is already text; host sources leave it out. */
   fromPlugin?: true;
   list(query: string, context: { canvasId: string }): Promise<CanvasReferenceRow[]>;

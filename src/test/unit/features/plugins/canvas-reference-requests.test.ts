@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  CANVAS_REFERENCE_MAX_IMAGE,
   CANVAS_REFERENCE_MAX_ROWS,
   CANVAS_REFERENCE_MAX_TEXT,
   CANVAS_REFERENCE_REQUEST_TIMEOUT_MS,
@@ -206,6 +207,59 @@ describe("resolvePluginCanvasReferences", () => {
     if (answer?.status !== "present") return;
     expect(answer.title).toHaveLength(CANVAS_REFERENCE_MAX_TEXT);
     expect(answer.value).toEqual({ subtitle: long.slice(0, CANVAS_REFERENCE_MAX_TEXT) });
+  });
+
+  it("keeps a png and an svg data URL as the image", async () => {
+    const png = "data:image/png;base64,iVBORw0KGgo=";
+    const svg = "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'/%3E";
+    const { lifecycle } = readyLifecycle(async () => ({
+      png: { status: "present", title: "Png", image: png },
+      svg: { status: "present", title: "Svg", subtitle: "sub", image: svg },
+    }));
+
+    await expect(resolvePluginCanvasReferences(lifecycle, def, ["png", "svg"])).resolves.toEqual({
+      png: { status: "present", title: "Png", value: { image: png } },
+      svg: { status: "present", title: "Svg", value: { subtitle: "sub", image: svg } },
+    });
+  });
+
+  it("drops an image that is not a png, jpeg, webp, or svg data URL", async () => {
+    const { lifecycle } = readyLifecycle(async () => ({
+      https: {
+        status: "present",
+        title: "Https",
+        subtitle: "sub",
+        image: "https://example.com/a.png",
+      },
+      html: { status: "present", title: "Html", subtitle: "sub", image: "data:text/html,<b>x</b>" },
+      gif: {
+        status: "present",
+        title: "Gif",
+        subtitle: "sub",
+        image: "data:image/gif;base64,R0lGOD",
+      },
+      number: { status: "present", title: "Number", subtitle: "sub", image: 42 },
+    }));
+
+    await expect(
+      resolvePluginCanvasReferences(lifecycle, def, ["https", "html", "gif", "number"])
+    ).resolves.toEqual({
+      https: { status: "present", title: "Https", value: { subtitle: "sub" } },
+      html: { status: "present", title: "Html", value: { subtitle: "sub" } },
+      gif: { status: "present", title: "Gif", value: { subtitle: "sub" } },
+      number: { status: "present", title: "Number", value: { subtitle: "sub" } },
+    });
+  });
+
+  it("drops an image over the image cap", async () => {
+    const over = `data:image/png;base64,${"A".repeat(CANVAS_REFERENCE_MAX_IMAGE)}`;
+    const { lifecycle } = readyLifecycle(async () => ({
+      a: { status: "present", title: "A", subtitle: "sub", image: over },
+    }));
+
+    await expect(resolvePluginCanvasReferences(lifecycle, def, ["a"])).resolves.toEqual({
+      a: { status: "present", title: "A", value: { subtitle: "sub" } },
+    });
   });
 });
 

@@ -249,6 +249,7 @@ export function startReader(client: PluginClient, serve: ReaderServe): void {
                 status: "present",
                 title: entry.title,
                 subtitle: entry.format.toUpperCase(),
+                ...(entry.coverDataUrl === undefined ? {} : { image: entry.coverDataUrl }),
               };
       }
       return answers;

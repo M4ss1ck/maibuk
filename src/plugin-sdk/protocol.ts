@@ -148,7 +148,13 @@ export const PLUGIN_CANVAS_REFERENCE_RESOLVE_REQUEST = "canvasReference.resolve"
 
 /** What one resolved id is: present with a title, or gone. */
 export type CanvasReferenceSourceResolution =
-  | { status: "present"; title: string; subtitle?: string }
+  | {
+      status: "present";
+      title: string;
+      subtitle?: string;
+      /** A data URL (png, jpeg, webp, or svg+xml, at most 1 MB) the host draws on the card when the source declares `preview`; anything else is dropped. */
+      image?: string;
+    }
   | { status: "missing" };
 
 /**

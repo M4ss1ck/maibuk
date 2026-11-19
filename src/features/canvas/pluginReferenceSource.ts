@@ -36,6 +36,7 @@ export function pluginReferenceSource(def: PluginCanvasReferenceSourceDef): Canv
     label: def.label,
     icon: pluginSourceIcon(def),
     card: "generic",
+    ...(def.preview === undefined ? {} : { preview: def.preview }),
     fromPlugin: true,
 
     list(query) {

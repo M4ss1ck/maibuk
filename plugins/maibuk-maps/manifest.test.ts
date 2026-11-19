@@ -144,9 +144,9 @@ describe("Maps manifest", () => {
 
   it("declares the Maps Canvas Reference source and the API version it needs", () => {
     const parsed = manifest();
-    expect(parsed.apiVersion).toBe("^0.1.14");
+    expect(parsed.apiVersion).toBe("^0.1.15");
     expect(parsed.contributes?.canvasReferenceSources).toEqual([
-      { id: "maps", label: "Maps", icon: "map" },
+      { id: "maps", label: "Maps", icon: "map", preview: "landscape" },
     ]);
   });
 
