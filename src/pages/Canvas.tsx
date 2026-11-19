@@ -401,6 +401,31 @@ function CanvasEditor() {
     setTitleDraft(current?.title ?? "");
   }, [current?.id, current?.title]);
 
+  // A Canvas Reference that opened this Canvas hands back where to return,
+  // kept in state because the effect below clears the navigation state. The
+  // Canvas it was captured for travels with it: this editor is not remounted
+  // between Canvases, so a target captured on one must never label another.
+  const [returnTarget, setReturnTarget] = useState<{
+    canvasId: string;
+    to: string;
+    label: string;
+  } | null>(null);
+  useEffect(() => {
+    const state = location.state as {
+      returnTo?: string;
+      returnLabel?: string;
+    } | null;
+    if (!state?.returnTo) return;
+    setReturnTarget({ canvasId, to: state.returnTo, label: state.returnLabel ?? "" });
+  }, [canvasId, location.state]);
+  const activeReturnTarget = returnTarget?.canvasId === canvasId ? returnTarget : null;
+  const backToGallery = useCallback(() => {
+    navigate(activeReturnTarget?.to ?? "/canvas");
+  }, [activeReturnTarget?.to, navigate]);
+  const backLabel = activeReturnTarget
+    ? t("nav.backTo", { title: activeReturnTarget.label || t("canvas.untitled") })
+    : t("canvas.backToCanvasGallery");
+
   // A Library Search text row opened this canvas on its card: select the card
   // and center the viewport on it. The history entry is replaced, so
   // Back/Forward opens the canvas plainly; a card gone since the index row
@@ -799,7 +824,7 @@ function CanvasEditor() {
           else clearSelection();
         },
       },
-      { id: "canvas.backToGallery", onTrigger: () => navigate("/canvas") },
+      { id: "canvas.backToGallery", onTrigger: backToGallery },
       { id: "canvas.toolSelect", onTrigger: () => setToolMode("select") },
       { id: "canvas.toolPen", onTrigger: () => setToolMode("pen") },
       { id: "canvas.toolEraser", onTrigger: () => setToolMode("eraser") },
@@ -901,9 +926,9 @@ function CanvasEditor() {
         {current?.title || t("canvas.untitled")}
       </h1>
       <header className="z-10 flex flex-wrap items-center gap-2 border-b border-border bg-card px-3 py-2">
-        <Button variant="ghost" size="sm" onClick={() => navigate("/canvas")}>
+        <Button variant="ghost" size="sm" onClick={backToGallery}>
           <ArrowLeft className="size-4" aria-hidden="true" />
-          {t("canvas.backToCanvasGallery")}
+          {backLabel}
         </Button>
         <input
           aria-label={t("canvas.renameCanvas")}

@@ -180,11 +180,15 @@ function readyState() {
   });
 }
 
-function renderCanvas() {
+function renderCanvas(
+  initialEntries: Array<{ pathname: string; state?: unknown }> = [{ pathname: "/canvas/canvas-1" }]
+) {
   return render(
-    <MemoryRouter initialEntries={["/canvas/canvas-1"]}>
+    <MemoryRouter initialEntries={initialEntries}>
       <Routes>
         <Route path="/canvas/:canvasId" element={<Canvas />} />
+        <Route path="/canvas" element={<div>canvas gallery</div>} />
+        <Route path="/canvas/canvas-0" element={<div>origin canvas</div>} />
       </Routes>
     </MemoryRouter>
   );
@@ -207,6 +211,30 @@ describe("Canvas page", () => {
     expect(mocks.actions.loadBooks).toHaveBeenCalledTimes(1);
     // A Text Node's Link dialog offers Notes even on a Canvas with no references.
     expect(mocks.actions.loadNotes).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns to the Canvas that opened it from a Canvas Reference", async () => {
+    const user = userEvent.setup();
+    renderCanvas([
+      {
+        pathname: "/canvas/canvas-1",
+        state: { returnTo: "/canvas/canvas-0", returnLabel: "Origin" },
+      },
+    ]);
+
+    expect(mockT).toHaveBeenCalledWith("nav.backTo", { title: "Origin" });
+    await user.click(screen.getByRole("button", { name: "nav.backTo" }));
+
+    expect(screen.getByText("origin canvas")).toBeInTheDocument();
+  });
+
+  it("returns to the canvas gallery when no Canvas opened it", async () => {
+    const user = userEvent.setup();
+    renderCanvas();
+
+    await user.click(screen.getByRole("button", { name: "canvas.backToCanvasGallery" }));
+
+    expect(screen.getByText("canvas gallery")).toBeInTheDocument();
   });
 
   it("lists the canvas tool shortcuts as bound once the canvas is ready", () => {
