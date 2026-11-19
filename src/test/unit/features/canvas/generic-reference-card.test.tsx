@@ -369,11 +369,8 @@ describe("the Generic Canvas Reference card", () => {
       const placeholder = screen.getByTestId("canvas-reference-image-placeholder");
       expect(placeholder).toHaveAttribute("aria-hidden", "true");
       expect(placeholder).toHaveClass("w-full", "h-40", "bg-muted");
-      if (state.registered === false) {
-        expect(placeholder.querySelector("svg")).toBeNull();
-      } else {
-        expect(placeholder.querySelector("svg")).not.toBeNull();
-      }
+      // Unavailable too: the registry still knows the source's icon this session.
+      expect(placeholder.querySelector("svg")).not.toBeNull();
       unmount();
     }
 

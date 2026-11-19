@@ -9,7 +9,7 @@ import {
   registerPluginContributions,
   resetPluginContributionsForTests,
 } from "@/features/plugins/contributions";
-import { getKnownCanvasReferencePreview } from "@/features/plugins/contributions-registry";
+import { getKnownCanvasReferenceSource } from "@/features/plugins/contributions-registry";
 import { readPluginManifest } from "@/features/plugins/runtime";
 import type { PluginFolder, PluginManifest } from "@/features/plugins/types";
 import { getPluginSettingsOwners, getPluginSettingsRows } from "@/features/settings/rows";
@@ -295,7 +295,10 @@ describe("registerPluginContributions", () => {
     unregister();
 
     expect(getPluginCanvasReferenceSources()).toEqual([]);
-    expect(getKnownCanvasReferencePreview("plugin.sample.swatches")).toBe("landscape");
+    expect(getKnownCanvasReferenceSource("plugin.sample.swatches")).toMatchObject({
+      preview: "landscape",
+      icon: "swatch-book",
+    });
   });
 
   it("orders canvas reference sources by Plugin display name, then declared order, and removes them on unregister", () => {

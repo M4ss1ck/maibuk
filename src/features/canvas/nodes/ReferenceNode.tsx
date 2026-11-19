@@ -1,4 +1,4 @@
-import { type ComponentType, useState } from "react";
+import { type ComponentType, type ReactNode, useState } from "react";
 import { BookOpen, ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -27,7 +27,8 @@ import {
   useCanvasReferenceSource,
 } from "@/features/canvas/references";
 import type { Canvas, ReferenceCanvasNode } from "@/features/canvas/types";
-import { getKnownCanvasReferencePreview } from "@/features/plugins/contributions-registry";
+import { PluginIcon } from "@/components/plugins/PluginIcon";
+import { getKnownCanvasReferenceSource } from "@/features/plugins/contributions-registry";
 import { isPluginContributionId } from "@/features/plugins/ids";
 import { CanvasNodeHandles } from "@/features/canvas/nodes/CanvasNodeHandles";
 import { useCanvasNodeMenu } from "@/features/canvas/nodes/CanvasNodeMenu";
@@ -155,11 +156,12 @@ function ReferenceStateBody({ title, detail }: { title: string; detail?: string 
 function PreviewImage({
   preview,
   image,
-  Icon,
+  icon,
 }: {
   preview: "landscape" | "portrait";
   image?: string;
-  Icon?: CanvasReferenceSource["icon"];
+  /** The source icon the placeholder centers. */
+  icon: ReactNode;
 }) {
   const box = preview === "landscape" ? "h-40 w-full shrink-0" : "min-h-0 w-full flex-1";
 
@@ -181,7 +183,7 @@ function PreviewImage({
       aria-hidden="true"
       className={`${box} flex items-center justify-center bg-muted`}
     >
-      {Icon && <Icon className="size-8 text-muted-foreground" />}
+      {icon}
     </div>
   );
 }
@@ -232,13 +234,13 @@ function CanvasReferenceCard({
 
   const source = useCanvasReferenceSource(node.source);
   const resolution = useCanvasReferenceResolution(node.source, node.targetId);
-  // A Plugin source that declares a preview draws its image; the answer keeps the
-  // shape even after the Plugin unregisters, so an Unavailable card holds its box.
-  const preview = source
-    ? source.preview
-    : isPluginContributionId(node.source)
-      ? getKnownCanvasReferencePreview(node.source)
+  // A Plugin source that declares a preview draws its image. The registry keeps
+  // a source after its Plugin unregisters, so an Unavailable card holds its box.
+  const known =
+    !source && isPluginContributionId(node.source)
+      ? getKnownCanvasReferenceSource(node.source)
       : undefined;
+  const preview = source ? source.preview : known?.preview;
   // A source this app does not know still keeps the box its kind would draw: a
   // Plugin reference is always Generic, anything else borrows the note box.
   const size = preview
@@ -280,7 +282,17 @@ function CanvasReferenceCard({
 
         {preview ? (
           <>
-            <PreviewImage preview={preview} image={image} Icon={source?.icon} />
+            <PreviewImage
+              preview={preview}
+              image={image}
+              icon={
+                source ? (
+                  <source.icon className="size-8 text-muted-foreground" />
+                ) : known ? (
+                  <PluginIcon icon={known.icon} className="size-8 text-muted-foreground" />
+                ) : null
+              }
+            />
             <div className="p-4 pb-0">
               {source && <ReferenceSourceHeader source={source} />}
 

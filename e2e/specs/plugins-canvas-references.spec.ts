@@ -46,7 +46,10 @@ const MISSING_LINE = "This item no longer exists";
  */
 const UNAVAILABLE_LINE = "Not available here";
 
-/** The picture a preview source's card draws, and the muted block it draws without one. */
+/**
+ * The picture a preview source's card draws, and the muted block it draws without one.
+ * Both are decorative (`alt=""`, `aria-hidden`), so no role or name can reach them.
+ */
 const REFERENCE_IMAGE = "canvas-reference-image";
 const REFERENCE_IMAGE_PLACEHOLDER = "canvas-reference-image-placeholder";
 

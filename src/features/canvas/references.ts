@@ -43,7 +43,7 @@ export const CANVAS_REFERENCE_PREVIEW_SIZES: Record<
   "landscape" | "portrait",
   { width: number; height: number }
 > = {
-  landscape: { width: 240, height: 280 },
+  landscape: { width: 240, height: 320 },
   portrait: { width: 192, height: 480 },
 };
 
