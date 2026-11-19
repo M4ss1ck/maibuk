@@ -1,6 +1,6 @@
 import type { ParseKeys, TFunction } from "i18next";
 import type { ComponentType } from "react";
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import type { NavigateFunction } from "react-router-dom";
 import { create } from "zustand";
 import { bookReferenceSource } from "@/features/canvas/bookReferenceSource";
@@ -11,11 +11,11 @@ import { pluginReferenceSource } from "@/features/canvas/pluginReferenceSource";
 import type { CanvasNode } from "@/features/canvas/types";
 import {
   type PluginCanvasReferenceSourceDef,
+  getKnownPluginName,
   getPluginCanvasReferenceSources,
   onPluginContributionsChange,
 } from "@/features/plugins/contributions-registry";
-import { getPluginLifecycle } from "@/features/plugins/lifecycle-instance";
-import { usePluginManagementStore } from "@/features/plugins/management";
+import { pluginIdOfContribution } from "@/features/plugins/ids";
 
 /**
  * Canvas References reach their targets only through a source. The picker, the
@@ -64,15 +64,15 @@ export interface CanvasReferenceOpenContext {
 export interface CanvasReferenceSource {
   id: string;
   /**
-   * i18n key of the picker tab label. A Plugin source holds already-localized
-   * text instead, so `canvasReferenceSourceLabel` can tell the two apart.
+   * i18n key of the picker tab label. A Plugin source (`fromPlugin`) holds
+   * already-localized text instead; `canvasReferenceSourceLabel` reads either.
    */
   label: string;
   /** Drawn in the picker tab; a Lucide icon or a Plugin's own icon component. */
   icon: ComponentType<{ className?: string }>;
   card: CanvasReferenceCardKind;
-  /** Set on a source a Plugin declares; host sources leave it out. */
-  plugin?: { pluginId: string; name: string };
+  /** Set on a source a Plugin declares, whose `label` is already text; host sources leave it out. */
+  fromPlugin?: true;
   list(query: string, context: { canvasId: string }): Promise<CanvasReferenceRow[]>;
   /** Answers every id asked; an id left out of the answer counts as unresolved. */
   resolve(ids: readonly string[]): Promise<Record<string, CanvasReferenceResolution>>;
@@ -83,7 +83,7 @@ export interface CanvasReferenceSource {
 
 /** The picker tab's text: a host source holds an i18n key, a Plugin source already-localized text. */
 export function canvasReferenceSourceLabel(source: CanvasReferenceSource, t: TFunction): string {
-  return source.plugin ? source.label : t(source.label as ParseKeys);
+  return source.fromPlugin ? source.label : t(source.label as ParseKeys);
 }
 
 /**
@@ -102,6 +102,20 @@ export const CANVAS_REFERENCE_SOURCES: readonly CanvasReferenceSource[] = [
 let cachedPluginDefs: readonly PluginCanvasReferenceSourceDef[] | null = null;
 let cachedMergedSources: readonly CanvasReferenceSource[] | null = null;
 
+// One source object per contribution: it stays the same object while its Plugin
+// stays registered, and a Plugin that comes back brings new ones, which the
+// resolver reads as "ask again".
+const pluginSources = new WeakMap<PluginCanvasReferenceSourceDef, CanvasReferenceSource>();
+
+function pluginSourceFor(def: PluginCanvasReferenceSourceDef): CanvasReferenceSource {
+  let source = pluginSources.get(def);
+  if (source === undefined) {
+    source = pluginReferenceSource(def);
+    pluginSources.set(def, source);
+  }
+  return source;
+}
+
 /**
  * Every source the picker, the cards, and the resolver see: the host sources
  * first, then one source per Plugin-declared source, in Plugin name order.
@@ -110,7 +124,7 @@ export function getCanvasReferenceSources(): readonly CanvasReferenceSource[] {
   const pluginDefs = getPluginCanvasReferenceSources();
   if (cachedMergedSources !== null && pluginDefs === cachedPluginDefs) return cachedMergedSources;
   cachedPluginDefs = pluginDefs;
-  cachedMergedSources = [...CANVAS_REFERENCE_SOURCES, ...pluginDefs.map(pluginReferenceSource)];
+  cachedMergedSources = [...CANVAS_REFERENCE_SOURCES, ...pluginDefs.map(pluginSourceFor)];
   return cachedMergedSources;
 }
 
@@ -128,21 +142,12 @@ export function getCanvasReferenceSource(id: string): CanvasReferenceSource | un
 }
 
 /**
- * The installed Plugin's name for a Plugin source id (`plugin.<pluginId>.<localId>`),
- * or undefined for a host source, a malformed id, or a Plugin this app does not know.
+ * The name of the Plugin behind a Plugin source id (`plugin.<pluginId>.<localId>`),
+ * or undefined for a host source or a Plugin that has not registered this session.
  */
 export function canvasReferencePluginName(sourceId: string): string | undefined {
-  const prefix = "plugin.";
-  if (!sourceId.startsWith(prefix)) return undefined;
-  const rest = sourceId.slice(prefix.length);
-  const lastDot = rest.lastIndexOf(".");
-  if (lastDot <= 0) return undefined;
-  const pluginId = rest.slice(0, lastDot);
-  const installed = getPluginLifecycle()?.installed() ?? [];
-  const running = installed.find((plugin) => plugin.pluginId === pluginId);
-  // A turned-off Plugin leaves the lifecycle; Settings still knows its manifest.
-  const known = running ?? usePluginManagementStore.getState().plugins[pluginId];
-  return known?.manifest.name;
+  const pluginId = pluginIdOfContribution(sourceId);
+  return pluginId === null ? undefined : getKnownPluginName(pluginId);
 }
 
 /** The key an answer is filed under: a target only means something inside its source. */
@@ -246,6 +251,8 @@ export function useResolveCanvasReferences(nodes: readonly CanvasNode[]): void {
   const sources = useCanvasReferenceSources();
   const groups = referenceGroups(nodes, sources);
   const groupsKey = referenceGroupsKey(groups);
+  // The source object each source id was last asked through on this Canvas.
+  const askedThrough = useRef(new Map<string, CanvasReferenceSource>());
 
   useEffect(() => {
     let live = true;
@@ -270,11 +277,17 @@ export function useResolveCanvasReferences(nodes: readonly CanvasNode[]): void {
     }
 
     for (const { source, ids } of groups) {
+      // A source object this Canvas has not asked through yet is a Plugin that
+      // came back: its answers from before it went off may be stale, so every
+      // id is asked again. Otherwise only the ids with no answer are.
+      const seenBefore = askedThrough.current.get(source.id);
+      askedThrough.current.set(source.id, source);
       const { resolutions } = useCanvasReferenceResolutions.getState();
-      const unanswered = ids.filter(
-        (id) => resolutions[canvasReferenceKey(source.id, id)] === undefined
-      );
-      if (unanswered.length > 0) resolveNow(source, unanswered);
+      const toAsk =
+        seenBefore !== undefined && seenBefore !== source
+          ? ids
+          : ids.filter((id) => resolutions[canvasReferenceKey(source.id, id)] === undefined);
+      if (toAsk.length > 0) resolveNow(source, toAsk);
 
       const { subscribe } = source;
       if (subscribe) unsubscribes.push(subscribe(() => resolveNow(source, ids)));
@@ -285,7 +298,7 @@ export function useResolveCanvasReferences(nodes: readonly CanvasNode[]): void {
       for (const unsubscribe of unsubscribes) unsubscribe();
     };
     // A new sources array means a Plugin changed its contributions: regroup even
-    // when every group's ids still match, so the new source objects are asked.
+    // when every group's ids still match, so a returning Plugin is asked again.
   }, [groupsKey, sources]);
 
   useEffect(

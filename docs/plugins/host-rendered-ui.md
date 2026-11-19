@@ -61,7 +61,7 @@ A Plugin declares what it adds under `contributes` in manifest.json. The validat
 - `itemMenuEntries`: a `command` that declares `targets`.
 - `canvasReferenceSources`: an `id`, a `label` in the Plugin's default language (a locale file overrides it as `canvasReferenceSources.<id>.label`), and an `icon`, validated like a `sidebarEntries` icon. Maibuk derives the source's full id as `plugin.<pluginId>.<id>`. The Canvas Reference picker draws one tab per source after the host's own tabs, ordered by Plugin name, while the Plugin is on. Every source draws the same Generic card: the icon, the source name, the title, an optional subtitle, and Open. There are no thumbnails, and a Plugin declares at most 20 sources.
 
-Every contribution may carry its own `platforms` list, and the host filters each surface by the device platform. Maibuk derives a Command's full id as `plugin.<pluginId>.<localId>`, so a Plugin never claims Maibuk's or another Plugin's ids. Registering is metadata only, so the Command Palette, Settings search, the toolbar, and the sidebar find an installed Plugin before its Worker is ready.
+Every contribution except `canvasReferenceSources` may carry its own `platforms` list, and the host filters each surface by the device platform; a Canvas Reference source follows its Plugin, which runs only on the platforms its manifest lists. Maibuk derives a Command's full id as `plugin.<pluginId>.<localId>`, so a Plugin never claims Maibuk's or another Plugin's ids. Registering is metadata only, so the Command Palette, Settings search, the toolbar, and the sidebar find an installed Plugin before its Worker is ready.
 
 
 The template's manifest declares one Command, one page, and one sidebar entry:

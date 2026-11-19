@@ -135,7 +135,7 @@ describe("the merged Canvas Reference registry", () => {
       id: "plugin.acme.one",
       label: "Acme one",
       card: "generic",
-      plugin: { pluginId: "acme", name: "Acme" },
+      fromPlugin: true,
     });
     expect(source?.subscribe).toBeUndefined();
   });
@@ -250,11 +250,47 @@ describe("useResolveCanvasReferences() with Plugin sources", () => {
       current: [referenceNode("node-1", "plugin.acme.cards", "card-2")],
     });
 
-    await waitFor(() => expect(brokerRequest).toHaveBeenCalledTimes(2));
+    // Coming back re-asks card-1; the new node then asks card-2.
+    await waitFor(() => expect(brokerRequest).toHaveBeenCalledTimes(3));
     expect(brokerRequest).toHaveBeenLastCalledWith("canvasReference.resolve", {
       source: "cards",
       ids: ["card-2"],
     });
+  });
+
+  it("asks again when the Plugin comes back, so an answer from before it went off is replaced", async () => {
+    brokerRequest.mockResolvedValue({ "card-1": { status: "present", title: "Card one" } });
+    registerPlugin([referenceDef("acme", "Acme", "cards")]);
+    const { result } = renderReference([referenceNode("node-1", "plugin.acme.cards", "card-1")]);
+    await waitFor(() =>
+      expect(result.current).toEqual(expect.objectContaining({ title: "Card one" }))
+    );
+
+    act(() => {
+      unregisterPlugin("acme");
+    });
+    // While it was off, the item went away.
+    brokerRequest.mockResolvedValue({ "card-1": { status: "missing" } });
+    act(() => {
+      registerPlugin([referenceDef("acme", "Acme", "cards")]);
+    });
+
+    await waitFor(() => expect(result.current).toEqual({ status: "missing" }));
+    expect(brokerRequest).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not ask a Plugin again when another Plugin's contributions change", async () => {
+    brokerRequest.mockResolvedValue({ "card-1": { status: "present", title: "Card one" } });
+    registerPlugin([referenceDef("acme", "Acme", "cards")]);
+    const { result } = renderReference([referenceNode("node-1", "plugin.acme.cards", "card-1")]);
+    await waitFor(() => expect(result.current).toBeDefined());
+
+    act(() => {
+      registerPlugin([referenceDef("zeta", "Zeta", "two")]);
+    });
+    await act(async () => {});
+
+    expect(brokerRequest).toHaveBeenCalledTimes(1);
   });
 
   it("never mutates the nodes it is given", async () => {
@@ -292,7 +328,10 @@ describe("useResolveCanvasReferences() with Plugin sources", () => {
 });
 
 describe("canvasReferencePluginName()", () => {
-  it("returns the installed Plugin's name for a Plugin source id", () => {
+  it("returns a registered Plugin's name, and keeps it after the Plugin unregisters", () => {
+    registerPlugin([referenceDef("acme", "Acme Cards", "cards")]);
+    expect(canvasReferencePluginName("plugin.acme.cards")).toBe("Acme Cards");
+    unregisterPlugin("acme");
     expect(canvasReferencePluginName("plugin.acme.cards")).toBe("Acme Cards");
   });
 

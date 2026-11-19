@@ -35,7 +35,7 @@ export function pluginReferenceSource(def: PluginCanvasReferenceSourceDef): Canv
     label: def.label,
     icon: pluginSourceIcon(def),
     card: "generic",
-    plugin: { pluginId: def.pluginId, name: def.displayName },
+    fromPlugin: true,
 
     list(query) {
       return listPluginCanvasReferences(getPluginLifecycle(), def, query);

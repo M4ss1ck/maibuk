@@ -26,6 +26,7 @@ import {
   useCanvasReferenceSource,
 } from "@/features/canvas/references";
 import type { Canvas, ReferenceCanvasNode } from "@/features/canvas/types";
+import { isPluginContributionId } from "@/features/plugins/ids";
 import { CanvasNodeHandles } from "@/features/canvas/nodes/CanvasNodeHandles";
 import { useCanvasNodeMenu } from "@/features/canvas/nodes/CanvasNodeMenu";
 import { useCanvasStore } from "@/features/canvas/store";
@@ -195,7 +196,7 @@ function CanvasReferenceCard({
   // Plugin reference is always Generic, anything else borrows the note box.
   const size =
     CANVAS_REFERENCE_CARD_SIZES[
-      source?.card ?? (node.source.startsWith("plugin.") ? "generic" : "note")
+      source?.card ?? (isPluginContributionId(node.source) ? "generic" : "note")
     ];
   // The Book card fills its box edge to edge, like the Library Book card.
   const isBookCard = source?.card === "book";

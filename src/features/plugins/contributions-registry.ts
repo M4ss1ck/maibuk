@@ -124,6 +124,7 @@ export function pluginPageRoute(pluginId: string, pageId: string): string {
 
 const contributions = new Map<string, RegisteredContributions>();
 const listeners = new Set<() => void>();
+const knownPluginNames = new Map<string, string>();
 // Referentially stable snapshots for useSyncExternalStore, refreshed on change.
 let cachedPages: PluginPageDef[] | null = null;
 let cachedSidebar: PluginSidebarEntryDef[] | null = null;
@@ -158,6 +159,16 @@ export function setRegisteredContributions(
   record: RegisteredContributions
 ): void {
   contributions.set(pluginId, record);
+  knownPluginNames.set(pluginId, record.displayName);
+}
+
+/**
+ * The name of a Plugin that registered contributions this session, kept after
+ * it unregisters, so a surface can still say which Plugin it is missing. A
+ * page load forgets a Plugin that has not registered since.
+ */
+export function getKnownPluginName(pluginId: string): string | undefined {
+  return knownPluginNames.get(pluginId);
 }
 
 /** Removes one Plugin's record; the registration side notifies when it does. */
@@ -285,5 +296,6 @@ export function currentUILanguage(): Language {
 /** Drops every registered contribution; tests use it between cases. */
 export function resetPluginContributionsForTests(): void {
   contributions.clear();
+  knownPluginNames.clear();
   notifyContributionsChange();
 }
