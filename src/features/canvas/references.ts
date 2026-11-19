@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import type { NavigateFunction } from "react-router-dom";
 import { create } from "zustand";
 import { bookReferenceSource } from "@/features/canvas/bookReferenceSource";
+import { canvasReferenceSource } from "@/features/canvas/canvasReferenceSource";
 import { chapterReferenceSource } from "@/features/canvas/chapterReferenceSource";
 import { noteReferenceSource } from "@/features/canvas/noteReferenceSource";
 import type { CanvasNode } from "@/features/canvas/types";
@@ -15,7 +16,7 @@ import type { CanvasNode } from "@/features/canvas/types";
  */
 
 /** Each card kind draws in one fixed box, whatever state it is in. */
-export type CanvasReferenceCardKind = "note" | "book" | "chapter";
+export type CanvasReferenceCardKind = "note" | "book" | "chapter" | "canvas";
 
 export const CANVAS_REFERENCE_CARD_SIZES: Record<
   CanvasReferenceCardKind,
@@ -24,6 +25,7 @@ export const CANVAS_REFERENCE_CARD_SIZES: Record<
   note: { width: 224, height: 176 },
   book: { width: 192, height: 480 },
   chapter: { width: 224, height: 208 },
+  canvas: { width: 240, height: 200 },
 };
 
 export interface CanvasReferenceRow {
@@ -71,6 +73,7 @@ export const CANVAS_REFERENCE_SOURCES: readonly CanvasReferenceSource[] = [
   noteReferenceSource,
   bookReferenceSource,
   chapterReferenceSource,
+  canvasReferenceSource,
 ];
 
 export function getCanvasReferenceSource(id: string): CanvasReferenceSource | undefined {

@@ -321,7 +321,8 @@
     "referenceSources": {
       "note": "Notes",
       "book": "Books",
-      "chapter": "Chapters"
+      "chapter": "Chapters",
+      "canvas": "Canvases"
     },
     "referenceSearchPlaceholder": "Search…",
     "referenceEmpty": "Nothing to show",

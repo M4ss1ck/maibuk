@@ -5,6 +5,7 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Book } from "@/features/books/types";
 import type { ChapterReferenceValue } from "@/features/canvas/chapterReferenceSource";
+import { type Canvas, createDefaultCanvasDoc } from "@/features/canvas/types";
 import type { Note } from "@/features/notes";
 import { installPointerEvent, touchLongPress, touchTap } from "@/test/support/pointer-events";
 
@@ -128,6 +129,27 @@ function chapterRow(overrides: Partial<ChapterReferenceValue> = {}): ChapterRefe
     content: "<p>Rain on the pier</p>",
     updatedAt: new Date(),
     bookTitle: "The Novel",
+    ...overrides,
+  };
+}
+
+function canvasRow(overrides: Partial<Canvas> = {}): Canvas {
+  return {
+    id: "canvas-1",
+    title: "Harbour light",
+    doc: {
+      ...createDefaultCanvasDoc(),
+      nodes: [
+        { id: "node-1", kind: "text", html: "<p>One</p>", position: { x: 0, y: 0 } },
+        { id: "node-2", kind: "text", html: "<p>Two</p>", position: { x: 0, y: 0 } },
+      ],
+      edges: [{ id: "edge-1", source: "node-1", target: "node-2" }],
+    },
+    pinned: false,
+    order: 0,
+    createdAt: 1,
+    updatedAt: 1,
+    contentUpdatedAt: 1,
     ...overrides,
   };
 }
@@ -735,6 +757,84 @@ describe("Canvas custom nodes", () => {
     });
 
     renderReference(referenceData({ source: "book", targetId: "book-1" }));
+    await user.tab();
+
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "canvas.openReferenceNamed" })
+    );
+  });
+
+  it("draws a Canvas reference in one fixed box whatever its state", () => {
+    const canvasData = referenceData({ source: "canvas", targetId: "canvas-1" });
+    const states: Array<{ name: string; seed?: () => void }> = [
+      {
+        name: "present",
+        seed: () =>
+          answer("canvas", "canvas-1", {
+            status: "present",
+            title: "Harbour light",
+            value: canvasRow(),
+          }),
+      },
+      { name: "missing", seed: () => answer("canvas", "canvas-1", { status: "missing" }) },
+      { name: "unresolved" },
+    ];
+
+    const boxes: Array<{ name: string; width: string; height: string }> = [];
+    for (const state of states) {
+      useCanvasReferenceResolutions.getState().clear();
+      state.seed?.();
+      const { container, unmount } = renderReference(canvasData);
+      const card = container.firstElementChild as HTMLElement;
+      boxes.push({ name: state.name, width: card.style.width, height: card.style.height });
+      unmount();
+    }
+
+    expect(boxes.map((box) => box.name)).toEqual(["present", "missing", "unresolved"]);
+    for (const box of boxes) {
+      expect({ width: box.width, height: box.height }).toEqual({
+        width: `${CANVAS_REFERENCE_CARD_SIZES.canvas.width}px`,
+        height: `${CANVAS_REFERENCE_CARD_SIZES.canvas.height}px`,
+      });
+    }
+  });
+
+  it("draws the Gallery Canvas card's face for a Present Canvas reference", () => {
+    answer("canvas", "canvas-1", {
+      status: "present",
+      title: "Harbour light",
+      value: canvasRow(),
+    });
+
+    renderReference(referenceData({ source: "canvas", targetId: "canvas-1" }));
+
+    expect(screen.getByText("Harbour light")).toBeInTheDocument();
+    expect(screen.getByText("canvas.nodeCount")).toBeInTheDocument();
+    expect(screen.getByText("canvas.edgeCount")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "canvas.openReferenceNamed" })).toBeEnabled();
+  });
+
+  it("shows the stored label and a disabled Open for a Missing Canvas", () => {
+    answer("canvas", "canvas-1", { status: "missing" });
+
+    renderReference(
+      referenceData({ source: "canvas", targetId: "canvas-1", label: "Cached canvas" })
+    );
+
+    expect(screen.getByText("Cached canvas")).toBeInTheDocument();
+    expect(screen.getByText("canvas.referenceMissing")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "canvas.openReferenceNamed" })).toBeDisabled();
+  });
+
+  it("reaches Open with Tab from a Present Canvas card", async () => {
+    const user = userEvent.setup();
+    answer("canvas", "canvas-1", {
+      status: "present",
+      title: "Harbour light",
+      value: canvasRow(),
+    });
+
+    renderReference(referenceData({ source: "canvas", targetId: "canvas-1" }));
     await user.tab();
 
     expect(document.activeElement).toBe(

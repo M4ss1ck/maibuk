@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useBookStore } from "@/features/books/store";
 import type { Book } from "@/features/books/types";
 import { type Note, useNoteStore } from "@/features/notes";
+import { useCanvasStore } from "@/features/canvas/store";
+import { type Canvas, createDefaultCanvasDoc } from "@/features/canvas/types";
 import {
   CANVAS_REFERENCE_SOURCES,
   type CanvasReferenceOpenContext,
@@ -11,6 +13,7 @@ import {
   getCanvasReferenceSource,
 } from "@/features/canvas/references";
 import { bookReferenceSource } from "@/features/canvas/bookReferenceSource";
+import { canvasReferenceSource } from "@/features/canvas/canvasReferenceSource";
 import { chapterReferenceSource } from "@/features/canvas/chapterReferenceSource";
 import { noteReferenceSource } from "@/features/canvas/noteReferenceSource";
 
@@ -69,6 +72,19 @@ function bookRow(id: string, title: string): Book {
 
 function chapterRow(id: string, bookId: string, title: string) {
   return { id, bookId, title, content: "<p>Body</p>", updatedAt: new Date(1000) };
+}
+
+function canvasRow(id: string, title: string): Canvas {
+  return {
+    id,
+    title,
+    doc: createDefaultCanvasDoc(),
+    pinned: false,
+    order: 0,
+    createdAt: 1,
+    updatedAt: 1,
+    contentUpdatedAt: 1,
+  };
 }
 
 interface HostSourceFixture {
@@ -140,6 +156,20 @@ const HOST_SOURCE_FIXTURES: Record<string, HostSourceFixture> = {
       useNoteStore.setState({
         notes: [noteRow("note-alpha", "Alpha harbor", 2), noteRow("note-beta", "Beta", 1)],
         loadNotes: vi.fn().mockResolvedValue(undefined),
+      });
+    },
+  },
+  canvas: {
+    presentId: "canvas-alpha",
+    otherId: "canvas-beta",
+    missingId: "canvas-gone",
+    query: "alpha",
+    path: "/canvas",
+    seed() {
+      useCanvasStore.setState({
+        canvases: [canvasRow("canvas-alpha", "Alpha harbor"), canvasRow("canvas-beta", "Beta")],
+        galleryError: null,
+        loadCanvases: vi.fn().mockResolvedValue(undefined),
       });
     },
   },
@@ -250,13 +280,15 @@ describe("canvas reference sources registry", () => {
     );
   });
 
-  it("registers the Book and Chapter sources beside the Note source", () => {
+  it("registers the Book, Chapter, and Canvas sources beside the Note source", () => {
     expect(CANVAS_REFERENCE_SOURCES.map((source) => source.id).sort()).toEqual([
       "book",
+      "canvas",
       "chapter",
       "note",
     ]);
     expect(getCanvasReferenceSource("book")).toBe(bookReferenceSource);
+    expect(getCanvasReferenceSource("canvas")).toBe(canvasReferenceSource);
     expect(getCanvasReferenceSource("chapter")).toBe(chapterReferenceSource);
     expect(getCanvasReferenceSource("note")).toBe(noteReferenceSource);
     expect(getCanvasReferenceSource("unknown")).toBeUndefined();
@@ -300,6 +332,31 @@ describe("the real Chapter source", () => {
         },
       },
     ]);
+  });
+});
+
+describe("the real Canvas source", () => {
+  it("opens a present Canvas at its own route", async () => {
+    HOST_SOURCE_FIXTURES.canvas.seed();
+    const { navigate, calls } = spyNavigate();
+
+    const result = await canvasReferenceSource.open("canvas-alpha", openContext(navigate));
+
+    expect(result).toBe("opened");
+    expect(calls).toEqual([
+      {
+        to: "/canvas/canvas-alpha",
+        options: { state: { returnTo: "/canvas/canvas-1", returnLabel: "My canvas" } },
+      },
+    ]);
+  });
+
+  it("never lists the Canvas being edited", async () => {
+    HOST_SOURCE_FIXTURES.canvas.seed();
+
+    const rows = await canvasReferenceSource.list("", { canvasId: "canvas-alpha" });
+
+    expect(rows.map((row) => row.id)).not.toContain("canvas-alpha");
   });
 });
 
