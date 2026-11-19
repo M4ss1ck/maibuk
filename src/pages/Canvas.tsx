@@ -415,24 +415,14 @@ function CanvasEditor() {
     setTitleDraft(current?.title ?? "");
   }, [current?.id, current?.title]);
 
-  // A Canvas Reference that opened this Canvas hands back where to return,
-  // kept in state because the effect below clears the navigation state. The
-  // Canvas it was captured for travels with it: this editor is not remounted
-  // between Canvases, so a target captured on one must never label another.
-  const [returnTarget, setReturnTarget] = useState<{
-    canvasId: string;
-    to: string;
-    label: string;
-  } | null>(null);
-  useEffect(() => {
-    const state = location.state as {
-      returnTo?: string;
-      returnLabel?: string;
-    } | null;
-    if (!state?.returnTo) return;
-    setReturnTarget({ canvasId, to: state.returnTo, label: state.returnLabel ?? "" });
-  }, [canvasId, location.state]);
-  const activeReturnTarget = returnTarget?.canvasId === canvasId ? returnTarget : null;
+  // A Canvas Reference that opened this Canvas hands back where to return. It
+  // is read from this visit's navigation state, so it lives exactly as long as
+  // the visit (Back/Forward included); the focusCardId replace below never
+  // comes with a return target.
+  const returnState = location.state as { returnTo?: string; returnLabel?: string } | null;
+  const activeReturnTarget = returnState?.returnTo
+    ? { to: returnState.returnTo, label: returnState.returnLabel ?? "" }
+    : null;
   const backToGallery = useCallback(() => {
     navigate(activeReturnTarget?.to ?? "/canvas");
   }, [activeReturnTarget?.to, navigate]);
@@ -890,7 +880,7 @@ function CanvasEditor() {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4">
         <p>{t("canvas.missingCanvas")}</p>
-        <Button onClick={() => navigate("/canvas")}>{t("canvas.backToCanvasGallery")}</Button>
+        <Button onClick={backToGallery}>{backLabel}</Button>
       </div>
     );
   }
@@ -911,8 +901,8 @@ function CanvasEditor() {
             {t(isNewerFormat ? "canvas.newerCanvasDescription" : "canvas.corruptDocDescription")}
           </p>
           <div className="mt-6 flex justify-center gap-3">
-            <Button variant="secondary" onClick={() => navigate("/canvas")}>
-              {t("canvas.backToCanvasGallery")}
+            <Button variant="secondary" onClick={backToGallery}>
+              {backLabel}
             </Button>
             {!isNewerFormat && (
               <Button variant="destructive" onClick={() => void replaceCorruptDocWithDefault()}>

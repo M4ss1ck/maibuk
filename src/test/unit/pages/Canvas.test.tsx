@@ -4,7 +4,7 @@ import { toast } from "@/components/ui";
 import { CanvasImageError } from "@/features/canvas/encodeCanvasImage";
 import { noteReferenceSource } from "@/features/canvas/noteReferenceSource";
 import { useBoundShortcutStore } from "@/lib/bound-shortcuts";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
@@ -144,6 +144,24 @@ vi.mock("@/components/sync/SyncStatusButton", () => ({
 
 const { Canvas } = await import("@/pages/Canvas");
 
+function deferred() {
+  let resolve!: (value: null) => void;
+  const promise = new Promise<null>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
+// Navigation the tests drive: a move between Canvases happens inside the one
+// mounted editor, exactly as the router does it in the app.
+const navigateTo = { current: null as null | ((to: string, state?: unknown) => void) };
+
+function NavigateProbe() {
+  const navigate = useNavigate();
+  navigateTo.current = (to, state) => navigate(to, { state: state ?? null });
+  return null;
+}
+
 function readyState() {
   const doc = {
     schemaVersion: 2,
@@ -185,6 +203,7 @@ function renderCanvas(
 ) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
+      <NavigateProbe />
       <Routes>
         <Route path="/canvas/:canvasId" element={<Canvas />} />
         <Route path="/canvas" element={<div>canvas gallery</div>} />
@@ -235,6 +254,53 @@ describe("Canvas page", () => {
     await user.click(screen.getByRole("button", { name: "canvas.backToCanvasGallery" }));
 
     expect(screen.getByText("canvas gallery")).toBeInTheDocument();
+  });
+
+  it("takes the return target from this visit's navigation state only", async () => {
+    renderCanvas([
+      {
+        pathname: "/canvas/canvas-1",
+        state: { returnTo: "/canvas/canvas-0", returnLabel: "Origin" },
+      },
+    ]);
+    expect(screen.getByRole("button", { name: "nav.backTo" })).toBeInTheDocument();
+
+    // The same Canvas opened again, with nothing handing back: the visit's state
+    // is gone, so the editor is a plain one now.
+    await act(async () => {
+      navigateTo.current?.("/canvas/canvas-1");
+    });
+
+    expect(screen.queryByRole("button", { name: "nav.backTo" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "canvas.backToCanvasGallery" })).toBeInTheDocument();
+  });
+
+  it("loads the next Canvas only after the Canvas being left has been saved", async () => {
+    const leavingSave = deferred();
+    mocks.actions.saveDoc.mockReturnValueOnce(leavingSave.promise);
+    renderCanvas();
+
+    // An unsaved edit on canvas-1: the session holds content to Flush on leaving.
+    mocks.state.revision = 1;
+    fireEvent.change(screen.getByRole("textbox", { name: "canvas.renameCanvas" }), {
+      target: { value: "Map edited" },
+    });
+
+    await act(async () => {
+      navigateTo.current?.("/canvas/canvas-2");
+    });
+
+    // The leaving save is still in flight: the editor stays on canvas-1's store
+    // state, so loading canvas-2 now would read the wrong Canvas.
+    expect(mocks.actions.saveDoc).toHaveBeenCalled();
+    expect(mocks.actions.loadCanvas).not.toHaveBeenCalledWith("canvas-2");
+
+    await act(async () => {
+      leavingSave.resolve(null);
+      await leavingSave.promise;
+    });
+
+    await waitFor(() => expect(mocks.actions.loadCanvas).toHaveBeenCalledWith("canvas-2"));
   });
 
   it("lists the canvas tool shortcuts as bound once the canvas is ready", () => {

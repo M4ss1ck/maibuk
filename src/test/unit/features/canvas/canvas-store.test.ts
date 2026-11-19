@@ -39,8 +39,19 @@ function isCanvasListRead(sql: string): boolean {
   return sql.includes("FROM canvases ORDER BY");
 }
 
-/** Hold the first canvases list SELECT open, after it has captured its rows. */
-function holdFirstCanvasRead(): { release: () => void; captured: Promise<void> } {
+/** The single-row read `loadCanvas` makes for one Canvas, as opposed to its writes. */
+function isCanvasOpenRead(sql: string): boolean {
+  return sql.includes("FROM canvases WHERE id = ?");
+}
+
+/**
+ * Hold the first canvases SELECT matching `matches` open, after it has captured
+ * its rows. Defaults to the gallery's list read.
+ */
+function holdFirstCanvasRead(matches: (sql: string) => boolean = isCanvasListRead): {
+  release: () => void;
+  captured: Promise<void>;
+} {
   const original = originalSelect();
   let held = false;
   let release = () => {};
@@ -53,7 +64,7 @@ function holdFirstCanvasRead(): { release: () => void; captured: Promise<void> }
   });
 
   testDb.select = async <T = unknown[]>(sql: string, params?: unknown[]): Promise<T> => {
-    if (!held && isCanvasListRead(sql)) {
+    if (!held && matches(sql)) {
       held = true;
       const rows = (await original(sql, params)) as T;
       markCaptured();
@@ -801,6 +812,41 @@ describe("useCanvasStore", () => {
       await useCanvasStore.getState().loadCanvases();
 
       expect(calls).toHaveLength(1);
+    });
+
+    it("drops an open read a later Canvas load superseded", async () => {
+      const doc = (node: string) => ({ ...createDefaultCanvasDoc(), nodes: [textNode(node)] });
+      await insertCanvas("a", JSON.stringify(doc("from-a")));
+      await insertCanvas("b", JSON.stringify(doc("from-b")));
+
+      const held = holdFirstCanvasRead(isCanvasOpenRead);
+      const openingA = useCanvasStore.getState().loadCanvas("a");
+      await held.captured;
+
+      // The newer load lands first; the older read must not replace it.
+      await useCanvasStore.getState().loadCanvas("b");
+      held.release();
+      await openingA;
+
+      const state = useCanvasStore.getState();
+      expect(state.current?.id).toBe("b");
+      expect(state.loadState).toBe("ready");
+      expect(state.doc.nodes.map((node) => node.id)).toEqual(["from-b"]);
+    });
+
+    it("drops an open read whose Canvas closed before it landed", async () => {
+      await insertCanvas("a", JSON.stringify(createDefaultCanvasDoc()));
+
+      const held = holdFirstCanvasRead(isCanvasOpenRead);
+      const opening = useCanvasStore.getState().loadCanvas("a");
+      await held.captured;
+
+      useCanvasStore.getState().closeCanvas();
+      held.release();
+      await opening;
+
+      expect(useCanvasStore.getState().current).toBeNull();
+      expect(useCanvasStore.getState().loadState).toBe("idle");
     });
   });
 });
