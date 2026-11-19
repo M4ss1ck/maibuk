@@ -19,5 +19,6 @@
   "commands.toggleContinuousScroll.label": "Continuous scroll",
   "commands.backToShelf.label": "Back to Shelf",
   "pages.reader.title": "Reader",
-  "pages.document.title": "Reading"
+  "pages.document.title": "Reading",
+  "canvasReferenceSources.documents.label": "Documents"
 }

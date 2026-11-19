@@ -5,7 +5,7 @@
   "description": "Design maps of your world, a region, or a country and its provinces, in color or print-ready ink.",
   "author": "Maibuk",
   "version": "0.7.0",
-  "apiVersion": "^0.1.11",
+  "apiVersion": "^0.1.13",
   "entry": "index.js",
   "platforms": ["web", "desktop"],
   "lifecycle": "on-demand",
@@ -282,6 +282,7 @@
       { "id": "map", "title": "Map", "command": "openMap", "hideTitle": true }
     ],
     "sidebarEntries": [{ "page": "maps", "icon": "map" }],
+    "canvasReferenceSources": [{ "id": "maps", "label": "Maps", "icon": "map" }],
     "itemMenuEntries": [{ "command": "bookMaps" }]
   }
 }

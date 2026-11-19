@@ -15,9 +15,13 @@ import type { ComponentType } from "react";
 import {
   PLUGIN_COMMAND_RUN_REQUEST,
   PLUGIN_MIGRATE_DATA_REQUEST,
+  type CanvasReferenceSourceRequests,
+  type CanvasReferenceSourceResolution,
+  type CanvasReferenceSourceRow,
   type HostRequestHandler,
   type PluginClient,
   type PluginFrame,
+  canvasReferenceRequests,
 } from "@/plugin-sdk";
 import { createMapEditor, type MapEditor } from "./editor";
 import type { ExportFont } from "./export";
@@ -298,12 +302,63 @@ export function startMaps(client: PluginClient, serve: MapsServe): MapsRuntime {
     return null;
   }
 
+  /**
+   * One Canvas Reference row per Map the store lists (#837): its name, and its
+   * Book's title as the subtitle, absent when it has no Book or the Library
+   * read fails.
+   */
+  async function referenceRows(): Promise<CanvasReferenceSourceRow[]> {
+    const entries = await store.list();
+    const books = await client.library.books.list().catch(() => []);
+    const titles = new Map(books.map((book) => [book.id, book.title]));
+    return entries.map((entry) => {
+      const bookTitle = entry.bookId === null ? undefined : titles.get(entry.bookId);
+      return bookTitle === undefined
+        ? { id: entry.id, title: entry.name }
+        : { id: entry.id, title: entry.name, subtitle: bookTitle };
+    });
+  }
+
+  /**
+   * The `maps` Canvas Reference source (#837): every Map the list page shows,
+   * filtered by name, resolved through one store read, and opened into the Map
+   * editor.
+   */
+  const referenceSource: CanvasReferenceSourceRequests = {
+    async list(query) {
+      const needle = query.trim().toLocaleLowerCase();
+      const rows = await referenceRows();
+      return rows.filter((row) => row.title.toLocaleLowerCase().includes(needle));
+    },
+
+    async resolve(ids) {
+      const rows = await referenceRows();
+      const answers: Record<string, CanvasReferenceSourceResolution> = {};
+      for (const id of ids) {
+        const row = rows.find((candidate) => candidate.id === id);
+        answers[id] =
+          row === undefined
+            ? { status: "missing" }
+            : {
+                status: "present",
+                title: row.title,
+                ...(row.subtitle === undefined ? {} : { subtitle: row.subtitle }),
+              };
+      }
+      return answers;
+    },
+
+    async open(id) {
+      return (await openMap(id)) ? "opened" : "missing";
+    },
+  };
+
   serve(client, {
     pages: {
       [MAPS_PAGE_ID]: createMapsPage({ client, store, filter, openMap }),
       [MAP_PAGE_ID]: createMapPage({ client, runtime, backToMaps }),
     },
-    onHostRequest: async (method, params) => {
+    onHostRequest: canvasReferenceRequests({ maps: referenceSource }, async (method, params) => {
       if (method === "health.check") return "pong";
       if (method === PLUGIN_COMMAND_RUN_REQUEST) return runCommand(params);
       if (method === PLUGIN_MIGRATE_DATA_REQUEST) {
@@ -311,7 +366,7 @@ export function startMaps(client: PluginClient, serve: MapsServe): MapsRuntime {
         return null;
       }
       throw new Error(`No handler for ${method}`);
-    },
+    }),
   });
 
   return runtime;

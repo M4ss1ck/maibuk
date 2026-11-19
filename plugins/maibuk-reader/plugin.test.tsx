@@ -10,7 +10,12 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { createTestHost } from "@/features/plugins/test-kit";
 import { createPluginClient } from "@/plugin-sdk";
-import { PLUGIN_COMMAND_RUN_REQUEST } from "@/plugin-sdk/protocol";
+import {
+  PLUGIN_CANVAS_REFERENCE_LIST_REQUEST,
+  PLUGIN_CANVAS_REFERENCE_OPEN_REQUEST,
+  PLUGIN_CANVAS_REFERENCE_RESOLVE_REQUEST,
+  PLUGIN_COMMAND_RUN_REQUEST,
+} from "@/plugin-sdk/protocol";
 import { servePluginUi } from "@/plugin-sdk/ui-serve";
 import { format } from "./i18n";
 import en from "./locales/runtime/en.json";
@@ -371,6 +376,163 @@ describe("Reader file drop", () => {
       expect(storage.get(CURRENT_DOCUMENT_KEY)).toBe(last?.id);
       expect(host.notifications).toEqual([]);
       await page.unmount();
+    } finally {
+      await host.stop();
+    }
+  });
+});
+
+// The writer points a Canvas Reference at a Document on the Shelf (#838): the
+// Shelf is the `documents` source, subtitled by each Document's format, and a
+// Document the author forgot is reported missing.
+describe("Reader Canvas Reference source", () => {
+  /** A Shelf of two Documents, newest first. */
+  async function seededShelf(): Promise<Map<string, unknown>> {
+    const dune = pdfBytes("a PDF on the shelf");
+    const emma = epubBytes("an EPUB on the shelf");
+    const storage = readerStorage();
+    storage.set(SHELF_KEY, [
+      await seededEntry(dune),
+      shelfEntry({
+        id: "doc-2",
+        grant: "grant-2",
+        fingerprint: await fingerprint(emma.length, emma, emma),
+        title: "Emma",
+        format: "epub",
+        lastReadAt: 2_000,
+      }),
+    ]);
+    return storage;
+  }
+
+  it("lists every Document on the Shelf, subtitled by its format", async () => {
+    const { host } = hostFor({ storage: await seededShelf() });
+    try {
+      const result = await host.broker.request(PLUGIN_CANVAS_REFERENCE_LIST_REQUEST, {
+        source: "documents",
+        query: "",
+      });
+      expect(result).toEqual({
+        rows: [
+          { id: "doc-2", title: "Emma", subtitle: "EPUB" },
+          { id: "doc-1", title: "Dune", subtitle: "PDF" },
+        ],
+      });
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("filters rows by title, trimmed and case-insensitive", async () => {
+    const { host } = hostFor({ storage: await seededShelf() });
+    try {
+      const result = await host.broker.request(PLUGIN_CANVAS_REFERENCE_LIST_REQUEST, {
+        source: "documents",
+        query: "  duNe ",
+      });
+      expect(result).toEqual({ rows: [{ id: "doc-1", title: "Dune", subtitle: "PDF" }] });
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("resolves a present Document and reports one removed from the Shelf missing", async () => {
+    const storage = await seededShelf();
+    const { host } = hostFor({ storage });
+    try {
+      const request = async (ids: string[]) =>
+        host.broker.request(PLUGIN_CANVAS_REFERENCE_RESOLVE_REQUEST, { source: "documents", ids });
+
+      await expect(request(["doc-1", "doc-2"])).resolves.toEqual({
+        "doc-1": { status: "present", title: "Dune", subtitle: "PDF" },
+        "doc-2": { status: "present", title: "Emma", subtitle: "EPUB" },
+      });
+
+      const shelf = storage.get(SHELF_KEY) as ShelfEntry[];
+      storage.set(
+        SHELF_KEY,
+        shelf.filter((entry) => entry.id !== "doc-1")
+      );
+      await expect(request(["doc-1", "doc-2"])).resolves.toEqual({
+        "doc-1": { status: "missing" },
+        "doc-2": { status: "present", title: "Emma", subtitle: "EPUB" },
+      });
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("resolves a lost file present and opens it onto the Reading page", async () => {
+    const bytes = pdfBytes("the file that moved");
+    const storage = readerStorage();
+    storage.set(SHELF_KEY, [{ ...(await seededEntry(bytes)), state: "missing" }]);
+    const { host } = hostFor({ storage });
+    try {
+      await expect(
+        host.broker.request(PLUGIN_CANVAS_REFERENCE_RESOLVE_REQUEST, {
+          source: "documents",
+          ids: ["doc-1"],
+        })
+      ).resolves.toEqual({ "doc-1": { status: "present", title: "Dune", subtitle: "PDF" } });
+
+      await expect(
+        host.broker.request(PLUGIN_CANVAS_REFERENCE_OPEN_REQUEST, {
+          source: "documents",
+          id: "doc-1",
+        })
+      ).resolves.toBe("opened");
+      expect(host.pageNavigations).toEqual([
+        { pluginId: "maibuk-reader", pageId: DOCUMENT_PAGE_ID },
+      ]);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("answers missing for an id not on the Shelf, opening nothing", async () => {
+    const { host } = hostFor({ storage: await seededShelf() });
+    try {
+      await expect(
+        host.broker.request(PLUGIN_CANVAS_REFERENCE_OPEN_REQUEST, {
+          source: "documents",
+          id: "gone",
+        })
+      ).resolves.toBe("missing");
+      expect(host.pageNavigations).toEqual([]);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("fails every request when the Shelf cannot be read, rather than calling Documents missing", async () => {
+    // A blocked storage read must not read as an empty Shelf: the host keeps the
+    // stored labels for a failed request, but marks a `missing` answer Missing.
+    class BlockedShelf extends Map<string, unknown> {
+      override get(key: string): unknown {
+        if (key === SHELF_KEY) throw new Error("storage blocked");
+        return super.get(key);
+      }
+    }
+    const { host } = hostFor({ storage: new BlockedShelf() });
+    try {
+      await expect(
+        host.broker.request(PLUGIN_CANVAS_REFERENCE_LIST_REQUEST, {
+          source: "documents",
+          query: "",
+        })
+      ).rejects.toThrow();
+      await expect(
+        host.broker.request(PLUGIN_CANVAS_REFERENCE_RESOLVE_REQUEST, {
+          source: "documents",
+          ids: ["doc-1"],
+        })
+      ).rejects.toThrow();
+      await expect(
+        host.broker.request(PLUGIN_CANVAS_REFERENCE_OPEN_REQUEST, {
+          source: "documents",
+          id: "doc-1",
+        })
+      ).rejects.toThrow();
     } finally {
       await host.stop();
     }
