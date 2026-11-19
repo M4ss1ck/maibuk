@@ -461,6 +461,8 @@ test.describe("Maps and Documents Canvas References @wf:plugins-canvas-reference
   test("a Document reference places, opens, turns Unavailable with the Reader off, and goes Missing when removed from the Shelf", async ({
     page,
   }) => {
+    // A file pick, a PDF parse, and two Settings round trips outrun the 30s default.
+    test.setTimeout(90_000);
     // Reader shelves the picked PDF; the Shelf then answers the Documents tab.
     await page.goto("/");
     await openReader(page);
@@ -521,6 +523,15 @@ test.describe("Maps and Documents Canvas References @wf:plugins-canvas-reference
     await tabTo(page, enableSwitch(page, READER), { max: 20 });
     await page.keyboard.press("Space");
     await expect(enableSwitch(page, READER)).toBeChecked();
+
+    await page.goto(canvasUrl);
+    await expectCanvasReady(page);
+    await expect(references(page)).toHaveCount(3);
+    await expect(
+      references(page)
+        .last()
+        .getByRole("button", { name: `Open ${DOCUMENT_TITLE}` })
+    ).toBeEnabled();
 
     // Remove from Shelf forgets the Document, which leaves the card Missing.
     // Tab from Settings never leaves the page in Firefox, so the Shelf opens by URL.
