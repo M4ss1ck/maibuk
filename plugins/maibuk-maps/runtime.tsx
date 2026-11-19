@@ -28,7 +28,12 @@ import type { ExportFont } from "./export";
 import { bundledFonts } from "./font-bytes";
 import type { FrameFontMessage } from "./frame-protocol";
 import { MAP_PAGE_ID, createMapPage } from "./map-page";
-import { MAP_LABEL_FONT_FAMILIES, createMapStore, migrateMapsData } from "./maps";
+import {
+  MAP_LABEL_FONT_FAMILIES,
+  createMapStore,
+  migrateMapsData,
+  type MapIndexEntry,
+} from "./maps";
 import { MAPS_PAGE_ID, createBookFilter, createMapsPage } from "./maps-page";
 import { MAP_STYLE_IDS } from "./styles";
 
@@ -312,13 +317,14 @@ export function startMaps(client: PluginClient, serve: MapsServe): MapsRuntime {
   /**
    * One Canvas Reference row per Map the store lists (#837): its name, and its
    * Book's title as the subtitle, absent when it has no Book or the Library
-   * read fails.
+   * read fails. Reads the store itself unless handed the entries it already
+   * listed, so a resolve lists them once (#847).
    */
-  async function referenceRows(): Promise<CanvasReferenceSourceRow[]> {
-    const entries = await store.list();
+  async function referenceRows(entries?: MapIndexEntry[]): Promise<CanvasReferenceSourceRow[]> {
+    const listed = entries ?? (await store.list());
     const books = await client.library.books.list().catch(() => []);
     const titles = new Map(books.map((book) => [book.id, book.title]));
-    return entries.map((entry) => {
+    return listed.map((entry) => {
       const bookTitle = entry.bookId === null ? undefined : titles.get(entry.bookId);
       return bookTitle === undefined
         ? { id: entry.id, title: entry.name }
@@ -339,18 +345,24 @@ export function startMaps(client: PluginClient, serve: MapsServe): MapsRuntime {
     },
 
     async resolve(ids) {
-      const rows = await referenceRows();
+      const entries = await store.list();
+      const rows = await referenceRows(entries);
       const answers: Record<string, CanvasReferenceSourceResolution> = {};
       for (const id of ids) {
         const row = rows.find((candidate) => candidate.id === id);
-        answers[id] =
-          row === undefined
-            ? { status: "missing" }
-            : {
-                status: "present",
-                title: row.title,
-                ...(row.subtitle === undefined ? {} : { subtitle: row.subtitle }),
-              };
+        if (row === undefined) {
+          answers[id] = { status: "missing" };
+          continue;
+        }
+        // The Map's own index preview rides along, so the host draws its
+        // picture on the card (#847).
+        const preview = entries.find((entry) => entry.id === id)?.preview;
+        answers[id] = {
+          status: "present",
+          title: row.title,
+          ...(row.subtitle === undefined ? {} : { subtitle: row.subtitle }),
+          ...(preview === undefined || preview === "" ? {} : { image: preview }),
+        };
       }
       return answers;
     },

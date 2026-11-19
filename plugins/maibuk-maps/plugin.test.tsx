@@ -1274,6 +1274,9 @@ describe("Maps Canvas Reference source", () => {
           { id: "m3", title: "Loose" },
         ],
       });
+      // The rows stay text only: the picture rides on a resolve answer (#847).
+      const { rows } = result as { rows: Array<Record<string, unknown>> };
+      expect(rows.some((row) => "image" in row)).toBe(false);
     } finally {
       await host.stop();
     }
@@ -1313,17 +1316,27 @@ describe("Maps Canvas Reference source", () => {
 
   it("resolves a present Map and reports a deleted one missing", async () => {
     const storage = seededStorage();
+    const previews = new Map(
+      (storage.get(INDEX_KEY) as MapIndexEntry[]).map((row) => [row.id, row.preview])
+    );
     const host = hostFor(storage);
     try {
-      await expect(
-        host.broker.request(PLUGIN_CANVAS_REFERENCE_RESOLVE_REQUEST, {
-          source: "maps",
-          ids: ["m1", "m3"],
-        })
-      ).resolves.toEqual({
-        m1: { status: "present", title: "Coast", subtitle: "Tides of Ash" },
-        m3: { status: "present", title: "Loose" },
+      const answer = (await host.broker.request(PLUGIN_CANVAS_REFERENCE_RESOLVE_REQUEST, {
+        source: "maps",
+        ids: ["m1", "m3"],
+      })) as Record<string, { status: string; image?: string }>;
+      // Each present answer carries the Map's own index preview (#847).
+      expect(answer).toEqual({
+        m1: {
+          status: "present",
+          title: "Coast",
+          subtitle: "Tides of Ash",
+          image: previews.get("m1"),
+        },
+        m3: { status: "present", title: "Loose", image: previews.get("m3") },
       });
+      expect(answer.m1?.image).toMatch(/^data:image\/svg\+xml,/);
+      expect(answer.m3?.image).toMatch(/^data:image\/svg\+xml,/);
 
       await removeStoredMap(storage, "m1");
       await expect(
