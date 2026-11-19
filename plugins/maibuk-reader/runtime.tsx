@@ -14,10 +14,14 @@
 import type { ComponentType } from "react";
 import {
   PLUGIN_COMMAND_RUN_REQUEST,
+  type CanvasReferenceSourceRequests,
+  type CanvasReferenceSourceResolution,
+  type CanvasReferenceSourceRow,
   type HostRequestHandler,
   type PluginApiEvents,
   type PluginClient,
   type PluginFrame,
+  canvasReferenceRequests,
 } from "@/plugin-sdk";
 import type { FrameCommandId } from "./frame-protocol";
 import { format, translate } from "./i18n";
@@ -167,9 +171,57 @@ export function startReader(client: PluginClient, serve: ReaderServe): void {
 
   const ShelfPage = createShelfPage({ client, library, onOpenDocument: openDocument });
 
+  /**
+   * The `documents` Canvas Reference source (#838): every Document on the Shelf
+   * in its own order, subtitled by its format, filtered by title, resolved
+   * through one Shelf read, and opened onto the Reading page. A Document whose
+   * file is lost is still on the Shelf, so it resolves present.
+   */
+  const documentSource: CanvasReferenceSourceRequests = {
+    async list(query) {
+      const needle = query.trim().toLocaleLowerCase();
+      const shelf = await library.loadShelf();
+      return shelf
+        .filter((entry) => entry.title.toLocaleLowerCase().includes(needle))
+        .map(
+          (entry): CanvasReferenceSourceRow => ({
+            id: entry.id,
+            title: entry.title,
+            subtitle: entry.format.toUpperCase(),
+          })
+        );
+    },
+
+    async resolve(ids) {
+      const shelf = await library.loadShelf();
+      const answers: Record<string, CanvasReferenceSourceResolution> = {};
+      for (const id of ids) {
+        const entry = shelf.find((candidate) => candidate.id === id);
+        answers[id] =
+          entry === undefined
+            ? { status: "missing" }
+            : {
+                status: "present",
+                title: entry.title,
+                subtitle: entry.format.toUpperCase(),
+              };
+      }
+      return answers;
+    },
+
+    async open(id) {
+      const entry = (await library.loadShelf()).find((candidate) => candidate.id === id);
+      if (entry === undefined) return "missing";
+      await openEntry(client, library, runtime, entry);
+      return "opened";
+    },
+  };
+
   serve(client, {
     pages: { [SHELF_PAGE_ID]: ShelfPage },
-    onHostRequest: (method, params) => handleHostRequest(client, library, runtime, method, params),
+    onHostRequest: canvasReferenceRequests({ documents: documentSource }, (method, params) =>
+      handleHostRequest(client, library, runtime, method, params)
+    ),
   });
 }
 

@@ -19,5 +19,6 @@
   "commands.toggleContinuousScroll.label": "Desplazamiento continuo",
   "commands.backToShelf.label": "Volver al estante",
   "pages.reader.title": "Lector",
-  "pages.document.title": "Lectura"
+  "pages.document.title": "Lectura",
+  "canvasReferenceSources.documents.label": "Documentos"
 }

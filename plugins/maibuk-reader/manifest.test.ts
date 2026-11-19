@@ -25,7 +25,15 @@ describe("Reader manifest", () => {
     expect(parsed.platforms).toEqual(["desktop", "web"]);
     expect(parsed.lifecycle).toBe("on-demand");
     expect(parsed.customUi).toBe(true);
-    expect(parsed.apiVersion).toBe("^0.1.12");
+    expect(parsed.apiVersion).toBe("^0.1.13");
+  });
+
+  it("declares the Documents Canvas Reference source and the API version it needs", () => {
+    const parsed = manifest();
+    expect(parsed.apiVersion).toBe("^0.1.13");
+    expect(parsed.contributes?.canvasReferenceSources).toEqual([
+      { id: "documents", label: "Documents", icon: "book-open-text" },
+    ]);
   });
 
   it("asks only for File Grants, never Library or editor access", () => {
