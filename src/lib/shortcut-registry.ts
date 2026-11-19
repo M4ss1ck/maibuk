@@ -366,6 +366,12 @@ export const COMMANDS = {
     defaults: [],
     navigates: true,
   },
+  "pluginPage.back": {
+    labelKey: "common.back",
+    contexts: ["pluginPage"],
+    defaults: [],
+    navigates: true,
+  },
   "settings.addPlugin": {
     labelKey: "plugins.management.commands.addPlugin",
     contexts: ["settings"],

@@ -93,6 +93,11 @@ export function PluginPage() {
   // visit does, Back/Forward included.
   const returnState = location.state as { returnTo?: string; returnLabel?: string } | null;
   const returnTo = returnState?.returnTo;
+  // Back is a Command of this page, so the author can bind a key to it (#786).
+  const goBack = () => {
+    if (returnTo !== undefined) navigate(returnTo);
+  };
+  useShortcuts([{ id: "pluginPage.back", enabled: returnTo !== undefined, onTrigger: goBack }]);
   const title = page?.title ?? savedEntry?.title ?? t("plugins.page.notFoundTitle");
   const name = page?.displayName ?? savedEntry?.displayName ?? pluginId;
   const showPanel =
@@ -145,12 +150,11 @@ export function PluginPage() {
           variant="ghost"
           size="sm"
           className="mb-2 self-start shrink-0"
-          onClick={() => navigate(returnTo)}
+          data-command="pluginPage.back"
+          onClick={goBack}
         >
           <ArrowLeft className="size-4" aria-hidden="true" />
-          {returnState?.returnLabel
-            ? t("nav.backTo", { title: returnState.returnLabel })
-            : t("common.back")}
+          {t("nav.backTo", { title: returnState?.returnLabel || t("common.untitled") })}
         </Button>
       )}
       <h1
