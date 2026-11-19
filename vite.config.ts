@@ -469,6 +469,7 @@ export default defineConfig(() => ({
         "src/features/canvas/write.ts",
         "src/features/canvas/references.ts",
         "src/features/canvas/noteReferenceSource.ts",
+        "src/features/canvas/pluginReferenceSource.ts",
         // Phase 14: Canvas rich-text parity
         "src/components/editor/extensions/createRichTextExtensions.ts",
         "src/components/editor/plain-text-html.ts",

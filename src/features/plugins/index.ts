@@ -210,6 +210,7 @@ export {
   openPluginPage,
   resolvePluginEntityRoute,
   setPluginNavigator,
+  withPluginReturnTarget,
 } from "@/features/plugins/navigation";
 export {
   EDITOR_CONTENT_EVENT_MS,

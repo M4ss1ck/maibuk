@@ -17,7 +17,7 @@ const {
   openPluginPage,
   resolvePluginEntityRoute,
   setPluginNavigator,
-  withPluginPageReturnTarget,
+  withPluginReturnTarget,
 } = await import("@/features/plugins/navigation");
 
 describe("Plugin entity navigation", () => {
@@ -67,6 +67,24 @@ describe("Plugin entity navigation", () => {
       expect(navigate).toHaveBeenCalledWith("/book/b1", {
         state: { openChapterId: "c1", reveal: { from: 3, to: 9 } },
       });
+    } finally {
+      unregister();
+    }
+  });
+
+  it("carries the caller's return target on an entity it opens inside the window", async () => {
+    const navigate = vi.fn();
+    const unregister = setPluginNavigator((to, options) => navigate(to, options));
+    try {
+      await withPluginReturnTarget("tracer", { to: "/canvas/cv1", label: "Board" }, async () => {
+        await openPluginEntity({ kind: "note", id: "n1" }, { from: 3, to: 9 }, "tracer");
+      });
+      expect(navigate).toHaveBeenCalledWith("/notes/n1", {
+        state: { returnTo: "/canvas/cv1", returnLabel: "Board", reveal: { from: 3, to: 9 } },
+      });
+      navigate.mockClear();
+      await openPluginEntity({ kind: "note", id: "n1" }, undefined, "other");
+      expect(navigate).toHaveBeenCalledWith("/notes/n1", undefined);
     } finally {
       unregister();
     }
@@ -157,49 +175,46 @@ describe("Plugin page navigation", () => {
     await expect(openPluginPage("tracer", "report")).resolves.toEqual({ status: "opened" });
   });
 
-  it("carries the return target on the caller's own page inside its run", async () => {
+  it("carries the return target on every page the caller opens inside its window", async () => {
     installPlugin("tracer", "report");
     const navigate = vi.fn();
     const unregister = setPluginNavigator(navigate);
     try {
-      await withPluginPageReturnTarget("tracer", { to: "/canvas/c1", label: "Plot" }, async () => {
-        await openPluginPage("tracer", "report", "tracer");
-      });
-      expect(navigate).toHaveBeenCalledWith("/plugin/tracer/report", {
-        state: { returnTo: "/canvas/c1", returnLabel: "Plot" },
-      });
-    } finally {
-      unregister();
-    }
-  });
-
-  it("carries no return target for a different caller", async () => {
-    installPlugin("tracer", "report");
-    const navigate = vi.fn();
-    const unregister = setPluginNavigator(navigate);
-    try {
-      await withPluginPageReturnTarget("tracer", { to: "/canvas/c1", label: "Plot" }, async () => {
-        await openPluginPage("tracer", "report", "other");
-      });
-      expect(navigate).toHaveBeenCalledWith("/plugin/tracer/report");
-    } finally {
-      unregister();
-    }
-  });
-
-  it("spends the return target once, not on a second open inside the same run", async () => {
-    installPlugin("tracer", "report");
-    const navigate = vi.fn();
-    const unregister = setPluginNavigator(navigate);
-    try {
-      await withPluginPageReturnTarget("tracer", { to: "/canvas/c1", label: "Plot" }, async () => {
+      await withPluginReturnTarget("tracer", { to: "/canvas/c1", label: "Plot" }, async () => {
         await openPluginPage("tracer", "report", "tracer");
         await openPluginPage("tracer", "report", "tracer");
       });
       expect(navigate).toHaveBeenNthCalledWith(1, "/plugin/tracer/report", {
         state: { returnTo: "/canvas/c1", returnLabel: "Plot" },
       });
-      expect(navigate).toHaveBeenNthCalledWith(2, "/plugin/tracer/report");
+      expect(navigate).toHaveBeenNthCalledWith(2, "/plugin/tracer/report", {
+        state: { returnTo: "/canvas/c1", returnLabel: "Plot" },
+      });
+
+      navigate.mockClear();
+      await openPluginPage("tracer", "report", "tracer");
+      expect(navigate).toHaveBeenCalledWith("/plugin/tracer/report");
+    } finally {
+      unregister();
+    }
+  });
+
+  it("keys the target to the calling Plugin, not to the opened page's owner", async () => {
+    installPlugin("tracer", "report");
+    installPlugin("other", "panel");
+    const navigate = vi.fn();
+    const unregister = setPluginNavigator(navigate);
+    try {
+      await withPluginReturnTarget("tracer", { to: "/canvas/c1", label: "Plot" }, async () => {
+        // A different Plugin calling during A's window carries nothing.
+        await openPluginPage("tracer", "report", "other");
+        // A opening another installed Plugin's page still carries A's target.
+        await openPluginPage("other", "panel", "tracer");
+      });
+      expect(navigate).toHaveBeenNthCalledWith(1, "/plugin/tracer/report");
+      expect(navigate).toHaveBeenNthCalledWith(2, "/plugin/other/panel", {
+        state: { returnTo: "/canvas/c1", returnLabel: "Plot" },
+      });
     } finally {
       unregister();
     }
@@ -210,7 +225,7 @@ describe("Plugin page navigation", () => {
     const navigate = vi.fn();
     const unregister = setPluginNavigator(navigate);
     try {
-      await withPluginPageReturnTarget("tracer", { to: "/canvas/c1", label: "Plot" }, async () => {
+      await withPluginReturnTarget("tracer", { to: "/canvas/c1", label: "Plot" }, async () => {
         await openPluginPage("tracer", "report", "tracer");
       });
       navigate.mockClear();
@@ -218,10 +233,89 @@ describe("Plugin page navigation", () => {
       expect(navigate).toHaveBeenCalledWith("/plugin/tracer/report");
 
       await expect(
-        withPluginPageReturnTarget("tracer", { to: "/canvas/c1", label: "Plot" }, async () => {
+        withPluginReturnTarget("tracer", { to: "/canvas/c1", label: "Plot" }, async () => {
           throw new Error("run failed");
         })
       ).rejects.toThrow("run failed");
+      navigate.mockClear();
+      await openPluginPage("tracer", "report", "tracer");
+      expect(navigate).toHaveBeenCalledWith("/plugin/tracer/report");
+    } finally {
+      unregister();
+    }
+  });
+
+  it("nests windows for the same caller, the inner one winning until it settles", async () => {
+    installPlugin("tracer", "report");
+    const navigate = vi.fn();
+    const unregister = setPluginNavigator(navigate);
+    try {
+      await withPluginReturnTarget("tracer", { to: "/canvas/outer", label: "Outer" }, async () => {
+        await openPluginPage("tracer", "report", "tracer");
+        await withPluginReturnTarget(
+          "tracer",
+          { to: "/canvas/inner", label: "Inner" },
+          async () => {
+            await openPluginPage("tracer", "report", "tracer");
+          }
+        );
+        await openPluginPage("tracer", "report", "tracer");
+      });
+      expect(navigate).toHaveBeenNthCalledWith(1, "/plugin/tracer/report", {
+        state: { returnTo: "/canvas/outer", returnLabel: "Outer" },
+      });
+      expect(navigate).toHaveBeenNthCalledWith(2, "/plugin/tracer/report", {
+        state: { returnTo: "/canvas/inner", returnLabel: "Inner" },
+      });
+      expect(navigate).toHaveBeenNthCalledWith(3, "/plugin/tracer/report", {
+        state: { returnTo: "/canvas/outer", returnLabel: "Outer" },
+      });
+
+      navigate.mockClear();
+      await openPluginPage("tracer", "report", "tracer");
+      expect(navigate).toHaveBeenCalledWith("/plugin/tracer/report");
+    } finally {
+      unregister();
+    }
+  });
+
+  it("keeps concurrent windows for different callers apart", async () => {
+    installPlugin("tracer", "report");
+    installPlugin("other", "panel");
+    const navigate = vi.fn();
+    const unregister = setPluginNavigator(navigate);
+    let releaseA: () => void = () => {};
+    let releaseB: () => void = () => {};
+    const gateA = new Promise<void>((resolve) => {
+      releaseA = resolve;
+    });
+    const gateB = new Promise<void>((resolve) => {
+      releaseB = resolve;
+    });
+    try {
+      const windowA = withPluginReturnTarget(
+        "tracer",
+        { to: "/canvas/a", label: "A" },
+        async () => {
+          await openPluginPage("tracer", "report", "tracer");
+          await gateA;
+        }
+      );
+      const windowB = withPluginReturnTarget("other", { to: "/canvas/b", label: "B" }, async () => {
+        await openPluginPage("other", "panel", "other");
+        await gateB;
+      });
+
+      releaseA();
+      releaseB();
+      await Promise.all([windowA, windowB]);
+
+      expect(navigate).toHaveBeenNthCalledWith(1, "/plugin/tracer/report", {
+        state: { returnTo: "/canvas/a", returnLabel: "A" },
+      });
+      expect(navigate).toHaveBeenNthCalledWith(2, "/plugin/other/panel", {
+        state: { returnTo: "/canvas/b", returnLabel: "B" },
+      });
       navigate.mockClear();
       await openPluginPage("tracer", "report", "tracer");
       expect(navigate).toHaveBeenCalledWith("/plugin/tracer/report");

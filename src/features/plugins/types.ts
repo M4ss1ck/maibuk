@@ -1345,6 +1345,12 @@ export interface PluginRoute {
   state?: { openChapterId?: string; reveal?: PluginRevealRange };
 }
 
+/** Where a navigation returns to, as a route and the label the host shows. */
+export interface PluginReturnTarget {
+  to: string;
+  label: string;
+}
+
 /** The app shell's `navigate`, without importing the router into the handlers. */
 export type PluginNavigator = (to: string, options?: { state?: unknown }) => void;
 

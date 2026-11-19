@@ -13,6 +13,7 @@ import type {
   PluginEntityTarget,
   PluginNavigator,
   PluginPageOpenResult,
+  PluginReturnTarget,
   PluginRevealRange,
   PluginRoute,
 } from "@/features/plugins/types";
@@ -20,13 +21,16 @@ import { getDatabase } from "@/lib/db";
 
 let navigator: PluginNavigator | null = null;
 
-/** Where an `openPage` returns to, as a route and the label the host shows. */
-export interface PluginPageReturnTarget {
-  to: string;
-  label: string;
-}
+/** Each caller's parked return targets, innermost last. */
+const pendingReturnTargets = new Map<string, Array<{ target: PluginReturnTarget }>>();
 
-let pendingPageReturn: { callerId: string; target: PluginPageReturnTarget } | null = null;
+/** The return target a caller has parked right now, or null when none is. */
+function currentReturnTarget(callerId: string | undefined): PluginReturnTarget | null {
+  if (callerId === undefined) return null;
+  const stack = pendingReturnTargets.get(callerId);
+  if (stack === undefined || stack.length === 0) return null;
+  return stack[stack.length - 1].target;
+}
 
 /**
  * Registers the app shell's navigator; returns the unregister. The last
@@ -79,44 +83,59 @@ export async function resolvePluginEntityRoute(
 
 /**
  * Opens an entity through the registered navigator, carrying a reveal range as
- * navigation state when one is given. A missing entity or no registered
- * navigator is a no-op: the call never rejects the Plugin.
+ * navigation state when one is given and `callerId`'s parked return target when
+ * it has one. A missing entity or no registered navigator is a no-op: the call
+ * never rejects the Plugin.
  */
 export async function openPluginEntity(
   target: PluginEntityTarget,
-  reveal?: PluginRevealRange
+  reveal?: PluginRevealRange,
+  callerId?: string
 ): Promise<void> {
   const route = await resolvePluginEntityRoute(target);
   if (route === null || navigator === null) return;
-  const state = reveal !== undefined ? { ...(route.state ?? {}), reveal } : route.state;
+  const base = reveal !== undefined ? { ...(route.state ?? {}), reveal } : route.state;
+  const returnTarget = currentReturnTarget(callerId);
+  const state =
+    returnTarget !== null
+      ? { ...(base ?? {}), returnTo: returnTarget.to, returnLabel: returnTarget.label }
+      : base;
   navigator(route.to, state !== undefined ? { state } : undefined);
 }
 
 /**
- * Runs `run` with a return target parked for `callerId`'s own next
- * `openPluginPage`, which spends it as navigation state. The slot is cleared
- * when the run settles, so a run that never opens a page carries nothing.
+ * Runs `run` with a return target parked for `callerId`, so every `openPage`
+ * and `openEntity` it makes inside the window carries it as navigation state.
+ * Targets nest per caller, and the entry is removed when the run settles, so a
+ * run that opens nothing leaves none behind.
  */
-export async function withPluginPageReturnTarget<T>(
+export async function withPluginReturnTarget<T>(
   callerId: string,
-  target: PluginPageReturnTarget,
+  target: PluginReturnTarget,
   run: () => Promise<T>
 ): Promise<T> {
-  const entry = { callerId, target };
-  pendingPageReturn = entry;
+  const entry = { target };
+  const stack = pendingReturnTargets.get(callerId);
+  if (stack === undefined) pendingReturnTargets.set(callerId, [entry]);
+  else stack.push(entry);
   try {
     return await run();
   } finally {
-    if (pendingPageReturn === entry) pendingPageReturn = null;
+    const entries = pendingReturnTargets.get(callerId);
+    if (entries !== undefined) {
+      const index = entries.indexOf(entry);
+      if (index !== -1) entries.splice(index, 1);
+      if (entries.length === 0) pendingReturnTargets.delete(callerId);
+    }
   }
 }
 
 /**
  * Opens a Plugin page through the registered navigator, carrying `callerId`'s
- * parked return target as navigation state and spending it. A Plugin that is not
- * installed or does not declare the page is a typed `not-found`; the call never
- * rejects the Plugin. Like `openPluginEntity`, no registered navigator is a
- * no-op (the page still resolves for the caller).
+ * parked return target as navigation state. A Plugin that is not installed or
+ * does not declare the page is a typed `not-found`; the call never rejects the
+ * Plugin. Like `openPluginEntity`, no registered navigator is a no-op (the page
+ * still resolves for the caller).
  */
 export async function openPluginPage(
   pluginId: string,
@@ -125,16 +144,12 @@ export async function openPluginPage(
 ): Promise<PluginPageOpenResult> {
   if (getPluginPage(pluginId, pageId) === undefined) return { status: "not-found" };
   const route = pluginPageRoute(pluginId, pageId);
-  const pending =
-    pendingPageReturn !== null && pendingPageReturn.callerId === callerId
-      ? pendingPageReturn
-      : null;
-  if (pending === null) {
+  const returnTarget = currentReturnTarget(callerId);
+  if (returnTarget === null) {
     navigator?.(route);
   } else {
-    pendingPageReturn = null;
     navigator?.(route, {
-      state: { returnTo: pending.target.to, returnLabel: pending.target.label },
+      state: { returnTo: returnTarget.to, returnLabel: returnTarget.label },
     });
   }
   return { status: "opened" };

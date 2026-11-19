@@ -209,8 +209,8 @@ export function createPluginHandlers(manifest: PluginHandlersManifest): PluginAp
       return null;
     },
     "storage.keys": (_params, context) => listPluginStorageKeys(context.pluginId),
-    "navigation.openEntity": ({ entity, reveal }) =>
-      openPluginEntity(entity, reveal).then(() => null),
+    "navigation.openEntity": ({ entity, reveal }, context) =>
+      openPluginEntity(entity, reveal, context.pluginId).then(() => null),
     "navigation.openPage": ({ pageId, pluginId }, context) =>
       openPluginPage(pluginId ?? context.pluginId, pageId, context.pluginId),
     "language.get": async () => ({ language: currentPluginLanguage() }),

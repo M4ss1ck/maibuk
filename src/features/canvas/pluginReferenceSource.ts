@@ -14,7 +14,7 @@ import {
 } from "@/features/plugins/canvas-reference-requests";
 import type { PluginCanvasReferenceSourceDef } from "@/features/plugins/contributions-registry";
 import { getPluginLifecycle } from "@/features/plugins/lifecycle-instance";
-import { withPluginPageReturnTarget } from "@/features/plugins/navigation";
+import { withPluginReturnTarget } from "@/features/plugins/navigation";
 import type { CanvasReferenceSource } from "@/features/canvas/references";
 
 /** The picker tab's icon draws the Plugin's declared icon in the app's icon box. */
@@ -47,7 +47,7 @@ export function pluginReferenceSource(def: PluginCanvasReferenceSourceDef): Canv
     },
 
     open(id, { canvasId, canvasTitle }) {
-      return withPluginPageReturnTarget(
+      return withPluginReturnTarget(
         def.pluginId,
         { to: `/canvas/${canvasId}`, label: canvasTitle },
         () => openPluginCanvasReference(getPluginLifecycle(), def, id)
