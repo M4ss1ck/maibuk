@@ -5,7 +5,7 @@
   "description": "Reads PDF, EPUB, MOBI, AZW3, FB2, and CBZ files from your device beside your writing, and remembers where you were.",
   "author": "Maibuk",
   "version": "0.2.0",
-  "apiVersion": "^0.1.13",
+  "apiVersion": "^0.1.14",
   "entry": "index.js",
   "platforms": ["desktop", "web"],
   "lifecycle": "on-demand",
@@ -113,7 +113,8 @@
         "title": "Reading",
         "command": "openDocument",
         "frame": "assets/ui/reader.html",
-        "hideTitle": true
+        "hideTitle": true,
+        "hideBack": true
       }
     ],
     "sidebarEntries": [{ "page": "reader", "icon": "book-open-text" }],

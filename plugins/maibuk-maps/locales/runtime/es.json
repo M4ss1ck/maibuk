@@ -39,6 +39,7 @@
   "delete.description": "Se eliminan el mapa y todo lo dibujado en él. No se puede deshacer.",
   "delete.confirm": "Eliminar",
   "map.backToMaps": "Volver a Mapas",
+  "map.backTo": "Volver a {label}",
   "map.frameTitle": "Editor de mapas",
   "map.penPoints_one": "Línea de pluma, {{count}} punto",
   "map.penPoints_other": "Línea de pluma, {{count}} puntos",

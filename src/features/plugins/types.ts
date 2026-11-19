@@ -787,6 +787,12 @@ export interface TestPageNavigation {
   pageId: string;
 }
 
+/** One `navigation.return` a Plugin asked for, in order, with the answer the host gave. */
+export interface TestReturn {
+  pluginId: string;
+  status: "returned" | "none";
+}
+
 export interface TestNotification {
   variant: string;
   message: string;
@@ -993,6 +999,8 @@ export interface TestHost {
   navigations: TestNavigation[];
   /** Every `navigation.openPage` the Plugin asked for, in order. */
   pageNavigations: TestPageNavigation[];
+  /** Every `navigation.return` the Plugin asked for, in order. */
+  returns: TestReturn[];
   /** Every Checkpoint the Plugin took, in order; a null one is not recorded. */
   readonly checkpoints: ReadonlyArray<TestCheckpoint>;
   /** The app language the host serves right now. */
@@ -1012,6 +1020,13 @@ export interface TestHost {
   toolbarPressed(button: string): boolean;
   /** Publishes a language change to every subscribed Plugin. */
   setLanguage(language: string): void;
+  /**
+   * Sets the return target of the Plugin's page on screen, the place Back
+   * returns to, and publishes `navigation.returnTargetChanged` to a subscribed
+   * Plugin; a page holding that target answers `navigation.return` with
+   * `returned`. Setting the same label again fires nothing.
+   */
+  setReturnTarget(label: string | null): void;
   /**
    * Moves the faked Plugin Endpoint to `port`, or turns it off with null, and
    * publishes `endpoint.addressChanged` to a subscribed Plugin that holds
@@ -1343,6 +1358,12 @@ export interface PluginRevealRange {
 export interface PluginRoute {
   to: string;
   state?: { openChapterId?: string; reveal?: PluginRevealRange };
+}
+
+/** Where a navigation returns to, as a route and the label the host shows. */
+export interface PluginReturnTarget {
+  to: string;
+  label: string;
 }
 
 /** The app shell's `navigate`, without importing the router into the handlers. */

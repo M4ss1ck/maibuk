@@ -13,7 +13,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FILE_READ_MAX_BYTES, createPluginClient } from "@/plugin-sdk";
 import { createTestHost } from "@/features/plugins/test-kit";
 import { createShelfService } from "./library";
-import { createReaderSession, type ReaderSession } from "./session";
+import { SHELF_PAGE_ID, followReturnTarget, leaveReading } from "./runtime";
+import { createReaderSession, frameLabels, type ReaderSession } from "./session";
 import { SHELF_KEY, positionKey, type DocumentFormat, type ShelfEntry } from "./shelf";
 import { readerManifest, shelfEntry } from "./test-support";
 
@@ -73,6 +74,8 @@ function setup(
     storage?: Map<string, unknown>;
     navigateToShelf?: () => Promise<void> | void;
     onDispose?: () => void;
+    /** The place the host's Back returns to; null while the page has none. */
+    returnLabel?: () => string | null;
   } = {}
 ): Harness {
   const storage = options.storage ?? new Map<string, unknown>();
@@ -94,6 +97,7 @@ function setup(
     port: channel.port1,
     navigateToShelf,
     onDispose: options.onDispose,
+    returnLabel: options.returnLabel ?? (() => null),
   });
   session.start();
   return {
@@ -128,6 +132,19 @@ async function opened(harness: Harness): Promise<Record<string, unknown>> {
   harness.send({ kind: "ready" });
   return messageOf(harness, "open");
 }
+
+describe("frameLabels", () => {
+  it("names the Shelf when the host has no return target", () => {
+    expect(frameLabels("en").back).toBe("Back to Shelf");
+    expect(frameLabels("en", null).back).toBe("Back to Shelf");
+    expect(frameLabels("es", null).back).toBe("Volver al estante");
+  });
+
+  it("names the place the host's Back returns to when there is one", () => {
+    expect(frameLabels("en", "Plot").back).toBe("Back to Plot");
+    expect(frameLabels("es", "Trama").back).toBe("Volver a Trama");
+  });
+});
 
 describe("open", () => {
   it("sends the Document, its Reading Position, the settings, and localized labels", async () => {
@@ -646,6 +663,82 @@ describe("back", () => {
       await vi.waitFor(() =>
         expect(harness.messages.filter((message) => message.kind === "open")).toHaveLength(2)
       );
+    } finally {
+      await harness.stop();
+    }
+  });
+});
+
+// A Document opened from somewhere else returns there (#786): the Frame's own
+// Back reads Back to {place} and asks the host for the return, and the Shelf
+// only opens when the host has no place to return to.
+describe("return target", () => {
+  /** A runtime the session joins, the way `startReader` holds one per activation. */
+  function readingRuntime() {
+    return {
+      returnLabel: null as string | null,
+      language: "en",
+      sessions: new Map<string, ReaderSession>(),
+    };
+  }
+
+  it("sends the Frame's Back label with the place the host returns to", async () => {
+    const entry = shelfEntry({ id: "doc-1", grant: "grant-1" });
+    const harness = setup({ entry, returnLabel: () => "Plot" });
+    try {
+      const open = await opened(harness);
+      expect((open.labels as Record<string, string>).back).toBe("Back to Plot");
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("relabels Back when the host names a return target, then returns there on Back", async () => {
+    const entry = shelfEntry({ id: "doc-1", grant: "grant-1" });
+    const runtime = readingRuntime();
+    const harness = setup({ entry, returnLabel: () => runtime.returnLabel });
+    harness.navigateToShelf.mockImplementation(() =>
+      leaveReading(harness.client, runtime.returnLabel)
+    );
+    runtime.sessions.set("frame-1", harness.session);
+    followReturnTarget(harness.client, runtime);
+    try {
+      const open = await opened(harness);
+      // Nothing opened this page, so the Frame's own Back still names the Shelf.
+      expect((open.labels as Record<string, string>).back).toBe("Back to Shelf");
+
+      harness.host.setReturnTarget("Plot");
+      await vi.waitFor(() => {
+        const [last] = harness.messages.filter((message) => message.kind === "language").slice(-1);
+        expect((last?.labels as Record<string, string>).back).toBe("Back to Plot");
+      });
+
+      harness.send({ kind: "back" });
+      await vi.waitFor(() =>
+        expect(harness.host.returns).toEqual([{ pluginId: "maibuk-reader", status: "returned" }])
+      );
+      expect(harness.host.pageNavigations).toEqual([]);
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("opens the Shelf on Back while the page has no return target", async () => {
+    const entry = shelfEntry({ id: "doc-1", grant: "grant-1" });
+    const runtime = readingRuntime();
+    const harness = setup({ entry, returnLabel: () => runtime.returnLabel });
+    harness.navigateToShelf.mockImplementation(() =>
+      leaveReading(harness.client, runtime.returnLabel)
+    );
+    try {
+      await opened(harness);
+      harness.send({ kind: "back" });
+      await vi.waitFor(() =>
+        expect(harness.host.pageNavigations).toEqual([
+          { pluginId: "maibuk-reader", pageId: SHELF_PAGE_ID },
+        ])
+      );
+      expect(harness.host.returns).toEqual([]);
     } finally {
       await harness.stop();
     }

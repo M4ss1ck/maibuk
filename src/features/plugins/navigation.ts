@@ -13,12 +13,24 @@ import type {
   PluginEntityTarget,
   PluginNavigator,
   PluginPageOpenResult,
+  PluginReturnTarget,
   PluginRevealRange,
   PluginRoute,
 } from "@/features/plugins/types";
 import { getDatabase } from "@/lib/db";
 
 let navigator: PluginNavigator | null = null;
+
+/** Each caller's parked return targets, innermost last. */
+const pendingReturnTargets = new Map<string, Array<{ target: PluginReturnTarget }>>();
+
+/** The return target a caller has parked right now, or null when none is. */
+function currentReturnTarget(callerId: string | undefined): PluginReturnTarget | null {
+  if (callerId === undefined) return null;
+  const stack = pendingReturnTargets.get(callerId);
+  if (stack === undefined || stack.length === 0) return null;
+  return stack[stack.length - 1].target;
+}
 
 /**
  * Registers the app shell's navigator; returns the unregister. The last
@@ -71,30 +83,126 @@ export async function resolvePluginEntityRoute(
 
 /**
  * Opens an entity through the registered navigator, carrying a reveal range as
- * navigation state when one is given. A missing entity or no registered
- * navigator is a no-op: the call never rejects the Plugin.
+ * navigation state when one is given and `callerId`'s parked return target when
+ * it has one. A missing entity or no registered navigator is a no-op: the call
+ * never rejects the Plugin.
  */
 export async function openPluginEntity(
   target: PluginEntityTarget,
-  reveal?: PluginRevealRange
+  reveal?: PluginRevealRange,
+  callerId?: string
 ): Promise<void> {
   const route = await resolvePluginEntityRoute(target);
   if (route === null || navigator === null) return;
-  const state = reveal !== undefined ? { ...(route.state ?? {}), reveal } : route.state;
+  const base = reveal !== undefined ? { ...(route.state ?? {}), reveal } : route.state;
+  const returnTarget = currentReturnTarget(callerId);
+  const state =
+    returnTarget !== null
+      ? { ...(base ?? {}), returnTo: returnTarget.to, returnLabel: returnTarget.label }
+      : base;
   navigator(route.to, state !== undefined ? { state } : undefined);
 }
 
 /**
- * Opens a Plugin page through the registered navigator. A Plugin that is not
- * installed or does not declare the page is a typed `not-found`; the call never
- * rejects the Plugin. Like `openPluginEntity`, no registered navigator is a
- * no-op (the page still resolves for the caller).
+ * Runs `run` with a return target parked for `callerId`, so every `openPage`
+ * and `openEntity` it makes inside the window carries it as navigation state.
+ * Targets nest per caller, and the entry is removed when the run settles, so a
+ * run that opens nothing leaves none behind.
+ */
+export async function withPluginReturnTarget<T>(
+  callerId: string,
+  target: PluginReturnTarget,
+  run: () => Promise<T>
+): Promise<T> {
+  const entry = { target };
+  const stack = pendingReturnTargets.get(callerId);
+  if (stack === undefined) pendingReturnTargets.set(callerId, [entry]);
+  else stack.push(entry);
+  try {
+    return await run();
+  } finally {
+    const entries = pendingReturnTargets.get(callerId);
+    if (entries !== undefined) {
+      const index = entries.indexOf(entry);
+      if (index !== -1) entries.splice(index, 1);
+      if (entries.length === 0) pendingReturnTargets.delete(callerId);
+    }
+  }
+}
+
+/** The return target shown on each Plugin's on-screen page, keyed by page `pluginId`. */
+const shownReturnTargets = new Map<string, { to: string; label: string }>();
+
+/** Callers told when a shown return target changes. */
+const shownReturnTargetListeners = new Set<(pluginId: string, label: string | null) => void>();
+
+/**
+ * Stores or clears the return target shown on `pluginId`'s page, telling
+ * listeners only when the stored `to` or `label` actually changed.
+ */
+export function setShownPluginReturnTarget(
+  pluginId: string,
+  target: PluginReturnTarget | null
+): void {
+  const previous = shownReturnTargets.get(pluginId);
+  if (target === null) {
+    if (previous === undefined) return;
+    shownReturnTargets.delete(pluginId);
+  } else {
+    if (previous?.to === target.to && previous.label === target.label) return;
+    shownReturnTargets.set(pluginId, { to: target.to, label: target.label });
+  }
+  for (const listener of shownReturnTargetListeners) listener(pluginId, target?.label ?? null);
+}
+
+/** The label of the return target shown on `pluginId`'s page, or null when none is. */
+export function shownPluginReturnLabel(pluginId: string): string | null {
+  return shownReturnTargets.get(pluginId)?.label ?? null;
+}
+
+/** Subscribes to shown return target changes; returns the unsubscribe. */
+export function onShownPluginReturnTargetChange(
+  listener: (pluginId: string, label: string | null) => void
+): () => void {
+  shownReturnTargetListeners.add(listener);
+  return () => {
+    shownReturnTargetListeners.delete(listener);
+  };
+}
+
+/**
+ * Returns from `pluginId`'s on-screen page to the target it shows: `returned`
+ * once the registered navigator is sent there, `none` when there is nothing to
+ * return to or no navigator is registered.
+ */
+export function returnFromPluginPage(pluginId: string): { status: "returned" | "none" } {
+  const target = shownReturnTargets.get(pluginId);
+  if (target === undefined || navigator === null) return { status: "none" };
+  navigator(target.to);
+  return { status: "returned" };
+}
+
+/**
+ * Opens a Plugin page through the registered navigator, carrying `callerId`'s
+ * parked return target as navigation state. A Plugin that is not installed or
+ * does not declare the page is a typed `not-found`; the call never rejects the
+ * Plugin. Like `openPluginEntity`, no registered navigator is a no-op (the page
+ * still resolves for the caller).
  */
 export async function openPluginPage(
   pluginId: string,
-  pageId: string
+  pageId: string,
+  callerId?: string
 ): Promise<PluginPageOpenResult> {
   if (getPluginPage(pluginId, pageId) === undefined) return { status: "not-found" };
-  navigator?.(pluginPageRoute(pluginId, pageId));
+  const route = pluginPageRoute(pluginId, pageId);
+  const returnTarget = currentReturnTarget(callerId);
+  if (returnTarget === null) {
+    navigator?.(route);
+  } else {
+    navigator?.(route, {
+      state: { returnTo: returnTarget.to, returnLabel: returnTarget.label },
+    });
+  }
   return { status: "opened" };
 }

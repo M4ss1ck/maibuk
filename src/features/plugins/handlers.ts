@@ -62,7 +62,11 @@ import {
   updatePluginNote,
 } from "@/features/plugins/library";
 import { usePluginManagementStore } from "@/features/plugins/management";
-import { openPluginEntity, openPluginPage } from "@/features/plugins/navigation";
+import {
+  openPluginEntity,
+  openPluginPage,
+  returnFromPluginPage,
+} from "@/features/plugins/navigation";
 import { pluginFetch } from "@/features/plugins/network";
 import { getPluginSecretStore, type PluginSecretStore } from "@/features/plugins/secret-store";
 import {
@@ -209,10 +213,11 @@ export function createPluginHandlers(manifest: PluginHandlersManifest): PluginAp
       return null;
     },
     "storage.keys": (_params, context) => listPluginStorageKeys(context.pluginId),
-    "navigation.openEntity": ({ entity, reveal }) =>
-      openPluginEntity(entity, reveal).then(() => null),
+    "navigation.openEntity": ({ entity, reveal }, context) =>
+      openPluginEntity(entity, reveal, context.pluginId).then(() => null),
     "navigation.openPage": ({ pageId, pluginId }, context) =>
-      openPluginPage(pluginId ?? context.pluginId, pageId),
+      openPluginPage(pluginId ?? context.pluginId, pageId, context.pluginId),
+    "navigation.return": (_params, { pluginId }) => returnFromPluginPage(pluginId),
     "language.get": async () => ({ language: currentPluginLanguage() }),
     "fonts.list": () => listPluginPdfFonts(),
     "fonts.read": ({ id }) => readPluginPdfFont(id),

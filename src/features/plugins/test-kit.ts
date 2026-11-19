@@ -73,6 +73,7 @@ import type {
   TestPage,
   TestPageNavigation,
   TestPageOptions,
+  TestReturn,
 } from "@/features/plugins/types";
 
 /** One refused batch, as the kit logs it and fails the page with. */
@@ -302,6 +303,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
   const notifications: TestNotification[] = [];
   const navigations: TestNavigation[] = [];
   const pageNavigations: TestPageNavigation[] = [];
+  const returns: TestReturn[] = [];
   const books = [...(options.library?.books ?? [])];
   const chapters = [...(options.library?.chapters ?? [])];
   const notes = [...(options.library?.notes ?? [])];
@@ -328,6 +330,9 @@ export function createTestHost(options: TestHostOptions): TestHost {
   const toolbarPressedState = new Map<string, boolean>();
   let language = options.language ?? "en";
   let libraryAvailable = true;
+  // The place the Plugin's page on screen returns to (#786): a `hideBack` page
+  // draws its own Back from this label and asks the host for the return.
+  let returnTarget: string | null = null;
 
   /**
    * Flushes every pending author edit into the in-memory Library, the way the
@@ -792,6 +797,12 @@ export function createTestHost(options: TestHostOptions): TestHost {
       pageNavigations.push({ pluginId: pluginId ?? options.manifest.id, pageId });
       return { status: "opened" };
     },
+    // A page with no return target answers `none`, as the app's handler does.
+    "navigation.return": () => {
+      const status = returnTarget === null ? "none" : "returned";
+      returns.push({ pluginId: options.manifest.id, status });
+      return { status };
+    },
     "language.get": () => ({ language }),
     // The PDF Fonts the test declared as installed (#751): `fonts.read` gives
     // back the byte array the test seeded, and an id it did not seed is refused
@@ -837,6 +848,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
         return { url: endpointUrlFor(endpointState, options.manifest.id) };
       }
       if (event === "permissions.changed") return { permissions: [...granted] };
+      if (event === "navigation.returnTargetChanged") return { label: returnTarget };
       return undefined;
     },
   });
@@ -1126,6 +1138,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
     notifications,
     navigations,
     pageNavigations,
+    returns,
     locale: options.locale ?? null,
     startReason,
     get language() {
@@ -1187,6 +1200,12 @@ export function createTestHost(options: TestHostOptions): TestHost {
     setLanguage(next) {
       language = next;
       broker.emit("language.changed", { language });
+    },
+    setReturnTarget(next) {
+      const changed = next !== returnTarget;
+      returnTarget = next;
+      // Like setLanguage: only a real change reaches a subscribed Plugin.
+      if (changed) broker.emit("navigation.returnTargetChanged", { label: returnTarget });
     },
     setEndpointAddress(port) {
       const next: EndpointListenerState =

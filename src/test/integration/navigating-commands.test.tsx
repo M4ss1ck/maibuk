@@ -188,7 +188,10 @@ function LocationProbe() {
     if (pathLog.at(-1) !== pathname) pathLog.push(pathname);
   }, [pathname]);
   const navigate = useNavigate();
-  navigateTo = (to: string) => navigate(to);
+  // The Plugin page always arrives with a return target, so every visit binds
+  // pluginPage.back.
+  navigateTo = (to: string) =>
+    navigate(to, to === STOPPED_PLUGIN_PAGE ? { state: PLUGIN_PAGE_RETURN } : undefined);
   return null;
 }
 
@@ -271,6 +274,7 @@ const IN_PLACE: Partial<Record<CommandId, (screen: string) => string | null>> = 
 };
 
 const STOPPED_PLUGIN_PAGE = "/plugin/sample/report";
+const PLUGIN_PAGE_RETURN = { returnTo: "/", returnLabel: "Library" };
 
 // Commands safe on every other screen but not this one: on a Stopped Plugin's
 // page the last focus stop is the panel's Plugin settings button, so an Enter
@@ -285,7 +289,8 @@ const SKIP_ON_SCREEN: Partial<Record<string, Partial<Record<CommandId, string>>>
 /**
  * A Stopped Plugin's page (#618): the registered page, the enabled approval,
  * and a lifecycle whose `sample` entry stopped on a crash. Its panel binds
- * `pluginPage.openSettings`, the navigating Command no other screen mounts.
+ * `pluginPage.openSettings`, the navigating Command no other screen mounts;
+ * opened with a return target, the page also binds `pluginPage.back`.
  * Returns the undo, for `onTestFinished`.
  */
 function installStoppedPluginPage(): () => void {

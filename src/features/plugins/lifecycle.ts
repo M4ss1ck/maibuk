@@ -67,6 +67,10 @@ import {
 import { launchReads, scanApprovedPlugins, syncBuiltInPlugins } from "@/features/plugins/launch";
 import { usePluginManagementStore } from "@/features/plugins/management";
 import { checkPluginCompatibility } from "@/features/plugins/manifest-compat";
+import {
+  onShownPluginReturnTargetChange,
+  shownPluginReturnLabel,
+} from "@/features/plugins/navigation";
 import { reviewPluginCopy } from "@/features/plugins/review";
 import { STARTUP_TIMEOUT_MS, readPluginManifest, startPlugin } from "@/features/plugins/runtime";
 import { pluginStopMessageKey } from "@/features/plugins/stop-messages";
@@ -702,6 +706,9 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
           if (event === "permissions.changed") {
             return { permissions: [...(getPluginApproval(pluginId)?.granted ?? [])] };
           }
+          if (event === "navigation.returnTargetChanged") {
+            return { label: shownPluginReturnLabel(pluginId) };
+          }
           return undefined;
         },
         // The remaining budget, so the handshake cannot grant itself a fresh 10 s.
@@ -912,6 +919,11 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     for (const entry of entries.values()) {
       entry.runtime?.broker.emit("language.changed", { language });
     }
+  });
+  // A shown page's return target belongs to that one Plugin (#786): only its
+  // own page can show one, so only its own broker hears the change.
+  const offReturnTarget = onShownPluginReturnTargetChange((pluginId, label) => {
+    entries.get(pluginId)?.runtime?.broker.emit("navigation.returnTargetChanged", { label });
   });
   // The Plugin Endpoint's port belongs to Maibuk and can move (#587): each
   // running Plugin hears its own address only when the bound port changes, so
@@ -1215,6 +1227,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       offBeforeBulkReplace();
       offBulkReplaceCancelled();
       offLanguage();
+      offReturnTarget();
       offEndpointAddress();
       offEditorContent();
       offEditorFocus();

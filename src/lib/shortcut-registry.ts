@@ -366,6 +366,13 @@ export const COMMANDS = {
     defaults: [],
     navigates: true,
   },
+  "pluginPage.back": {
+    labelKey: "common.back",
+    contexts: ["pluginPage"],
+    defaults: [],
+    navigates: true,
+    voice: { phrases: { en: ["go back"], es: ["volver atrás"] } },
+  },
   "settings.addPlugin": {
     labelKey: "plugins.management.commands.addPlugin",
     contexts: ["settings"],

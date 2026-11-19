@@ -198,4 +198,28 @@ describe("a page's frame reaches the contributions registry", () => {
     }
     expect(readPluginManifest(pluginFolder({}, manifest(false))).ok).toBe(false);
   });
+
+  it("carries hideBack onto the page definition, and accepts only true", () => {
+    // `hideBack: false` is the invalid case, so the type stays open.
+    const manifest = (hideBack: unknown) =>
+      ({
+        id: "sample",
+        name: "Sample",
+        platforms: ["web", "desktop"],
+        contributes: {
+          commands: [{ id: "open", label: "Open", contexts: ["global"], navigates: true }],
+          pages: [{ id: "home", title: "Home", command: "open", hideBack }],
+        },
+      }) as Parameters<typeof pluginFolder>[1];
+    const folder = pluginFolder({}, manifest(true));
+    const read = readPluginManifest(folder);
+    if (!read.ok) throw new Error(JSON.stringify(read.problems));
+    const unregister = registerPluginContributions({ manifest: read.manifest, folder });
+    try {
+      expect(getPluginPage("sample", "home")?.hideBack).toBe(true);
+    } finally {
+      unregister();
+    }
+    expect(readPluginManifest(pluginFolder({}, manifest(false))).ok).toBe(false);
+  });
 });

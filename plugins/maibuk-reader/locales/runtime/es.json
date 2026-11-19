@@ -20,6 +20,7 @@
   "shelf.dropSkipped.other": "Lector no puede abrir {{count}} archivos soltados.",
   "shelf.reopenFailed": "El navegador no dio acceso a este archivo.",
   "viewer.back": "Volver al estante",
+  "viewer.backTo": "Volver a {label}",
   "viewer.contents": "Contenido",
   "viewer.contentsEmpty": "Este documento no tiene índice.",
   "viewer.find": "Buscar en el documento",

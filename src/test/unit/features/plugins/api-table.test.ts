@@ -192,11 +192,12 @@ function propertyNames(schema: unknown): string[] {
 }
 
 describe("PLUGIN_API_EVENTS", () => {
-  it("lists the events: library, availability, language, the endpoint address, permissions, dropped files, and the two editor events", () => {
+  it("lists the events: library, availability, language, the return target, the endpoint address, permissions, dropped files, and the two editor events", () => {
     expect(PLUGIN_API_EVENTS.map((event) => event.id)).toEqual([
       "library.changed",
       "library.availabilityChanged",
       "language.changed",
+      "navigation.returnTargetChanged",
       "endpoint.addressChanged",
       "permissions.changed",
       "files.dropped",
@@ -212,6 +213,7 @@ describe("PLUGIN_API_EVENTS", () => {
       const ungated =
         event.id === "library.availabilityChanged" ||
         event.id === "language.changed" ||
+        event.id === "navigation.returnTargetChanged" ||
         event.id === "permissions.changed";
       const expected = ungated
         ? null

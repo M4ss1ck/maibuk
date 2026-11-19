@@ -304,6 +304,25 @@ describe("createTestHost()", () => {
     }
   });
 
+  it("answers navigation.return only while a return target is set, recording each call", async () => {
+    const host = createTestHost({ manifest: fixtureManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      await expect(client.navigation.return()).resolves.toEqual({ status: "none" });
+      host.setReturnTarget("Plot");
+      await expect(client.navigation.return()).resolves.toEqual({ status: "returned" });
+      host.setReturnTarget(null);
+      await expect(client.navigation.return()).resolves.toEqual({ status: "none" });
+      expect(host.returns).toEqual([
+        { pluginId: "tracer", status: "none" },
+        { pluginId: "tracer", status: "returned" },
+        { pluginId: "tracer", status: "none" },
+      ]);
+    } finally {
+      await host.stop();
+    }
+  });
+
   it("refuses navigation.openEntity with library-unavailable while the Tutorial runs", async () => {
     // Decision #398: the Tutorial refuses Library access, and navigation reads
     // the Library to resolve a route and drives the router out of the run.
@@ -409,6 +428,28 @@ describe("createTestHost() events and language", () => {
 
       await vi.waitFor(() => expect(seen).toEqual(["es"]));
       await expect(client.language.get({})).resolves.toEqual({ language: "es" });
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("replays the return target on subscription, and every later change", async () => {
+    const host = createTestHost({ manifest: fixtureManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      const seen: (string | null)[] = [];
+      const off = await client.on("navigation.returnTargetChanged", (payload) =>
+        seen.push(payload.label)
+      );
+
+      // A page activated after the host set a target still learns it.
+      await vi.waitFor(() => expect(seen).toEqual([null]));
+      host.setReturnTarget("Plot");
+      // The same target again is no change, so it costs no event.
+      host.setReturnTarget("Plot");
+      host.setReturnTarget(null);
+      await vi.waitFor(() => expect(seen).toEqual([null, "Plot", null]));
+      await off();
     } finally {
       await host.stop();
     }

@@ -1,11 +1,14 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 import { PluginFrameSurface } from "@/components/plugins/PluginFrame";
 import { PluginStoppedPanel } from "@/components/plugins/PluginStoppedPanel";
 import { usePluginFileDrop } from "@/components/plugins/usePluginFileDrop";
+import { Button } from "@/components/ui/Button";
 import { pluginPageCommandBindings, pluginPageCommands } from "@/features/plugins/commands";
 import { getPluginPage, getPluginSidebarEntries } from "@/features/plugins/contributions-registry";
+import { setShownPluginReturnTarget } from "@/features/plugins/navigation";
 import { useCommandRegistryRevision } from "@/hooks/useCommandRegistryRevision";
 import {
   useInstalledPluginLifecycle,
@@ -37,6 +40,8 @@ const PluginRemoteUiBoundary = lazy(() =>
 export function PluginPage() {
   const { t } = useTranslation();
   const { pluginId = "", pageId = "" } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const lifecycle = useInstalledPluginLifecycle();
   const revision = useCommandRegistryRevision();
   const lifecycleRevision = usePluginLifecycleRevision(lifecycle);
@@ -84,6 +89,27 @@ export function PluginPage() {
           (entry) => entry.pluginId === pluginId && entry.pageId === pageId
         )
       : undefined;
+  // A page that opened this one hands back where to return (#786). It is read
+  // from this visit's navigation state, so it lives exactly as long as the
+  // visit does, Back/Forward included.
+  const returnState = location.state as { returnTo?: string; returnLabel?: string } | null;
+  const returnTo = returnState?.returnTo;
+  const returnLabel = returnState?.returnLabel || t("common.untitled");
+  // The Plugin hears the return target of its page on screen through
+  // navigation.returnTargetChanged, so a hideBack page can draw its own Back (#786).
+  useEffect(() => {
+    if (returnTo !== undefined) {
+      setShownPluginReturnTarget(pluginId, { to: returnTo, label: returnLabel });
+    } else {
+      setShownPluginReturnTarget(pluginId, null);
+    }
+    return () => setShownPluginReturnTarget(pluginId, null);
+  }, [pluginId, returnTo, returnLabel]);
+  // Back is a Command of this page, so the author can bind a key to it (#786).
+  const goBack = () => {
+    if (returnTo !== undefined) navigate(returnTo);
+  };
+  useShortcuts([{ id: "pluginPage.back", enabled: returnTo !== undefined, onTrigger: goBack }]);
   const title = page?.title ?? savedEntry?.title ?? t("plugins.page.notFoundTitle");
   const name = page?.displayName ?? savedEntry?.displayName ?? pluginId;
   const showPanel =
@@ -118,6 +144,9 @@ export function PluginPage() {
   // for screen readers and route focus only.
   const isFrame = page?.frame !== undefined && !showPanel;
   const hideTitle = page?.hideTitle === true && !showPanel;
+  // A page that draws its own Back keeps Maibuk's off while it runs; the
+  // stopped panel draws it, so a stopped page is never stranded.
+  const drawsBack = returnTo !== undefined && !(page?.hideBack === true && !showPanel);
   return (
     <div
       ref={setPageElement}
@@ -131,6 +160,18 @@ export function PluginPage() {
         .filter(Boolean)
         .join(" ")}
     >
+      {drawsBack && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mb-2 self-start shrink-0"
+          data-command="pluginPage.back"
+          onClick={goBack}
+        >
+          <ArrowLeft className="size-4" aria-hidden="true" />
+          {t("nav.backTo", { title: returnLabel })}
+        </Button>
+      )}
       <h1
         ref={headingRef}
         tabIndex={-1}

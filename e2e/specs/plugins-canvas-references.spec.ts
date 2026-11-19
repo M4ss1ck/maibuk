@@ -12,6 +12,7 @@ import type { Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { installFilePicker } from "../support/file-picker";
 import { isFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
+import { runPaletteCommand } from "../support/palette";
 import { expect, test } from "../support/test";
 
 const PLUGIN_NAME = "Fixture Everything";
@@ -402,6 +403,19 @@ test.describe("Maps and Documents Canvas References @wf:plugins-canvas-reference
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/plugin\/maibuk-maps\/map$/);
 
+    // The Map's name in its own toolbar marks the page drawn for the capture.
+    await expect(page.getByRole("button", { name: MAP_NAME, exact: true })).toBeVisible();
+    await capture(page, "plugin-page-back-to-canvas");
+    // Maps' own Back now names the Canvas it was opened from, and Maibuk draws
+    // no second Back above it (hideBack).
+    const back = page.getByRole("button", { name: "Back to Map", exact: true });
+    await expect(back).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "Back to Maps" })).toHaveCount(0);
+    await tabTo(page, back, { max: 10 });
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(canvasUrl);
+    await expectCanvasReady(page);
+
     // Turn Maps off from its Settings row, by keyboard.
     await openPluginsSection(page);
     await expandPluginRow(page, MAPS);
@@ -498,6 +512,18 @@ test.describe("Maps and Documents Canvas References @wf:plugins-canvas-reference
     await tabTo(page, card.getByRole("button", { name: `Open ${DOCUMENT_TITLE}` }), { max: 5 });
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/document$/);
+    await expect(pageIndicator(page)).toContainText("of 12", { timeout: 30_000 });
+    await capture(page, "reader-back-to-canvas");
+
+    // Reader's own Back names the Canvas, and Maibuk draws none above it.
+    await expect(page.getByRole("button", { name: /^Back to / })).toHaveCount(0);
+    await expect(
+      documentFrame(page).getByRole("button", { name: "Back to Map", exact: true })
+    ).toBeVisible();
+    // Reader's Back to Shelf Command takes the same Back, so it returns there.
+    await runPaletteCommand(page, "Back to Shelf");
+    await expect(page).toHaveURL(canvasUrl);
+    await expectCanvasReady(page);
 
     // Turn Reader off from its Settings row, by keyboard.
     await openPluginsSection(page);

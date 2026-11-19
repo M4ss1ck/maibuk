@@ -96,6 +96,8 @@ export interface ReaderRuntime {
   sessions: Map<string, ReaderSession>;
   /** The app language the Frame should draw its own chrome in. */
   language: string;
+  /** The place the host's Back returns to, or null when nothing opened this page (#786). */
+  returnLabel: string | null;
 }
 
 /**
@@ -114,6 +116,39 @@ export async function restoreCurrentDocument(
   for (const session of runtime.sessions.values()) session.setEntry(entry);
 }
 
+/**
+ * Follows the host's return target (#786): the place the Reading page's Back
+ * returns to. The host replays the current label on subscription, so a Frame
+ * mounted after the move still knows, and every live session relabels its own
+ * Back.
+ */
+export function followReturnTarget(
+  client: Pick<PluginClient, "on">,
+  runtime: Pick<ReaderRuntime, "returnLabel" | "language" | "sessions">
+): void {
+  void client
+    .on("navigation.returnTargetChanged", (payload) => {
+      runtime.returnLabel = payload.label;
+      for (const session of runtime.sessions.values()) session.setLanguage(runtime.language);
+    })
+    .catch(() => {});
+}
+
+/**
+ * Leaves the reading surface for the place that opened it (#786), and only
+ * falls back to the Shelf when the host has no return target to answer.
+ */
+export async function leaveReading(
+  client: Pick<PluginClient, "navigation">,
+  returnLabel: string | null
+): Promise<void> {
+  if (returnLabel !== null) {
+    const answer = await client.navigation.return();
+    if (answer.status === "returned") return;
+  }
+  await client.navigation.openPage({ pageId: SHELF_PAGE_ID });
+}
+
 /** Wires the client to the Shelf page, the document Frame, and the Commands. */
 export function startReader(client: PluginClient, serve: ReaderServe): void {
   const library = createShelfService(client);
@@ -122,6 +157,7 @@ export function startReader(client: PluginClient, serve: ReaderServe): void {
     currentEntry: null,
     sessions: new Map(),
     language: "en",
+    returnLabel: null,
   };
   /** Drops run one at a time: the next waits for the one being fingerprinted. */
   let pendingDrops: Promise<void> = Promise.resolve();
@@ -138,6 +174,7 @@ export function startReader(client: PluginClient, serve: ReaderServe): void {
       for (const session of runtime.sessions.values()) session.setLanguage(payload.language);
     })
     .catch(() => {});
+  followReturnTarget(client, runtime);
   void client
     .on("files.dropped", (payload) => {
       pendingDrops = pendingDrops
@@ -153,9 +190,8 @@ export function startReader(client: PluginClient, serve: ReaderServe): void {
       entry: runtime.currentEntry,
       language: runtime.language,
       port: frame.port,
-      navigateToShelf: async () => {
-        await client.navigation.openPage({ pageId: SHELF_PAGE_ID });
-      },
+      returnLabel: () => runtime.returnLabel,
+      navigateToShelf: () => leaveReading(client, runtime.returnLabel),
       onDispose: () => {
         runtime.sessions.delete(frame.id);
       },

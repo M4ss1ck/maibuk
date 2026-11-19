@@ -39,6 +39,11 @@ export interface PluginPageDef {
   frame?: string;
   /** The page draws its own heading: Maibuk keeps the title for screen readers only. */
   hideTitle?: true;
+  /**
+   * The page draws its own Back while it runs: Maibuk draws no Back button for
+   * it, though the stopped panel still does.
+   */
+  hideBack?: true;
   /** The navigating Command that opens the page. */
   commandId: PluginCommandId;
   icon?: PluginIconSpec;

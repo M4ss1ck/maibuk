@@ -65,6 +65,7 @@
     "no": "No",
     "new": "New",
     "back": "Back",
+    "untitled": "Untitled",
     "more": "More",
     "moreActionsFor": "More actions for {{title}}",
     "deleteConfirm": "Delete?",

@@ -29,7 +29,9 @@ vi.mock("@/lib/platform", async (importOriginal) => ({
 }));
 
 const { createPluginHandlers } = await import("@/features/plugins/handlers");
-const { setPluginNavigator } = await import("@/features/plugins/navigation");
+const { setPluginNavigator, setShownPluginReturnTarget } = await import(
+  "@/features/plugins/navigation"
+);
 const { createMemoryPluginSecretStore, registerPluginSecretStore } = await import(
   "@/features/plugins/secret-store"
 );
@@ -136,6 +138,23 @@ describe("createPluginHandlers(): the wired rows", () => {
       unregisterNav();
       unregisterContrib();
       resetPluginContributionsForTests();
+    }
+  });
+
+  it("returns from the caller's shown page through navigation.return", () => {
+    const navigate = vi.fn();
+    const unregisterNav = setPluginNavigator(navigate);
+    try {
+      const back = createPluginHandlers(PLUGIN_MANIFEST)["navigation.return"];
+      if (!back) throw new Error("navigation.return is not wired");
+      setShownPluginReturnTarget("tracer", { to: "/canvas/c1", label: "Plot" });
+      expect(back({}, context)).toEqual({ status: "returned" });
+      expect(navigate).toHaveBeenCalledWith("/canvas/c1");
+      setShownPluginReturnTarget("tracer", null);
+      expect(back({}, context)).toEqual({ status: "none" });
+    } finally {
+      setShownPluginReturnTarget("tracer", null);
+      unregisterNav();
     }
   });
 

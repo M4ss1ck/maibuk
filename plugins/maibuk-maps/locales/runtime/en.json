@@ -39,6 +39,7 @@
   "delete.description": "The Map and everything drawn on it are deleted. This cannot be undone.",
   "delete.confirm": "Delete",
   "map.backToMaps": "Back to Maps",
+  "map.backTo": "Back to {label}",
   "map.frameTitle": "Map editor",
   "map.penPoints_one": "Pen line, {{count}} point",
   "map.penPoints_other": "Pen line, {{count}} points",
