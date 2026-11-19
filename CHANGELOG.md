@@ -5,6 +5,30 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.0] - 2026-11-19
+
+### Added
+- Add a tabbed Canvas Reference picker with Notes, Books, Chapters, Canvases, Maps, Documents, and Plugin sources, including missing states for deleted Maps and Documents removed from the Shelf
+- Add Canvas Reference cards for Books, Chapters, Canvases, Maps, Documents, and Notes, with Present, Missing, Unavailable, and unresolved states
+- Add Plugin Canvas Reference sources and a Generic card with source icon, title, subtitle, and Open action
+- Add preview images from Plugin Canvas Reference sources, including Map previews and Document covers, with landscape and portrait layouts
+- Add Back to {opener} navigation for Plugin pages, Maps, Reading pages, Books, Chapters, and Canvases opened from a Canvas
+- Add Plugin APIs for Canvas Reference sources and return targets, including navigation.return, navigation.returnTargetChanged, and the pluginPage.back command
+
+### Changed
+- Rename Canvas note references to generic references and migrate existing noteRef nodes, custom shortcuts, and voice commands to Add reference
+- Resolve Canvas References in memory so disabled Plugins show Unavailable references without modifying Canvas documents and re-resolve them when re-enabled
+- Use the Map and Reading pages' own Back controls to return to the Canvas that opened them after saving
+- Keep Canvas Reference connection ports visible and make Book cover images draggable with their cards
+
+### Fixed
+- Save the current Canvas before loading another when navigating between Canvas References, preventing lost edits and stale Canvas loads
+- Preserve Chapter deep links until the target Book's Chapters load
+- Keep Canvas Reference labels when a target changes and disable Open for missing or unavailable references
+- Re-ask Canvas References when a Plugin is re-enabled and prevent stale Present answers from lingering
+- Fail Document Canvas References only when the Shelf read fails, instead of marking them Missing
+- Keep failed Notes or Plugin reference reads and failed opens from marking all references Missing, and allow retries
+
 ## [0.23.1] - 2026-11-18
 
 ### Added

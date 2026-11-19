@@ -5,6 +5,30 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 y este proyecto sigue el [Versionado Semántico](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.0] - 2026-11-19
+
+### Added
+- Añadir un selector de Referencias de lienzo con pestañas para Notas, Libros, Capítulos, Lienzos, Mapas, Documentos y fuentes de complementos, incluidos los estados faltantes para Mapas eliminados y Documentos quitados de la Estantería
+- Añadir tarjetas de Referencia de lienzo para Libros, Capítulos, Lienzos, Mapas, Documentos y Notas, con estados Presente, Faltante, No disponible y sin resolver
+- Añadir fuentes de Referencias de lienzo de complementos y una tarjeta Genérica con icono de la fuente, título, subtítulo y acción Abrir
+- Añadir imágenes de vista previa de fuentes de Referencias de lienzo de complementos, incluidas vistas previas de Mapas y portadas de Documentos, con diseños horizontal y vertical
+- Añadir navegación Volver a {opener} para páginas de complementos, Mapas, páginas de Lectura, Libros, Capítulos y Lienzos abiertos desde un Lienzo
+- Añadir API de complementos para fuentes de Referencias de lienzo y destinos de retorno, incluidos navigation.return, navigation.returnTargetChanged y el comando pluginPage.back
+
+### Changed
+- Renombrar las referencias de notas de Lienzo a referencias genéricas y migrar los nodos noteRef existentes, los atajos personalizados y los comandos de voz a Añadir referencia
+- Resolver las Referencias de lienzo en memoria para que los complementos deshabilitados muestren referencias no disponibles sin modificar los documentos de Lienzo, y volver a resolverlas cuando se vuelvan a habilitar
+- Usar los controles Volver propios de las páginas de Mapas y Lectura para regresar al Lienzo que las abrió después de guardar
+- Mantener visibles los puertos de conexión de las Referencias de lienzo y permitir arrastrar las imágenes de portada de los Libros junto con sus tarjetas
+
+### Fixed
+- Guardar el Lienzo actual antes de cargar otro al navegar entre Referencias de lienzo, evitando ediciones perdidas y cargas obsoletas de Lienzo
+- Conservar los enlaces profundos de Capítulo hasta que se carguen los Capítulos del Libro de destino
+- Mantener las etiquetas de las Referencias de lienzo cuando cambia un destino y deshabilitar Abrir para referencias faltantes o no disponibles
+- Volver a consultar las Referencias de lienzo cuando se vuelve a habilitar un complemento y evitar que persistan respuestas Presente obsoletas
+- Considerar fallidas las Referencias de lienzo de Documentos solo cuando falle la lectura de la Estantería, en lugar de marcarlas como Faltantes
+- Evitar que las lecturas fallidas de referencias de Notas o de complementos y las aperturas fallidas marquen todas las referencias como Faltantes, y permitir reintentos
+
 ## [0.23.1] - 2026-11-18
 
 ### Added
