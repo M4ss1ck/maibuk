@@ -619,7 +619,8 @@ describe("Canvas custom nodes", () => {
       },
       {
         name: "unavailable",
-        data: referenceData({ source: "plugin.x.y", targetId: "item-1" }),
+        // A non-Plugin source keeps the note box; a Plugin id takes the generic one (#836).
+        data: referenceData({ source: "retired.map", targetId: "item-1" }),
       },
       { name: "unresolved", data: referenceData() },
     ];

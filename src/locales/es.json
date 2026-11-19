@@ -345,6 +345,7 @@
     "referenceUntitled": "Sin título",
     "referenceMissing": "Este elemento ya no existe",
     "referenceUnavailable": "No disponible aquí",
+    "referenceUnavailablePlugin": "Necesita el Plugin {{name}}",
     "openReference": "Abrir",
     "openReferenceNamed": "Abrir {{title}}",
     "noMatches": "Ningún lienzo coincide con la búsqueda",
