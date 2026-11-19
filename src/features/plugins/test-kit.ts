@@ -837,6 +837,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
         return { url: endpointUrlFor(endpointState, options.manifest.id) };
       }
       if (event === "permissions.changed") return { permissions: [...granted] };
+      if (event === "navigation.returnTargetChanged") return { label: null };
       return undefined;
     },
   });

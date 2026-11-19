@@ -2,7 +2,7 @@
 
 import type { PluginStreamListener } from "@/plugin-sdk/protocol";
 
-export const PLUGIN_API_VERSION = "0.1.13";
+export const PLUGIN_API_VERSION = "0.1.14";
 
 export const PLUGIN_API_METHODS = [
   "library.books.list",
@@ -32,6 +32,7 @@ export const PLUGIN_API_METHODS = [
   "editor.replace",
   "navigation.openEntity",
   "navigation.openPage",
+  "navigation.return",
   "language.get",
   "fonts.list",
   "fonts.read",
@@ -573,6 +574,15 @@ export interface PluginApiMethods {
       status: "not-found";
     };
   };
+  /** Returns from this Plugin's page on screen to the place that opened it (its return target). Reports none when the page has no return target. */
+  "navigation.return": {
+    input: Record<string, never>;
+    output: {
+      status: "returned";
+    } | {
+      status: "none";
+    };
+  };
   /** Reads the language Maibuk runs in. No permission is required. */
   "language.get": {
     input: Record<string, never>;
@@ -784,6 +794,7 @@ export const PLUGIN_API_EVENT_IDS = [
   "library.changed",
   "library.availabilityChanged",
   "language.changed",
+  "navigation.returnTargetChanged",
   "endpoint.addressChanged",
   "permissions.changed",
   "files.dropped",
@@ -814,6 +825,10 @@ export interface PluginApiEvents {
   /** Maibuk's language changed. The current value is delivered on subscription, so a Plugin that starts after a change never misses it. */
   "language.changed": {
     language: string;
+  };
+  /** The return target of this Plugin's page on screen changed: label is the place Back returns to, or null when there is none. A page that declares hideBack draws its own Back from it and calls navigation.return. The current value is delivered on subscription. */
+  "navigation.returnTargetChanged": {
+    label: string | null;
   };
   /** This Plugin's Plugin Endpoint address changed: the listener moved to another port or stopped. The current address is delivered on subscription, so a Plugin that starts after a change never misses it. */
   "endpoint.addressChanged": {
@@ -918,6 +933,8 @@ export interface PluginApi {
     openEntity(params: PluginApiMethods["navigation.openEntity"]["input"]): Promise<PluginApiMethods["navigation.openEntity"]["output"]>;
     /** Opens a Plugin page by its page id, in this Plugin or another installed one. */
     openPage(params: PluginApiMethods["navigation.openPage"]["input"]): Promise<PluginApiMethods["navigation.openPage"]["output"]>;
+    /** Returns from this Plugin's page on screen to the place that opened it (its return target). Reports none when the page has no return target. */
+    return(params?: PluginApiMethods["navigation.return"]["input"]): Promise<PluginApiMethods["navigation.return"]["output"]>;
   };
   language: {
     /** Reads the language Maibuk runs in. No permission is required. */

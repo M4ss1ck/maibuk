@@ -17,7 +17,7 @@ import type { McpToolProjection, PluginApiEventRow, PluginApiRow } from "@/featu
 import { FILE_READ_MAX_BYTES } from "@/plugin-sdk/protocol";
 
 /** The Plugin API's own semver, separate from Maibuk's release number. */
-export const PLUGIN_API_VERSION = "0.1.13";
+export const PLUGIN_API_VERSION = "0.1.14";
 
 export const PLUGIN_API_NAMESPACES = [
   "library",
@@ -545,6 +545,19 @@ export const PLUGIN_API_TABLE = [
     requiresLibrary: false,
   }),
   defineApiRow({
+    id: "navigation.return",
+    description:
+      "Returns from this Plugin's page on screen to the place that opened it (its return target). Reports none when the page has no return target.",
+    input: none,
+    output: z.union([
+      z.strictObject({ status: z.literal("returned") }),
+      z.strictObject({ status: z.literal("none") }),
+    ]),
+    permission: null,
+    effect: "write",
+    requiresLibrary: false,
+  }),
+  defineApiRow({
     id: "language.get",
     description: "Reads the language Maibuk runs in. No permission is required.",
     input: none,
@@ -846,6 +859,14 @@ export const PLUGIN_API_EVENTS = [
     description:
       "Maibuk's language changed. The current value is delivered on subscription, so a Plugin that starts after a change never misses it.",
     payload: z.strictObject({ language: z.string() }),
+    permission: null,
+    replays: true,
+  }),
+  defineApiEvent({
+    id: "navigation.returnTargetChanged",
+    description:
+      "The return target of this Plugin's page on screen changed: label is the place Back returns to, or null when there is none. A page that declares hideBack draws its own Back from it and calls navigation.return. The current value is delivered on subscription.",
+    payload: z.strictObject({ label: z.string().nullable() }),
     permission: null,
     replays: true,
   }),

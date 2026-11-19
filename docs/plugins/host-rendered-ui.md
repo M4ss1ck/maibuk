@@ -174,7 +174,7 @@ The Worker entry, templates/plugin/index.tsx, is the only file that imports `@ma
 
 ## Events
 
-`client.on(event, listener)` subscribes to an event and resolves with the function that unsubscribes. A subscription whose event's Plugin Permission is not granted rejects with `permission-denied`. The events are `library.changed`, `library.availabilityChanged`, `language.changed`, `editor.contentChanged`, and `editor.focusChanged`; their payloads are in [api-reference.md](api-reference.md#events).
+`client.on(event, listener)` subscribes to an event and resolves with the function that unsubscribes. A subscription whose event's Plugin Permission is not granted rejects with `permission-denied`. The events are `library.changed`, `library.availabilityChanged`, `language.changed`, `navigation.returnTargetChanged`, `editor.contentChanged`, and `editor.focusChanged`; their payloads are in [api-reference.md](api-reference.md#events).
 
 ## Calling the API
 
