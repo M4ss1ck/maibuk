@@ -11,6 +11,7 @@ import {
   getCanvasReferenceSource,
 } from "@/features/canvas/references";
 import { bookReferenceSource } from "@/features/canvas/bookReferenceSource";
+import { chapterReferenceSource } from "@/features/canvas/chapterReferenceSource";
 import { noteReferenceSource } from "@/features/canvas/noteReferenceSource";
 
 /**
@@ -18,6 +19,22 @@ import { noteReferenceSource } from "@/features/canvas/noteReferenceSource";
  * present and missing ids, and open only what it can find. A new source joins
  * CANVAS_REFERENCE_SOURCES and adds its fixture here, or the registry test fails.
  */
+
+// The Chapter source reads its rows and its targets from the Chapters store, so
+// the two reads are faked here; the store that stays live is the real one.
+const { mockListChapterTitles, mockGetChaptersByIds } = vi.hoisted(() => ({
+  mockListChapterTitles: vi.fn(),
+  mockGetChaptersByIds: vi.fn(),
+}));
+
+vi.mock("@/features/chapters/store", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/features/chapters/store")>();
+  return {
+    ...actual,
+    listChapterTitles: mockListChapterTitles,
+    getChaptersByIds: mockGetChaptersByIds,
+  };
+});
 
 function noteRow(id: string, title: string, order: number): Note {
   return {
@@ -50,6 +67,10 @@ function bookRow(id: string, title: string): Book {
   };
 }
 
+function chapterRow(id: string, bookId: string, title: string) {
+  return { id, bookId, title, content: "<p>Body</p>", updatedAt: new Date(1000) };
+}
+
 interface HostSourceFixture {
   /** The id `query` matches, and the only row `list(query)` returns. */
   presentId: string;
@@ -60,6 +81,8 @@ interface HostSourceFixture {
   query: string;
   /** The route a present id opens. */
   path: string;
+  /** The route a present id opens, when it is not `${path}/${id}`. */
+  openTo?(presentId: string): string;
   seed(): void;
 }
 
@@ -76,6 +99,35 @@ const HOST_SOURCE_FIXTURES: Record<string, HostSourceFixture> = {
         error: null,
         loadBooks: vi.fn().mockResolvedValue(undefined),
       });
+    },
+  },
+  chapter: {
+    presentId: "chapter-alpha",
+    otherId: "chapter-beta",
+    missingId: "chapter-gone",
+    query: "alpha",
+    // A Chapter opens at its Book, which is not the Chapter's own id.
+    path: "/book",
+    openTo: (presentId) => `/book/book-of-${presentId}`,
+    seed() {
+      useBookStore.setState({
+        books: [
+          bookRow("book-of-chapter-alpha", "Alpha harbor"),
+          bookRow("book-of-chapter-beta", "Beta"),
+        ],
+        error: null,
+        loadBooks: vi.fn().mockResolvedValue(undefined),
+      });
+      const chapters = [
+        chapterRow("chapter-alpha", "book-of-chapter-alpha", "Alpha harbor"),
+        chapterRow("chapter-beta", "book-of-chapter-beta", "Beta"),
+      ];
+      mockListChapterTitles.mockResolvedValue(
+        chapters.map(({ id, bookId, title }) => ({ id, bookId, title }))
+      );
+      mockGetChaptersByIds.mockImplementation(async (ids: readonly string[]) =>
+        chapters.filter((chapter) => ids.includes(chapter.id))
+      );
     },
   },
   note: {
@@ -137,6 +189,8 @@ interface ContractCase {
   query: string;
   /** The route a present id opens; only read when the source navigates. */
   path: string;
+  /** The route a present id opens, when it is not `${path}/${presentId}`. */
+  openTo?: string;
   seed?(): void;
   /** Host sources navigate in-app; a fake may resolve without leaving. */
   callsNavigate: boolean;
@@ -153,6 +207,7 @@ const contractCases: ContractCase[] = [
       missingId: fixture.missingId,
       query: fixture.query,
       path: fixture.path,
+      openTo: fixture.openTo?.(fixture.presentId),
       seed: () => fixture.seed(),
       callsNavigate: true,
     };
@@ -195,9 +250,14 @@ describe("canvas reference sources registry", () => {
     );
   });
 
-  it("registers the Book source beside the Note source", () => {
-    expect(CANVAS_REFERENCE_SOURCES.map((source) => source.id).sort()).toEqual(["book", "note"]);
+  it("registers the Book and Chapter sources beside the Note source", () => {
+    expect(CANVAS_REFERENCE_SOURCES.map((source) => source.id).sort()).toEqual([
+      "book",
+      "chapter",
+      "note",
+    ]);
     expect(getCanvasReferenceSource("book")).toBe(bookReferenceSource);
+    expect(getCanvasReferenceSource("chapter")).toBe(chapterReferenceSource);
     expect(getCanvasReferenceSource("note")).toBe(noteReferenceSource);
     expect(getCanvasReferenceSource("unknown")).toBeUndefined();
   });
@@ -215,6 +275,29 @@ describe("the real Book source", () => {
       {
         to: "/book/book-alpha",
         options: { state: { returnTo: "/canvas/canvas-1", returnLabel: "My canvas" } },
+      },
+    ]);
+  });
+});
+
+describe("the real Chapter source", () => {
+  it("opens a present Chapter at its Book, asking for the Chapter", async () => {
+    HOST_SOURCE_FIXTURES.chapter.seed();
+    const { navigate, calls } = spyNavigate();
+
+    const result = await chapterReferenceSource.open("chapter-alpha", openContext(navigate));
+
+    expect(result).toBe("opened");
+    expect(calls).toEqual([
+      {
+        to: "/book/book-of-chapter-alpha",
+        options: {
+          state: {
+            openChapterId: "chapter-alpha",
+            returnTo: "/canvas/canvas-1",
+            returnLabel: "My canvas",
+          },
+        },
       },
     ]);
   });
@@ -246,10 +329,17 @@ describe.each(contractCases)("canvas reference source: $name", (testCase) => {
     const result = await testCase.source.open(testCase.presentId, openContext(navigate));
     expect(result).toBe("opened");
     if (testCase.callsNavigate) {
+      // A card may carry more state than the way back (the Chapter card names
+      // the Chapter to open); every source still says where it came from.
       expect(calls).toEqual([
         {
-          to: `${testCase.path}/${testCase.presentId}`,
-          options: { state: { returnTo: "/canvas/canvas-1", returnLabel: "My canvas" } },
+          to: testCase.openTo ?? `${testCase.path}/${testCase.presentId}`,
+          options: {
+            state: expect.objectContaining({
+              returnTo: "/canvas/canvas-1",
+              returnLabel: "My canvas",
+            }),
+          },
         },
       ]);
     } else {

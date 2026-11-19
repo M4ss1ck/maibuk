@@ -18,6 +18,7 @@ const {
   listAllChaptersForLinking,
   listChaptersForBookLinking,
   getChapterForLinking,
+  getChaptersByIds,
 } = await import("@/features/chapters/store");
 
 async function seedChapter(
@@ -635,6 +636,39 @@ describe("useChapterStore", () => {
 
     it("getChapterForLinking returns null when the chapter is missing", async () => {
       expect(await getChapterForLinking("missing")).toBeNull();
+    });
+
+    it("getChaptersByIds returns the named chapters with their content and time", async () => {
+      await seedChapter(testDb, "ch-1", "book-1", 0);
+      await seedChapter(testDb, "ch-2", "book-1", 1, null);
+      await seedChapter(testDb, "other", "book-1", 2);
+
+      const rows = await getChaptersByIds(["ch-1", "ch-2", "missing"]);
+
+      expect(rows).toEqual([
+        {
+          id: "ch-1",
+          bookId: "book-1",
+          title: "Chapter 0",
+          content: "<p>Body</p>",
+          updatedAt: new Date(2 * 1000),
+        },
+        {
+          id: "ch-2",
+          bookId: "book-1",
+          title: "Chapter 1",
+          content: null,
+          updatedAt: new Date(2 * 1000),
+        },
+      ]);
+    });
+
+    it("getChaptersByIds reads nothing for no ids", async () => {
+      const select = vi.spyOn(testDb, "select");
+
+      expect(await getChaptersByIds([])).toEqual([]);
+      expect(select).not.toHaveBeenCalled();
+      select.mockRestore();
     });
   });
 });

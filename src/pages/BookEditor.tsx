@@ -542,7 +542,9 @@ export function BookEditor() {
       searchHandoff?: SearchHandoff;
       reveal?: PluginRevealRange;
     } | null;
-    if (!state?.openChapterId || chapters.length === 0) return;
+    // Chapters left from the last Book opened are not this Book's: wait for its
+    // own, or the target is never found and the request is cleared.
+    if (!state?.openChapterId || chapters.length === 0 || currentBookId !== bookId) return;
 
     const target = chapters.find((c) => c.id === state.openChapterId);
     if (target) {
@@ -579,7 +581,7 @@ export function BookEditor() {
     }
     // Clear the navigation state so re-renders don't re-trigger.
     navigate(location.pathname, { replace: true, state: null });
-  }, [chapters, location, navigate, setCurrentChapter]);
+  }, [chapters, currentBookId, bookId, location, navigate, setCurrentChapter]);
 
   // The toolbar clears an applied handoff through `onHandoffApplied`, once its
   // panel has the query: clearing on chapter match instead would drop a

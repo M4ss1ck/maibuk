@@ -800,10 +800,11 @@ test.describe("Canvas Reference @wf:canvas-note-ref @sc:canvas.addReference @sc:
       page.getByRole("heading", { name: "The Lighthouse Keeper", level: 1 })
     ).toBeVisible();
 
-    // The Book side of the Canvas has no Chapters, so focus sits on Add Chapter.
     const back = page.getByRole("button", { name: "Back to Map" });
     await expect(back).toBeVisible();
-    await tabTo(page, back, { max: 60, backwards: true });
+    // Tab inside the Chapter text indents; Escape leaves the text first.
+    await page.keyboard.press("Escape");
+    await tabTo(page, back, { max: 120, backwards: true });
     await page.keyboard.press("Enter");
     await expectCanvasReady(page);
     await expect(references(page)).toHaveCount(3);
@@ -836,8 +837,10 @@ test.describe("Canvas Reference @wf:canvas-note-ref @sc:canvas.addReference @sc:
     });
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/book\/[\w-]+$/);
+    await expect(page.getByRole("textbox", { name: /^Text of / })).toBeFocused();
+    await page.keyboard.press("Escape");
     await tabTo(page, page.getByRole("button", { name: "Book Settings" }), {
-      max: 80,
+      max: 120,
       backwards: true,
     });
     await page.keyboard.press("Enter");
@@ -863,6 +866,158 @@ test.describe("Canvas Reference @wf:canvas-note-ref @sc:canvas.addReference @sc:
       missing.getByRole("button", { name: "Open The Lighthouse Keeper" })
     ).toBeDisabled();
     await captureTallCard(page, "canvas-reference-book-card-missing", missing);
+  });
+
+  test("places, connects, moves, opens, and deletes a Canvas Reference to a Chapter", async ({
+    page,
+  }) => {
+    await openMap(page);
+    await expect(references(page)).toHaveCount(2);
+
+    // The picker opens on Notes; Chapters is two tabs to its right.
+    await page.keyboard.press("n");
+    await page.keyboard.press("Enter");
+    const dialog = page.getByRole("dialog", { name: "Add reference" });
+    await expect(dialog).toBeVisible();
+    const search = dialog.getByPlaceholder("Search…");
+    await expect(search).toBeFocused();
+    await tabTo(page, dialog.getByRole("tab", { name: "Notes" }), { max: 5 });
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    await expect(dialog.getByRole("tab", { name: "Chapters" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+    await capture(page, "canvas-reference-picker-chapters", { around: [dialog] });
+
+    // The seeded Book's Chapters in order: Arrival, then The Lamp. Arrival is
+    // not the Chapter the Book opens on by default (the last), so landing on it proves the deep link.
+    const options = dialog.getByRole("option");
+    await expect(options).toHaveCount(2);
+    await tabTo(page, options.first(), { max: 5 });
+    await page.keyboard.press("Enter");
+    await expect(dialog).toBeHidden();
+    await expect(references(page)).toHaveCount(3);
+
+    // The placed card draws the Chapter: its title, its Book, its preview, its time.
+    const placed = references(page).last();
+    await expect(placed).toBeVisible();
+    await capture(page, "canvas-reference-chapter-card", { around: [placed] });
+    await expect(placed).toContainText("Arrival");
+    await expect(placed).toContainText("The Lighthouse Keeper");
+    const placedId = ((await placed.getAttribute("data-testid")) ?? "").replace("rf__node-", "");
+    expect(placedId).not.toBe("");
+
+    // Connect the placed card to the seeded Note Reference.
+    await selectNode(page, placed);
+    await expect(placed).toHaveClass(/selected/);
+    const connect = page.getByRole("button", { name: "Connect to…" });
+    await tabTo(page, connect, { max: 40 });
+    await page.keyboard.press("Enter");
+    const connectDialog = page.getByRole("dialog", { name: "Connect “Arrival” to…" });
+    await expect(connectDialog).toBeVisible();
+    await expect(connectDialog.getByPlaceholder("Search this canvas…")).toBeFocused();
+    await page.keyboard.type("Keeper");
+    await tabTo(page, connectDialog.getByRole("button", { name: "Keeper's Log" }), { max: 5 });
+    await page.keyboard.press("Enter");
+    await expect(connectDialog).toBeHidden();
+    await expect(
+      page.getByRole("group", { name: new RegExp(`^Edge from ${placedId} `) })
+    ).toHaveCount(1);
+
+    // Arrow keys move the selected card, as they do for any node.
+    await selectNode(page, placed);
+    const before = await placed.boundingBox();
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    await expect
+      .poll(async () => (await placed.boundingBox())?.x ?? 0)
+      .toBeGreaterThan(before?.x ?? 0);
+
+    // Open reaches the Chapter at its Book, not the Book's first Chapter.
+    await tabTo(page, placed.getByRole("button", { name: "Open Arrival" }), { max: 5 });
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/\/book\/[\w-]+$/);
+    const chapterGrid = page.getByRole("grid", { name: "Chapters" });
+    await expect(page.getByRole("textbox", { name: "Text of Arrival" })).toBeVisible();
+    await expect(chapterGrid.getByRole("row", { name: "Arrival" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+    await expect(chapterGrid.getByRole("row", { name: "The Lamp" })).toHaveAttribute(
+      "aria-selected",
+      "false"
+    );
+
+    // Its back control returns to this Canvas.
+    const back = page.getByRole("button", { name: "Back to Map" });
+    await expect(back).toBeVisible();
+    // Tab inside the Chapter text indents; Escape leaves the text first.
+    await page.keyboard.press("Escape");
+    await tabTo(page, back, { max: 120, backwards: true });
+    await page.keyboard.press("Enter");
+    await expectCanvasReady(page);
+    await expect(references(page)).toHaveCount(3);
+
+    await selectNode(page, placed);
+    await page.keyboard.press("Delete");
+    await expect(references(page)).toHaveCount(2);
+  });
+
+  test("deleting a referenced Chapter turns its card Missing and keeps it on the Canvas", async ({
+    page,
+  }) => {
+    await openMap(page);
+    await expect(references(page)).toHaveCount(2);
+    const mapUrl = page.url();
+    await page.keyboard.press("n");
+    await page.keyboard.press("Enter");
+    const dialog = page.getByRole("dialog", { name: "Add reference" });
+    await expect(dialog.getByPlaceholder("Search…")).toBeFocused();
+    await tabTo(page, dialog.getByRole("tab", { name: "Notes" }), { max: 5 });
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    const options = dialog.getByRole("option");
+    await expect(options).toHaveCount(2);
+    await tabTo(page, options.first(), { max: 5 });
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+    await expect(references(page)).toHaveCount(3);
+    const placed = references(page).last();
+
+    await tabTo(page, placed.getByRole("button", { name: "Open The Lamp" }), { max: 60 });
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(/\/book\/[\w-]+$/);
+    await expect(page.getByRole("textbox", { name: "Text of The Lamp" })).toBeVisible();
+
+    // Leave the text for the Chapter list, then delete The Lamp from its row.
+    await page.keyboard.press("Escape");
+    await expectFocusWithin(page.getByRole("complementary", { name: "Chapter list" }));
+    const chapterGrid = page.getByRole("grid", { name: "Chapters" });
+    const lamp = chapterGrid.getByRole("row", { name: "The Lamp" });
+    await tabTo(page, chapterGrid.getByRole("row", { selected: true }));
+    await pressUntilFocused(
+      page,
+      "ArrowRight",
+      lamp.getByRole("button", { name: "Delete Chapter" }),
+      { max: 6 }
+    );
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("button", { name: "No", exact: true })).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(page.getByRole("button", { name: "Yes", exact: true })).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(lamp).toHaveCount(0);
+
+    // The card stays where it was, with its stored label, and cannot open.
+    await page.goto(mapUrl);
+    await expectCanvasReady(page);
+    await expect(references(page)).toHaveCount(3);
+    const missing = references(page).last();
+    await expect(missing).toContainText("The Lamp");
+    await expect(missing).toContainText("This item no longer exists");
+    await expect(missing.getByRole("button", { name: "Open The Lamp" })).toBeDisabled();
+    await capture(page, "canvas-reference-chapter-card-missing", { around: [missing] });
   });
 
   test("Escape on the reference picker after an armed Canvas Reference places nothing", async ({

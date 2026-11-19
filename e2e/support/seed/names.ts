@@ -63,7 +63,7 @@ export const SEED_NOTE_TAGS = {
   harbor: "harbor",
 } as const;
 
-/** `canvasWithNodes`: two Canvases, a text-node pair with a Connection, a Note Reference, and a Book to reference. */
+/** `canvasWithNodes`: two Canvases, a text-node pair with a Connection, a Note Reference, and a Book with two Chapters to reference. */
 export const SEED_CANVASES = {
   map: "Map",
   ideas: "Ideas",

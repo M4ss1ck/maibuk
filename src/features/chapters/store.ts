@@ -220,6 +220,32 @@ export async function listChaptersForBookLinking(
   }));
 }
 
+/**
+ * The named Chapters, with what a Canvas Reference shows and opens: content and
+ * the time it last changed. One read for every id asked, none for an empty ask.
+ */
+export async function getChaptersByIds(
+  ids: readonly string[]
+): Promise<
+  { id: string; bookId: string; title: string; content: string | null; updatedAt: Date }[]
+> {
+  if (ids.length === 0) return [];
+  const db = await getDatabase();
+  const placeholders = ids.map(() => "?").join(", ");
+  const rows = await db.select<
+    { id: string; book_id: string; title: string; content: string | null; updated_at: number }[]
+  >(`SELECT id, book_id, title, content, updated_at FROM chapters WHERE id IN (${placeholders})`, [
+    ...ids,
+  ]);
+  return rows.map((r) => ({
+    id: r.id,
+    bookId: r.book_id,
+    title: r.title,
+    content: r.content,
+    updatedAt: new Date(r.updated_at * 1000),
+  }));
+}
+
 export async function getChapterForLinking(
   chapterId: string
 ): Promise<{ id: string; bookId: string; title: string; content: string | null } | null> {

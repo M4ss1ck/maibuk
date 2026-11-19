@@ -260,9 +260,21 @@ export async function canvasWithNodes(): Promise<void> {
     "local"
   );
 
-  // A Book the Book Reference spec adds to the Map itself: it is not in the
-  // stored doc, so only that spec sees it on the Canvas.
-  await createBookRow({ ...SEED_BOOK }, "local");
+  // A Book the Book and Chapter Reference specs add to the Map themselves: it is
+  // not in the stored doc, so only those specs see it on the Canvas. Two
+  // Chapters, in SEED_CHAPTERS order, so the second one is a distinct target.
+  const book = await createBookRow({ ...SEED_BOOK }, "local");
+  let words = 0;
+  for (const chapter of [SEED_CHAPTERS[0], SEED_CHAPTERS[1]]) {
+    const created = await createChapterRow({ bookId: book.id, title: chapter.title }, "local");
+    const saved = await updateChapterRow(
+      created.id,
+      { content: `<p>${chapter.text}</p>` },
+      "local"
+    );
+    words += saved?.wordCount ?? 0;
+  }
+  await updateBookWordCountRow(book.id, words);
 
   const map = await createCanvasRow({ title: SEED_CANVASES.map }, "local");
   await updateCanvasDocRow(

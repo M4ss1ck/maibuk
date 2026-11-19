@@ -11,8 +11,9 @@ import { notePreviewText } from "@/components/notes/notes-list-model";
 import { timeAgo } from "@/components/notes/timeAgo";
 import { useBookStore } from "@/features/books/store";
 import type { Book } from "@/features/books/types";
-import type { Note } from "@/features/notes";
+import type { ChapterReferenceValue } from "@/features/canvas/chapterReferenceSource";
 import type { CanvasFlowNodeData } from "@/features/canvas/reactFlowAdapter";
+import type { Note } from "@/features/notes";
 import {
   CANVAS_REFERENCE_CARD_SIZES,
   type CanvasReferenceCardKind,
@@ -69,6 +70,37 @@ function BookReferenceCardBody({ value }: CanvasReferenceCardBodyProps) {
   return <BookCardFace book={value as Book} fill />;
 }
 
+/** A Chapter draws its preview, its Book, and when it was last edited; it has no tags. */
+function ChapterReferenceCardBody({ value, title }: CanvasReferenceCardBodyProps) {
+  const { t, i18n } = useTranslation();
+  const chapter = value as ChapterReferenceValue;
+  const preview = chapter.content ? notePreviewText(chapter.content) : "";
+  const dateLabel = timeAgo(
+    Math.floor(chapter.updatedAt.getTime() / 1000),
+    i18n?.language ?? "en",
+    t
+  );
+
+  return (
+    <>
+      <h3 className="line-clamp-2 font-medium text-foreground">{title}</h3>
+
+      {preview && (
+        <p className="mt-1 line-clamp-3 min-h-8 text-sm text-muted-foreground">{preview}</p>
+      )}
+
+      {chapter.bookTitle && (
+        <span className="mt-2 inline-flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+          <BookOpen className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">{chapter.bookTitle}</span>
+        </span>
+      )}
+
+      <span className="mt-auto pt-2 text-xs text-muted-foreground">{dateLabel}</span>
+    </>
+  );
+}
+
 /** What a card kind draws once its source answered: the one place a value is read. */
 const CANVAS_REFERENCE_CARD_BODIES: Record<
   CanvasReferenceCardKind,
@@ -76,6 +108,7 @@ const CANVAS_REFERENCE_CARD_BODIES: Record<
 > = {
   note: NoteReferenceCardBody,
   book: BookReferenceCardBody,
+  chapter: ChapterReferenceCardBody,
 };
 
 /** A state with nothing to draw beyond its label and, sometimes, one line saying why. */
