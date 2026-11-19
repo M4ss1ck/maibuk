@@ -3,13 +3,15 @@
  * "Back to {title}" affordance, so the page that sent the reader here can be
  * reached again from the keyboard. It draws the same way for every page shape:
  * a Host-rendered page, a whole-page Frame, a `hideTitle` page, the stopped
- * panel, and the not-found page.
+ * panel, and the not-found page. A `hideBack` page draws its own Back while it
+ * runs, and gets Maibuk's back on the stopped panel.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { pluginPageRoute } from "@/features/plugins/contributions-registry";
+import { shownPluginReturnLabel } from "@/features/plugins/navigation";
 import { STARTUP_TIMEOUT_MS } from "@/features/plugins/runtime";
 import { PluginPage } from "@/pages/PluginPage";
 import {
@@ -43,8 +45,11 @@ type PageOptions = {
   deferReady?: boolean;
 };
 
-function renderPage(state?: ReturnState, { pageId = "report" }: PageOptions = {}): void {
-  render(
+function renderPage(
+  state?: ReturnState,
+  { pageId = "report" }: PageOptions = {}
+): ReturnType<typeof render> {
+  return render(
     <MemoryRouter initialEntries={[{ pathname: pluginPageRoute("alpha", pageId), state }]}>
       <Routes>
         <Route path="plugin/:pluginId/:pageId" element={<PluginPage />} />
@@ -58,19 +63,22 @@ function keyboard() {
   return userEvent.setup({ advanceTimers: (ms) => vi.advanceTimersByTime(ms) });
 }
 
-async function openPage(state?: ReturnState, options: PageOptions = {}): Promise<void> {
+async function openPage(
+  state?: ReturnState,
+  options: PageOptions = {}
+): Promise<ReturnType<typeof render>> {
   const h = await createLifecycleHarness({
     approved: options.approved ?? [pagePlugin("alpha")],
     deferReady: options.deferReady,
   });
   await h.launch();
-  renderPage(state, options);
+  return renderPage(state, options);
 }
 
 /** An on-demand page Plugin whose first start runs out of time on its page. */
-async function timedOutOnItsPage(state?: ReturnState) {
+async function timedOutOnItsPage(state?: ReturnState, approved?: ReturnType<typeof pagePlugin>[]) {
   const h = await createLifecycleHarness({
-    approved: [pagePlugin("alpha", { name: "Word Stats", lifecycle: "on-demand" })],
+    approved: approved ?? [pagePlugin("alpha", { name: "Word Stats", lifecycle: "on-demand" })],
     deferReady: true,
   });
   await h.launch();
@@ -102,6 +110,16 @@ const HIDE_TITLE_PLUGIN = () =>
       commands: [{ id: "open", label: "Open report", contexts: ["global"], navigates: true }],
       pages: [{ id: "report", title: "Report", command: "open", hideTitle: true }],
     },
+  });
+
+const HIDE_BACK_PLUGIN = (extra: Parameters<typeof pagePlugin>[1] = {}) =>
+  pagePlugin("alpha", {
+    name: "Word Stats",
+    contributes: {
+      commands: [{ id: "open", label: "Open report", contexts: ["global"], navigates: true }],
+      pages: [{ id: "report", title: "Report", command: "open", hideBack: true }],
+    },
+    ...extra,
   });
 
 describe("a Plugin page opened with a return target", () => {
@@ -161,5 +179,37 @@ describe("a Plugin page opened with a return target", () => {
     await openPage({ returnTo: "/canvas/c1", returnLabel: "" });
 
     expect(screen.getByRole("button", { name: "Back to Untitled" })).toBeInTheDocument();
+  });
+
+  it("draws no Back to button on a hideBack page that draws its own", async () => {
+    await openPage(
+      { returnTo: "/canvas/c1", returnLabel: "Plot" },
+      { approved: [HIDE_BACK_PLUGIN()] }
+    );
+
+    expect(screen.queryByRole("button", { name: /Back to/ })).toBeNull();
+  });
+
+  it("draws Back to its opener on a hideBack page's stopped panel", async () => {
+    await timedOutOnItsPage({ returnTo: "/canvas/c1", returnLabel: "Plot" }, [
+      HIDE_BACK_PLUGIN({ lifecycle: "on-demand" }),
+    ]);
+
+    expect(screen.getByText("Word Stats stopped")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Back to Plot" })).toBeInTheDocument();
+  });
+
+  it("shows the page's return label, and clears it when the page unmounts", async () => {
+    const { unmount } = await openPage({ returnTo: "/canvas/c1", returnLabel: "Plot" });
+
+    expect(shownPluginReturnLabel("alpha")).toBe("Plot");
+    unmount();
+    expect(shownPluginReturnLabel("alpha")).toBeNull();
+  });
+
+  it("registers an Untitled return label when the opener has no label", async () => {
+    await openPage({ returnTo: "/canvas/c1", returnLabel: "" });
+
+    expect(shownPluginReturnLabel("alpha")).toBe("Untitled");
   });
 });

@@ -294,6 +294,7 @@ export function registerPluginContributions(source: PluginContributionsSource): 
         // A page that declares `frame` is a whole-page Frame (D2).
         ...(page.frame !== undefined ? { frame: page.frame } : {}),
         ...(page.hideTitle === true ? { hideTitle: true as const } : {}),
+        ...(page.hideBack === true ? { hideBack: true as const } : {}),
         commandId: `${PLUGIN_COMMAND_PREFIX}${manifest.id}.${page.command}` as PluginCommandId,
       }));
       const sidebarDefs: PluginSidebarEntryDef[] = [];

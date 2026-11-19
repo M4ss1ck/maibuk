@@ -131,6 +131,12 @@ const pageContribution = strictObject({
       "Hide the page title Maibuk draws above the page; the page draws its own heading. Screen readers still hear the title."
     )
     .optional(),
+  hideBack: z
+    .literal(true)
+    .describe(
+      "Hide the Back button Maibuk draws on this page when another place opened it; the page draws its own Back from navigation.returnTargetChanged and calls navigation.return. The stopped panel still shows Maibuk's Back."
+    )
+    .optional(),
   platforms: contributionPlatforms.optional(),
 });
 
