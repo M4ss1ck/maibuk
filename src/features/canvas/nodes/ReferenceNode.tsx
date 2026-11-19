@@ -18,9 +18,9 @@ import type { Note } from "@/features/notes";
 import {
   CANVAS_REFERENCE_CARD_SIZES,
   type CanvasReferenceCardKind,
-  getCanvasReferenceSource,
   openCanvasReference,
   useCanvasReferenceResolution,
+  useCanvasReferenceSource,
 } from "@/features/canvas/references";
 import type { Canvas, ReferenceCanvasNode } from "@/features/canvas/types";
 import { CanvasNodeHandles } from "@/features/canvas/nodes/CanvasNodeHandles";
@@ -107,6 +107,11 @@ function ChapterReferenceCardBody({ value, title }: CanvasReferenceCardBodyProps
   );
 }
 
+/** A Generic card draws the Plugin's title until the real Generic body lands (#836). */
+function GenericReferenceCardBody({ title }: CanvasReferenceCardBodyProps) {
+  return <h3 className="line-clamp-2 font-medium text-foreground">{title}</h3>;
+}
+
 /** What a card kind draws once its source answered: the one place a value is read. */
 const CANVAS_REFERENCE_CARD_BODIES: Record<
   CanvasReferenceCardKind,
@@ -116,6 +121,7 @@ const CANVAS_REFERENCE_CARD_BODIES: Record<
   book: BookReferenceCardBody,
   chapter: ChapterReferenceCardBody,
   canvas: CanvasReferenceCardBody,
+  generic: GenericReferenceCardBody,
 };
 
 /** A state with nothing to draw beyond its label and, sometimes, one line saying why. */
@@ -155,7 +161,7 @@ function CanvasReferenceCard({
     isDisabled: editorReadOnly || interactivityLocked,
   });
 
-  const source = getCanvasReferenceSource(node.source);
+  const source = useCanvasReferenceSource(node.source);
   const resolution = useCanvasReferenceResolution(node.source, node.targetId);
   // An unregistered source has no card kind yet; it borrows the note box.
   const size = CANVAS_REFERENCE_CARD_SIZES[source?.card ?? "note"];
