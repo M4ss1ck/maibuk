@@ -4,6 +4,7 @@ import {
   expectTabContained,
   pressUntilFocused,
   tabTo,
+  tabToEither,
 } from "../support/keyboard";
 import { capture } from "../support/capture";
 import { writeClipboard } from "../support/clipboard";
@@ -1018,6 +1019,149 @@ test.describe("Canvas Reference @wf:canvas-note-ref @sc:canvas.addReference @sc:
     await expect(missing).toContainText("This item no longer exists");
     await expect(missing.getByRole("button", { name: "Open The Lamp" })).toBeDisabled();
     await capture(page, "canvas-reference-chapter-card-missing", { around: [missing] });
+  });
+
+  test("places, connects, moves, opens, and deletes a Canvas Reference to a Canvas", async ({
+    page,
+  }) => {
+    await openMap(page);
+    await expect(references(page)).toHaveCount(2);
+
+    // The picker opens on Notes; Canvases is the last tab, three to its right.
+    await page.keyboard.press("n");
+    await page.keyboard.press("Enter");
+    const dialog = page.getByRole("dialog", { name: "Add reference" });
+    await expect(dialog).toBeVisible();
+    const search = dialog.getByPlaceholder("Search…");
+    await expect(search).toBeFocused();
+    await tabTo(page, dialog.getByRole("tab", { name: "Notes" }), { max: 5 });
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    await expect(dialog.getByRole("tab", { name: "Canvases" })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+    await capture(page, "canvas-reference-picker-canvases", { around: [dialog] });
+
+    // A Canvas is never its own target: Map is missing, the other two are listed.
+    const options = dialog.getByRole("option");
+    await expect(options).toHaveCount(2);
+    await expect(dialog.getByRole("option", { name: "Map", exact: true })).toHaveCount(0);
+    const ideasOption = dialog.getByRole("option", { name: "Ideas", exact: true });
+    await expect(ideasOption).toHaveCount(1);
+    await tabTo(page, ideasOption, { max: 5 });
+    await page.keyboard.press("Enter");
+    await expect(dialog).toBeHidden();
+    await expect(references(page)).toHaveCount(3);
+
+    // The placed card draws the Gallery Canvas card's face: title and counts.
+    const placed = references(page).last();
+    await expect(placed).toBeVisible();
+    await expect(placed).toContainText("Ideas");
+    await expect(placed).toContainText("0 nodes");
+    await expect(placed).toContainText("0 connections");
+    await capture(page, "canvas-reference-canvas-card", { around: [placed] });
+    const placedId = ((await placed.getAttribute("data-testid")) ?? "").replace("rf__node-", "");
+    expect(placedId).not.toBe("");
+
+    // Connect the placed card to the seeded Note Reference.
+    await selectNode(page, placed);
+    await expect(placed).toHaveClass(/selected/);
+    const connect = page.getByRole("button", { name: "Connect to…" });
+    await tabTo(page, connect, { max: 40 });
+    await page.keyboard.press("Enter");
+    const connectDialog = page.getByRole("dialog", { name: "Connect “Ideas” to…" });
+    await expect(connectDialog).toBeVisible();
+    await expect(connectDialog.getByPlaceholder("Search this canvas…")).toBeFocused();
+    await page.keyboard.type("Keeper");
+    await tabTo(page, connectDialog.getByRole("button", { name: "Keeper's Log" }), { max: 5 });
+    await page.keyboard.press("Enter");
+    await expect(connectDialog).toBeHidden();
+    await expect(
+      page.getByRole("group", { name: new RegExp(`^Edge from ${placedId} `) })
+    ).toHaveCount(1);
+
+    // Arrow keys move the selected card, as they do for any node.
+    await selectNode(page, placed);
+    const before = await placed.boundingBox();
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    await expect
+      .poll(async () => (await placed.boundingBox())?.x ?? 0)
+      .toBeGreaterThan(before?.x ?? 0);
+
+    // Open reaches the referenced Canvas; its back control names this one.
+    await tabTo(page, placed.getByRole("button", { name: "Open Ideas" }), { max: 5 });
+    await page.keyboard.press("Enter");
+    await expectCanvasReady(page);
+    await expect(page.getByRole("textbox", { name: "Rename canvas" })).toHaveValue("Ideas");
+
+    const back = page.getByRole("button", { name: "Back to Map" });
+    await expect(back).toBeVisible();
+    // The target Canvas opened with nothing focused, so its header sits either
+    // side of focus; the helper tries forward, then back.
+    await tabToEither(page, back, { max: 60 });
+    await page.keyboard.press("Enter");
+    await expectCanvasReady(page);
+    await expect(references(page)).toHaveCount(3);
+
+    await selectNode(page, placed);
+    await page.keyboard.press("Delete");
+    await expect(references(page)).toHaveCount(2);
+  });
+
+  test("deleting a referenced Canvas turns its card Missing and keeps it on the Canvas", async ({
+    page,
+  }) => {
+    await openMap(page);
+    await expect(references(page)).toHaveCount(2);
+    const mapUrl = page.url();
+    await page.keyboard.press("n");
+    await page.keyboard.press("Enter");
+    const dialog = page.getByRole("dialog", { name: "Add reference" });
+    await expect(dialog.getByPlaceholder("Search…")).toBeFocused();
+    await tabTo(page, dialog.getByRole("tab", { name: "Notes" }), { max: 5 });
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    const ideasOption = dialog.getByRole("option", { name: "Ideas", exact: true });
+    await expect(ideasOption).toHaveCount(1);
+    await tabTo(page, ideasOption, { max: 5 });
+    await page.keyboard.press("Enter");
+    await expect(references(page)).toHaveCount(3);
+    await expect(references(page).last()).toContainText("Ideas");
+    // The placement is written before the page loads the Gallery afresh.
+    await expect(page.getByText("Saved", { exact: true })).toBeVisible();
+
+    // Delete the Ideas Canvas from the Gallery, as its own card would.
+    await page.goto("/canvas");
+    const grid = page.getByRole("grid", { name: "Canvases" });
+    const ideas = grid.getByRole("row", { name: /Ideas/ });
+    // Tab presses sent before the gallery renders land on an empty body.
+    await expect(ideas).toBeVisible();
+    await tabTo(page, grid.getByRole("row").first(), { max: 40 });
+    await page.keyboard.press("Home");
+    await pressUntilFocused(page, "ArrowRight", ideas, { max: 12 });
+    await tabTo(page, ideas.getByRole("button", { name: "Delete canvas" }), { max: 6 });
+    await page.keyboard.press("Enter");
+    // The card now holds its confirm buttons; Tab re-enters the grid on it.
+    await tabTo(page, ideas, { max: 60 });
+    await tabTo(page, ideas.getByRole("button", { name: "Delete canvas", exact: true }), {
+      max: 6,
+    });
+    await page.keyboard.press("Enter");
+    await expect(ideas).toHaveCount(0);
+
+    // The card stays where it was, with its stored label, and cannot open.
+    await page.goto(mapUrl);
+    await expectCanvasReady(page);
+    await expect(references(page)).toHaveCount(3);
+    const missing = references(page).last();
+    await expect(missing).toContainText("Ideas");
+    await expect(missing).toContainText("This item no longer exists");
+    await expect(missing.getByRole("button", { name: "Open Ideas" })).toBeDisabled();
+    await capture(page, "canvas-reference-canvas-card-missing", { around: [missing] });
   });
 
   test("Escape on the reference picker after an armed Canvas Reference places nothing", async ({

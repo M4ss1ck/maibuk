@@ -105,6 +105,9 @@ let appliedReadTicket = 0;
 // Bumped by every store write that sets `canvases`, so a read issued earlier
 // knows its rows predate that write.
 let writeEpoch = 0;
+// Bumped by every open or close of a Canvas, so a slower read of a Canvas
+// left since never replaces the one open now.
+let openTicket = 0;
 
 const CANVASES_SELECT = 'SELECT * FROM canvases ORDER BY pinned DESC, "order" ASC, updated_at DESC';
 
@@ -512,6 +515,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
   },
 
   loadCanvas: async (id) => {
+    const ticket = ++openTicket;
     set({
       ...editorResetState(),
       loadState: "loading",
@@ -522,6 +526,7 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
         "SELECT * FROM canvases WHERE id = ?",
         [id]
       );
+      if (ticket !== openTicket) return;
       if (!rows[0]) {
         set({ loadState: "missing" });
         return;
@@ -542,11 +547,15 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
       const doc = { ...result.doc, viewport: viewportForCanvas(current.id, result.doc.viewport) };
       set({ current: { ...current, doc }, doc, loadState: "ready" });
     } catch (error) {
+      if (ticket !== openTicket) return;
       set({ loadState: "error", editorError: String(error), editorReadOnly: true });
     }
   },
 
-  closeCanvas: () => set({ ...editorResetState(), toolMode: "select" }),
+  closeCanvas: () => {
+    openTicket++;
+    set({ ...editorResetState(), toolMode: "select" });
+  },
   resetEditorState: () => set(editorResetState()),
 
   commit: (next) => {

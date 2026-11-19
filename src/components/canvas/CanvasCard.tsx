@@ -1,4 +1,9 @@
-import { useState, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  useState,
+  type KeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+} from "react";
 import { keepRowFromActing } from "@/lib/arrow-navigation";
 import { Network, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -15,6 +20,49 @@ interface CanvasCardProps {
   tutorialAnchor?: string;
 }
 
+interface CanvasCardFaceProps {
+  canvas: Canvas;
+  /** The heading slot: the renaming card puts its input here instead. */
+  title?: ReactNode;
+  /** The delete prompt takes the metadata's room on the fixed-height card. */
+  showMetadata?: boolean;
+}
+
+/**
+ * Header row and metadata shared by the Gallery Canvas card and the Canvas
+ * Reference card. Display only: it renders no handlers, so each card keeps its
+ * own interactions.
+ *
+ * `title` replaces the default heading, and `showMetadata` hides the counts and
+ * date when the owning card needs their room for something else.
+ */
+export function CanvasCardFace({ canvas, title, showMetadata = true }: CanvasCardFaceProps) {
+  const { t, i18n } = useTranslation();
+
+  return (
+    <>
+      <div className="flex items-center gap-2">
+        <Network className="size-5 shrink-0 text-primary" aria-hidden="true" />
+        {title ?? <h2 className="truncate font-medium">{canvas.title || t("canvas.untitled")}</h2>}
+        {canvas.pinned && <Pin className="size-4 shrink-0 text-primary" aria-hidden="true" />}
+      </div>
+      {showMetadata && (
+        <>
+          <div className="mt-4 flex gap-3 text-sm text-muted-foreground">
+            <span>{t("canvas.nodeCount", { count: canvas.doc.nodes.length })}</span>
+            <span>{t("canvas.edgeCount", { count: canvas.doc.edges.length })}</span>
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            {new Intl.DateTimeFormat(i18n.language, { dateStyle: "medium" }).format(
+              new Date(canvas.updatedAt * 1000)
+            )}
+          </p>
+        </>
+      )}
+    </>
+  );
+}
+
 export function CanvasCard({
   canvas,
   onOpen,
@@ -23,7 +71,7 @@ export function CanvasCard({
   onTogglePinned,
   tutorialAnchor,
 }: CanvasCardProps) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(canvas.title);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -48,20 +96,6 @@ export function CanvasCard({
     }
   };
 
-  const metadata = (
-    <>
-      <div className="mt-4 flex gap-3 text-sm text-muted-foreground">
-        <span>{t("canvas.nodeCount", { count: canvas.doc.nodes.length })}</span>
-        <span>{t("canvas.edgeCount", { count: canvas.doc.edges.length })}</span>
-      </div>
-      <p className="mt-3 text-xs text-muted-foreground">
-        {new Intl.DateTimeFormat(i18n.language, { dateStyle: "medium" }).format(
-          new Date(canvas.updatedAt * 1000)
-        )}
-      </p>
-    </>
-  );
-
   return (
     <article
       data-tutorial={tutorialAnchor}
@@ -69,29 +103,24 @@ export function CanvasCard({
     >
       {renaming ? (
         <div className="min-w-0 flex-1 text-left">
-          <div className="flex items-center gap-2">
-            <Network className="size-5 shrink-0 text-primary" aria-hidden="true" />
-            <input
-              autoFocus
-              className="min-w-0 flex-1 cursor-text rounded-lg border border-border bg-background px-2 py-1 text-sm font-medium outline-none focus:border-primary"
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={handleRenameKeyDown}
-              onBlur={saveRename}
-            />
-            {canvas.pinned && <Pin className="size-4 shrink-0 text-primary" aria-hidden="true" />}
-          </div>
-          {metadata}
+          <CanvasCardFace
+            canvas={canvas}
+            title={
+              <input
+                autoFocus
+                className="min-w-0 flex-1 cursor-text rounded-lg border border-border bg-background px-2 py-1 text-sm font-medium outline-none focus:border-primary"
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={handleRenameKeyDown}
+                onBlur={saveRename}
+              />
+            }
+          />
         </div>
       ) : (
         <button type="button" className="min-w-0 flex-1 cursor-pointer text-left" onClick={onOpen}>
-          <div className="flex items-center gap-2">
-            <Network className="size-5 shrink-0 text-primary" aria-hidden="true" />
-            <h2 className="truncate font-medium">{canvas.title || t("canvas.untitled")}</h2>
-            {canvas.pinned && <Pin className="size-4 shrink-0 text-primary" aria-hidden="true" />}
-          </div>
           {/* The card has a fixed height, so the delete prompt takes the metadata's room. */}
-          {!confirmingDelete && metadata}
+          <CanvasCardFace canvas={canvas} showMetadata={!confirmingDelete} />
         </button>
       )}
       {confirmingDelete ? (

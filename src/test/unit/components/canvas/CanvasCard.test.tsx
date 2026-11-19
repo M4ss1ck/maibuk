@@ -1,25 +1,30 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { CanvasCard } from "@/components/canvas/CanvasCard";
+import { CanvasCard, CanvasCardFace } from "@/components/canvas/CanvasCard";
+import type { Canvas } from "@/features/canvas/types";
 import { createDefaultCanvasDoc } from "@/features/canvas/types";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key, i18n: { language: "en" } }),
 }));
 
+function makeCanvas(title: string): Canvas {
+  return {
+    id: "canvas",
+    title,
+    doc: createDefaultCanvasDoc(),
+    pinned: false,
+    order: 0,
+    createdAt: 1,
+    updatedAt: 1,
+    contentUpdatedAt: 1,
+  };
+}
+
 function renderCard() {
   render(
     <CanvasCard
-      canvas={{
-        id: "canvas",
-        title: "Map",
-        doc: createDefaultCanvasDoc(),
-        pinned: false,
-        order: 0,
-        createdAt: 1,
-        updatedAt: 1,
-        contentUpdatedAt: 1,
-      }}
+      canvas={makeCanvas("Map")}
       onOpen={vi.fn()}
       onRename={vi.fn()}
       onDelete={vi.fn()}
@@ -43,5 +48,16 @@ describe("CanvasCard", () => {
     expect(screen.queryByText("canvas.nodeCount")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "common.cancel" }));
     expect(screen.getByText("canvas.nodeCount")).toBeInTheDocument();
+  });
+});
+
+describe("CanvasCardFace", () => {
+  it("renders the title and metadata with no actions of its own", () => {
+    render(<CanvasCardFace canvas={makeCanvas("Map")} />);
+
+    expect(screen.getByRole("heading", { name: "Map" })).toBeInTheDocument();
+    expect(screen.getByText("canvas.nodeCount")).toBeInTheDocument();
+    expect(screen.getByText("canvas.edgeCount")).toBeInTheDocument();
+    expect(screen.queryByRole("button")).toBeNull();
   });
 });

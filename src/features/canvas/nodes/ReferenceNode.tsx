@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { type Node, type NodeProps } from "@xyflow/react";
 import { SpinnerIcon } from "@/components/icons";
+import { CanvasCardFace } from "@/components/canvas/CanvasCard";
 import { BookCardFace } from "@/components/project/BookCard";
 import { Button } from "@/components/ui/Button";
 import { NoteTagsRow } from "@/components/notes/NoteTagsRow";
@@ -21,7 +22,7 @@ import {
   openCanvasReference,
   useCanvasReferenceResolution,
 } from "@/features/canvas/references";
-import type { ReferenceCanvasNode } from "@/features/canvas/types";
+import type { Canvas, ReferenceCanvasNode } from "@/features/canvas/types";
 import { CanvasNodeHandles } from "@/features/canvas/nodes/CanvasNodeHandles";
 import { useCanvasNodeMenu } from "@/features/canvas/nodes/CanvasNodeMenu";
 import { useCanvasStore } from "@/features/canvas/store";
@@ -70,6 +71,11 @@ function BookReferenceCardBody({ value }: CanvasReferenceCardBodyProps) {
   return <BookCardFace book={value as Book} fill />;
 }
 
+/** A Canvas draws the Gallery Canvas card's face. */
+function CanvasReferenceCardBody({ value }: CanvasReferenceCardBodyProps) {
+  return <CanvasCardFace canvas={value as Canvas} />;
+}
+
 /** A Chapter draws its preview, its Book, and when it was last edited; it has no tags. */
 function ChapterReferenceCardBody({ value, title }: CanvasReferenceCardBodyProps) {
   const { t, i18n } = useTranslation();
@@ -109,6 +115,7 @@ const CANVAS_REFERENCE_CARD_BODIES: Record<
   note: NoteReferenceCardBody,
   book: BookReferenceCardBody,
   chapter: ChapterReferenceCardBody,
+  canvas: CanvasReferenceCardBody,
 };
 
 /** A state with nothing to draw beyond its label and, sometimes, one line saying why. */

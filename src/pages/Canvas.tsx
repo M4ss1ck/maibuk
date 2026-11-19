@@ -272,7 +272,10 @@ function CanvasEditor() {
   const pointerRef = useRef<{ x: number; y: number } | null>(null);
   const current = useCanvasStore((state) => state.current);
   const doc = useCanvasStore((state) => state.doc);
-  const loadState = useCanvasStore((state) => state.loadState);
+  const storeLoadState = useCanvasStore((state) => state.loadState);
+  // Moving to another Canvas, the store holds the one being left until its
+  // Flush settles and this one's load starts: it is not this Canvas's content.
+  const loadState = current && current.id !== canvasId ? "loading" : storeLoadState;
   const docLoadError = useCanvasStore((state) => state.docLoadError);
   const editorReadOnly = useCanvasStore((state) => state.editorReadOnly);
   const dirty = useCanvasStore((state) => state.dirty);
@@ -378,17 +381,28 @@ function CanvasEditor() {
     sessionRef.current?.update(sessionDocFromKey(sessionDocKey(useCanvasStore.getState().doc)));
   }, [revision, sessionRef]);
 
+  // The Flush of the Canvas being left. The editor is not remounted between
+  // Canvases, and the save writes to the store's open Canvas, so the next
+  // Canvas loads only once that save has landed.
+  const leavingRef = useRef<Promise<unknown>>(Promise.resolve());
+
   useEffect(() => {
-    void loadCanvas(canvasId);
+    let left = false;
+    // A failed Flush stays registered for the next one; the load goes ahead.
+    const load = () => {
+      if (!left) void loadCanvas(canvasId);
+    };
+    void leavingRef.current.then(load, load);
     void loadNotes();
     void loadBooks();
     return () => {
+      left = true;
       // Leaving always Flushes: unsaved content lands before the editor
       // closes. The session stays registered until its save settles, so a
       // close whose save failed is retried by the next Flush.
       const session = sessionRef.current;
-      if (useCanvasStore.getState().current?.id === canvasId) {
-        void session?.flush().finally(() => {
+      if (session && useCanvasStore.getState().current?.id === canvasId) {
+        leavingRef.current = session.flush().finally(() => {
           if (useCanvasStore.getState().current?.id === canvasId) closeCanvas();
         });
       } else {
@@ -400,6 +414,21 @@ function CanvasEditor() {
   useEffect(() => {
     setTitleDraft(current?.title ?? "");
   }, [current?.id, current?.title]);
+
+  // A Canvas Reference that opened this Canvas hands back where to return. It
+  // is read from this visit's navigation state, so it lives exactly as long as
+  // the visit (Back/Forward included); the focusCardId replace below never
+  // comes with a return target.
+  const returnState = location.state as { returnTo?: string; returnLabel?: string } | null;
+  const activeReturnTarget = returnState?.returnTo
+    ? { to: returnState.returnTo, label: returnState.returnLabel ?? "" }
+    : null;
+  const backToGallery = useCallback(() => {
+    navigate(activeReturnTarget?.to ?? "/canvas");
+  }, [activeReturnTarget?.to, navigate]);
+  const backLabel = activeReturnTarget
+    ? t("nav.backTo", { title: activeReturnTarget.label || t("canvas.untitled") })
+    : t("canvas.backToCanvasGallery");
 
   // A Library Search text row opened this canvas on its card: select the card
   // and center the viewport on it. The history entry is replaced, so
@@ -799,7 +828,7 @@ function CanvasEditor() {
           else clearSelection();
         },
       },
-      { id: "canvas.backToGallery", onTrigger: () => navigate("/canvas") },
+      { id: "canvas.backToGallery", onTrigger: backToGallery },
       { id: "canvas.toolSelect", onTrigger: () => setToolMode("select") },
       { id: "canvas.toolPen", onTrigger: () => setToolMode("pen") },
       { id: "canvas.toolEraser", onTrigger: () => setToolMode("eraser") },
@@ -851,7 +880,7 @@ function CanvasEditor() {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4">
         <p>{t("canvas.missingCanvas")}</p>
-        <Button onClick={() => navigate("/canvas")}>{t("canvas.backToCanvasGallery")}</Button>
+        <Button onClick={backToGallery}>{backLabel}</Button>
       </div>
     );
   }
@@ -872,8 +901,8 @@ function CanvasEditor() {
             {t(isNewerFormat ? "canvas.newerCanvasDescription" : "canvas.corruptDocDescription")}
           </p>
           <div className="mt-6 flex justify-center gap-3">
-            <Button variant="secondary" onClick={() => navigate("/canvas")}>
-              {t("canvas.backToCanvasGallery")}
+            <Button variant="secondary" onClick={backToGallery}>
+              {backLabel}
             </Button>
             {!isNewerFormat && (
               <Button variant="destructive" onClick={() => void replaceCorruptDocWithDefault()}>
@@ -901,9 +930,9 @@ function CanvasEditor() {
         {current?.title || t("canvas.untitled")}
       </h1>
       <header className="z-10 flex flex-wrap items-center gap-2 border-b border-border bg-card px-3 py-2">
-        <Button variant="ghost" size="sm" onClick={() => navigate("/canvas")}>
+        <Button variant="ghost" size="sm" onClick={backToGallery}>
           <ArrowLeft className="size-4" aria-hidden="true" />
-          {t("canvas.backToCanvasGallery")}
+          {backLabel}
         </Button>
         <input
           aria-label={t("canvas.renameCanvas")}

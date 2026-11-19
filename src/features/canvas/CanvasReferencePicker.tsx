@@ -14,7 +14,7 @@ import { CANVAS_REFERENCE_SOURCES, type CanvasReferenceRow } from "@/features/ca
 export const CANVAS_REFERENCE_LIST_TIMEOUT_MS = 5000;
 
 const TAB_CLASS =
-  "flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1 pointer-coarse:py-2 text-sm font-medium outline-none transition-colors text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary data-[selected]:bg-card data-[selected]:text-foreground data-[selected]:shadow-sm";
+  "flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 pointer-coarse:py-2 text-sm font-medium outline-none transition-colors text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary data-[selected]:bg-card data-[selected]:text-foreground data-[selected]:shadow-sm";
 
 const FIRST_SOURCE_ID = CANVAS_REFERENCE_SOURCES[0]?.id ?? "";
 
