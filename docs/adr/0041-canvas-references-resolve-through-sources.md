@@ -20,4 +20,5 @@ Decided while triaging [#785](https://github.com/M4ss1ck/maibuk/issues/785); the
 
 - Opening a Canvas that holds Plugin references starts those Plugins' sandboxes.
 - A Canvas synced to a device without the Plugin or its data shows those references as Unavailable or Missing, with their stored labels.
+- A source may answer an image with a present resolution (#847), drawn on cards whose source declares a `preview` shape. The image travels only in the resolution and is never written into the Canvas; the rejected snapshot option still stands, so a card picks up a new image only when its references resolve again.
 - A Canvas at `schemaVersion` 5 is read-only on an app that only knows 4 (ADR 0006).
