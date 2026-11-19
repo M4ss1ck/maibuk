@@ -402,6 +402,13 @@ test.describe("Maps and Documents Canvas References @wf:plugins-canvas-reference
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/plugin\/maibuk-maps\/map$/);
 
+    // The Map page offers the way back to the Canvas it was opened from.
+    const back = page.getByRole("button", { name: "Back to Map", exact: true });
+    await tabTo(page, back, { max: 10 });
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(canvasUrl);
+    await expectCanvasReady(page);
+
     // Turn Maps off from its Settings row, by keyboard.
     await openPluginsSection(page);
     await expandPluginRow(page, MAPS);
