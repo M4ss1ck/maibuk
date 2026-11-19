@@ -206,10 +206,14 @@ export {
 } from "@/features/plugins/library";
 export type { PluginContentFragment } from "@/features/plugins/library";
 export {
+  onShownPluginReturnTargetChange,
   openPluginEntity,
   openPluginPage,
   resolvePluginEntityRoute,
+  returnFromPluginPage,
   setPluginNavigator,
+  setShownPluginReturnTarget,
+  shownPluginReturnLabel,
   withPluginReturnTarget,
 } from "@/features/plugins/navigation";
 export {

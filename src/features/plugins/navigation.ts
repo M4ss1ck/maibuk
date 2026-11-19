@@ -130,6 +130,58 @@ export async function withPluginReturnTarget<T>(
   }
 }
 
+/** The return target shown on each Plugin's on-screen page, keyed by page `pluginId`. */
+const shownReturnTargets = new Map<string, { to: string; label: string }>();
+
+/** Callers told when a shown return target changes. */
+const shownReturnTargetListeners = new Set<(pluginId: string, label: string | null) => void>();
+
+/**
+ * Stores or clears the return target shown on `pluginId`'s page, telling
+ * listeners only when the stored `to` or `label` actually changed.
+ */
+export function setShownPluginReturnTarget(
+  pluginId: string,
+  target: PluginReturnTarget | null
+): void {
+  const previous = shownReturnTargets.get(pluginId);
+  if (target === null) {
+    if (previous === undefined) return;
+    shownReturnTargets.delete(pluginId);
+  } else {
+    if (previous?.to === target.to && previous.label === target.label) return;
+    shownReturnTargets.set(pluginId, { to: target.to, label: target.label });
+  }
+  for (const listener of shownReturnTargetListeners) listener(pluginId, target?.label ?? null);
+}
+
+/** The label of the return target shown on `pluginId`'s page, or null when none is. */
+export function shownPluginReturnLabel(pluginId: string): string | null {
+  return shownReturnTargets.get(pluginId)?.label ?? null;
+}
+
+/** Subscribes to shown return target changes; returns the unsubscribe. */
+export function onShownPluginReturnTargetChange(
+  listener: (pluginId: string, label: string | null) => void
+): () => void {
+  shownReturnTargetListeners.add(listener);
+  return () => {
+    shownReturnTargetListeners.delete(listener);
+  };
+}
+
+/**
+ * Returns from `pluginId`'s on-screen page to the target it shows: `returned`
+ * once the registered navigator is sent there, `none` when there is nothing to
+ * return to or no navigator is registered.
+ */
+export function returnFromPluginPage(pluginId: string): { status: "returned" | "none" } {
+  const target = shownReturnTargets.get(pluginId);
+  if (target === undefined || navigator === null) return { status: "none" };
+  navigator(target.to);
+  return { status: "returned" };
+}
+
 /**
  * Opens a Plugin page through the registered navigator, carrying `callerId`'s
  * parked return target as navigation state. A Plugin that is not installed or

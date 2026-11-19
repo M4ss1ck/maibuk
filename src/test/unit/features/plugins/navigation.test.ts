@@ -13,10 +13,14 @@ const { mockGetDatabase } = vi.hoisted(() => ({ mockGetDatabase: vi.fn() }));
 vi.mock("@/lib/db", () => ({ getDatabase: mockGetDatabase }));
 
 const {
+  onShownPluginReturnTargetChange,
   openPluginEntity,
   openPluginPage,
   resolvePluginEntityRoute,
+  returnFromPluginPage,
   setPluginNavigator,
+  setShownPluginReturnTarget,
+  shownPluginReturnLabel,
   withPluginReturnTarget,
 } = await import("@/features/plugins/navigation");
 
@@ -322,5 +326,65 @@ describe("Plugin page navigation", () => {
     } finally {
       unregister();
     }
+  });
+});
+
+describe("shown Plugin page return target", () => {
+  afterEach(() => {
+    setShownPluginReturnTarget("tracer", null);
+    setShownPluginReturnTarget("other", null);
+  });
+
+  it("stores and reads the target shown for a Plugin's page", () => {
+    expect(shownPluginReturnLabel("tracer")).toBeNull();
+    setShownPluginReturnTarget("tracer", { to: "/canvas/c1", label: "Plot" });
+    expect(shownPluginReturnLabel("tracer")).toBe("Plot");
+    setShownPluginReturnTarget("tracer", { to: "/notes/n1", label: "Note" });
+    expect(shownPluginReturnLabel("tracer")).toBe("Note");
+  });
+
+  it("notifies on a change, not on an identical set, and reports null on clear", () => {
+    const listener = vi.fn();
+    const unsubscribe = onShownPluginReturnTargetChange(listener);
+    try {
+      setShownPluginReturnTarget("tracer", { to: "/canvas/c1", label: "Plot" });
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(listener).toHaveBeenCalledWith("tracer", "Plot");
+
+      setShownPluginReturnTarget("tracer", { to: "/canvas/c1", label: "Plot" });
+      expect(listener).toHaveBeenCalledTimes(1);
+
+      setShownPluginReturnTarget("tracer", null);
+      expect(listener).toHaveBeenLastCalledWith("tracer", null);
+      expect(listener).toHaveBeenCalledTimes(2);
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it("stops notifying after unsubscribe", () => {
+    const listener = vi.fn();
+    const unsubscribe = onShownPluginReturnTargetChange(listener);
+    unsubscribe();
+    setShownPluginReturnTarget("tracer", { to: "/canvas/c1", label: "Plot" });
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it("returns to the shown target through the registered navigator", () => {
+    const navigate = vi.fn();
+    const unregister = setPluginNavigator(navigate);
+    try {
+      expect(returnFromPluginPage("tracer")).toEqual({ status: "none" });
+      setShownPluginReturnTarget("tracer", { to: "/canvas/c1", label: "Plot" });
+      expect(returnFromPluginPage("tracer")).toEqual({ status: "returned" });
+      expect(navigate).toHaveBeenCalledWith("/canvas/c1");
+    } finally {
+      unregister();
+    }
+  });
+
+  it("reports none when no navigator is registered", () => {
+    setShownPluginReturnTarget("tracer", { to: "/canvas/c1", label: "Plot" });
+    expect(returnFromPluginPage("tracer")).toEqual({ status: "none" });
   });
 });
