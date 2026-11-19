@@ -20,6 +20,7 @@
   "shelf.dropSkipped.other": "Reader can't open {{count}} dropped files.",
   "shelf.reopenFailed": "The browser didn't give access to this file.",
   "viewer.back": "Back to Shelf",
+  "viewer.backTo": "Back to {label}",
   "viewer.contents": "Contents",
   "viewer.contentsEmpty": "This Document has no table of contents.",
   "viewer.find": "Find in Document",

@@ -25,12 +25,12 @@ describe("Reader manifest", () => {
     expect(parsed.platforms).toEqual(["desktop", "web"]);
     expect(parsed.lifecycle).toBe("on-demand");
     expect(parsed.customUi).toBe(true);
-    expect(parsed.apiVersion).toBe("^0.1.13");
+    expect(parsed.apiVersion).toBe("^0.1.14");
   });
 
   it("declares the Documents Canvas Reference source and the API version it needs", () => {
     const parsed = manifest();
-    expect(parsed.apiVersion).toBe("^0.1.13");
+    expect(parsed.apiVersion).toBe("^0.1.14");
     expect(parsed.contributes?.canvasReferenceSources).toEqual([
       { id: "documents", label: "Documents", icon: "book-open-text" },
     ]);
@@ -55,7 +55,12 @@ describe("Reader manifest", () => {
   it("declares the reading page as a whole-page Frame with a navigating Command", () => {
     const contributes = manifest().contributes;
     const page = contributes?.pages?.find((candidate) => candidate.id === "document");
-    expect(page).toMatchObject({ command: "openDocument", frame: "assets/ui/reader.html" });
+    expect(page).toMatchObject({
+      command: "openDocument",
+      frame: "assets/ui/reader.html",
+      // The Frame draws its own Back, which returns to the place that opened it (#786).
+      hideBack: true,
+    });
     const open = contributes?.commands?.find((command) => command.id === "openDocument");
     expect(open?.navigates).toBe(true);
     expect(open?.contexts).toEqual(["reader"]);

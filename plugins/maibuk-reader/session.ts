@@ -68,6 +68,11 @@ export interface ReaderSessionDeps {
   entry: ShelfEntry | null;
   language: string;
   port: MessagePort;
+  /**
+   * The place the host's Back returns to, or null when this page has none
+   * (#786): the Frame's own Back reads back to it instead of back to the Shelf.
+   */
+  returnLabel: () => string | null;
   /** Leaves the reading surface; the runtime opens the Shelf page. */
   navigateToShelf(): Promise<void> | void;
   /** Called once when the session stops, so the runtime forgets the Frame. */
@@ -149,9 +154,12 @@ export function readPosition(value: unknown, settings: ReaderSettings): ReadingP
 }
 
 /** Every string the Frame's own chrome needs, in the host's language. */
-export function frameLabels(language: string): FrameLabels {
+export function frameLabels(language: string, returnLabel: string | null = null): FrameLabels {
   return {
-    back: translate(language, "viewer.back"),
+    back:
+      returnLabel === null
+        ? translate(language, "viewer.back")
+        : translate(language, "viewer.backTo").replace("{label}", returnLabel),
     contents: translate(language, "viewer.contents"),
     contentsEmpty: translate(language, "viewer.contentsEmpty"),
     find: translate(language, "viewer.find"),
@@ -270,7 +278,7 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
       position,
       settings,
       size: entry === null ? 0 : sizeFromFingerprint(entry.fingerprint),
-      labels: frameLabels(language),
+      labels: frameLabels(language, deps.returnLabel()),
       language,
     };
     if (entry !== null && entry.format === "pdf") {
@@ -601,7 +609,7 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     },
     setLanguage(next: string): void {
       language = next;
-      post({ kind: "language", language: next, labels: frameLabels(next) });
+      post({ kind: "language", language: next, labels: frameLabels(next, deps.returnLabel()) });
     },
     command(id: FrameCommandId): void {
       post({ kind: "command", id });
