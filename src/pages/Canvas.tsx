@@ -272,7 +272,10 @@ function CanvasEditor() {
   const pointerRef = useRef<{ x: number; y: number } | null>(null);
   const current = useCanvasStore((state) => state.current);
   const doc = useCanvasStore((state) => state.doc);
-  const loadState = useCanvasStore((state) => state.loadState);
+  const storeLoadState = useCanvasStore((state) => state.loadState);
+  // Moving to another Canvas, the store holds the one being left until its
+  // Flush settles and this one's load starts: it is not this Canvas's content.
+  const loadState = current && current.id !== canvasId ? "loading" : storeLoadState;
   const docLoadError = useCanvasStore((state) => state.docLoadError);
   const editorReadOnly = useCanvasStore((state) => state.editorReadOnly);
   const dirty = useCanvasStore((state) => state.dirty);
@@ -378,17 +381,28 @@ function CanvasEditor() {
     sessionRef.current?.update(sessionDocFromKey(sessionDocKey(useCanvasStore.getState().doc)));
   }, [revision, sessionRef]);
 
+  // The Flush of the Canvas being left. The editor is not remounted between
+  // Canvases, and the save writes to the store's open Canvas, so the next
+  // Canvas loads only once that save has landed.
+  const leavingRef = useRef<Promise<unknown>>(Promise.resolve());
+
   useEffect(() => {
-    void loadCanvas(canvasId);
+    let left = false;
+    // A failed Flush stays registered for the next one; the load goes ahead.
+    const load = () => {
+      if (!left) void loadCanvas(canvasId);
+    };
+    void leavingRef.current.then(load, load);
     void loadNotes();
     void loadBooks();
     return () => {
+      left = true;
       // Leaving always Flushes: unsaved content lands before the editor
       // closes. The session stays registered until its save settles, so a
       // close whose save failed is retried by the next Flush.
       const session = sessionRef.current;
-      if (useCanvasStore.getState().current?.id === canvasId) {
-        void session?.flush().finally(() => {
+      if (session && useCanvasStore.getState().current?.id === canvasId) {
+        leavingRef.current = session.flush().finally(() => {
           if (useCanvasStore.getState().current?.id === canvasId) closeCanvas();
         });
       } else {
