@@ -46,6 +46,16 @@ const MISSING_LINE = "This item no longer exists";
  */
 const UNAVAILABLE_LINE = "Not available here";
 
+/** The picture a preview source's card draws, and the muted block it draws without one. */
+const REFERENCE_IMAGE = "canvas-reference-image";
+const REFERENCE_IMAGE_PLACEHOLDER = "canvas-reference-image-placeholder";
+
+/** A preview card with no picture to draw keeps its image slot as the muted placeholder. */
+async function expectImagePlaceholder(card: Locator): Promise<void> {
+  await expect(card.getByTestId(REFERENCE_IMAGE_PLACEHOLDER)).toBeVisible();
+  await expect(card.getByTestId(REFERENCE_IMAGE)).toHaveCount(0);
+}
+
 /** The host's own Canvas Reference sources, in the picker's order; Plugin sources follow them. */
 const HOST_TABS = ["Notes", "Books", "Chapters", "Canvases"];
 
@@ -392,6 +402,11 @@ test.describe("Maps and Documents Canvas References @wf:plugins-canvas-reference
     const card = references(page).last();
     await expect(card).toContainText(MAPS);
     await expect(card).toContainText(MAP_NAME);
+    // Its picture is the Map preview the Maps list shows.
+    await expect(card.getByTestId(REFERENCE_IMAGE)).toHaveAttribute(
+      "src",
+      /^data:image\/svg\+xml,/
+    );
     await capture(page, "canvas-reference-map-card", { around: [card] });
     // The placement is written before the Canvas is loaded afresh.
     await expect(page.getByText("Saved", { exact: true })).toBeVisible();
@@ -431,6 +446,8 @@ test.describe("Maps and Documents Canvas References @wf:plugins-canvas-reference
     await expect(unavailable).toContainText(MAP_NAME);
     await expect(unavailable).toContainText(UNAVAILABLE_LINE);
     await expect(unavailable.getByRole("button", { name: `Open ${MAP_NAME}` })).toBeDisabled();
+    // After a page load nothing registered the source, so the card draws no picture.
+    await expect(unavailable.getByTestId(REFERENCE_IMAGE)).toHaveCount(0);
     await capture(page, "canvas-reference-map-unavailable", { around: [unavailable] });
 
     // Turning it back on resolves the same reference again.
@@ -469,6 +486,7 @@ test.describe("Maps and Documents Canvas References @wf:plugins-canvas-reference
     const missing = references(page).last();
     await expect(missing).toContainText(MAP_NAME);
     await expect(missing).toContainText(MISSING_LINE);
+    await expectImagePlaceholder(missing);
     await capture(page, "canvas-reference-map-missing", { around: [missing] });
   });
 
@@ -558,6 +576,11 @@ test.describe("Maps and Documents Canvas References @wf:plugins-canvas-reference
         .last()
         .getByRole("button", { name: `Open ${DOCUMENT_TITLE}` })
     ).toBeEnabled();
+    // Its picture is the cover the Shelf shows. Reader saves it once the first page
+    // renders, which WebKit may finish only on the second open, through the card.
+    const covered = references(page).last();
+    await expect(covered.getByTestId(REFERENCE_IMAGE)).toHaveAttribute("src", /^data:image\/jpeg/);
+    await capture(page, "canvas-reference-document-cover", { around: [covered] });
 
     // Remove from Shelf forgets the Document, which leaves the card Missing.
     // Tab from Settings never leaves the page in Firefox, so the Shelf opens by URL.
@@ -575,6 +598,7 @@ test.describe("Maps and Documents Canvas References @wf:plugins-canvas-reference
     const missing = references(page).last();
     await expect(missing).toContainText(DOCUMENT_TITLE);
     await expect(missing).toContainText(MISSING_LINE);
+    await expectImagePlaceholder(missing);
     await capture(page, "canvas-reference-document-missing", { around: [missing] });
   });
 });
