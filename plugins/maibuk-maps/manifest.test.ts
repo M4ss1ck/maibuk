@@ -137,6 +137,14 @@ describe("Maps manifest", () => {
     ]);
   });
 
+  it("declares the Maps Canvas Reference source and the API version it needs", () => {
+    const parsed = manifest();
+    expect(parsed.apiVersion).toBe("^0.1.13");
+    expect(parsed.contributes?.canvasReferenceSources).toEqual([
+      { id: "maps", label: "Maps", icon: "map" },
+    ]);
+  });
+
   it("localizes its host-visible strings in English and Spanish", () => {
     const parsed = manifest();
     const contributes = parsed.contributes;
@@ -145,6 +153,9 @@ describe("Maps manifest", () => {
       "description",
       ...(contributes?.commands ?? []).map((command) => `commands.${command.id}.label`),
       ...(contributes?.pages ?? []).map((page) => `pages.${page.id}.title`),
+      ...(contributes?.canvasReferenceSources ?? []).map(
+        (source) => `canvasReferenceSources.${source.id}.label`
+      ),
     ].sort();
     for (const language of ["en", "es"] as const) {
       const locale = readFileSync(join(__dirname, "locales", `${language}.json`), "utf8");

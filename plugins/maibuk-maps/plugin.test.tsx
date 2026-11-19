@@ -28,7 +28,13 @@ import {
   type PluginClient,
   type PluginFrame,
 } from "@/plugin-sdk";
-import { PLUGIN_COMMAND_RUN_REQUEST, PLUGIN_MIGRATE_DATA_REQUEST } from "@/plugin-sdk/protocol";
+import {
+  PLUGIN_CANVAS_REFERENCE_LIST_REQUEST,
+  PLUGIN_CANVAS_REFERENCE_OPEN_REQUEST,
+  PLUGIN_CANVAS_REFERENCE_RESOLVE_REQUEST,
+  PLUGIN_COMMAND_RUN_REQUEST,
+  PLUGIN_MIGRATE_DATA_REQUEST,
+} from "@/plugin-sdk/protocol";
 import { servePluginUi } from "@/plugin-sdk/ui-serve";
 import { DEFAULT_SOFT_EDGE_MM, SOFT_EDGE_STEP_MM, type MapEditor } from "./editor";
 import {
@@ -59,6 +65,7 @@ import {
   MAP_LABEL_FONT_FAMILIES,
   MAX_NAME_LENGTH,
   PAGE_SIZES,
+  createMapStore,
   mapKey,
   newLabel,
   type MapDocument,
@@ -1231,6 +1238,126 @@ describe("Maps Commands and host requests", () => {
         host.broker.request(PLUGIN_MIGRATE_DATA_REQUEST, { from: 1 })
       ).resolves.toBeNull();
       expect([...storage]).toEqual(before);
+    } finally {
+      await host.stop();
+    }
+  });
+});
+
+describe("Maps Canvas Reference source", () => {
+  /** Deletes a Map through the same store the Plugin writes with. */
+  async function removeStoredMap(storage: Map<string, unknown>, id: string): Promise<void> {
+    await createMapStore({
+      get: async ({ key }) => storage.get(key),
+      set: async ({ key, value }) => {
+        storage.set(key, value);
+        return null;
+      },
+      delete: async ({ key }) => {
+        storage.delete(key);
+        return null;
+      },
+    }).remove(id);
+  }
+
+  it("lists every Map, subtitled by its Book's title", async () => {
+    const host = hostFor(seededStorage());
+    try {
+      const result = await host.broker.request(PLUGIN_CANVAS_REFERENCE_LIST_REQUEST, {
+        source: "maps",
+        query: "",
+      });
+      expect(result).toEqual({
+        rows: [
+          { id: "m1", title: "Coast", subtitle: "Tides of Ash" },
+          { id: "m2", title: "Isles", subtitle: "Tides of Ash" },
+          { id: "m3", title: "Loose" },
+        ],
+      });
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("filters rows by name, trimmed and case-insensitive", async () => {
+    const host = hostFor(seededStorage());
+    try {
+      const result = await host.broker.request(PLUGIN_CANVAS_REFERENCE_LIST_REQUEST, {
+        source: "maps",
+        query: "  isLe ",
+      });
+      expect(result).toEqual({ rows: [{ id: "m2", title: "Isles", subtitle: "Tides of Ash" }] });
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("lists a Map without a subtitle when the Library read fails", async () => {
+    const host = createTestHost({
+      manifest: mapsManifest(),
+      library: { books: BOOKS },
+      storage: seededStorage(),
+      permissions: ["editor:write", "files:pick", "files:save"],
+    });
+    startMaps(createPluginClient(host.port), servePluginUi);
+    try {
+      const result = await host.broker.request(PLUGIN_CANVAS_REFERENCE_LIST_REQUEST, {
+        source: "maps",
+        query: "coast",
+      });
+      expect(result).toEqual({ rows: [{ id: "m1", title: "Coast" }] });
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("resolves a present Map and reports a deleted one missing", async () => {
+    const storage = seededStorage();
+    const host = hostFor(storage);
+    try {
+      await expect(
+        host.broker.request(PLUGIN_CANVAS_REFERENCE_RESOLVE_REQUEST, {
+          source: "maps",
+          ids: ["m1", "m3"],
+        })
+      ).resolves.toEqual({
+        m1: { status: "present", title: "Coast", subtitle: "Tides of Ash" },
+        m3: { status: "present", title: "Loose" },
+      });
+
+      await removeStoredMap(storage, "m1");
+      await expect(
+        host.broker.request(PLUGIN_CANVAS_REFERENCE_RESOLVE_REQUEST, {
+          source: "maps",
+          ids: ["m1"],
+        })
+      ).resolves.toEqual({ m1: { status: "missing" } });
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("opens the Map page for a listed Map", async () => {
+    const host = hostFor(seededStorage());
+    try {
+      await expect(
+        host.broker.request(PLUGIN_CANVAS_REFERENCE_OPEN_REQUEST, { source: "maps", id: "m2" })
+      ).resolves.toBe("opened");
+      expect(host.pageNavigations).toContainEqual({ pluginId: "maibuk-maps", pageId: MAP_PAGE_ID });
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("answers missing when the Map is gone", async () => {
+    const storage = seededStorage();
+    const host = hostFor(storage);
+    try {
+      await removeStoredMap(storage, "m2");
+      await expect(
+        host.broker.request(PLUGIN_CANVAS_REFERENCE_OPEN_REQUEST, { source: "maps", id: "m2" })
+      ).resolves.toBe("missing");
+      expect(host.pageNavigations).toEqual([]);
     } finally {
       await host.stop();
     }

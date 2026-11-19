@@ -45,5 +45,6 @@
   "commands.nextMapStyle.label": "Siguiente estilo de mapa",
   "commands.deleteElement.label": "Eliminar elemento",
   "pages.maps.title": "Mapas",
-  "pages.map.title": "Mapa"
+  "pages.map.title": "Mapa",
+  "canvasReferenceSources.maps.label": "Mapas"
 }
