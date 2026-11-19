@@ -1,9 +1,11 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 import { PluginFrameSurface } from "@/components/plugins/PluginFrame";
 import { PluginStoppedPanel } from "@/components/plugins/PluginStoppedPanel";
 import { usePluginFileDrop } from "@/components/plugins/usePluginFileDrop";
+import { Button } from "@/components/ui/Button";
 import { pluginPageCommandBindings, pluginPageCommands } from "@/features/plugins/commands";
 import { getPluginPage, getPluginSidebarEntries } from "@/features/plugins/contributions-registry";
 import { useCommandRegistryRevision } from "@/hooks/useCommandRegistryRevision";
@@ -37,6 +39,8 @@ const PluginRemoteUiBoundary = lazy(() =>
 export function PluginPage() {
   const { t } = useTranslation();
   const { pluginId = "", pageId = "" } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const lifecycle = useInstalledPluginLifecycle();
   const revision = useCommandRegistryRevision();
   const lifecycleRevision = usePluginLifecycleRevision(lifecycle);
@@ -84,6 +88,11 @@ export function PluginPage() {
           (entry) => entry.pluginId === pluginId && entry.pageId === pageId
         )
       : undefined;
+  // A page that opened this one hands back where to return (#786). It is read
+  // from this visit's navigation state, so it lives exactly as long as the
+  // visit does, Back/Forward included.
+  const returnState = location.state as { returnTo?: string; returnLabel?: string } | null;
+  const returnTo = returnState?.returnTo;
   const title = page?.title ?? savedEntry?.title ?? t("plugins.page.notFoundTitle");
   const name = page?.displayName ?? savedEntry?.displayName ?? pluginId;
   const showPanel =
@@ -131,6 +140,19 @@ export function PluginPage() {
         .filter(Boolean)
         .join(" ")}
     >
+      {returnTo !== undefined && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mb-2 self-start shrink-0"
+          onClick={() => navigate(returnTo)}
+        >
+          <ArrowLeft className="size-4" aria-hidden="true" />
+          {returnState?.returnLabel
+            ? t("nav.backTo", { title: returnState.returnLabel })
+            : t("common.back")}
+        </Button>
+      )}
       <h1
         ref={headingRef}
         tabIndex={-1}
