@@ -110,7 +110,7 @@ jobs:
 
           # Keep in sync with forceRerunTriggers in vite.config.ts (issue #853).
           FULL_RUN='(^|/)package\.json$|(^|/)vite\.config\.ts$|(^|/)vitest\.config\.|(^|/)src/test/setup\.ts$|(^|/)src/test/support/|(^|/)pnpm-lock\.yaml$|(^|/)tsconfig[^/]*\.json$|^\.github/workflows/'
-          PLUGIN='^(scripts/plugin/|plugins/|src/plugin-sdk/|src/features/plugins/|templates/plugin/|package\.json$|pnpm-lock\.yaml$|\.github/workflows/)'
+          PLUGIN='^(scripts/plugin/|scripts/build-plugin|src/test/integration/plugin-tooling|plugins/|src/plugin-sdk/|src/features/plugins/|templates/plugin/|package\.json$|pnpm-lock\.yaml$|\.github/workflows/)'
 
           base=""
           case "$EVENT" in
@@ -305,7 +305,7 @@ jobs:
   # Nobody watches the Actions tab, so a red main opens or updates one issue.
   report-failure:
     name: Report a red main
-    needs: [checks, agents-budget, tests, coverage, plugin-tooling]
+    needs: [checks, agents-budget, changes, tests, coverage, plugin-tooling]
     if: ${{ failure() && github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
     permissions:

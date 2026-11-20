@@ -167,7 +167,9 @@ describe("CI workflow", () => {
     expect(report).toContain(
       ["if: $", "{{ failure() && github.event_name != 'pull_request' }}"].join("")
     );
-    expect(report).toContain("needs: [checks, agents-budget, tests, coverage, plugin-tooling]");
+    expect(report).toContain(
+      "needs: [checks, agents-budget, changes, tests, coverage, plugin-tooling]"
+    );
     expect(report).toContain("issues: write");
     expect(report).toContain("--label bug");
   });

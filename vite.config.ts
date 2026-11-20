@@ -192,7 +192,8 @@ export default defineConfig(() => ({
   test: {
     setupFiles: ["./src/test/setup.ts"],
     // A change to any of these makes `vitest --changed` / `vitest related` run
-    // every test. This array replaces the Vitest defaults, so it keeps them.
+    // every test. This array replaces the Vitest defaults, so it lists
+    // package.json and the Vite config itself.
     // Keep in sync with the `FULL_RUN` list in the `changes` job of
     // .github/workflows/ci.yml (issue #853).
     forceRerunTriggers: [
