@@ -305,9 +305,20 @@ export function isVoiceEligible(id: CommandId): boolean {
  */
 const wholeLineCache = new Map<string, string[]>();
 
-// A Plugin Command's labels change with its registration; the cache must not
+/**
+ * The phrases `voiceCommandPhrases` yields, grouped by Command and filled one
+ * language at a time: the Shortcut Editor asks for one Command's phrases per
+ * row, so walking every Command per call would make a render O(rows x
+ * Commands).
+ */
+const defaultPhrasesCache = new Map<DictationLanguage, Map<CommandId, string[]>>();
+
+// A Plugin Command's labels change with its registration; the caches must not
 // serve the previous declaration.
-onCommandRegistryChange(() => wholeLineCache.clear());
+onCommandRegistryChange(() => {
+  wholeLineCache.clear();
+  defaultPhrasesCache.clear();
+});
 
 export function defaultWholeLinePhrases(id: CommandId, language: DictationLanguage): string[] {
   const key = `${id}:${language}`;
@@ -402,16 +413,21 @@ export function voicePhrasePolarity(
 
 /** A Command's default phrases in one language, `verb target`, as the author sees them. */
 export function defaultVoicePhrases(id: CommandId, language: DictationLanguage): string[] {
-  const seen = new Set<string>();
-  const phrases: string[] = [];
-  for (const { id: owner, phrase } of voiceCommandPhrases(language)) {
-    if (owner !== id) continue;
-    const key = phraseWords(phrase).join(" ");
-    if (seen.has(key)) continue;
-    seen.add(key);
-    phrases.push(phrase);
+  let byId = defaultPhrasesCache.get(language);
+  if (byId === undefined) {
+    byId = new Map<CommandId, string[]>();
+    const seen = new Set<string>();
+    for (const { id: owner, phrase } of voiceCommandPhrases(language)) {
+      const key = `${owner}\u0000${phraseWords(phrase).join(" ")}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const phrases = byId.get(owner);
+      if (phrases === undefined) byId.set(owner, [phrase]);
+      else phrases.push(phrase);
+    }
+    defaultPhrasesCache.set(language, byId);
   }
-  return phrases;
+  return [...(byId.get(id) ?? [])];
 }
 
 /** The phrases a Command answers to in one language: the author's list, else the defaults. */

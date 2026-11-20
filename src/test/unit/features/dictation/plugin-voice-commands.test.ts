@@ -92,6 +92,24 @@ describe("Plugin Command Voice Commands", () => {
     expect(defaultVoicePhrases(echoesId, "es")).toEqual(["mostrar informe"]);
   });
 
+  it("does not let a caller mutate the cached default phrases", () => {
+    register("echoes", englishOnly);
+
+    const first = defaultVoicePhrases(echoesId, "en");
+    first.length = 0;
+
+    expect(defaultVoicePhrases(echoesId, "en")).toEqual(["Show report"]);
+  });
+
+  it("returns no phrases for a Plugin Command once it unregisters", () => {
+    register("echoes", englishOnly);
+    expect(defaultVoicePhrases(echoesId, "en")).toEqual(["Show report"]);
+
+    unregisters.pop()?.();
+
+    expect(defaultVoicePhrases(echoesId, "en")).toEqual([]);
+  });
+
   it("routes an English-only Command with a custom Spanish phrase through Dictation", () => {
     register("echoes", englishOnly);
     const custom = { [echoesId]: { es: ["mostrar informe"] } };

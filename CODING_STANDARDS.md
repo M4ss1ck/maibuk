@@ -332,7 +332,7 @@ Rules for this feature:
 
 Any change that adds or modifies interactive UI is **not done** until behavioral keyboard tests exist:
 
-1. **Test behavior, not attributes.** Asserting `tabIndex`, `role`, or `aria-*` values alone is insufficient — such tests have stayed green on widgets that were inoperable by keyboard. Use `@testing-library/user-event` to press the actual keys.
+1. **Test behavior, not attributes.** Asserting `tabIndex`, `role`, or `aria-*` values alone is insufficient — such tests have stayed green on widgets that were inoperable by keyboard. Use `@testing-library/user-event` to press the actual keys. `user.paste` may stand in for typing a search or filter query when the behavior under test is the text, not the typing; keep typing where the widget reacts per key (Autocomplete auto-select, shortcuts).
 2. **Required coverage:**
    - Every user-facing action in the feature is exercised keyboard-only (arrows / Enter / Space / Escape / Tab as appropriate), asserting the resulting state or focus change.
    - Dialogs: Escape closes, and focus returns to the trigger element.

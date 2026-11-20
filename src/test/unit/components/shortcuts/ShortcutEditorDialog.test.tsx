@@ -79,7 +79,7 @@ async function focusRow(user: ReturnType<typeof userEvent.setup>, query: string)
     search.focus();
   });
   await user.clear(search);
-  await user.keyboard(query);
+  await user.paste(query);
   const grid = screen.getByRole("grid");
   // Tab leaves the search field for the filter group, then the grid.
   while (!grid.contains(document.activeElement)) await user.tab();
@@ -105,7 +105,7 @@ async function findDialogTitled(title: string) {
 async function narrowList(user: ReturnType<typeof userEvent.setup>, query: string) {
   const search = screen.getByRole("searchbox");
   await act(async () => search.focus());
-  await user.keyboard(query);
+  await user.paste(query);
 }
 
 /** The live filter toggle; the group also renders an aria-hidden copy it measures. */
@@ -277,11 +277,11 @@ describe("Shortcut Editor", () => {
     expect(grid.textContent ?? "").toContain("C");
 
     await user.clear(screen.getByRole("searchbox"));
-    await user.keyboard("editor.matchWholeWord");
+    await user.paste("editor.matchWholeWord");
     expect(within(screen.getByRole("grid")).getByText("editor.matchWholeWord")).toBeInTheDocument();
 
     await user.clear(screen.getByRole("searchbox"));
-    await user.keyboard("editor.useRegex");
+    await user.paste("editor.useRegex");
     expect(within(screen.getByRole("grid")).getByText("editor.useRegex")).toBeInTheDocument();
   });
 
