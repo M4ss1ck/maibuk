@@ -332,7 +332,9 @@ describe("Settings outline motion", () => {
     // Each reversal starts where that row painted, and the starting heights sum
     // to the space the section occupied: the edge never jumps.
     const starts = reversing.map((call) => Number.parseFloat(String(call.keyframes[0].height)));
-    expect(starts.reduce((total, height) => total + height, 0)).toBeCloseTo(paintedSum, 6);
+    // jsdom rounds computed heights to six significant digits, as browsers do, so
+    // the sums match to 1e-4 px.
+    expect(starts.reduce((total, height) => total + height, 0)).toBeCloseTo(paintedSum, 4);
     expect(reversing.every(onlyHeight)).toBe(true);
     expect(folding.every((call) => call.animation.cancelled)).toBe(true);
   });
@@ -365,7 +367,7 @@ describe("Settings outline motion", () => {
     ]);
     expect(
       reversing.reduce((total, call) => total + Number.parseFloat(startHeight(call) ?? "0"), 0)
-    ).toBeCloseTo(2 * ROW_HEIGHT, 6);
+    ).toBeCloseTo(2 * ROW_HEIGHT, 4);
     expect(reversing[0].keyframes.at(-1)!.height).toBe(`${ROW_HEIGHT}px`);
     expect(reversing.every(onlyHeight)).toBe(true);
     // Half the distance, half the time: a reversal with little left to travel
@@ -404,7 +406,7 @@ describe("Settings outline motion", () => {
     // The edge never jumps: the fold starts at the space the grow had reached.
     const bRows = growing.length;
     const starts = folding.map((call) => Number.parseFloat(startHeight(call) ?? "0"));
-    expect(starts.reduce((total, height) => total + height, 0)).toBeCloseTo(bRows * half, 6);
+    expect(starts.reduce((total, height) => total + height, 0)).toBeCloseTo(bRows * half, 4);
     // About's rows are still not on screen: this fold has to end first.
     expect(rowsOf("about")).toEqual([]);
 

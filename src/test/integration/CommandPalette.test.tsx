@@ -4,6 +4,7 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import { computeAccessibleName } from "dom-accessibility-api";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseAdapter } from "@/lib/platform/types";
+import { deferAnimationFrames } from "@/test/support/animation-frame";
 import { createTestDatabase } from "@/test/support/db-test-context";
 import { mockVirtualizerLayout } from "@/test/support/virtualizer-layout";
 
@@ -888,10 +889,7 @@ describe("Command Palette", () => {
   });
 
   it("runs Bold from the palette on the chapter selection and returns focus to the editor", async () => {
-    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
-      callback(0);
-      return 0;
-    });
+    deferAnimationFrames();
     try {
       const book = await createBookRow({ title: "Format", authorName: "Author" }, "local");
       const chapter = await createChapterRow({ bookId: book.id, title: "Chapter" }, "local");

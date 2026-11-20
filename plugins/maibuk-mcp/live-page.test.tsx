@@ -189,9 +189,12 @@ describe("MCP Server live page", () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(RELATIVE_TICK_MS * 2);
       });
-      const connections = screen.getByRole("table", { name: en.connectionsLabel });
-      expect(within(connections).getByText(relativeLabel(-1, "minute"))).toBeInTheDocument();
-      expect(within(connections).queryByText(relativeLabel(0, "second"))).toBeNull();
+      // The repaint crosses the Remote UI channel, a real task the fake clock does not run.
+      await untilVisible(() => {
+        const connections = screen.getByRole("table", { name: en.connectionsLabel });
+        expect(within(connections).getByText(relativeLabel(-1, "minute"))).toBeInTheDocument();
+        expect(within(connections).queryByText(relativeLabel(0, "second"))).toBeNull();
+      });
 
       // The Plugin's teardown waits on a real task, which a fake clock never runs.
       vi.useRealTimers();

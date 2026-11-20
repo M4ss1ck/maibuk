@@ -1,4 +1,6 @@
 import "@testing-library/jest-dom/vitest";
+import { Blob as NodeBlob } from "node:buffer";
+import { createRequire } from "node:module";
 import { relative } from "node:path";
 import { cleanup, configure } from "@testing-library/react";
 import { afterEach, beforeEach, expect, vi } from "vitest";
@@ -47,6 +49,19 @@ if (typeof window !== "undefined") {
         [Symbol.iterator]: function* () {},
       }) as unknown as DOMRectList;
   }
+
+  // jsdom is pinned exactly: this reads a file it does not export.
+  // Vitest 4 copies a jsdom Blob into a Node Blob for URL.createObjectURL
+  // through an own Symbol("impl") that jsdom 30.1 dropped, so the call throws.
+  // This reads the bytes the way Vitest 5 does; drop it with that upgrade.
+  const { implForWrapper } = createRequire(import.meta.url)("jsdom/lib/generated/idl/utils.js");
+  const nodeCreateObjectURL: (blob: NodeBlob) => string =
+    Object.getPrototypeOf(URL).createObjectURL;
+  const createObjectURL = URL.createObjectURL;
+  URL.createObjectURL = (object) =>
+    object instanceof Blob
+      ? nodeCreateObjectURL(new NodeBlob([implForWrapper(object)._bytes], { type: object.type }))
+      : createObjectURL(object);
 
   // jsdom has no Element.scrollIntoView; revealing a virtualized row calls it
   // from an animation frame, where a missing method throws unhandled. Tests

@@ -17,6 +17,7 @@ import {
   type ToolbarConfig,
 } from "@/features/settings/toolbar-config";
 import { useTutorialStore } from "@/features/tutorial/store";
+import { deferAnimationFrames } from "@/test/support/animation-frame";
 
 vi.mock("@/components/editor/extensions/SpellCheck", async () => {
   const { Extension } = await vi.importActual<typeof import("@tiptap/core")>("@tiptap/core");
@@ -840,6 +841,7 @@ describe("SelectionToolbar with the Font and Line Height fields", () => {
   });
 
   it("keeps the highlight picker's hex field working from the Selection Toolbar", async () => {
+    deferAnimationFrames();
     const user = userEvent.setup();
     const { editor } = mountSelectionToolbar({
       ...DEFAULT_TOOLBAR_CONFIG,
@@ -1077,6 +1079,7 @@ describe("SelectionToolbar keeps the selection visible", () => {
 
 describe("SelectionToolbar Text Color", () => {
   it("colors the selected text from a swatch picked by keyboard", async () => {
+    deferAnimationFrames();
     const user = userEvent.setup();
     const { editor } = mountSelectionToolbar({
       ...DEFAULT_TOOLBAR_CONFIG,

@@ -26,6 +26,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  document.body.replaceChildren();
 });
 
 function withRect(element: HTMLElement, left: number, width: number): HTMLElement {
@@ -71,6 +72,8 @@ function buildLayout({
     lane.appendChild(withRect(child, cursor + margin, width));
     cursor += margin + width + margin;
   });
+
+  document.body.append(root, end, lane);
 
   return { root, end, lane, entryCount: entries.length };
 }

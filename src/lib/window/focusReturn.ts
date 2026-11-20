@@ -37,10 +37,12 @@ export function installFocusReturn(): () => void {
   const onWindowBlur = (event: FocusEvent) => {
     // Only the window's own blur; a control's blur reaches a window listener
     // too. Focus moving into a Plugin's iframe also blurs the window, but the
-    // iframe takes focus in this document first, so its return lands
-    // elsewhere and is left alone.
+    // iframe is this document's active element by then, and it may get no
+    // focus event here, so the iframe is what was left: a return to any other
+    // control is left alone.
     if (event.target instanceof Node) return;
-    leftFrom = lastFocused;
+    leftFrom =
+      document.activeElement instanceof HTMLIFrameElement ? document.activeElement : lastFocused;
   };
   const onUserInput = () => {
     leftFrom = null;
