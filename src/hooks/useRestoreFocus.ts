@@ -7,7 +7,11 @@ import { useEffect, useRef } from "react";
  * dialog, whose opener is already gone): the target wins when it returns one.
  * `getTarget` is read again on close when the element it first returned is
  * gone or disabled, so an action that removes its own row can name the row
- * that survived.
+ * that survived. Pass `getOverlay` to follow React Aria's FocusScope rule:
+ * focus is restored only when it is still inside the closing overlay or has
+ * fallen to <body>, so focus a field took on purpose elsewhere stays there
+ * (#854). A `getOverlay` that returns null contains nothing, which restores
+ * only focus on <body>.
  *
  * The restore runs in a passive effect on purpose. A modal hides the rest of
  * the page while open and lifts that in a passive-effect cleanup; a
@@ -26,7 +30,12 @@ export function useRestoreFocus(
   {
     skipWhenDialogFocused = false,
     getTarget,
-  }: { skipWhenDialogFocused?: boolean; getTarget?: () => HTMLElement | null } = {}
+    getOverlay,
+  }: {
+    skipWhenDialogFocused?: boolean;
+    getTarget?: () => HTMLElement | null;
+    getOverlay?: () => HTMLElement | null;
+  } = {}
 ): void {
   const targetRef = useRef<HTMLElement | null>(null);
   const wasOpenRef = useRef(false);
@@ -35,6 +44,8 @@ export function useRestoreFocus(
   skipRef.current = skipWhenDialogFocused;
   const getTargetRef = useRef(getTarget);
   getTargetRef.current = getTarget;
+  const getOverlayRef = useRef(getOverlay);
+  getOverlayRef.current = getOverlay;
 
   if (isOpen && !wasOpenRef.current && typeof document !== "undefined") {
     const provided = getTargetRef.current?.() ?? null;
@@ -64,6 +75,16 @@ export function useRestoreFocus(
     if (!canTakeFocus(target)) return;
     // Another dialog took focus meanwhile; leave it there.
     if (skipRef.current && document.activeElement?.closest?.('[role="dialog"]')) return;
+    // React Aria's FocusScope rule: restore only focus the overlay still holds
+    // or focus that fell to <body>. Focus that moved outside on purpose, such
+    // as a field with autoFocus, stays put (#854).
+    if (getOverlayRef.current) {
+      const overlay = getOverlayRef.current();
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && active !== document.body && !overlay?.contains(active)) {
+        return;
+      }
+    }
     // The page did not move under the overlay, so neither should focus.
     // Focusing a tall editor otherwise scrolls it to the top, and ProseMirror
     // then scrolls the caret back in from below.

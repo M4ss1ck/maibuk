@@ -153,6 +153,39 @@ function HandoffHarness() {
   );
 }
 
+/**
+ * A non-modal overlay that stays mounted while it closes, as a Popover does
+ * through its exit animation, so the hook can still see it when the close
+ * commit runs. Escape closes it without moving focus, which leaves focus where
+ * the test put it. Models the host's Plugin Popover (#854).
+ */
+function ClosingPopoverHarness() {
+  const [isOpen, setIsOpen] = useState(false);
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  useRestoreFocus(isOpen, { getOverlay: () => overlayRef.current });
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  return (
+    <>
+      <button type="button" onClick={() => setIsOpen(true)}>
+        Open
+      </button>
+      <div ref={overlayRef} role="dialog" aria-label="Overlay">
+        <button type="button">Inside</button>
+      </div>
+      <button type="button">Field</button>
+    </>
+  );
+}
+
 describe("useRestoreFocus", () => {
   it("restores focus to an explicit target instead of the element that opened the dialog", async () => {
     const user = userEvent.setup();
@@ -240,5 +273,50 @@ describe("useRestoreFocus", () => {
     await user.keyboard("{Enter}");
 
     expect(trigger).toHaveFocus();
+  });
+
+  // The field mounts with autoFocus and the overlay closes on a later render,
+  // so the restore runs after focus moved out on purpose (#854).
+  it("keeps focus a field outside the closing overlay took", async () => {
+    const user = userEvent.setup();
+    render(<ClosingPopoverHarness />);
+    const trigger = screen.getByRole("button", { name: "Open" });
+    const field = screen.getByRole("button", { name: "Field" });
+
+    await user.tab();
+    expect(trigger).toHaveFocus();
+    await user.keyboard("{Enter}");
+    field.focus();
+    await user.keyboard("{Escape}");
+
+    expect(field).toHaveFocus();
+    expect(trigger).not.toHaveFocus();
+  });
+
+  it("restores focus the closing overlay still holds", async () => {
+    const user = userEvent.setup();
+    render(<ClosingPopoverHarness />);
+    const inside = screen.getByRole("button", { name: "Inside" });
+
+    await user.tab();
+    await user.keyboard("{Enter}");
+    inside.focus();
+    expect(inside).toHaveFocus();
+    await user.keyboard("{Escape}");
+
+    expect(screen.getByRole("button", { name: "Open" })).toHaveFocus();
+  });
+
+  it("restores focus that fell to the body when the overlay closes", async () => {
+    const user = userEvent.setup();
+    render(<ClosingPopoverHarness />);
+
+    await user.tab();
+    await user.keyboard("{Enter}");
+    (document.activeElement as HTMLElement | null)?.blur();
+    expect(document.activeElement).toBe(document.body);
+    await user.keyboard("{Escape}");
+
+    expect(screen.getByRole("button", { name: "Open" })).toHaveFocus();
   });
 });
