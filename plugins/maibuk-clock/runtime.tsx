@@ -6,12 +6,12 @@
  * into jsdom. Imports only `@/plugin-sdk` (and its subpaths) and its own files.
  *
  * The page draws the four tabs its glossary names. The Timer tab holds the
- * live Timer, the Pomodoro tab the Cycle, and the Stopwatch tab the Stopwatch;
- * the Alarms tab's panel is empty until its own ticket fills it, so it says it
- * is coming soon. The Timer tab is selected first, and the selected tab is
- * page-local state. The page owns the Timer's, the Cycle's, and the Stopwatch's
- * subscriptions and its once-a-second redraw, so its polite live region speaks
- * from below the tabs on every tab, not only the Timer's.
+ * live Timer, the Pomodoro tab the Cycle, the Stopwatch tab the Stopwatch, and
+ * the Alarms tab the Alarms and the form that adds or edits one. The Timer tab
+ * is selected first, and the selected tab is page-local state. The page owns
+ * the Timer's, the Cycle's, the Stopwatch's, and the Alarms' subscriptions and
+ * its once-a-second redraw, so its polite live region speaks from below the
+ * tabs on every tab, not only the Timer's.
  */
 
 import { useEffect, useState, type ComponentType } from "react";
@@ -22,6 +22,7 @@ import {
   type PluginClient,
 } from "@/plugin-sdk";
 import { translate, type ClockKey } from "./i18n";
+import { createAlarms, type Alarm, type AlarmInput, type ClockAlarms } from "./alarms";
 import { createPomodoro, type ClockPomodoro, type PomodoroSnapshot } from "./pomodoro";
 import { remainingCycleMs, todayCount } from "./cycle";
 import { createStopwatch, type ClockStopwatch } from "./stopwatch";
@@ -32,6 +33,7 @@ import {
   formatElapsed,
   hourCycleFor,
   joinDuration,
+  localOffsetAt,
   MS_PER_MINUTE,
   remainingMs,
   splitDuration,
@@ -107,13 +109,14 @@ async function reportMissed(client: PluginClient, sentences: readonly string[]):
 
 /**
  * Wires the client to the Clock page and the Command handlers. The Timer, the
- * Pomodoro, and the Stopwatch are created here and live for the Plugin's
- * lifetime, so a Command run and a page mount act on the same ones.
+ * Pomodoro, the Stopwatch, and the Alarms are created here and live for the
+ * Plugin's lifetime, so a Command run and a page mount act on the same ones.
  */
 export function startClock(client: PluginClient, serve: ClockServe): Promise<void> {
   const timer = createTimer(client);
   const pomodoro = createPomodoro(client);
   const stopwatch = createStopwatch(client);
+  const alarms = createAlarms(client);
   // The Toggle Button shows whether a phase runs: every change to the Cycle is
   // mirrored onto it, only when the pressed value moves, and never loudly.
   let buttonPressed: boolean | null = null;
@@ -137,6 +140,7 @@ export function startClock(client: PluginClient, serve: ClockServe): Promise<voi
     }
     timer.setLanguage(language);
     pomodoro.setLanguage(language);
+    alarms.setLanguage(language);
     const missed: string[] = [];
     const timerEndedAt = await timer.load();
     if (timerEndedAt !== null) {
@@ -153,6 +157,13 @@ export function startClock(client: PluginClient, serve: ClockServe): Promise<voi
     }
     // A Stopwatch never ends on its own, so load reports no missed end.
     await stopwatch.load();
+    // An Alarm missed while Maibuk was closed joins the one toast, in the same
+    // 12/24-hour form its own Alert names the time; load has turned a one-off
+    // Alarm off and moved a repeating one on.
+    const missedAlarms = await alarms.load();
+    for (const missedAlarm of missedAlarms) {
+      missed.push(missedSentence(language, "alarmMissed", missedAlarm.at));
+    }
     if (missed.length === 0) return;
     try {
       await reportMissed(client, missed);
@@ -166,10 +177,11 @@ export function startClock(client: PluginClient, serve: ClockServe): Promise<voi
     .on("language.changed", (payload) => {
       timer.setLanguage(payload.language);
       pomodoro.setLanguage(payload.language);
+      alarms.setLanguage(payload.language);
     })
     .catch(() => {});
   serve(client, {
-    pages: { [CLOCK_PAGE_ID]: createClockPage(client, timer, pomodoro, stopwatch) },
+    pages: { [CLOCK_PAGE_ID]: createClockPage(client, timer, pomodoro, stopwatch, alarms) },
     settingsRows: { [POMODORO_SETTINGS_ROW_ID]: createPomodoroSettings(client, pomodoro) },
     onHostRequest: (method, params) =>
       handleHostRequest(client, timer, pomodoro, stopwatch, method, params),
@@ -551,6 +563,212 @@ function StopwatchPanel({ stopwatch, language, state, now }: StopwatchPanelProps
   );
 }
 
+/** The weekdays the Alarms store and the panel lists, Sunday through Saturday. */
+const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6] as const;
+
+/** Each weekday's short name in the runtime catalogs. */
+const WEEKDAY_KEYS: Readonly<Record<number, ClockKey>> = {
+  0: "weekdaySun",
+  1: "weekdayMon",
+  2: "weekdayTue",
+  3: "weekdayWed",
+  4: "weekdayThu",
+  5: "weekdayFri",
+  6: "weekdaySat",
+};
+
+/** An Alarm's time of day on the device's clock, in the language's 12- or 24-hour cycle. */
+function alarmClockTime(hour: number, minute: number, language: string): string {
+  const at = new Date(2000, 0, 1, hour, minute).getTime();
+  return formatClockTime(at, localOffsetAt(at), hourCycleFor(language));
+}
+
+/** The weekdays an Alarm repeats on, short and Sunday first, or the word for a one-off. */
+function alarmRepeat(alarm: Alarm, language: string): string {
+  if (alarm.weekdays.length === 0) return translate(language, "repeatOnce");
+  return WEEKDAYS.filter((day) => alarm.weekdays.includes(day))
+    .map((day) => translate(language, WEEKDAY_KEYS[day]))
+    .join(", ");
+}
+
+/** What the add or edit form holds until its Save writes it to the Alarms. */
+interface AlarmDraft {
+  /** The Alarm being edited, or null while adding one. */
+  id: string | null;
+  hour: number;
+  minute: number;
+  label: string;
+  weekdays: number[];
+}
+
+/** The fields a new Alarm's form opens with: the current time, no label, no weekday. */
+function newDraft(): AlarmDraft {
+  const local = new Date();
+  return {
+    id: null,
+    hour: local.getHours(),
+    minute: local.getMinutes(),
+    label: "",
+    weekdays: [],
+  };
+}
+
+/** The fields an existing Alarm's form opens with. */
+function draftOf(alarm: Alarm): AlarmDraft {
+  return {
+    id: alarm.id,
+    hour: alarm.hour,
+    minute: alarm.minute,
+    label: alarm.label,
+    weekdays: [...alarm.weekdays],
+  };
+}
+
+interface AlarmsPanelProps {
+  alarms: ClockAlarms;
+  language: string;
+  list: readonly Alarm[];
+}
+
+/**
+ * The Alarms tab. It draws every Alarm with its time, label, and weekdays, the
+ * switch that turns it on or off, and the buttons that edit or delete it. The
+ * form the add and edit buttons open is a Modal, so Escape, its Cancel button,
+ * and its Save button all return focus to the button that opened it. The page
+ * owns the Alarms' subscription, so this panel holds no list of its own.
+ */
+function AlarmsPanel({ alarms, language, list }: AlarmsPanelProps) {
+  const [draft, setDraft] = useState<AlarmDraft | null>(null);
+
+  const update = (change: Partial<AlarmDraft>) => {
+    setDraft((current) => (current === null ? current : { ...current, ...change }));
+  };
+
+  const toggleWeekday = (day: number, selected: boolean) => {
+    setDraft((current) =>
+      current === null
+        ? current
+        : {
+            ...current,
+            weekdays: selected
+              ? [...current.weekdays.filter((value) => value !== day), day]
+              : current.weekdays.filter((value) => value !== day),
+          }
+    );
+  };
+
+  const save = () => {
+    if (draft === null) return;
+    const input: AlarmInput = {
+      hour: draft.hour,
+      minute: draft.minute,
+      label: draft.label,
+      weekdays: WEEKDAYS.filter((day) => draft.weekdays.includes(day)),
+    };
+    if (draft.id === null) alarms.add(input);
+    else alarms.edit(draft.id, input);
+    setDraft(null);
+  };
+
+  return (
+    <ui.View direction="column" gap="md">
+      {list.length === 0 ? <ui.Text tone="muted">{translate(language, "noAlarms")}</ui.Text> : null}
+      {list.map((alarm) => {
+        const time = alarmClockTime(alarm.hour, alarm.minute, language);
+        return (
+          <ui.View key={alarm.id} direction="column" gap="sm">
+            <ui.View direction="row" gap="sm" align="center" wrap>
+              <ui.Text size="lg" weight="semibold">
+                {time}
+              </ui.Text>
+              {alarm.label === "" ? null : <ui.Text>{alarm.label}</ui.Text>}
+              <ui.Text tone="muted">{alarmRepeat(alarm, language)}</ui.Text>
+            </ui.View>
+            <ui.View direction="row" gap="sm" align="center" wrap>
+              <ui.Switch
+                label={translate(language, "alarmSwitch").replace("{time}", time)}
+                isSelected={alarm.enabled}
+                onChange={(event) => alarms.setEnabled(alarm.id, event.detail)}
+              />
+              <ui.Button variant="secondary" onPress={() => setDraft(draftOf(alarm))}>
+                {translate(language, "editAlarm").replace("{time}", time)}
+              </ui.Button>
+              <ui.Button variant="destructive" onPress={() => alarms.remove(alarm.id)}>
+                {translate(language, "deleteAlarm").replace("{time}", time)}
+              </ui.Button>
+            </ui.View>
+          </ui.View>
+        );
+      })}
+
+      <ui.View direction="row" gap="sm">
+        <ui.Button variant="primary" onPress={() => setDraft(newDraft())}>
+          {translate(language, "addAlarm")}
+        </ui.Button>
+      </ui.View>
+
+      <ui.Modal
+        title={
+          draft === null || draft.id === null
+            ? translate(language, "addAlarm")
+            : translate(language, "alarm")
+        }
+        isOpen={draft !== null}
+        onOpenChange={(event) => {
+          if (!event.detail) setDraft(null);
+        }}
+      >
+        {draft === null ? null : (
+          <ui.View direction="column" gap="sm">
+            <ui.View direction="row" gap="sm" align="end">
+              <ui.NumberField
+                label={translate(language, "hour")}
+                value={draft.hour}
+                minValue={0}
+                maxValue={23}
+                step={1}
+                onChange={(event) => update({ hour: event.detail })}
+              />
+              <ui.NumberField
+                label={translate(language, "minute")}
+                value={draft.minute}
+                minValue={0}
+                maxValue={59}
+                step={1}
+                onChange={(event) => update({ minute: event.detail })}
+              />
+            </ui.View>
+            <ui.TextField
+              label={translate(language, "alarmLabel")}
+              value={draft.label}
+              autoFocus
+              onInput={(event) => update({ label: event.detail })}
+            />
+            <ui.View direction="row" gap="sm" wrap>
+              {WEEKDAYS.map((day) => (
+                <ui.Checkbox
+                  key={day}
+                  label={translate(language, WEEKDAY_KEYS[day])}
+                  isSelected={draft.weekdays.includes(day)}
+                  onChange={(event) => toggleWeekday(day, event.detail)}
+                />
+              ))}
+            </ui.View>
+            <ui.View direction="row" gap="sm">
+              <ui.Button variant="primary" onPress={save}>
+                {translate(language, "saveAlarm")}
+              </ui.Button>
+              <ui.Button variant="secondary" onPress={() => setDraft(null)}>
+                {translate(language, "cancel")}
+              </ui.Button>
+            </ui.View>
+          </ui.View>
+        )}
+      </ui.Modal>
+    </ui.View>
+  );
+}
+
 /**
  * The `pomodoro` Settings row's body: the three lengths, the count before a Long
  * Break, and the two auto-start switches. Each change is written straight to
@@ -622,16 +840,16 @@ function createPomodoroSettings(client: PluginClient, pomodoro: ClockPomodoro): 
 
 /**
  * The Clock page: a heading and the four tabs, the Timer's selected first. The
- * page owns the Timer's, the Cycle's, and the Stopwatch's state, so the polite
- * live region sits below the tabs and speaks the same on every one of them. The
- * Timer, Pomodoro, and Stopwatch tabs draw their panels; the Alarms tab says it
- * is coming soon until its own ticket replaces it.
+ * page owns the Timer's, the Cycle's, the Stopwatch's, and the Alarms' state, so
+ * the polite live region sits below the tabs and speaks the same on every one of
+ * them. Each tab draws its own panel.
  */
 function createClockPage(
   client: PluginClient,
   timer: ClockTimer,
   pomodoro: ClockPomodoro,
-  stopwatch: ClockStopwatch
+  stopwatch: ClockStopwatch,
+  alarms: ClockAlarms
 ): ComponentType {
   function ClockPage() {
     const language = useLanguage(client);
@@ -641,6 +859,7 @@ function createClockPage(
     const [stopwatchSnapshot, setStopwatchSnapshot] = useState<StopwatchState>(() =>
       stopwatch.snapshot()
     );
+    const [alarmList, setAlarmList] = useState<Alarm[]>(() => alarms.snapshot());
     const [now, setNow] = useState(() => Date.now());
     const items = TABS.map((key) => ({
       value: key,
@@ -675,6 +894,14 @@ function createClockPage(
       sync();
       return stopwatch.subscribe(sync);
     }, [stopwatch]);
+
+    // The Alarms are not clocked by the page's redraw: their own list is what
+    // changes when one is added, edited, switched, or deleted.
+    useEffect(() => {
+      const sync = () => setAlarmList(alarms.snapshot());
+      sync();
+      return alarms.subscribe(sync);
+    }, [alarms]);
 
     // The redraw exists only while the page is mounted and a phase or the
     // Stopwatch runs, or while the Pomodoro tab shows today's count, which
@@ -726,10 +953,7 @@ function createClockPage(
               now={now}
             />
           ) : (
-            <ui.EmptyState
-              title={translate(language, tab)}
-              description={translate(language, "comingSoon")}
-            />
+            <AlarmsPanel alarms={alarms} language={language} list={alarmList} />
           )}
         </ui.Tabs>
         {announcement === "" ? null : <ui.Status tone="info">{announcement}</ui.Status>}
