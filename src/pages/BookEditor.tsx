@@ -187,6 +187,15 @@ function TitleBarAction({ label, icon, showLabel, onPress, tutorialId }: TitleBa
   );
 }
 
+/**
+ * Focus the mobile chapters drawer from the frame after it opens. The drawer
+ * can close before that frame runs; its `inert` attribute then says so, and the
+ * focus restored to the trigger stays put.
+ */
+function focusOpenMobileChapters(pane: HTMLElement | null) {
+  if (pane && !pane.hasAttribute("inert")) pane.focus();
+}
+
 export function BookEditor() {
   const { t } = useTranslation();
   const { bookId } = useParams<{ bookId: string }>();
@@ -391,7 +400,7 @@ export function BookEditor() {
     if (isMobile) {
       setShowMobileChapters(true);
       requestAnimationFrame(() => {
-        mobilePaneRef.current?.focus();
+        focusOpenMobileChapters(mobilePaneRef.current);
       });
     } else {
       if (!showSidebarRef.current) {
@@ -1062,7 +1071,7 @@ export function BookEditor() {
                     setShowMobileMenu(false);
                     setShowMobileChapters(true);
                     requestAnimationFrame(() => {
-                      mobilePaneRef.current?.focus();
+                      focusOpenMobileChapters(mobilePaneRef.current);
                     });
                   }}
                   className="md:hidden p-2 hover:bg-muted rounded transition-colors"
