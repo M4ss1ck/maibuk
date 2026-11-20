@@ -1,0 +1,6 @@
+{
+  "name": "Reloj",
+  "commands.openClock.label": "Abrir Reloj",
+  "commands.toggleTimer.label": "Iniciar o pausar el temporizador",
+  "pages.clock.title": "Reloj"
+}

@@ -123,6 +123,7 @@ describe("buildBuiltInPlugins()", () => {
       "maibuk-mcp",
       "maibuk-reader",
       "maibuk-maps",
+      "maibuk-clock",
     ]);
 
     await buildBuiltInPlugins({
@@ -132,15 +133,23 @@ describe("buildBuiltInPlugins()", () => {
       target: "web",
     });
 
-    // maibuk-mcp lists only "desktop", so the web build ships Echoes, Reader, and Maps.
+    // maibuk-mcp lists only "desktop", so the web build ships Echoes, Reader,
+    // Maps, and Clock.
     const names = readdirSync(outRoot);
-    expect(names.sort()).toEqual(["index.json", "maibuk-echoes", "maibuk-maps", "maibuk-reader"]);
+    expect(names.sort()).toEqual([
+      "index.json",
+      "maibuk-clock",
+      "maibuk-echoes",
+      "maibuk-maps",
+      "maibuk-reader",
+    ]);
     expect(names).not.toContain("sample-builtin");
     expect(names).not.toContain("remote-ui");
     expect(readIndex(outRoot).plugins.map((plugin) => plugin.id)).toEqual([
       "maibuk-echoes",
       "maibuk-reader",
       "maibuk-maps",
+      "maibuk-clock",
     ]);
   });
 });
