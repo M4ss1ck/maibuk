@@ -51,8 +51,12 @@ const drawnElements = (page: Page) => mapFrame(page).locator("g[data-element-id]
 const PAGE_CENTRE_MM: readonly [number, number] = [114.3, 76.2];
 const RECTANGLE_LEFT_MM = PAGE_CENTRE_MM[0] - 20;
 const RECTANGLE_TOP_MM = PAGE_CENTRE_MM[1] - 20;
-/** The middle of the placed Rectangle's left side: a point on its ink. */
-const RECTANGLE_EDGE_MM: readonly [number, number] = [RECTANGLE_LEFT_MM, PAGE_CENTRE_MM[1]];
+/**
+ * A point on the placed Rectangle's left side, a quarter of the way down: a
+ * point on its ink clear of the transform handles (#797), where the middle of
+ * the side is the west resize handle of a selected Rectangle.
+ */
+const RECTANGLE_EDGE_MM: readonly [number, number] = [RECTANGLE_LEFT_MM, PAGE_CENTRE_MM[1] - 10];
 
 /** Opens Maps from the sidebar, waiting for the Plugin's launch scan. */
 async function openMaps(page: Page): Promise<void> {
@@ -191,7 +195,11 @@ test.describe("Maps Select drag @wf:plugins-maps-move @sc:plugin.maibuk-maps.sel
     // The release commits the move, and the Fill follows its Rectangle.
     await expectTopLeft(linePath(page), [RECTANGLE_LEFT_MM + 30, RECTANGLE_TOP_MM + 10]);
     await expectTopLeft(fillPath(page), [RECTANGLE_LEFT_MM + 30, RECTANGLE_TOP_MM + 10]);
-    await expect(mapFrame(page).locator("g[data-dragging], g[transform]")).toHaveCount(0);
+    // Only drawn Elements let go of their transform: the selection's transform
+    // box (#797) keeps its own, so it is left out of the claim.
+    await expect(
+      mapFrame(page).locator("g[data-element-id][data-dragging], g[data-element-id][transform]")
+    ).toHaveCount(0);
     await capture(page, "maps-move-done");
 
     // The whole drag is one undo step, the Fill's move included.
