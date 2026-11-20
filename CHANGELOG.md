@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.1] - 2026-11-20
+
+### Changed
+- Improve Shortcut Editor rendering performance by caching default voice phrases per language
+
+### Fixed
+- Prevent focus from being pulled into a closed mobile chapters drawer when it is dismissed during opening
+- Preserve correct focus behavior when moving between the app window and Plugin iframes
+- Keep focus on Plugin fields that take focus while a Remote UI popover is closing
+
 ## [0.24.0] - 2026-11-19
 
 ### Added
