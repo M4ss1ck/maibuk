@@ -709,9 +709,13 @@ export function pickedTool(name: string): HTMLElement {
   return screen.getByRole("button", { name });
 }
 
-/** Opens the Layers card, which starts shut (#778), and waits for the list. */
-export async function openLayers(user: User): Promise<void> {
-  const toggle = await screen.findByRole("button", { name: en["chrome.layers"] });
+/**
+ * Opens the Layers card, which starts shut (#778), and waits for the list. A
+ * page in another language passes its own label: the English one is there only
+ * until the page's first render in that language lands.
+ */
+export async function openLayers(user: User, label = en["chrome.layers"]): Promise<void> {
+  const toggle = await screen.findByRole("button", { name: label });
   if (toggle.getAttribute("aria-pressed") === "false") {
     await tabTo(user, toggle, 120);
     await user.keyboard("{Enter}");

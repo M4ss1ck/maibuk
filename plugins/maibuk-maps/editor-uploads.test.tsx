@@ -213,7 +213,7 @@ describe("Map editor uploads (#756)", () => {
         // The Map holds the picture the row describes, and the row's kind names
         // the Element, instead of leaving the author with its flags alone (#756).
         expect(runtime.editor?.getSnapshot().elements[0]?.kind).toBe("image");
-        await openLayers(userEvent.setup({ delay: null }));
+        await openLayers(userEvent.setup({ delay: null }), catalog["chrome.layers"]);
         await waitFor(() =>
           expect(screen.getByRole("list")).toHaveTextContent(catalog["element.kind.image"])
         );
