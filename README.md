@@ -139,7 +139,11 @@ details.
 
 #### Prerequisites
 
-- [Node.js](https://nodejs.org/) 22.13 or higher
+- [Node.js](https://nodejs.org/) 26, as pinned in `.node-version` (fnm, mise,
+  nodenv, and `actions/setup-node` read it). pnpm also downloads the lockfile's
+  Node 26 for every script (`devEngines.runtime` in `package.json`), so
+  `pnpm test` and `pnpm dev` run on Node 26 even when the shell's `node` is
+  another version.
 - [pnpm](https://pnpm.io/) 11.8.0, as pinned in `package.json`
 
 For native development, also install:
