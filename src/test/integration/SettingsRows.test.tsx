@@ -242,8 +242,9 @@ describe("Settings rows", () => {
       if (html.closest("[data-settings-navigation]")) continue;
       // Section disclosure toggles are not settings controls.
       if (html.matches("button[aria-expanded]") && !html.closest("[data-settings-row]")) continue;
-      if (computeAccessibleName(html) === "") continue;
-      if (!html.closest("[data-settings-row]")) {
+      if (html.closest("[data-settings-row]")) continue;
+      // Naming walks computed styles, so only controls outside a row pay for it.
+      if (computeAccessibleName(html) !== "") {
         orphans.push(
           `${html.tagName.toLowerCase()}[${[...html.attributes].map((a) => a.name).join(",")}]`
         );
