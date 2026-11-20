@@ -188,6 +188,9 @@ async function pickLineStyle(page: Page, option: string): Promise<void> {
   await pressUntilFocused(page, "ArrowDown", item, { max: 10 });
   await page.keyboard.press("Enter");
   await expect(trigger).toHaveText(option);
+  // The Select hands focus back to its trigger once the list closes, which
+  // WebKit does a moment later, so the next Tab walk must start from there.
+  await expect(trigger).toBeFocused();
 }
 
 /** The `d` attribute a drawn Element's first path has now. */
