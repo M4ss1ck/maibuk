@@ -1,7 +1,8 @@
 /**
- * The Timer's arithmetic, pure and clockless. `now` (epoch milliseconds) and the
- * time zone offset are always arguments, so the module never reads the device
- * clock and never reaches for `Intl`, which the Android engine lacks.
+ * The Timer's and Stopwatch's arithmetic, pure and clockless. `now` (epoch
+ * milliseconds) and the time zone offset are always arguments, so the module
+ * never reads the device clock and never reaches for `Intl`, which the Android
+ * engine lacks.
  */
 
 /** A countdown from a length the author sets, as the Timer stores it. */
@@ -84,19 +85,92 @@ function pad2(value: number): string {
   return value < 10 ? `0${value}` : `${value}`;
 }
 
+/** One Lap of a Stopwatch: its own stretch, and the Stopwatch time when it was marked. */
+export interface Lap {
+  length: number;
+  total: number;
+}
+
+/**
+ * A Stopwatch as the plugin stores it. Time is always worked out from
+ * `startedAt` and `banked`, never stored as a count that ticks.
+ */
+export type StopwatchState =
+  | { status: "idle" }
+  | { status: "running"; startedAt: number; banked: number; laps: Lap[] }
+  | { status: "paused"; banked: number; laps: Lap[] };
+
+/** Starts an idle Stopwatch from zero, and resumes a paused one with its banked time and Laps. */
+export function startStopwatch(state: StopwatchState, now: number): StopwatchState {
+  if (state.status === "running") return state;
+  const banked = state.status === "paused" ? state.banked : 0;
+  const laps = state.status === "paused" ? state.laps : [];
+  return { status: "running", startedAt: now, banked, laps };
+}
+
+/** Banks the running stretch; every other status already holds still. */
+export function pauseStopwatch(state: StopwatchState, now: number): StopwatchState {
+  if (state.status !== "running") return state;
+  return {
+    status: "paused",
+    banked: state.banked + Math.max(0, now - state.startedAt),
+    laps: state.laps,
+  };
+}
+
+/** Returns a fresh idle Stopwatch, dropping its Laps. */
+export function resetStopwatch(): StopwatchState {
+  return { status: "idle" };
+}
+
+/** How long a Stopwatch has run at `now`; a clock moved backwards never makes it shrink. */
+export function elapsedMs(state: StopwatchState, now: number): number {
+  switch (state.status) {
+    case "running":
+      return state.banked + Math.max(0, now - state.startedAt);
+    case "paused":
+      return state.banked;
+    case "idle":
+      return 0;
+  }
+}
+
+/**
+ * Records a Lap of a running Stopwatch, counting only the time since the last
+ * one; idle and paused Stopwatches hold still. Never mutates the state.
+ */
+export function markLap(state: StopwatchState, now: number): StopwatchState {
+  if (state.status !== "running") return state;
+  const total = elapsedMs(state, now);
+  const last = state.laps[state.laps.length - 1];
+  return { ...state, laps: [...state.laps, { length: total - (last ? last.total : 0), total }] };
+}
+
+/**
+ * "m:ss" under an hour, "h:mm:ss" from an hour, rounded down so a Stopwatch
+ * never reads 0:01 while under a second has passed.
+ */
+export function formatElapsed(ms: number): string {
+  return formatWholeSeconds(Math.floor(ms / MS_PER_SECOND));
+}
+
 /** Rounds up to the whole second, so a Timer never shows 0:00 while it still runs. */
 function ceilSeconds(ms: number): number {
   return Math.ceil(ms / MS_PER_SECOND);
 }
 
-/** "m:ss" under an hour, "h:mm:ss" from an hour. */
-export function formatDuration(ms: number): string {
-  const total = ceilSeconds(ms);
+/** "m:ss" under an hour, "h:mm:ss" from an hour, from a count of whole seconds. */
+function formatWholeSeconds(total: number): string {
   const seconds = total % SECONDS_PER_MINUTE;
   const minutes = Math.floor(total / SECONDS_PER_MINUTE) % MINUTES_PER_HOUR;
   const hours = Math.floor(total / SECONDS_PER_HOUR);
   if (hours === 0) return `${minutes}:${pad2(seconds)}`;
   return `${hours}:${pad2(minutes)}:${pad2(seconds)}`;
+}
+
+/** "m:ss" under an hour, "h:mm:ss" from an hour. */
+export function formatDuration(ms: number): string {
+  return formatWholeSeconds(ceilSeconds(ms));
 }
 
 export interface DurationParts {

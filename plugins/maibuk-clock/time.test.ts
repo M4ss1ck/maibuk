@@ -1,17 +1,24 @@
 import { describe, expect, it } from "vitest";
 import {
   addRecentLength,
+  elapsedMs,
   formatClockTime,
   formatDuration,
+  formatElapsed,
   hourCycleFor,
   joinDuration,
+  markLap,
+  pauseStopwatch,
   pauseTimer,
   reconcileTimer,
   remainingMs,
+  resetStopwatch,
   resetTimer,
   setTimerLength,
   splitDuration,
+  startStopwatch,
   startTimer,
+  type StopwatchState,
   type TimerState,
 } from "./time";
 
@@ -295,5 +302,144 @@ describe("addRecentLength()", () => {
       5 * MINUTE,
       MINUTE,
     ]);
+  });
+});
+
+describe("startStopwatch()", () => {
+  it("starts an idle stopwatch from zero", () => {
+    expect(startStopwatch({ status: "idle" }, 1_000)).toEqual({
+      status: "running",
+      startedAt: 1_000,
+      banked: 0,
+      laps: [],
+    });
+  });
+
+  it("resumes a paused stopwatch with its banked time and laps", () => {
+    const laps = [{ length: 10_000, total: 10_000 }];
+    expect(startStopwatch({ status: "paused", banked: 10_000, laps }, 60_000)).toEqual({
+      status: "running",
+      startedAt: 60_000,
+      banked: 10_000,
+      laps,
+    });
+  });
+
+  it("leaves a running stopwatch alone", () => {
+    const running: StopwatchState = { status: "running", startedAt: 1_000, banked: 0, laps: [] };
+    expect(startStopwatch(running, 90_000)).toBe(running);
+  });
+});
+
+describe("pauseStopwatch()", () => {
+  it("banks the running stretch", () => {
+    expect(
+      pauseStopwatch({ status: "running", startedAt: 1_000, banked: 5_000, laps: [] }, 11_000)
+    ).toEqual({ status: "paused", banked: 15_000, laps: [] });
+  });
+
+  it("keeps banked time exact across a pause and a resume", () => {
+    const running = startStopwatch({ status: "idle" }, 0);
+    const paused = pauseStopwatch(running, 10_000);
+    const resumed = startStopwatch(paused, MINUTE);
+    expect(elapsedMs(resumed, 65_000)).toBe(15_000);
+  });
+
+  it("never banks a backwards stretch", () => {
+    expect(
+      pauseStopwatch({ status: "running", startedAt: 10_000, banked: 5_000, laps: [] }, 5_000)
+    ).toEqual({ status: "paused", banked: 5_000, laps: [] });
+  });
+
+  it("leaves idle and paused stopwatches alone", () => {
+    const idle: StopwatchState = { status: "idle" };
+    const paused: StopwatchState = { status: "paused", banked: 5_000, laps: [] };
+    expect(pauseStopwatch(idle, 1_000)).toBe(idle);
+    expect(pauseStopwatch(paused, 1_000)).toBe(paused);
+  });
+});
+
+describe("resetStopwatch()", () => {
+  it("returns a fresh idle stopwatch with no laps", () => {
+    expect(resetStopwatch()).toEqual({ status: "idle" });
+  });
+});
+
+describe("elapsedMs()", () => {
+  it("reads zero for an idle stopwatch", () => {
+    expect(elapsedMs({ status: "idle" }, 999_000)).toBe(0);
+  });
+
+  it("reads the banked time of a paused stopwatch", () => {
+    expect(elapsedMs({ status: "paused", banked: 15_000, laps: [] }, 999_000)).toBe(15_000);
+  });
+
+  it("adds the running stretch to the banked time", () => {
+    expect(
+      elapsedMs({ status: "running", startedAt: 60_000, banked: 10_000, laps: [] }, 65_000)
+    ).toBe(15_000);
+  });
+
+  it("never falls below banked when the clock moves backwards", () => {
+    expect(
+      elapsedMs({ status: "running", startedAt: 10_000, banked: 5_000, laps: [] }, 5_000)
+    ).toBe(5_000);
+  });
+});
+
+describe("markLap()", () => {
+  it("records each lap's length and total", () => {
+    const started = startStopwatch({ status: "idle" }, 0);
+    const first = markLap(started, 10_000);
+    const second = markLap(first, 25_000);
+    expect(second).toMatchObject({
+      laps: [
+        { length: 10_000, total: 10_000 },
+        { length: 15_000, total: 25_000 },
+      ],
+    });
+  });
+
+  it("counts only running time after a pause and a resume", () => {
+    const started = startStopwatch({ status: "idle" }, 0);
+    const lapped = markLap(started, 10_000);
+    const paused = pauseStopwatch(lapped, 10_000);
+    const resumed = startStopwatch(paused, MINUTE);
+    expect(markLap(resumed, 65_000)).toMatchObject({
+      laps: [
+        { length: 10_000, total: 10_000 },
+        { length: 5_000, total: 15_000 },
+      ],
+    });
+  });
+
+  it("is ignored when idle or paused", () => {
+    const idle: StopwatchState = { status: "idle" };
+    const paused: StopwatchState = { status: "paused", banked: 5_000, laps: [] };
+    expect(markLap(idle, 1_000)).toBe(idle);
+    expect(markLap(paused, 1_000)).toBe(paused);
+  });
+
+  it("does not mutate its input", () => {
+    const running: StopwatchState = { status: "running", startedAt: 0, banked: 0, laps: [] };
+    const lapped = markLap(running, 10_000);
+    expect(running.laps).toEqual([]);
+    expect(lapped).not.toBe(running);
+  });
+});
+
+describe("formatElapsed()", () => {
+  it("floors to the whole second", () => {
+    expect(formatElapsed(999)).toBe("0:00");
+    expect(formatElapsed(1_000)).toBe("0:01");
+    expect(formatElapsed(59_999)).toBe("0:59");
+  });
+
+  it("formats under an hour as m:ss", () => {
+    expect(formatElapsed(61_000)).toBe("1:01");
+  });
+
+  it("formats from an hour as h:mm:ss", () => {
+    expect(formatElapsed(3_600_000)).toBe("1:00:00");
   });
 });
