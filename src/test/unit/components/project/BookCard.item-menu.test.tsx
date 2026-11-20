@@ -139,7 +139,8 @@ describe("BookCard Item Menu", () => {
     await user.keyboard("{Escape}");
 
     await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
-    expect(screen.getByRole("row", { name: "Tides of Ash" })).toHaveFocus();
+    // React Aria gives focus back on a frame after the menu unmounts.
+    await waitFor(() => expect(screen.getByRole("row", { name: "Tides of Ash" })).toHaveFocus());
     expect(brokerRequest).not.toHaveBeenCalled();
   });
 
