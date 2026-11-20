@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Periodic lane for the Dictation Command Interpreter (ADR 0015): p99 under
 // 1 ms per line and under 10 ms to rebuild the phrase table, with every default
 // plus 1,000 aliases and 1,000 Vocabulary entries. Run `pnpm bench:dictation`;

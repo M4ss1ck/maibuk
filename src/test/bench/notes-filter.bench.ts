@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Periodic lane for the Note Filter (issue #650): filter plus sort over
 // 5,000 Notes against its 2 ms p99 budget. Run `pnpm bench:notes-filter`;
 // scripts/notes-filter-bench-budget.mjs fails the run when a budget is missed.

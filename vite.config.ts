@@ -215,6 +215,9 @@ export default defineConfig(() => ({
           name: "node",
           environment: "node",
           include: ["src/test/**/*.test.ts", "plugins/**/*.test.ts"],
+          // Benchmarks run once, in `dom`, where they ran before the split;
+          // a bench that wants Node keeps its own docblock.
+          benchmark: { include: [] },
         },
       },
     ],
