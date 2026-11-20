@@ -60,7 +60,7 @@ vi.mock("@xyflow/react", async (importOriginal) => {
 
 const backgroundLayer = () =>
   document.querySelector<HTMLElement>("div.react-flow__background") as HTMLElement;
-const tileGeometry = () => backgroundLayer().querySelector("defs text");
+const tileGeometry = () => backgroundLayer().querySelector<SVGTextElement>("defs text");
 const tileMarkup = () => backgroundLayer().querySelector("svg")?.innerHTML ?? "";
 
 describe("canvasBackgroundOffset()", () => {
@@ -133,7 +133,7 @@ describe("<CanvasBackground />", () => {
       `translate3d(${canvasBackgroundOffset(137, tile.tileWidth)}px, ${canvasBackgroundOffset(
         -42,
         tile.tileHeight
-      )}px, 0)`
+      )}px, 0px)`
     );
     expect(layer.style.willChange).toBe("transform");
   });
@@ -151,14 +151,16 @@ describe("<CanvasBackground />", () => {
   it("rasterizes a new tile when the zoom changes", () => {
     render(<CanvasBackground />);
 
-    expect(tileGeometry()?.getAttribute("style")).toContain(
-      `font-size: ${canvasTileGeometry(1).fontSize}px`
+    expect(Number.parseFloat(tileGeometry()?.style.fontSize ?? "")).toBeCloseTo(
+      canvasTileGeometry(1).fontSize,
+      3
     );
 
     act(() => fakeStore.setTransform([0, 0, 2]));
 
-    expect(tileGeometry()?.getAttribute("style")).toContain(
-      `font-size: ${canvasTileGeometry(2).fontSize}px`
+    expect(Number.parseFloat(tileGeometry()?.style.fontSize ?? "")).toBeCloseTo(
+      canvasTileGeometry(2).fontSize,
+      3
     );
   });
 

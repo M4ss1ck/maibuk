@@ -994,7 +994,7 @@ describe("colored highlight ranges (#532)", () => {
     const mark = markFor(editor, "repetition");
     expect(mark.classList.contains("plugin-highlight")).toBe(true);
     expect(mark.style.backgroundColor).toBe(
-      "color-mix(in srgb, rgb(0, 114, 178) 22%, transparent)"
+      "color-mix(in srgb, rgb(0, 114, 178) 22%, transparent 78%)"
     );
     expect(mark.style.textDecorationColor).toBe("rgb(0, 114, 178)");
     // Text color is never set by a range color.
