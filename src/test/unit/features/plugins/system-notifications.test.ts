@@ -440,7 +440,8 @@ describe("sends queued behind the one-second budget (#870 review)", () => {
 
   it("drops what a Plugin still had queued once cancelPlugin runs", async () => {
     const adapter = createMemorySystemNotificationAdapter();
-    let release: () => void = () => {};
+    let release = (): void => undefined;
+    let waiting = false;
     let time = 0;
     const service = createPluginSystemNotifications({
       adapter,
@@ -448,6 +449,7 @@ describe("sends queued behind the one-second budget (#870 review)", () => {
       now: () => time,
       wait: (ms) =>
         new Promise<void>((resolve) => {
+          waiting = true;
           release = () => {
             time += ms;
             resolve();
@@ -458,8 +460,8 @@ describe("sends queued behind the one-second budget (#870 review)", () => {
     await service.send(clockPlugin, { id: "a", title: "A", body: "" });
     const queued = service.send(clockPlugin, { id: "b", title: "B", body: "" });
     const queuedLater = service.send(clockPlugin, { id: "c", title: "C", body: "", at: 60_000 });
-    await vi.waitFor(() => expect(release).not.toBe(undefined));
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    // "b" is waiting out the second when the Plugin is cancelled.
+    await vi.waitFor(() => expect(waiting).toBe(true));
 
     await service.cancelPlugin("clock");
     release();
