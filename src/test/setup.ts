@@ -54,8 +54,8 @@ if (typeof window !== "undefined") {
   // through an own Symbol("impl") that jsdom 30.1 dropped, so the call throws.
   // This reads the bytes the way Vitest 5 does; drop it with that upgrade.
   const { implForWrapper } = createRequire(import.meta.url)("jsdom/lib/generated/idl/utils.js");
-  const nodeCreateObjectURL = Object.getPrototypeOf(URL)
-    .createObjectURL as typeof URL.createObjectURL;
+  const nodeCreateObjectURL: (blob: NodeBlob) => string =
+    Object.getPrototypeOf(URL).createObjectURL;
   const createObjectURL = URL.createObjectURL;
   URL.createObjectURL = (object) =>
     object instanceof Blob
