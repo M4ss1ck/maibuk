@@ -3483,6 +3483,21 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-clock-stopwatch",
+    area: "plugins",
+    workflow:
+      "Clock turned on from Settings → Plugins by keyboard, then Open Clock from the Command Palette opens its page; the author moves with ArrowRight from the Timer tab to the Stopwatch tab, where the idle Stopwatch draws 0:00 with Start alone and no Laps table, and Start runs it, so Pause and Lap replace Start and the elapsed time climbs; Lap, pressed on its own button, marks the first Lap in the Laps table, which names its columns Lap, Lap time, and Total and lists the newest Lap first; Start or pause the Stopwatch, run from the Command Palette, pauses it, so Resume replaces Pause, Lap is no longer offered, and the drawn elapsed time holds what it reached, and running the Command again resumes it; Mark a Lap, the other Plugin Command from the Palette, marks the second Lap; Reset returns it to 0:00 idle, with Start and no Laps table; asserts: the drawn elapsed time, the controls each status draws, the Laps table's rows and columns, and the time holding while paused; persists: yes (device-local Plugin storage; the Library is untouched)",
+    edges: [
+      "The Stopwatch runs from its tab, marks a Lap from its button, pauses and resumes from its Command, adds a second Lap from its other Command, and Reset returns it to 0:00 idle",
+    ],
+    terms: ["Plugin", "Built-in Plugin", "Plugin Command"],
+    shortcuts: ["plugin.maibuk-clock.toggleStopwatch", "plugin.maibuk-clock.lapStopwatch"],
+    routes: ["/settings", "/plugin/:pluginId/:pageId"],
+    fixture: "empty",
+    tags: ["chromium-only"],
+    status: "accepted",
+  },
+  {
     id: "settings-reset-all",
     area: "settings",
     workflow:
