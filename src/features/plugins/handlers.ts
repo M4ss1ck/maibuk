@@ -21,6 +21,8 @@
  * store (ADR 0036), and saves a file the Plugin hands over as one `Blob`
  * (ADR 0040); and
  * `toolbar.setPressed` sets one of the Plugin's Toggle Buttons on or off.
+ * `notifications.system` and its neighbours show, withdraw, and ask about a
+ * System Notification (ADR 0042).
  * The broker already enforces each row's Plugin Permission, input schema,
  * Library availability, user action, and rate limit, so a handler only does its work.
  */
@@ -75,9 +77,10 @@ import {
   listPluginStorageKeys,
   setPluginStorageValue,
 } from "@/features/plugins/storage";
+import { createPluginSystemNotifications } from "@/features/plugins/system-notifications";
 import { setToolbarPressed } from "@/features/plugins/toolbar-pressed";
 import type { PluginApiHandlers, PluginManifest } from "@/features/plugins/types";
-import { getClipboard, getPluginFetch } from "@/lib/platform";
+import { getClipboard, getPluginFetch, getSystemNotifications } from "@/lib/platform";
 import type { ClipboardAdapter } from "@/lib/platform/types";
 import { PluginApiError } from "@/plugin-sdk/protocol";
 
@@ -110,6 +113,24 @@ function pluginFileGrantStore(): PluginFileGrantStore {
     });
   }
   return store;
+}
+
+/**
+ * The System Notification service (ADR 0042). Built once on first use, because
+ * the platform adapter is async, and kept so one Plugin's queue and rate limit
+ * survive across calls.
+ */
+let pluginSystemNotifications: Promise<ReturnType<typeof createPluginSystemNotifications>> | null =
+  null;
+
+function systemNotifications(): Promise<ReturnType<typeof createPluginSystemNotifications>> {
+  pluginSystemNotifications ??= getSystemNotifications().then((adapter) =>
+    createPluginSystemNotifications({
+      adapter,
+      fallback: (text) => toast.info(text),
+    })
+  );
+  return pluginSystemNotifications;
 }
 
 /**
@@ -167,6 +188,13 @@ export function createPluginHandlers(manifest: PluginHandlersManifest): PluginAp
       else toast.info(text);
       return null;
     },
+    "notifications.system": async (params) =>
+      (await systemNotifications()).send({ id: manifest.id, name: manifest.name }, params),
+    "notifications.cancel": async ({ id }, { pluginId }) =>
+      (await systemNotifications()).cancel(pluginId, id),
+    "notifications.systemStatus": async () => (await systemNotifications()).status(),
+    "notifications.requestSystemPermission": async () =>
+      (await systemNotifications()).requestPermission(),
     "library.books.list": () => listPluginBooks(),
     "library.books.get": ({ bookId }) => getPluginBook(bookId),
     "library.books.update": ({ bookId, title, authorName, genre, status, targetWordCount }) =>

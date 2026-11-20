@@ -17,7 +17,7 @@ import type { McpToolProjection, PluginApiEventRow, PluginApiRow } from "@/featu
 import { FILE_READ_MAX_BYTES } from "@/plugin-sdk/protocol";
 
 /** The Plugin API's own semver, separate from Maibuk's release number. */
-export const PLUGIN_API_VERSION = "0.1.15";
+export const PLUGIN_API_VERSION = "0.1.16";
 
 export const PLUGIN_API_NAMESPACES = [
   "library",
@@ -58,6 +58,8 @@ const id = z.string().min(1).max(128);
 const timestamp = z.number().describe("Milliseconds since the Unix epoch.");
 const none = z.strictObject({});
 const ok = z.null();
+/** The OS's answer, as the System Notification adapter reports it (ADR 0042). */
+const systemNotificationPermission = z.enum(["granted", "denied", "default"]);
 
 /**
  * The bytes `files.read` returns. JSON Schema has no byte type, so the emitter
@@ -685,6 +687,56 @@ export const PLUGIN_API_TABLE = [
     permission: null,
     effect: "write",
     minIntervalMs: 5000,
+  }),
+  defineApiRow({
+    id: "notifications.system",
+    description:
+      "Shows a System Notification naming this Plugin. The same id replaces this Plugin's earlier one, and Maibuk allows at most one per second, queueing extras so none is dropped. When the device has not allowed notifications, or cannot show one, Maibuk's toast shows it instead.",
+    input: z.strictObject({
+      id: z
+        .string()
+        .min(1)
+        .max(128)
+        .describe(
+          "This Plugin's own id: sending the same id again replaces the earlier notification."
+        ),
+      title: z.string().min(1).max(200),
+      body: z.string().max(1000),
+    }),
+    output: ok,
+    permission: "system-notifications",
+    effect: "write",
+  }),
+  defineApiRow({
+    id: "notifications.cancel",
+    description:
+      "Withdraws this Plugin's System Notification with that id. An id that is not showing is not an error.",
+    input: z.strictObject({ id: z.string().min(1).max(128) }),
+    output: ok,
+    permission: "system-notifications",
+    effect: "write",
+  }),
+  defineApiRow({
+    id: "notifications.systemStatus",
+    description:
+      "Reads whether this device allows System Notifications and whether it shows one while Maibuk is closed.",
+    input: none,
+    output: z.strictObject({
+      permission: systemNotificationPermission,
+      canScheduleWhileClosed: z.boolean(),
+    }),
+    permission: "system-notifications",
+    effect: "read",
+  }),
+  defineApiRow({
+    id: "notifications.requestSystemPermission",
+    description:
+      "Asks the device for permission to show System Notifications and returns its answer. Refused with user-action-required unless the author's own click, key press, or Command run caused the call.",
+    input: none,
+    output: z.strictObject({ permission: systemNotificationPermission }),
+    permission: "system-notifications",
+    effect: "write",
+    requiresUserAction: true,
   }),
   defineApiRow({
     id: "toolbar.setPressed",
