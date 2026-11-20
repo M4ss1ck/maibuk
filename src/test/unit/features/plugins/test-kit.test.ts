@@ -2264,7 +2264,7 @@ describe("createTestHost() System Notifications", () => {
     }
   });
 
-  it("reports the device's answer and whether it fires while closed", async () => {
+  it("reports the device's answer, whether it fires while closed, and whether it fires on time", async () => {
     const host = createTestHost({ manifest: notificationsManifest() });
     try {
       const client = createPluginClient(host.port);
@@ -2272,14 +2272,17 @@ describe("createTestHost() System Notifications", () => {
       await expect(client.notifications.systemStatus()).resolves.toEqual({
         permission: "granted",
         canScheduleWhileClosed: false,
+        exactTiming: true,
       });
 
       host.systemNotifications.setCanScheduleWhileClosed(true);
+      host.systemNotifications.setExactTiming(false);
       host.systemNotifications.setPermission("denied");
 
       await expect(client.notifications.systemStatus()).resolves.toEqual({
         permission: "denied",
         canScheduleWhileClosed: true,
+        exactTiming: false,
       });
     } finally {
       await host.stop();
@@ -2298,6 +2301,7 @@ describe("createTestHost() System Notifications", () => {
       await expect(client.notifications.systemStatus()).resolves.toEqual({
         permission: "default",
         canScheduleWhileClosed: false,
+        exactTiming: true,
       });
     } finally {
       await host.stop();
