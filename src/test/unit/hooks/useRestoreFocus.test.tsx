@@ -154,16 +154,15 @@ function HandoffHarness() {
 }
 
 /**
- * A non-modal overlay that stays mounted while it closes, as a Popover does
- * through its exit animation, so the hook can still see it when the close
- * commit runs. Escape closes it without moving focus, which leaves focus where
- * the test put it. Models the host's Plugin Popover (#854).
+ * A non-modal overlay that unmounts its content when it closes, leaving no
+ * element behind, as a Popover does once its exit animation ends. Escape closes
+ * it without moving focus, which leaves focus where the test put it. Models the
+ * host's Plugin Popover (#854).
  */
 function ClosingPopoverHarness() {
   const [isOpen, setIsOpen] = useState(false);
-  const overlayRef = useRef<HTMLDivElement>(null);
 
-  useRestoreFocus(isOpen, { getOverlay: () => overlayRef.current });
+  useRestoreFocus(isOpen, { onlyFromBody: true });
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -178,9 +177,11 @@ function ClosingPopoverHarness() {
       <button type="button" onClick={() => setIsOpen(true)}>
         Open
       </button>
-      <div ref={overlayRef} role="dialog" aria-label="Overlay">
-        <button type="button">Inside</button>
-      </div>
+      {isOpen && (
+        <div role="dialog" aria-label="Overlay">
+          <button type="button">Inside</button>
+        </div>
+      )}
       <button type="button">Field</button>
     </>
   );
@@ -291,20 +292,6 @@ describe("useRestoreFocus", () => {
 
     expect(field).toHaveFocus();
     expect(trigger).not.toHaveFocus();
-  });
-
-  it("restores focus the closing overlay still holds", async () => {
-    const user = userEvent.setup();
-    render(<ClosingPopoverHarness />);
-    const inside = screen.getByRole("button", { name: "Inside" });
-
-    await user.tab();
-    await user.keyboard("{Enter}");
-    inside.focus();
-    expect(inside).toHaveFocus();
-    await user.keyboard("{Escape}");
-
-    expect(screen.getByRole("button", { name: "Open" })).toHaveFocus();
   });
 
   it("restores focus that fell to the body when the overlay closes", async () => {

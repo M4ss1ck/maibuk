@@ -1561,13 +1561,12 @@ function PopoverHost({
 }: PopoverHostProps) {
   const [open, setOpen] = useMirroredOpen(isOpen, onOpenChange, openSeq);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const popoverRef = useRef<HTMLElement>(null);
   // A non-modal popover does not return focus by itself when the host dismisses
   // it; the shared hook restores the trigger, immediately and without a Worker
   // echo, unless a field that took focus outside the popover keeps it (#854).
   useRestoreFocus(open, {
     getTarget: () => triggerRef.current,
-    getOverlay: () => popoverRef.current,
+    onlyFromBody: true,
   });
   // Without an icon there is nothing to show in its place, so the label stays.
   const iconOnlyTrigger = iconOnly === true && icon !== undefined && icon !== "";
@@ -1587,10 +1586,7 @@ function PopoverHost({
   return (
     <DialogTrigger isOpen={open} onOpenChange={setOpen}>
       {iconOnlyTrigger ? <Tooltip content={label}>{trigger}</Tooltip> : trigger}
-      <AriaPopover
-        ref={popoverRef}
-        className="z-50 max-w-xs rounded-lg border border-border bg-card p-3 shadow-lg"
-      >
+      <AriaPopover className="z-50 max-w-xs rounded-lg border border-border bg-card p-3 shadow-lg">
         <Dialog className="outline-none">{children}</Dialog>
       </AriaPopover>
     </DialogTrigger>
