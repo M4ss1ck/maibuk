@@ -122,6 +122,25 @@ export interface ClipboardAdapter {
   readCopiedImageFile(): Promise<Blob | null>;
 }
 
+export type SystemNotificationPermission = "granted" | "denied" | "default";
+
+/** System Notifications: the OS banner, not the in-app toast (ADR 0042). */
+export interface SystemNotificationAdapter {
+  /** The OS's answer now; `"denied"` where the platform has no notifications. */
+  permission(): Promise<SystemNotificationPermission>;
+  /** Asks the OS. The web needs a user gesture, so call it from one. */
+  requestPermission(): Promise<SystemNotificationPermission>;
+  /**
+   * Shows one now. A second show with the same `tag` replaces the first.
+   * Rejects when the platform cannot show one.
+   */
+  show(notification: { tag: string; title: string; body: string }): Promise<void>;
+  /** Withdraws the one with `tag`; an unknown tag is not an error. */
+  cancel(tag: string): Promise<void>;
+  /** Whether the OS fires one while Maibuk is closed. False on every platform for now. */
+  canScheduleWhileClosed(): boolean;
+}
+
 /**
  * Fetches a URL on a host the broker already allowed. The web build uses the
  * browser's own `fetch`, so its request is subject to CORS like any page; the

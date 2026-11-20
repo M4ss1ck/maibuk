@@ -7,6 +7,7 @@ import type {
   WebDialogAdapter,
   BackupAdapter,
   ClipboardAdapter,
+  SystemNotificationAdapter,
   EndpointAdapter,
   PluginDirectoryAdapter,
   PluginFetchAdapter,
@@ -47,6 +48,8 @@ export type {
   BackupAdapter,
   BackupEntry,
   ClipboardAdapter,
+  SystemNotificationAdapter,
+  SystemNotificationPermission,
   EndpointAdapter,
   EndpointListenerState,
   EndpointRequestMessage,
@@ -247,6 +250,18 @@ export async function getClipboard(): Promise<ClipboardAdapter> {
   }
   const { tauriClipboard } = await import("@/lib/platform/tauri/clipboard");
   return tauriClipboard;
+}
+
+// System Notifications factory. Desktop and Android go through the
+// notification plugin (ADR 0042); the web build uses the Web Notifications API,
+// which a mobile browser refuses outside a service worker.
+export async function getSystemNotifications(): Promise<SystemNotificationAdapter> {
+  if (IS_WEB) {
+    const { webSystemNotifications } = await import("@/lib/platform/web/system-notifications");
+    return webSystemNotifications;
+  }
+  const { tauriSystemNotifications } = await import("@/lib/platform/tauri/system-notifications");
+  return tauriSystemNotifications;
 }
 
 // Plugin network factory. The web build uses the browser's `fetch` (subject to
