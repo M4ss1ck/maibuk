@@ -3,12 +3,15 @@ import { describe, expect, it } from "vitest";
 import {
   formatClockTime,
   joinDuration,
+  nextAlarmAt,
   pauseTimer,
   reconcileTimer,
   remainingMs,
   setTimerLength,
   splitDuration,
   startTimer,
+  type AlarmTime,
+  type OffsetAt,
   type TimerState,
 } from "./time";
 
@@ -151,6 +154,117 @@ describe("clock time properties", () => {
           expect(hour24).toBe(Number(longHour));
         }
       ),
+      { seed: 871, numRuns: 300 }
+    );
+  });
+});
+
+const MS_PER_MINUTE = 60_000;
+const MS_PER_DAY = 86_400_000;
+const EARLIEST_NOW_MS = Date.UTC(2023, 0, 1);
+const LATEST_NOW_MS = Date.UTC(2026, 0, 1);
+
+/** A zone's offset at an instant, read like `getTimezoneOffset()` out of `Intl`. */
+function zoneOffsetAt(timeZone: string): OffsetAt {
+  const format = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+  return (epochMs) => {
+    const second = Math.floor(epochMs / 1_000) * 1_000;
+    const fields: Record<string, number> = {};
+    for (const part of format.formatToParts(new Date(second))) {
+      if (part.type !== "literal") fields[part.type] = Number(part.value);
+    }
+    const wallMs = Date.UTC(
+      fields.year,
+      fields.month - 1,
+      fields.day,
+      fields.hour,
+      fields.minute,
+      fields.second
+    );
+    return (second - wallMs) / MS_PER_MINUTE;
+  };
+}
+
+const newYorkOffsetAt = zoneOffsetAt("America/New_York");
+
+/** A zone that never steps. */
+function fixedOffset(offset: number): OffsetAt {
+  return () => offset;
+}
+
+/** A fixed offset, or a real zone whose DST steps the Alarm has to survive. */
+const zoneArbitrary: fc.Arbitrary<OffsetAt> = fc.oneof(
+  fc.integer({ min: -1_440, max: 1_440 }).map(fixedOffset),
+  fc.constant(newYorkOffsetAt)
+);
+
+const alarmArbitrary = fc.record({
+  hour: fc.integer({ min: 0, max: 23 }),
+  minute: fc.integer({ min: 0, max: 59 }),
+  weekdays: fc.uniqueArray(fc.integer({ min: 0, max: 6 }), { maxLength: 7 }),
+});
+
+const alarmNowArbitrary = fc.record({
+  now: fc.integer({ min: EARLIEST_NOW_MS, max: LATEST_NOW_MS }),
+  alarm: alarmArbitrary,
+  zone: zoneArbitrary,
+});
+
+/** Minutes from local midnight to the Alarm's time. */
+function alarmMinuteOfDay(alarm: AlarmTime): number {
+  return alarm.hour * 60 + alarm.minute;
+}
+
+/** The local weekdays and minutes-of-day the same offset works out. */
+function localWeekday(zone: OffsetAt, epochMs: number): number {
+  const local = epochMs - zone(epochMs) * MS_PER_MINUTE;
+  const day = Math.floor(local / MS_PER_DAY);
+  return ((day % 7) + 7 + 4) % 7;
+}
+
+function localMinuteOfDay(zone: OffsetAt, epochMs: number): number {
+  const local = epochMs - zone(epochMs) * MS_PER_MINUTE;
+  const inDay = ((local % MS_PER_DAY) + MS_PER_DAY) % MS_PER_DAY;
+  return Math.floor(inDay / MS_PER_MINUTE);
+}
+
+describe("alarm properties", () => {
+  it("fires after now, within eight days, at the Alarm's own time", () => {
+    fc.assert(
+      fc.property(alarmNowArbitrary, ({ now, alarm, zone }) => {
+        const result = nextAlarmAt(alarm, now, zone);
+        expect(result).toBeGreaterThan(now);
+        expect(result - now).toBeLessThanOrEqual(8 * MS_PER_DAY);
+
+        if (alarm.weekdays.length > 0) expect(alarm.weekdays).toContain(localWeekday(zone, result));
+
+        const target = alarmMinuteOfDay(alarm);
+        const actual = localMinuteOfDay(zone, result);
+        if (actual !== target) {
+          // Only a spring-forward gap explains another time: the Alarm fires at the gap's end.
+          expect(actual).toBeGreaterThan(target);
+          expect(localMinuteOfDay(zone, result - 1)).toBeLessThan(target);
+        }
+      }),
+      { seed: 871, numRuns: 300 }
+    );
+  });
+
+  it("leaves no valid instant between now and its answer", () => {
+    fc.assert(
+      fc.property(alarmNowArbitrary, ({ now, alarm, zone }) => {
+        const result = nextAlarmAt(alarm, now, zone);
+        expect(nextAlarmAt(alarm, result - 1, zone)).toBe(result);
+      }),
       { seed: 871, numRuns: 300 }
     );
   });

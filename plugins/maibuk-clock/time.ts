@@ -234,3 +234,112 @@ export function addRecentLength(recent: readonly number[], length: number): numb
   }
   return next;
 }
+
+/** The offset at an instant, read like `new Date(epochMs).getTimezoneOffset()`: UTC minus local. */
+export type OffsetAt = (epochMs: number) => number;
+
+/**
+ * An Alarm's time of day and the weekdays it repeats on, 0=Sunday through 6.
+ * No weekdays means a one-off Alarm, which may fire on any day.
+ */
+export interface AlarmTime {
+  hour: number;
+  minute: number;
+  weekdays: readonly number[];
+}
+
+const MS_PER_DAY = 86_400_000;
+/** Local days walked from the local date of `now`; a weekly repeat always lands sooner. */
+const ALARM_SEARCH_DAYS = 9;
+/** How far apart the offset probes around a wall time sit. */
+const PROBE_STEP_MS = 6 * MS_PER_HOUR;
+/** Probes either side of a wall time, enough to see every offset within a day of it. */
+const PROBE_STEPS = 4;
+/** Epoch day zero, 1970-01-01, is a Thursday. */
+const EPOCH_WEEKDAY = 4;
+const DAYS_PER_WEEK = 7;
+
+/** An offset read at one instant, so a change of offset can be narrowed between two of them. */
+interface OffsetProbe {
+  at: number;
+  offset: number;
+}
+
+/** The local wall clock, as epoch-like milliseconds, read only through `offsetAt`. */
+function localMsAt(epochMs: number, offsetAt: OffsetAt): number {
+  return epochMs - offsetAt(epochMs) * MS_PER_MINUTE;
+}
+
+/** The weekday of a local wall clock reading, 0=Sunday through 6. */
+function weekdayOf(localMs: number): number {
+  const day = Math.floor(localMs / MS_PER_DAY) % DAYS_PER_WEEK;
+  return (day + DAYS_PER_WEEK + EPOCH_WEEKDAY) % DAYS_PER_WEEK;
+}
+
+/** The offsets in force within a day either side of a wall time, with the instant each was read at. */
+function probeOffsets(wallMs: number, offsetAt: OffsetAt): OffsetProbe[] {
+  const probes: OffsetProbe[] = [];
+  for (let step = -PROBE_STEPS; step <= PROBE_STEPS; step++) {
+    const at = wallMs + step * PROBE_STEP_MS;
+    probes.push({ at, offset: offsetAt(at) });
+  }
+  return probes;
+}
+
+/** The first instant between two probes that already reads the later probe's offset. */
+function jumpAt(before: number, after: number, offsetAt: OffsetAt): number {
+  const offset = offsetAt(after);
+  let low = before;
+  let high = after;
+  while (high - low > 1) {
+    const middle = low + Math.floor((high - low) / 2);
+    if (offsetAt(middle) === offset) high = middle;
+    else low = middle;
+  }
+  return high;
+}
+
+/**
+ * The instant the local wall clock reads `wallMs` on the day it names: the
+ * earlier one when a fall-back reads it twice, and the jump itself when a
+ * spring-forward skips it and lands past it.
+ */
+function occurrenceOn(wallMs: number, offsetAt: OffsetAt): number | null {
+  const probes = probeOffsets(wallMs, offsetAt);
+  let earliest: number | null = null;
+  for (const { offset } of probes) {
+    const instant = wallMs + offset * MS_PER_MINUTE;
+    // Only an offset still in force at that instant makes it read the wall time.
+    if (offsetAt(instant) !== offset) continue;
+    if (earliest === null || instant < earliest) earliest = instant;
+  }
+  if (earliest !== null) return earliest;
+  let previous: OffsetProbe | null = null;
+  for (const probe of probes) {
+    // A falling offset means local time jumped forward, past the wall times it skips.
+    if (previous !== null && probe.offset < previous.offset) {
+      const jump = jumpAt(previous.at, probe.at, offsetAt);
+      if (localMsAt(jump - 1, offsetAt) < wallMs && localMsAt(jump, offsetAt) >= wallMs)
+        return jump;
+    }
+    previous = probe;
+  }
+  return null;
+}
+
+/** The earliest instant after `now` at which the local clock reads the Alarm's time on one of its weekdays. */
+export function nextAlarmAt(alarm: AlarmTime, now: number, offsetAt: OffsetAt): number {
+  const todayStartMs = Math.floor(localMsAt(now, offsetAt) / MS_PER_DAY) * MS_PER_DAY;
+  const minuteOfDay = alarm.hour * MINUTES_PER_HOUR + alarm.minute;
+  for (let day = 0; day < ALARM_SEARCH_DAYS; day++) {
+    const wallMs = todayStartMs + day * MS_PER_DAY + minuteOfDay * MS_PER_MINUTE;
+    if (alarm.weekdays.length > 0 && !alarm.weekdays.includes(weekdayOf(wallMs))) continue;
+    const occurrence = occurrenceOn(wallMs, offsetAt);
+    // A day whose one occurrence has gone is spent: a fall-back repeat never fires a second time.
+    if (occurrence !== null && occurrence > now) return occurrence;
+  }
+  throw new Error("nextAlarmAt: no occurrence within the search window");
+}
+
+/** The device's own offset, for callers with no zone to pass. */
+export const localOffsetAt: OffsetAt = (t) => new Date(t).getTimezoneOffset();
