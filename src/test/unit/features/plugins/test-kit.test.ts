@@ -2159,22 +2159,12 @@ describe("createTestHost() System Notifications", () => {
       });
 
       // The kit's service keeps Maibuk's one-a-second rule, so this send waits
-      // out the first one's second before it replaces it; fake time skips it.
-      vi.useFakeTimers();
-      const replaced = client.notifications.system({
+      // out the first one's second (real time) before it replaces it.
+      await client.notifications.system({
         id: "pomodoro",
         title: "Break is over",
         body: "Back to work",
       });
-      let settled = false;
-      void replaced.finally(() => {
-        settled = true;
-      });
-      for (let step = 0; step < 20 && !settled; step += 1) {
-        await vi.advanceTimersByTimeAsync(100);
-      }
-      await replaced;
-      vi.useRealTimers();
 
       expect(host.systemNotifications.log.map((entry) => entry.kind)).toEqual(["sent", "replaced"]);
       expect(host.systemNotifications.active.size).toBe(1);
@@ -2184,7 +2174,6 @@ describe("createTestHost() System Notifications", () => {
       });
       expect(host.notifications).toEqual([]);
     } finally {
-      vi.useRealTimers();
       await host.stop();
     }
   });
