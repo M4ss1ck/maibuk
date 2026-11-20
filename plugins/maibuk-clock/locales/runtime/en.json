@@ -5,5 +5,19 @@
   "timer": "Timer",
   "stopwatch": "Stopwatch",
   "alarms": "Alarms",
-  "comingSoon": "Coming soon"
+  "comingSoon": "Coming soon",
+  "hours": "Hours",
+  "minutes": "Minutes",
+  "seconds": "Seconds",
+  "start": "Start",
+  "pause": "Pause",
+  "resume": "Resume",
+  "reset": "Reset",
+  "minutesLeft": "{n} minutes left",
+  "oneMinuteLeft": "1 minute left",
+  "timerEndedAnnounce": "Timer ended",
+  "timerEnded": "Your {length} Timer ended.",
+  "allowNotifications": "Allow notifications",
+  "alertsNeedOpen": "Alerts need Maibuk open to fire.",
+  "alertsMayBeLate": "Alerts may be a few minutes late until exact alarms are allowed."
 }

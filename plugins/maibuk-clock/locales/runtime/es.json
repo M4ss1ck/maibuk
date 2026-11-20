@@ -5,5 +5,19 @@
   "timer": "Temporizador",
   "stopwatch": "Cronómetro",
   "alarms": "Alarmas",
-  "comingSoon": "Próximamente"
+  "comingSoon": "Próximamente",
+  "hours": "Horas",
+  "minutes": "Minutos",
+  "seconds": "Segundos",
+  "start": "Iniciar",
+  "pause": "Pausar",
+  "resume": "Reanudar",
+  "reset": "Reiniciar",
+  "minutesLeft": "{n} minutos restantes",
+  "oneMinuteLeft": "Queda 1 minuto",
+  "timerEndedAnnounce": "Temporizador terminado",
+  "timerEnded": "Tu temporizador de {length} terminó.",
+  "allowNotifications": "Permitir notificaciones",
+  "alertsNeedOpen": "Las alertas necesitan que Maibuk esté abierto para activarse.",
+  "alertsMayBeLate": "Las alertas pueden llegar unos minutos tarde hasta que se permitan las alarmas exactas."
 }
