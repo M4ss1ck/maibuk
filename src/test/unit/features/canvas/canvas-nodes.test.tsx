@@ -11,6 +11,9 @@ import { installPointerEvent, touchLongPress, touchTap } from "@/test/support/po
 
 installPointerEvent();
 
+/** Two frames of jsdom's 16 ms loop: the span a fake clock needs to drain a frame. */
+const TWO_FRAMES_MS = 32;
+
 /** A Text Node uses Link navigation, so it needs the Router the app provides. */
 function renderNode(ui: Parameters<typeof render>[0]) {
   return render(ui, { wrapper: MemoryRouter });
@@ -302,10 +305,10 @@ describe("Canvas custom nodes", () => {
       // scheduled on the fake clock leaves a handle real timers can never clear,
       // so the window never animates again and React Aria's deferred focus,
       // which waits for a frame, never lands. Let the fake loop drain itself
-      // first.
+      // first, over TWO_FRAMES_MS.
       if (vi.isFakeTimers()) {
         act(() => {
-          vi.advanceTimersByTime(32);
+          vi.advanceTimersByTime(TWO_FRAMES_MS);
         });
       }
       vi.useRealTimers();

@@ -332,6 +332,8 @@ describe("Settings outline motion", () => {
     // Each reversal starts where that row painted, and the starting heights sum
     // to the space the section occupied: the edge never jumps.
     const starts = reversing.map((call) => Number.parseFloat(String(call.keyframes[0].height)));
+    // jsdom rounds computed heights to six significant digits, as browsers do, so
+    // the sums match to 1e-4 px.
     expect(starts.reduce((total, height) => total + height, 0)).toBeCloseTo(paintedSum, 4);
     expect(reversing.every(onlyHeight)).toBe(true);
     expect(folding.every((call) => call.animation.cancelled)).toBe(true);

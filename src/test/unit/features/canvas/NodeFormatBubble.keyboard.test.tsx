@@ -10,6 +10,7 @@ import { useSettingsStore } from "@/features/settings/store";
 import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
 import { DEFAULT_TOOLBAR_CONFIG, type ToolbarConfig } from "@/features/settings/toolbar-config";
 import { useTutorialStore } from "@/features/tutorial/store";
+import { deferAnimationFrames } from "@/test/support/animation-frame";
 
 vi.mock("@/components/editor/extensions/SpellCheck", async () => {
   const { Extension } = await vi.importActual<typeof import("@tiptap/core")>("@tiptap/core");
@@ -194,11 +195,7 @@ describe("NodeFormatBubble keyboard operation", () => {
   });
 
   it("colors the selection from a swatch picked by keyboard, and the Text Node stays editing", async () => {
-    // A synchronous frame would run React Aria FocusScope's refocus inside the focusout.
-    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
-      queueMicrotask(() => callback(0));
-      return 0;
-    });
+    deferAnimationFrames();
     const user = userEvent.setup();
     useSettingsStore.setState({
       toolbarConfig: {
