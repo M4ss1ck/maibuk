@@ -388,6 +388,16 @@ describe("elapsedMs()", () => {
 });
 
 describe("markLap()", () => {
+  it("never records a negative Lap when the clock moves back between Laps", () => {
+    const lapped = markLap(startStopwatch({ status: "idle" }, 0), 5_000);
+    expect(markLap(lapped, 2_000)).toMatchObject({
+      laps: [
+        { length: 5_000, total: 5_000 },
+        { length: 0, total: 5_000 },
+      ],
+    });
+  });
+
   it("records each lap's length and total", () => {
     const started = startStopwatch({ status: "idle" }, 0);
     const first = markLap(started, 10_000);

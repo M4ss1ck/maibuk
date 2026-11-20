@@ -141,9 +141,10 @@ export function elapsedMs(state: StopwatchState, now: number): number {
  */
 export function markLap(state: StopwatchState, now: number): StopwatchState {
   if (state.status !== "running") return state;
-  const total = elapsedMs(state, now);
-  const last = state.laps[state.laps.length - 1];
-  return { ...state, laps: [...state.laps, { length: total - (last ? last.total : 0), total }] };
+  // A clock moved back since the last Lap must not record a negative stretch.
+  const previous = state.laps[state.laps.length - 1]?.total ?? 0;
+  const total = Math.max(previous, elapsedMs(state, now));
+  return { ...state, laps: [...state.laps, { length: total - previous, total }] };
 }
 
 /**
