@@ -194,6 +194,11 @@ describe("NodeFormatBubble keyboard operation", () => {
   });
 
   it("colors the selection from a swatch picked by keyboard, and the Text Node stays editing", async () => {
+    // A synchronous frame would run React Aria FocusScope's refocus inside the focusout.
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      queueMicrotask(() => callback(0));
+      return 0;
+    });
     const user = userEvent.setup();
     useSettingsStore.setState({
       toolbarConfig: {

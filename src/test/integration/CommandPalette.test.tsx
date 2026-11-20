@@ -888,8 +888,9 @@ describe("Command Palette", () => {
   });
 
   it("runs Bold from the palette on the chapter selection and returns focus to the editor", async () => {
+    // A synchronous frame would run React Aria FocusScope's refocus inside the focusout.
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
-      callback(0);
+      queueMicrotask(() => callback(0));
       return 0;
     });
     try {
