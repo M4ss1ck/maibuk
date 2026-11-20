@@ -201,10 +201,14 @@ describe("DictationBar", () => {
     const english = screen.getByRole("button", { name: /dictation language/i });
     expect(english).toHaveTextContent("en");
     expect(english).toHaveAccessibleName(/English/);
+    // React Aria returns focus to the picker on the next frame.
+    await waitFor(() => expect(english).toHaveFocus());
 
     await user.keyboard("{Enter}{ArrowDown}{Enter}");
     await waitFor(() => expect(setLanguage).toHaveBeenLastCalledWith("es"));
-    expect(screen.getByRole("button", { name: /dictation language/i })).toHaveTextContent("es");
+    const spanish = screen.getByRole("button", { name: /dictation language/i });
+    expect(spanish).toHaveTextContent("es");
+    await waitFor(() => expect(spanish).toHaveFocus());
 
     await user.keyboard("{Enter}{Home}{Enter}");
     await waitFor(() => expect(setLanguage).toHaveBeenLastCalledWith(null));
