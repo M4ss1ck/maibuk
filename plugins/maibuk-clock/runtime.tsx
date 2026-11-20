@@ -223,12 +223,14 @@ function TimerPanel({ client, timer, language }: TimerPanelProps) {
       .catch(() => {});
   };
 
+  const announcement = liveRegionText(state, now, language);
+
   return (
     <ui.View direction="column" gap="md">
       <ui.Text size="lg" weight="semibold">
         {formatDuration(remaining)}
       </ui.Text>
-      <ui.Status tone="info">{liveRegionText(state, now, language)}</ui.Status>
+      {announcement === "" ? null : <ui.Status tone="info">{announcement}</ui.Status>}
 
       {status !== null && status.permission !== "granted" ? (
         <ui.View direction="row" gap="sm" align="center">
@@ -336,7 +338,6 @@ function createClockPage(client: PluginClient, timer: ClockTimer): ComponentType
 
     return (
       <ui.View direction="column" gap="md">
-        <ui.Heading level={2}>{translate(language, "heading")}</ui.Heading>
         <ui.Tabs
           label={translate(language, "tabs")}
           items={items}

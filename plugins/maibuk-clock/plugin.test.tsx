@@ -138,7 +138,7 @@ describe("Clock runtime", () => {
       expect(host.pageNavigations).toEqual([{ pluginId: "maibuk-clock", pageId: CLOCK_PAGE_ID }]);
 
       const page = await host.renderPage(CLOCK_PAGE_ID);
-      expect(await screen.findByRole("heading", { name: en.heading })).toBeInTheDocument();
+      expect(await screen.findByRole("tablist", { name: en.tabs })).toBeInTheDocument();
       for (const label of [en.pomodoro, en.timer, en.stopwatch, en.alarms]) {
         expect(screen.getByRole("tab", { name: label })).toBeInTheDocument();
       }
@@ -191,7 +191,7 @@ describe("Clock runtime", () => {
       startClock(createPluginClient(host.port), servePluginUi);
       const page = await host.renderPage(CLOCK_PAGE_ID);
 
-      expect(await screen.findByRole("heading", { name: es.heading })).toBeInTheDocument();
+      expect(await screen.findByRole("tablist", { name: es.tabs })).toBeInTheDocument();
       for (const label of [es.pomodoro, es.timer, es.stopwatch, es.alarms]) {
         expect(screen.getByRole("tab", { name: label })).toBeInTheDocument();
       }
