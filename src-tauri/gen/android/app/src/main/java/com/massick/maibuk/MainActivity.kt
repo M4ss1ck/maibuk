@@ -1,9 +1,11 @@
 package com.massick.maibuk
 
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.JavascriptInterface
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebView
 import com.jakewharton.processphoenix.ProcessPhoenix
@@ -17,9 +19,18 @@ class MainActivity : TauriActivity() {
   // acted on once even if Chromium reports it again before the restart.
   private var rendererGoneHandled = false
 
+  // The notification plugin's tap event names no notification, and a cold-start
+  // tap fires before any page listens, so the tapped id waits here until the
+  // page takes it (#870).
+  private val notificationTaps = NotificationTaps()
+  private var webView: WebView? = null
+
   override fun onWebViewCreate(webView: WebView) {
     super.onWebViewCreate(webView)
     rendererGoneHandled = false
+    this.webView = webView
+    // Added before wry loads the page, so the page sees it from the start.
+    webView.addJavascriptInterface(notificationTaps, "MaibukNotificationTaps")
     // wry calls setWebView (this callback) before it calls setWebViewClient, so
     // wrapping here would be overwritten. Posting runs after wry's synchronous
     // setup on the main thread.
@@ -51,9 +62,20 @@ class MainActivity : TauriActivity() {
     ProcessPhoenix.triggerRebirth(this)
   }
 
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    if (notificationTaps.record(intent)) {
+      webView?.evaluateJavascript(
+        "window.dispatchEvent(new Event('maibuk:notification-tap'))",
+        null,
+      )
+    }
+  }
+
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
+    notificationTaps.record(intent)
 
     // WebView builds before M136/M139 ignore env(safe-area-inset-*) and IME
     // resize, so inset the native content root ourselves and return a builder
@@ -72,5 +94,26 @@ class MainActivity : TauriActivity() {
         .build()
     }
     ViewCompat.requestApplyInsets(contentRoot)
+  }
+}
+
+/** The id of the last notification the author tapped, for the page to take once. */
+class NotificationTaps {
+  @Volatile private var tapped = -1
+
+  /** Keeps the tapped id when the intent came from a notification. */
+  fun record(intent: Intent?): Boolean {
+    // The notification plugin's key for the id on its tap intent.
+    val id = intent?.getIntExtra("NotificationId", Int.MIN_VALUE) ?: Int.MIN_VALUE
+    if (id == Int.MIN_VALUE) return false
+    tapped = id
+    return true
+  }
+
+  @JavascriptInterface
+  fun take(): Int {
+    val id = tapped
+    tapped = -1
+    return id
   }
 }

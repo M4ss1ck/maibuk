@@ -91,6 +91,35 @@ function forgetScheduled(tag: string): void {
   writeScheduled(records);
 }
 
+/**
+ * Which tag each Android id was sent under, kept across runs: the plugin's tap
+ * event names no notification, so a tap is resolved from the id MainActivity
+ * hands over, possibly in a later run. The newest 200 are kept.
+ */
+const IDS_KEY = "maibuk.systemNotifications.ids";
+const MAX_REMEMBERED_IDS = 200;
+
+function readIds(): Record<string, string> {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(IDS_KEY) ?? "{}");
+    return typeof parsed === "object" && parsed !== null ? (parsed as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function rememberId(id: number, tag: string): void {
+  const ids = readIds();
+  delete ids[id];
+  ids[id] = tag;
+  const kept = Object.entries(ids).slice(-MAX_REMEMBERED_IDS);
+  try {
+    localStorage.setItem(IDS_KEY, JSON.stringify(Object.fromEntries(kept)));
+  } catch {
+    // Storage is best effort; a lost entry only loses that tap's page.
+  }
+}
+
 /** Withdraws both the pending (scheduled) and the shown one for a tag. */
 async function withdraw(tag: string): Promise<void> {
   const id = idFor(tag);
@@ -123,10 +152,31 @@ async function exactAlarmsAllowed(): Promise<boolean> {
 const clickHandlers = new Set<(tag: string) => void>();
 let listeningForClicks = false;
 
+/** MainActivity's bridge to the id of the notification the author tapped (#870). */
+interface NotificationTapBridge {
+  /** The tapped id once, then -1 until the next tap. */
+  take(): number;
+}
+
+/** Hands an Android tap from MainActivity's bridge to the handlers. */
+function takeAndroidTap(): void {
+  // Leave the tap for a later subscriber rather than drop it.
+  if (clickHandlers.size === 0) return;
+  const bridge = (globalThis.window as { MaibukNotificationTaps?: NotificationTapBridge } | undefined)
+    ?.MaibukNotificationTaps;
+  const id = bridge?.take() ?? -1;
+  if (id < 0) return;
+  const tag = tagsById.get(id) ?? readIds()[id];
+  if (tag) for (const handler of clickHandlers) handler(tag);
+}
+
 async function handleClick(event: ActionPerformed): Promise<void> {
   if (event.actionId !== "tap") return;
-  const reported = event.notification;
-  const tag = reported?.data?.tag ?? tagsById.get(reported?.id ?? -1);
+  const reported = event.notification as
+    | (ActionPerformed["notification"] & { extra?: { tag?: unknown } })
+    | null;
+  const sent = reported?.extra?.tag ?? reported?.data?.tag;
+  const tag = typeof sent === "string" ? sent : tagsById.get(reported?.id ?? -1);
   if (!tag) return;
   if (!IS_ANDROID) {
     // Desktop may hand the click to an app that is behind or minimized.
@@ -154,6 +204,16 @@ async function handleClick(event: ActionPerformed): Promise<void> {
 function listenForClicks(): void {
   if (listeningForClicks) return;
   listeningForClicks = true;
+  if (IS_ANDROID) {
+    // A cold-start tap is waiting already; a warm one is signalled by
+    // MainActivity, and coming back to the app covers a missed signal.
+    globalThis.window?.addEventListener("maibuk:notification-tap", takeAndroidTap);
+    globalThis.document?.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") takeAndroidTap();
+    });
+    queueMicrotask(takeAndroidTap);
+    return;
+  }
   void onAction((event) => {
     void handleClick(event);
   });
@@ -189,7 +249,9 @@ export const tauriSystemNotifications: SystemNotificationAdapter = {
     return answer;
   },
   async show({ tag, title, body }): Promise<void> {
-    sendNotification({ id: idFor(tag), title, body, extra: { tag } });
+    const id = idFor(tag);
+    if (IS_ANDROID) rememberId(id, tag);
+    sendNotification({ id, title, body, extra: { tag } });
   },
   async schedule({ tag, title, body, at }): Promise<void> {
     if (!IS_ANDROID) {
@@ -197,8 +259,10 @@ export const tauriSystemNotifications: SystemNotificationAdapter = {
       return;
     }
     // Only Android's OS holds a future notification across a restart.
+    const id = idFor(tag);
+    rememberId(id, tag);
     sendNotification({
-      id: idFor(tag),
+      id,
       title,
       body,
       extra: { tag },

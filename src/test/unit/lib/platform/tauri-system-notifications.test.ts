@@ -277,6 +277,58 @@ describe("tauriSystemNotifications (notification plugin)", () => {
     expect(windowApi.main.setFocus).toHaveBeenCalledTimes(1);
   });
 
+  it("reads a desktop click's tag from the extra it was sent with", async () => {
+    const handler = vi.fn();
+    desktop.adapter.onClick(handler);
+    const listener = plugin.onAction.mock.calls[0][0] as (event: unknown) => void;
+
+    listener({ actionId: "tap", inputValue: null, notification: { id: 9, extra: { tag: "clock/x" } } });
+
+    await vi.waitFor(() => expect(handler).toHaveBeenCalledWith("clock/x"));
+  });
+
+  describe("Android taps, which the plugin reports without the notification", () => {
+    /** MainActivity's bridge: hands over the tapped id once. */
+    function installBridge(ids: number[]): void {
+      Object.defineProperty(window, "MaibukNotificationTaps", {
+        value: { take: () => ids.shift() ?? -1 },
+        configurable: true,
+      });
+    }
+
+    it("takes a cold-start tap and resolves it through the id a previous run stored", async () => {
+      const previousRun = await load(true);
+      await previousRun.adapter.schedule({ tag: "clock/alarm", title: "A", body: "", at: Date.now() + 60_000 });
+      const id = previousRun.notificationId("clock/alarm");
+
+      const android = await load(true);
+      installBridge([id]);
+      const handler = vi.fn();
+      const unsubscribe = android.adapter.onClick(handler);
+
+      await vi.waitFor(() => expect(handler).toHaveBeenCalledWith("clock/alarm"));
+      expect(plugin.onAction).not.toHaveBeenCalled();
+      unsubscribe();
+    });
+
+    it("takes a warm tap when MainActivity signals one", async () => {
+      const android = await load(true);
+      await android.adapter.show({ tag: "clock/timer", title: "T", body: "" });
+      const ids: number[] = [];
+      installBridge(ids);
+      const handler = vi.fn();
+      android.adapter.onClick(handler);
+      await Promise.resolve();
+      expect(handler).not.toHaveBeenCalled();
+
+      ids.push(android.notificationId("clock/timer"));
+      window.dispatchEvent(new Event("maibuk:notification-tap"));
+
+      await vi.waitFor(() => expect(handler).toHaveBeenCalledWith("clock/timer"));
+      expect(windowApi.main.setFocus).not.toHaveBeenCalled();
+    });
+  });
+
   it("registers the click listener once for every handler", async () => {
     desktop.adapter.onClick(vi.fn())();
     desktop.adapter.onClick(vi.fn());
