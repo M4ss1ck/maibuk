@@ -54,7 +54,7 @@ const PLUGIN_TYPES = ["node", "react", "react-dom"] as const;
 /**
  * The `@testing-library/jest-dom` Vitest matcher declarations
  * (`toBeInTheDocument`, `toHaveFocus`, ...). Maibuk's own suite loads them from
- * `src/test/setup.ts` (`import "@testing-library/jest-dom/vitest"`), which the
+ * `src/test/setup.ts` (`import type {} from "@testing-library/jest-dom/vitest"`), which the
  * Plugin's program never includes, so the tooling points at the same
  * declaration file directly. It is a path, not a `types` entry: a Plugin has no
  * `node_modules` for `types` to resolve the package from, and `paths` does not
