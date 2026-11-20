@@ -569,15 +569,18 @@ function createClockPage(
       return pomodoro.subscribe(sync);
     }, [pomodoro]);
 
-    const running =
-      snapshot.state.status === "running" || pomodoroSnapshot.state.status === "running";
+    // The redraw exists only while the page is mounted and a phase runs, or
+    // while the Pomodoro tab shows today's count, which turns over at midnight.
+    const ticking =
+      snapshot.state.status === "running" ||
+      pomodoroSnapshot.state.status === "running" ||
+      tab === "pomodoro";
 
-    // The redraw exists only while the page is mounted and a phase runs.
     useEffect(() => {
-      if (!running) return;
+      if (!ticking) return;
       const id = setInterval(() => setNow(Date.now()), 1_000);
       return () => clearInterval(id);
-    }, [running]);
+    }, [ticking]);
 
     const state = snapshot.state;
     const announcement = liveRegionText(state, now, language);

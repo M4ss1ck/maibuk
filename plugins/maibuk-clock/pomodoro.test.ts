@@ -184,10 +184,12 @@ describe("Clock Pomodoro core", () => {
       })
     );
     expect(pomodoro.snapshot().today.count).toBe(1);
-    await vi.waitFor(() =>
-      expect(host.systemNotifications.scheduled.has(POMODORO_TAG)).toBe(false)
-    );
-    expect(host.systemNotifications.active.has(POMODORO_TAG)).toBe(false);
+    // The ended phase's Alert is left to fire: nothing withdraws it.
+    expect(
+      host.systemNotifications.log.filter(
+        (entry) => entry.kind === "cancelled" && entry.tag === POMODORO_TAG
+      )
+    ).toEqual([]);
   });
 
   it("starts the Short Break and resends the Alert when autoStartBreaks is on", async () => {
@@ -199,7 +201,7 @@ describe("Clock Pomodoro core", () => {
     await pomodoro.load();
     pomodoro.setSettings({ pomodoroMinutes: 1, shortBreakMinutes: 1, autoStartBreaks: true });
     pomodoro.start();
-    const breakEndsAt = start + 120_000;
+    const breakEndsAt = start + 121_000;
 
     await vi.advanceTimersByTimeAsync(60_000);
     await vi.waitFor(() =>
@@ -218,6 +220,15 @@ describe("Clock Pomodoro core", () => {
       title: "Clock: Short break",
       body: "Your break ended. Time for the next Pomodoro.",
     });
+    // Scheduling the break under the same id must not swallow the Pomodoro's
+    // own Alert, which fires first.
+    expect(host.systemNotifications.log).toContainEqual(
+      expect.objectContaining({
+        kind: "sent",
+        tag: POMODORO_TAG,
+        body: "Your Pomodoro ended. Time for a break.",
+      })
+    );
   });
 
   it("sends the last Pomodoro of the cycle to the Long Break", async () => {

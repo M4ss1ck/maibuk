@@ -37,6 +37,7 @@ import {
   TOGGLE_TIMER,
   startClock,
 } from "./runtime";
+import { dayNumber } from "./cycle";
 import { clockManifest, tabTo, type User } from "./test-support";
 import { formatDuration } from "./time";
 
@@ -260,7 +261,7 @@ describe("Clock runtime", () => {
     });
   });
 
-  it("ends the Pomodoro into an idle Short Break, counts it, and cancels the Alert", async () => {
+  it("ends the Pomodoro into an idle Short Break, counts it, and leaves its Alert to fire", async () => {
     const { host, storage } = startHost();
     freezeClock();
     await host.renderPage(CLOCK_PAGE_ID);
@@ -282,13 +283,12 @@ describe("Clock runtime", () => {
       pomodoro: 1,
       status: "idle",
     });
-    await eventually(() =>
-      expect(host.systemNotifications.scheduled.has(POMODORO_TAG)).toBe(false)
-    );
-    expect(host.systemNotifications.log.at(-1)).toMatchObject({
-      kind: "cancelled",
-      tag: POMODORO_TAG,
-    });
+    // The ended Pomodoro's Alert is left to fire: nothing withdraws it.
+    expect(
+      host.systemNotifications.log.filter(
+        (entry) => entry.kind === "cancelled" && entry.tag === POMODORO_TAG
+      )
+    ).toEqual([]);
     expect(screen.getByRole("button", { name: en.start })).toBeInTheDocument();
   });
 
@@ -321,6 +321,42 @@ describe("Clock runtime", () => {
       pomodoro: 1,
       status: "idle",
     });
+  });
+
+  it("resets Pomodoros today at local midnight while the page stays open on an idle Cycle", async () => {
+    const lateEvening = new Date(2026, 10, 20, 23, 59, 0).getTime();
+    const storage = new Map<string, unknown>([
+      [
+        "pomodoro",
+        {
+          state: { phase: "pomodoro", pomodoro: 3, status: "idle" },
+          today: {
+            day: dayNumber(lateEvening, new Date(lateEvening).getTimezoneOffset()),
+            count: 2,
+          },
+        },
+      ],
+    ]);
+    const { host } = startHost({ storage });
+    vi.useFakeTimers({
+      now: lateEvening,
+      shouldAdvanceTime: true,
+      toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"],
+    });
+    await host.renderPage(CLOCK_PAGE_ID);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+    await openPomodoroTab(user);
+    await eventually(() =>
+      expect(screen.getByText(en.pomodorosToday.replace("{n}", "2"))).toBeInTheDocument()
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2 * 60_000);
+    });
+    await eventually(() =>
+      expect(screen.getByText(en.pomodorosToday.replace("{n}", "0"))).toBeInTheDocument()
+    );
   });
 
   it("sends the fourth Pomodoro to the Long Break", async () => {

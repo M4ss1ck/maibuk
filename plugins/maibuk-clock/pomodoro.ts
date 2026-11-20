@@ -34,6 +34,9 @@ export const POMODORO_NOTIFICATION_ID = "pomodoro";
 /** The Plugin storage key the Cycle is kept under. */
 const STORAGE_KEY = "pomodoro";
 
+/** How long after a phase's deadline the page acts on its end. */
+const END_GRACE_MS = 1_000;
+
 /** What the Cycle keeps: where it stands, how it runs, and today's Pomodoros. */
 export interface PomodoroSnapshot {
   state: CycleState;
@@ -249,15 +252,17 @@ export function createPomodoro(client: PluginClient): ClockPomodoro {
             : snapshot.today;
         const state = advanceCycle(result.state, snapshot.settings, now);
         snapshot = { ...snapshot, state, today };
+        // The ended phase's Alert is left to fire; only an auto-started phase
+        // schedules its own.
         if (state.status === "running") {
           scheduleAlert(state);
           holdEnd(state.endsAt);
-        } else {
-          cancelAlert();
         }
         changed();
       },
-      Math.max(0, endsAt - Date.now())
+      // A moment past the deadline, so the ended phase's own Alert has fired
+      // before an auto-started phase reschedules the same id over it.
+      Math.max(0, endsAt - Date.now()) + END_GRACE_MS
     );
   }
 
