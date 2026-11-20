@@ -1,4 +1,5 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { EventEmitter } from "node:events";
 import {
   existsSync,
   mkdirSync,
@@ -16,9 +17,16 @@ import {
   createRunDir,
   killRecordedPreview,
   playwrightEnv,
+  runPlaywright,
   sweepRunDirs,
   sweepStalePreviews,
 } from "../../../../e2e/preview-server.mjs";
+
+// Only `spawn` is stubbed, so runPlaywright never starts Playwright; spawnSync stays real.
+vi.mock("node:child_process", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("node:child_process")>()),
+  spawn: vi.fn(),
+}));
 
 function probeFor({
   alive = () => false,
@@ -208,7 +216,26 @@ describe("playwrightEnv", () => {
     expect(env).toMatchObject({ PATH: "/bin", VITE_BUILD_TARGET: "web" });
   });
 
-  it("makes localStorage throw in the Playwright process, so zustand skips persistence", () => {
+  it("is the env runPlaywright hands the Playwright process", async () => {
+    const child = new EventEmitter();
+    vi.mocked(spawn).mockReturnValueOnce(child as ReturnType<typeof spawn>);
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const done = runPlaywright({
+      root: "/repo",
+      label: "test",
+      config: "e2e/playwright.config.ts",
+      args: [],
+      env: { E2E_BASE_URL: "http://x" },
+      teardown: { track: () => {} },
+    });
+    child.emit("exit", 0, null);
+    expect(await done).toBe(0);
+    const { env } = vi.mocked(spawn).mock.calls[0][2] as { env: NodeJS.ProcessEnv };
+    expect(env.NODE_OPTIONS).toContain("--no-experimental-webstorage");
+    expect(env.E2E_BASE_URL).toBe("http://x");
+  });
+
+  it("makes localStorage throw in a Node child, so zustand skips persistence", () => {
     // #881: without the flag, Node 26 returns undefined here and zustand
     // persist crashes in E2E global setup. Older Node throws either way.
     const base = { ...process.env };
