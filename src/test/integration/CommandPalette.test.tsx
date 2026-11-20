@@ -675,7 +675,7 @@ describe("Command Palette", () => {
 
     await user.keyboard("{F1}");
     const dialog = await screen.findByRole("dialog", { name: PALETTE_NAME });
-    await user.keyboard("save version");
+    await user.paste("save version");
 
     // A Command bound only in the Book Editor is not offered on the Library.
     await within(dialog).findAllByRole("option");
@@ -720,7 +720,7 @@ describe("Command Palette", () => {
     screen.getByPlaceholderText("Search notes...").focus();
     await openPaletteWithF1(user);
     const dialog = screen.getByRole("dialog", { name: PALETTE_NAME });
-    await user.keyboard("duplicate");
+    await user.paste("duplicate");
 
     // Settings rows still answer "duplicate", but the Note Item Command does not.
     await within(dialog).findAllByRole("option");
@@ -1695,7 +1695,7 @@ describe("Command Palette text results", () => {
     await settleOn("/");
 
     const dialog = await openLibrarySearch(user);
-    await user.keyboard("harbour");
+    await user.paste("harbour");
 
     const textGroup = await within(dialog).findByRole("group", { name: "Text" });
     // The Text section trails every title section.
@@ -1716,7 +1716,7 @@ describe("Command Palette text results", () => {
     await settleOn("/");
 
     const dialog = await openLibrarySearch(user);
-    await user.keyboard("harbour");
+    await user.paste("harbour");
     await within(dialog).findByRole("group", { name: "Text" });
 
     const byName = textOptionsByName(dialog);
@@ -1750,7 +1750,7 @@ describe("Command Palette text results", () => {
     await settleOn("/");
 
     const dialog = await openLibrarySearch(user);
-    await user.keyboard("harbour");
+    await user.paste("harbour");
     await within(dialog).findByRole("group", { name: "Text" });
 
     // No title matches "harbour": the two text rows are the whole count.
@@ -1773,7 +1773,7 @@ describe("Command Palette text results", () => {
     await settleOn("/");
 
     const dialog = await openLibrarySearch(user);
-    await user.keyboard("capybara");
+    await user.paste("capybara");
 
     await within(dialog).findByRole("group", { name: "Text" });
     // The list virtualizes to its viewport, so jsdom mounts only the visible
@@ -1802,7 +1802,7 @@ describe("Command Palette text results", () => {
     await arrowToAndChoose(user, dialog, search, page);
     expect(await within(dialog).findByText("Showing Open Note")).toBeInTheDocument();
 
-    await user.keyboard("sharedword");
+    await user.paste("sharedword");
     await within(dialog).findByRole("group", { name: "Text" });
     await waitFor(() => expect(sectionOptions(dialog, "Text")).toHaveLength(1));
     const names = [...textOptionsByName(dialog).keys()];
@@ -1881,7 +1881,7 @@ describe("Command Palette text results", () => {
       await settleOn("/");
 
       const dialog = await openLibrarySearch(user);
-      await user.keyboard("harbour");
+      await user.paste("harbour");
       expect(
         await within(dialog).findByText(en("commandPalette.textIndexing"))
       ).toBeInTheDocument();
@@ -1919,7 +1919,7 @@ describe("Command Palette text results", () => {
       await settleOn("/");
 
       const dialog = await openLibrarySearch(user);
-      await user.keyboard("harbour");
+      await user.paste("harbour");
       expect(
         await within(dialog).findByText(en("commandPalette.textIndexing"))
       ).toBeInTheDocument();
@@ -2005,8 +2005,9 @@ describe("Command Palette entry buttons", () => {
 
   /** Tabs from the body until the entry button holds focus; keyboard only. */
   async function tabToEntryButton(user: ReturnType<typeof userEvent.setup>): Promise<HTMLElement> {
+    const targets = visiblePaletteButtons();
     for (let i = 0; i < 250; i++) {
-      const focused = visiblePaletteButtons().find((button) => button === document.activeElement);
+      const focused = targets.find((button) => button === document.activeElement);
       if (focused) return focused;
       await user.tab();
     }
