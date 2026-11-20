@@ -262,6 +262,35 @@ describe("BookEditor mobile overlays", () => {
     expect(chaptersButton).toHaveFocus();
   });
 
+  it("keeps focus on the trigger when the chapters drawer closes before its open-focus frame", async () => {
+    // The opener focuses the drawer one animation frame later. Under load the
+    // drawer can close first; that late frame must not pull focus into the
+    // closed drawer (jsdom does not enforce inert, so the guard is ours).
+    const frames: FrameRequestCallback[] = [];
+    const rafSpy = vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
+      frames.push(cb);
+      return frames.length;
+    });
+    try {
+      const user = userEvent.setup();
+      render(<BookEditor />);
+
+      const chaptersButton = screen.getByRole("button", { name: "chapters.title" });
+      chaptersButton.focus();
+      await user.keyboard("{Enter}");
+      await user.click(screen.getByTestId("mobile-chapters-backdrop"));
+      expect(chaptersButton).toHaveFocus();
+
+      act(() => {
+        for (const cb of frames.splice(0)) cb(performance.now());
+      });
+
+      expect(chaptersButton).toHaveFocus();
+    } finally {
+      rafSpy.mockRestore();
+    }
+  });
+
   it("closes the chapters drawer via the Android back handler and cleans up its dismisser", async () => {
     const user = userEvent.setup();
     render(<BookEditor />);
