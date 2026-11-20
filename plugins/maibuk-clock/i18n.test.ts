@@ -47,9 +47,11 @@ describe("Clock manifest overrides", () => {
   it("overrides exactly the fields the English manifest declares", () => {
     const locale = JSON.parse(readFileSync(join(__dirname, "locales", "es.json"), "utf8"));
     expect(Object.keys(locale).sort()).toEqual([
+      "commands.lapStopwatch.label",
       "commands.openClock.label",
       "commands.skipPomodoro.label",
       "commands.togglePomodoro.label",
+      "commands.toggleStopwatch.label",
       "commands.toggleTimer.label",
       "description",
       "name",

@@ -1,13 +1,17 @@
-// Clock's Timer (issue #871) and Pomodoro, on the Built-in Plugin that ships off
-// by default: turning it on from Settings → Plugins by keyboard, opening its page
-// from the Command Palette on the Timer tab, setting a 5-second length from the
-// length fields, starting it, pausing and resuming it from its Plugin Command,
-// and its end: the live region's announcement and the Alert, which reaches the
-// author as Maibuk's own in-window notice here because headless Chromium never
-// grants the Notification permission. The Pomodoro tab is reached by keyboard
-// from the Timer tab, and its Cycle starts there, pauses and resumes from its
-// Command, skips to the Short break from its other Command, and resets to the
-// first Pomodoro. No phase is waited out: its 25 minutes are the unit suites'.
+// Clock's Timer (issue #871), Pomodoro, and Stopwatch (issue #873), on the
+// Built-in Plugin that ships off by default: turning it on from Settings →
+// Plugins by keyboard, opening its page from the Command Palette on the Timer
+// tab, setting a 5-second length from the length fields, starting it, pausing
+// and resuming it from its Plugin Command, and its end: the live region's
+// announcement and the Alert, which reaches the author as Maibuk's own
+// in-window notice here because headless Chromium never grants the Notification
+// permission. The Pomodoro tab is reached by keyboard from the Timer tab, and
+// its Cycle starts there, pauses and resumes from its Command, skips to the
+// Short break from its other Command, and resets to the first Pomodoro. The
+// Stopwatch tab is one ArrowRight further on: its Stopwatch starts, marks a Lap
+// from its button and a second from its other Command, pauses and resumes from
+// its Command, and resets to zero. No phase is waited out: the Pomodoro's 25
+// minutes are the unit suites'.
 // Keyboard only: every control is reached by Tab and pressed with Enter or Space.
 
 import type { Page } from "@playwright/test";
@@ -105,6 +109,33 @@ async function secondsLeft(page: Page): Promise<number> {
   return text === null ? Number.POSITIVE_INFINITY : secondsOf(text);
 }
 
+/** The Stopwatch Command that starts, pauses and resumes the Stopwatch. */
+const TOGGLE_STOPWATCH_COMMAND = "Start or pause the Stopwatch";
+
+/** The Stopwatch Command that marks one Lap while it runs. */
+const LAP_STOPWATCH_COMMAND = "Mark a Lap";
+
+/** The Laps table the Stopwatch draws once it has Laps. */
+const lapsTable = (page: Page) => page.getByRole("table", { name: "Laps" });
+
+/** One Laps data row: a body row holds a cell per column, the header row holds none. */
+const lapRows = (page: Page) =>
+  lapsTable(page)
+    .getByRole("row")
+    .filter({ has: page.getByRole("cell") });
+
+/**
+ * The Stopwatch's drawn elapsed time: the "m:ss" above its controls. The Laps
+ * table draws times of its own, so the panel's first one is the elapsed time.
+ */
+const elapsedTime = (page: Page) => page.getByText(/^\d{1,2}:\d{2}$/).first();
+
+/** The seconds the Stopwatch's drawn elapsed time shows. */
+async function elapsedSeconds(page: Page): Promise<number> {
+  const text = await elapsedTime(page).textContent();
+  return text === null ? 0 : secondsOf(text);
+}
+
 /** Jumps to the Plugins section through the Settings outline, leaving its heading focused. */
 async function openPluginsSection(page: Page): Promise<void> {
   await page.goto("/settings");
@@ -177,6 +208,22 @@ async function openPomodoroTab(page: Page): Promise<void> {
   await page.keyboard.press("ArrowLeft");
   await expect(pomodoroTab).toHaveAttribute("aria-selected", "true");
   await expect(phaseHeading(page, "Pomodoro")).toBeVisible({ timeout: 15_000 });
+}
+
+/**
+ * Moves from the Timer tab to the Stopwatch tab by keyboard: the tab list is one
+ * tab stop, so Tab lands on the selected Timer tab, and ArrowRight moves to the
+ * Stopwatch, which selection follows.
+ */
+async function openStopwatchTab(page: Page): Promise<void> {
+  const tabList = page.getByRole("tablist", { name: "Clock sections" });
+  const timerTab = tabList.getByRole("tab", { name: "Timer", exact: true });
+  const stopwatchTab = tabList.getByRole("tab", { name: "Stopwatch", exact: true });
+  await tabTo(page, timerTab, { max: 40 });
+  await page.keyboard.press("ArrowRight");
+  await expect(stopwatchTab).toHaveAttribute("aria-selected", "true");
+  // The Stopwatch tab's own panel, from the zero it opens on.
+  await expect(page.getByText("0:00", { exact: true })).toBeVisible({ timeout: 15_000 });
 }
 
 /**
@@ -327,5 +374,72 @@ test.describe("Clock Pomodoro @wf:plugins-clock-pomodoro @chromium-only", () => 
     await expect(page.getByRole("button", { name: "Pause", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Resume", exact: true })).toHaveCount(0);
     await capture(page, "clock-pomodoro-reset");
+  });
+});
+
+test.describe("Clock Stopwatch @wf:plugins-clock-stopwatch @chromium-only", () => {
+  test("the Stopwatch runs from its tab, marks Laps and pauses, resumes and resets from its Commands @sc:plugin.maibuk-clock.toggleStopwatch @sc:plugin.maibuk-clock.lapStopwatch", async ({
+    page,
+  }) => {
+    await turnOn(page);
+    await openClockPage(page);
+    await openStopwatchTab(page);
+
+    // Idle: nothing has run, so Start is the only control and no Lap is marked.
+    const start = page.getByRole("button", { name: "Start", exact: true });
+    await expect(page.getByText("0:00", { exact: true })).toBeVisible();
+    await expect(start).toBeVisible();
+    await expect(page.getByRole("button", { name: "Pause", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Resume", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Lap", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Reset", exact: true })).toHaveCount(0);
+    await expect(lapsTable(page)).toHaveCount(0);
+    await capture(page, "clock-stopwatch-idle");
+
+    // Start runs it: Pause and Lap replace Start, and the elapsed time climbs.
+    await tabTo(page, start, { max: 12 });
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Lap", exact: true })).toBeVisible();
+    await expect.poll(() => elapsedSeconds(page), { timeout: 10_000 }).toBeGreaterThan(0);
+
+    // Lap, pressed on its own button, marks the first one: the table appears and
+    // holds one row under its Lap, Lap time, and Total columns.
+    const lap = page.getByRole("button", { name: "Lap", exact: true });
+    await tabToEither(page, lap, { max: 30 });
+    await page.keyboard.press("Enter");
+    await expect(lapsTable(page)).toBeVisible();
+    await expect(lapRows(page)).toHaveCount(1);
+
+    // The Command pauses it: Resume replaces Pause, Lap is offered only while it
+    // runs, and the elapsed time holds rather than climbing.
+    await runPaletteCommand(page, TOGGLE_STOPWATCH_COMMAND);
+    await expect(page.getByRole("button", { name: "Resume", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Pause", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Lap", exact: true })).toHaveCount(0);
+    const paused = (await elapsedTime(page).textContent()) ?? "";
+    expect(secondsOf(paused)).toBeGreaterThan(0);
+    await page.waitForTimeout(1_500);
+    await expect(elapsedTime(page)).toHaveText(paused);
+
+    // The Command again resumes it, and its other Command adds a second Lap.
+    await runPaletteCommand(page, TOGGLE_STOPWATCH_COMMAND);
+    await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Resume", exact: true })).toHaveCount(0);
+    await runPaletteCommand(page, LAP_STOPWATCH_COMMAND);
+    await expect(lapRows(page)).toHaveCount(2);
+    await capture(page, "clock-stopwatch-laps");
+
+    // Reset returns it to zero, dropping the Laps. The palette leaves focus on
+    // the body, so the button is reached from either side.
+    const reset = page.getByRole("button", { name: "Reset", exact: true });
+    await tabToEither(page, reset, { max: 30 });
+    await page.keyboard.press("Enter");
+    await expect(page.getByText("0:00", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Reset", exact: true })).toHaveCount(0);
+    await expect(lapsTable(page)).toHaveCount(0);
+    await capture(page, "clock-stopwatch-reset");
   });
 });

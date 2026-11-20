@@ -81,6 +81,26 @@ describe("Clock manifest", () => {
     expect(command?.navigates).toBeUndefined();
   });
 
+  it("contributes the toggleStopwatch Command with no default shortcut", () => {
+    const command = manifest().contributes?.commands?.find(
+      (candidate) => candidate.id === "toggleStopwatch"
+    );
+    expect(command?.label).toBe("Start or pause the Stopwatch");
+    expect(command?.contexts).toEqual(["global"]);
+    expect(command?.defaults).toBeUndefined();
+    expect(command?.navigates).toBeUndefined();
+  });
+
+  it("contributes the lapStopwatch Command with no default shortcut", () => {
+    const command = manifest().contributes?.commands?.find(
+      (candidate) => candidate.id === "lapStopwatch"
+    );
+    expect(command?.label).toBe("Mark a Lap");
+    expect(command?.contexts).toEqual(["global"]);
+    expect(command?.defaults).toBeUndefined();
+    expect(command?.navigates).toBeUndefined();
+  });
+
   it("contributes the Pomodoro toggle as a Toggle Button", () => {
     expect(manifest().contributes?.toolbarButtons).toEqual([
       {
@@ -108,12 +128,14 @@ describe("Clock manifest", () => {
     ]);
   });
 
-  it("contributes exactly the four Commands, in order", () => {
+  it("contributes exactly the six Commands, in order", () => {
     expect(manifest().contributes?.commands?.map((command) => command.id)).toEqual([
       "openClock",
       "toggleTimer",
       "togglePomodoro",
       "skipPomodoro",
+      "toggleStopwatch",
+      "lapStopwatch",
     ]);
   });
 
@@ -131,6 +153,8 @@ describe("Clock manifest", () => {
     expect(locale["commands.toggleTimer.label"]).toBe("Iniciar o pausar el temporizador");
     expect(locale["commands.togglePomodoro.label"]).toBe("Iniciar o pausar el Pomodoro");
     expect(locale["commands.skipPomodoro.label"]).toBe("Saltar al siguiente Pomodoro o descanso");
+    expect(locale["commands.toggleStopwatch.label"]).toBe("Iniciar o pausar el cronómetro");
+    expect(locale["commands.lapStopwatch.label"]).toBe("Marcar una vuelta");
     expect(locale["pages.clock.title"]).toBe("Reloj");
     expect(locale["settingsRows.pomodoro.label"]).toBe("Pomodoro");
     expect(locale["settingsRows.pomodoro.description"]).toBe(

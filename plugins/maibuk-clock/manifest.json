@@ -36,6 +36,16 @@
         "id": "skipPomodoro",
         "label": "Skip to the next Pomodoro or break",
         "contexts": ["global"]
+      },
+      {
+        "id": "toggleStopwatch",
+        "label": "Start or pause the Stopwatch",
+        "contexts": ["global"]
+      },
+      {
+        "id": "lapStopwatch",
+        "label": "Mark a Lap",
+        "contexts": ["global"]
       }
     ],
     "pages": [{ "id": "clock", "title": "Clock", "command": "openClock" }],
