@@ -7,6 +7,8 @@ import { describe, expect, it } from "vitest";
 import type { TestModule } from "vitest/node";
 import TimeBudgetReporter from "@/test/support/time-budget-reporter";
 import {
+  FILE_BUDGET_MS,
+  filesOverBudget,
   githubAnnotations,
   summaryMarkdown,
   type TimedTest,
@@ -150,6 +152,41 @@ describe("time budget report", () => {
     );
     expect(summaryMarkdown([])).toContain("Every test finished within 50% of its timeout.");
   });
+
+  it("sums each file's tests, keeps the ones over the file budget, heaviest first", () => {
+    expect(FILE_BUDGET_MS).toBe(30_000);
+    const files = filesOverBudget([
+      { file: "src/test/a.test.tsx", name: "one", durationMs: 20_000, timeoutMs: 60_000 },
+      { file: "src/test/b.test.tsx", name: "slow", durationMs: 45_000, timeoutMs: 60_000 },
+      { file: "src/test/a.test.tsx", name: "two", durationMs: 15_000, timeoutMs: 60_000 },
+      { file: "src/test/c.test.tsx", name: "light", durationMs: 5_000, timeoutMs: 60_000 },
+    ]);
+    expect(files).toEqual([
+      { file: "src/test/b.test.tsx", durationMs: 45_000, tests: 1 },
+      { file: "src/test/a.test.tsx", durationMs: 35_000, tests: 2 },
+    ]);
+  });
+
+  it("annotates an over-budget file for GitHub, escaping what workflow commands reserve", () => {
+    const lines = githubAnnotations(
+      [],
+      [{ file: "src/test/a,b.test.ts", durationMs: 135_000, tests: 3 }]
+    );
+    expect(lines).toEqual([
+      "::warning file=src/test/a%2Cb.test.ts,title=File over its time budget::src/test/a,b.test.ts took 135.0 s of test time across 3 tests, over the 30.0 s file budget. Split it.",
+    ]);
+  });
+
+  it("writes a file table after the per-test part, and says every file has room", () => {
+    const table = summaryMarkdown(
+      [timed("slow", 45_000)],
+      [{ file: "src/test/a.test.ts", durationMs: 135_000, tests: 3 }]
+    );
+    expect(table).toContain("| 75% | 45.0 s | 60.0 s | `src/test/integration/a.test.tsx` | slow |");
+    expect(table).toContain("| Took | Tests | File |");
+    expect(table).toContain("| 135.0 s | 3 | `src/test/a.test.ts` |");
+    expect(summaryMarkdown([])).toContain("Every file is under the 30 s budget.");
+  });
 });
 
 describe("TimeBudgetReporter", () => {
@@ -185,15 +222,19 @@ describe("TimeBudgetReporter", () => {
       log: (line) => lines.push(line),
     }).onTestRunEnd([run]);
 
-    expect(lines).toHaveLength(2);
+    expect(lines).toHaveLength(3);
     expect(lines[0]).toMatch(
       /^::warning file=src\/test\/integration\/slow\.test\.tsx,.*::slow took 40\.0 s/
     );
+    expect(lines[1]).toMatch(
+      /^::warning file=src\/test\/integration\/slow\.test\.tsx,title=File over its time budget::/
+    );
     const summary = readFileSync(summaryFile, "utf8");
     expect(summary).toContain("| 67% | 40.0 s | 60.0 s |");
+    expect(summary).toContain("| 40.1 s | 2 | `src/test/integration/slow.test.tsx` |");
     // The step log carries the summary verbatim: the job summary is not
     // readable back through the GitHub API.
-    expect(lines[1]).toBe(summary);
+    expect(lines[2]).toBe(summary);
   });
 
   it("still prints and writes the summary on GitHub Actions when every test has room", () => {
@@ -220,5 +261,36 @@ describe("TimeBudgetReporter", () => {
     lines.length = 0;
     reporter.onTestRunEnd([moduleWith([{ name: "fast", duration: 100, timeout: 60_000 }])]);
     expect(lines).toEqual([]);
+  });
+
+  // Each test keeps 67% of its timeout in hand, so only the file sum is over.
+  const spread = moduleWith([
+    { name: "one", duration: 20_000, timeout: 60_000 },
+    { name: "two", duration: 20_000, timeout: 60_000 },
+  ]);
+
+  it("annotates a file that sums over the budget when no single test is tight", () => {
+    const summaryFile = join(mkdtempSync(join(tmpdir(), "budget-")), "summary.md");
+    const lines: string[] = [];
+    new TimeBudgetReporter({
+      env: { GITHUB_ACTIONS: "true", GITHUB_STEP_SUMMARY: summaryFile },
+      cwd: "/repo",
+      log: (line) => lines.push(line),
+    }).onTestRunEnd([spread]);
+
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toBe(
+      "::warning file=src/test/integration/slow.test.tsx,title=File over its time budget::src/test/integration/slow.test.tsx took 40.0 s of test time across 2 tests, over the 30.0 s file budget. Split it."
+    );
+    expect(lines[1]).toBe(readFileSync(summaryFile, "utf8"));
+    expect(lines[1]).toContain("| 40.0 s | 2 | `src/test/integration/slow.test.tsx` |");
+  });
+
+  it("prints the table locally when only a file is over budget", () => {
+    const lines: string[] = [];
+    new TimeBudgetReporter({ env: {}, cwd: "/repo", log: (l) => lines.push(l) }).onTestRunEnd([
+      spread,
+    ]);
+    expect(lines.join("\n")).toContain("| 40.0 s | 2 | `src/test/integration/slow.test.tsx` |");
   });
 });
