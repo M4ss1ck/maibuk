@@ -5,6 +5,16 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 y este proyecto sigue el [Versionado Semántico](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.1] - 2026-11-20
+
+### Changed
+- Mejorar el rendimiento de representación del Editor de atajos almacenando en caché las frases de voz predeterminadas por idioma
+
+### Fixed
+- Evitar que el foco se introduzca en un panel de capítulos móvil cerrado cuando se descarta durante la apertura
+- Mantener el comportamiento correcto del foco al moverse entre la ventana de la aplicación y los iframes de complementos
+- Mantener el foco en los campos de complementos que reciben el foco mientras se cierra un popover de IU remota
+
 ## [0.24.0] - 2026-11-19
 
 ### Added
