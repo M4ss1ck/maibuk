@@ -691,7 +691,7 @@ export const PLUGIN_API_TABLE = [
   defineApiRow({
     id: "notifications.system",
     description:
-      "Shows a System Notification naming this Plugin. The same id replaces this Plugin's earlier one, and Maibuk allows at most one per second, queueing extras so none is dropped. When the device has not allowed notifications, or cannot show one, Maibuk's toast shows it instead.",
+      "Shows a System Notification naming this Plugin, now or at `at`. The same id replaces this Plugin's earlier one, shown or scheduled, and Maibuk allows at most one immediate one per second, queueing extras so none is dropped. A Plugin may have at most 20 scheduled ones pending; one more returns the limit error, and a replace by id does not count as new. Android holds a scheduled one even after Maibuk closes; desktop and the web hold it only while Maibuk runs and forget it on restart, so send it again when your Plugin starts. When the device has not allowed notifications, or cannot show one, Maibuk's toast shows it instead.",
     input: z.strictObject({
       id: z
         .string()
@@ -702,15 +702,28 @@ export const PLUGIN_API_TABLE = [
         ),
       title: z.string().min(1).max(200),
       body: z.string().max(1000),
+      at: z
+        .int()
+        .min(0)
+        .optional()
+        .describe(
+          "When to show it, in milliseconds since the epoch (Date.now() + delay). A time already past shows it now."
+        ),
     }),
-    output: ok,
+    output: z.union([
+      ok,
+      z.strictObject({
+        error: z.literal("limit"),
+        message: z.string(),
+      }),
+    ]),
     permission: "system-notifications",
     effect: "write",
   }),
   defineApiRow({
     id: "notifications.cancel",
     description:
-      "Withdraws this Plugin's System Notification with that id. An id that is not showing is not an error.",
+      "Withdraws this Plugin's System Notification with that id, shown or scheduled. An id that is not showing or pending is not an error.",
     input: z.strictObject({ id: z.string().min(1).max(128) }),
     output: ok,
     permission: "system-notifications",
@@ -719,11 +732,12 @@ export const PLUGIN_API_TABLE = [
   defineApiRow({
     id: "notifications.systemStatus",
     description:
-      "Reads whether this device allows System Notifications and whether it shows one while Maibuk is closed.",
+      "Reads whether this device allows System Notifications, whether it shows a scheduled one while Maibuk is closed (Android), and whether a scheduled one fires on time. exactTiming is false on Android until the author allows alarms and reminders, and then one can fire minutes late.",
     input: none,
     output: z.strictObject({
       permission: systemNotificationPermission,
       canScheduleWhileClosed: z.boolean(),
+      exactTiming: z.boolean(),
     }),
     permission: "system-notifications",
     effect: "read",
@@ -731,7 +745,7 @@ export const PLUGIN_API_TABLE = [
   defineApiRow({
     id: "notifications.requestSystemPermission",
     description:
-      "Asks the device for permission to show System Notifications and returns its answer. Refused with user-action-required unless the author's own click, key press, or Command run caused the call.",
+      "Asks the device for permission to show System Notifications and returns its answer. On Android, once notifications are allowed, it also opens the alarms and reminders setting when exact timing is off. Refused with user-action-required unless the author's own click, key press, or Command run caused the call.",
     input: none,
     output: z.strictObject({ permission: systemNotificationPermission }),
     permission: "system-notifications",

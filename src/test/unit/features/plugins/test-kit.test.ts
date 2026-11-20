@@ -2264,7 +2264,7 @@ describe("createTestHost() System Notifications", () => {
     }
   });
 
-  it("reports the device's answer and whether it fires while closed", async () => {
+  it("reports the device's answer, whether it fires while closed, and whether it fires on time", async () => {
     const host = createTestHost({ manifest: notificationsManifest() });
     try {
       const client = createPluginClient(host.port);
@@ -2272,15 +2272,30 @@ describe("createTestHost() System Notifications", () => {
       await expect(client.notifications.systemStatus()).resolves.toEqual({
         permission: "granted",
         canScheduleWhileClosed: false,
+        exactTiming: true,
       });
 
       host.systemNotifications.setCanScheduleWhileClosed(true);
+      host.systemNotifications.setExactTiming(false);
       host.systemNotifications.setPermission("denied");
 
       await expect(client.notifications.systemStatus()).resolves.toEqual({
         permission: "denied",
         canScheduleWhileClosed: true,
+        exactTiming: false,
       });
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("opens the Plugin's first page when the author clicks one of its notifications", async () => {
+    const host = createTestHost({ manifest: notificationsManifest() });
+    try {
+      host.systemNotifications.click("another-plugin/x");
+      host.systemNotifications.click(`${host.manifest.id}/reminder`);
+
+      expect(host.pageNavigations).toEqual([{ pluginId: host.manifest.id, pageId: "report" }]);
     } finally {
       await host.stop();
     }
@@ -2298,6 +2313,7 @@ describe("createTestHost() System Notifications", () => {
       await expect(client.notifications.systemStatus()).resolves.toEqual({
         permission: "default",
         canScheduleWhileClosed: false,
+        exactTiming: true,
       });
     } finally {
       await host.stop();
@@ -2342,6 +2358,164 @@ describe("createTestHost() System Notifications", () => {
         });
       }
       expect(host.systemNotifications.log).toEqual([]);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("records a future send as scheduled, with its deadline", async () => {
+    const host = createTestHost({ manifest: notificationsManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      const at = Date.now() + 60_000;
+
+      await expect(
+        client.notifications.system({ id: "alarm", title: "Wake up", body: "Stretch", at })
+      ).resolves.toBeNull();
+
+      expect(host.systemNotifications.scheduled.get("tracer/alarm")).toEqual({
+        title: "Tracer Fixture: Wake up",
+        body: "Stretch",
+        at,
+      });
+      expect(host.systemNotifications.log).toContainEqual({
+        kind: "scheduled",
+        tag: "tracer/alarm",
+        title: "Tracer Fixture: Wake up",
+        body: "Stretch",
+        at,
+      });
+      expect(host.systemNotifications.active.has("tracer/alarm")).toBe(false);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("fires a scheduled one at its deadline", async () => {
+    // Real time, a short deadline: fake timers raced the port in these tests.
+    const host = createTestHost({ manifest: notificationsManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      await client.notifications.system({
+        id: "alarm",
+        title: "Wake up",
+        body: "Stretch",
+        at: Date.now() + 100,
+      });
+
+      await vi.waitFor(() => {
+        expect(host.systemNotifications.active.get("tracer/alarm")).toEqual({
+          title: "Tracer Fixture: Wake up",
+          body: "Stretch",
+        });
+      });
+      expect(host.systemNotifications.scheduled.has("tracer/alarm")).toBe(false);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("refuses the 21st pending one, but lets a send replace one of the 20", async () => {
+    const host = createTestHost({ manifest: notificationsManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      const at = Date.now() + 60_000;
+      await Promise.all(
+        Array.from({ length: 20 }, (_, index) =>
+          client.notifications.system({
+            id: `alarm-${index}`,
+            title: `Alarm ${index}`,
+            body: "Ring",
+            at,
+          })
+        )
+      );
+      expect(host.systemNotifications.scheduled.size).toBe(20);
+
+      await expect(
+        client.notifications.system({ id: "alarm-20", title: "Alarm 20", body: "Ring", at })
+      ).resolves.toEqual({ error: "limit", message: expect.stringContaining("20") });
+      expect(host.systemNotifications.scheduled.size).toBe(20);
+
+      await expect(
+        client.notifications.system({ id: "alarm-0", title: "Alarm again", body: "Ring", at })
+      ).resolves.toBeNull();
+      expect(host.systemNotifications.scheduled.size).toBe(20);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("cancels pending ones when the grant is lost", async () => {
+    const host = createTestHost({ manifest: notificationsManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      await client.notifications.system({
+        id: "alarm",
+        title: "Wake up",
+        body: "Stretch",
+        at: Date.now() + 60_000,
+      });
+      expect(host.systemNotifications.scheduled.size).toBe(1);
+
+      host.setGranted([]);
+
+      await vi.waitFor(() => expect(host.systemNotifications.scheduled.size).toBe(0));
+      expect(host.systemNotifications.log).toContainEqual({
+        kind: "cancelled",
+        tag: "tracer/alarm",
+      });
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("cancels pending ones when the host stops", async () => {
+    const host = createTestHost({ manifest: notificationsManifest() });
+    const client = createPluginClient(host.port);
+    await client.notifications.system({
+      id: "alarm",
+      title: "Wake up",
+      body: "Stretch",
+      at: Date.now() + 60_000,
+    });
+    expect(host.systemNotifications.scheduled.size).toBe(1);
+
+    await host.stop();
+
+    expect(host.systemNotifications.scheduled.size).toBe(0);
+    expect(host.systemNotifications.log).toContainEqual({
+      kind: "cancelled",
+      tag: "tracer/alarm",
+    });
+  });
+
+  it("an immediate send replaces a scheduled one with the same id", async () => {
+    const host = createTestHost({ manifest: notificationsManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      await client.notifications.system({
+        id: "alarm",
+        title: "Wake up",
+        body: "Stretch",
+        at: Date.now() + 60_000,
+      });
+      expect(host.systemNotifications.scheduled.has("tracer/alarm")).toBe(true);
+
+      await expect(
+        client.notifications.system({ id: "alarm", title: "Now", body: "Here" })
+      ).resolves.toBeNull();
+
+      expect(host.systemNotifications.scheduled.has("tracer/alarm")).toBe(false);
+      expect(host.systemNotifications.active.get("tracer/alarm")).toEqual({
+        title: "Tracer Fixture: Now",
+        body: "Here",
+      });
+      expect(host.systemNotifications.log.map((entry) => entry.kind)).toEqual([
+        "scheduled",
+        "cancelled",
+        "sent",
+      ]);
     } finally {
       await host.stop();
     }

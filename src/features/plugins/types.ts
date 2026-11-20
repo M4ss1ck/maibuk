@@ -1005,10 +1005,11 @@ export interface TestHost {
   notifications: TestNotification[];
   /**
    * The in-memory device behind `notifications.system`: the log of sent,
-   * replaced, and cancelled notifications (tags are `<pluginId>/<id>`), the
-   * ones `active` right now, `setPermission`, `setCanScheduleWhileClosed`, and
-   * `requestAnswer`. A send the device refuses lands in `notifications` as an
-   * info toast instead.
+   * replaced, scheduled, and cancelled notifications (tags are
+   * `<pluginId>/<id>`), the ones `active` now and the ones `scheduled` for a
+   * deadline, `setPermission`, `setCanScheduleWhileClosed`, `setExactTiming`,
+   * `click`, and `requestAnswer`. A send the device refuses lands in
+   * `notifications` as an info toast instead.
    */
   systemNotifications: MemorySystemNotificationAdapter;
   /** Every `navigation.openEntity` the Plugin asked for, in order. */
@@ -1030,6 +1031,7 @@ export interface TestHost {
   /**
    * Changes the granted Plugin Permissions; the next call reads them again,
    * and a subscribed Plugin hears `permissions.changed` when the set changed.
+   * Losing `system-notifications` cancels the Plugin's pending System Notifications.
    */
   setGranted(permissions: readonly PluginPermissionId[]): void;
   /** Whether the Plugin last set this Toggle Button on with `toolbar.setPressed`; off until it does. */
@@ -1091,9 +1093,10 @@ export interface TestHost {
    */
   stopWorker(): void;
   /**
-   * Unmounts every open page, then stops the broker; resolves once each page's
-   * Plugin tree has unmounted. Rejects with the first page's refused batch, if
-   * any, after everything is down.
+   * Unmounts every open page, cancels the Plugin's pending System
+   * Notifications, then stops the broker; resolves once each page's Plugin
+   * tree has unmounted. Rejects with the first page's refused batch, if any,
+   * after everything is down.
    */
   stop(): Promise<void>;
 }

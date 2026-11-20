@@ -2,6 +2,7 @@ mod android_exit;
 mod backup;
 mod clipboard_image;
 mod dictation;
+mod exact_alarms;
 mod library_db;
 mod plugins;
 #[cfg(any(target_os = "linux", target_os = "windows"))]
@@ -127,6 +128,8 @@ pub fn run() {
             #[cfg(desktop)]
             window_background::set_window_background,
             android_exit::exit_app,
+            exact_alarms::exact_alarms_allowed,
+            exact_alarms::request_exact_alarms,
             library_db::library_execute_atomic,
             clipboard_image::read_clipboard_image_file,
             backup::pick_backup_directory,

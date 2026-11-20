@@ -448,6 +448,14 @@ export function createTestHost(options: TestHostOptions): TestHost {
     adapter: systemNotificationDevice,
     fallback: (message) => notifications.push({ variant: "info", message }),
   });
+  // A click opens the Plugin's first page, as the app's handler does, so a
+  // test sees it in `pageNavigations`.
+  systemNotificationService.onClick((pluginId) => {
+    const firstPage = options.manifest.contributes?.pages?.[0];
+    if (pluginId === options.manifest.id && firstPage !== undefined) {
+      pageNavigations.push({ pluginId, pageId: firstPage.id });
+    }
+  });
 
   const networkHandler: PluginApiHandlers = testFetch
     ? {
@@ -1222,6 +1230,10 @@ export function createTestHost(options: TestHostOptions): TestHost {
       const unchanged =
         next.size === granted.size && [...next].every((permission) => granted.has(permission));
       granted = next;
+      // Losing it ends what the Plugin left pending, like the app's revoke does.
+      if (!next.has("system-notifications")) {
+        void systemNotificationService.cancelPlugin(options.manifest.id);
+      }
       // Like setLanguage: only a real change reaches a subscribed Plugin, so
       // recording the same set again costs no event.
       if (!unchanged) broker.emit("permissions.changed", { permissions: [...granted] });
@@ -1285,6 +1297,9 @@ export function createTestHost(options: TestHostOptions): TestHost {
           refused ??= error;
         }
       }
+      // Stopping plays the Plugin being disabled or removed, so its pending
+      // System Notifications go too.
+      await systemNotificationService.cancelPlugin(options.manifest.id);
       broker.stop("requested");
       channel.port1.close();
       channel.port2.close();

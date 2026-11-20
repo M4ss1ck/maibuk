@@ -67,6 +67,7 @@ import { planPluginModules } from "@/features/plugins/modules";
 import { applyPluginLocale } from "@/features/plugins/manifest-constants";
 import { reviewPluginCopy } from "@/features/plugins/review";
 import { getPluginFileGrantStore } from "@/features/plugins/file-grants";
+import { cancelPluginSystemNotifications } from "@/features/plugins/handlers";
 import { getPluginSecretStore } from "@/features/plugins/secret-store";
 import { clearPluginStorage, getPluginDataSize } from "@/features/plugins/storage";
 import type {
@@ -901,6 +902,11 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
           await getPluginFileGrantStore()?.clearPlugin(pluginId);
         }
         savePluginApproval(next);
+        if (permission === "system-notifications" || !next.enabled) {
+          // The Plugin loses the permission or stops entirely, so the OS must
+          // not keep showing what it left behind.
+          void cancelPluginSystemNotifications(pluginId);
+        }
         if (!next.enabled) {
           // A required grant is gone: the Plugin is disabled and unregistered.
           getLifecycle()?.uninstall(pluginId);
@@ -948,6 +954,8 @@ export function createPluginManagementStore(options: PluginManagementOptions = {
         if (!entry?.approval) return;
         const next = disablePlugin(entry.approval);
         savePluginApproval(next);
+        // A disabled Plugin leaves nothing pending on the OS; remove reuses this.
+        void cancelPluginSystemNotifications(pluginId);
         getLifecycle()?.uninstall(pluginId);
         set((state) => ({
           plugins: {

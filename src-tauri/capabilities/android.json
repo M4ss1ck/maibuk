@@ -30,6 +30,8 @@
     "notification:allow-notify",
     "notification:allow-cancel",
     "notification:allow-remove-active",
+    "notification:allow-register-listener",
+    "notification:allow-remove-listener",
     "deep-link:default"
   ]
 }
