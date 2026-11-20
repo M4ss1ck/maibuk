@@ -25,6 +25,6 @@ const worker = self as unknown as ClockWorkerScope;
 worker.addEventListener("message", (event) => {
   const port = event.ports[0];
   if (port === undefined) return;
-  startClock(createPluginClient(port), servePluginUi);
+  void startClock(createPluginClient(port), servePluginUi);
   worker.postMessage({ kind: PLUGIN_READY_MESSAGE.kind });
 });

@@ -61,11 +61,12 @@ export type ClockServe = (
  * created here and lives for the Plugin's lifetime, so a Command run and a page
  * mount act on the same one.
  */
-export function startClock(client: PluginClient, serve: ClockServe): void {
+export function startClock(client: PluginClient, serve: ClockServe): Promise<void> {
   const timer = createTimer(client);
   // The Alert and the end toast read the app language, so it is read before load
   // reconciles a Timer that ended while Maibuk was closed; "en" stays the fallback.
-  void (async () => {
+  // The returned promise settles once that startup reconciliation is done.
+  const started = (async () => {
     try {
       const value = await client.language.get();
       timer.setLanguage(value.language);
@@ -83,6 +84,7 @@ export function startClock(client: PluginClient, serve: ClockServe): void {
     pages: { [CLOCK_PAGE_ID]: createClockPage(client, timer) },
     onHostRequest: (method, params) => handleHostRequest(client, timer, method, params),
   });
+  return started;
 }
 
 /** Answers the host's health check and runs the Plugin's Commands. */

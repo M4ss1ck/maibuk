@@ -314,11 +314,15 @@ describe("Clock runtime", () => {
       await untilVisible(() => expect(stored(storage)?.state.status).toBe("idle"));
     }
 
-    const picks = screen
-      .getAllByRole("button")
-      .map((button) => button.textContent ?? "")
-      .filter((label) => /^\d+:\d{2}$/.test(label));
-    expect(picks).toEqual(["3:00", "2:00", "1:00"]);
+    // The page redraws after the stored reset, so wait for the drawn picks.
+    await untilVisible(() =>
+      expect(
+        screen
+          .getAllByRole("button")
+          .map((button) => button.textContent ?? "")
+          .filter((label) => /^\d+:\d{2}$/.test(label))
+      ).toEqual(["3:00", "2:00", "1:00"])
+    );
 
     const pick = screen.getByRole("button", { name: "2:00" });
     pick.focus();

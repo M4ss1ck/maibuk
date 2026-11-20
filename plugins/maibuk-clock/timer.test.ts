@@ -42,13 +42,6 @@ function jumpTo(now: number): void {
   });
 }
 
-/** Lets pending host round trips through, which a fake clock never runs on its own. */
-function settle(ms = 20): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
 /** Starts a one-minute Timer on its own host, over `storage`, then stops that host. */
 async function runAndStopOneMinuteTimer(storage: Map<string, unknown>): Promise<void> {
   const host = createTestHost({ manifest: clockManifest(), storage });
@@ -64,7 +57,7 @@ async function runAndStopOneMinuteTimer(storage: Map<string, unknown>): Promise<
 }
 
 /** Starts the Clock runtime over `storage`, as Maibuk does when a Plugin starts. */
-function startHost(
+async function startHost(
   storage: Map<string, unknown>,
   options: { language?: string; canScheduleWhileClosed?: boolean } = {}
 ) {
@@ -78,7 +71,8 @@ function startHost(
     host.systemNotifications.setCanScheduleWhileClosed(canScheduleWhileClosed);
   }
   openHosts.push(host);
-  startClock(createPluginClient(host.port), () => {});
+  // Resolves once startup reconciliation, and any toast it shows, is done.
+  await startClock(createPluginClient(host.port), () => {});
   return host;
 }
 
@@ -144,7 +138,7 @@ describe("Clock Timer startup reconciliation", () => {
 
     jumpTo(start + 5 * 60_000);
     // Spanish, so the toast proves the language was read before load reconciled.
-    const host = startHost(storage, { language: "es" });
+    const host = await startHost(storage, { language: "es" });
     await vi.waitFor(() => expect(host.notifications).toHaveLength(1));
 
     const time = formatClockTime(endsAt, new Date(endsAt).getTimezoneOffset(), 24);
@@ -154,8 +148,7 @@ describe("Clock Timer startup reconciliation", () => {
     expect(storedState(storage)?.status).toBe("ended");
 
     // A later start finds the ended Timer already reconciled and says nothing.
-    const nextHost = startHost(storage, { language: "es" });
-    await settle();
+    const nextHost = await startHost(storage, { language: "es" });
     expect(nextHost.notifications).toEqual([]);
     expect(host.notifications).toHaveLength(1);
   });
@@ -167,12 +160,11 @@ describe("Clock Timer startup reconciliation", () => {
     const endsAt = storedState(storage)?.endsAt as number;
 
     jumpTo(start + 30_000);
-    const host = startHost(storage);
+    const host = await startHost(storage);
     await vi.waitFor(() =>
       expect(host.systemNotifications.scheduled.get(TIMER_TAG)?.at).toBe(endsAt)
     );
 
-    await settle();
     expect(host.notifications).toEqual([]);
     expect(storedState(storage)?.status).toBe("running");
   });
@@ -183,10 +175,9 @@ describe("Clock Timer startup reconciliation", () => {
     await runAndStopOneMinuteTimer(storage);
 
     jumpTo(start + 5 * 60_000);
-    const host = startHost(storage, { canScheduleWhileClosed: true });
+    const host = await startHost(storage, { canScheduleWhileClosed: true });
     await vi.waitFor(() => expect(storedState(storage)?.status).toBe("ended"));
 
-    await settle();
     expect(host.notifications).toEqual([]);
   });
 });
