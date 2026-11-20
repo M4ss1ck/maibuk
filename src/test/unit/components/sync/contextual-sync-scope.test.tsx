@@ -131,7 +131,11 @@ describe("contextual sync scope", () => {
 
     await user.click(screen.getByRole("button", { name: /sync\.scopeNotes/ }));
     await user.click(screen.getByRole("option", { name: "sync.scopeBooks" }));
-    expect(screen.getByRole("button", { name: /sync\.scopeBooks/ })).toBeInTheDocument();
+    const scopeTrigger = screen.getByRole("button", { name: /sync\.scopeBooks/ });
+    // React Aria hands focus back to the Select trigger one animation frame
+    // after the list closes. Escape pressed before then lands on <body>, which
+    // no person can do, so wait for the focus a person would see (#877).
+    await waitFor(() => expect(scopeTrigger).toHaveFocus());
 
     await user.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByText("writer@example.com")).not.toBeInTheDocument());
