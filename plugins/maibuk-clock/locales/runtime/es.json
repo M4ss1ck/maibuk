@@ -21,6 +21,8 @@
   "timerEndedAnnounce": "Temporizador terminado",
   "timerEnded": "Tu temporizador de {length} terminó.",
   "timerEndedWhileClosed": "Tu temporizador terminó a las {time}.",
+  "pomodoroEndedWhileClosed": "Tu Pomodoro terminó a las {time}.",
+  "breakEndedWhileClosed": "Tu descanso terminó a las {time}.",
   "notificationsOff": "Las notificaciones están desactivadas, así que las alertas solo se muestran dentro de Maibuk.",
   "allowNotifications": "Permitir notificaciones",
   "alertsNeedOpen": "Las alertas necesitan que Maibuk esté abierto para activarse.",

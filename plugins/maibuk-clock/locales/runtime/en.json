@@ -21,6 +21,8 @@
   "timerEndedAnnounce": "Timer ended",
   "timerEnded": "Your {length} Timer ended.",
   "timerEndedWhileClosed": "Your Timer ended at {time}.",
+  "pomodoroEndedWhileClosed": "Your Pomodoro ended at {time}.",
+  "breakEndedWhileClosed": "Your break ended at {time}.",
   "notificationsOff": "Notifications are off, so Alerts show only inside Maibuk.",
   "allowNotifications": "Allow notifications",
   "alertsNeedOpen": "Alerts need Maibuk open to fire.",

@@ -14,9 +14,7 @@ import type { PluginClient } from "@/plugin-sdk";
 import { translate } from "./i18n";
 import {
   addRecentLength,
-  formatClockTime,
   formatDuration,
-  hourCycleFor,
   pauseTimer,
   reconcileTimer,
   resetTimer,
@@ -42,8 +40,12 @@ export interface TimerSnapshot {
 
 /** The Timer the page and the Command share. */
 export interface ClockTimer {
-  /** Reads storage once; a malformed value leaves the default Timer in place. */
-  load(): Promise<void>;
+  /**
+   * Reads storage once; a malformed value leaves the default Timer in place. A
+   * deadline that passed while Maibuk was closed is left ended, and its
+   * `endedAt` returned so the caller can report it.
+   */
+  load(): Promise<number | null>;
   /** The Timer now, as a copy. */
   snapshot(): TimerSnapshot;
   /** Listens for every change; returns the unsubscribe. */
@@ -174,49 +176,25 @@ export function createTimer(client: PluginClient): ClockTimer {
     void client.notifications.cancel({ id: TIMER_NOTIFICATION_ID }).catch(() => {});
   }
 
-  /**
-   * Tells the author, once, that a Timer ended while Maibuk was closed. Only a
-   * device that granted the permission and fires a scheduled Alert while closed
-   * (Android) already told them; one that was refused never posted it, and one
-   * that cannot answer or show an Alert leaves them without a toast.
-   */
-  async function reportEndedWhileClosed(endedAt: number): Promise<void> {
-    const status = await client.notifications.systemStatus();
-    if (status.permission === "granted" && status.canScheduleWhileClosed) return;
-    const time = formatClockTime(
-      endedAt,
-      new Date(endedAt).getTimezoneOffset(),
-      hourCycleFor(language)
-    );
-    await client.notifications.show({
-      variant: "info",
-      message: translate(language, "timerEndedWhileClosed").replace("{time}", time),
-    });
-  }
-
   return {
     async load() {
-      if (loaded) return;
+      if (loaded) return null;
       loaded = true;
       let stored: unknown;
       try {
         stored = await client.storage.get({ key: STORAGE_KEY });
       } catch {
-        return;
+        return null;
       }
-      if (mutated) return;
+      if (mutated) return null;
       snapshot = parseStored(stored);
       const result = reconcileTimer(snapshot.state, Date.now());
       if (result.endedAt !== null) {
         snapshot = { ...snapshot, state: result.state };
         await persist();
         notify();
-        try {
-          await reportEndedWhileClosed(result.endedAt);
-        } catch {
-          // A device that cannot say or show it leaves the author without a toast.
-        }
-        return;
+        // The caller reports the missed end, once, for the Timer and the Pomodoro.
+        return result.endedAt;
       }
       if (snapshot.state.status === "running") {
         // Desktop and the web forget a scheduled Alert when Maibuk closes, so it
@@ -225,6 +203,7 @@ export function createTimer(client: PluginClient): ClockTimer {
         holdEnd(snapshot.state.endsAt);
       }
       notify();
+      return null;
     },
     snapshot() {
       return { state: snapshot.state, recent: [...snapshot.recent] };

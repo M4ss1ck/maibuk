@@ -20,9 +20,12 @@ import {
   type HostRequestHandler,
   type PluginClient,
 } from "@/plugin-sdk";
-import { translate } from "./i18n";
+import { translate, type ClockKey } from "./i18n";
+import { createPomodoro } from "./pomodoro";
 import {
+  formatClockTime,
   formatDuration,
+  hourCycleFor,
   joinDuration,
   MS_PER_MINUTE,
   remainingMs,
@@ -64,28 +67,76 @@ export type ClockServe = (
 ) => void;
 
 /**
- * Wires the client to the Clock page and the Command handlers. The Timer is
- * created here and lives for the Plugin's lifetime, so a Command run and a page
- * mount act on the same one.
+ * The sentence telling the author a phase ended while Maibuk was closed, written
+ * the way the Alert's own body names the time.
+ */
+function missedSentence(language: string, key: ClockKey, endedAt: number): string {
+  const time = formatClockTime(
+    endedAt,
+    new Date(endedAt).getTimezoneOffset(),
+    hourCycleFor(language)
+  );
+  return translate(language, key).replace("{time}", time);
+}
+
+/**
+ * Tells the author, once, that a Timer or a Pomodoro ended while Maibuk was
+ * closed. Only a device that granted the permission and fires a scheduled Alert
+ * while closed (Android) already told them; one that was refused never posted
+ * it, and one that cannot answer or show an Alert leaves them without a toast.
+ */
+async function reportMissed(client: PluginClient, sentences: readonly string[]): Promise<void> {
+  const status = await client.notifications.systemStatus();
+  if (status.permission === "granted" && status.canScheduleWhileClosed) return;
+  await client.notifications.show({ variant: "info", message: sentences.join(" ") });
+}
+
+/**
+ * Wires the client to the Clock page and the Command handlers. The Timer and the
+ * Pomodoro are created here and live for the Plugin's lifetime, so a Command run
+ * and a page mount act on the same ones.
  */
 export function startClock(client: PluginClient, serve: ClockServe): Promise<void> {
   const timer = createTimer(client);
-  // The Alert and the end toast read the app language, so it is read before load
-  // reconciles a Timer that ended while Maibuk was closed; "en" stays the fallback.
-  // The returned promise settles once that startup reconciliation is done.
+  const pomodoro = createPomodoro(client);
+  // The Alerts and the missed-end toast read the app language, so it is read
+  // before load reconciles a Timer or Pomodoro that ended while Maibuk was
+  // closed; "en" stays the fallback. The returned promise settles once that
+  // startup reconciliation, and its one toast, is done.
   const started = (async () => {
+    let language = "en";
     try {
-      const value = await client.language.get();
-      timer.setLanguage(value.language);
+      language = (await client.language.get()).language;
     } catch {
-      // Keep the language the Timer already has.
+      // Keep the language the Timer and the Pomodoro already have.
     }
-    await timer.load();
+    timer.setLanguage(language);
+    pomodoro.setLanguage(language);
+    const missed: string[] = [];
+    const timerEndedAt = await timer.load();
+    if (timerEndedAt !== null) {
+      missed.push(missedSentence(language, "timerEndedWhileClosed", timerEndedAt));
+    }
+    const pomodoroEnd = await pomodoro.load();
+    if (pomodoroEnd !== null) {
+      const key: ClockKey =
+        pomodoroEnd.phase === "pomodoro" ? "pomodoroEndedWhileClosed" : "breakEndedWhileClosed";
+      missed.push(missedSentence(language, key, pomodoroEnd.endedAt));
+    }
+    if (missed.length === 0) return;
+    try {
+      await reportMissed(client, missed);
+    } catch {
+      // A device that cannot say or show it leaves the author without a toast.
+    }
   })();
-  // The Alert's words follow the app language. Subscribed once here, not per
+  // The Alerts' words follow the app language. Subscribed once here, not per
   // page, so switching tabs never re-subscribes.
   void client
-    .on("language.changed", (payload) => timer.setLanguage(payload.language))
+    .on("language.changed", (payload) => {
+      timer.setLanguage(payload.language);
+      pomodoro.setLanguage(payload.language);
+    })
     .catch(() => {});
   serve(client, {
     pages: { [CLOCK_PAGE_ID]: createClockPage(client, timer) },
