@@ -338,6 +338,20 @@ describe("tauriSystemNotifications (notification plugin)", () => {
     });
   });
 
+  it("survives a click listener the platform refuses, and tries again on the next subscribe", async () => {
+    let rejected = 0;
+    plugin.onAction.mockImplementationOnce(() => {
+      rejected += 1;
+      return Promise.reject(new TypeError("no Tauri runtime"));
+    });
+
+    desktop.adapter.onClick(vi.fn());
+    await vi.waitFor(() => expect(rejected).toBe(1));
+    desktop.adapter.onClick(vi.fn());
+
+    await vi.waitFor(() => expect(plugin.onAction).toHaveBeenCalledTimes(2));
+  });
+
   it("registers the click listener once for every handler", async () => {
     desktop.adapter.onClick(vi.fn())();
     desktop.adapter.onClick(vi.fn());

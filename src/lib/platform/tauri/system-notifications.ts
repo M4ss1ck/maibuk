@@ -215,8 +215,11 @@ function listenForClicks(): void {
     queueMicrotask(takeAndroidTap);
     return;
   }
-  void onAction((event) => {
+  onAction((event) => {
     void handleClick(event);
+  }).catch(() => {
+    // No listener without the Tauri runtime; the next subscriber tries again.
+    listeningForClicks = false;
   });
 }
 
