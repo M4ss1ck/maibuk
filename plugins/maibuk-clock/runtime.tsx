@@ -21,7 +21,7 @@ import {
   type PluginClient,
 } from "@/plugin-sdk";
 import { translate, type ClockKey } from "./i18n";
-import { createPomodoro } from "./pomodoro";
+import { createPomodoro, type ClockPomodoro } from "./pomodoro";
 import {
   formatClockTime,
   formatDuration,
@@ -40,6 +40,8 @@ export const CLOCK_PAGE_ID = "clock";
 /** The Command-local ids the manifest declares. */
 export const OPEN_CLOCK = "openClock";
 export const TOGGLE_TIMER = "toggleTimer";
+export const TOGGLE_POMODORO = "togglePomodoro";
+export const SKIP_POMODORO = "skipPomodoro";
 
 /** The tabs the page draws, in the glossary's order. */
 const TABS = ["pomodoro", "timer", "stopwatch", "alarms"] as const;
@@ -99,6 +101,16 @@ async function reportMissed(client: PluginClient, sentences: readonly string[]):
 export function startClock(client: PluginClient, serve: ClockServe): Promise<void> {
   const timer = createTimer(client);
   const pomodoro = createPomodoro(client);
+  // The Toggle Button shows whether a phase runs: every change to the Cycle is
+  // mirrored onto it, only when the pressed value moves, and never loudly.
+  let buttonPressed: boolean | null = null;
+  const showPressed = (): void => {
+    const pressed = pomodoro.snapshot().state.status === "running";
+    if (pressed === buttonPressed) return;
+    buttonPressed = pressed;
+    void client.toolbar.setPressed({ button: TOGGLE_POMODORO, pressed }).catch(() => {});
+  };
+  pomodoro.subscribe(showPressed);
   // The Alerts and the missed-end toast read the app language, so it is read
   // before load reconciles a Timer or Pomodoro that ended while Maibuk was
   // closed; "en" stays the fallback. The returned promise settles once that
@@ -118,6 +130,9 @@ export function startClock(client: PluginClient, serve: ClockServe): Promise<voi
       missed.push(missedSentence(language, "timerEndedWhileClosed", timerEndedAt));
     }
     const pomodoroEnd = await pomodoro.load();
+    // The Cycle a restart found may already run, so the button is set from what
+    // load settled on, once.
+    showPressed();
     if (pomodoroEnd !== null) {
       const key: ClockKey =
         pomodoroEnd.phase === "pomodoro" ? "pomodoroEndedWhileClosed" : "breakEndedWhileClosed";
@@ -140,7 +155,7 @@ export function startClock(client: PluginClient, serve: ClockServe): Promise<voi
     .catch(() => {});
   serve(client, {
     pages: { [CLOCK_PAGE_ID]: createClockPage(client, timer) },
-    onHostRequest: (method, params) => handleHostRequest(client, timer, method, params),
+    onHostRequest: (method, params) => handleHostRequest(client, timer, pomodoro, method, params),
   });
   return started;
 }
@@ -149,11 +164,13 @@ export function startClock(client: PluginClient, serve: ClockServe): Promise<voi
 function handleHostRequest(
   client: PluginClient,
   timer: ClockTimer,
+  pomodoro: ClockPomodoro,
   method: string,
   params: unknown
 ): unknown {
   if (method === "health.check") return "pong";
-  if (method === PLUGIN_COMMAND_RUN_REQUEST) return runClockCommand(client, timer, params);
+  if (method === PLUGIN_COMMAND_RUN_REQUEST)
+    return runClockCommand(client, timer, pomodoro, params);
   throw new Error(`No handler for ${method}`);
 }
 
@@ -161,16 +178,20 @@ function handleHostRequest(
  * Answers one Command run. `Open Clock` is the page's navigating Command, so the
  * host normally navigates without a `command.run`; answering it here keeps the
  * page reachable the other way. `Start or pause the Timer` toggles the one
- * Timer the Plugin holds.
+ * Timer the Plugin holds, `Start or pause the Pomodoro` toggles the Cycle, and
+ * `Skip to the next Pomodoro or break` moves it on.
  */
 async function runClockCommand(
   client: PluginClient,
   timer: ClockTimer,
+  pomodoro: ClockPomodoro,
   params: unknown
 ): Promise<null> {
   const { id } = (params ?? {}) as { id?: unknown };
   if (id === OPEN_CLOCK) await client.navigation.openPage({ pageId: CLOCK_PAGE_ID });
   if (id === TOGGLE_TIMER) timer.toggle();
+  if (id === TOGGLE_POMODORO) pomodoro.toggle();
+  if (id === SKIP_POMODORO) pomodoro.skip();
   return null;
 }
 

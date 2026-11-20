@@ -10,8 +10,9 @@
  * System Notification at the deadline, pause freezes it and cancels the Alert,
  * reset restores the length, the recent lengths come back newest first, the
  * Command toggles, the live region speaks on the minute and at the end on every
- * tab, and the notification banner asks for permission. Every control is reached
- * with `user-event` key presses.
+ * tab, and the notification banner asks for permission. The Pomodoro Commands
+ * start, pause, and skip the cycle, and the Toggle Button stays pressed exactly
+ * while a phase runs. Every control is reached with `user-event` key presses.
  */
 
 import { act, screen } from "@testing-library/react";
@@ -24,7 +25,14 @@ import { PLUGIN_COMMAND_RUN_REQUEST } from "@/plugin-sdk/protocol";
 import { servePluginUi } from "@/plugin-sdk/ui-serve";
 import en from "./locales/runtime/en.json";
 import es from "./locales/runtime/es.json";
-import { CLOCK_PAGE_ID, OPEN_CLOCK, TOGGLE_TIMER, startClock } from "./runtime";
+import {
+  CLOCK_PAGE_ID,
+  OPEN_CLOCK,
+  SKIP_POMODORO,
+  TOGGLE_POMODORO,
+  TOGGLE_TIMER,
+  startClock,
+} from "./runtime";
 import { clockManifest, tabTo, type User } from "./test-support";
 import { formatDuration } from "./time";
 
@@ -39,16 +47,30 @@ const START = Date.now() + 3_600_000;
 /** The tag the host scopes the Timer's Alert under. */
 const TIMER_TAG = "maibuk-clock/timer";
 
+/** The tag the host scopes the Pomodoro's Alert under. */
+const POMODORO_TAG = "maibuk-clock/pomodoro";
+
 /** One stored Timer, as the Plugin writes it. */
 interface StoredTimer {
   state: { status: string; length: number; endsAt?: number; remaining?: number; endedAt?: number };
   recent: number[];
 }
 
+/** One stored Cycle, as the Plugin writes it. */
+interface StoredCycle {
+  state: { phase: string; pomodoro: number; status: string; endsAt?: number; remaining?: number };
+}
+
 /** The Timer storage holds, or none. */
 function stored(storage: Map<string, unknown>): StoredTimer | undefined {
   const value = storage.get("timer");
   return typeof value === "object" && value !== null ? (value as StoredTimer) : undefined;
+}
+
+/** The Cycle storage holds, or none. */
+function storedCycle(storage: Map<string, unknown>): StoredCycle | undefined {
+  const value = storage.get("pomodoro");
+  return typeof value === "object" && value !== null ? (value as StoredCycle) : undefined;
 }
 
 /** Takes over the clock and the Plugin's own timers for one test. */
@@ -350,6 +372,73 @@ describe("Clock runtime", () => {
     ).resolves.toBeNull();
     await eventually(() => expect(stored(storage)?.state.status).toBe("paused"));
     expect(host.pageNavigations).toEqual([]);
+  });
+
+  it("starts and then pauses the Pomodoro from the togglePomodoro Command", async () => {
+    const { host, storage } = startHost();
+    freezeClock();
+
+    await expect(
+      host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: TOGGLE_POMODORO })
+    ).resolves.toBeNull();
+    await eventually(() => expect(storedCycle(storage)?.state.status).toBe("running"));
+    await eventually(() => {
+      const state = storedCycle(storage)?.state;
+      expect(host.systemNotifications.scheduled.get(POMODORO_TAG)?.at).toBe(state?.endsAt);
+    });
+
+    await expect(
+      host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: TOGGLE_POMODORO })
+    ).resolves.toBeNull();
+    await eventually(() => expect(storedCycle(storage)?.state.status).toBe("paused"));
+    await eventually(() =>
+      expect(host.systemNotifications.scheduled.has(POMODORO_TAG)).toBe(false)
+    );
+    expect(host.systemNotifications.log.at(-1)).toMatchObject({
+      kind: "cancelled",
+      tag: POMODORO_TAG,
+    });
+    expect(host.pageNavigations).toEqual([]);
+  });
+
+  it("skips to the Short Break from the skipPomodoro Command", async () => {
+    const { host, storage } = startHost();
+    freezeClock();
+
+    await expect(
+      host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: SKIP_POMODORO })
+    ).resolves.toBeNull();
+    await eventually(() =>
+      expect(storedCycle(storage)?.state).toEqual({
+        phase: "shortBreak",
+        pomodoro: 1,
+        status: "idle",
+      })
+    );
+    expect(host.pageNavigations).toEqual([]);
+  });
+
+  it("keeps the Toggle Button pressed while a phase runs, and released when it pauses or ends", async () => {
+    const { host, storage } = startHost();
+    freezeClock();
+    expect(host.toolbarPressed(TOGGLE_POMODORO)).toBe(false);
+
+    await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: TOGGLE_POMODORO });
+    await eventually(() => expect(host.toolbarPressed(TOGGLE_POMODORO)).toBe(true));
+
+    await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: TOGGLE_POMODORO });
+    await eventually(() => expect(host.toolbarPressed(TOGGLE_POMODORO)).toBe(false));
+
+    // A phase that ends in the app releases it too: auto-start is off by default.
+    await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: TOGGLE_POMODORO });
+    await eventually(() => expect(host.toolbarPressed(TOGGLE_POMODORO)).toBe(true));
+    await vi.advanceTimersByTimeAsync(25 * 60_000);
+    await eventually(() => expect(host.toolbarPressed(TOGGLE_POMODORO)).toBe(false));
+    expect(storedCycle(storage)?.state).toEqual({
+      phase: "shortBreak",
+      pomodoro: 1,
+      status: "idle",
+    });
   });
 
   it("announces the whole minute and the end, never every second", async () => {

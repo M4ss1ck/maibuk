@@ -26,9 +26,33 @@
         "id": "toggleTimer",
         "label": "Start or pause the Timer",
         "contexts": ["global"]
+      },
+      {
+        "id": "togglePomodoro",
+        "label": "Start or pause the Pomodoro",
+        "contexts": ["global"]
+      },
+      {
+        "id": "skipPomodoro",
+        "label": "Skip to the next Pomodoro or break",
+        "contexts": ["global"]
       }
     ],
     "pages": [{ "id": "clock", "title": "Clock", "command": "openClock" }],
-    "sidebarEntries": [{ "page": "clock", "icon": "timer" }]
+    "sidebarEntries": [{ "page": "clock", "icon": "timer" }],
+    "toolbarButtons": [
+      {
+        "id": "togglePomodoro",
+        "command": "togglePomodoro",
+        "icon": {
+          "elements": [
+            ["line", { "x1": "10", "y1": "2", "x2": "14", "y2": "2" }],
+            ["line", { "x1": "12", "y1": "14", "x2": "15", "y2": "11" }],
+            ["circle", { "cx": "12", "cy": "14", "r": "8" }]
+          ]
+        },
+        "toggle": true
+      }
+    ]
   }
 }
