@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -14,6 +15,7 @@ import {
   PREVIEW_RUNS_DIR,
   createRunDir,
   killRecordedPreview,
+  playwrightEnv,
   sweepRunDirs,
   sweepStalePreviews,
 } from "../../../../e2e/preview-server.mjs";
@@ -175,5 +177,50 @@ describe("sweepStalePreviews and createRunDir", () => {
     killRecordedPreview(dir, probe);
     killRecordedPreview(join(root, "missing"), probe);
     expect(probe.kill).not.toHaveBeenCalled();
+  });
+});
+
+describe("playwrightEnv", () => {
+  it("appends the flag to an existing NODE_OPTIONS", () => {
+    expect(playwrightEnv({ NODE_OPTIONS: "--max-old-space-size=4096" }, {}).NODE_OPTIONS).toBe(
+      "--max-old-space-size=4096 --no-experimental-webstorage"
+    );
+  });
+
+  it("prefers extra's NODE_OPTIONS over base's", () => {
+    const env = playwrightEnv({ NODE_OPTIONS: "--from-base" }, { NODE_OPTIONS: "--from-extra" });
+    expect(env.NODE_OPTIONS).toBe("--from-extra --no-experimental-webstorage");
+  });
+
+  it("never duplicates the flag", () => {
+    expect(playwrightEnv({ NODE_OPTIONS: "--no-experimental-webstorage" }, {}).NODE_OPTIONS).toBe(
+      "--no-experimental-webstorage"
+    );
+    expect(
+      playwrightEnv({}, { NODE_OPTIONS: "--trace-warnings --no-experimental-webstorage" })
+        .NODE_OPTIONS
+    ).toBe("--trace-warnings --no-experimental-webstorage");
+  });
+
+  it("is just the flag when no NODE_OPTIONS existed", () => {
+    const env = playwrightEnv({ PATH: "/bin" }, { VITE_BUILD_TARGET: "web" });
+    expect(env.NODE_OPTIONS).toBe("--no-experimental-webstorage");
+    expect(env).toMatchObject({ PATH: "/bin", VITE_BUILD_TARGET: "web" });
+  });
+
+  it("makes localStorage throw in the Playwright process, so zustand skips persistence", () => {
+    // #881: without the flag, Node 26 returns undefined here and zustand
+    // persist crashes in E2E global setup. Older Node throws either way.
+    const base = { ...process.env };
+    delete base.NODE_OPTIONS;
+    const child = spawnSync(
+      process.execPath,
+      [
+        "-e",
+        'try { localStorage.getItem("x"); process.exit(1) } catch (e) { process.exit(e instanceof ReferenceError ? 0 : 2) }',
+      ],
+      { env: playwrightEnv(base, {}) }
+    );
+    expect(child.status).toBe(0);
   });
 });
