@@ -191,6 +191,20 @@ export default defineConfig(() => ({
   },
   test: {
     setupFiles: ["./src/test/setup.ts"],
+    // A change to any of these makes `vitest --changed` / `vitest related` run
+    // every test. This array replaces the Vitest defaults, so it keeps them.
+    // Keep in sync with the `FULL_RUN` list in the `changes` job of
+    // .github/workflows/ci.yml (issue #853).
+    forceRerunTriggers: [
+      "**/package.json",
+      "**/vite.config.ts",
+      "**/vitest.config.*",
+      "**/src/test/setup.ts",
+      "**/src/test/support/**",
+      "**/pnpm-lock.yaml",
+      "**/tsconfig*.json",
+      "**/.github/workflows/**",
+    ],
     // Node 26's own `localStorage` global is undefined without a storage file,
     // and it hides jsdom's.
     execArgv: ["--no-experimental-webstorage"],
