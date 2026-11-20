@@ -2,15 +2,16 @@ import { appendFileSync } from "node:fs";
 import { relative } from "node:path";
 import { experimental_getRunnerTask, type Reporter, type TestModule } from "vitest/node";
 import {
+  filesOverBudget,
   githubAnnotations,
   summaryMarkdown,
   type TimedTest,
   testsOverBudget,
 } from "@/test/support/time-budget-report";
 
-// Reports tests that used more than half their timeout. It never fails the
-// run: wall time on a shared runner is noise, and failing on it would be the
-// same flake one step earlier. The timeout itself stays the only failure.
+// Reports tests that used more than half their timeout, and files whose tests
+// sum past FILE_BUDGET_MS. It never fails the run: wall time on a shared
+// runner is noise, and failing on it would be the same flake one step earlier. The timeout itself stays the only failure.
 interface ReporterIo {
   env?: NodeJS.ProcessEnv;
   cwd?: string;
@@ -45,18 +46,19 @@ export default class TimeBudgetReporter implements Reporter {
       }
     }
     const over = testsOverBudget(tests);
+    const files = filesOverBudget(tests);
 
     if (this.env.GITHUB_ACTIONS === "true") {
-      for (const line of githubAnnotations(over)) this.log(line);
+      for (const line of githubAnnotations(over, files)) this.log(line);
       // The job summary is unreadable through the GitHub API, so the same
       // Markdown goes to the step log, where `gh run view --log` can reach it.
-      const summary = summaryMarkdown(over);
+      const summary = summaryMarkdown(over, files);
       this.log(summary);
       // Written even when every test has room, so the summary shows the check ran.
       const summaryFile = this.env.GITHUB_STEP_SUMMARY;
       if (summaryFile) appendFileSync(summaryFile, summary);
-    } else if (over.length > 0) {
-      this.log(`\n${summaryMarkdown(over)}`);
+    } else if (over.length > 0 || files.length > 0) {
+      this.log(`\n${summaryMarkdown(over, files)}`);
     }
   }
 }
