@@ -89,6 +89,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_notification::init())
         // A Plugin File Save writes on desktop and Android alike (ADR 0040).
         .manage(plugins::files::SaveStore::default());
 

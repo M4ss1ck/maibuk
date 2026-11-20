@@ -25,6 +25,7 @@ libsqlite3-sys = { version = "=0.30.1", default-features = false }
 tauri-plugin-os = "2.3.2"
 tauri-plugin-process = "2"
 tauri-plugin-clipboard-manager = "2"
+tauri-plugin-notification = "2"
 tauri-plugin-deep-link = "2"
 tauri-plugin-http = "2"
 base64 = "0.22"

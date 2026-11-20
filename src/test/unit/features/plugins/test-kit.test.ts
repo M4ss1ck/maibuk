@@ -2123,6 +2123,231 @@ describe("createTestHost() File Grants", () => {
   });
 });
 
+describe("createTestHost() System Notifications", () => {
+  function notificationsManifest(): PluginManifest {
+    return {
+      ...fixtureManifest(),
+      permissions: { required: ["system-notifications"], optional: [] },
+    };
+  }
+
+  /** The tags the memory device recorded so far, in the order it showed them. */
+  function shown(host: ReturnType<typeof createTestHost>): string[] {
+    return host.systemNotifications.log.map((entry) => entry.tag);
+  }
+
+  it("shows one titled with the Plugin's name, and the same id replaces it", async () => {
+    vi.useFakeTimers();
+    const host = createTestHost({ manifest: notificationsManifest() });
+    try {
+      const client = createPluginClient(host.port);
+
+      await expect(
+        client.notifications.system({ id: "pomodoro", title: "Break time", body: "Stand up" })
+      ).resolves.toBeNull();
+
+      expect(host.systemNotifications.log).toEqual([
+        {
+          kind: "sent",
+          tag: "tracer/pomodoro",
+          title: "Tracer Fixture: Break time",
+          body: "Stand up",
+        },
+      ]);
+      expect(host.systemNotifications.active.get("tracer/pomodoro")).toEqual({
+        title: "Tracer Fixture: Break time",
+        body: "Stand up",
+      });
+
+      // The kit's service keeps Maibuk's one-a-second rule, so this send waits
+      // out the first one's second: once it reached the queue, jump the clock.
+      const replaced = client.notifications.system({
+        id: "pomodoro",
+        title: "Break is over",
+        body: "Back to work",
+      });
+      await vi.waitFor(() => expect(vi.getTimerCount()).toBe(1));
+      await vi.advanceTimersByTimeAsync(1000);
+      await vi.waitFor(() =>
+        expect(host.systemNotifications.log.map((entry) => entry.kind)).toEqual([
+          "sent",
+          "replaced",
+        ])
+      );
+      await replaced;
+      expect(host.systemNotifications.active.size).toBe(1);
+      expect(host.systemNotifications.active.get("tracer/pomodoro")).toEqual({
+        title: "Tracer Fixture: Break is over",
+        body: "Back to work",
+      });
+      expect(host.notifications).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+      await host.stop();
+    }
+  });
+
+  it("cancels one, and a cancel of an unknown id is not an error", async () => {
+    const host = createTestHost({ manifest: notificationsManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      await client.notifications.system({
+        id: "pomodoro",
+        title: "Break time",
+        body: "Stand up",
+      });
+
+      await expect(client.notifications.cancel({ id: "pomodoro" })).resolves.toBeNull();
+
+      expect(host.systemNotifications.active.size).toBe(0);
+      expect(host.systemNotifications.log.at(-1)).toEqual({
+        kind: "cancelled",
+        tag: "tracer/pomodoro",
+      });
+
+      await expect(client.notifications.cancel({ id: "absent" })).resolves.toBeNull();
+      expect(host.systemNotifications.log).toHaveLength(2);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("delivers three immediate sends in order, a second apart, dropping none", async () => {
+    vi.useFakeTimers();
+    const host = createTestHost({ manifest: notificationsManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      const sends = ["first", "second", "third"].map((id) =>
+        client.notifications.system({ id, title: id, body: id })
+      );
+
+      // The first shows as soon as the port carries it in; each later one waits
+      // out the second of the one before, so jump the clock a second at a time.
+      // (The service's own suite pins the gap to the millisecond.)
+      await vi.waitFor(() => expect(shown(host)).toEqual(["tracer/first"]));
+      await vi.waitFor(() => expect(vi.getTimerCount()).toBe(1));
+      expect(shown(host)).toEqual(["tracer/first"]);
+      await vi.advanceTimersByTimeAsync(1000);
+      await vi.waitFor(() => expect(shown(host)).toEqual(["tracer/first", "tracer/second"]));
+      await vi.waitFor(() => expect(vi.getTimerCount()).toBe(1));
+      await vi.advanceTimersByTimeAsync(1000);
+      await vi.waitFor(() =>
+        expect(shown(host)).toEqual(["tracer/first", "tracer/second", "tracer/third"])
+      );
+
+      await Promise.all(sends);
+    } finally {
+      vi.useRealTimers();
+      await host.stop();
+    }
+  });
+
+  it.each([
+    "denied",
+    "default",
+  ] as const)("falls back to an info toast while the device answers %s", async (permission) => {
+    const host = createTestHost({ manifest: notificationsManifest() });
+    try {
+      host.systemNotifications.setPermission(permission);
+      const client = createPluginClient(host.port);
+
+      await expect(
+        client.notifications.system({ id: "pomodoro", title: "Break time", body: "Stand up" })
+      ).resolves.toBeNull();
+
+      expect(host.systemNotifications.log).toEqual([]);
+      expect(host.notifications).toEqual([
+        { variant: "info", message: "Tracer Fixture: Break time. Stand up" },
+      ]);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("reports the device's answer and whether it fires while closed", async () => {
+    const host = createTestHost({ manifest: notificationsManifest() });
+    try {
+      const client = createPluginClient(host.port);
+
+      await expect(client.notifications.systemStatus()).resolves.toEqual({
+        permission: "granted",
+        canScheduleWhileClosed: false,
+      });
+
+      host.systemNotifications.setCanScheduleWhileClosed(true);
+      host.systemNotifications.setPermission("denied");
+
+      await expect(client.notifications.systemStatus()).resolves.toEqual({
+        permission: "denied",
+        canScheduleWhileClosed: true,
+      });
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("returns requestSystemPermission's answer, which the status then reports", async () => {
+    const host = createTestHost({ manifest: notificationsManifest() });
+    try {
+      host.systemNotifications.requestAnswer = "default";
+      const client = createPluginClient(host.port);
+
+      await expect(client.notifications.requestSystemPermission()).resolves.toEqual({
+        permission: "default",
+      });
+      await expect(client.notifications.systemStatus()).resolves.toEqual({
+        permission: "default",
+        canScheduleWhileClosed: false,
+      });
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("refuses requestSystemPermission with user-action-required without a user action", async () => {
+    const host = createTestHost({ manifest: notificationsManifest(), userActivation: false });
+    try {
+      const client = createPluginClient(host.port);
+
+      await expect(client.notifications.requestSystemPermission()).rejects.toMatchObject({
+        code: "user-action-required",
+      });
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("refuses the four methods with permission-denied while the grant is not held", async () => {
+    const host = createTestHost({
+      manifest: {
+        ...fixtureManifest(),
+        permissions: { required: [], optional: ["system-notifications"] },
+      },
+      permissions: [],
+    });
+    try {
+      const client = createPluginClient(host.port);
+      const calls = [
+        () =>
+          client.notifications.system({ id: "pomodoro", title: "Break time", body: "Stand up" }),
+        () => client.notifications.cancel({ id: "pomodoro" }),
+        () => client.notifications.systemStatus(),
+        () => client.notifications.requestSystemPermission(),
+      ];
+
+      for (const call of calls) {
+        await expect(call()).rejects.toMatchObject({
+          code: "permission-denied",
+          permission: "system-notifications",
+        });
+      }
+      expect(host.systemNotifications.log).toEqual([]);
+    } finally {
+      await host.stop();
+    }
+  });
+});
+
 describe("createTestHost() files.dropped", () => {
   // ASCII on purpose: a test reads the range back as text.
   const BYTES = new TextEncoder().encode("A dropped file is a File Grant like any other.");

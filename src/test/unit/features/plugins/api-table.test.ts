@@ -42,15 +42,7 @@ import {
   type PluginApiMethods,
 } from "@/plugin-sdk/api.generated";
 
-const UNGATED = new Set([
-  "storage",
-  "notifications",
-  "navigation",
-  "language",
-  "fonts",
-  "permissions",
-  "toolbar",
-]);
+const UNGATED = new Set(["storage", "navigation", "language", "fonts", "permissions", "toolbar"]);
 
 describe("PLUGIN_API_TABLE", () => {
   it("names every method <namespace>.<verb> with unique ids", () => {
@@ -72,7 +64,12 @@ describe("PLUGIN_API_TABLE", () => {
   it("gates every method by one Plugin Permission, except the ungated namespaces", () => {
     for (const row of PLUGIN_API_TABLE) {
       const namespace = row.id.split(".")[0];
-      if (UNGATED.has(namespace)) {
+      if (namespace === "notifications") {
+        // Only the toast is ungated; the System Notifications need `system-notifications` (ADR 0042).
+        expect(row.permission, row.id).toBe(
+          row.id === "notifications.show" ? null : "system-notifications"
+        );
+      } else if (UNGATED.has(namespace)) {
         expect(row.permission, row.id).toBeNull();
       } else if (namespace === "network") {
         expect(row.permission, row.id).toBe("network");

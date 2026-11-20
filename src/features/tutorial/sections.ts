@@ -252,6 +252,8 @@ export const TUTORIAL_OUT_OF_SCOPE_TERMS: Readonly<Record<string, string>> = {
   "Plugin Permission": "decided, not built (ADR 0019); there is no Plugin in the app to point at",
   "Plugin Command": "decided, not built (ADR 0022); there is no Plugin in the app to point at",
   "File Grant": "a Plugin capability; the Tutorial Library ships no Plugin that picks files",
+  "System Notification":
+    "a Plugin capability shown by the device, outside Maibuk's window; the Tutorial Library ships no Plugin that sends one",
   "PDF Font":
     "its settings row lives in Settings → Export, outside the Tutorial's sections, and the PDF export dialog it serves is a dialog, which steps never open",
   "Plugin Endpoint":

@@ -675,6 +675,10 @@ _Avoid_: grant, scope, capability (Tauri's word in code)
 Maibuk's leave for one Plugin to read again, on this device, a file the author picked for it or dropped on one of its pages. The Plugin never learns where the file lives. A File Grant is not part of the Library, so Backups and Sync never carry it; it ends when the Plugin lets it go, when the Plugin is removed, when the author revokes the Plugin Permission that let the Plugin ask for files, or when the author runs Reset settings.
 _Avoid_: file handle, file path, file permission, bookmark
 
+**System Notification**:
+A notice shown by the device's own notification center, outside Maibuk's window, which the device can show while Maibuk is in the background and, on Android, after it closes. The device decides whether to allow it; Maibuk's own in-window notice is the fallback. (ADR 0042)
+_Avoid_: native notification, push notification, toast (Maibuk's in-window notice)
+
 **Plugin Endpoint**:
 The local address `http://127.0.0.1:<port>/plugin/<pluginId>/` where Maibuk hands each request to the Plugin its path names; only a Plugin holding the `serve` Plugin Permission answers, and Maibuk binds the one port only while an enabled Plugin holds `serve`, on the desktop app only. Maibuk picks that port once and keeps it across launches, moving it only when another program holds it at launch; a Plugin holding `serve` reads the address with `endpoint.address` and hears a move as `endpoint.addressChanged`. A request from a foreign Origin is refused (403), and so is one naming a foreign Host. (ADR 0031)
 _Avoid_: plugin server, MCP port, local API

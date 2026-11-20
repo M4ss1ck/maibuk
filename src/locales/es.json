@@ -2428,6 +2428,8 @@
       "filesPickDetail": "Leer solo los archivos que elijas en el selector de archivos de Maibuk. Maibuk conserva el acceso en este dispositivo y nunca los copia en tu Biblioteca.",
       "filesSave": "Guardar los archivos que pidas",
       "filesSaveDetail": "Escribir un archivo que le hayas pedido a este Plugin, como una exportación o una imagen. Maibuk te pregunta dónde guardarlo y nunca escribe fuera del lugar que elijas.",
+      "systemNotifications": "Mostrar notificaciones en este dispositivo",
+      "systemNotificationsDetail": "Mostrar avisos en el centro de notificaciones de tu dispositivo, fuera de la ventana de Maibuk. Tu dispositivo aún puede bloquearlos.",
       "serve": "Responder a solicitudes de aplicaciones de este equipo",
       "serveDetail": "Las aplicaciones de este equipo pueden enviar solicitudes a este Plugin mientras está activo. Solo en escritorio."
     },

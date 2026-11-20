@@ -12,6 +12,7 @@ import type { ChapterStatus, ChapterType } from "@/features/chapters/types";
 import type { Language } from "@/features/settings/types";
 import type { PluginStopMessageReason } from "@/features/plugins/stop-messages";
 import type { MemoryPluginFileGrantFile, PluginFileGrant } from "@/features/plugins/file-grants";
+import type { MemorySystemNotificationAdapter } from "@/features/plugins/system-notifications";
 import type { PluginDirectoryAdapter, PluginFetchAdapter } from "@/lib/platform/types";
 import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
 import type { EndpointRequest, PluginMessagePort, PluginStartReason } from "@/plugin-sdk/protocol";
@@ -868,6 +869,13 @@ export interface TestHostOptions {
    * Plugin. Defaults to `enable`.
    */
   startReason?: PluginStartReason;
+  /**
+   * Whether every call this host serves counts as caused by the author's
+   * click, key press, or Command run; defaults to `true`. Set it `false` to
+   * see the rows that need one, such as `files.pick` and
+   * `notifications.requestSystemPermission`, refused `user-action-required`.
+   */
+  userActivation?: boolean;
 }
 
 /** How `renderPage` and `renderSettingsRow` treat a batch the host refuses. */
@@ -995,6 +1003,14 @@ export interface TestHost {
   manifest: PluginManifest;
   /** Every `notifications.show` the Plugin asked for, in order. */
   notifications: TestNotification[];
+  /**
+   * The in-memory device behind `notifications.system`: the log of sent,
+   * replaced, and cancelled notifications (tags are `<pluginId>/<id>`), the
+   * ones `active` right now, `setPermission`, `setCanScheduleWhileClosed`, and
+   * `requestAnswer`. A send the device refuses lands in `notifications` as an
+   * info toast instead.
+   */
+  systemNotifications: MemorySystemNotificationAdapter;
   /** Every `navigation.openEntity` the Plugin asked for, in order. */
   navigations: TestNavigation[];
   /** Every `navigation.openPage` the Plugin asked for, in order. */
@@ -1148,7 +1164,7 @@ export type PluginToolbarButtonContribution = NonNullable<Contributions["toolbar
 export type PluginItemMenuEntryContribution = NonNullable<Contributions["itemMenuEntries"]>[number];
 export type PluginDeclaredLifecycle = PluginManifest["lifecycle"];
 
-/** One of the eleven exact Plugin Permission names. */
+/** One of the twelve exact Plugin Permission names. */
 export type PluginPermissionName = (typeof PLUGIN_PERMISSION_NAMES)[number];
 
 /** A Plugin Permission as a manifest declares it: an exact name or `network:<host>`. */

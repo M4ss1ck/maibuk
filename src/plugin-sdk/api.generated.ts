@@ -2,7 +2,7 @@
 
 import type { PluginStreamListener } from "@/plugin-sdk/protocol";
 
-export const PLUGIN_API_VERSION = "0.1.15";
+export const PLUGIN_API_VERSION = "0.1.16";
 
 export const PLUGIN_API_METHODS = [
   "library.books.list",
@@ -45,6 +45,10 @@ export const PLUGIN_API_METHODS = [
   "clipboard.readText",
   "clipboard.writeText",
   "notifications.show",
+  "notifications.system",
+  "notifications.cancel",
+  "notifications.systemStatus",
+  "notifications.requestSystemPermission",
   "toolbar.setPressed",
   "storage.get",
   "storage.set",
@@ -679,6 +683,38 @@ export interface PluginApiMethods {
     };
     output: null;
   };
+  /** Shows a System Notification naming this Plugin. The same id replaces this Plugin's earlier one, and Maibuk allows at most one per second, queueing extras so none is dropped. When the device has not allowed notifications, or cannot show one, Maibuk's toast shows it instead. */
+  "notifications.system": {
+    input: {
+      /** This Plugin's own id: sending the same id again replaces the earlier notification. */
+      id: string;
+      title: string;
+      body: string;
+    };
+    output: null;
+  };
+  /** Withdraws this Plugin's System Notification with that id. An id that is not showing is not an error. */
+  "notifications.cancel": {
+    input: {
+      id: string;
+    };
+    output: null;
+  };
+  /** Reads whether this device allows System Notifications and whether it shows one while Maibuk is closed. */
+  "notifications.systemStatus": {
+    input: Record<string, never>;
+    output: {
+      permission: "granted" | "denied" | "default";
+      canScheduleWhileClosed: boolean;
+    };
+  };
+  /** Asks the device for permission to show System Notifications and returns its answer. Refused with user-action-required unless the author's own click, key press, or Command run caused the call. */
+  "notifications.requestSystemPermission": {
+    input: Record<string, never>;
+    output: {
+      permission: "granted" | "denied" | "default";
+    };
+  };
   /** Sets whether one of this Plugin's Toggle Buttons shows as on. Only a toolbar button the manifest declares with toggle: true. */
   "toolbar.setPressed": {
     input: {
@@ -975,6 +1011,14 @@ export interface PluginApi {
   notifications: {
     /** Shows a toast naming this Plugin. At most one every 5 seconds, except while answering the author's own Command run. */
     show(params: PluginApiMethods["notifications.show"]["input"]): Promise<PluginApiMethods["notifications.show"]["output"]>;
+    /** Shows a System Notification naming this Plugin. The same id replaces this Plugin's earlier one, and Maibuk allows at most one per second, queueing extras so none is dropped. When the device has not allowed notifications, or cannot show one, Maibuk's toast shows it instead. */
+    system(params: PluginApiMethods["notifications.system"]["input"]): Promise<PluginApiMethods["notifications.system"]["output"]>;
+    /** Withdraws this Plugin's System Notification with that id. An id that is not showing is not an error. */
+    cancel(params: PluginApiMethods["notifications.cancel"]["input"]): Promise<PluginApiMethods["notifications.cancel"]["output"]>;
+    /** Reads whether this device allows System Notifications and whether it shows one while Maibuk is closed. */
+    systemStatus(params?: PluginApiMethods["notifications.systemStatus"]["input"]): Promise<PluginApiMethods["notifications.systemStatus"]["output"]>;
+    /** Asks the device for permission to show System Notifications and returns its answer. Refused with user-action-required unless the author's own click, key press, or Command run caused the call. */
+    requestSystemPermission(params?: PluginApiMethods["notifications.requestSystemPermission"]["input"]): Promise<PluginApiMethods["notifications.requestSystemPermission"]["output"]>;
   };
   toolbar: {
     /** Sets whether one of this Plugin's Toggle Buttons shows as on. Only a toolbar button the manifest declares with toggle: true. */
