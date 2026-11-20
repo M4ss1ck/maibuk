@@ -1,5 +1,5 @@
 import { mockItemMenuLayout } from "@/test/support/item-menu-layout";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -297,6 +297,17 @@ describe("Canvas custom nodes", () => {
 
   describe("node Item Menu", () => {
     afterEach(() => {
+      // jsdom 31 runs requestAnimationFrame from a setInterval it caches for the
+      // window, and it clears the interval only from inside that tick. A tick
+      // scheduled on the fake clock leaves a handle real timers can never clear,
+      // so the window never animates again and React Aria's deferred focus,
+      // which waits for a frame, never lands. Let the fake loop drain itself
+      // first.
+      if (vi.isFakeTimers()) {
+        act(() => {
+          vi.advanceTimersByTime(32);
+        });
+      }
       vi.useRealTimers();
     });
 
