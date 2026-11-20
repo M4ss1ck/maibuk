@@ -322,6 +322,11 @@ describe("Echoes report page", () => {
       await user.keyboard("{Enter}");
 
       // The occurrences are listed after the row; Arrow moves onto the first.
+      // They arrive over the Remote UI connection a tick later, so an Arrow
+      // pressed before they land has nothing to move onto.
+      await waitFor(() =>
+        expect(screen.getAllByRole("option", { name: /The harbor was/ }).length).toBeGreaterThan(0)
+      );
       await user.keyboard("{ArrowDown}");
       await user.keyboard("{Enter}");
 
@@ -518,7 +523,10 @@ describe("Echoes report page", () => {
       await waitFor(() =>
         expect(storage.get(ECHOES_SETTINGS_KEY)).toMatchObject({ ignore: ["harbor"] })
       );
-      expect(screen.queryByRole("option", { name: /harbor/ })).not.toBeInTheDocument();
+      // The Plugin recomputes and re-renders over Remote UI after the write lands.
+      await waitFor(() =>
+        expect(screen.queryByRole("option", { name: /harbor/ })).not.toBeInTheDocument()
+      );
 
       await page.unmount();
     } finally {

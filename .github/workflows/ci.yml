@@ -31,7 +31,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "lts/*"
+          node-version-file: ".node-version"
           cache: "pnpm"
 
       - name: Install dependencies
@@ -77,7 +77,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "lts/*"
+          node-version-file: ".node-version"
 
       - name: Check the AGENTS.md word budget
         run: node scripts/agents-word-budget.mjs AGENTS.md
@@ -170,7 +170,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "lts/*"
+          node-version-file: ".node-version"
           cache: "pnpm"
 
       - name: Install dependencies
@@ -219,7 +219,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "lts/*"
+          node-version-file: ".node-version"
           cache: "pnpm"
 
       - name: Install dependencies
@@ -257,7 +257,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "lts/*"
+          node-version-file: ".node-version"
           cache: "pnpm"
 
       - name: Install dependencies
@@ -284,7 +284,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: "lts/*"
+          node-version-file: ".node-version"
           cache: "pnpm"
 
       - name: Install dependencies

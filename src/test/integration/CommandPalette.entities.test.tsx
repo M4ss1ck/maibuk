@@ -21,7 +21,6 @@ import {
   sectionOptions,
   settleOn,
   updateChapterRow,
-  useBookStore,
   useCommandPaletteRecentStore,
   useNoteStore,
   useSettingsRevealStore,
@@ -29,12 +28,17 @@ import {
 } from "@/test/support/command-palette";
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 describe("Command Palette entities and pages", () => {
   it("lists a Book by title under Books and Enter opens the Book Editor", async () => {
-    await createBookRow({ title: "Alpha", authorName: "Author" }, "local");
+    const alpha = await createBookRow({ title: "Alpha", authorName: "Author" }, "local");
+    // updated_at has whole-second resolution and the Library lists the newest
+    // first, so whether Beta sorts ahead of Alpha depends on a second boundary
+    // falling between the two writes. Pin the case where it does.
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.now() + 1000);
     await createBookRow({ title: "Beta", authorName: "Author" }, "local");
+    clock.mockRestore();
     const user = userEvent.setup();
     renderApp("/");
     await settleOn("/");
@@ -48,7 +52,7 @@ describe("Command Palette entities and pages", () => {
 
     await waitFor(() => expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull());
     await waitFor(() => expect(bookEditorTitle()).toBe("Alpha"));
-    expect(path).toBe(`/book/${(useBookStore.getState().books[0] as { id: string }).id}`);
+    expect(path).toBe(`/book/${alpha.id}`);
   });
 
   it("finds a Chapter of another Book, shows its Book, and opens that Book at it", async () => {
