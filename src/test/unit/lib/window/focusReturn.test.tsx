@@ -179,6 +179,25 @@ describe("installFocusReturn", () => {
     expect(bold).toHaveAttribute("data-focus-visible");
   });
 
+  it("treats a return into the Plugin's iframe the author left from as a return", async () => {
+    const user = userEvent.setup();
+    render(<Fixture />);
+    await user.tab();
+    const plugin = screen.getByTitle("Plugin");
+    // The author is inside the Plugin when the window blurs; the engine may not
+    // fire focus on the iframe element itself, so only activeElement says so.
+    act(() => {
+      plugin.focus();
+      fireEvent.blur(window);
+    });
+    act(() => {
+      raw(window, "focus");
+      raw(plugin, "focus");
+    });
+
+    expect(getInteractionModality()).toBe("pointer");
+  });
+
   it("leaves the modality alone when focus lands somewhere other than where it left", async () => {
     const user = userEvent.setup();
     render(<Fixture />);

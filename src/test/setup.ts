@@ -50,6 +50,7 @@ if (typeof window !== "undefined") {
       }) as unknown as DOMRectList;
   }
 
+  // jsdom is pinned exactly: this reads a file it does not export.
   // Vitest 4 copies a jsdom Blob into a Node Blob for URL.createObjectURL
   // through an own Symbol("impl") that jsdom 30.1 dropped, so the call throws.
   // This reads the bytes the way Vitest 5 does; drop it with that upgrade.

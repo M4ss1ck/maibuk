@@ -370,7 +370,7 @@ importers:
         specifier: ^4.10.2
         version: 4.10.2
       jsdom:
-        specifier: ^31.0.1
+        specifier: 31.0.1
         version: 31.0.1
       source-map-js:
         specifier: ^1.2.1
