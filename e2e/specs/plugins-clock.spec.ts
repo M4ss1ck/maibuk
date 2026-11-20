@@ -1,15 +1,18 @@
-// Clock's Timer (issue #871), on the Built-in Plugin that ships off by default:
-// turning it on from Settings → Plugins by keyboard, opening its page from the
-// Command Palette on the Timer tab, setting a 5-second length from the length
-// fields, starting it, pausing and resuming it from its Plugin Command, and its
-// end — the live region's announcement and the Alert, which reaches the author
-// as Maibuk's own in-window notice here because headless Chromium never grants
-// the Notification permission. Keyboard only: every control is reached by Tab
-// and pressed with Enter or Space.
+// Clock's Timer (issue #871) and Pomodoro, on the Built-in Plugin that ships off
+// by default: turning it on from Settings → Plugins by keyboard, opening its page
+// from the Command Palette on the Timer tab, setting a 5-second length from the
+// length fields, starting it, pausing and resuming it from its Plugin Command,
+// and its end: the live region's announcement and the Alert, which reaches the
+// author as Maibuk's own in-window notice here because headless Chromium never
+// grants the Notification permission. The Pomodoro tab is reached by keyboard
+// from the Timer tab, and its Cycle starts there, pauses and resumes from its
+// Command, skips to the Short break from its other Command, and resets to the
+// first Pomodoro. No phase is waited out: its 25 minutes are the unit suites'.
+// Keyboard only: every control is reached by Tab and pressed with Enter or Space.
 
 import type { Page } from "@playwright/test";
 import { capture } from "../support/capture";
-import { expectFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
+import { expectFocusWithin, pressUntilFocused, tabTo, tabToEither } from "../support/keyboard";
 import { runPaletteCommand } from "../support/palette";
 import { expect, test } from "../support/test";
 
@@ -61,6 +64,42 @@ function secondsOf(text: string): number {
 /** The seconds the drawn time shows; Infinity until it has fallen below the length. */
 async function secondsShown(page: Page): Promise<number> {
   const drawn = drawnTime(page);
+  if ((await drawn.count()) === 0) return Number.POSITIVE_INFINITY;
+  const text = await drawn.textContent();
+  return text === null ? Number.POSITIVE_INFINITY : secondsOf(text);
+}
+
+/** The Pomodoro Command that starts, pauses and resumes the Cycle. */
+const TOGGLE_POMODORO_COMMAND = "Start or pause the Pomodoro";
+
+/** The Pomodoro Command that moves the Cycle to its next phase. */
+const SKIP_POMODORO_COMMAND = "Skip to the next Pomodoro or break";
+
+/** The first Pomodoro of the four the default settings put before a Long break. */
+const POMODORO_OF_CYCLE = "Pomodoro 1 of 4";
+
+/** Its 25-minute length, drawn while it is idle. */
+const POMODORO_LENGTH = "25:00";
+
+/** The Short break's 5-minute length, drawn while it is idle. */
+const SHORT_BREAK_LENGTH = "5:00";
+
+/** Today's count, which nothing here adds to: only a phase that ends counts one. */
+const POMODOROS_TODAY = "Pomodoros today: 0";
+
+/** The whole first Pomodoro in seconds, which the drawn time must fall below. */
+const POMODORO_SECONDS = 25 * 60;
+
+/** The Pomodoro panel's phase heading, which it draws at level 3. */
+const phaseHeading = (page: Page, name: string) =>
+  page.getByRole("heading", { name, exact: true, level: 3 });
+
+/** The Cycle's drawn remaining time: "m:ss", from the 25-minute default down. */
+const cycleTime = (page: Page) => page.getByText(/^\d{1,2}:\d{2}$/);
+
+/** The seconds the Cycle's drawn time shows; Infinity until it draws a time. */
+async function secondsLeft(page: Page): Promise<number> {
+  const drawn = cycleTime(page);
   if ((await drawn.count()) === 0) return Number.POSITIVE_INFINITY;
   const text = await drawn.textContent();
   return text === null ? Number.POSITIVE_INFINITY : secondsOf(text);
@@ -123,6 +162,21 @@ async function openClockPage(page: Page): Promise<void> {
     "true"
   );
   await expect(lengthField(page, "Seconds")).toBeVisible({ timeout: 15_000 });
+}
+
+/**
+ * Moves from the Timer tab to the Pomodoro tab by keyboard: the tab list is one
+ * tab stop, so Tab lands on the selected Timer tab, and ArrowLeft moves to the
+ * Pomodoro, which selection follows.
+ */
+async function openPomodoroTab(page: Page): Promise<void> {
+  const tabList = page.getByRole("tablist", { name: "Clock sections" });
+  const timerTab = tabList.getByRole("tab", { name: "Timer", exact: true });
+  const pomodoroTab = tabList.getByRole("tab", { name: "Pomodoro", exact: true });
+  await tabTo(page, timerTab, { max: 40 });
+  await page.keyboard.press("ArrowLeft");
+  await expect(pomodoroTab).toHaveAttribute("aria-selected", "true");
+  await expect(phaseHeading(page, "Pomodoro")).toBeVisible({ timeout: 15_000 });
 }
 
 /**
@@ -202,5 +256,76 @@ test.describe("Clock Timer @wf:plugins-clock-timer @chromium-only", () => {
     await expect(lengthField(page, "Seconds")).toBeVisible();
     await expect(page.getByRole("button", { name: "Reset", exact: true })).toBeVisible();
     await capture(page, "clock-timer-ended");
+  });
+});
+
+test.describe("Clock Pomodoro @wf:plugins-clock-pomodoro @chromium-only", () => {
+  test("the Pomodoro runs from its tab and pauses, resumes, skips and resets from its Commands @sc:plugin.maibuk-clock.togglePomodoro @sc:plugin.maibuk-clock.skipPomodoro", async ({
+    page,
+  }) => {
+    await turnOn(page);
+    await openClockPage(page);
+    await openPomodoroTab(page);
+
+    // Idle on the first Pomodoro: its 25-minute length, the controls of that
+    // status, and no Pomodoro counted today.
+    await expect(phaseHeading(page, "Pomodoro")).toBeVisible();
+    await expect(page.getByText(POMODORO_OF_CYCLE, { exact: true })).toBeVisible();
+    await expect(page.getByText(POMODORO_LENGTH, { exact: true })).toBeVisible();
+    await expect(page.getByText(POMODOROS_TODAY, { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Skip", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Reset Cycle", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Pause", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Resume", exact: true })).toHaveCount(0);
+    await capture(page, "clock-pomodoro-idle");
+
+    // Start runs it: Pause replaces Start, and the drawn time falls.
+    await tabTo(page, page.getByRole("button", { name: "Start", exact: true }), { max: 12 });
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start", exact: true })).toHaveCount(0);
+    await expect.poll(() => secondsLeft(page), { timeout: 5_000 }).toBeLessThan(POMODORO_SECONDS);
+
+    // The Command pauses it: Resume replaces Pause, and the drawn time holds
+    // what was left rather than returning to the length.
+    await runPaletteCommand(page, TOGGLE_POMODORO_COMMAND);
+    await expect(page.getByRole("button", { name: "Resume", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Pause", exact: true })).toHaveCount(0);
+    const paused = await secondsLeft(page);
+    expect(paused).toBeLessThan(POMODORO_SECONDS);
+
+    // The Command again resumes it from that remainder.
+    await runPaletteCommand(page, TOGGLE_POMODORO_COMMAND);
+    await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Resume", exact: true })).toHaveCount(0);
+    await expect.poll(() => secondsLeft(page), { timeout: 5_000 }).toBeLessThan(paused);
+
+    // Its other Command moves the Cycle on: the Short break, idle, still the
+    // first Pomodoro of the Cycle and none counted.
+    await runPaletteCommand(page, SKIP_POMODORO_COMMAND);
+    await expect(phaseHeading(page, "Short break")).toBeVisible();
+    await expect(phaseHeading(page, "Pomodoro")).toHaveCount(0);
+    await expect(page.getByText(POMODORO_OF_CYCLE, { exact: true })).toBeVisible();
+    await expect(page.getByText(SHORT_BREAK_LENGTH, { exact: true })).toBeVisible();
+    await expect(page.getByText(POMODOROS_TODAY, { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Pause", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Resume", exact: true })).toHaveCount(0);
+    await capture(page, "clock-pomodoro-short-break");
+
+    // Reset Cycle returns the Cycle to its first Pomodoro, idle. The palette
+    // leaves focus on the body, so the button is reached from either side.
+    const reset = page.getByRole("button", { name: "Reset Cycle", exact: true });
+    await tabToEither(page, reset, { max: 30 });
+    await page.keyboard.press("Enter");
+    await expect(phaseHeading(page, "Pomodoro")).toBeVisible();
+    await expect(page.getByText(POMODORO_OF_CYCLE, { exact: true })).toBeVisible();
+    await expect(page.getByText(POMODORO_LENGTH, { exact: true })).toBeVisible();
+    await expect(page.getByText(POMODOROS_TODAY, { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Pause", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Resume", exact: true })).toHaveCount(0);
+    await capture(page, "clock-pomodoro-reset");
   });
 });
