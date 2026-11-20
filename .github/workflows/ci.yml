@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - main
+  # Nightly full run, so drift on a quiet branch still meets the whole suite.
+  schedule:
+    - cron: "17 3 * * *"
 
 # A newer push to the same PR makes the running checks moot.
 concurrency:
@@ -79,11 +82,78 @@ jobs:
       - name: Check the AGENTS.md word budget
         run: node scripts/agents-word-budget.mjs AGENTS.md
 
-  # The suite in parallel shards. Each shard records its results and coverage
-  # as a blob; the coverage job merges them and enforces the thresholds on the
-  # whole, since a shard alone covers a third of the code.
+  # Picks how much of the suite a run takes: the full sharded run, or only
+  # the tests a PR's diff reaches (issue #853).
+  changes:
+    name: Select tests
+    runs-on: ubuntu-latest
+    outputs:
+      full: ${{ steps.select.outputs.full }}
+      plugin: ${{ steps.select.outputs.plugin }}
+      base: ${{ steps.select.outputs.base }}
+
+    steps:
+      # Full history, so the merge base and the diff against it exist.
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Select the tests to run
+        id: select
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+
+          # Keep in sync with forceRerunTriggers in vite.config.ts (issue #853).
+          FULL_RUN='(^|/)package\.json$|(^|/)vite\.config\.ts$|(^|/)vitest\.config\.|(^|/)src/test/setup\.ts$|(^|/)src/test/support/|(^|/)pnpm-lock\.yaml$|(^|/)tsconfig[^/]*\.json$|^\.github/workflows/'
+          PLUGIN='^(scripts/plugin/|scripts/build-plugin|src/test/integration/plugin-tooling|plugins/|src/plugin-sdk/|src/features/plugins/|templates/plugin/|package\.json$|pnpm-lock\.yaml$|\.github/workflows/)'
+
+          base=""
+          case "$EVENT" in
+            pull_request) base=$(git merge-base "origin/$BASE_REF" HEAD) ;;
+            push) base="$BEFORE" ;;
+          esac
+
+          # A first push reports an all-zero before SHA, which no commit answers to.
+          if [ -n "$base" ] && ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            base=""
+          fi
+
+          files=""
+          if [ -n "$base" ]; then
+            files=$(git diff --name-only "$base" HEAD)
+          fi
+
+          full=true
+          if [ "$EVENT" = "pull_request" ] && [ -n "$base" ] && ! grep -Eq "$FULL_RUN" <<< "$files"; then
+            full=false
+          fi
+
+          plugin=true
+          if [ -n "$base" ] && ! grep -Eq "$PLUGIN" <<< "$files"; then
+            plugin=false
+          fi
+
+          {
+            echo "full=$full"
+            echo "plugin=$plugin"
+            echo "base=$base"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Select tests: event $EVENT, base ${base:-none}, full run $full, Plugin tooling $plugin"
+
+  # The full run in parallel shards: a push to main, the nightly schedule, or a
+  # PR that touches a full-run trigger. Each shard records its results and
+  # coverage as a blob; the coverage job merges them and enforces the
+  # thresholds on the whole, since a shard alone covers a third of the code.
   tests:
     name: Tests (shard ${{ matrix.shard }}/3)
+    needs: changes
+    if: ${{ needs.changes.outputs.full == 'true' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -127,13 +197,54 @@ jobs:
           include-hidden-files: true
           retention-days: 1
 
+  # The other PR path: vitest --changed against the merge base runs only the
+  # tests the diff reaches through the import graph. The guards lane catches the
+  # tests that read files from disk, which the import graph cannot see, and the
+  # coverage thresholds wait for the full run.
+  tests-changed:
+    name: Tests (changed)
+    needs: changes
+    if: ${{ needs.changes.outputs.full == 'false' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "lts/*"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch dictation runtime
+        run: pnpm fetch:dictation
+
+      - name: Run the tests the change reaches
+        env:
+          BASE: ${{ needs.changes.outputs.base }}
+        run: pnpm exec vitest run --changed "$BASE" --passWithNoTests
+
+      - name: Run the guard lane
+        run: pnpm test:guards
+
   # The slow Plugin-tooling lane (issue #455): the template is copied into a path
   # with spaces, set up, and checked end to end, plus the built-in layout
   # equivalence. It spawns tsx, Vite, tsc, biome, and vitest, so it runs once,
-  # after the unit tests, never inside the sharded suite.
+  # in parallel with the tests, only when a Plugin path changed or on the
+  # nightly run; a skipped job reports success.
   plugin-tooling:
     name: Plugin tooling
-    needs: tests
+    needs: changes
+    if: ${{ needs.changes.outputs.plugin == 'true' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -159,8 +270,8 @@ jobs:
   # (tests past half their timeout), which is what explains a timeout.
   coverage:
     name: Coverage gates
-    needs: tests
-    if: ${{ !cancelled() }}
+    needs: [changes, tests]
+    if: ${{ !cancelled() && needs.changes.outputs.full == 'true' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -190,3 +301,42 @@ jobs:
 
       - name: Merge reports and check coverage thresholds
         run: pnpm exec vitest run --mergeReports --coverage
+
+  # Nobody watches the Actions tab, so a red main opens or updates one issue.
+  report-failure:
+    name: Report a red main
+    needs: [checks, agents-budget, changes, tests, coverage, plugin-tooling]
+    if: ${{ failure() && github.event_name != 'pull_request' }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: read
+      contents: read
+
+    steps:
+      - name: Open or update the failing-main issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          EVENT: ${{ github.event_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          pr=$(gh api "repos/$GH_REPO/commits/$SHA/pulls" --jq '.[0].number // empty')
+          if [ -n "$pr" ]; then
+            source="#$pr"
+          else
+            source="commit $SHA"
+          fi
+
+          title="CI is failing on main"
+          body="CI failed on \`main\` ($EVENT) at $SHA, from $source: $RUN_URL"
+
+          issue=$(gh issue list --state open --label bug --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$issue" ]; then
+            gh issue comment "$issue" --body "$body"
+          else
+            gh issue create --title "$title" --label bug --body "$body"
+          fi

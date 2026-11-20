@@ -184,8 +184,9 @@ Testing is configured with **Vitest + Testing Library**, on jsdom or plain Node 
 - Support helpers: `src/test/support/` (fixtures, factories)
 - Commands:
   - `pnpm test` (watch mode — TDD loop)
-  - `pnpm test:run` (single run — CI)
+  - `pnpm test:run` (single run, the whole suite)
   - `pnpm test:coverage` (coverage report with threshold enforcement)
+  - Before pushing, run what the change reaches: `pnpm exec vitest related <touched files> --run` plus `pnpm test:guards`. Leave the full suite to CI: a PR runs only the tests its diff reaches (plus the guards), and the full sharded suite with coverage gates runs on every push to `main`, nightly, and on any PR touching a full-run trigger (`forceRerunTriggers` in `vite.config.ts`).
 
 ### Coverage strategy
 

@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { matchesGlob, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import packageJson from "../../../package.json";
@@ -53,7 +53,7 @@ describe("CI workflow", () => {
     }
 
     const coverage = job("coverage");
-    expect(coverage).toContain("needs: tests");
+    expect(coverage).toContain("needs: [changes, tests]");
     expect(coverage).toContain("vitest run --mergeReports --coverage");
     expect(coverage).not.toContain("--coverage.thresholds");
   });
@@ -80,7 +80,9 @@ describe("CI workflow", () => {
   // flag, which would replace it), and must run after a failed shard too.
   it("reports the time budget from the merged run, even when a shard failed", () => {
     const coverage = job("coverage");
-    expect(coverage).toContain(["if: $", "{{ !cancelled() }}"].join(""));
+    expect(coverage).toContain(
+      ["if: $", "{{ !cancelled() && needs.changes.outputs.full == 'true' }}"].join("")
+    );
     expect(coverage).not.toContain("--reporter");
     expect(readFileSync(resolve(__dirname, "../../../vite.config.ts"), "utf8")).toContain(
       "./src/test/support/time-budget-reporter.ts"
@@ -95,15 +97,80 @@ describe("CI workflow", () => {
   });
 
   // The Plugin tooling lane spawns tsx, Vite, tsc, biome, and vitest and takes
-  // about 10 seconds: it runs once, after the tests, never in the shards
-  // (issue #455).
-  it("runs the Plugin tooling lane once, after the unit tests", () => {
+  // about 10 seconds: it runs once, never in the shards (issue #455), beside
+  // the tests and only when a Plugin path changed (issue #853).
+  it("runs the Plugin tooling lane once, beside the tests, only for Plugin changes", () => {
     expect(packageJson.scripts["test:plugin-tooling"]).toBe(
       "MAIBUK_PLUGIN_TOOLING=1 vitest run src/test/integration/plugin-tooling.test.ts"
     );
     const tooling = job("plugin-tooling");
-    expect(tooling).toContain("needs: tests");
+    expect(tooling).toContain("needs: changes");
+    expect(tooling).toContain(["if: $", "{{ needs.changes.outputs.plugin == 'true' }}"].join(""));
     expect(tooling).toContain("run: pnpm test:plugin-tooling");
     expect(tooling).not.toContain("matrix");
+  });
+
+  // A PR pays for the tests its diff reaches, not the whole suite; the guards
+  // cover the tests that read the repo from disk, which the import graph
+  // cannot see (issue #853).
+  it("runs only the tests a PR reaches, plus the guards, unless a trigger changed", () => {
+    expect(job("tests")).toContain(
+      ["if: $", "{{ needs.changes.outputs.full == 'true' }}"].join("")
+    );
+    const changed = job("tests-changed");
+    expect(changed).toContain(["if: $", "{{ needs.changes.outputs.full == 'false' }}"].join(""));
+    expect(changed).toContain('run: pnpm exec vitest run --changed "$BASE"');
+    expect(changed).toContain("run: pnpm test:guards");
+    expect(changed).not.toContain("--coverage");
+  });
+
+  // CI's full-run list and Vitest's forceRerunTriggers are two spellings of
+  // one list: a local `vitest --changed` must widen to the whole suite exactly
+  // when CI does.
+  it("widens to the full suite on the same files as vitest --changed", () => {
+    const fullRun = new RegExp(job("changes").match(/FULL_RUN='([^']+)'/)?.[1] ?? "^$");
+    const viteConfig = readFileSync(resolve(__dirname, "../../../vite.config.ts"), "utf8");
+    const triggers = [
+      ...(viteConfig.match(/forceRerunTriggers: \[([\s\S]*?)\]/)?.[1] ?? "").matchAll(/"([^"]+)"/g),
+    ].map((m) => m[1]);
+    const forcesRerun = (file: string) =>
+      triggers.some((glob) => matchesGlob(`/repo/${file}`, glob));
+
+    const cases: Array<[string, boolean]> = [
+      ["package.json", true],
+      ["pnpm-lock.yaml", true],
+      ["vite.config.ts", true],
+      ["tsconfig.json", true],
+      ["tsconfig.node.json", true],
+      ["src/test/setup.ts", true],
+      ["src/test/support/time-budget-reporter.ts", true],
+      [".github/workflows/ci.yml", true],
+      ["src/lib/async-queue.ts", false],
+      ["src/test/unit/ci-workflow.test.ts", false],
+      ["docs/agents/design.md", false],
+    ];
+    for (const [file, full] of cases) {
+      expect({ file, ci: fullRun.test(file), vitest: forcesRerun(file) }).toEqual({
+        file,
+        ci: full,
+        vitest: full,
+      });
+    }
+  });
+
+  // Every push to main and the nightly run take the full suite, and a red main
+  // opens or updates one bug issue, since nobody watches the Actions tab.
+  it("runs the full suite on main and nightly and reports a failure as an issue", () => {
+    expect(workflow).toMatch(/\n {2}push:\n {4}branches:\n {6}- main\n/);
+    expect(workflow).toMatch(/\n {2}schedule:\n {4}- cron: /);
+    const report = job("report-failure");
+    expect(report).toContain(
+      ["if: $", "{{ failure() && github.event_name != 'pull_request' }}"].join("")
+    );
+    expect(report).toContain(
+      "needs: [checks, agents-budget, changes, tests, coverage, plugin-tooling]"
+    );
+    expect(report).toContain("issues: write");
+    expect(report).toContain("--label bug");
   });
 });
