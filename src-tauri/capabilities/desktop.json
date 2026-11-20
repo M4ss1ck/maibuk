@@ -26,6 +26,9 @@
     "core:window:allow-set-always-on-top",
     "core:window:allow-set-fullscreen",
     "core:window:allow-hide",
+    "core:window:allow-unminimize",
+    "core:window:allow-show",
+    "core:window:allow-set-focus",
     "autostart:allow-enable",
     "autostart:allow-disable",
     "autostart:allow-is-enabled",
@@ -39,6 +42,8 @@
     "notification:allow-notify",
     "notification:allow-cancel",
     "notification:allow-remove-active",
+    "notification:allow-register-listener",
+    "notification:allow-remove-listener",
     "deep-link:default",
     {
       "identifier": "http:default",

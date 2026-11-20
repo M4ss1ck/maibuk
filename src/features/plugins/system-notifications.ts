@@ -13,6 +13,7 @@
  * showing one fails, the author still sees the notice as Maibuk's toast.
  */
 
+import { createNotificationDeadlines } from "@/lib/platform/notification-deadlines";
 import type { SystemNotificationAdapter, SystemNotificationPermission } from "@/lib/platform/types";
 
 /** Maibuk's limit: one immediate System Notification per second, per Plugin (ADR 0042). */
@@ -152,18 +153,24 @@ export function createPluginSystemNotifications(
 
 /** One entry of the memory adapter's log. */
 interface MemorySystemNotificationLogEntry {
-  kind: "sent" | "replaced" | "cancelled";
+  kind: "sent" | "replaced" | "scheduled" | "cancelled";
   tag: string;
   title?: string;
   body?: string;
+  /** The deadline a `"scheduled"` entry was recorded for, ms since the epoch. */
+  at?: number;
 }
 
 /** The memory device the test kit exposes as `host.systemNotifications`. */
 export type MemorySystemNotificationAdapter = SystemNotificationAdapter & {
   readonly log: MemorySystemNotificationLogEntry[];
   readonly active: ReadonlyMap<string, { title: string; body: string }>;
+  readonly scheduled: ReadonlyMap<string, { title: string; body: string; at: number }>;
   setPermission(permission: SystemNotificationPermission): void;
   setCanScheduleWhileClosed(value: boolean): void;
+  setExactTiming(value: boolean): void;
+  /** Simulates the author clicking a notification, so a test sees the Plugin's handler. */
+  click(tag: string): void;
   requestAnswer: SystemNotificationPermission;
 };
 
@@ -179,30 +186,59 @@ export type MemorySystemNotificationAdapter = SystemNotificationAdapter & {
  * expect(notifications.active.get("clock/pomodoro")?.body).toBe("Break time");
  * ```
  *
- * - `log` lists every show and cancel in order: `"sent"` for a new tag,
- *   `"replaced"` when the tag was already showing (a second send with the same
- *   id replaces the first), `"cancelled"` when a cancel withdrew one.
+ * - `log` lists every show, schedule, and cancel in order: `"sent"` for a new
+ *   tag, `"replaced"` when the tag was already showing (a second send with the
+ *   same id replaces the first), `"scheduled"` when one was given a deadline,
+ *   `"cancelled"` when a cancel withdrew one.
  * - `active` holds the notifications currently showing, keyed by tag.
+ * - `scheduled` holds the ones waiting for their deadline, keyed by tag; a host
+ *   timer moves each into `active` when it is due.
  * - `setPermission` plays the OS's answer, and `requestPermission` answers with
  *   `requestAnswer` and remembers it; both start at `"granted"`.
  * - `setCanScheduleWhileClosed` plays whether the OS fires one after Maibuk
- *   closes; it starts `false`, which is every platform today.
+ *   closes; it starts `false`, which is every platform but Android.
+ * - `setExactTiming` plays whether a scheduled one fires on time; it starts
+ *   `true`.
+ * - `click` runs the handlers `onClick` registered with the tag, as a click
+ *   on the notification would.
  */
 export function createMemorySystemNotificationAdapter(): MemorySystemNotificationAdapter {
   const log: MemorySystemNotificationLogEntry[] = [];
   const active = new Map<string, { title: string; body: string }>();
+  const scheduled = new Map<string, { title: string; body: string; at: number }>();
+  const clickHandlers = new Set<(tag: string) => void>();
   let permission: SystemNotificationPermission = "granted";
   let canSchedule = false;
+  let exactTiming = true;
+
+  function record(kind: "sent" | "replaced", tag: string, title: string, body: string): void {
+    log.push({ kind, tag, title, body });
+    active.set(tag, { title, body });
+  }
+
+  const deadlines = createNotificationDeadlines((notification) => {
+    scheduled.delete(notification.tag);
+    record(
+      active.has(notification.tag) ? "replaced" : "sent",
+      notification.tag,
+      notification.title,
+      notification.body
+    );
+  });
 
   const adapter: MemorySystemNotificationAdapter = {
     log,
     active,
+    scheduled,
     requestAnswer: "granted",
     setPermission(next): void {
       permission = next;
     },
     setCanScheduleWhileClosed(value): void {
       canSchedule = value;
+    },
+    setExactTiming(value): void {
+      exactTiming = value;
     },
     async permission() {
       return permission;
@@ -212,12 +248,45 @@ export function createMemorySystemNotificationAdapter(): MemorySystemNotificatio
       return permission;
     },
     async show(notification) {
-      const kind = active.has(notification.tag) ? "replaced" : "sent";
-      log.push({ kind, tag: notification.tag, title: notification.title, body: notification.body });
-      active.set(notification.tag, { title: notification.title, body: notification.body });
+      record(
+        active.has(notification.tag) ? "replaced" : "sent",
+        notification.tag,
+        notification.title,
+        notification.body
+      );
+    },
+    async schedule({ tag, title, body, at }) {
+      scheduled.set(tag, { title, body, at });
+      log.push({ kind: "scheduled", tag, title, body, at });
+      deadlines.schedule({ tag, title, body, at });
     },
     async cancel(tag) {
-      if (active.delete(tag)) log.push({ kind: "cancelled", tag });
+      deadlines.cancel(tag);
+      const wasScheduled = scheduled.delete(tag);
+      const wasShowing = active.delete(tag);
+      if (wasScheduled || wasShowing) log.push({ kind: "cancelled", tag });
+    },
+    async cancelAll(prefix) {
+      deadlines.cancelAll(prefix);
+      const tags = new Set([...scheduled.keys(), ...active.keys()]);
+      for (const tag of tags) {
+        if (!tag.startsWith(prefix)) continue;
+        scheduled.delete(tag);
+        active.delete(tag);
+        log.push({ kind: "cancelled", tag });
+      }
+    },
+    async exactTiming() {
+      return exactTiming;
+    },
+    onClick(handler) {
+      clickHandlers.add(handler);
+      return () => {
+        clickHandlers.delete(handler);
+      };
+    },
+    click(tag) {
+      for (const handler of clickHandlers) handler(tag);
     },
     canScheduleWhileClosed() {
       return canSchedule;

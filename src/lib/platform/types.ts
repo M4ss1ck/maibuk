@@ -135,9 +135,23 @@ export interface SystemNotificationAdapter {
    * Rejects when the platform cannot show one.
    */
   show(notification: { tag: string; title: string; body: string }): Promise<void>;
-  /** Withdraws the one with `tag`; an unknown tag is not an error. */
+  /**
+   * Shows one at `at` (ms since the epoch). A second with the same `tag` replaces
+   * an earlier scheduled or shown one; an `at` already past fires on the next tick.
+   */
+  schedule(notification: { tag: string; title: string; body: string; at: number }): Promise<void>;
+  /** Withdraws the one with `tag`, scheduled or shown; an unknown tag is not an error. */
   cancel(tag: string): Promise<void>;
-  /** Whether the OS fires one while Maibuk is closed. False on every platform for now. */
+  /** Withdraws every scheduled and shown one whose tag starts with `prefix`. */
+  cancelAll(prefix: string): Promise<void>;
+  /** Whether a scheduled one fires on time, rather than minutes late. */
+  exactTiming(): Promise<boolean>;
+  /**
+   * Calls `handler` with the tag of a clicked one, after Maibuk came to the front;
+   * returns the unsubscribe. Supports one or more handlers.
+   */
+  onClick(handler: (tag: string) => void): () => void;
+  /** Whether the OS fires one while Maibuk is closed. True on Android only. */
   canScheduleWhileClosed(): boolean;
 }
 
