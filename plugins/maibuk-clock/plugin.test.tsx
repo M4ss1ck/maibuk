@@ -186,9 +186,12 @@ async function openStopwatchTab(user: User): Promise<void> {
   await tabTo(user, timerTab);
   expect(timerTab).toHaveFocus();
   await user.keyboard("{ArrowRight}");
-  await eventually(() =>
-    expect(screen.getByRole("tab", { name: en.stopwatch })).toHaveAttribute("aria-selected", "true")
-  );
+  expect(screen.getByRole("tab", { name: en.stopwatch })).toHaveFocus();
+  // The Stopwatch panel draws a time and none of the Timer's length fields.
+  await eventually(() => {
+    expect(screen.queryByRole("textbox", { name: en.hours })).toBeNull();
+    expect(screen.getByRole("tabpanel")).toHaveTextContent(/\d+:\d{2}/);
+  });
 }
 
 /** Starts the Timer from the page and waits for the stored running state. */
@@ -265,10 +268,10 @@ describe("Clock runtime", () => {
     }
   });
 
-  it("marks Laps while running, newest first, with each stretch and total", async () => {
+  it("marks Laps while running, newest first, with each stretch and total, kept across a page change", async () => {
     const { host, storage } = startHost();
     freezeClock();
-    await host.renderPage(CLOCK_PAGE_ID);
+    const page = await host.renderPage(CLOCK_PAGE_ID);
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
 
     await openStopwatchTab(user);
@@ -296,6 +299,13 @@ describe("Clock runtime", () => {
     expect(rows[1]?.textContent).toContain("0:15");
     expect(rows[2]?.textContent).toContain("1");
     expect(rows[2]?.textContent).toContain("0:10");
+
+    // Leaving the page and coming back finds the same Laps.
+    await page.unmount();
+    await host.renderPage(CLOCK_PAGE_ID);
+    await openStopwatchTab(user);
+    const again = await screen.findByRole("table", { name: en.laps });
+    await eventually(() => expect(within(again).getAllByRole("row")).toHaveLength(3));
   });
 
   it("pauses to hold the time and resumes from where it stopped", async () => {
