@@ -34,6 +34,14 @@ export const EXCLUSIONS: Exclusion[] = [
   },
   {
     kind: "term",
+    items: ["System Notification"],
+    reason:
+      "Shown by the device's notification center, outside the page a browser test drives, and the browser's permission prompt cannot be answered from Playwright; the toast fallback has no UI of its own beyond the existing toast (ADR 0042)",
+    owner:
+      "Vitest Plugin test kit (through the real broker), the system-notifications service and platform adapter suites, and the manual device check in the PR",
+  },
+  {
+    kind: "term",
     items: ["Plugin Platforms"],
     reason:
       "A manifest field the Plugin author writes, never shown on screen; Android Plugins are not shown to users yet (#516), so no workflow reaches the term",
