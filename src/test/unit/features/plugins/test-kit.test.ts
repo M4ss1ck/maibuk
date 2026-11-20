@@ -2137,6 +2137,7 @@ describe("createTestHost() System Notifications", () => {
   }
 
   it("shows one titled with the Plugin's name, and the same id replaces it", async () => {
+    vi.useFakeTimers();
     const host = createTestHost({ manifest: notificationsManifest() });
     try {
       const client = createPluginClient(host.port);
@@ -2159,14 +2160,21 @@ describe("createTestHost() System Notifications", () => {
       });
 
       // The kit's service keeps Maibuk's one-a-second rule, so this send waits
-      // out the first one's second (real time) before it replaces it.
-      await client.notifications.system({
+      // out the first one's second: once it reached the queue, jump the clock.
+      const replaced = client.notifications.system({
         id: "pomodoro",
         title: "Break is over",
         body: "Back to work",
       });
-
-      expect(host.systemNotifications.log.map((entry) => entry.kind)).toEqual(["sent", "replaced"]);
+      await vi.waitFor(() => expect(vi.getTimerCount()).toBe(1));
+      await vi.advanceTimersByTimeAsync(1000);
+      await vi.waitFor(() =>
+        expect(host.systemNotifications.log.map((entry) => entry.kind)).toEqual([
+          "sent",
+          "replaced",
+        ])
+      );
+      await replaced;
       expect(host.systemNotifications.active.size).toBe(1);
       expect(host.systemNotifications.active.get("tracer/pomodoro")).toEqual({
         title: "Tracer Fixture: Break is over",
@@ -2174,6 +2182,7 @@ describe("createTestHost() System Notifications", () => {
       });
       expect(host.notifications).toEqual([]);
     } finally {
+      vi.useRealTimers();
       await host.stop();
     }
   });
@@ -2203,7 +2212,7 @@ describe("createTestHost() System Notifications", () => {
     }
   });
 
-  it("delivers three immediate sends in order, a second apart", async () => {
+  it("delivers three immediate sends in order, a second apart, dropping none", async () => {
     vi.useFakeTimers();
     const host = createTestHost({ manifest: notificationsManifest() });
     try {
@@ -2212,20 +2221,19 @@ describe("createTestHost() System Notifications", () => {
         client.notifications.system({ id, title: id, body: id })
       );
 
-      // The port carries the three calls in; the first shows at once.
-      for (let turn = 0; turn < 20 && host.systemNotifications.log.length === 0; turn++) {
-        await vi.advanceTimersByTimeAsync(0);
-      }
+      // The first shows as soon as the port carries it in; each later one waits
+      // out the second of the one before, so jump the clock a second at a time.
+      // (The service's own suite pins the gap to the millisecond.)
+      await vi.waitFor(() => expect(shown(host)).toEqual(["tracer/first"]));
+      await vi.waitFor(() => expect(vi.getTimerCount()).toBe(1));
       expect(shown(host)).toEqual(["tracer/first"]);
-
-      // The second waits out the first's second: still nothing at 999 ms…
-      await vi.advanceTimersByTimeAsync(999);
-      expect(shown(host)).toEqual(["tracer/first"]);
-      // …and it shows at 1000 ms, where the third starts its own second.
-      await vi.advanceTimersByTimeAsync(1);
-      expect(shown(host)).toEqual(["tracer/first", "tracer/second"]);
       await vi.advanceTimersByTimeAsync(1000);
-      expect(shown(host)).toEqual(["tracer/first", "tracer/second", "tracer/third"]);
+      await vi.waitFor(() => expect(shown(host)).toEqual(["tracer/first", "tracer/second"]));
+      await vi.waitFor(() => expect(vi.getTimerCount()).toBe(1));
+      await vi.advanceTimersByTimeAsync(1000);
+      await vi.waitFor(() =>
+        expect(shown(host)).toEqual(["tracer/first", "tracer/second", "tracer/third"])
+      );
 
       await Promise.all(sends);
     } finally {

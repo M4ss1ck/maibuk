@@ -12,7 +12,7 @@ import type { ChapterStatus, ChapterType } from "@/features/chapters/types";
 import type { Language } from "@/features/settings/types";
 import type { PluginStopMessageReason } from "@/features/plugins/stop-messages";
 import type { MemoryPluginFileGrantFile, PluginFileGrant } from "@/features/plugins/file-grants";
-import type { createMemorySystemNotificationAdapter } from "@/features/plugins/system-notifications";
+import type { MemorySystemNotificationAdapter } from "@/features/plugins/system-notifications";
 import type { PluginDirectoryAdapter, PluginFetchAdapter } from "@/lib/platform/types";
 import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
 import type { EndpointRequest, PluginMessagePort, PluginStartReason } from "@/plugin-sdk/protocol";
@@ -1010,7 +1010,7 @@ export interface TestHost {
    * `requestAnswer`. A send the device refuses lands in `notifications` as an
    * info toast instead.
    */
-  systemNotifications: ReturnType<typeof createMemorySystemNotificationAdapter>;
+  systemNotifications: MemorySystemNotificationAdapter;
   /** Every `navigation.openEntity` the Plugin asked for, in order. */
   navigations: TestNavigation[];
   /** Every `navigation.openPage` the Plugin asked for, in order. */

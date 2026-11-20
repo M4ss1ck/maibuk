@@ -158,6 +158,15 @@ interface MemorySystemNotificationLogEntry {
   body?: string;
 }
 
+/** The memory device the test kit exposes as `host.systemNotifications`. */
+export type MemorySystemNotificationAdapter = SystemNotificationAdapter & {
+  readonly log: MemorySystemNotificationLogEntry[];
+  readonly active: ReadonlyMap<string, { title: string; body: string }>;
+  setPermission(permission: SystemNotificationPermission): void;
+  setCanScheduleWhileClosed(value: boolean): void;
+  requestAnswer: SystemNotificationPermission;
+};
+
 /**
  * The in-memory System Notification adapter a Plugin's tests use: it shows
  * nothing, and records what the host asked of it instead, so a test asserts the
@@ -179,25 +188,13 @@ interface MemorySystemNotificationLogEntry {
  * - `setCanScheduleWhileClosed` plays whether the OS fires one after Maibuk
  *   closes; it starts `false`, which is every platform today.
  */
-export function createMemorySystemNotificationAdapter(): SystemNotificationAdapter & {
-  readonly log: MemorySystemNotificationLogEntry[];
-  readonly active: ReadonlyMap<string, { title: string; body: string }>;
-  setPermission(permission: SystemNotificationPermission): void;
-  setCanScheduleWhileClosed(value: boolean): void;
-  requestAnswer: SystemNotificationPermission;
-} {
+export function createMemorySystemNotificationAdapter(): MemorySystemNotificationAdapter {
   const log: MemorySystemNotificationLogEntry[] = [];
   const active = new Map<string, { title: string; body: string }>();
   let permission: SystemNotificationPermission = "granted";
   let canSchedule = false;
 
-  const adapter: SystemNotificationAdapter & {
-    readonly log: MemorySystemNotificationLogEntry[];
-    readonly active: ReadonlyMap<string, { title: string; body: string }>;
-    setPermission(permission: SystemNotificationPermission): void;
-    setCanScheduleWhileClosed(value: boolean): void;
-    requestAnswer: SystemNotificationPermission;
-  } = {
+  const adapter: MemorySystemNotificationAdapter = {
     log,
     active,
     requestAnswer: "granted",
