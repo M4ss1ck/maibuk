@@ -47,6 +47,15 @@ import type {
 import type { PluginDirectoryAdapter } from "@/lib/platform/types";
 import { PLUGIN_MANIFEST, pluginFolder } from "@/test/support/plugin-fixtures";
 
+const { cancelPluginSystemNotifications } = vi.hoisted(() => ({
+  cancelPluginSystemNotifications: vi.fn(async () => {}),
+}));
+
+vi.mock("@/features/plugins/handlers", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/plugins/handlers")>()),
+  cancelPluginSystemNotifications,
+}));
+
 vi.mock("@/features/plugins/storage", () => ({
   listPluginStorageKeys: vi.fn(async () => []),
   getPluginStorageValue: vi.fn(async () => undefined),
@@ -68,6 +77,7 @@ beforeEach(() => {
   localStorage.clear();
   vi.mocked(clearPluginStorage).mockClear();
   vi.mocked(getPluginDataSize).mockReset().mockResolvedValue(0);
+  cancelPluginSystemNotifications.mockClear();
 });
 
 afterEach(() => {
@@ -310,6 +320,18 @@ describe("Plugin management actions: remove", () => {
     expect(clearPluginStorage).not.toHaveBeenCalled();
   });
 
+  it("cancels the Plugin's pending System Notifications", async () => {
+    const folder = pluginFolder({}, { id: "tracer", name: "Tracer" });
+    const dir = makeDirectory("web", [folder]);
+    await approveFolder(folder);
+    const store = makeStore(dir.adapter);
+    await store.getState().refresh();
+
+    await store.getState().remove("tracer", { deleteData: false });
+
+    expect(cancelPluginSystemNotifications).toHaveBeenCalledWith("tracer");
+  });
+
   it("withdraws the removed Plugin's changed notice", async () => {
     const folder = pluginFolder({}, { id: "tracer", name: "Tracer" });
     const dir = makeDirectory("web", [folder]);
@@ -431,6 +453,20 @@ describe("Plugin management actions: remove", () => {
   });
 });
 
+describe("Plugin management actions: disable", () => {
+  it("cancels the Plugin's pending System Notifications", async () => {
+    const folder = pluginFolder({}, { id: "tracer", name: "Tracer" });
+    const dir = makeDirectory("web", [folder]);
+    await approveFolder(folder);
+    const store = makeStore(dir.adapter);
+    await store.getState().refresh();
+
+    store.getState().disable("tracer");
+
+    expect(cancelPluginSystemNotifications).toHaveBeenCalledWith("tracer");
+  });
+});
+
 describe("Plugin management actions: revoke", () => {
   const PERMISSIONS_WITH_FILES: PluginManifest["permissions"] = {
     required: ["library:read"],
@@ -478,6 +514,47 @@ describe("Plugin management actions: revoke", () => {
     await store.getState().revoke("tracer", "secrets");
 
     await expect(grants.list("tracer")).resolves.toMatchObject([{ name: "a.pdf" }]);
+  });
+
+  const PERMISSIONS_WITH_NOTIFICATIONS: PluginManifest["permissions"] = {
+    required: ["library:read"],
+    optional: ["system-notifications", "secrets"],
+  };
+
+  async function setupWithNotifications() {
+    const folder = pluginFolder(
+      {},
+      { id: "tracer", name: "Tracer", permissions: PERMISSIONS_WITH_NOTIFICATIONS }
+    );
+    const dir = makeDirectory("web", [folder]);
+    savePluginApproval({
+      pluginId: "tracer",
+      pinnedHash: await hashPluginDirectory(folder.files),
+      granted: ["library:read", "system-notifications", "secrets"],
+      enabled: true,
+      approvedVersion: "1.0.0",
+      approvedPermissions: PERMISSIONS_WITH_NOTIFICATIONS,
+      approvedFiles: {},
+    });
+    const store = makeStore(dir.adapter);
+    await store.getState().refresh();
+    return store;
+  }
+
+  it("cancels pending System Notifications when system-notifications is revoked", async () => {
+    const store = await setupWithNotifications();
+
+    await store.getState().revoke("tracer", "system-notifications");
+
+    expect(cancelPluginSystemNotifications).toHaveBeenCalledWith("tracer");
+  });
+
+  it("keeps them when another optional permission is revoked", async () => {
+    const store = await setupWithNotifications();
+
+    await store.getState().revoke("tracer", "secrets");
+
+    expect(cancelPluginSystemNotifications).not.toHaveBeenCalled();
   });
 });
 

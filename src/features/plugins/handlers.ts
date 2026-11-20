@@ -37,6 +37,7 @@ import {
   revealInFocusedEditor,
   setPluginEditorHighlights,
 } from "@/features/plugins/editor-host";
+import { getPluginPages } from "@/features/plugins/contributions-registry";
 import { endpointUrlFor } from "@/features/plugins/endpoint";
 import { getPluginFileSaver, savePluginFile } from "@/features/plugins/file-save";
 import { getPluginFileGrantStore, type PluginFileGrantStore } from "@/features/plugins/file-grants";
@@ -124,13 +125,33 @@ let pluginSystemNotifications: Promise<ReturnType<typeof createPluginSystemNotif
   null;
 
 function systemNotifications(): Promise<ReturnType<typeof createPluginSystemNotifications>> {
-  pluginSystemNotifications ??= getSystemNotifications().then((adapter) =>
-    createPluginSystemNotifications({
+  pluginSystemNotifications ??= getSystemNotifications().then((adapter) => {
+    const service = createPluginSystemNotifications({
       adapter,
       fallback: (text) => toast.info(text),
-    })
-  );
+    });
+    // A click can arrive after a restart, so opening the page here means the
+    // Plugin hears it even before its own notification code runs.
+    service.onClick((pluginId) => {
+      const page = getPluginPages().find((entry) => entry.pluginId === pluginId);
+      if (page !== undefined) void openPluginPage(pluginId, page.localId);
+    });
+    return service;
+  });
   return pluginSystemNotifications;
+}
+
+/**
+ * Withdraws every System Notification a Plugin holds, for the management
+ * actions that end its access. A device that refuses is not an error for the
+ * caller: the Plugin is disabled, removed, or revoked either way.
+ */
+export async function cancelPluginSystemNotifications(pluginId: string): Promise<void> {
+  try {
+    await (await systemNotifications()).cancelPlugin(pluginId);
+  } catch {
+    // The Platform refused to build or withdraw; the Plugin is gone regardless.
+  }
 }
 
 /**
@@ -180,6 +201,9 @@ export function assertToggleButton(
 }
 
 export function createPluginHandlers(manifest: PluginHandlersManifest): PluginApiHandlers {
+  // Starts the service so a click on a notification the OS held across a
+  // restart is heard as soon as any Plugin starts; the build is a singleton.
+  void systemNotifications().catch(() => undefined);
   return {
     "notifications.show": ({ variant, message }) => {
       const text = `${manifest.name}: ${message}`;
