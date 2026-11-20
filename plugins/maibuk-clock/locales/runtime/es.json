@@ -1,6 +1,10 @@
 {
   "tabs": "Secciones del reloj",
   "pomodoro": "Pomodoro",
+  "shortBreak": "Descanso corto",
+  "longBreak": "Descanso largo",
+  "pomodoroEnded": "Tu Pomodoro terminó. Toca un descanso.",
+  "breakEnded": "Tu descanso terminó. Toca el siguiente Pomodoro.",
   "timer": "Temporizador",
   "stopwatch": "Cronómetro",
   "alarms": "Alarmas",

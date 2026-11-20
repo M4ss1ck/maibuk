@@ -1,6 +1,10 @@
 {
   "tabs": "Clock sections",
   "pomodoro": "Pomodoro",
+  "shortBreak": "Short break",
+  "longBreak": "Long break",
+  "pomodoroEnded": "Your Pomodoro ended. Time for a break.",
+  "breakEnded": "Your break ended. Time for the next Pomodoro.",
   "timer": "Timer",
   "stopwatch": "Stopwatch",
   "alarms": "Alarms",
