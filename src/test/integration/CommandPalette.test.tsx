@@ -1,6 +1,7 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, useLocation } from "react-router-dom";
+import { computeAccessibleName } from "dom-accessibility-api";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "@/test/support/db-test-context";
@@ -2003,12 +2004,21 @@ describe("Command Palette entry buttons", () => {
       .filter((button) => button.closest("[inert]") === null);
   }
 
-  /** Tabs from the body until the entry button holds focus; keyboard only. */
+  /**
+   * Tabs from the body until the entry button holds focus; keyboard only.
+   * Names only the focused element per Tab: naming every button each turn
+   * walked computed styles across the whole app.
+   */
   async function tabToEntryButton(user: ReturnType<typeof userEvent.setup>): Promise<HTMLElement> {
-    const targets = visiblePaletteButtons();
     for (let i = 0; i < 250; i++) {
-      const focused = targets.find((button) => button === document.activeElement);
-      if (focused) return focused;
+      const focused = document.activeElement;
+      if (
+        focused instanceof HTMLButtonElement &&
+        focused.closest("[inert]") === null &&
+        computeAccessibleName(focused) === BUTTON_NAME
+      ) {
+        return focused;
+      }
       await user.tab();
     }
     throw new Error("the palette entry button never took focus");

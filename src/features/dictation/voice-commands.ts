@@ -416,15 +416,14 @@ export function defaultVoicePhrases(id: CommandId, language: DictationLanguage):
   let byId = defaultPhrasesCache.get(language);
   if (byId === undefined) {
     byId = new Map<CommandId, string[]>();
+    const seen = new Set<string>();
     for (const { id: owner, phrase } of voiceCommandPhrases(language)) {
-      let phrases = byId.get(owner);
-      if (phrases === undefined) {
-        phrases = [];
-        byId.set(owner, phrases);
-      }
-      const key = phraseWords(phrase).join(" ");
-      if (phrases.some((kept) => phraseWords(kept).join(" ") === key)) continue;
-      phrases.push(phrase);
+      const key = `${owner}\u0000${phraseWords(phrase).join(" ")}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const phrases = byId.get(owner);
+      if (phrases === undefined) byId.set(owner, [phrase]);
+      else phrases.push(phrase);
     }
     defaultPhrasesCache.set(language, byId);
   }
