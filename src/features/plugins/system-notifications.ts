@@ -92,7 +92,8 @@ function defaultWait(ms: number): Promise<void> {
  * until a second has passed since that Plugin's previous delivered one.
  * `cancel` joins the chain too (a cancel called after a queued send runs after
  * it) but never waits for the budget, since withdrawing one is not a show.
- * `cancelPlugin` runs at once, outside the chain, because the Plugin is gone.
+ * `cancelPlugin` runs at once, outside the chain, because the Plugin is gone; a
+ * send it still had queued finds itself stale and shows nothing.
  */
 export function createPluginSystemNotifications(
   deps: PluginSystemNotificationsDeps
@@ -107,6 +108,17 @@ export function createPluginSystemNotifications(
   const pending = new Map<string, Map<string, { viaHost: boolean }>>();
   /** Each Plugin's name, for the host deadline, which only carries the tag. */
   const pluginNames = new Map<string, string>();
+  /**
+   * Bumped by cancelPlugin, so a send still queued from before it finds itself
+   * stale and shows nothing: a Plugin that was turned off never rings again.
+   */
+  const generations = new Map<string, number>();
+
+  /** True once cancelPlugin ran for the Plugin after this was called. */
+  function staleCheck(pluginId: string): () => boolean {
+    const generation = generations.get(pluginId) ?? 0;
+    return () => (generations.get(pluginId) ?? 0) !== generation;
+  }
 
   /**
    * One deadline table for both kinds, keyed by tag: an OS-held one only frees
@@ -120,8 +132,9 @@ export function createPluginSystemNotifications(
     const entry = dropPending(pluginId, id);
     if (!entry?.viaHost) return;
     const plugin = { id: pluginId, name: pluginNames.get(pluginId) ?? pluginId };
+    const stale = staleCheck(pluginId);
     void enqueue(pluginId, () =>
-      sendQueued(plugin, { id, title: notification.title, body: notification.body })
+      sendQueued(plugin, { id, title: notification.title, body: notification.body }, stale)
     ).catch(() => undefined);
   });
 
@@ -186,14 +199,17 @@ export function createPluginSystemNotifications(
 
   async function sendQueued(
     plugin: { id: string; name: string },
-    notification: { id: string; title: string; body: string }
+    notification: { id: string; title: string; body: string },
+    stale: () => boolean
   ): Promise<null> {
+    if (stale()) return null;
     await withdrawPending(plugin.id, notification.id);
     const previous = deliveredAt.get(plugin.id);
     if (previous !== undefined) {
       const remaining = MIN_GAP_MS - (now() - previous);
       if (remaining > 0) await wait(remaining);
     }
+    if (stale()) return null;
     const sent = await deliver(plugin, notification);
     deliveredAt.set(plugin.id, now());
     return sent;
@@ -202,8 +218,13 @@ export function createPluginSystemNotifications(
   async function scheduleSend(
     plugin: { id: string; name: string },
     notification: { id: string; title: string; body: string },
-    at: number
+    at: number,
+    stale: () => boolean
   ): Promise<null | { error: "limit"; message: string }> {
+    if (stale()) return null;
+    // Its time can pass while it waits behind the one-second budget, and the
+    // OS drops a past time, so it shows now instead.
+    if (at <= now()) return sendQueued(plugin, notification, stale);
     const entries = pending.get(plugin.id);
     const replacing = entries?.has(notification.id) ?? false;
     if (!replacing && (entries?.size ?? 0) >= MAX_PENDING_SCHEDULED) {
@@ -224,6 +245,11 @@ export function createPluginSystemNotifications(
         viaHost = true;
       }
     }
+    if (stale()) {
+      // cancelPlugin ran while the device was scheduling it.
+      if (!viaHost) await deps.adapter.cancel(tag).catch(() => undefined);
+      return null;
+    }
     // Switching from an OS-held one to a host-held one must withdraw the OS one.
     if (viaHost && entries?.get(notification.id)?.viaHost === false) {
       try {
@@ -243,10 +269,11 @@ export function createPluginSystemNotifications(
   return {
     send(plugin, notification) {
       const at = notification.at;
+      const stale = staleCheck(plugin.id);
       if (at !== undefined && at > now()) {
-        return enqueue(plugin.id, () => scheduleSend(plugin, notification, at));
+        return enqueue(plugin.id, () => scheduleSend(plugin, notification, at, stale));
       }
-      return enqueue(plugin.id, () => sendQueued(plugin, notification));
+      return enqueue(plugin.id, () => sendQueued(plugin, notification, stale));
     },
     cancel(pluginId, id) {
       return enqueue(pluginId, async () => {
@@ -262,6 +289,7 @@ export function createPluginSystemNotifications(
       });
     },
     async cancelPlugin(pluginId) {
+      generations.set(pluginId, (generations.get(pluginId) ?? 0) + 1);
       pending.delete(pluginId);
       pluginNames.delete(pluginId);
       deadlines.cancelAll(`${pluginId}/`);

@@ -420,6 +420,61 @@ describe("cancelPlugin()", () => {
   });
 });
 
+describe("sends queued behind the one-second budget (#870 review)", () => {
+  it("shows a scheduled one now when its time passed while it waited in the queue", async () => {
+    const adapter = createMemorySystemNotificationAdapter();
+    const clock = createClock();
+    const { service } = build(adapter, clock);
+
+    await service.send(clockPlugin, { id: "first", title: "First", body: "a" });
+    // The second waits out the second; the scheduled one queued behind it is
+    // due before that wait ends, so by the time it runs its time has passed.
+    const second = service.send(clockPlugin, { id: "second", title: "Second", body: "b" });
+    const late = service.send(clockPlugin, { id: "soon", title: "Soon", body: "c", at: 400 });
+    await second;
+    await expect(late).resolves.toBeNull();
+
+    expect(adapter.scheduled.size).toBe(0);
+    expect(adapter.active.get("clock/soon")).toEqual({ title: "Clock: Soon", body: "c" });
+  });
+
+  it("drops what a Plugin still had queued once cancelPlugin runs", async () => {
+    const adapter = createMemorySystemNotificationAdapter();
+    let release: () => void = () => {};
+    let time = 0;
+    const service = createPluginSystemNotifications({
+      adapter,
+      fallback: vi.fn(),
+      now: () => time,
+      wait: (ms) =>
+        new Promise<void>((resolve) => {
+          release = () => {
+            time += ms;
+            resolve();
+          };
+        }),
+    });
+
+    await service.send(clockPlugin, { id: "a", title: "A", body: "" });
+    const queued = service.send(clockPlugin, { id: "b", title: "B", body: "" });
+    const queuedLater = service.send(clockPlugin, { id: "c", title: "C", body: "", at: 60_000 });
+    await vi.waitFor(() => expect(release).not.toBe(undefined));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    await service.cancelPlugin("clock");
+    release();
+    await queued;
+    await queuedLater;
+
+    expect([...adapter.active.keys()]).toEqual([]);
+    expect(adapter.scheduled.size).toBe(0);
+
+    // A send after the cancel is the Plugin's again, and goes through.
+    await service.send(clockPlugin, { id: "d", title: "D", body: "", at: 120_000 });
+    expect([...adapter.scheduled.keys()]).toEqual(["clock/d"]);
+  });
+});
+
 describe("onClick()", () => {
   it("maps a clicked tag to the Plugin id before the first slash", () => {
     const adapter = createMemorySystemNotificationAdapter();

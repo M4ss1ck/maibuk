@@ -352,6 +352,11 @@ export default defineConfig(() => ({
         "src/features/sync/client.ts",
         "src/features/sync/tombstones.ts",
         "src/lib/async-queue.ts",
+        // System Notifications (ADR 0042, #869, #870)
+        "src/features/plugins/system-notifications.ts",
+        "src/lib/platform/notification-deadlines.ts",
+        "src/lib/platform/web/system-notifications.ts",
+        "src/lib/platform/tauri/system-notifications.ts",
         // Plugin storage (ADR 0023)
         "src/features/plugins/tables.ts",
         "src/features/plugins/storage.ts",
