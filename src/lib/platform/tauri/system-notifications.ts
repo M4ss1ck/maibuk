@@ -162,8 +162,9 @@ interface NotificationTapBridge {
 function takeAndroidTap(): void {
   // Leave the tap for a later subscriber rather than drop it.
   if (clickHandlers.size === 0) return;
-  const bridge = (globalThis.window as { MaibukNotificationTaps?: NotificationTapBridge } | undefined)
-    ?.MaibukNotificationTaps;
+  const bridge = (
+    globalThis.window as { MaibukNotificationTaps?: NotificationTapBridge } | undefined
+  )?.MaibukNotificationTaps;
   const id = bridge?.take() ?? -1;
   if (id < 0) return;
   const tag = tagsById.get(id) ?? readIds()[id];

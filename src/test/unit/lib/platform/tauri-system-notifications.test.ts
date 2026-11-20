@@ -282,7 +282,11 @@ describe("tauriSystemNotifications (notification plugin)", () => {
     desktop.adapter.onClick(handler);
     const listener = plugin.onAction.mock.calls[0][0] as (event: unknown) => void;
 
-    listener({ actionId: "tap", inputValue: null, notification: { id: 9, extra: { tag: "clock/x" } } });
+    listener({
+      actionId: "tap",
+      inputValue: null,
+      notification: { id: 9, extra: { tag: "clock/x" } },
+    });
 
     await vi.waitFor(() => expect(handler).toHaveBeenCalledWith("clock/x"));
   });
@@ -298,7 +302,12 @@ describe("tauriSystemNotifications (notification plugin)", () => {
 
     it("takes a cold-start tap and resolves it through the id a previous run stored", async () => {
       const previousRun = await load(true);
-      await previousRun.adapter.schedule({ tag: "clock/alarm", title: "A", body: "", at: Date.now() + 60_000 });
+      await previousRun.adapter.schedule({
+        tag: "clock/alarm",
+        title: "A",
+        body: "",
+        at: Date.now() + 60_000,
+      });
       const id = previousRun.notificationId("clock/alarm");
 
       const android = await load(true);
