@@ -1,4 +1,3 @@
-// @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { cacheModelFiles, readModelFiles } from "@/lib/platform/web/dictation/cache-model-files";
 import { crc32cBase64 } from "@/features/dictation/crc32c";

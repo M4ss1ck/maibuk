@@ -1,4 +1,3 @@
-// @vitest-environment node
 // The `android` step of `plugin:check` (issue #517): skipped unless the manifest's
 // `platforms` lists android; otherwise it evaluates the built entry in the Android
 // QuickJS engine and names the problem on a missing global, an unevaluable module,

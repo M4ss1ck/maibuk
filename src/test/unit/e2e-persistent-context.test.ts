@@ -1,4 +1,3 @@
-// @vitest-environment node
 //
 // WebKit has OPFS only in a persistent context: in Playwright's default
 // ephemeral context `navigator.storage.getDirectory()` throws UnknownError,

@@ -1,4 +1,3 @@
-// @vitest-environment node
 // The `plugin:check` command line (issue #455): argument parsing, the plan's
 // step order, and `runCheck`'s stop-at-the-first-failure and exit code. The
 // steps are stubbed here, so no real toolchain runs; the tools themselves are

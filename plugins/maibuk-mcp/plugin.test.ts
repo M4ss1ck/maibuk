@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The MCP Server's Plugin-level behavior through the supported Plugin test
  * kit: the real broker and method table over an in-process channel, driven

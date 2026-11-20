@@ -1,4 +1,3 @@
-// @vitest-environment node
 /**
  * The Plugin-side (Worker) Remote UI round trip, in process (#438). A real
  * `RemoteReceiver` and a `@quilted/threads` thread stand in for the host, and the

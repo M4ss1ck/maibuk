@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import { buildBook, buildChapter } from "@/test/support/fixtures";
 import { buildProjectEpubPackage } from "@/features/export/project-epub-generator";

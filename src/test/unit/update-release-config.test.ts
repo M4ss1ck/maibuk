@@ -1,4 +1,3 @@
-// @vitest-environment node
 //
 // Guard for Update's release wiring (ADR 0037). A config edit can silently
 // break Update for every install: a missing public key, unsigned updater

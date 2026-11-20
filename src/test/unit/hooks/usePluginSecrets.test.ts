@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * usePluginSecrets (#453): the saved-credential state one Plugin row shows. The
  * remember flag is re-read inside the effect that refreshes the names, so a

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it } from "vitest";
 

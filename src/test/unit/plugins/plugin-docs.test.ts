@@ -1,4 +1,3 @@
-// @vitest-environment node
 //
 // Holds the Plugin authoring docs (docs/plugins/) to the rules the code keeps:
 // every required page exists, links resolve, commands name real scripts and

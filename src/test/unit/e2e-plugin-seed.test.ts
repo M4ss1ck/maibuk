@@ -1,4 +1,3 @@
-// @vitest-environment node
 //
 // The E2E seed (`e2e/support/storage.ts`) writes the approval record the
 // runtime reads. This proves the record it builds for the `fixture-everything`

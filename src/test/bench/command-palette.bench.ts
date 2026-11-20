@@ -1,4 +1,3 @@
-// @vitest-environment node
 // Periodic lane for the Command Palette search index (issue #353, slice 4):
 // p95 under 16 ms per keystroke over 10,000 items. Run `pnpm bench:palette`;
 // scripts/palette-bench-budget.mjs fails the run when a budget is missed.

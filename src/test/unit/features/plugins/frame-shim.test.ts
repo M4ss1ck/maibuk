@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The Frame shim, called directly in jsdom (#454 unit 2). It is the code the
  * Frame document runs; these tests drive it through a fake window so the

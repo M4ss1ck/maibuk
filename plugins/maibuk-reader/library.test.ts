@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The Shelf service (#653) through the Plugin test kit's File Grant fakes: a
  * pick is fingerprinted and added once, a Missing Document is marked from

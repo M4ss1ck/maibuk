@@ -1,4 +1,3 @@
-// @vitest-environment node
 /**
  * The fixture-hostile Plugin source (issue #446): one escape attempt per
  * Command, so the @sandbox E2E lane can prove every escape fails safely on the

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The Plugin-side mutation observer (#788): every structural change a tick makes
  * reaches the host's `RemoteReceiver` with indexes that are right where each

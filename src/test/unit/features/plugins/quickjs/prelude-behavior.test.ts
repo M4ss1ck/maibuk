@@ -1,4 +1,3 @@
-// @vitest-environment node
 /**
  * The sandbox prelude's QuickJS branch (#516), run against a fake Worker global
  * scope. The prelude is host code, so this drives the real `PRELUDE_SOURCE`

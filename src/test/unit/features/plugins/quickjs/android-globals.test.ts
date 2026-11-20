@@ -1,4 +1,3 @@
-// @vitest-environment node
 /**
  * The exported Android global list (`QUICKJS_ANDROID_GLOBALS`, #517) names
  * only globals the QuickJS engine really installs. The Android step's message

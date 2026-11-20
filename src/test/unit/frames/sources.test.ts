@@ -1,4 +1,3 @@
-// @vitest-environment node
 // Each source parser against a captured real-world fixture
 // (src/test/fixtures/frames/), plus malformed and empty input.
 

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The Map Frame's drawing surface (#745) in jsdom: the real `assets/ui/map.html`
  * and `assets/ui/map.js`, the vendored Preact+htm library, a stand-in

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The Map Frame's SVG ingest (#756): the classic script the Frame loads before
  * `map.js`, driven here with the real vendored DOMPurify build the Frame loads

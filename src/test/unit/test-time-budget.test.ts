@@ -1,4 +1,4 @@
-// @vitest-environment node
+// @vitest-environment jsdom
 import { existsSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";

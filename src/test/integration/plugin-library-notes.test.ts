@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Change } from "@/features/sync/change-feed";
 import type { SyncAction, SyncDeletionReviewItem } from "@/features/sync/types";

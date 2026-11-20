@@ -1,4 +1,3 @@
-// @vitest-environment node
 // The import boundary an external Plugin must respect (issues #455, #450):
 // only `@maibuk/plugin-sdk` (and subpaths) or a relative file inside the folder
 // may be imported; `@maibuk/plugin-test-kit` stays to test files; Node builtins

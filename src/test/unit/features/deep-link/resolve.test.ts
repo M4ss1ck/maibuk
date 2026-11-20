@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { DatabaseAdapter } from "@/lib/platform/types";
 import { createTestDatabase } from "../../../support/db-test-context";

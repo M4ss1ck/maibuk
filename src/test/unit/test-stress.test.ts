@@ -1,4 +1,3 @@
-// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { failedTests, parseStressArgs } from "../../../scripts/test-stress.mjs";
 

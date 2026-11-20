@@ -1,4 +1,3 @@
-// @vitest-environment node
 /**
  * The fixture-frame Plugin source (issue #454 unit U6): one manifest with
  * `customUi: true`, a whole-page Frame page (`ui/page.html`), and a Remote UI

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The Plugin-side node budget, per mount (#516, decision 2a). The host checks
  * the limit per mount, and counts text nodes as well as elements; these tests pin

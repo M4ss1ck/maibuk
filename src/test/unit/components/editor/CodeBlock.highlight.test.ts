@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { CodeBlockLowlight } from "@tiptap/extension-code-block-lowlight";
 import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";

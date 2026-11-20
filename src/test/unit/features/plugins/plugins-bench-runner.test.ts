@@ -1,4 +1,3 @@
-// @vitest-environment node
 //
 // The pure half of the Plugins bench runner (issue #448): argument
 // parsing, the worst-exit-code combination, and assembling a PluginsBenchReport

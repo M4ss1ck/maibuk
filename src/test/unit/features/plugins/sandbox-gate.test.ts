@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The sandbox gate (ADR 0019): the frame's bootstrap is fixed host code that
  * never evaluates Plugin bytes and never loads Plugin HTML. It may only create

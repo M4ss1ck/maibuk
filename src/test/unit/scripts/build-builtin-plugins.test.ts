@@ -1,4 +1,3 @@
-// @vitest-environment node
 // The Built-in Plugin build pipeline (issue #444): a sample built through the
 // test-only ids list lands as an installable folder whose `index.json` hash the
 // app recomputes, an excluded platform is omitted, the empty shipped list writes

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest";
 import { MAX_RECENT_SYMBOLS, useSymbolsStore } from "@/features/symbols/store";
 

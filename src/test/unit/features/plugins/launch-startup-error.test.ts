@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The launch startup error (#442, item 5). A Plugin that fails to start at app
  * launch — a scan refusal or a start failure — has the error recorded on its

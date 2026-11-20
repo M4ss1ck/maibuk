@@ -1,4 +1,3 @@
-// @vitest-environment node
 // Packaging a built Plugin folder (issue #455): the `.zip` holds the folder's
 // files at its root, sorted by path, and two runs of the same folder produce
 // byte-identical output because every entry carries one fixed time. The parent

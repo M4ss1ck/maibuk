@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // src/test/unit/features/chapters/chapter-store.reindex.test.ts
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseAdapter } from "@/lib/platform/types";

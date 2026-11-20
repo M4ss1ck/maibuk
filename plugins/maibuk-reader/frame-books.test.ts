@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Reader's Flowing view and Page view for books (#653) in jsdom: the real
  * `assets/ui/reader.js` and `assets/ui/sanitizer.js` against the real markup,

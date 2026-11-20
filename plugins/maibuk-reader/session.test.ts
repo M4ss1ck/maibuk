@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * One Reader session (#653), the Worker half of the Frame wire protocol,
  * through the Plugin test kit's real broker and File Grant fakes. The test

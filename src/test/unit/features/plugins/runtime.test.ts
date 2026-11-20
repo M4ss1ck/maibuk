@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
 import { hashPluginDirectory } from "@/features/plugins/directory-hash";
 import { startPlugin } from "@/features/plugins/runtime";

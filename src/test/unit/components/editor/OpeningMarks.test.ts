@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { Editor } from "@tiptap/core";
 import Typography from "@tiptap/extension-typography";
 import StarterKit from "@tiptap/starter-kit";

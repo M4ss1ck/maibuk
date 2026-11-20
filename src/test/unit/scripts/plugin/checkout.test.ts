@@ -1,4 +1,3 @@
-// @vitest-environment node
 // Checkout resolution for an external Plugin repo (issue #455). The logic lives
 // in the template's `scripts/maibuk.mjs` (the single source both the CLI launch
 // and `setup.mjs` share): the flag wins over the env var which wins over

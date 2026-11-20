@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
 
 // Stub @react-pdf/renderer so createElement gets real React elements with keys

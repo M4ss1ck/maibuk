@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createUnsupportedHost, unsupportedModelFiles } from "@/lib/platform/unsupported-dictation";
 import { useTutorialStore } from "@/features/tutorial/store";

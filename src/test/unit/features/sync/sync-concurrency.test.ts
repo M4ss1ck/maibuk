@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 // Same module mocks as sync-engine.test.ts — the engine under test is fully

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // src/test/unit/features/links/navigate.test.ts
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { DatabaseAdapter } from "@/lib/platform/types";

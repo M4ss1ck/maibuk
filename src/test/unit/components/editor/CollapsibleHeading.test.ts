@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { Editor } from "@tiptap/core";

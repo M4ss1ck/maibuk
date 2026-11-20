@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Plugin development mode (#442, plan decision 6): a watched Plugin folder's
  * completed build reloads the Plugin automatically, while a partial or failed

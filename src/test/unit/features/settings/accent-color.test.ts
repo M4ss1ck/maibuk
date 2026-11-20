@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
 import { accentColorVars, applyAccentColor } from "@/features/settings/accent-color";
 import { BOOT_THEME_KEY } from "@/features/theme/boot-theme";

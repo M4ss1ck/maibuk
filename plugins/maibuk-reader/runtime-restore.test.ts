@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Relaunching onto the Reading page: the runtime has no Document in memory, so
  * it reopens the one storage says was open instead of showing no Document.

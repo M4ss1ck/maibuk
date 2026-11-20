@@ -1,4 +1,3 @@
-// @vitest-environment node
 //
 // The frame-rate lane's desktop source has no init scripts (WebDriver), so it
 // answers the Tutorial offer through `dismissTutorialOnLoadedPage` and reloads.

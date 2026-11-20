@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The lifecycle's QuickJS stop reasons (#516, ADR 0019). The Android QuickJS
  * engine reports a memory death as a Worker error whose message is

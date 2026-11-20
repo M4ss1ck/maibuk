@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The Stopped Plugin read (#618): one answer, for a Plugin id, to "is this a
  * Stopped Plugin, and why", derived from a real lifecycle driven over fake

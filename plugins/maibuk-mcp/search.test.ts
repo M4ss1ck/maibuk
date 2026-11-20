@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import { connect, mcpRequest, type McpAnswer } from "./test-support";
 import { markedExcerpt } from "./search";

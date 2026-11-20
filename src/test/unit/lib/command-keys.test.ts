@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useShortcutSettingsStore } from "@/features/settings/shortcut-store";
 import { pressRunsCommand } from "@/lib/command-keys";

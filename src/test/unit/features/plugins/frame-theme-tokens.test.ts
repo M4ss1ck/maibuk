@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // The Frame theme-token contract (#454 unit U4, ADR 0021 D3). `readFrameThemeTokens`
 // resolves each internal CSS variable to its stable public name; the table is
 // frozen and must keep its exact public names, and every source it names must
