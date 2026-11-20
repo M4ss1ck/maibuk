@@ -134,14 +134,21 @@ export function createTimer(client: PluginClient): ClockTimer {
     timeout = null;
   }
 
-  /** Holds the one timeout that reconciles the state at the deadline. */
+  /**
+   * Holds the one timeout that reconciles the state at the deadline, and holds
+   * it again when it fires early (a late clock adjustment left the deadline
+   * ahead): the state stays "running" until the deadline is really reached.
+   */
   function holdEnd(endsAt: number): void {
     clearTimeoutForEnd();
     timeout = setTimeout(
       () => {
         timeout = null;
         const result = reconcileTimer(snapshot.state, Date.now());
-        if (result.endedAt === null) return;
+        if (result.endedAt === null) {
+          if (snapshot.state.status === "running") holdEnd(snapshot.state.endsAt);
+          return;
+        }
         snapshot = { ...snapshot, state: result.state };
         changed();
       },
@@ -168,14 +175,19 @@ export function createTimer(client: PluginClient): ClockTimer {
   }
 
   /**
-   * Tells the author, once, that a Timer ended while Maibuk was closed. A device
-   * that fires a scheduled Alert while closed (Android) already told them, and a
-   * device that cannot answer or show one leaves them without a toast.
+   * Tells the author, once, that a Timer ended while Maibuk was closed. Only a
+   * device that granted the permission and fires a scheduled Alert while closed
+   * (Android) already told them; one that was refused never posted it, and one
+   * that cannot answer or show an Alert leaves them without a toast.
    */
   async function reportEndedWhileClosed(endedAt: number): Promise<void> {
     const status = await client.notifications.systemStatus();
-    if (status.canScheduleWhileClosed) return;
-    const time = formatClockTime(endedAt, new Date().getTimezoneOffset(), hourCycleFor(language));
+    if (status.permission === "granted" && status.canScheduleWhileClosed) return;
+    const time = formatClockTime(
+      endedAt,
+      new Date(endedAt).getTimezoneOffset(),
+      hourCycleFor(language)
+    );
     await client.notifications.show({
       variant: "info",
       message: translate(language, "timerEndedWhileClosed").replace("{time}", time),

@@ -49,6 +49,7 @@ describe("Clock manifest overrides", () => {
     expect(Object.keys(locale).sort()).toEqual([
       "commands.openClock.label",
       "commands.toggleTimer.label",
+      "description",
       "name",
       "pages.clock.title",
     ]);

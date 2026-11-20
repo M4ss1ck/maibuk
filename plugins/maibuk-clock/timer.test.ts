@@ -59,9 +59,13 @@ async function runAndStopOneMinuteTimer(storage: Map<string, unknown>): Promise<
 /** Starts the Clock runtime over `storage`, as Maibuk does when a Plugin starts. */
 async function startHost(
   storage: Map<string, unknown>,
-  options: { language?: string; canScheduleWhileClosed?: boolean } = {}
+  options: {
+    language?: string;
+    canScheduleWhileClosed?: boolean;
+    permission?: "granted" | "denied" | "default";
+  } = {}
 ) {
-  const { language, canScheduleWhileClosed } = options;
+  const { language, canScheduleWhileClosed, permission } = options;
   const host = createTestHost({
     manifest: clockManifest(),
     storage,
@@ -70,6 +74,7 @@ async function startHost(
   if (canScheduleWhileClosed !== undefined) {
     host.systemNotifications.setCanScheduleWhileClosed(canScheduleWhileClosed);
   }
+  if (permission !== undefined) host.systemNotifications.setPermission(permission);
   openHosts.push(host);
   // Resolves once startup reconciliation, and any toast it shows, is done.
   await startClock(createPluginClient(host.port), () => {});
@@ -110,6 +115,35 @@ describe("Clock Timer core", () => {
         await host.stop();
       }
     }
+  });
+
+  it("holds the end again when its timeout fires before the deadline", async () => {
+    const start = Date.now();
+    const storage = new Map<string, unknown>();
+    const host = createTestHost({ manifest: clockManifest(), storage });
+    openHosts.push(host);
+    jumpTo(start);
+    const timer = createTimer(createPluginClient(host.port));
+    await timer.load();
+    timer.setLength(60_000);
+    timer.start();
+    const started = timer.snapshot().state;
+    if (started.status !== "running") throw new Error("the Timer should be running");
+
+    // The clock steps two minutes back after the end was held, so the held
+    // timeout fires while the deadline is still ahead of it.
+    vi.setSystemTime(start - 120_000);
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(timer.snapshot().state.status).toBe("running");
+
+    // The end still lands once the clock reaches the deadline again.
+    await vi.advanceTimersByTimeAsync(120_000);
+    await vi.waitFor(() => expect(storedState(storage)?.status).toBe("ended"));
+    expect(timer.snapshot().state).toEqual({
+      status: "ended",
+      length: 60_000,
+      endedAt: started.endsAt,
+    });
   });
 
   it("does not start a zero-length Timer and schedules no Alert", async () => {
@@ -175,9 +209,24 @@ describe("Clock Timer startup reconciliation", () => {
     await runAndStopOneMinuteTimer(storage);
 
     jumpTo(start + 5 * 60_000);
-    const host = await startHost(storage, { canScheduleWhileClosed: true });
+    const host = await startHost(storage, { canScheduleWhileClosed: true, permission: "granted" });
     await vi.waitFor(() => expect(storedState(storage)?.status).toBe("ended"));
 
     expect(host.notifications).toEqual([]);
+  });
+
+  it("toasts when a device that schedules while closed never got the permission", async () => {
+    const start = Date.now();
+    const storage = new Map<string, unknown>();
+    await runAndStopOneMinuteTimer(storage);
+
+    jumpTo(start + 5 * 60_000);
+    // Android schedules while closed, but a refused permission means it never
+    // posted the Alert, so the toast is the only word of the end.
+    const host = await startHost(storage, { canScheduleWhileClosed: true, permission: "denied" });
+    await vi.waitFor(() => expect(host.notifications).toHaveLength(1));
+
+    expect(host.notifications[0]?.variant).toBe("info");
+    expect(storedState(storage)?.status).toBe("ended");
   });
 });

@@ -12,7 +12,8 @@ export type TimerState =
   | { status: "ended"; length: number; endedAt: number };
 
 const MS_PER_SECOND = 1_000;
-const MS_PER_MINUTE = 60_000;
+/** A minute in milliseconds, for the page's whole-minute announcement. */
+export const MS_PER_MINUTE = 60_000;
 const MS_PER_HOUR = 3_600_000;
 const SECONDS_PER_MINUTE = 60;
 const MINUTES_PER_HOUR = 60;

@@ -8,7 +8,9 @@
  * The page draws the four tabs its glossary names. The Timer tab holds the
  * live Timer; every other tab's panel is empty until its own ticket fills it,
  * so each one says it is coming soon. The Timer tab is selected first, and the
- * selected tab is page-local state.
+ * selected tab is page-local state. The page owns the Timer's subscription and
+ * its once-a-second redraw, so its polite live region speaks from below the
+ * tabs on every tab, not only the Timer's.
  */
 
 import { useEffect, useState, type ComponentType } from "react";
@@ -19,7 +21,14 @@ import {
   type PluginClient,
 } from "@/plugin-sdk";
 import { translate } from "./i18n";
-import { formatDuration, joinDuration, remainingMs, splitDuration, type TimerState } from "./time";
+import {
+  formatDuration,
+  joinDuration,
+  MS_PER_MINUTE,
+  remainingMs,
+  splitDuration,
+  type TimerState,
+} from "./time";
 import { createTimer, type ClockTimer } from "./timer";
 
 /** The Clock page id, exactly as the manifest declares it. */
@@ -37,8 +46,6 @@ type ClockTab = (typeof TABS)[number];
 
 /** The tab selected when the page opens. */
 const DEFAULT_TAB: ClockTab = "timer";
-
-const MS_PER_MINUTE = 60_000;
 
 /** What the OS answered about System Notifications, as the banner reads it. */
 type NotificationStatus = Awaited<ReturnType<PluginClient["notifications"]["systemStatus"]>>;
@@ -164,35 +171,20 @@ interface TimerPanelProps {
   client: PluginClient;
   timer: ClockTimer;
   language: string;
+  state: TimerState;
+  now: number;
+  recent: readonly number[];
 }
 
 /**
- * The Timer tab. It draws the Timer's remaining time every second while it
- * runs, the length fields and the recent quick picks when it is idle or ended,
- * the control its status calls for, and the notification banner. The interval
- * exists only while this panel is mounted and the Timer is running.
+ * The Timer tab. It draws the remaining time the page hands it, the length
+ * fields and the recent quick picks when the Timer is idle or ended, the
+ * control its status calls for, and the notification banner. The page owns the
+ * Timer's subscription and its once-a-second redraw, so this panel holds no
+ * timer of its own.
  */
-function TimerPanel({ client, timer, language }: TimerPanelProps) {
-  const [snapshot, setSnapshot] = useState(() => timer.snapshot());
-  const [now, setNow] = useState(() => Date.now());
+function TimerPanel({ client, timer, language, state, now, recent }: TimerPanelProps) {
   const [status, setStatus] = useState<NotificationStatus | null>(null);
-
-  useEffect(
-    () =>
-      timer.subscribe(() => {
-        setSnapshot(timer.snapshot());
-        setNow(Date.now());
-      }),
-    [timer]
-  );
-
-  const running = snapshot.state.status === "running";
-
-  useEffect(() => {
-    if (!running) return;
-    const id = setInterval(() => setNow(Date.now()), 1_000);
-    return () => clearInterval(id);
-  }, [running]);
 
   useEffect(() => {
     let active = true;
@@ -207,7 +199,6 @@ function TimerPanel({ client, timer, language }: TimerPanelProps) {
     };
   }, [client]);
 
-  const state = snapshot.state;
   const remaining = remainingMs(state, now);
   const parts = splitDuration(state.length);
 
@@ -223,14 +214,11 @@ function TimerPanel({ client, timer, language }: TimerPanelProps) {
       .catch(() => {});
   };
 
-  const announcement = liveRegionText(state, now, language);
-
   return (
     <ui.View direction="column" gap="md">
       <ui.Text size="lg" weight="semibold">
         {formatDuration(remaining)}
       </ui.Text>
-      {announcement === "" ? null : <ui.Status tone="info">{announcement}</ui.Status>}
 
       {status !== null && status.permission !== "granted" ? (
         <ui.View direction="row" gap="sm" align="center">
@@ -272,9 +260,9 @@ function TimerPanel({ client, timer, language }: TimerPanelProps) {
               onChange={(event) => setPart("seconds", event.detail)}
             />
           </ui.View>
-          {snapshot.recent.length > 0 ? (
+          {recent.length > 0 ? (
             <ui.View direction="row" gap="sm" wrap>
-              {snapshot.recent.map((length) => (
+              {recent.map((length) => (
                 <ui.Button key={length} variant="secondary" onPress={() => timer.setLength(length)}>
                   {formatDuration(length)}
                 </ui.Button>
@@ -324,17 +312,41 @@ function TimerPanel({ client, timer, language }: TimerPanelProps) {
 
 /**
  * The Clock page: a heading and the four tabs, the Timer's selected first. The
- * Timer tab draws its panel; every other tab says it is coming soon until its
- * own ticket replaces it.
+ * page owns the Timer's state, so the polite live region sits below the tabs
+ * and speaks the same on every one of them. The Timer tab draws its panel;
+ * every other tab says it is coming soon until its own ticket replaces it.
  */
 function createClockPage(client: PluginClient, timer: ClockTimer): ComponentType {
   function ClockPage() {
     const language = useLanguage(client);
     const [tab, setTab] = useState<ClockTab>(DEFAULT_TAB);
+    const [snapshot, setSnapshot] = useState(() => timer.snapshot());
+    const [now, setNow] = useState(() => Date.now());
     const items = TABS.map((key) => ({
       value: key,
       label: translate(language, key),
     }));
+
+    useEffect(
+      () =>
+        timer.subscribe(() => {
+          setSnapshot(timer.snapshot());
+          setNow(Date.now());
+        }),
+      [timer]
+    );
+
+    const running = snapshot.state.status === "running";
+
+    // The redraw exists only while the page is mounted and the Timer runs.
+    useEffect(() => {
+      if (!running) return;
+      const id = setInterval(() => setNow(Date.now()), 1_000);
+      return () => clearInterval(id);
+    }, [running]);
+
+    const state = snapshot.state;
+    const announcement = liveRegionText(state, now, language);
 
     return (
       <ui.View direction="column" gap="md">
@@ -345,7 +357,14 @@ function createClockPage(client: PluginClient, timer: ClockTimer): ComponentType
           onChange={(event) => setTab(asTab(event.detail))}
         >
           {tab === "timer" ? (
-            <TimerPanel client={client} timer={timer} language={language} />
+            <TimerPanel
+              client={client}
+              timer={timer}
+              language={language}
+              state={state}
+              now={now}
+              recent={snapshot.recent}
+            />
           ) : (
             <ui.EmptyState
               title={translate(language, tab)}
@@ -353,6 +372,7 @@ function createClockPage(client: PluginClient, timer: ClockTimer): ComponentType
             />
           )}
         </ui.Tabs>
+        {announcement === "" ? null : <ui.Status tone="info">{announcement}</ui.Status>}
       </ui.View>
     );
   }

@@ -9,7 +9,7 @@
 
 import type { Page } from "@playwright/test";
 import { capture } from "../support/capture";
-import { expectFocusWithin, isFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
+import { expectFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
 import { runPaletteCommand } from "../support/palette";
 import { expect, test } from "../support/test";
 
@@ -77,11 +77,9 @@ async function openPluginsSection(page: Page): Promise<void> {
     .getByRole("treegrid", { name: "Settings sections" });
   const pluginsEntry = tree.getByRole("row", { name: /^Plugins(, current)?$/ });
   await expect(tree).toBeVisible();
-  // The outline is the page's last focusable region: Shift+Tab reaches it.
-  for (let i = 0; i < 12; i++) {
-    if (await isFocusWithin(tree)) break;
-    await page.keyboard.press("Shift+Tab");
-  }
+  // The outline is the page's last focusable region: Shift+Tab enters it on its
+  // first entry, whatever sits after it in the page.
+  await tabTo(page, tree.getByRole("row").first(), { max: 12, backwards: true });
   await expectFocusWithin(tree);
   await page.keyboard.press("Home");
   await pressUntilFocused(page, "ArrowDown", pluginsEntry, { max: 60 });

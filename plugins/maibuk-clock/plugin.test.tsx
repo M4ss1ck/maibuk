@@ -9,9 +9,9 @@
  * Timer works end to end: a typed length counts down, its end is scheduled as a
  * System Notification at the deadline, pause freezes it and cancels the Alert,
  * reset restores the length, the recent lengths come back newest first, the
- * Command toggles, the live region speaks on the minute and at the end, and the
- * notification banner asks for permission. Every control is reached with
- * `user-event` key presses.
+ * Command toggles, the live region speaks on the minute and at the end on every
+ * tab, and the notification banner asks for permission. Every control is reached
+ * with `user-event` key presses.
  */
 
 import { act, screen } from "@testing-library/react";
@@ -80,11 +80,11 @@ function startHost(options: { language?: string } = {}): {
 }
 
 /**
- * Polls the host's tree until the page shows what the test asserts, instead of
- * guessing how many event-loop turns the Remote UI mount needs.
+ * Polls until the page shows what the test asserts, instead of guessing how
+ * many event-loop turns the Remote UI mount needs.
  */
-async function untilVisible(check: () => void): Promise<void> {
-  await vi.waitFor(check, { timeout: 5_000 });
+async function eventually(check: () => void): Promise<void> {
+  await vi.waitFor(check);
 }
 
 /** Types a length's minutes from the keyboard, and waits until the Timer took it. */
@@ -93,32 +93,33 @@ async function typeMinutes(
   minutes: number,
   storage: Map<string, unknown>
 ): Promise<void> {
-  await untilVisible(() =>
+  await eventually(() =>
     expect(screen.getByRole("textbox", { name: en.minutes })).toBeInTheDocument()
   );
   const field = screen.getByRole("textbox", { name: en.minutes });
   await user.clear(field);
   await user.type(field, String(minutes));
   await user.keyboard("{Enter}");
-  await untilVisible(() => {
+  await eventually(() => {
     const saved = stored(storage);
     expect(saved?.state.status).toBe("idle");
     expect(saved?.state.length).toBe(minutes * 60_000);
   });
 }
 
-/** Focuses a named button with the keyboard and presses it. */
+/** Tabs to a named button, proves it holds focus, and presses it. */
 async function press(user: User, name: string): Promise<void> {
-  await untilVisible(() => expect(screen.getByRole("button", { name })).toBeInTheDocument());
+  await eventually(() => expect(screen.getByRole("button", { name })).toBeInTheDocument());
   const button = screen.getByRole("button", { name });
-  button.focus();
+  await tabTo(user, button);
+  expect(button).toHaveFocus();
   await user.keyboard("{Enter}");
 }
 
 /** Starts the Timer from the page and waits for the stored running state. */
 async function startTimer(user: User, storage: Map<string, unknown>): Promise<void> {
   await press(user, en.start);
-  await untilVisible(() => expect(stored(storage)?.state.status).toBe("running"));
+  await eventually(() => expect(stored(storage)?.state.status).toBe("running"));
 }
 
 describe("Clock runtime", () => {
@@ -168,7 +169,7 @@ describe("Clock runtime", () => {
 
       await user.keyboard("{ArrowRight}");
 
-      await untilVisible(() =>
+      await eventually(() =>
         expect(screen.getByRole("tab", { name: en.stopwatch })).toHaveAttribute(
           "aria-selected",
           "true"
@@ -176,6 +177,7 @@ describe("Clock runtime", () => {
       );
       const stopwatchTab = screen.getByRole("tab", { name: en.stopwatch });
       expect(stopwatchTab).toHaveAttribute("aria-selected", "true");
+      expect(stopwatchTab).toHaveFocus();
       expect(screen.getByRole("tabpanel")).toHaveTextContent(en.stopwatch);
       expect(screen.getByRole("tabpanel")).toHaveTextContent(en.comingSoon);
 
@@ -213,13 +215,13 @@ describe("Clock runtime", () => {
     await typeMinutes(user, 1, storage);
     await startTimer(user, storage);
 
-    await untilVisible(() => expect(screen.getByText("1:00")).toBeInTheDocument());
+    await eventually(() => expect(screen.getByText("1:00")).toBeInTheDocument());
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1_000);
     });
-    await untilVisible(() => expect(screen.getByText("0:59")).toBeInTheDocument());
+    await eventually(() => expect(screen.getByText("0:59")).toBeInTheDocument());
 
-    await untilVisible(() => {
+    await eventually(() => {
       const saved = stored(storage);
       expect(saved?.state.status).toBe("running");
       expect(saved?.state.endsAt).toBeGreaterThan(START);
@@ -240,21 +242,21 @@ describe("Clock runtime", () => {
 
     await typeMinutes(user, 1, storage);
     await startTimer(user, storage);
-    await untilVisible(() => expect(host.systemNotifications.scheduled.has(TIMER_TAG)).toBe(true));
+    await eventually(() => expect(host.systemNotifications.scheduled.has(TIMER_TAG)).toBe(true));
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(10_000);
     });
     await press(user, en.pause);
-    await untilVisible(() => expect(stored(storage)?.state.status).toBe("paused"));
+    await eventually(() => expect(stored(storage)?.state.status).toBe("paused"));
 
     const pausedRemaining = stored(storage)?.state.remaining ?? -1;
     expect(pausedRemaining).toBeGreaterThan(0);
-    await untilVisible(() =>
+    await eventually(() =>
       expect(screen.getByRole("button", { name: en.resume })).toBeInTheDocument()
     );
     expect(screen.getByText(formatDuration(pausedRemaining))).toBeInTheDocument();
-    await untilVisible(() => expect(host.systemNotifications.scheduled.has(TIMER_TAG)).toBe(false));
+    await eventually(() => expect(host.systemNotifications.scheduled.has(TIMER_TAG)).toBe(false));
     expect(host.systemNotifications.log.at(-1)).toMatchObject({
       kind: "cancelled",
       tag: TIMER_TAG,
@@ -268,7 +270,7 @@ describe("Clock runtime", () => {
     expect(screen.getByText(formatDuration(pausedRemaining))).toBeInTheDocument();
 
     await press(user, en.resume);
-    await untilVisible(() => {
+    await eventually(() => {
       const saved = stored(storage);
       expect(saved?.state.status).toBe("running");
       const scheduled = host.systemNotifications.scheduled.get(TIMER_TAG);
@@ -285,17 +287,17 @@ describe("Clock runtime", () => {
 
     await typeMinutes(user, 1, storage);
     await startTimer(user, storage);
-    await untilVisible(() => expect(host.systemNotifications.scheduled.has(TIMER_TAG)).toBe(true));
+    await eventually(() => expect(host.systemNotifications.scheduled.has(TIMER_TAG)).toBe(true));
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(5_000);
     });
     await press(user, en.reset);
-    await untilVisible(() => {
+    await eventually(() => {
       expect(stored(storage)?.state).toEqual({ status: "idle", length: 60_000 });
       expect(host.systemNotifications.scheduled.has(TIMER_TAG)).toBe(false);
     });
-    await untilVisible(() =>
+    await eventually(() =>
       expect(screen.getByRole("button", { name: en.start })).toBeInTheDocument()
     );
     expect(screen.getByRole("textbox", { name: en.minutes })).toHaveValue("1");
@@ -311,11 +313,11 @@ describe("Clock runtime", () => {
       await typeMinutes(user, minutes, storage);
       await startTimer(user, storage);
       await press(user, en.reset);
-      await untilVisible(() => expect(stored(storage)?.state.status).toBe("idle"));
+      await eventually(() => expect(stored(storage)?.state.status).toBe("idle"));
     }
 
     // The page redraws after the stored reset, so wait for the drawn picks.
-    await untilVisible(() =>
+    await eventually(() =>
       expect(
         screen
           .getAllByRole("button")
@@ -325,9 +327,10 @@ describe("Clock runtime", () => {
     );
 
     const pick = screen.getByRole("button", { name: "2:00" });
-    pick.focus();
+    await tabTo(user, pick);
+    expect(pick).toHaveFocus();
     await user.keyboard("{Enter}");
-    await untilVisible(() =>
+    await eventually(() =>
       expect(stored(storage)?.state).toEqual({ status: "idle", length: 120_000 })
     );
     expect(screen.getByRole("textbox", { name: en.minutes })).toHaveValue("2");
@@ -340,12 +343,12 @@ describe("Clock runtime", () => {
     await expect(
       host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: TOGGLE_TIMER })
     ).resolves.toBeNull();
-    await untilVisible(() => expect(stored(storage)?.state.status).toBe("running"));
+    await eventually(() => expect(stored(storage)?.state.status).toBe("running"));
 
     await expect(
       host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: TOGGLE_TIMER })
     ).resolves.toBeNull();
-    await untilVisible(() => expect(stored(storage)?.state.status).toBe("paused"));
+    await eventually(() => expect(stored(storage)?.state.status).toBe("paused"));
     expect(host.pageNavigations).toEqual([]);
   });
 
@@ -359,33 +362,67 @@ describe("Clock runtime", () => {
     await startTimer(user, storage);
 
     const twoMinutes = en.minutesLeft.replace("{n}", "2");
-    await untilVisible(() => expect(screen.getByText(twoMinutes)).toBeInTheDocument());
+    await eventually(() => expect(screen.getByText(twoMinutes)).toBeInTheDocument());
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1_000);
     });
-    await untilVisible(() => expect(screen.getByText("1:59")).toBeInTheDocument());
+    await eventually(() => expect(screen.getByText("1:59")).toBeInTheDocument());
     expect(screen.getByText(twoMinutes)).toBeInTheDocument();
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1_000);
     });
-    await untilVisible(() => expect(screen.getByText("1:58")).toBeInTheDocument());
+    await eventually(() => expect(screen.getByText("1:58")).toBeInTheDocument());
     expect(screen.getByText(twoMinutes)).toBeInTheDocument();
 
     // Cross the whole minute: the live region moves, the drawing keeps ticking.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(58_000);
     });
-    await untilVisible(() => expect(screen.getByText(en.oneMinuteLeft)).toBeInTheDocument());
+    await eventually(() => expect(screen.getByText(en.oneMinuteLeft)).toBeInTheDocument());
     expect(screen.queryByText(twoMinutes)).toBeNull();
 
     // The end.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60_000);
     });
-    await untilVisible(() => expect(screen.getByText(en.timerEndedAnnounce)).toBeInTheDocument());
-    await untilVisible(() => expect(stored(storage)?.state.status).toBe("ended"));
+    await eventually(() => expect(screen.getByText(en.timerEndedAnnounce)).toBeInTheDocument());
+    await eventually(() => expect(stored(storage)?.state.status).toBe("ended"));
+  });
+
+  it("announces the minute and the end from the live region on every tab", async () => {
+    const { host, storage } = startHost();
+    freezeClock();
+    await host.renderPage(CLOCK_PAGE_ID);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+    await typeMinutes(user, 1, storage);
+    await startTimer(user, storage);
+    await eventually(() => expect(screen.getByText(en.oneMinuteLeft)).toBeInTheDocument());
+
+    // On the Stopwatch tab the live region, which sits below the tabs, speaks on.
+    const timerTab = screen.getByRole("tab", { name: en.timer });
+    await tabTo(user, timerTab);
+    expect(timerTab).toHaveFocus();
+    await user.keyboard("{ArrowRight}");
+    await eventually(() =>
+      expect(screen.getByRole("tab", { name: en.stopwatch })).toHaveAttribute(
+        "aria-selected",
+        "true"
+      )
+    );
+    expect(screen.getByText(en.oneMinuteLeft)).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    await eventually(() => expect(screen.getByText(en.timerEndedAnnounce)).toBeInTheDocument());
+    await eventually(() => expect(stored(storage)?.state.status).toBe("ended"));
+    expect(screen.getByRole("tab", { name: en.stopwatch })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
   });
 
   it("offers Allow notifications when the OS has not answered, and asks on press", async () => {
@@ -395,16 +432,17 @@ describe("Clock runtime", () => {
     await host.renderPage(CLOCK_PAGE_ID);
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
 
-    await untilVisible(() =>
+    await eventually(() =>
       expect(screen.getByRole("button", { name: en.allowNotifications })).toBeInTheDocument()
     );
     const allow = screen.getByRole("button", { name: en.allowNotifications });
     expect(screen.getByText(en.alertsNeedOpen)).toBeInTheDocument();
 
-    allow.focus();
+    await tabTo(user, allow);
+    expect(allow).toHaveFocus();
     await user.keyboard("{Enter}");
 
-    await untilVisible(() =>
+    await eventually(() =>
       expect(screen.queryByRole("button", { name: en.allowNotifications })).toBeNull()
     );
     expect(await host.systemNotifications.permission()).toBe("granted");
@@ -417,7 +455,7 @@ describe("Clock runtime", () => {
     freezeClock();
     await host.renderPage(CLOCK_PAGE_ID);
 
-    await untilVisible(() => expect(screen.getByText(en.alertsMayBeLate)).toBeInTheDocument());
+    await eventually(() => expect(screen.getByText(en.alertsMayBeLate)).toBeInTheDocument());
     expect(screen.queryByText(en.alertsNeedOpen)).toBeNull();
   });
 });
