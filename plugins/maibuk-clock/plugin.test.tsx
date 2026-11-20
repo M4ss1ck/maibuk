@@ -18,7 +18,7 @@
  * phase runs. Every control is reached with `user-event` key presses.
  */
 
-import { act, screen } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "@/i18n";
@@ -30,10 +30,12 @@ import en from "./locales/runtime/en.json";
 import es from "./locales/runtime/es.json";
 import {
   CLOCK_PAGE_ID,
+  LAP_STOPWATCH,
   OPEN_CLOCK,
   POMODORO_SETTINGS_ROW_ID,
   SKIP_POMODORO,
   TOGGLE_POMODORO,
+  TOGGLE_STOPWATCH,
   TOGGLE_TIMER,
   startClock,
 } from "./runtime";
@@ -76,6 +78,20 @@ function stored(storage: Map<string, unknown>): StoredTimer | undefined {
 function storedCycle(storage: Map<string, unknown>): StoredCycle | undefined {
   const value = storage.get("pomodoro");
   return typeof value === "object" && value !== null ? (value as StoredCycle) : undefined;
+}
+
+/** One stored Stopwatch, as the Plugin writes it. */
+interface StoredStopwatch {
+  status: string;
+  startedAt?: number;
+  banked?: number;
+  laps?: { length: number; total: number }[];
+}
+
+/** The Stopwatch storage holds, or none. */
+function storedStopwatch(storage: Map<string, unknown>): StoredStopwatch | undefined {
+  const value = storage.get("stopwatch");
+  return typeof value === "object" && value !== null ? (value as StoredStopwatch) : undefined;
 }
 
 /** The Cycle settings storage holds, or none. */
@@ -164,6 +180,17 @@ async function openPomodoroTab(user: User): Promise<void> {
   );
 }
 
+/** Focuses the selected Timer tab and moves right to the Stopwatch tab with the keyboard. */
+async function openStopwatchTab(user: User): Promise<void> {
+  const timerTab = await screen.findByRole("tab", { name: en.timer });
+  await tabTo(user, timerTab);
+  expect(timerTab).toHaveFocus();
+  await user.keyboard("{ArrowRight}");
+  await eventually(() =>
+    expect(screen.getByRole("tab", { name: en.stopwatch })).toHaveAttribute("aria-selected", "true")
+  );
+}
+
 /** Starts the Timer from the page and waits for the stored running state. */
 async function startTimer(user: User, storage: Map<string, unknown>): Promise<void> {
   await press(user, en.start);
@@ -226,13 +253,198 @@ describe("Clock runtime", () => {
       const stopwatchTab = screen.getByRole("tab", { name: en.stopwatch });
       expect(stopwatchTab).toHaveAttribute("aria-selected", "true");
       expect(stopwatchTab).toHaveFocus();
-      expect(screen.getByRole("tabpanel")).toHaveTextContent(en.stopwatch);
-      expect(screen.getByRole("tabpanel")).toHaveTextContent(en.comingSoon);
+      // The Stopwatch tab draws the Stopwatch itself now, not a placeholder.
+      const panel = screen.getByRole("tabpanel");
+      expect(within(panel).getByText("0:00")).toBeInTheDocument();
+      expect(within(panel).getByRole("button", { name: en.start })).toBeInTheDocument();
+      expect(within(panel).queryByText(en.comingSoon)).toBeNull();
 
       await page.unmount();
     } finally {
       await host.stop();
     }
+  });
+
+  it("marks Laps while running, newest first, with each stretch and total", async () => {
+    const { host, storage } = startHost();
+    freezeClock();
+    await host.renderPage(CLOCK_PAGE_ID);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+    await openStopwatchTab(user);
+    await press(user, en.start);
+    await eventually(() => expect(storedStopwatch(storage)?.status).toBe("running"));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+    await press(user, en.lap);
+    await eventually(() => expect(storedStopwatch(storage)?.laps).toHaveLength(1));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+    await press(user, en.lap);
+    await eventually(() => expect(storedStopwatch(storage)?.laps).toHaveLength(2));
+
+    const table = await screen.findByRole("table", { name: en.laps });
+    await eventually(() => expect(within(table).getAllByRole("row")).toHaveLength(3));
+    const rows = within(table).getAllByRole("row");
+    // Newest first: Lap 2 is the 5 s stretch ending at 0:15, Lap 1 the 10 s one.
+    expect(rows[1]?.textContent).toContain("2");
+    expect(rows[1]?.textContent).toContain("0:05");
+    expect(rows[1]?.textContent).toContain("0:15");
+    expect(rows[2]?.textContent).toContain("1");
+    expect(rows[2]?.textContent).toContain("0:10");
+  });
+
+  it("pauses to hold the time and resumes from where it stopped", async () => {
+    const { host, storage } = startHost();
+    freezeClock();
+    await host.renderPage(CLOCK_PAGE_ID);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+    await openStopwatchTab(user);
+    await press(user, en.start);
+    await eventually(() => expect(storedStopwatch(storage)?.status).toBe("running"));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+    await press(user, en.pause);
+    await eventually(() => expect(storedStopwatch(storage)?.status).toBe("paused"));
+    await eventually(() => expect(screen.getByText("0:10")).toBeInTheDocument());
+
+    // A minute passes while paused; the Stopwatch holds still.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(screen.getByText("0:10")).toBeInTheDocument();
+
+    await press(user, en.resume);
+    await eventually(() => expect(storedStopwatch(storage)?.status).toBe("running"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+    await eventually(() => expect(screen.getByText("0:15")).toBeInTheDocument());
+  });
+
+  it("resets to zero, drops the Laps, and stores an idle Stopwatch", async () => {
+    const { host, storage } = startHost();
+    freezeClock();
+    await host.renderPage(CLOCK_PAGE_ID);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+    await openStopwatchTab(user);
+    await press(user, en.start);
+    await eventually(() => expect(storedStopwatch(storage)?.status).toBe("running"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+    await press(user, en.lap);
+    await eventually(() => expect(storedStopwatch(storage)?.laps).toHaveLength(1));
+
+    await press(user, en.reset);
+    await eventually(() => expect(storedStopwatch(storage)).toEqual({ status: "idle" }));
+    await eventually(() => expect(screen.getByText("0:00")).toBeInTheDocument());
+    expect(screen.queryByRole("table", { name: en.laps })).toBeNull();
+  });
+
+  it("finds a running Stopwatch and its Laps after a restart", async () => {
+    const storage = new Map<string, unknown>([
+      [
+        "stopwatch",
+        {
+          status: "running",
+          startedAt: START - 90_000,
+          banked: 0,
+          laps: [
+            { length: 30_000, total: 30_000 },
+            { length: 30_000, total: 60_000 },
+          ],
+        },
+      ],
+    ]);
+    const { host } = startHost({ storage });
+    freezeClock();
+    await host.renderPage(CLOCK_PAGE_ID);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+    await openStopwatchTab(user);
+    await eventually(() => expect(screen.getByText("1:30")).toBeInTheDocument());
+    const table = await screen.findByRole("table", { name: en.laps });
+    await eventually(() => expect(within(table).getAllByRole("row")).toHaveLength(3));
+    const rows = within(table).getAllByRole("row");
+    // Newest first: Lap 2's 0:30 stretch ends at 1:00, Lap 1's ends at 0:30.
+    expect(rows[1]?.textContent).toContain("2");
+    expect(rows[1]?.textContent).toContain("0:30");
+    expect(rows[1]?.textContent).toContain("1:00");
+    expect(rows[2]?.textContent).toContain("1");
+    expect(rows[2]?.textContent).toContain("0:30");
+  });
+
+  it("starts and then pauses the Stopwatch from the toggleStopwatch Command", async () => {
+    const { host, storage } = startHost();
+    freezeClock();
+
+    await expect(
+      host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: TOGGLE_STOPWATCH })
+    ).resolves.toBeNull();
+    await eventually(() => expect(storedStopwatch(storage)?.status).toBe("running"));
+
+    await expect(
+      host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: TOGGLE_STOPWATCH })
+    ).resolves.toBeNull();
+    await eventually(() => expect(storedStopwatch(storage)?.status).toBe("paused"));
+    expect(host.pageNavigations).toEqual([]);
+  });
+
+  it("marks a Lap from the lapStopwatch Command while running", async () => {
+    const { host, storage } = startHost();
+    freezeClock();
+
+    await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: TOGGLE_STOPWATCH });
+    await eventually(() => expect(storedStopwatch(storage)?.status).toBe("running"));
+
+    await vi.advanceTimersByTime(5_000);
+    await expect(
+      host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: LAP_STOPWATCH })
+    ).resolves.toBeNull();
+    await eventually(() => expect(storedStopwatch(storage)?.laps).toHaveLength(1));
+    expect(storedStopwatch(storage)?.laps?.[0]?.length).toBeGreaterThanOrEqual(5_000);
+    expect(storedStopwatch(storage)?.laps?.[0]?.total).toBeGreaterThanOrEqual(5_000);
+  });
+
+  it("runs the Timer, the Pomodoro, and the Stopwatch all at once", async () => {
+    const { host, storage } = startHost();
+    freezeClock();
+
+    await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: TOGGLE_TIMER });
+    await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: TOGGLE_POMODORO });
+    await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: TOGGLE_STOPWATCH });
+
+    await eventually(() => {
+      expect(stored(storage)?.state.status).toBe("running");
+      expect(storedCycle(storage)?.state.status).toBe("running");
+      expect(storedStopwatch(storage)?.status).toBe("running");
+    });
+  });
+
+  it("raises no Alert however long the Stopwatch runs", async () => {
+    const { host, storage } = startHost();
+    freezeClock();
+    await host.renderPage(CLOCK_PAGE_ID);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+    await openStopwatchTab(user);
+    await press(user, en.start);
+    await eventually(() => expect(storedStopwatch(storage)?.status).toBe("running"));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60 * 60_000);
+    });
+    expect(host.systemNotifications.scheduled.size).toBe(0);
+    expect(host.systemNotifications.log).toEqual([]);
   });
 
   it("opens the Pomodoro tab by keyboard, and Start runs Pomodoro 1 of 4 with an Alert", async () => {

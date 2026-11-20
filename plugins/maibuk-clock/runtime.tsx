@@ -6,11 +6,12 @@
  * into jsdom. Imports only `@/plugin-sdk` (and its subpaths) and its own files.
  *
  * The page draws the four tabs its glossary names. The Timer tab holds the
- * live Timer; every other tab's panel is empty until its own ticket fills it,
- * so each one says it is coming soon. The Timer tab is selected first, and the
- * selected tab is page-local state. The page owns the Timer's subscription and
- * its once-a-second redraw, so its polite live region speaks from below the
- * tabs on every tab, not only the Timer's.
+ * live Timer, the Pomodoro tab the Cycle, and the Stopwatch tab the Stopwatch;
+ * the Alarms tab's panel is empty until its own ticket fills it, so it says it
+ * is coming soon. The Timer tab is selected first, and the selected tab is
+ * page-local state. The page owns the Timer's, the Cycle's, and the Stopwatch's
+ * subscriptions and its once-a-second redraw, so its polite live region speaks
+ * from below the tabs on every tab, not only the Timer's.
  */
 
 import { useEffect, useState, type ComponentType } from "react";
@@ -23,14 +24,18 @@ import {
 import { translate, type ClockKey } from "./i18n";
 import { createPomodoro, type ClockPomodoro, type PomodoroSnapshot } from "./pomodoro";
 import { remainingCycleMs, todayCount } from "./cycle";
+import { createStopwatch, type ClockStopwatch } from "./stopwatch";
 import {
+  elapsedMs,
   formatClockTime,
   formatDuration,
+  formatElapsed,
   hourCycleFor,
   joinDuration,
   MS_PER_MINUTE,
   remainingMs,
   splitDuration,
+  type StopwatchState,
   type TimerState,
 } from "./time";
 import { createTimer, type ClockTimer } from "./timer";
@@ -46,6 +51,8 @@ export const OPEN_CLOCK = "openClock";
 export const TOGGLE_TIMER = "toggleTimer";
 export const TOGGLE_POMODORO = "togglePomodoro";
 export const SKIP_POMODORO = "skipPomodoro";
+export const TOGGLE_STOPWATCH = "toggleStopwatch";
+export const LAP_STOPWATCH = "lapStopwatch";
 
 /** The tabs the page draws, in the glossary's order. */
 const TABS = ["pomodoro", "timer", "stopwatch", "alarms"] as const;
@@ -99,13 +106,14 @@ async function reportMissed(client: PluginClient, sentences: readonly string[]):
 }
 
 /**
- * Wires the client to the Clock page and the Command handlers. The Timer and the
- * Pomodoro are created here and live for the Plugin's lifetime, so a Command run
- * and a page mount act on the same ones.
+ * Wires the client to the Clock page and the Command handlers. The Timer, the
+ * Pomodoro, and the Stopwatch are created here and live for the Plugin's
+ * lifetime, so a Command run and a page mount act on the same ones.
  */
 export function startClock(client: PluginClient, serve: ClockServe): Promise<void> {
   const timer = createTimer(client);
   const pomodoro = createPomodoro(client);
+  const stopwatch = createStopwatch(client);
   // The Toggle Button shows whether a phase runs: every change to the Cycle is
   // mirrored onto it, only when the pressed value moves, and never loudly.
   let buttonPressed: boolean | null = null;
@@ -143,6 +151,8 @@ export function startClock(client: PluginClient, serve: ClockServe): Promise<voi
         pomodoroEnd.phase === "pomodoro" ? "pomodoroEndedWhileClosed" : "breakEndedWhileClosed";
       missed.push(missedSentence(language, key, pomodoroEnd.endedAt));
     }
+    // A Stopwatch never ends on its own, so load reports no missed end.
+    await stopwatch.load();
     if (missed.length === 0) return;
     try {
       await reportMissed(client, missed);
@@ -159,9 +169,10 @@ export function startClock(client: PluginClient, serve: ClockServe): Promise<voi
     })
     .catch(() => {});
   serve(client, {
-    pages: { [CLOCK_PAGE_ID]: createClockPage(client, timer, pomodoro) },
+    pages: { [CLOCK_PAGE_ID]: createClockPage(client, timer, pomodoro, stopwatch) },
     settingsRows: { [POMODORO_SETTINGS_ROW_ID]: createPomodoroSettings(client, pomodoro) },
-    onHostRequest: (method, params) => handleHostRequest(client, timer, pomodoro, method, params),
+    onHostRequest: (method, params) =>
+      handleHostRequest(client, timer, pomodoro, stopwatch, method, params),
   });
   return started;
 }
@@ -171,12 +182,13 @@ function handleHostRequest(
   client: PluginClient,
   timer: ClockTimer,
   pomodoro: ClockPomodoro,
+  stopwatch: ClockStopwatch,
   method: string,
   params: unknown
 ): unknown {
   if (method === "health.check") return "pong";
   if (method === PLUGIN_COMMAND_RUN_REQUEST)
-    return runClockCommand(client, timer, pomodoro, params);
+    return runClockCommand(client, timer, pomodoro, stopwatch, params);
   throw new Error(`No handler for ${method}`);
 }
 
@@ -184,13 +196,15 @@ function handleHostRequest(
  * Answers one Command run. `Open Clock` is the page's navigating Command, so the
  * host normally navigates without a `command.run`; answering it here keeps the
  * page reachable the other way. `Start or pause the Timer` toggles the one
- * Timer the Plugin holds, `Start or pause the Pomodoro` toggles the Cycle, and
- * `Skip to the next Pomodoro or break` moves it on.
+ * Timer the Plugin holds, `Start or pause the Pomodoro` toggles the Cycle,
+ * `Skip to the next Pomodoro or break` moves it on, `Start or pause the
+ * Stopwatch` toggles the Stopwatch, and `Mark a Lap` marks one while it runs.
  */
 async function runClockCommand(
   client: PluginClient,
   timer: ClockTimer,
   pomodoro: ClockPomodoro,
+  stopwatch: ClockStopwatch,
   params: unknown
 ): Promise<null> {
   const { id } = (params ?? {}) as { id?: unknown };
@@ -198,6 +212,8 @@ async function runClockCommand(
   if (id === TOGGLE_TIMER) timer.toggle();
   if (id === TOGGLE_POMODORO) pomodoro.toggle();
   if (id === SKIP_POMODORO) pomodoro.skip();
+  if (id === TOGGLE_STOPWATCH) stopwatch.toggle();
+  if (id === LAP_STOPWATCH) stopwatch.lap();
   return null;
 }
 
@@ -457,6 +473,84 @@ function PomodoroPanel({ pomodoro, language, snapshot, now }: PomodoroPanelProps
   );
 }
 
+interface StopwatchPanelProps {
+  stopwatch: ClockStopwatch;
+  language: string;
+  state: StopwatchState;
+  now: number;
+}
+
+/**
+ * The Stopwatch tab. It draws the elapsed time, the controls the status calls
+ * for, and the Laps marked so far, newest first. The page owns the Stopwatch's
+ * subscription and its once-a-second redraw, so this panel holds no timer of
+ * its own.
+ */
+function StopwatchPanel({ stopwatch, language, state, now }: StopwatchPanelProps) {
+  const laps = state.status === "idle" ? [] : state.laps;
+
+  return (
+    <ui.View direction="column" gap="md">
+      <ui.Text size="lg" weight="semibold">
+        {formatElapsed(elapsedMs(state, now))}
+      </ui.Text>
+
+      <ui.View direction="row" gap="sm" wrap>
+        {state.status === "idle" ? (
+          <ui.Button variant="primary" onPress={() => stopwatch.start()}>
+            {translate(language, "start")}
+          </ui.Button>
+        ) : null}
+        {state.status === "running" ? (
+          <ui.Button variant="primary" onPress={() => stopwatch.pause()}>
+            {translate(language, "pause")}
+          </ui.Button>
+        ) : null}
+        {state.status === "running" ? (
+          <ui.Button variant="secondary" onPress={() => stopwatch.lap()}>
+            {translate(language, "lap")}
+          </ui.Button>
+        ) : null}
+        {state.status === "paused" ? (
+          <ui.Button variant="primary" onPress={() => stopwatch.start()}>
+            {translate(language, "resume")}
+          </ui.Button>
+        ) : null}
+        {state.status === "idle" ? null : (
+          <ui.Button variant="secondary" onPress={() => stopwatch.reset()}>
+            {translate(language, "reset")}
+          </ui.Button>
+        )}
+      </ui.View>
+
+      {laps.length > 0 ? (
+        <ui.Table
+          label={translate(language, "laps")}
+          columns={[
+            { value: "lap", label: translate(language, "lap") },
+            { value: "lapTime", label: translate(language, "lapTime") },
+            { value: "total", label: translate(language, "total") },
+          ]}
+        >
+          {laps
+            .map((lap, index) => ({ lap, number: index + 1 }))
+            .reverse()
+            .map(({ lap, number }) => (
+              <ui.TableRow
+                key={number}
+                cells={[
+                  { value: "lap", label: String(number) },
+                  { value: "lapTime", label: formatElapsed(lap.length) },
+                  { value: "total", label: formatElapsed(lap.total) },
+                ]}
+              />
+            ))}
+        </ui.Table>
+      ) : null}
+    </ui.View>
+  );
+}
+
 /**
  * The `pomodoro` Settings row's body: the three lengths, the count before a Long
  * Break, and the two auto-start switches. Each change is written straight to
@@ -528,21 +622,25 @@ function createPomodoroSettings(client: PluginClient, pomodoro: ClockPomodoro): 
 
 /**
  * The Clock page: a heading and the four tabs, the Timer's selected first. The
- * page owns the Timer's and the Cycle's state, so the polite live region sits
- * below the tabs and speaks the same on every one of them. The Timer and
- * Pomodoro tabs draw their panels; the other two say they are coming soon until
- * their own tickets replace them.
+ * page owns the Timer's, the Cycle's, and the Stopwatch's state, so the polite
+ * live region sits below the tabs and speaks the same on every one of them. The
+ * Timer, Pomodoro, and Stopwatch tabs draw their panels; the Alarms tab says it
+ * is coming soon until its own ticket replaces it.
  */
 function createClockPage(
   client: PluginClient,
   timer: ClockTimer,
-  pomodoro: ClockPomodoro
+  pomodoro: ClockPomodoro,
+  stopwatch: ClockStopwatch
 ): ComponentType {
   function ClockPage() {
     const language = useLanguage(client);
     const [tab, setTab] = useState<ClockTab>(DEFAULT_TAB);
     const [snapshot, setSnapshot] = useState(() => timer.snapshot());
     const [pomodoroSnapshot, setPomodoroSnapshot] = useState(() => pomodoro.snapshot());
+    const [stopwatchSnapshot, setStopwatchSnapshot] = useState<StopwatchState>(() =>
+      stopwatch.snapshot()
+    );
     const [now, setNow] = useState(() => Date.now());
     const items = TABS.map((key) => ({
       value: key,
@@ -569,11 +667,22 @@ function createClockPage(
       return pomodoro.subscribe(sync);
     }, [pomodoro]);
 
-    // The redraw exists only while the page is mounted and a phase runs, or
-    // while the Pomodoro tab shows today's count, which turns over at midnight.
+    useEffect(() => {
+      const sync = () => {
+        setStopwatchSnapshot(stopwatch.snapshot());
+        setNow(Date.now());
+      };
+      sync();
+      return stopwatch.subscribe(sync);
+    }, [stopwatch]);
+
+    // The redraw exists only while the page is mounted and a phase or the
+    // Stopwatch runs, or while the Pomodoro tab shows today's count, which
+    // turns over at midnight.
     const ticking =
       snapshot.state.status === "running" ||
       pomodoroSnapshot.state.status === "running" ||
+      stopwatchSnapshot.status === "running" ||
       tab === "pomodoro";
 
     useEffect(() => {
@@ -607,6 +716,13 @@ function createClockPage(
               pomodoro={pomodoro}
               language={language}
               snapshot={pomodoroSnapshot}
+              now={now}
+            />
+          ) : tab === "stopwatch" ? (
+            <StopwatchPanel
+              stopwatch={stopwatch}
+              language={language}
+              state={stopwatchSnapshot}
               now={now}
             />
           ) : (
