@@ -144,6 +144,8 @@ describe("Map editor Export panel", () => {
       await waitFor(() =>
         expect(screen.getByRole("radio", { name: en["export.format.svg"] })).toBeChecked()
       );
+      // The Plugin re-renders for SVG once it hears the change; DPI is PNG only.
+      await waitFor(() => expect(screen.queryByLabelText(en["export.dpi"])).toBeNull());
 
       const save = screen.getByRole("button", { name: en["export.save"] });
       await tabTo(user, save, 120);
@@ -235,6 +237,8 @@ describe("Map editor Export panel", () => {
       await waitFor(() =>
         expect(screen.getByRole("radio", { name: en["export.format.svg"] })).toBeChecked()
       );
+      // The Plugin re-renders for SVG once it hears the change; DPI is PNG only.
+      await waitFor(() => expect(screen.queryByLabelText(en["export.dpi"])).toBeNull());
 
       const save = screen.getByRole("button", { name: en["export.save"] });
       await tabTo(user, save, 120);
