@@ -7,7 +7,10 @@ import { useEffect, useRef } from "react";
  * dialog, whose opener is already gone): the target wins when it returns one.
  * `getTarget` is read again on close when the element it first returned is
  * gone or disabled, so an action that removes its own row can name the row
- * that survived.
+ * that survived. Pass `onlyFromBody` for an overlay that leaves no element
+ * behind when it closes: focus is then restored only when it fell to <body>
+ * as the overlay closed (React Aria's FocusScope rule), so focus a field took
+ * on purpose elsewhere stays there (#854).
  *
  * The restore runs in a passive effect on purpose. A modal hides the rest of
  * the page while open and lifts that in a passive-effect cleanup; a
@@ -25,14 +28,21 @@ export function useRestoreFocus(
   isOpen: boolean,
   {
     skipWhenDialogFocused = false,
+    onlyFromBody = false,
     getTarget,
-  }: { skipWhenDialogFocused?: boolean; getTarget?: () => HTMLElement | null } = {}
+  }: {
+    skipWhenDialogFocused?: boolean;
+    onlyFromBody?: boolean;
+    getTarget?: () => HTMLElement | null;
+  } = {}
 ): void {
   const targetRef = useRef<HTMLElement | null>(null);
   const wasOpenRef = useRef(false);
   const openedRef = useRef(false);
   const skipRef = useRef(skipWhenDialogFocused);
   skipRef.current = skipWhenDialogFocused;
+  const onlyFromBodyRef = useRef(onlyFromBody);
+  onlyFromBodyRef.current = onlyFromBody;
   const getTargetRef = useRef(getTarget);
   getTargetRef.current = getTarget;
 
@@ -64,6 +74,12 @@ export function useRestoreFocus(
     if (!canTakeFocus(target)) return;
     // Another dialog took focus meanwhile; leave it there.
     if (skipRef.current && document.activeElement?.closest?.('[role="dialog"]')) return;
+    // Focus that moved outside on purpose, such as a field with autoFocus,
+    // stays put (#854).
+    if (onlyFromBodyRef.current) {
+      const active = document.activeElement;
+      if (active instanceof Element && active !== document.body) return;
+    }
     // The page did not move under the overlay, so neither should focus.
     // Focusing a tall editor otherwise scrolls it to the top, and ProseMirror
     // then scrolls the caret back in from below.

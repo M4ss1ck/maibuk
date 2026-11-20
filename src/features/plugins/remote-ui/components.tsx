@@ -1563,8 +1563,11 @@ function PopoverHost({
   const triggerRef = useRef<HTMLButtonElement>(null);
   // A non-modal popover does not return focus by itself when the host dismisses
   // it; the shared hook restores the trigger, immediately and without a Worker
-  // echo.
-  useRestoreFocus(open, { getTarget: () => triggerRef.current });
+  // echo, unless a field that took focus outside the popover keeps it (#854).
+  useRestoreFocus(open, {
+    getTarget: () => triggerRef.current,
+    onlyFromBody: true,
+  });
   // Without an icon there is nothing to show in its place, so the label stays.
   const iconOnlyTrigger = iconOnly === true && icon !== undefined && icon !== "";
   const trigger = (
