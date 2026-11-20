@@ -10,9 +10,12 @@
  * System Notification at the deadline, pause freezes it and cancels the Alert,
  * reset restores the length, the recent lengths come back newest first, the
  * Command toggles, the live region speaks on the minute and at the end on every
- * tab, and the notification banner asks for permission. The Pomodoro Commands
- * start, pause, and skip the cycle, and the Toggle Button stays pressed exactly
- * while a phase runs. Every control is reached with `user-event` key presses.
+ * tab, and the notification banner asks for permission. The Pomodoro tab starts,
+ * pauses, skips, and resets the Cycle, counts today's Pomodoros, and shows a
+ * phase that ended before startup as ended. The Pomodoro Settings row changes
+ * the lengths and auto-starts the next phase. The Pomodoro Commands start,
+ * pause, and skip the cycle, and the Toggle Button stays pressed exactly while a
+ * phase runs. Every control is reached with `user-event` key presses.
  */
 
 import { act, screen } from "@testing-library/react";
@@ -28,6 +31,7 @@ import es from "./locales/runtime/es.json";
 import {
   CLOCK_PAGE_ID,
   OPEN_CLOCK,
+  POMODORO_SETTINGS_ROW_ID,
   SKIP_POMODORO,
   TOGGLE_POMODORO,
   TOGGLE_TIMER,
@@ -73,6 +77,16 @@ function storedCycle(storage: Map<string, unknown>): StoredCycle | undefined {
   return typeof value === "object" && value !== null ? (value as StoredCycle) : undefined;
 }
 
+/** The Cycle settings storage holds, or none. */
+function storedSettings(storage: Map<string, unknown>): Record<string, unknown> | undefined {
+  const value = storage.get("pomodoro");
+  if (typeof value !== "object" || value === null) return undefined;
+  const settings = (value as { settings?: unknown }).settings;
+  return typeof settings === "object" && settings !== null
+    ? (settings as Record<string, unknown>)
+    : undefined;
+}
+
 /** Takes over the clock and the Plugin's own timers for one test. */
 function freezeClock(): void {
   vi.useFakeTimers({
@@ -86,11 +100,11 @@ function freezeClock(): void {
 const openHosts: ReturnType<typeof createTestHost>[] = [];
 
 /** A host with the Clock manifest, its storage in memory, and the runtime wired. */
-function startHost(options: { language?: string } = {}): {
+function startHost(options: { language?: string; storage?: Map<string, unknown> } = {}): {
   host: ReturnType<typeof createTestHost>;
   storage: Map<string, unknown>;
 } {
-  const storage = new Map<string, unknown>();
+  const storage = options.storage ?? new Map<string, unknown>();
   const host = createTestHost({
     manifest: clockManifest(),
     storage,
@@ -136,6 +150,17 @@ async function press(user: User, name: string): Promise<void> {
   await tabTo(user, button);
   expect(button).toHaveFocus();
   await user.keyboard("{Enter}");
+}
+
+/** Focuses the selected Timer tab and moves left to the Pomodoro tab with the keyboard. */
+async function openPomodoroTab(user: User): Promise<void> {
+  const timerTab = await screen.findByRole("tab", { name: en.timer });
+  await tabTo(user, timerTab);
+  expect(timerTab).toHaveFocus();
+  await user.keyboard("{ArrowLeft}");
+  await eventually(() =>
+    expect(screen.getByRole("heading", { name: en.pomodoro })).toBeInTheDocument()
+  );
 }
 
 /** Starts the Timer from the page and waits for the stored running state. */
@@ -209,11 +234,209 @@ describe("Clock runtime", () => {
     }
   });
 
+  it("opens the Pomodoro tab by keyboard, and Start runs Pomodoro 1 of 4 with an Alert", async () => {
+    const { host, storage } = startHost();
+    freezeClock();
+    await host.renderPage(CLOCK_PAGE_ID);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+    await openPomodoroTab(user);
+
+    expect(screen.getByRole("heading", { name: en.pomodoro })).toBeInTheDocument();
+    expect(
+      screen.getByText(en.pomodoroOfCycle.replace("{n}", "1").replace("{total}", "4"))
+    ).toBeInTheDocument();
+    expect(screen.getByText("25:00")).toBeInTheDocument();
+    expect(screen.getByText(en.pomodorosToday.replace("{n}", "0"))).toBeInTheDocument();
+
+    await press(user, en.start);
+    await eventually(() => expect(storedCycle(storage)?.state.status).toBe("running"));
+    await eventually(() => {
+      const state = storedCycle(storage)?.state;
+      expect(host.systemNotifications.scheduled.get(POMODORO_TAG)?.at).toBe(state?.endsAt);
+    });
+    expect(host.systemNotifications.scheduled.get(POMODORO_TAG)).toMatchObject({
+      title: `Clock: ${en.pomodoro}`,
+    });
+  });
+
+  it("ends the Pomodoro into an idle Short Break, counts it, and cancels the Alert", async () => {
+    const { host, storage } = startHost();
+    freezeClock();
+    await host.renderPage(CLOCK_PAGE_ID);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+    await openPomodoroTab(user);
+    await press(user, en.start);
+    await eventually(() => expect(host.systemNotifications.scheduled.has(POMODORO_TAG)).toBe(true));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(25 * 60_000);
+    });
+    await eventually(() =>
+      expect(screen.getByRole("heading", { name: en.shortBreak })).toBeInTheDocument()
+    );
+    expect(screen.getByText(en.pomodorosToday.replace("{n}", "1"))).toBeInTheDocument();
+    expect(storedCycle(storage)?.state).toEqual({
+      phase: "shortBreak",
+      pomodoro: 1,
+      status: "idle",
+    });
+    await eventually(() =>
+      expect(host.systemNotifications.scheduled.has(POMODORO_TAG)).toBe(false)
+    );
+    expect(host.systemNotifications.log.at(-1)).toMatchObject({
+      kind: "cancelled",
+      tag: POMODORO_TAG,
+    });
+    expect(screen.getByRole("button", { name: en.start })).toBeInTheDocument();
+  });
+
+  it("skips to the next phase and resets to Pomodoro 1 by keyboard", async () => {
+    const { host, storage } = startHost();
+    freezeClock();
+    await host.renderPage(CLOCK_PAGE_ID);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+    await openPomodoroTab(user);
+    await press(user, en.skip);
+    await eventually(() =>
+      expect(screen.getByRole("heading", { name: en.shortBreak })).toBeInTheDocument()
+    );
+    expect(storedCycle(storage)?.state).toEqual({
+      phase: "shortBreak",
+      pomodoro: 1,
+      status: "idle",
+    });
+
+    await press(user, en.resetCycle);
+    await eventually(() =>
+      expect(screen.getByRole("heading", { name: en.pomodoro })).toBeInTheDocument()
+    );
+    expect(
+      screen.getByText(en.pomodoroOfCycle.replace("{n}", "1").replace("{total}", "4"))
+    ).toBeInTheDocument();
+    expect(storedCycle(storage)?.state).toEqual({
+      phase: "pomodoro",
+      pomodoro: 1,
+      status: "idle",
+    });
+  });
+
+  it("sends the fourth Pomodoro to the Long Break", async () => {
+    const storage = new Map<string, unknown>([
+      [
+        "pomodoro",
+        {
+          state: { phase: "pomodoro", pomodoro: 4, status: "idle" },
+          today: { day: 0, count: 3 },
+        },
+      ],
+    ]);
+    const { host } = startHost({ storage });
+    freezeClock();
+    await host.renderPage(CLOCK_PAGE_ID);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+    await openPomodoroTab(user);
+    expect(
+      screen.getByText(en.pomodoroOfCycle.replace("{n}", "4").replace("{total}", "4"))
+    ).toBeInTheDocument();
+
+    await press(user, en.start);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(25 * 60_000);
+    });
+    await eventually(() =>
+      expect(screen.getByRole("heading", { name: en.longBreak })).toBeInTheDocument()
+    );
+    expect(storedCycle(storage)?.state).toEqual({
+      phase: "longBreak",
+      pomodoro: 4,
+      status: "idle",
+    });
+  });
+
+  it("shows a phase that ended before startup as ended and does not advance", async () => {
+    const storage = new Map<string, unknown>([
+      [
+        "pomodoro",
+        {
+          state: {
+            phase: "pomodoro",
+            pomodoro: 2,
+            status: "running",
+            endsAt: START - 60_000,
+          },
+          today: { day: 0, count: 0 },
+        },
+      ],
+    ]);
+    const { host } = startHost({ storage });
+    freezeClock();
+    await host.renderPage(CLOCK_PAGE_ID);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+    await openPomodoroTab(user);
+
+    await eventually(() =>
+      expect(screen.getByText(en.phaseEnded.replace("{phase}", en.pomodoro))).toBeInTheDocument()
+    );
+    expect(screen.getByRole("heading", { name: en.pomodoro })).toBeInTheDocument();
+    expect(screen.getByText(en.pomodorosToday.replace("{n}", "1"))).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: en.shortBreak })).toBeNull();
+    expect(storedCycle(storage)?.state).toMatchObject({
+      phase: "pomodoro",
+      pomodoro: 2,
+      status: "ended",
+    });
+  });
+
+  it("changes the Pomodoro settings by keyboard and auto-starts the Short Break", async () => {
+    const { host, storage } = startHost();
+    freezeClock();
+    const row = await host.renderSettingsRow(POMODORO_SETTINGS_ROW_ID);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+    const length = await screen.findByRole("textbox", { name: en.pomodoroMinutes });
+    await tabTo(user, length);
+    expect(length).toHaveFocus();
+    await user.keyboard("{Control>}a{/Control}1{Enter}");
+    await eventually(() => expect(storedSettings(storage)?.pomodoroMinutes).toBe(1));
+
+    const autoStart = screen.getByRole("switch", { name: en.autoStartBreaks });
+    await tabTo(user, autoStart);
+    expect(autoStart).toHaveFocus();
+    await user.keyboard(" ");
+    await eventually(() => expect(storedSettings(storage)?.autoStartBreaks).toBe(true));
+
+    await row.unmount();
+
+    await host.renderPage(CLOCK_PAGE_ID);
+    await openPomodoroTab(user);
+    await press(user, en.start);
+    await eventually(() => expect(storedCycle(storage)?.state.status).toBe("running"));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    await eventually(() =>
+      expect(storedCycle(storage)?.state).toMatchObject({
+        phase: "shortBreak",
+        pomodoro: 1,
+        status: "running",
+      })
+    );
+    expect(screen.getByRole("heading", { name: en.shortBreak })).toBeInTheDocument();
+    expect(host.systemNotifications.scheduled.has(POMODORO_TAG)).toBe(true);
+  });
+
   it("renders every label in Spanish when the app language is Spanish", async () => {
     const host = createTestHost({ manifest: clockManifest(), language: "es" });
     try {
       startClock(createPluginClient(host.port), servePluginUi);
       const page = await host.renderPage(CLOCK_PAGE_ID);
+      const user = userEvent.setup();
 
       expect(await screen.findByRole("tablist", { name: es.tabs })).toBeInTheDocument();
       for (const label of [es.pomodoro, es.timer, es.stopwatch, es.alarms]) {
@@ -221,6 +444,29 @@ describe("Clock runtime", () => {
       }
       expect(screen.getByRole("textbox", { name: es.hours })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: es.start })).toBeInTheDocument();
+
+      const timerTab = screen.getByRole("tab", { name: es.timer });
+      await tabTo(user, timerTab);
+      expect(timerTab).toHaveFocus();
+      await user.keyboard("{ArrowLeft}");
+      await eventually(() =>
+        expect(screen.getByRole("heading", { name: es.pomodoro })).toBeInTheDocument()
+      );
+      expect(
+        screen.getByText(es.pomodoroOfCycle.replace("{n}", "1").replace("{total}", "4"))
+      ).toBeInTheDocument();
+      expect(screen.getByText(es.pomodorosToday.replace("{n}", "0"))).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: es.skip })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: es.resetCycle })).toBeInTheDocument();
+
+      const row = await host.renderSettingsRow(POMODORO_SETTINGS_ROW_ID);
+      expect(await screen.findByRole("textbox", { name: es.pomodoroMinutes })).toBeInTheDocument();
+      expect(screen.getByRole("textbox", { name: es.shortBreakMinutes })).toBeInTheDocument();
+      expect(screen.getByRole("textbox", { name: es.longBreakMinutes })).toBeInTheDocument();
+      expect(screen.getByRole("textbox", { name: es.longBreakEvery })).toBeInTheDocument();
+      expect(screen.getByRole("switch", { name: es.autoStartBreaks })).toBeInTheDocument();
+      expect(screen.getByRole("switch", { name: es.autoStartPomodoros })).toBeInTheDocument();
+      await row.unmount();
 
       await page.unmount();
     } finally {

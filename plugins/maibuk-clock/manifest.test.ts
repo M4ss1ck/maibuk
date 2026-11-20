@@ -98,6 +98,16 @@ describe("Clock manifest", () => {
     ]);
   });
 
+  it("declares the Pomodoro Settings row", () => {
+    expect(manifest().contributes?.settingsRows).toEqual([
+      {
+        id: "pomodoro",
+        label: "Pomodoro",
+        description: "Set how long Pomodoros and breaks last, and whether they start on their own.",
+      },
+    ]);
+  });
+
   it("contributes exactly the four Commands, in order", () => {
     expect(manifest().contributes?.commands?.map((command) => command.id)).toEqual([
       "openClock",
@@ -122,5 +132,9 @@ describe("Clock manifest", () => {
     expect(locale["commands.togglePomodoro.label"]).toBe("Iniciar o pausar el Pomodoro");
     expect(locale["commands.skipPomodoro.label"]).toBe("Saltar al siguiente Pomodoro o descanso");
     expect(locale["pages.clock.title"]).toBe("Reloj");
+    expect(locale["settingsRows.pomodoro.label"]).toBe("Pomodoro");
+    expect(locale["settingsRows.pomodoro.description"]).toBe(
+      "Elige cuánto duran los Pomodoros y los descansos, y si empiezan solos."
+    );
   });
 });

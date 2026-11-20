@@ -5,5 +5,7 @@
   "commands.toggleTimer.label": "Iniciar o pausar el temporizador",
   "commands.togglePomodoro.label": "Iniciar o pausar el Pomodoro",
   "commands.skipPomodoro.label": "Saltar al siguiente Pomodoro o descanso",
-  "pages.clock.title": "Reloj"
+  "pages.clock.title": "Reloj",
+  "settingsRows.pomodoro.label": "Pomodoro",
+  "settingsRows.pomodoro.description": "Elige cuánto duran los Pomodoros y los descansos, y si empiezan solos."
 }

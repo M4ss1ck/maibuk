@@ -53,6 +53,13 @@
         },
         "toggle": true
       }
+    ],
+    "settingsRows": [
+      {
+        "id": "pomodoro",
+        "label": "Pomodoro",
+        "description": "Set how long Pomodoros and breaks last, and whether they start on their own."
+      }
     ]
   }
 }

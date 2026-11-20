@@ -21,7 +21,8 @@ import {
   type PluginClient,
 } from "@/plugin-sdk";
 import { translate, type ClockKey } from "./i18n";
-import { createPomodoro, type ClockPomodoro } from "./pomodoro";
+import { createPomodoro, type ClockPomodoro, type PomodoroSnapshot } from "./pomodoro";
+import { remainingCycleMs, todayCount } from "./cycle";
 import {
   formatClockTime,
   formatDuration,
@@ -36,6 +37,9 @@ import { createTimer, type ClockTimer } from "./timer";
 
 /** The Clock page id, exactly as the manifest declares it. */
 export const CLOCK_PAGE_ID = "clock";
+
+/** The Pomodoro Settings row id, exactly as the manifest declares it. */
+export const POMODORO_SETTINGS_ROW_ID = "pomodoro";
 
 /** The Command-local ids the manifest declares. */
 export const OPEN_CLOCK = "openClock";
@@ -64,6 +68,7 @@ export type ClockServe = (
   client: Pick<PluginClient, "onHostRequest">,
   options: {
     pages: Record<string, ComponentType>;
+    settingsRows?: Record<string, ComponentType>;
     onHostRequest?: HostRequestHandler;
   }
 ) => void;
@@ -154,7 +159,8 @@ export function startClock(client: PluginClient, serve: ClockServe): Promise<voi
     })
     .catch(() => {});
   serve(client, {
-    pages: { [CLOCK_PAGE_ID]: createClockPage(client, timer) },
+    pages: { [CLOCK_PAGE_ID]: createClockPage(client, timer, pomodoro) },
+    settingsRows: { [POMODORO_SETTINGS_ROW_ID]: createPomodoroSettings(client, pomodoro) },
     onHostRequest: (method, params) => handleHostRequest(client, timer, pomodoro, method, params),
   });
   return started;
@@ -382,17 +388,161 @@ function TimerPanel({ client, timer, language, state, now, recent }: TimerPanelP
   );
 }
 
+/** A whole number of minutes, at least one, from a number field's value. */
+function wholeMinutes(value: number): number {
+  return Number.isFinite(value) ? Math.max(1, Math.round(value)) : 1;
+}
+
+interface PomodoroPanelProps {
+  pomodoro: ClockPomodoro;
+  language: string;
+  snapshot: PomodoroSnapshot;
+  now: number;
+}
+
+/**
+ * The Pomodoro tab. It draws the phase and its number in the Cycle, the time
+ * left (or the sentence that names the phase ended), today's count, and the
+ * controls the status calls for. The page owns the Cycle's subscription and its
+ * once-a-second redraw, so this panel holds no timer of its own.
+ */
+function PomodoroPanel({ pomodoro, language, snapshot, now }: PomodoroPanelProps) {
+  const { state, settings, today } = snapshot;
+  const phase = translate(language, state.phase);
+  const total = settings.longBreakEvery;
+  const count = todayCount(today, now, new Date(now).getTimezoneOffset());
+  const remaining = remainingCycleMs(state, settings, now);
+
+  return (
+    <ui.View direction="column" gap="md">
+      <ui.Heading level={3}>{phase}</ui.Heading>
+      <ui.Text>
+        {translate(language, "pomodoroOfCycle")
+          .replace("{n}", String(state.pomodoro))
+          .replace("{total}", String(total))}
+      </ui.Text>
+      <ui.Text size="lg" weight="semibold">
+        {state.status === "ended"
+          ? translate(language, "phaseEnded").replace("{phase}", phase)
+          : formatDuration(remaining)}
+      </ui.Text>
+      <ui.Text tone="muted">
+        {translate(language, "pomodorosToday").replace("{n}", String(count))}
+      </ui.Text>
+
+      <ui.View direction="row" gap="sm" wrap>
+        {state.status === "idle" || state.status === "ended" ? (
+          <ui.Button variant="primary" onPress={() => pomodoro.start()}>
+            {translate(language, "start")}
+          </ui.Button>
+        ) : null}
+        {state.status === "running" ? (
+          <ui.Button variant="primary" onPress={() => pomodoro.pause()}>
+            {translate(language, "pause")}
+          </ui.Button>
+        ) : null}
+        {state.status === "paused" ? (
+          <ui.Button variant="primary" onPress={() => pomodoro.start()}>
+            {translate(language, "resume")}
+          </ui.Button>
+        ) : null}
+        <ui.Button variant="secondary" onPress={() => pomodoro.skip()}>
+          {translate(language, "skip")}
+        </ui.Button>
+        <ui.Button variant="secondary" onPress={() => pomodoro.reset()}>
+          {translate(language, "resetCycle")}
+        </ui.Button>
+      </ui.View>
+    </ui.View>
+  );
+}
+
+/**
+ * The `pomodoro` Settings row's body: the three lengths, the count before a Long
+ * Break, and the two auto-start switches. Each change is written straight to
+ * the Cycle, which persists it under its one key, so the row survives a reload.
+ * Labels come from the runtime catalogs.
+ */
+function createPomodoroSettings(client: PluginClient, pomodoro: ClockPomodoro): ComponentType {
+  function PomodoroSettings() {
+    const language = useLanguage(client);
+    const [settings, setSettings] = useState(() => pomodoro.snapshot().settings);
+
+    useEffect(() => {
+      const sync = () => setSettings(pomodoro.snapshot().settings);
+      sync();
+      return pomodoro.subscribe(sync);
+    }, [pomodoro]);
+
+    return (
+      <ui.View direction="column" gap="md">
+        <ui.NumberField
+          label={translate(language, "pomodoroMinutes")}
+          value={settings.pomodoroMinutes}
+          minValue={1}
+          step={1}
+          onChange={(event) =>
+            pomodoro.setSettings({ pomodoroMinutes: wholeMinutes(event.detail) })
+          }
+        />
+        <ui.NumberField
+          label={translate(language, "shortBreakMinutes")}
+          value={settings.shortBreakMinutes}
+          minValue={1}
+          step={1}
+          onChange={(event) =>
+            pomodoro.setSettings({ shortBreakMinutes: wholeMinutes(event.detail) })
+          }
+        />
+        <ui.NumberField
+          label={translate(language, "longBreakMinutes")}
+          value={settings.longBreakMinutes}
+          minValue={1}
+          step={1}
+          onChange={(event) =>
+            pomodoro.setSettings({ longBreakMinutes: wholeMinutes(event.detail) })
+          }
+        />
+        <ui.NumberField
+          label={translate(language, "longBreakEvery")}
+          value={settings.longBreakEvery}
+          minValue={1}
+          step={1}
+          onChange={(event) => pomodoro.setSettings({ longBreakEvery: wholeMinutes(event.detail) })}
+        />
+        <ui.Switch
+          label={translate(language, "autoStartBreaks")}
+          isSelected={settings.autoStartBreaks}
+          onChange={(event) => pomodoro.setSettings({ autoStartBreaks: event.detail })}
+        />
+        <ui.Switch
+          label={translate(language, "autoStartPomodoros")}
+          isSelected={settings.autoStartPomodoros}
+          onChange={(event) => pomodoro.setSettings({ autoStartPomodoros: event.detail })}
+        />
+      </ui.View>
+    );
+  }
+  return PomodoroSettings;
+}
+
 /**
  * The Clock page: a heading and the four tabs, the Timer's selected first. The
- * page owns the Timer's state, so the polite live region sits below the tabs
- * and speaks the same on every one of them. The Timer tab draws its panel;
- * every other tab says it is coming soon until its own ticket replaces it.
+ * page owns the Timer's and the Cycle's state, so the polite live region sits
+ * below the tabs and speaks the same on every one of them. The Timer and
+ * Pomodoro tabs draw their panels; the other two say they are coming soon until
+ * their own tickets replace them.
  */
-function createClockPage(client: PluginClient, timer: ClockTimer): ComponentType {
+function createClockPage(
+  client: PluginClient,
+  timer: ClockTimer,
+  pomodoro: ClockPomodoro
+): ComponentType {
   function ClockPage() {
     const language = useLanguage(client);
     const [tab, setTab] = useState<ClockTab>(DEFAULT_TAB);
     const [snapshot, setSnapshot] = useState(() => timer.snapshot());
+    const [pomodoroSnapshot, setPomodoroSnapshot] = useState(() => pomodoro.snapshot());
     const [now, setNow] = useState(() => Date.now());
     const items = TABS.map((key) => ({
       value: key,
@@ -408,9 +558,21 @@ function createClockPage(client: PluginClient, timer: ClockTimer): ComponentType
       [timer]
     );
 
-    const running = snapshot.state.status === "running";
+    // Subscribed, then read once, so a load that settled before the effect ran
+    // still reaches the page.
+    useEffect(() => {
+      const sync = () => {
+        setPomodoroSnapshot(pomodoro.snapshot());
+        setNow(Date.now());
+      };
+      sync();
+      return pomodoro.subscribe(sync);
+    }, [pomodoro]);
 
-    // The redraw exists only while the page is mounted and the Timer runs.
+    const running =
+      snapshot.state.status === "running" || pomodoroSnapshot.state.status === "running";
+
+    // The redraw exists only while the page is mounted and a phase runs.
     useEffect(() => {
       if (!running) return;
       const id = setInterval(() => setNow(Date.now()), 1_000);
@@ -436,6 +598,13 @@ function createClockPage(client: PluginClient, timer: ClockTimer): ComponentType
               state={state}
               now={now}
               recent={snapshot.recent}
+            />
+          ) : tab === "pomodoro" ? (
+            <PomodoroPanel
+              pomodoro={pomodoro}
+              language={language}
+              snapshot={pomodoroSnapshot}
+              now={now}
             />
           ) : (
             <ui.EmptyState
