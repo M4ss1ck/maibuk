@@ -3,5 +3,9 @@
   "description": "Organiza tu trabajo con un ciclo Pomodoro, un temporizador, un cronómetro y alarmas.",
   "commands.openClock.label": "Abrir Reloj",
   "commands.toggleTimer.label": "Iniciar o pausar el temporizador",
-  "pages.clock.title": "Reloj"
+  "commands.togglePomodoro.label": "Iniciar o pausar el Pomodoro",
+  "commands.skipPomodoro.label": "Saltar al siguiente Pomodoro o descanso",
+  "pages.clock.title": "Reloj",
+  "settingsRows.pomodoro.label": "Pomodoro",
+  "settingsRows.pomodoro.description": "Elige cuánto duran los Pomodoros y los descansos, y si empiezan solos."
 }

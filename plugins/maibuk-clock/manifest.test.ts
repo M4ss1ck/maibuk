@@ -61,10 +61,59 @@ describe("Clock manifest", () => {
     expect(command?.navigates).toBeUndefined();
   });
 
-  it("contributes exactly the two Commands, in order", () => {
+  it("contributes the togglePomodoro Command with no default shortcut", () => {
+    const command = manifest().contributes?.commands?.find(
+      (candidate) => candidate.id === "togglePomodoro"
+    );
+    expect(command?.label).toBe("Start or pause the Pomodoro");
+    expect(command?.contexts).toEqual(["global"]);
+    expect(command?.defaults).toBeUndefined();
+    expect(command?.navigates).toBeUndefined();
+  });
+
+  it("contributes the skipPomodoro Command with no default shortcut", () => {
+    const command = manifest().contributes?.commands?.find(
+      (candidate) => candidate.id === "skipPomodoro"
+    );
+    expect(command?.label).toBe("Skip to the next Pomodoro or break");
+    expect(command?.contexts).toEqual(["global"]);
+    expect(command?.defaults).toBeUndefined();
+    expect(command?.navigates).toBeUndefined();
+  });
+
+  it("contributes the Pomodoro toggle as a Toggle Button", () => {
+    expect(manifest().contributes?.toolbarButtons).toEqual([
+      {
+        id: "togglePomodoro",
+        command: "togglePomodoro",
+        icon: {
+          elements: [
+            ["line", { x1: "10", y1: "2", x2: "14", y2: "2" }],
+            ["line", { x1: "12", y1: "14", x2: "15", y2: "11" }],
+            ["circle", { cx: "12", cy: "14", r: "8" }],
+          ],
+        },
+        toggle: true,
+      },
+    ]);
+  });
+
+  it("declares the Pomodoro Settings row", () => {
+    expect(manifest().contributes?.settingsRows).toEqual([
+      {
+        id: "pomodoro",
+        label: "Pomodoro",
+        description: "Set how long Pomodoros and breaks last, and whether they start on their own.",
+      },
+    ]);
+  });
+
+  it("contributes exactly the four Commands, in order", () => {
     expect(manifest().contributes?.commands?.map((command) => command.id)).toEqual([
       "openClock",
       "toggleTimer",
+      "togglePomodoro",
+      "skipPomodoro",
     ]);
   });
 
@@ -75,11 +124,17 @@ describe("Clock manifest", () => {
     expect(result.ok ? [] : result.problems).toEqual([]);
   });
 
-  it("localizes the name, both Command labels, and the page title in Spanish", () => {
+  it("localizes the name, every Command label, and the page title in Spanish", () => {
     const locale = JSON.parse(readFileSync(join(__dirname, "locales", "es.json"), "utf8"));
     expect(locale.name).toBe("Reloj");
     expect(locale["commands.openClock.label"]).toBe("Abrir Reloj");
     expect(locale["commands.toggleTimer.label"]).toBe("Iniciar o pausar el temporizador");
+    expect(locale["commands.togglePomodoro.label"]).toBe("Iniciar o pausar el Pomodoro");
+    expect(locale["commands.skipPomodoro.label"]).toBe("Saltar al siguiente Pomodoro o descanso");
     expect(locale["pages.clock.title"]).toBe("Reloj");
+    expect(locale["settingsRows.pomodoro.label"]).toBe("Pomodoro");
+    expect(locale["settingsRows.pomodoro.description"]).toBe(
+      "Elige cuánto duran los Pomodoros y los descansos, y si empiezan solos."
+    );
   });
 });

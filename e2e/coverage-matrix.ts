@@ -3468,6 +3468,21 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-clock-pomodoro",
+    area: "plugins",
+    workflow:
+      "Clock turned on from Settings → Plugins by keyboard, then Open Clock from the Command Palette opens its page; the author moves to the Pomodoro tab by keyboard and presses Start: Pomodoro 1 of 4 runs and the drawn time falls; Start or pause the Pomodoro, run from the Command Palette, pauses it, so Resume replaces Pause, and running it again resumes it; Skip to the next Pomodoro or break, the other Plugin Command from the Palette, moves the Cycle to Short break; Reset Cycle returns it to Pomodoro 1 idle; asserts: the phase heading, the Pomodoro of the Cycle, the controls each status draws, and Pomodoros today: 0; persists: yes (device-local Plugin storage; the Library is untouched)",
+    edges: [
+      "The Pomodoro runs from its tab, pauses and resumes from its Command, skips to Short break from its Command, and Reset Cycle returns it to Pomodoro 1 idle",
+    ],
+    terms: ["Plugin", "Built-in Plugin", "Plugin Command"],
+    shortcuts: ["plugin.maibuk-clock.togglePomodoro", "plugin.maibuk-clock.skipPomodoro"],
+    routes: ["/settings", "/plugin/:pluginId/:pageId"],
+    fixture: "empty",
+    tags: ["chromium-only"],
+    status: "accepted",
+  },
+  {
     id: "settings-reset-all",
     area: "settings",
     workflow:

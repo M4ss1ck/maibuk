@@ -48,10 +48,14 @@ describe("Clock manifest overrides", () => {
     const locale = JSON.parse(readFileSync(join(__dirname, "locales", "es.json"), "utf8"));
     expect(Object.keys(locale).sort()).toEqual([
       "commands.openClock.label",
+      "commands.skipPomodoro.label",
+      "commands.togglePomodoro.label",
       "commands.toggleTimer.label",
       "description",
       "name",
       "pages.clock.title",
+      "settingsRows.pomodoro.description",
+      "settingsRows.pomodoro.label",
     ]);
     const result = parsePluginLocale(JSON.stringify(locale), "es", manifest());
     expect(result.ok ? [] : result.problems).toEqual([]);

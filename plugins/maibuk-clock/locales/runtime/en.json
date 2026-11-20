@@ -1,6 +1,10 @@
 {
   "tabs": "Clock sections",
   "pomodoro": "Pomodoro",
+  "shortBreak": "Short break",
+  "longBreak": "Long break",
+  "pomodoroEnded": "Your Pomodoro ended. Time for a break.",
+  "breakEnded": "Your break ended. Time for the next Pomodoro.",
   "timer": "Timer",
   "stopwatch": "Stopwatch",
   "alarms": "Alarms",
@@ -17,8 +21,21 @@
   "timerEndedAnnounce": "Timer ended",
   "timerEnded": "Your {length} Timer ended.",
   "timerEndedWhileClosed": "Your Timer ended at {time}.",
+  "pomodoroEndedWhileClosed": "Your Pomodoro ended at {time}.",
+  "breakEndedWhileClosed": "Your break ended at {time}.",
   "notificationsOff": "Notifications are off, so Alerts show only inside Maibuk.",
   "allowNotifications": "Allow notifications",
   "alertsNeedOpen": "Alerts need Maibuk open to fire.",
-  "alertsMayBeLate": "Alerts may be a few minutes late until exact alarms are allowed."
+  "alertsMayBeLate": "Alerts may be a few minutes late until exact alarms are allowed.",
+  "pomodoroOfCycle": "Pomodoro {n} of {total}",
+  "phaseEnded": "{phase} ended",
+  "pomodorosToday": "Pomodoros today: {n}",
+  "skip": "Skip",
+  "resetCycle": "Reset Cycle",
+  "pomodoroMinutes": "Pomodoro (minutes)",
+  "shortBreakMinutes": "Short break (minutes)",
+  "longBreakMinutes": "Long break (minutes)",
+  "longBreakEvery": "Pomodoros before a Long break",
+  "autoStartBreaks": "Start breaks automatically",
+  "autoStartPomodoros": "Start the next Pomodoro automatically"
 }

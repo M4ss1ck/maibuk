@@ -20,9 +20,13 @@ import {
   type HostRequestHandler,
   type PluginClient,
 } from "@/plugin-sdk";
-import { translate } from "./i18n";
+import { translate, type ClockKey } from "./i18n";
+import { createPomodoro, type ClockPomodoro, type PomodoroSnapshot } from "./pomodoro";
+import { remainingCycleMs, todayCount } from "./cycle";
 import {
+  formatClockTime,
   formatDuration,
+  hourCycleFor,
   joinDuration,
   MS_PER_MINUTE,
   remainingMs,
@@ -34,9 +38,14 @@ import { createTimer, type ClockTimer } from "./timer";
 /** The Clock page id, exactly as the manifest declares it. */
 export const CLOCK_PAGE_ID = "clock";
 
+/** The Pomodoro Settings row id, exactly as the manifest declares it. */
+export const POMODORO_SETTINGS_ROW_ID = "pomodoro";
+
 /** The Command-local ids the manifest declares. */
 export const OPEN_CLOCK = "openClock";
 export const TOGGLE_TIMER = "toggleTimer";
+export const TOGGLE_POMODORO = "togglePomodoro";
+export const SKIP_POMODORO = "skipPomodoro";
 
 /** The tabs the page draws, in the glossary's order. */
 const TABS = ["pomodoro", "timer", "stopwatch", "alarms"] as const;
@@ -59,37 +68,100 @@ export type ClockServe = (
   client: Pick<PluginClient, "onHostRequest">,
   options: {
     pages: Record<string, ComponentType>;
+    settingsRows?: Record<string, ComponentType>;
     onHostRequest?: HostRequestHandler;
   }
 ) => void;
 
 /**
- * Wires the client to the Clock page and the Command handlers. The Timer is
- * created here and lives for the Plugin's lifetime, so a Command run and a page
- * mount act on the same one.
+ * The sentence telling the author a phase ended while Maibuk was closed, written
+ * the way the Alert's own body names the time.
+ */
+function missedSentence(language: string, key: ClockKey, endedAt: number): string {
+  const time = formatClockTime(
+    endedAt,
+    new Date(endedAt).getTimezoneOffset(),
+    hourCycleFor(language)
+  );
+  return translate(language, key).replace("{time}", time);
+}
+
+/**
+ * Tells the author, once, that a Timer or a Pomodoro ended while Maibuk was
+ * closed. Only a device that granted the permission and fires a scheduled Alert
+ * while closed (Android) already told them; one that was refused never posted
+ * it, and one that cannot answer or show an Alert leaves them without a toast.
+ */
+async function reportMissed(client: PluginClient, sentences: readonly string[]): Promise<void> {
+  const status = await client.notifications.systemStatus();
+  if (status.permission === "granted" && status.canScheduleWhileClosed) return;
+  await client.notifications.show({ variant: "info", message: sentences.join(" ") });
+}
+
+/**
+ * Wires the client to the Clock page and the Command handlers. The Timer and the
+ * Pomodoro are created here and live for the Plugin's lifetime, so a Command run
+ * and a page mount act on the same ones.
  */
 export function startClock(client: PluginClient, serve: ClockServe): Promise<void> {
   const timer = createTimer(client);
-  // The Alert and the end toast read the app language, so it is read before load
-  // reconciles a Timer that ended while Maibuk was closed; "en" stays the fallback.
-  // The returned promise settles once that startup reconciliation is done.
+  const pomodoro = createPomodoro(client);
+  // The Toggle Button shows whether a phase runs: every change to the Cycle is
+  // mirrored onto it, only when the pressed value moves, and never loudly.
+  let buttonPressed: boolean | null = null;
+  const showPressed = (): void => {
+    const pressed = pomodoro.snapshot().state.status === "running";
+    if (pressed === buttonPressed) return;
+    buttonPressed = pressed;
+    void client.toolbar.setPressed({ button: TOGGLE_POMODORO, pressed }).catch(() => {});
+  };
+  pomodoro.subscribe(showPressed);
+  // The Alerts and the missed-end toast read the app language, so it is read
+  // before load reconciles a Timer or Pomodoro that ended while Maibuk was
+  // closed; "en" stays the fallback. The returned promise settles once that
+  // startup reconciliation, and its one toast, is done.
   const started = (async () => {
+    let language = "en";
     try {
-      const value = await client.language.get();
-      timer.setLanguage(value.language);
+      language = (await client.language.get()).language;
     } catch {
-      // Keep the language the Timer already has.
+      // Keep the language the Timer and the Pomodoro already have.
     }
-    await timer.load();
+    timer.setLanguage(language);
+    pomodoro.setLanguage(language);
+    const missed: string[] = [];
+    const timerEndedAt = await timer.load();
+    if (timerEndedAt !== null) {
+      missed.push(missedSentence(language, "timerEndedWhileClosed", timerEndedAt));
+    }
+    const pomodoroEnd = await pomodoro.load();
+    // The Cycle a restart found may already run, so the button is set from what
+    // load settled on, once.
+    showPressed();
+    if (pomodoroEnd !== null) {
+      const key: ClockKey =
+        pomodoroEnd.phase === "pomodoro" ? "pomodoroEndedWhileClosed" : "breakEndedWhileClosed";
+      missed.push(missedSentence(language, key, pomodoroEnd.endedAt));
+    }
+    if (missed.length === 0) return;
+    try {
+      await reportMissed(client, missed);
+    } catch {
+      // A device that cannot say or show it leaves the author without a toast.
+    }
   })();
-  // The Alert's words follow the app language. Subscribed once here, not per
+  // The Alerts' words follow the app language. Subscribed once here, not per
   // page, so switching tabs never re-subscribes.
   void client
-    .on("language.changed", (payload) => timer.setLanguage(payload.language))
+    .on("language.changed", (payload) => {
+      timer.setLanguage(payload.language);
+      pomodoro.setLanguage(payload.language);
+    })
     .catch(() => {});
   serve(client, {
-    pages: { [CLOCK_PAGE_ID]: createClockPage(client, timer) },
-    onHostRequest: (method, params) => handleHostRequest(client, timer, method, params),
+    pages: { [CLOCK_PAGE_ID]: createClockPage(client, timer, pomodoro) },
+    settingsRows: { [POMODORO_SETTINGS_ROW_ID]: createPomodoroSettings(client, pomodoro) },
+    onHostRequest: (method, params) => handleHostRequest(client, timer, pomodoro, method, params),
   });
   return started;
 }
@@ -98,11 +170,13 @@ export function startClock(client: PluginClient, serve: ClockServe): Promise<voi
 function handleHostRequest(
   client: PluginClient,
   timer: ClockTimer,
+  pomodoro: ClockPomodoro,
   method: string,
   params: unknown
 ): unknown {
   if (method === "health.check") return "pong";
-  if (method === PLUGIN_COMMAND_RUN_REQUEST) return runClockCommand(client, timer, params);
+  if (method === PLUGIN_COMMAND_RUN_REQUEST)
+    return runClockCommand(client, timer, pomodoro, params);
   throw new Error(`No handler for ${method}`);
 }
 
@@ -110,16 +184,20 @@ function handleHostRequest(
  * Answers one Command run. `Open Clock` is the page's navigating Command, so the
  * host normally navigates without a `command.run`; answering it here keeps the
  * page reachable the other way. `Start or pause the Timer` toggles the one
- * Timer the Plugin holds.
+ * Timer the Plugin holds, `Start or pause the Pomodoro` toggles the Cycle, and
+ * `Skip to the next Pomodoro or break` moves it on.
  */
 async function runClockCommand(
   client: PluginClient,
   timer: ClockTimer,
+  pomodoro: ClockPomodoro,
   params: unknown
 ): Promise<null> {
   const { id } = (params ?? {}) as { id?: unknown };
   if (id === OPEN_CLOCK) await client.navigation.openPage({ pageId: CLOCK_PAGE_ID });
   if (id === TOGGLE_TIMER) timer.toggle();
+  if (id === TOGGLE_POMODORO) pomodoro.toggle();
+  if (id === SKIP_POMODORO) pomodoro.skip();
   return null;
 }
 
@@ -310,17 +388,161 @@ function TimerPanel({ client, timer, language, state, now, recent }: TimerPanelP
   );
 }
 
+/** A whole number of minutes, at least one, from a number field's value. */
+function wholeMinutes(value: number): number {
+  return Number.isFinite(value) ? Math.max(1, Math.round(value)) : 1;
+}
+
+interface PomodoroPanelProps {
+  pomodoro: ClockPomodoro;
+  language: string;
+  snapshot: PomodoroSnapshot;
+  now: number;
+}
+
+/**
+ * The Pomodoro tab. It draws the phase and its number in the Cycle, the time
+ * left (or the sentence that names the phase ended), today's count, and the
+ * controls the status calls for. The page owns the Cycle's subscription and its
+ * once-a-second redraw, so this panel holds no timer of its own.
+ */
+function PomodoroPanel({ pomodoro, language, snapshot, now }: PomodoroPanelProps) {
+  const { state, settings, today } = snapshot;
+  const phase = translate(language, state.phase);
+  const total = settings.longBreakEvery;
+  const count = todayCount(today, now, new Date(now).getTimezoneOffset());
+  const remaining = remainingCycleMs(state, settings, now);
+
+  return (
+    <ui.View direction="column" gap="md">
+      <ui.Heading level={3}>{phase}</ui.Heading>
+      <ui.Text>
+        {translate(language, "pomodoroOfCycle")
+          .replace("{n}", String(state.pomodoro))
+          .replace("{total}", String(total))}
+      </ui.Text>
+      <ui.Text size="lg" weight="semibold">
+        {state.status === "ended"
+          ? translate(language, "phaseEnded").replace("{phase}", phase)
+          : formatDuration(remaining)}
+      </ui.Text>
+      <ui.Text tone="muted">
+        {translate(language, "pomodorosToday").replace("{n}", String(count))}
+      </ui.Text>
+
+      <ui.View direction="row" gap="sm" wrap>
+        {state.status === "idle" || state.status === "ended" ? (
+          <ui.Button variant="primary" onPress={() => pomodoro.start()}>
+            {translate(language, "start")}
+          </ui.Button>
+        ) : null}
+        {state.status === "running" ? (
+          <ui.Button variant="primary" onPress={() => pomodoro.pause()}>
+            {translate(language, "pause")}
+          </ui.Button>
+        ) : null}
+        {state.status === "paused" ? (
+          <ui.Button variant="primary" onPress={() => pomodoro.start()}>
+            {translate(language, "resume")}
+          </ui.Button>
+        ) : null}
+        <ui.Button variant="secondary" onPress={() => pomodoro.skip()}>
+          {translate(language, "skip")}
+        </ui.Button>
+        <ui.Button variant="secondary" onPress={() => pomodoro.reset()}>
+          {translate(language, "resetCycle")}
+        </ui.Button>
+      </ui.View>
+    </ui.View>
+  );
+}
+
+/**
+ * The `pomodoro` Settings row's body: the three lengths, the count before a Long
+ * Break, and the two auto-start switches. Each change is written straight to
+ * the Cycle, which persists it under its one key, so the row survives a reload.
+ * Labels come from the runtime catalogs.
+ */
+function createPomodoroSettings(client: PluginClient, pomodoro: ClockPomodoro): ComponentType {
+  function PomodoroSettings() {
+    const language = useLanguage(client);
+    const [settings, setSettings] = useState(() => pomodoro.snapshot().settings);
+
+    useEffect(() => {
+      const sync = () => setSettings(pomodoro.snapshot().settings);
+      sync();
+      return pomodoro.subscribe(sync);
+    }, [pomodoro]);
+
+    return (
+      <ui.View direction="column" gap="md">
+        <ui.NumberField
+          label={translate(language, "pomodoroMinutes")}
+          value={settings.pomodoroMinutes}
+          minValue={1}
+          step={1}
+          onChange={(event) =>
+            pomodoro.setSettings({ pomodoroMinutes: wholeMinutes(event.detail) })
+          }
+        />
+        <ui.NumberField
+          label={translate(language, "shortBreakMinutes")}
+          value={settings.shortBreakMinutes}
+          minValue={1}
+          step={1}
+          onChange={(event) =>
+            pomodoro.setSettings({ shortBreakMinutes: wholeMinutes(event.detail) })
+          }
+        />
+        <ui.NumberField
+          label={translate(language, "longBreakMinutes")}
+          value={settings.longBreakMinutes}
+          minValue={1}
+          step={1}
+          onChange={(event) =>
+            pomodoro.setSettings({ longBreakMinutes: wholeMinutes(event.detail) })
+          }
+        />
+        <ui.NumberField
+          label={translate(language, "longBreakEvery")}
+          value={settings.longBreakEvery}
+          minValue={1}
+          step={1}
+          onChange={(event) => pomodoro.setSettings({ longBreakEvery: wholeMinutes(event.detail) })}
+        />
+        <ui.Switch
+          label={translate(language, "autoStartBreaks")}
+          isSelected={settings.autoStartBreaks}
+          onChange={(event) => pomodoro.setSettings({ autoStartBreaks: event.detail })}
+        />
+        <ui.Switch
+          label={translate(language, "autoStartPomodoros")}
+          isSelected={settings.autoStartPomodoros}
+          onChange={(event) => pomodoro.setSettings({ autoStartPomodoros: event.detail })}
+        />
+      </ui.View>
+    );
+  }
+  return PomodoroSettings;
+}
+
 /**
  * The Clock page: a heading and the four tabs, the Timer's selected first. The
- * page owns the Timer's state, so the polite live region sits below the tabs
- * and speaks the same on every one of them. The Timer tab draws its panel;
- * every other tab says it is coming soon until its own ticket replaces it.
+ * page owns the Timer's and the Cycle's state, so the polite live region sits
+ * below the tabs and speaks the same on every one of them. The Timer and
+ * Pomodoro tabs draw their panels; the other two say they are coming soon until
+ * their own tickets replace them.
  */
-function createClockPage(client: PluginClient, timer: ClockTimer): ComponentType {
+function createClockPage(
+  client: PluginClient,
+  timer: ClockTimer,
+  pomodoro: ClockPomodoro
+): ComponentType {
   function ClockPage() {
     const language = useLanguage(client);
     const [tab, setTab] = useState<ClockTab>(DEFAULT_TAB);
     const [snapshot, setSnapshot] = useState(() => timer.snapshot());
+    const [pomodoroSnapshot, setPomodoroSnapshot] = useState(() => pomodoro.snapshot());
     const [now, setNow] = useState(() => Date.now());
     const items = TABS.map((key) => ({
       value: key,
@@ -336,14 +558,29 @@ function createClockPage(client: PluginClient, timer: ClockTimer): ComponentType
       [timer]
     );
 
-    const running = snapshot.state.status === "running";
-
-    // The redraw exists only while the page is mounted and the Timer runs.
+    // Subscribed, then read once, so a load that settled before the effect ran
+    // still reaches the page.
     useEffect(() => {
-      if (!running) return;
+      const sync = () => {
+        setPomodoroSnapshot(pomodoro.snapshot());
+        setNow(Date.now());
+      };
+      sync();
+      return pomodoro.subscribe(sync);
+    }, [pomodoro]);
+
+    // The redraw exists only while the page is mounted and a phase runs, or
+    // while the Pomodoro tab shows today's count, which turns over at midnight.
+    const ticking =
+      snapshot.state.status === "running" ||
+      pomodoroSnapshot.state.status === "running" ||
+      tab === "pomodoro";
+
+    useEffect(() => {
+      if (!ticking) return;
       const id = setInterval(() => setNow(Date.now()), 1_000);
       return () => clearInterval(id);
-    }, [running]);
+    }, [ticking]);
 
     const state = snapshot.state;
     const announcement = liveRegionText(state, now, language);
@@ -364,6 +601,13 @@ function createClockPage(client: PluginClient, timer: ClockTimer): ComponentType
               state={state}
               now={now}
               recent={snapshot.recent}
+            />
+          ) : tab === "pomodoro" ? (
+            <PomodoroPanel
+              pomodoro={pomodoro}
+              language={language}
+              snapshot={pomodoroSnapshot}
+              now={now}
             />
           ) : (
             <ui.EmptyState

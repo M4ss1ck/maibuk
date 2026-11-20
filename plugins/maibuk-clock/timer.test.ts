@@ -9,6 +9,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createTestHost } from "@/features/plugins/test-kit";
 import { createPluginClient } from "@/plugin-sdk";
+import { DEFAULT_POMODORO_SETTINGS } from "./cycle";
+import type { PomodoroSnapshot } from "./pomodoro";
 import { startClock } from "./runtime";
 import { clockManifest } from "./test-support";
 import { formatClockTime } from "./time";
@@ -54,6 +56,26 @@ async function runAndStopOneMinuteTimer(storage: Map<string, unknown>): Promise<
   } finally {
     await host.stop();
   }
+}
+
+/** Seeds a Pomodoro running to `endsAt`, as storage holds one when Maibuk closes. */
+function seedRunningPomodoro(storage: Map<string, unknown>, endsAt: number): void {
+  const snapshot: PomodoroSnapshot = {
+    state: { phase: "pomodoro", pomodoro: 1, status: "running", endsAt },
+    settings: DEFAULT_POMODORO_SETTINGS,
+    today: { day: 0, count: 0 },
+  };
+  storage.set("pomodoro", snapshot);
+}
+
+/** The stored Pomodoro state, or none. */
+function storedPomodoro(storage: Map<string, unknown>): Record<string, unknown> | undefined {
+  const value = storage.get("pomodoro");
+  if (typeof value !== "object" || value === null) return undefined;
+  const state = (value as { state?: unknown }).state;
+  return typeof state === "object" && state !== null
+    ? (state as Record<string, unknown>)
+    : undefined;
 }
 
 /** Starts the Clock runtime over `storage`, as Maibuk does when a Plugin starts. */
@@ -228,5 +250,64 @@ describe("Clock Timer startup reconciliation", () => {
 
     expect(host.notifications[0]?.variant).toBe("info");
     expect(storedState(storage)?.status).toBe("ended");
+  });
+
+  it("toasts the Pomodoro's sentence when a Pomodoro ended while Maibuk was closed", async () => {
+    const start = Date.now();
+    const storage = new Map<string, unknown>();
+    const endsAt = start + 60_000;
+    seedRunningPomodoro(storage, endsAt);
+
+    jumpTo(start + 5 * 60_000);
+    // Spanish, so the toast proves the language was read before load reconciled.
+    const host = await startHost(storage, { language: "es" });
+    await vi.waitFor(() => expect(host.notifications).toHaveLength(1));
+
+    const time = formatClockTime(endsAt, new Date(endsAt).getTimezoneOffset(), 24);
+    expect(host.notifications).toEqual([
+      { variant: "info", message: `Tu Pomodoro terminó a las ${time}.` },
+    ]);
+    expect(storedPomodoro(storage)?.status).toBe("ended");
+  });
+
+  it("folds a Timer and a Pomodoro that both ended into one toast, the Timer first", async () => {
+    const start = Date.now();
+    const storage = new Map<string, unknown>();
+    await runAndStopOneMinuteTimer(storage);
+    const timerEndsAt = storedState(storage)?.endsAt as number;
+    const pomodoroEndsAt = timerEndsAt + 60_000;
+    seedRunningPomodoro(storage, pomodoroEndsAt);
+
+    jumpTo(start + 10 * 60_000);
+    const host = await startHost(storage, { language: "es" });
+    await vi.waitFor(() => expect(host.notifications).toHaveLength(1));
+
+    const timerTime = formatClockTime(timerEndsAt, new Date(timerEndsAt).getTimezoneOffset(), 24);
+    const pomodoroTime = formatClockTime(
+      pomodoroEndsAt,
+      new Date(pomodoroEndsAt).getTimezoneOffset(),
+      24
+    );
+    expect(host.notifications).toEqual([
+      {
+        variant: "info",
+        message: `Tu temporizador terminó a las ${timerTime}. Tu Pomodoro terminó a las ${pomodoroTime}.`,
+      },
+    ]);
+    expect(storedPomodoro(storage)?.status).toBe("ended");
+  });
+
+  it("keeps quiet for both when the device alerts while closed, and still stores both ends", async () => {
+    const start = Date.now();
+    const storage = new Map<string, unknown>();
+    await runAndStopOneMinuteTimer(storage);
+    seedRunningPomodoro(storage, start + 30_000);
+
+    jumpTo(start + 5 * 60_000);
+    const host = await startHost(storage, { canScheduleWhileClosed: true, permission: "granted" });
+    await vi.waitFor(() => expect(storedState(storage)?.status).toBe("ended"));
+    await vi.waitFor(() => expect(storedPomodoro(storage)?.status).toBe("ended"));
+
+    expect(host.notifications).toEqual([]);
   });
 });
