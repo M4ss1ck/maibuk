@@ -63,13 +63,19 @@ export type ClockServe = (
  */
 export function startClock(client: PluginClient, serve: ClockServe): void {
   const timer = createTimer(client);
-  void timer.load();
+  // The Alert and the end toast read the app language, so it is read before load
+  // reconciles a Timer that ended while Maibuk was closed; "en" stays the fallback.
+  void (async () => {
+    try {
+      const value = await client.language.get();
+      timer.setLanguage(value.language);
+    } catch {
+      // Keep the language the Timer already has.
+    }
+    await timer.load();
+  })();
   // The Alert's words follow the app language. Subscribed once here, not per
   // page, so switching tabs never re-subscribes.
-  void client.language
-    .get()
-    .then((value) => timer.setLanguage(value.language))
-    .catch(() => {});
   void client
     .on("language.changed", (payload) => timer.setLanguage(payload.language))
     .catch(() => {});
@@ -223,13 +229,12 @@ function TimerPanel({ client, timer, language }: TimerPanelProps) {
       <ui.Status tone="info">{liveRegionText(state, now, language)}</ui.Status>
 
       {status !== null && status.permission !== "granted" ? (
-        <ui.Status tone="warning">
-          <ui.View direction="row" gap="sm" align="center">
-            <ui.Button variant="secondary" onPress={allowNotifications}>
-              {translate(language, "allowNotifications")}
-            </ui.Button>
-          </ui.View>
-        </ui.Status>
+        <ui.View direction="row" gap="sm" align="center">
+          <ui.Status tone="warning">{translate(language, "notificationsOff")}</ui.Status>
+          <ui.Button variant="secondary" onPress={allowNotifications}>
+            {translate(language, "allowNotifications")}
+          </ui.Button>
+        </ui.View>
       ) : null}
       {status !== null && !status.canScheduleWhileClosed ? (
         <ui.Text tone="muted">{translate(language, "alertsNeedOpen")}</ui.Text>

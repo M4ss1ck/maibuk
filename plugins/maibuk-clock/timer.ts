@@ -14,7 +14,9 @@ import type { PluginClient } from "@/plugin-sdk";
 import { translate } from "./i18n";
 import {
   addRecentLength,
+  formatClockTime,
   formatDuration,
+  hourCycleFor,
   pauseTimer,
   reconcileTimer,
   resetTimer,
@@ -109,8 +111,12 @@ export function createTimer(client: PluginClient): ClockTimer {
   let timeout: ReturnType<typeof setTimeout> | null = null;
   const listeners = new Set<() => void>();
 
-  function persist(): void {
-    void client.storage.set({ key: STORAGE_KEY, value: snapshot }).catch(() => {});
+  async function persist(): Promise<void> {
+    try {
+      await client.storage.set({ key: STORAGE_KEY, value: snapshot });
+    } catch {
+      // A store that refuses still leaves the Timer usable in memory.
+    }
   }
 
   function notify(): void {
@@ -118,7 +124,7 @@ export function createTimer(client: PluginClient): ClockTimer {
   }
 
   function changed(): void {
-    persist();
+    void persist();
     notify();
   }
 
@@ -161,6 +167,21 @@ export function createTimer(client: PluginClient): ClockTimer {
     void client.notifications.cancel({ id: TIMER_NOTIFICATION_ID }).catch(() => {});
   }
 
+  /**
+   * Tells the author, once, that a Timer ended while Maibuk was closed. A device
+   * that fires a scheduled Alert while closed (Android) already told them, and a
+   * device that cannot answer or show one leaves them without a toast.
+   */
+  async function reportEndedWhileClosed(endedAt: number): Promise<void> {
+    const status = await client.notifications.systemStatus();
+    if (status.canScheduleWhileClosed) return;
+    const time = formatClockTime(endedAt, new Date().getTimezoneOffset(), hourCycleFor(language));
+    await client.notifications.show({
+      variant: "info",
+      message: translate(language, "timerEndedWhileClosed").replace("{time}", time),
+    });
+  }
+
   return {
     async load() {
       if (loaded) return;
@@ -173,6 +194,24 @@ export function createTimer(client: PluginClient): ClockTimer {
       }
       if (mutated) return;
       snapshot = parseStored(stored);
+      const result = reconcileTimer(snapshot.state, Date.now());
+      if (result.endedAt !== null) {
+        snapshot = { ...snapshot, state: result.state };
+        await persist();
+        notify();
+        try {
+          await reportEndedWhileClosed(result.endedAt);
+        } catch {
+          // A device that cannot say or show it leaves the author without a toast.
+        }
+        return;
+      }
+      if (snapshot.state.status === "running") {
+        // Desktop and the web forget a scheduled Alert when Maibuk closes, so it
+        // is sent again, and the end deadline is held again.
+        scheduleAlert(snapshot.state.endsAt);
+        holdEnd(snapshot.state.endsAt);
+      }
       notify();
     },
     snapshot() {
