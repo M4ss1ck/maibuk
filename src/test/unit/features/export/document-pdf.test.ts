@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { vi, describe, expect, it, beforeEach } from "vitest";
 
 const { mockToBlob, mockPdf } = vi.hoisted(() => {

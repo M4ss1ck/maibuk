@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // The SDK's Frame handoff (#454, D1, decision: the broker MessagePort). The
 // host posts one reserved envelope carrying the Frame's port; the SDK settles
 // it before RPC dispatch and exposes it through `client.onFrame`. These tests

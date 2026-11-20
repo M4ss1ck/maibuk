@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The Plugin management store's state model (#443, unit U2): the known-Plugin
  * list that keeps a row after its files are gone, the Built-in availability, the

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { Editor } from "@tiptap/core";
 import Placeholder from "@tiptap/extension-placeholder";
 import { undo, undoDepth } from "@tiptap/pm/history";

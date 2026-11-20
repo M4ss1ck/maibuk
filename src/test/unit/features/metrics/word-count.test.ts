@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import { countWords } from "@/features/metrics/word-count";
 import { normalizeChapterContent } from "@/features/chapters/write";

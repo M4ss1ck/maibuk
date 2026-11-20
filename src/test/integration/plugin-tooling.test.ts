@@ -1,4 +1,3 @@
-// @vitest-environment node
 /**
  * The slow Plugin-tooling lane (issue #455, unit U3). It runs the real
  * toolchain end to end over the template copied into a path with spaces: setup

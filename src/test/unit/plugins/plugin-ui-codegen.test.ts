@@ -1,4 +1,3 @@
-// @vitest-environment node
 //
 // The generated SDK component declarations (`src/plugin-sdk/ui.generated.ts`)
 // must match the UI kit table. This gate regenerates in memory and compares, so

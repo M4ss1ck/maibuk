@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * `manage_chapter` through the Plugin test kit: what the Agent sees and what the
  * Library holds afterwards. The tool changes one Chapter's title, Chapter Type,

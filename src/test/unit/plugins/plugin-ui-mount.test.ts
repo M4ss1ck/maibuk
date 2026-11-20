@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createPluginBroker } from "@/features/plugins/broker";
 import { openPluginUiMount } from "@/features/plugins/remote-ui";

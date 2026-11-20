@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The Reader Frame's Page view (#653) in jsdom: the real `assets/ui/reader.js`
  * loaded against the real `assets/ui/reader.html` markup, a stand-in

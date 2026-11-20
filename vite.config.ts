@@ -190,17 +190,36 @@ export default defineConfig(() => ({
     __APP_VERSION__: JSON.stringify(`v${version}`),
   },
   test: {
-    environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
     // Node 26's own `localStorage` global is undefined without a storage file,
     // and it hides jsdom's.
     execArgv: ["--no-experimental-webstorage"],
     alias: [],
-    include: [
-      "src/test/**/*.test.ts",
-      "src/test/**/*.test.tsx",
-      "plugins/**/*.test.ts",
-      "plugins/**/*.test.tsx",
+    // A `.tsx` test renders, so it gets jsdom. A `.test.ts` runs in Node,
+    // which skips the per-file jsdom start; one that needs the DOM opts in
+    // with a `// @vitest-environment jsdom` docblock (CODING_STANDARDS.md
+    // "Testing"). Each project sets its own `include`: `extends` would
+    // concatenate a root one.
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "dom",
+          environment: "jsdom",
+          include: ["src/test/**/*.test.tsx", "plugins/**/*.test.tsx"],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "node",
+          environment: "node",
+          include: ["src/test/**/*.test.ts", "plugins/**/*.test.ts"],
+          // Benchmarks run once, in `dom`, where they ran before the split;
+          // a bench that wants Node keeps its own docblock.
+          benchmark: { include: [] },
+        },
+      },
     ],
     // One budget for every test; see src/test/time-budget.ts.
     testTimeout: TEST_TIMEOUT_MS,

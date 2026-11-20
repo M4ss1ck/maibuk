@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { useShortcutSettingsStore, SHORTCUT_STORAGE_KEY } from "@/features/settings/shortcut-store";

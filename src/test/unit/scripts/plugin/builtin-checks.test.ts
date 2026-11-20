@@ -1,4 +1,3 @@
-// @vitest-environment node
 // Every Built-in Plugin passes `plugin:check`'s static steps that CI does not
 // otherwise run. Lint is `biome check`, formatter included, while the repo's
 // `pnpm lint` is `biome lint` only; the import boundary refuses host modules a

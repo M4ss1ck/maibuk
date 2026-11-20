@@ -1,4 +1,3 @@
-// @vitest-environment node
 // The layout a packaged Plugin must have (issue #455). The same rules run on a
 // built folder and on its `.zip`: the manifest sits at the root, every file the
 // manifest declares is present, nothing a package must never ship is inside

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { Editor } from "@tiptap/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";

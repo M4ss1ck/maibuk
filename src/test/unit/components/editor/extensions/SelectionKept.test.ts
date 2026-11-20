@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { Editor } from "@tiptap/core";
 import { undoDepth } from "@tiptap/pm/history";
 import { afterEach, describe, expect, it, vi } from "vitest";

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { Editor as TiptapEditor } from "@tiptap/core";
 import { Table } from "@tiptap/extension-table";
 import { TableRow } from "@tiptap/extension-table-row";

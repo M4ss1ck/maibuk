@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { afterEach, describe, it, expect, vi } from "vitest";
 
 // A launch with a saved Sync Account: the store is first imported with its

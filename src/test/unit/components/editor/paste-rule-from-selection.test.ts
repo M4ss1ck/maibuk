@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import { inferPasteRuleFromSelection } from "@/components/editor/paste-rule-from-selection";
 import { cleanPastedHtml } from "@/components/editor/paste-cleanup";

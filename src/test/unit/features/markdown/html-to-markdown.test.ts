@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import { editorHtmlToMarkdown } from "@/features/markdown/html-to-markdown";
 import { markdownToEditorHtml } from "@/features/markdown/markdown-to-html";

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // src/test/unit/components/editor/HeadingId.test.ts
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Editor } from "@tiptap/core";

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The Plugin Endpoint address a Plugin can read and watch (#587): the one
  * derivation both the host handler and the lifecycle emitter use, and the

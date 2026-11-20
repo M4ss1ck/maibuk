@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The Activity log through the Plugin test kit: one entry per tool call the
  * server answers, with none of the author's text, capped at the newest 500 and

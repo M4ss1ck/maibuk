@@ -1,4 +1,3 @@
-// @vitest-environment node
 /**
  * The Cuba Template build script (#755): the pure steps that turn Natural
  * Earth's admin-1 provinces into the generated module. Every test feeds

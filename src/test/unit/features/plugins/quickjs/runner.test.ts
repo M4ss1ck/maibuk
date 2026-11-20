@@ -1,4 +1,3 @@
-// @vitest-environment node
 /**
  * The QuickJS Plugin runner (#516, ADR 0019): the runner suite. It runs real
  * Plugin bytes (the harness fixture, built from the real SDK) in a memory-capped

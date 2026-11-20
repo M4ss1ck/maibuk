@@ -1,4 +1,3 @@
-// @vitest-environment node
 /**
  * The committed conformance results must stay readable after the report stopped
  * writing `support` and `followUp` (#517): the file on disk keeps those legacy

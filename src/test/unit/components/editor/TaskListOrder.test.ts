@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { Editor } from "@tiptap/core";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { undo, redo, undoDepth } from "@tiptap/pm/history";

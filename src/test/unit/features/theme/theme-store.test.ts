@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from "vitest";
 import { useThemeStore, applyTheme, getCycledTheme } from "@/features/theme/store";
 

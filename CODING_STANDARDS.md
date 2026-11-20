@@ -176,10 +176,11 @@ Any code path that commits a theme change to the document — the `<html>` mode 
 
 ### Architecture
 
-Testing is configured with **Vitest + Testing Library + jsdom**, following a **phased coverage expansion** pattern (inspired by the kaont project).
+Testing is configured with **Vitest + Testing Library**, on jsdom or plain Node per file (below), following a **phased coverage expansion** pattern (inspired by the kaont project).
 
 - Test files: `src/test/**/*.test.ts` and `src/test/**/*.test.tsx`
-- Test setup: `src/test/setup.ts`
+- Environments: Vitest runs two projects (`vite.config.ts`). A `.test.tsx` file gets jsdom (`dom`). A `.test.ts` file runs in plain Node (`node`), which skips the jsdom start each file pays. A `.test.ts` that needs the DOM (`document`, `window`, `localStorage`, `DOMParser`, TipTap, Testing Library) opts in with `// @vitest-environment jsdom` on its first line. Default to Node and opt in only when the file fails without a DOM. The docblock beats the project, so a `.test.tsx` that must not get jsdom says `// @vitest-environment node`. Benchmarks run in `dom` only. Projects split by extension, not by environment: `--project dom` runs the `.test.tsx` files, `--project node` every `.test.ts`, its jsdom opt-ins included.
+- Test setup: `src/test/setup.ts` (its DOM half, with Testing Library, jest-dom, and the polyfills, runs only under jsdom)
 - Support helpers: `src/test/support/` (fixtures, factories)
 - Commands:
   - `pnpm test` (watch mode — TDD loop)

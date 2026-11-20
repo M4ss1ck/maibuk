@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Reset settings (#442, plan decision 7): the orchestrator clears the settings
  * store, Custom Shortcuts and custom Voice Commands, toolbar config, every

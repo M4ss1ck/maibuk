@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * `edit_chapter` through the Plugin test kit: what the Agent sees and what the
  * Library holds afterwards. Find-and-replace runs on the stored HTML as a plain

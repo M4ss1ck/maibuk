@@ -1,4 +1,3 @@
-// @vitest-environment node
 //
 // Plugin CSS scoping (#439): a Plugin's stylesheet reaches its own host-rendered
 // surface and nothing else. The scoper prefixes every selector with the

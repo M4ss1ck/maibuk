@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The Frame document and load message (ADR 0021, D4, #454 unit 2): the exact
  * CSP, the visible named iframe that can only run scripts, the MIME mapping,

@@ -1,4 +1,3 @@
-// @vitest-environment node
 //
 // The coverage guard `pnpm test:e2e` runs before Playwright, run here so CI
 // (which runs Vitest and never Playwright) fails when a route, registry

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PluginManifest, PluginPermissionId } from "@/features/plugins/types";
 import { parsePluginManifest } from "@/features/plugins/manifest-validate";

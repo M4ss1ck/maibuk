@@ -1,4 +1,3 @@
-// @vitest-environment node
 import { SourceMapGenerator } from "source-map-js";
 import { describe, expect, it } from "vitest";
 import { attributeKeyPresses, resolveLongFrameSources } from "@/test/support/frames/attribution";

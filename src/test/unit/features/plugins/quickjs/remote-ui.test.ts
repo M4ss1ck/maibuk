@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Remote UI under the QuickJS runner (#516, ADR 0019/0021): a real Plugin's page
  * and Settings row body, served from inside the VM over the bridged mount ports,

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { inflateSync } from "node:zlib";
 import { Document, Page, pdf, Text } from "@react-pdf/renderer";
 import { createElement } from "react";

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The test kit drives the same tracer fixture the E2E lane seeds into OPFS
  * (issue #434). The fixture is loaded as a real ES module from its file, with

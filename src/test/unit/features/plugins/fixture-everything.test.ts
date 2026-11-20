@@ -1,4 +1,3 @@
-// @vitest-environment node
 /**
  * The fixture-everything Plugin source (issue #446): every contribution point
  * and every Plugin Permission in one manifest, an English-only Command with a

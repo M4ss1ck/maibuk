@@ -1,8 +1,6 @@
-// @vitest-environment node
 import { existsSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
-import { getConfig } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import type { TestModule } from "vitest/node";
 import TimeBudgetReporter from "@/test/support/time-budget-reporter";
@@ -14,12 +12,7 @@ import {
   type TimedTest,
   testsOverBudget,
 } from "@/test/support/time-budget-report";
-import {
-  ASYNC_UTIL_TIMEOUT_MS,
-  allowedTimeouts,
-  TEST_TIMEOUT_MS,
-  TIMEOUT_EXCEPTIONS,
-} from "@/test/time-budget";
+import { allowedTimeouts, TEST_TIMEOUT_MS, TIMEOUT_EXCEPTIONS } from "@/test/time-budget";
 
 const root = resolve(__dirname, "../../..");
 
@@ -39,10 +32,6 @@ const MARKER = "time-budget:";
 describe("test time budget", () => {
   it("runs every test on the suite's one timeout", ({ task }) => {
     expect(task.timeout).toBe(TEST_TIMEOUT_MS);
-  });
-
-  it("gives waitFor and findBy the suite's wait limit", () => {
-    expect(getConfig().asyncUtilTimeout).toBe(ASYNC_UTIL_TIMEOUT_MS);
   });
 
   // The setup file's guard fails a test with its own timeout before it runs,

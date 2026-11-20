@@ -1,4 +1,3 @@
-// @vitest-environment node
 /**
  * Echoes on the Android QuickJS engine (#517): the Built-in entry, bundled the
  * way a shipped Plugin is, evaluates in the memory-capped runner with the Android

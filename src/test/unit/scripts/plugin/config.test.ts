@@ -1,4 +1,3 @@
-// @vitest-environment node
 // The generated configuration for an external Plugin (issue #455): the aliases
 // that resolve the SDK, the test kit, and React to Maibuk's copy, the test-only
 // fallback resolver, and the two TypeScript configs the typecheck step writes.

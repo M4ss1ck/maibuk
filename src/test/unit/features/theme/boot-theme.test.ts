@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BOOT_THEME_KEY, writeBootTheme } from "@/features/theme/boot-theme";
 

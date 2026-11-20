@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The fast index extractor must yield exactly what `htmlToPlainText()` does
  * (#639): the same block boundaries, the same text, the same whitespace and

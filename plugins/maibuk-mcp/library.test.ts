@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import { PluginApiError } from "@/plugin-sdk";
 import { excerptOf, libraryCall, readWindow } from "./library";

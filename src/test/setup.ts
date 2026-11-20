@@ -1,18 +1,10 @@
-import "@testing-library/jest-dom/vitest";
+// The jest-dom matcher types; the matchers load below, only under a DOM.
+import type {} from "@testing-library/jest-dom/vitest";
 import { Blob as NodeBlob } from "node:buffer";
 import { createRequire } from "node:module";
 import { relative } from "node:path";
-import { cleanup, configure } from "@testing-library/react";
 import { afterEach, beforeEach, expect, vi } from "vitest";
-// vitest-axe exports toHaveNoViolations via export type* in the .d.ts
-// barrel but as a value in the dist .js; import from the dist path
-// to satisfy both runtime and type-check.
-import { toHaveNoViolations } from "vitest-axe/dist/matchers";
 import { ASYNC_UTIL_TIMEOUT_MS, allowedTimeouts, TEST_TIMEOUT_MS } from "@/test/time-budget";
-
-expect.extend({ toHaveNoViolations });
-
-configure({ asyncUtilTimeout: ASYNC_UTIL_TIMEOUT_MS });
 
 // `vi.waitFor` and `vi.waitUntil` give up after 1 s by default, a limit a busy
 // CI runner crosses while the condition is still on its way. They get the same
@@ -36,9 +28,19 @@ beforeEach(({ task }) => {
   }
 });
 
-// This setup is for the jsdom suites. A `// @vitest-environment node` suite
-// (the browser-free E2E coverage guard) has no DOM, so skip the polyfills.
+// The rest is for jsdom suites. A Node suite (every `.test.ts` without a
+// `// @vitest-environment jsdom` docblock) has no DOM, so it skips the
+// polyfills and does not pay to import Testing Library, jest-dom, or axe.
 if (typeof window !== "undefined") {
+  await import("@testing-library/jest-dom/vitest");
+  const { cleanup, configure } = await import("@testing-library/react");
+  // vitest-axe exports toHaveNoViolations via export type* in the .d.ts
+  // barrel but as a value in the dist .js; import from the dist path
+  // to satisfy both runtime and type-check.
+  const { toHaveNoViolations } = await import("vitest-axe/dist/matchers");
+  expect.extend({ toHaveNoViolations });
+  configure({ asyncUtilTimeout: ASYNC_UTIL_TIMEOUT_MS });
+
   // Polyfill getClientRects for TipTap/ProseMirror in jsdom
   // ProseMirror calls this during scrollToSelection / dispatch, which crashes in jsdom
   if (typeof Element.prototype.getClientRects !== "function") {

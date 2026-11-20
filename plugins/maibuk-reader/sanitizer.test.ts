@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Reader's book sanitizer (#653): the classic script the Frame loads before
  * `reader.js`, driven here with the real DOMPurify build and an XML document the

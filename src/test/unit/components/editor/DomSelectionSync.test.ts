@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { Editor, Extension } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { afterEach, describe, expect, it } from "vitest";

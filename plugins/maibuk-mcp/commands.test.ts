@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The MCP Server's page Commands (#594, part 1): opening the page and copying
  * each Agent snippet, run through the broker the way the Command Palette runs

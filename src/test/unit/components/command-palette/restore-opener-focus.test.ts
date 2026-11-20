@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
 import { restoreOpenerFocus } from "@/components/command-palette/CommandPalette";
 import { useCommandPaletteStore } from "@/features/command-palette/store";

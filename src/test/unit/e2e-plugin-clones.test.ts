@@ -1,4 +1,3 @@
-// @vitest-environment node
 //
 // The pure half of the E2E clone seeding (`e2e/support/storage.ts`, issue
 // #448): `clonePluginId` names the N-th copy and `clonePluginManifest` rewrites

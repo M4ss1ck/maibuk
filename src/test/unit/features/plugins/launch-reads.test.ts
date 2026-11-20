@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * One launch's folder reads (issue #653, gate 1): the Built-in sync reads each
  * Built-in folder to judge it, and the scan reads the enabled folders again to

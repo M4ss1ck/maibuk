@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { planPluginModules } from "@/features/plugins/modules";
 import { computePluginModulePlan } from "@/features/plugins/module-plan";

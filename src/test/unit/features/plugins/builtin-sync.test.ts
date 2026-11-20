@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The launch sync of the shipped Built-in Plugins (#444): before the
  * management store first classifies Plugins, the app copies each Built-in whose

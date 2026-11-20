@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The MCP Server Agent eval's checks and budgets, proven without a paid run
  * (#595). A scripted Agent drives the real MCP Server Plugin through the eval's

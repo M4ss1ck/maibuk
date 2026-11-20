@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // The #401 long Chapter is one shared document: the unit bench, the Plugin
 // editor tests, and the frame-rate seed all build it from
 // `src/test/support/long-chapter.ts`, and this gate pins its shape and its

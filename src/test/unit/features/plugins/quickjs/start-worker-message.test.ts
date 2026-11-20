@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The start-worker message is the only path the QuickJS engine's bytes take
  * from the host into the sandbox frame. The frame is an opaque-origin

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { REVEAL_VIRTUAL_ROW_FRAMES, revealVirtualRow } from "@/lib/reveal-virtual-row";
 

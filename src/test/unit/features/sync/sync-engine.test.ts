@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 const mockGetDatabase = vi.hoisted(() => vi.fn());

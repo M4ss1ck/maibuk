@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Echoes' editor controller (#451, unit 3): Toggle echo highlights, Next echo,
  * and Previous echo, driven over a fake Plugin client shaped like the SDK. The

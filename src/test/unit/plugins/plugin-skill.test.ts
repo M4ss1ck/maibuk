@@ -1,4 +1,3 @@
-// @vitest-environment node
 //
 // Holds the Plugin authoring skill (skills/maibuk-plugin/SKILL.md) to the files,
 // scripts, setup commands, and SDK entries it names, so a renamed path, a

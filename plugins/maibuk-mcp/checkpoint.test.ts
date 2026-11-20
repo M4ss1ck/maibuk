@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The pre-write Checkpoint through the Plugin test kit: before a Connection's
  * first write to a Book, the Plugin takes a Checkpoint through the normal

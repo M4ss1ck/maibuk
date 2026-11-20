@@ -1,4 +1,3 @@
-// @vitest-environment node
 //
 // The coverage gate: every public component in the UI kit table has a test
 // rendered from a real remote tree (#438). An interactive row must have a

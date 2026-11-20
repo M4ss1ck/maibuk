@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The Plugin management store's actions (#443, unit U3): adding a Plugin from
  * a `.zip` or a picked folder, removing one with or without its retained data,

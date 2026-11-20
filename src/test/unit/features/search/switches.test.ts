@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest";
 import { defaultWholeLinePhrases } from "@/features/dictation/voice-commands";
 import { SEARCH_SWITCHES_STORAGE_KEY, useSearchSwitchesStore } from "@/features/search/switches";

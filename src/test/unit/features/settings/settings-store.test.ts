@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { DEFAULT_METRICS_SETTINGS, PASTE_CLEANUP_PRESETS } from "@/features/settings/types";
 import {
