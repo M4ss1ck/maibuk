@@ -219,13 +219,29 @@ export function ownTeardown(stopSync) {
   };
 }
 
+// Node 26 turns Web Storage on: without --localstorage-file its `localStorage`
+// getter returns undefined instead of throwing, and zustand persist then crashes
+// in global setup (#881). Same flag as the Vitest workers in vite.config.ts.
+export function playwrightEnv(base, extra) {
+  const nodeOptions = extra.NODE_OPTIONS ?? base.NODE_OPTIONS;
+  return {
+    ...base,
+    ...extra,
+    NODE_OPTIONS: nodeOptions
+      ? nodeOptions.includes("--no-experimental-webstorage")
+        ? nodeOptions
+        : `${nodeOptions} --no-experimental-webstorage`
+      : "--no-experimental-webstorage",
+  };
+}
+
 export function runPlaywright({ root, label, config, args, env, teardown }) {
   console.log(`\n[e2e] ${label}`);
   return new Promise((resolve) => {
     const child = spawn("pnpm", ["exec", "playwright", "test", "--config", config, ...args], {
       cwd: root,
       stdio: "inherit",
-      env: { ...process.env, ...env },
+      env: playwrightEnv(process.env, env),
     });
     teardown.track(child);
     child.on("exit", (status, signal) => resolve(status ?? (signal ? 130 : 1)));

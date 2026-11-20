@@ -37,6 +37,12 @@ export interface Teardown {
 }
 
 export function ownTeardown(stopSync: () => void): Teardown;
+
+export function playwrightEnv(
+  base: Record<string, string | undefined>,
+  extra: Record<string, string | undefined>
+): Record<string, string | undefined>;
+
 export function runPlaywright(options: {
   root: string;
   label: string;
