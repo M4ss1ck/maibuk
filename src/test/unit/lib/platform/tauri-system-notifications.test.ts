@@ -29,6 +29,27 @@ describe("tauriSystemNotifications (notification plugin)", () => {
     await expect(tauriSystemNotifications.permission()).resolves.toBe("default");
   });
 
+  it("reports denied once the OS refused, through the plugin's Notification shim", async () => {
+    vi.stubGlobal("window", { Notification: { permission: "denied" } });
+    try {
+      await expect(tauriSystemNotifications.permission()).resolves.toBe("denied");
+      expect(plugin.isPermissionGranted).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("gives two tags whose hashes collide different ids, so one never replaces the other", async () => {
+    // FNV-1a maps both of these to 991592123; a Plugin could pick such an id on purpose.
+    await tauriSystemNotifications.show({ tag: "a/229698", title: "One", body: "First" });
+    await tauriSystemNotifications.show({ tag: "a/801416", title: "Two", body: "Second" });
+    await tauriSystemNotifications.cancel("a/801416");
+
+    const [first, second] = plugin.sendNotification.mock.calls;
+    expect(first[0].id).not.toBe(second[0].id);
+    expect(plugin.cancel).toHaveBeenCalledWith([second[0].id]);
+  });
+
   it("passes the OS's request answer through", async () => {
     plugin.requestPermission.mockResolvedValue("granted");
 
