@@ -6,7 +6,7 @@
  */
 
 import { readFileSync } from "node:fs";
-import { useEffect } from "react";
+import { type ReactElement, useEffect } from "react";
 import { Blob as NodeBlob } from "node:buffer";
 import { join } from "node:path";
 import { render, screen, waitFor, within } from "@testing-library/react";
@@ -95,6 +95,9 @@ import { linePath, roughen, seedFor, shapeOutline } from "./geometry";
 import { MAP_STYLES } from "./styles";
 import { templateElements } from "./templates";
 
+// Every test sets up user-event with `delay: null`: the default waits a
+// macrotask between key presses, which was 40% of a keyboard test's time and
+// none of its coverage (#850). Events still dispatch in order.
 type User = ReturnType<typeof userEvent.setup>;
 
 /**
@@ -106,6 +109,13 @@ type User = ReturnType<typeof userEvent.setup>;
  * intrinsics are put back for this file, as
  * `src/test/support/bundle-plugin-fixture.ts` does for its bundle.
  */
+// A focused button opens its Tooltip, and Floating UI then reads computed
+// style up the whole ancestor chain: in jsdom that was 38% of a keyboard
+// test's time (#850). No test here asserts a Tooltip, so it renders its child.
+vi.mock("@/components/ui/Tooltip", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/components/ui/Tooltip")>()),
+  Tooltip: ({ children }: { children: ReactElement }) => children,
+}));
 const hostBytes = new TextEncoder().encode("");
 const globalsWithBytes = globalThis as {
   Uint8Array: Uint8ArrayConstructor;
@@ -873,7 +883,7 @@ describe("Maps page", () => {
     try {
       const page = await host.renderPage(MAPS_PAGE_ID);
       expect(await screen.findByText(en["list.emptyTitle"])).toBeInTheDocument();
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
 
       const create = screen.getByRole("button", { name: en["list.new"] });
       await tabTo(user, create);
@@ -911,7 +921,7 @@ describe("Maps page", () => {
     try {
       const page = await host.renderPage(MAPS_PAGE_ID);
       expect(await screen.findByText(en["list.emptyTitle"])).toBeInTheDocument();
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
 
       const create = screen.getByRole("button", { name: en["list.new"] });
       await tabTo(user, create);
@@ -966,7 +976,7 @@ describe("Maps page", () => {
     try {
       const page = await host.renderPage(MAPS_PAGE_ID);
       expect(await screen.findByText(en["list.emptyTitle"])).toBeInTheDocument();
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
 
       const create = screen.getByRole("button", { name: en["list.new"] });
       await tabTo(user, create);
@@ -992,7 +1002,7 @@ describe("Maps page", () => {
     const host = hostFor(new Map<string, unknown>(), "es");
     try {
       const page = await host.renderPage(MAPS_PAGE_ID);
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       const create = await screen.findByRole("button", { name: es["list.new"] });
       await tabTo(user, create);
       await user.keyboard("{Enter}");
@@ -1025,7 +1035,7 @@ describe("Maps page", () => {
     const host = hostFor(storage);
     try {
       const page = await host.renderPage(MAPS_PAGE_ID);
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       const create = await screen.findByRole("button", { name: en["list.new"] });
       await tabTo(user, create);
       await user.keyboard("{Enter}");
@@ -1051,7 +1061,7 @@ describe("Maps page", () => {
     const host = hostFor(storage);
     try {
       const page = await host.renderPage(MAPS_PAGE_ID);
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       const rename = await screen.findByRole("button", { name: `${en["list.rename"]} Isles` });
       await tabTo(user, rename);
       await user.keyboard("{Enter}");
@@ -1083,7 +1093,7 @@ describe("Maps page", () => {
     const host = hostFor(storage);
     try {
       const page = await host.renderPage(MAPS_PAGE_ID);
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       const remove = await screen.findByRole("button", { name: `${en["list.delete"]} Coast` });
       await tabTo(user, remove);
       await user.keyboard("{Enter}");
@@ -1115,7 +1125,7 @@ describe("Maps page", () => {
     try {
       const page = await host.renderPage(MAPS_PAGE_ID);
       await waitFor(() => expect(names()).toEqual(["Coast", "Isles", "Loose"]));
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await pickOption(user, en["list.filter"], "Tides of Ash");
       await waitFor(() => expect(names()).toEqual(["Coast", "Isles"]));
       await pickOption(user, en["list.filter"], "The Salt Road");
@@ -1484,7 +1494,7 @@ describe("Map editor page", () => {
     const { host, runtime } = editorHostFor(storage);
     try {
       const mapsPage = await host.renderPage(MAPS_PAGE_ID);
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       const open = await screen.findByRole("button", { name: /^Coast\b/ });
       await tabTo(user, open, 120);
       await user.keyboard("{Enter}");
@@ -1519,7 +1529,7 @@ describe("Map editor page", () => {
     try {
       const page = await host.renderPage(MAP_PAGE_ID);
       expect(await screen.findByText(en["map.emptyTitle"])).toBeInTheDocument();
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       const back = screen.getByRole("button", { name: en["map.backToMaps"] });
       await tabTo(user, back, 120);
       await user.keyboard("{Enter}");
@@ -1547,7 +1557,7 @@ describe("Map editor page", () => {
     registerMapCommands();
     const keys = render(<CommandKeys host={host} />);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await selectRow(user, "Line one");
       await focusPanelButton(user);
 
@@ -1602,7 +1612,7 @@ describe("Map editor page", () => {
     registerMapCommands();
     const keys = render(<CommandKeys host={host} />);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await selectRow(user, "City");
       await focusPanelButton(user);
       const transform = () =>
@@ -1665,7 +1675,7 @@ describe("Map editor page", () => {
     registerMapCommands();
     const keys = render(<CommandKeys host={host} />);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await selectRow(user, "Line two");
       const list = elementsList();
       const first = within(list).getByRole("button", { name: /^Line one/ });
@@ -1711,7 +1721,7 @@ describe("Map editor page", () => {
     const { host, runtime } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
 
       await selectRow(user, "Line one");
       await chooseRowMenu(user, "Move up");
@@ -2118,7 +2128,7 @@ describe("Map editor page", () => {
     const { host, runtime } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await selectRow(user, "Coast");
       expect(runtime.editor?.getSnapshot().roughenStrength).toBe(1.5);
 
@@ -2156,7 +2166,7 @@ describe("Map editor page", () => {
     registerMapCommands();
     const keys = render(<CommandKeys host={host} />);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       // The page commits after `renderPage` returns; wait for its first control.
       await screen.findByRole("button", { name: en["tools.pen"] });
       await focusPanelButton(user);
@@ -2226,7 +2236,7 @@ describe("Map editor page", () => {
     runtime.editor?.attachFrame(workerPort);
     const keys = render(<CommandKeys host={host} />);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
 
       // The Area tool's own key selects it, through the host's shortcut registry.
       await user.keyboard("a");
@@ -2287,7 +2297,7 @@ describe("Map editor page", () => {
     registerMapCommands();
     const keys = render(<CommandKeys host={host} />);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
 
       // A closed Shape to pour into, landed at the view centre by keyboard.
       await placeShape(user, "rectangle");
@@ -2347,7 +2357,7 @@ describe("Map editor page", () => {
     registerMapCommands();
     const keys = render(<CommandKeys host={host} />);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
 
       /** Opens the Fill color picker and commits one hex colour by keyboard. */
       async function pickColor(hex: string): Promise<void> {
@@ -2406,7 +2416,7 @@ describe("Map editor page", () => {
     const { host, runtime } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await placeShape(user, "ellipse");
       expect(runtime.editor?.getSnapshot().elements).toHaveLength(1);
 
@@ -2452,7 +2462,7 @@ describe("Map editor page", () => {
     const { host, runtime } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       const sides = () => screen.queryByRole("textbox", { name: en["properties.shape.sides"] });
       const cornerRadius = () =>
         screen.queryByRole("textbox", { name: en["properties.shape.cornerRadius"] });
@@ -2497,7 +2507,7 @@ describe("Map editor page", () => {
     const { host, runtime } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await placeShape(user, "ellipse");
       expect(screen.queryByText(en["properties.convertedFrom.ellipse"])).not.toBeInTheDocument();
 
@@ -2523,7 +2533,7 @@ describe("Map editor page", () => {
     const { host } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await placeShape(user, "ellipse");
       const width = await screen.findByRole("textbox", {
         name: en["properties.shape.width"],
@@ -2557,7 +2567,7 @@ describe("Map editor page", () => {
     registerMapCommands();
     const keys = render(<CommandKeys host={host} />);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await screen.findByRole("button", { name: en["tools.polygon"] });
       await focusPanelButton(user);
 
@@ -2594,7 +2604,7 @@ describe("Map editor page", () => {
     registerMapCommands();
     const keys = render(<CommandKeys host={host} />);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await screen.findByRole("button", { name: en["tools.hand"] });
       runtime.editor?.select("e1");
       await focusPanelButton(user);
@@ -2634,7 +2644,7 @@ describe("Map editor page", () => {
     const { host, runtime } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       // With the Pen picked and no Map Line selected, Properties shows the style
       // the next line takes (#778); selecting one shows that line's own.
       await pickTool(user, en["tools.pen"]);
@@ -2737,7 +2747,7 @@ describe("Map editor page", () => {
     const { host, runtime } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await selectRow(user, "Line one");
       expect(runtime.editor?.getSnapshot().selectedId).toBe("e1");
 
@@ -2875,7 +2885,7 @@ describe("Map editor page", () => {
     const { host, runtime } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await selectRow(user, "Line one");
       await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: MOVE_RIGHT });
       await waitFor(() =>
@@ -2923,7 +2933,7 @@ describe("Map editor page", () => {
     const { host, runtime } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await selectRow(user, "Line one");
       await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: MOVE_RIGHT });
       await waitFor(() =>
@@ -2961,7 +2971,7 @@ describe("Map editor page", () => {
     host.setReturnTarget("Plot");
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       const back = await screen.findByRole("button", {
         name: en["map.backTo"].replace("{label}", "Plot"),
       });
@@ -2990,7 +3000,7 @@ describe("Map editor page", () => {
     const { host } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       const back = await screen.findByRole("button", { name: en["map.backToMaps"] });
       await tabTo(user, back, 120);
       await user.keyboard("{Enter}");
@@ -3012,7 +3022,7 @@ describe("Map editor page", () => {
     const { host, runtime } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await pickTool(user, en["tools.insert"]);
 
       // One tile per base Stamp, in the Stamps' own order, each a button named
@@ -3064,7 +3074,7 @@ describe("Map editor page", () => {
     registerMapCommands();
     const keys = render(<CommandKeys host={host} />);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await screen.findByRole("button", { name: en["tools.text"] });
       await focusPanelButton(user);
 
@@ -3101,7 +3111,7 @@ describe("Map editor page", () => {
     registerMapCommands();
     const keys = render(<CommandKeys host={host} />);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
 
       // The Insert tool by its place in the tool belt, and the Stamp grid it shows.
       await pickTool(user, en["tools.insert"]);
@@ -3198,7 +3208,7 @@ describe("Map editor page", () => {
     const { host, runtime } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
 
       await pickTool(user, en["tools.insert"]);
       await pickStamp(user, en["stamp.scale-bar"]);
@@ -3269,7 +3279,7 @@ describe("Map editor page", () => {
     registerMapCommands();
     const keys = render(<CommandKeys host={host} />);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
 
       // The Text tool's Properties offer the keyboard path that lands a Map
       // Label at the view centre.
@@ -3419,7 +3429,7 @@ describe("Map editor page", () => {
     const { host, runtime } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await selectRow(user, "Fill 1");
 
       const toggle = await screen.findByRole("switch", { name: en["properties.softEdge"] });
@@ -3471,7 +3481,7 @@ describe("Map editor page", () => {
     const { host, runtime } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await selectRow(user, "Fill 1");
 
       await pickOption(user, en["properties.fillTexture"], en["properties.texture.grass"]);
@@ -3521,7 +3531,7 @@ describe("Map editor page", () => {
     const { host, runtime } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await selectRow(user, "Fill 1");
 
       await pickOption(user, en["properties.fillTexture"], en["properties.none"]);
@@ -3553,7 +3563,7 @@ describe("Map editor page", () => {
     const { host, runtime } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await screen.findByRole("button", { name: en["tools.pen"] });
       expect(runtime.editor?.getSnapshot().styleId).toBe("atlas");
 
@@ -3622,7 +3632,7 @@ describe("Map editor page", () => {
     const { host } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await selectRow(user, "Fill 1");
 
       const trigger = await screen.findByRole("button", { name: en["properties.fillColor"] });
@@ -3669,7 +3679,7 @@ describe("Map editor Export panel", () => {
       expect(await runtime.openMap("m1")).toBe(true);
       const frame = frameStandIn(runtime.editor);
       const page = await host.renderPage(MAP_PAGE_ID);
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       // The Export panel is the top-right pill's popover (#778), so it opens first.
       await openExport(user);
 
@@ -3737,7 +3747,7 @@ describe("Map editor Export panel", () => {
       expect(await runtime.openMap("m1")).toBe(true);
       frameStandIn(runtime.editor);
       const page = await host.renderPage(MAP_PAGE_ID);
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       // The Export panel is the top-right pill's popover (#778), so it opens first.
       await openExport(user);
 
@@ -3791,7 +3801,7 @@ describe("Map editor Export panel", () => {
       expect(await runtime.openMap("m1")).toBe(true);
       const frame = frameStandIn(runtime.editor);
       const page = await host.renderPage(MAP_PAGE_ID);
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       // The Export panel is the top-right pill's popover (#778), so it opens first.
       await openExport(user);
 
@@ -3829,7 +3839,7 @@ describe("Map editor Export panel", () => {
       expect(await runtime.openMap("m1")).toBe(true);
       frameStandIn(runtime.editor);
       const page = await host.renderPage(MAP_PAGE_ID);
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       // The Export panel is the top-right pill's popover (#778), so it opens first.
       await openExport(user);
 
@@ -3865,7 +3875,7 @@ describe("Map editor Export panel", () => {
       expect(await runtime.openMap("m1")).toBe(true);
       frameStandIn(runtime.editor);
       const page = await host.renderPage(MAP_PAGE_ID);
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       // The Export panel is the top-right pill's popover (#778), so it opens first.
       await openExport(user);
       host.files.queueSaveCancel();
@@ -3901,7 +3911,7 @@ describe("Map editor Place dialog", () => {
       expect(await runtime.openMap("m1")).toBe(true);
       frameStandIn(runtime.editor);
       const page = await host.renderPage(MAP_PAGE_ID);
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
 
       const placeButton = await screen.findByRole("button", { name: en["place.label"] });
       await tabTo(user, placeButton, 120);
@@ -3959,7 +3969,7 @@ describe("Map editor Place dialog", () => {
       frameStandIn(runtime.editor, new Uint8Array(Math.floor(INSERT_IMAGE_CAP_BYTES * 0.8)));
       expect(await runtime.openMap("m1")).toBe(true);
       const page = await host.renderPage(MAP_PAGE_ID);
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
 
       const placeButton = await screen.findByRole("button", { name: en["place.label"] });
       await tabTo(user, placeButton, 120);
@@ -3988,7 +3998,7 @@ describe("Map editor Place dialog", () => {
       expect(await runtime.openMap("m1")).toBe(true);
       frameStandIn(runtime.editor);
       const page = await host.renderPage(MAP_PAGE_ID);
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
 
       const placeButton = await screen.findByRole("button", { name: en["place.label"] });
       await tabTo(user, placeButton, 120);
@@ -4022,7 +4032,7 @@ describe("Map editor Place dialog", () => {
       expect(await runtime.openMap("m1")).toBe(true);
       frameStandIn(runtime.editor);
       const page = await host.renderPage(MAP_PAGE_ID);
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
 
       const placeButton = await screen.findByRole("button", { name: en["place.label"] });
       await tabTo(user, placeButton, 120);
@@ -4059,7 +4069,7 @@ describe("Map editor Place dialog", () => {
       expect(await runtime.openMap("m1")).toBe(true);
       frameStandIn(runtime.editor);
       const page = await host.renderPage(MAP_PAGE_ID);
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
 
       const placeButton = await screen.findByRole("button", { name: en["place.label"] });
       await tabTo(user, placeButton, 120);
@@ -4146,7 +4156,7 @@ describe("Map editor uploads (#756)", () => {
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
       host.files.queuePick({ name: "banner.svg", bytes: svgBytes() });
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
 
       await pickTool(user, en["tools.insert"]);
       const upload = await tabToUpload(user);
@@ -4213,7 +4223,7 @@ describe("Map editor uploads (#756)", () => {
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
       host.files.queuePick({ name: "trace.png", bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47]) });
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
 
       await pickTool(user, en["tools.insert"]);
       const asImage = await screen.findByRole("checkbox", { name: en["properties.asMapImage"] });
@@ -4264,7 +4274,7 @@ describe("Map editor uploads (#756)", () => {
     const fileName = `${"Beacon of the Northern Reach ".repeat(10)}.svg`;
     try {
       host.files.queuePick({ name: fileName, bytes: svgBytes() });
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
 
       await pickTool(user, en["tools.insert"]);
       const upload = await tabToUpload(user);
@@ -4311,7 +4321,7 @@ describe("Map editor uploads (#756)", () => {
         // The Map holds the picture the row describes, and the row's kind names
         // the Element, instead of leaving the author with its flags alone (#756).
         expect(runtime.editor?.getSnapshot().elements[0]?.kind).toBe("image");
-        await openLayers(userEvent.setup());
+        await openLayers(userEvent.setup({ delay: null }));
         await waitFor(() =>
           expect(screen.getByRole("list")).toHaveTextContent(catalog["element.kind.image"])
         );
@@ -4340,7 +4350,7 @@ describe("Map editor uploads (#756)", () => {
     const { host } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await pickTool(user, en["tools.insert"]);
 
       const keep = await screen.findByRole("button", { name: "Keep" });
@@ -4383,7 +4393,7 @@ describe("Map editor uploads (#756)", () => {
     const { host, runtime } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await pickTool(user, en["tools.insert"]);
 
       // The Library really is past the cap this test is about.
@@ -4439,7 +4449,7 @@ describe("Map editor uploads (#756)", () => {
     const { host, runtime } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await selectRow(user, "Fill 1");
 
       // The Library really is past the caps this test is about.
@@ -4483,7 +4493,7 @@ describe("Map editor uploads (#756)", () => {
         name: "huge.png",
         bytes: new Uint8Array(Math.ceil((ASSET_MAX_BYTES * 3) / 4) + 1),
       });
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
 
       await pickTool(user, en["tools.insert"]);
       const upload = await tabToUpload(user);
@@ -4512,7 +4522,7 @@ describe("Map editor uploads (#756)", () => {
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
       host.files.queuePick({ name: "broken.svg", bytes: svgBytes() });
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
 
       await pickTool(user, en["tools.insert"]);
       const upload = await tabToUpload(user);
@@ -4554,7 +4564,7 @@ describe("Map editor uploads (#756)", () => {
     const { host, runtime } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await selectRow(user, "Scan");
 
       const size = await screen.findByRole("textbox", { name: en["properties.image.size"] });
@@ -4616,7 +4626,7 @@ describe("Map editor uploads (#756)", () => {
     const { host, runtime } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await selectRow(user, "Fill 1");
 
       await pickOption(user, en["properties.customFill"], "Meadow");
@@ -4645,7 +4655,7 @@ describe("Map editor uploads (#756)", () => {
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
       host.files.queuePick({ name: "moss.svg", bytes: svgBytes() });
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await selectRow(user, "Fill 1");
 
       const fromTexture = await screen.findByRole("button", {
@@ -4689,7 +4699,7 @@ describe("Map editor uploads (#756)", () => {
     const { host, runtime } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await selectRow(user, "Fill 1");
 
       const stamps = await screen.findByRole("listbox", {
@@ -4742,7 +4752,7 @@ describe("the narrow editor's bar and regions (#779)", () => {
     frameStandIn(runtime.editor);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       // The narrow bar folds the pill's three controls into one popover; the
       // stylesheet is what shows it in their place, so the same control the
       // narrow page draws is the one this test drives.
@@ -4775,7 +4785,7 @@ describe("the narrow editor's bar and regions (#779)", () => {
     const { host, runtime } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       // A Pen selection keeps the Properties card on the page with no Element.
       await pickTool(user, en["tools.pen"]);
       const full = await screen.findByRole("button", { name: en["chrome.expandProperties"] });
@@ -4804,7 +4814,7 @@ describe("the narrow editor's bar and regions (#779)", () => {
     const { host } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await openLayers(user);
       const list = await screen.findByRole("list");
 
@@ -4839,7 +4849,7 @@ describe("the floating editor's chrome (#778)", () => {
     const { host, runtime } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       // A tool from the belt: one press picks it, and the belt says so.
       await pickTool(user, en["tools.pencil"]);
       expect(runtime.editor?.getSnapshot().tool).toBe("pencil");
@@ -4860,7 +4870,7 @@ describe("the floating editor's chrome (#778)", () => {
     const { host, runtime } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       // Insert's card places a Stamp at the view centre by keyboard.
       await pickTool(user, en["tools.insert"]);
       const place = await screen.findByRole("button", {
@@ -4895,7 +4905,7 @@ describe("the floating editor's chrome (#778)", () => {
     const { host } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       // Properties minimises to one icon, and comes back.
       await pickTool(user, en["tools.pen"]);
       const minimise = await screen.findByRole("button", {
@@ -4934,7 +4944,7 @@ describe("the floating editor's chrome (#778)", () => {
     const { host } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await openLayers(user);
       const row = await within(await screen.findByRole("list")).findByRole("button", {
         name: /^Etiqueta de Pinar del Río/,
@@ -4961,7 +4971,7 @@ describe("the floating editor's chrome (#778)", () => {
     const { host } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      await openLayers(userEvent.setup());
+      await openLayers(userEvent.setup({ delay: null }));
       expect(await screen.findByText(en["elements.empty"])).toBeInTheDocument();
       expect(screen.queryByRole("listitem")).toBeNull();
 
@@ -4981,7 +4991,7 @@ describe("the floating editor's chrome (#778)", () => {
     const { host, runtime } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await openLayers(user);
       const eye = await screen.findByRole("button", {
         name: format(en["elements.hideFor"], { name: "Line one" }),
@@ -5025,7 +5035,7 @@ describe("the floating editor's chrome (#778)", () => {
     const { host, runtime } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       await selectRow(user, "Line one");
       await closeLayers(user);
       for (const [key, field] of [
@@ -5052,7 +5062,7 @@ describe("the floating editor's chrome (#778)", () => {
     const { host, runtime } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       // The zoom cluster: Zoom in moves the view, and the readout resets it.
       const zoomIn = await screen.findByRole("button", { name: en["chrome.zoomIn"] });
       await tabTo(user, zoomIn, 120);
@@ -5076,7 +5086,7 @@ describe("the floating editor's chrome (#778)", () => {
     const { host } = await openEditor(storage);
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ delay: null });
       // Export opens its popover, which holds the Save path.
       await openExport(user);
       expect(screen.getByRole("button", { name: en["export.save"] })).toBeInTheDocument();
