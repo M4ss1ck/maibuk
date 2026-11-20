@@ -1,0 +1,7 @@
+{
+  "name": "Reloj",
+  "description": "Organiza tu trabajo con un ciclo Pomodoro, un temporizador, un cronómetro y alarmas.",
+  "commands.openClock.label": "Abrir Reloj",
+  "commands.toggleTimer.label": "Iniciar o pausar el temporizador",
+  "pages.clock.title": "Reloj"
+}

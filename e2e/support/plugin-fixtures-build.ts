@@ -101,6 +101,14 @@ const FIXTURE_PLUGINS: readonly FixturePlugin[] = [
     manifest: "manifest.json",
     output: "maibuk-maps",
   },
+  // Clock (#871) ships `desktop`, `web`, and `android`; its page is Remote UI,
+  // so the web lane runs the real source unchanged.
+  {
+    source: "plugins/maibuk-clock",
+    repoSource: true,
+    manifest: "manifest.json",
+    output: "maibuk-clock",
+  },
   // MCP Server ships desktop-only; the E2E web lane runs the real source with
   // "web" added to its manifest `platforms` here, in the built copy alone. The
   // shipped `plugins/maibuk-mcp/manifest.json` is never changed.

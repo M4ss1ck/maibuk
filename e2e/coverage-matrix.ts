@@ -3453,6 +3453,21 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-clock-timer",
+    area: "plugins",
+    workflow:
+      "Clock, the Built-in Plugin that ships off by default, turned on from Settings → Plugins by keyboard: an untouched Built-in is pre-granted its one required Plugin Permission (system-notifications), so its switch starts it with no review dialog and its sidebar entry appears; Open Clock, its navigating Plugin Command run from the Command Palette, opens the page on the Timer tab — the Clock sections tab list, the drawn remaining time, the length fields, and, because headless Chromium never grants the Notification permission, the “Notifications are off” banner with Allow notifications; the author zeroes the minutes and types 5 into the seconds field, presses Start, and the drawn time falls a second in while the live region names the minute left; Start or pause the Timer, the Plugin Command run from the Palette, pauses it, so Resume and Reset replace Pause and the drawn time holds what was left rather than the length, and running the Command again resumes it from that remainder; when the 5-second Timer ends the drawn time is spent, the live region announces “Timer ended” once, Reset and the fields come back, and the Alert reaches the author as Maibuk’s own in-window notice, since the device granted no System Notification; asserts: the drawn time, the selected tab and tab list, the banner and its button, the controls each Timer status draws, the announcement, and the notice’s text; persists: yes (device-local: the Built-in’s approval that pins its shipped copy, and the Timer in Plugin storage; the Library is untouched)",
+    edges: [
+      "A 5-second Timer set from the length fields runs, pauses and resumes from its Command, and ends with the announcement and the notice",
+    ],
+    terms: ["Plugin", "Built-in Plugin", "Plugin Permission", "Plugin Command"],
+    shortcuts: ["plugin.maibuk-clock.openClock", "plugin.maibuk-clock.toggleTimer"],
+    routes: ["/settings", "/plugin/:pluginId/:pageId"],
+    fixture: "empty",
+    tags: ["chromium-only"],
+    status: "accepted",
+  },
+  {
     id: "settings-reset-all",
     area: "settings",
     workflow:
