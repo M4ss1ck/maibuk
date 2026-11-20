@@ -82,7 +82,7 @@ jobs:
       - name: Check the AGENTS.md word budget
         run: node scripts/agents-word-budget.mjs AGENTS.md
 
-  # Decides how much of the suite a run needs: the full sharded run, or only
+  # Picks how much of the suite a run takes: the full sharded run, or only
   # the tests a PR's diff reaches (issue #853).
   changes:
     name: Select tests
