@@ -48,6 +48,10 @@ import { PluginRemoteUiSurface } from "@/features/plugins/remote-ui/surface";
 import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
 import type { PluginSecretStore } from "@/features/plugins/secret-store";
 import {
+  createMemorySystemNotificationAdapter,
+  createPluginSystemNotifications,
+} from "@/features/plugins/system-notifications";
+import {
   PLUGIN_INIT_MESSAGE,
   PluginApiError,
   base64ToBytes,
@@ -435,6 +439,15 @@ export function createTestHost(options: TestHostOptions): TestHost {
   // The files the Plugin saved (ADR 0040): the same memory saver and save flow
   // the app wires, so a test asserts the bytes the host received.
   const fileSaver = createMemoryPluginFileSaver();
+  // The System Notifications (#869) a Plugin test drives: the memory device the
+  // kit exposes as `systemNotifications`, and the app's own service over it, so
+  // a test asserts the queue, the rate limit, and the toast fallback without a
+  // device.
+  const systemNotificationDevice = createMemorySystemNotificationAdapter();
+  const systemNotificationService = createPluginSystemNotifications({
+    adapter: systemNotificationDevice,
+    fallback: (message) => notifications.push({ variant: "info", message }),
+  });
 
   const networkHandler: PluginApiHandlers = testFetch
     ? {
@@ -448,6 +461,19 @@ export function createTestHost(options: TestHostOptions): TestHost {
       notifications.push({ variant, message });
       return null;
     },
+    // The System Notification rows (#869), driven through the app's own service
+    // over the memory device: a send shows or falls back to a toast, and a
+    // cancel is the Plugin's own id scoped by its tag.
+    "notifications.system": async (params) =>
+      systemNotificationService.send(
+        { id: options.manifest.id, name: options.manifest.name },
+        params
+      ),
+    "notifications.cancel": async ({ id }, { pluginId }) =>
+      systemNotificationService.cancel(pluginId, id),
+    "notifications.systemStatus": async () => systemNotificationService.status(),
+    "notifications.requestSystemPermission": async () =>
+      systemNotificationService.requestPermission(),
     "library.books.list": () => books,
     "library.books.get": ({ bookId }) => books.find((book) => book.id === bookId) ?? null,
     // The Book field write (#592): a null Genre or Target Word Count clears it,
@@ -837,11 +863,13 @@ export function createTestHost(options: TestHostOptions): TestHost {
     granted: () => granted,
     handlers,
     isLibraryAvailable: () => libraryAvailable,
-    // Every call this host serves answers a Command run or a click the test
-    // made, so the rows that need one (`files.pick`, `files.save`,
-    // `files.requestAccess`) are accepted rather than refused
-    // `user-action-required`.
-    hasUserActivation: () => true,
+    // Every call this host serves counts as the author's own click, key press,
+    // or Command run unless the test says otherwise, so the rows that need one
+    // (`files.pick`, `files.save`, `files.requestAccess`,
+    // `notifications.requestSystemPermission`) are accepted rather than refused
+    // `user-action-required`; `userActivation: false` plays a Plugin calling on
+    // its own.
+    hasUserActivation: () => options.userActivation ?? true,
     eventSnapshot: (event) => {
       if (event === "language.changed") return { language };
       if (event === "endpoint.addressChanged") {
@@ -1136,6 +1164,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
     broker,
     manifest: applyPluginLocale(options.manifest, options.locale ?? {}),
     notifications,
+    systemNotifications: systemNotificationDevice,
     navigations,
     pageNavigations,
     returns,
