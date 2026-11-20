@@ -1,6 +1,6 @@
 // Shared setup and keyboard helpers for the Shortcut Editor tests (#851).
 import { useState } from "react";
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterAll, beforeAll, beforeEach, expect, vi } from "vitest";
 import { mockVirtualizerLayout } from "@/test/support/virtualizer-layout";
@@ -62,6 +62,8 @@ export function Harness() {
 
 export const custom = () => useShortcutSettingsStore.getState().shortcuts.custom;
 
+export const voice = () => useShortcutSettingsStore.getState().shortcuts.voice;
+
 export async function openEditor() {
   const user = userEvent.setup();
   render(<Harness />);
@@ -117,6 +119,25 @@ export function filterButton(label: string) {
 
 export function expectFocusName(pattern: RegExp) {
   expect(document.activeElement?.getAttribute("aria-label") ?? "").toMatch(pattern);
+}
+
+/** Filters to Bold and opens its Voice commands from the row, by keyboard. */
+export async function openBoldVoice() {
+  const { user } = await openEditor();
+  await focusRow(user, "editor.bold");
+  for (let press = 0; press < 8; press += 1) {
+    if (
+      /^shortcutEditor\.voice\.open/.test(document.activeElement?.getAttribute("aria-label") ?? "")
+    )
+      break;
+    await user.keyboard("{ArrowRight}");
+  }
+  expectFocusName(/^shortcutEditor\.voice\.open/);
+  const opener = document.activeElement as HTMLElement;
+  await user.keyboard("{Enter}");
+  const dialog = await findDialogTitled('shortcutEditor.voice.title {"command":"editor.bold"}');
+  const field = within(dialog).getByRole("textbox", { name: /shortcutEditor\.voice\.addLabel/ });
+  return { user, dialog, opener, field };
 }
 
 beforeEach(() => {
