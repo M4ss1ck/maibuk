@@ -145,7 +145,7 @@ if (typeof window !== "undefined") {
     });
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     throw new Error(
-      "A React Aria keyboard drag was still running when the test ended. Drop or cancel it, and wait for it to start (waitForKeyboardDrag) and end (waitForKeyboardDragEnd) in src/test/support/drag-events.ts."
+      "A React Aria keyboard drag was still running when the test ended. Drop or cancel it, and wait for it to start (waitForKeyboardDrag) and end (endKeyboardDrag) in src/test/support/drag-events.ts."
     );
   });
 }

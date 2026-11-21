@@ -118,9 +118,17 @@ export async function waitForKeyboardDrag() {
   );
 }
 
-// A keyboard drag hides everything but its drop targets until it ends, so a
-// drop or cancel is done once `element`, which no drop target holds, is
-// exposed again.
-export async function waitForKeyboardDragEnd(element: HTMLElement) {
-  await waitFor(() => expect(element.closest('[aria-hidden="true"], [inert]')).toBeNull());
+// A keyboard drag hides everything but its drop targets until it ends.
+// Presses `key` (drop or cancel) and waits for that: `outside`, an element no
+// drop target holds, is hidden first and exposed again after. The first check
+// keeps the wait from passing on an element the drag never hid.
+export async function endKeyboardDrag(
+  user: { keyboard: (text: string) => Promise<void> },
+  key: "{Enter}" | "{Escape}",
+  outside: HTMLElement
+) {
+  const hidden = '[aria-hidden="true"], [inert]';
+  expect(outside.closest(hidden), "the drag should hide `outside`").not.toBeNull();
+  await user.keyboard(key);
+  await waitFor(() => expect(outside.closest(hidden)).toBeNull());
 }

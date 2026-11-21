@@ -12,8 +12,8 @@ import {
   createDataTransfer,
   dispatchDragEvent,
   mockRect,
+  endKeyboardDrag,
   waitForKeyboardDrag,
-  waitForKeyboardDragEnd,
 } from "@/test/support/drag-events";
 import {
   ALL_GROUP_IDS,
@@ -104,14 +104,13 @@ function getDragHandle(row: HTMLElement): HTMLElement {
   return within(row).getByRole("button", { name: "toolbar.settings.dragHandle" });
 }
 
-/** Ends a keyboard drag with `key`, then waits for React Aria to end it. */
-async function endKeyboardDrag(
-  user: ReturnType<typeof userEvent.setup>,
-  key: "{Enter}" | "{Escape}"
-) {
-  const closeButton = screen.getByRole("button", { name: "toolbar.settings.close", hidden: true });
-  await user.keyboard(key);
-  await waitForKeyboardDragEnd(closeButton);
+/** Drops or cancels a keyboard drag; the footer's Close button is outside its drop targets. */
+async function endDrag(user: ReturnType<typeof userEvent.setup>, key: "{Enter}" | "{Escape}") {
+  await endKeyboardDrag(
+    user,
+    key,
+    screen.getByRole("button", { name: "toolbar.settings.close", hidden: true })
+  );
 }
 
 async function arrowToControl(
@@ -612,7 +611,7 @@ describe("keyboard operation of every control", () => {
     expect(control).toHaveClass("pointer-events-none", "opacity-0");
     expect(control).not.toHaveClass("group-hover:opacity-100");
 
-    await endKeyboardDrag(user, "{Escape}");
+    await endDrag(user, "{Escape}");
     expect(control).toHaveClass("group-hover:opacity-100");
     expect(useSettingsStore.getState().toolbarConfig.start[0].id).toBe("history");
   });
@@ -716,7 +715,7 @@ describe("keyboard drag-and-drop (React Aria)", () => {
     dragHandle.focus();
     await user.keyboard("{Enter}");
     await arrowToDropTarget(user, "Insert after toolbar.groups.basicMarks");
-    await endKeyboardDrag(user, "{Enter}");
+    await endDrag(user, "{Enter}");
 
     const state = useSettingsStore.getState().toolbarConfig;
     expect(state.start[2].kind === "group" && state.start[2].id).toBe("history");
@@ -734,7 +733,7 @@ describe("keyboard drag-and-drop (React Aria)", () => {
     dragHandle.focus();
     await user.keyboard("{Enter}");
     await arrowToDropTarget(user, "Insert after toolbar.groups.basicMarks");
-    await endKeyboardDrag(user, "{Escape}");
+    await endDrag(user, "{Escape}");
 
     expect(useSettingsStore.getState().toolbarConfig.start.map((entry) => entry.id)).toEqual(
       TEST_CONFIG.start.map((entry) => entry.id)
@@ -761,7 +760,7 @@ describe("keyboard drag-and-drop (React Aria)", () => {
     // Tab moves the drag to the End section's own drop target.
     await user.keyboard("{Tab}");
     expect(findEndGrid()).toContainElement(document.activeElement as HTMLElement);
-    await endKeyboardDrag(user, "{Enter}");
+    await endDrag(user, "{Enter}");
 
     const state = useSettingsStore.getState().toolbarConfig;
     expect(state.start).toHaveLength(TEST_CONFIG.start.length - 1);
@@ -780,7 +779,7 @@ describe("keyboard drag-and-drop (React Aria)", () => {
     await waitForKeyboardDrag();
     await user.keyboard("{Tab}");
     expect(findEndGrid()).toContainElement(document.activeElement as HTMLElement);
-    await endKeyboardDrag(user, "{Enter}");
+    await endDrag(user, "{Enter}");
 
     const state = useSettingsStore.getState().toolbarConfig;
     expect(state.start).toHaveLength(TEST_CONFIG.start.length - 1);
@@ -797,11 +796,11 @@ describe("keyboard drag-and-drop (React Aria)", () => {
     dragHandle.focus();
     await user.keyboard("{Enter}");
     await arrowToDropTarget(user, "Insert after toolbar.groups.basicMarks");
-    await endKeyboardDrag(user, "{Enter}");
+    const status = screen.getByRole("status", { hidden: true });
+    expect(status).toBeEmptyDOMElement();
+    await endDrag(user, "{Enter}");
 
-    await waitFor(() =>
-      expect(screen.getByRole("status")).toHaveTextContent("toolbar.settings.moved")
-    );
+    await waitFor(() => expect(status).toHaveTextContent("toolbar.settings.moved"));
   });
 
   it("reaches the localized drag handle by keyboard", async () => {
