@@ -170,45 +170,65 @@ function sandboxCsp(): string {
   return match[1];
 }
 
+/** The event the frame probe tries to emit; the host hearing it is T2 reached. */
+const FRAME_PROBE_EVENT = "maibuk-conformance-frame-probe";
+
 /**
  * The in-frame half of T2: try every Tauri IPC path a sandboxed frame could have
  * and report whether any of them reached the Rust side. The frame is the real
  * sandbox shape — `sandbox="allow-scripts"`, the bootstrap's CSP, an opaque
  * origin — so a blocked result is the platform's, not this route's.
+ *
+ * "Reached" means a real, read-only command answered (`plugin:app|version`,
+ * granted by `core:default`): a refusal or a silent drop is not reached, and a
+ * global merely existing is reported in the detail but is not reached either.
+ * Each attempt has its own timeout because a dropped IPC message never settles.
  */
 const FRAME_IPC_PROBE = `(async () => {
-  const out = { reached: false, detail: "no Tauri IPC path reached the host" };
+  const seen = [];
+  if (window.__TAURI_INTERNALS__) seen.push("__TAURI_INTERNALS__");
+  if (window.ipc) seen.push("window.ipc");
+  const notes = [];
+  let reached = false;
+  const within = (promise) => Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error("no answer in 3 s")), 3000)),
+  ]);
   try {
     const internals = window.__TAURI_INTERNALS__;
     if (internals && typeof internals.invoke === "function") {
-      await internals.invoke("plugin:conformance%7Cprobe", {});
-      out.reached = true;
-      out.detail = "window.__TAURI_INTERNALS__.invoke resolved";
+      await within(internals.invoke("plugin:event|emit", { event: "${FRAME_PROBE_EVENT}", payload: "frame" }));
+      notes.push("emit answered");
     }
   } catch (error) {
-    out.detail = "invoke refused: " + String((error && error.message) || error);
+    notes.push("emit refused: " + String((error && error.message) || error));
   }
   try {
-    const ipc = window.ipc;
-    if (!out.reached && ipc && typeof ipc.postMessage === "function") {
-      ipc.postMessage(JSON.stringify({ cmd: "plugin:conformance%7Cprobe" }));
-      out.reached = true;
-      out.detail = "window.ipc.postMessage accepted a message";
+    const internals = window.__TAURI_INTERNALS__;
+    if (internals && typeof internals.invoke === "function") {
+      const version = await within(internals.invoke("plugin:app|version", {}));
+      reached = true;
+      notes.push("__TAURI_INTERNALS__.invoke answered plugin:app|version with " + JSON.stringify(version));
     }
   } catch (error) {
-    out.detail = "ipc.postMessage refused: " + String((error && error.message) || error);
+    notes.push("invoke refused: " + String((error && error.message) || error));
   }
   try {
-    const response = await fetch("ipc://localhost/plugin%3Aconformance%7Cprobe", {
+    const response = await within(fetch("ipc://localhost/plugin%3Aapp%7Cversion", {
       method: "POST",
       body: "{}",
-    });
-    out.reached = true;
-    out.detail = "ipc:// fetch returned " + String(response && response.status);
+    }));
+    if (response && response.ok) {
+      reached = true;
+      notes.push("ipc:// fetch answered " + String(response.status));
+    } else {
+      notes.push("ipc:// fetch refused with " + String(response && response.status));
+    }
   } catch (error) {
-    out.detail = "ipc:// fetch refused: " + String((error && error.message) || error);
+    notes.push("ipc:// fetch refused: " + String((error && error.message) || error));
   }
-  parent.postMessage({ __conformanceFrameProbe: out }, "*");
+  const detail = "globals: " + (seen.length ? seen.join(", ") : "none") + "; " + notes.join("; ");
+  parent.postMessage({ __conformanceFrameProbe: { reached, detail } }, "*");
 })();`;
 
 function readPlatform(): ConformancePlatform {
@@ -785,7 +805,35 @@ export async function createRuntimeSeam(
     };
   }
 
+  /**
+   * T2 from a sandboxed frame. "No answer" alone does not prove a refusal, so
+   * under Tauri the host also listens for the event the frame tries to emit and
+   * counts hearing it as reached.
+   */
   async function probeFrameIpc(): Promise<IpcObservation> {
+    let heard = false;
+    let unlisten: (() => void) | null = null;
+    if (IS_ANDROID || IS_DESKTOP) {
+      const { listen } = await import("@tauri-apps/api/event");
+      unlisten = await listen(FRAME_PROBE_EVENT, () => {
+        heard = true;
+      });
+    }
+    try {
+      const observation = await runFrameProbe();
+      if (unlisten) await sleep(1_000);
+      return heard
+        ? {
+            reached: true,
+            detail: `${observation.detail}; the host heard ${FRAME_PROBE_EVENT}, emitted from the frame through plugin:event|emit`,
+          }
+        : observation;
+    } finally {
+      unlisten?.();
+    }
+  }
+
+  function runFrameProbe(): Promise<IpcObservation> {
     return new Promise<IpcObservation>((resolve, reject) => {
       let iframe: HTMLIFrameElement;
       try {

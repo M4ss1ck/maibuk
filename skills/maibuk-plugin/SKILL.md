@@ -44,7 +44,7 @@ Declare `platforms` on purpose. Omitted means desktop and the web. List `"androi
 
 Choose a **Frame** only when the component table cannot express the surface: a canvas, a chart, a DOM-dependent third-party library, a rich widget that already exists as web code. A Frame Plugin:
 
-- sets `customUi: true`. Frame UI is off on Android, so the Frame shows a placeholder there, and `android` stays out of `platforms` unless the rest of the Plugin is meant to run there;
+- sets `customUi: true`. The Frame mounts on Android too, so list `android` in `platforms` when the whole Plugin (entry and Frame) is meant to run there;
 - bundles the library inside the Plugin folder, so it ships in the zip, and excludes a vendored copy with a `!!` entry in `biome.json` `files.includes`, since lint covers the whole folder;
 - styles with the host's `--maibuk-*` theme tokens from `frame-ui.md`;
 - owns its own accessibility, which the handoff states.
