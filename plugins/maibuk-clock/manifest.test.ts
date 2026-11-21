@@ -88,6 +88,16 @@ describe("Clock manifest", () => {
     expect(command?.navigates).toBeUndefined();
   });
 
+  it("contributes the openPomodoroSettings Command with no default shortcut", () => {
+    const command = manifest().contributes?.commands?.find(
+      (candidate) => candidate.id === "openPomodoroSettings"
+    );
+    expect(command?.label).toBe("Pomodoro settings");
+    expect(command?.contexts).toEqual(["global"]);
+    expect(command?.defaults).toBeUndefined();
+    expect(command?.navigates).toBeUndefined();
+  });
+
   it("contributes the toggleStopwatch Command with no default shortcut", () => {
     const command = manifest().contributes?.commands?.find(
       (candidate) => candidate.id === "toggleStopwatch"
@@ -135,12 +145,13 @@ describe("Clock manifest", () => {
     ]);
   });
 
-  it("contributes exactly the six Commands, in order", () => {
+  it("contributes exactly the seven Commands, in order", () => {
     expect(manifest().contributes?.commands?.map((command) => command.id)).toEqual([
       "openClock",
       "toggleTimer",
       "togglePomodoro",
       "skipPomodoro",
+      "openPomodoroSettings",
       "toggleStopwatch",
       "lapStopwatch",
     ]);
@@ -160,6 +171,7 @@ describe("Clock manifest", () => {
     expect(locale["commands.toggleTimer.label"]).toBe("Iniciar o pausar el temporizador");
     expect(locale["commands.togglePomodoro.label"]).toBe("Iniciar o pausar el Pomodoro");
     expect(locale["commands.skipPomodoro.label"]).toBe("Saltar al siguiente Pomodoro o descanso");
+    expect(locale["commands.openPomodoroSettings.label"]).toBe("Ajustes del Pomodoro");
     expect(locale["commands.toggleStopwatch.label"]).toBe("Iniciar o pausar el cronómetro");
     expect(locale["commands.lapStopwatch.label"]).toBe("Marcar una vuelta");
     expect(locale["pages.clock.title"]).toBe("Reloj");

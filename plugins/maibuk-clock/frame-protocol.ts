@@ -15,6 +15,7 @@
 
 import type { PluginClient } from "@/plugin-sdk";
 import type { Alarm, AlarmInput, ClockAlarms } from "./alarms";
+import { isValidPomodoroSettings, type PomodoroSettings } from "./cycle";
 import { catalogFor, type ClockKey } from "./i18n";
 import type { ClockPomodoro, PomodoroSnapshot } from "./pomodoro";
 import type { ClockStopwatch } from "./stopwatch";
@@ -48,7 +49,10 @@ export interface FrameStateMessage {
   notifications: FrameNotificationStatus | null;
 }
 
-export type WorkerToFrameMessage = FrameLabelsMessage | FrameStateMessage;
+export type WorkerToFrameMessage =
+  | FrameLabelsMessage
+  | FrameStateMessage
+  | { kind: "pomodoro.openSettings" };
 
 /* Frame -> Worker */
 
@@ -62,6 +66,7 @@ export type FrameToWorkerMessage =
   | { kind: "pomodoro.pause" }
   | { kind: "pomodoro.skip" }
   | { kind: "pomodoro.reset" }
+  | { kind: "pomodoro.setSettings"; settings: PomodoroSettings }
   | { kind: "stopwatch.start" }
   | { kind: "stopwatch.pause" }
   | { kind: "stopwatch.lap" }
@@ -94,12 +99,48 @@ function alarmInput(value: unknown): AlarmInput | null {
 }
 
 /**
+ * Holds the one open-settings request between the Command and a Frame that may
+ * not have received its labels yet. `request` raises a flag and tells the
+ * listeners; `take` reads the flag once and clears it, so a request reaches one
+ * Frame once.
+ */
+export interface SettingsRequest {
+  request(): void;
+  take(): boolean;
+  subscribe(listener: () => void): () => void;
+}
+
+/** A fresh settings request: pending on `request`, handed out once by `take`. */
+export function createSettingsRequest(): SettingsRequest {
+  let pending = false;
+  const listeners = new Set<() => void>();
+  return {
+    request() {
+      pending = true;
+      for (const listener of listeners) listener();
+    },
+    take() {
+      const value = pending;
+      pending = false;
+      return value;
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
+}
+
+/**
  * Wires one mounted Clock Frame to the modules the Worker holds: sends the
  * labels and the whole state on connect, sends the state again on every module
  * change and after the notification status is read, runs the Frame's intents,
- * and re-sends the labels on `language.changed`. Returns the dispose, which the
- * Frame's own `closed` also runs. Client errors are swallowed, as
- * `runtime.tsx` does today.
+ * and re-sends the labels on `language.changed`. A pending settings request is
+ * posted once the labels have gone out, so the Frame has its words before it
+ * opens the dialog. Returns the dispose, which the Frame's own `closed` also
+ * runs. Client errors are swallowed, as `runtime.tsx` does today.
  */
 export function connectClockFrame(
   port: MessagePort,
@@ -109,10 +150,12 @@ export function connectClockFrame(
     pomodoro: ClockPomodoro;
     stopwatch: ClockStopwatch;
     alarms: ClockAlarms;
+    settingsRequest: SettingsRequest;
   }
 ): () => void {
-  const { client, timer, pomodoro, stopwatch, alarms } = deps;
+  const { client, timer, pomodoro, stopwatch, alarms, settingsRequest } = deps;
   let disposed = false;
+  let labelsSent = false;
   let language = "en";
   let notifications: FrameNotificationStatus | null = null;
   const unsubscribes: (() => void | Promise<void>)[] = [];
@@ -129,6 +172,15 @@ export function connectClockFrame(
       hourCycle: hourCycleFor(language),
       labels: { ...catalogFor(language) },
     });
+    labelsSent = true;
+    sendSettingsRequest();
+  }
+
+  /** Posts the open-settings signal once, only after the labels are out. */
+  function sendSettingsRequest(): void {
+    if (disposed || !labelsSent) return;
+    if (!settingsRequest.take()) return;
+    post({ kind: "pomodoro.openSettings" });
   }
 
   function sendState(): void {
@@ -192,6 +244,19 @@ export function connectClockFrame(
       case "pomodoro.reset":
         pomodoro.reset();
         return;
+      case "pomodoro.setSettings": {
+        const { settings } = value as { settings: unknown };
+        if (!isValidPomodoroSettings(settings)) return;
+        pomodoro.setSettings({
+          pomodoroMinutes: settings.pomodoroMinutes,
+          shortBreakMinutes: settings.shortBreakMinutes,
+          longBreakMinutes: settings.longBreakMinutes,
+          longBreakEvery: settings.longBreakEvery,
+          autoStartBreaks: settings.autoStartBreaks,
+          autoStartPomodoros: settings.autoStartPomodoros,
+        });
+        return;
+      }
       case "stopwatch.start":
         stopwatch.start();
         return;
@@ -253,7 +318,8 @@ export function connectClockFrame(
     timer.subscribe(sendState),
     pomodoro.subscribe(sendState),
     stopwatch.subscribe(sendState),
-    alarms.subscribe(sendState)
+    alarms.subscribe(sendState),
+    settingsRequest.subscribe(sendSettingsRequest)
   );
   sendState();
 

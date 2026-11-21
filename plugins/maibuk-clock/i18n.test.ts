@@ -49,6 +49,7 @@ describe("Clock manifest overrides", () => {
     expect(Object.keys(locale).sort()).toEqual([
       "commands.lapStopwatch.label",
       "commands.openClock.label",
+      "commands.openPomodoroSettings.label",
       "commands.skipPomodoro.label",
       "commands.togglePomodoro.label",
       "commands.toggleStopwatch.label",
