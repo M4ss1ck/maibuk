@@ -295,7 +295,7 @@
     const minutes = minutesOfDay % MINUTES_PER_HOUR;
     if (hourCycle === 24) return `${pad2(hours)}:${pad2(minutes)}`;
     const hours12 = hours % 12 === 0 ? 12 : hours % 12;
-    return `${hours12}:${pad2(minutes)} ${hours < 12 ? "AM" : "PM"}`;
+    return `${hours12}:${pad2(minutes)} ${hours < 12 ? label("am") : label("pm")}`;
   }
 
   /** @returns {number} */
@@ -424,6 +424,8 @@
   let stopwatchIcon = "";
   /** @type {OpenAlarmDraft | null} */
   let editor = null;
+  /** The Alarm just deleted, kept until the redrawn list can take focus. @type {{ id: string, index: number } | null} */
+  let pendingRemoveFocus = null;
 
   /** @param {string} key @returns {string} */
   function label(key) {
@@ -1123,7 +1125,12 @@
     });
     const remove = iconButton("remove");
     remove.className = "icon-button destructive";
-    remove.addEventListener("click", () => post({ kind: "alarm.remove", id: alarm.id }));
+    remove.addEventListener("click", () => {
+      const index =
+        frameState === null ? -1 : frameState.alarms.findIndex((a) => a.id === alarm.id);
+      pendingRemoveFocus = { id: alarm.id, index: Math.max(0, index) };
+      post({ kind: "alarm.remove", id: alarm.id });
+    });
     actions.append(edit, remove);
     foot.append(repeat, actions);
 
@@ -1198,6 +1205,23 @@
     }
   }
 
+  /**
+   * Puts focus on the Delete button of the row that took the deleted Alarm's
+   * place, else on the row before it, so a deletion never drops focus to body.
+   * @param {number} index
+   */
+  function focusAfterRemove(index) {
+    const rows = el("alarm-list").querySelectorAll("li");
+    const row = rows[index] instanceof HTMLElement ? rows[index] : rows[index - 1];
+    const remove =
+      row instanceof HTMLElement ? row.querySelector(".icon-button.destructive") : null;
+    if (remove instanceof HTMLElement) {
+      remove.focus();
+      return;
+    }
+    el("add-alarm").focus();
+  }
+
   function drawAlarms() {
     if (!frameState) return;
     const list = frameState.alarms;
@@ -1218,6 +1242,12 @@
       const row = items.children[index];
       if (row instanceof HTMLElement) applyAlarmRow(row, alarm, list);
     });
+
+    const removed = pendingRemoveFocus;
+    if (removed !== null && !list.some((alarm) => alarm.id === removed.id)) {
+      pendingRemoveFocus = null;
+      focusAfterRemove(removed.index);
+    }
   }
 
   /** @returns {HTMLInputElement[]} */
@@ -1334,17 +1364,36 @@
       return;
     }
     if (event.key !== "Tab") return;
-    const items = focusableIn(el("alarm-editor"));
+    const dialog = el("alarm-editor");
+    const items = focusableIn(dialog);
     if (items.length === 0) return;
     const first = items[0];
     const last = items[items.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement) || !dialog.contains(active)) {
+      // A click on the backdrop leaves focus on the body: Tab comes back in.
+      event.preventDefault();
+      first.focus();
+    } else if (event.shiftKey && active === first) {
       event.preventDefault();
       last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
+    } else if (!event.shiftKey && active === last) {
       event.preventDefault();
       first.focus();
     }
+  }
+
+  /**
+   * A press on the backdrop puts focus back on the dialog's first control,
+   * rather than letting it fall to the body; the dialog stays open.
+   * @param {PointerEvent} event
+   */
+  function onEditorPointerDown(event) {
+    if (editor === null || !(event.target instanceof HTMLElement)) return;
+    if (event.target !== el("alarm-editor")) return;
+    event.preventDefault();
+    const items = focusableIn(el("alarm-editor"));
+    if (items.length > 0) items[0].focus();
   }
 
   function drawTimed() {
@@ -1464,6 +1513,32 @@
     });
   }
 
+  /** The keys a field keeps from the host, which would otherwise turn them into focus moves. */
+  const FIELD_KEYS = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End"];
+
+  /**
+   * Keeps the caret and step keys inside the Frame's own fields. preventDefault
+   * also stops a number field's native step, so the Frame steps the value itself
+   * and fires the same `input` a typed value would.
+   * @param {KeyboardEvent} event
+   */
+  function onFieldKeyDown(event) {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) return;
+    if (target.type !== "number" && target.type !== "text") return;
+    if (!FIELD_KEYS.includes(event.key)) return;
+    event.preventDefault();
+    if (target.type !== "number") return;
+    const step = event.key === "ArrowUp" ? 1 : event.key === "ArrowDown" ? -1 : 0;
+    if (step === 0) return;
+    const min = target.min === "" ? Number.NEGATIVE_INFINITY : Number(target.min);
+    const max = target.max === "" ? Number.POSITIVE_INFINITY : Number(target.max);
+    const typed = Number.parseInt(target.value, 10);
+    const next = Math.min(Math.max((Number.isFinite(typed) ? typed : 0) + step, min), max);
+    target.value = pad2(next);
+    target.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
   for (const key of TABS) {
     el(`tab-${key}`).addEventListener("click", () => selectTab(key, false));
   }
@@ -1497,7 +1572,9 @@
   el("alarm-editor-close").addEventListener("click", closeEditor);
   el("alarm-cancel").addEventListener("click", closeEditor);
   el("alarm-save").addEventListener("click", saveEditor);
-  el("alarm-editor").addEventListener("keydown", onEditorKeyDown);
+  document.addEventListener("keydown", onEditorKeyDown);
+  el("alarm-editor").addEventListener("pointerdown", onEditorPointerDown);
+  document.addEventListener("keydown", onFieldKeyDown);
 
   for (const key of ["timer-hours", "timer-minutes", "timer-seconds"]) {
     el(key).addEventListener("input", postLength);
@@ -1506,6 +1583,8 @@
   el("allow-notifications").addEventListener("click", () => post({ kind: "notifications.allow" }));
 
   window.addEventListener("pagehide", () => {
+    document.removeEventListener("keydown", onEditorKeyDown);
+    document.removeEventListener("keydown", onFieldKeyDown);
     if (tickHandle !== 0) {
       clearInterval(tickHandle);
       tickHandle = 0;

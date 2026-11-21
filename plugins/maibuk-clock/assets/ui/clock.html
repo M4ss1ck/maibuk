@@ -19,6 +19,10 @@
         display: none !important;
       }
 
+      html {
+        font-size: var(--maibuk-font-size, 16px);
+      }
+
       html,
       body {
         margin: 0;
@@ -76,7 +80,7 @@
         border-radius: 10px;
         background: transparent;
         color: var(--maibuk-color-muted-foreground);
-        font-size: 14px;
+        font-size: 0.875rem;
         font-weight: 500;
       }
 
@@ -84,7 +88,8 @@
         background: var(--maibuk-color-card);
         color: var(--maibuk-color-card-foreground);
         font-weight: 600;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+        box-shadow: 0 1px 2px
+          color-mix(in srgb, var(--maibuk-color-foreground) 12%, transparent);
       }
 
       .tab svg {
@@ -100,7 +105,7 @@
 
       .today {
         margin: 0;
-        font-size: 14px;
+        font-size: 0.875rem;
         color: var(--maibuk-color-muted-foreground);
       }
 
@@ -123,7 +128,7 @@
         background: var(--maibuk-color-warning-bg);
         border: 1px solid color-mix(in srgb, var(--maibuk-color-warning-text) 25%, transparent);
         color: var(--maibuk-color-warning-text);
-        font-size: 14px;
+        font-size: 0.875rem;
       }
 
       .banner .banner-text {
@@ -137,7 +142,7 @@
         border: 1px solid currentColor;
         background: transparent;
         color: var(--maibuk-color-warning-text);
-        font-size: 13px;
+        font-size: 0.8125rem;
         font-weight: 600;
       }
 
@@ -160,7 +165,8 @@
         flex-direction: column;
         align-items: center;
         gap: 32px;
-        box-shadow: 0 12px 32px -16px rgba(0, 0, 0, 0.18);
+        box-shadow: 0 12px 32px -16px
+          color-mix(in srgb, var(--maibuk-color-foreground) 18%, transparent);
       }
 
       .hero-timer {
@@ -193,7 +199,7 @@
 
       .card h2 {
         margin: 0;
-        font-size: 13px;
+        font-size: 0.8125rem;
         font-weight: 600;
         letter-spacing: 0.06em;
         text-transform: uppercase;
@@ -207,7 +213,7 @@
         padding: 6px 12px;
         border-radius: 999px;
         background: color-mix(in srgb, var(--maibuk-color-primary) 14%, transparent);
-        font-size: 13px;
+        font-size: 0.8125rem;
         font-weight: 600;
       }
 
@@ -242,7 +248,7 @@
       }
 
       .dial-time {
-        font-size: 76px;
+        font-size: 4.75rem;
         font-weight: 300;
         letter-spacing: -0.04em;
         font-variant-numeric: tabular-nums;
@@ -250,7 +256,7 @@
       }
 
       .dial-sub {
-        font-size: 14px;
+        font-size: 0.875rem;
         color: var(--maibuk-color-muted-foreground);
       }
 
@@ -299,7 +305,7 @@
         border: 0;
         background: var(--maibuk-color-primary);
         color: var(--maibuk-color-primary-foreground);
-        font-size: 17px;
+        font-size: 1.0625rem;
         font-weight: 600;
         display: flex;
         align-items: center;
@@ -348,7 +354,7 @@
         border: 1px solid var(--maibuk-color-border);
         background: var(--maibuk-color-background);
         color: var(--maibuk-color-foreground);
-        font-size: 72px;
+        font-size: 4.5rem;
         font-weight: 300;
         letter-spacing: -0.04em;
         text-align: center;
@@ -362,7 +368,7 @@
       }
 
       .field label {
-        font-size: 12px;
+        font-size: 0.75rem;
         font-weight: 600;
         letter-spacing: 0.08em;
         text-transform: uppercase;
@@ -370,7 +376,7 @@
       }
 
       .field-separator {
-        font-size: 72px;
+        font-size: 4.5rem;
         font-weight: 300;
         line-height: 112px;
         color: var(--maibuk-color-muted-foreground);
@@ -394,7 +400,7 @@
       }
 
       .recent-label {
-        font-size: 13px;
+        font-size: 0.8125rem;
         color: var(--maibuk-color-muted-foreground);
       }
 
@@ -412,7 +418,7 @@
         border: 1px solid var(--maibuk-color-border);
         background: transparent;
         color: var(--maibuk-color-foreground);
-        font-size: 14px;
+        font-size: 0.875rem;
         font-weight: 500;
         font-variant-numeric: tabular-nums;
       }
@@ -464,7 +470,7 @@
 
       .cycle-step .step-label {
         flex: 1;
-        font-size: 14px;
+        font-size: 0.875rem;
         color: var(--maibuk-color-foreground);
       }
 
@@ -477,7 +483,7 @@
       }
 
       .cycle-step .step-length {
-        font-size: 13px;
+        font-size: 0.8125rem;
         color: var(--maibuk-color-muted-foreground);
         font-variant-numeric: tabular-nums;
       }
@@ -491,7 +497,7 @@
         border-radius: 14px;
         border: 1px dashed var(--maibuk-color-border);
         color: var(--maibuk-color-muted-foreground);
-        font-size: 14px;
+        font-size: 0.875rem;
         font-weight: 500;
       }
 
@@ -515,12 +521,12 @@
       }
 
       .also-title {
-        font-size: 15px;
+        font-size: 0.9375rem;
         font-weight: 600;
       }
 
       .also-sub {
-        font-size: 13px;
+        font-size: 0.8125rem;
         color: var(--maibuk-color-muted-foreground);
         font-variant-numeric: tabular-nums;
       }
@@ -539,7 +545,7 @@
         border: 0;
         background: transparent;
         color: var(--maibuk-color-foreground);
-        font-size: 13px;
+        font-size: 0.8125rem;
         font-weight: 500;
       }
 
@@ -549,7 +555,7 @@
 
       .alerts-text {
         margin: 0;
-        font-size: 14px;
+        font-size: 0.875rem;
         line-height: 1.55;
       }
 
@@ -574,13 +580,13 @@
       }
 
       .stopwatch-digits {
-        font-size: 96px;
+        font-size: 6rem;
         font-weight: 300;
         letter-spacing: -0.045em;
       }
 
       .stopwatch-hundredths {
-        font-size: 40px;
+        font-size: 2.5rem;
         font-weight: 300;
         color: var(--maibuk-color-muted-foreground);
         letter-spacing: -0.02em;
@@ -590,7 +596,7 @@
         display: flex;
         align-items: center;
         gap: 10px;
-        font-size: 14px;
+        font-size: 0.875rem;
         color: var(--maibuk-color-muted-foreground);
       }
 
@@ -635,7 +641,7 @@
         border: 1px solid var(--maibuk-color-border);
         background: var(--maibuk-color-card);
         color: var(--maibuk-color-card-foreground);
-        font-size: 16px;
+        font-size: 1rem;
         font-weight: 600;
         display: flex;
         align-items: center;
@@ -650,7 +656,7 @@
       .laps-table {
         width: 100%;
         border-collapse: collapse;
-        font-size: 14px;
+        font-size: 0.875rem;
         font-variant-numeric: tabular-nums;
       }
 
@@ -658,7 +664,7 @@
         text-align: left;
         font-weight: 500;
         color: var(--maibuk-color-muted-foreground);
-        font-size: 12px;
+        font-size: 0.75rem;
         padding: 8px 0;
         border-bottom: 1px solid var(--maibuk-color-border);
       }
@@ -695,7 +701,7 @@
       }
 
       .tag {
-        font-size: 11px;
+        font-size: 0.6875rem;
         font-weight: 600;
         padding: 2px 8px;
         border-radius: 999px;
@@ -720,7 +726,7 @@
       .next-alarm,
       .no-alarms {
         margin: 0;
-        font-size: 14px;
+        font-size: 0.875rem;
         color: var(--maibuk-color-muted-foreground);
       }
 
@@ -729,7 +735,7 @@
         height: 44px;
         padding: 0 20px;
         border-radius: 22px;
-        font-size: 15px;
+        font-size: 0.9375rem;
       }
 
       .alarm-list {
@@ -767,7 +773,7 @@
       }
 
       .alarm-time {
-        font-size: 48px;
+        font-size: 3rem;
         font-weight: 300;
         letter-spacing: -0.04em;
         line-height: 1;
@@ -775,7 +781,7 @@
       }
 
       .alarm-label {
-        font-size: 14px;
+        font-size: 0.875rem;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -839,7 +845,7 @@
         display: flex;
         align-items: center;
         gap: 4px;
-        font-size: 13px;
+        font-size: 0.8125rem;
         color: var(--maibuk-color-muted-foreground);
       }
 
@@ -851,7 +857,7 @@
         width: 24px;
         height: 24px;
         border-radius: 12px;
-        font-size: 11px;
+        font-size: 0.6875rem;
         font-weight: 600;
         color: var(--maibuk-color-muted-foreground);
       }
@@ -924,7 +930,7 @@
 
       .dialog-head h2 {
         margin: 0;
-        font-size: 20px;
+        font-size: 1.25rem;
         font-weight: 600;
         letter-spacing: -0.01em;
       }
@@ -945,11 +951,11 @@
       .dialog .field input {
         width: 120px;
         height: 104px;
-        font-size: 64px;
+        font-size: 4rem;
       }
 
       .dialog .field-separator {
-        font-size: 64px;
+        font-size: 4rem;
         line-height: 104px;
       }
 
@@ -961,7 +967,7 @@
 
       .dialog-label label,
       .dialog-repeat legend {
-        font-size: 14px;
+        font-size: 0.875rem;
         font-weight: 500;
       }
 
@@ -972,7 +978,7 @@
         border: 1px solid var(--maibuk-color-border);
         background: var(--maibuk-color-background);
         color: var(--maibuk-color-foreground);
-        font-size: 15px;
+        font-size: 0.9375rem;
       }
 
       .dialog-label input:focus-visible {
@@ -1022,7 +1028,7 @@
         border: 1px solid var(--maibuk-color-border);
         background: transparent;
         color: var(--maibuk-color-muted-foreground);
-        font-size: 13px;
+        font-size: 0.8125rem;
         font-weight: 600;
       }
 
@@ -1039,7 +1045,7 @@
 
       .hint {
         margin: 0;
-        font-size: 13px;
+        font-size: 0.8125rem;
         color: var(--maibuk-color-muted-foreground);
       }
 
@@ -1056,7 +1062,7 @@
         border: 1px solid var(--maibuk-color-border);
         background: var(--maibuk-color-card);
         color: var(--maibuk-color-card-foreground);
-        font-size: 15px;
+        font-size: 0.9375rem;
         font-weight: 600;
       }
 
@@ -1065,7 +1071,7 @@
         height: 48px;
         padding: 0 28px;
         border-radius: 24px;
-        font-size: 15px;
+        font-size: 0.9375rem;
       }
 
       @media (max-width: 640px) {
@@ -1098,7 +1104,7 @@
           min-height: 52px;
           padding: 0 4px;
           border-radius: 12px;
-          font-size: 11px;
+          font-size: 0.6875rem;
           font-weight: 600;
         }
 
@@ -1133,11 +1139,11 @@
         .field input {
           width: 92px;
           height: 96px;
-          font-size: 56px;
+          font-size: 3.5rem;
         }
 
         .field-separator {
-          font-size: 56px;
+          font-size: 3.5rem;
           line-height: 96px;
         }
 
@@ -1147,15 +1153,15 @@
         }
 
         .dial-time {
-          font-size: 68px;
+          font-size: 4.25rem;
         }
 
         .stopwatch-digits {
-          font-size: 64px;
+          font-size: 4rem;
         }
 
         .stopwatch-hundredths {
-          font-size: 28px;
+          font-size: 1.75rem;
         }
 
         .alarm-list {
@@ -1163,7 +1169,7 @@
         }
 
         .alarm-time {
-          font-size: 40px;
+          font-size: 2.5rem;
         }
 
         .dialog {
@@ -1174,11 +1180,11 @@
         .dialog .field input {
           width: 92px;
           height: 96px;
-          font-size: 56px;
+          font-size: 3.5rem;
         }
 
         .dialog .field-separator {
-          font-size: 56px;
+          font-size: 3.5rem;
           line-height: 96px;
         }
       }

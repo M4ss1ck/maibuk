@@ -259,6 +259,34 @@ describe("Clock Frame", () => {
     expect(lengths).toContain(300_000);
   });
 
+  it("keeps the Arrow keys in the Timer's Minutes field and steps it itself", async () => {
+    const port = renderFrame();
+    const user = keyboardUser();
+
+    await user.tab();
+    await tabTo(user, el("timer-minutes"));
+    expect(inputValue("timer-minutes")).toBe("25");
+
+    let defaultPrevented = false;
+    document.addEventListener(
+      "keydown",
+      (event) => {
+        defaultPrevented = event.defaultPrevented;
+      },
+      { once: true }
+    );
+
+    await user.keyboard("{ArrowUp}");
+    expect(defaultPrevented).toBe(true);
+    expect(inputValue("timer-minutes")).toBe("26");
+    const lengths = posted(port, "timer.setLength");
+    expect(lengths[lengths.length - 1]).toEqual({
+      kind: "timer.setLength",
+      length: 1_560_000,
+    });
+    expect(document.activeElement).toBe(el("timer-minutes"));
+  });
+
   it("shows Reset beside Start once the Timer has ended", async () => {
     const port = renderFrame({
       state: stateMessage({
@@ -533,6 +561,22 @@ describe("Clock Frame", () => {
     expect(posted(port, "alarm.remove")).toEqual([{ kind: "alarm.remove", id: "a1" }]);
   });
 
+  it("moves focus to Add alarm once the last alarm is deleted", async () => {
+    const port = renderFrame({ state: stateMessage({ alarms: [alarmMessage()] }) });
+    const user = keyboardUser();
+
+    await user.tab();
+    await user.keyboard("{End}");
+    await tabTo(user, find(el("alarm-list"), '[aria-label="Delete 6:30 AM"]'));
+    await user.keyboard("{Enter}");
+    expect(posted(port, "alarm.remove")).toEqual([{ kind: "alarm.remove", id: "a1" }]);
+
+    // The Worker drops the Alarm and sends the list without it.
+    port.deliver(stateMessage({ alarms: [] }));
+    expect(el("alarm-list").querySelectorAll("li")).toHaveLength(0);
+    expect(document.activeElement).toBe(el("add-alarm"));
+  });
+
   it("names the repeat weekdays on the row's chips", async () => {
     const port = renderFrame({
       state: stateMessage({
@@ -650,6 +694,43 @@ describe("Clock Frame", () => {
     await user.keyboard("{Shift>}{Tab}{/Shift}");
     expect(document.activeElement).toBe(el("alarm-save"));
     expect(el("alarm-editor").hidden).toBe(false);
+  });
+
+  it("brings Tab back into the open editor from the body and still closes with Escape", async () => {
+    renderFrame();
+    const user = keyboardUser();
+
+    await user.tab();
+    await user.keyboard("{End}");
+    await tabTo(user, el("add-alarm"));
+    await user.keyboard("{Enter}");
+    expect(el("alarm-editor").hidden).toBe(false);
+
+    // A press on the backdrop moves focus to the body: the Frame pulls it back.
+    await user.pointer({ target: el("alarm-editor"), keys: "[MouseLeft]" });
+    expect(el("alarm-editor").contains(document.activeElement)).toBe(true);
+
+    // From the body, Tab lands on the dialog's first control; Escape still closes.
+    (document.activeElement as HTMLElement).blur();
+    expect(document.activeElement).toBe(document.body);
+
+    await user.tab();
+    expect(document.activeElement).toBe(el("alarm-editor-close"));
+
+    await user.keyboard("{Escape}");
+    expect(el("alarm-editor").hidden).toBe(true);
+    expect(document.activeElement).toBe(el("add-alarm"));
+  });
+
+  it("reads the 12-hour clock's PM from the labels", () => {
+    const port = renderFrame({
+      state: stateMessage({ alarms: [alarmMessage({ hour: 13, minute: 5, label: "" })] }),
+    });
+    expect(find(el("alarm-list"), ".alarm-time").textContent).toBe("1:05 PM");
+
+    // The suffix comes from the catalog, not from a string baked into the Frame.
+    port.deliver(labelsMessage({ ...EN, pm: "p. m." }, "en", 12));
+    expect(find(el("alarm-list"), ".alarm-time").textContent).toBe("1:05 p. m.");
   });
 
   it("writes the next alarm in the local day and the hours left", () => {

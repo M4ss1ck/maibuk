@@ -62,6 +62,8 @@
   "autoStartBreaks": "Iniciar los descansos automáticamente",
   "autoStartPomodoros": "Iniciar el siguiente Pomodoro automáticamente",
   "running": "en marcha",
+  "am": "a. m.",
+  "pm": "p. m.",
   "endsAt": "termina a las {time}",
   "ofLength": "de {length}",
   "thisCycle": "Este ciclo",

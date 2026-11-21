@@ -62,6 +62,8 @@
   "autoStartBreaks": "Start breaks automatically",
   "autoStartPomodoros": "Start the next Pomodoro automatically",
   "running": "running",
+  "am": "AM",
+  "pm": "PM",
   "endsAt": "ends {time}",
   "ofLength": "of {length}",
   "thisCycle": "This Cycle",
