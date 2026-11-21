@@ -83,7 +83,7 @@ async function chooseRow(page: Page, marker: string): Promise<void> {
 async function arrowTo(page: Page, key: string, { max = 30 } = {}): Promise<void> {
   // The list settles while the query filters it, so the active result can
   // already be past the target; the arrows do not wrap, so two presses that
-  // leave the active result where it was mean the end, and the walk turns up.
+  // leave the active result where it was mean an end, and the walk turns.
   let arrow = "ArrowDown";
   let unmoved = 0;
   for (let i = 0; i < max; i++) {
@@ -94,8 +94,8 @@ async function arrowTo(page: Page, key: string, { max = 30 } = {}): Promise<void
     // costs one more loop.
     await page.waitForTimeout(250);
     unmoved = (await activeKey(page)) === before ? unmoved + 1 : 0;
-    if (unmoved >= 2 && arrow === "ArrowDown") {
-      arrow = "ArrowUp";
+    if (unmoved >= 2) {
+      arrow = arrow === "ArrowDown" ? "ArrowUp" : "ArrowDown";
       unmoved = 0;
     }
   }

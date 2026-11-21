@@ -17,7 +17,11 @@ export async function tabTo(
   target: Locator,
   { max = 40, backwards = false }: { max?: number; backwards?: boolean } = {}
 ): Promise<void> {
-  await expect(target, `${target} is in the page before Tab walks to it`).toBeAttached();
+  // A count, not toBeAttached: that is strict and would hide isFocused's own
+  // "matches N elements" message behind a generic strict-mode error.
+  await expect
+    .poll(() => target.count(), { message: `${target} is in the page before Tab walks to it` })
+    .toBeGreaterThan(0);
   const visited: string[] = [];
   for (let i = 0; i < max; i++) {
     if (await isFocused(target)) return;
