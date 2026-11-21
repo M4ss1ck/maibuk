@@ -51,6 +51,13 @@ describe("Clock manifest", () => {
     );
   });
 
+  it("draws the Clock page in its Frame with the host's title hidden", () => {
+    expect(manifest().customUi).toBe(true);
+    const page = manifest().contributes?.pages?.find((candidate) => candidate.id === "clock");
+    expect(page?.frame).toBe("assets/ui/clock.html");
+    expect(page?.hideTitle).toBe(true);
+  });
+
   it("contributes the toggleTimer Command with no default shortcut", () => {
     const command = manifest().contributes?.commands?.find(
       (candidate) => candidate.id === "toggleTimer"

@@ -15,11 +15,27 @@
 // Edit moves its minute, its switch turns it off and back on, and Delete
 // returns the tab to its empty message (issue #874). No phase is waited out:
 // the Pomodoro's 25 minutes are the unit suites'.
-// Keyboard only: every control is reached by Tab and pressed with Enter or Space.
+// The page is the Plugin's whole-page Frame (#886): the section tabs, every
+// panel, the notification banner, and the live region are inside the iframe, so
+// every step below reaches them through the Frame. Only the Command Palette and
+// Maibuk's own Alert notice are host UI. Keyboard only: every control is
+// reached by Tab and pressed with Enter or Space, and a host Command takes the
+// keys back from the Frame first. The Alarm editor is a dialog inside the Frame,
+// so its focus entry, Tab containment, Escape and restored focus are asserted
+// where it opens. The same Frame on a phone (#886) stacks its side card below
+// the hero and keeps every target thumb-sized: a @touch test opens it from the
+// navigation menu and proves both.
 
-import type { Locator, Page } from "@playwright/test";
+import type { FrameLocator, Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
-import { expectFocusWithin, pressUntilFocused, tabTo, tabToEither } from "../support/keyboard";
+import {
+  expectFocusWithin,
+  expectTabContained,
+  leaveFrame,
+  pressUntilFocused,
+  tabTo,
+  tabToEither,
+} from "../support/keyboard";
 import { runPaletteCommand } from "../support/palette";
 import { expect, test } from "../support/test";
 
@@ -53,27 +69,35 @@ const enableSwitch = (page: Page) =>
 /** The Clock card's disclosure trigger: the button named after the Plugin. */
 const cardTrigger = (page: Page) =>
   page.getByRole("button", { name: new RegExp(`^${PLUGIN_NAME}`) });
+
+/** The page itself: the Plugin's whole-page Frame, and the iframe around it. */
+const clockFrame = (page: Page): FrameLocator =>
+  page.frameLocator('[data-plugin-frame="page"] iframe');
+const frameElement = (page: Page) => page.locator('[data-plugin-frame="page"] iframe');
+
+/** The panel of one section tab, named by its tab. */
+const tabPanel = (page: Page, name: string) =>
+  clockFrame(page).getByRole("tabpanel", { name: new RegExp(`^${name}`) });
+
 /** One length field of the Timer, by its localized label. */
-const lengthField = (page: Page, name: string) => page.getByRole("textbox", { name, exact: true });
+const lengthField = (page: Page, name: string) =>
+  clockFrame(page).getByRole("spinbutton", { name, exact: true });
 
 /**
- * The drawn remaining time while it is not the whole length: the length's quick
- * pick prints the same "0:05" the Timer starts from, so a value that has fallen
- * names the drawn line alone.
+ * The Timer's drawn remaining time, which stays empty until it runs: the Frame
+ * keeps the length in the fields, not in a second reading.
  */
-const drawnTime = (page: Page) => page.getByText(/^0:0[0-4]$/);
-
-/** The seconds a "m:ss" reading stands for. */
-function secondsOf(text: string): number {
-  return text.split(":").reduce((total, part) => total * 60 + Number(part), 0);
-}
+const timerTime = (page: Page) => clockFrame(page).locator("#timer-time");
 
 /** The seconds the drawn time shows; Infinity until it has fallen below the length. */
 async function secondsShown(page: Page): Promise<number> {
-  const drawn = drawnTime(page);
-  if ((await drawn.count()) === 0) return Number.POSITIVE_INFINITY;
-  const text = await drawn.textContent();
-  return text === null ? Number.POSITIVE_INFINITY : secondsOf(text);
+  const text = await timerTime(page).textContent();
+  return text === null || text === "" ? Number.POSITIVE_INFINITY : secondsOf(text);
+}
+
+/** The seconds an "h:mm:ss" or "m:ss" reading stands for. */
+function secondsOf(text: string): number {
+  return text.split(":").reduce((total, part) => total * 60 + Number(part), 0);
 }
 
 /** The Pomodoro Command that starts, pauses and resumes the Cycle. */
@@ -97,18 +121,15 @@ const POMODOROS_TODAY = "Pomodoros today: 0";
 /** The whole first Pomodoro in seconds, which the drawn time must fall below. */
 const POMODORO_SECONDS = 25 * 60;
 
-/** The Pomodoro panel's phase heading, which it draws at level 3. */
-const phaseHeading = (page: Page, name: string) =>
-  page.getByRole("heading", { name, exact: true, level: 3 });
+/** The Cycle step drawn as the current one: its phase name, from the Cycle list. */
+const currentPhase = (page: Page) => clockFrame(page).locator(".cycle-step.now .step-label");
 
 /** The Cycle's drawn remaining time: "m:ss", from the 25-minute default down. */
-const cycleTime = (page: Page) => page.getByText(/^\d{1,2}:\d{2}$/);
+const pomodoroTime = (page: Page) => clockFrame(page).locator("#pomodoro-time");
 
 /** The seconds the Cycle's drawn time shows; Infinity until it draws a time. */
 async function secondsLeft(page: Page): Promise<number> {
-  const drawn = cycleTime(page);
-  if ((await drawn.count()) === 0) return Number.POSITIVE_INFINITY;
-  const text = await drawn.textContent();
+  const text = await pomodoroTime(page).textContent();
   return text === null ? Number.POSITIVE_INFINITY : secondsOf(text);
 }
 
@@ -118,20 +139,17 @@ const TOGGLE_STOPWATCH_COMMAND = "Start or pause the Stopwatch";
 /** The Stopwatch Command that marks one Lap while it runs. */
 const LAP_STOPWATCH_COMMAND = "Mark a Lap";
 
-/** The Laps table the Stopwatch draws once it has Laps. */
-const lapsTable = (page: Page) => page.getByRole("table", { name: "Laps" });
+/** The Laps table the Stopwatch draws once it has Laps, the Frame's only table. */
+const lapsTable = (page: Page) => clockFrame(page).getByRole("table");
 
-/** One Laps data row: a body row holds a cell per column, the header row holds none. */
-const lapRows = (page: Page) =>
-  lapsTable(page)
-    .getByRole("row")
-    .filter({ has: page.getByRole("cell") });
+/** One Laps data row: the table's body rows, the header row holding none. */
+const lapRows = (page: Page) => lapsTable(page).locator("tbody tr");
 
 /**
- * The Stopwatch's drawn elapsed time: the "m:ss" above its controls. The Laps
- * table draws times of its own, so the panel's first one is the elapsed time.
+ * The Stopwatch's drawn elapsed time: the Frame's "hh:mm:ss" digits. The Laps
+ * table draws times of its own, but each carries hundredths and so cannot match.
  */
-const elapsedTime = (page: Page) => page.getByText(/^\d{1,2}:\d{2}$/).first();
+const elapsedTime = (page: Page) => clockFrame(page).locator("#stopwatch-digits");
 
 /** The seconds the Stopwatch's drawn elapsed time shows. */
 async function elapsedSeconds(page: Page): Promise<number> {
@@ -171,26 +189,36 @@ const ALARM_LABEL = "Wake up";
 const NO_ALARMS = "No alarms yet.";
 
 /** The Alarms tab's Add alarm button, which opens the form. */
-const addAlarmButton = (page: Page) => page.getByRole("button", { name: "Add alarm", exact: true });
+const addAlarmButton = (page: Page) =>
+  clockFrame(page).getByRole("button", { name: "Add alarm", exact: true });
 
 /** The Alarm form as a dialog, titled for the action that opened it. */
-const alarmForm = (page: Page, name: "Add alarm" | "Alarm") =>
-  page.getByRole("dialog", { name, exact: true });
+const alarmForm = (page: Page, name: "Add alarm" | `Edit ${string}`) =>
+  clockFrame(page).getByRole("dialog", { name, exact: true });
 
 /** One row's switch, which carries the row's drawn time in its name. */
 const alarmSwitch = (page: Page, time: string) =>
-  page.getByRole("switch", { name: `Alarm ${time}`, exact: true });
+  clockFrame(page).getByRole("switch", { name: `Alarm ${time}`, exact: true });
 
 /**
  * Replaces one number field of the open form from the keyboard: the field holds
- * the current hour or minute, so Select All types over it, and the Tab out is
- * the commit React Aria reads (it parses on blur, Enter, or stepping).
+ * the current hour or minute, so Select All types over it, and the Tab out moves
+ * on to the next field.
  */
 async function setAlarmNumber(page: Page, field: Locator, value: number): Promise<void> {
   await tabToEither(page, field, { max: 20 });
   await page.keyboard.press("ControlOrMeta+a");
   await page.keyboard.type(String(value));
   await page.keyboard.press("Tab");
+}
+
+/**
+ * Runs a host Command from the Command Palette. The Frame keeps keyboard focus
+ * while it is mounted, so focus leaves it first or F1 would open nothing.
+ */
+async function runHostCommand(page: Page, label: string): Promise<void> {
+  await leaveFrame(page, frameElement(page));
+  await runPaletteCommand(page, label);
 }
 
 /** Jumps to the Plugins section through the Settings outline, leaving its heading focused. */
@@ -242,10 +270,12 @@ async function turnOn(page: Page): Promise<void> {
 async function openClockPage(page: Page): Promise<void> {
   await runPaletteCommand(page, "Open Clock");
   await expect(page).toHaveURL(new RegExp(`/plugin/${PLUGIN_ID}/${PAGE_ID}$`));
+  // The page's own heading stays in the host, drawn for screen readers only.
   await expect(page.getByRole("heading", { name: PLUGIN_NAME, level: 1 })).toBeVisible();
-  await expect(page.getByRole("tablist", { name: "Clock sections" })).toBeVisible();
+  const tabs = clockFrame(page).getByRole("tablist", { name: "Clock sections" });
+  await expect(tabs).toBeVisible();
   // The Timer is the page's first tab and the one it opens on.
-  await expect(page.getByRole("tab", { name: "Timer", exact: true })).toHaveAttribute(
+  await expect(tabs.getByRole("tab", { name: "Timer", exact: true })).toHaveAttribute(
     "aria-selected",
     "true"
   );
@@ -258,13 +288,13 @@ async function openClockPage(page: Page): Promise<void> {
  * Pomodoro, which selection follows.
  */
 async function openPomodoroTab(page: Page): Promise<void> {
-  const tabList = page.getByRole("tablist", { name: "Clock sections" });
+  const tabList = clockFrame(page).getByRole("tablist", { name: "Clock sections" });
   const timerTab = tabList.getByRole("tab", { name: "Timer", exact: true });
   const pomodoroTab = tabList.getByRole("tab", { name: "Pomodoro", exact: true });
-  await tabTo(page, timerTab, { max: 40 });
+  await tabTo(page, timerTab, { max: 60 });
   await page.keyboard.press("ArrowLeft");
   await expect(pomodoroTab).toHaveAttribute("aria-selected", "true");
-  await expect(phaseHeading(page, "Pomodoro")).toBeVisible({ timeout: 15_000 });
+  await expect(tabPanel(page, "Pomodoro")).toBeVisible({ timeout: 15_000 });
 }
 
 /**
@@ -273,14 +303,15 @@ async function openPomodoroTab(page: Page): Promise<void> {
  * Stopwatch, which selection follows.
  */
 async function openStopwatchTab(page: Page): Promise<void> {
-  const tabList = page.getByRole("tablist", { name: "Clock sections" });
+  const tabList = clockFrame(page).getByRole("tablist", { name: "Clock sections" });
   const timerTab = tabList.getByRole("tab", { name: "Timer", exact: true });
   const stopwatchTab = tabList.getByRole("tab", { name: "Stopwatch", exact: true });
-  await tabTo(page, timerTab, { max: 40 });
+  await tabTo(page, timerTab, { max: 60 });
   await page.keyboard.press("ArrowRight");
   await expect(stopwatchTab).toHaveAttribute("aria-selected", "true");
   // The Stopwatch tab's own panel, from the zero it opens on.
-  await expect(page.getByText("0:00", { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(tabPanel(page, "Stopwatch")).toBeVisible({ timeout: 15_000 });
+  await expect(elapsedTime(page)).toHaveText("00:00:00", { timeout: 15_000 });
 }
 
 /**
@@ -289,30 +320,56 @@ async function openStopwatchTab(page: Page): Promise<void> {
  * the Stopwatch to the Alarms, which selection follows.
  */
 async function openAlarmsTab(page: Page): Promise<void> {
-  const tabList = page.getByRole("tablist", { name: "Clock sections" });
+  const tabList = clockFrame(page).getByRole("tablist", { name: "Clock sections" });
   const timerTab = tabList.getByRole("tab", { name: "Timer", exact: true });
   const stopwatchTab = tabList.getByRole("tab", { name: "Stopwatch", exact: true });
   const alarmsTab = tabList.getByRole("tab", { name: "Alarms", exact: true });
-  await tabTo(page, timerTab, { max: 40 });
+  await tabTo(page, timerTab, { max: 60 });
   await page.keyboard.press("ArrowRight");
   await expect(stopwatchTab).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("ArrowRight");
   await expect(alarmsTab).toHaveAttribute("aria-selected", "true");
   // The Alarms tab's own panel, from the empty list it opens on.
-  await expect(page.getByText(NO_ALARMS, { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(tabPanel(page, "Alarms")).toBeVisible({ timeout: 15_000 });
+  await expect(clockFrame(page).getByText(NO_ALARMS, { exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
 }
 
 /**
- * Replaces one length field's number from the keyboard and commits it: the
- * field holds the Plugin's default, so Select All and the digits type over it,
- * and Enter parses and clamps what was typed.
+ * Replaces one length field's number from the keyboard: the field holds the
+ * Plugin's default, so Select All types over it, and the field posts the new
+ * length on every keystroke.
  */
 async function setLength(page: Page, name: string, value: number): Promise<void> {
   const field = lengthField(page, name);
-  await tabTo(page, field, { max: 40 });
+  await tabTo(page, field, { max: 60 });
   await page.keyboard.press("ControlOrMeta+a");
   await page.keyboard.type(String(value));
   await page.keyboard.press("Enter");
+}
+
+/** The four section buttons, in the Frame's tab order. */
+const SECTIONS = ["Pomodoro", "Timer", "Stopwatch", "Alarms"] as const;
+
+/** The smallest a tap target may be on a phone: 44 by 44 CSS pixels. */
+const MIN_TAP = 44;
+
+/** The box an element draws, failing when a hidden or detached one draws none. */
+async function boxOf(
+  target: Locator,
+  name: string
+): Promise<{ x: number; y: number; width: number; height: number }> {
+  const box = await target.boundingBox();
+  if (box === null) throw new Error(`${name} draws no box, so it is no tap target`);
+  return box;
+}
+
+/** Asserts one control is at least 44 by 44, the size a fingertip needs. */
+async function expectThumbSized(target: Locator, name: string): Promise<void> {
+  const box = await boxOf(target, name);
+  expect(box.width, `${name} width`).toBeGreaterThanOrEqual(MIN_TAP);
+  expect(box.height, `${name} height`).toBeGreaterThanOrEqual(MIN_TAP);
 }
 
 test.use({
@@ -330,38 +387,44 @@ test.describe("Clock Timer @wf:plugins-clock-timer @chromium-only", () => {
 
     // The device granted no System Notification, so the page says Alerts stay
     // inside Maibuk and offers the banner.
-    await expect(page.getByText(NOTIFICATIONS_OFF, { exact: true })).toBeVisible();
+    await expect(clockFrame(page).getByText(NOTIFICATIONS_OFF, { exact: true })).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Allow notifications", exact: true })
+      clockFrame(page).getByRole("button", { name: "Allow notifications", exact: true })
     ).toBeVisible();
     await capture(page, "clock-timer-page");
 
     // 0 minutes and 5 seconds, from the 25-minute default the fields hold.
     await setLength(page, "Minutes", 0);
     await setLength(page, "Seconds", 5);
-    await expect(page.getByText(LENGTH, { exact: true })).toHaveCount(1);
-
-    const start = page.getByRole("button", { name: "Start", exact: true });
+    // Start names the length it will run: 0:05.
+    const start = clockFrame(page).getByRole("button", { name: `Start ${LENGTH}`, exact: true });
+    await expect(start).toBeVisible();
     await tabTo(page, start, { max: 12 });
     await page.keyboard.press("Enter");
     // A second in, the drawn time has fallen.
-    await expect(page.getByText("0:04", { exact: true })).toBeVisible({ timeout: 5_000 });
+    await expect(timerTime(page)).toHaveText("0:04", { timeout: 5_000 });
     // The live region names the whole minute left, not every second.
-    await expect(page.getByText("1 minute left", { exact: true })).toBeVisible();
+    await expect(clockFrame(page).getByText("1 minute left", { exact: true })).toBeVisible();
 
     // The Command pauses it: Resume and Reset replace Pause, and the drawn time
     // holds what was left rather than returning to the length.
-    await runPaletteCommand(page, TOGGLE_COMMAND);
-    await expect(page.getByRole("button", { name: "Resume", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Pause", exact: true })).toHaveCount(0);
-    await expect(page.getByText(ENDED, { exact: true })).toHaveCount(0);
-    const paused = await drawnTime(page).textContent();
+    await runHostCommand(page, TOGGLE_COMMAND);
+    await expect(
+      clockFrame(page).getByRole("button", { name: "Resume", exact: true })
+    ).toBeVisible();
+    await expect(clockFrame(page).getByRole("button", { name: "Pause", exact: true })).toHaveCount(
+      0
+    );
+    await expect(clockFrame(page).getByText(ENDED, { exact: true })).toHaveCount(0);
+    const paused = await timerTime(page).textContent();
     expect(paused).toMatch(/^0:0[0-4]$/);
 
     // The Command again resumes it from that remainder, and the drawn time never
     // goes back to the length.
-    await runPaletteCommand(page, TOGGLE_COMMAND);
-    await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
+    await runHostCommand(page, TOGGLE_COMMAND);
+    await expect(
+      clockFrame(page).getByRole("button", { name: "Pause", exact: true })
+    ).toBeVisible();
     const pausedSeconds = secondsOf(paused ?? "");
     await expect
       .poll(() => secondsShown(page), { timeout: 5_000 })
@@ -372,12 +435,17 @@ test.describe("Clock Timer @wf:plugins-clock-timer @chromium-only", () => {
     await expect(page.getByRole("status").filter({ hasText: ALERT })).toBeVisible({
       timeout: 10_000,
     });
-    await expect(page.getByText(ENDED, { exact: true })).toBeVisible();
-    await expect(page.getByText(NOTIFICATIONS_OFF, { exact: true })).toBeVisible();
-    // The drawn time is spent, and the fields and Reset come back.
-    await expect(page.getByText("0:00", { exact: true })).toBeVisible();
+    await expect(clockFrame(page).getByText(ENDED, { exact: true })).toBeVisible();
+    await expect(clockFrame(page).getByText(NOTIFICATIONS_OFF, { exact: true })).toBeVisible();
+    // The Timer is spent and back in its setup: the fields, Start naming the
+    // length, and Reset.
     await expect(lengthField(page, "Seconds")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Reset", exact: true })).toBeVisible();
+    await expect(
+      clockFrame(page).getByRole("button", { name: `Start ${LENGTH}`, exact: true })
+    ).toBeVisible();
+    await expect(
+      clockFrame(page).getByRole("button", { name: "Reset", exact: true })
+    ).toBeVisible();
     await capture(page, "clock-timer-ended");
   });
 });
@@ -392,63 +460,96 @@ test.describe("Clock Pomodoro @wf:plugins-clock-pomodoro @chromium-only", () => 
 
     // Idle on the first Pomodoro: its 25-minute length, the controls of that
     // status, and no Pomodoro counted today.
-    await expect(phaseHeading(page, "Pomodoro")).toBeVisible();
-    await expect(page.getByText(POMODORO_OF_CYCLE, { exact: true })).toBeVisible();
-    await expect(page.getByText(POMODORO_LENGTH, { exact: true })).toBeVisible();
-    await expect(page.getByText(POMODOROS_TODAY, { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Start", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Skip", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Reset Cycle", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Pause", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Resume", exact: true })).toHaveCount(0);
+    await expect(currentPhase(page)).toHaveText("Pomodoro");
+    await expect(clockFrame(page).getByText(POMODORO_OF_CYCLE, { exact: true })).toBeVisible();
+    await expect(pomodoroTime(page)).toHaveText(POMODORO_LENGTH);
+    await expect(clockFrame(page).getByText(POMODOROS_TODAY, { exact: true })).toBeVisible();
+    await expect(
+      clockFrame(page).getByRole("button", { name: "Start", exact: true })
+    ).toBeVisible();
+    await expect(clockFrame(page).getByRole("button", { name: "Skip", exact: true })).toBeVisible();
+    await expect(
+      clockFrame(page).getByRole("button", { name: "Reset Cycle", exact: true })
+    ).toBeVisible();
+    await expect(clockFrame(page).getByRole("button", { name: "Pause", exact: true })).toHaveCount(
+      0
+    );
+    await expect(clockFrame(page).getByRole("button", { name: "Resume", exact: true })).toHaveCount(
+      0
+    );
     await capture(page, "clock-pomodoro-idle");
 
     // Start runs it: Pause replaces Start, and the drawn time falls.
-    await tabTo(page, page.getByRole("button", { name: "Start", exact: true }), { max: 12 });
+    await tabTo(page, clockFrame(page).getByRole("button", { name: "Start", exact: true }), {
+      max: 12,
+    });
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Start", exact: true })).toHaveCount(0);
+    await expect(
+      clockFrame(page).getByRole("button", { name: "Pause", exact: true })
+    ).toBeVisible();
+    await expect(clockFrame(page).getByRole("button", { name: "Start", exact: true })).toHaveCount(
+      0
+    );
     await expect.poll(() => secondsLeft(page), { timeout: 5_000 }).toBeLessThan(POMODORO_SECONDS);
 
     // The Command pauses it: Resume replaces Pause, and the drawn time holds
     // what was left rather than returning to the length.
-    await runPaletteCommand(page, TOGGLE_POMODORO_COMMAND);
-    await expect(page.getByRole("button", { name: "Resume", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Pause", exact: true })).toHaveCount(0);
+    await runHostCommand(page, TOGGLE_POMODORO_COMMAND);
+    await expect(
+      clockFrame(page).getByRole("button", { name: "Resume", exact: true })
+    ).toBeVisible();
+    await expect(clockFrame(page).getByRole("button", { name: "Pause", exact: true })).toHaveCount(
+      0
+    );
     const paused = await secondsLeft(page);
     expect(paused).toBeLessThan(POMODORO_SECONDS);
 
     // The Command again resumes it from that remainder.
-    await runPaletteCommand(page, TOGGLE_POMODORO_COMMAND);
-    await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Resume", exact: true })).toHaveCount(0);
+    await runHostCommand(page, TOGGLE_POMODORO_COMMAND);
+    await expect(
+      clockFrame(page).getByRole("button", { name: "Pause", exact: true })
+    ).toBeVisible();
+    await expect(clockFrame(page).getByRole("button", { name: "Resume", exact: true })).toHaveCount(
+      0
+    );
     await expect.poll(() => secondsLeft(page), { timeout: 5_000 }).toBeLessThan(paused);
 
     // Its other Command moves the Cycle on: the Short break, idle, still the
     // first Pomodoro of the Cycle and none counted.
-    await runPaletteCommand(page, SKIP_POMODORO_COMMAND);
-    await expect(phaseHeading(page, "Short break")).toBeVisible();
-    await expect(phaseHeading(page, "Pomodoro")).toHaveCount(0);
-    await expect(page.getByText(POMODORO_OF_CYCLE, { exact: true })).toBeVisible();
-    await expect(page.getByText(SHORT_BREAK_LENGTH, { exact: true })).toBeVisible();
-    await expect(page.getByText(POMODOROS_TODAY, { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Start", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Pause", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Resume", exact: true })).toHaveCount(0);
+    await runHostCommand(page, SKIP_POMODORO_COMMAND);
+    await expect(currentPhase(page)).toHaveText("Short break");
+    await expect(clockFrame(page).getByText(POMODORO_OF_CYCLE, { exact: true })).toBeVisible();
+    await expect(pomodoroTime(page)).toHaveText(SHORT_BREAK_LENGTH);
+    await expect(clockFrame(page).getByText(POMODOROS_TODAY, { exact: true })).toBeVisible();
+    await expect(
+      clockFrame(page).getByRole("button", { name: "Start", exact: true })
+    ).toBeVisible();
+    await expect(clockFrame(page).getByRole("button", { name: "Pause", exact: true })).toHaveCount(
+      0
+    );
+    await expect(clockFrame(page).getByRole("button", { name: "Resume", exact: true })).toHaveCount(
+      0
+    );
     await capture(page, "clock-pomodoro-short-break");
 
     // Reset Cycle returns the Cycle to its first Pomodoro, idle. The palette
-    // leaves focus on the body, so the button is reached from either side.
-    const reset = page.getByRole("button", { name: "Reset Cycle", exact: true });
-    await tabToEither(page, reset, { max: 30 });
+    // leaves focus in the host, so the button is reached by entering the Frame.
+    const reset = clockFrame(page).getByRole("button", { name: "Reset Cycle", exact: true });
+    await tabTo(page, reset, { max: 60 });
     await page.keyboard.press("Enter");
-    await expect(phaseHeading(page, "Pomodoro")).toBeVisible();
-    await expect(page.getByText(POMODORO_OF_CYCLE, { exact: true })).toBeVisible();
-    await expect(page.getByText(POMODORO_LENGTH, { exact: true })).toBeVisible();
-    await expect(page.getByText(POMODOROS_TODAY, { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Start", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Pause", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Resume", exact: true })).toHaveCount(0);
+    await expect(currentPhase(page)).toHaveText("Pomodoro");
+    await expect(clockFrame(page).getByText(POMODORO_OF_CYCLE, { exact: true })).toBeVisible();
+    await expect(pomodoroTime(page)).toHaveText(POMODORO_LENGTH);
+    await expect(clockFrame(page).getByText(POMODOROS_TODAY, { exact: true })).toBeVisible();
+    await expect(
+      clockFrame(page).getByRole("button", { name: "Start", exact: true })
+    ).toBeVisible();
+    await expect(clockFrame(page).getByRole("button", { name: "Pause", exact: true })).toHaveCount(
+      0
+    );
+    await expect(clockFrame(page).getByRole("button", { name: "Resume", exact: true })).toHaveCount(
+      0
+    );
     await capture(page, "clock-pomodoro-reset");
   });
 });
@@ -462,59 +563,84 @@ test.describe("Clock Stopwatch @wf:plugins-clock-stopwatch @chromium-only", () =
     await openStopwatchTab(page);
 
     // Idle: nothing has run, so Start is the only control and no Lap is marked.
-    const start = page.getByRole("button", { name: "Start", exact: true });
-    await expect(page.getByText("0:00", { exact: true })).toBeVisible();
+    const start = clockFrame(page).getByRole("button", { name: "Start", exact: true });
+    await expect(elapsedTime(page)).toHaveText("00:00:00");
     await expect(start).toBeVisible();
-    await expect(page.getByRole("button", { name: "Pause", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Resume", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Lap", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Reset", exact: true })).toHaveCount(0);
+    await expect(clockFrame(page).getByRole("button", { name: "Pause", exact: true })).toHaveCount(
+      0
+    );
+    await expect(clockFrame(page).getByRole("button", { name: "Resume", exact: true })).toHaveCount(
+      0
+    );
+    await expect(clockFrame(page).getByRole("button", { name: "Lap", exact: true })).toHaveCount(0);
+    await expect(clockFrame(page).getByRole("button", { name: "Reset", exact: true })).toHaveCount(
+      0
+    );
     await expect(lapsTable(page)).toHaveCount(0);
     await capture(page, "clock-stopwatch-idle");
 
     // Start runs it: Pause and Lap replace Start, and the elapsed time climbs.
     await tabTo(page, start, { max: 12 });
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Start", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Lap", exact: true })).toBeVisible();
+    await expect(
+      clockFrame(page).getByRole("button", { name: "Pause", exact: true })
+    ).toBeVisible();
+    await expect(clockFrame(page).getByRole("button", { name: "Start", exact: true })).toHaveCount(
+      0
+    );
+    await expect(clockFrame(page).getByRole("button", { name: "Lap", exact: true })).toBeVisible();
     await expect.poll(() => elapsedSeconds(page), { timeout: 10_000 }).toBeGreaterThan(0);
 
     // Lap, pressed on its own button, marks the first one: the table appears and
-    // holds one row under its Lap, Lap time, and Total columns.
-    const lap = page.getByRole("button", { name: "Lap", exact: true });
-    await tabToEither(page, lap, { max: 30 });
+    // holds one row under its Lap, Lap time, and Total columns. It sits just
+    // before the primary button its focus is on, so it is reached going back.
+    const lap = clockFrame(page).getByRole("button", { name: "Lap", exact: true });
+    await tabTo(page, lap, { max: 4, backwards: true });
     await page.keyboard.press("Enter");
     await expect(lapsTable(page)).toBeVisible();
     await expect(lapRows(page)).toHaveCount(1);
 
     // The Command pauses it: Resume replaces Pause, Lap is offered only while it
     // runs, and the elapsed time holds rather than climbing.
-    await runPaletteCommand(page, TOGGLE_STOPWATCH_COMMAND);
-    await expect(page.getByRole("button", { name: "Resume", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Pause", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Lap", exact: true })).toHaveCount(0);
+    await runHostCommand(page, TOGGLE_STOPWATCH_COMMAND);
+    await expect(
+      clockFrame(page).getByRole("button", { name: "Resume", exact: true })
+    ).toBeVisible();
+    await expect(clockFrame(page).getByRole("button", { name: "Pause", exact: true })).toHaveCount(
+      0
+    );
+    await expect(clockFrame(page).getByRole("button", { name: "Lap", exact: true })).toHaveCount(0);
     const paused = (await elapsedTime(page).textContent()) ?? "";
     expect(secondsOf(paused)).toBeGreaterThan(0);
     await page.waitForTimeout(1_500);
     await expect(elapsedTime(page)).toHaveText(paused);
 
     // The Command again resumes it, and its other Command adds a second Lap.
-    await runPaletteCommand(page, TOGGLE_STOPWATCH_COMMAND);
-    await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Resume", exact: true })).toHaveCount(0);
-    await runPaletteCommand(page, LAP_STOPWATCH_COMMAND);
+    await runHostCommand(page, TOGGLE_STOPWATCH_COMMAND);
+    await expect(
+      clockFrame(page).getByRole("button", { name: "Pause", exact: true })
+    ).toBeVisible();
+    await expect(clockFrame(page).getByRole("button", { name: "Resume", exact: true })).toHaveCount(
+      0
+    );
+    await runHostCommand(page, LAP_STOPWATCH_COMMAND);
     await expect(lapRows(page)).toHaveCount(2);
     await capture(page, "clock-stopwatch-laps");
 
-    // Reset returns it to zero, dropping the Laps. The palette leaves focus on
-    // the body, so the button is reached from either side.
-    const reset = page.getByRole("button", { name: "Reset", exact: true });
-    await tabToEither(page, reset, { max: 30 });
+    // The Frame offers Reset only while the Stopwatch is paused, so its Command
+    // parks it first; the Laps stay until the button drops them.
+    await runHostCommand(page, TOGGLE_STOPWATCH_COMMAND);
+    const reset = clockFrame(page).getByRole("button", { name: "Reset", exact: true });
+    await expect(reset).toBeVisible();
+    await tabTo(page, reset, { max: 60 });
     await page.keyboard.press("Enter");
-    await expect(page.getByText("0:00", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Start", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Reset", exact: true })).toHaveCount(0);
+    await expect(elapsedTime(page)).toHaveText("00:00:00");
+    await expect(
+      clockFrame(page).getByRole("button", { name: "Start", exact: true })
+    ).toBeVisible();
+    await expect(clockFrame(page).getByRole("button", { name: "Reset", exact: true })).toHaveCount(
+      0
+    );
     await expect(lapsTable(page)).toHaveCount(0);
     await capture(page, "clock-stopwatch-reset");
   });
@@ -537,10 +663,33 @@ test.describe("Clock Alarms @wf:plugins-clock-alarms @chromium-only", () => {
     await page.keyboard.press("Enter");
     const add = alarmForm(page, "Add alarm");
     await expect(add).toBeVisible();
-    await setAlarmNumber(page, add.getByRole("textbox", { name: "Hour", exact: true }), ALARM_HOUR);
+    // The dialog takes focus on its Label field, keeps Tab inside past its last
+    // control, and Escape dismisses it back to the button that opened it.
+    await expectFocusWithin(add);
+    await expect(add.getByRole("textbox", { name: "Label", exact: true })).toBeFocused();
+    await expectTabContained(page, add);
+    // From Save, the last control, Tab lands back on the dialog's first, and one
+    // more reaches its second: the Hour field, so focus wrapped inside.
+    await tabToEither(page, add.getByRole("button", { name: "Save", exact: true }), { max: 20 });
+    await page.keyboard.press("Tab");
+    await expectFocusWithin(add);
+    await page.keyboard.press("Tab");
+    await expect(add.getByRole("spinbutton", { name: "Hour", exact: true })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(add).toBeHidden();
+    await expect(addAlarmButton(page)).toBeFocused();
+
+    // Reopened from the restored focus, the form is filled and saved.
+    await page.keyboard.press("Enter");
+    await expect(add).toBeVisible();
     await setAlarmNumber(
       page,
-      add.getByRole("textbox", { name: "Minute", exact: true }),
+      add.getByRole("spinbutton", { name: "Hour", exact: true }),
+      ALARM_HOUR
+    );
+    await setAlarmNumber(
+      page,
+      add.getByRole("spinbutton", { name: "Minute", exact: true }),
       ALARM_MINUTE
     );
     await tabToEither(page, add.getByRole("textbox", { name: "Label", exact: true }), { max: 20 });
@@ -556,46 +705,53 @@ test.describe("Clock Alarms @wf:plugins-clock-alarms @chromium-only", () => {
     await tabToEither(page, add.getByRole("button", { name: "Save", exact: true }), { max: 20 });
     await page.keyboard.press("Enter");
     await expect(add).toBeHidden();
-    await expect(page.getByText(ALARM_TIME, { exact: true })).toBeVisible();
-    await expect(page.getByText(ALARM_LABEL, { exact: true })).toBeVisible();
-    await expect(page.getByText(ALARM_WEEKDAY, { exact: true })).toBeVisible();
-    await expect(page.getByText(NO_ALARMS, { exact: true })).toHaveCount(0);
+    await expect(clockFrame(page).getByText(ALARM_TIME, { exact: true })).toBeVisible();
+    await expect(clockFrame(page).getByText(ALARM_LABEL, { exact: true })).toBeVisible();
+    // The weekday chips are letters on screen; the repeat names the day fully.
+    await expect(clockFrame(page).locator(".alarm-repeat")).toHaveAttribute(
+      "aria-label",
+      ALARM_WEEKDAY
+    );
+    await expect(clockFrame(page).getByText(NO_ALARMS, { exact: true })).toBeHidden();
     const toggle = alarmSwitch(page, ALARM_TIME);
     await expect(toggle).toBeChecked();
     await capture(page, "clock-alarms-added");
 
     // Edit <time> reopens the same form holding the Alarm's own fields, and a
     // new minute moves the row to the new time.
-    await tabToEither(page, page.getByRole("button", { name: `Edit ${ALARM_TIME}`, exact: true }), {
-      max: 30,
+    const editButton = clockFrame(page).getByRole("button", {
+      name: `Edit ${ALARM_TIME}`,
+      exact: true,
     });
+    await tabToEither(page, editButton, { max: 30 });
     await page.keyboard.press("Enter");
-    const edit = alarmForm(page, "Alarm");
+    const edit = alarmForm(page, `Edit ${ALARM_TIME}`);
     await expect(edit).toBeVisible();
-    await expect(edit.getByRole("textbox", { name: "Hour", exact: true })).toHaveValue(
-      String(ALARM_HOUR)
+    await expect(edit.getByRole("spinbutton", { name: "Hour", exact: true })).toHaveValue(
+      String(ALARM_HOUR).padStart(2, "0")
     );
-    await expect(edit.getByRole("textbox", { name: "Minute", exact: true })).toHaveValue(
-      String(ALARM_MINUTE)
+    await expect(edit.getByRole("spinbutton", { name: "Minute", exact: true })).toHaveValue(
+      String(ALARM_MINUTE).padStart(2, "0")
     );
     await expect(edit.getByRole("textbox", { name: "Label", exact: true })).toHaveValue(
       ALARM_LABEL
     );
     await setAlarmNumber(
       page,
-      edit.getByRole("textbox", { name: "Minute", exact: true }),
+      edit.getByRole("spinbutton", { name: "Minute", exact: true }),
       EDITED_MINUTE
     );
     await tabToEither(page, edit.getByRole("button", { name: "Save", exact: true }), { max: 20 });
     await page.keyboard.press("Enter");
     await expect(edit).toBeHidden();
-    await expect(page.getByText(EDITED_TIME, { exact: true })).toBeVisible();
-    await expect(page.getByText(ALARM_TIME, { exact: true })).toHaveCount(0);
+    await expect(clockFrame(page).getByText(EDITED_TIME, { exact: true })).toBeVisible();
+    await expect(clockFrame(page).getByText(ALARM_TIME, { exact: true })).toHaveCount(0);
 
     // The switch, renamed with the new time, turns the Alarm off and back on.
+    // Saving returned focus to the row's Edit button, so the switch sits before.
     const editedToggle = alarmSwitch(page, EDITED_TIME);
     await expect(editedToggle).toBeChecked();
-    await tabToEither(page, editedToggle, { max: 30 });
+    await tabTo(page, editedToggle, { max: 4, backwards: true });
     await page.keyboard.press("Space");
     await expect(editedToggle).not.toBeChecked();
     await page.keyboard.press("Space");
@@ -603,15 +759,68 @@ test.describe("Clock Alarms @wf:plugins-clock-alarms @chromium-only", () => {
     await capture(page, "clock-alarms-edited");
 
     // Delete <time> takes the row away, leaving the tab empty again.
-    await tabToEither(
-      page,
-      page.getByRole("button", { name: `Delete ${EDITED_TIME}`, exact: true }),
-      { max: 30 }
-    );
+    const removeButton = clockFrame(page).getByRole("button", {
+      name: `Delete ${EDITED_TIME}`,
+      exact: true,
+    });
+    await tabTo(page, removeButton, { max: 4 });
     await page.keyboard.press("Enter");
-    await expect(page.getByText(NO_ALARMS, { exact: true })).toBeVisible();
+    await expect(clockFrame(page).getByText(NO_ALARMS, { exact: true })).toBeVisible();
     await expect(editedToggle).toHaveCount(0);
-    await expect(page.getByText(ALARM_LABEL, { exact: true })).toHaveCount(0);
+    await expect(clockFrame(page).getByText(ALARM_LABEL, { exact: true })).toHaveCount(0);
     await capture(page, "clock-alarms-deleted");
+  });
+});
+
+test.describe("Clock on a phone @touch @wf:plugins-clock-phone", () => {
+  // A phone has no Settings outline to turn the Built-in on from, so the seed
+  // writes the record turning it on would: the shipped copy pinned, its one
+  // required Plugin Permission granted, and the Plugin already running.
+  test.use({ pluginApprovals: [{ pluginId: PLUGIN_ID, granted: ["system-notifications"] }] });
+
+  test("the Frame stacks its side card below the hero with thumb-sized targets @touch", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    // A phone has no sidebar: the pages live behind the navigation menu.
+    const menu = page.getByRole("button", { name: "Open navigation menu" });
+    await expect(menu).toBeVisible({ timeout: 60_000 });
+    await menu.tap();
+    const navigation = page.getByRole("dialog", { name: "Primary navigation" });
+    await navigation.getByRole("option", { name: /^Clock/ }).tap();
+    await expect(page).toHaveURL(new RegExp(`/plugin/${PLUGIN_ID}/${PAGE_ID}$`));
+    const tabs = clockFrame(page).getByRole("tablist", { name: "Clock sections" });
+    await expect(tabs).toBeVisible({ timeout: 20_000 });
+
+    // The Pomodoro tab draws a hero carrying the primary button and the two
+    // round icon buttons, and a side card that desktop width puts beside it.
+    await tabs.getByRole("tab", { name: "Pomodoro", exact: true }).tap();
+    const pomodoro = tabPanel(page, "Pomodoro");
+    await expect(pomodoro).toBeVisible({ timeout: 15_000 });
+    const hero = await boxOf(pomodoro.locator(".hero"), "the hero");
+    const side = await boxOf(pomodoro.locator(".side"), "the side card");
+    // At phone width the layout stacks, so the side card starts below the hero.
+    expect(side.y).toBeGreaterThan(hero.y + hero.height);
+
+    // Every target is thumb-sized: the four section buttons, the hero's primary
+    // button, and its two round icon buttons.
+    for (const name of SECTIONS) {
+      await expectThumbSized(tabs.getByRole("tab", { name, exact: true }), name);
+    }
+    await expectThumbSized(pomodoro.getByRole("button", { name: "Start", exact: true }), "Start");
+    await expectThumbSized(
+      pomodoro.getByRole("button", { name: "Reset Cycle", exact: true }),
+      "Reset Cycle"
+    );
+    await expectThumbSized(pomodoro.getByRole("button", { name: "Skip", exact: true }), "Skip");
+    await capture(page, "clock-phone-pomodoro");
+
+    // A tap on the Stopwatch section selects it and draws its own panel.
+    const stopwatchTab = tabs.getByRole("tab", { name: "Stopwatch", exact: true });
+    await stopwatchTab.tap();
+    await expect(tabPanel(page, "Stopwatch")).toBeVisible();
+    await expect(stopwatchTab).toHaveAttribute("aria-selected", "true");
+    await expect(pomodoro).toBeHidden();
+    await capture(page, "clock-phone-stopwatch");
   });
 });

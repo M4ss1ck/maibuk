@@ -1,0 +1,1486 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Clock</title>
+    <style>
+      :root {
+        color-scheme: var(--maibuk-color-scheme, light dark);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      /* `hidden` has to win over the `display` rules the panels set. */
+      [hidden] {
+        /* biome-ignore lint/complexity/noImportantStyles: the panel display rules outrank [hidden] without it */
+        display: none !important;
+      }
+
+      html {
+        font-size: var(--maibuk-font-size, 16px);
+      }
+
+      html,
+      body {
+        margin: 0;
+      }
+
+      body {
+        min-height: 100vh;
+        background: var(--maibuk-color-background);
+        color: var(--maibuk-color-foreground);
+        font-family: var(--maibuk-font-sans, system-ui, sans-serif);
+      }
+
+      button {
+        font-family: inherit;
+        cursor: pointer;
+      }
+
+      input {
+        font-family: inherit;
+      }
+
+      #clock {
+        max-width: 1040px;
+        margin: 0 auto;
+        padding: 32px 24px 48px;
+        display: flex;
+        flex-direction: column;
+        gap: 28px;
+      }
+
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .tabs {
+        display: flex;
+        gap: 4px;
+        padding: 4px;
+        background: color-mix(in srgb, var(--maibuk-color-muted) 55%, var(--maibuk-color-background));
+        border: 1px solid var(--maibuk-color-border);
+        border-radius: 14px;
+      }
+
+      .tab {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 40px;
+        padding: 0 16px;
+        border: 0;
+        border-radius: 10px;
+        background: transparent;
+        color: var(--maibuk-color-muted-foreground);
+        font-size: 0.875rem;
+        font-weight: 500;
+      }
+
+      .tab[aria-selected="true"] {
+        background: var(--maibuk-color-card);
+        color: var(--maibuk-color-card-foreground);
+        font-weight: 600;
+        box-shadow: 0 1px 2px
+          color-mix(in srgb, var(--maibuk-color-foreground) 12%, transparent);
+      }
+
+      .tab svg {
+        flex: 0 0 auto;
+      }
+
+      .tab .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 3px;
+        background: var(--maibuk-color-primary);
+      }
+
+      .today {
+        margin: 0;
+        font-size: 0.875rem;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+
+      .banner {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px 16px;
+        padding: 12px 12px 12px 16px;
+        border-radius: 14px;
+        background: var(--maibuk-color-warning-bg);
+        border: 1px solid color-mix(in srgb, var(--maibuk-color-warning-text) 25%, transparent);
+        color: var(--maibuk-color-warning-text);
+        font-size: 0.875rem;
+      }
+
+      .banner .banner-text {
+        flex: 1 1 240px;
+      }
+
+      .banner button {
+        min-height: 36px;
+        padding: 0 14px;
+        border-radius: 10px;
+        border: 1px solid currentColor;
+        background: transparent;
+        color: var(--maibuk-color-warning-text);
+        font-size: 0.8125rem;
+        font-weight: 600;
+      }
+
+      .layout {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px;
+        align-items: stretch;
+      }
+
+      .hero {
+        flex: 999 1 520px;
+        min-width: 0;
+        background: var(--maibuk-color-card);
+        color: var(--maibuk-color-card-foreground);
+        border: 1px solid var(--maibuk-color-border);
+        border-radius: 24px;
+        padding: 40px 24px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 32px;
+        box-shadow: 0 12px 32px -16px
+          color-mix(in srgb, var(--maibuk-color-foreground) 18%, transparent);
+      }
+
+      .hero-timer {
+        padding: 48px 24px;
+        gap: 36px;
+      }
+
+      .side {
+        flex: 1 1 300px;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .card {
+        background: var(--maibuk-color-card);
+        color: var(--maibuk-color-card-foreground);
+        border: 1px solid var(--maibuk-color-border);
+        border-radius: 20px;
+        padding: 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .card.tight {
+        gap: 10px;
+      }
+
+      .card h2 {
+        margin: 0;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .phase-pill {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--maibuk-color-primary) 14%, transparent);
+        font-size: 0.8125rem;
+        font-weight: 600;
+      }
+
+      .phase-pill .phase-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 4px;
+        background: var(--maibuk-color-primary);
+      }
+
+      .dial {
+        position: relative;
+        width: 320px;
+        height: 320px;
+        max-width: 100%;
+      }
+
+      .dial svg {
+        display: block;
+        max-width: 100%;
+        height: auto;
+      }
+
+      .dial-content {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
+
+      .dial-time {
+        font-size: 4.75rem;
+        font-weight: 300;
+        letter-spacing: -0.04em;
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+      }
+
+      .dial-sub {
+        font-size: 0.875rem;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .ring-track {
+        fill: none;
+        stroke: var(--maibuk-color-muted);
+        stroke-width: 10;
+      }
+
+      .ring-value {
+        fill: none;
+        stroke: var(--maibuk-color-primary);
+        stroke-width: 10;
+        stroke-linecap: round;
+      }
+
+      .ticks line {
+        stroke: var(--maibuk-color-muted-foreground);
+        stroke-linecap: round;
+      }
+
+      .controls {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+
+      .round {
+        width: 48px;
+        height: 48px;
+        padding: 0;
+        border-radius: 24px;
+        border: 1px solid var(--maibuk-color-border);
+        background: var(--maibuk-color-card);
+        color: var(--maibuk-color-muted-foreground);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .primary {
+        min-width: 160px;
+        height: 60px;
+        padding: 0 32px;
+        border-radius: 30px;
+        border: 0;
+        background: var(--maibuk-color-primary);
+        color: var(--maibuk-color-primary-foreground);
+        font-size: 1.0625rem;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        box-shadow: 0 8px 20px -8px var(--maibuk-color-primary);
+      }
+
+      .primary:hover {
+        background: var(--maibuk-color-primary-hover);
+      }
+
+      .primary-wide {
+        min-width: 200px;
+        padding: 0 36px;
+        box-shadow: 0 10px 28px -10px var(--maibuk-color-primary);
+      }
+
+      .setup {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 36px;
+      }
+
+      .fieldset {
+        border: 0;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+      }
+
+      .field {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .field input {
+        width: 132px;
+        height: 112px;
+        border-radius: 20px;
+        border: 1px solid var(--maibuk-color-border);
+        background: var(--maibuk-color-background);
+        color: var(--maibuk-color-foreground);
+        font-size: 4.5rem;
+        font-weight: 300;
+        letter-spacing: -0.04em;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .field input:focus-visible {
+        border-color: var(--maibuk-color-primary);
+        outline: 2px solid var(--maibuk-color-primary);
+        outline-offset: 2px;
+      }
+
+      .field label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .field-separator {
+        font-size: 4.5rem;
+        font-weight: 300;
+        line-height: 112px;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      input::-webkit-outer-spin-button,
+      input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+
+      input[type="number"] {
+        -moz-appearance: textfield;
+      }
+
+      .recent {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .recent-label {
+        font-size: 0.8125rem;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+      }
+
+      .chip {
+        min-height: 40px;
+        padding: 0 16px;
+        border-radius: 20px;
+        border: 1px solid var(--maibuk-color-border);
+        background: transparent;
+        color: var(--maibuk-color-foreground);
+        font-size: 0.875rem;
+        font-weight: 500;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .chip[aria-pressed="true"] {
+        background: color-mix(in srgb, var(--maibuk-color-primary) 16%, transparent);
+        border-color: var(--maibuk-color-primary);
+      }
+
+      .cycle-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .cycle-step {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 36px;
+        padding: 0 10px;
+        border-radius: 10px;
+      }
+
+      .cycle-step.now {
+        background: color-mix(in srgb, var(--maibuk-color-muted) 45%, transparent);
+      }
+
+      .cycle-step .step-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 5px;
+        background: transparent;
+        border: 2px solid var(--maibuk-color-border);
+      }
+
+      .cycle-step.pomodoro:not(.next) .step-dot {
+        background: var(--maibuk-color-primary);
+        border-color: var(--maibuk-color-primary);
+      }
+
+      .cycle-step.break:not(.next) .step-dot {
+        background: var(--maibuk-color-success);
+        border-color: var(--maibuk-color-success);
+      }
+
+      .cycle-step .step-label {
+        flex: 1;
+        font-size: 0.875rem;
+        color: var(--maibuk-color-foreground);
+      }
+
+      .cycle-step.done .step-label {
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .cycle-step.now .step-label {
+        font-weight: 600;
+      }
+
+      .cycle-step .step-length {
+        font-size: 0.8125rem;
+        color: var(--maibuk-color-muted-foreground);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .lengths {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 48px;
+        padding: 0 20px;
+        border-radius: 14px;
+        border: 1px dashed var(--maibuk-color-border);
+        color: var(--maibuk-color-muted-foreground);
+        font-size: 0.875rem;
+        font-weight: 500;
+      }
+
+      .also-list {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .also-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .also-row .also-text {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .also-title {
+        font-size: 0.9375rem;
+        font-weight: 600;
+      }
+
+      .also-sub {
+        font-size: 0.8125rem;
+        color: var(--maibuk-color-muted-foreground);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .mini-track {
+        stroke: var(--maibuk-color-muted);
+      }
+
+      .mini-value {
+        stroke: var(--maibuk-color-primary);
+      }
+
+      .link-button {
+        min-height: 44px;
+        padding: 0 4px;
+        border: 0;
+        background: transparent;
+        color: var(--maibuk-color-foreground);
+        font-size: 0.8125rem;
+        font-weight: 500;
+      }
+
+      .link-button:hover {
+        color: var(--maibuk-color-primary-hover);
+      }
+
+      .alerts-text {
+        margin: 0;
+        font-size: 0.875rem;
+        line-height: 1.55;
+      }
+
+      .hero-stopwatch {
+        padding: 56px 24px;
+        justify-content: center;
+        gap: 40px;
+      }
+
+      .stopwatch-main {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+      }
+
+      .stopwatch-time {
+        display: flex;
+        align-items: baseline;
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+      }
+
+      .stopwatch-digits {
+        font-size: 6rem;
+        font-weight: 300;
+        letter-spacing: -0.045em;
+      }
+
+      .stopwatch-hundredths {
+        font-size: 2.5rem;
+        font-weight: 300;
+        color: var(--maibuk-color-muted-foreground);
+        letter-spacing: -0.02em;
+      }
+
+      .stopwatch-lap {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 0.875rem;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .lap-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--maibuk-color-primary) 14%, transparent);
+        color: var(--maibuk-color-foreground);
+        font-weight: 600;
+      }
+
+      .stopwatch-lap-time {
+        font-variant-numeric: tabular-nums;
+      }
+
+      .lap-bars {
+        width: 100%;
+        max-width: 420px;
+        height: 6px;
+        display: flex;
+        gap: 3px;
+      }
+
+      .lap-bar {
+        flex: 1 1 0;
+        border-radius: 3px;
+        background: var(--maibuk-color-muted);
+      }
+
+      .lap-bar.current {
+        background: var(--maibuk-color-primary);
+      }
+
+      .pill {
+        min-height: 44px;
+        min-width: 128px;
+        height: 56px;
+        padding: 0 24px;
+        border-radius: 28px;
+        border: 1px solid var(--maibuk-color-border);
+        background: var(--maibuk-color-card);
+        color: var(--maibuk-color-card-foreground);
+        font-size: 1rem;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+      }
+
+      .laps-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .laps-table th {
+        text-align: left;
+        font-weight: 500;
+        color: var(--maibuk-color-muted-foreground);
+        font-size: 0.75rem;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--maibuk-color-border);
+      }
+
+      .laps-table th.numeric,
+      .laps-table td.numeric {
+        text-align: right;
+        padding-left: 16px;
+      }
+
+      .laps-table td {
+        padding: 12px 0;
+        border-bottom: 1px solid color-mix(in srgb, var(--maibuk-color-border) 50%, transparent);
+      }
+
+      .laps-table td.numeric {
+        font-weight: 600;
+      }
+
+      .laps-table td.total {
+        font-weight: 400;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .lap-number {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .lap-number .number {
+        min-width: 16px;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .tag {
+        font-size: 0.6875rem;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 999px;
+      }
+
+      .tag.fastest {
+        background: var(--maibuk-color-success-bg);
+        color: var(--maibuk-color-success-text);
+      }
+
+      .tag.slowest {
+        background: var(--maibuk-color-warning-bg);
+        color: var(--maibuk-color-warning-text);
+      }
+
+      .alarms {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .next-alarm,
+      .no-alarms {
+        margin: 0;
+        font-size: 0.875rem;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .primary.add-alarm {
+        min-width: 0;
+        height: 44px;
+        padding: 0 20px;
+        border-radius: 22px;
+        font-size: 0.9375rem;
+      }
+
+      .alarm-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 16px;
+      }
+
+      .alarm {
+        background: var(--maibuk-color-card);
+        color: var(--maibuk-color-card-foreground);
+        border: 1px solid var(--maibuk-color-border);
+        border-radius: 20px;
+        padding: 22px 22px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+
+      .alarm-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .alarm-text {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+      }
+
+      .alarm-time {
+        font-size: 3rem;
+        font-weight: 300;
+        letter-spacing: -0.04em;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .alarm-label {
+        font-size: 0.875rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .alarm.off .alarm-time,
+      .alarm.off .alarm-label {
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .switch {
+        flex: none;
+        width: 52px;
+        min-height: 44px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        display: flex;
+        align-items: center;
+      }
+
+      .switch .track {
+        display: flex;
+        align-items: center;
+        width: 52px;
+        height: 32px;
+        padding: 3px;
+        border-radius: 16px;
+        background: var(--maibuk-color-muted);
+      }
+
+      .switch[aria-checked="true"] .track {
+        justify-content: flex-end;
+        background: var(--maibuk-color-primary);
+      }
+
+      .switch .knob {
+        width: 26px;
+        height: 26px;
+        border-radius: 13px;
+        background: var(--maibuk-color-card);
+        box-shadow: 0 1px 3px color-mix(in srgb, var(--maibuk-color-foreground) 35%, transparent);
+      }
+
+      .switch:focus-visible .track {
+        outline: 2px solid var(--maibuk-color-primary);
+        outline-offset: 2px;
+      }
+
+      .alarm-foot {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding-top: 14px;
+        border-top: 1px solid var(--maibuk-color-border);
+      }
+
+      .alarm-repeat {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.8125rem;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .day-chip {
+        flex: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        border-radius: 12px;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .day-chip.on {
+        background: color-mix(in srgb, var(--maibuk-color-primary) 18%, transparent);
+        color: var(--maibuk-color-foreground);
+      }
+
+      .alarm-actions {
+        display: flex;
+        gap: 2px;
+      }
+
+      .icon-button {
+        width: 44px;
+        height: 44px;
+        padding: 0;
+        border: 0;
+        border-radius: 22px;
+        background: transparent;
+        color: var(--maibuk-color-muted-foreground);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .icon-button:hover {
+        background: color-mix(in srgb, var(--maibuk-color-muted) 60%, transparent);
+      }
+
+      .icon-button.destructive {
+        color: var(--maibuk-color-destructive);
+      }
+
+      .overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px 16px;
+        background: color-mix(in srgb, var(--maibuk-color-foreground) 40%, transparent);
+      }
+
+      .dialog {
+        width: 100%;
+        max-width: 480px;
+        max-height: calc(100vh - 48px);
+        overflow-y: auto;
+        background: var(--maibuk-color-card);
+        color: var(--maibuk-color-card-foreground);
+        border: 1px solid var(--maibuk-color-border);
+        border-radius: 28px;
+        padding: 32px;
+        display: flex;
+        flex-direction: column;
+        gap: 28px;
+        box-shadow: 0 32px 64px -24px
+          color-mix(in srgb, var(--maibuk-color-foreground) 45%, transparent);
+      }
+
+      .dialog-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .dialog-head h2 {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+
+      .dialog-close {
+        flex: none;
+        background: color-mix(in srgb, var(--maibuk-color-muted) 60%, transparent);
+        color: var(--maibuk-color-card-foreground);
+      }
+
+      .dialog-fields {
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        gap: 8px;
+      }
+
+      .dialog .field input {
+        width: 120px;
+        height: 104px;
+        font-size: 4rem;
+      }
+
+      .dialog .field-separator {
+        font-size: 4rem;
+        line-height: 104px;
+      }
+
+      .dialog-label {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .dialog-label label,
+      .dialog-repeat legend {
+        font-size: 0.875rem;
+        font-weight: 500;
+      }
+
+      .dialog-label input {
+        height: 48px;
+        padding: 0 16px;
+        border-radius: 14px;
+        border: 1px solid var(--maibuk-color-border);
+        background: var(--maibuk-color-background);
+        color: var(--maibuk-color-foreground);
+        font-size: 0.9375rem;
+      }
+
+      .dialog-label input:focus-visible {
+        outline: 2px solid var(--maibuk-color-primary);
+        outline-offset: 2px;
+      }
+
+      .dialog-repeat {
+        border: 0;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .dialog-repeat legend {
+        padding: 0;
+        margin-bottom: 10px;
+      }
+
+      .day-toggles {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .day {
+        position: relative;
+        display: block;
+      }
+
+      .day input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+      }
+
+      .day span {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 52px;
+        height: 44px;
+        border-radius: 12px;
+        border: 1px solid var(--maibuk-color-border);
+        background: transparent;
+        color: var(--maibuk-color-muted-foreground);
+        font-size: 0.8125rem;
+        font-weight: 600;
+      }
+
+      .day input:checked + span {
+        border-color: var(--maibuk-color-primary);
+        background: var(--maibuk-color-primary);
+        color: var(--maibuk-color-primary-foreground);
+      }
+
+      .day input:focus-visible + span {
+        outline: 2px solid var(--maibuk-color-primary);
+        outline-offset: 2px;
+      }
+
+      .hint {
+        margin: 0;
+        font-size: 0.8125rem;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .dialog-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+      }
+
+      .secondary {
+        min-height: 48px;
+        padding: 0 22px;
+        border-radius: 24px;
+        border: 1px solid var(--maibuk-color-border);
+        background: var(--maibuk-color-card);
+        color: var(--maibuk-color-card-foreground);
+        font-size: 0.9375rem;
+        font-weight: 600;
+      }
+
+      .dialog-actions .primary {
+        min-width: 0;
+        height: 48px;
+        padding: 0 28px;
+        border-radius: 24px;
+        font-size: 0.9375rem;
+      }
+
+      @media (max-width: 640px) {
+        #clock {
+          padding: 20px 16px 24px;
+          gap: 24px;
+        }
+
+        .layout {
+          flex-direction: column;
+        }
+
+        .hero,
+        .side {
+          flex: 1 1 auto;
+        }
+
+        .tabs {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 4px;
+          border-radius: 16px;
+          width: 100%;
+        }
+
+        .tab {
+          position: relative;
+          flex-direction: column;
+          justify-content: center;
+          gap: 4px;
+          min-height: 52px;
+          padding: 0 4px;
+          border-radius: 12px;
+          font-size: 0.6875rem;
+          font-weight: 600;
+        }
+
+        .tab svg {
+          width: 18px;
+          height: 18px;
+        }
+
+        .tab .dot {
+          position: absolute;
+          top: 8px;
+          right: 14px;
+        }
+
+        .hero {
+          padding: 32px 16px;
+        }
+
+        .round {
+          width: 56px;
+          height: 56px;
+          border-radius: 28px;
+        }
+
+        .primary,
+        .chip,
+        .link-button,
+        .banner button {
+          min-height: 44px;
+        }
+
+        .field input {
+          width: 92px;
+          height: 96px;
+          font-size: 3.5rem;
+        }
+
+        .field-separator {
+          font-size: 3.5rem;
+          line-height: 96px;
+        }
+
+        .dial {
+          width: 280px;
+          height: 280px;
+        }
+
+        .dial-time {
+          font-size: 4.25rem;
+        }
+
+        .stopwatch-digits {
+          font-size: 4rem;
+        }
+
+        .stopwatch-hundredths {
+          font-size: 1.75rem;
+        }
+
+        .alarm-list {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .alarm-time {
+          font-size: 2.5rem;
+        }
+
+        .dialog {
+          padding: 24px;
+          border-radius: 24px;
+        }
+
+        .dialog .field input {
+          width: 92px;
+          height: 96px;
+          font-size: 3.5rem;
+        }
+
+        .dialog .field-separator {
+          font-size: 3.5rem;
+          line-height: 96px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main id="clock" hidden>
+      <header>
+        <nav id="sections" class="tabs" role="tablist" aria-label="">
+          <button
+            class="tab"
+            type="button"
+            role="tab"
+            id="tab-pomodoro"
+            aria-selected="false"
+            aria-controls="panel-pomodoro"
+            tabindex="-1"
+          >
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2 2"></path><path d="M10 2h4"></path></svg>
+            <span id="tab-pomodoro-label"></span>
+            <span class="dot" id="dot-pomodoro" hidden><span class="sr-only"></span></span>
+          </button>
+          <button
+            class="tab"
+            type="button"
+            role="tab"
+            id="tab-timer"
+            aria-selected="true"
+            aria-controls="panel-timer"
+            tabindex="0"
+          >
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12"></path><path d="M6 22h12"></path><path d="M7 2c0 5 10 5 10 10S7 17 7 22"></path><path d="M17 2c0 5-10 5-10 10s10 5 10 10"></path></svg>
+            <span id="tab-timer-label"></span>
+            <span class="dot" id="dot-timer" hidden><span class="sr-only"></span></span>
+          </button>
+          <button
+            class="tab"
+            type="button"
+            role="tab"
+            id="tab-stopwatch"
+            aria-selected="false"
+            aria-controls="panel-stopwatch"
+            tabindex="-1"
+          >
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="8"></circle><path d="M12 14l3-3"></path><path d="M10 2h4"></path><path d="M19 5l1.5 1.5"></path></svg>
+            <span id="tab-stopwatch-label"></span>
+            <span class="dot" id="dot-stopwatch" hidden><span class="sr-only"></span></span>
+          </button>
+          <button
+            class="tab"
+            type="button"
+            role="tab"
+            id="tab-alarms"
+            aria-selected="false"
+            aria-controls="panel-alarms"
+            tabindex="-1"
+          >
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2 2"></path><path d="M5 3L2 6"></path><path d="M22 6l-3-3"></path></svg>
+            <span id="tab-alarms-label"></span>
+            <span class="dot" id="dot-alarms" hidden><span class="sr-only"></span></span>
+          </button>
+        </nav>
+        <p id="pomodoros-today" class="today"></p>
+        <button id="add-alarm" class="primary add-alarm" type="button">
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+          <span id="add-alarm-label"></span>
+        </button>
+      </header>
+
+      <div id="live" class="sr-only" role="status" aria-live="polite"></div>
+
+      <div id="banner" class="banner" role="status" hidden>
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path><path d="M2 2l20 20"></path></svg>
+        <span id="banner-text" class="banner-text"></span>
+        <button id="allow-notifications" type="button"></button>
+      </div>
+
+      <div
+        id="panel-pomodoro"
+        class="layout"
+        role="tabpanel"
+        aria-labelledby="tab-pomodoro"
+        hidden
+      >
+        <div class="hero">
+          <div class="phase-pill">
+            <span class="phase-dot" aria-hidden="true"></span>
+            <span id="pomodoro-phase"></span>
+          </div>
+          <div class="dial">
+            <svg aria-hidden="true" width="320" height="320" viewBox="0 0 320 320">
+              <g id="pomodoro-ticks" class="ticks"></g>
+              <circle class="ring-track" cx="160" cy="160" r="128"></circle>
+              <circle
+                id="pomodoro-ring"
+                class="ring-value"
+                cx="160"
+                cy="160"
+                r="128"
+                stroke-dasharray="804.2"
+                stroke-dashoffset="0"
+                transform="rotate(-90 160 160)"
+              ></circle>
+            </svg>
+            <div class="dial-content">
+              <div id="pomodoro-time" class="dial-time" role="timer"></div>
+              <div id="pomodoro-sub" class="dial-sub"></div>
+            </div>
+          </div>
+          <div class="controls">
+            <button id="pomodoro-reset" class="round" type="button">
+              <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5"></path></svg>
+            </button>
+            <button id="pomodoro-primary" class="primary" type="button">
+              <svg id="pomodoro-primary-icon" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"></svg>
+              <span id="pomodoro-primary-label"></span>
+            </button>
+            <button id="pomodoro-skip" class="round" type="button">
+              <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4l10 8-10 8z"></path><path d="M19 5v14"></path></svg>
+            </button>
+          </div>
+        </div>
+        <aside class="side">
+          <div class="card">
+            <h2 id="cycle-title"></h2>
+            <ol id="cycle-list" class="cycle-list"></ol>
+          </div>
+          <div class="lengths">
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7"></path><path d="M4 10V3"></path><path d="M12 21v-9"></path><path d="M12 8V3"></path><path d="M20 21v-5"></path><path d="M20 12V3"></path><path d="M1 14h6"></path><path d="M9 8h6"></path><path d="M17 16h6"></path></svg>
+            <span id="cycle-lengths"></span>
+          </div>
+        </aside>
+      </div>
+
+      <div id="panel-timer" class="layout" role="tabpanel" aria-labelledby="tab-timer" hidden>
+        <div class="hero hero-timer">
+          <div id="timer-setup" class="setup">
+            <fieldset class="fieldset">
+              <legend id="timer-length-legend" class="sr-only"></legend>
+              <div class="field">
+                <input id="timer-hours" type="number" min="0" max="99" inputmode="numeric" />
+                <label id="timer-hours-label" for="timer-hours"></label>
+              </div>
+              <span class="field-separator" aria-hidden="true">:</span>
+              <div class="field">
+                <input id="timer-minutes" type="number" min="0" max="59" inputmode="numeric" />
+                <label id="timer-minutes-label" for="timer-minutes"></label>
+              </div>
+              <span class="field-separator" aria-hidden="true">:</span>
+              <div class="field">
+                <input id="timer-seconds" type="number" min="0" max="59" inputmode="numeric" />
+                <label id="timer-seconds-label" for="timer-seconds"></label>
+              </div>
+            </fieldset>
+            <div id="recent-block" class="recent">
+              <span id="recent-label" class="recent-label"></span>
+              <div id="recent-list" class="chips"></div>
+            </div>
+          </div>
+          <div id="timer-run" class="dial" hidden>
+            <svg aria-hidden="true" width="320" height="320" viewBox="0 0 320 320">
+              <g id="timer-ticks" class="ticks"></g>
+              <circle class="ring-track" cx="160" cy="160" r="128"></circle>
+              <circle
+                id="timer-ring"
+                class="ring-value"
+                cx="160"
+                cy="160"
+                r="128"
+                stroke-dasharray="804.2"
+                stroke-dashoffset="0"
+                transform="rotate(-90 160 160)"
+              ></circle>
+            </svg>
+            <div class="dial-content">
+              <div id="timer-time" class="dial-time" role="timer"></div>
+              <div id="timer-sub" class="dial-sub"></div>
+            </div>
+          </div>
+          <div class="controls">
+            <button id="timer-reset" class="round" type="button" hidden>
+              <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5"></path></svg>
+            </button>
+            <button id="timer-primary" class="primary primary-wide" type="button">
+              <svg id="timer-primary-icon" aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"></svg>
+              <span id="timer-primary-label"></span>
+            </button>
+          </div>
+        </div>
+        <aside class="side">
+          <div id="also-running" class="card" hidden>
+            <h2 id="also-running-title"></h2>
+            <div id="also-running-list" class="also-list"></div>
+          </div>
+          <div id="alerts-card" class="card tight" hidden>
+            <h2 id="alerts-title"></h2>
+            <p id="alerts-text" class="alerts-text"></p>
+          </div>
+        </aside>
+      </div>
+
+      <div
+        id="panel-stopwatch"
+        class="layout"
+        role="tabpanel"
+        aria-labelledby="tab-stopwatch"
+        hidden
+      >
+        <div class="hero hero-stopwatch">
+          <div class="stopwatch-main">
+            <div id="stopwatch-time" class="stopwatch-time" role="timer" aria-label="">
+              <span id="stopwatch-digits" class="stopwatch-digits"></span>
+              <span id="stopwatch-hundredths" class="stopwatch-hundredths"></span>
+            </div>
+            <div id="stopwatch-lap-line" class="stopwatch-lap" hidden>
+              <span id="stopwatch-lap-pill" class="lap-pill"></span>
+              <span id="stopwatch-lap-time" class="stopwatch-lap-time"></span>
+            </div>
+          </div>
+          <div id="stopwatch-bars" class="lap-bars" aria-hidden="true"></div>
+          <div class="controls">
+            <button id="stopwatch-lap" class="pill" type="button" hidden>
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22V4"></path><path d="M4 4h12l-2 4 2 4H4"></path></svg>
+              <span id="stopwatch-lap-label"></span>
+            </button>
+            <button id="stopwatch-reset" class="round" type="button" hidden>
+              <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5"></path></svg>
+            </button>
+            <button id="stopwatch-primary" class="primary" type="button">
+              <svg id="stopwatch-primary-icon" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"></svg>
+              <span id="stopwatch-primary-label"></span>
+            </button>
+          </div>
+        </div>
+        <aside id="laps-panel" class="side" hidden>
+          <div id="laps-card" class="card" hidden>
+            <h2 id="laps-title"></h2>
+            <div class="table-wrap">
+              <table class="laps-table" aria-labelledby="laps-title">
+                <thead>
+                  <tr>
+                    <th scope="col" id="laps-col-lap"></th>
+                    <th scope="col" id="laps-col-lap-time" class="numeric"></th>
+                    <th scope="col" id="laps-col-total" class="numeric"></th>
+                  </tr>
+                </thead>
+                <tbody id="laps-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <div id="panel-alarms" class="alarms" role="tabpanel" aria-labelledby="tab-alarms" hidden>
+        <p id="next-alarm" class="next-alarm" hidden></p>
+        <p id="no-alarms" class="no-alarms" hidden></p>
+        <ul id="alarm-list" class="alarm-list"></ul>
+      </div>
+
+      <div id="alarm-editor" class="overlay" hidden>
+        <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="alarm-editor-title">
+          <div class="dialog-head">
+            <h2 id="alarm-editor-title"></h2>
+            <button id="alarm-editor-close" class="icon-button dialog-close" type="button">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12"></path><path d="M18 6L6 18"></path></svg>
+            </button>
+          </div>
+          <div class="dialog-fields">
+            <div class="field">
+              <input id="alarm-hour" type="number" min="0" max="23" inputmode="numeric" />
+              <label id="alarm-hour-label" for="alarm-hour"></label>
+            </div>
+            <span class="field-separator" aria-hidden="true">:</span>
+            <div class="field">
+              <input id="alarm-minute" type="number" min="0" max="59" inputmode="numeric" />
+              <label id="alarm-minute-label" for="alarm-minute"></label>
+            </div>
+          </div>
+          <div class="dialog-label">
+            <label id="alarm-label-caption" for="alarm-label"></label>
+            <input id="alarm-label" type="text" />
+          </div>
+          <fieldset class="dialog-repeat">
+            <legend id="alarm-repeat-legend"></legend>
+            <div id="alarm-days" class="day-toggles"></div>
+            <p id="alarm-repeat-hint" class="hint"></p>
+          </fieldset>
+          <div class="dialog-actions">
+            <button id="alarm-cancel" class="secondary" type="button"></button>
+            <button id="alarm-save" class="primary" type="button"></button>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script src="clock.js"></script>
+  </body>
+</html>

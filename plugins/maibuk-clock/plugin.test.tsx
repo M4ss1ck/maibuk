@@ -4,30 +4,33 @@
  * polyfill-free `@/plugin-sdk/ui-serve` entry, the same one the kit's jsdom
  * uses; `index.tsx` (the Worker bootstrap) is never imported.
  *
- * This unit proves the Clock page opens from the Open Clock Command, the tabs
- * switch with the keyboard alone, the labels follow the app language, and the
- * Timer works end to end: a typed length counts down, its end is scheduled as a
- * System Notification at the deadline, pause freezes it and cancels the Alert,
- * reset restores the length, the recent lengths come back newest first, the
- * Command toggles, the live region speaks on the minute and at the end on every
- * tab, and the notification banner asks for permission. The Pomodoro tab starts,
- * pauses, skips, and resets the Cycle, counts today's Pomodoros, and shows a
- * phase that ended before startup as ended. The Pomodoro Settings row changes
- * the lengths and auto-starts the next phase. The Pomodoro Commands start,
- * pause, and skip the cycle, and the Toggle Button stays pressed exactly while a
- * phase runs. Every control is reached with `user-event` key presses.
+ * The Clock page is a Frame (#886), so the kit's host draws nothing for it:
+ * each test hands the runtime one Frame over a real `MessageChannel`, taken
+ * through the handler `startClock` registers with `client.onFrame`, and then
+ * drives the Plugin the way that Frame will — by posting its intents — or
+ * through its Commands. What the Frame draws, and the keys it answers, live in
+ * `frame.test.ts`; the wire between the two lives in `frame-protocol.test.ts`.
  *
- * The Alarms tab adds, edits, switches, and deletes Alarms by keyboard, with
+ * This unit proves the Clock page opens from the Open Clock Command, and that
+ * the Timer works end to end: a length counts down, its end is scheduled as a
+ * System Notification at the deadline, pause freezes it and cancels the Alert,
+ * reset restores the length, the recent lengths come back newest first, and the
+ * Command toggles it. The Pomodoro Commands start, pause, and skip the Cycle, a
+ * phase that ended before startup stays ended, the Pomodoro Settings row changes
+ * the lengths and auto-starts the next phase, and the Toggle Button stays
+ * pressed exactly while a phase runs.
+ *
+ * The Alarms add, edit, switch, and delete through the Frame's intents, with
  * each change shown as a scheduled System Notification, and a startup toast
  * names an Alarm missed while Maibuk was closed.
  */
 
-import { act, screen, within } from "@testing-library/react";
+import { act, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import "@/i18n";
 import { createTestHost } from "@/features/plugins/test-kit";
-import { createPluginClient } from "@/plugin-sdk";
+import { createPluginClient, type PluginFrame } from "@/plugin-sdk";
 import { PLUGIN_COMMAND_RUN_REQUEST } from "@/plugin-sdk/protocol";
 import { servePluginUi } from "@/plugin-sdk/ui-serve";
 import en from "./locales/runtime/en.json";
@@ -43,10 +46,10 @@ import {
   TOGGLE_TIMER,
   startClock,
 } from "./runtime";
-import { dayNumber } from "./cycle";
 import { alarmNotificationId, type Alarm } from "./alarms";
-import { clockManifest, tabTo, type User } from "./test-support";
-import { formatClockTime, formatDuration, hourCycleFor, localOffsetAt, nextAlarmAt } from "./time";
+import type { FrameStateMessage, WorkerToFrameMessage } from "./frame-protocol";
+import { clockManifest, tabTo } from "./test-support";
+import { formatClockTime, hourCycleFor, localOffsetAt, nextAlarmAt } from "./time";
 
 /**
  * The fake clock every timed test starts at. It sits an hour ahead of the real
@@ -85,6 +88,14 @@ function storedCycle(storage: Map<string, unknown>): StoredCycle | undefined {
   return typeof value === "object" && value !== null ? (value as StoredCycle) : undefined;
 }
 
+/** The Pomodoros today the Cycle storage counts, or none. */
+function storedToday(storage: Map<string, unknown>): { count?: number } | undefined {
+  const value = storage.get("pomodoro");
+  if (typeof value !== "object" || value === null) return undefined;
+  const today = (value as { today?: unknown }).today;
+  return typeof today === "object" && today !== null ? (today as { count?: number }) : undefined;
+}
+
 /** One stored Stopwatch, as the Plugin writes it. */
 interface StoredStopwatch {
   status: string;
@@ -110,7 +121,7 @@ function alarmTag(alarm: Alarm): string {
   return `maibuk-clock/${alarmNotificationId(alarm.id)}`;
 }
 
-/** An Alarm's time as the page writes it, in the given language's clock. */
+/** An Alarm's time as the Plugin stores it, in the given language's clock. */
 function shownTime(hour: number, minute: number, language = "en"): string {
   const at = new Date(2000, 0, 1, hour, minute).getTime();
   return formatClockTime(at, localOffsetAt(at), hourCycleFor(language));
@@ -138,11 +149,45 @@ function freezeClock(): void {
 /** Every host a timed test built, stopped after the test so no page outlives it. */
 const openHosts: ReturnType<typeof createTestHost>[] = [];
 
+/** Every Clock Frame a test mounted, told `closed` after the test. */
+const openFrames: ClockFrame[] = [];
+
+/**
+ * One Clock Frame as the Worker sees it: the recording end of a real
+ * `MessageChannel`, so a message the Worker posts and an intent the Frame posts
+ * cross exactly as they do in the app.
+ */
+interface ClockFrame {
+  /** Every message the Worker sent this Frame, in order. */
+  messages: WorkerToFrameMessage[];
+  /** Sends one Frame -> Worker message. */
+  send(message: unknown): void;
+  /** Tells the Worker the Frame closed, as the Frame's `pagehide` does. */
+  close(): void;
+}
+
+/** Every whole-Clock state the Worker sent this Frame, in order. */
+function states(frame: ClockFrame): FrameStateMessage[] {
+  return frame.messages.filter((message): message is FrameStateMessage => message.kind === "state");
+}
+
+/** The latest whole-Clock state the Worker sent this Frame, or none yet. */
+function lastState(frame: ClockFrame): FrameStateMessage | undefined {
+  return states(frame).at(-1);
+}
+
 /** A host with the Clock manifest, its storage in memory, and the runtime wired. */
-function startHost(options: { language?: string; storage?: Map<string, unknown> } = {}): {
+interface ClockHost {
   host: ReturnType<typeof createTestHost>;
   storage: Map<string, unknown>;
-} {
+  /** Settles once the runtime's startup loads did, so an intent cannot race them. */
+  ready: Promise<void>;
+  /** Hands the runtime one Clock Frame, the way the host hands over a mounted one. */
+  mountFrame(): ClockFrame;
+}
+
+/** Builds such a host, wiring the runtime and keeping its startup promise. */
+function startHost(options: { language?: string; storage?: Map<string, unknown> } = {}): ClockHost {
   const storage = options.storage ?? new Map<string, unknown>();
   const host = createTestHost({
     manifest: clockManifest(),
@@ -150,286 +195,213 @@ function startHost(options: { language?: string; storage?: Map<string, unknown> 
     ...(options.language === undefined ? {} : { language: options.language }),
   });
   openHosts.push(host);
-  startClock(createPluginClient(host.port), servePluginUi);
-  return { host, storage };
+
+  // The kit's host renders no Frame (it serves only the Settings rows), so the
+  // test keeps the handler `startClock` registers and hands it one Frame over a
+  // real `MessageChannel`, which is the whole of what the host does.
+  const client = createPluginClient(host.port);
+  const handoff: { deliver: ((frame: PluginFrame) => void) | null } = { deliver: null };
+  const realOnFrame = client.onFrame;
+  client.onFrame = (handler) => {
+    handoff.deliver = handler;
+    return realOnFrame(handler);
+  };
+  const ready = startClock(client, servePluginUi);
+
+  let mounted = 0;
+  function mountFrame(): ClockFrame {
+    const channel = new MessageChannel();
+    const messages: WorkerToFrameMessage[] = [];
+    channel.port2.onmessage = (event: MessageEvent) => {
+      messages.push(event.data as WorkerToFrameMessage);
+    };
+    const frame: ClockFrame = {
+      messages,
+      send(message) {
+        channel.port2.postMessage(message);
+      },
+      close() {
+        channel.port2.postMessage({ kind: "closed" });
+      },
+    };
+    const deliver = handoff.deliver;
+    if (deliver === null) throw new Error("startClock registered no Frame handler");
+    mounted += 1;
+    deliver({ id: `frame-${mounted}`, src: "assets/ui/clock.html", port: channel.port1 });
+    openFrames.push(frame);
+    return frame;
+  }
+
+  return { host, storage, ready, mountFrame };
 }
 
 /**
- * Polls until the page shows what the test asserts, instead of guessing how
- * many event-loop turns the Remote UI mount needs.
+ * Polls until what the test asserts holds, instead of guessing how many
+ * event-loop turns a persisted write or a delivered message needs.
  */
 async function eventually(check: () => void): Promise<void> {
   await vi.waitFor(check);
-}
-
-/** Types a length's minutes from the keyboard, and waits until the Timer took it. */
-async function typeMinutes(
-  user: User,
-  minutes: number,
-  storage: Map<string, unknown>
-): Promise<void> {
-  await eventually(() =>
-    expect(screen.getByRole("textbox", { name: en.minutes })).toBeInTheDocument()
-  );
-  const field = screen.getByRole("textbox", { name: en.minutes });
-  await user.clear(field);
-  await user.type(field, String(minutes));
-  await user.keyboard("{Enter}");
-  await eventually(() => {
-    const saved = stored(storage);
-    expect(saved?.state.status).toBe("idle");
-    expect(saved?.state.length).toBe(minutes * 60_000);
-  });
-}
-
-/** Tabs to a named button, proves it holds focus, and presses it. */
-async function press(user: User, name: string): Promise<void> {
-  await eventually(() => expect(screen.getByRole("button", { name })).toBeInTheDocument());
-  const button = screen.getByRole("button", { name });
-  await tabTo(user, button);
-  expect(button).toHaveFocus();
-  await user.keyboard("{Enter}");
-}
-
-/** Focuses the selected Timer tab and moves left to the Pomodoro tab with the keyboard. */
-async function openPomodoroTab(user: User): Promise<void> {
-  const timerTab = await screen.findByRole("tab", { name: en.timer });
-  await tabTo(user, timerTab);
-  expect(timerTab).toHaveFocus();
-  await user.keyboard("{ArrowLeft}");
-  await eventually(() =>
-    expect(screen.getByRole("heading", { name: en.pomodoro })).toBeInTheDocument()
-  );
-}
-
-/** Focuses the selected Timer tab and moves right to the Stopwatch tab with the keyboard. */
-async function openStopwatchTab(user: User): Promise<void> {
-  const timerTab = await screen.findByRole("tab", { name: en.timer });
-  await tabTo(user, timerTab);
-  expect(timerTab).toHaveFocus();
-  await user.keyboard("{ArrowRight}");
-  expect(screen.getByRole("tab", { name: en.stopwatch })).toHaveFocus();
-  // The Stopwatch panel draws a time and none of the Timer's length fields.
-  await eventually(() => {
-    expect(screen.queryByRole("textbox", { name: en.hours })).toBeNull();
-    expect(screen.getByRole("tabpanel")).toHaveTextContent(/\d+:\d{2}/);
-  });
-}
-
-/** Focuses the selected Timer tab and moves right twice to the Alarms tab. */
-async function openAlarmsTab(user: User): Promise<void> {
-  const timerTab = await screen.findByRole("tab", { name: en.timer });
-  await tabTo(user, timerTab);
-  expect(timerTab).toHaveFocus();
-  await user.keyboard("{ArrowRight}{ArrowRight}");
-  expect(screen.getByRole("tab", { name: en.alarms })).toHaveFocus();
-  await eventually(() =>
-    expect(screen.getByRole("button", { name: en.addAlarm })).toBeInTheDocument()
-  );
-}
-
-/** Starts the Timer from the page and waits for the stored running state. */
-async function startTimer(user: User, storage: Map<string, unknown>): Promise<void> {
-  await press(user, en.start);
-  await eventually(() => expect(stored(storage)?.state.status).toBe("running"));
 }
 
 describe("Clock runtime", () => {
   afterEach(async () => {
     // The Plugin's teardown waits on a real task, which a fake clock never runs.
     vi.useRealTimers();
+    for (const frame of openFrames.splice(0)) frame.close();
     const pending = openHosts.splice(0);
     for (const host of pending) await host.stop();
   });
 
-  it("opens the Clock page from the openClock Command and draws its four tabs", async () => {
+  it("opens the Clock page from the openClock Command", async () => {
     const host = createTestHost({ manifest: clockManifest() });
     try {
       startClock(createPluginClient(host.port), servePluginUi);
 
-      await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: OPEN_CLOCK });
+      await expect(
+        host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: OPEN_CLOCK })
+      ).resolves.toBeNull();
       expect(host.pageNavigations).toEqual([{ pluginId: "maibuk-clock", pageId: CLOCK_PAGE_ID }]);
-
-      const page = await host.renderPage(CLOCK_PAGE_ID);
-      expect(await screen.findByRole("tablist", { name: en.tabs })).toBeInTheDocument();
-      for (const label of [en.pomodoro, en.timer, en.stopwatch, en.alarms]) {
-        expect(screen.getByRole("tab", { name: label })).toBeInTheDocument();
-      }
-      // The Timer is selected first, and its panel is the live Timer.
-      expect(screen.getByRole("tab", { name: en.timer })).toHaveAttribute("aria-selected", "true");
-      expect(screen.getByRole("textbox", { name: en.hours })).toBeInTheDocument();
-      expect(screen.getByRole("textbox", { name: en.minutes })).toBeInTheDocument();
-      expect(screen.getByRole("textbox", { name: en.seconds })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: en.start })).toBeInTheDocument();
-
-      await page.unmount();
     } finally {
       await host.stop();
     }
   });
 
-  it("moves from Timer to Stopwatch with the keyboard alone", async () => {
-    const host = createTestHost({ manifest: clockManifest() });
-    try {
-      startClock(createPluginClient(host.port), servePluginUi);
-      const page = await host.renderPage(CLOCK_PAGE_ID);
-      const user = userEvent.setup();
-
-      const timerTab = await screen.findByRole("tab", { name: en.timer });
-      await tabTo(user, timerTab);
-      expect(timerTab).toHaveFocus();
-
-      await user.keyboard("{ArrowRight}");
-
-      await eventually(() =>
-        expect(screen.getByRole("tab", { name: en.stopwatch })).toHaveAttribute(
-          "aria-selected",
-          "true"
-        )
-      );
-      const stopwatchTab = screen.getByRole("tab", { name: en.stopwatch });
-      expect(stopwatchTab).toHaveAttribute("aria-selected", "true");
-      expect(stopwatchTab).toHaveFocus();
-      // The Stopwatch tab draws the Stopwatch itself now, not a placeholder.
-      const panel = screen.getByRole("tabpanel");
-      expect(within(panel).getByText("0:00")).toBeInTheDocument();
-      expect(within(panel).getByRole("button", { name: en.start })).toBeInTheDocument();
-      expect(within(panel).queryByRole("button", { name: en.addAlarm })).toBeNull();
-
-      await page.unmount();
-    } finally {
-      await host.stop();
-    }
-  });
-
-  it("marks Laps while running, newest first, with each stretch and total, kept across a page change", async () => {
-    const { host, storage } = startHost();
+  it("marks Laps while running, with each stretch and total, and keeps them for the next Frame", async () => {
+    const { storage, mountFrame, ready } = startHost();
     freezeClock();
-    const page = await host.renderPage(CLOCK_PAGE_ID);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await ready;
+    const frame = mountFrame();
 
-    await openStopwatchTab(user);
-    await press(user, en.start);
+    frame.send({ kind: "stopwatch.start" });
     await eventually(() => expect(storedStopwatch(storage)?.status).toBe("running"));
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(10_000);
     });
-    await press(user, en.lap);
+    frame.send({ kind: "stopwatch.lap" });
     await eventually(() => expect(storedStopwatch(storage)?.laps).toHaveLength(1));
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(5_000);
     });
-    await press(user, en.lap);
+    frame.send({ kind: "stopwatch.lap" });
     await eventually(() => expect(storedStopwatch(storage)?.laps).toHaveLength(2));
 
-    const table = await screen.findByRole("table", { name: en.laps });
-    await eventually(() => expect(within(table).getAllByRole("row")).toHaveLength(3));
-    const rows = within(table).getAllByRole("row");
-    // Newest first: Lap 2 is the 5 s stretch ending at 0:15, Lap 1 the 10 s one.
-    expect(rows[1]?.textContent).toContain("2");
-    expect(rows[1]?.textContent).toContain("0:05");
-    expect(rows[1]?.textContent).toContain("0:15");
-    expect(rows[2]?.textContent).toContain("1");
-    expect(rows[2]?.textContent).toContain("0:10");
+    // Each Lap carries its own stretch, and the total from the start.
+    const laps = storedStopwatch(storage)?.laps ?? [];
+    expect(laps[0]?.length).toBeGreaterThanOrEqual(10_000);
+    expect(laps[0]?.total).toBeGreaterThanOrEqual(10_000);
+    expect(laps[1]?.length).toBeGreaterThanOrEqual(5_000);
+    expect(laps[1]?.total).toBeGreaterThanOrEqual(15_000);
 
-    // Leaving the page and coming back finds the same Laps.
-    await page.unmount();
-    await host.renderPage(CLOCK_PAGE_ID);
-    await openStopwatchTab(user);
-    const again = await screen.findByRole("table", { name: en.laps });
-    await eventually(() => expect(within(again).getAllByRole("row")).toHaveLength(3));
+    // Leaving the page and coming back finds the same Laps: the Worker holds
+    // them, not the Frame.
+    frame.close();
+    const again = mountFrame();
+    await eventually(() => expect(lastState(again)?.stopwatch.status).toBe("running"));
+    const running = lastState(again)?.stopwatch;
+    if (running === undefined || running.status !== "running") {
+      throw new Error("the Frame should have been told the running Stopwatch");
+    }
+    expect(running.laps).toHaveLength(2);
+    expect(running.laps[0]?.length).toBeGreaterThanOrEqual(10_000);
+    expect(running.laps[1]?.total).toBeGreaterThanOrEqual(15_000);
   });
 
   it("pauses to hold the time and resumes from where it stopped", async () => {
-    const { host, storage } = startHost();
+    const { storage, mountFrame, ready } = startHost();
     freezeClock();
-    await host.renderPage(CLOCK_PAGE_ID);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await ready;
+    const frame = mountFrame();
 
-    await openStopwatchTab(user);
-    await press(user, en.start);
+    frame.send({ kind: "stopwatch.start" });
     await eventually(() => expect(storedStopwatch(storage)?.status).toBe("running"));
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(10_000);
     });
-    await press(user, en.pause);
+    frame.send({ kind: "stopwatch.pause" });
     await eventually(() => expect(storedStopwatch(storage)?.status).toBe("paused"));
-    await eventually(() => expect(screen.getByText("0:10")).toBeInTheDocument());
+    const banked = storedStopwatch(storage)?.banked ?? -1;
+    expect(banked).toBeGreaterThanOrEqual(10_000);
 
     // A minute passes while paused; the Stopwatch holds still.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60_000);
     });
-    expect(screen.getByText("0:10")).toBeInTheDocument();
+    expect(storedStopwatch(storage)?.banked).toBe(banked);
 
-    await press(user, en.resume);
+    frame.send({ kind: "stopwatch.start" });
     await eventually(() => expect(storedStopwatch(storage)?.status).toBe("running"));
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5_000);
-    });
-    await eventually(() => expect(screen.getByText("0:15")).toBeInTheDocument());
+    // The resume carries the held time forward instead of starting from zero.
+    expect(storedStopwatch(storage)?.banked).toBe(banked);
   });
 
   it("resets to zero, drops the Laps, and stores an idle Stopwatch", async () => {
-    const { host, storage } = startHost();
+    const { storage, mountFrame, ready } = startHost();
     freezeClock();
-    await host.renderPage(CLOCK_PAGE_ID);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await ready;
+    const frame = mountFrame();
 
-    await openStopwatchTab(user);
-    await press(user, en.start);
+    frame.send({ kind: "stopwatch.start" });
     await eventually(() => expect(storedStopwatch(storage)?.status).toBe("running"));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(10_000);
     });
-    await press(user, en.lap);
+    frame.send({ kind: "stopwatch.lap" });
     await eventually(() => expect(storedStopwatch(storage)?.laps).toHaveLength(1));
 
-    await press(user, en.reset);
+    frame.send({ kind: "stopwatch.reset" });
     await eventually(() => expect(storedStopwatch(storage)).toEqual({ status: "idle" }));
-    await eventually(() => expect(screen.getByText("0:00")).toBeInTheDocument());
-    expect(screen.queryByRole("table", { name: en.laps })).toBeNull();
+  });
+
+  it("stops sending to a Frame once the next one is handed over", async () => {
+    const { mountFrame, ready } = startHost();
+    freezeClock();
+    await ready;
+    const first = mountFrame();
+    await eventually(() => expect(lastState(first)).toBeDefined());
+
+    const second = mountFrame();
+    await eventually(() => expect(lastState(second)).toBeDefined());
+
+    // The first Frame's connection is disposed, so a module change reaches only
+    // the Frame currently mounted.
+    const before = states(first).length;
+    second.send({ kind: "stopwatch.start" });
+    await eventually(() => expect(lastState(second)?.stopwatch.status).toBe("running"));
+    expect(states(first).length).toBe(before);
   });
 
   it("finds a running Stopwatch and its Laps after a restart", async () => {
+    const laps = [
+      { length: 30_000, total: 30_000 },
+      { length: 30_000, total: 60_000 },
+    ];
     const storage = new Map<string, unknown>([
-      [
-        "stopwatch",
-        {
-          status: "running",
-          startedAt: START - 90_000,
-          banked: 0,
-          laps: [
-            { length: 30_000, total: 30_000 },
-            { length: 30_000, total: 60_000 },
-          ],
-        },
-      ],
+      ["stopwatch", { status: "running", startedAt: START - 90_000, banked: 0, laps }],
     ]);
-    const { host } = startHost({ storage });
+    const { mountFrame, ready } = startHost({ storage });
     freezeClock();
-    await host.renderPage(CLOCK_PAGE_ID);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await ready;
 
-    await openStopwatchTab(user);
-    await eventually(() => expect(screen.getByText("1:30")).toBeInTheDocument());
-    const table = await screen.findByRole("table", { name: en.laps });
-    await eventually(() => expect(within(table).getAllByRole("row")).toHaveLength(3));
-    const rows = within(table).getAllByRole("row");
-    // Newest first: Lap 2's 0:30 stretch ends at 1:00, Lap 1's ends at 0:30.
-    expect(rows[1]?.textContent).toContain("2");
-    expect(rows[1]?.textContent).toContain("0:30");
-    expect(rows[1]?.textContent).toContain("1:00");
-    expect(rows[2]?.textContent).toContain("1");
-    expect(rows[2]?.textContent).toContain("0:30");
+    // The Frame is told what the restart found, Laps and all, so its readout
+    // carries on from there.
+    const frame = mountFrame();
+    await eventually(() =>
+      expect(lastState(frame)?.stopwatch).toEqual({
+        status: "running",
+        startedAt: START - 90_000,
+        banked: 0,
+        laps,
+      })
+    );
   });
 
   it("starts and then pauses the Stopwatch from the toggleStopwatch Command", async () => {
-    const { host, storage } = startHost();
+    const { host, storage, ready } = startHost();
     freezeClock();
+    await ready;
 
     await expect(
       host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: TOGGLE_STOPWATCH })
@@ -444,8 +416,9 @@ describe("Clock runtime", () => {
   });
 
   it("marks a Lap from the lapStopwatch Command while running", async () => {
-    const { host, storage } = startHost();
+    const { host, storage, ready } = startHost();
     freezeClock();
+    await ready;
 
     await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: TOGGLE_STOPWATCH });
     await eventually(() => expect(storedStopwatch(storage)?.status).toBe("running"));
@@ -460,8 +433,9 @@ describe("Clock runtime", () => {
   });
 
   it("runs the Timer, the Pomodoro, and the Stopwatch all at once", async () => {
-    const { host, storage } = startHost();
+    const { host, storage, ready } = startHost();
     freezeClock();
+    await ready;
 
     await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: TOGGLE_TIMER });
     await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: TOGGLE_POMODORO });
@@ -475,13 +449,11 @@ describe("Clock runtime", () => {
   });
 
   it("raises no Alert however long the Stopwatch runs", async () => {
-    const { host, storage } = startHost();
+    const { host, storage, ready } = startHost();
     freezeClock();
-    await host.renderPage(CLOCK_PAGE_ID);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await ready;
 
-    await openStopwatchTab(user);
-    await press(user, en.start);
+    await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: TOGGLE_STOPWATCH });
     await eventually(() => expect(storedStopwatch(storage)?.status).toBe("running"));
 
     await act(async () => {
@@ -491,23 +463,14 @@ describe("Clock runtime", () => {
     expect(host.systemNotifications.log).toEqual([]);
   });
 
-  it("opens the Pomodoro tab by keyboard, and Start runs Pomodoro 1 of 4 with an Alert", async () => {
-    const { host, storage } = startHost();
+  it("starts Pomodoro 1 of 4 and schedules its Alert", async () => {
+    const { host, storage, ready } = startHost();
     freezeClock();
-    await host.renderPage(CLOCK_PAGE_ID);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await ready;
 
-    await openPomodoroTab(user);
-
-    expect(screen.getByRole("heading", { name: en.pomodoro })).toBeInTheDocument();
-    expect(
-      screen.getByText(en.pomodoroOfCycle.replace("{n}", "1").replace("{total}", "4"))
-    ).toBeInTheDocument();
-    expect(screen.getByText("25:00")).toBeInTheDocument();
-    expect(screen.getByText(en.pomodorosToday.replace("{n}", "0"))).toBeInTheDocument();
-
-    await press(user, en.start);
+    await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: TOGGLE_POMODORO });
     await eventually(() => expect(storedCycle(storage)?.state.status).toBe("running"));
+    expect(storedCycle(storage)?.state).toMatchObject({ phase: "pomodoro", pomodoro: 1 });
     await eventually(() => {
       const state = storedCycle(storage)?.state;
       expect(host.systemNotifications.scheduled.get(POMODORO_TAG)?.at).toBe(state?.endsAt);
@@ -518,100 +481,54 @@ describe("Clock runtime", () => {
   });
 
   it("ends the Pomodoro into an idle Short Break, counts it, and leaves its Alert to fire", async () => {
-    const { host, storage } = startHost();
+    const { host, storage, ready } = startHost();
     freezeClock();
-    await host.renderPage(CLOCK_PAGE_ID);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await ready;
 
-    await openPomodoroTab(user);
-    await press(user, en.start);
+    await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: TOGGLE_POMODORO });
     await eventually(() => expect(host.systemNotifications.scheduled.has(POMODORO_TAG)).toBe(true));
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(25 * 60_000);
     });
     await eventually(() =>
-      expect(screen.getByRole("heading", { name: en.shortBreak })).toBeInTheDocument()
+      expect(storedCycle(storage)?.state).toEqual({
+        phase: "shortBreak",
+        pomodoro: 1,
+        status: "idle",
+      })
     );
-    expect(screen.getByText(en.pomodorosToday.replace("{n}", "1"))).toBeInTheDocument();
-    expect(storedCycle(storage)?.state).toEqual({
-      phase: "shortBreak",
-      pomodoro: 1,
-      status: "idle",
-    });
+    expect(storedToday(storage)?.count).toBe(1);
     // The ended Pomodoro's Alert is left to fire: nothing withdraws it.
     expect(
       host.systemNotifications.log.filter(
         (entry) => entry.kind === "cancelled" && entry.tag === POMODORO_TAG
       )
     ).toEqual([]);
-    expect(screen.getByRole("button", { name: en.start })).toBeInTheDocument();
   });
 
-  it("skips to the next phase and resets to Pomodoro 1 by keyboard", async () => {
-    const { host, storage } = startHost();
+  it("skips to the next phase and resets to Pomodoro 1", async () => {
+    const { storage, mountFrame, ready } = startHost();
     freezeClock();
-    await host.renderPage(CLOCK_PAGE_ID);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await ready;
+    const frame = mountFrame();
 
-    await openPomodoroTab(user);
-    await press(user, en.skip);
+    frame.send({ kind: "pomodoro.skip" });
     await eventually(() =>
-      expect(screen.getByRole("heading", { name: en.shortBreak })).toBeInTheDocument()
-    );
-    expect(storedCycle(storage)?.state).toEqual({
-      phase: "shortBreak",
-      pomodoro: 1,
-      status: "idle",
-    });
-
-    await press(user, en.resetCycle);
-    await eventually(() =>
-      expect(screen.getByRole("heading", { name: en.pomodoro })).toBeInTheDocument()
-    );
-    expect(
-      screen.getByText(en.pomodoroOfCycle.replace("{n}", "1").replace("{total}", "4"))
-    ).toBeInTheDocument();
-    expect(storedCycle(storage)?.state).toEqual({
-      phase: "pomodoro",
-      pomodoro: 1,
-      status: "idle",
-    });
-  });
-
-  it("resets Pomodoros today at local midnight while the page stays open on an idle Cycle", async () => {
-    const lateEvening = new Date(2026, 10, 20, 23, 59, 0).getTime();
-    const storage = new Map<string, unknown>([
-      [
-        "pomodoro",
-        {
-          state: { phase: "pomodoro", pomodoro: 3, status: "idle" },
-          today: {
-            day: dayNumber(lateEvening, new Date(lateEvening).getTimezoneOffset()),
-            count: 2,
-          },
-        },
-      ],
-    ]);
-    const { host } = startHost({ storage });
-    vi.useFakeTimers({
-      now: lateEvening,
-      shouldAdvanceTime: true,
-      toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "Date"],
-    });
-    await host.renderPage(CLOCK_PAGE_ID);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-
-    await openPomodoroTab(user);
-    await eventually(() =>
-      expect(screen.getByText(en.pomodorosToday.replace("{n}", "2"))).toBeInTheDocument()
+      expect(storedCycle(storage)?.state).toEqual({
+        phase: "shortBreak",
+        pomodoro: 1,
+        status: "idle",
+      })
     );
 
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(2 * 60_000);
-    });
+    frame.send({ kind: "pomodoro.reset" });
     await eventually(() =>
-      expect(screen.getByText(en.pomodorosToday.replace("{n}", "0"))).toBeInTheDocument()
+      expect(storedCycle(storage)?.state).toEqual({
+        phase: "pomodoro",
+        pomodoro: 1,
+        status: "idle",
+      })
     );
   });
 
@@ -625,28 +542,21 @@ describe("Clock runtime", () => {
         },
       ],
     ]);
-    const { host } = startHost({ storage });
+    const { host, ready } = startHost({ storage });
     freezeClock();
-    await host.renderPage(CLOCK_PAGE_ID);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await ready;
 
-    await openPomodoroTab(user);
-    expect(
-      screen.getByText(en.pomodoroOfCycle.replace("{n}", "4").replace("{total}", "4"))
-    ).toBeInTheDocument();
-
-    await press(user, en.start);
+    await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: TOGGLE_POMODORO });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(25 * 60_000);
     });
     await eventually(() =>
-      expect(screen.getByRole("heading", { name: en.longBreak })).toBeInTheDocument()
+      expect(storedCycle(storage)?.state).toEqual({
+        phase: "longBreak",
+        pomodoro: 4,
+        status: "idle",
+      })
     );
-    expect(storedCycle(storage)?.state).toEqual({
-      phase: "longBreak",
-      pomodoro: 4,
-      status: "idle",
-    });
   });
 
   it("shows a phase that ended before startup as ended and does not advance", async () => {
@@ -664,29 +574,33 @@ describe("Clock runtime", () => {
         },
       ],
     ]);
-    const { host } = startHost({ storage });
+    const { mountFrame, ready } = startHost({ storage });
     freezeClock();
-    await host.renderPage(CLOCK_PAGE_ID);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await ready;
 
-    await openPomodoroTab(user);
-
+    // The Frame is told the phase ended where it stood; startup did not skip
+    // ahead to a Short Break.
+    const frame = mountFrame();
     await eventually(() =>
-      expect(screen.getByText(en.phaseEnded.replace("{phase}", en.pomodoro))).toBeInTheDocument()
+      expect(lastState(frame)?.pomodoro.state).toMatchObject({
+        phase: "pomodoro",
+        pomodoro: 2,
+        status: "ended",
+      })
     );
-    expect(screen.getByRole("heading", { name: en.pomodoro })).toBeInTheDocument();
-    expect(screen.getByText(en.pomodorosToday.replace("{n}", "1"))).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: en.shortBreak })).toBeNull();
     expect(storedCycle(storage)?.state).toMatchObject({
       phase: "pomodoro",
       pomodoro: 2,
       status: "ended",
     });
+    expect(storedCycle(storage)?.state.phase).not.toBe("shortBreak");
+    expect(storedToday(storage)?.count).toBe(1);
   });
 
   it("changes the Pomodoro settings by keyboard and auto-starts the Short Break", async () => {
-    const { host, storage } = startHost();
+    const { host, storage, ready } = startHost();
     freezeClock();
+    await ready;
     const row = await host.renderSettingsRow(POMODORO_SETTINGS_ROW_ID);
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
 
@@ -704,9 +618,7 @@ describe("Clock runtime", () => {
 
     await row.unmount();
 
-    await host.renderPage(CLOCK_PAGE_ID);
-    await openPomodoroTab(user);
-    await press(user, en.start);
+    await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: TOGGLE_POMODORO });
     await eventually(() => expect(storedCycle(storage)?.state.status).toBe("running"));
 
     await act(async () => {
@@ -719,90 +631,35 @@ describe("Clock runtime", () => {
         status: "running",
       })
     );
-    expect(screen.getByRole("heading", { name: en.shortBreak })).toBeInTheDocument();
     expect(host.systemNotifications.scheduled.has(POMODORO_TAG)).toBe(true);
   });
 
-  it("renders every label in Spanish when the app language is Spanish", async () => {
-    const host = createTestHost({ manifest: clockManifest(), language: "es" });
-    try {
-      startClock(createPluginClient(host.port), servePluginUi);
-      const page = await host.renderPage(CLOCK_PAGE_ID);
-      const user = userEvent.setup();
+  it("renders the Pomodoro settings row in Spanish when the app language is Spanish", async () => {
+    const { host } = startHost({ language: "es" });
 
-      expect(await screen.findByRole("tablist", { name: es.tabs })).toBeInTheDocument();
-      for (const label of [es.pomodoro, es.timer, es.stopwatch, es.alarms]) {
-        expect(screen.getByRole("tab", { name: label })).toBeInTheDocument();
-      }
-      expect(screen.getByRole("textbox", { name: es.hours })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: es.start })).toBeInTheDocument();
+    const row = await host.renderSettingsRow(POMODORO_SETTINGS_ROW_ID);
+    expect(await screen.findByRole("textbox", { name: es.pomodoroMinutes })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: es.shortBreakMinutes })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: es.longBreakMinutes })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: es.longBreakEvery })).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: es.autoStartBreaks })).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: es.autoStartPomodoros })).toBeInTheDocument();
 
-      const timerTab = screen.getByRole("tab", { name: es.timer });
-      await tabTo(user, timerTab);
-      expect(timerTab).toHaveFocus();
-      await user.keyboard("{ArrowLeft}");
-      await eventually(() =>
-        expect(screen.getByRole("heading", { name: es.pomodoro })).toBeInTheDocument()
-      );
-      expect(
-        screen.getByText(es.pomodoroOfCycle.replace("{n}", "1").replace("{total}", "4"))
-      ).toBeInTheDocument();
-      expect(screen.getByText(es.pomodorosToday.replace("{n}", "0"))).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: es.skip })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: es.resetCycle })).toBeInTheDocument();
-
-      // The Alarms tab, and the form its Add alarm button opens.
-      const pomodoroTab = screen.getByRole("tab", { name: es.pomodoro });
-      await tabTo(user, pomodoroTab);
-      expect(pomodoroTab).toHaveFocus();
-      await user.keyboard("{ArrowRight}{ArrowRight}{ArrowRight}");
-      await eventually(() =>
-        expect(screen.getByRole("button", { name: es.addAlarm })).toBeInTheDocument()
-      );
-      expect(screen.getByText(es.noAlarms)).toBeInTheDocument();
-      await press(user, es.addAlarm);
-      const alarmDialog = await screen.findByRole("dialog", { name: es.addAlarm });
-      expect(within(alarmDialog).getByRole("textbox", { name: es.hour })).toBeInTheDocument();
-      expect(within(alarmDialog).getByRole("textbox", { name: es.minute })).toBeInTheDocument();
-      expect(within(alarmDialog).getByRole("textbox", { name: es.alarmLabel })).toBeInTheDocument();
-      expect(
-        within(alarmDialog).getByRole("checkbox", { name: es.weekdayMon })
-      ).toBeInTheDocument();
-      expect(within(alarmDialog).getByRole("button", { name: es.saveAlarm })).toBeInTheDocument();
-      expect(within(alarmDialog).getByRole("button", { name: es.cancel })).toBeInTheDocument();
-      await user.keyboard("{Escape}");
-      await eventually(() => expect(screen.queryByRole("dialog")).toBeNull());
-
-      const row = await host.renderSettingsRow(POMODORO_SETTINGS_ROW_ID);
-      expect(await screen.findByRole("textbox", { name: es.pomodoroMinutes })).toBeInTheDocument();
-      expect(screen.getByRole("textbox", { name: es.shortBreakMinutes })).toBeInTheDocument();
-      expect(screen.getByRole("textbox", { name: es.longBreakMinutes })).toBeInTheDocument();
-      expect(screen.getByRole("textbox", { name: es.longBreakEvery })).toBeInTheDocument();
-      expect(screen.getByRole("switch", { name: es.autoStartBreaks })).toBeInTheDocument();
-      expect(screen.getByRole("switch", { name: es.autoStartPomodoros })).toBeInTheDocument();
-      await row.unmount();
-
-      await page.unmount();
-    } finally {
-      await host.stop();
-    }
+    await row.unmount();
   });
 
   it("counts a typed length down and schedules the Alert at the stored deadline", async () => {
-    const { host, storage } = startHost();
+    const { host, storage, mountFrame, ready } = startHost();
     freezeClock();
-    await host.renderPage(CLOCK_PAGE_ID);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await ready;
+    const frame = mountFrame();
 
-    await typeMinutes(user, 1, storage);
-    await startTimer(user, storage);
+    frame.send({ kind: "timer.setLength", length: 60_000 });
+    await eventually(() =>
+      expect(stored(storage)?.state).toEqual({ status: "idle", length: 60_000 })
+    );
 
-    await eventually(() => expect(screen.getByText("1:00")).toBeInTheDocument());
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1_000);
-    });
-    await eventually(() => expect(screen.getByText("0:59")).toBeInTheDocument());
-
+    frame.send({ kind: "timer.start" });
     await eventually(() => {
       const saved = stored(storage);
       expect(saved?.state.status).toBe("running");
@@ -817,41 +674,39 @@ describe("Clock runtime", () => {
   });
 
   it("pauses to keep the remaining time exact, cancels the Alert, and resumes at a new end", async () => {
-    const { host, storage } = startHost();
+    const { host, storage, mountFrame, ready } = startHost();
     freezeClock();
-    await host.renderPage(CLOCK_PAGE_ID);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await ready;
+    const frame = mountFrame();
 
-    await typeMinutes(user, 1, storage);
-    await startTimer(user, storage);
+    frame.send({ kind: "timer.setLength", length: 60_000 });
+    await eventually(() =>
+      expect(stored(storage)?.state).toEqual({ status: "idle", length: 60_000 })
+    );
+    frame.send({ kind: "timer.start" });
     await eventually(() => expect(host.systemNotifications.scheduled.has(TIMER_TAG)).toBe(true));
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(10_000);
     });
-    await press(user, en.pause);
+    frame.send({ kind: "timer.pause" });
     await eventually(() => expect(stored(storage)?.state.status).toBe("paused"));
 
     const pausedRemaining = stored(storage)?.state.remaining ?? -1;
     expect(pausedRemaining).toBeGreaterThan(0);
-    await eventually(() =>
-      expect(screen.getByRole("button", { name: en.resume })).toBeInTheDocument()
-    );
-    expect(screen.getByText(formatDuration(pausedRemaining))).toBeInTheDocument();
     await eventually(() => expect(host.systemNotifications.scheduled.has(TIMER_TAG)).toBe(false));
     expect(host.systemNotifications.log.at(-1)).toMatchObject({
       kind: "cancelled",
       tag: TIMER_TAG,
     });
 
-    // Ten more seconds move neither the stored remaining time nor the drawing.
+    // Ten more seconds move neither the stored remaining time nor the Alert.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(10_000);
     });
     expect(stored(storage)?.state.remaining).toBe(pausedRemaining);
-    expect(screen.getByText(formatDuration(pausedRemaining))).toBeInTheDocument();
 
-    await press(user, en.resume);
+    frame.send({ kind: "timer.start" });
     await eventually(() => {
       const saved = stored(storage);
       expect(saved?.state.status).toBe("running");
@@ -862,65 +717,58 @@ describe("Clock runtime", () => {
   });
 
   it("resets to the length and cancels the Alert", async () => {
-    const { host, storage } = startHost();
+    const { host, storage, mountFrame, ready } = startHost();
     freezeClock();
-    await host.renderPage(CLOCK_PAGE_ID);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await ready;
+    const frame = mountFrame();
 
-    await typeMinutes(user, 1, storage);
-    await startTimer(user, storage);
+    frame.send({ kind: "timer.setLength", length: 60_000 });
+    await eventually(() =>
+      expect(stored(storage)?.state).toEqual({ status: "idle", length: 60_000 })
+    );
+    frame.send({ kind: "timer.start" });
     await eventually(() => expect(host.systemNotifications.scheduled.has(TIMER_TAG)).toBe(true));
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(5_000);
     });
-    await press(user, en.reset);
+    frame.send({ kind: "timer.reset" });
     await eventually(() => {
       expect(stored(storage)?.state).toEqual({ status: "idle", length: 60_000 });
       expect(host.systemNotifications.scheduled.has(TIMER_TAG)).toBe(false);
     });
-    await eventually(() =>
-      expect(screen.getByRole("button", { name: en.start })).toBeInTheDocument()
-    );
-    expect(screen.getByRole("textbox", { name: en.minutes })).toHaveValue("1");
   });
 
-  it("keeps the three most recent lengths newest first, and a quick pick sets the length", async () => {
-    const { host, storage } = startHost();
+  it("keeps the three most recent lengths newest first, and a length the author picks is taken", async () => {
+    const { storage, mountFrame, ready } = startHost();
     freezeClock();
-    await host.renderPage(CLOCK_PAGE_ID);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await ready;
+    const frame = mountFrame();
 
     for (const minutes of [1, 2, 3]) {
-      await typeMinutes(user, minutes, storage);
-      await startTimer(user, storage);
-      await press(user, en.reset);
+      frame.send({ kind: "timer.setLength", length: minutes * 60_000 });
+      await eventually(() =>
+        expect(stored(storage)?.state).toEqual({ status: "idle", length: minutes * 60_000 })
+      );
+      frame.send({ kind: "timer.start" });
+      await eventually(() => expect(stored(storage)?.state.status).toBe("running"));
+      frame.send({ kind: "timer.reset" });
       await eventually(() => expect(stored(storage)?.state.status).toBe("idle"));
     }
 
-    // The page redraws after the stored reset, so wait for the drawn picks.
-    await eventually(() =>
-      expect(
-        screen
-          .getAllByRole("button")
-          .map((button) => button.textContent ?? "")
-          .filter((label) => /^\d+:\d{2}$/.test(label))
-      ).toEqual(["3:00", "2:00", "1:00"])
-    );
+    await eventually(() => expect(stored(storage)?.recent).toEqual([180_000, 120_000, 60_000]));
 
-    const pick = screen.getByRole("button", { name: "2:00" });
-    await tabTo(user, pick);
-    expect(pick).toHaveFocus();
-    await user.keyboard("{Enter}");
+    // Picking a recent is the same `setLength` intent the Frame posts.
+    frame.send({ kind: "timer.setLength", length: 120_000 });
     await eventually(() =>
       expect(stored(storage)?.state).toEqual({ status: "idle", length: 120_000 })
     );
-    expect(screen.getByRole("textbox", { name: en.minutes })).toHaveValue("2");
   });
 
   it("starts and then pauses the Timer from the toggleTimer Command", async () => {
-    const { host, storage } = startHost();
+    const { host, storage, ready } = startHost();
     freezeClock();
+    await ready;
 
     await expect(
       host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: TOGGLE_TIMER })
@@ -935,8 +783,9 @@ describe("Clock runtime", () => {
   });
 
   it("starts and then pauses the Pomodoro from the togglePomodoro Command", async () => {
-    const { host, storage } = startHost();
+    const { host, storage, ready } = startHost();
     freezeClock();
+    await ready;
 
     await expect(
       host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: TOGGLE_POMODORO })
@@ -962,8 +811,9 @@ describe("Clock runtime", () => {
   });
 
   it("skips to the Short Break from the skipPomodoro Command", async () => {
-    const { host, storage } = startHost();
+    const { host, storage, ready } = startHost();
     freezeClock();
+    await ready;
 
     await expect(
       host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: SKIP_POMODORO })
@@ -979,8 +829,9 @@ describe("Clock runtime", () => {
   });
 
   it("keeps the Toggle Button pressed while a phase runs, and released when it pauses or ends", async () => {
-    const { host, storage } = startHost();
+    const { host, storage, ready } = startHost();
     freezeClock();
+    await ready;
     expect(host.toolbarPressed(TOGGLE_POMODORO)).toBe(false);
 
     await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: TOGGLE_POMODORO });
@@ -1000,160 +851,27 @@ describe("Clock runtime", () => {
       status: "idle",
     });
   });
-
-  it("announces the whole minute and the end, never every second", async () => {
-    const { host, storage } = startHost();
-    freezeClock();
-    await host.renderPage(CLOCK_PAGE_ID);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-
-    await typeMinutes(user, 2, storage);
-    await startTimer(user, storage);
-
-    const twoMinutes = en.minutesLeft.replace("{n}", "2");
-    await eventually(() => expect(screen.getByText(twoMinutes)).toBeInTheDocument());
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1_000);
-    });
-    await eventually(() => expect(screen.getByText("1:59")).toBeInTheDocument());
-    expect(screen.getByText(twoMinutes)).toBeInTheDocument();
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1_000);
-    });
-    await eventually(() => expect(screen.getByText("1:58")).toBeInTheDocument());
-    expect(screen.getByText(twoMinutes)).toBeInTheDocument();
-
-    // Cross the whole minute: the live region moves, the drawing keeps ticking.
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(58_000);
-    });
-    await eventually(() => expect(screen.getByText(en.oneMinuteLeft)).toBeInTheDocument());
-    expect(screen.queryByText(twoMinutes)).toBeNull();
-
-    // The end.
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(60_000);
-    });
-    await eventually(() => expect(screen.getByText(en.timerEndedAnnounce)).toBeInTheDocument());
-    await eventually(() => expect(stored(storage)?.state.status).toBe("ended"));
-  });
-
-  it("announces the minute and the end from the live region on every tab", async () => {
-    const { host, storage } = startHost();
-    freezeClock();
-    await host.renderPage(CLOCK_PAGE_ID);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-
-    await typeMinutes(user, 1, storage);
-    await startTimer(user, storage);
-    await eventually(() => expect(screen.getByText(en.oneMinuteLeft)).toBeInTheDocument());
-
-    // On the Stopwatch tab the live region, which sits below the tabs, speaks on.
-    const timerTab = screen.getByRole("tab", { name: en.timer });
-    await tabTo(user, timerTab);
-    expect(timerTab).toHaveFocus();
-    await user.keyboard("{ArrowRight}");
-    await eventually(() =>
-      expect(screen.getByRole("tab", { name: en.stopwatch })).toHaveAttribute(
-        "aria-selected",
-        "true"
-      )
-    );
-    expect(screen.getByText(en.oneMinuteLeft)).toBeInTheDocument();
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(60_000);
-    });
-    await eventually(() => expect(screen.getByText(en.timerEndedAnnounce)).toBeInTheDocument());
-    await eventually(() => expect(stored(storage)?.state.status).toBe("ended"));
-    expect(screen.getByRole("tab", { name: en.stopwatch })).toHaveAttribute(
-      "aria-selected",
-      "true"
-    );
-  });
-
-  it("offers Allow notifications when the OS has not answered, and asks on press", async () => {
-    const { host } = startHost();
-    host.systemNotifications.setPermission("default");
-    freezeClock();
-    await host.renderPage(CLOCK_PAGE_ID);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-
-    await eventually(() =>
-      expect(screen.getByRole("button", { name: en.allowNotifications })).toBeInTheDocument()
-    );
-    const allow = screen.getByRole("button", { name: en.allowNotifications });
-    expect(screen.getByText(en.alertsNeedOpen)).toBeInTheDocument();
-
-    await tabTo(user, allow);
-    expect(allow).toHaveFocus();
-    await user.keyboard("{Enter}");
-
-    await eventually(() =>
-      expect(screen.queryByRole("button", { name: en.allowNotifications })).toBeNull()
-    );
-    expect(await host.systemNotifications.permission()).toBe("granted");
-  });
-
-  it("says Alerts may be late only when the device can schedule ahead but not exactly", async () => {
-    const { host } = startHost();
-    host.systemNotifications.setCanScheduleWhileClosed(true);
-    host.systemNotifications.setExactTiming(false);
-    freezeClock();
-    await host.renderPage(CLOCK_PAGE_ID);
-
-    await eventually(() => expect(screen.getByText(en.alertsMayBeLate)).toBeInTheDocument());
-    expect(screen.queryByText(en.alertsNeedOpen)).toBeNull();
-  });
 });
 
 describe("Clock Alarms", () => {
   afterEach(async () => {
     // The Plugin's teardown waits on a real task, which a fake clock never runs.
     vi.useRealTimers();
+    for (const frame of openFrames.splice(0)) frame.close();
     const pending = openHosts.splice(0);
     for (const host of pending) await host.stop();
   });
 
-  it("adds, edits, switches, and deletes an Alarm by keyboard, rescheduling its Alert", async () => {
-    const { host, storage } = startHost();
+  it("adds, edits, switches, and deletes an Alarm, rescheduling its Alert", async () => {
+    const { host, storage, mountFrame, ready } = startHost();
     freezeClock();
-    await host.renderPage(CLOCK_PAGE_ID);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await ready;
+    const frame = mountFrame();
 
-    await openAlarmsTab(user);
-    expect(screen.getByText(en.noAlarms)).toBeInTheDocument();
-
-    await press(user, en.addAlarm);
-    const dialog = await screen.findByRole("dialog", { name: en.addAlarm });
-
-    const hourField = within(dialog).getByRole("textbox", { name: en.hour });
-    await tabTo(user, hourField);
-    expect(hourField).toHaveFocus();
-    await user.clear(hourField);
-    await user.type(hourField, "13");
-    await user.keyboard("{Enter}");
-
-    const minuteField = within(dialog).getByRole("textbox", { name: en.minute });
-    await tabTo(user, minuteField);
-    await user.clear(minuteField);
-    await user.type(minuteField, "30");
-    await user.keyboard("{Enter}");
-
-    const labelField = within(dialog).getByRole("textbox", { name: en.alarmLabel });
-    await tabTo(user, labelField);
-    await user.type(labelField, "Write");
-
-    const monday = within(dialog).getByRole("checkbox", { name: en.weekdayMon });
-    await tabTo(user, monday);
-    expect(monday).toHaveFocus();
-    await user.keyboard(" ");
-
-    await press(user, en.saveAlarm);
-    await eventually(() => expect(screen.queryByRole("dialog")).toBeNull());
-
+    frame.send({
+      kind: "alarm.add",
+      input: { hour: 13, minute: 30, label: "Write", weekdays: [1] },
+    });
     await eventually(() => expect(storedAlarms(storage)).toHaveLength(1));
     const added = storedAlarms(storage)[0];
     if (added === undefined) throw new Error("the added Alarm should be stored");
@@ -1170,29 +888,12 @@ describe("Clock Alarms", () => {
     expect(host.systemNotifications.scheduled.get(tag)?.title).toBe("Clock: Write");
     expect(host.systemNotifications.scheduled.get(tag)?.body).toBe(shownTime(13, 30));
 
-    // The row names the time, the label, and the weekday, and the Alarm's
-    // switch is on.
-    expect(screen.getByText(shownTime(13, 30))).toBeInTheDocument();
-    expect(screen.getByText("Write")).toBeInTheDocument();
-    expect(screen.getByText(en.weekdayMon)).toBeInTheDocument();
-    const alarmSwitch = screen.getByRole("switch", { name: `Alarm ${shownTime(13, 30)}` });
-    expect(alarmSwitch).toBeChecked();
-
     // Editing the time reschedules the Alert at the new occurrence.
-    await press(user, en.editAlarm.replace("{time}", shownTime(13, 30)));
-    const editDialog = await screen.findByRole("dialog", { name: en.alarm });
-    expect(within(editDialog).getByRole("textbox", { name: en.alarmLabel })).toHaveValue("Write");
-    const editHour = within(editDialog).getByRole("textbox", { name: en.hour });
-    await tabTo(user, editHour);
-    await user.clear(editHour);
-    await user.type(editHour, "14");
-    await user.keyboard("{Enter}");
-    const editMinute = within(editDialog).getByRole("textbox", { name: en.minute });
-    await tabTo(user, editMinute);
-    await user.clear(editMinute);
-    await user.type(editMinute, "0");
-    await user.keyboard("{Enter}");
-    await press(user, en.saveAlarm);
+    frame.send({
+      kind: "alarm.edit",
+      id: added.id,
+      input: { hour: 14, minute: 0, label: "Write", weekdays: [1] },
+    });
     await eventually(() =>
       expect(storedAlarms(storage)[0]).toMatchObject({ hour: 14, minute: 0, label: "Write" })
     );
@@ -1200,43 +901,20 @@ describe("Clock Alarms", () => {
     await eventually(() => expect(host.systemNotifications.scheduled.get(tag)?.at).toBe(secondAt));
 
     // Off cancels the Alert; on schedules it again.
-    const editedSwitch = screen.getByRole("switch", { name: `Alarm ${shownTime(14, 0)}` });
-    await tabTo(user, editedSwitch);
-    expect(editedSwitch).toHaveFocus();
-    await user.keyboard(" ");
+    frame.send({ kind: "alarm.setEnabled", id: added.id, enabled: false });
     await eventually(() => expect(storedAlarms(storage)[0]?.enabled).toBe(false));
     await eventually(() => expect(host.systemNotifications.scheduled.has(tag)).toBe(false));
     expect(host.systemNotifications.log.at(-1)).toMatchObject({ kind: "cancelled", tag });
 
-    await user.keyboard(" ");
+    frame.send({ kind: "alarm.setEnabled", id: added.id, enabled: true });
     await eventually(() => expect(storedAlarms(storage)[0]?.enabled).toBe(true));
     await eventually(() => expect(host.systemNotifications.scheduled.get(tag)?.at).toBe(secondAt));
 
     // Deleting cancels the Alert and empties the list.
-    await press(user, en.deleteAlarm.replace("{time}", shownTime(14, 0)));
+    frame.send({ kind: "alarm.remove", id: added.id });
     await eventually(() => expect(storedAlarms(storage)).toEqual([]));
     await eventually(() => expect(host.systemNotifications.scheduled.has(tag)).toBe(false));
     expect(host.systemNotifications.log.at(-1)).toMatchObject({ kind: "cancelled", tag });
-    await eventually(() => expect(screen.getByText(en.noAlarms)).toBeInTheDocument());
-  });
-
-  it("closes the form on Escape and returns focus to the button that opened it", async () => {
-    const { host, storage } = startHost();
-    freezeClock();
-    await host.renderPage(CLOCK_PAGE_ID);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-
-    await openAlarmsTab(user);
-    const add = screen.getByRole("button", { name: en.addAlarm });
-    await tabTo(user, add);
-    expect(add).toHaveFocus();
-    await user.keyboard("{Enter}");
-    await screen.findByRole("dialog", { name: en.addAlarm });
-
-    await user.keyboard("{Escape}");
-    await eventually(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(add).toHaveFocus();
-    expect(storedAlarms(storage)).toEqual([]);
   });
 
   it("toasts once about an Alarm missed while closed, and shows it off", async () => {
@@ -1251,52 +929,19 @@ describe("Clock Alarms", () => {
       nextAt: passedAt,
     };
     const storage = new Map<string, unknown>([["alarms", [missed]]]);
-    const { host } = startHost({ storage });
+    const { host, ready } = startHost({ storage });
     freezeClock();
+    await ready;
 
-    await eventually(() => expect(host.notifications).toHaveLength(1));
     const missedTime = formatClockTime(passedAt, localOffsetAt(passedAt), hourCycleFor("en"));
     expect(host.notifications).toEqual([
       { variant: "info", message: en.alarmMissed.replace("{time}", missedTime) },
     ]);
     expect(host.notifications[0]?.message).toContain("Missed alarm");
 
-    await host.renderPage(CLOCK_PAGE_ID);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    await openAlarmsTab(user);
-
-    const offSwitch = await screen.findByRole("switch", { name: `Alarm ${shownTime(9, 0)}` });
-    expect(offSwitch).not.toBeChecked();
+    // The one-off Alarm is off, so the Frame draws its switch off and nothing
+    // is scheduled.
     expect(storedAlarms(storage)[0]?.enabled).toBe(false);
     expect(host.systemNotifications.scheduled.size).toBe(0);
-  });
-
-  it("names two Alarms at one time apart by their label and weekdays", async () => {
-    const at = (id: string, label: string, weekdays: number[]): Alarm => ({
-      id,
-      hour: 7,
-      minute: 0,
-      label,
-      weekdays,
-      enabled: false,
-      nextAt: null,
-    });
-    const storage = new Map<string, unknown>([
-      ["alarms", [at("weekday", "Write", [1, 2, 3, 4, 5]), at("weekend", "", [0, 6])]],
-    ]);
-    const { host } = startHost({ storage });
-    freezeClock();
-    await host.renderPage(CLOCK_PAGE_ID);
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
-    await openAlarmsTab(user);
-
-    const time = shownTime(7, 0);
-    const weekdays = [en.weekdayMon, en.weekdayTue, en.weekdayWed, en.weekdayThu, en.weekdayFri];
-    const first = `${time}, Write, ${weekdays.join(", ")}`;
-    const second = `${time}, ${en.weekdaySun}, ${en.weekdaySat}`;
-    expect(await screen.findByRole("switch", { name: `Alarm ${first}` })).toBeInTheDocument();
-    expect(screen.getByRole("switch", { name: `Alarm ${second}` })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: `Edit ${first}` })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: `Delete ${second}` })).toBeInTheDocument();
   });
 });
