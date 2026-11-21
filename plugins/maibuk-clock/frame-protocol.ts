@@ -19,7 +19,7 @@ import { catalogFor, type ClockKey } from "./i18n";
 import type { ClockPomodoro, PomodoroSnapshot } from "./pomodoro";
 import type { ClockStopwatch } from "./stopwatch";
 import type { ClockTimer, TimerSnapshot } from "./timer";
-import { hourCycleFor, type StopwatchState } from "./time";
+import { hourCycleFor, MAX_TIMER_LENGTH_MS, type StopwatchState } from "./time";
 
 /* Worker -> Frame */
 
@@ -175,6 +175,8 @@ export function connectClockFrame(
       case "timer.setLength": {
         const { length } = value as { length: unknown };
         if (typeof length !== "number" || !Number.isFinite(length) || length < 0) return;
+        // A length the Duration input could never express would freeze the readout.
+        if (length > MAX_TIMER_LENGTH_MS) return;
         timer.setLength(length);
         return;
       }

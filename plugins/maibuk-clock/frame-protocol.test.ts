@@ -24,6 +24,7 @@ import es from "./locales/runtime/es.json";
 import { createPomodoro } from "./pomodoro";
 import { createStopwatch } from "./stopwatch";
 import { clockManifest } from "./test-support";
+import { MAX_TIMER_LENGTH_MS } from "./time";
 import { createTimer } from "./timer";
 
 /** The default Timer an empty storage leaves in place. */
@@ -216,6 +217,14 @@ describe("connectClockFrame", () => {
     });
   });
 
+  it("takes the longest length the Duration input can express", async () => {
+    const harness = setup();
+    await connected(harness);
+
+    const set = await apply(harness, { kind: "timer.setLength", length: MAX_TIMER_LENGTH_MS });
+    expect(set.timer.state).toEqual({ status: "idle", length: MAX_TIMER_LENGTH_MS });
+  });
+
   it("runs the Pomodoro's intents", async () => {
     const harness = setup();
     await connected(harness);
@@ -307,6 +316,8 @@ describe("connectClockFrame", () => {
     harness.send({ kind: "timer.setLength", length: -1 });
     harness.send({ kind: "timer.setLength", length: "ten" });
     harness.send({ kind: "timer.setLength", length: Number.POSITIVE_INFINITY });
+    harness.send({ kind: "timer.setLength", length: 1e12 });
+    harness.send({ kind: "timer.setLength", length: MAX_TIMER_LENGTH_MS + 1_000 });
     harness.send({ kind: "alarm.add", input: { hour: 24, minute: 0, label: "", weekdays: [] } });
     harness.send({ kind: "alarm.add", input: { hour: 12, minute: 60, label: "", weekdays: [] } });
     harness.send({ kind: "alarm.add", input: { hour: 12, minute: 0, label: "", weekdays: [7] } });

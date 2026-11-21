@@ -355,6 +355,24 @@ describe("Clock runtime", () => {
     await eventually(() => expect(storedStopwatch(storage)).toEqual({ status: "idle" }));
   });
 
+  it("stops sending to a Frame once the next one is handed over", async () => {
+    const { mountFrame, ready } = startHost();
+    freezeClock();
+    await ready;
+    const first = mountFrame();
+    await eventually(() => expect(lastState(first)).toBeDefined());
+
+    const second = mountFrame();
+    await eventually(() => expect(lastState(second)).toBeDefined());
+
+    // The first Frame's connection is disposed, so a module change reaches only
+    // the Frame currently mounted.
+    const before = states(first).length;
+    second.send({ kind: "stopwatch.start" });
+    await eventually(() => expect(lastState(second)?.stopwatch.status).toBe("running"));
+    expect(states(first).length).toBe(before);
+  });
+
   it("finds a running Stopwatch and its Laps after a restart", async () => {
     const laps = [
       { length: 30_000, total: 30_000 },

@@ -202,6 +202,13 @@ export function joinDuration(parts: DurationParts): number {
   return Math.round(hours * MS_PER_HOUR + minutes * MS_PER_MINUTE + seconds * MS_PER_SECOND);
 }
 
+/** The longest length the Timer's Duration input can express: 99:59:59. */
+export const MAX_TIMER_LENGTH_MS = joinDuration({
+  hours: MAX_HOURS,
+  minutes: MAX_MINUTES,
+  seconds: MAX_SECONDS,
+});
+
 /**
  * The local time of day, worked out by hand. `offsetMinutes` reads like
  * `Date.prototype.getTimezoneOffset()`: UTC minus local, so UTC+2 is -120.

@@ -155,9 +155,14 @@ export function startClock(client: PluginClient, serve: ClockServe): Promise<voi
     .catch(() => {});
   // Every mounted Clock Frame speaks to the same four modules over its own
   // port; the Frame tells the Worker when it closes, and `connectClockFrame`
-  // then drops that Frame's subscriptions and closes the port.
+  // then drops that Frame's subscriptions and closes the port. The host closes
+  // the port before that message arrives, so the previous connection is
+  // disposed here too; only one whole-page Clock Frame is mounted at a time,
+  // so there is never more than one to keep.
+  let disposeFrame: (() => void) | null = null;
   client.onFrame((frame) => {
-    connectClockFrame(frame.port, { client, timer, pomodoro, stopwatch, alarms });
+    disposeFrame?.();
+    disposeFrame = connectClockFrame(frame.port, { client, timer, pomodoro, stopwatch, alarms });
   });
   serve(client, {
     pages: {},
