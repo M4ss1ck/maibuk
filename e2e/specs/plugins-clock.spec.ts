@@ -20,12 +20,17 @@
 // every step below reaches them through the Frame. Only the Command Palette and
 // Maibuk's own Alert notice are host UI. Keyboard only: every control is
 // reached by Tab and pressed with Enter or Space, and a host Command takes the
-// keys back from the Frame first.
+// keys back from the Frame first. The Alarm editor is a dialog inside the Frame,
+// so its focus entry, Tab containment, Escape and restored focus are asserted
+// where it opens. The same Frame on a phone (#886) stacks its side card below
+// the hero and keeps every target thumb-sized: a @touch test opens it from the
+// navigation menu and proves both.
 
 import type { FrameLocator, Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import {
   expectFocusWithin,
+  expectTabContained,
   leaveFrame,
   pressUntilFocused,
   tabTo,
@@ -344,6 +349,29 @@ async function setLength(page: Page, name: string, value: number): Promise<void>
   await page.keyboard.press("Enter");
 }
 
+/** The four section buttons, in the Frame's tab order. */
+const SECTIONS = ["Pomodoro", "Timer", "Stopwatch", "Alarms"] as const;
+
+/** The smallest a tap target may be on a phone: 44 by 44 CSS pixels. */
+const MIN_TAP = 44;
+
+/** The box an element draws, failing when a hidden or detached one draws none. */
+async function boxOf(
+  target: Locator,
+  name: string
+): Promise<{ x: number; y: number; width: number; height: number }> {
+  const box = await target.boundingBox();
+  if (box === null) throw new Error(`${name} draws no box, so it is no tap target`);
+  return box;
+}
+
+/** Asserts one control is at least 44 by 44, the size a fingertip needs. */
+async function expectThumbSized(target: Locator, name: string): Promise<void> {
+  const box = await boxOf(target, name);
+  expect(box.width, `${name} width`).toBeGreaterThanOrEqual(MIN_TAP);
+  expect(box.height, `${name} height`).toBeGreaterThanOrEqual(MIN_TAP);
+}
+
 test.use({
   library: "empty",
   plugins: [PLUGIN_ID],
@@ -635,6 +663,25 @@ test.describe("Clock Alarms @wf:plugins-clock-alarms @chromium-only", () => {
     await page.keyboard.press("Enter");
     const add = alarmForm(page, "Add alarm");
     await expect(add).toBeVisible();
+    // The dialog takes focus on its Label field, keeps Tab inside past its last
+    // control, and Escape dismisses it back to the button that opened it.
+    await expectFocusWithin(add);
+    await expect(add.getByRole("textbox", { name: "Label", exact: true })).toBeFocused();
+    await expectTabContained(page, add);
+    // From Save, the last control, Tab lands back on the dialog's first, and one
+    // more reaches its second: the Hour field, so focus wrapped inside.
+    await tabToEither(page, add.getByRole("button", { name: "Save", exact: true }), { max: 20 });
+    await page.keyboard.press("Tab");
+    await expectFocusWithin(add);
+    await page.keyboard.press("Tab");
+    await expect(add.getByRole("spinbutton", { name: "Hour", exact: true })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(add).toBeHidden();
+    await expect(addAlarmButton(page)).toBeFocused();
+
+    // Reopened from the restored focus, the form is filled and saved.
+    await page.keyboard.press("Enter");
+    await expect(add).toBeVisible();
     await setAlarmNumber(
       page,
       add.getByRole("spinbutton", { name: "Hour", exact: true }),
@@ -722,5 +769,58 @@ test.describe("Clock Alarms @wf:plugins-clock-alarms @chromium-only", () => {
     await expect(editedToggle).toHaveCount(0);
     await expect(clockFrame(page).getByText(ALARM_LABEL, { exact: true })).toHaveCount(0);
     await capture(page, "clock-alarms-deleted");
+  });
+});
+
+test.describe("Clock on a phone @touch @wf:plugins-clock-phone", () => {
+  // A phone has no Settings outline to turn the Built-in on from, so the seed
+  // writes the record turning it on would: the shipped copy pinned, its one
+  // required Plugin Permission granted, and the Plugin already running.
+  test.use({ pluginApprovals: [{ pluginId: PLUGIN_ID, granted: ["system-notifications"] }] });
+
+  test("the Frame stacks its side card below the hero with thumb-sized targets @touch", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    // A phone has no sidebar: the pages live behind the navigation menu.
+    const menu = page.getByRole("button", { name: "Open navigation menu" });
+    await expect(menu).toBeVisible({ timeout: 60_000 });
+    await menu.tap();
+    const navigation = page.getByRole("dialog", { name: "Primary navigation" });
+    await navigation.getByRole("option", { name: /^Clock/ }).tap();
+    await expect(page).toHaveURL(new RegExp(`/plugin/${PLUGIN_ID}/${PAGE_ID}$`));
+    const tabs = clockFrame(page).getByRole("tablist", { name: "Clock sections" });
+    await expect(tabs).toBeVisible({ timeout: 20_000 });
+
+    // The Pomodoro tab draws a hero carrying the primary button and the two
+    // round icon buttons, and a side card that desktop width puts beside it.
+    await tabs.getByRole("tab", { name: "Pomodoro", exact: true }).tap();
+    const pomodoro = tabPanel(page, "Pomodoro");
+    await expect(pomodoro).toBeVisible({ timeout: 15_000 });
+    const hero = await boxOf(pomodoro.locator(".hero"), "the hero");
+    const side = await boxOf(pomodoro.locator(".side"), "the side card");
+    // At phone width the layout stacks, so the side card starts below the hero.
+    expect(side.y).toBeGreaterThan(hero.y + hero.height);
+
+    // Every target is thumb-sized: the four section buttons, the hero's primary
+    // button, and its two round icon buttons.
+    for (const name of SECTIONS) {
+      await expectThumbSized(tabs.getByRole("tab", { name, exact: true }), name);
+    }
+    await expectThumbSized(pomodoro.getByRole("button", { name: "Start", exact: true }), "Start");
+    await expectThumbSized(
+      pomodoro.getByRole("button", { name: "Reset Cycle", exact: true }),
+      "Reset Cycle"
+    );
+    await expectThumbSized(pomodoro.getByRole("button", { name: "Skip", exact: true }), "Skip");
+    await capture(page, "clock-phone-pomodoro");
+
+    // A tap on the Stopwatch section selects it and draws its own panel.
+    const stopwatchTab = tabs.getByRole("tab", { name: "Stopwatch", exact: true });
+    await stopwatchTab.tap();
+    await expect(tabPanel(page, "Stopwatch")).toBeVisible();
+    await expect(stopwatchTab).toHaveAttribute("aria-selected", "true");
+    await expect(pomodoro).toBeHidden();
+    await capture(page, "clock-phone-stopwatch");
   });
 });
