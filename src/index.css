@@ -3,6 +3,12 @@
    only Markdown mentions into the build. */
 @import "tailwindcss" source(".");
 
+/* The built-in motion variants key off the media query; the app reduction is
+   the root attribute instead, so every motion-reduce:/motion-safe: utility
+   follows the same switch as the reset below. */
+@custom-variant motion-reduce (&:where([data-motion="reduce"], [data-motion="reduce"] *));
+@custom-variant motion-safe (&:where(:not([data-motion="reduce"], [data-motion="reduce"] *)));
+
 @theme {
   /* Semantic colors for light mode (default) */
   --color-primary: #3b82f6;
@@ -1834,38 +1840,31 @@ li.footnote-item,
   animation: fade-in 0.12s ease-out forwards;
 }
 
-/* Reduced motion */
-@media (prefers-reduced-motion: reduce) {
-  .pane-badge-enter,
-  .modal-backdrop-enter,
-  .modal-panel-enter,
-  .toast-enter,
-  .toast-exit,
-  .loading-entrance,
-  .dropdown-enter,
-  .modal-panel-drop,
-  .empty-state-enter,
-  .book-card-enter,
-  .selection-toolbar-enter {
-    animation: none;
-    opacity: 1;
-  }
+/* Reduced motion: the root carries data-motion="reduce" (src/lib/motion.ts).
+   0.01ms rather than `none`, so animationend and transitionend still fire for
+   code that waits on them, and `forwards` entrances end visible. */
+[data-motion="reduce"],
+[data-motion="reduce"] *,
+[data-motion="reduce"] *::before,
+[data-motion="reduce"] *::after {
+  /* biome-ignore lint/complexity/noImportantStyles: the reset must outrank inline styles and every utility class. */
+  animation-duration: 0.01ms !important;
+  /* biome-ignore lint/complexity/noImportantStyles: the reset must outrank inline styles and every utility class. */
+  animation-iteration-count: 1 !important;
+  /* biome-ignore lint/complexity/noImportantStyles: the reset must outrank inline styles and every utility class. */
+  animation-delay: 0ms !important;
+  /* biome-ignore lint/complexity/noImportantStyles: the reset must outrank inline styles and every utility class. */
+  transition-duration: 0.01ms !important;
+  /* biome-ignore lint/complexity/noImportantStyles: the reset must outrank inline styles and every utility class. */
+  transition-delay: 0ms !important;
+  /* biome-ignore lint/complexity/noImportantStyles: the reset must outrank inline styles and every utility class. */
+  scroll-behavior: auto !important;
+}
 
-  /* A still band in the middle still says "working, size unknown". */
-  .progress-update:indeterminate {
-    animation: none;
-    background-position: 50% 0;
-  }
-
-  /* React Joyride ignores prefers-reduced-motion (ADR 0009): its floater
-     fades with an inline transition and the spotlight cutout fades in. */
-  [data-tutorial-portal],
-  [data-tutorial-portal] * {
-    /* biome-ignore lint/complexity/noImportantStyles: Joyride sets these inline, and only !important outranks an inline style. */
-    transition: none !important;
-    /* biome-ignore lint/complexity/noImportantStyles: Joyride sets these inline, and only !important outranks an inline style. */
-    animation: none !important;
-  }
+/* A still band in the middle still says "working, size unknown". */
+[data-motion="reduce"] .progress-update:indeterminate {
+  animation: none;
+  background-position: 50% 0;
 }
 
 /* The Tutorial card draws its own shadow; Joyride's inline drop-shadow doubles it. */
