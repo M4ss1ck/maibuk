@@ -675,6 +675,17 @@ function AlarmsPanel({ alarms, language, list }: AlarmsPanelProps) {
       {list.length === 0 ? <ui.Text tone="muted">{translate(language, "noAlarms")}</ui.Text> : null}
       {list.map((alarm) => {
         const time = alarmClockTime(alarm.hour, alarm.minute, language);
+        // Two rows at one time would share their controls' names, so those
+        // rows' names also carry the label and the weekdays.
+        const shared = list.some(
+          (other) =>
+            other.id !== alarm.id && other.hour === alarm.hour && other.minute === alarm.minute
+        );
+        const name = shared
+          ? [time, alarm.label, alarmRepeat(alarm, language)]
+              .filter((part) => part !== "")
+              .join(", ")
+          : time;
         return (
           <ui.View key={alarm.id} direction="column" gap="sm">
             <ui.View direction="row" gap="sm" align="center" wrap>
@@ -686,15 +697,15 @@ function AlarmsPanel({ alarms, language, list }: AlarmsPanelProps) {
             </ui.View>
             <ui.View direction="row" gap="sm" align="center" wrap>
               <ui.Switch
-                label={translate(language, "alarmSwitch").replace("{time}", time)}
+                label={translate(language, "alarmSwitch").replace("{time}", name)}
                 isSelected={alarm.enabled}
                 onChange={(event) => alarms.setEnabled(alarm.id, event.detail)}
               />
               <ui.Button variant="secondary" onPress={() => setDraft(draftOf(alarm))}>
-                {translate(language, "editAlarm").replace("{time}", time)}
+                {translate(language, "editAlarm").replace("{time}", name)}
               </ui.Button>
               <ui.Button variant="destructive" onPress={() => alarms.remove(alarm.id)}>
-                {translate(language, "deleteAlarm").replace("{time}", time)}
+                {translate(language, "deleteAlarm").replace("{time}", name)}
               </ui.Button>
             </ui.View>
           </ui.View>

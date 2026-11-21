@@ -1270,4 +1270,33 @@ describe("Clock Alarms", () => {
     expect(storedAlarms(storage)[0]?.enabled).toBe(false);
     expect(host.systemNotifications.scheduled.size).toBe(0);
   });
+
+  it("names two Alarms at one time apart by their label and weekdays", async () => {
+    const at = (id: string, label: string, weekdays: number[]): Alarm => ({
+      id,
+      hour: 7,
+      minute: 0,
+      label,
+      weekdays,
+      enabled: false,
+      nextAt: null,
+    });
+    const storage = new Map<string, unknown>([
+      ["alarms", [at("weekday", "Write", [1, 2, 3, 4, 5]), at("weekend", "", [0, 6])]],
+    ]);
+    const { host } = startHost({ storage });
+    freezeClock();
+    await host.renderPage(CLOCK_PAGE_ID);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await openAlarmsTab(user);
+
+    const time = shownTime(7, 0);
+    const weekdays = [en.weekdayMon, en.weekdayTue, en.weekdayWed, en.weekdayThu, en.weekdayFri];
+    const first = `${time}, Write, ${weekdays.join(", ")}`;
+    const second = `${time}, ${en.weekdaySun}, ${en.weekdaySat}`;
+    expect(await screen.findByRole("switch", { name: `Alarm ${first}` })).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: `Alarm ${second}` })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: `Edit ${first}` })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: `Delete ${second}` })).toBeInTheDocument();
+  });
 });
