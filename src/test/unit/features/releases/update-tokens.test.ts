@@ -17,6 +17,7 @@ function tokensIn(block: string): Record<string, string> {
 const darkStart = css.indexOf(".dark {");
 const themes = {
   light: tokensIn(css.slice(0, darkStart)),
+  // Only the .dark block: the later .eink.dark rule reassigns these tokens too.
   dark: tokensIn(css.slice(darkStart, css.indexOf("}", darkStart))),
 };
 

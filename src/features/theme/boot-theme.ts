@@ -61,10 +61,8 @@ export function writeBootTheme(patch: {
     if (patch.vars !== undefined) next.vars = patch.vars;
     if (patch.eink !== undefined) next.eink = patch.eink;
     // Off is the absence of the key, like records written before E-ink Mode.
-    const record = next.eink
-      ? { v: next.v, mode: next.mode, vars: next.vars, eink: true }
-      : { v: next.v, mode: next.mode, vars: next.vars };
-    localStorage.setItem(BOOT_THEME_KEY, JSON.stringify(record));
+    const { eink, ...withoutEink } = next;
+    localStorage.setItem(BOOT_THEME_KEY, JSON.stringify(eink ? next : withoutEink));
   } catch {
     // The snapshot only shortens the first paint; losing it is not an error.
   }

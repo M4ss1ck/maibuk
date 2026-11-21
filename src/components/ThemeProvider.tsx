@@ -9,21 +9,22 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const eink = useThemeStore((state) => state.eink);
   const { pathname } = useLocation();
   const onEmbed = isEmbedPath(pathname);
+  // The Embed route owns its own look, so E-ink Mode never reaches it.
+  const einkOn = eink && !onEmbed;
 
   useLayoutEffect(() => {
     // The two sources are the OS preference and E-ink Mode (#901).
     const mediaQuery = window.matchMedia?.(REDUCED_MOTION_QUERY);
-    const einkMotion = eink && !onEmbed;
-    const handler = () => applyMotion((mediaQuery?.matches ?? false) || einkMotion);
+    const handler = () => applyMotion((mediaQuery?.matches ?? false) || einkOn);
     handler();
     if (!mediaQuery) return;
     mediaQuery.addEventListener("change", handler);
     return () => mediaQuery.removeEventListener("change", handler);
-  }, [eink, onEmbed]);
+  }, [einkOn]);
 
   useEffect(() => {
-    document.documentElement.classList.toggle("eink", eink && !onEmbed);
-  }, [eink, onEmbed]);
+    document.documentElement.classList.toggle("eink", einkOn);
+  }, [einkOn]);
 
   useEffect(() => {
     // The Embed route owns the document theme through its ?theme parameter, so
