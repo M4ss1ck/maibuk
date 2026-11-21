@@ -11,6 +11,12 @@ export const APPEARANCE_SECTION = {
       keywordsKey: "settings.keywords.theme",
     },
     {
+      id: "einkMode",
+      labelKey: "settings.einkMode",
+      descriptionKey: "settings.einkModeDescription",
+      keywordsKey: "settings.keywords.einkMode",
+    },
+    {
       id: "appFontSize",
       labelKey: "settings.fontSize",
       descriptionKey: "settings.fontSizeDescription",

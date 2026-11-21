@@ -1913,3 +1913,296 @@ li.footnote-item,
 .ProseMirror[data-color-preview="highlight"] .selection-kept {
   background-color: var(--editor-color-preview);
 }
+
+/* E-ink Mode (#898): a three-value black/white/gray palette for e-ink screens.
+   Unit 1 toggles class "eink" on <html> beside "dark", so every rule here sits
+   after its .dark source and wins at equal specificity. Non-token rules use the
+   polarity tokens (background = paper, foreground = ink) and therefore invert
+   with .eink.dark. */
+.eink {
+  --color-background: #fff;
+  --color-card: #fff;
+  --color-muted: #fff;
+  --color-table-header: #fff;
+  --color-status-draft-bg: #fff;
+  --color-status-progress-bg: #fff;
+  --color-status-complete-bg: #fff;
+  --color-status-archived-bg: #fff;
+  --color-info-bg: #fff;
+  --color-warning-bg: #fff;
+  --color-feedback-error-bg: #fff;
+  --color-feedback-success-bg: #fff;
+  --color-feedback-progress-bg: #fff;
+  --color-update-bg: #fff;
+  --color-foreground: #000;
+  --color-card-foreground: #000;
+  /* biome-ignore lint/complexity/noImportantStyles: the stored accent color is applied as an inline style on <html>, and only !important outranks it. */
+  --color-primary: #000 !important;
+  --color-destructive: #000;
+  --color-destructive-hover: #000;
+  --color-success: #000;
+  --color-border: #000;
+  --color-table-border: #000;
+  --color-info-link: #000;
+  --color-update-border: #000;
+  --color-status-draft-text: #000;
+  --color-status-progress-text: #000;
+  --color-status-complete-text: #000;
+  --color-status-archived-text: #000;
+  --color-info-text: #000;
+  --color-warning-text: #000;
+  --color-feedback-error-text: #000;
+  --color-feedback-success-text: #000;
+  --color-feedback-progress-text: #000;
+  --color-update-text: #000;
+  /* biome-ignore lint/complexity/noImportantStyles: the stored accent color is applied as an inline style on <html>, and only !important outranks it. */
+  --color-primary-hover: #595959 !important;
+  --color-secondary: #595959;
+  --color-muted-foreground: #595959;
+  /* biome-ignore lint/complexity/noImportantStyles: the stored accent color is applied as an inline style on <html>, and only !important outranks it. */
+  --color-primary-foreground: #fff !important;
+  /* biome-ignore lint/complexity/noImportantStyles: the stored accent color is applied as an inline style on <html>, and only !important outranks it. */
+  --color-primary-hover-foreground: #fff !important;
+}
+
+.eink.dark {
+  --color-background: #000;
+  --color-card: #000;
+  --color-muted: #000;
+  --color-table-header: #000;
+  --color-status-draft-bg: #000;
+  --color-status-progress-bg: #000;
+  --color-status-complete-bg: #000;
+  --color-status-archived-bg: #000;
+  --color-info-bg: #000;
+  --color-warning-bg: #000;
+  --color-feedback-error-bg: #000;
+  --color-feedback-success-bg: #000;
+  --color-feedback-progress-bg: #000;
+  --color-update-bg: #000;
+  --color-foreground: #fff;
+  --color-card-foreground: #fff;
+  /* biome-ignore lint/complexity/noImportantStyles: the stored accent color is applied as an inline style on <html>, and only !important outranks it. */
+  --color-primary: #fff !important;
+  --color-destructive: #fff;
+  --color-destructive-hover: #fff;
+  --color-success: #fff;
+  --color-border: #fff;
+  --color-table-border: #fff;
+  --color-info-link: #fff;
+  --color-update-border: #fff;
+  --color-status-draft-text: #fff;
+  --color-status-progress-text: #fff;
+  --color-status-complete-text: #fff;
+  --color-status-archived-text: #fff;
+  --color-info-text: #fff;
+  --color-warning-text: #fff;
+  --color-feedback-error-text: #fff;
+  --color-feedback-success-text: #fff;
+  --color-feedback-progress-text: #fff;
+  --color-update-text: #fff;
+  /* biome-ignore lint/complexity/noImportantStyles: the stored accent color is applied as an inline style on <html>, and only !important outranks it. */
+  --color-primary-hover: #a6a6a6 !important;
+  --color-secondary: #a6a6a6;
+  --color-muted-foreground: #a6a6a6;
+  /* biome-ignore lint/complexity/noImportantStyles: the stored accent color is applied as an inline style on <html>, and only !important outranks it. */
+  --color-primary-foreground: #000 !important;
+  /* biome-ignore lint/complexity/noImportantStyles: the stored accent color is applied as an inline style on <html>, and only !important outranks it. */
+  --color-primary-hover-foreground: #000 !important;
+}
+
+/* Editor surfaces: uncolored highlights, code blocks, and diffs. Author-colored
+   marks keep their inline style, so only the token-driven defaults change. */
+.eink .editor-content mark {
+  background-color: var(--color-foreground);
+  color: var(--color-background);
+}
+
+.eink .editor-content pre {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  border: 1px solid var(--color-foreground);
+}
+
+.eink .code-block-language,
+.eink .code-block-language-input,
+.eink .code-block-copy {
+  background-color: var(--color-background);
+  border: 1px solid var(--color-foreground);
+  color: var(--color-foreground);
+}
+
+.eink .code-block-language:hover,
+.eink .code-block-copy:hover {
+  background-color: var(--color-background);
+  border: 1px solid var(--color-foreground);
+  color: var(--color-foreground);
+}
+
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-comment,
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-quote {
+  color: var(--color-muted-foreground);
+  font-style: italic;
+}
+
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-keyword,
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-selector-tag,
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-literal,
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-meta .hljs-keyword,
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-doctag {
+  color: inherit;
+  font-weight: 700;
+}
+
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-string,
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-regexp,
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-addition {
+  color: inherit;
+}
+
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-number,
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-bullet {
+  color: inherit;
+}
+
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-title,
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-section,
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-name,
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-selector-id,
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-selector-class {
+  color: inherit;
+}
+
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-built_in,
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-type,
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-class,
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-symbol {
+  color: inherit;
+}
+
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-attr,
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-attribute,
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-variable,
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-template-variable,
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-params {
+  color: inherit;
+}
+
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-tag,
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-meta,
+.eink :is(.editor-content pre code, .markdown-hint) .hljs-deletion {
+  color: inherit;
+}
+
+.eink .editor-content ins {
+  background-color: transparent;
+  text-decoration: underline;
+}
+
+.eink .editor-content del {
+  background-color: transparent;
+  text-decoration: line-through;
+}
+
+/* Flat paper: every shadow and backdrop blur reads as a gray smear on e-ink. */
+.eink *,
+.eink *::before,
+.eink *::after {
+  /* biome-ignore lint/complexity/noImportantStyles: Tailwind shadow utilities set these, and only !important outranks them. */
+  box-shadow: none !important;
+  /* biome-ignore lint/complexity/noImportantStyles: Tailwind shadow utilities set these, and only !important outranks them. */
+  text-shadow: none !important;
+  /* biome-ignore lint/complexity/noImportantStyles: Tailwind backdrop utilities set these, and only !important outranks them. */
+  backdrop-filter: none !important;
+}
+
+/* Alpha washes turn into gray haze; pin the overlay scrims to paper. */
+.eink [class*="bg-black/"],
+.eink [class*="bg-background/"],
+.eink [class*="bg-card/"] {
+  /* biome-ignore lint/complexity/noImportantStyles: the opacity-modified utility sets the color, and only !important outranks it. */
+  background-color: var(--color-background) !important;
+}
+
+/* Muted fills are the same paper here, so keep their edge with a line. */
+.eink .bg-muted {
+  outline: 1px solid var(--color-foreground);
+  outline-offset: -1px;
+}
+
+/* State drawn by a white thumb or a shadow alone vanishes on paper: the
+   Switch thumb gets an ink edge, and a pressed toggle an ink outline. */
+.eink .switch-thumb {
+  background-color: var(--color-background);
+  border: 2px solid var(--color-foreground);
+}
+
+.eink [aria-pressed="true"] {
+  outline: 2px solid var(--color-foreground);
+  outline-offset: -2px;
+}
+
+.eink :focus-visible {
+  /* biome-ignore lint/complexity/noImportantStyles: component focus styles outrank a bare :focus-visible; the ring must survive. */
+  outline: 2px solid var(--color-foreground) !important;
+  outline-offset: 2px;
+}
+
+@supports (caret-animation: manual) {
+  .eink {
+    caret-animation: manual;
+  }
+}
+
+/* Joyride paints its overlay and spotlight inline; the scrim and the blend
+   mode hide the target on e-ink, so both must be forced back. */
+.eink [data-tutorial-portal] .react-joyride__overlay {
+  /* biome-ignore lint/complexity/noImportantStyles: Joyride sets these inline, and only !important outranks an inline style. */
+  background: transparent !important;
+  /* biome-ignore lint/complexity/noImportantStyles: Joyride sets these inline, and only !important outranks an inline style. */
+  mix-blend-mode: normal !important;
+}
+
+.eink [data-tutorial-portal] .react-joyride__spotlight {
+  /* biome-ignore lint/complexity/noImportantStyles: Joyride sets these inline, and only !important outranks an inline style. */
+  background: transparent !important;
+  /* biome-ignore lint/complexity/noImportantStyles: Joyride sets these inline, and only !important outranks an inline style. */
+  outline: 2px solid var(--color-foreground) !important;
+}
+
+/* Meaning without color: borders carry destructive, status, and banner state. */
+.eink .bg-destructive {
+  /* biome-ignore lint/complexity/noImportantStyles: the utility sets the fill and text, and only !important outranks it. */
+  background-color: var(--color-background) !important;
+  /* biome-ignore lint/complexity/noImportantStyles: the utility sets the fill and text, and only !important outranks it. */
+  color: var(--color-foreground) !important;
+  border: 2px solid var(--color-foreground);
+  font-weight: 700;
+}
+
+.eink .text-destructive {
+  font-weight: 600;
+}
+
+.eink [class*="bg-status-"] {
+  border: 1px solid var(--color-foreground);
+}
+
+.eink .bg-info-bg,
+.eink .bg-feedback-progress-bg {
+  border: 1px solid var(--color-foreground);
+}
+
+.eink .bg-warning-bg,
+.eink .bg-update-bg {
+  border: 2px dashed var(--color-foreground);
+}
+
+.eink .bg-feedback-error-bg {
+  border: 2px solid var(--color-foreground);
+  font-weight: 600;
+}
+
+.eink .bg-feedback-success-bg {
+  border: 1px dotted var(--color-foreground);
+}

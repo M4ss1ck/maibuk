@@ -891,6 +891,8 @@
     "appearance": "Apariencia",
     "theme": "Tema",
     "themeDescription": "Elige tu tema preferido",
+    "einkMode": "Modo tinta electrónica",
+    "einkModeDescription": "Colores en escala de grises y sin movimiento, para pantallas de papel electrónico",
     "language": "Idioma",
     "languageDescription": "Elige el idioma de la aplicación",
     "fontSize": "Tamaño de Fuente",
@@ -899,6 +901,7 @@
     "fontDescription": "Elige el tipo de fuente de la aplicación",
     "primaryColor": "Color primario",
     "primaryColorDescription": "Define el color de acento usado en toda la app",
+    "primaryColorEinkNote": "El modo tinta electrónica usa tinta en lugar del color principal. Tu color vuelve al desactivarlo.",
     "resetPrimaryColor": "Restablecer",
     "dark": "Oscuro",
     "light": "Claro",
@@ -1110,6 +1113,17 @@
         "procesador"
       ],
       "theme": ["oscuro", "claro", "modo", "apariencia", "sistema"],
+      "einkMode": [
+        "e-ink",
+        "eink",
+        "epaper",
+        "e-paper",
+        "kindle",
+        "boox",
+        "escala de grises",
+        "monocromo",
+        "tinta"
+      ],
       "primaryColor": ["acento", "color"],
       "appFontSize": ["zoom", "tamaño de texto"],
       "pasteCleanupPreset": ["copiar", "pegar", "portapapeles", "formato"],
@@ -1382,6 +1396,7 @@
     "gotoCanvas": "Ir a Lienzos",
     "gotoEphemeral": "Ir a Efímero",
     "toggleTheme": "Cambiar tema",
+    "toggleEinkMode": "Alternar modo tinta electrónica",
     "toggleShortcutHints": "Alternar atajos visuales",
     "toggleAlwaysOnTop": "Alternar siempre visible",
     "openReleaseNotes": "Mostrar novedades",
@@ -1482,6 +1497,17 @@
       ],
       "toggleAlwaysOnTop": ["fijar", "flotante", "ventana", "siempre visible"],
       "toggleTheme": ["oscuro", "claro", "modo", "apariencia"],
+      "toggleEinkMode": [
+        "e-ink",
+        "eink",
+        "epaper",
+        "e-paper",
+        "kindle",
+        "boox",
+        "escala de grises",
+        "monocromo",
+        "tinta"
+      ],
       "syncNow": ["subir", "descargar", "nube"],
       "showHelp": ["teclado", "teclas", "atajos"],
       "gotoSettings": ["preferencias", "opciones", "ajustes"],
@@ -1986,7 +2012,7 @@
       "settings": {
         "appearance": {
           "title": "Apariencia",
-          "body": "Tema, fuente, tamaño de letra y el color principal que marca los controles activos."
+          "body": "Tema, modo tinta electrónica para pantallas de papel electrónico, fuente, tamaño de letra y el color principal que marca los controles activos."
         },
         "window": {
           "title": "Ventana",

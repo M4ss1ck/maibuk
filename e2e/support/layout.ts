@@ -83,6 +83,22 @@ export async function watchForText(page: Page, text: string): Promise<() => Prom
     page.evaluate((flag) => (window as unknown as Record<string, boolean>)[flag] === true, flag);
 }
 
+/**
+ * The longest duration, in ms, of any animation or transition on `element` and
+ * its descendants right now; 0 when none. Under reduced motion every one is
+ * cut to 0.01ms, so an instant open reads below 1.
+ */
+export function longestAnimationMs(element: Locator): Promise<number> {
+  return element.evaluate((target) =>
+    Math.max(
+      0,
+      ...target
+        .getAnimations({ subtree: true })
+        .map((animation) => Number(animation.effect?.getComputedTiming().duration) || 0)
+    )
+  );
+}
+
 /** Animations running on `element` and its descendants right now. */
 export function runningAnimationCount(element: Locator): Promise<number> {
   return element.evaluate((target) => target.getAnimations({ subtree: true }).length);

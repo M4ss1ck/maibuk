@@ -5,7 +5,7 @@ import { useThemeStore, applyTheme, getCycledTheme } from "@/features/theme/stor
 describe("useThemeStore", () => {
   beforeEach(() => {
     localStorage.clear();
-    useThemeStore.setState({ theme: "system" });
+    useThemeStore.setState({ theme: "system", eink: false });
     // Clean up any leftover dark class
     document.documentElement.classList.remove("dark");
   });
@@ -13,6 +13,10 @@ describe("useThemeStore", () => {
   describe("initial state", () => {
     it("defaults to system theme", () => {
       expect(useThemeStore.getState().theme).toBe("system");
+    });
+
+    it("defaults E-ink Mode off", () => {
+      expect(useThemeStore.getState().eink).toBe(false);
     });
   });
 
@@ -31,6 +35,19 @@ describe("useThemeStore", () => {
       useThemeStore.getState().setTheme("dark");
       useThemeStore.getState().setTheme("system");
       expect(useThemeStore.getState().theme).toBe("system");
+    });
+  });
+
+  describe("setEink()", () => {
+    it("turns E-ink Mode on", () => {
+      useThemeStore.getState().setEink(true);
+      expect(useThemeStore.getState().eink).toBe(true);
+    });
+
+    it("persists E-ink Mode in the maibuk-theme record", () => {
+      useThemeStore.getState().setEink(true);
+      const stored = JSON.parse(localStorage.getItem("maibuk-theme") ?? "null");
+      expect(stored?.state?.eink).toBe(true);
     });
   });
 });

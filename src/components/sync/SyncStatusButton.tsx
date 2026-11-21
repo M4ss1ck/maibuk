@@ -1,7 +1,15 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, Dialog, DialogTrigger, Popover } from "react-aria-components";
-import { Cloud, CloudOff, CloudUpload, Loader2, CloudAlert, AlertTriangle } from "lucide-react";
+import {
+  Cloud,
+  CloudOff,
+  CloudUpload,
+  Loader2,
+  CloudAlert,
+  CloudCheck,
+  AlertTriangle,
+} from "lucide-react";
 import { useSyncStore } from "@/features/sync/store";
 import { useBookStore } from "@/features/books/store";
 import { useSyncFlow } from "@/features/sync/useSyncFlow";
@@ -53,13 +61,16 @@ export function SyncStatusButton({ defaultScope = "all" }: { defaultScope?: Sync
       return <Loader2 className="w-5 h-5 shrink-0 animate-spin" />;
     }
     if (syncStatus === "partial") {
-      return <CloudAlert className="w-5 h-5 shrink-0" />;
+      return <AlertTriangle className="w-5 h-5 shrink-0" />;
     }
     if (syncStatus === "error") {
       return <CloudAlert className="w-5 h-5 shrink-0" />;
     }
     if (hasPendingChanges) {
       return <CloudUpload className="w-5 h-5 shrink-0" />;
+    }
+    if (syncStatus === "success" || lastSyncedAt) {
+      return <CloudCheck className="w-5 h-5 shrink-0" />;
     }
     return <Cloud className="w-5 h-5 shrink-0" />;
   };

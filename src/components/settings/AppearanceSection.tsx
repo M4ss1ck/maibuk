@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { useTheme } from "@/features/theme";
+import { useTheme, useThemeStore } from "@/features/theme";
 import {
   useSettings,
   DEFAULT_PRIMARY_COLOR,
@@ -8,7 +8,7 @@ import {
   type FontSize,
   type FontFamily,
 } from "@/features/settings";
-import { Select, Button } from "@/components/ui";
+import { Select, Button, Switch } from "@/components/ui";
 import { ColorPickerControl } from "@/components/ui/ColorPickerControl";
 import { applyAccentColor } from "@/features/settings/accent-color";
 import { SettingRow } from "@/components/settings/SettingRow";
@@ -17,6 +17,8 @@ import { SettingsSection, SETTINGS_ROW_CLASS } from "@/components/settings/Setti
 export function AppearanceSection() {
   const { t } = useTranslation();
   const { theme, setTheme } = useTheme();
+  const eink = useThemeStore((state) => state.eink);
+  const setEink = useThemeStore((state) => state.setEink);
   const { appFontSize, appFont, primaryColor, setAppFontSize, setAppFont, setPrimaryColor } =
     useSettings();
 
@@ -51,6 +53,15 @@ export function AppearanceSection() {
         </div>
       </SettingRow>
 
+      <SettingRow id="einkMode" className={SETTINGS_ROW_CLASS}>
+        <Switch
+          checked={eink}
+          onChange={setEink}
+          label={t("settings.einkMode")}
+          data-command="global.toggleEinkMode"
+        />
+      </SettingRow>
+
       <SettingRow id="appFontSize" className={SETTINGS_ROW_CLASS}>
         <Select<FontSize>
           ariaLabel={t("settings.fontSize")}
@@ -69,19 +80,28 @@ export function AppearanceSection() {
         />
       </SettingRow>
 
-      <SettingRow id="primaryColor" className={SETTINGS_ROW_CLASS}>
+      <SettingRow
+        id="primaryColor"
+        className={SETTINGS_ROW_CLASS}
+        labelExtra={
+          eink ? (
+            <p className="text-sm text-muted-foreground">{t("settings.primaryColorEinkNote")}</p>
+          ) : null
+        }
+      >
         <div className="flex items-center gap-2">
           <ColorPickerControl
             label={t("settings.primaryColor")}
             value={primaryColor}
             onPreview={(color) => applyAccentColor(color ?? primaryColor)}
             onCommit={setPrimaryColor}
+            isDisabled={eink}
           />
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setPrimaryColor(DEFAULT_PRIMARY_COLOR)}
-            disabled={primaryColor === DEFAULT_PRIMARY_COLOR}
+            disabled={eink || primaryColor === DEFAULT_PRIMARY_COLOR}
           >
             {t("settings.resetPrimaryColor")}
           </Button>

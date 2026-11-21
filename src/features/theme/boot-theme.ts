@@ -6,7 +6,7 @@ export const BOOT_THEME_VERSION = 1;
 const MODES: Array<BootTheme["mode"]> = ["light", "dark", "system"];
 
 function emptyBootTheme(): BootTheme {
-  return { v: BOOT_THEME_VERSION, mode: "system", vars: {} };
+  return { v: BOOT_THEME_VERSION, mode: "system", vars: {}, eink: false };
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -29,7 +29,7 @@ function readBootTheme(): BootTheme {
     if (!raw) return emptyBootTheme();
     const parsed: unknown = JSON.parse(raw);
     if (!isPlainObject(parsed)) return emptyBootTheme();
-    const { v, mode, vars } = parsed;
+    const { v, mode, vars, eink } = parsed;
     if (v !== BOOT_THEME_VERSION || !MODES.includes(mode as BootTheme["mode"])) {
       return emptyBootTheme();
     }
@@ -38,6 +38,7 @@ function readBootTheme(): BootTheme {
       v: BOOT_THEME_VERSION,
       mode: mode as BootTheme["mode"],
       vars: readVars(vars),
+      eink: eink === true,
     };
   } catch {
     return emptyBootTheme();
@@ -52,12 +53,16 @@ function readBootTheme(): BootTheme {
 export function writeBootTheme(patch: {
   mode?: BootTheme["mode"];
   vars?: Record<string, string>;
+  eink?: boolean;
 }): void {
   try {
     const next = readBootTheme();
     if (patch.mode !== undefined) next.mode = patch.mode;
     if (patch.vars !== undefined) next.vars = patch.vars;
-    localStorage.setItem(BOOT_THEME_KEY, JSON.stringify(next));
+    if (patch.eink !== undefined) next.eink = patch.eink;
+    // Off is the absence of the key, like records written before E-ink Mode.
+    const { eink, ...withoutEink } = next;
+    localStorage.setItem(BOOT_THEME_KEY, JSON.stringify(eink ? next : withoutEink));
   } catch {
     // The snapshot only shortens the first paint; losing it is not an error.
   }

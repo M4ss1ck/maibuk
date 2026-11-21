@@ -891,6 +891,8 @@
     "appearance": "Appearance",
     "theme": "Theme",
     "themeDescription": "Choose your preferred theme",
+    "einkMode": "E-ink mode",
+    "einkModeDescription": "Grayscale colors and no motion, for e-paper screens",
     "language": "Language",
     "languageDescription": "Choose the app language",
     "fontSize": "Font Size",
@@ -899,6 +901,7 @@
     "fontDescription": "Choose the app font family",
     "primaryColor": "Primary Color",
     "primaryColorDescription": "Set the accent color used across the app",
+    "primaryColorEinkNote": "E-ink mode uses ink instead of the primary color. Your color returns when you turn it off.",
     "resetPrimaryColor": "Reset",
     "dark": "Dark",
     "light": "Light",
@@ -1103,6 +1106,17 @@
     "keywords": {
       "trayResourceUsage": ["CPU", "RAM", "memory", "storage", "disk space", "processor"],
       "theme": ["dark", "light", "mode", "appearance", "system"],
+      "einkMode": [
+        "e-ink",
+        "eink",
+        "epaper",
+        "e-paper",
+        "kindle",
+        "boox",
+        "grayscale",
+        "monochrome",
+        "tinta"
+      ],
       "primaryColor": ["accent", "color"],
       "appFontSize": ["zoom", "text size"],
       "pasteCleanupPreset": ["copy", "paste", "clipboard", "formatting"],
@@ -1376,6 +1390,7 @@
     "gotoCanvas": "Go to Canvas",
     "gotoEphemeral": "Go to Ephemeral",
     "toggleTheme": "Cycle theme",
+    "toggleEinkMode": "Toggle E-ink mode",
     "toggleShortcutHints": "Toggle shortcut hints",
     "toggleAlwaysOnTop": "Toggle always on top",
     "openReleaseNotes": "Show what's new",
@@ -1470,6 +1485,17 @@
       "openReleaseNotes": ["release notes", "changelog", "version", "update", "about"],
       "toggleAlwaysOnTop": ["pin", "float", "window", "stay on top"],
       "toggleTheme": ["dark", "light", "mode", "appearance"],
+      "toggleEinkMode": [
+        "e-ink",
+        "eink",
+        "epaper",
+        "e-paper",
+        "kindle",
+        "boox",
+        "grayscale",
+        "monochrome",
+        "tinta"
+      ],
       "syncNow": ["upload", "download", "cloud", "backup"],
       "showHelp": ["keyboard", "keys", "hotkeys", "cheat sheet"],
       "gotoSettings": ["preferences", "options", "configuration"],
@@ -1974,7 +2000,7 @@
       "settings": {
         "appearance": {
           "title": "Appearance",
-          "body": "Theme, font, font size and the primary color that marks active controls."
+          "body": "Theme, E-ink mode for e-paper screens, font, font size and the primary color that marks active controls."
         },
         "window": {
           "title": "Window",

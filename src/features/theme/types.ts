@@ -3,4 +3,5 @@ export type BootTheme = {
   v: 1;
   mode: "light" | "dark" | "system";
   vars: Record<string, string>;
+  eink: boolean;
 };

@@ -34,13 +34,6 @@ export const EXCLUSIONS: Exclusion[] = [
   },
   {
     kind: "term",
-    items: ["E-ink Mode"],
-    reason:
-      "Decided, not built (#898): the app has no E-ink mode switch yet; the settings-eink-mode row replaces this exclusion when it ships",
-    owner: "none until #898 lands",
-  },
-  {
-    kind: "term",
     items: ["System Notification"],
     reason:
       "Shown by the device's notification center, outside the page a browser test drives, and the browser's permission prompt cannot be answered from Playwright; the toast fallback has no UI of its own beyond the existing toast (ADR 0042)",
@@ -2461,6 +2454,19 @@ export const ROWS: MatrixRow[] = [
     edges: [],
     terms: ["Resource Usage"],
     shortcuts: [],
+    routes: ["/settings"],
+    fixture: "oneBookThreeChapters",
+    tags: [],
+    status: "accepted",
+  },
+  {
+    id: "settings-eink-mode",
+    area: "settings",
+    workflow:
+      "E-ink mode switch by keyboard (#901); asserts: html eink class and data-motion, Primary Color disabled, the Command Palette opens with no motion, the palette Command turns it off; persists: yes",
+    edges: [],
+    terms: ["E-ink Mode"],
+    shortcuts: ["global.toggleEinkMode"],
     routes: ["/settings"],
     fixture: "oneBookThreeChapters",
     tags: [],

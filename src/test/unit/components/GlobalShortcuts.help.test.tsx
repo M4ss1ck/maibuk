@@ -155,6 +155,7 @@ describe("GlobalShortcuts", () => {
       "global.themeLight",
       "global.themeSystem",
       "global.toggleAlwaysOnTop",
+      "global.toggleEinkMode",
       "global.toggleShortcutHints",
       "global.toggleTheme",
       "global.updateMaibuk",

@@ -45,7 +45,9 @@ describe("boot-theme-script", () => {
     localStorage.clear();
     window.history.replaceState(null, "", "/");
     document.documentElement.classList.remove("dark");
+    document.documentElement.classList.remove("eink");
     document.documentElement.removeAttribute("style");
+    document.documentElement.removeAttribute("data-motion");
     window.matchMedia = originalMatchMedia;
     setPrefersDark(false);
   });
@@ -55,6 +57,8 @@ describe("boot-theme-script", () => {
     window.matchMedia = originalMatchMedia;
     window.history.replaceState(null, "", "/");
     document.documentElement.removeAttribute("style");
+    document.documentElement.classList.remove("eink");
+    document.documentElement.removeAttribute("data-motion");
   });
 
   it("stays small enough to inline", () => {
@@ -169,5 +173,34 @@ describe("boot-theme-script", () => {
     storeRecord({ v: 1, mode: "light", vars: {} });
     runScript();
     expect(isDark()).toBe(true);
+  });
+
+  it("paints E-ink Mode from a valid record", () => {
+    storeRecord({ v: 1, mode: "light", vars: {}, eink: true });
+    runScript();
+    expect(document.documentElement.classList.contains("eink")).toBe(true);
+    expect(document.documentElement.getAttribute("data-motion")).toBe("reduce");
+  });
+
+  it("does not paint E-ink Mode for a record without it", () => {
+    storeRecord({ v: 1, mode: "dark", vars: {} });
+    runScript();
+    expect(document.documentElement.classList.contains("eink")).toBe(false);
+    expect(document.documentElement.hasAttribute("data-motion")).toBe(false);
+  });
+
+  it("ignores a malformed eink flag", () => {
+    storeRecord({ v: 1, mode: "dark", vars: {}, eink: "yes" });
+    runScript();
+    expect(document.documentElement.classList.contains("eink")).toBe(false);
+    expect(document.documentElement.hasAttribute("data-motion")).toBe(false);
+  });
+
+  it("never paints E-ink Mode on the Embed route", () => {
+    window.history.replaceState(null, "", "/embed?theme=dark");
+    storeRecord({ v: 1, mode: "light", vars: {}, eink: true });
+    runScript();
+    expect(document.documentElement.classList.contains("eink")).toBe(false);
+    expect(document.documentElement.hasAttribute("data-motion")).toBe(false);
   });
 });
