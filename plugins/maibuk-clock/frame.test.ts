@@ -131,6 +131,13 @@ function dayToggle(day: number): HTMLInputElement {
   return input;
 }
 
+/** The Alarm editor's AM or PM radio. */
+function meridiem(value: "am" | "pm"): HTMLInputElement {
+  const input = el("alarm-meridiem").querySelector(`input[value="${value}"]`);
+  if (!(input instanceof HTMLInputElement)) throw new Error(`missing meridiem ${value}`);
+  return input;
+}
+
 /** An input's value, which the Frame writes and the author types into. */
 function inputValue(id: string): string {
   const input = el(id);
@@ -459,7 +466,7 @@ describe("Clock Frame", () => {
   });
 
   it("adds an alarm through the editor by keyboard", async () => {
-    const port = renderFrame();
+    const port = renderFrame({ hourCycle: 24 });
     const user = keyboardUser();
 
     expect(el("add-alarm").hidden).toBe(true);
@@ -507,18 +514,19 @@ describe("Clock Frame", () => {
 
   it("opens the editor with the Alarm's fields and posts alarm.edit", async () => {
     const port = renderFrame({
+      hourCycle: 24,
       state: stateMessage({ alarms: [alarmMessage({ weekdays: [1, 2] })] }),
     });
     const user = keyboardUser();
 
     await user.tab();
     await user.keyboard("{End}");
-    const edit = find(el("alarm-list"), '[aria-label="Edit 6:30 AM"]');
+    const edit = find(el("alarm-list"), '[aria-label="Edit 06:30"]');
 
     await tabTo(user, edit);
     await user.keyboard("{Enter}");
     expect(el("alarm-editor").hidden).toBe(false);
-    expect(el("alarm-editor-title").textContent).toBe("Edit 6:30 AM");
+    expect(el("alarm-editor-title").textContent).toBe("Edit 06:30");
     expect(inputValue("alarm-hour")).toBe("06");
     expect(inputValue("alarm-minute")).toBe("30");
     expect(inputValue("alarm-label")).toBe("Morning pages");
@@ -681,7 +689,7 @@ describe("Clock Frame", () => {
     ["alarm-minute", "60", "Between 0 and 59"],
     ["alarm-minute", "", "Between 0 and 59"],
   ] as const)("refuses %s = %j at Save, names the range, and keeps the editor open", async (id, value, message) => {
-    const port = renderFrame();
+    const port = renderFrame({ hourCycle: 24 });
     const user = keyboardUser();
 
     await user.tab();
@@ -700,12 +708,15 @@ describe("Clock Frame", () => {
   });
 
   it("shows both time errors on Save, focuses the hour, and saves once both are fixed", async () => {
-    const port = renderFrame({ state: stateMessage({ alarms: [alarmMessage()] }) });
+    const port = renderFrame({
+      hourCycle: 24,
+      state: stateMessage({ alarms: [alarmMessage()] }),
+    });
     const user = keyboardUser();
 
     await user.tab();
     await user.keyboard("{End}");
-    await tabTo(user, find(el("alarm-list"), '[aria-label="Edit 6:30 AM"]'));
+    await tabTo(user, find(el("alarm-list"), '[aria-label="Edit 06:30"]'));
     await user.keyboard("{Enter}");
     await user.clear(el("alarm-hour"));
     await user.type(el("alarm-hour"), "25");
@@ -740,7 +751,7 @@ describe("Clock Frame", () => {
   });
 
   it("posts the hour the check read, so an exponent cannot slip past as another number", async () => {
-    const port = renderFrame();
+    const port = renderFrame({ hourCycle: 24 });
     const user = keyboardUser();
 
     await user.tab();
@@ -911,14 +922,32 @@ describe("Clock Frame", () => {
     expect(port.messages).toEqual([{ kind: "tab.select", tab: "alarms" }]);
   });
 
-  it("keeps Tab and Shift+Tab inside the alarm editor", async () => {
-    renderFrame();
+  it.each([
+    12, 24,
+  ] as const)("keeps Tab and Shift+Tab inside the alarm editor on a %i-hour clock", async (cycle) => {
+    renderFrame({ hourCycle: cycle });
     const user = keyboardUser();
 
     await user.tab();
     await user.keyboard("{End}");
     await tabTo(user, el("add-alarm"));
     await user.keyboard("{Enter}");
+    expect(document.activeElement).toBe(el("alarm-label"));
+
+    // The format row sits between the time fields and the Label; on a
+    // 12-hour clock the AM/PM group stands in front of it, and on a 24-hour
+    // clock the hidden group is skipped.
+    await tabTo(user, el("alarm-hour"));
+    expect(document.activeElement).toBe(el("alarm-hour"));
+    await user.tab();
+    expect(document.activeElement).toBe(el("alarm-minute"));
+    await user.tab();
+    if (cycle === 12) {
+      expect(el("alarm-meridiem").contains(document.activeElement)).toBe(true);
+      await user.tab();
+    }
+    expect(document.activeElement).toBe(el("alarm-hour-cycle"));
+    await user.tab();
     expect(document.activeElement).toBe(el("alarm-label"));
 
     await tabTo(user, el("alarm-save"));
@@ -1226,6 +1255,212 @@ describe("Clock Frame 24-Hour Clock switch", () => {
     expect(el("alarms-hour-cycle").getAttribute("aria-checked")).toBe("false");
     expect(find(el("alarm-list"), ".alarm-time").textContent).toBe("1:05 PM");
     expect(port.messages).toEqual([]);
+  });
+});
+
+describe("Clock Frame alarm editor hour cycle", () => {
+  /** Opens the Alarms tab by keyboard, where the editor's controls sit. */
+  async function openAlarms(user: User): Promise<void> {
+    await user.tab();
+    await user.keyboard("{End}");
+  }
+
+  /** Opens the one Alarm's editor from the list. */
+  async function openEdit(user: User): Promise<void> {
+    const edit = el("alarm-list").querySelector('[aria-label^="Edit "]');
+    if (!(edit instanceof HTMLElement)) throw new Error("missing Edit");
+    await tabTo(user, edit);
+    await user.keyboard("{Enter}");
+  }
+
+  /** Opens Add alarm from the Alarms tab. */
+  async function openAdd(user: User): Promise<void> {
+    await openAlarms(user);
+    await tabTo(user, el("add-alarm"));
+    await user.keyboard("{Enter}");
+  }
+
+  /** Picks AM or PM with the arrow keys the radio group answers to. */
+  async function pickMeridiem(user: User, value: "am" | "pm"): Promise<void> {
+    if (meridiem(value).checked) return;
+    const checked = [meridiem("am"), meridiem("pm")].find((input) => input.checked);
+    await tabTo(user, checked ?? meridiem("am"));
+    if (checked === null) {
+      if (value === "pm") await user.keyboard("{ArrowRight}");
+      return;
+    }
+    await user.keyboard(value === "pm" ? "{ArrowRight}" : "{ArrowLeft}");
+  }
+
+  it("edits 13:05 as 1:05 PM and saves the hour the radio says", async () => {
+    const port = renderFrame({
+      hourCycle: 12,
+      state: stateMessage({ alarms: [alarmMessage({ hour: 13, minute: 5, label: "" })] }),
+    });
+    const user = keyboardUser();
+    await openAlarms(user);
+    await openEdit(user);
+
+    expect(inputValue("alarm-hour")).toBe("1");
+    expect(inputValue("alarm-minute")).toBe("05");
+    expect(meridiem("pm").checked).toBe(true);
+    expect(el("alarm-meridiem").hidden).toBe(false);
+
+    await tabTo(user, el("alarm-save"));
+    await user.keyboard("{Enter}");
+    expect(posted(port, "alarm.edit")).toEqual([
+      { kind: "alarm.edit", id: "a1", input: { hour: 13, minute: 5, label: "", weekdays: [1] } },
+    ]);
+
+    // Reopen and move the choice to AM: 1 AM saves hour 1.
+    await openEdit(user);
+    expect(meridiem("pm").checked).toBe(true);
+    await tabTo(user, meridiem("pm"));
+    expect(document.activeElement).toBe(meridiem("pm"));
+    await user.keyboard("{ArrowLeft}");
+    expect(meridiem("am").checked).toBe(true);
+    expect(meridiem("pm").checked).toBe(false);
+
+    await tabTo(user, el("alarm-save"));
+    await user.keyboard("{Enter}");
+    expect(posted(port, "alarm.edit")).toEqual([
+      { kind: "alarm.edit", id: "a1", input: { hour: 13, minute: 5, label: "", weekdays: [1] } },
+      { kind: "alarm.edit", id: "a1", input: { hour: 1, minute: 5, label: "", weekdays: [1] } },
+    ]);
+  });
+
+  it.each([
+    ["am", 0],
+    ["pm", 12],
+  ] as const)("saves 12 %s as hour %i", async (part, hour) => {
+    const port = renderFrame({ hourCycle: 12 });
+    const user = keyboardUser();
+    await openAdd(user);
+
+    await user.clear(el("alarm-hour"));
+    await user.type(el("alarm-hour"), "12");
+    await user.clear(el("alarm-minute"));
+    await user.type(el("alarm-minute"), "30");
+    await pickMeridiem(user, part);
+    await tabTo(user, el("alarm-save"));
+    await user.keyboard("{Enter}");
+
+    expect(posted(port, "alarm.add")).toEqual([
+      { kind: "alarm.add", input: { hour, minute: 30, label: "", weekdays: [] } },
+    ]);
+  });
+
+  it("flips both switches from the editor and keeps the hour when it converts", async () => {
+    const port = renderFrame({
+      hourCycle: 12,
+      state: stateMessage({ alarms: [alarmMessage({ hour: 13, minute: 5, label: "" })] }),
+    });
+    const user = keyboardUser();
+    await openAlarms(user);
+    await openEdit(user);
+    expect(el("alarm-editor-title").textContent).toBe("Edit 1:05 PM");
+
+    await tabTo(user, el("alarm-hour-cycle"));
+    expect(document.activeElement).toBe(el("alarm-hour-cycle"));
+    await user.keyboard(" ");
+    // The title names the stored Alarm in the cycle now shown.
+    expect(el("alarm-editor-title").textContent).toBe("Edit 13:05");
+
+    expect(posted(port, "hourCycle.set")).toEqual([{ kind: "hourCycle.set", hourCycle: 24 }]);
+    expect(inputValue("alarm-hour")).toBe("13");
+    expect(el("alarm-meridiem").hidden).toBe(true);
+    expect(el("alarms-hour-cycle").getAttribute("aria-checked")).toBe("true");
+    expect(el("alarm-hour-cycle").getAttribute("aria-checked")).toBe("true");
+
+    await user.keyboard(" ");
+    expect(posted(port, "hourCycle.set")).toEqual([
+      { kind: "hourCycle.set", hourCycle: 24 },
+      { kind: "hourCycle.set", hourCycle: 12 },
+    ]);
+    expect(inputValue("alarm-hour")).toBe("1");
+    expect(el("alarm-meridiem").hidden).toBe(false);
+    expect(meridiem("pm").checked).toBe(true);
+    expect(el("alarms-hour-cycle").getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("keeps an invalid 24-hour hour when the editor flips, with the new message", async () => {
+    renderFrame({ hourCycle: 24 });
+    const user = keyboardUser();
+    await openAdd(user);
+
+    await user.clear(el("alarm-hour"));
+    await user.type(el("alarm-hour"), "25");
+    await tabTo(user, el("alarm-save"));
+    await user.keyboard("{Enter}");
+    expect(el("alarm-hour")).toHaveAccessibleDescription("Between 0 and 23");
+
+    await tabTo(user, el("alarm-hour-cycle"));
+    await user.keyboard(" ");
+    expect(inputValue("alarm-hour")).toBe("25");
+    expect(el("alarm-hour")).toHaveAccessibleDescription("Between 1 and 12");
+  });
+
+  it("raises no error when a valid 24-hour hour flips", async () => {
+    renderFrame({ hourCycle: 24 });
+    const user = keyboardUser();
+    await openAdd(user);
+
+    await user.clear(el("alarm-hour"));
+    await user.type(el("alarm-hour"), "7");
+    expect(el("alarm-hour")).toHaveAccessibleDescription("");
+
+    await tabTo(user, el("alarm-hour-cycle"));
+    await user.keyboard(" ");
+    expect(inputValue("alarm-hour")).toBe("7");
+    expect(el("alarm-hour")).toHaveAccessibleDescription("");
+    expect(meridiem("am").checked).toBe(true);
+  });
+
+  it("closes after a flip without undoing it or posting anything else", async () => {
+    const port = renderFrame({
+      hourCycle: 24,
+      state: stateMessage({ alarms: [alarmMessage({ hour: 13, minute: 5, label: "" })] }),
+    });
+    const user = keyboardUser();
+    await openAlarms(user);
+    await openEdit(user);
+    expect(inputValue("alarm-hour")).toBe("13");
+
+    await tabTo(user, el("alarm-hour-cycle"));
+    await user.keyboard(" ");
+    expect(posted(port, "hourCycle.set")).toEqual([{ kind: "hourCycle.set", hourCycle: 12 }]);
+
+    await user.keyboard("{Escape}");
+    expect(el("alarm-editor").hidden).toBe(true);
+    expect(port.messages).toEqual([
+      { kind: "tab.select", tab: "alarms" },
+      { kind: "hourCycle.set", hourCycle: 12 },
+    ]);
+
+    port.deliver(
+      stateMessage({ alarms: [alarmMessage({ hour: 13, minute: 5, label: "" })], hourCycle: 12 })
+    );
+    expect(el("alarms-hour-cycle").getAttribute("aria-checked")).toBe("false");
+    expect(find(el("alarm-list"), ".alarm-time").textContent).toBe("1:05 PM");
+  });
+
+  it("converts an open editor's hour when a state brings another cycle", async () => {
+    const port = renderFrame({
+      hourCycle: 24,
+      state: stateMessage({ alarms: [alarmMessage({ hour: 13, minute: 5, label: "" })] }),
+    });
+    const user = keyboardUser();
+    await openAlarms(user);
+    await openEdit(user);
+    expect(inputValue("alarm-hour")).toBe("13");
+
+    port.deliver(
+      stateMessage({ alarms: [alarmMessage({ hour: 13, minute: 5, label: "" })], hourCycle: 12 })
+    );
+    expect(inputValue("alarm-hour")).toBe("1");
+    expect(meridiem("pm").checked).toBe(true);
+    expect(el("alarm-meridiem").hidden).toBe(false);
+    expect(posted(port, "hourCycle.set")).toEqual([]);
   });
 });
 

@@ -106,11 +106,40 @@
     ["settings-every", "longBreakEvery", POMODORO_LIMITS.longBreakEvery, "countRange"],
   ];
 
-  /** The Alarm editor's time fields: the range each takes and the message key an invalid one shows. */
-  const ALARM_FIELDS = [
-    ["alarm-hour", { min: 0, max: MAX_ALARM_HOUR }, "countRange"],
-    ["alarm-minute", { min: 0, max: MAX_MINUTES }, "countRange"],
-  ];
+  /**
+   * The range the Alarm editor's hour takes in `cycle`: 1-12 on a 12-hour
+   * clock, 0-23 otherwise.
+   * @param {12 | 24} cycle
+   * @returns {{ min: number, max: number }}
+   */
+  function alarmHourRangeFor(cycle) {
+    return cycle === 12 ? { min: 1, max: 12 } : { min: 0, max: MAX_ALARM_HOUR };
+  }
+
+  /**
+   * The Alarm editor's time fields: the range each takes on the clock the
+   * Frame shows now, and the message key an invalid one shows.
+   * @returns {Array<[string, { min: number, max: number }, string]>}
+   */
+  function alarmFields() {
+    return [
+      ["alarm-hour", alarmHourRangeFor(hourCycle), "countRange"],
+      ["alarm-minute", { min: 0, max: MAX_MINUTES }, "countRange"],
+    ];
+  }
+
+  /**
+   * Re-checks one Alarm editor field against the range its clock takes now.
+   * @param {string} id
+   * @param {boolean} show
+   * @returns {boolean}
+   */
+  function checkAlarmField(id, show) {
+    for (const [fieldId, range, messageKey] of alarmFields()) {
+      if (fieldId === id) return checkField(fieldId, range, messageKey, show);
+    }
+    return false;
+  }
 
   /** The settings dialog's switches and the setting each toggles. */
   const SETTINGS_SWITCHES = [
@@ -611,8 +640,12 @@
     el("stopwatch-reset").setAttribute("aria-label", label("reset"));
     setText("add-alarm-label", label("addAlarm"));
     setText("alarms-hour-cycle-label", label("twentyFourHourClock"));
+    setText("alarm-hour-cycle-label", label("twentyFourHourClock"));
     setText("alarm-hour-label", label("hour"));
     setText("alarm-minute-label", label("minute"));
+    setText("alarm-meridiem-legend", label("meridiem"));
+    setText("alarm-am-label", label("am"));
+    setText("alarm-pm-label", label("pm"));
     setText("alarm-label-caption", label("alarmLabel"));
     setText("alarm-repeat-legend", label("repeat"));
     setText("alarm-repeat-hint", label("repeatHint"));
@@ -1309,6 +1342,12 @@
     setText("no-alarms", label("noAlarms"));
 
     setSwitch("alarms-hour-cycle", hourCycle === 24);
+    setSwitch("alarm-hour-cycle", hourCycle === 24);
+    el("alarm-meridiem").hidden = hourCycle === 24;
+    const hourRange = alarmHourRangeFor(hourCycle);
+    const hourInput = /** @type {HTMLInputElement} */ (el("alarm-hour"));
+    hourInput.min = String(hourRange.min);
+    hourInput.max = String(hourRange.max);
 
     const items = el("alarm-list");
     const key = list.map((alarm) => alarm.id).join(",");
@@ -1331,6 +1370,22 @@
   /** @returns {HTMLInputElement[]} */
   function dayInputs() {
     return Array.from(el("alarm-days").querySelectorAll("input"));
+  }
+
+  /** @returns {HTMLInputElement[]} */
+  function meridiemInputs() {
+    return Array.from(el("alarm-meridiem").querySelectorAll("input"));
+  }
+
+  /** @returns {"am" | "pm"} */
+  function meridiemValue() {
+    const checked = meridiemInputs().find((input) => input.checked);
+    return checked && checked.value === "pm" ? "pm" : "am";
+  }
+
+  /** @param {"am" | "pm"} value */
+  function setMeridiem(value) {
+    for (const input of meridiemInputs()) input.checked = input.value === value;
   }
 
   /** Draws the seven weekday toggles, keeping the ones already checked. */
@@ -1405,14 +1460,62 @@
    */
   function openEditor(draft, opener) {
     editor = { ...draft };
-    /** @type {HTMLInputElement} */ (el("alarm-hour")).value = pad2(draft.hour);
+    const hour = /** @type {HTMLInputElement} */ (el("alarm-hour"));
+    if (hourCycle === 12) {
+      hour.value = String(draft.hour % 12 === 0 ? 12 : draft.hour % 12);
+      setMeridiem(draft.hour < 12 ? "am" : "pm");
+    } else {
+      hour.value = pad2(draft.hour);
+    }
     /** @type {HTMLInputElement} */ (el("alarm-minute")).value = pad2(draft.minute);
     /** @type {HTMLInputElement} */ (el("alarm-label")).value = draft.label;
     for (const input of dayInputs()) input.checked = draft.weekdays.includes(Number(input.value));
-    for (const [id] of ALARM_FIELDS) setFieldError(id, "");
+    for (const [id] of alarmFields()) setFieldError(id, "");
     showDialog({ id: "alarm-editor", opener, backdrop: "focus", close: closeEditor });
     drawEditorTitle();
     el("alarm-label").focus();
+  }
+
+  /**
+   * Rewrites the open editor's hour in `next`, keeping the time of day, and
+   * rewords an error it already shows against the new range. Text that is not
+   * a whole number in the old range stays exactly as typed.
+   * @param {12 | 24} next
+   */
+  function convertEditorHour(next) {
+    const input = /** @type {HTMLInputElement} */ (el("alarm-hour"));
+    const typed = input.value;
+    if (isFieldValueValid(typed, alarmHourRangeFor(hourCycle))) {
+      const hour = Number(typed);
+      if (next === 12) {
+        input.value = String(hour % 12 === 0 ? 12 : hour % 12);
+        setMeridiem(hour < 12 ? "am" : "pm");
+      } else {
+        input.value = pad2((hour % 12) + (meridiemValue() === "pm" ? 12 : 0));
+      }
+    }
+    if (input.getAttribute("aria-invalid") === "true") {
+      checkField("alarm-hour", alarmHourRangeFor(next), "countRange", true);
+    }
+  }
+
+  /**
+   * The one place an hour cycle change lands: converts an open editor, then
+   * redraws. A press and a Worker state both come through here, so the switch
+   * and the fields never disagree.
+   * @param {12 | 24} next
+   */
+  function applyHourCycle(next) {
+    if (next === hourCycle) return;
+    if (editor !== null) convertEditorHour(next);
+    hourCycle = next;
+    // "Edit <time>" names the stored Alarm, so its time is rewritten in the new cycle.
+    const edited = editor !== null && editor.id !== null ? currentAlarm(editor.id) : null;
+    if (editor !== null && edited !== null) {
+      editor.time = alarmTimeText(edited);
+      drawEditorTitle();
+    }
+    renderAll();
   }
 
   function closeEditor() {
@@ -1428,14 +1531,17 @@
    */
   function saveEditor() {
     if (editor === null) return;
-    const firstInvalid = firstInvalidField(ALARM_FIELDS);
+    const firstInvalid = firstInvalidField(alarmFields());
     if (firstInvalid !== null) {
       el(firstInvalid).focus();
       return;
     }
+    const typedHour = Number(/** @type {HTMLInputElement} */ (el("alarm-hour")).value);
+    const hour =
+      hourCycle === 12 ? (typedHour % 12) + (meridiemValue() === "pm" ? 12 : 0) : typedHour;
     const input = {
       // Parsed as the check read them, so "1e1" posts the 10 it was checked as.
-      hour: Number(/** @type {HTMLInputElement} */ (el("alarm-hour")).value),
+      hour,
       minute: Number(/** @type {HTMLInputElement} */ (el("alarm-minute")).value),
       label: /** @type {HTMLInputElement} */ (el("alarm-label")).value,
       weekdays: dayInputs()
@@ -1498,7 +1604,7 @@
     /** @type {HTMLElement[]} */
     const items = [];
     for (const node of root.querySelectorAll("button, input, [tabindex]")) {
-      if (!(node instanceof HTMLElement) || node.hidden) continue;
+      if (!(node instanceof HTMLElement) || node.closest("[hidden]") !== null) continue;
       if (node.getAttribute("tabindex") === "-1") continue;
       if (node instanceof HTMLInputElement && node.type === "hidden") continue;
       // Reset is hidden by a class: check it beside the computed style, so the
@@ -1787,10 +1893,15 @@
       if (typeof data.language === "string") document.documentElement.lang = data.language;
     } else if (data.kind === "state") {
       frameState = data;
-      hourCycle = data.hourCycle === 12 ? 12 : 24;
       if (followStoredTab && TABS.includes(data.tab) && data.tab !== activeTab) {
         selectTab(data.tab, false);
       }
+      // One render per state: the hour cycle change draws itself, a plain one
+      // falls through to the draw below.
+      const next = data.hourCycle === 12 ? 12 : 24;
+      if (next === hourCycle) renderAll();
+      else applyHourCycle(next);
+      return;
     } else if (data.kind === "pomodoro.openSettings") {
       // The Worker holds this until the labels and state are out, so the Frame
       // is already drawn: select the tab and open the dialog without a redraw.
@@ -1898,9 +2009,14 @@
   el("alarms-hour-cycle").addEventListener("click", () => {
     // Draw at once; the state the Worker sends back confirms it.
     const next = switchOn("alarms-hour-cycle") ? 12 : 24;
-    hourCycle = next;
     post({ kind: "hourCycle.set", hourCycle: next });
-    renderAll();
+    applyHourCycle(next);
+  });
+  el("alarm-hour-cycle").addEventListener("click", () => {
+    // The switch saves at once, so closing the editor cannot undo it.
+    const next = switchOn("alarm-hour-cycle") ? 12 : 24;
+    post({ kind: "hourCycle.set", hourCycle: next });
+    applyHourCycle(next);
   });
   el("alarm-editor-close").addEventListener("click", closeEditor);
   el("alarm-cancel").addEventListener("click", closeEditor);
@@ -1921,9 +2037,9 @@
     });
     el(id).addEventListener("blur", () => checkField(id, range, messageKey, true));
   }
-  for (const [id, range, messageKey] of ALARM_FIELDS) {
-    el(id).addEventListener("input", () => checkField(id, range, messageKey, false));
-    el(id).addEventListener("blur", () => checkField(id, range, messageKey, true));
+  for (const [id] of alarmFields()) {
+    el(id).addEventListener("input", () => checkAlarmField(id, false));
+    el(id).addEventListener("blur", () => checkAlarmField(id, true));
   }
   for (const [id] of SETTINGS_SWITCHES) {
     el(id).addEventListener("click", () => {

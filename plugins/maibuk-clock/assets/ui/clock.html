@@ -1134,6 +1134,16 @@
         outline-offset: 2px;
       }
 
+      .meridiem {
+        border: 0;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        align-self: center;
+      }
+
       .hint {
         margin: 0;
         font-size: 0.8125rem;
@@ -1681,6 +1691,30 @@
               <label id="alarm-minute-label" for="alarm-minute"></label>
               <p id="alarm-minute-error" class="field-error"></p>
             </div>
+            <fieldset id="alarm-meridiem" class="meridiem" hidden>
+              <legend id="alarm-meridiem-legend" class="sr-only"></legend>
+              <label class="day">
+                <input type="radio" name="alarm-meridiem" value="am" />
+                <span id="alarm-am-label"></span>
+              </label>
+              <label class="day">
+                <input type="radio" name="alarm-meridiem" value="pm" />
+                <span id="alarm-pm-label"></span>
+              </label>
+            </fieldset>
+          </div>
+          <div class="editor-format settings-switch-row">
+            <span id="alarm-hour-cycle-label"></span>
+            <button
+              id="alarm-hour-cycle"
+              class="switch"
+              type="button"
+              role="switch"
+              aria-checked="true"
+              aria-labelledby="alarm-hour-cycle-label"
+            >
+              <span class="track"><span class="knob"></span></span>
+            </button>
           </div>
           <div class="dialog-label">
             <label id="alarm-label-caption" for="alarm-label"></label>
