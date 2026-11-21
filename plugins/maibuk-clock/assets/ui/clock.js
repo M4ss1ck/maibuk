@@ -1,8 +1,8 @@
 // @ts-check
 /* The Clock Frame (#886): the four panels (Pomodoro, Timer, Stopwatch, Alarms),
    the section bar they share, the notifications banner, the live region, and the
-   two modal dialogs (the Alarms' editor and the Pomodoro settings). The Frame's
-   only host channel is `window.maibuk.port`: the Worker sends the localized
+   three modal dialogs (the Alarms' editor, the Alarm delete confirmation, and
+   the Pomodoro settings). The Frame's only host channel is `window.maibuk.port`: the Worker sends the localized
    labels and the whole state as raw JSON, and the Frame answers with one control
    message per press. Labels may arrive after the first state, so the page stays
    empty until both have arrived.
@@ -104,6 +104,12 @@
     ["settings-short", "shortBreakMinutes", POMODORO_LIMITS.minutes, "minutesRange"],
     ["settings-long", "longBreakMinutes", POMODORO_LIMITS.minutes, "minutesRange"],
     ["settings-every", "longBreakEvery", POMODORO_LIMITS.longBreakEvery, "countRange"],
+  ];
+
+  /** The Alarm editor's time fields: the range each takes and the message key an invalid one shows. */
+  const ALARM_FIELDS = [
+    ["alarm-hour", { min: 0, max: MAX_ALARM_HOUR }, "countRange"],
+    ["alarm-minute", { min: 0, max: MAX_MINUTES }, "countRange"],
   ];
 
   /** The settings dialog's switches and the setting each toggles. */
@@ -249,19 +255,25 @@
     if (ahead <= 0) dayWord = label("today");
     else if (ahead === 1) dayWord = label("tomorrow");
     else dayWord = weekdayName(day + EPOCH_WEEKDAY);
-    const minutes = Math.max(0, Math.ceil((soonest - now) / MS_PER_MINUTE));
-    const inText =
-      minutes >= MINUTES_PER_HOUR
-        ? fill(label("inHoursMinutes"), {
-            h: Math.floor(minutes / MINUTES_PER_HOUR),
-            m: minutes % MINUTES_PER_HOUR,
-          })
-        : fill(label("inMinutes"), { m: minutes });
     return fill(label("nextAlarm"), {
       day: dayWord,
       time: formatClockTime(soonest, new Date(soonest).getTimezoneOffset(), hourCycle),
-      in: inText,
+      in: timeUntilText(Math.max(0, Math.ceil((soonest - now) / MS_PER_MINUTE))),
     });
+  }
+
+  /**
+   * How long until the next Alarm, writing only the parts above zero: "2 h",
+   * "2 h 5 min", or "5 min".
+   * @param {number} minutes
+   * @returns {string}
+   */
+  function timeUntilText(minutes) {
+    const h = Math.floor(minutes / MINUTES_PER_HOUR);
+    const m = minutes % MINUTES_PER_HOUR;
+    if (h === 0) return fill(label("inMinutes"), { m });
+    if (m === 0) return fill(label("inHours"), { h });
+    return fill(label("inHoursMinutes"), { h, m });
   }
 
   /**
@@ -463,6 +475,8 @@
   let editor = null;
   /** The modal dialog that is open, if any: one at a time. @type {OpenDialog | null} */
   let dialog = null;
+  /** The Alarm the delete confirmation asks about, or null while it is closed. @type {string | null} */
+  let deleteId = null;
   /** The Alarm just deleted, kept until the redrawn list can take focus. @type {{ id: string, index: number } | null} */
   let pendingRemoveFocus = null;
 
@@ -604,6 +618,9 @@
     setText("alarm-cancel", label("cancel"));
     setText("alarm-save", label("save"));
     el("alarm-editor-close").setAttribute("aria-label", label("cancel"));
+    setText("alarm-delete-title", label("deleteAlarmTitle"));
+    setText("alarm-delete-cancel", label("cancel"));
+    setText("alarm-delete-confirm", label("delete"));
     setText("pomodoro-settings-title", label("pomodoroSettings"));
     setText("settings-pomodoro-label", label("pomodoroMinutes"));
     setText("settings-short-label", label("shortBreakMinutes"));
@@ -1188,12 +1205,7 @@
     });
     const remove = iconButton("remove");
     remove.className = "icon-button destructive";
-    remove.addEventListener("click", () => {
-      const index =
-        frameState === null ? -1 : frameState.alarms.findIndex((a) => a.id === alarm.id);
-      pendingRemoveFocus = { id: alarm.id, index: Math.max(0, index) };
-      post({ kind: "alarm.remove", id: alarm.id });
-    });
+    remove.addEventListener("click", () => openDeleteConfirm(alarm.id, remove));
     actions.append(edit, remove);
     foot.append(repeat, actions);
 
@@ -1394,6 +1406,7 @@
     /** @type {HTMLInputElement} */ (el("alarm-minute")).value = pad2(draft.minute);
     /** @type {HTMLInputElement} */ (el("alarm-label")).value = draft.label;
     for (const input of dayInputs()) input.checked = draft.weekdays.includes(Number(input.value));
+    for (const [id] of ALARM_FIELDS) setFieldError(id, "");
     showDialog({ id: "alarm-editor", opener, backdrop: "focus", close: closeEditor });
     drawEditorTitle();
     el("alarm-label").focus();
@@ -1405,11 +1418,22 @@
     hideDialog();
   }
 
+  /**
+   * Posts the editor's Alarm, or, when the hour or minute is out of range,
+   * shows each field's message, focuses the first, and stays open: Save never
+   * corrects a value the author typed.
+   */
   function saveEditor() {
     if (editor === null) return;
+    const firstInvalid = firstInvalidField(ALARM_FIELDS);
+    if (firstInvalid !== null) {
+      el(firstInvalid).focus();
+      return;
+    }
     const input = {
-      hour: clamp(readInput("alarm-hour"), MAX_ALARM_HOUR),
-      minute: clamp(readInput("alarm-minute"), MAX_MINUTES),
+      // Parsed as the check read them, so "1e1" posts the 10 it was checked as.
+      hour: Number(/** @type {HTMLInputElement} */ (el("alarm-hour")).value),
+      minute: Number(/** @type {HTMLInputElement} */ (el("alarm-minute")).value),
       label: /** @type {HTMLInputElement} */ (el("alarm-label")).value,
       weekdays: dayInputs()
         .filter((input) => input.checked)
@@ -1419,6 +1443,46 @@
     if (editor.id === null) post({ kind: "alarm.add", input });
     else post({ kind: "alarm.edit", id: editor.id, input });
     closeEditor();
+  }
+
+  /**
+   * Asks before deleting: the confirmation names the Alarm, and its focus
+   * starts on Cancel so a stray Enter keeps the Alarm.
+   * @param {string} id
+   * @param {HTMLElement} opener the row's Delete button, which focus returns to on Cancel
+   */
+  function openDeleteConfirm(id, opener) {
+    const alarm = currentAlarm(id);
+    if (alarm === null || frameState === null) return;
+    deleteId = id;
+    setText(
+      "alarm-delete-body",
+      fill(label("deleteAlarmBody"), { time: alarmName(alarm, frameState.alarms) })
+    );
+    showDialog({ id: "alarm-delete", opener, backdrop: "close", close: closeDeleteConfirm });
+    el("alarm-delete-cancel").focus();
+  }
+
+  function closeDeleteConfirm() {
+    if (deleteId === null) return;
+    deleteId = null;
+    hideDialog();
+  }
+
+  /** Deletes the Alarm; focus lands where `focusAfterRemove` puts it once the Worker drops the row. */
+  function confirmDelete() {
+    const id = deleteId;
+    if (id === null) return;
+    // The Alarm may have gone while the question was open: nothing to delete,
+    // and no redraw will come to take focus, so Cancel's path closes it.
+    if (currentAlarm(id) === null) {
+      closeDeleteConfirm();
+      return;
+    }
+    const index = frameState === null ? -1 : frameState.alarms.findIndex((a) => a.id === id);
+    pendingRemoveFocus = { id, index: Math.max(0, index) };
+    post({ kind: "alarm.remove", id });
+    closeDeleteConfirm();
   }
 
   /**
@@ -1474,7 +1538,8 @@
   /**
    * A press on a dialog's backdrop is that dialog's own business: the Alarm
    * editor pulls focus back onto its first control and stays open, while the
-   * Pomodoro settings close and discard their edits.
+   * Pomodoro settings close and discard their edits, and the delete
+   * confirmation closes as Cancel would.
    * @param {PointerEvent} event
    */
   function onBackdropPointerDown(event) {
@@ -1525,7 +1590,7 @@
   }
 
   /**
-   * Marks one settings field invalid or clears it: the input's aria-invalid,
+   * Marks one dialog field invalid or clears it: the input's aria-invalid,
    * the message under it, and the aria-describedby link between the two.
    * @param {string} id
    * @param {string} message
@@ -1545,7 +1610,7 @@
   }
 
   /**
-   * Re-checks one settings field and refreshes its error. A keystroke passes
+   * Re-checks one dialog field and refreshes its error. A keystroke passes
    * `show` false, so a field whose error is hidden never raises a new one
    * mid-typing; a shown error still clears the moment the value is valid.
    * @param {string} id
@@ -1560,6 +1625,21 @@
     if (valid) setFieldError(id, "");
     else if (show) setFieldError(id, fill(label(messageKey), { min: range.min, max: range.max }));
     return valid;
+  }
+
+  /**
+   * Checks every field of one dialog, showing each one's message, and returns
+   * the first invalid field's id, or null when all hold valid values.
+   * @param {ReadonlyArray<readonly [string, { min: number, max: number }, string]>} fields
+   * @returns {string | null}
+   */
+  function firstInvalidField(fields) {
+    /** @type {string | null} */
+    let first = null;
+    for (const [id, range, messageKey] of fields) {
+      if (!checkField(id, range, messageKey, true) && first === null) first = id;
+    }
+    return first;
   }
 
   /** Clears every settings field's error, which opening and Reset both do. */
@@ -1610,11 +1690,9 @@
 
   function saveSettings() {
     if (dialog === null) return;
-    /** @type {string | null} */
-    let firstInvalid = null;
-    for (const [id, , range, messageKey] of SETTINGS_FIELDS) {
-      if (!checkField(id, range, messageKey, true) && firstInvalid === null) firstInvalid = id;
-    }
+    const firstInvalid = firstInvalidField(
+      SETTINGS_FIELDS.map(([id, , range, messageKey]) => [id, range, messageKey])
+    );
     if (firstInvalid !== null) {
       el(firstInvalid).focus();
       return;
@@ -1817,6 +1895,8 @@
   el("alarm-editor-close").addEventListener("click", closeEditor);
   el("alarm-cancel").addEventListener("click", closeEditor);
   el("alarm-save").addEventListener("click", saveEditor);
+  el("alarm-delete-cancel").addEventListener("click", closeDeleteConfirm);
+  el("alarm-delete-confirm").addEventListener("click", confirmDelete);
   el("pomodoro-settings-open").addEventListener("click", () =>
     openSettings(el("pomodoro-settings-open"))
   );
@@ -1831,6 +1911,10 @@
     });
     el(id).addEventListener("blur", () => checkField(id, range, messageKey, true));
   }
+  for (const [id, range, messageKey] of ALARM_FIELDS) {
+    el(id).addEventListener("input", () => checkField(id, range, messageKey, false));
+    el(id).addEventListener("blur", () => checkField(id, range, messageKey, true));
+  }
   for (const [id] of SETTINGS_SWITCHES) {
     el(id).addEventListener("click", () => {
       setSwitch(id, !switchOn(id));
@@ -1840,6 +1924,7 @@
   document.addEventListener("keydown", onDialogKeyDown);
   el("alarm-editor").addEventListener("pointerdown", onBackdropPointerDown);
   el("pomodoro-settings").addEventListener("pointerdown", onBackdropPointerDown);
+  el("alarm-delete").addEventListener("pointerdown", onBackdropPointerDown);
   document.addEventListener("keydown", onFieldKeyDown);
 
   for (const key of ["timer-hours", "timer-minutes", "timer-seconds"]) {

@@ -231,6 +231,13 @@ const addAlarmButton = (page: Page) =>
 const alarmForm = (page: Page, name: "Add alarm" | `Edit ${string}`) =>
   clockFrame(page).getByRole("dialog", { name, exact: true });
 
+/** What the Hour field says when a Save finds it outside 0 to 23. */
+const HOUR_RANGE = "Between 0 and 23";
+
+/** The confirmation a row's Delete button opens before anything is deleted. */
+const deleteConfirm = (page: Page) =>
+  clockFrame(page).getByRole("alertdialog", { name: "Delete this alarm?", exact: true });
+
 /** One row's switch, which carries the row's drawn time in its name. */
 const alarmSwitch = (page: Page, time: string) =>
   clockFrame(page).getByRole("switch", { name: `Alarm ${time}`, exact: true });
@@ -805,9 +812,21 @@ test.describe("Clock Alarms @wf:plugins-clock-alarms @chromium-only", () => {
     await expect(add).toBeHidden();
     await expect(addAlarmButton(page)).toBeFocused();
 
-    // Reopened from the restored focus, the form is filled and saved.
+    // Reopened from the restored focus: an hour of 24 is outside 0 to 23, so
+    // Save names the range, keeps the form open, and focuses the Hour field.
     await page.keyboard.press("Enter");
     await expect(add).toBeVisible();
+    const hour = add.getByRole("spinbutton", { name: "Hour", exact: true });
+    await setAlarmNumber(page, hour, 24);
+    await tabToEither(page, add.getByRole("button", { name: "Save", exact: true }), { max: 20 });
+    await page.keyboard.press("Enter");
+    await expect(add.getByText(HOUR_RANGE, { exact: true })).toBeVisible();
+    await expect(add).toBeVisible();
+    await expect(hour).toBeFocused();
+    await expect(hour).toHaveValue("24");
+    await capture(page, "clock-alarms-form-error");
+
+    // The form is filled with a valid time and saved.
     await setAlarmNumber(
       page,
       add.getByRole("spinbutton", { name: "Hour", exact: true }),
@@ -884,13 +903,31 @@ test.describe("Clock Alarms @wf:plugins-clock-alarms @chromium-only", () => {
     await expect(editedToggle).toBeChecked();
     await capture(page, "clock-alarms-edited");
 
-    // Delete <time> takes the row away, leaving the tab empty again.
+    // Delete <time> asks first: the confirmation names the Alarm and opens on
+    // Cancel, and Escape keeps the row with focus back on its Delete button.
     const removeButton = clockFrame(page).getByRole("button", {
       name: `Delete ${EDITED_TIME}`,
       exact: true,
     });
     await tabTo(page, removeButton, { max: 4 });
     await page.keyboard.press("Enter");
+    const confirm = deleteConfirm(page);
+    await expect(confirm).toBeVisible();
+    await expect(confirm).toContainText(`Alarm ${EDITED_TIME} will be deleted.`);
+    await expect(confirm.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+    await capture(page, "clock-alarms-delete-confirm");
+    await page.keyboard.press("Escape");
+    await expect(confirm).toBeHidden();
+    await expect(removeButton).toBeFocused();
+    await expect(editedToggle).toBeVisible();
+
+    // Confirmed, Delete takes the row away, leaving the tab empty again.
+    await page.keyboard.press("Enter");
+    await expect(confirm).toBeVisible();
+    await page.keyboard.press("Tab");
+    await expect(confirm.getByRole("button", { name: "Delete", exact: true })).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(confirm).toBeHidden();
     await expect(clockFrame(page).getByText(NO_ALARMS, { exact: true })).toBeVisible();
     await expect(editedToggle).toHaveCount(0);
     await expect(clockFrame(page).getByText(ALARM_LABEL, { exact: true })).toHaveCount(0);
