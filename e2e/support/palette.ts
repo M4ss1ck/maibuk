@@ -58,11 +58,12 @@ export async function arrowToOption(page: Page, dialog: Locator, option: Locator
  * Arrows until the item with key `key` (e.g. `command:global.toggleTheme`) is
  * the palette's active result. Each poll re-reads the list, so a row that
  * lands mid-walk or a press swallowed while the list settles only costs one
- * more press. With both rows rendered it steps toward the target; with the
- * target outside the virtualized window it walks down, and turns once two
- * presses leave the active row where it was (an end: the arrows do not wrap).
- * The key matches whole: `settingsRow:spellCheck` never stops on
- * `settingsRow:spellCheckDictionaries`.
+ * more press. With both rows rendered it steps toward the target; otherwise
+ * it keeps its direction and turns once two presses leave the active row
+ * where it was (an end: the arrows do not wrap). A hit counts once a second
+ * read, with no press between, still finds it, so Enter never follows a press
+ * still landing. The key matches whole: `settingsRow:spellCheck` never stops
+ * on `settingsRow:spellCheckDictionaries`.
  */
 export async function arrowToKey(
   page: Page,
@@ -72,38 +73,49 @@ export async function arrowToKey(
 ): Promise<void> {
   const searchbox = dialog.getByRole("searchbox");
   let arrow: "ArrowDown" | "ArrowUp" = "ArrowDown";
-  let previous: string | null | undefined;
+  let previous: string | null = null;
   let unmoved = 0;
   let presses = 0;
+  let hit = false;
   await expect
     .poll(
       async () => {
-        const active = (await searchbox.getAttribute("aria-activedescendant")) ?? "";
+        const active = await searchbox.getAttribute("aria-activedescendant");
         const keys = await dialog
           .getByRole("option")
           .evaluateAll((rows) => rows.map((row) => row.getAttribute("data-key")));
         const activeKey = active ? (keyOfOptionId(active, keys) ?? null) : null;
-        if (activeKey === key || presses >= max) return activeKey;
+        if (activeKey === key) {
+          if (hit) return key;
+          hit = true;
+          return "settling";
+        }
+        hit = false;
+        if (presses >= max) return activeKey;
         const target = keys.indexOf(key);
-        if (activeKey === null) {
+        if (!active) {
           // No active row: ArrowDown lands on the first.
           arrow = "ArrowDown";
-        } else if (target >= 0) {
+        } else if (activeKey !== null && target >= 0) {
           arrow = keys.indexOf(activeKey) < target ? "ArrowDown" : "ArrowUp";
         } else {
-          unmoved = activeKey === previous ? unmoved + 1 : 0;
+          // The target, or the active row itself, is outside the rendered
+          // window: keep going and turn at an end.
+          unmoved = active === previous ? unmoved + 1 : 0;
           if (unmoved >= 2) {
             arrow = arrow === "ArrowDown" ? "ArrowUp" : "ArrowDown";
             unmoved = 0;
           }
         }
-        previous = activeKey;
+        previous = active;
         presses++;
         await page.keyboard.press(arrow);
         return activeKey;
       },
-      // One read per press: a second per press bounds the walk.
-      { message: `arrow to the ${key} row`, intervals: [100], timeout: max * 1_000 }
+      // A read every 250 ms gives React Aria its beat to move the active row,
+      // so a slow update is not taken for an end; about 400 ms per press bounds
+      // the walk inside the test's own timeout.
+      { message: `arrow to the ${key} row`, intervals: [250], timeout: max * 400 }
     )
     .toBe(key);
 }
