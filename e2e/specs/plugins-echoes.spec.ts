@@ -6,7 +6,7 @@
 // Settings row changes what is detected, and touch opens and expands by tap.
 
 import type { Page } from "@playwright/test";
-import { caretText, pressUntilFocused, tabTo } from "../support/keyboard";
+import { caretText, pressUntilFocused, tabTo, tabToEither } from "../support/keyboard";
 import { capture } from "../support/capture";
 import { selectPaletteCommand } from "../support/palette";
 import { SEED_BOOK } from "../support/seed/names";
@@ -43,6 +43,19 @@ async function openEchoesFromPalette(page: Page) {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/maibuk-echoes\/report$/);
   await expect(page.getByRole("heading", { name: "Echoes", level: 1 })).toBeVisible();
+}
+
+/**
+ * Back to the Books Gallery through the sidebar. Not `g b`: the report's
+ * listboxes and the sidebar's own listbox keep bare letters for typeahead, so a
+ * Go-to sequence pressed with focus in one of them never reaches the Command.
+ */
+async function backToBooks(page: Page) {
+  // The sidebar's one Tab stop is its selected entry, Echoes.
+  await tabToEither(page, navOption(page, "Echoes"));
+  await pressUntilFocused(page, "ArrowUp", navOption(page, "Books"), { max: 12 });
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/$/);
 }
 
 /** Opens the report from the sidebar entry, the way an author reaches it. */
@@ -212,9 +225,7 @@ test.describe("Echoes report @wf:plugins-echoes @sc:plugin.maibuk-echoes.openEch
     await expect(harbor).toHaveCount(0);
 
     // Leaving and reopening the page reads the stored ignore list.
-    await page.keyboard.press("g");
-    await page.keyboard.press("b");
-    await expect(page).toHaveURL(/\/$/);
+    await backToBooks(page);
     await openEchoesFromPalette(page);
     await expect(nearbyList(page).getByRole("option", { name: /^dark / })).toBeVisible({
       timeout: 20_000,
@@ -232,9 +243,7 @@ test.describe("Echoes report @wf:plugins-echoes @sc:plugin.maibuk-echoes.openEch
     // Add two more "harbor" to the Book's last Chapter, then return to the
     // report at once (before the editor's 1s autosave): the editor's flush on
     // leaving emits the Change that touches the Book.
-    await page.keyboard.press("g");
-    await page.keyboard.press("b");
-    await expect(page).toHaveURL(/\/$/);
+    await backToBooks(page);
     const card = page.getByRole("grid", { name: "Books" }).getByRole("row");
     await expect(card).toHaveCount(1);
     await tabTo(page, card, { max: 40 });
