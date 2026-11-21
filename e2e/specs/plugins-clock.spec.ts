@@ -598,10 +598,12 @@ test.describe("Clock Pomodoro @wf:plugins-clock-pomodoro @chromium-only", () => 
     // lengths, and Enter on it opens the dialog.
     await expect(lengthsRow(page)).toContainText(lengthsSummary(25));
     await tabToEither(page, lengthsRow(page), { max: 12 });
+    await capture(page, "clock-pomodoro-settings-row");
     await page.keyboard.press("Enter");
 
     const settings = settingsDialog(page);
     await expect(settings).toBeVisible();
+    await capture(page, "clock-pomodoro-settings-dialog");
     // Focus enters on the Pomodoro length field, holding the default, and Tab
     // past the dialog's last control stays inside it.
     const minutes = pomodoroLengthField(page);
@@ -636,10 +638,14 @@ test.describe("Clock Pomodoro @wf:plugins-clock-pomodoro @chromium-only", () => 
     await expect(lengthsRow(page)).toContainText(lengthsSummary(30));
     await expect(pomodoroTime(page)).toHaveText("30:00");
 
-    // The Command opens the same dialog on the Pomodoro tab, holding what Save
-    // stored, and Escape dismisses it back to the row that opened it.
+    // From the Timer tab, the Command switches to the Pomodoro tab and opens the
+    // same dialog, holding what Save stored; Escape dismisses it back to the row.
+    await tabToEither(page, clockFrame(page).getByRole("tab", { name: "Pomodoro", exact: true }));
+    await page.keyboard.press("ArrowRight");
+    await expect(tabPanel(page, "Pomodoro")).toBeHidden();
     await runHostCommand(page, POMODORO_SETTINGS_COMMAND);
     await expect(tabPanel(page, "Pomodoro")).toBeVisible({ timeout: 15_000 });
+    await expect(tabPanel(page, "Timer")).toBeHidden();
     await expect(settings).toBeVisible();
     await expect(minutes).toHaveValue("30");
     await expect(minutes).toBeFocused();
@@ -648,6 +654,12 @@ test.describe("Clock Pomodoro @wf:plugins-clock-pomodoro @chromium-only", () => 
     await expect(settings).toBeHidden();
     await expect(lengthsRow(page)).toBeFocused();
     await expect(pomodoroTime(page)).toHaveText("30:00");
+
+    // At phone width the dialog still fits, its action row wrapping.
+    await page.setViewportSize({ width: 360, height: 760 });
+    await page.keyboard.press("Enter");
+    await expect(settings).toBeVisible();
+    await capture(page, "clock-pomodoro-settings-narrow");
   });
 });
 

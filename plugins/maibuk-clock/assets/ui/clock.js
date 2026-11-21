@@ -593,7 +593,7 @@
     setText("alarm-repeat-legend", label("repeat"));
     setText("alarm-repeat-hint", label("repeatHint"));
     setText("alarm-cancel", label("cancel"));
-    setText("alarm-save", label("saveAlarm"));
+    setText("alarm-save", label("save"));
     el("alarm-editor-close").setAttribute("aria-label", label("cancel"));
     setText("pomodoro-settings-title", label("pomodoroSettings"));
     setText("settings-pomodoro-label", label("pomodoroMinutes"));
@@ -604,7 +604,7 @@
     setText("settings-auto-pomodoros-label", label("autoStartPomodoros"));
     setText("pomodoro-settings-reset", label("resetToDefaults"));
     setText("pomodoro-settings-cancel", label("cancel"));
-    setText("pomodoro-settings-save", label("saveSettings"));
+    setText("pomodoro-settings-save", label("save"));
     el("pomodoro-settings-close").setAttribute("aria-label", label("cancel"));
     for (const [id, , limits] of SETTINGS_FIELDS) {
       const input = /** @type {HTMLInputElement} */ (el(id));
