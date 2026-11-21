@@ -39,6 +39,7 @@ import {
   CLOCK_PAGE_ID,
   LAP_STOPWATCH,
   OPEN_CLOCK,
+  OPEN_POMODORO_SETTINGS,
   POMODORO_SETTINGS_ROW_ID,
   SKIP_POMODORO,
   TOGGLE_POMODORO,
@@ -264,6 +265,26 @@ describe("Clock runtime", () => {
     } finally {
       await host.stop();
     }
+  });
+
+  it("opens the Clock page and asks the Frame to show Pomodoro settings from the Command", async () => {
+    const { host, mountFrame, ready } = startHost();
+    freezeClock();
+    await ready;
+
+    await expect(
+      host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: OPEN_POMODORO_SETTINGS })
+    ).resolves.toBeNull();
+    expect(host.pageNavigations).toEqual([{ pluginId: "maibuk-clock", pageId: CLOCK_PAGE_ID }]);
+
+    // The Command ran before any Frame was mounted, so the request waits for
+    // the Frame's labels and then reaches it once.
+    const frame = mountFrame();
+    await eventually(() =>
+      expect(
+        frame.messages.filter((message) => message.kind === "pomodoro.openSettings")
+      ).toHaveLength(1)
+    );
   });
 
   it("marks Laps while running, with each stretch and total, and keeps them for the next Frame", async () => {
@@ -632,6 +653,24 @@ describe("Clock runtime", () => {
       })
     );
     expect(host.systemNotifications.scheduled.has(POMODORO_TAG)).toBe(true);
+  });
+
+  it("stops the Pomodoro settings row's number fields at the shared maxima", async () => {
+    const { host, storage } = startHost();
+    const row = await host.renderSettingsRow(POMODORO_SETTINGS_ROW_ID);
+    const user = userEvent.setup();
+
+    const length = await screen.findByRole("textbox", { name: en.pomodoroMinutes });
+    await tabTo(user, length);
+    await user.keyboard("{Control>}a{/Control}100{Enter}");
+    await eventually(() => expect(storedSettings(storage)?.pomodoroMinutes).toBe(99));
+
+    const every = screen.getByRole("textbox", { name: en.longBreakEvery });
+    await tabTo(user, every);
+    await user.keyboard("{Control>}a{/Control}13{Enter}");
+    await eventually(() => expect(storedSettings(storage)?.longBreakEvery).toBe(12));
+
+    await row.unmount();
   });
 
   it("renders the Pomodoro settings row in Spanish when the app language is Spanish", async () => {

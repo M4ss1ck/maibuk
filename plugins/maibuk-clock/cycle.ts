@@ -32,6 +32,40 @@ export const DEFAULT_POMODORO_SETTINGS: PomodoroSettings = {
   autoStartPomodoros: false,
 };
 
+/** The range each Pomodoro setting may hold: minutes for the lengths, Pomodoros for the count. */
+export const POMODORO_LIMITS = {
+  minutes: { min: 1, max: 99 },
+  longBreakEvery: { min: 1, max: 12 },
+};
+
+/** A whole number inside `range`. */
+export function isWholeNumberIn(
+  value: unknown,
+  range: { min: number; max: number }
+): value is number {
+  return (
+    typeof value === "number" && Number.isInteger(value) && value >= range.min && value <= range.max
+  );
+}
+
+/**
+ * True when `value` holds all six settings, each a whole number inside
+ * `POMODORO_LIMITS` or a boolean, so a stored record or a Worker message can be
+ * trusted as `PomodoroSettings`.
+ */
+export function isValidPomodoroSettings(value: unknown): value is PomodoroSettings {
+  if (typeof value !== "object" || value === null) return false;
+  const settings = value as Record<string, unknown>;
+  return (
+    isWholeNumberIn(settings.pomodoroMinutes, POMODORO_LIMITS.minutes) &&
+    isWholeNumberIn(settings.shortBreakMinutes, POMODORO_LIMITS.minutes) &&
+    isWholeNumberIn(settings.longBreakMinutes, POMODORO_LIMITS.minutes) &&
+    isWholeNumberIn(settings.longBreakEvery, POMODORO_LIMITS.longBreakEvery) &&
+    typeof settings.autoStartBreaks === "boolean" &&
+    typeof settings.autoStartPomodoros === "boolean"
+  );
+}
+
 /** Where the Cycle stands: its phase, its Pomodoro number (1-based), and how it runs. */
 export type CycleState = { phase: Phase; pomodoro: number } & (
   | { status: "idle" }

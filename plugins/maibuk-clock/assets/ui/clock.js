@@ -1,12 +1,13 @@
 // @ts-check
 /* The Clock Frame (#886): the four panels (Pomodoro, Timer, Stopwatch, Alarms),
    the section bar they share, the notifications banner, the live region, and the
-   Alarms' editor dialog. The Frame's only host channel is `window.maibuk.port`:
-   the Worker sends the localized labels and the whole state as raw JSON, and the
-   Frame answers with one control message per press. Labels may arrive after the
-   first state, so the page stays empty until both have arrived.
+   two modal dialogs (the Alarms' editor and the Pomodoro settings). The Frame's
+   only host channel is `window.maibuk.port`: the Worker sends the localized
+   labels and the whole state as raw JSON, and the Frame answers with one control
+   message per press. Labels may arrive after the first state, so the page stays
+   empty until both have arrived.
 
-   The Frame owns its keyboard: the tabs, the dialog's focus trap and Escape, and
+   The Frame owns its keyboard: the tabs, the dialogs' focus trap and Escape, and
    nothing else, so every other key reaches the host's Commands.
 
    The wire shapes mirror `frame-protocol.ts`. It is a classic script, not a
@@ -30,10 +31,11 @@
    * @typedef {{ permission: string, canScheduleWhileClosed: boolean, exactTiming: boolean }} FrameNotificationStatus
    * @typedef {{ kind: "labels", language: string, hourCycle: 12 | 24, labels: Record<string, string> }} FrameLabelsMessage
    * @typedef {{ kind: "state", timer: TimerSnapshot, pomodoro: PomodoroSnapshot, stopwatch: StopwatchState, alarms: Alarm[], notifications: FrameNotificationStatus | null }} FrameStateMessage
-   * @typedef {FrameLabelsMessage | FrameStateMessage} WorkerToFrameMessage
+   * @typedef {FrameLabelsMessage | FrameStateMessage | FrameOpenSettingsMessage} WorkerToFrameMessage
    * @typedef {{ progress: number, title: string, subtitle: string, target: "pomodoro" | "stopwatch" }} AlsoData
    * @typedef {{ id: string | null, hour: number, minute: number, label: string, weekdays: number[], time: string | null }} AlarmDraft
-   * @typedef {AlarmDraft & { opener: HTMLElement | null }} OpenAlarmDraft
+   * @typedef {{ id: string, opener: HTMLElement | null, backdrop: "focus" | "close", close: () => void }} OpenDialog
+   * @typedef {{ kind: "pomodoro.openSettings" }} FrameOpenSettingsMessage
    */
 
   const SVG_NS = "http://www.w3.org/2000/svg";
@@ -79,6 +81,39 @@
     edit: ["M12 20h9", "M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"],
     remove: ["M3 6h18", "M8 6V4h8v2", "M19 6l-1 14H6L5 6"],
   };
+
+  /** The settings Reset fills, mirroring `DEFAULT_POMODORO_SETTINGS` in `cycle.ts`. */
+  const DEFAULT_POMODORO_SETTINGS = {
+    pomodoroMinutes: 25,
+    shortBreakMinutes: 5,
+    longBreakMinutes: 15,
+    longBreakEvery: 4,
+    autoStartBreaks: false,
+    autoStartPomodoros: false,
+  };
+
+  /** The Frame's mirror of the Worker's `POMODORO_LIMITS` (`cycle.ts`): the range each field takes. */
+  const POMODORO_LIMITS = {
+    minutes: { min: 1, max: 99 },
+    longBreakEvery: { min: 1, max: 12 },
+  };
+
+  /** The settings dialog's number fields: the setting each edits, the range it takes, and the message key an invalid one shows. */
+  const SETTINGS_FIELDS = [
+    ["settings-pomodoro", "pomodoroMinutes", POMODORO_LIMITS.minutes, "minutesRange"],
+    ["settings-short", "shortBreakMinutes", POMODORO_LIMITS.minutes, "minutesRange"],
+    ["settings-long", "longBreakMinutes", POMODORO_LIMITS.minutes, "minutesRange"],
+    ["settings-every", "longBreakEvery", POMODORO_LIMITS.longBreakEvery, "countRange"],
+  ];
+
+  /** The settings dialog's switches and the setting each toggles. */
+  const SETTINGS_SWITCHES = [
+    ["settings-auto-breaks", "autoStartBreaks"],
+    ["settings-auto-pomodoros", "autoStartPomodoros"],
+  ];
+
+  /** The class that hides Reset without taking it out of the row's layout. */
+  const RESET_HIDDEN_CLASS = "reset-hidden";
 
   /** @param {string} id @returns {HTMLElement} */
   function el(id) {
@@ -422,8 +457,10 @@
   let lapBarKeys = "";
   let daysKey = "";
   let stopwatchIcon = "";
-  /** @type {OpenAlarmDraft | null} */
+  /** @type {AlarmDraft | null} */
   let editor = null;
+  /** The modal dialog that is open, if any: one at a time. @type {OpenDialog | null} */
+  let dialog = null;
   /** The Alarm just deleted, kept until the redrawn list can take focus. @type {{ id: string, index: number } | null} */
   let pendingRemoveFocus = null;
 
@@ -556,8 +593,24 @@
     setText("alarm-repeat-legend", label("repeat"));
     setText("alarm-repeat-hint", label("repeatHint"));
     setText("alarm-cancel", label("cancel"));
-    setText("alarm-save", label("saveAlarm"));
+    setText("alarm-save", label("save"));
     el("alarm-editor-close").setAttribute("aria-label", label("cancel"));
+    setText("pomodoro-settings-title", label("pomodoroSettings"));
+    setText("settings-pomodoro-label", label("pomodoroMinutes"));
+    setText("settings-short-label", label("shortBreakMinutes"));
+    setText("settings-long-label", label("longBreakMinutes"));
+    setText("settings-every-label", label("longBreakEvery"));
+    setText("settings-auto-breaks-label", label("autoStartBreaks"));
+    setText("settings-auto-pomodoros-label", label("autoStartPomodoros"));
+    setText("pomodoro-settings-reset", label("resetToDefaults"));
+    setText("pomodoro-settings-cancel", label("cancel"));
+    setText("pomodoro-settings-save", label("save"));
+    el("pomodoro-settings-close").setAttribute("aria-label", label("cancel"));
+    for (const [id, , limits] of SETTINGS_FIELDS) {
+      const input = /** @type {HTMLInputElement} */ (el(id));
+      input.min = String(limits.min);
+      input.max = String(limits.max);
+    }
     drawDays();
     drawEditorTitle();
   }
@@ -688,10 +741,11 @@
       short: settings.shortBreakMinutes,
       long: settings.longBreakMinutes,
     });
-    setText(
-      "cycle-lengths",
-      settings.autoStartBreaks ? `${lengths}, ${label("breaksStartOnTheirOwn")}` : lengths
-    );
+    const summary = settings.autoStartBreaks
+      ? `${lengths}, ${label("breaksStartOnTheirOwn")}`
+      : lengths;
+    setText("cycle-lengths", summary);
+    setAttr("pomodoro-settings-open", "aria-label", `${label("pomodoroSettings")}, ${summary}`);
   }
 
   /** @param {string} id @param {number} value */
@@ -1302,28 +1356,44 @@
   }
 
   /**
+   * Shows a modal dialog, remembering what opened it and how it closes.
+   * @param {OpenDialog} next
+   */
+  function showDialog(next) {
+    dialog = next;
+    el(next.id).hidden = false;
+  }
+
+  /** Hides the open dialog and gives focus back to the control that opened it. */
+  function hideDialog() {
+    if (dialog === null) return;
+    const { id, opener } = dialog;
+    dialog = null;
+    el(id).hidden = true;
+    if (opener !== null && document.contains(opener)) opener.focus();
+  }
+
+  /**
    * Opens the editor with a draft, and remembers the control to give focus back
    * to once it closes.
    * @param {AlarmDraft} draft
    * @param {HTMLElement | null} opener
    */
   function openEditor(draft, opener) {
-    editor = { ...draft, opener };
+    editor = { ...draft };
     /** @type {HTMLInputElement} */ (el("alarm-hour")).value = pad2(draft.hour);
     /** @type {HTMLInputElement} */ (el("alarm-minute")).value = pad2(draft.minute);
     /** @type {HTMLInputElement} */ (el("alarm-label")).value = draft.label;
     for (const input of dayInputs()) input.checked = draft.weekdays.includes(Number(input.value));
-    el("alarm-editor").hidden = false;
+    showDialog({ id: "alarm-editor", opener, backdrop: "focus", close: closeEditor });
     drawEditorTitle();
     el("alarm-label").focus();
   }
 
   function closeEditor() {
     if (editor === null) return;
-    const { opener } = editor;
     editor = null;
-    el("alarm-editor").hidden = true;
-    if (opener !== null && document.contains(opener)) opener.focus();
+    hideDialog();
   }
 
   function saveEditor() {
@@ -1342,7 +1412,12 @@
     closeEditor();
   }
 
-  /** @param {HTMLElement} root @returns {HTMLElement[]} */
+  /**
+   * The controls a dialog's Tab key reaches: not hidden, not out of the Tab
+   * order, and not a Hidden Reset, which keeps its box but leaves the keyboard.
+   * @param {HTMLElement} root
+   * @returns {HTMLElement[]}
+   */
   function focusableIn(root) {
     /** @type {HTMLElement[]} */
     const items = [];
@@ -1350,27 +1425,31 @@
       if (!(node instanceof HTMLElement) || node.hidden) continue;
       if (node.getAttribute("tabindex") === "-1") continue;
       if (node instanceof HTMLInputElement && node.type === "hidden") continue;
+      // Reset is hidden by a class: check it beside the computed style, so the
+      // Tab order never depends on the style block alone.
+      if (node.classList.contains(RESET_HIDDEN_CLASS)) continue;
+      if (window.getComputedStyle(node).visibility === "hidden") continue;
       items.push(node);
     }
     return items;
   }
 
   /** @param {KeyboardEvent} event */
-  function onEditorKeyDown(event) {
-    if (editor === null) return;
+  function onDialogKeyDown(event) {
+    if (dialog === null) return;
     if (event.key === "Escape") {
       event.preventDefault();
-      closeEditor();
+      dialog.close();
       return;
     }
     if (event.key !== "Tab") return;
-    const dialog = el("alarm-editor");
-    const items = focusableIn(dialog);
+    const root = el(dialog.id);
+    const items = focusableIn(root);
     if (items.length === 0) return;
     const first = items[0];
     const last = items[items.length - 1];
     const active = document.activeElement;
-    if (!(active instanceof HTMLElement) || !dialog.contains(active)) {
+    if (!(active instanceof HTMLElement) || !root.contains(active)) {
       // A click on the backdrop leaves focus on the body: Tab comes back in.
       event.preventDefault();
       first.focus();
@@ -1384,16 +1463,164 @@
   }
 
   /**
-   * A press on the backdrop puts focus back on the dialog's first control,
-   * rather than letting it fall to the body; the dialog stays open.
+   * A press on a dialog's backdrop is that dialog's own business: the Alarm
+   * editor pulls focus back onto its first control and stays open, while the
+   * Pomodoro settings close and discard their edits.
    * @param {PointerEvent} event
    */
-  function onEditorPointerDown(event) {
-    if (editor === null || !(event.target instanceof HTMLElement)) return;
-    if (event.target !== el("alarm-editor")) return;
+  function onBackdropPointerDown(event) {
+    if (dialog === null || !(event.target instanceof HTMLElement)) return;
+    if (event.target !== el(dialog.id)) return;
+    // A press on the backdrop must never take focus off the dialog's opener.
     event.preventDefault();
-    const items = focusableIn(el("alarm-editor"));
+    if (dialog.backdrop === "close") {
+      dialog.close();
+      return;
+    }
+    const items = focusableIn(el(dialog.id));
     if (items.length > 0) items[0].focus();
+  }
+
+  /**
+   * True when two settings hold the same six values.
+   * @param {PomodoroSettings} a
+   * @param {PomodoroSettings} b
+   * @returns {boolean}
+   */
+  function sameSettings(a, b) {
+    return (
+      a.pomodoroMinutes === b.pomodoroMinutes &&
+      a.shortBreakMinutes === b.shortBreakMinutes &&
+      a.longBreakMinutes === b.longBreakMinutes &&
+      a.longBreakEvery === b.longBreakEvery &&
+      a.autoStartBreaks === b.autoStartBreaks &&
+      a.autoStartPomodoros === b.autoStartPomodoros
+    );
+  }
+
+  /** @param {string} id @returns {boolean} */
+  function switchOn(id) {
+    return el(id).getAttribute("aria-checked") === "true";
+  }
+
+  /** @param {string} id @param {boolean} on */
+  function setSwitch(id, on) {
+    el(id).setAttribute("aria-checked", on ? "true" : "false");
+  }
+
+  /** @param {string} value @param {{ min: number, max: number }} range @returns {boolean} */
+  function isFieldValueValid(value, range) {
+    if (value.trim() === "") return false;
+    const number = Number(value);
+    return Number.isInteger(number) && number >= range.min && number <= range.max;
+  }
+
+  /**
+   * Marks one settings field invalid or clears it: the input's aria-invalid,
+   * the message under it, and the aria-describedby link between the two.
+   * @param {string} id
+   * @param {string} message
+   */
+  function setFieldError(id, message) {
+    const input = /** @type {HTMLInputElement} */ (el(id));
+    const node = el(`${id}-error`);
+    if (message === "") {
+      input.removeAttribute("aria-invalid");
+      input.removeAttribute("aria-describedby");
+      node.textContent = "";
+      return;
+    }
+    input.setAttribute("aria-invalid", "true");
+    input.setAttribute("aria-describedby", node.id);
+    node.textContent = message;
+  }
+
+  /**
+   * Re-checks one settings field and refreshes its error. A keystroke passes
+   * `show` false, so a field whose error is hidden never raises a new one
+   * mid-typing; a shown error still clears the moment the value is valid.
+   * @param {string} id
+   * @param {{ min: number, max: number }} range
+   * @param {string} messageKey
+   * @param {boolean} show
+   * @returns {boolean}
+   */
+  function checkField(id, range, messageKey, show) {
+    const value = /** @type {HTMLInputElement} */ (el(id)).value;
+    const valid = isFieldValueValid(value, range);
+    if (valid) setFieldError(id, "");
+    else if (show) setFieldError(id, fill(label(messageKey), { min: range.min, max: range.max }));
+    return valid;
+  }
+
+  /** Clears every settings field's error, which opening and Reset both do. */
+  function clearSettingsErrors() {
+    for (const [id] of SETTINGS_FIELDS) setFieldError(id, "");
+  }
+
+  /** What the settings dialog's fields hold right now, parsed the way Save posts it. */
+  function settingsFromFields() {
+    /** @type {PomodoroSettings} */
+    const settings = { ...DEFAULT_POMODORO_SETTINGS };
+    for (const [id, key] of SETTINGS_FIELDS) {
+      settings[key] = Number(/** @type {HTMLInputElement} */ (el(id)).value);
+    }
+    for (const [id, key] of SETTINGS_SWITCHES) {
+      settings[key] = switchOn(id);
+    }
+    return settings;
+  }
+
+  /** @param {PomodoroSettings} settings */
+  function fillSettings(settings) {
+    for (const [id, key] of SETTINGS_FIELDS) {
+      /** @type {HTMLInputElement} */ (el(id)).value = String(settings[key]);
+    }
+    for (const [id, key] of SETTINGS_SWITCHES) {
+      setSwitch(id, settings[key]);
+    }
+  }
+
+  /** Shows Reset only while the fields hold something other than the defaults. */
+  function drawResetButton() {
+    el("pomodoro-settings-reset").classList.toggle(
+      RESET_HIDDEN_CLASS,
+      sameSettings(settingsFromFields(), DEFAULT_POMODORO_SETTINGS)
+    );
+  }
+
+  /** @param {HTMLElement | null} opener */
+  function openSettings(opener) {
+    if (!frameState) return;
+    fillSettings(frameState.pomodoro.settings);
+    clearSettingsErrors();
+    showDialog({ id: "pomodoro-settings", opener, backdrop: "close", close: hideDialog });
+    drawResetButton();
+    el("settings-pomodoro").focus();
+  }
+
+  function saveSettings() {
+    if (dialog === null) return;
+    /** @type {string | null} */
+    let firstInvalid = null;
+    for (const [id, , range, messageKey] of SETTINGS_FIELDS) {
+      if (!checkField(id, range, messageKey, true) && firstInvalid === null) firstInvalid = id;
+    }
+    if (firstInvalid !== null) {
+      el(firstInvalid).focus();
+      return;
+    }
+    post({ kind: "pomodoro.setSettings", settings: settingsFromFields() });
+    hideDialog();
+  }
+
+  /** Fills the defaults and posts nothing; Reset has just left the Tab order. */
+  function resetSettings() {
+    if (dialog === null) return;
+    fillSettings(DEFAULT_POMODORO_SETTINGS);
+    clearSettingsErrors();
+    drawResetButton();
+    el("settings-pomodoro").focus();
   }
 
   function drawTimed() {
@@ -1471,6 +1698,12 @@
       if (typeof data.language === "string") document.documentElement.lang = data.language;
     } else if (data.kind === "state") {
       frameState = data;
+    } else if (data.kind === "pomodoro.openSettings") {
+      // The Worker holds this until the labels and state are out, so the Frame
+      // is already drawn: select the tab and open the dialog without a redraw.
+      selectTab("pomodoro", false);
+      openSettings(el("pomodoro-settings-open"));
+      return;
     } else {
       return;
     }
@@ -1572,8 +1805,29 @@
   el("alarm-editor-close").addEventListener("click", closeEditor);
   el("alarm-cancel").addEventListener("click", closeEditor);
   el("alarm-save").addEventListener("click", saveEditor);
-  document.addEventListener("keydown", onEditorKeyDown);
-  el("alarm-editor").addEventListener("pointerdown", onEditorPointerDown);
+  el("pomodoro-settings-open").addEventListener("click", () =>
+    openSettings(el("pomodoro-settings-open"))
+  );
+  el("pomodoro-settings-close").addEventListener("click", hideDialog);
+  el("pomodoro-settings-cancel").addEventListener("click", hideDialog);
+  el("pomodoro-settings-save").addEventListener("click", saveSettings);
+  el("pomodoro-settings-reset").addEventListener("click", resetSettings);
+  for (const [id, , range, messageKey] of SETTINGS_FIELDS) {
+    el(id).addEventListener("input", () => {
+      drawResetButton();
+      checkField(id, range, messageKey, false);
+    });
+    el(id).addEventListener("blur", () => checkField(id, range, messageKey, true));
+  }
+  for (const [id] of SETTINGS_SWITCHES) {
+    el(id).addEventListener("click", () => {
+      setSwitch(id, !switchOn(id));
+      drawResetButton();
+    });
+  }
+  document.addEventListener("keydown", onDialogKeyDown);
+  el("alarm-editor").addEventListener("pointerdown", onBackdropPointerDown);
+  el("pomodoro-settings").addEventListener("pointerdown", onBackdropPointerDown);
   document.addEventListener("keydown", onFieldKeyDown);
 
   for (const key of ["timer-hours", "timer-minutes", "timer-seconds"]) {
@@ -1583,7 +1837,7 @@
   el("allow-notifications").addEventListener("click", () => post({ kind: "notifications.allow" }));
 
   window.addEventListener("pagehide", () => {
-    document.removeEventListener("keydown", onEditorKeyDown);
+    document.removeEventListener("keydown", onDialogKeyDown);
     document.removeEventListener("keydown", onFieldKeyDown);
     if (tickHandle !== 0) {
       clearInterval(tickHandle);

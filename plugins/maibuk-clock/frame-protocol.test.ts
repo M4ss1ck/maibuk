@@ -15,8 +15,10 @@ import { createAlarms } from "./alarms";
 import { DEFAULT_POMODORO_SETTINGS } from "./cycle";
 import {
   connectClockFrame,
+  createSettingsRequest,
   type FrameLabelsMessage,
   type FrameStateMessage,
+  type SettingsRequest,
   type WorkerToFrameMessage,
 } from "./frame-protocol";
 import en from "./locales/runtime/en.json";
@@ -39,6 +41,8 @@ interface Harness {
   pomodoro: ReturnType<typeof createPomodoro>;
   stopwatch: ReturnType<typeof createStopwatch>;
   alarms: ReturnType<typeof createAlarms>;
+  /** The settings request this connection was wired to. */
+  settingsRequest: SettingsRequest;
   /** Every message the Frame end received, in order. */
   messages: WorkerToFrameMessage[];
   /** True once the Worker closed the Frame end. */
@@ -73,7 +77,12 @@ function framePort(port: MessagePort, onClose: () => void): MessagePort {
 
 /** The real modules, one Frame port, and the messages the Frame end received. */
 function setup(
-  options: { language?: string; permission?: "granted" | "denied" | "default" } = {}
+  options: {
+    language?: string;
+    permission?: "granted" | "denied" | "default";
+    settingsRequest?: SettingsRequest;
+    beforeConnect?: (settingsRequest: SettingsRequest) => void;
+  } = {}
 ): Harness {
   const host = createTestHost({
     manifest: clockManifest(),
@@ -85,6 +94,8 @@ function setup(
   const pomodoro = createPomodoro(client);
   const stopwatch = createStopwatch(client);
   const alarms = createAlarms(client);
+  const settingsRequest = options.settingsRequest ?? createSettingsRequest();
+  options.beforeConnect?.(settingsRequest);
   const channel = new MessageChannel();
   const messages: WorkerToFrameMessage[] = [];
   channel.port2.onmessage = (event: MessageEvent) => {
@@ -95,7 +106,7 @@ function setup(
     framePort(channel.port1, () => {
       closed = true;
     }),
-    { client, timer, pomodoro, stopwatch, alarms }
+    { client, timer, pomodoro, stopwatch, alarms, settingsRequest }
   );
   const harness: Harness = {
     host,
@@ -103,6 +114,7 @@ function setup(
     pomodoro,
     stopwatch,
     alarms,
+    settingsRequest,
     messages,
     get closed() {
       return closed;
@@ -124,6 +136,11 @@ function states(harness: Harness): FrameStateMessage[] {
   return harness.messages.filter(
     (message): message is FrameStateMessage => message.kind === "state"
   );
+}
+
+/** The open-settings signals the Frame end received. */
+function openSignals(harness: Harness): WorkerToFrameMessage[] {
+  return harness.messages.filter((message) => message.kind === "pomodoro.openSettings");
 }
 
 /** Waits until the Frame end received a message of `kind`, and returns the latest one. */
@@ -243,6 +260,100 @@ describe("connectClockFrame", () => {
       pomodoro: 1,
       status: "idle",
     });
+  });
+
+  it("takes a valid pomodoro.setSettings into the Pomodoro module", async () => {
+    const harness = setup();
+    await connected(harness);
+
+    const settings = {
+      pomodoroMinutes: 30,
+      shortBreakMinutes: 7,
+      longBreakMinutes: 20,
+      longBreakEvery: 3,
+      autoStartBreaks: true,
+      autoStartPomodoros: true,
+    };
+    const state = await apply(harness, { kind: "pomodoro.setSettings", settings });
+    expect(state.pomodoro.settings).toEqual(settings);
+  });
+
+  it("drops every malformed pomodoro.setSettings without changing the Cycle", async () => {
+    const harness = setup();
+    await connected(harness);
+    const before = states(harness).length;
+    const valid = DEFAULT_POMODORO_SETTINGS;
+
+    // A missing field.
+    harness.send({
+      kind: "pomodoro.setSettings",
+      settings: {
+        shortBreakMinutes: valid.shortBreakMinutes,
+        longBreakMinutes: valid.longBreakMinutes,
+        longBreakEvery: valid.longBreakEvery,
+        autoStartBreaks: valid.autoStartBreaks,
+        autoStartPomodoros: valid.autoStartPomodoros,
+      },
+    });
+    // A string where a number belongs.
+    harness.send({ kind: "pomodoro.setSettings", settings: { ...valid, pomodoroMinutes: "30" } });
+    // A decimal, then zero, then one over the length limit.
+    harness.send({ kind: "pomodoro.setSettings", settings: { ...valid, pomodoroMinutes: 30.5 } });
+    harness.send({ kind: "pomodoro.setSettings", settings: { ...valid, shortBreakMinutes: 0 } });
+    harness.send({ kind: "pomodoro.setSettings", settings: { ...valid, longBreakMinutes: 100 } });
+    // One over the Pomodoros per Pomodoro Cycle limit.
+    harness.send({ kind: "pomodoro.setSettings", settings: { ...valid, longBreakEvery: 13 } });
+    // A truthy auto-start that is not a boolean.
+    harness.send({ kind: "pomodoro.setSettings", settings: { ...valid, autoStartBreaks: "yes" } });
+    harness.send({ kind: "pomodoro.setSettings", settings: null });
+
+    // The Stopwatch's start travels behind them on the same port, so its state
+    // arrives only after every malformed one was handled: one new state means
+    // none of them was taken.
+    const state = await apply(harness, { kind: "stopwatch.start" });
+    expect(states(harness).length - before).toBe(1);
+    expect(state.pomodoro.settings).toEqual(DEFAULT_POMODORO_SETTINGS);
+  });
+
+  it("posts the open-settings signal once for each request while connected", async () => {
+    const harness = setup();
+    await connected(harness);
+
+    harness.settingsRequest.request();
+    await vi.waitFor(() => expect(openSignals(harness)).toHaveLength(1));
+
+    harness.settingsRequest.request();
+    await vi.waitFor(() => expect(openSignals(harness)).toHaveLength(2));
+  });
+
+  it("posts a request made before connect only after the labels", async () => {
+    const harness = setup({ beforeConnect: (settingsRequest) => settingsRequest.request() });
+
+    // The state is out at once; the labels and the signal wait on the language.
+    expect(openSignals(harness)).toHaveLength(0);
+    expect(harness.messages.some((message) => message.kind === "labels")).toBe(false);
+
+    await latest(harness, "labels");
+    await vi.waitFor(() => expect(openSignals(harness)).toHaveLength(1));
+    const labelsAt = harness.messages.findIndex((message) => message.kind === "labels");
+    const signalAt = harness.messages.findIndex(
+      (message) => message.kind === "pomodoro.openSettings"
+    );
+    expect(labelsAt).toBeLessThan(signalAt);
+  });
+
+  it("delivers a pending request once, to the connection it was made for", async () => {
+    const settingsRequest = createSettingsRequest();
+    const first = setup({ settingsRequest });
+    first.settingsRequest.request();
+    await latest(first, "labels");
+    await vi.waitFor(() => expect(openSignals(first)).toHaveLength(1));
+    first.dispose();
+
+    // A second connection finds nothing pending: the request was already taken.
+    const second = setup({ settingsRequest });
+    await latest(second, "labels");
+    expect(openSignals(second)).toHaveLength(0);
   });
 
   it("runs the Stopwatch's intents", async () => {

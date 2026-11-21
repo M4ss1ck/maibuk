@@ -21,11 +21,12 @@ import {
 } from "@/plugin-sdk";
 import { translate, type ClockKey } from "./i18n";
 import { createAlarms } from "./alarms";
+import { POMODORO_LIMITS } from "./cycle";
 import { createPomodoro, type ClockPomodoro } from "./pomodoro";
 import { createStopwatch, type ClockStopwatch } from "./stopwatch";
 import { formatClockTime, hourCycleFor } from "./time";
 import { createTimer, type ClockTimer } from "./timer";
-import { connectClockFrame } from "./frame-protocol";
+import { connectClockFrame, createSettingsRequest, type SettingsRequest } from "./frame-protocol";
 
 /** The Clock page id, exactly as the manifest declares it. */
 export const CLOCK_PAGE_ID = "clock";
@@ -38,6 +39,7 @@ export const OPEN_CLOCK = "openClock";
 export const TOGGLE_TIMER = "toggleTimer";
 export const TOGGLE_POMODORO = "togglePomodoro";
 export const SKIP_POMODORO = "skipPomodoro";
+export const OPEN_POMODORO_SETTINGS = "openPomodoroSettings";
 export const TOGGLE_STOPWATCH = "toggleStopwatch";
 export const LAP_STOPWATCH = "lapStopwatch";
 
@@ -90,6 +92,9 @@ export function startClock(client: PluginClient, serve: ClockServe): Promise<voi
   const pomodoro = createPomodoro(client);
   const stopwatch = createStopwatch(client);
   const alarms = createAlarms(client);
+  // One request for the Plugin's lifetime: a Command run while no Frame is
+  // mounted leaves it pending until the next Frame has received its labels.
+  const settingsRequest = createSettingsRequest();
   // The Toggle Button shows whether a phase runs: every change to the Cycle is
   // mirrored onto it, only when the pressed value moves, and never loudly.
   let buttonPressed: boolean | null = null;
@@ -162,13 +167,20 @@ export function startClock(client: PluginClient, serve: ClockServe): Promise<voi
   let disposeFrame: (() => void) | null = null;
   client.onFrame((frame) => {
     disposeFrame?.();
-    disposeFrame = connectClockFrame(frame.port, { client, timer, pomodoro, stopwatch, alarms });
+    disposeFrame = connectClockFrame(frame.port, {
+      client,
+      timer,
+      pomodoro,
+      stopwatch,
+      alarms,
+      settingsRequest,
+    });
   });
   serve(client, {
     pages: {},
     settingsRows: { [POMODORO_SETTINGS_ROW_ID]: createPomodoroSettings(client, pomodoro) },
     onHostRequest: (method, params) =>
-      handleHostRequest(client, timer, pomodoro, stopwatch, method, params),
+      handleHostRequest(client, timer, pomodoro, stopwatch, settingsRequest, method, params),
   });
   return started;
 }
@@ -179,12 +191,13 @@ function handleHostRequest(
   timer: ClockTimer,
   pomodoro: ClockPomodoro,
   stopwatch: ClockStopwatch,
+  settingsRequest: SettingsRequest,
   method: string,
   params: unknown
 ): unknown {
   if (method === "health.check") return "pong";
   if (method === PLUGIN_COMMAND_RUN_REQUEST)
-    return runClockCommand(client, timer, pomodoro, stopwatch, params);
+    return runClockCommand(client, timer, pomodoro, stopwatch, settingsRequest, params);
   throw new Error(`No handler for ${method}`);
 }
 
@@ -193,18 +206,24 @@ function handleHostRequest(
  * host normally navigates without a `command.run`; answering it here keeps the
  * page reachable the other way. `Start or pause the Timer` toggles the one
  * Timer the Plugin holds, `Start or pause the Pomodoro` toggles the Cycle,
- * `Skip to the next Pomodoro or break` moves it on, `Start or pause the
- * Stopwatch` toggles the Stopwatch, and `Mark a Lap` marks one while it runs.
+ * `Skip to the next Pomodoro or break` moves it on, `Pomodoro settings` opens
+ * the Clock page and asks its Frame to show the settings dialog, `Start or pause
+ * the Stopwatch` toggles the Stopwatch, and `Mark a Lap` marks one while it runs.
  */
 async function runClockCommand(
   client: PluginClient,
   timer: ClockTimer,
   pomodoro: ClockPomodoro,
   stopwatch: ClockStopwatch,
+  settingsRequest: SettingsRequest,
   params: unknown
 ): Promise<null> {
   const { id } = (params ?? {}) as { id?: unknown };
   if (id === OPEN_CLOCK) await client.navigation.openPage({ pageId: CLOCK_PAGE_ID });
+  if (id === OPEN_POMODORO_SETTINGS) {
+    settingsRequest.request();
+    await client.navigation.openPage({ pageId: CLOCK_PAGE_ID });
+  }
   if (id === TOGGLE_TIMER) timer.toggle();
   if (id === TOGGLE_POMODORO) pomodoro.toggle();
   if (id === SKIP_POMODORO) pomodoro.skip();
@@ -249,9 +268,13 @@ function wholeMinutes(value: number): number {
  * The `pomodoro` Settings row's body: the three lengths, the count before a Long
  * Break, and the two auto-start switches. Each change is written straight to
  * the Cycle, which persists it under its one key, so the row survives a reload.
- * Labels come from the runtime catalogs.
+ * The number fields take their bounds from `POMODORO_LIMITS`, so the row cannot
+ * store what the Clock page's dialog refuses. Labels come from the runtime
+ * catalogs.
  */
 function createPomodoroSettings(client: PluginClient, pomodoro: ClockPomodoro): ComponentType {
+  const { minutes, longBreakEvery } = POMODORO_LIMITS;
+
   function PomodoroSettings() {
     const language = useLanguage(client);
     const [settings, setSettings] = useState(() => pomodoro.snapshot().settings);
@@ -267,7 +290,8 @@ function createPomodoroSettings(client: PluginClient, pomodoro: ClockPomodoro): 
         <ui.NumberField
           label={translate(language, "pomodoroMinutes")}
           value={settings.pomodoroMinutes}
-          minValue={1}
+          minValue={minutes.min}
+          maxValue={minutes.max}
           step={1}
           onChange={(event) =>
             pomodoro.setSettings({ pomodoroMinutes: wholeMinutes(event.detail) })
@@ -276,7 +300,8 @@ function createPomodoroSettings(client: PluginClient, pomodoro: ClockPomodoro): 
         <ui.NumberField
           label={translate(language, "shortBreakMinutes")}
           value={settings.shortBreakMinutes}
-          minValue={1}
+          minValue={minutes.min}
+          maxValue={minutes.max}
           step={1}
           onChange={(event) =>
             pomodoro.setSettings({ shortBreakMinutes: wholeMinutes(event.detail) })
@@ -285,7 +310,8 @@ function createPomodoroSettings(client: PluginClient, pomodoro: ClockPomodoro): 
         <ui.NumberField
           label={translate(language, "longBreakMinutes")}
           value={settings.longBreakMinutes}
-          minValue={1}
+          minValue={minutes.min}
+          maxValue={minutes.max}
           step={1}
           onChange={(event) =>
             pomodoro.setSettings({ longBreakMinutes: wholeMinutes(event.detail) })
@@ -294,7 +320,8 @@ function createPomodoroSettings(client: PluginClient, pomodoro: ClockPomodoro): 
         <ui.NumberField
           label={translate(language, "longBreakEvery")}
           value={settings.longBreakEvery}
-          minValue={1}
+          minValue={longBreakEvery.min}
+          maxValue={longBreakEvery.max}
           step={1}
           onChange={(event) => pomodoro.setSettings({ longBreakEvery: wholeMinutes(event.detail) })}
         />
