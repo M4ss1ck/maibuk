@@ -8,7 +8,13 @@ import {
   ToolbarSettingsDialog,
 } from "@/components/editor/toolbar/ToolbarSettingsDialog";
 import { useSettingsStore } from "@/features/settings/store";
-import { createDataTransfer, dispatchDragEvent, mockRect } from "@/test/support/drag-events";
+import {
+  createDataTransfer,
+  dispatchDragEvent,
+  mockRect,
+  endKeyboardDrag,
+  waitForKeyboardDrag,
+} from "@/test/support/drag-events";
 import {
   ALL_GROUP_IDS,
   registerToolbarButtons,
@@ -98,6 +104,15 @@ function getDragHandle(row: HTMLElement): HTMLElement {
   return within(row).getByRole("button", { name: "toolbar.settings.dragHandle" });
 }
 
+/** Drops or cancels a keyboard drag; the footer's Close button is outside its drop targets. */
+async function endDrag(user: ReturnType<typeof userEvent.setup>, key: "{Enter}" | "{Escape}") {
+  await endKeyboardDrag(
+    user,
+    key,
+    screen.getByRole("button", { name: "toolbar.settings.close", hidden: true })
+  );
+}
+
 async function arrowToControl(
   user: ReturnType<typeof userEvent.setup>,
   row: HTMLElement,
@@ -111,6 +126,7 @@ async function arrowToControl(
 }
 
 async function arrowToDropTarget(user: ReturnType<typeof userEvent.setup>, accessibleName: string) {
+  await waitForKeyboardDrag();
   for (
     let index = 0;
     index < 10 && document.activeElement?.getAttribute("aria-label") !== accessibleName;
@@ -583,15 +599,20 @@ describe("keyboard operation of every control", () => {
 
     const historyRow = findRowByName(/toolbar\.groups\.history/);
     const dragHandle = getDragHandle(historyRow);
+    // Outside a drag, hovering the row reveals the control.
+    const control = screen.getByTestId("toolbar-add-divider-start-3");
+    expect(control).toHaveClass("group-hover:opacity-100");
+
     dragHandle.focus();
     await user.keyboard("{Enter}");
+    await waitForKeyboardDrag();
 
-    // During drag, isDragging=true hides the add-divider control
-    const control = screen.getByTestId("toolbar-add-divider-start-3");
+    // During drag, isDragging=true keeps it hidden even under the pointer.
     expect(control).toHaveClass("pointer-events-none", "opacity-0");
+    expect(control).not.toHaveClass("group-hover:opacity-100");
 
-    // Cancel the drag
-    await user.keyboard("{Escape}");
+    await endDrag(user, "{Escape}");
+    expect(control).toHaveClass("group-hover:opacity-100");
     expect(useSettingsStore.getState().toolbarConfig.start[0].id).toBe("history");
   });
 });
@@ -694,14 +715,13 @@ describe("keyboard drag-and-drop (React Aria)", () => {
     dragHandle.focus();
     await user.keyboard("{Enter}");
     await arrowToDropTarget(user, "Insert after toolbar.groups.basicMarks");
-    await user.keyboard("{Enter}");
+    await endDrag(user, "{Enter}");
 
     const state = useSettingsStore.getState().toolbarConfig;
     expect(state.start[2].kind === "group" && state.start[2].id).toBe("history");
 
     // After drop, focus is on the moved row
-    const movedRow = findRowByName(/toolbar\.groups\.history/);
-    expect(document.activeElement).toBe(movedRow);
+    await waitFor(() => expect(findRowByName(/toolbar\.groups\.history/)).toHaveFocus());
   });
 
   it("Escape cancels drag without changing order", async () => {
@@ -712,10 +732,13 @@ describe("keyboard drag-and-drop (React Aria)", () => {
 
     dragHandle.focus();
     await user.keyboard("{Enter}");
-    await user.keyboard("{ArrowDown}");
-    await user.keyboard("{Escape}");
+    await arrowToDropTarget(user, "Insert after toolbar.groups.basicMarks");
+    await endDrag(user, "{Escape}");
 
-    expect(useSettingsStore.getState().toolbarConfig.start[0].id).toBe("history");
+    expect(useSettingsStore.getState().toolbarConfig.start.map((entry) => entry.id)).toEqual(
+      TEST_CONFIG.start.map((entry) => entry.id)
+    );
+    expect(dragHandle).toHaveFocus();
   });
 
   it("moves an entry across sections with cross-section keyboard DnD", async () => {
@@ -733,10 +756,11 @@ describe("keyboard drag-and-drop (React Aria)", () => {
 
     dragHandle.focus();
     await user.keyboard("{Enter}");
-    await user.keyboard("{ArrowDown}");
-    await user.keyboard("{ArrowDown}");
+    await waitForKeyboardDrag();
+    // Tab moves the drag to the End section's own drop target.
     await user.keyboard("{Tab}");
-    await user.keyboard("{Enter}");
+    expect(findEndGrid()).toContainElement(document.activeElement as HTMLElement);
+    await endDrag(user, "{Enter}");
 
     const state = useSettingsStore.getState().toolbarConfig;
     expect(state.start).toHaveLength(TEST_CONFIG.start.length - 1);
@@ -752,11 +776,10 @@ describe("keyboard drag-and-drop (React Aria)", () => {
 
     dragHandle.focus();
     await user.keyboard("{Enter}");
-    await user.keyboard("{ArrowDown}");
-    await user.keyboard("{ArrowDown}");
-    await user.keyboard("{ArrowDown}");
+    await waitForKeyboardDrag();
     await user.keyboard("{Tab}");
-    await user.keyboard("{Enter}");
+    expect(findEndGrid()).toContainElement(document.activeElement as HTMLElement);
+    await endDrag(user, "{Enter}");
 
     const state = useSettingsStore.getState().toolbarConfig;
     expect(state.start).toHaveLength(TEST_CONFIG.start.length - 1);
@@ -772,10 +795,12 @@ describe("keyboard drag-and-drop (React Aria)", () => {
 
     dragHandle.focus();
     await user.keyboard("{Enter}");
-    await user.keyboard("{ArrowDown}");
-    await user.keyboard("{Enter}");
+    await arrowToDropTarget(user, "Insert after toolbar.groups.basicMarks");
+    const status = screen.getByRole("status", { hidden: true });
+    expect(status).toBeEmptyDOMElement();
+    await endDrag(user, "{Enter}");
 
-    expect(screen.getByRole("status")).toHaveTextContent("toolbar.settings.moved");
+    await waitFor(() => expect(status).toHaveTextContent("toolbar.settings.moved"));
   });
 
   it("reaches the localized drag handle by keyboard", async () => {

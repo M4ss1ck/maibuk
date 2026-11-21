@@ -19,6 +19,8 @@ import {
   createFileDataTransfer,
   dispatchDragEvent,
   mockRect,
+  endKeyboardDrag,
+  waitForKeyboardDrag,
 } from "@/test/support/drag-events";
 import {
   mockScrollEventOnScrollTopWrite,
@@ -1036,6 +1038,7 @@ describe("NotesList reorder", () => {
     name: string,
     key = "{ArrowUp}"
   ) {
+    await waitForKeyboardDrag();
     for (let i = 0; i < 10 && document.activeElement?.getAttribute("aria-label") !== name; i++) {
       await user.keyboard(key);
     }
@@ -1044,10 +1047,11 @@ describe("NotesList reorder", () => {
 
   /** Drops (Enter) or cancels (Escape), then waits for React Aria to end the drag. */
   async function endDrag(user: ReturnType<typeof userEvent.setup>, key: "{Enter}" | "{Escape}") {
-    await user.keyboard(key);
-    // A keyboard drag hides everything but its drop targets until it ends.
-    await waitFor(() =>
-      expect(screen.getByRole("grid").closest('[aria-hidden="true"]')).toBeNull()
+    // The New note button sits outside the drop targets, so the drag hides it.
+    await endKeyboardDrag(
+      user,
+      key,
+      screen.getByRole("button", { name: "New note", hidden: true })
     );
   }
 
@@ -1180,8 +1184,7 @@ describe("NotesList reorder", () => {
 
       await arrowToHandle(user, "b");
       await user.keyboard("{Enter}");
-      // React Aria moves focus to the first drop target once the drag starts.
-      await waitFor(() => expect(handleOf("b")).not.toHaveFocus());
+      await waitForKeyboardDrag();
       const seen = new Set<string>();
       for (let i = 0; i < 6; i++) {
         seen.add(document.activeElement?.getAttribute("aria-label") ?? "");

@@ -41,6 +41,90 @@ export async function expectActiveOption(dialog: Locator, option: Locator): Prom
   await expect(dialog.getByRole("searchbox")).toHaveAttribute("aria-activedescendant", id!);
 }
 
+/**
+ * Arrows until `option` is the palette's active result in Library Search.
+ * There the Library and text rows arrive after the keystrokes, and a later
+ * deferred list can drop the active row so that none is active; waiting
+ * alone can then wait forever. Commands mode settles from the query alone:
+ * use `expectActiveOption` there.
+ */
+export async function arrowToOption(page: Page, dialog: Locator, option: Locator): Promise<void> {
+  const key = await option.getAttribute("data-key");
+  expect(key, "the option has no data-key to arrow to").toBeTruthy();
+  await arrowToKey(page, dialog, key!);
+}
+
+/**
+ * Arrows until the item with key `key` (e.g. `command:global.toggleTheme`) is
+ * the palette's active result. Each poll re-reads the list, so a row that
+ * lands mid-walk or a press swallowed while the list settles only costs one
+ * more press. With both rows rendered it steps toward the target; otherwise
+ * it keeps its direction and turns once two presses leave the active row
+ * where it was (an end: the arrows do not wrap). A hit counts once a second
+ * read, with no press between, still finds it, so Enter never follows a press
+ * still landing. The key matches whole: `settingsRow:spellCheck` never stops
+ * on `settingsRow:spellCheckDictionaries`.
+ */
+export async function arrowToKey(
+  page: Page,
+  dialog: Locator,
+  key: string,
+  { max = 30 } = {}
+): Promise<void> {
+  const searchbox = dialog.getByRole("searchbox");
+  let arrow: "ArrowDown" | "ArrowUp" = "ArrowDown";
+  let previous: string | null = null;
+  let unmoved = 0;
+  let presses = 0;
+  let hit = false;
+  await expect
+    .poll(
+      async () => {
+        const active = await searchbox.getAttribute("aria-activedescendant");
+        const keys = await dialog
+          .getByRole("option")
+          .evaluateAll((rows) => rows.map((row) => row.getAttribute("data-key")));
+        const activeKey = active ? (keyOfOptionId(active, keys) ?? null) : null;
+        if (activeKey === key) {
+          if (hit) return key;
+          hit = true;
+          return "settling";
+        }
+        hit = false;
+        if (presses >= max) return activeKey;
+        const target = keys.indexOf(key);
+        if (!active) {
+          // No active row: ArrowDown lands on the first.
+          arrow = "ArrowDown";
+        } else if (activeKey !== null && target >= 0) {
+          arrow = keys.indexOf(activeKey) < target ? "ArrowDown" : "ArrowUp";
+        } else {
+          // The target, or the active row itself, is outside the rendered
+          // window: keep going and turn at an end.
+          unmoved = active === previous ? unmoved + 1 : 0;
+          if (unmoved >= 2) {
+            arrow = arrow === "ArrowDown" ? "ArrowUp" : "ArrowDown";
+            unmoved = 0;
+          }
+        }
+        previous = active;
+        presses++;
+        await page.keyboard.press(arrow);
+        return activeKey;
+      },
+      // A read every 250 ms gives React Aria its beat to move the active row,
+      // so a slow update is not taken for an end; about 400 ms per press bounds
+      // the walk inside the test's own timeout.
+      { message: `arrow to the ${key} row`, intervals: [250], timeout: max * 400 }
+    )
+    .toBe(key);
+}
+
+/** The listed key whose option id `active` names (`<listbox id>-option-<key>`). */
+function keyOfOptionId(active: string, keys: readonly (string | null)[]): string | undefined {
+  return keys.find((key): key is string => key !== null && active.endsWith(`-option-${key}`));
+}
+
 /** Opens the palette with F1, runs the Command named `label`, and waits for it to close. */
 export async function runPaletteCommand(
   page: Page,

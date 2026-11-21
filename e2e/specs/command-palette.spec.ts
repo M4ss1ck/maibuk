@@ -7,6 +7,7 @@ import type { Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { expectFocusWithin, expectTabContained, tabTo } from "../support/keyboard";
 import { seedWebBackups } from "../support/storage";
+import { arrowToKey, arrowToOption, expectActiveOption } from "../support/palette";
 import {
   SEED_BOOK,
   SEED_CHAPTERS,
@@ -39,9 +40,11 @@ async function openLibrarySearch(page: Page): Promise<void> {
 }
 
 /**
- * Types a query and waits for React Aria to settle the active result: it moves
+ * Types a query and waits for React Aria to name an active result: it moves
  * the input's aria-activedescendant 500 ms after typing, so arrows pressed
- * before that land on a stale row.
+ * before that land on a stale row. Any row counts, even one the deferred list
+ * has yet to re-rank: before Enter, wait for the wanted row itself
+ * (`expectActiveOption`, or `arrowToOption` in Library Search).
  */
 async function search(page: Page, query: string): Promise<void> {
   // A mode prefix is already typed; End keeps it and appends the query.
@@ -73,21 +76,9 @@ async function chooseRow(page: Page, marker: string): Promise<void> {
   await page.keyboard.press("Enter");
 }
 
-/**
- * Arrows until the item with key `key` (e.g. `command:global.toggleTheme`,
- * `settingsRow:theme`) is the active result. The first ArrowDown after typing
- * is swallowed while the list settles, so this re-reads after every press
- * instead of counting presses.
- */
-async function arrowTo(page: Page, key: string, { max = 30 } = {}): Promise<void> {
-  for (let i = 0; i < max; i++) {
-    if ((await activeKey(page)).includes(`option-${key}`)) return;
-    await page.keyboard.press("ArrowDown");
-    // A beat for React Aria to move virtual focus; a swallowed press just
-    // costs one more loop.
-    await page.waitForTimeout(250);
-  }
-  throw new Error(`arrowTo never reached ${key}; still on ${await activeKey(page)}`);
+/** Arrows until the item with key `key` is the active result (support/palette.ts). */
+async function arrowTo(page: Page, key: string, options: { max?: number } = {}): Promise<void> {
+  await arrowToKey(page, dialog(page), key, options);
 }
 
 async function openBookEditorOnArrival(page: Page): Promise<void> {
@@ -221,6 +212,7 @@ test.describe("Command Palette commands @wf:command-palette", () => {
 
     await openPalette(page);
     await search(page, "go to notes");
+    await expectActiveOption(dialog(page), option(page, "Go to Notes"));
     await page.keyboard.press("Enter");
 
     await expect(dialog(page)).toBeHidden();
@@ -271,6 +263,7 @@ test.describe("Command Palette entities @wf:command-palette", () => {
 
     await openLibrarySearch(page);
     await search(page, "open chapter");
+    await arrowToOption(page, dialog(page), option(page, "Open Chapter…"));
     await page.keyboard.press("Enter");
 
     const chip = dialog(page).getByText("Open Chapter", { exact: true });
@@ -392,6 +385,7 @@ test.describe("Command Palette recent @wf:command-palette", () => {
     // leaves the theme alone, so the capture below can emulate both schemes.
     await openPalette(page);
     await search(page, "go to notes");
+    await expectActiveOption(dialog(page), option(page, "Go to Notes"));
     await page.keyboard.press("Enter");
     await expect(dialog(page)).toBeHidden();
     await expect(page).toHaveURL(/\/notes$/);
@@ -459,6 +453,7 @@ test.describe("Command Palette formatting @wf:command-palette", () => {
     await page.keyboard.press("F1");
     await expect(dialog(page)).toBeVisible();
     await search(page, "bold");
+    await expectActiveOption(dialog(page), option(page, "Bold"));
     await page.keyboard.press("Enter");
 
     await expect(dialog(page)).toBeHidden();

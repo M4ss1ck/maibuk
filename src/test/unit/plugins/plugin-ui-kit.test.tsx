@@ -1171,6 +1171,157 @@ describe("the Remote UI kit, part 2", () => {
       expect(list.style.maxHeight).toBe("525px");
     });
 
+    /** A Plugin page body stretched to the page height (`flex-1`), taller than
+     * the tree and button it holds, the way PluginPage lays out a Remote UI
+     * page. */
+    function stretchedBodyWrapper({ children }: { children: ReactNode }) {
+      return (
+        <div data-testid="scroller" style={{ overflowY: "auto" }}>
+          <div data-testid="body">
+            {children}
+            <button type="button" data-testid="more">
+              Show 200 more
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    it("does not count a stretched page body's empty space as content after the list", async () => {
+      harness = renderRemoteUi({ wrapper: stretchedBodyWrapper });
+      await harness.mount(
+        <ui.Collection label="Echoes" selectionMode="none">
+          {manyRows(40)}
+        </ui.Collection>
+      );
+
+      const list = screen.getByRole("listbox");
+      mockRect(screen.getByTestId("scroller"), 0, 1100);
+      // The body ends at 1000 however tall the list is: flex-1 stretches it.
+      mockRect(screen.getByTestId("body"), 0, 1000);
+      mockRect(list, 200, 392);
+      // An 8px gap, then the 36px button.
+      mockRect(screen.getByTestId("more"), 400, 436);
+      remeasure();
+
+      // 1100 - 200 - (8 + 36) = 856. Counting the body's empty space below the
+      // button as content kept the list at the height it was first measured at.
+      expect(list.style.maxHeight).toBe("856px");
+    });
+
+    it("counts the padding of a container that wraps the list and nothing after it", async () => {
+      harness = renderRemoteUi({
+        wrapper: ({ children }) => (
+          <div data-testid="scroller" style={{ overflowY: "auto" }}>
+            <div
+              data-testid="card"
+              style={{ paddingBottom: "16px", borderBottomWidth: "2px", borderStyle: "solid" }}
+            >
+              {children}
+            </div>
+          </div>
+        ),
+      });
+      await harness.mount(
+        <ui.Collection label="Layers" selectionMode="none">
+          {manyRows(40)}
+        </ui.Collection>
+      );
+
+      const list = screen.getByRole("listbox");
+      mockRect(screen.getByTestId("scroller"), 0, 800);
+      mockRect(list, 200, 520);
+      remeasure();
+
+      // 800 - 200 - (16 padding + 2 border) = 582: the card's bottom edge stays
+      // on screen.
+      expect(list.style.maxHeight).toBe("582px");
+    });
+
+    it("keeps the same room after the list whatever height the list has in a stretched body", async () => {
+      harness = renderRemoteUi({ wrapper: stretchedBodyWrapper });
+      await harness.mount(
+        <ui.Collection label="Echoes" selectionMode="none">
+          {manyRows(40)}
+        </ui.Collection>
+      );
+
+      const list = screen.getByRole("listbox");
+      mockRect(screen.getByTestId("scroller"), 0, 1100);
+      mockRect(screen.getByTestId("body"), 0, 1000);
+      // The list is as tall as its max-height and the button follows it.
+      const listHeight = () => Number.parseFloat(list.style.maxHeight);
+      mockRectFrom(list, () => [200, 200 + listHeight()]);
+      mockRectFrom(screen.getByTestId("more"), () => [208 + listHeight(), 244 + listHeight()]);
+
+      const heights: string[] = [];
+      for (let tick = 0; tick < 4; tick++) {
+        remeasure();
+        heights.push(list.style.maxHeight);
+      }
+
+      // From the 320px fallback straight to the room the window leaves, then still.
+      expect(heights).toEqual(["856px", "856px", "856px", "856px"]);
+    });
+
+    it("measures to content after the list's container, past that container's padding", async () => {
+      harness = renderRemoteUi({
+        wrapper: ({ children }) => (
+          <div data-testid="scroller" style={{ overflowY: "auto" }}>
+            <div data-testid="card" style={{ paddingBottom: "16px" }}>
+              {children}
+            </div>
+            <button type="button" data-testid="more">
+              Show 200 more
+            </button>
+          </div>
+        ),
+      });
+      await harness.mount(
+        <ui.Collection label="Echoes" selectionMode="none">
+          {manyRows(40)}
+        </ui.Collection>
+      );
+
+      const list = screen.getByRole("listbox");
+      mockRect(screen.getByTestId("scroller"), 0, 800);
+      mockRect(list, 200, 520);
+      // The card's 16px padding, then the 60px button.
+      mockRect(screen.getByTestId("more"), 536, 596);
+      remeasure();
+
+      // 800 - 200 - 76: the button's position already holds the card's padding,
+      // so it is not counted twice.
+      expect(list.style.maxHeight).toBe("524px");
+    });
+
+    it("does not count an out-of-flow sibling as content after the list", async () => {
+      harness = renderRemoteUi({
+        wrapper: ({ children }) => (
+          <div data-testid="scroller" style={{ overflowY: "auto" }}>
+            <div>{children}</div>
+            <span data-testid="announcer" style={{ position: "absolute" }}>
+              40 rows
+            </span>
+          </div>
+        ),
+      });
+      await harness.mount(
+        <ui.Collection label="Echoes" selectionMode="none">
+          {manyRows(40)}
+        </ui.Collection>
+      );
+
+      const list = screen.getByRole("listbox");
+      mockRect(screen.getByTestId("scroller"), 0, 800);
+      mockRect(list, 200, 520);
+      // A visually hidden announcer whose box sits far below the list.
+      mockRect(screen.getByTestId("announcer"), 700, 701);
+      remeasure();
+
+      expect(list.style.maxHeight).toBe("600px");
+    });
+
     it("still navigates the rows with the arrow keys", async () => {
       harness = renderRemoteUi({ wrapper: scrollerWrapper });
       await harness.mount(

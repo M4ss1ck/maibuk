@@ -123,4 +123,22 @@ if (typeof window !== "undefined") {
   afterEach(() => {
     cleanup();
   });
+
+  // React Aria keeps the page's one keyboard drag in a module variable, and
+  // the drag hides everything outside its drop targets. A test that ends with
+  // a drag still running (it failed mid-drag, or pressed Escape before the
+  // drag's first frame; `waitForKeyboardDrag` in support/drag-events.ts)
+  // would hide every later test's screen, and the rest of the file would fail
+  // with "Unable to find an accessible element". End the drag here and fail
+  // the test that left it.
+  const { endLeakedKeyboardDrag } = await import("@/test/support/drag-events");
+  afterEach(async () => {
+    const leaked = await endLeakedKeyboardDrag();
+    if (!leaked) return;
+    throw new Error(
+      leaked === "ended"
+        ? "A React Aria keyboard drag was still running when the test ended. Drop or cancel it, and wait for it to start (waitForKeyboardDrag) and end (endKeyboardDrag) in src/test/support/drag-events.ts."
+        : "A React Aria keyboard drag was still running when the test ended, with animation frames faked, so it could not be cancelled and later tests in this file may fail. End the drag and call vi.useRealTimers() before the test ends."
+    );
+  });
 }

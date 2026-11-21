@@ -6,12 +6,22 @@ import { expect, type Locator, type Page } from "@playwright/test";
 /**
  * Presses Tab (or Shift+Tab) until `target` has focus. Fails with the list of
  * elements visited when it is not reached, so a broken tab order reads as one.
+ *
+ * Tab cannot reach an element that is not in the page yet, so the walk starts
+ * once `target` is attached. Right after `page.goto` the app may still be
+ * booting: under load every press would land on `<body>` and the walk would
+ * end before the first render.
  */
 export async function tabTo(
   page: Page,
   target: Locator,
   { max = 40, backwards = false }: { max?: number; backwards?: boolean } = {}
 ): Promise<void> {
+  // A count, not toBeAttached: that is strict and would hide isFocused's own
+  // "matches N elements" message behind a generic strict-mode error.
+  await expect
+    .poll(() => target.count(), { message: `${target} is in the page before Tab walks to it` })
+    .toBeGreaterThan(0);
   const visited: string[] = [];
   for (let i = 0; i < max; i++) {
     if (await isFocused(target)) return;

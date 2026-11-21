@@ -75,7 +75,7 @@ async function openStatusFilter(page: Page) {
   return page.getByRole("listbox", { name: "Filter by status" });
 }
 
-/** g p: back to the Gallery. page.goto("/") would reopen the last screen instead. */
+/** g b: back to the Gallery. page.goto("/") would reopen the last screen instead. */
 async function backToGallery(page: Page) {
   await page.keyboard.press("g");
   await page.keyboard.press("b");
