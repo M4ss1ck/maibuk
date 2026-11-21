@@ -2,7 +2,7 @@
 export const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
 /** True exactly when `root` carries `data-motion="reduce"`. */
-export function prefersReducedMotion(root: HTMLElement = document.documentElement): boolean {
+export function prefersReducedMotion(root: Element = document.documentElement): boolean {
   return root.getAttribute("data-motion") === "reduce";
 }
 

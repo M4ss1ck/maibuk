@@ -25,6 +25,7 @@ export {
 export type { FrameLoadFile, FrameLoadMessage } from "@/features/plugins/frame/frame";
 export {
   FRAME_THEME_COLOR_SCHEME,
+  FRAME_THEME_MOTION,
   FRAME_THEME_TOKENS,
   readFrameThemeTokens,
 } from "@/features/plugins/frame/theme-tokens";
