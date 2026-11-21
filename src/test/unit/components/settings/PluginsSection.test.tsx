@@ -611,7 +611,7 @@ describe("PluginsSection", () => {
     useSettingsRevealStore.setState({ pendingPluginReviewId: "echoes" });
     render(<PluginsSection />);
 
-    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    await screen.findByRole("dialog");
     expect(useSettingsRevealStore.getState().pendingPluginReviewId).toBeNull();
   });
 
@@ -703,7 +703,7 @@ describe("Plugin card header (#442)", () => {
     await tabTo(user, toggle);
     await user.keyboard(" ");
 
-    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    await screen.findByRole("dialog");
     // The switch follows the store, so it stays off until the copy is approved.
     expect(toggle).not.toBeChecked();
   });
@@ -847,7 +847,7 @@ describe("Plugin card body (#442)", () => {
     await tabTo(user, trigger, 40);
     await user.keyboard("{Enter}");
     expect(trigger).toHaveAttribute("aria-expanded", "true");
-    expect(await screen.findByRole("checkbox", { name: /Read your Library/ })).toBeInTheDocument();
+    await screen.findByRole("checkbox", { name: /Read your Library/ });
 
     await user.keyboard("{Enter}");
     expect(trigger).toHaveAttribute("aria-expanded", "false");
@@ -878,7 +878,7 @@ describe("Plugin card body (#442)", () => {
     const reviewButton = screen.getByRole("button", { name: "Review" });
     await tabTo(user, reviewButton, 40);
     await user.keyboard("{Enter}");
-    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    await screen.findByRole("dialog");
   });
 
   it("flags a missing required grant with its own explanation", async () => {
@@ -1112,7 +1112,7 @@ describe("Plugin management (#443)", () => {
     }
     await user.keyboard("{Escape}");
 
-    expect(await screen.findByText("No Plugins match these filters.")).toBeInTheDocument();
+    await screen.findByText("No Plugins match these filters.");
   });
 
   it("shows a Stopped row's reason and tries again by keyboard", async () => {
@@ -1682,7 +1682,7 @@ describe("Plugin management (#443)", () => {
       expect(useBoundShortcutStore.getState().counts["settings.removePlugin"]).toBeGreaterThan(0)
     );
     await expect(runCommand("settings.removePlugin", { source: "palette" })).resolves.toBe("ran");
-    expect(await screen.findByRole("alertdialog", { name: "Remove Echoes?" })).toBeInTheDocument();
+    await screen.findByRole("alertdialog", { name: "Remove Echoes?" });
   });
 
   it("toggles the data-deletion checkbox by clicking its visible text", async () => {

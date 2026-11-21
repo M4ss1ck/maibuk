@@ -143,7 +143,7 @@ describe("pressByName and pressChoice", () => {
     const result = pressByName("duplicate");
     expect(result).toEqual({ kind: "choices", count: 2 });
     // Badges render the 1-based numbers.
-    expect(await screen.findByText("1")).toBeInTheDocument();
+    await screen.findByText("1");
     expect(screen.getByText("2")).toBeInTheDocument();
     const pressed = pressChoice(2);
     expect(pressed.kind).toBe("pressed");

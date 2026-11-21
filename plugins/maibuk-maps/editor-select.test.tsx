@@ -94,7 +94,7 @@ describe("Map editor page", () => {
       await tabTo(user, roughenButton, 120);
       await user.keyboard("{Enter}");
 
-      expect(await screen.findByText(en["properties.convertedFrom.ellipse"])).toBeInTheDocument();
+      await screen.findByText(en["properties.convertedFrom.ellipse"]);
       expect(runtime.editor?.getSnapshot().selectedConvertedFrom).toBe("ellipse");
       // The line is point by point now, so its number fields are gone.
       expect(
@@ -159,9 +159,7 @@ describe("Map editor page", () => {
         await user.keyboard(key);
         await waitFor(() => expect(runtime.editor?.getSnapshot().tool).toBe(tool));
         await waitFor(() => expect(pickedTool(label)).toHaveAttribute("aria-pressed", "true"));
-        expect(
-          await screen.findByRole("button", { name: en[`properties.placeShape.${tool}`] })
-        ).toBeInTheDocument();
+        await screen.findByRole("button", { name: en[`properties.placeShape.${tool}`] });
       }
 
       keys.unmount();
@@ -477,7 +475,7 @@ describe("Map editor page", () => {
       await user.keyboard("{Enter}");
 
       // The write failed: the editor stays open and the page says so.
-      expect(await screen.findByText(en["map.saveFailed"])).toBeInTheDocument();
+      await screen.findByText(en["map.saveFailed"]);
       expect(runtime.currentMapId).toBe("m1");
       expect(host.pageNavigations).not.toContainEqual({
         pluginId: "maibuk-maps",

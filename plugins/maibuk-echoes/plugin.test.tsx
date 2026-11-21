@@ -92,7 +92,7 @@ describe("Echoes runtime", () => {
       expect(host.pageNavigations).toEqual([{ pluginId: "maibuk-echoes", pageId: REPORT_PAGE_ID }]);
 
       const page = await host.renderPage(REPORT_PAGE_ID);
-      expect(await screen.findByRole("button", { name: /Chapter One/ })).toBeInTheDocument();
+      await screen.findByRole("button", { name: /Chapter One/ });
       await page.unmount();
     } finally {
       await host.stop();
@@ -108,7 +108,7 @@ describe("Echoes runtime", () => {
       startEchoes(createPluginClient(host.port), servePluginUi);
       const page = await host.renderPage(REPORT_PAGE_ID);
       expect(await screen.findByLabelText(en["report.book"])).toHaveTextContent(BOOK.title);
-      expect(await screen.findByRole("tab", { name: en["tab.nearby"] })).toBeInTheDocument();
+      await screen.findByRole("tab", { name: en["tab.nearby"] });
       await page.unmount();
     } finally {
       await host.stop();
@@ -125,12 +125,12 @@ describe("Echoes runtime", () => {
       startEchoes(createPluginClient(host.port), servePluginUi);
 
       const page = await host.renderPage(REPORT_PAGE_ID);
-      expect(await screen.findByRole("tab", { name: en["tab.nearby"] })).toBeInTheDocument();
+      await screen.findByRole("tab", { name: en["tab.nearby"] });
 
       await act(async () => {
         host.setLanguage("es");
       });
-      expect(await screen.findByRole("tab", { name: es["tab.nearby"] })).toBeInTheDocument();
+      await screen.findByRole("tab", { name: es["tab.nearby"] });
       await page.unmount();
     } finally {
       await host.stop();

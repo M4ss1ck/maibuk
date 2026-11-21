@@ -182,14 +182,14 @@ describe("NodeFormatBubble", () => {
     }
     render(<FocusBeforeMount />);
 
-    expect(await screen.findByRole("button", { name: "Format selection" })).toBeInTheDocument();
+    await screen.findByRole("button", { name: "Format selection" });
   });
 
   it("hides when the editor loses focus", async () => {
     const editor = buildEditor({ empty: true, isFocused: true });
     render(<NodeFormatBubble editor={editor as never} />);
 
-    expect(await screen.findByRole("button", { name: "Format selection" })).toBeInTheDocument();
+    await screen.findByRole("button", { name: "Format selection" });
     expect(editor.on).toHaveBeenCalledWith("blur", expect.any(Function));
     editor.emit("blur");
 
@@ -308,7 +308,7 @@ describe("NodeFormatBubble", () => {
 
     // The keyboard made a non-empty selection, so the bubble offers its actions.
     expect(editor.state.selection.empty).toBe(false);
-    expect(await screen.findByRole("button", { name: "Format selection" })).toBeInTheDocument();
+    await screen.findByRole("button", { name: "Format selection" });
   });
 
   // A selected picture shows its own toolbar just above it, where this bubble
@@ -336,7 +336,7 @@ describe("NodeFormatBubble", () => {
       ({ top: 100, bottom: 120, left: 50, right: 60 }) as unknown as DOMRect;
     render(<NodeFormatBubble editor={editor as never} />);
     act(() => editor.view.focus());
-    expect(await screen.findByRole("toolbar")).toBeInTheDocument();
+    await screen.findByRole("toolbar");
 
     const picturePos = editor.state.doc.child(0).nodeSize;
     act(() => {
@@ -351,6 +351,6 @@ describe("NodeFormatBubble", () => {
         editor.state.tr.setSelection(TextSelection.create(editor.state.doc, 1, 3))
       );
     });
-    expect(await screen.findByRole("toolbar")).toBeInTheDocument();
+    await screen.findByRole("toolbar");
   });
 });

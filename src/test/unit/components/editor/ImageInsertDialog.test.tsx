@@ -135,7 +135,7 @@ describe("ImageInsertDialog with a submit handler", () => {
     );
     await user.click(screen.getByRole("button", { name: "common.insert" }));
 
-    expect(await screen.findByText("canvas.imageUnsupported")).toBeInTheDocument();
+    await screen.findByText("canvas.imageUnsupported");
     expect(onClose).not.toHaveBeenCalled();
   });
 });

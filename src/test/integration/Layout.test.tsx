@@ -381,7 +381,7 @@ describe("Layout", () => {
     const trigger = screen.getByRole("button", { name: "Open navigation menu" });
 
     await user.click(trigger);
-    expect(await screen.findByRole("dialog", { name: "Primary navigation" })).toBeInTheDocument();
+    await screen.findByRole("dialog", { name: "Primary navigation" });
     await user.keyboard("{Escape}");
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
@@ -407,7 +407,7 @@ describe("Layout", () => {
 
     trigger.focus();
     await user.keyboard("{Enter}");
-    expect(await screen.findByRole("dialog", { name: "Primary navigation" })).toBeInTheDocument();
+    await screen.findByRole("dialog", { name: "Primary navigation" });
 
     act(() => {
       expect(runTopBackDismiss()).toBe(true);

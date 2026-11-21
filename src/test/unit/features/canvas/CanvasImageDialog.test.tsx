@@ -97,7 +97,7 @@ describe("CanvasImageDialog", () => {
 
     await typeSource(user, "https://example.com/photo.heic");
 
-    expect(await screen.findByText("canvas.imageUnsupported")).toBeInTheDocument();
+    await screen.findByText("canvas.imageUnsupported");
     expect(useCanvasStore.getState().doc.nodes).toHaveLength(0);
     expect(useCanvasStore.getState().imageDialog).not.toBeNull();
   });

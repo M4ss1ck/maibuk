@@ -229,7 +229,7 @@ describe("Home keyboard navigation", () => {
 
     trigger.focus();
     await user.keyboard("{Enter}");
-    expect(await screen.findByRole("dialog", { name: "New Book" })).toBeInTheDocument();
+    await screen.findByRole("dialog", { name: "New Book" });
     await user.keyboard("{Escape}");
 
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
@@ -250,7 +250,7 @@ describe("Home keyboard navigation", () => {
     render(<Home />);
 
     expect(await runCommand("bookList.newBook", { source: "voice" })).toBe("ran");
-    expect(await screen.findByRole("dialog", { name: "New Book" })).toBeInTheDocument();
+    await screen.findByRole("dialog", { name: "New Book" });
 
     await user.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
@@ -325,7 +325,7 @@ describe("nested row controls by keyboard", () => {
     const statusButton = within(rows[0]).getByRole("button", { name: "books.changeStatus" });
     await tabToStatus(user, rows[0], statusButton);
     await user.keyboard(key);
-    expect(await screen.findByRole("listbox")).toBeInTheDocument();
+    await screen.findByRole("listbox");
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 });

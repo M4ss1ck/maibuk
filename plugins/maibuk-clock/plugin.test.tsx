@@ -695,7 +695,7 @@ describe("Clock runtime", () => {
     const { host } = startHost({ language: "es" });
 
     const row = await host.renderSettingsRow(POMODORO_SETTINGS_ROW_ID);
-    expect(await screen.findByRole("textbox", { name: es.pomodoroMinutes })).toBeInTheDocument();
+    await screen.findByRole("textbox", { name: es.pomodoroMinutes });
     expect(screen.getByRole("textbox", { name: es.shortBreakMinutes })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: es.longBreakMinutes })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: es.longBreakEvery })).toBeInTheDocument();

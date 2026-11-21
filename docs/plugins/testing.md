@@ -77,7 +77,7 @@ The second test renders the page, finds the heading and the button by role, tabs
 ```ts
 const page = await host.renderPage(PAGE_ID);
 const user = userEvent.setup();
-expect(await screen.findByRole("heading", { name: "Hello from your Plugin" })).toBeInTheDocument();
+await screen.findByRole("heading", { name: "Hello from your Plugin" });
 const greet = screen.getByRole("button", { name: "Greet" });
 await tabTo(user, greet);
 await user.keyboard("{Enter}");

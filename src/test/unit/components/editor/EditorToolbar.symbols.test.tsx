@@ -197,7 +197,7 @@ describe("editor.insertSymbol shortcut", () => {
 
     await user.keyboard("{Control>}{Shift>}o{/Shift}{/Control}");
 
-    expect(await screen.findByRole("dialog", { name: "insert symbol" })).toBeInTheDocument();
+    await screen.findByRole("dialog", { name: "insert symbol" });
     await user.keyboard("{Escape}");
 
     await waitFor(() => {
@@ -216,7 +216,7 @@ describe("editor.insertSymbol shortcut", () => {
     expect(symbolsButton).toHaveFocus();
     await user.keyboard("{Enter}");
 
-    expect(await screen.findByRole("dialog", { name: "insert symbol" })).toBeInTheDocument();
+    await screen.findByRole("dialog", { name: "insert symbol" });
     await user.keyboard("{Escape}");
 
     await waitFor(() => {

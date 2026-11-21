@@ -75,7 +75,7 @@ describe("TextCaseMenu keyboard behavior", () => {
 
     trigger.focus();
     await user.keyboard("{Enter}");
-    expect(await screen.findByRole("menu")).toBeInTheDocument();
+    await screen.findByRole("menu");
     expect(screen.getByRole("separator")).toHaveClass("border-muted");
 
     await user.keyboard("{Escape}");

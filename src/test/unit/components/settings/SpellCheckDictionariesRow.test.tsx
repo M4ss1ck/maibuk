@@ -126,7 +126,7 @@ describe("SpellCheckDictionariesRow", () => {
     await tabTo(user, download);
     await user.keyboard("{Enter}");
 
-    expect(await within(row).findByText("Download failed. Try again.")).toBeInTheDocument();
+    await within(row).findByText("Download failed. Try again.");
     expect(useSpellCheckDictionaries.getState().installed).not.toContain("fr");
     expect(download).toHaveFocus();
   });

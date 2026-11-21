@@ -104,9 +104,7 @@ describe("Map editor page", () => {
       await waitFor(() =>
         expect(pickedTool(en["tools.text"])).toHaveAttribute("aria-pressed", "true")
       );
-      expect(
-        await screen.findByRole("button", { name: en["properties.mapLabel.place"] })
-      ).toBeInTheDocument();
+      await screen.findByRole("button", { name: en["properties.mapLabel.place"] });
       // The Text tool opens no Insert card.
       expect(screen.queryByRole("button", { name: en["properties.upload"] })).toBeNull();
 

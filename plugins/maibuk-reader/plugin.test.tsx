@@ -67,7 +67,7 @@ describe("Reader Shelf", () => {
     try {
       host.files.queuePick({ name: "Dune.pdf", bytes: pdfBytes("a PDF") });
       const page = await host.renderPage(SHELF_PAGE_ID);
-      expect(await screen.findByText(en["shelf.emptyTitle"])).toBeInTheDocument();
+      await screen.findByText(en["shelf.emptyTitle"]);
 
       const user = userEvent.setup();
       const open = screen.getByRole("button", { name: en["shelf.openFile"] });
@@ -75,7 +75,7 @@ describe("Reader Shelf", () => {
       expect(open).toHaveFocus();
       await user.keyboard("{Enter}");
 
-      expect(await screen.findByText("Dune")).toBeInTheDocument();
+      await screen.findByText("Dune");
       await waitFor(() =>
         expect(host.pageNavigations).toEqual([{ pluginId: "maibuk-reader", pageId: "document" }])
       );
@@ -93,7 +93,7 @@ describe("Reader Shelf", () => {
     const { host } = hostFor({ files: [{ name: "Dune.pdf", bytes }], storage });
     try {
       const page = await host.renderPage(SHELF_PAGE_ID);
-      expect(await screen.findByText("Dune")).toBeInTheDocument();
+      await screen.findByText("Dune");
 
       const user = userEvent.setup();
       const remove = screen.getByRole("button", { name: en["shelf.remove"] });
@@ -101,7 +101,7 @@ describe("Reader Shelf", () => {
       expect(remove).toHaveFocus();
       await user.keyboard("{Enter}");
 
-      expect(await screen.findByText(en["shelf.emptyTitle"])).toBeInTheDocument();
+      await screen.findByText(en["shelf.emptyTitle"]);
       expect(screen.queryByText("Dune")).not.toBeInTheDocument();
       await waitFor(async () => expect(await host.files.grants()).toEqual([]));
       expect(storage.get(SHELF_KEY)).toEqual([]);
@@ -150,7 +150,7 @@ describe("Reader Shelf", () => {
       host.files.queuePick({ name: "Dune.pdf", bytes });
 
       const page = await host.renderPage(SHELF_PAGE_ID);
-      expect(await screen.findByText(en["shelf.status.missing"])).toBeInTheDocument();
+      await screen.findByText(en["shelf.status.missing"]);
 
       const user = userEvent.setup();
       const locate = screen.getByRole("button", { name: en["shelf.locate"] });
@@ -193,7 +193,7 @@ describe("Reader file drop", () => {
   /** Opens the Shelf page and waits for it to finish loading, so Reader has subscribed. */
   async function shelfPage(host: Host, text: string) {
     const page = await host.renderPage(SHELF_PAGE_ID);
-    expect(await screen.findByText(text)).toBeInTheDocument();
+    await screen.findByText(text);
     return page;
   }
 

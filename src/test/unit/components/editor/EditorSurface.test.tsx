@@ -121,7 +121,7 @@ describe("useEditorSurface", () => {
     });
     await user.keyboard("{Control>}k{/Control}");
 
-    expect(await screen.findByRole("dialog", { name: "editor.insertLink" })).toBeInTheDocument();
+    await screen.findByRole("dialog", { name: "editor.insertLink" });
   });
 
   it("inserts a horizontal rule when the Command runs from the palette", async () => {

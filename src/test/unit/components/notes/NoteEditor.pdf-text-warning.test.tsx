@@ -103,7 +103,7 @@ describe("NoteEditor PDF text warning", () => {
 
     await user.click(screen.getByRole("button", { name: "Export PDF" }));
 
-    expect(await screen.findByRole("alertdialog")).toBeInTheDocument();
+    await screen.findByRole("alertdialog");
     expect(mockGenerateDocumentPdf).not.toHaveBeenCalled();
   });
 

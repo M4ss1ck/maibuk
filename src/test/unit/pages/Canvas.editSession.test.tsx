@@ -242,6 +242,10 @@ describe("Canvas Edit Session", () => {
     await settleRender();
     expect(screen.getByTestId("flow")).toBeInTheDocument();
 
+    // The label already reads "saved" before the move, so it proves nothing;
+    // assert no save is attempted instead.
+    const saveDocSpy = vi.spyOn(useCanvasStore.getState(), "saveDoc");
+    saveDocSpy.mockClear();
     act(() => {
       useCanvasStore.getState().setViewport({ x: 40, y: 50, zoom: 2 });
     });
@@ -255,6 +259,7 @@ describe("Canvas Edit Session", () => {
       [CANVAS_ID]
     );
     expect(rows[0].updated_at).toBe(1000);
+    expect(saveDocSpy).not.toHaveBeenCalled();
     expect(screen.getByRole("status")).toHaveTextContent("canvas.saved");
   });
 

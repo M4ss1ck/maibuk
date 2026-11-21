@@ -205,7 +205,7 @@ describe("DictationSection", () => {
 
   it("names the microphone when the backend can", async () => {
     render(<DictationSection />);
-    expect(await screen.findByText("Microphone: USB Mic")).toBeInTheDocument();
+    await screen.findByText("Microphone: USB Mic");
   });
 
   it("says Spanish models add no punctuation", () => {
@@ -407,11 +407,9 @@ describe("DictationSection", () => {
       maxInterpreterMs: 2.0150000001303852,
     });
     render(<DictationSection />);
-    expect(
-      await screen.findByText(
-        "Interpreter: typical delay 1.015 ms, worst delay 2.015 ms, spoken punctuation 4, voice commands 1, scratch that 2"
-      )
-    ).toBeInTheDocument();
+    await screen.findByText(
+      "Interpreter: typical delay 1.015 ms, worst delay 2.015 ms, spoken punctuation 4, voice commands 1, scratch that 2"
+    );
   });
 
   it("says nothing about the interpreter until a line has been interpreted", async () => {
@@ -427,18 +425,16 @@ describe("DictationSection", () => {
       voiceCommandRefusedCount: 0,
     });
     render(<DictationSection />);
-    expect(await screen.findByText(/Recent lines: 1/)).toBeInTheDocument();
+    await screen.findByText(/Recent lines: 1/);
     expect(screen.queryByText(/Interpreter:/)).toBeNull();
   });
 
   it("names the interpreter stats in Spanish", async () => {
     await act(() => i18n.changeLanguage("es"));
     render(<DictationSection />);
-    expect(
-      await screen.findByText(
-        "Intérprete: demora típica 8 ms, peor demora 15 ms, puntuación dictada 4, comandos de voz 1, borra eso 2"
-      )
-    ).toBeInTheDocument();
+    await screen.findByText(
+      "Intérprete: demora típica 8 ms, peor demora 15 ms, puntuación dictada 4, comandos de voz 1, borra eso 2"
+    );
   });
 
   it("shows unavailable and refused voice command counts beside the interpreter stats", async () => {
@@ -448,9 +444,7 @@ describe("DictationSection", () => {
       voiceCommandRefusedCount: 1,
     });
     render(<DictationSection />);
-    expect(
-      await screen.findByText("Unavailable voice commands: 2 Refused voice commands: 1")
-    ).toBeInTheDocument();
+    await screen.findByText("Unavailable voice commands: 2 Refused voice commands: 1");
   });
 
   it("names the unavailable and refused voice command counts in Spanish", async () => {
@@ -461,9 +455,7 @@ describe("DictationSection", () => {
       voiceCommandRefusedCount: 1,
     });
     render(<DictationSection />);
-    expect(
-      await screen.findByText("Comandos de voz no disponibles: 2 Comandos de voz rechazados: 1")
-    ).toBeInTheDocument();
+    await screen.findByText("Comandos de voz no disponibles: 2 Comandos de voz rechazados: 1");
   });
 });
 

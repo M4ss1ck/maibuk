@@ -206,7 +206,7 @@ describe("opening a Note", () => {
     useNoteStore.setState({ loadNote, currentNote: buildNote("stale") });
     renderNotes("/notes/a");
 
-    expect(await screen.findByText("gallery")).toBeInTheDocument();
+    await screen.findByText("gallery");
     expect(screen.queryByTestId("editor")).not.toBeInTheDocument();
     expect(useSettingsStore.getState().setLastNoteId).not.toHaveBeenCalledWith("a");
   });

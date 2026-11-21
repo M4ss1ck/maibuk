@@ -372,9 +372,7 @@ describe("Command Palette", () => {
 
     await user.keyboard("{Enter}");
     await waitFor(() => expect(screen.queryByRole("dialog", { name: PALETTE_NAME })).toBeNull());
-    expect(
-      await screen.findByText("That command is not available here anymore")
-    ).toBeInTheDocument();
+    await screen.findByText("That command is not available here anymore");
   });
 
   it("refuses to open during a Tutorial run", async () => {

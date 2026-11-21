@@ -119,7 +119,7 @@ describe("PdfFontsRow", () => {
     await tabTo(user, download);
     await user.keyboard("{Enter}");
 
-    expect(await within(row).findByText("Download failed. Try again.")).toBeInTheDocument();
+    await within(row).findByText("Download failed. Try again.");
     expect(usePdfFonts.getState().installed).not.toContain("latin");
     expect(download).toHaveFocus();
   });

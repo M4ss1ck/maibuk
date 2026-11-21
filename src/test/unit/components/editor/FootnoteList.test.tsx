@@ -227,7 +227,7 @@ describe("FootnoteList", () => {
 
     await waitFor(() => expect(row("Second")).toHaveFocus());
     await user.keyboard("{Control>}{Shift>}e{/Shift}{/Control}");
-    expect(await screen.findByRole("dialog", { name: "editor.editFootnote" })).toBeInTheDocument();
+    await screen.findByRole("dialog", { name: "editor.editFootnote" });
   });
 
   it("does not run the Commands while focus is in the text", async () => {
@@ -357,7 +357,7 @@ describe("nested row controls by keyboard", () => {
     const edit = screen.getByRole("button", { name: "editor.editFootnote" });
     await arrowToButton(user, rowEl, edit);
     await user.keyboard(key);
-    expect(await screen.findByRole("dialog", { name: "editor.editFootnote" })).toBeInTheDocument();
+    await screen.findByRole("dialog", { name: "editor.editFootnote" });
     expect(onGoTo).not.toHaveBeenCalled();
   });
 

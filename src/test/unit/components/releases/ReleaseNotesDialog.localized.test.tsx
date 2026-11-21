@@ -107,7 +107,7 @@ describe("Release Notes dialog in the app language", () => {
     const dialog = renderOpenDialog();
 
     const latest = await within(dialog).findByRole("article", { name: /0\.15\.2/ });
-    expect(await within(latest).findByText(SPANISH)).toBeInTheDocument();
+    await within(latest).findByText(SPANISH);
     expect(within(latest).queryByText(ENGLISH)).not.toBeInTheDocument();
 
     const previous = article(dialog, "0.15.1");
@@ -134,13 +134,13 @@ describe("Release Notes dialog in the app language", () => {
 
   it("swaps the notes when the app language changes with the dialog open", async () => {
     const dialog = renderOpenDialog();
-    expect(await within(article(dialog, "0.15.2")).findByText(ENGLISH)).toBeInTheDocument();
+    await within(article(dialog, "0.15.2")).findByText(ENGLISH);
 
     await act(async () => {
       await i18n.changeLanguage("es");
     });
 
-    expect(await within(article(dialog, "0.15.2")).findByText(SPANISH)).toBeInTheDocument();
+    await within(article(dialog, "0.15.2")).findByText(SPANISH);
     expect(within(article(dialog, "0.15.2")).queryByText(ENGLISH)).not.toBeInTheDocument();
   });
 
@@ -148,7 +148,7 @@ describe("Release Notes dialog in the app language", () => {
     await i18n.changeLanguage("fr-FR");
     const dialog = renderOpenDialog();
 
-    expect(await within(article(dialog, "0.15.2")).findByText(ENGLISH)).toBeInTheDocument();
+    await within(article(dialog, "0.15.2")).findByText(ENGLISH);
     expect(within(article(dialog, "0.15.2")).queryByText(SPANISH)).not.toBeInTheDocument();
   });
 });
@@ -162,7 +162,7 @@ describe("Newer Releases in the app language", () => {
     const dialog = renderOpenDialog([NEWER_ENGLISH]);
 
     const newer = await within(dialog).findByRole("article", { name: /99\.1\.0/ });
-    expect(await within(newer).findByText(SPANISH_NEWER_BULLET)).toBeInTheDocument();
+    await within(newer).findByText(SPANISH_NEWER_BULLET);
     expect(within(newer).queryByText(ENGLISH_NEWER_BULLET)).not.toBeInTheDocument();
     expect(urls).toEqual([CHANGELOG_ES]);
   });
@@ -206,17 +206,13 @@ describe("Newer Releases in the app language", () => {
     await checkForNewerReleases(fetchImpl);
     const dialog = renderOpenDialog(useReleaseStore.getState().newerReleases);
 
-    expect(
-      await within(article(dialog, "99.1.0")).findByText(ENGLISH_NEWER_BULLET)
-    ).toBeInTheDocument();
+    await within(article(dialog, "99.1.0")).findByText(ENGLISH_NEWER_BULLET);
 
     await act(async () => {
       await i18n.changeLanguage("es");
     });
 
-    expect(
-      await within(article(dialog, "99.1.0")).findByText(SPANISH_NEWER_BULLET)
-    ).toBeInTheDocument();
+    await within(article(dialog, "99.1.0")).findByText(SPANISH_NEWER_BULLET);
     expect(
       within(article(dialog, "99.1.0")).queryByText(ENGLISH_NEWER_BULLET)
     ).not.toBeInTheDocument();
@@ -229,9 +225,7 @@ describe("Newer Releases in the app language", () => {
     await checkForNewerReleases(fetchImpl);
     const dialog = renderOpenDialog(useReleaseStore.getState().newerReleases);
 
-    expect(
-      await within(article(dialog, "99.1.0")).findByText(ENGLISH_NEWER_BULLET)
-    ).toBeInTheDocument();
+    await within(article(dialog, "99.1.0")).findByText(ENGLISH_NEWER_BULLET);
     expect(urls).toEqual([RELEASES_URL]);
   });
 });

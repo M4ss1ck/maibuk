@@ -183,7 +183,7 @@ describe("ThemeToggle", () => {
       const user = userEvent.setup();
       render(<ThemeToggle variant="dropdown" />);
       await user.click(screen.getByRole("button"));
-      expect(await screen.findByRole("menuitemradio", { name: "Light" })).toBeInTheDocument();
+      await screen.findByRole("menuitemradio", { name: "Light" });
       expect(screen.getByRole("menuitemradio", { name: "Dark" })).toBeInTheDocument();
       expect(screen.getByRole("menuitemradio", { name: "System" })).toBeInTheDocument();
     });

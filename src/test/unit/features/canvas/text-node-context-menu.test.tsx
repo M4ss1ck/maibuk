@@ -239,7 +239,7 @@ describe("Text Node context menu while editing", () => {
 
     // The browser menu never appears, and the editor's own menu does.
     expect(event.defaultPrevented).toBe(true);
-    expect(await screen.findByRole("menu")).toBeInTheDocument();
+    await screen.findByRole("menu");
     // The menu took focus from the text: that blur must not commit the node.
     expect(mocks.updateTextNode).not.toHaveBeenCalled();
 

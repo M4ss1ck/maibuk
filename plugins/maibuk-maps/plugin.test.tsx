@@ -71,7 +71,7 @@ describe("Maps page", () => {
     const host = hostFor(storage);
     try {
       const page = await host.renderPage(MAPS_PAGE_ID);
-      expect(await screen.findByText(en["list.emptyTitle"])).toBeInTheDocument();
+      await screen.findByText(en["list.emptyTitle"]);
       const user = userEvent.setup({ delay: null });
 
       const create = screen.getByRole("button", { name: en["list.new"] });
@@ -109,7 +109,7 @@ describe("Maps page", () => {
     const host = hostFor(storage);
     try {
       const page = await host.renderPage(MAPS_PAGE_ID);
-      expect(await screen.findByText(en["list.emptyTitle"])).toBeInTheDocument();
+      await screen.findByText(en["list.emptyTitle"]);
       const user = userEvent.setup({ delay: null });
 
       const create = screen.getByRole("button", { name: en["list.new"] });
@@ -164,7 +164,7 @@ describe("Maps page", () => {
     const host = hostFor(storage);
     try {
       const page = await host.renderPage(MAPS_PAGE_ID);
-      expect(await screen.findByText(en["list.emptyTitle"])).toBeInTheDocument();
+      await screen.findByText(en["list.emptyTitle"]);
       const user = userEvent.setup({ delay: null });
 
       const create = screen.getByRole("button", { name: en["list.new"] });
@@ -231,7 +231,7 @@ describe("Maps page", () => {
       const dialog = await screen.findByRole("dialog");
       await tabTo(user, within(dialog).getByRole("button", { name: en["create.submit"] }));
       await user.keyboard("{Enter}");
-      expect(await within(dialog).findByText(en["dialog.emptyName"])).toBeInTheDocument();
+      await within(dialog).findByText(en["dialog.emptyName"]);
       expect(storage.has(INDEX_KEY)).toBe(false);
 
       await user.keyboard("{Escape}");
@@ -318,7 +318,7 @@ describe("Maps page", () => {
       await pickOption(user, en["list.filter"], "Tides of Ash");
       await waitFor(() => expect(names()).toEqual(["Coast", "Isles"]));
       await pickOption(user, en["list.filter"], "The Salt Road");
-      expect(await screen.findByText(en["list.emptyBookTitle"])).toBeInTheDocument();
+      await screen.findByText(en["list.emptyBookTitle"]);
       await pickOption(user, en["list.filter"], en["list.filter.all"]);
       await waitFor(() => expect(names()).toEqual(["Coast", "Isles", "Loose"]));
       await page.unmount();
@@ -331,7 +331,7 @@ describe("Maps page", () => {
     const host = hostFor(new Map(), "es");
     try {
       const page = await host.renderPage(MAPS_PAGE_ID);
-      expect(await screen.findByText(es["list.emptyTitle"])).toBeInTheDocument();
+      await screen.findByText(es["list.emptyTitle"]);
       expect(screen.getByRole("button", { name: es["list.new"] })).toBeInTheDocument();
       await page.unmount();
     } finally {
@@ -754,7 +754,7 @@ describe("Map editor Place dialog", () => {
       await tabTo(user, submit);
       await user.keyboard("{Enter}");
 
-      expect(await screen.findByText(en["place.failed"])).toBeInTheDocument();
+      await screen.findByText(en["place.failed"]);
       expect(host.navigations).toEqual([]);
       expect(insert).not.toHaveBeenCalled();
 

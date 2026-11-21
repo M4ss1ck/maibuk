@@ -40,7 +40,7 @@ describe("the floating editor's chrome (#778)", () => {
       // The Layers card starts shut, and its toggle is the way in.
       expect(screen.queryByRole("list")).toBeNull();
       await openLayers(user);
-      expect(await screen.findByRole("list")).toBeInTheDocument();
+      await screen.findByRole("list");
 
       await page.unmount();
     } finally {
@@ -101,11 +101,9 @@ describe("the floating editor's chrome (#778)", () => {
       expect(screen.queryByLabelText(en["properties.lineStyle"])).toBeNull();
       await tabTo(user, restore, 120);
       await user.keyboard("{Enter}");
-      expect(
-        await screen.findByRole("button", { name: en["chrome.minimiseProperties"] })
-      ).toBeInTheDocument();
+      await screen.findByRole("button", { name: en["chrome.minimiseProperties"] });
       // The controls are back: the Pen's line style is the card's first one.
-      expect(await screen.findByLabelText(en["properties.lineStyle"])).toBeInTheDocument();
+      await screen.findByLabelText(en["properties.lineStyle"]);
 
       await page.unmount();
     } finally {

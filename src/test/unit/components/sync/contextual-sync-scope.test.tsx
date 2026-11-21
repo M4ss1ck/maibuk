@@ -159,7 +159,7 @@ describe("contextual sync scope", () => {
     const scopeSelect = screen.getByRole("button", { name: /sync\.scopeNotes/ });
     scopeSelect.focus();
     await user.keyboard("{ArrowDown}");
-    expect(await screen.findByRole("listbox")).toBeInTheDocument();
+    await screen.findByRole("listbox");
     await user.keyboard("{ArrowDown}");
     expect(document.activeElement).toHaveTextContent("sync.scopeCanvases");
     await user.keyboard("{Enter}");

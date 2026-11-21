@@ -191,7 +191,7 @@ describe("nested row controls by keyboard", () => {
     const menuButton = screen.getByRole("button", { name: "common.moreActionsFor" });
     await tabTo(user, row, menuButton);
     await user.keyboard(key);
-    expect(await screen.findByRole("menu")).toBeInTheDocument();
+    await screen.findByRole("menu");
     expect(onClick).not.toHaveBeenCalled();
   });
 });

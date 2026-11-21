@@ -119,6 +119,6 @@ describe("EditorToolbar shortcuts help", () => {
     customize.focus();
     await user.keyboard("{Enter}");
     expect(help).not.toBeInTheDocument();
-    expect(await screen.findByRole("dialog", { name: "shortcutEditor.title" })).toBeInTheDocument();
+    await screen.findByRole("dialog", { name: "shortcutEditor.title" });
   });
 });

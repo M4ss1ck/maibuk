@@ -149,7 +149,7 @@ describe("a Text Node's shared editor surface", () => {
 
     await user.keyboard("{Control>}{Alt>}n{/Alt}{/Control}");
 
-    expect(await screen.findByRole("dialog", { name: "editor.footnote" })).toBeInTheDocument();
+    await screen.findByRole("dialog", { name: "editor.footnote" });
   });
 
   it("toggles Spell Check from the palette", async () => {
@@ -175,7 +175,7 @@ describe("a Text Node's shared editor surface", () => {
     await waitFor(() => expect(find).toHaveFocus());
 
     await user.type(find, "edited");
-    expect(await screen.findByText("editor.matchesOf:1/1")).toBeInTheDocument();
+    await screen.findByText("editor.matchesOf:1/1");
 
     await user.keyboard("{Escape}");
     await waitFor(() =>
@@ -197,7 +197,7 @@ describe("a Text Node's shared editor surface", () => {
     await user.click(editor);
 
     await user.keyboard("{Control>}k{/Control}");
-    expect(await screen.findByRole("dialog", { name: "editor.insertLink" })).toBeInTheDocument();
+    await screen.findByRole("dialog", { name: "editor.insertLink" });
     expect(useCanvasStore.getState().editingNodeId).toBe("node");
 
     await user.keyboard("{Escape}");
@@ -214,7 +214,7 @@ describe("a Text Node's shared editor surface", () => {
 
     const outcome = await runCommand("editor.insertSymbol", { source: "palette" });
     expect(outcome).toBe("ran");
-    expect(await screen.findByRole("dialog", { name: "symbols.title" })).toBeInTheDocument();
+    await screen.findByRole("dialog", { name: "symbols.title" });
     expect(useCanvasStore.getState().editingNodeId).toBe("node");
 
     await user.keyboard("{Escape}");
@@ -240,7 +240,7 @@ describe("a Text Node's shared editor surface", () => {
     await findEditor(container);
 
     expect(await runCommand("editor.insertImage", { source: "palette" })).toBe("ran");
-    expect(await screen.findByRole("dialog", { name: "editor.insertImage" })).toBeInTheDocument();
+    await screen.findByRole("dialog", { name: "editor.insertImage" });
   });
 
   it("opens the dictionary prompt from the palette when nothing is selected", async () => {
@@ -248,9 +248,7 @@ describe("a Text Node's shared editor surface", () => {
     await findEditor(container);
 
     expect(await runCommand("editor.dictionary", { source: "palette" })).toBe("ran");
-    expect(
-      await screen.findByRole("dialog", { name: "dictionary.promptTitle" })
-    ).toBeInTheDocument();
+    await screen.findByRole("dialog", { name: "dictionary.promptTitle" });
   });
 
   it("colors the selected text from the palette", async () => {

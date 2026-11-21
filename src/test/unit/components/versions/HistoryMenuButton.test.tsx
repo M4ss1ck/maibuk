@@ -60,7 +60,7 @@ describe("HistoryMenuButton", () => {
     // accessibility tree, so hold the trigger from before it opens.
     const trigger = screen.getByRole("button", { name: "More version actions" });
     await user.click(trigger);
-    expect(await screen.findByRole("menu")).toBeInTheDocument();
+    await screen.findByRole("menu");
 
     await user.click(trigger);
     await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
@@ -122,7 +122,7 @@ describe("HistoryMenuButton", () => {
 
     const outside = screen.getByRole("button", { name: "Outside" });
     await user.click(screen.getByRole("button", { name: "More version actions" }));
-    expect(await screen.findByRole("menu")).toBeInTheDocument();
+    await screen.findByRole("menu");
     await user.click(outside);
 
     await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());

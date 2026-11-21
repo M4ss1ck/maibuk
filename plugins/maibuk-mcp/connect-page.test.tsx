@@ -97,7 +97,7 @@ describe("MCP Server page", () => {
       const page = await host.renderPage(CONNECT_PAGE_ID);
       const user = userEvent.setup();
 
-      expect(await screen.findByRole("heading", { name: en.heading })).toBeInTheDocument();
+      await screen.findByRole("heading", { name: en.heading });
       for (const [, text] of snippetsFor(key)) {
         expect(await findSnippet(text)).toBeInTheDocument();
       }
@@ -110,7 +110,13 @@ describe("MCP Server page", () => {
         expect(copies[index]).toHaveFocus();
         await user.keyboard("{Enter}");
         await waitFor(() => expect(host.clipboard).toBe(text));
-        expect(await screen.findByText(en.copied)).toBeInTheDocument();
+        // The previous snippet's "Copied" stays up for COPIED_MS, so a
+        // page-wide query matches that stale node and races its unmount.
+        // Wait for the status in this snippet's own row; that render also
+        // takes it off the previous row.
+        const row = copies[index].parentElement as HTMLElement;
+        await within(row).findByText(en.copied);
+        expect(screen.getAllByText(en.copied)).toHaveLength(1);
       }
 
       await page.unmount();
@@ -197,7 +203,7 @@ describe("MCP Server page", () => {
       const movedAddress = `http://127.0.0.1:${movedPort}/plugin/maibuk-mcp/`;
       await waitFor(() => host.setEndpointAddress(movedPort));
 
-      expect(await screen.findByText(en.reconnect)).toBeInTheDocument();
+      await screen.findByText(en.reconnect);
       expect(
         await findSnippet(claudeCodeSnippet({ url: `${movedAddress}mcp`, key }))
       ).toBeInTheDocument();
@@ -231,7 +237,7 @@ describe("MCP Server page", () => {
     try {
       const page = await host.renderPage(CONNECT_PAGE_ID);
 
-      expect(await screen.findByText(en.unavailable)).toBeInTheDocument();
+      await screen.findByText(en.unavailable);
       expect(screen.queryAllByRole("button", { name: en.copy })).toHaveLength(0);
 
       await page.unmount();
@@ -246,7 +252,7 @@ describe("MCP Server page", () => {
       const page = await host.renderPage(CONNECT_PAGE_ID);
 
       // Startup could store no Key, so the page says so instead of loading forever.
-      expect(await screen.findByText(en.snippetsUnavailable)).toBeInTheDocument();
+      await screen.findByText(en.snippetsUnavailable);
       expect(screen.queryAllByRole("button", { name: en.copy })).toHaveLength(0);
 
       // The Tutorial ends: the next request makes the Key the page was waiting for.
@@ -268,7 +274,7 @@ describe("MCP Server page", () => {
       const key = await storedKey(storage);
       const page = await host.renderPage(CONNECT_PAGE_ID);
 
-      expect(await screen.findByRole("heading", { name: es.heading })).toBeInTheDocument();
+      await screen.findByRole("heading", { name: es.heading });
       expect(await findSnippet(codexSnippet({ url: MCP_URL, key }))).toBeInTheDocument();
       expect(screen.getByRole("button", { name: es.newKey })).toBeInTheDocument();
       expect(screen.getAllByRole("button", { name: es.copy })).toHaveLength(4);

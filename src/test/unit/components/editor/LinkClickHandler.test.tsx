@@ -233,7 +233,7 @@ describe("LinkClickHandler", () => {
         await user.keyboard("{Control>}{Enter}{/Control}");
 
         await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith("/notes/note-1", undefined));
-        expect(await screen.findByText("deepLink.headingGone")).toBeInTheDocument();
+        await screen.findByText("deepLink.headingGone");
       });
     });
   });

@@ -559,7 +559,7 @@ describe("Plugin cards in the Settings outline", () => {
     );
 
     await user.type(screen.getByRole("searchbox"), "ecos");
-    expect(await screen.findByRole("row", { name: "Ecos" })).toBeInTheDocument();
+    await screen.findByRole("row", { name: "Ecos" });
   });
 
   it("resets the filter that hid the card and still reveals it", async () => {

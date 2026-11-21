@@ -92,7 +92,7 @@ describe("Metrics page", () => {
   it("renders snapshot totals while event-derived sections are still loading", async () => {
     render(<Metrics />);
 
-    expect(await screen.findByText("12,345")).toBeInTheDocument();
+    await screen.findByText("12,345");
     expect(screen.getByText("Novel One")).toBeInTheDocument();
     expect(screen.getByText("8,000 words")).toBeInTheDocument();
     expect(screen.getAllByText("Loading writing patterns").length).toBeGreaterThan(0);
