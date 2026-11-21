@@ -78,6 +78,8 @@ function stateMessage(overrides: Record<string, unknown> = {}): Record<string, u
     stopwatch: { status: "idle" },
     alarms: [],
     notifications: { permission: "granted", canScheduleWhileClosed: true, exactTiming: true },
+    // A device whose stored tab is the Timer: the panel tests below start there.
+    tab: "timer",
     ...overrides,
   };
 }
@@ -606,7 +608,7 @@ describe("Clock Frame", () => {
     expect(once.getAttribute("aria-label")).toBeNull();
     expect(once.textContent).toBe("Once");
     expect(once.querySelectorAll(".day-chip")).toHaveLength(0);
-    expect(port.messages).toEqual([]);
+    expect(port.messages).toEqual([{ kind: "tab.select", tab: "alarms" }]);
   });
 
   it("names two Alarms at the same time apart by their label and repeat", async () => {
@@ -674,7 +676,7 @@ describe("Clock Frame", () => {
     await user.keyboard("{Escape}");
     expect(el("alarm-editor").hidden).toBe(true);
     expect(document.activeElement).toBe(el("add-alarm"));
-    expect(port.messages).toEqual([]);
+    expect(port.messages).toEqual([{ kind: "tab.select", tab: "alarms" }]);
   });
 
   it("keeps Tab and Shift+Tab inside the alarm editor", async () => {
@@ -896,6 +898,82 @@ describe("Clock Frame", () => {
     const port = renderFrame();
     window.dispatchEvent(new Event("pagehide"));
     expect(posted(port, "closed")).toHaveLength(1);
+  });
+});
+
+describe("Clock Frame open tab", () => {
+  it("opens on Pomodoro before the Worker says otherwise", async () => {
+    renderFrame({ state: stateMessage({ tab: "pomodoro" }) });
+    expect(el("panel-pomodoro").hidden).toBe(false);
+    expect(el("panel-timer").hidden).toBe(true);
+
+    await keyboardUser().tab();
+    expect(document.activeElement).toBe(el("tab-pomodoro"));
+  });
+
+  it("shows Pomodoro in the bare markup, before any state arrives", () => {
+    loadFrame();
+    expect(el("panel-pomodoro").hidden).toBe(false);
+    expect(el("tab-pomodoro").getAttribute("aria-selected")).toBe("true");
+    expect(el("panel-timer").hidden).toBe(true);
+  });
+
+  it("follows the stored tab when the Worker's load lands after the first state", async () => {
+    const port = renderFrame({ state: stateMessage({ tab: "pomodoro" }) });
+    port.deliver(stateMessage({ tab: "stopwatch" }));
+    expect(el("panel-stopwatch").hidden).toBe(false);
+    expect(el("panel-pomodoro").hidden).toBe(true);
+
+    await keyboardUser().tab();
+    expect(document.activeElement).toBe(el("tab-stopwatch"));
+    expect(posted(port, "tab.select")).toEqual([]);
+  });
+
+  it("posts tab.select for every tab the author picks by keyboard", async () => {
+    const port = renderFrame({ state: stateMessage({ tab: "pomodoro" }) });
+    const user = keyboardUser();
+
+    await user.tab();
+    await user.keyboard("{ArrowRight}");
+    await user.keyboard("{End}");
+    await user.keyboard("{Home}");
+    expect(posted(port, "tab.select")).toEqual([
+      { kind: "tab.select", tab: "timer" },
+      { kind: "tab.select", tab: "alarms" },
+      { kind: "tab.select", tab: "pomodoro" },
+    ]);
+  });
+
+  it("posts tab.select when the Also running card switches tabs", async () => {
+    const port = renderFrame({
+      state: stateMessage({ stopwatch: { status: "paused", banked: 65_000, laps: [] } }),
+    });
+    const buttons = el("also-running-list").querySelectorAll("button");
+    const user = keyboardUser();
+
+    await user.tab();
+    await tabTo(user, buttons[1]);
+    await user.keyboard("{Enter}");
+    expect(posted(port, "tab.select")).toEqual([{ kind: "tab.select", tab: "stopwatch" }]);
+  });
+
+  it("keeps the author's tab when a later state still carries the old one", async () => {
+    const port = renderFrame({ state: stateMessage({ tab: "pomodoro" }) });
+    const user = keyboardUser();
+
+    await user.tab();
+    await user.keyboard("{End}");
+    expect(el("panel-alarms").hidden).toBe(false);
+
+    // A state already in flight before the Worker heard the pick.
+    port.deliver(stateMessage({ tab: "pomodoro" }));
+    expect(el("panel-alarms").hidden).toBe(false);
+    expect(document.activeElement).toBe(el("tab-alarms"));
+  });
+
+  it("ignores a tab the Frame does not know", () => {
+    renderFrame({ state: stateMessage({ tab: "calendar" }) });
+    expect(el("panel-pomodoro").hidden).toBe(false);
   });
 });
 

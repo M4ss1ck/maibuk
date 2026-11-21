@@ -1,11 +1,11 @@
 // Clock's Timer (issue #871), Pomodoro, and Stopwatch (issue #873), on the
 // Built-in Plugin that ships off by default: turning it on from Settings →
-// Plugins by keyboard, opening its page from the Command Palette on the Timer
-// tab, setting a 5-second length from the length fields, starting it, pausing
+// Plugins by keyboard, opening its page from the Command Palette on the Pomodoro
+// tab, moving to the Timer tab, setting a 5-second length from the length fields, starting it, pausing
 // and resuming it from its Plugin Command, and its end: the live region's
 // announcement and the Alert, which reaches the author as Maibuk's own
 // in-window notice here because headless Chromium never grants the Notification
-// permission. The Pomodoro tab is reached by keyboard from the Timer tab, and
+// permission. The page opens on the Pomodoro tab, and
 // its Cycle starts there, pauses and resumes from its Command, skips to the
 // Short break from its other Command, and resets to the first Pomodoro. Its
 // settings dialog opens by keyboard from the lengths row under the Cycle: Save
@@ -13,9 +13,10 @@
 // field, Save on 30 closes it with the row and the idle drawn time reading 30,
 // and the Pomodoro settings Command opens the same dialog on the Pomodoro tab
 // until Escape dismisses it. The
-// Stopwatch tab is one ArrowRight further on: its Stopwatch starts, marks a Lap
+// Stopwatch tab is two ArrowRights from the Pomodoro: its Stopwatch starts, marks a Lap
 // from its button and a second from its other Command, pauses and resumes from
-// its Command, and resets to zero. The Alarms tab is one ArrowRight past that:
+// its Command, and resets to zero, and a reload reopens the Clock on the
+// Stopwatch tab, the one this device last picked. The Alarms tab is End from the Pomodoro:
 // the form adds an Alarm a couple of minutes ahead with a label and a weekday,
 // Edit moves its minute, its switch turns it off and back on, and Delete
 // returns the tab to its empty message (issue #874). No phase is waited out:
@@ -300,47 +301,60 @@ async function turnOn(page: Page): Promise<void> {
   await expect(navOption(page, PLUGIN_NAME)).toBeVisible({ timeout: 20_000 });
 }
 
-/** Opens the Clock page through its navigating Command, on the Timer tab. */
-async function openClockPage(page: Page): Promise<void> {
+/**
+ * Opens the Clock page through its navigating Command, on the tab `opensOn`:
+ * Pomodoro on a device that never picked one, else the tab it last picked.
+ * `shot` names a capture of the page as it first draws, taken before the tab is
+ * asserted so the base run of `pnpm screenshots` shows the tab it opened on.
+ */
+async function openClockPage(
+  page: Page,
+  opensOn = "Pomodoro",
+  shot: string | null = null
+): Promise<void> {
   await runPaletteCommand(page, "Open Clock");
   await expect(page).toHaveURL(new RegExp(`/plugin/${PLUGIN_ID}/${PAGE_ID}$`));
   // The page's own heading stays in the host, drawn for screen readers only.
   await expect(page.getByRole("heading", { name: PLUGIN_NAME, level: 1 })).toBeVisible();
   const tabs = clockFrame(page).getByRole("tablist", { name: "Clock sections" });
   await expect(tabs).toBeVisible();
-  // The Timer is the page's first tab and the one it opens on.
-  await expect(tabs.getByRole("tab", { name: "Timer", exact: true })).toHaveAttribute(
+  if (shot !== null) await capture(page, shot);
+  await expect(tabs.getByRole("tab", { name: opensOn, exact: true })).toHaveAttribute(
     "aria-selected",
-    "true"
+    "true",
+    { timeout: 15_000 }
   );
+  await expect(tabPanel(page, opensOn)).toBeVisible({ timeout: 15_000 });
+}
+
+/**
+ * Moves from the Pomodoro tab to the Timer tab by keyboard: the tab list is one
+ * tab stop, so Tab lands on the selected Pomodoro tab, and ArrowRight moves to
+ * the Timer, which selection follows.
+ */
+async function openTimerTab(page: Page): Promise<void> {
+  const tabList = clockFrame(page).getByRole("tablist", { name: "Clock sections" });
+  const pomodoroTab = tabList.getByRole("tab", { name: "Pomodoro", exact: true });
+  const timerTab = tabList.getByRole("tab", { name: "Timer", exact: true });
+  await tabTo(page, pomodoroTab, { max: 60 });
+  await page.keyboard.press("ArrowRight");
+  await expect(timerTab).toHaveAttribute("aria-selected", "true");
   await expect(lengthField(page, "Seconds")).toBeVisible({ timeout: 15_000 });
 }
 
 /**
- * Moves from the Timer tab to the Pomodoro tab by keyboard: the tab list is one
- * tab stop, so Tab lands on the selected Timer tab, and ArrowLeft moves to the
- * Pomodoro, which selection follows.
- */
-async function openPomodoroTab(page: Page): Promise<void> {
-  const tabList = clockFrame(page).getByRole("tablist", { name: "Clock sections" });
-  const timerTab = tabList.getByRole("tab", { name: "Timer", exact: true });
-  const pomodoroTab = tabList.getByRole("tab", { name: "Pomodoro", exact: true });
-  await tabTo(page, timerTab, { max: 60 });
-  await page.keyboard.press("ArrowLeft");
-  await expect(pomodoroTab).toHaveAttribute("aria-selected", "true");
-  await expect(tabPanel(page, "Pomodoro")).toBeVisible({ timeout: 15_000 });
-}
-
-/**
- * Moves from the Timer tab to the Stopwatch tab by keyboard: the tab list is one
- * tab stop, so Tab lands on the selected Timer tab, and ArrowRight moves to the
- * Stopwatch, which selection follows.
+ * Moves from the Pomodoro tab to the Stopwatch tab by keyboard: the tab list is
+ * one tab stop, so Tab lands on the selected Pomodoro tab, and two ArrowRights
+ * pass the Timer to the Stopwatch, which selection follows.
  */
 async function openStopwatchTab(page: Page): Promise<void> {
   const tabList = clockFrame(page).getByRole("tablist", { name: "Clock sections" });
+  const pomodoroTab = tabList.getByRole("tab", { name: "Pomodoro", exact: true });
   const timerTab = tabList.getByRole("tab", { name: "Timer", exact: true });
   const stopwatchTab = tabList.getByRole("tab", { name: "Stopwatch", exact: true });
-  await tabTo(page, timerTab, { max: 60 });
+  await tabTo(page, pomodoroTab, { max: 60 });
+  await page.keyboard.press("ArrowRight");
+  await expect(timerTab).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("ArrowRight");
   await expect(stopwatchTab).toHaveAttribute("aria-selected", "true");
   // The Stopwatch tab's own panel, from the zero it opens on.
@@ -349,19 +363,16 @@ async function openStopwatchTab(page: Page): Promise<void> {
 }
 
 /**
- * Moves from the Timer tab to the Alarms tab by keyboard: the tab list is one
- * tab stop, so Tab lands on the selected Timer tab, and two ArrowRights pass
- * the Stopwatch to the Alarms, which selection follows.
+ * Moves from the Pomodoro tab to the Alarms tab by keyboard: the tab list is
+ * one tab stop, so Tab lands on the selected Pomodoro tab, and End moves to the
+ * last tab, the Alarms, which selection follows.
  */
 async function openAlarmsTab(page: Page): Promise<void> {
   const tabList = clockFrame(page).getByRole("tablist", { name: "Clock sections" });
-  const timerTab = tabList.getByRole("tab", { name: "Timer", exact: true });
-  const stopwatchTab = tabList.getByRole("tab", { name: "Stopwatch", exact: true });
+  const pomodoroTab = tabList.getByRole("tab", { name: "Pomodoro", exact: true });
   const alarmsTab = tabList.getByRole("tab", { name: "Alarms", exact: true });
-  await tabTo(page, timerTab, { max: 60 });
-  await page.keyboard.press("ArrowRight");
-  await expect(stopwatchTab).toHaveAttribute("aria-selected", "true");
-  await page.keyboard.press("ArrowRight");
+  await tabTo(page, pomodoroTab, { max: 60 });
+  await page.keyboard.press("End");
   await expect(alarmsTab).toHaveAttribute("aria-selected", "true");
   // The Alarms tab's own panel, from the empty list it opens on.
   await expect(tabPanel(page, "Alarms")).toBeVisible({ timeout: 15_000 });
@@ -418,6 +429,7 @@ test.describe("Clock Timer @wf:plugins-clock-timer @chromium-only", () => {
   }) => {
     await turnOn(page);
     await openClockPage(page);
+    await openTimerTab(page);
 
     // The device granted no System Notification, so the page says Alerts stay
     // inside Maibuk and offers the banner.
@@ -489,8 +501,7 @@ test.describe("Clock Pomodoro @wf:plugins-clock-pomodoro @chromium-only", () => 
     page,
   }) => {
     await turnOn(page);
-    await openClockPage(page);
-    await openPomodoroTab(page);
+    await openClockPage(page, "Pomodoro", "clock-opens-on");
 
     // Idle on the first Pomodoro: its 25-minute length, the controls of that
     // status, and no Pomodoro counted today.
@@ -592,7 +603,6 @@ test.describe("Clock Pomodoro @wf:plugins-clock-pomodoro @chromium-only", () => 
   }) => {
     await turnOn(page);
     await openClockPage(page);
-    await openPomodoroTab(page);
 
     // The side card's last control is the lengths row: it sums up the three
     // lengths, and Enter on it opens the dialog.
@@ -752,6 +762,13 @@ test.describe("Clock Stopwatch @wf:plugins-clock-stopwatch @chromium-only", () =
     );
     await expect(lapsTable(page)).toHaveCount(0);
     await capture(page, "clock-stopwatch-reset");
+
+    // The tab is kept on this device: a reload reopens the Clock on the
+    // Stopwatch, not the Pomodoro a device that never picked one opens on.
+    await page.reload();
+    await expect(navOption(page, PLUGIN_NAME)).toBeVisible({ timeout: 20_000 });
+    await openClockPage(page, "Stopwatch");
+    await expect(elapsedTime(page)).toHaveText("00:00:00", { timeout: 15_000 });
   });
 });
 

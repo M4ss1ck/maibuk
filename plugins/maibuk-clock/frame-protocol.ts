@@ -19,6 +19,7 @@ import { isValidPomodoroSettings, type PomodoroSettings } from "./cycle";
 import { catalogFor, type ClockKey } from "./i18n";
 import type { ClockPomodoro, PomodoroSnapshot } from "./pomodoro";
 import type { ClockStopwatch } from "./stopwatch";
+import { type ClockTab, type ClockTabState, isClockTab } from "./tab";
 import type { ClockTimer, TimerSnapshot } from "./timer";
 import { hourCycleFor, MAX_TIMER_LENGTH_MS, type StopwatchState } from "./time";
 
@@ -47,6 +48,8 @@ export interface FrameStateMessage {
   stopwatch: StopwatchState;
   alarms: Alarm[];
   notifications: FrameNotificationStatus | null;
+  /** The tab this device last opened; the Frame follows it only when it changes. */
+  tab: ClockTab;
 }
 
 export type WorkerToFrameMessage =
@@ -76,6 +79,7 @@ export type FrameToWorkerMessage =
   | { kind: "alarm.setEnabled"; id: string; enabled: boolean }
   | { kind: "alarm.remove"; id: string }
   | { kind: "notifications.allow" }
+  | { kind: "tab.select"; tab: ClockTab }
   | { kind: "closed" };
 
 /** A whole clock field, from zero through `max`. */
@@ -150,10 +154,11 @@ export function connectClockFrame(
     pomodoro: ClockPomodoro;
     stopwatch: ClockStopwatch;
     alarms: ClockAlarms;
+    tab: ClockTabState;
     settingsRequest: SettingsRequest;
   }
 ): () => void {
-  const { client, timer, pomodoro, stopwatch, alarms, settingsRequest } = deps;
+  const { client, timer, pomodoro, stopwatch, alarms, tab, settingsRequest } = deps;
   let disposed = false;
   let labelsSent = false;
   let language = "en";
@@ -191,6 +196,7 @@ export function connectClockFrame(
       stopwatch: stopwatch.snapshot(),
       alarms: alarms.snapshot(),
       notifications,
+      tab: tab.snapshot(),
     });
   }
 
@@ -303,6 +309,11 @@ export function connectClockFrame(
           })
           .catch(() => {});
         return;
+      case "tab.select": {
+        const { tab: next } = value as { tab: unknown };
+        if (isClockTab(next)) tab.select(next);
+        return;
+      }
       case "closed":
         dispose();
         return;
@@ -319,6 +330,7 @@ export function connectClockFrame(
     pomodoro.subscribe(sendState),
     stopwatch.subscribe(sendState),
     alarms.subscribe(sendState),
+    tab.subscribe(sendState),
     settingsRequest.subscribe(sendSettingsRequest)
   );
   sendState();

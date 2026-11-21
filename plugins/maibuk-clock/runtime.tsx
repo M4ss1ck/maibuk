@@ -24,6 +24,7 @@ import { createAlarms } from "./alarms";
 import { POMODORO_LIMITS } from "./cycle";
 import { createPomodoro, type ClockPomodoro } from "./pomodoro";
 import { createStopwatch, type ClockStopwatch } from "./stopwatch";
+import { createClockTab } from "./tab";
 import { formatClockTime, hourCycleFor } from "./time";
 import { createTimer, type ClockTimer } from "./timer";
 import { connectClockFrame, createSettingsRequest, type SettingsRequest } from "./frame-protocol";
@@ -92,6 +93,7 @@ export function startClock(client: PluginClient, serve: ClockServe): Promise<voi
   const pomodoro = createPomodoro(client);
   const stopwatch = createStopwatch(client);
   const alarms = createAlarms(client);
+  const tab = createClockTab(client);
   // One request for the Plugin's lifetime: a Command run while no Frame is
   // mounted leaves it pending until the next Frame has received its labels.
   const settingsRequest = createSettingsRequest();
@@ -110,6 +112,9 @@ export function startClock(client: PluginClient, serve: ClockServe): Promise<voi
   // closed; "en" stays the fallback. The returned promise settles once that
   // startup reconciliation, and its one toast, is done.
   const started = (async () => {
+    // The last tab is read first, so a Frame's first state usually carries it;
+    // a Frame mounted sooner follows it once it lands.
+    await tab.load();
     let language = "en";
     try {
       language = (await client.language.get()).language;
@@ -173,6 +178,7 @@ export function startClock(client: PluginClient, serve: ClockServe): Promise<voi
       pomodoro,
       stopwatch,
       alarms,
+      tab,
       settingsRequest,
     });
   });
