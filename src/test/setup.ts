@@ -123,4 +123,29 @@ if (typeof window !== "undefined") {
   afterEach(() => {
     cleanup();
   });
+
+  // React Aria keeps the page's one keyboard drag in a module variable, and
+  // the drag hides everything outside its drop targets. A test that ends with
+  // a drag still running (it failed mid-drag, or pressed Escape before the
+  // drag's first frame; `waitForKeyboardDrag` in support/drag-events.ts)
+  // would hide every later test's screen, and the rest of the file would fail
+  // with "Unable to find an accessible element". End the drag here and fail
+  // the test that left it.
+  const { isVirtualDragging } = await import("react-aria/private/dnd/DragManager");
+  // Taken now, before any test fakes the timers.
+  const realSetTimeout = globalThis.setTimeout;
+  afterEach(async () => {
+    if (!isVirtualDragging()) return;
+    // The drag listens for Escape from its first frame on; this frame runs
+    // after it. A test that faked or stubbed out frames never runs one, so
+    // the wait gives up after a real 100 ms rather than hang the hook.
+    await new Promise((resolve) => {
+      requestAnimationFrame(resolve);
+      realSetTimeout(resolve, 100);
+    });
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    throw new Error(
+      "A React Aria keyboard drag was still running when the test ended. Drop or cancel it, and wait for it to start (waitForKeyboardDrag) and end (waitForKeyboardDragEnd) in src/test/support/drag-events.ts."
+    );
+  });
 }
