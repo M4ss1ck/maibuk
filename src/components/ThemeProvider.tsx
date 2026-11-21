@@ -6,18 +6,24 @@ import { applyMotion, REDUCED_MOTION_QUERY } from "@/lib/motion";
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const theme = useThemeStore((state) => state.theme);
+  const eink = useThemeStore((state) => state.eink);
   const { pathname } = useLocation();
   const onEmbed = isEmbedPath(pathname);
 
   useLayoutEffect(() => {
-    // OS preference OR another source; E-ink Mode (#898) is the only other source to come.
+    // The two sources are the OS preference and E-ink Mode (#901).
     const mediaQuery = window.matchMedia?.(REDUCED_MOTION_QUERY);
-    if (!mediaQuery) return;
-    const handler = () => applyMotion(mediaQuery.matches ?? false);
+    const einkMotion = eink && !onEmbed;
+    const handler = () => applyMotion((mediaQuery?.matches ?? false) || einkMotion);
     handler();
+    if (!mediaQuery) return;
     mediaQuery.addEventListener("change", handler);
     return () => mediaQuery.removeEventListener("change", handler);
-  }, []);
+  }, [eink, onEmbed]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("eink", eink && !onEmbed);
+  }, [eink, onEmbed]);
 
   useEffect(() => {
     // The Embed route owns the document theme through its ?theme parameter, so
@@ -25,7 +31,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (onEmbed) return;
     applyTheme(theme);
     syncWindowBackground();
-    writeBootTheme({ mode: theme });
+    writeBootTheme({ mode: theme, eink });
 
     // Listen for system theme changes when in "system" mode
     if (theme === "system") {
@@ -37,7 +43,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       mediaQuery.addEventListener("change", handler);
       return () => mediaQuery.removeEventListener("change", handler);
     }
-  }, [theme, onEmbed]);
+  }, [theme, eink, onEmbed]);
 
   return <>{children}</>;
 }

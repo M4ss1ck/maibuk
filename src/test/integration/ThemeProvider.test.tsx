@@ -30,8 +30,9 @@ function renderProvider(children: React.ReactNode, path = "/") {
 describe("ThemeProvider", () => {
   beforeEach(() => {
     localStorage.clear();
-    useThemeStore.setState({ theme: "system" });
+    useThemeStore.setState({ theme: "system", eink: false });
     document.documentElement.classList.remove("dark");
+    document.documentElement.classList.remove("eink");
     document.documentElement.removeAttribute("data-motion");
   });
 
@@ -143,6 +144,54 @@ describe("ThemeProvider", () => {
       reduceMotion = false;
       handlers.get(REDUCED_MOTION)?.();
     });
+    expect(document.documentElement).not.toHaveAttribute("data-motion");
+  });
+
+  it("marks the root for E-ink Mode", () => {
+    mockMediaQuery(() => false);
+    useThemeStore.setState({ eink: true });
+    renderProvider(<div>content</div>);
+    expect(document.documentElement.classList.contains("eink")).toBe(true);
+  });
+
+  it("sets data-motion=reduce from E-ink Mode alone", () => {
+    mockMediaQuery(() => false);
+    useThemeStore.setState({ eink: true });
+    renderProvider(<div>content</div>);
+    expect(document.documentElement).toHaveAttribute("data-motion", "reduce");
+  });
+
+  it("keeps dark following Light/Dark/System while E-ink Mode is on", () => {
+    mockMediaQuery((query) => query === "(prefers-color-scheme: dark)");
+    useThemeStore.setState({ theme: "light", eink: true });
+    renderProvider(<div>content</div>);
+    expect(document.documentElement.classList.contains("dark")).toBe(false);
+
+    act(() => useThemeStore.setState({ theme: "dark" }));
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+
+    act(() => useThemeStore.setState({ theme: "system" }));
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+  });
+
+  it("removes the E-ink class and data-motion when E-ink Mode turns off", () => {
+    mockMediaQuery(() => false);
+    useThemeStore.setState({ eink: true });
+    renderProvider(<div>content</div>);
+    expect(document.documentElement.classList.contains("eink")).toBe(true);
+    expect(document.documentElement).toHaveAttribute("data-motion", "reduce");
+
+    act(() => useThemeStore.setState({ eink: false }));
+
+    expect(document.documentElement.classList.contains("eink")).toBe(false);
+    expect(document.documentElement).not.toHaveAttribute("data-motion");
+  });
+
+  it("never paints E-ink Mode on the Embed route", () => {
+    mockMediaQuery(() => false);
+    useThemeStore.setState({ eink: true });
+    renderProvider(<div>content</div>, "/embed?theme=dark");
+    expect(document.documentElement.classList.contains("eink")).toBe(false);
     expect(document.documentElement).not.toHaveAttribute("data-motion");
   });
 });

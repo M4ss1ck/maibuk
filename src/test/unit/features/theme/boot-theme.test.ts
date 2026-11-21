@@ -76,4 +76,55 @@ describe("writeBootTheme()", () => {
     });
     expect(() => writeBootTheme({ mode: "dark" })).not.toThrow();
   });
+
+  it("round-trips E-ink Mode through later writes", () => {
+    writeBootTheme({ eink: true });
+    expect(readSnapshot()).toEqual({ v: 1, mode: "system", vars: {}, eink: true });
+    writeBootTheme({ mode: "dark" });
+    expect(readSnapshot()).toEqual({ v: 1, mode: "dark", vars: {}, eink: true });
+  });
+
+  it("reads a record without eink as off", () => {
+    localStorage.setItem(BOOT_THEME_KEY, JSON.stringify({ v: 1, mode: "dark", vars: {} }));
+    writeBootTheme({ mode: "light" });
+    expect(readSnapshot()).toEqual({ v: 1, mode: "light", vars: {} });
+  });
+
+  it("keeps mode and vars from an old record when eink turns on", () => {
+    localStorage.setItem(
+      BOOT_THEME_KEY,
+      JSON.stringify({ v: 1, mode: "dark", vars: { "--color-primary": "#123456" } })
+    );
+    writeBootTheme({ eink: true });
+    expect(readSnapshot()).toEqual({
+      v: 1,
+      mode: "dark",
+      vars: { "--color-primary": "#123456" },
+      eink: true,
+    });
+  });
+
+  it("reads a malformed eink as off without discarding mode or vars", () => {
+    localStorage.setItem(
+      BOOT_THEME_KEY,
+      JSON.stringify({
+        v: 1,
+        mode: "dark",
+        vars: { "--color-primary": "#123456" },
+        eink: "yes",
+      })
+    );
+    writeBootTheme({ mode: "light" });
+    expect(readSnapshot()).toEqual({
+      v: 1,
+      mode: "light",
+      vars: { "--color-primary": "#123456" },
+    });
+  });
+
+  it("leaves eink out again when it turns off", () => {
+    writeBootTheme({ eink: true });
+    writeBootTheme({ eink: false });
+    expect(readSnapshot()).toEqual({ v: 1, mode: "system", vars: {} });
+  });
 });

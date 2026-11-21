@@ -5,14 +5,18 @@ type Theme = "light" | "dark" | "system";
 
 interface ThemeStore {
   theme: Theme;
+  eink: boolean;
   setTheme: (theme: Theme) => void;
+  setEink: (eink: boolean) => void;
 }
 
 export const useThemeStore = create<ThemeStore>()(
   persist(
     (set) => ({
       theme: "system",
+      eink: false,
       setTheme: (theme) => set({ theme }),
+      setEink: (eink) => set({ eink }),
     }),
     {
       name: "maibuk-theme",
