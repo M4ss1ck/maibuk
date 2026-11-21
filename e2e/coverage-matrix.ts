@@ -3498,6 +3498,21 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "plugins-clock-alarms",
+    area: "plugins",
+    workflow:
+      "Clock turned on from Settings → Plugins by keyboard, then Open Clock from the Command Palette opens its page; the author moves with ArrowRight from the Timer tab past the Stopwatch to the Alarms tab, which opens empty — “No alarms yet.” above Add alarm — and Add alarm opens the Alarm form, where the author types a time two minutes ahead into the Hour and Minute fields, types a label, ticks one weekday, and presses Save: the row shows that time, the label, and the weekday, its switch is named Alarm <time> and starts on, and Edit <time> reopens the same form holding those fields, where a new Minute and Save move the row to the new time; the switch pressed off and on again reads unchecked, then checked; Delete <time> takes the row away and the tab shows “No alarms yet.” again; asserts: the empty message, the form's fields, the row's time, label, weekday, and switch name and state, the row's new time after the edit, and the empty message after the deletion; persists: yes (device-local Plugin storage; the Library is untouched)",
+    edges: [
+      "An Alarm added from the form shows its time, label, and weekday with its switch named Alarm <time> and on; Edit moves its time, the switch turns it off and back on, and Delete returns the tab to empty",
+    ],
+    terms: ["Plugin", "Built-in Plugin"],
+    shortcuts: [],
+    routes: ["/settings", "/plugin/:pluginId/:pageId"],
+    fixture: "empty",
+    tags: ["chromium-only"],
+    status: "accepted",
+  },
+  {
     id: "settings-reset-all",
     area: "settings",
     workflow:

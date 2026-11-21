@@ -10,11 +10,14 @@
 // Short break from its other Command, and resets to the first Pomodoro. The
 // Stopwatch tab is one ArrowRight further on: its Stopwatch starts, marks a Lap
 // from its button and a second from its other Command, pauses and resumes from
-// its Command, and resets to zero. No phase is waited out: the Pomodoro's 25
-// minutes are the unit suites'.
+// its Command, and resets to zero. The Alarms tab is one ArrowRight past that:
+// the form adds an Alarm a couple of minutes ahead with a label and a weekday,
+// Edit moves its minute, its switch turns it off and back on, and Delete
+// returns the tab to its empty message (issue #874). No phase is waited out:
+// the Pomodoro's 25 minutes are the unit suites'.
 // Keyboard only: every control is reached by Tab and pressed with Enter or Space.
 
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { expectFocusWithin, pressUntilFocused, tabTo, tabToEither } from "../support/keyboard";
 import { runPaletteCommand } from "../support/palette";
@@ -136,6 +139,60 @@ async function elapsedSeconds(page: Page): Promise<number> {
   return text === null ? 0 : secondsOf(text);
 }
 
+/** The weekdays the Alarms list prints, short and Sunday first. */
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+
+/** The 12-hour reading en-US gives an Alarm's time: "h:mm AM" or "h:mm PM". */
+function clockTime(hour: number, minute: number): string {
+  const hours = hour % 12 === 0 ? 12 : hour % 12;
+  return `${hours}:${String(minute).padStart(2, "0")} ${hour < 12 ? "AM" : "PM"}`;
+}
+
+/** The clock when the spec starts. */
+const NOW = new Date();
+
+/** The Alarm's time: a couple of minutes past it. */
+const AHEAD = new Date(NOW.getTime() + 2 * 60_000);
+const ALARM_HOUR = AHEAD.getHours();
+const ALARM_MINUTE = AHEAD.getMinutes();
+const ALARM_TIME = clockTime(ALARM_HOUR, ALARM_MINUTE);
+
+/** The minute the edit moves it to, kept off the 60 the field refuses. */
+const EDITED_MINUTE = ALARM_MINUTE === 59 ? 58 : ALARM_MINUTE + 1;
+const EDITED_TIME = clockTime(ALARM_HOUR, EDITED_MINUTE);
+
+/** A weekday other than today's, so a two-minutes-ahead Alarm cannot fire mid-test. */
+const ALARM_WEEKDAY = WEEKDAYS[(NOW.getDay() + 3) % 7];
+
+/** The label the form is given, which the row then shows beside its time. */
+const ALARM_LABEL = "Wake up";
+
+/** What an Alarms tab with no Alarm draws. */
+const NO_ALARMS = "No alarms yet.";
+
+/** The Alarms tab's Add alarm button, which opens the form. */
+const addAlarmButton = (page: Page) => page.getByRole("button", { name: "Add alarm", exact: true });
+
+/** The Alarm form as a dialog, titled for the action that opened it. */
+const alarmForm = (page: Page, name: "Add alarm" | "Alarm") =>
+  page.getByRole("dialog", { name, exact: true });
+
+/** One row's switch, which carries the row's drawn time in its name. */
+const alarmSwitch = (page: Page, time: string) =>
+  page.getByRole("switch", { name: `Alarm ${time}`, exact: true });
+
+/**
+ * Replaces one number field of the open form from the keyboard: the field holds
+ * the current hour or minute, so Select All types over it, and the Tab out is
+ * the commit React Aria reads (it parses on blur, Enter, or stepping).
+ */
+async function setAlarmNumber(page: Page, field: Locator, value: number): Promise<void> {
+  await tabToEither(page, field, { max: 20 });
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.type(String(value));
+  await page.keyboard.press("Tab");
+}
+
 /** Jumps to the Plugins section through the Settings outline, leaving its heading focused. */
 async function openPluginsSection(page: Page): Promise<void> {
   await page.goto("/settings");
@@ -224,6 +281,25 @@ async function openStopwatchTab(page: Page): Promise<void> {
   await expect(stopwatchTab).toHaveAttribute("aria-selected", "true");
   // The Stopwatch tab's own panel, from the zero it opens on.
   await expect(page.getByText("0:00", { exact: true })).toBeVisible({ timeout: 15_000 });
+}
+
+/**
+ * Moves from the Timer tab to the Alarms tab by keyboard: the tab list is one
+ * tab stop, so Tab lands on the selected Timer tab, and two ArrowRights pass
+ * the Stopwatch to the Alarms, which selection follows.
+ */
+async function openAlarmsTab(page: Page): Promise<void> {
+  const tabList = page.getByRole("tablist", { name: "Clock sections" });
+  const timerTab = tabList.getByRole("tab", { name: "Timer", exact: true });
+  const stopwatchTab = tabList.getByRole("tab", { name: "Stopwatch", exact: true });
+  const alarmsTab = tabList.getByRole("tab", { name: "Alarms", exact: true });
+  await tabTo(page, timerTab, { max: 40 });
+  await page.keyboard.press("ArrowRight");
+  await expect(stopwatchTab).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("ArrowRight");
+  await expect(alarmsTab).toHaveAttribute("aria-selected", "true");
+  // The Alarms tab's own panel, from the empty list it opens on.
+  await expect(page.getByText(NO_ALARMS, { exact: true })).toBeVisible({ timeout: 15_000 });
 }
 
 /**
@@ -441,5 +517,101 @@ test.describe("Clock Stopwatch @wf:plugins-clock-stopwatch @chromium-only", () =
     await expect(page.getByRole("button", { name: "Reset", exact: true })).toHaveCount(0);
     await expect(lapsTable(page)).toHaveCount(0);
     await capture(page, "clock-stopwatch-reset");
+  });
+});
+
+test.describe("Clock Alarms @wf:plugins-clock-alarms @chromium-only", () => {
+  test("an Alarm added from its form, moved by Edit, switched off and on, and deleted returns the tab to empty", async ({
+    page,
+  }) => {
+    await turnOn(page);
+    await openClockPage(page);
+    await openAlarmsTab(page);
+
+    // No Alarm yet: the empty message above the one button the list offers.
+    await expect(addAlarmButton(page)).toBeVisible();
+    await capture(page, "clock-alarms-empty");
+
+    // Add alarm opens the form: the current time, no label, and no weekday.
+    await tabToEither(page, addAlarmButton(page), { max: 30 });
+    await page.keyboard.press("Enter");
+    const add = alarmForm(page, "Add alarm");
+    await expect(add).toBeVisible();
+    await setAlarmNumber(page, add.getByRole("textbox", { name: "Hour", exact: true }), ALARM_HOUR);
+    await setAlarmNumber(
+      page,
+      add.getByRole("textbox", { name: "Minute", exact: true }),
+      ALARM_MINUTE
+    );
+    await tabToEither(page, add.getByRole("textbox", { name: "Label", exact: true }), { max: 20 });
+    await page.keyboard.type(ALARM_LABEL);
+    const weekday = add.getByRole("checkbox", { name: ALARM_WEEKDAY, exact: true });
+    await tabToEither(page, weekday, { max: 20 });
+    await page.keyboard.press("Space");
+    await expect(weekday).toBeChecked();
+    await capture(page, "clock-alarms-form");
+
+    // Save writes it: the row shows the time, the label, and the weekday, its
+    // switch is named after the time, and it starts on.
+    await tabToEither(page, add.getByRole("button", { name: "Save", exact: true }), { max: 20 });
+    await page.keyboard.press("Enter");
+    await expect(add).toBeHidden();
+    await expect(page.getByText(ALARM_TIME, { exact: true })).toBeVisible();
+    await expect(page.getByText(ALARM_LABEL, { exact: true })).toBeVisible();
+    await expect(page.getByText(ALARM_WEEKDAY, { exact: true })).toBeVisible();
+    await expect(page.getByText(NO_ALARMS, { exact: true })).toHaveCount(0);
+    const toggle = alarmSwitch(page, ALARM_TIME);
+    await expect(toggle).toBeChecked();
+    await capture(page, "clock-alarms-added");
+
+    // Edit <time> reopens the same form holding the Alarm's own fields, and a
+    // new minute moves the row to the new time.
+    await tabToEither(page, page.getByRole("button", { name: `Edit ${ALARM_TIME}`, exact: true }), {
+      max: 30,
+    });
+    await page.keyboard.press("Enter");
+    const edit = alarmForm(page, "Alarm");
+    await expect(edit).toBeVisible();
+    await expect(edit.getByRole("textbox", { name: "Hour", exact: true })).toHaveValue(
+      String(ALARM_HOUR)
+    );
+    await expect(edit.getByRole("textbox", { name: "Minute", exact: true })).toHaveValue(
+      String(ALARM_MINUTE)
+    );
+    await expect(edit.getByRole("textbox", { name: "Label", exact: true })).toHaveValue(
+      ALARM_LABEL
+    );
+    await setAlarmNumber(
+      page,
+      edit.getByRole("textbox", { name: "Minute", exact: true }),
+      EDITED_MINUTE
+    );
+    await tabToEither(page, edit.getByRole("button", { name: "Save", exact: true }), { max: 20 });
+    await page.keyboard.press("Enter");
+    await expect(edit).toBeHidden();
+    await expect(page.getByText(EDITED_TIME, { exact: true })).toBeVisible();
+    await expect(page.getByText(ALARM_TIME, { exact: true })).toHaveCount(0);
+
+    // The switch, renamed with the new time, turns the Alarm off and back on.
+    const editedToggle = alarmSwitch(page, EDITED_TIME);
+    await expect(editedToggle).toBeChecked();
+    await tabToEither(page, editedToggle, { max: 30 });
+    await page.keyboard.press("Space");
+    await expect(editedToggle).not.toBeChecked();
+    await page.keyboard.press("Space");
+    await expect(editedToggle).toBeChecked();
+    await capture(page, "clock-alarms-edited");
+
+    // Delete <time> takes the row away, leaving the tab empty again.
+    await tabToEither(
+      page,
+      page.getByRole("button", { name: `Delete ${EDITED_TIME}`, exact: true }),
+      { max: 30 }
+    );
+    await page.keyboard.press("Enter");
+    await expect(page.getByText(NO_ALARMS, { exact: true })).toBeVisible();
+    await expect(editedToggle).toHaveCount(0);
+    await expect(page.getByText(ALARM_LABEL, { exact: true })).toHaveCount(0);
+    await capture(page, "clock-alarms-deleted");
   });
 });

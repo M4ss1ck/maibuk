@@ -8,6 +8,8 @@ import {
   hourCycleFor,
   joinDuration,
   markLap,
+  nextAlarmAt,
+  type OffsetAt,
   pauseStopwatch,
   pauseTimer,
   reconcileTimer,
@@ -451,5 +453,78 @@ describe("formatElapsed()", () => {
 
   it("formats from an hour as h:mm:ss", () => {
     expect(formatElapsed(3_600_000)).toBe("1:00:00");
+  });
+});
+
+describe("nextAlarmAt()", () => {
+  const HOUR = 60 * MINUTE;
+  const DAY = 24 * HOUR;
+  /** 2024-01-01, a Monday. */
+  const MONDAY = Date.UTC(2024, 0, 1);
+  const utc: OffsetAt = () => 0;
+  const utcPlusTwo: OffsetAt = () => -120;
+
+  /** New York's spring-forward: 02:00 EST reads as 03:00 EDT. */
+  const SPRING_JUMP = Date.UTC(2024, 2, 10, 7, 0);
+  const springForward: OffsetAt = (epochMs) => (epochMs < SPRING_JUMP ? 300 : 240);
+  /** New York's fall-back: 02:00 EDT reads again as 01:00 EST. */
+  const FALL_JUMP = Date.UTC(2024, 10, 3, 6, 0);
+  const fallBack: OffsetAt = (epochMs) => (epochMs < FALL_JUMP ? 240 : 300);
+
+  it("fires later today", () => {
+    expect(nextAlarmAt({ hour: 9, minute: 0, weekdays: [] }, MONDAY + 8 * HOUR, utc)).toBe(
+      MONDAY + 9 * HOUR
+    );
+  });
+
+  it("reads the wall clock through the offset", () => {
+    // 06:00 UTC is 08:00 at UTC+2, so the ninth hour is still to come.
+    expect(nextAlarmAt({ hour: 9, minute: 0, weekdays: [] }, MONDAY + 6 * HOUR, utcPlusTwo)).toBe(
+      MONDAY + 7 * HOUR
+    );
+  });
+
+  it("waits for tomorrow when the time has passed", () => {
+    expect(nextAlarmAt({ hour: 9, minute: 0, weekdays: [] }, MONDAY + 10 * HOUR, utc)).toBe(
+      MONDAY + DAY + 9 * HOUR
+    );
+  });
+
+  it("treats exactly now as gone", () => {
+    expect(nextAlarmAt({ hour: 9, minute: 0, weekdays: [] }, MONDAY + 9 * HOUR, utc)).toBe(
+      MONDAY + DAY + 9 * HOUR
+    );
+  });
+
+  it("skips ahead to the next enabled weekday", () => {
+    // 5 is Friday, and 2024-01-05 is the first one after that Monday.
+    expect(nextAlarmAt({ hour: 9, minute: 0, weekdays: [5] }, MONDAY + 8 * HOUR, utc)).toBe(
+      Date.UTC(2024, 0, 5, 9, 0)
+    );
+    // Today is enabled but its time has gone, so the next Monday is a week out.
+    expect(nextAlarmAt({ hour: 9, minute: 0, weekdays: [1] }, MONDAY + 10 * HOUR, utc)).toBe(
+      MONDAY + 7 * DAY + 9 * HOUR
+    );
+  });
+
+  it("fires at the end of the gap when spring-forward skips the time", () => {
+    const alarm = { hour: 2, minute: 30, weekdays: [] };
+    expect(nextAlarmAt(alarm, Date.UTC(2024, 2, 9, 12, 0), springForward)).toBe(SPRING_JUMP);
+    // 2024-03-10 is a Sunday: the skipped half hour fires on that day, at 03:00 local.
+    expect(
+      nextAlarmAt({ ...alarm, weekdays: [0] }, Date.UTC(2024, 2, 9, 12, 0), springForward)
+    ).toBe(SPRING_JUMP);
+    // Not a Sunday, so the Alarm waits for Monday's 02:30, which exists again.
+    expect(
+      nextAlarmAt({ ...alarm, weekdays: [1] }, Date.UTC(2024, 2, 9, 12, 0), springForward)
+    ).toBe(Date.UTC(2024, 2, 11, 6, 30));
+  });
+
+  it("fires once, at the earlier instant, when fall-back repeats the time", () => {
+    const alarm = { hour: 1, minute: 30, weekdays: [] };
+    const earlier = Date.UTC(2024, 10, 3, 5, 30);
+    expect(nextAlarmAt(alarm, Date.UTC(2024, 10, 2, 12, 0), fallBack)).toBe(earlier);
+    // The repeat at 01:30 EST is not an occurrence of its own.
+    expect(nextAlarmAt(alarm, earlier, fallBack)).toBe(Date.UTC(2024, 10, 4, 6, 30));
   });
 });

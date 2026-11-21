@@ -16,6 +16,10 @@
  * the lengths and auto-starts the next phase. The Pomodoro Commands start,
  * pause, and skip the cycle, and the Toggle Button stays pressed exactly while a
  * phase runs. Every control is reached with `user-event` key presses.
+ *
+ * The Alarms tab adds, edits, switches, and deletes Alarms by keyboard, with
+ * each change shown as a scheduled System Notification, and a startup toast
+ * names an Alarm missed while Maibuk was closed.
  */
 
 import { act, screen, within } from "@testing-library/react";
@@ -40,8 +44,9 @@ import {
   startClock,
 } from "./runtime";
 import { dayNumber } from "./cycle";
+import { alarmNotificationId, type Alarm } from "./alarms";
 import { clockManifest, tabTo, type User } from "./test-support";
-import { formatDuration } from "./time";
+import { formatClockTime, formatDuration, hourCycleFor, localOffsetAt, nextAlarmAt } from "./time";
 
 /**
  * The fake clock every timed test starts at. It sits an hour ahead of the real
@@ -92,6 +97,23 @@ interface StoredStopwatch {
 function storedStopwatch(storage: Map<string, unknown>): StoredStopwatch | undefined {
   const value = storage.get("stopwatch");
   return typeof value === "object" && value !== null ? (value as StoredStopwatch) : undefined;
+}
+
+/** The Alarms storage holds, or none. */
+function storedAlarms(storage: Map<string, unknown>): Alarm[] {
+  const value = storage.get("alarms");
+  return Array.isArray(value) ? (value as Alarm[]) : [];
+}
+
+/** The tag the host scopes one Alarm's Alert under. */
+function alarmTag(alarm: Alarm): string {
+  return `maibuk-clock/${alarmNotificationId(alarm.id)}`;
+}
+
+/** An Alarm's time as the page writes it, in the given language's clock. */
+function shownTime(hour: number, minute: number, language = "en"): string {
+  const at = new Date(2000, 0, 1, hour, minute).getTime();
+  return formatClockTime(at, localOffsetAt(at), hourCycleFor(language));
 }
 
 /** The Cycle settings storage holds, or none. */
@@ -194,6 +216,18 @@ async function openStopwatchTab(user: User): Promise<void> {
   });
 }
 
+/** Focuses the selected Timer tab and moves right twice to the Alarms tab. */
+async function openAlarmsTab(user: User): Promise<void> {
+  const timerTab = await screen.findByRole("tab", { name: en.timer });
+  await tabTo(user, timerTab);
+  expect(timerTab).toHaveFocus();
+  await user.keyboard("{ArrowRight}{ArrowRight}");
+  expect(screen.getByRole("tab", { name: en.alarms })).toHaveFocus();
+  await eventually(() =>
+    expect(screen.getByRole("button", { name: en.addAlarm })).toBeInTheDocument()
+  );
+}
+
 /** Starts the Timer from the page and waits for the stored running state. */
 async function startTimer(user: User, storage: Map<string, unknown>): Promise<void> {
   await press(user, en.start);
@@ -260,7 +294,7 @@ describe("Clock runtime", () => {
       const panel = screen.getByRole("tabpanel");
       expect(within(panel).getByText("0:00")).toBeInTheDocument();
       expect(within(panel).getByRole("button", { name: en.start })).toBeInTheDocument();
-      expect(within(panel).queryByText(en.comingSoon)).toBeNull();
+      expect(within(panel).queryByRole("button", { name: en.addAlarm })).toBeNull();
 
       await page.unmount();
     } finally {
@@ -717,6 +751,28 @@ describe("Clock runtime", () => {
       expect(screen.getByRole("button", { name: es.skip })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: es.resetCycle })).toBeInTheDocument();
 
+      // The Alarms tab, and the form its Add alarm button opens.
+      const pomodoroTab = screen.getByRole("tab", { name: es.pomodoro });
+      await tabTo(user, pomodoroTab);
+      expect(pomodoroTab).toHaveFocus();
+      await user.keyboard("{ArrowRight}{ArrowRight}{ArrowRight}");
+      await eventually(() =>
+        expect(screen.getByRole("button", { name: es.addAlarm })).toBeInTheDocument()
+      );
+      expect(screen.getByText(es.noAlarms)).toBeInTheDocument();
+      await press(user, es.addAlarm);
+      const alarmDialog = await screen.findByRole("dialog", { name: es.addAlarm });
+      expect(within(alarmDialog).getByRole("textbox", { name: es.hour })).toBeInTheDocument();
+      expect(within(alarmDialog).getByRole("textbox", { name: es.minute })).toBeInTheDocument();
+      expect(within(alarmDialog).getByRole("textbox", { name: es.alarmLabel })).toBeInTheDocument();
+      expect(
+        within(alarmDialog).getByRole("checkbox", { name: es.weekdayMon })
+      ).toBeInTheDocument();
+      expect(within(alarmDialog).getByRole("button", { name: es.saveAlarm })).toBeInTheDocument();
+      expect(within(alarmDialog).getByRole("button", { name: es.cancel })).toBeInTheDocument();
+      await user.keyboard("{Escape}");
+      await eventually(() => expect(screen.queryByRole("dialog")).toBeNull());
+
       const row = await host.renderSettingsRow(POMODORO_SETTINGS_ROW_ID);
       expect(await screen.findByRole("textbox", { name: es.pomodoroMinutes })).toBeInTheDocument();
       expect(screen.getByRole("textbox", { name: es.shortBreakMinutes })).toBeInTheDocument();
@@ -1050,5 +1106,197 @@ describe("Clock runtime", () => {
 
     await eventually(() => expect(screen.getByText(en.alertsMayBeLate)).toBeInTheDocument());
     expect(screen.queryByText(en.alertsNeedOpen)).toBeNull();
+  });
+});
+
+describe("Clock Alarms", () => {
+  afterEach(async () => {
+    // The Plugin's teardown waits on a real task, which a fake clock never runs.
+    vi.useRealTimers();
+    const pending = openHosts.splice(0);
+    for (const host of pending) await host.stop();
+  });
+
+  it("adds, edits, switches, and deletes an Alarm by keyboard, rescheduling its Alert", async () => {
+    const { host, storage } = startHost();
+    freezeClock();
+    await host.renderPage(CLOCK_PAGE_ID);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+    await openAlarmsTab(user);
+    expect(screen.getByText(en.noAlarms)).toBeInTheDocument();
+
+    await press(user, en.addAlarm);
+    const dialog = await screen.findByRole("dialog", { name: en.addAlarm });
+
+    const hourField = within(dialog).getByRole("textbox", { name: en.hour });
+    await tabTo(user, hourField);
+    expect(hourField).toHaveFocus();
+    await user.clear(hourField);
+    await user.type(hourField, "13");
+    await user.keyboard("{Enter}");
+
+    const minuteField = within(dialog).getByRole("textbox", { name: en.minute });
+    await tabTo(user, minuteField);
+    await user.clear(minuteField);
+    await user.type(minuteField, "30");
+    await user.keyboard("{Enter}");
+
+    const labelField = within(dialog).getByRole("textbox", { name: en.alarmLabel });
+    await tabTo(user, labelField);
+    await user.type(labelField, "Write");
+
+    const monday = within(dialog).getByRole("checkbox", { name: en.weekdayMon });
+    await tabTo(user, monday);
+    expect(monday).toHaveFocus();
+    await user.keyboard(" ");
+
+    await press(user, en.saveAlarm);
+    await eventually(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    await eventually(() => expect(storedAlarms(storage)).toHaveLength(1));
+    const added = storedAlarms(storage)[0];
+    if (added === undefined) throw new Error("the added Alarm should be stored");
+    expect(added).toMatchObject({
+      hour: 13,
+      minute: 30,
+      label: "Write",
+      weekdays: [1],
+      enabled: true,
+    });
+    const tag = alarmTag(added);
+    const firstAt = nextAlarmAt({ hour: 13, minute: 30, weekdays: [1] }, START, localOffsetAt);
+    await eventually(() => expect(host.systemNotifications.scheduled.get(tag)?.at).toBe(firstAt));
+    expect(host.systemNotifications.scheduled.get(tag)?.title).toBe("Clock: Write");
+    expect(host.systemNotifications.scheduled.get(tag)?.body).toBe(shownTime(13, 30));
+
+    // The row names the time, the label, and the weekday, and the Alarm's
+    // switch is on.
+    expect(screen.getByText(shownTime(13, 30))).toBeInTheDocument();
+    expect(screen.getByText("Write")).toBeInTheDocument();
+    expect(screen.getByText(en.weekdayMon)).toBeInTheDocument();
+    const alarmSwitch = screen.getByRole("switch", { name: `Alarm ${shownTime(13, 30)}` });
+    expect(alarmSwitch).toBeChecked();
+
+    // Editing the time reschedules the Alert at the new occurrence.
+    await press(user, en.editAlarm.replace("{time}", shownTime(13, 30)));
+    const editDialog = await screen.findByRole("dialog", { name: en.alarm });
+    expect(within(editDialog).getByRole("textbox", { name: en.alarmLabel })).toHaveValue("Write");
+    const editHour = within(editDialog).getByRole("textbox", { name: en.hour });
+    await tabTo(user, editHour);
+    await user.clear(editHour);
+    await user.type(editHour, "14");
+    await user.keyboard("{Enter}");
+    const editMinute = within(editDialog).getByRole("textbox", { name: en.minute });
+    await tabTo(user, editMinute);
+    await user.clear(editMinute);
+    await user.type(editMinute, "0");
+    await user.keyboard("{Enter}");
+    await press(user, en.saveAlarm);
+    await eventually(() =>
+      expect(storedAlarms(storage)[0]).toMatchObject({ hour: 14, minute: 0, label: "Write" })
+    );
+    const secondAt = nextAlarmAt({ hour: 14, minute: 0, weekdays: [1] }, START, localOffsetAt);
+    await eventually(() => expect(host.systemNotifications.scheduled.get(tag)?.at).toBe(secondAt));
+
+    // Off cancels the Alert; on schedules it again.
+    const editedSwitch = screen.getByRole("switch", { name: `Alarm ${shownTime(14, 0)}` });
+    await tabTo(user, editedSwitch);
+    expect(editedSwitch).toHaveFocus();
+    await user.keyboard(" ");
+    await eventually(() => expect(storedAlarms(storage)[0]?.enabled).toBe(false));
+    await eventually(() => expect(host.systemNotifications.scheduled.has(tag)).toBe(false));
+    expect(host.systemNotifications.log.at(-1)).toMatchObject({ kind: "cancelled", tag });
+
+    await user.keyboard(" ");
+    await eventually(() => expect(storedAlarms(storage)[0]?.enabled).toBe(true));
+    await eventually(() => expect(host.systemNotifications.scheduled.get(tag)?.at).toBe(secondAt));
+
+    // Deleting cancels the Alert and empties the list.
+    await press(user, en.deleteAlarm.replace("{time}", shownTime(14, 0)));
+    await eventually(() => expect(storedAlarms(storage)).toEqual([]));
+    await eventually(() => expect(host.systemNotifications.scheduled.has(tag)).toBe(false));
+    expect(host.systemNotifications.log.at(-1)).toMatchObject({ kind: "cancelled", tag });
+    await eventually(() => expect(screen.getByText(en.noAlarms)).toBeInTheDocument());
+  });
+
+  it("closes the form on Escape and returns focus to the button that opened it", async () => {
+    const { host, storage } = startHost();
+    freezeClock();
+    await host.renderPage(CLOCK_PAGE_ID);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+    await openAlarmsTab(user);
+    const add = screen.getByRole("button", { name: en.addAlarm });
+    await tabTo(user, add);
+    expect(add).toHaveFocus();
+    await user.keyboard("{Enter}");
+    await screen.findByRole("dialog", { name: en.addAlarm });
+
+    await user.keyboard("{Escape}");
+    await eventually(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(add).toHaveFocus();
+    expect(storedAlarms(storage)).toEqual([]);
+  });
+
+  it("toasts once about an Alarm missed while closed, and shows it off", async () => {
+    const passedAt = START - 3 * 3_600_000;
+    const missed: Alarm = {
+      id: "missed",
+      hour: 9,
+      minute: 0,
+      label: "Write",
+      weekdays: [],
+      enabled: true,
+      nextAt: passedAt,
+    };
+    const storage = new Map<string, unknown>([["alarms", [missed]]]);
+    const { host } = startHost({ storage });
+    freezeClock();
+
+    await eventually(() => expect(host.notifications).toHaveLength(1));
+    const missedTime = formatClockTime(passedAt, localOffsetAt(passedAt), hourCycleFor("en"));
+    expect(host.notifications).toEqual([
+      { variant: "info", message: en.alarmMissed.replace("{time}", missedTime) },
+    ]);
+    expect(host.notifications[0]?.message).toContain("Missed alarm");
+
+    await host.renderPage(CLOCK_PAGE_ID);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await openAlarmsTab(user);
+
+    const offSwitch = await screen.findByRole("switch", { name: `Alarm ${shownTime(9, 0)}` });
+    expect(offSwitch).not.toBeChecked();
+    expect(storedAlarms(storage)[0]?.enabled).toBe(false);
+    expect(host.systemNotifications.scheduled.size).toBe(0);
+  });
+
+  it("names two Alarms at one time apart by their label and weekdays", async () => {
+    const at = (id: string, label: string, weekdays: number[]): Alarm => ({
+      id,
+      hour: 7,
+      minute: 0,
+      label,
+      weekdays,
+      enabled: false,
+      nextAt: null,
+    });
+    const storage = new Map<string, unknown>([
+      ["alarms", [at("weekday", "Write", [1, 2, 3, 4, 5]), at("weekend", "", [0, 6])]],
+    ]);
+    const { host } = startHost({ storage });
+    freezeClock();
+    await host.renderPage(CLOCK_PAGE_ID);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await openAlarmsTab(user);
+
+    const time = shownTime(7, 0);
+    const weekdays = [en.weekdayMon, en.weekdayTue, en.weekdayWed, en.weekdayThu, en.weekdayFri];
+    const first = `${time}, Write, ${weekdays.join(", ")}`;
+    const second = `${time}, ${en.weekdaySun}, ${en.weekdaySat}`;
+    expect(await screen.findByRole("switch", { name: `Alarm ${first}` })).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: `Alarm ${second}` })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: `Edit ${first}` })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: `Delete ${second}` })).toBeInTheDocument();
   });
 });
