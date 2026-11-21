@@ -195,10 +195,15 @@ async function elapsedSeconds(page: Page): Promise<number> {
 /** The weekdays the Alarms list prints, short and Sunday first. */
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
-/** The 12-hour reading en-US gives an Alarm's time: "h:mm AM" or "h:mm PM". */
-function clockTime(hour: number, minute: number): string {
+/**
+ * An Alarm's drawn time: "HH:mm" while the 24-Hour Clock is on, which it is on
+ * a device that never turned it off, and "h:mm AM" or "h:mm PM" once it is off.
+ */
+function clockTime(hour: number, minute: number, hourCycle: 12 | 24 = 24): string {
+  const mm = String(minute).padStart(2, "0");
+  if (hourCycle === 24) return `${String(hour).padStart(2, "0")}:${mm}`;
   const hours = hour % 12 === 0 ? 12 : hour % 12;
-  return `${hours}:${String(minute).padStart(2, "0")} ${hour < 12 ? "AM" : "PM"}`;
+  return `${hours}:${mm} ${hour < 12 ? "AM" : "PM"}`;
 }
 
 /** The clock when the spec starts. */
@@ -941,6 +946,94 @@ test.describe("Clock Alarms @wf:plugins-clock-alarms @chromium-only", () => {
     const shortForm = alarmForm(page, "Add alarm");
     await expect(shortForm).toBeVisible();
     await capture(page, "clock-alarms-form-short", { around: [shortForm] });
+  });
+});
+
+test.describe("Clock 24-hour clock @wf:plugins-clock-alarms @chromium-only", () => {
+  test("the 24-hour clock is on by default, its switches turn 12-hour times on in the tab and the editor, and a reload keeps the choice", async ({
+    page,
+  }) => {
+    await turnOn(page);
+    await openClockPage(page);
+    await openAlarmsTab(page);
+
+    // On by default: the switch sits on the empty tab, and an Alarm reads 24-hour.
+    const tabSwitch = clockFrame(page).locator("#alarms-hour-cycle");
+    await expect(tabSwitch).toHaveAccessibleName("24-hour clock");
+    await expect(tabSwitch).toBeChecked();
+    await tabToEither(page, addAlarmButton(page), { max: 30 });
+    await page.keyboard.press("Enter");
+    const add = alarmForm(page, "Add alarm");
+    await expect(add).toBeVisible();
+    await setAlarmNumber(
+      page,
+      add.getByRole("spinbutton", { name: "Hour", exact: true }),
+      ALARM_HOUR
+    );
+    await setAlarmNumber(
+      page,
+      add.getByRole("spinbutton", { name: "Minute", exact: true }),
+      ALARM_MINUTE
+    );
+    const weekday = add.getByRole("checkbox", { name: ALARM_WEEKDAY, exact: true });
+    await tabToEither(page, weekday, { max: 20 });
+    await page.keyboard.press("Space");
+    await tabToEither(page, add.getByRole("button", { name: "Save", exact: true }), { max: 20 });
+    await page.keyboard.press("Enter");
+    await expect(add).toBeHidden();
+    const time24 = clockTime(ALARM_HOUR, ALARM_MINUTE, 24);
+    const time12 = clockTime(ALARM_HOUR, ALARM_MINUTE, 12);
+    await expect(clockFrame(page).getByText(time24, { exact: true })).toBeVisible();
+
+    // The tab's switch, off by keyboard, rewrites the row in 12-hour form.
+    // Save gave focus back to Add alarm, so the switch is a Tab or two on.
+    await tabToEither(page, tabSwitch, { max: 10 });
+    await page.keyboard.press("Space");
+    await expect(tabSwitch).not.toBeChecked();
+    await expect(clockFrame(page).getByText(time12, { exact: true })).toBeVisible();
+    await capture(page, "clock-alarms-12-hour");
+
+    // Edit opens on the 12-hour hour with AM or PM chosen.
+    const editButton = clockFrame(page).getByRole("button", {
+      name: `Edit ${time12}`,
+      exact: true,
+    });
+    await tabToEither(page, editButton, { max: 30 });
+    await page.keyboard.press("Enter");
+    await expect(alarmForm(page, `Edit ${time12}`)).toBeVisible();
+    // The title follows the hour cycle, so the steps below find the one open
+    // dialog rather than its name.
+    const edit = clockFrame(page).getByRole("dialog");
+    const hour = edit.getByRole("spinbutton", { name: "Hour", exact: true });
+    await expect(hour).toHaveValue(String(ALARM_HOUR % 12 === 0 ? 12 : ALARM_HOUR % 12));
+    const meridiem = ALARM_HOUR < 12 ? "AM" : "PM";
+    await expect(edit.getByRole("radio", { name: meridiem, exact: true })).toBeChecked();
+    await capture(page, "clock-alarms-form-12-hour");
+
+    // The editor's switch turns the 24-hour clock back on at once: the hour
+    // converts, AM and PM go, and the tab's switch follows.
+    const editorSwitch = edit.getByRole("switch", { name: "24-hour clock", exact: true });
+    await tabToEither(page, editorSwitch, { max: 20 });
+    await page.keyboard.press("Space");
+    await expect(editorSwitch).toBeChecked();
+    await expect(hour).toHaveValue(String(ALARM_HOUR).padStart(2, "0"));
+    await expect(edit.getByRole("radio")).toHaveCount(0);
+    await expect(alarmForm(page, `Edit ${time24}`)).toBeVisible();
+    await expect(tabSwitch).toBeChecked();
+
+    // Off again, then Escape: Cancel discards the edit, never the switch.
+    await page.keyboard.press("Space");
+    await expect(editorSwitch).not.toBeChecked();
+    await page.keyboard.press("Escape");
+    await expect(clockFrame(page).getByRole("dialog")).toHaveCount(0);
+    await expect(tabSwitch).not.toBeChecked();
+
+    // Kept on this device: a reload reopens the tab still in 12-hour form.
+    await page.reload();
+    await expect(navOption(page, PLUGIN_NAME)).toBeVisible({ timeout: 20_000 });
+    await openClockPage(page, "Alarms");
+    await expect(tabSwitch).not.toBeChecked({ timeout: 15_000 });
+    await expect(clockFrame(page).getByText(time12, { exact: true })).toBeVisible();
   });
 });
 
