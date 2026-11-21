@@ -7,7 +7,7 @@ import type { Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { expectFocusWithin, expectTabContained, tabTo } from "../support/keyboard";
 import { seedWebBackups } from "../support/storage";
-import { arrowToKey } from "../support/palette";
+import { arrowToKey, arrowToOption, expectActiveOption } from "../support/palette";
 import {
   SEED_BOOK,
   SEED_CHAPTERS,
@@ -40,9 +40,11 @@ async function openLibrarySearch(page: Page): Promise<void> {
 }
 
 /**
- * Types a query and waits for React Aria to settle the active result: it moves
+ * Types a query and waits for React Aria to name an active result: it moves
  * the input's aria-activedescendant 500 ms after typing, so arrows pressed
- * before that land on a stale row.
+ * before that land on a stale row. Any row counts, even one the deferred list
+ * has yet to re-rank: before Enter, wait for the wanted row itself
+ * (`expectActiveOption`, or `arrowToOption` in Library Search).
  */
 async function search(page: Page, query: string): Promise<void> {
   // A mode prefix is already typed; End keeps it and appends the query.
@@ -210,6 +212,7 @@ test.describe("Command Palette commands @wf:command-palette", () => {
 
     await openPalette(page);
     await search(page, "go to notes");
+    await expectActiveOption(dialog(page), option(page, "Go to Notes"));
     await page.keyboard.press("Enter");
 
     await expect(dialog(page)).toBeHidden();
@@ -260,6 +263,7 @@ test.describe("Command Palette entities @wf:command-palette", () => {
 
     await openLibrarySearch(page);
     await search(page, "open chapter");
+    await arrowToOption(page, dialog(page), option(page, "Open Chapter…"));
     await page.keyboard.press("Enter");
 
     const chip = dialog(page).getByText("Open Chapter", { exact: true });
@@ -381,6 +385,7 @@ test.describe("Command Palette recent @wf:command-palette", () => {
     // leaves the theme alone, so the capture below can emulate both schemes.
     await openPalette(page);
     await search(page, "go to notes");
+    await expectActiveOption(dialog(page), option(page, "Go to Notes"));
     await page.keyboard.press("Enter");
     await expect(dialog(page)).toBeHidden();
     await expect(page).toHaveURL(/\/notes$/);
@@ -448,6 +453,7 @@ test.describe("Command Palette formatting @wf:command-palette", () => {
     await page.keyboard.press("F1");
     await expect(dialog(page)).toBeVisible();
     await search(page, "bold");
+    await expectActiveOption(dialog(page), option(page, "Bold"));
     await page.keyboard.press("Enter");
 
     await expect(dialog(page)).toBeHidden();
