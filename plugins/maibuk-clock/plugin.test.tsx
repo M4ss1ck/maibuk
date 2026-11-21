@@ -287,6 +287,24 @@ describe("Clock runtime", () => {
     );
   });
 
+  it("opens a first Frame on Pomodoro and the next on the tab this device last picked", async () => {
+    const storage = new Map<string, unknown>();
+    const first = startHost({ storage });
+    await first.ready;
+    const frame = first.mountFrame();
+    await eventually(() => expect(lastState(frame)?.tab).toBe("pomodoro"));
+
+    frame.send({ kind: "tab.select", tab: "stopwatch" });
+    await eventually(() => expect(storage.get("tab")).toBe("stopwatch"));
+    expect(lastState(frame)?.tab).toBe("stopwatch");
+
+    // A restart on the same device reads the same Plugin storage.
+    const second = startHost({ storage });
+    await second.ready;
+    const next = second.mountFrame();
+    await eventually(() => expect(lastState(next)?.tab).toBe("stopwatch"));
+  });
+
   it("marks Laps while running, with each stretch and total, and keeps them for the next Frame", async () => {
     const { storage, mountFrame, ready } = startHost();
     freezeClock();

@@ -30,7 +30,7 @@
    * @typedef {{ id: string, hour: number, minute: number, label: string, weekdays: number[], enabled: boolean, nextAt: number | null }} Alarm
    * @typedef {{ permission: string, canScheduleWhileClosed: boolean, exactTiming: boolean }} FrameNotificationStatus
    * @typedef {{ kind: "labels", language: string, hourCycle: 12 | 24, labels: Record<string, string> }} FrameLabelsMessage
-   * @typedef {{ kind: "state", timer: TimerSnapshot, pomodoro: PomodoroSnapshot, stopwatch: StopwatchState, alarms: Alarm[], notifications: FrameNotificationStatus | null }} FrameStateMessage
+   * @typedef {{ kind: "state", timer: TimerSnapshot, pomodoro: PomodoroSnapshot, stopwatch: StopwatchState, alarms: Alarm[], notifications: FrameNotificationStatus | null, tab: string }} FrameStateMessage
    * @typedef {FrameLabelsMessage | FrameStateMessage | FrameOpenSettingsMessage} WorkerToFrameMessage
    * @typedef {{ progress: number, title: string, subtitle: string, target: "pomodoro" | "stopwatch" }} AlsoData
    * @typedef {{ id: string | null, hour: number, minute: number, label: string, weekdays: number[], time: string | null }} AlarmDraft
@@ -448,7 +448,9 @@
   /** @type {FrameStateMessage | null} */
   let frameState = null;
   /** @type {string} */
-  let activeTab = "timer";
+  let activeTab = "pomodoro";
+  /** True until the author picks a tab here; until then the Frame follows the Worker's stored tab. */
+  let followStoredTab = true;
   let tickHandle = 0;
   let rafHandle = 0;
   let alsoKeys = "";
@@ -561,6 +563,13 @@
     if (focus) el(`tab-${name}`).focus();
     scheduleTick();
     scheduleAnimation();
+  }
+
+  /** The author picked a tab: show it and have the Worker keep it for this device. @param {string} name @param {boolean} focus */
+  function chooseTab(name, focus) {
+    followStoredTab = false;
+    selectTab(name, focus);
+    post({ kind: "tab.select", tab: name });
   }
 
   function drawStatic() {
@@ -993,7 +1002,7 @@
     const button = document.createElement("button");
     button.type = "button";
     button.className = "link-button";
-    button.addEventListener("click", () => selectTab(data.target, true));
+    button.addEventListener("click", () => chooseTab(data.target, true));
 
     row.append(svg, text, button);
     applyAlsoRow(row, data);
@@ -1698,10 +1707,13 @@
       if (typeof data.language === "string") document.documentElement.lang = data.language;
     } else if (data.kind === "state") {
       frameState = data;
+      if (followStoredTab && TABS.includes(data.tab) && data.tab !== activeTab) {
+        selectTab(data.tab, false);
+      }
     } else if (data.kind === "pomodoro.openSettings") {
       // The Worker holds this until the labels and state are out, so the Frame
       // is already drawn: select the tab and open the dialog without a redraw.
-      selectTab("pomodoro", false);
+      chooseTab("pomodoro", false);
       openSettings(el("pomodoro-settings-open"));
       return;
     } else {
@@ -1732,7 +1744,7 @@
         return;
     }
     event.preventDefault();
-    selectTab(next, true);
+    chooseTab(next, true);
   }
 
   function postLength() {
@@ -1773,7 +1785,7 @@
   }
 
   for (const key of TABS) {
-    el(`tab-${key}`).addEventListener("click", () => selectTab(key, false));
+    el(`tab-${key}`).addEventListener("click", () => chooseTab(key, false));
   }
   el("sections").addEventListener("keydown", onTabKeyDown);
 
@@ -1850,7 +1862,7 @@
     post({ kind: "closed" });
   });
 
-  selectTab("timer", false);
+  selectTab(activeTab, false);
 
   if (port) {
     port.onmessage = (event) => onMessage(event);

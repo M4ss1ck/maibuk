@@ -25,6 +25,7 @@ import en from "./locales/runtime/en.json";
 import es from "./locales/runtime/es.json";
 import { createPomodoro } from "./pomodoro";
 import { createStopwatch } from "./stopwatch";
+import { createClockTab } from "./tab";
 import { clockManifest } from "./test-support";
 import { MAX_TIMER_LENGTH_MS } from "./time";
 import { createTimer } from "./timer";
@@ -37,10 +38,13 @@ const openHarnesses: Harness[] = [];
 
 interface Harness {
   host: ReturnType<typeof createTestHost>;
+  /** The Plugin storage the host reads and writes. */
+  storage: Map<string, unknown>;
   timer: ReturnType<typeof createTimer>;
   pomodoro: ReturnType<typeof createPomodoro>;
   stopwatch: ReturnType<typeof createStopwatch>;
   alarms: ReturnType<typeof createAlarms>;
+  tab: ReturnType<typeof createClockTab>;
   /** The settings request this connection was wired to. */
   settingsRequest: SettingsRequest;
   /** Every message the Frame end received, in order. */
@@ -82,10 +86,13 @@ function setup(
     permission?: "granted" | "denied" | "default";
     settingsRequest?: SettingsRequest;
     beforeConnect?: (settingsRequest: SettingsRequest) => void;
+    storage?: Map<string, unknown>;
   } = {}
 ): Harness {
+  const storage = options.storage ?? new Map<string, unknown>();
   const host = createTestHost({
     manifest: clockManifest(),
+    storage,
     ...(options.language === undefined ? {} : { language: options.language }),
   });
   if (options.permission !== undefined) host.systemNotifications.setPermission(options.permission);
@@ -94,6 +101,7 @@ function setup(
   const pomodoro = createPomodoro(client);
   const stopwatch = createStopwatch(client);
   const alarms = createAlarms(client);
+  const tab = createClockTab(client);
   const settingsRequest = options.settingsRequest ?? createSettingsRequest();
   options.beforeConnect?.(settingsRequest);
   const channel = new MessageChannel();
@@ -106,14 +114,16 @@ function setup(
     framePort(channel.port1, () => {
       closed = true;
     }),
-    { client, timer, pomodoro, stopwatch, alarms, settingsRequest }
+    { client, timer, pomodoro, stopwatch, alarms, tab, settingsRequest }
   );
   const harness: Harness = {
     host,
+    storage,
     timer,
     pomodoro,
     stopwatch,
     alarms,
+    tab,
     settingsRequest,
     messages,
     get closed() {
@@ -200,6 +210,7 @@ describe("connectClockFrame", () => {
     });
     expect(state.stopwatch).toEqual({ status: "idle" });
     expect(state.alarms).toEqual([]);
+    expect(state.tab).toBe("pomodoro");
 
     await connected(harness);
     const received = states(harness);
@@ -436,6 +447,9 @@ describe("connectClockFrame", () => {
     harness.send({ kind: "alarm.edit", id, input: { hour: 12, minute: 0, label: "x" } });
     harness.send({ kind: "alarm.setEnabled", id, enabled: "yes" });
     harness.send({ kind: "alarm.remove", id: 7 });
+    harness.send({ kind: "tab.select", tab: "calendar" });
+    harness.send({ kind: "tab.select", tab: 2 });
+    harness.send({ kind: "tab.select" });
     harness.send({ kind: "closed.soon" });
     harness.send("not a message");
 
@@ -448,6 +462,29 @@ describe("connectClockFrame", () => {
     expect(state.alarms).toHaveLength(1);
     expect(state.alarms[0]).toMatchObject({ id, enabled: true, label: "Wake" });
     expect(state.stopwatch.status).toBe("running");
+    expect(state.tab).toBe("pomodoro");
+    expect(harness.storage.has("tab")).toBe(false);
+  });
+
+  it("sends the device's stored tab once it loads", async () => {
+    const harness = setup({ storage: new Map([["tab", "stopwatch"]]) });
+    await connected(harness);
+    expect(states(harness)[0].tab).toBe("pomodoro");
+
+    await harness.tab.load();
+    await vi.waitFor(() => {
+      const received = states(harness);
+      expect(received[received.length - 1].tab).toBe("stopwatch");
+    });
+  });
+
+  it("keeps the picked tab for this device and sends it back in the state", async () => {
+    const harness = setup();
+    await connected(harness);
+
+    const state = await apply(harness, { kind: "tab.select", tab: "alarms" });
+    expect(state.tab).toBe("alarms");
+    await vi.waitFor(() => expect(harness.storage.get("tab")).toBe("alarms"));
   });
 
   it("re-sends the labels in the new language when it changes", async () => {
