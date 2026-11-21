@@ -16,12 +16,13 @@
 import type { PluginClient } from "@/plugin-sdk";
 import type { Alarm, AlarmInput, ClockAlarms } from "./alarms";
 import { isValidPomodoroSettings, type PomodoroSettings } from "./cycle";
+import { type ClockHourCycle, type HourCycle, isHourCycle } from "./hour-cycle";
 import { catalogFor, type ClockKey } from "./i18n";
 import type { ClockPomodoro, PomodoroSnapshot } from "./pomodoro";
 import type { ClockStopwatch } from "./stopwatch";
 import { type ClockTab, type ClockTabState, isClockTab } from "./tab";
 import type { ClockTimer, TimerSnapshot } from "./timer";
-import { hourCycleFor, MAX_TIMER_LENGTH_MS, type StopwatchState } from "./time";
+import { MAX_TIMER_LENGTH_MS, type StopwatchState } from "./time";
 
 /* Worker -> Frame */
 
@@ -29,7 +30,6 @@ import { hourCycleFor, MAX_TIMER_LENGTH_MS, type StopwatchState } from "./time";
 export interface FrameLabelsMessage {
   kind: "labels";
   language: string;
-  hourCycle: 12 | 24;
   labels: Record<ClockKey, string>;
 }
 
@@ -50,6 +50,8 @@ export interface FrameStateMessage {
   notifications: FrameNotificationStatus | null;
   /** The tab this device last opened; the Frame follows it only when it changes. */
   tab: ClockTab;
+  /** The hour cycle this device shows every time of day in. */
+  hourCycle: HourCycle;
 }
 
 export type WorkerToFrameMessage =
@@ -80,6 +82,7 @@ export type FrameToWorkerMessage =
   | { kind: "alarm.remove"; id: string }
   | { kind: "notifications.allow" }
   | { kind: "tab.select"; tab: ClockTab }
+  | { kind: "hourCycle.set"; hourCycle: HourCycle }
   | { kind: "closed" };
 
 /** A whole clock field, from zero through `max`. */
@@ -155,10 +158,11 @@ export function connectClockFrame(
     stopwatch: ClockStopwatch;
     alarms: ClockAlarms;
     tab: ClockTabState;
+    hourCycle: ClockHourCycle;
     settingsRequest: SettingsRequest;
   }
 ): () => void {
-  const { client, timer, pomodoro, stopwatch, alarms, tab, settingsRequest } = deps;
+  const { client, timer, pomodoro, stopwatch, alarms, tab, hourCycle, settingsRequest } = deps;
   let disposed = false;
   let labelsSent = false;
   let language = "en";
@@ -174,7 +178,6 @@ export function connectClockFrame(
     post({
       kind: "labels",
       language,
-      hourCycle: hourCycleFor(language),
       labels: { ...catalogFor(language) },
     });
     labelsSent = true;
@@ -197,6 +200,7 @@ export function connectClockFrame(
       alarms: alarms.snapshot(),
       notifications,
       tab: tab.snapshot(),
+      hourCycle: hourCycle.snapshot(),
     });
   }
 
@@ -314,6 +318,11 @@ export function connectClockFrame(
         if (isClockTab(next)) tab.select(next);
         return;
       }
+      case "hourCycle.set": {
+        const { hourCycle: next } = value as { hourCycle: unknown };
+        if (isHourCycle(next)) hourCycle.set(next);
+        return;
+      }
       case "closed":
         dispose();
         return;
@@ -331,6 +340,7 @@ export function connectClockFrame(
     stopwatch.subscribe(sendState),
     alarms.subscribe(sendState),
     tab.subscribe(sendState),
+    hourCycle.subscribe(sendState),
     settingsRequest.subscribe(sendSettingsRequest)
   );
   sendState();

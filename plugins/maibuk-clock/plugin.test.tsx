@@ -50,7 +50,7 @@ import {
 import { alarmNotificationId, type Alarm } from "./alarms";
 import type { FrameStateMessage, WorkerToFrameMessage } from "./frame-protocol";
 import { clockManifest, tabTo } from "./test-support";
-import { formatClockTime, hourCycleFor, localOffsetAt, nextAlarmAt } from "./time";
+import { formatClockTime, localOffsetAt, nextAlarmAt } from "./time";
 
 /**
  * The fake clock every timed test starts at. It sits an hour ahead of the real
@@ -122,10 +122,10 @@ function alarmTag(alarm: Alarm): string {
   return `maibuk-clock/${alarmNotificationId(alarm.id)}`;
 }
 
-/** An Alarm's time as the Plugin stores it, in the given language's clock. */
-function shownTime(hour: number, minute: number, language = "en"): string {
+/** An Alarm's time as the Plugin stores it, in the default 24-hour clock. */
+function shownTime(hour: number, minute: number): string {
   const at = new Date(2000, 0, 1, hour, minute).getTime();
-  return formatClockTime(at, localOffsetAt(at), hourCycleFor(language));
+  return formatClockTime(at, localOffsetAt(at), 24);
 }
 
 /** The Cycle settings storage holds, or none. */
@@ -990,7 +990,7 @@ describe("Clock Alarms", () => {
     freezeClock();
     await ready;
 
-    const missedTime = formatClockTime(passedAt, localOffsetAt(passedAt), hourCycleFor("en"));
+    const missedTime = formatClockTime(passedAt, localOffsetAt(passedAt), 24);
     expect(host.notifications).toEqual([
       { variant: "info", message: en.alarmMissed.replace("{time}", missedTime) },
     ]);

@@ -48,12 +48,8 @@ function loadFrame(): FakePort {
 }
 
 /** The `labels` message the Worker sends, catalog keys as they ship. */
-function labelsMessage(
-  catalog: Record<string, string>,
-  language: string,
-  hourCycle: 12 | 24
-): Record<string, unknown> {
-  return { kind: "labels", language, hourCycle, labels: { ...catalog } };
+function labelsMessage(catalog: Record<string, string>, language: string): Record<string, unknown> {
+  return { kind: "labels", language, labels: { ...catalog } };
 }
 
 /** A whole Clock state, with today's day computed for the current clock. */
@@ -80,6 +76,8 @@ function stateMessage(overrides: Record<string, unknown> = {}): Record<string, u
     notifications: { permission: "granted", canScheduleWhileClosed: true, exactTiming: true },
     // A device whose stored tab is the Timer: the panel tests below start there.
     tab: "timer",
+    // The 24-Hour Clock off: the time tests below read 12-hour times.
+    hourCycle: 12,
     ...overrides,
   };
 }
@@ -94,10 +92,11 @@ interface RenderOptions {
 /** Loads the Frame and delivers the labels and the state, in that order. */
 function renderFrame(options: RenderOptions = {}): FakePort {
   const port = loadFrame();
+  port.deliver(labelsMessage(options.labels ?? EN, options.language ?? "en"));
+  const state = options.state ?? stateMessage();
   port.deliver(
-    labelsMessage(options.labels ?? EN, options.language ?? "en", options.hourCycle ?? 12)
+    options.hourCycle === undefined ? state : { ...state, hourCycle: options.hourCycle }
   );
-  port.deliver(options.state ?? stateMessage());
   return port;
 }
 
@@ -167,7 +166,7 @@ describe("Clock Frame", () => {
     port.deliver(stateMessage());
     expect(el("clock").hidden).toBe(true);
 
-    port.deliver(labelsMessage(EN, "en", 12));
+    port.deliver(labelsMessage(EN, "en"));
     expect(el("clock").hidden).toBe(false);
     expect(el("tab-timer-label").textContent).toBe("Timer");
     expect(el("tab-pomodoro-label").textContent).toBe("Pomodoro");
@@ -965,7 +964,7 @@ describe("Clock Frame", () => {
     expect(find(el("alarm-list"), ".alarm-time").textContent).toBe("1:05 PM");
 
     // The suffix comes from the catalog, not from a string baked into the Frame.
-    port.deliver(labelsMessage({ ...EN, pm: "p. m." }, "en", 12));
+    port.deliver(labelsMessage({ ...EN, pm: "p. m." }, "en"));
     expect(find(el("alarm-list"), ".alarm-time").textContent).toBe("1:05 p. m.");
   });
 

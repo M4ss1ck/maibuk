@@ -42,6 +42,11 @@ _Avoid_: reminder, alert (for the Alarm itself)
 What fires when a Pomodoro, a break, a Timer, or an Alarm ends: a System Notification, or Maibuk's own notice when the device refuses one.
 _Avoid_: alarm (for the end of a Timer or Pomodoro), ring, notification (alone)
 
+**24-Hour Clock**:
+The Clock setting, on unless the author turned it off on this device, that shows every time of day from 00:00 to 23:59; off, times read 12-hour with AM and PM.
+_UI_: en "24-hour clock" / es "Reloj de 24 horas"
+_Avoid_: time format, hour format, military time
+
 ## Relationships
 
 - A **Pomodoro Cycle** holds one or more **Pomodoros**; each Pomodoro is followed by a **Short Break**, except the last, which is followed by the **Long Break**.

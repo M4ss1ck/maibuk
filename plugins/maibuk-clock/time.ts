@@ -228,11 +228,6 @@ export function formatClockTime(
   return `${hours12}:${pad2(minutes)} ${hours < 12 ? "AM" : "PM"}`;
 }
 
-/** English reads a 12-hour clock; every other language Maibuk ships reads 24. */
-export function hourCycleFor(language: string): 12 | 24 {
-  return language.startsWith("en") ? 12 : 24;
-}
-
 /** The length just used, first, without duplicates, keeping the last three. */
 export function addRecentLength(recent: readonly number[], length: number): number[] {
   const next: number[] = [];

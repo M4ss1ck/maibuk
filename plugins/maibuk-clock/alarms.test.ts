@@ -90,7 +90,7 @@ describe("Clock Alarm core", () => {
       expect(host.systemNotifications.scheduled.get(tag)).toMatchObject({
         at: START + HOUR,
         title: "Clock: Write",
-        body: "1:00 PM",
+        body: "13:00",
       })
     );
     await vi.waitFor(() => expect(storedAlarms(storage)).toEqual([alarm]));
@@ -110,7 +110,7 @@ describe("Clock Alarm core", () => {
       expect(host.systemNotifications.scheduled.get(tag)).toMatchObject({
         at: START + 3 * HOUR,
         title: "Clock: Write more",
-        body: "3:00 PM",
+        body: "15:00",
       })
     );
     await vi.waitFor(() => expect(storedAlarms(storage)).toEqual([edited]));
@@ -363,5 +363,33 @@ describe("Clock Alarm core", () => {
     await vi.waitFor(() =>
       expect(storedAlarms(storage).map((alarm) => alarm.label)).toEqual(["Stored", "Early"])
     );
+  });
+
+  it("re-sends every scheduled Alert in the new hour cycle, once", async () => {
+    const storage = new Map<string, unknown>();
+    const host = createTestHost({ manifest: clockManifest(), storage });
+    openHosts.push(host);
+    jumpTo(START);
+    const client = createPluginClient(host.port);
+    const system = vi.spyOn(client.notifications, "system");
+    const alarms = createAlarms(client, UTC);
+    await alarms.load();
+
+    const alarm = alarms.add({ hour: 7, minute: 30, label: "", weekdays: [] });
+    const tag = tagFor(alarm);
+    await vi.waitFor(() => expect(host.systemNotifications.scheduled.get(tag)?.body).toBe("07:30"));
+
+    // The same occurrence is sent again under the same id, now written in 12-hour form.
+    const callsBefore = system.mock.calls.length;
+    alarms.setHourCycle(12);
+    await vi.waitFor(() =>
+      expect(host.systemNotifications.scheduled.get(tag)?.body).toBe("7:30 AM")
+    );
+    expect(system.mock.calls.length).toBe(callsBefore + 1);
+
+    // Setting the hour cycle already in use is not a change: nothing is sent again.
+    const callsAfter = system.mock.calls.length;
+    alarms.setHourCycle(12);
+    expect(system.mock.calls.length).toBe(callsAfter);
   });
 });

@@ -29,8 +29,8 @@
    * @typedef {{ status: "idle" } | { status: "running", startedAt: number, banked: number, laps: Lap[] } | { status: "paused", banked: number, laps: Lap[] }} StopwatchState
    * @typedef {{ id: string, hour: number, minute: number, label: string, weekdays: number[], enabled: boolean, nextAt: number | null }} Alarm
    * @typedef {{ permission: string, canScheduleWhileClosed: boolean, exactTiming: boolean }} FrameNotificationStatus
-   * @typedef {{ kind: "labels", language: string, hourCycle: 12 | 24, labels: Record<string, string> }} FrameLabelsMessage
-   * @typedef {{ kind: "state", timer: TimerSnapshot, pomodoro: PomodoroSnapshot, stopwatch: StopwatchState, alarms: Alarm[], notifications: FrameNotificationStatus | null, tab: string }} FrameStateMessage
+   * @typedef {{ kind: "labels", language: string, labels: Record<string, string> }} FrameLabelsMessage
+   * @typedef {{ kind: "state", timer: TimerSnapshot, pomodoro: PomodoroSnapshot, stopwatch: StopwatchState, alarms: Alarm[], notifications: FrameNotificationStatus | null, tab: string, hourCycle: 12 | 24 }} FrameStateMessage
    * @typedef {FrameLabelsMessage | FrameStateMessage | FrameOpenSettingsMessage} WorkerToFrameMessage
    * @typedef {{ progress: number, title: string, subtitle: string, target: "pomodoro" | "stopwatch" }} AlsoData
    * @typedef {{ id: string | null, hour: number, minute: number, label: string, weekdays: number[], time: string | null }} AlarmDraft
@@ -1781,10 +1781,10 @@
     if (!data || typeof data !== "object") return;
     if (data.kind === "labels") {
       labels = data.labels;
-      hourCycle = data.hourCycle === 12 ? 12 : 24;
       if (typeof data.language === "string") document.documentElement.lang = data.language;
     } else if (data.kind === "state") {
       frameState = data;
+      hourCycle = data.hourCycle === 12 ? 12 : 24;
       if (followStoredTab && TABS.includes(data.tab) && data.tab !== activeTab) {
         selectTab(data.tab, false);
       }
