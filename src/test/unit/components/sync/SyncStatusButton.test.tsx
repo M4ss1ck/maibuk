@@ -7,7 +7,7 @@ const { i18nState, syncState, syncFlow } = vi.hoisted(() => ({
   syncState: {
     authStatus: "logged-out",
     syncStatus: "idle",
-    lastSyncedAt: null,
+    lastSyncedAt: null as number | null,
     userEmail: "writer@example.com",
     syncError: null,
     pendingDeletions: [],
@@ -192,5 +192,47 @@ describe("SyncStatusButton", () => {
     expect(screen.getByTestId("auth-dialog-open")).toBeInTheDocument();
     expect(screen.queryByText("writer@example.com")).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
+  });
+
+  it("tells a successful sync apart from a never-synced idle state by icon", () => {
+    syncState.authStatus = "logged-in";
+    syncState.syncStatus = "success";
+    const { container, unmount } = render(<SyncStatusButton />);
+
+    expect(container.querySelector(".lucide-cloud-check")).toBeInTheDocument();
+    expect(container.querySelector(".lucide-cloud")).toBeNull();
+
+    unmount();
+    syncState.syncStatus = "idle";
+    syncState.lastSyncedAt = null;
+    const { container: idleContainer } = render(<SyncStatusButton />);
+
+    expect(idleContainer.querySelector(".lucide-cloud")).toBeInTheDocument();
+    expect(idleContainer.querySelector(".lucide-cloud-check")).toBeNull();
+  });
+
+  it("shows the cloud check icon for an idle state that has synced before", () => {
+    syncState.authStatus = "logged-in";
+    syncState.syncStatus = "idle";
+    syncState.lastSyncedAt = 1_000;
+    const { container } = render(<SyncStatusButton />);
+
+    expect(container.querySelector(".lucide-cloud-check")).toBeInTheDocument();
+    expect(container.querySelector(".lucide-cloud")).toBeNull();
+  });
+
+  it("tells a partial sync apart from an error by icon", () => {
+    syncState.authStatus = "logged-in";
+
+    syncState.syncStatus = "partial";
+    const { container, unmount } = render(<SyncStatusButton />);
+    expect(container.querySelector(".lucide-triangle-alert")).toBeInTheDocument();
+    expect(container.querySelector(".lucide-cloud-alert")).toBeNull();
+
+    unmount();
+    syncState.syncStatus = "error";
+    const { container: errorContainer } = render(<SyncStatusButton />);
+    expect(errorContainer.querySelector(".lucide-cloud-alert")).toBeInTheDocument();
+    expect(errorContainer.querySelector(".lucide-triangle-alert")).toBeNull();
   });
 });

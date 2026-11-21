@@ -1,6 +1,14 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ListChecks, RefreshCw, Trash2 } from "lucide-react";
+import {
+  ChevronDown,
+  CircleCheck,
+  CircleX,
+  ListChecks,
+  RefreshCw,
+  Trash2,
+  TriangleAlert,
+} from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { useSyncStore } from "@/features/sync/store";
@@ -205,6 +213,13 @@ export function SyncControls({
                               : "text-muted-foreground"
                       }
                     >
+                      {entry.level === "error" ? (
+                        <CircleX className="inline h-3 w-3 mr-1 shrink-0" aria-hidden />
+                      ) : entry.level === "warning" ? (
+                        <TriangleAlert className="inline h-3 w-3 mr-1 shrink-0" aria-hidden />
+                      ) : entry.level === "success" ? (
+                        <CircleCheck className="inline h-3 w-3 mr-1 shrink-0" aria-hidden />
+                      ) : null}
                       {entry.message}
                     </p>
                   </div>

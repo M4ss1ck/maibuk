@@ -52,6 +52,53 @@ describe("SyncControls", () => {
     expect(screen.getByText("Pulled note")).toBeInTheDocument();
   });
 
+  it("marks each log level with its own icon", () => {
+    useSyncStore.setState({
+      syncLog: [
+        {
+          id: "log-error",
+          timestamp: 100,
+          level: "error",
+          event: "error",
+          message: "Push failed",
+        },
+        {
+          id: "log-warning",
+          timestamp: 200,
+          level: "warning",
+          event: "compare",
+          message: "Partial result",
+        },
+        {
+          id: "log-success",
+          timestamp: 300,
+          level: "success",
+          event: "pull",
+          message: "Pulled note",
+        },
+        {
+          id: "log-info",
+          timestamp: 400,
+          level: "info",
+          event: "scope",
+          message: "Started sync",
+        },
+      ],
+    });
+
+    const { container } = render(<SyncControls onSync={vi.fn()} />);
+
+    expect(container.querySelector(".lucide-circle-x")).toBeInTheDocument();
+    expect(container.querySelector(".lucide-triangle-alert")).toBeInTheDocument();
+    expect(container.querySelector(".lucide-circle-check")).toBeInTheDocument();
+    expect(screen.getByText("Push failed").querySelector(".lucide-circle-x")).not.toBeNull();
+    expect(
+      screen.getByText("Partial result").querySelector(".lucide-triangle-alert")
+    ).not.toBeNull();
+    expect(screen.getByText("Pulled note").querySelector(".lucide-circle-check")).not.toBeNull();
+    expect(screen.getByText("Started sync").querySelector("svg")).toBeNull();
+  });
+
   it("clears the log only through the explicit clear action", async () => {
     const user = userEvent.setup();
     useSyncStore.setState({
