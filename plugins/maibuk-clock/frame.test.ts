@@ -564,6 +564,58 @@ describe("Clock Frame", () => {
     expect(port.messages).toEqual([]);
   });
 
+  it("names two Alarms at the same time apart by their label and repeat", async () => {
+    const port = renderFrame({
+      state: stateMessage({
+        alarms: [
+          alarmMessage({ weekdays: [1] }),
+          alarmMessage({ id: "a2", label: "", weekdays: [] }),
+        ],
+      }),
+    });
+    const user = keyboardUser();
+
+    await user.tab();
+    await user.keyboard("{End}");
+    const rows = el("alarm-list").querySelectorAll("li");
+    const first = rows[0] as HTMLElement;
+    const second = rows[1] as HTMLElement;
+
+    // Both draw 6:30 AM, so each control names itself with the time, the label,
+    // and the repeat that tell it from the other.
+    expect(find(first, '[role="switch"]').getAttribute("aria-label")).toBe(
+      "Alarm 6:30 AM, Morning pages, Mon"
+    );
+    expect(find(first, '[aria-label^="Edit "]').getAttribute("aria-label")).toBe(
+      "Edit 6:30 AM, Morning pages, Mon"
+    );
+    expect(find(first, '[aria-label^="Delete "]').getAttribute("aria-label")).toBe(
+      "Delete 6:30 AM, Morning pages, Mon"
+    );
+    expect(find(second, '[role="switch"]').getAttribute("aria-label")).toBe("Alarm 6:30 AM, Once");
+    expect(find(second, '[aria-label^="Edit "]').getAttribute("aria-label")).toBe(
+      "Edit 6:30 AM, Once"
+    );
+    expect(find(second, '[aria-label^="Delete "]').getAttribute("aria-label")).toBe(
+      "Delete 6:30 AM, Once"
+    );
+
+    // The longer names are what the keyboard reaches: the second Alarm's switch
+    // turns that one off, and the first Alarm's Edit opens its own fields.
+    await tabTo(user, find(second, '[role="switch"]'));
+    await user.keyboard(" ");
+    expect(posted(port, "alarm.setEnabled")).toEqual([
+      { kind: "alarm.setEnabled", id: "a2", enabled: false },
+    ]);
+
+    await tabTo(user, find(first, '[aria-label^="Edit "]'));
+    await user.keyboard("{Enter}");
+    expect(el("alarm-editor").hidden).toBe(false);
+    expect(inputValue("alarm-label")).toBe("Morning pages");
+    await user.keyboard("{Escape}");
+    expect(el("alarm-editor").hidden).toBe(true);
+  });
+
   it("closes the editor with Escape without posting and returns focus to Add alarm", async () => {
     const port = renderFrame();
     const user = keyboardUser();
@@ -613,6 +665,34 @@ describe("Clock Frame", () => {
 
       port.deliver(stateMessage({ alarms: [alarmMessage({ enabled: false, nextAt: null })] }));
       expect(el("next-alarm").hidden).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("counts no Pomodoros today after local midnight, with the Pomodoro tab open", async () => {
+    // `shouldAdvanceTime` lets user-event's own zero-delay timeout run, which
+    // its React wrapper always sets even when the suite fakes the clock.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      vi.setSystemTime(new Date(2026, 10, 16, 23, 59, 30));
+      const state = stateMessage();
+      // An idle Cycle: nothing runs, so only the open Pomodoro tab keeps the tick.
+      state.pomodoro = {
+        ...(state.pomodoro as Record<string, unknown>),
+        state: { phase: "pomodoro", pomodoro: 1, status: "idle" },
+      };
+      renderFrame({ state });
+      const user = keyboardUser();
+
+      await user.tab();
+      await user.keyboard("{ArrowLeft}");
+      expect(el("panel-pomodoro").hidden).toBe(false);
+      expect(el("pomodoros-today").textContent).toBe("Pomodoros today: 3");
+
+      // The tick crosses local midnight: the count is yesterday's, so it reads zero.
+      vi.advanceTimersByTime(60_000);
+      expect(el("pomodoros-today").textContent).toBe("Pomodoros today: 0");
     } finally {
       vi.useRealTimers();
     }
