@@ -1157,6 +1157,35 @@
         font-size: 0.9375rem;
       }
 
+      .dialog-actions .danger {
+        background: var(--maibuk-color-destructive);
+        color: #fff;
+        box-shadow: none;
+      }
+
+      .dialog-actions .danger:hover {
+        background: var(--maibuk-color-destructive-hover, var(--maibuk-color-destructive));
+      }
+
+      /* The delete confirmation is a short question and one line under it. */
+      .confirm-dialog {
+        max-width: 400px;
+        gap: 12px;
+      }
+
+      .confirm-dialog h2 {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+
+      .confirm-body {
+        margin: 0 0 16px;
+        font-size: 0.9375rem;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
       /* The settings dialog's fields pair a label with the dialog's own input,
          one notch tighter than the Alarm editor's oversized time fields. */
       .settings-grid {
@@ -1187,7 +1216,7 @@
         font-variant-numeric: tabular-nums;
       }
 
-      .settings-field input[aria-invalid="true"] {
+      .dialog input[aria-invalid="true"] {
         border-color: var(--maibuk-color-destructive);
       }
 
@@ -1613,11 +1642,13 @@
             <div class="field">
               <input id="alarm-hour" type="number" min="0" max="23" inputmode="numeric" />
               <label id="alarm-hour-label" for="alarm-hour"></label>
+              <p id="alarm-hour-error" class="field-error"></p>
             </div>
             <span class="field-separator" aria-hidden="true">:</span>
             <div class="field">
               <input id="alarm-minute" type="number" min="0" max="59" inputmode="numeric" />
               <label id="alarm-minute-label" for="alarm-minute"></label>
+              <p id="alarm-minute-error" class="field-error"></p>
             </div>
           </div>
           <div class="dialog-label">
@@ -1632,6 +1663,23 @@
           <div class="dialog-actions">
             <button id="alarm-cancel" class="secondary" type="button"></button>
             <button id="alarm-save" class="primary" type="button"></button>
+          </div>
+        </section>
+      </div>
+
+      <div id="alarm-delete" class="overlay" hidden>
+        <section
+          class="dialog confirm-dialog"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="alarm-delete-title"
+          aria-describedby="alarm-delete-body"
+        >
+          <h2 id="alarm-delete-title"></h2>
+          <p id="alarm-delete-body" class="confirm-body"></p>
+          <div class="dialog-actions">
+            <button id="alarm-delete-cancel" class="secondary" type="button"></button>
+            <button id="alarm-delete-confirm" class="primary danger" type="button"></button>
           </div>
         </section>
       </div>

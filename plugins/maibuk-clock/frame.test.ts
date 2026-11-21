@@ -561,6 +561,9 @@ describe("Clock Frame", () => {
 
     await tabTo(user, find(el("alarm-list"), '[aria-label="Delete 6:30 AM"]'));
     await user.keyboard("{Enter}");
+    expect(posted(port, "alarm.remove")).toEqual([]);
+    await tabTo(user, el("alarm-delete-confirm"));
+    await user.keyboard("{Enter}");
     expect(posted(port, "alarm.remove")).toEqual([{ kind: "alarm.remove", id: "a1" }]);
   });
 
@@ -572,12 +575,242 @@ describe("Clock Frame", () => {
     await user.keyboard("{End}");
     await tabTo(user, find(el("alarm-list"), '[aria-label="Delete 6:30 AM"]'));
     await user.keyboard("{Enter}");
+    await tabTo(user, el("alarm-delete-confirm"));
+    await user.keyboard("{Enter}");
     expect(posted(port, "alarm.remove")).toEqual([{ kind: "alarm.remove", id: "a1" }]);
+    expect(el("alarm-delete").hidden).toBe(true);
 
     // The Worker drops the Alarm and sends the list without it.
     port.deliver(stateMessage({ alarms: [] }));
     expect(el("alarm-list").querySelectorAll("li")).toHaveLength(0);
     expect(document.activeElement).toBe(el("add-alarm"));
+  });
+
+  it("asks before deleting and keeps the Alarm on Cancel, Escape, or a backdrop press", async () => {
+    const port = renderFrame({ state: stateMessage({ alarms: [alarmMessage()] }) });
+    const user = keyboardUser();
+
+    await user.tab();
+    await user.keyboard("{End}");
+    const remove = find(el("alarm-list"), '[aria-label="Delete 6:30 AM"]');
+    await tabTo(user, remove);
+    await user.keyboard("{Enter}");
+
+    const confirm = find(el("alarm-delete"), '[role="alertdialog"]');
+    expect(el("alarm-delete").hidden).toBe(false);
+    expect(confirm).toHaveAccessibleName("Delete this alarm?");
+    expect(confirm).toHaveAccessibleDescription("Alarm 6:30 AM will be deleted.");
+    // Focus starts on Cancel, so a second Enter keeps the Alarm.
+    expect(document.activeElement).toBe(el("alarm-delete-cancel"));
+    await user.keyboard("{Enter}");
+    expect(el("alarm-delete").hidden).toBe(true);
+    expect(document.activeElement).toBe(remove);
+
+    await user.keyboard("{Enter}");
+    expect(el("alarm-delete").hidden).toBe(false);
+    await user.keyboard("{Escape}");
+    expect(el("alarm-delete").hidden).toBe(true);
+    expect(document.activeElement).toBe(remove);
+
+    await user.keyboard("{Enter}");
+    await user.pointer({ target: el("alarm-delete"), keys: "[MouseLeft]" });
+    expect(el("alarm-delete").hidden).toBe(true);
+
+    expect(posted(port, "alarm.remove")).toEqual([]);
+    expect(el("alarm-list").querySelectorAll("li")).toHaveLength(1);
+  });
+
+  it("keeps Tab and Shift+Tab inside the delete confirmation", async () => {
+    renderFrame({ state: stateMessage({ alarms: [alarmMessage()] }) });
+    const user = keyboardUser();
+
+    await user.tab();
+    await user.keyboard("{End}");
+    await tabTo(user, find(el("alarm-list"), '[aria-label="Delete 6:30 AM"]'));
+    await user.keyboard("{Enter}");
+
+    expect(document.activeElement).toBe(el("alarm-delete-cancel"));
+    await user.tab();
+    expect(document.activeElement).toBe(el("alarm-delete-confirm"));
+    await user.tab();
+    expect(document.activeElement).toBe(el("alarm-delete-cancel"));
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(el("alarm-delete-confirm"));
+  });
+
+  it("names the Alarm in the confirmation by its label and repeat when another shares its time", async () => {
+    renderFrame({
+      state: stateMessage({
+        alarms: [alarmMessage(), alarmMessage({ id: "a2", label: "Gym", weekdays: [3] })],
+      }),
+    });
+    const user = keyboardUser();
+
+    await user.tab();
+    await user.keyboard("{End}");
+    await tabTo(user, find(el("alarm-list"), '[aria-label="Delete 6:30 AM, Gym, Wed"]'));
+    await user.keyboard("{Enter}");
+
+    expect(el("alarm-delete-body").textContent).toBe("Alarm 6:30 AM, Gym, Wed will be deleted.");
+  });
+
+  it("asks in Spanish", async () => {
+    renderFrame({
+      labels: ES,
+      language: "es",
+      hourCycle: 24,
+      state: stateMessage({ alarms: [alarmMessage()] }),
+    });
+    const user = keyboardUser();
+
+    await user.tab();
+    await user.keyboard("{End}");
+    await tabTo(user, find(el("alarm-list"), '[aria-label="Eliminar 06:30"]'));
+    await user.keyboard("{Enter}");
+
+    expect(el("alarm-delete-title").textContent).toBe("¿Eliminar esta alarma?");
+    expect(el("alarm-delete-body").textContent).toBe("Se eliminará la alarma 06:30.");
+    expect(el("alarm-delete-cancel").textContent).toBe("Cancelar");
+    expect(el("alarm-delete-confirm").textContent).toBe("Eliminar");
+  });
+
+  it.each([
+    ["alarm-hour", "24", "Between 0 and 23"],
+    ["alarm-hour", "-1", "Between 0 and 23"],
+    ["alarm-hour", "", "Between 0 and 23"],
+    ["alarm-hour", "7.5", "Between 0 and 23"],
+    ["alarm-minute", "60", "Between 0 and 59"],
+    ["alarm-minute", "", "Between 0 and 59"],
+  ] as const)("refuses %s = %j at Save, names the range, and keeps the editor open", async (id, value, message) => {
+    const port = renderFrame();
+    const user = keyboardUser();
+
+    await user.tab();
+    await user.keyboard("{End}");
+    await tabTo(user, el("add-alarm"));
+    await user.keyboard("{Enter}");
+    await user.clear(el(id));
+    if (value !== "") await user.type(el(id), value);
+    await tabTo(user, el("alarm-save"));
+    await user.keyboard("{Enter}");
+
+    expect(el("alarm-editor").hidden).toBe(false);
+    expect(el(id)).toHaveAccessibleDescription(message);
+    expect(document.activeElement).toBe(el(id));
+    expect(posted(port, "alarm.add")).toEqual([]);
+  });
+
+  it("shows both time errors on Save, focuses the hour, and saves once both are fixed", async () => {
+    const port = renderFrame({ state: stateMessage({ alarms: [alarmMessage()] }) });
+    const user = keyboardUser();
+
+    await user.tab();
+    await user.keyboard("{End}");
+    await tabTo(user, find(el("alarm-list"), '[aria-label="Edit 6:30 AM"]'));
+    await user.keyboard("{Enter}");
+    await user.clear(el("alarm-hour"));
+    await user.type(el("alarm-hour"), "25");
+    await user.clear(el("alarm-minute"));
+    await user.type(el("alarm-minute"), "75");
+    await tabTo(user, el("alarm-save"));
+    await user.keyboard("{Enter}");
+
+    expect(el("alarm-hour")).toHaveAccessibleDescription("Between 0 and 23");
+    expect(el("alarm-minute")).toHaveAccessibleDescription("Between 0 and 59");
+    expect(document.activeElement).toBe(el("alarm-hour"));
+    expect(posted(port, "alarm.edit")).toEqual([]);
+
+    // A valid value clears its message as it is typed.
+    await user.clear(el("alarm-hour"));
+    await user.type(el("alarm-hour"), "23");
+    expect(el("alarm-hour")).toHaveAccessibleDescription("");
+    await user.clear(el("alarm-minute"));
+    await user.type(el("alarm-minute"), "59");
+    expect(el("alarm-minute")).toHaveAccessibleDescription("");
+    await tabTo(user, el("alarm-save"));
+    await user.keyboard("{Enter}");
+
+    expect(posted(port, "alarm.edit")).toEqual([
+      {
+        kind: "alarm.edit",
+        id: "a1",
+        input: { hour: 23, minute: 59, label: "Morning pages", weekdays: [1] },
+      },
+    ]);
+    expect(el("alarm-editor").hidden).toBe(true);
+  });
+
+  it("posts the hour the check read, so an exponent cannot slip past as another number", async () => {
+    const port = renderFrame();
+    const user = keyboardUser();
+
+    await user.tab();
+    await user.keyboard("{End}");
+    await tabTo(user, el("add-alarm"));
+    await user.keyboard("{Enter}");
+    await user.clear(el("alarm-hour"));
+    await user.type(el("alarm-hour"), "1e1");
+    await user.clear(el("alarm-minute"));
+    await user.type(el("alarm-minute"), "5");
+    await tabTo(user, el("alarm-save"));
+    await user.keyboard("{Enter}");
+
+    expect(posted(port, "alarm.add")).toEqual([
+      { kind: "alarm.add", input: { hour: 10, minute: 5, label: "", weekdays: [] } },
+    ]);
+  });
+
+  it("closes the confirmation without posting when the Alarm went while it was open", async () => {
+    const port = renderFrame({ state: stateMessage({ alarms: [alarmMessage()] }) });
+    const user = keyboardUser();
+
+    await user.tab();
+    await user.keyboard("{End}");
+    await tabTo(user, find(el("alarm-list"), '[aria-label="Delete 6:30 AM"]'));
+    await user.keyboard("{Enter}");
+    port.deliver(stateMessage({ alarms: [] }));
+    await tabTo(user, el("alarm-delete-confirm"));
+    await user.keyboard("{Enter}");
+
+    expect(el("alarm-delete").hidden).toBe(true);
+    expect(posted(port, "alarm.remove")).toEqual([]);
+  });
+
+  it("shows a time field's message when it loses focus and drops it when the editor reopens", async () => {
+    renderFrame();
+    const user = keyboardUser();
+
+    await user.tab();
+    await user.keyboard("{End}");
+    await tabTo(user, el("add-alarm"));
+    await user.keyboard("{Enter}");
+    await user.clear(el("alarm-minute"));
+    await user.type(el("alarm-minute"), "99");
+    // Mid-typing raises nothing; leaving the field does.
+    expect(el("alarm-minute")).toHaveAccessibleDescription("");
+    await user.tab();
+    expect(el("alarm-minute")).toHaveAccessibleDescription("Between 0 and 59");
+
+    await user.keyboard("{Escape}");
+    await user.keyboard("{Enter}");
+    expect(el("alarm-editor").hidden).toBe(false);
+    expect(el("alarm-minute")).toHaveAccessibleDescription("");
+    expect(el("alarm-minute-error").textContent).toBe("");
+  });
+
+  it("renders the time errors in Spanish", async () => {
+    renderFrame({ labels: ES, language: "es", hourCycle: 24 });
+    const user = keyboardUser();
+
+    await user.tab();
+    await user.keyboard("{End}");
+    await tabTo(user, el("add-alarm"));
+    await user.keyboard("{Enter}");
+    await user.clear(el("alarm-hour"));
+    await user.type(el("alarm-hour"), "24");
+    await user.tab();
+
+    expect(el("alarm-hour")).toHaveAccessibleDescription("Entre 0 y 23");
   });
 
   it("names the repeat weekdays on the row's chips", async () => {
@@ -749,6 +982,23 @@ describe("Clock Frame", () => {
 
       port.deliver(stateMessage({ alarms: [alarmMessage({ enabled: false, nextAt: null })] }));
       expect(el("next-alarm").hidden).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([
+    ["whole hours", new Date(2026, 10, 16, 15, 32, 0), "today at 3:32 PM, in 2 h"],
+    ["minutes alone", new Date(2026, 10, 16, 13, 37, 0), "today at 1:37 PM, in 5 min"],
+    ["both parts", new Date(2026, 10, 16, 14, 33, 0), "today at 2:33 PM, in 1 h 1 min"],
+  ] as const)("writes only the parts above zero for %s", (_case, at, text) => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(2026, 10, 16, 13, 32, 0));
+      renderFrame({
+        state: stateMessage({ alarms: [alarmMessage({ weekdays: [], nextAt: at.getTime() })] }),
+      });
+      expect(el("next-alarm").textContent).toBe(`Next alarm ${text}`);
     } finally {
       vi.useRealTimers();
     }
