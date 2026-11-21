@@ -178,6 +178,9 @@ test.describe("link dialog @wf:editor-link-dialog @sc:editor.insertLink", () => 
     await tabTo(page, insert.getByRole("button", { name: "Insert", exact: true }));
     await page.keyboard.press("Enter");
     await expect(insert).toBeHidden();
+    // Keys pressed before focus is back in the text land nowhere.
+    await expect(editorText(page)).toBeFocused();
+    await expect(editorText(page).getByRole("link", { name: "Charts" })).toBeVisible();
     // Insert leaves the Link's text selected.
     await page.keyboard.press("End");
     for (let i = 0; i < 30; i++) await page.keyboard.press("Enter");
