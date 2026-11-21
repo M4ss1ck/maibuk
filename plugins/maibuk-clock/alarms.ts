@@ -132,6 +132,20 @@ function copy(alarm: Alarm): Alarm {
   return { ...alarm, weekdays: [...alarm.weekdays] };
 }
 
+/**
+ * The input with a whole hour and minute in range: a number field may commit a
+ * fraction, which storage would refuse on the next start and drop the Alarm.
+ */
+function wholeInput(input: AlarmInput): AlarmInput {
+  const whole = (value: number, max: number) =>
+    Math.min(max, Math.max(0, Math.trunc(Number.isFinite(value) ? value : 0)));
+  return {
+    ...input,
+    hour: whole(input.hour, HOURS_PER_DAY - 1),
+    minute: whole(input.minute, MINUTES_PER_HOUR - 1),
+  };
+}
+
 /** A random id from `getRandomValues`: the sandboxed Plugin frame has no `randomUUID`. */
 function randomAlarmId(): string {
   const bytes = new Uint8Array(16);
@@ -147,8 +161,6 @@ export function createAlarms(
   let alarms: Alarm[] = [];
   let language = "en";
   let loaded = false;
-  /** True once the page or a Command changed an Alarm, so a slow load cannot clobber it. */
-  let mutated = false;
   let timeout: ReturnType<typeof setTimeout> | null = null;
   let zoneWatch: ReturnType<typeof setInterval> | null = null;
   /** Every Alarm id the host holds an Alert for, with the occurrence it was sent for. */
@@ -227,7 +239,8 @@ export function createAlarms(
       if (!alarm.enabled || alarm.nextAt === null || alarm.nextAt > now) return alarm;
       fired = true;
       if (alarm.weekdays.length === 0) return { ...alarm, enabled: false, nextAt: null };
-      return { ...alarm, nextAt: nextAlarmAt(alarm, alarm.nextAt, offsetAt) };
+      // From now, not from the occurrence: a sleep past several rings once.
+      return { ...alarm, nextAt: nextAlarmAt(alarm, now, offsetAt) };
     });
     if (!fired) {
       holdFiring();
@@ -296,9 +309,10 @@ export function createAlarms(
       } catch {
         return [];
       }
-      if (mutated) return [];
       const now = Date.now();
-      alarms = parseStored(stored);
+      // An Alarm added before this read finished is kept after the stored ones.
+      const early = new Set(alarms.map((alarm) => alarm.id));
+      alarms = [...parseStored(stored).filter((alarm) => !early.has(alarm.id)), ...alarms];
       const missed: MissedAlarm[] = [];
       alarms = alarms.map((alarm) => {
         if (!alarm.enabled || alarm.nextAt === null || alarm.nextAt > now) return alarm;
@@ -329,8 +343,8 @@ export function createAlarms(
         listeners.delete(listener);
       };
     },
-    add(input) {
-      mutated = true;
+    add(raw) {
+      const input = wholeInput(raw);
       const alarm: Alarm = {
         id: randomAlarmId(),
         hour: input.hour,
@@ -347,9 +361,9 @@ export function createAlarms(
       changed();
       return copy(alarm);
     },
-    edit(id, input) {
+    edit(id, raw) {
       if (!alarms.some((alarm) => alarm.id === id)) return;
-      mutated = true;
+      const input = wholeInput(raw);
       const now = Date.now();
       alarms = alarms.map((alarm) =>
         alarm.id !== id
@@ -371,7 +385,6 @@ export function createAlarms(
     setEnabled(id, enabled) {
       const current = alarms.find((alarm) => alarm.id === id);
       if (current === undefined || current.enabled === enabled) return;
-      mutated = true;
       const now = Date.now();
       alarms = alarms.map((alarm) =>
         alarm.id !== id
@@ -385,7 +398,6 @@ export function createAlarms(
     },
     remove(id) {
       if (!alarms.some((alarm) => alarm.id === id)) return;
-      mutated = true;
       alarms = alarms.filter((alarm) => alarm.id !== id);
       reschedule();
       holdFiring();

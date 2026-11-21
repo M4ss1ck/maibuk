@@ -297,4 +297,71 @@ describe("Clock Alarm core", () => {
     );
     await vi.waitFor(() => expect(storedAlarms(storage)).toEqual(alarms.snapshot()));
   });
+
+  it("keeps a whole hour and minute, so a fractional field cannot drop the Alarm on restart", async () => {
+    const storage = new Map<string, unknown>();
+    const host = createTestHost({ manifest: clockManifest(), storage });
+    openHosts.push(host);
+    jumpTo(START);
+    const alarms = createAlarms(createPluginClient(host.port), UTC);
+    await alarms.load();
+
+    const alarm = alarms.add({ hour: 13.5, minute: 10.7, label: "", weekdays: [] });
+    expect(alarm).toMatchObject({ hour: 13, minute: 10, nextAt: START + HOUR + 10 * MINUTE });
+    alarms.edit(alarm.id, { hour: 14.9, minute: 0.2, label: "", weekdays: [] });
+    expect(alarms.snapshot()[0]).toMatchObject({ hour: 14, minute: 0 });
+
+    await vi.waitFor(() => expect(storedAlarms(storage)).toHaveLength(1));
+    const restarted = createAlarms(createPluginClient(host.port), UTC);
+    await restarted.load();
+    expect(restarted.snapshot()).toHaveLength(1);
+  });
+
+  it("rings once after a long sleep, moving a repeating Alarm to its next occurrence from now", async () => {
+    const storage = new Map<string, unknown>();
+    const host = createTestHost({ manifest: clockManifest(), storage });
+    openHosts.push(host);
+    jumpTo(START);
+    const alarms = createAlarms(createPluginClient(host.port), UTC);
+    await alarms.load();
+    const daily = alarms.add({ hour: 13, minute: 0, label: "", weekdays: [0, 1, 2, 3, 4, 5, 6] });
+    const tag = tagFor(daily);
+    await vi.waitFor(() => expect(host.systemNotifications.scheduled.has(tag)).toBe(true));
+
+    // The device sleeps past three occurrences; the held timeout runs late, once.
+    const wake = START + 3 * 24 * HOUR + 2 * HOUR;
+    const before = host.systemNotifications.log.length;
+    vi.setSystemTime(wake);
+    await vi.advanceTimersByTimeAsync(2 * HOUR);
+
+    const next = START + 4 * 24 * HOUR + HOUR;
+    await vi.waitFor(() => expect(alarms.snapshot()[0]?.nextAt).toBe(next));
+    await vi.waitFor(() => expect(host.systemNotifications.scheduled.get(tag)?.at).toBe(next));
+    // One Alert sent for the next occurrence, none for the ones slept through.
+    const sentSince = host.systemNotifications.log
+      .slice(before)
+      .filter((entry) => entry.kind !== "cancelled");
+    expect(sentSince).toHaveLength(1);
+  });
+
+  it("keeps the stored Alarms when one is added before startup finished reading them", async () => {
+    const storage = new Map<string, unknown>();
+    const host = createTestHost({ manifest: clockManifest(), storage });
+    openHosts.push(host);
+    jumpTo(START);
+    const first = createAlarms(createPluginClient(host.port), UTC);
+    await first.load();
+    first.add({ hour: 13, minute: 0, label: "Stored", weekdays: [] });
+    await vi.waitFor(() => expect(storedAlarms(storage)).toHaveLength(1));
+
+    const restarted = createAlarms(createPluginClient(host.port), UTC);
+    const loading = restarted.load();
+    restarted.add({ hour: 14, minute: 0, label: "Early", weekdays: [] });
+    await loading;
+
+    expect(restarted.snapshot().map((alarm) => alarm.label)).toEqual(["Stored", "Early"]);
+    await vi.waitFor(() =>
+      expect(storedAlarms(storage).map((alarm) => alarm.label)).toEqual(["Stored", "Early"])
+    );
+  });
 });
