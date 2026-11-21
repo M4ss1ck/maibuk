@@ -392,6 +392,42 @@
         -moz-appearance: textfield;
       }
 
+      /* The app styles every scrollbar itself, but the Frame's opaque origin
+         keeps those rules out, so the same bar is drawn here from the theme
+         tokens the host writes. */
+      /* Firefox. Chromium would take these too, and then draw arrow buttons and
+         ignore the rounded thumb below, so only engines without it get them. */
+      @supports not selector(::-webkit-scrollbar) {
+        * {
+          scrollbar-width: thin;
+          scrollbar-color: color-mix(in srgb, var(--maibuk-color-muted-foreground) 45%, transparent)
+            transparent;
+        }
+      }
+
+      /* Chromium, Safari, and the Linux desktop webview. */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      /* Where a vertical and a horizontal scrollbar meet; the engine paints it
+         white otherwise. */
+      ::-webkit-scrollbar-corner {
+        background: transparent;
+      }
+
+      ::-webkit-scrollbar-thumb {
+        border: 2px solid transparent;
+        border-radius: 9999px;
+        background-clip: padding-box;
+        background-color: color-mix(in srgb, var(--maibuk-color-muted-foreground) 45%, transparent);
+      }
+
       .recent {
         display: flex;
         flex-direction: column;
