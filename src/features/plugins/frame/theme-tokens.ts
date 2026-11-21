@@ -14,6 +14,8 @@
  * docs/agents/design.md, "Frame theme tokens".
  */
 
+import { prefersReducedMotion } from "@/lib/motion";
+
 /** One public Frame token: the name a Frame reads, and the internal source. */
 export interface FrameThemeToken {
   /** The stable public custom property a Frame reads (`--maibuk-…`). */
@@ -71,10 +73,18 @@ export const FRAME_THEME_TOKENS: readonly FrameThemeToken[] = Object.freeze(
 export const FRAME_THEME_COLOR_SCHEME = "--maibuk-color-scheme" as const;
 
 /**
+ * The active motion preference. It is not a CSS custom property: the host
+ * derives it from the root's `data-motion` attribute and always publishes it as
+ * `reduce` or `no-preference`.
+ */
+export const FRAME_THEME_MOTION = "--maibuk-motion" as const;
+
+/**
  * Resolves every public token against `root`, reading the computed value of
  * each internal source. An empty value is skipped, so a Frame only ever
  * receives properties the host actually defines. `--maibuk-color-scheme` is
- * always present, as the resolved `light` or `dark`.
+ * always present, as the resolved `light` or `dark`, and `--maibuk-motion` is
+ * always present, as `reduce` or `no-preference`.
  */
 export function readFrameThemeTokens(
   root: Element = document.documentElement
@@ -86,5 +96,6 @@ export function readFrameThemeTokens(
     if (value !== "") tokens[token.name] = value;
   }
   tokens[FRAME_THEME_COLOR_SCHEME] = root.classList.contains("dark") ? "dark" : "light";
+  tokens[FRAME_THEME_MOTION] = prefersReducedMotion(root) ? "reduce" : "no-preference";
   return tokens;
 }

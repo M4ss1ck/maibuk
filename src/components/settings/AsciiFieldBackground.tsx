@@ -7,6 +7,7 @@ import {
   quietness,
   type Rect,
 } from "@/components/settings/asciiBanner.helpers";
+import { prefersReducedMotion } from "@/lib/motion";
 
 interface AsciiFieldBackgroundProps {
   /** Theme color (`#rrggbb`) the glyphs brighten toward. Defaults to brand gold. */
@@ -53,7 +54,7 @@ export function AsciiFieldBackground({ color }: AsciiFieldBackgroundProps) {
     if (!ctx) return;
 
     const base = color ? hexToRgb(color) : FALLBACK_RGB;
-    const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduceMotion = prefersReducedMotion();
     const pointerFine = matchMedia("(pointer:fine)").matches;
 
     const cellWidth = FONT_SIZE * MONO_ASPECT;

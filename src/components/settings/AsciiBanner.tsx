@@ -8,6 +8,7 @@ import {
   FALLBACK_RGB,
   type Grid,
 } from "@/components/settings/asciiBanner.helpers";
+import { prefersReducedMotion } from "@/lib/motion";
 
 interface AsciiBannerProps {
   art?: string;
@@ -48,7 +49,7 @@ export function AsciiBanner({ art = maibukArt, label = "maibuk", color }: AsciiB
     const grid: Grid = parseArt(art);
     const { rows, cols, cells } = grid;
 
-    const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduceMotion = prefersReducedMotion();
     const pointerFine = matchMedia("(pointer:fine)").matches;
 
     const fieldGlyph: string[][] = cells.map((row) =>

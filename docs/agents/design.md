@@ -108,6 +108,7 @@ not part of the contract.
 | `--maibuk-color-success-bg`        | Success banner background                           |
 | `--maibuk-color-success-text`      | Success banner text                                 |
 | `--maibuk-color-scheme`            | Resolved scheme: `"light"` or `"dark"`              |
+| `--maibuk-motion`                  | `"reduce"` or `"no-preference"`, from `data-motion` |
 | `--maibuk-font-sans`               | Sans-serif family stack (UI)                        |
 | `--maibuk-font-serif`              | Serif family stack (editor)                         |
 | `--maibuk-font-mono`               | Monospace family stack                              |

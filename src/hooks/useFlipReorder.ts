@@ -1,10 +1,10 @@
 import { useLayoutEffect, useRef } from "react";
 import type { RefObject } from "react";
 import { OUTLINE_EASING, OUTLINE_MOTION_MS } from "@/components/settings/useOutlineMotion";
+import { prefersReducedMotion } from "@/lib/motion";
 
 const DEFAULT_SELECTOR = "[data-key]";
 const MIN_MOVE_PX = 0.5;
-const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
 /** The attribute a selector like `[data-flip-key]` names, or null if it is not a bare attribute selector. */
 const keyAttributeOf = (selector: string): string | null =>
@@ -82,7 +82,7 @@ export function useFlipReorder(
     signatureRef.current = signature;
 
     if (!orderChanged || !previousTops) return;
-    if (window.matchMedia?.(REDUCED_MOTION_QUERY).matches) return;
+    if (prefersReducedMotion()) return;
 
     for (const row of container.querySelectorAll<HTMLElement>(selector)) {
       const key = row.getAttribute(attribute);

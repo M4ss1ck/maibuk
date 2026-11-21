@@ -45,6 +45,7 @@ The host writes its semantic theme tokens onto the Frame's `<html>` as public `-
 --maibuk-color-scheme             --maibuk-font-sans
 --maibuk-font-serif               --maibuk-font-mono
 --maibuk-font-size                --maibuk-spacing-editor-max
+--maibuk-motion
 ```
 
 For example:
@@ -61,6 +62,13 @@ body {
 ```
 
 Set `color-scheme` from `--maibuk-color-scheme` on every Frame, as above. The host page sets its own `color-scheme` to match the theme, and when a Frame's scheme differs from the host's, the browser paints an opaque backdrop behind the Frame in the Frame's scheme: a Frame with a transparent body and no `color-scheme` shows as a white box in the dark theme. The same property makes the Frame's native scrollbars and form controls follow the theme. The `light dark` fallback covers the moment before the host writes the tokens.
+
+`--maibuk-motion` is `reduce` while Maibuk reduces motion (today, the OS preference) and `no-preference` otherwise, updated live. A Frame that animates should stop when it reads `reduce`. Read it in JavaScript rather than a media query, so the Frame follows the app's resolved preference:
+
+```js
+const reduceMotion =
+  getComputedStyle(document.documentElement).getPropertyValue("--maibuk-motion").trim() === "reduce";
+```
 
 ## Focus when the author leaves the Frame
 

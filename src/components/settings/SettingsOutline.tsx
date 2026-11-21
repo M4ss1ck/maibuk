@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
+import { prefersReducedMotion } from "@/lib/motion";
 import {
   Button as AriaButton,
   Input as AriaInput,
@@ -40,10 +41,6 @@ interface SettingsOutlineProps {
 
 const sectionKey = (id: string) => `section:${id}`;
 const rowKey = (section: string, row: string) => `row:${section}:${row}`;
-
-function prefersReducedMotion() {
-  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-}
 
 /**
  * The Settings outline beside the sections: a search field and a tree of

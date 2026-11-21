@@ -6,12 +6,15 @@
 // only through this table — a public name a Plugin relies on cannot drift.
 
 import { readFileSync } from "node:fs";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   FRAME_THEME_COLOR_SCHEME,
+  FRAME_THEME_MOTION,
   FRAME_THEME_TOKENS,
   readFrameThemeTokens,
 } from "@/features/plugins/frame";
+import { useFrameThemeTokens } from "@/components/plugins/useFrameThemeTokens";
 
 function setToken(name: string, value: string): void {
   document.documentElement.style.setProperty(name, value);
@@ -20,6 +23,7 @@ function setToken(name: string, value: string): void {
 afterEach(() => {
   document.documentElement.removeAttribute("style");
   document.documentElement.classList.remove("dark");
+  document.documentElement.removeAttribute("data-motion");
 });
 
 describe("FRAME_THEME_TOKENS", () => {
@@ -67,6 +71,7 @@ describe("FRAME_THEME_TOKENS", () => {
       "--maibuk-spacing-editor-max",
     ]);
     expect(FRAME_THEME_COLOR_SCHEME).toBe("--maibuk-color-scheme");
+    expect(FRAME_THEME_MOTION).toBe("--maibuk-motion");
   });
 
   it("names a source that still exists in src/index.css", () => {
@@ -114,6 +119,15 @@ describe("readFrameThemeTokens", () => {
     expect(readFrameThemeTokens()[FRAME_THEME_COLOR_SCHEME]).toBe("dark");
   });
 
+  it("publishes no-preference without a data-motion attribute", () => {
+    expect(readFrameThemeTokens()[FRAME_THEME_MOTION]).toBe("no-preference");
+  });
+
+  it('publishes reduce when the root carries data-motion="reduce"', () => {
+    document.documentElement.setAttribute("data-motion", "reduce");
+    expect(readFrameThemeTokens()[FRAME_THEME_MOTION]).toBe("reduce");
+  });
+
   it("resolves against any root element", () => {
     const root = document.createElement("div");
     root.style.setProperty("--color-card", "#abcdef");
@@ -121,6 +135,24 @@ describe("readFrameThemeTokens", () => {
 
     expect(readFrameThemeTokens(root)["--maibuk-color-card"]).toBe("#abcdef");
     root.remove();
+  });
+});
+
+describe("useFrameThemeTokens", () => {
+  it("updates the motion token live when data-motion changes", async () => {
+    const { result } = renderHook(() => useFrameThemeTokens());
+    expect(result.current[FRAME_THEME_MOTION]).toBe("no-preference");
+
+    act(() => {
+      document.documentElement.setAttribute("data-motion", "reduce");
+    });
+    await waitFor(() => expect(result.current[FRAME_THEME_MOTION]).toBe("reduce"));
+
+    act(() => {
+      document.documentElement.removeAttribute("data-motion");
+    });
+    await waitFor(() => expect(result.current[FRAME_THEME_MOTION]).toBe("no-preference"));
+    document.documentElement.removeAttribute("data-motion");
   });
 });
 

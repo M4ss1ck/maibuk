@@ -7,6 +7,7 @@ import { isFocusVisible } from "react-aria/private/interactions/useFocusVisible"
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "@/features/settings/store";
 import { PANE_CYCLED_EVENT, PANE_SELECTOR } from "@/lib/arrow-navigation";
+import { prefersReducedMotion } from "@/lib/motion";
 
 const SLIDE_MS = 180;
 const BADGE_MS = 1500;
@@ -32,10 +33,6 @@ const NAVIGATION_KEYS = new Set([
   "Meta",
   "CapsLock",
 ]);
-
-function prefersReducedMotion(): boolean {
-  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-}
 
 function place(frame: HTMLElement, rect: DOMRect): void {
   frame.style.left = `${rect.left}px`;

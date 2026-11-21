@@ -4,12 +4,12 @@
  * post the current map to a loaded Frame.
  *
  * Every one of these variables is written on the root element — the theme class
- * (`document.documentElement.classList`) and the accent and app-font inline
- * properties. A `MutationObserver` on the root's attributes therefore catches
- * every writer through one path, and it fires *after* the DOM is updated, so the
- * read always sees the committed value. `requestAnimationFrame` would race
- * React's passive effects, which are what write these variables, and could read
- * the previous frame; the observer cannot.
+ * (`document.documentElement.classList`), the accent and app-font inline
+ * properties, and the `data-motion` attribute. A `MutationObserver` on the
+ * root's attributes therefore catches every writer through one path, and it
+ * fires *after* the DOM is updated, so the read always sees the committed value.
+ * `requestAnimationFrame` would race React's passive effects, which are what
+ * write these variables, and could read the previous frame; the observer cannot.
  *
  * The theme store is read so a `system` theme re-checks on the OS preference,
  * and the Settings store's accent/font fields are subscribed so a change that
@@ -60,7 +60,7 @@ export function useFrameThemeTokens(): Record<string, string> {
     const observer = new MutationObserver(recompute);
     observer.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ["class", "style", "data-theme"],
+      attributeFilter: ["class", "style", "data-theme", "data-motion"],
     });
     return () => observer.disconnect();
   }, [recompute]);

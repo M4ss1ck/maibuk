@@ -9,6 +9,7 @@ import {
   type OutlinePinEvent,
   type OutlineSelection,
 } from "@/features/settings/outline";
+import { prefersReducedMotion } from "@/lib/motion";
 
 // Where a section lands below the visible top after a jump.
 const LANDING_GAP = 24;
@@ -113,7 +114,7 @@ export function useSettingsOutline(scrollerRef: RefObject<HTMLElement | null>, t
       const { heading, card } = sectionElement(section);
       if (!card) return;
       const delta = card.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
-      const smooth = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const smooth = !prefersReducedMotion();
       scroller.scrollTo?.({
         top: scroller.scrollTop + delta - topInset - LANDING_GAP,
         behavior: smooth ? "smooth" : "auto",

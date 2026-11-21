@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useRef, type RefObject } from "react";
 import type { OutlineTransition, OutlineTransitionEvent } from "@/features/settings/outline";
 import { cubicBezier, edgeKeyframes } from "@/features/settings/outline-edge";
+import { prefersReducedMotion } from "@/lib/motion";
 
 // One duration and curve for the current-section marker and the outline's own
 // scroll, so they arrive together. The rows travel on their own curves below.
@@ -37,10 +38,6 @@ function sectionOf(row: HTMLElement): string | null {
   if (!key?.startsWith("row:")) return null;
   const end = key.indexOf(":", "row:".length);
   return end < 0 ? null : key.slice("row:".length, end);
-}
-
-function prefersReducedMotion() {
-  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 }
 
 /**
