@@ -1,5 +1,5 @@
-import { fireEvent } from "@testing-library/react";
-import { vi } from "vitest";
+import { fireEvent, waitFor } from "@testing-library/react";
+import { expect, vi } from "vitest";
 
 // jsdom has no DataTransfer or layout. These drive React Aria's native
 // drag-and-drop the way a browser would: a DataTransfer that keeps what
@@ -104,4 +104,23 @@ export function dispatchDragEvent(
     shiftKey: { value: false },
   });
   fireEvent(element, event);
+}
+
+// React Aria starts a keyboard drag a frame after Enter lifts the row
+// (DragManager's requestAnimationFrame). Only in that frame does it listen for
+// Escape, hide everything but the drop targets, and focus the first one. jsdom
+// runs frames on a fixed clock, so a key pressed before it misses the drag: an
+// arrow moves the row focus, and an Escape leaves the drag running past the
+// test, where its late frame hides the next test's screen.
+export async function waitForKeyboardDrag() {
+  await waitFor(() =>
+    expect(document.activeElement?.getAttribute("aria-label")).toMatch(/^Insert /)
+  );
+}
+
+// A keyboard drag hides everything but its drop targets until it ends, so a
+// drop or cancel is done once `element`, which no drop target holds, is
+// exposed again.
+export async function waitForKeyboardDragEnd(element: HTMLElement) {
+  await waitFor(() => expect(element.closest('[aria-hidden="true"], [inert]')).toBeNull());
 }
