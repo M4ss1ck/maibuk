@@ -161,8 +161,11 @@ test.describe("Plugin approvals @wf:plugins-approvals", () => {
     }) => {
       await openPluginsSection(page);
       await expandPluginRow(page);
-      // The Worker is up: its start report landed.
-      await expect(ran(page)).toBeVisible({ timeout: 15_000 });
+      // The Worker is up: it drew its Settings row. Its start report is a
+      // toast raised at boot, long gone by the time the outline walk ends.
+      await expect(page.getByRole("switch", { name: "Approvals kept data" })).toBeVisible({
+        timeout: 15_000,
+      });
 
       // The grants live in the nested Permissions accordion.
       await openPermissions(page);
@@ -174,14 +177,15 @@ test.describe("Plugin approvals @wf:plugins-approvals", () => {
       await expect(enableSwitch(page)).toBeChecked();
 
       // The next call to that permission is refused (the fixture reports it).
-      // Leave the checkbox (a typing target suppresses global Commands), and let
-      // the startup report's 5 s notification slot pass.
+      // Leave the checkbox: a typing target suppresses global Commands.
       await page.keyboard.press("Shift+Tab");
-      await page.waitForTimeout(5_200);
       await page.keyboard.press("ControlOrMeta+Alt+e");
+      // The host admits one notification per 5 s and the startup report may
+      // still hold the slot; the fixture retries a refused report each second
+      // until it lands, so the wait covers that slot.
       await expect(
         page.getByRole("status").filter({ hasText: "approvals editor refused: permission-denied" })
-      ).toBeVisible({ timeout: 5_000 });
+      ).toBeVisible({ timeout: 15_000 });
     });
 
     test("revoking a required grant disables the Plugin and unregisters its surfaces", async ({
