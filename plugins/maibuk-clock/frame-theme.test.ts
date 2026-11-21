@@ -48,4 +48,37 @@ describe("Clock Frame themed scrollbars", () => {
     expect(thumb).not.toMatch(/#[0-9a-f]{3,8}/i);
     expect(firefoxScrollbarProperties()).toMatch(APP_THUMB);
   });
+
+  it("paints the root scroller's gutter like the page, never the webview's white", () => {
+    // A document's own canvas does not paint under its root scrollbar, so a
+    // transparent track there shows the webview's base color, which stays
+    // white in the dark theme; the app's own bars never sit on a root
+    // scroller, so only the Frame needs this.
+    for (const part of ["-track", "-corner"]) {
+      expect(ruleBody(`html::-webkit-scrollbar${part}`)).toMatch(
+        /background:\s*var\(--maibuk-color-background\);/
+      );
+    }
+  });
+
+  it("keeps a solid token color ahead of the mix for engines that cannot resolve it", () => {
+    // The thumb: WebKitGTK's scrollbar paint reads color-mix() as nothing and
+    // paints no thumb at all, so the token's own solid color stands in first.
+    const thumb = ruleBody("::-webkit-scrollbar-thumb");
+    const solid = thumb.match(/background-color:\s*var\(--maibuk-color-muted-foreground\);/);
+    const mixed = thumb.match(APP_THUMB);
+    expect(solid?.index).toBeDefined();
+    expect(mixed?.index).toBeDefined();
+    expect(solid?.index ?? 0).toBeLessThan(mixed?.index ?? 0);
+
+    // Firefox's bar gets the same insurance.
+    const gated = firefoxScrollbarProperties();
+    const solidColor = gated.match(
+      /scrollbar-color:\s*var\(--maibuk-color-muted-foreground\)\s+var\(--maibuk-color-background\);/
+    );
+    const mixedColor = gated.match(APP_THUMB);
+    expect(solidColor?.index).toBeDefined();
+    expect(mixedColor?.index).toBeDefined();
+    expect(solidColor?.index ?? 0).toBeLessThan(mixedColor?.index ?? 0);
+  });
 });

@@ -400,6 +400,9 @@
       @supports not selector(::-webkit-scrollbar) {
         * {
           scrollbar-width: thin;
+          /* The solid pair stands in for engines without color-mix(). */
+          scrollbar-color: var(--maibuk-color-muted-foreground) var(--maibuk-color-background);
+          /* biome-ignore lint/suspicious/noDuplicateProperties: the plain pair above is the fallback for engines that cannot resolve color-mix() */
           scrollbar-color: color-mix(in srgb, var(--maibuk-color-muted-foreground) 45%, transparent)
             transparent;
         }
@@ -421,10 +424,27 @@
         background: transparent;
       }
 
+      /* The root scroller's track backs onto the webview's own base color,
+         which stays white in the dark theme; the Frame's canvas does not
+         extend under it the way the app's page does. Painting it like the
+         page leaves the same pixels the app's transparent track shows. */
+      html::-webkit-scrollbar-track {
+        background: var(--maibuk-color-background);
+      }
+
+      html::-webkit-scrollbar-corner {
+        background: var(--maibuk-color-background);
+      }
+
       ::-webkit-scrollbar-thumb {
         border: 2px solid transparent;
         border-radius: 9999px;
         background-clip: padding-box;
+        /* WebKitGTK's scrollbar paint reads an unresolved color-mix() as no
+           color at all and skips the thumb; the token's solid color stands in
+           first, and every engine that resolves the mix takes that instead. */
+        background-color: var(--maibuk-color-muted-foreground);
+        /* biome-ignore lint/suspicious/noDuplicateProperties: the plain color above is the fallback for engines that cannot resolve color-mix() */
         background-color: color-mix(in srgb, var(--maibuk-color-muted-foreground) 45%, transparent);
       }
 
