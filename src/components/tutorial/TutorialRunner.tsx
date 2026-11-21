@@ -42,6 +42,7 @@ import { useTutorialStore, type TutorialRun } from "@/features/tutorial/store";
 import type { TutorialExitReason, TutorialOrigin } from "@/features/tutorial/types";
 import { registerBackDismiss } from "@/lib/platform/backDismiss";
 import { TUTORIAL_RELAUNCH_HINT_DURATION_MS } from "@/constants";
+import { prefersReducedMotion } from "@/lib/motion";
 import { useShortcuts } from "@/lib/shortcuts";
 
 // Runs the Tutorial across screens (ADR 0009). React Joyride only draws the
@@ -170,12 +171,6 @@ function JoyrideCard({ step }: TooltipRenderProps) {
       onSkip={actions.onSkip}
     />
   );
-}
-
-function prefersReducedMotion(): boolean {
-  return typeof window.matchMedia === "function"
-    ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    : false;
 }
 
 export function TutorialRunner() {

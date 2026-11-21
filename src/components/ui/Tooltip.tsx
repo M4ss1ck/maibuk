@@ -21,6 +21,7 @@ import { cloneElement, useRef, useState, type ReactElement, type ReactNode, type
 
 import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
 import { lowlight } from "@/lib/lowlight";
+import { prefersReducedMotion } from "@/lib/motion";
 import { IS_ANDROID } from "@/lib/platform";
 import { isMac } from "@/lib/platform/detect";
 import { useCommandHint } from "@/lib/command-keys";
@@ -88,9 +89,7 @@ export function Tooltip({
 }: TooltipProps) {
   const [open, setOpen] = useState(false);
   const arrowRef = useRef<SVGSVGElement>(null);
-  const reducedMotion =
-    typeof window !== "undefined" &&
-    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  const reducedMotion = prefersReducedMotion();
   const { refs, floatingStyles, context } = useFloating({
     open,
     onOpenChange: setOpen,

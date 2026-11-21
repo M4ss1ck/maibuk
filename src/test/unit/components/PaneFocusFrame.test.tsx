@@ -15,6 +15,7 @@ vi.mock("@/features/settings/store", () => ({
 
 import { PaneFocusFrame } from "@/components/PaneFocusFrame";
 import { cyclePanes, installArrowNavigation } from "@/lib/arrow-navigation";
+import { applyMotion } from "@/lib/motion";
 
 function Fixture() {
   return (
@@ -44,15 +45,11 @@ function keyboardFocus(el: HTMLElement) {
 }
 
 let animate: ReturnType<typeof vi.fn>;
-let reducedMotion = false;
 beforeEach(() => {
   settingsState.hideKeyboardHints = false;
-  reducedMotion = false;
+  applyMotion(false);
   animate = vi.fn();
   HTMLElement.prototype.animate = animate as unknown as HTMLElement["animate"];
-  window.matchMedia = vi.fn((query: string) => ({
-    matches: query.includes("reduce") && reducedMotion,
-  })) as unknown as typeof window.matchMedia;
   // jsdom has no layout; give every Pane a box so the slide has something to measure.
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
     left: 0,
@@ -69,6 +66,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
+  applyMotion(false);
 });
 
 describe("PaneFocusFrame", () => {
@@ -138,7 +136,7 @@ describe("PaneFocusFrame", () => {
   });
 
   it("skips the slide under reduced motion but still shows the ring", () => {
-    reducedMotion = true;
+    applyMotion(true);
     render(<Fixture />);
     keyboardFocus(button("In list"));
     keyboardFocus(button("In editor"));

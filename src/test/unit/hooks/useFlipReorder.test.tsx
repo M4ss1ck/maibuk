@@ -2,6 +2,7 @@ import { render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useRef } from "react";
 import { useFlipReorder } from "@/hooks/useFlipReorder";
+import { applyMotion } from "@/lib/motion";
 
 const ROW_HEIGHT = 40;
 
@@ -27,24 +28,11 @@ function Harness({ order, options }: HarnessProps) {
 const rowsOf = (container: HTMLElement) =>
   Array.from(container.querySelectorAll<HTMLElement>("[data-key]"));
 
-function setMatchMedia(reduced: boolean) {
-  Object.defineProperty(window, "matchMedia", {
-    configurable: true,
-    writable: true,
-    value: vi.fn().mockImplementation((query: string) => ({
-      matches: reduced && query === "(prefers-reduced-motion: reduce)",
-      media: query,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    })),
-  });
-}
-
 describe("useFlipReorder", () => {
   let rectSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    setMatchMedia(false);
+    applyMotion(false);
     // Each row sits at index * ROW_HEIGHT inside the content, so its viewport
     // top is that minus the container's scrollTop. The container is at viewport 0.
     rectSpy = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (
@@ -85,6 +73,7 @@ describe("useFlipReorder", () => {
   afterEach(() => {
     rectSpy.mockRestore();
     vi.restoreAllMocks();
+    applyMotion(false);
   });
 
   function attachAnimate(container: HTMLElement) {
@@ -247,7 +236,7 @@ describe("useFlipReorder", () => {
   });
 
   it("does not animate any row when prefers-reduced-motion is set", () => {
-    setMatchMedia(true);
+    applyMotion(true);
     const { getByTestId, rerender } = render(<Harness order={["a", "b", "c"]} />);
     const container = getByTestId("list");
     const animate = attachAnimate(container);

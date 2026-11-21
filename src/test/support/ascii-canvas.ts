@@ -1,4 +1,5 @@
 import { vi } from "vitest";
+import { applyMotion } from "@/lib/motion";
 
 /**
  * jsdom has no canvas, no `document.fonts`, no IntersectionObserver, and reports
@@ -115,11 +116,7 @@ export function setupAsciiCanvas({
 
   const prevMatchMedia = window.matchMedia;
   window.matchMedia = ((query: string) => ({
-    matches: /prefers-reduced-motion/.test(query)
-      ? reduceMotion
-      : /pointer:\s*fine/.test(query)
-        ? pointerFine
-        : false,
+    matches: /pointer:\s*fine/.test(query) ? pointerFine : false,
     media: query,
     onchange: null,
     addEventListener: () => {},
@@ -128,6 +125,10 @@ export function setupAsciiCanvas({
     removeListener: () => {},
     dispatchEvent: () => false,
   })) as unknown as typeof window.matchMedia;
+
+  // The ASCII components read the OS reduced-motion preference through
+  // src/lib/motion.ts, which reads this root attribute.
+  applyMotion(reduceMotion);
 
   return {
     ctx,
@@ -152,6 +153,7 @@ export function setupAsciiCanvas({
       globalThis.requestAnimationFrame = prevRaf;
       globalThis.cancelAnimationFrame = prevCaf;
       window.matchMedia = prevMatchMedia;
+      applyMotion(false);
     },
   };
 }

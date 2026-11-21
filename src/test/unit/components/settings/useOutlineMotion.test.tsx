@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SettingsSectionId } from "@/components/settings/SettingsSection";
 import type { OutlineSelection } from "@/features/settings/outline";
+import { applyMotion } from "@/lib/motion";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key, i18n: { language: "en" } }),
@@ -82,7 +83,6 @@ class FakeAnimation {
   }
 }
 let calls: Call[];
-let reducedMotion: boolean;
 
 /** Runs the animations a change started to their end, as the browser would. */
 function finishAnimations(match: (call: Call) => boolean) {
@@ -95,7 +95,7 @@ function finishAnimations(match: (call: Call) => boolean) {
 // it at some other height, and an animation is a record of what was asked for.
 beforeEach(() => {
   calls = [];
-  reducedMotion = false;
+  applyMotion(false);
   Object.defineProperty(HTMLElement.prototype, "offsetTop", {
     configurable: true,
     get(this: HTMLElement) {
@@ -121,21 +121,13 @@ beforeEach(() => {
     return animation as unknown as Animation;
   } as HTMLElement["animate"];
   HTMLElement.prototype.getAnimations = () => [];
-  vi.spyOn(window, "matchMedia").mockImplementation(
-    (query: string) =>
-      ({
-        matches: query.includes("reduce") && reducedMotion,
-        media: query,
-        addEventListener() {},
-        removeEventListener() {},
-      }) as unknown as MediaQueryList
-  );
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
   delete (HTMLElement.prototype as Partial<HTMLElement>).animate;
   delete (HTMLElement.prototype as Partial<HTMLElement>).getAnimations;
+  applyMotion(false);
 });
 
 const select = (section: string): OutlineSelection => ({ section, row: null });
@@ -505,7 +497,7 @@ describe("Settings outline motion", () => {
   });
 
   it("reduced motion changes the outline without animating it", async () => {
-    reducedMotion = true;
+    applyMotion(true);
     const { container, moveTo } = renderOutline("appearance");
     await act(async () => moveTo("general"));
     expect(calls).toEqual([]);
