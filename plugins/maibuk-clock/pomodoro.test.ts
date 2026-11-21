@@ -107,6 +107,35 @@ describe("Clock Pomodoro core", () => {
     });
   });
 
+  it("falls back on an out-of-range stored value field by field", async () => {
+    const storage = new Map<string, unknown>([
+      [
+        "pomodoro",
+        {
+          state: INITIAL_CYCLE,
+          settings: {
+            pomodoroMinutes: 0,
+            shortBreakMinutes: 100,
+            longBreakMinutes: 45,
+            longBreakEvery: 13,
+            autoStartBreaks: true,
+            autoStartPomodoros: false,
+          },
+          today: { day: 0, count: 0 },
+        },
+      ],
+    ]);
+    const host = openHost(storage);
+    const pomodoro = createPomodoro(createPluginClient(host.port));
+    await pomodoro.load();
+
+    expect(pomodoro.snapshot().settings).toEqual({
+      ...DEFAULT_POMODORO_SETTINGS,
+      longBreakMinutes: 45,
+      autoStartBreaks: true,
+    });
+  });
+
   it("schedules the end Alert under the Pomodoro id when a phase starts", async () => {
     const start = Date.now();
     const storage = new Map<string, unknown>();
@@ -263,6 +292,60 @@ describe("Clock Pomodoro core", () => {
       })
     );
     expect(pomodoro.snapshot().today.count).toBe(2);
+  });
+
+  it("keeps a running phase's end and a paused phase's remaining when the settings change", async () => {
+    const start = Date.now();
+    const storage = new Map<string, unknown>();
+    const host = openHost(storage);
+    jumpTo(start);
+    const pomodoro = createPomodoro(createPluginClient(host.port));
+    await pomodoro.load();
+    pomodoro.start();
+    const running = pomodoro.snapshot().state;
+    if (running.status !== "running") throw new Error("the Cycle should be running");
+    expect(running.endsAt).toBe(start + 25 * 60_000);
+
+    pomodoro.setSettings({ pomodoroMinutes: 50, longBreakMinutes: 60 });
+    expect(pomodoro.snapshot().settings.pomodoroMinutes).toBe(50);
+    expect(pomodoro.snapshot().state).toEqual(running);
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    pomodoro.pause();
+    const paused = pomodoro.snapshot().state;
+    if (paused.status !== "paused") throw new Error("the Cycle should be paused");
+    expect(paused.remaining).toBe(25 * 60_000 - 10_000);
+    pomodoro.setSettings({ pomodoroMinutes: 1 });
+    expect(pomodoro.snapshot().state).toEqual(paused);
+  });
+
+  it("makes the next break the Long Break when longBreakEvery falls below the current Pomodoro", async () => {
+    const start = Date.now();
+    const storage = new Map<string, unknown>([
+      [
+        "pomodoro",
+        {
+          state: { phase: "pomodoro", pomodoro: 3, status: "idle" },
+          settings: DEFAULT_POMODORO_SETTINGS,
+          today: { day: 0, count: 0 },
+        },
+      ],
+    ]);
+    const host = openHost(storage);
+    jumpTo(start);
+    const pomodoro = createPomodoro(createPluginClient(host.port));
+    await pomodoro.load();
+    pomodoro.start();
+
+    // The third Pomodoro runs; shortening the cycle to two ends it at the next break.
+    pomodoro.setSettings({ longBreakEvery: 2 });
+    pomodoro.skip();
+
+    expect(pomodoro.snapshot().state).toEqual({
+      phase: "longBreak",
+      pomodoro: 3,
+      status: "idle",
+    });
   });
 
   it("reports a phase that ended while closed without advancing it", async () => {

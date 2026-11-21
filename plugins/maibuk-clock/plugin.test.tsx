@@ -634,6 +634,24 @@ describe("Clock runtime", () => {
     expect(host.systemNotifications.scheduled.has(POMODORO_TAG)).toBe(true);
   });
 
+  it("stops the Pomodoro settings row's number fields at the shared maxima", async () => {
+    const { host, storage } = startHost();
+    const row = await host.renderSettingsRow(POMODORO_SETTINGS_ROW_ID);
+    const user = userEvent.setup();
+
+    const length = await screen.findByRole("textbox", { name: en.pomodoroMinutes });
+    await tabTo(user, length);
+    await user.keyboard("{Control>}a{/Control}100{Enter}");
+    await eventually(() => expect(storedSettings(storage)?.pomodoroMinutes).toBe(99));
+
+    const every = screen.getByRole("textbox", { name: en.longBreakEvery });
+    await tabTo(user, every);
+    await user.keyboard("{Control>}a{/Control}13{Enter}");
+    await eventually(() => expect(storedSettings(storage)?.longBreakEvery).toBe(12));
+
+    await row.unmount();
+  });
+
   it("renders the Pomodoro settings row in Spanish when the app language is Spanish", async () => {
     const { host } = startHost({ language: "es" });
 

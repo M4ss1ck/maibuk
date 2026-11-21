@@ -21,6 +21,7 @@ import {
 } from "@/plugin-sdk";
 import { translate, type ClockKey } from "./i18n";
 import { createAlarms } from "./alarms";
+import { POMODORO_LIMITS } from "./cycle";
 import { createPomodoro, type ClockPomodoro } from "./pomodoro";
 import { createStopwatch, type ClockStopwatch } from "./stopwatch";
 import { formatClockTime, hourCycleFor } from "./time";
@@ -249,9 +250,13 @@ function wholeMinutes(value: number): number {
  * The `pomodoro` Settings row's body: the three lengths, the count before a Long
  * Break, and the two auto-start switches. Each change is written straight to
  * the Cycle, which persists it under its one key, so the row survives a reload.
- * Labels come from the runtime catalogs.
+ * The number fields take their bounds from `POMODORO_LIMITS`, so the row cannot
+ * store what the Clock page's dialog refuses. Labels come from the runtime
+ * catalogs.
  */
 function createPomodoroSettings(client: PluginClient, pomodoro: ClockPomodoro): ComponentType {
+  const { minutes, longBreakEvery } = POMODORO_LIMITS;
+
   function PomodoroSettings() {
     const language = useLanguage(client);
     const [settings, setSettings] = useState(() => pomodoro.snapshot().settings);
@@ -267,7 +272,8 @@ function createPomodoroSettings(client: PluginClient, pomodoro: ClockPomodoro): 
         <ui.NumberField
           label={translate(language, "pomodoroMinutes")}
           value={settings.pomodoroMinutes}
-          minValue={1}
+          minValue={minutes.min}
+          maxValue={minutes.max}
           step={1}
           onChange={(event) =>
             pomodoro.setSettings({ pomodoroMinutes: wholeMinutes(event.detail) })
@@ -276,7 +282,8 @@ function createPomodoroSettings(client: PluginClient, pomodoro: ClockPomodoro): 
         <ui.NumberField
           label={translate(language, "shortBreakMinutes")}
           value={settings.shortBreakMinutes}
-          minValue={1}
+          minValue={minutes.min}
+          maxValue={minutes.max}
           step={1}
           onChange={(event) =>
             pomodoro.setSettings({ shortBreakMinutes: wholeMinutes(event.detail) })
@@ -285,7 +292,8 @@ function createPomodoroSettings(client: PluginClient, pomodoro: ClockPomodoro): 
         <ui.NumberField
           label={translate(language, "longBreakMinutes")}
           value={settings.longBreakMinutes}
-          minValue={1}
+          minValue={minutes.min}
+          maxValue={minutes.max}
           step={1}
           onChange={(event) =>
             pomodoro.setSettings({ longBreakMinutes: wholeMinutes(event.detail) })
@@ -294,7 +302,8 @@ function createPomodoroSettings(client: PluginClient, pomodoro: ClockPomodoro): 
         <ui.NumberField
           label={translate(language, "longBreakEvery")}
           value={settings.longBreakEvery}
-          minValue={1}
+          minValue={longBreakEvery.min}
+          maxValue={longBreakEvery.max}
           step={1}
           onChange={(event) => pomodoro.setSettings({ longBreakEvery: wholeMinutes(event.detail) })}
         />

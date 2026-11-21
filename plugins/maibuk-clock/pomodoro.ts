@@ -17,7 +17,9 @@ import {
   advanceCycle,
   DEFAULT_POMODORO_SETTINGS,
   INITIAL_CYCLE,
+  isWholeNumberIn,
   pauseCycle,
+  POMODORO_LIMITS,
   reconcileCycle,
   resetCycle,
   startCycle,
@@ -88,10 +90,6 @@ function isPomodoroNumber(value: unknown): value is number {
   return isFiniteNumber(value) && Number.isInteger(value) && value >= 1;
 }
 
-function isMinutes(value: unknown): value is number {
-  return isFiniteNumber(value) && Number.isInteger(value) && value > 0;
-}
-
 /** One stored phase state, or null when any field is not the shape `cycle.ts` writes. */
 function parseState(value: unknown): CycleState | null {
   if (typeof value !== "object" || value === null) return null;
@@ -118,21 +116,22 @@ function parseState(value: unknown): CycleState | null {
   return null;
 }
 
-/** The stored settings, each malformed field taking its default on its own. */
+/** The stored settings, each malformed or out-of-range field taking its default on its own. */
 function parseSettings(value: unknown): PomodoroSettings {
+  const { minutes, longBreakEvery } = POMODORO_LIMITS;
   const stored =
     typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
   return {
-    pomodoroMinutes: isMinutes(stored.pomodoroMinutes)
+    pomodoroMinutes: isWholeNumberIn(stored.pomodoroMinutes, minutes)
       ? stored.pomodoroMinutes
       : DEFAULT_POMODORO_SETTINGS.pomodoroMinutes,
-    shortBreakMinutes: isMinutes(stored.shortBreakMinutes)
+    shortBreakMinutes: isWholeNumberIn(stored.shortBreakMinutes, minutes)
       ? stored.shortBreakMinutes
       : DEFAULT_POMODORO_SETTINGS.shortBreakMinutes,
-    longBreakMinutes: isMinutes(stored.longBreakMinutes)
+    longBreakMinutes: isWholeNumberIn(stored.longBreakMinutes, minutes)
       ? stored.longBreakMinutes
       : DEFAULT_POMODORO_SETTINGS.longBreakMinutes,
-    longBreakEvery: isMinutes(stored.longBreakEvery)
+    longBreakEvery: isWholeNumberIn(stored.longBreakEvery, longBreakEvery)
       ? stored.longBreakEvery
       : DEFAULT_POMODORO_SETTINGS.longBreakEvery,
     autoStartBreaks:
