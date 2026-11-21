@@ -82,7 +82,7 @@ test.describe("phone Maps editor @touch @wf:plugins-maps-touch", () => {
     await dialog.getByRole("button", { name: "Create" }).tap();
     await expect(dialog).toBeHidden();
 
-    await page.getByRole("button", { name: "Open Coastline" }).tap();
+    await page.getByRole("button", { name: /^Coastline\b/ }).tap();
     await expect(frame(page)).toBeVisible();
     // The editor's belt is a row of thumb-sized targets along the bottom on a
     // phone, and a tap on one of them picks that tool in the drawing (#779).
