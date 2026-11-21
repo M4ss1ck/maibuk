@@ -131,21 +131,14 @@ if (typeof window !== "undefined") {
   // would hide every later test's screen, and the rest of the file would fail
   // with "Unable to find an accessible element". End the drag here and fail
   // the test that left it.
-  const { isVirtualDragging } = await import("react-aria/private/dnd/DragManager");
-  // Taken now, before any test fakes the timers.
-  const realSetTimeout = globalThis.setTimeout;
+  const { endLeakedKeyboardDrag } = await import("@/test/support/drag-events");
   afterEach(async () => {
-    if (!isVirtualDragging()) return;
-    // The drag listens for Escape from its first frame on; this frame runs
-    // after it. A test that faked or stubbed out frames never runs one, so
-    // the wait gives up after a real 100 ms rather than hang the hook.
-    await new Promise((resolve) => {
-      requestAnimationFrame(resolve);
-      realSetTimeout(resolve, 100);
-    });
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    const leaked = await endLeakedKeyboardDrag();
+    if (!leaked) return;
     throw new Error(
-      "A React Aria keyboard drag was still running when the test ended. Drop or cancel it, and wait for it to start (waitForKeyboardDrag) and end (endKeyboardDrag) in src/test/support/drag-events.ts."
+      leaked === "ended"
+        ? "A React Aria keyboard drag was still running when the test ended. Drop or cancel it, and wait for it to start (waitForKeyboardDrag) and end (endKeyboardDrag) in src/test/support/drag-events.ts."
+        : "A React Aria keyboard drag was still running when the test ended, with animation frames faked, so it could not be cancelled and later tests in this file may fail. End the drag and call vi.useRealTimers() before the test ends."
     );
   });
 }

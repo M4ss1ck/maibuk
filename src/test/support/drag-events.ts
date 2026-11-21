@@ -1,4 +1,5 @@
 import { fireEvent, waitFor } from "@testing-library/react";
+import { isVirtualDragging } from "react-aria/private/dnd/DragManager";
 import { expect, vi } from "vitest";
 
 // jsdom has no DataTransfer or layout. These drive React Aria's native
@@ -131,4 +132,25 @@ export async function endKeyboardDrag(
   expect(outside.closest(hidden), "the drag should hide `outside`").not.toBeNull();
   await user.keyboard(key);
   await waitFor(() => expect(outside.closest(hidden)).toBeNull());
+}
+
+// Taken at import, before any test fakes the timers.
+const realSetTimeout = globalThis.setTimeout;
+
+/**
+ * Ends a React Aria keyboard drag a test left running, and says whether there
+ * was one. The drag listens for Escape from its first frame on, so this waits
+ * for a frame first; a test that faked frames never runs one, so the wait is
+ * capped at a real 100 ms (a ceiling, not a guess at how long anything takes).
+ * Returns "ended", "stuck" (frames were faked, so the drag never set up and
+ * cannot hear Escape), or null when no drag was running.
+ */
+export async function endLeakedKeyboardDrag(): Promise<"ended" | "stuck" | null> {
+  if (!isVirtualDragging()) return null;
+  await new Promise((resolve) => {
+    requestAnimationFrame(resolve);
+    realSetTimeout(resolve, 100);
+  });
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  return isVirtualDragging() ? "stuck" : "ended";
 }
