@@ -24,6 +24,7 @@ import {
 import en from "./locales/runtime/en.json";
 import es from "./locales/runtime/es.json";
 import { createPomodoro } from "./pomodoro";
+import { createHourCycle } from "./hour-cycle";
 import { createStopwatch } from "./stopwatch";
 import { createClockTab } from "./tab";
 import { clockManifest } from "./test-support";
@@ -45,6 +46,7 @@ interface Harness {
   stopwatch: ReturnType<typeof createStopwatch>;
   alarms: ReturnType<typeof createAlarms>;
   tab: ReturnType<typeof createClockTab>;
+  hourCycle: ReturnType<typeof createHourCycle>;
   /** The settings request this connection was wired to. */
   settingsRequest: SettingsRequest;
   /** Every message the Frame end received, in order. */
@@ -102,6 +104,7 @@ function setup(
   const stopwatch = createStopwatch(client);
   const alarms = createAlarms(client);
   const tab = createClockTab(client);
+  const hourCycle = createHourCycle(client);
   const settingsRequest = options.settingsRequest ?? createSettingsRequest();
   options.beforeConnect?.(settingsRequest);
   const channel = new MessageChannel();
@@ -114,7 +117,7 @@ function setup(
     framePort(channel.port1, () => {
       closed = true;
     }),
-    { client, timer, pomodoro, stopwatch, alarms, tab, settingsRequest }
+    { client, timer, pomodoro, stopwatch, alarms, tab, hourCycle, settingsRequest }
   );
   const harness: Harness = {
     host,
@@ -124,6 +127,7 @@ function setup(
     stopwatch,
     alarms,
     tab,
+    hourCycle,
     settingsRequest,
     messages,
     get closed() {
@@ -197,7 +201,6 @@ describe("connectClockFrame", () => {
     const harness = setup();
     const labels = (await latest(harness, "labels")) as FrameLabelsMessage;
     expect(labels.language).toBe("en");
-    expect(labels.hourCycle).toBe(12);
     expect(labels.labels.timer).toBe(en.timer);
     expect(labels.labels.timeLeft).toBe(en.timeLeft);
 
@@ -211,6 +214,7 @@ describe("connectClockFrame", () => {
     expect(state.stopwatch).toEqual({ status: "idle" });
     expect(state.alarms).toEqual([]);
     expect(state.tab).toBe("pomodoro");
+    expect(state.hourCycle).toBe(24);
 
     await connected(harness);
     const received = states(harness);
@@ -487,6 +491,42 @@ describe("connectClockFrame", () => {
     await vi.waitFor(() => expect(harness.storage.get("tab")).toBe("alarms"));
   });
 
+  it("sends the device's hour cycle in the state", async () => {
+    const harness = setup();
+    await connected(harness);
+    const state = (await latest(harness, "state")) as FrameStateMessage;
+    expect(state.hourCycle).toBe(24);
+  });
+
+  it("keeps the picked hour cycle for this device and sends it back in the state", async () => {
+    const harness = setup();
+    await connected(harness);
+
+    const state = await apply(harness, { kind: "hourCycle.set", hourCycle: 12 });
+    expect(state.hourCycle).toBe(12);
+    await vi.waitFor(() => expect(harness.storage.get("hourCycle")).toBe(12));
+  });
+
+  it("drops every malformed hourCycle.set without changing the hour cycle", async () => {
+    const harness = setup();
+    await connected(harness);
+    const before = states(harness).length;
+
+    harness.send({ kind: "hourCycle.set", hourCycle: 13 });
+    harness.send({ kind: "hourCycle.set", hourCycle: "12" });
+    harness.send({ kind: "hourCycle.set", hourCycle: 0 });
+    harness.send({ kind: "hourCycle.set", hourCycle: null });
+    harness.send({ kind: "hourCycle.set" });
+
+    // The Stopwatch's start travels behind them on the same port, so its state
+    // arrives only after every malformed one was handled: one new state means
+    // none of them was taken.
+    const state = await apply(harness, { kind: "stopwatch.start" });
+    expect(states(harness).length - before).toBe(1);
+    expect(state.hourCycle).toBe(24);
+    expect(harness.storage.has("hourCycle")).toBe(false);
+  });
+
   it("re-sends the labels in the new language when it changes", async () => {
     const harness = setup();
     await connected(harness);
@@ -501,9 +541,12 @@ describe("connectClockFrame", () => {
       expect(labels[labels.length - 1].language).toBe("es");
     });
     const labels = (await latest(harness, "labels")) as FrameLabelsMessage;
-    expect(labels.hourCycle).toBe(24);
+    expect(labels.language).toBe("es");
     expect(labels.labels.timer).toBe(es.timer);
     expect(labels.labels.timeLeft).toBe(es.timeLeft);
+    // The hour cycle is a per-device setting, not a property of the language.
+    const state = (await latest(harness, "state")) as FrameStateMessage;
+    expect(state.hourCycle).toBe(24);
   });
 
   it("stops sending state once the Frame says closed", async () => {

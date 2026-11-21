@@ -22,10 +22,11 @@ import {
 import { translate, type ClockKey } from "./i18n";
 import { createAlarms } from "./alarms";
 import { POMODORO_LIMITS } from "./cycle";
+import { createHourCycle, type HourCycle } from "./hour-cycle";
 import { createPomodoro, type ClockPomodoro } from "./pomodoro";
 import { createStopwatch, type ClockStopwatch } from "./stopwatch";
 import { createClockTab } from "./tab";
-import { formatClockTime, hourCycleFor } from "./time";
+import { formatClockTime } from "./time";
 import { createTimer, type ClockTimer } from "./timer";
 import { connectClockFrame, createSettingsRequest, type SettingsRequest } from "./frame-protocol";
 
@@ -62,12 +63,13 @@ export type ClockServe = (
  * The sentence telling the author a phase ended while Maibuk was closed, written
  * the way the Alert's own body names the time.
  */
-function missedSentence(language: string, key: ClockKey, endedAt: number): string {
-  const time = formatClockTime(
-    endedAt,
-    new Date(endedAt).getTimezoneOffset(),
-    hourCycleFor(language)
-  );
+function missedSentence(
+  language: string,
+  key: ClockKey,
+  endedAt: number,
+  hourCycle: HourCycle
+): string {
+  const time = formatClockTime(endedAt, new Date(endedAt).getTimezoneOffset(), hourCycle);
   return translate(language, key).replace("{time}", time);
 }
 
@@ -94,6 +96,7 @@ export function startClock(client: PluginClient, serve: ClockServe): Promise<voi
   const stopwatch = createStopwatch(client);
   const alarms = createAlarms(client);
   const tab = createClockTab(client);
+  const hourCycle = createHourCycle(client);
   // One request for the Plugin's lifetime: a Command run while no Frame is
   // mounted leaves it pending until the next Frame has received its labels.
   const settingsRequest = createSettingsRequest();
@@ -115,6 +118,9 @@ export function startClock(client: PluginClient, serve: ClockServe): Promise<voi
     // The last tab is read first, so a Frame's first state usually carries it;
     // a Frame mounted sooner follows it once it lands.
     await tab.load();
+    // The 24-Hour Clock setting is read before anything writes an Alert or a
+    // missed-end sentence, so both use the device's cycle from the first time.
+    await hourCycle.load();
     let language = "en";
     try {
       language = (await client.language.get()).language;
@@ -124,10 +130,15 @@ export function startClock(client: PluginClient, serve: ClockServe): Promise<voi
     timer.setLanguage(language);
     pomodoro.setLanguage(language);
     alarms.setLanguage(language);
+    // The Alerts bodies are written in the device's hour cycle, set before load
+    // schedules every Alarm with it.
+    alarms.setHourCycle(hourCycle.snapshot());
     const missed: string[] = [];
     const timerEndedAt = await timer.load();
     if (timerEndedAt !== null) {
-      missed.push(missedSentence(language, "timerEndedWhileClosed", timerEndedAt));
+      missed.push(
+        missedSentence(language, "timerEndedWhileClosed", timerEndedAt, hourCycle.snapshot())
+      );
     }
     const pomodoroEnd = await pomodoro.load();
     // The Cycle a restart found may already run, so the button is set from what
@@ -136,7 +147,7 @@ export function startClock(client: PluginClient, serve: ClockServe): Promise<voi
     if (pomodoroEnd !== null) {
       const key: ClockKey =
         pomodoroEnd.phase === "pomodoro" ? "pomodoroEndedWhileClosed" : "breakEndedWhileClosed";
-      missed.push(missedSentence(language, key, pomodoroEnd.endedAt));
+      missed.push(missedSentence(language, key, pomodoroEnd.endedAt, hourCycle.snapshot()));
     }
     // A Stopwatch never ends on its own, so load reports no missed end.
     await stopwatch.load();
@@ -145,7 +156,7 @@ export function startClock(client: PluginClient, serve: ClockServe): Promise<voi
     // Alarm off and moved a repeating one on.
     const missedAlarms = await alarms.load();
     for (const missedAlarm of missedAlarms) {
-      missed.push(missedSentence(language, "alarmMissed", missedAlarm.at));
+      missed.push(missedSentence(language, "alarmMissed", missedAlarm.at, hourCycle.snapshot()));
     }
     if (missed.length === 0) return;
     try {
@@ -163,6 +174,9 @@ export function startClock(client: PluginClient, serve: ClockServe): Promise<voi
       alarms.setLanguage(payload.language);
     })
     .catch(() => {});
+  // The 24-Hour Clock setting is per device, written to Plugin storage, and every
+  // change rewrites the Alerts bodies. Subscribed once here, not per page.
+  hourCycle.subscribe(() => alarms.setHourCycle(hourCycle.snapshot()));
   // Every mounted Clock Frame speaks to the same four modules over its own
   // port; the Frame tells the Worker when it closes, and `connectClockFrame`
   // then drops that Frame's subscriptions and closes the port. The host closes
@@ -179,6 +193,7 @@ export function startClock(client: PluginClient, serve: ClockServe): Promise<voi
       stopwatch,
       alarms,
       tab,
+      hourCycle,
       settingsRequest,
     });
   });

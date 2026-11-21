@@ -5,7 +5,6 @@ import {
   formatClockTime,
   formatDuration,
   formatElapsed,
-  hourCycleFor,
   joinDuration,
   markLap,
   nextAlarmAt,
@@ -264,16 +263,6 @@ describe("formatClockTime()", () => {
   it("wraps backwards across midnight", () => {
     expect(formatClockTime(-MINUTE, 0, 24)).toBe("23:59");
     expect(formatClockTime(-MINUTE, 0, 12)).toBe("11:59 PM");
-  });
-});
-
-describe("hourCycleFor()", () => {
-  it("picks 12 for English and 24 for everything else", () => {
-    expect(hourCycleFor("en")).toBe(12);
-    expect(hourCycleFor("en-US")).toBe(12);
-    expect(hourCycleFor("es")).toBe(24);
-    expect(hourCycleFor("fr-FR")).toBe(24);
-    expect(hourCycleFor("")).toBe(24);
   });
 });
 

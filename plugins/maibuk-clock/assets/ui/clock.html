@@ -795,9 +795,25 @@
         gap: 20px;
       }
 
+      .alarms-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 16px;
+      }
+
       .next-alarm,
       .no-alarms {
         margin: 0;
+        font-size: 0.875rem;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .alarms-format {
+        margin-inline-start: auto;
+        display: flex;
+        align-items: center;
+        gap: 10px;
         font-size: 0.875rem;
         color: var(--maibuk-color-muted-foreground);
       }
@@ -896,6 +912,11 @@
         border-radius: 13px;
         background: var(--maibuk-color-card);
         box-shadow: 0 1px 3px color-mix(in srgb, var(--maibuk-color-foreground) 35%, transparent);
+      }
+
+      /* The track draws the ring; the button's own outline would add a second, square one. */
+      .switch:focus-visible {
+        outline: none;
       }
 
       .switch:focus-visible .track {
@@ -1116,6 +1137,16 @@
       .day input:focus-visible + span {
         outline: 2px solid var(--maibuk-color-primary);
         outline-offset: 2px;
+      }
+
+      .meridiem {
+        border: 0;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        align-self: center;
       }
 
       .hint {
@@ -1625,8 +1656,23 @@
       </div>
 
       <div id="panel-alarms" class="alarms" role="tabpanel" aria-labelledby="tab-alarms" hidden>
-        <p id="next-alarm" class="next-alarm" hidden></p>
-        <p id="no-alarms" class="no-alarms" hidden></p>
+        <div class="alarms-head">
+          <p id="next-alarm" class="next-alarm" hidden></p>
+          <p id="no-alarms" class="no-alarms" hidden></p>
+          <div class="alarms-format">
+            <span id="alarms-hour-cycle-label"></span>
+            <button
+              id="alarms-hour-cycle"
+              class="switch"
+              type="button"
+              role="switch"
+              aria-checked="true"
+              aria-labelledby="alarms-hour-cycle-label"
+            >
+              <span class="track"><span class="knob"></span></span>
+            </button>
+          </div>
+        </div>
         <ul id="alarm-list" class="alarm-list"></ul>
       </div>
 
@@ -1650,6 +1696,30 @@
               <label id="alarm-minute-label" for="alarm-minute"></label>
               <p id="alarm-minute-error" class="field-error"></p>
             </div>
+            <fieldset id="alarm-meridiem" class="meridiem" hidden>
+              <legend id="alarm-meridiem-legend" class="sr-only"></legend>
+              <label class="day">
+                <input type="radio" name="alarm-meridiem" value="am" />
+                <span id="alarm-am-label"></span>
+              </label>
+              <label class="day">
+                <input type="radio" name="alarm-meridiem" value="pm" />
+                <span id="alarm-pm-label"></span>
+              </label>
+            </fieldset>
+          </div>
+          <div class="editor-format settings-switch-row">
+            <span id="alarm-hour-cycle-label"></span>
+            <button
+              id="alarm-hour-cycle"
+              class="switch"
+              type="button"
+              role="switch"
+              aria-checked="true"
+              aria-labelledby="alarm-hour-cycle-label"
+            >
+              <span class="track"><span class="knob"></span></span>
+            </button>
           </div>
           <div class="dialog-label">
             <label id="alarm-label-caption" for="alarm-label"></label>

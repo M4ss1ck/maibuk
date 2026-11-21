@@ -16,8 +16,9 @@
  */
 
 import type { PluginClient } from "@/plugin-sdk";
+import { DEFAULT_HOUR_CYCLE, type HourCycle } from "./hour-cycle";
 import { translate } from "./i18n";
-import { formatClockTime, hourCycleFor, localOffsetAt, nextAlarmAt, type OffsetAt } from "./time";
+import { formatClockTime, localOffsetAt, nextAlarmAt, type OffsetAt } from "./time";
 
 /**
  * How many Alarms are scheduled at once. The host allows 20 pending scheduled
@@ -89,6 +90,8 @@ export interface ClockAlarms {
   remove(id: string): void;
   /** The language the Alerts' titles and bodies are written in. */
   setLanguage(language: string): void;
+  /** The hour cycle the Alerts bodies are written in; a change sends every scheduled Alert again. */
+  setHourCycle(next: HourCycle): void;
 }
 
 function isInteger(value: unknown): value is number {
@@ -160,6 +163,7 @@ export function createAlarms(
 ): ClockAlarms {
   let alarms: Alarm[] = [];
   let language = "en";
+  let hourCycle: HourCycle = DEFAULT_HOUR_CYCLE;
   let loaded = false;
   let timeout: ReturnType<typeof setTimeout> | null = null;
   let zoneWatch: ReturnType<typeof setInterval> | null = null;
@@ -205,7 +209,7 @@ export function createAlarms(
         .system({
           id: alarmNotificationId(alarm.id),
           title: alarm.label.trim() !== "" ? alarm.label : translate(language, "alarm"),
-          body: formatClockTime(at, offsetAt(at), hourCycleFor(language)),
+          body: formatClockTime(at, offsetAt(at), hourCycle),
           at,
         })
         .catch(() => {});
@@ -406,6 +410,14 @@ export function createAlarms(
     },
     setLanguage(next) {
       language = next;
+    },
+    setHourCycle(next) {
+      if (next === hourCycle) return;
+      hourCycle = next;
+      // Every scheduled Alert already carries its body in the old hour cycle; a
+      // resend under the same id replaces it with the same time, written anew.
+      scheduled.clear();
+      reschedule();
     },
   };
 }

@@ -50,7 +50,7 @@ import {
 import { alarmNotificationId, type Alarm } from "./alarms";
 import type { FrameStateMessage, WorkerToFrameMessage } from "./frame-protocol";
 import { clockManifest, tabTo } from "./test-support";
-import { formatClockTime, hourCycleFor, localOffsetAt, nextAlarmAt } from "./time";
+import { formatClockTime, localOffsetAt, nextAlarmAt } from "./time";
 
 /**
  * The fake clock every timed test starts at. It sits an hour ahead of the real
@@ -122,10 +122,10 @@ function alarmTag(alarm: Alarm): string {
   return `maibuk-clock/${alarmNotificationId(alarm.id)}`;
 }
 
-/** An Alarm's time as the Plugin stores it, in the given language's clock. */
-function shownTime(hour: number, minute: number, language = "en"): string {
+/** An Alarm's time as the Plugin stores it, in the default 24-hour clock. */
+function shownTime(hour: number, minute: number): string {
   const at = new Date(2000, 0, 1, hour, minute).getTime();
-  return formatClockTime(at, localOffsetAt(at), hourCycleFor(language));
+  return formatClockTime(at, localOffsetAt(at), 24);
 }
 
 /** The Cycle settings storage holds, or none. */
@@ -974,6 +974,59 @@ describe("Clock Alarms", () => {
     expect(host.systemNotifications.log.at(-1)).toMatchObject({ kind: "cancelled", tag });
   });
 
+  it("writes the Alerts in the stored 12-hour clock and rewrites them when the Frame turns the 24-hour clock back on", async () => {
+    const passedAt = START - 3 * 3_600_000;
+    const missed: Alarm = {
+      id: "missed",
+      hour: 9,
+      minute: 0,
+      label: "Write",
+      weekdays: [],
+      enabled: true,
+      nextAt: passedAt,
+    };
+    const ahead: Alarm = {
+      id: "ahead",
+      hour: 13,
+      minute: 30,
+      label: "Write",
+      weekdays: [1],
+      enabled: true,
+      nextAt: null,
+    };
+    const storage = new Map<string, unknown>([
+      ["hourCycle", 12],
+      ["alarms", [missed, ahead]],
+    ]);
+    const { host, mountFrame, ready } = startHost({ storage });
+    freezeClock();
+    await ready;
+
+    // The stored setting is read before the missed-Alarm toast and the Alerts are written.
+    const missedTime = formatClockTime(passedAt, localOffsetAt(passedAt), 12);
+    expect(host.notifications).toEqual([
+      { variant: "info", message: en.alarmMissed.replace("{time}", missedTime) },
+    ]);
+    const tag = alarmTag(ahead);
+    const at = nextAlarmAt(ahead, START, localOffsetAt);
+    await eventually(() => expect(host.systemNotifications.scheduled.get(tag)?.at).toBe(at));
+    expect(host.systemNotifications.scheduled.get(tag)?.body).toBe(
+      formatClockTime(at, localOffsetAt(at), 12)
+    );
+
+    // The Frame's switch reaches the Worker: the setting is stored and the
+    // pending Alert is sent again in the 24-hour clock, at the same instant.
+    const frame = mountFrame();
+    frame.send({ kind: "hourCycle.set", hourCycle: 24 });
+    await eventually(() => expect(storage.get("hourCycle")).toBe(24));
+    await eventually(() =>
+      expect(host.systemNotifications.scheduled.get(tag)?.body).toBe(
+        formatClockTime(at, localOffsetAt(at), 24)
+      )
+    );
+    expect(host.systemNotifications.scheduled.get(tag)?.at).toBe(at);
+  });
+
   it("toasts once about an Alarm missed while closed, and shows it off", async () => {
     const passedAt = START - 3 * 3_600_000;
     const missed: Alarm = {
@@ -990,7 +1043,7 @@ describe("Clock Alarms", () => {
     freezeClock();
     await ready;
 
-    const missedTime = formatClockTime(passedAt, localOffsetAt(passedAt), hourCycleFor("en"));
+    const missedTime = formatClockTime(passedAt, localOffsetAt(passedAt), 24);
     expect(host.notifications).toEqual([
       { variant: "info", message: en.alarmMissed.replace("{time}", missedTime) },
     ]);
