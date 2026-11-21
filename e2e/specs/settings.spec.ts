@@ -247,6 +247,9 @@ test.describe("Settings language @wf:settings-language", () => {
 
 test.describe("Settings editor defaults @wf:settings-editor-defaults", () => {
   test("editor defaults are set by keyboard and survive a reload", async ({ page }) => {
+    // Seven Tab walks across the Settings page, each up to 90 presses, then a
+    // reload: on a busy WebKit worker that outlasts 30 s. test.slow() triples it.
+    test.slow();
     await openSettings(page);
     const main = settingsMain(page);
 
