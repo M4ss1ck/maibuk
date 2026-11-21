@@ -537,11 +537,7 @@ test.describe("Clock Alarms @wf:plugins-clock-alarms @chromium-only", () => {
     await page.keyboard.press("Enter");
     const add = alarmForm(page, "Add alarm");
     await expect(add).toBeVisible();
-    await setAlarmNumber(
-      page,
-      add.getByRole("textbox", { name: "Hour", exact: true }),
-      ALARM_HOUR
-    );
+    await setAlarmNumber(page, add.getByRole("textbox", { name: "Hour", exact: true }), ALARM_HOUR);
     await setAlarmNumber(
       page,
       add.getByRole("textbox", { name: "Minute", exact: true }),
