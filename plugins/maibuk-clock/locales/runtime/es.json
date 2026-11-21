@@ -71,6 +71,7 @@
   "running": "en marcha",
   "am": "a. m.",
   "pm": "p. m.",
+  "twentyFourHourClock": "Reloj de 24 horas",
   "endsAt": "termina a las {time}",
   "ofLength": "de {length}",
   "thisCycle": "Este ciclo",

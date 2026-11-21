@@ -795,9 +795,25 @@
         gap: 20px;
       }
 
+      .alarms-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 16px;
+      }
+
       .next-alarm,
       .no-alarms {
         margin: 0;
+        font-size: 0.875rem;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .alarms-format {
+        margin-inline-start: auto;
+        display: flex;
+        align-items: center;
+        gap: 10px;
         font-size: 0.875rem;
         color: var(--maibuk-color-muted-foreground);
       }
@@ -1625,8 +1641,23 @@
       </div>
 
       <div id="panel-alarms" class="alarms" role="tabpanel" aria-labelledby="tab-alarms" hidden>
-        <p id="next-alarm" class="next-alarm" hidden></p>
-        <p id="no-alarms" class="no-alarms" hidden></p>
+        <div class="alarms-head">
+          <p id="next-alarm" class="next-alarm" hidden></p>
+          <p id="no-alarms" class="no-alarms" hidden></p>
+          <div class="alarms-format">
+            <span id="alarms-hour-cycle-label"></span>
+            <button
+              id="alarms-hour-cycle"
+              class="switch"
+              type="button"
+              role="switch"
+              aria-checked="true"
+              aria-labelledby="alarms-hour-cycle-label"
+            >
+              <span class="track"><span class="knob"></span></span>
+            </button>
+          </div>
+        </div>
         <ul id="alarm-list" class="alarm-list"></ul>
       </div>
 

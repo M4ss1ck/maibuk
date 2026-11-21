@@ -610,6 +610,7 @@
     setText("stopwatch-lap-label", label("lap"));
     el("stopwatch-reset").setAttribute("aria-label", label("reset"));
     setText("add-alarm-label", label("addAlarm"));
+    setText("alarms-hour-cycle-label", label("twentyFourHourClock"));
     setText("alarm-hour-label", label("hour"));
     setText("alarm-minute-label", label("minute"));
     setText("alarm-label-caption", label("alarmLabel"));
@@ -1307,6 +1308,8 @@
     el("no-alarms").hidden = list.length > 0;
     setText("no-alarms", label("noAlarms"));
 
+    setSwitch("alarms-hour-cycle", hourCycle === 24);
+
     const items = el("alarm-list");
     const key = list.map((alarm) => alarm.id).join(",");
     if (key !== alarmKeys) {
@@ -1892,6 +1895,13 @@
   el("stopwatch-reset").addEventListener("click", () => post({ kind: "stopwatch.reset" }));
 
   el("add-alarm").addEventListener("click", () => openEditor(newAlarmDraft(), el("add-alarm")));
+  el("alarms-hour-cycle").addEventListener("click", () => {
+    // Draw at once; the state the Worker sends back confirms it.
+    const next = switchOn("alarms-hour-cycle") ? 12 : 24;
+    hourCycle = next;
+    post({ kind: "hourCycle.set", hourCycle: next });
+    renderAll();
+  });
   el("alarm-editor-close").addEventListener("click", closeEditor);
   el("alarm-cancel").addEventListener("click", closeEditor);
   el("alarm-save").addEventListener("click", saveEditor);

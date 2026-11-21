@@ -71,6 +71,7 @@
   "running": "running",
   "am": "AM",
   "pm": "PM",
+  "twentyFourHourClock": "24-hour clock",
   "endsAt": "ends {time}",
   "ofLength": "of {length}",
   "thisCycle": "This Cycle",

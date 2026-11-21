@@ -1080,6 +1080,7 @@ describe("Clock Frame", () => {
     expect(tags).toEqual(["Más lenta", "Más rápida"]);
 
     expect(el("add-alarm-label").textContent).toBe("Añadir alarma");
+    expect(el("alarms-hour-cycle-label").textContent).toBe("Reloj de 24 horas");
     const row = el("alarm-list").querySelector("li");
     const repeat = row?.querySelector(".alarm-repeat");
     expect(repeat?.getAttribute("aria-label")).toBe("Lun, Mar, Mié, Jue, Vie");
@@ -1147,6 +1148,84 @@ describe("Clock Frame", () => {
     const port = renderFrame();
     window.dispatchEvent(new Event("pagehide"));
     expect(posted(port, "closed")).toHaveLength(1);
+  });
+});
+
+describe("Clock Frame 24-Hour Clock switch", () => {
+  /** Opens the Alarms tab by keyboard, where the hour cycle switch sits. */
+  async function openAlarms(user: User): Promise<void> {
+    await user.tab();
+    await user.keyboard("{End}");
+  }
+
+  it.each([
+    [24, "true"],
+    [12, "false"],
+  ] as const)("names the switch and reads an hour cycle of %i at aria-checked %s", async (cycle, checked) => {
+    renderFrame({ hourCycle: cycle });
+    const user = keyboardUser();
+    await openAlarms(user);
+
+    // The Alarms panel is empty: the switch stays beside the message.
+    expect(el("no-alarms").hidden).toBe(false);
+    expect(el("alarms-hour-cycle-label").textContent).toBe("24-hour clock");
+    expect(el("alarms-hour-cycle")).toHaveAccessibleName("24-hour clock");
+    expect(el("alarms-hour-cycle").getAttribute("aria-checked")).toBe(checked);
+  });
+
+  it("keeps the switch when no Alarm is on", () => {
+    renderFrame({
+      hourCycle: 24,
+      state: stateMessage({ alarms: [alarmMessage({ enabled: false, nextAt: null })] }),
+    });
+
+    expect(el("next-alarm").hidden).toBe(true);
+    expect(el("no-alarms").hidden).toBe(true);
+    expect(el("alarms-hour-cycle")).toHaveAccessibleName("24-hour clock");
+    expect(el("alarms-hour-cycle").getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("turns the 24-hour clock off and back on from its switch by keyboard", async () => {
+    const port = renderFrame({
+      hourCycle: 24,
+      state: stateMessage({ alarms: [alarmMessage({ hour: 13, minute: 5, label: "" })] }),
+    });
+    const user = keyboardUser();
+
+    await openAlarms(user);
+    await tabTo(user, el("add-alarm"));
+    // The switch is the next Tab stop after Add alarm.
+    await user.tab();
+    expect(document.activeElement).toBe(el("alarms-hour-cycle"));
+
+    await user.keyboard(" ");
+    expect(posted(port, "hourCycle.set")).toEqual([{ kind: "hourCycle.set", hourCycle: 12 }]);
+    expect(el("alarms-hour-cycle").getAttribute("aria-checked")).toBe("false");
+    expect(find(el("alarm-list"), ".alarm-time").textContent).toBe("1:05 PM");
+
+    await user.keyboard("{Enter}");
+    expect(posted(port, "hourCycle.set")).toEqual([
+      { kind: "hourCycle.set", hourCycle: 12 },
+      { kind: "hourCycle.set", hourCycle: 24 },
+    ]);
+    expect(el("alarms-hour-cycle").getAttribute("aria-checked")).toBe("true");
+    expect(find(el("alarm-list"), ".alarm-time").textContent).toBe("13:05");
+  });
+
+  it("redraws the switch and the times from a state the Worker sends", () => {
+    const port = renderFrame({
+      hourCycle: 24,
+      state: stateMessage({ alarms: [alarmMessage({ hour: 13, minute: 5, label: "" })] }),
+    });
+    expect(el("alarms-hour-cycle").getAttribute("aria-checked")).toBe("true");
+    expect(find(el("alarm-list"), ".alarm-time").textContent).toBe("13:05");
+
+    port.deliver(
+      stateMessage({ alarms: [alarmMessage({ hour: 13, minute: 5, label: "" })], hourCycle: 12 })
+    );
+    expect(el("alarms-hour-cycle").getAttribute("aria-checked")).toBe("false");
+    expect(find(el("alarm-list"), ".alarm-time").textContent).toBe("1:05 PM");
+    expect(port.messages).toEqual([]);
   });
 });
 
