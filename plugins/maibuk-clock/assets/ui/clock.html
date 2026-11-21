@@ -1,0 +1,844 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Clock</title>
+    <style>
+      :root {
+        color-scheme: var(--maibuk-color-scheme, light dark);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      /* `hidden` has to win over the `display` rules the panels set. */
+      [hidden] {
+        /* biome-ignore lint/complexity/noImportantStyles: the panel display rules outrank [hidden] without it */
+        display: none !important;
+      }
+
+      html,
+      body {
+        margin: 0;
+      }
+
+      body {
+        min-height: 100vh;
+        background: var(--maibuk-color-background);
+        color: var(--maibuk-color-foreground);
+        font-family: var(--maibuk-font-sans, system-ui, sans-serif);
+      }
+
+      button {
+        font-family: inherit;
+        cursor: pointer;
+      }
+
+      input {
+        font-family: inherit;
+      }
+
+      #clock {
+        max-width: 1040px;
+        margin: 0 auto;
+        padding: 32px 24px 48px;
+        display: flex;
+        flex-direction: column;
+        gap: 28px;
+      }
+
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .tabs {
+        display: flex;
+        gap: 4px;
+        padding: 4px;
+        background: color-mix(in srgb, var(--maibuk-color-muted) 55%, var(--maibuk-color-background));
+        border: 1px solid var(--maibuk-color-border);
+        border-radius: 14px;
+      }
+
+      .tab {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 40px;
+        padding: 0 16px;
+        border: 0;
+        border-radius: 10px;
+        background: transparent;
+        color: var(--maibuk-color-muted-foreground);
+        font-size: 14px;
+        font-weight: 500;
+      }
+
+      .tab[aria-selected="true"] {
+        background: var(--maibuk-color-card);
+        color: var(--maibuk-color-card-foreground);
+        font-weight: 600;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+      }
+
+      .tab svg {
+        flex: 0 0 auto;
+      }
+
+      .tab .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 3px;
+        background: var(--maibuk-color-primary);
+      }
+
+      .today {
+        margin: 0;
+        font-size: 14px;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+
+      .banner {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px 16px;
+        padding: 12px 12px 12px 16px;
+        border-radius: 14px;
+        background: var(--maibuk-color-warning-bg);
+        border: 1px solid color-mix(in srgb, var(--maibuk-color-warning-text) 25%, transparent);
+        color: var(--maibuk-color-warning-text);
+        font-size: 14px;
+      }
+
+      .banner .banner-text {
+        flex: 1 1 240px;
+      }
+
+      .banner button {
+        min-height: 36px;
+        padding: 0 14px;
+        border-radius: 10px;
+        border: 1px solid currentColor;
+        background: transparent;
+        color: var(--maibuk-color-warning-text);
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .layout {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px;
+        align-items: stretch;
+      }
+
+      .hero {
+        flex: 999 1 520px;
+        min-width: 0;
+        background: var(--maibuk-color-card);
+        color: var(--maibuk-color-card-foreground);
+        border: 1px solid var(--maibuk-color-border);
+        border-radius: 24px;
+        padding: 40px 24px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 32px;
+        box-shadow: 0 12px 32px -16px rgba(0, 0, 0, 0.18);
+      }
+
+      .hero-timer {
+        padding: 48px 24px;
+        gap: 36px;
+      }
+
+      .side {
+        flex: 1 1 300px;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .card {
+        background: var(--maibuk-color-card);
+        color: var(--maibuk-color-card-foreground);
+        border: 1px solid var(--maibuk-color-border);
+        border-radius: 20px;
+        padding: 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .card.tight {
+        gap: 10px;
+      }
+
+      .card h2 {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .phase-pill {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--maibuk-color-primary) 14%, transparent);
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .phase-pill .phase-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 4px;
+        background: var(--maibuk-color-primary);
+      }
+
+      .dial {
+        position: relative;
+        width: 320px;
+        height: 320px;
+        max-width: 100%;
+      }
+
+      .dial svg {
+        display: block;
+        max-width: 100%;
+        height: auto;
+      }
+
+      .dial-content {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
+
+      .dial-time {
+        font-size: 76px;
+        font-weight: 300;
+        letter-spacing: -0.04em;
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+      }
+
+      .dial-sub {
+        font-size: 14px;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .ring-track {
+        fill: none;
+        stroke: var(--maibuk-color-muted);
+        stroke-width: 10;
+      }
+
+      .ring-value {
+        fill: none;
+        stroke: var(--maibuk-color-primary);
+        stroke-width: 10;
+        stroke-linecap: round;
+      }
+
+      .ticks line {
+        stroke: var(--maibuk-color-muted-foreground);
+        stroke-linecap: round;
+      }
+
+      .controls {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+
+      .round {
+        width: 48px;
+        height: 48px;
+        padding: 0;
+        border-radius: 24px;
+        border: 1px solid var(--maibuk-color-border);
+        background: var(--maibuk-color-card);
+        color: var(--maibuk-color-muted-foreground);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .primary {
+        min-width: 160px;
+        height: 60px;
+        padding: 0 32px;
+        border-radius: 30px;
+        border: 0;
+        background: var(--maibuk-color-primary);
+        color: var(--maibuk-color-primary-foreground);
+        font-size: 17px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        box-shadow: 0 8px 20px -8px var(--maibuk-color-primary);
+      }
+
+      .primary:hover {
+        background: var(--maibuk-color-primary-hover);
+      }
+
+      .primary-wide {
+        min-width: 200px;
+        padding: 0 36px;
+        box-shadow: 0 10px 28px -10px var(--maibuk-color-primary);
+      }
+
+      .setup {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 36px;
+      }
+
+      .fieldset {
+        border: 0;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+      }
+
+      .field {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .field input {
+        width: 132px;
+        height: 112px;
+        border-radius: 20px;
+        border: 1px solid var(--maibuk-color-border);
+        background: var(--maibuk-color-background);
+        color: var(--maibuk-color-foreground);
+        font-size: 72px;
+        font-weight: 300;
+        letter-spacing: -0.04em;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .field input:focus-visible {
+        border-color: var(--maibuk-color-primary);
+        outline: 2px solid var(--maibuk-color-primary);
+        outline-offset: 2px;
+      }
+
+      .field label {
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .field-separator {
+        font-size: 72px;
+        font-weight: 300;
+        line-height: 112px;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      input::-webkit-outer-spin-button,
+      input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+
+      input[type="number"] {
+        -moz-appearance: textfield;
+      }
+
+      .recent {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .recent-label {
+        font-size: 13px;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+      }
+
+      .chip {
+        min-height: 40px;
+        padding: 0 16px;
+        border-radius: 20px;
+        border: 1px solid var(--maibuk-color-border);
+        background: transparent;
+        color: var(--maibuk-color-foreground);
+        font-size: 14px;
+        font-weight: 500;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .chip[aria-pressed="true"] {
+        background: color-mix(in srgb, var(--maibuk-color-primary) 16%, transparent);
+        border-color: var(--maibuk-color-primary);
+      }
+
+      .cycle-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .cycle-step {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 36px;
+        padding: 0 10px;
+        border-radius: 10px;
+      }
+
+      .cycle-step.now {
+        background: color-mix(in srgb, var(--maibuk-color-muted) 45%, transparent);
+      }
+
+      .cycle-step .step-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 5px;
+        background: transparent;
+        border: 2px solid var(--maibuk-color-border);
+      }
+
+      .cycle-step.pomodoro:not(.next) .step-dot {
+        background: var(--maibuk-color-primary);
+        border-color: var(--maibuk-color-primary);
+      }
+
+      .cycle-step.break:not(.next) .step-dot {
+        background: var(--maibuk-color-success);
+        border-color: var(--maibuk-color-success);
+      }
+
+      .cycle-step .step-label {
+        flex: 1;
+        font-size: 14px;
+        color: var(--maibuk-color-foreground);
+      }
+
+      .cycle-step.done .step-label {
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .cycle-step.now .step-label {
+        font-weight: 600;
+      }
+
+      .cycle-step .step-length {
+        font-size: 13px;
+        color: var(--maibuk-color-muted-foreground);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .lengths {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 48px;
+        padding: 0 20px;
+        border-radius: 14px;
+        border: 1px dashed var(--maibuk-color-border);
+        color: var(--maibuk-color-muted-foreground);
+        font-size: 14px;
+        font-weight: 500;
+      }
+
+      .also-list {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .also-row {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .also-row .also-text {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .also-title {
+        font-size: 15px;
+        font-weight: 600;
+      }
+
+      .also-sub {
+        font-size: 13px;
+        color: var(--maibuk-color-muted-foreground);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .mini-track {
+        stroke: var(--maibuk-color-muted);
+      }
+
+      .mini-value {
+        stroke: var(--maibuk-color-primary);
+      }
+
+      .link-button {
+        min-height: 44px;
+        padding: 0 4px;
+        border: 0;
+        background: transparent;
+        color: var(--maibuk-color-foreground);
+        font-size: 13px;
+        font-weight: 500;
+      }
+
+      .link-button:hover {
+        color: var(--maibuk-color-primary-hover);
+      }
+
+      .alerts-text {
+        margin: 0;
+        font-size: 14px;
+        line-height: 1.55;
+      }
+
+      @media (max-width: 640px) {
+        #clock {
+          padding: 20px 16px 24px;
+          gap: 24px;
+        }
+
+        .layout {
+          flex-direction: column;
+        }
+
+        .hero,
+        .side {
+          flex: 1 1 auto;
+        }
+
+        .tabs {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 4px;
+          border-radius: 16px;
+        }
+
+        .tab {
+          position: relative;
+          flex-direction: column;
+          justify-content: center;
+          gap: 4px;
+          min-height: 52px;
+          padding: 0 4px;
+          border-radius: 12px;
+          font-size: 11px;
+          font-weight: 600;
+        }
+
+        .tab svg {
+          width: 18px;
+          height: 18px;
+        }
+
+        .tab .dot {
+          position: absolute;
+          top: 8px;
+          right: 14px;
+        }
+
+        .hero {
+          padding: 32px 16px;
+        }
+
+        .round {
+          width: 56px;
+          height: 56px;
+          border-radius: 28px;
+        }
+
+        .primary,
+        .chip,
+        .link-button,
+        .banner button {
+          min-height: 44px;
+        }
+
+        .field input {
+          width: 92px;
+          height: 96px;
+          font-size: 56px;
+        }
+
+        .field-separator {
+          font-size: 56px;
+          line-height: 96px;
+        }
+
+        .dial {
+          width: 280px;
+          height: 280px;
+        }
+
+        .dial-time {
+          font-size: 68px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main id="clock" hidden>
+      <header>
+        <nav id="sections" class="tabs" role="tablist" aria-label="">
+          <button
+            class="tab"
+            type="button"
+            role="tab"
+            id="tab-pomodoro"
+            aria-selected="false"
+            aria-controls="panel-pomodoro"
+            tabindex="-1"
+          >
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2 2"></path><path d="M10 2h4"></path></svg>
+            <span id="tab-pomodoro-label"></span>
+            <span class="dot" id="dot-pomodoro" hidden><span class="sr-only"></span></span>
+          </button>
+          <button
+            class="tab"
+            type="button"
+            role="tab"
+            id="tab-timer"
+            aria-selected="true"
+            aria-controls="panel-timer"
+            tabindex="0"
+          >
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12"></path><path d="M6 22h12"></path><path d="M7 2c0 5 10 5 10 10S7 17 7 22"></path><path d="M17 2c0 5-10 5-10 10s10 5 10 10"></path></svg>
+            <span id="tab-timer-label"></span>
+            <span class="dot" id="dot-timer" hidden><span class="sr-only"></span></span>
+          </button>
+          <button
+            class="tab"
+            type="button"
+            role="tab"
+            id="tab-stopwatch"
+            aria-selected="false"
+            aria-controls="panel-stopwatch"
+            tabindex="-1"
+          >
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="8"></circle><path d="M12 14l3-3"></path><path d="M10 2h4"></path><path d="M19 5l1.5 1.5"></path></svg>
+            <span id="tab-stopwatch-label"></span>
+            <span class="dot" id="dot-stopwatch" hidden><span class="sr-only"></span></span>
+          </button>
+          <button
+            class="tab"
+            type="button"
+            role="tab"
+            id="tab-alarms"
+            aria-selected="false"
+            aria-controls="panel-alarms"
+            tabindex="-1"
+          >
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"></circle><path d="M12 9v4l2 2"></path><path d="M5 3L2 6"></path><path d="M22 6l-3-3"></path></svg>
+            <span id="tab-alarms-label"></span>
+            <span class="dot" id="dot-alarms" hidden><span class="sr-only"></span></span>
+          </button>
+        </nav>
+        <p id="pomodoros-today" class="today"></p>
+      </header>
+
+      <div id="live" class="sr-only" role="status" aria-live="polite"></div>
+
+      <div id="banner" class="banner" role="status" hidden>
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path><path d="M2 2l20 20"></path></svg>
+        <span id="banner-text" class="banner-text"></span>
+        <button id="allow-notifications" type="button"></button>
+      </div>
+
+      <div
+        id="panel-pomodoro"
+        class="layout"
+        role="tabpanel"
+        aria-labelledby="tab-pomodoro"
+        hidden
+      >
+        <div class="hero">
+          <div class="phase-pill">
+            <span class="phase-dot" aria-hidden="true"></span>
+            <span id="pomodoro-phase"></span>
+          </div>
+          <div class="dial">
+            <svg aria-hidden="true" width="320" height="320" viewBox="0 0 320 320">
+              <g id="pomodoro-ticks" class="ticks"></g>
+              <circle class="ring-track" cx="160" cy="160" r="128"></circle>
+              <circle
+                id="pomodoro-ring"
+                class="ring-value"
+                cx="160"
+                cy="160"
+                r="128"
+                stroke-dasharray="804.2"
+                stroke-dashoffset="0"
+                transform="rotate(-90 160 160)"
+              ></circle>
+            </svg>
+            <div class="dial-content">
+              <div id="pomodoro-time" class="dial-time" role="timer"></div>
+              <div id="pomodoro-sub" class="dial-sub"></div>
+            </div>
+          </div>
+          <div class="controls">
+            <button id="pomodoro-reset" class="round" type="button">
+              <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5"></path></svg>
+            </button>
+            <button id="pomodoro-primary" class="primary" type="button">
+              <svg id="pomodoro-primary-icon" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"></svg>
+              <span id="pomodoro-primary-label"></span>
+            </button>
+            <button id="pomodoro-skip" class="round" type="button">
+              <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4l10 8-10 8z"></path><path d="M19 5v14"></path></svg>
+            </button>
+          </div>
+        </div>
+        <aside class="side">
+          <div class="card">
+            <h2 id="cycle-title"></h2>
+            <ol id="cycle-list" class="cycle-list"></ol>
+          </div>
+          <div class="lengths">
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21v-7"></path><path d="M4 10V3"></path><path d="M12 21v-9"></path><path d="M12 8V3"></path><path d="M20 21v-5"></path><path d="M20 12V3"></path><path d="M1 14h6"></path><path d="M9 8h6"></path><path d="M17 16h6"></path></svg>
+            <span id="cycle-lengths"></span>
+          </div>
+        </aside>
+      </div>
+
+      <div id="panel-timer" class="layout" role="tabpanel" aria-labelledby="tab-timer" hidden>
+        <div class="hero hero-timer">
+          <div id="timer-setup" class="setup">
+            <fieldset class="fieldset">
+              <legend id="timer-length-legend" class="sr-only"></legend>
+              <div class="field">
+                <input id="timer-hours" type="number" min="0" max="99" inputmode="numeric" />
+                <label id="timer-hours-label" for="timer-hours"></label>
+              </div>
+              <span class="field-separator" aria-hidden="true">:</span>
+              <div class="field">
+                <input id="timer-minutes" type="number" min="0" max="59" inputmode="numeric" />
+                <label id="timer-minutes-label" for="timer-minutes"></label>
+              </div>
+              <span class="field-separator" aria-hidden="true">:</span>
+              <div class="field">
+                <input id="timer-seconds" type="number" min="0" max="59" inputmode="numeric" />
+                <label id="timer-seconds-label" for="timer-seconds"></label>
+              </div>
+            </fieldset>
+            <div id="recent-block" class="recent">
+              <span id="recent-label" class="recent-label"></span>
+              <div id="recent-list" class="chips"></div>
+            </div>
+          </div>
+          <div id="timer-run" class="dial" hidden>
+            <svg aria-hidden="true" width="320" height="320" viewBox="0 0 320 320">
+              <g id="timer-ticks" class="ticks"></g>
+              <circle class="ring-track" cx="160" cy="160" r="128"></circle>
+              <circle
+                id="timer-ring"
+                class="ring-value"
+                cx="160"
+                cy="160"
+                r="128"
+                stroke-dasharray="804.2"
+                stroke-dashoffset="0"
+                transform="rotate(-90 160 160)"
+              ></circle>
+            </svg>
+            <div class="dial-content">
+              <div id="timer-time" class="dial-time" role="timer"></div>
+              <div id="timer-sub" class="dial-sub"></div>
+            </div>
+          </div>
+          <div class="controls">
+            <button id="timer-reset" class="round" type="button" hidden>
+              <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5"></path></svg>
+            </button>
+            <button id="timer-primary" class="primary primary-wide" type="button">
+              <svg id="timer-primary-icon" aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"></svg>
+              <span id="timer-primary-label"></span>
+            </button>
+          </div>
+        </div>
+        <aside class="side">
+          <div id="also-running" class="card" hidden>
+            <h2 id="also-running-title"></h2>
+            <div id="also-running-list" class="also-list"></div>
+          </div>
+          <div id="alerts-card" class="card tight" hidden>
+            <h2 id="alerts-title"></h2>
+            <p id="alerts-text" class="alerts-text"></p>
+          </div>
+        </aside>
+      </div>
+
+      <div
+        id="panel-stopwatch"
+        class="layout"
+        role="tabpanel"
+        aria-labelledby="tab-stopwatch"
+        hidden
+      ></div>
+      <div id="panel-alarms" class="layout" role="tabpanel" aria-labelledby="tab-alarms" hidden></div>
+    </main>
+
+    <script src="clock.js"></script>
+  </body>
+</html>
