@@ -200,12 +200,19 @@ jobs:
   # The other PR path: vitest --changed against the merge base runs only the
   # tests the diff reaches through the import graph. The guards lane catches the
   # tests that read files from disk, which the import graph cannot see, and the
-  # coverage thresholds wait for the full run.
+  # coverage thresholds wait for the full run. It is sharded three ways because
+  # a hub file such as src/locales/en.json reaches most of the suite (issue
+  # #905); --passWithNoTests covers a shard that gets no files, and the guards
+  # run on shard 1 only.
   tests-changed:
-    name: Tests (changed)
+    name: Tests (changed, shard ${{ matrix.shard }}/3)
     needs: changes
     if: ${{ needs.changes.outputs.full == 'false' }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
 
     steps:
       - name: Checkout repository
@@ -231,9 +238,10 @@ jobs:
       - name: Run the tests the change reaches
         env:
           BASE: ${{ needs.changes.outputs.base }}
-        run: pnpm exec vitest run --changed "$BASE" --passWithNoTests
+        run: pnpm exec vitest run --changed "$BASE" --passWithNoTests --shard=${{ matrix.shard }}/3
 
       - name: Run the guard lane
+        if: ${{ matrix.shard == 1 }}
         run: pnpm test:guards
 
   # The slow Plugin-tooling lane (issue #455): the template is copied into a path
