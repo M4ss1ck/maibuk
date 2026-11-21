@@ -1153,7 +1153,9 @@ function findScrollableAncestor(start: HTMLElement): HTMLElement | null {
  * place however tall the list is, and counting its empty space made the list
  * keep whatever height it was first measured at. The siblings move with the
  * list's bottom, so the value does not depend on the list's own height and a
- * re-measure converges instead of oscillating.
+ * re-measure converges instead of oscillating. A following sibling that itself
+ * stretches to its container's bottom would bring the stretch back; no Plugin
+ * page draws one today.
  */
 function trailingSpaceAfter(list: HTMLElement, scroller: HTMLElement): number {
   const listBottom = list.getBoundingClientRect().bottom;
@@ -1165,7 +1167,10 @@ function trailingSpaceAfter(list: HTMLElement, scroller: HTMLElement): number {
     for (let next = node.nextElementSibling; next; next = next.nextElementSibling) {
       const rect = next.getBoundingClientRect();
       if (rect.bottom - rect.top <= 0) continue;
-      const bottom = rect.bottom + pixelsOf(getComputedStyle(next).marginBottom);
+      const nextStyle = getComputedStyle(next);
+      // Out of flow (a screen-reader-only text, an overlay): not below the list.
+      if (nextStyle.position === "absolute" || nextStyle.position === "fixed") continue;
+      const bottom = rect.bottom + pixelsOf(nextStyle.marginBottom);
       levelBottom = Math.max(levelBottom ?? bottom, bottom);
     }
     // Content at an outer level renders after the inner levels' content, and
