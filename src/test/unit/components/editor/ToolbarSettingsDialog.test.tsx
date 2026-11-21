@@ -600,15 +600,20 @@ describe("keyboard operation of every control", () => {
 
     const historyRow = findRowByName(/toolbar\.groups\.history/);
     const dragHandle = getDragHandle(historyRow);
+    // Outside a drag, hovering the row reveals the control.
+    const control = screen.getByTestId("toolbar-add-divider-start-3");
+    expect(control).toHaveClass("group-hover:opacity-100");
+
     dragHandle.focus();
     await user.keyboard("{Enter}");
     await waitForKeyboardDrag();
 
-    // During drag, isDragging=true hides the add-divider control
-    const control = screen.getByTestId("toolbar-add-divider-start-3");
+    // During drag, isDragging=true keeps it hidden even under the pointer.
     expect(control).toHaveClass("pointer-events-none", "opacity-0");
+    expect(control).not.toHaveClass("group-hover:opacity-100");
 
     await endKeyboardDrag(user, "{Escape}");
+    expect(control).toHaveClass("group-hover:opacity-100");
     expect(useSettingsStore.getState().toolbarConfig.start[0].id).toBe("history");
   });
 });

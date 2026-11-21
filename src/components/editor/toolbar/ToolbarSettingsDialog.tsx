@@ -298,6 +298,9 @@ function ToolbarSectionGrid({ section, entries, announceMove }: ToolbarSectionGr
         aria-label={t(`toolbar.settings.${section}`)}
         className={`${TOOLBAR_SETTINGS_ROW_MIN_WIDTH} min-h-8 max-h-[55vh] overflow-y-auto space-y-2 py-2`}
         dragAndDropHooks={dragAndDropHooks}
+        // The rows read isDragging; GridList re-renders cached rows only
+        // when a listed dependency changes.
+        dependencies={[isDragging]}
         renderEmptyState={() => null}
       >
         {(entry) =>
