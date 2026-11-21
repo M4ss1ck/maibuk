@@ -31,10 +31,11 @@
    * @typedef {{ permission: string, canScheduleWhileClosed: boolean, exactTiming: boolean }} FrameNotificationStatus
    * @typedef {{ kind: "labels", language: string, hourCycle: 12 | 24, labels: Record<string, string> }} FrameLabelsMessage
    * @typedef {{ kind: "state", timer: TimerSnapshot, pomodoro: PomodoroSnapshot, stopwatch: StopwatchState, alarms: Alarm[], notifications: FrameNotificationStatus | null }} FrameStateMessage
-   * @typedef {FrameLabelsMessage | FrameStateMessage} WorkerToFrameMessage
+   * @typedef {FrameLabelsMessage | FrameStateMessage | FrameOpenSettingsMessage} WorkerToFrameMessage
    * @typedef {{ progress: number, title: string, subtitle: string, target: "pomodoro" | "stopwatch" }} AlsoData
    * @typedef {{ id: string | null, hour: number, minute: number, label: string, weekdays: number[], time: string | null }} AlarmDraft
    * @typedef {{ id: string, opener: HTMLElement | null, backdrop: "focus" | "close", close: () => void }} OpenDialog
+   * @typedef {{ kind: "pomodoro.openSettings" }} FrameOpenSettingsMessage
    */
 
   const SVG_NS = "http://www.w3.org/2000/svg";
@@ -97,12 +98,12 @@
     longBreakEvery: { min: 1, max: 12 },
   };
 
-  /** The settings dialog's number fields: the setting each edits and the range it takes. */
+  /** The settings dialog's number fields: the setting each edits, the range it takes, and the message key an invalid one shows. */
   const SETTINGS_FIELDS = [
-    ["settings-pomodoro", "pomodoroMinutes", POMODORO_LIMITS.minutes],
-    ["settings-short", "shortBreakMinutes", POMODORO_LIMITS.minutes],
-    ["settings-long", "longBreakMinutes", POMODORO_LIMITS.minutes],
-    ["settings-every", "longBreakEvery", POMODORO_LIMITS.longBreakEvery],
+    ["settings-pomodoro", "pomodoroMinutes", POMODORO_LIMITS.minutes, "minutesRange"],
+    ["settings-short", "shortBreakMinutes", POMODORO_LIMITS.minutes, "minutesRange"],
+    ["settings-long", "longBreakMinutes", POMODORO_LIMITS.minutes, "minutesRange"],
+    ["settings-every", "longBreakEvery", POMODORO_LIMITS.longBreakEvery, "countRange"],
   ];
 
   /** The settings dialog's switches and the setting each toggles. */
@@ -1507,6 +1508,56 @@
     el(id).setAttribute("aria-checked", on ? "true" : "false");
   }
 
+  /** @param {string} value @param {{ min: number, max: number }} range @returns {boolean} */
+  function isFieldValueValid(value, range) {
+    if (value.trim() === "") return false;
+    const number = Number(value);
+    return Number.isInteger(number) && number >= range.min && number <= range.max;
+  }
+
+  /**
+   * Marks one settings field invalid or clears it: the input's aria-invalid,
+   * the message under it, and the aria-describedby link between the two.
+   * @param {string} id
+   * @param {string} message
+   */
+  function setFieldError(id, message) {
+    const input = /** @type {HTMLInputElement} */ (el(id));
+    const node = el(`${id}-error`);
+    if (message === "") {
+      input.removeAttribute("aria-invalid");
+      input.removeAttribute("aria-describedby");
+      node.textContent = "";
+      return;
+    }
+    input.setAttribute("aria-invalid", "true");
+    input.setAttribute("aria-describedby", node.id);
+    node.textContent = message;
+  }
+
+  /**
+   * Re-checks one settings field and refreshes its error. A keystroke passes
+   * `show` false, so a field whose error is hidden never raises a new one
+   * mid-typing; a shown error still clears the moment the value is valid.
+   * @param {string} id
+   * @param {{ min: number, max: number }} range
+   * @param {string} messageKey
+   * @param {boolean} show
+   * @returns {boolean}
+   */
+  function checkField(id, range, messageKey, show) {
+    const value = /** @type {HTMLInputElement} */ (el(id)).value;
+    const valid = isFieldValueValid(value, range);
+    if (valid) setFieldError(id, "");
+    else if (show) setFieldError(id, fill(label(messageKey), { min: range.min, max: range.max }));
+    return valid;
+  }
+
+  /** Clears every settings field's error, which opening and Reset both do. */
+  function clearSettingsErrors() {
+    for (const [id] of SETTINGS_FIELDS) setFieldError(id, "");
+  }
+
   /** What the settings dialog's fields hold right now, parsed the way Save posts it. */
   function settingsFromFields() {
     /** @type {PomodoroSettings} */
@@ -1542,6 +1593,7 @@
   function openSettings(opener) {
     if (!frameState) return;
     fillSettings(frameState.pomodoro.settings);
+    clearSettingsErrors();
     showDialog({ id: "pomodoro-settings", opener, backdrop: "close", close: hideDialog });
     drawResetButton();
     el("settings-pomodoro").focus();
@@ -1549,6 +1601,15 @@
 
   function saveSettings() {
     if (dialog === null) return;
+    /** @type {string | null} */
+    let firstInvalid = null;
+    for (const [id, , range, messageKey] of SETTINGS_FIELDS) {
+      if (!checkField(id, range, messageKey, true) && firstInvalid === null) firstInvalid = id;
+    }
+    if (firstInvalid !== null) {
+      el(firstInvalid).focus();
+      return;
+    }
     post({ kind: "pomodoro.setSettings", settings: settingsFromFields() });
     hideDialog();
   }
@@ -1557,6 +1618,7 @@
   function resetSettings() {
     if (dialog === null) return;
     fillSettings(DEFAULT_POMODORO_SETTINGS);
+    clearSettingsErrors();
     drawResetButton();
     el("settings-pomodoro").focus();
   }
@@ -1636,6 +1698,12 @@
       if (typeof data.language === "string") document.documentElement.lang = data.language;
     } else if (data.kind === "state") {
       frameState = data;
+    } else if (data.kind === "pomodoro.openSettings") {
+      // The Worker holds this until the labels and state are out, so the Frame
+      // is already drawn: select the tab and open the dialog without a redraw.
+      selectTab("pomodoro", false);
+      openSettings(el("pomodoro-settings-open"));
+      return;
     } else {
       return;
     }
@@ -1744,7 +1812,13 @@
   el("pomodoro-settings-cancel").addEventListener("click", hideDialog);
   el("pomodoro-settings-save").addEventListener("click", saveSettings);
   el("pomodoro-settings-reset").addEventListener("click", resetSettings);
-  for (const [id] of SETTINGS_FIELDS) el(id).addEventListener("input", drawResetButton);
+  for (const [id, , range, messageKey] of SETTINGS_FIELDS) {
+    el(id).addEventListener("input", () => {
+      drawResetButton();
+      checkField(id, range, messageKey, false);
+    });
+    el(id).addEventListener("blur", () => checkField(id, range, messageKey, true));
+  }
   for (const [id] of SETTINGS_SWITCHES) {
     el(id).addEventListener("click", () => {
       setSwitch(id, !switchOn(id));

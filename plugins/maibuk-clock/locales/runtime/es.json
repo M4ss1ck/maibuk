@@ -64,6 +64,8 @@
   "pomodoroSettings": "Ajustes del Pomodoro",
   "resetToDefaults": "Restablecer valores predeterminados",
   "saveSettings": "Guardar",
+  "minutesRange": "Entre {min} y {max} minutos",
+  "countRange": "Entre {min} y {max}",
   "running": "en marcha",
   "am": "a. m.",
   "pm": "p. m.",

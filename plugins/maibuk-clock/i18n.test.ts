@@ -33,6 +33,13 @@ describe("Clock runtime catalogs", () => {
     expect(translate("es-MX", "timer")).toBe("Temporizador");
     expect(translate("fr", "timer")).toBe("Timer");
   });
+
+  it("words both range messages in English and Spanish", () => {
+    expect(translate("en", "minutesRange")).toBe("Between {min} and {max} minutes");
+    expect(translate("en", "countRange")).toBe("Between {min} and {max}");
+    expect(translate("es", "minutesRange")).toBe("Entre {min} y {max} minutos");
+    expect(translate("es", "countRange")).toBe("Entre {min} y {max}");
+  });
 });
 
 describe("Clock manifest overrides", () => {

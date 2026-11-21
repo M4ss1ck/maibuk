@@ -11,6 +11,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { DEFAULT_POMODORO_SETTINGS, POMODORO_LIMITS } from "./cycle";
 import en from "./locales/runtime/en.json";
 import es from "./locales/runtime/es.json";
 import { tabTo, type User } from "./test-support";
@@ -1105,5 +1106,107 @@ describe("Clock Frame Pomodoro settings", () => {
     await tabTo(user, el("pomodoro-settings-cancel"));
     await user.keyboard("{Shift>}{Tab}{/Shift}");
     expect(document.activeElement).toBe(el("settings-auto-pomodoros"));
+  });
+
+  it("shows a field's message when it loses focus and clears it once valid", async () => {
+    renderFrame({ state: settingsState() });
+    const user = keyboardUser();
+    await openSettings(user);
+
+    await user.clear(el("settings-pomodoro"));
+    await user.tab();
+
+    expect(el("settings-pomodoro")).toHaveAccessibleDescription("Between 1 and 99 minutes");
+
+    await user.clear(el("settings-pomodoro"));
+    await user.type(el("settings-pomodoro"), "30");
+
+    expect(el("settings-pomodoro")).toHaveAccessibleDescription("");
+  });
+
+  it.each([
+    ["settings-pomodoro", ""],
+    ["settings-pomodoro", "2.5"],
+    ["settings-pomodoro", "-3"],
+    ["settings-pomodoro", "0"],
+    ["settings-pomodoro", "100"],
+    ["settings-every", "13"],
+  ] as const)("refuses %s = %j at Save and keeps the dialog open", async (id, value) => {
+    const port = renderFrame({ state: settingsState() });
+    const user = keyboardUser();
+    await openSettings(user);
+
+    await user.clear(el(id));
+    if (value !== "") await user.type(el(id), value);
+    await tabTo(user, el("pomodoro-settings-save"));
+    await user.keyboard("{Enter}");
+
+    expect(el("pomodoro-settings").hidden).toBe(false);
+    expect(posted(port, "pomodoro.setSettings")).toEqual([]);
+  });
+
+  it("shows both errors and focuses the first invalid field on Save", async () => {
+    const port = renderFrame({ state: settingsState() });
+    const user = keyboardUser();
+    await openSettings(user);
+
+    await user.clear(el("settings-pomodoro"));
+    await user.type(el("settings-pomodoro"), "100");
+    await user.clear(el("settings-every"));
+    await user.type(el("settings-every"), "13");
+    await tabTo(user, el("pomodoro-settings-save"));
+    await user.keyboard("{Enter}");
+
+    expect(el("settings-pomodoro")).toHaveAccessibleDescription("Between 1 and 99 minutes");
+    expect(el("settings-every")).toHaveAccessibleDescription("Between 1 and 12");
+    expect(document.activeElement).toBe(el("settings-pomodoro"));
+    expect(el("pomodoro-settings").hidden).toBe(false);
+    expect(posted(port, "pomodoro.setSettings")).toEqual([]);
+  });
+
+  it("renders its errors in Spanish", async () => {
+    renderFrame({ labels: ES, language: "es", hourCycle: 24, state: settingsState() });
+    const user = keyboardUser();
+    await openSettings(user);
+    expect(el("pomodoro-settings-title").textContent).toBe("Ajustes del Pomodoro");
+
+    await user.clear(el("settings-pomodoro"));
+    await user.tab();
+    expect(el("settings-pomodoro")).toHaveAccessibleDescription("Entre 1 y 99 minutos");
+
+    await user.clear(el("settings-every"));
+    await user.type(el("settings-every"), "13");
+    await user.tab();
+    expect(el("settings-every")).toHaveAccessibleDescription("Entre 1 y 12");
+  });
+
+  it("opens the dialog from the Worker's signal and returns focus to the row", async () => {
+    const port = renderFrame({ state: settingsState() });
+    const user = keyboardUser();
+
+    port.deliver({ kind: "pomodoro.openSettings" });
+
+    expect(el("pomodoro-settings").hidden).toBe(false);
+    expect(el("panel-pomodoro").hidden).toBe(false);
+    expect(el("panel-timer").hidden).toBe(true);
+    expect(document.activeElement).toBe(el("settings-pomodoro"));
+
+    await user.keyboard("{Escape}");
+    expect(el("pomodoro-settings").hidden).toBe(true);
+    expect(document.activeElement).toBe(el("pomodoro-settings-open"));
+  });
+});
+
+describe("Clock Frame mirrored Pomodoro settings", () => {
+  /** One mirrored object literal, evaluated from the Frame script's own source. */
+  function mirrored(name: string): Record<string, unknown> {
+    const match = SCRIPT.match(new RegExp(`const ${name} = (\\{[\\s\\S]*?\\n  \\});`));
+    if (match?.[1] === undefined) throw new Error(`missing ${name}`);
+    return new Function(`return ${match[1]}`)() as Record<string, unknown>;
+  }
+
+  it("mirrors the limits and defaults the Worker owns", () => {
+    expect(mirrored("POMODORO_LIMITS")).toEqual(POMODORO_LIMITS);
+    expect(mirrored("DEFAULT_POMODORO_SETTINGS")).toEqual(DEFAULT_POMODORO_SETTINGS);
   });
 });

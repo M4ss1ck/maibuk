@@ -1162,6 +1162,20 @@
         font-variant-numeric: tabular-nums;
       }
 
+      .settings-field input[aria-invalid="true"] {
+        border-color: var(--maibuk-color-destructive);
+      }
+
+      /* The message keeps its line while empty, so an error never shifts the
+         dialog's action row. */
+      .field-error {
+        margin: 0;
+        min-height: 1.1em;
+        font-size: 0.75rem;
+        line-height: 1.1;
+        color: var(--maibuk-color-destructive);
+      }
+
       .settings-switches {
         display: flex;
         flex-direction: column;
@@ -1609,18 +1623,22 @@
             <div class="dialog-label settings-field">
               <label id="settings-pomodoro-label" for="settings-pomodoro"></label>
               <input id="settings-pomodoro" type="number" min="1" max="99" inputmode="numeric" />
+              <p id="settings-pomodoro-error" class="field-error"></p>
             </div>
             <div class="dialog-label settings-field">
               <label id="settings-short-label" for="settings-short"></label>
               <input id="settings-short" type="number" min="1" max="99" inputmode="numeric" />
+              <p id="settings-short-error" class="field-error"></p>
             </div>
             <div class="dialog-label settings-field">
               <label id="settings-long-label" for="settings-long"></label>
               <input id="settings-long" type="number" min="1" max="99" inputmode="numeric" />
+              <p id="settings-long-error" class="field-error"></p>
             </div>
             <div class="dialog-label settings-field">
               <label id="settings-every-label" for="settings-every"></label>
               <input id="settings-every" type="number" min="1" max="12" inputmode="numeric" />
+              <p id="settings-every-error" class="field-error"></p>
             </div>
           </div>
           <div class="settings-switches">
