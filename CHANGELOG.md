@@ -5,6 +5,35 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.0] - 2026-11-21
+
+### Added
+- Clock plugin with Timer, Pomodoro, Stopwatch, and Alarms
+- Pomodoro cycles with alerts, commands, a toggle button, daily count, and a settings dialog with reset-to-defaults
+- Stopwatch with lap tracking that persists across restarts
+- Alarms with weekday repeat, DST-safe scheduling, a missed-alarm startup toast, and delete confirmation
+- Per-device 24-hour clock setting, enabled by default, on the Alarms tab and in the Alarm editor
+- Plugin System Notifications with immediate and scheduled delivery, permission gating, and click-to-open behavior
+- Android exact alarms for scheduled System Notifications
+
+### Changed
+- Redesigned the Clock page as a themed full-page Frame with improved keyboard navigation, focus handling, font scaling, and phone layout
+- Clock now opens on Pomodoro and remembers the last selected tab per device
+- Alarm editor validates hour and minute ranges, focuses the first invalid field, and keeps Save open until corrected
+- Next-alarm times omit zero units, such as “in 2 h”
+- Dialog shadows are lighter across Alarm, Delete confirmation, and Pomodoro settings dialogs
+- Clock Frame scrollbars follow the app theme, including WebKitGTK dark-theme rendering
+- Scheduled System Notifications are cancelled when a plugin is disabled, removed, or loses permission
+- System Notification queues are capped at 20 pending per plugin, and past queued times show immediately
+
+### Fixed
+- Android notification taps, including cold starts, open the correct plugin
+- Notification permission denial and cross-plugin notification ID collisions are handled correctly
+- Pomodoro phase alerts fire at phase end, and the daily count resets at local midnight
+- Stopwatch does not record negative laps when the clock moves backward
+- Clock Frame keeps arrow keys inside fields and restores alarm editor focus after backdrop clicks
+- Timer lengths beyond 99:59:59 are rejected
+
 ## [0.24.1] - 2026-11-20
 
 ### Changed

@@ -5,6 +5,35 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 y este proyecto sigue el [Versionado Semántico](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.0] - 2026-11-21
+
+### Added
+- Complemento Reloj con Temporizador, Pomodoro, Cronómetro y Alarmas
+- Ciclos Pomodoro con alertas, comandos, un botón de alternancia, recuento diario y un diálogo de ajustes con restablecimiento a los valores predeterminados
+- Cronómetro con registro de vueltas que se conserva entre reinicios
+- Alarmas con repetición por día de la semana, programación segura ante el horario de verano, un aviso emergente al iniciar por alarma perdida y confirmación de eliminación
+- Ajuste de reloj de 24 horas por dispositivo, activado de forma predeterminada, en la pestaña Alarmas y en el editor de alarmas
+- Notificaciones del sistema de complementos con entrega inmediata y programada, control de permisos y comportamiento de abrir al hacer clic
+- Alarmas exactas de Android para las notificaciones del sistema programadas
+
+### Changed
+- Se rediseñó la página del Reloj como un Marco de página completa con tema, con mejoras en la navegación por teclado, el manejo del foco, el escalado de fuente y el diseño para teléfono
+- El Reloj ahora se abre en Pomodoro y recuerda la última pestaña seleccionada por dispositivo
+- El editor de alarmas valida los rangos de horas y minutos, enfoca el primer campo no válido y mantiene abierto Guardar hasta que se corrija
+- Las horas de la próxima alarma omiten las unidades cero, como «en 2 h»
+- Las sombras de los diálogos son más claras en los diálogos de Alarmas, confirmación de eliminación y ajustes de Pomodoro
+- Las barras de desplazamiento del Marco del Reloj siguen el tema de la aplicación, incluida la representación del tema oscuro de WebKitGTK
+- Las notificaciones del sistema programadas se cancelan cuando un complemento se desactiva, se elimina o pierde permisos
+- Las colas de notificaciones del sistema se limitan a 20 pendientes por complemento, y los horarios en cola que ya pasaron se muestran inmediatamente
+
+### Fixed
+- Las pulsaciones en notificaciones de Android, incluidos los inicios en frío, abren el complemento correcto
+- La denegación de permisos de notificación y las colisiones de ID de notificación entre complementos se gestionan correctamente
+- Las alertas de fase de Pomodoro se activan al final de la fase, y el recuento diario se restablece a medianoche local
+- El cronómetro no registra vueltas negativas cuando el reloj retrocede
+- El Marco del Reloj mantiene las teclas de flecha dentro de los campos y restaura el foco del editor de alarmas tras hacer clic en el fondo
+- Se rechazan las duraciones del temporizador superiores a 99:59:59
+
 ## [0.24.1] - 2026-11-20
 
 ### Changed

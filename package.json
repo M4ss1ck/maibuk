@@ -1,7 +1,7 @@
 {
   "name": "maibuk",
   "private": true,
-  "version": "0.24.1",
+  "version": "0.25.0",
   "description": "A cross-platform writing app for authors",
   "type": "module",
   "scripts": {
