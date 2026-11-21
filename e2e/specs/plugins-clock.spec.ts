@@ -1034,6 +1034,27 @@ test.describe("Clock 24-hour clock @wf:plugins-clock-alarms @chromium-only", () 
     await openClockPage(page, "Alarms");
     await expect(tabSwitch).not.toBeChecked({ timeout: 15_000 });
     await expect(clockFrame(page).getByText(time12, { exact: true })).toBeVisible();
+
+    // A narrow panel cannot hold the next-alarm line and the switch side by
+    // side: the switch drops to its own line and keeps to the end edge.
+    await page.setViewportSize({ width: 420, height: 800 });
+    const nextAlarm = clockFrame(page).locator("#next-alarm");
+    const format = clockFrame(page).locator(".alarms-format");
+    const panel = tabPanel(page, "Alarms");
+    await expect(nextAlarm).toBeVisible();
+    await expect
+      .poll(async () => {
+        const [line, group] = await Promise.all([nextAlarm.boundingBox(), format.boundingBox()]);
+        return line !== null && group !== null && group.y >= line.y + line.height - 1;
+      })
+      .toBe(true);
+    const [group, box] = await Promise.all([format.boundingBox(), panel.boundingBox()]);
+    expect(group).not.toBeNull();
+    expect(box).not.toBeNull();
+    if (group !== null && box !== null) {
+      expect(Math.abs(group.x + group.width - (box.x + box.width))).toBeLessThanOrEqual(1);
+    }
+    await capture(page, "clock-alarms-12-hour-narrow");
   });
 });
 

@@ -1461,12 +1461,11 @@
   function openEditor(draft, opener) {
     editor = { ...draft };
     const hour = /** @type {HTMLInputElement} */ (el("alarm-hour"));
-    if (hourCycle === 12) {
-      hour.value = String(draft.hour % 12 === 0 ? 12 : draft.hour % 12);
-      setMeridiem(draft.hour < 12 ? "am" : "pm");
-    } else {
-      hour.value = pad2(draft.hour);
-    }
+    hour.value =
+      hourCycle === 12 ? String(draft.hour % 12 === 0 ? 12 : draft.hour % 12) : pad2(draft.hour);
+    // Chosen in either cycle: a flip to 12-hour over an empty hour keeps this
+    // choice, so Save never reads AM from a group with nothing checked.
+    setMeridiem(draft.hour < 12 ? "am" : "pm");
     /** @type {HTMLInputElement} */ (el("alarm-minute")).value = pad2(draft.minute);
     /** @type {HTMLInputElement} */ (el("alarm-label")).value = draft.label;
     for (const input of dayInputs()) input.checked = draft.weekdays.includes(Number(input.value));

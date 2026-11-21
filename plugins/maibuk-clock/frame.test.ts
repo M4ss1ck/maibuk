@@ -1285,7 +1285,7 @@ describe("Clock Frame alarm editor hour cycle", () => {
     if (meridiem(value).checked) return;
     const checked = [meridiem("am"), meridiem("pm")].find((input) => input.checked);
     await tabTo(user, checked ?? meridiem("am"));
-    if (checked === null) {
+    if (checked === undefined) {
       if (value === "pm") await user.keyboard("{ArrowRight}");
       return;
     }
@@ -1398,6 +1398,27 @@ describe("Clock Frame alarm editor hour cycle", () => {
     await user.keyboard(" ");
     expect(inputValue("alarm-hour")).toBe("25");
     expect(el("alarm-hour")).toHaveAccessibleDescription("Between 1 and 12");
+  });
+
+  it("keeps the Alarm's PM when the hour was empty at the flip, so Save posts the evening", async () => {
+    const port = renderFrame({
+      hourCycle: 24,
+      state: stateMessage({ alarms: [alarmMessage({ hour: 19, minute: 0, label: "" })] }),
+    });
+    const user = keyboardUser();
+    await openAlarms(user);
+    await openEdit(user);
+
+    await user.clear(el("alarm-hour"));
+    await tabTo(user, el("alarm-hour-cycle"));
+    await user.keyboard(" ");
+    expect(inputValue("alarm-hour")).toBe("");
+    expect(meridiem("pm").checked).toBe(true);
+
+    await user.type(el("alarm-hour"), "7");
+    await tabTo(user, el("alarm-save"));
+    await user.keyboard("{Enter}");
+    expect(posted(port, "alarm.edit")).toMatchObject([{ input: { hour: 19, minute: 0 } }]);
   });
 
   it("raises no error when a valid 24-hour hour flips", async () => {

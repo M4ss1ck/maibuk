@@ -914,6 +914,11 @@
         box-shadow: 0 1px 3px color-mix(in srgb, var(--maibuk-color-foreground) 35%, transparent);
       }
 
+      /* The track draws the ring; the button's own outline would add a second, square one. */
+      .switch:focus-visible {
+        outline: none;
+      }
+
       .switch:focus-visible .track {
         outline: 2px solid var(--maibuk-color-primary);
         outline-offset: 2px;
