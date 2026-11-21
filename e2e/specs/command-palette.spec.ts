@@ -77,15 +77,27 @@ async function chooseRow(page: Page, marker: string): Promise<void> {
  * Arrows until the item with key `key` (e.g. `command:global.toggleTheme`,
  * `settingsRow:theme`) is the active result. The first ArrowDown after typing
  * is swallowed while the list settles, so this re-reads after every press
- * instead of counting presses.
+ * instead of counting presses. The key matches whole, so `settingsRow:spellCheck`
+ * does not stop on `settingsRow:spellCheckDictionaries`.
  */
 async function arrowTo(page: Page, key: string, { max = 30 } = {}): Promise<void> {
+  // The list settles while the query filters it, so the active result can
+  // already be past the target; the arrows do not wrap, so two presses that
+  // leave the active result where it was mean the end, and the walk turns up.
+  let arrow = "ArrowDown";
+  let unmoved = 0;
   for (let i = 0; i < max; i++) {
-    if ((await activeKey(page)).includes(`option-${key}`)) return;
-    await page.keyboard.press("ArrowDown");
+    const before = await activeKey(page);
+    if (before.endsWith(`-option-${key}`)) return;
+    await page.keyboard.press(arrow);
     // A beat for React Aria to move virtual focus; a swallowed press just
     // costs one more loop.
     await page.waitForTimeout(250);
+    unmoved = (await activeKey(page)) === before ? unmoved + 1 : 0;
+    if (unmoved >= 2 && arrow === "ArrowDown") {
+      arrow = "ArrowUp";
+      unmoved = 0;
+    }
   }
   throw new Error(`arrowTo never reached ${key}; still on ${await activeKey(page)}`);
 }
