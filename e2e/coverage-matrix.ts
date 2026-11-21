@@ -3471,12 +3471,17 @@ export const ROWS: MatrixRow[] = [
     id: "plugins-clock-pomodoro",
     area: "plugins",
     workflow:
-      "Clock turned on from Settings → Plugins by keyboard, then Open Clock from the Command Palette opens its page, the Plugin’s whole-page Frame (issue #886); inside that Frame the author moves from the Timer tab to the Pomodoro tab by keyboard — the tab list is one tab stop, and ArrowLeft selects the Pomodoro — and presses Start: the Cycle step drawn as the current one reads Pomodoro, Pomodoro 1 of 4 runs, and the drawn time falls from its 25:00 default; Start or pause the Pomodoro, run from the Command Palette, pauses it, so Resume replaces Pause and the drawn time holds what was left rather than the length, and running it again resumes it from that remainder; Skip to the next Pomodoro or break, the other Plugin Command from the Palette, moves the Cycle to Short break, idle at 5:00; Reset Cycle returns it to Pomodoro 1, idle at 25:00; asserts: the current Cycle step’s phase label, the Pomodoro of the Cycle, the drawn time, the controls each status draws, and Pomodoros today: 0, all inside the Frame; persists: yes (device-local Plugin storage; the Library is untouched)",
+      "Clock turned on from Settings → Plugins by keyboard, then Open Clock from the Command Palette opens its page, the Plugin’s whole-page Frame (issue #886); inside that Frame the author moves from the Timer tab to the Pomodoro tab by keyboard — the tab list is one tab stop, and ArrowLeft selects the Pomodoro — and presses Start: the Cycle step drawn as the current one reads Pomodoro, Pomodoro 1 of 4 runs, and the drawn time falls from its 25:00 default; Start or pause the Pomodoro, run from the Command Palette, pauses it, so Resume replaces Pause and the drawn time holds what was left rather than the length, and running it again resumes it from that remainder; Skip to the next Pomodoro or break, the other Plugin Command from the Palette, moves the Cycle to Short break, idle at 5:00; Reset Cycle returns it to Pomodoro 1, idle at 25:00; the lengths row under the Cycle opens the Pomodoro settings dialog, also reachable as the Pomodoro settings Plugin Command, which selects the Pomodoro tab and opens the same dialog holding the stored lengths: focus enters on the Pomodoro length field, and Save on 100 minutes raises the Between 1 and 99 minutes error on that field, keeps the dialog open, and puts focus back on it, while Save on 30 closes the dialog, returns focus to the lengths row, and the row and the idle drawn time both read 30; Escape dismisses the dialog the Command opened; asserts: the current Cycle step’s phase label, the Pomodoro of the Cycle, the drawn time, the controls each status draws, Pomodoros today: 0, the lengths row, and the settings dialog’s focus entry, Tab containment, error, values, and the focus each close restores, all inside the Frame; persists: yes (device-local Plugin storage; the Library is untouched)",
     edges: [
       "The Pomodoro runs from its tab, pauses and resumes from its Command, skips to Short break from its Command, and Reset Cycle returns it to Pomodoro 1 idle",
+      "The settings dialog opened from the lengths row refuses 100 minutes with its range error and saves 30, and its Command reopens it on the Pomodoro tab until Escape dismisses it",
     ],
     terms: ["Plugin", "Built-in Plugin", "Plugin Command"],
-    shortcuts: ["plugin.maibuk-clock.togglePomodoro", "plugin.maibuk-clock.skipPomodoro"],
+    shortcuts: [
+      "plugin.maibuk-clock.togglePomodoro",
+      "plugin.maibuk-clock.skipPomodoro",
+      "plugin.maibuk-clock.openPomodoroSettings",
+    ],
     routes: ["/settings", "/plugin/:pluginId/:pageId"],
     fixture: "empty",
     tags: ["chromium-only"],

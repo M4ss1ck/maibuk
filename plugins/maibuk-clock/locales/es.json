@@ -5,6 +5,7 @@
   "commands.toggleTimer.label": "Iniciar o pausar el temporizador",
   "commands.togglePomodoro.label": "Iniciar o pausar el Pomodoro",
   "commands.skipPomodoro.label": "Saltar al siguiente Pomodoro o descanso",
+  "commands.openPomodoroSettings.label": "Ajustes del Pomodoro",
   "commands.toggleStopwatch.label": "Iniciar o pausar el cronómetro",
   "commands.lapStopwatch.label": "Marcar una vuelta",
   "pages.clock.title": "Reloj",

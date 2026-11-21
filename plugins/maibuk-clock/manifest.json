@@ -39,6 +39,11 @@
         "contexts": ["global"]
       },
       {
+        "id": "openPomodoroSettings",
+        "label": "Pomodoro settings",
+        "contexts": ["global"]
+      },
+      {
         "id": "toggleStopwatch",
         "label": "Start or pause the Stopwatch",
         "contexts": ["global"]

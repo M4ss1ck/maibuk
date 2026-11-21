@@ -7,7 +7,12 @@
 // in-window notice here because headless Chromium never grants the Notification
 // permission. The Pomodoro tab is reached by keyboard from the Timer tab, and
 // its Cycle starts there, pauses and resumes from its Command, skips to the
-// Short break from its other Command, and resets to the first Pomodoro. The
+// Short break from its other Command, and resets to the first Pomodoro. Its
+// settings dialog opens by keyboard from the lengths row under the Cycle: Save
+// on a 100-minute Pomodoro length raises the range error and keeps focus on the
+// field, Save on 30 closes it with the row and the idle drawn time reading 30,
+// and the Pomodoro settings Command opens the same dialog on the Pomodoro tab
+// until Escape dismisses it. The
 // Stopwatch tab is one ArrowRight further on: its Stopwatch starts, marks a Lap
 // from its button and a second from its other Command, pauses and resumes from
 // its Command, and resets to zero. The Alarms tab is one ArrowRight past that:
@@ -20,9 +25,10 @@
 // every step below reaches them through the Frame. Only the Command Palette and
 // Maibuk's own Alert notice are host UI. Keyboard only: every control is
 // reached by Tab and pressed with Enter or Space, and a host Command takes the
-// keys back from the Frame first. The Alarm editor is a dialog inside the Frame,
-// so its focus entry, Tab containment, Escape and restored focus are asserted
-// where it opens. The same Frame on a phone (#886) stacks its side card below
+// keys back from the Frame first. The Alarm editor and the Pomodoro settings
+// dialog are dialogs inside the Frame, so their focus entry, Tab containment,
+// Escape and restored focus are asserted where they open. The same Frame on a
+// phone (#886) stacks its side card below
 // the hero and keeps every target thumb-sized: a @touch test opens it from the
 // navigation menu and proves both.
 
@@ -132,6 +138,34 @@ async function secondsLeft(page: Page): Promise<number> {
   const text = await pomodoroTime(page).textContent();
   return text === null ? Number.POSITIVE_INFINITY : secondsOf(text);
 }
+
+/**
+ * The Pomodoro settings Command, which opens the Clock page and asks its Frame
+ * to show the dialog. Its label is also the dialog's title, so both lookups
+ * read the same words.
+ */
+const POMODORO_SETTINGS_COMMAND = "Pomodoro settings";
+
+/** The settings dialog inside the Frame. */
+const settingsDialog = (page: Page) =>
+  clockFrame(page).getByRole("dialog", { name: POMODORO_SETTINGS_COMMAND, exact: true });
+
+/** The dialog's Pomodoro length field, by its localized label. */
+const pomodoroLengthField = (page: Page) =>
+  settingsDialog(page).getByRole("spinbutton", { name: "Pomodoro (minutes)", exact: true });
+
+/** What the field says when a Save finds its number outside 1 to 99. */
+const MINUTES_RANGE = "Between 1 and 99 minutes";
+
+/**
+ * The lengths row under the Cycle: the button that sums up the three lengths
+ * and opens the settings dialog, named "Pomodoro settings, 25 · 5 · 15 min".
+ */
+const lengthsRow = (page: Page) =>
+  clockFrame(page).getByRole("button", { name: /^Pomodoro settings, / });
+
+/** The lengths row's summary for a Pomodoro of `minutes`, the two breaks unchanged. */
+const lengthsSummary = (minutes: number) => `${minutes} · 5 · 15 min`;
 
 /** The Stopwatch Command that starts, pauses and resumes the Stopwatch. */
 const TOGGLE_STOPWATCH_COMMAND = "Start or pause the Stopwatch";
@@ -551,6 +585,81 @@ test.describe("Clock Pomodoro @wf:plugins-clock-pomodoro @chromium-only", () => 
       0
     );
     await capture(page, "clock-pomodoro-reset");
+  });
+
+  test("the Pomodoro settings dialog opens from the lengths row, refuses 100 minutes, saves 30, and reopens from its Command @sc:plugin.maibuk-clock.openPomodoroSettings", async ({
+    page,
+  }) => {
+    await turnOn(page);
+    await openClockPage(page);
+    await openPomodoroTab(page);
+
+    // The side card's last control is the lengths row: it sums up the three
+    // lengths, and Enter on it opens the dialog.
+    await expect(lengthsRow(page)).toContainText(lengthsSummary(25));
+    await tabToEither(page, lengthsRow(page), { max: 12 });
+    await capture(page, "clock-pomodoro-settings-row");
+    await page.keyboard.press("Enter");
+
+    const settings = settingsDialog(page);
+    await expect(settings).toBeVisible();
+    await capture(page, "clock-pomodoro-settings-dialog");
+    // Focus enters on the Pomodoro length field, holding the default, and Tab
+    // past the dialog's last control stays inside it.
+    const minutes = pomodoroLengthField(page);
+    await expect(minutes).toBeFocused();
+    await expect(minutes).toHaveValue("25");
+    await expectTabContained(page, settings);
+    // The containment walk leaves focus somewhere inside; it goes back to the
+    // field before typing, the way the author would.
+    await tabToEither(page, minutes, { max: 20 });
+    await expect(minutes).toBeFocused();
+
+    // 100 minutes is outside 1 to 99: Save raises the error, leaves the dialog
+    // open, and puts focus back on the field the error names.
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type("100");
+    const save = settings.getByRole("button", { name: "Save", exact: true });
+    await tabToEither(page, save, { max: 20 });
+    await page.keyboard.press("Enter");
+    await expect(settings.getByText(MINUTES_RANGE, { exact: true })).toBeVisible();
+    await expect(settings).toBeVisible();
+    await expect(minutes).toBeFocused();
+    await capture(page, "clock-pomodoro-settings-error");
+
+    // 30 is inside it: Save closes the dialog and hands focus back to the row,
+    // which reads the new length, as does the idle Pomodoro's drawn time.
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type("30");
+    await tabToEither(page, save, { max: 20 });
+    await page.keyboard.press("Enter");
+    await expect(settings).toBeHidden();
+    await expect(lengthsRow(page)).toBeFocused();
+    await expect(lengthsRow(page)).toContainText(lengthsSummary(30));
+    await expect(pomodoroTime(page)).toHaveText("30:00");
+
+    // From the Timer tab, the Command switches to the Pomodoro tab and opens the
+    // same dialog, holding what Save stored; Escape dismisses it back to the row.
+    await tabToEither(page, clockFrame(page).getByRole("tab", { name: "Pomodoro", exact: true }));
+    await page.keyboard.press("ArrowRight");
+    await expect(tabPanel(page, "Pomodoro")).toBeHidden();
+    await runHostCommand(page, POMODORO_SETTINGS_COMMAND);
+    await expect(tabPanel(page, "Pomodoro")).toBeVisible({ timeout: 15_000 });
+    await expect(tabPanel(page, "Timer")).toBeHidden();
+    await expect(settings).toBeVisible();
+    await expect(minutes).toHaveValue("30");
+    await expect(minutes).toBeFocused();
+    await capture(page, "clock-pomodoro-settings-command");
+    await page.keyboard.press("Escape");
+    await expect(settings).toBeHidden();
+    await expect(lengthsRow(page)).toBeFocused();
+    await expect(pomodoroTime(page)).toHaveText("30:00");
+
+    // At phone width the dialog still fits, its action row wrapping.
+    await page.setViewportSize({ width: 360, height: 760 });
+    await page.keyboard.press("Enter");
+    await expect(settings).toBeVisible();
+    await capture(page, "clock-pomodoro-settings-narrow");
   });
 });
 

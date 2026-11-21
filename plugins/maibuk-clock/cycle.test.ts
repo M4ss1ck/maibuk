@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_POMODORO_SETTINGS,
   INITIAL_CYCLE,
+  POMODORO_LIMITS,
   addPomodoro,
   advanceCycle,
   dayNumber,
+  isValidPomodoroSettings,
   nextPhase,
   pauseCycle,
   phaseLength,
@@ -35,6 +37,56 @@ describe("DEFAULT_POMODORO_SETTINGS", () => {
       autoStartBreaks: false,
       autoStartPomodoros: false,
     });
+  });
+});
+
+describe("POMODORO_LIMITS", () => {
+  it("allows 1 to 99 minutes and 1 to 12 Pomodoros per cycle", () => {
+    expect(POMODORO_LIMITS).toEqual({
+      minutes: { min: 1, max: 99 },
+      longBreakEvery: { min: 1, max: 12 },
+    });
+  });
+});
+
+describe("isValidPomodoroSettings()", () => {
+  it("accepts the defaults and the limits' boundary values", () => {
+    expect(isValidPomodoroSettings(DEFAULT_POMODORO_SETTINGS)).toBe(true);
+    expect(
+      isValidPomodoroSettings(
+        settings({
+          pomodoroMinutes: 1,
+          shortBreakMinutes: 99,
+          longBreakMinutes: 1,
+          longBreakEvery: 12,
+          autoStartBreaks: true,
+        })
+      )
+    ).toBe(true);
+  });
+
+  it("rejects a value missing a field", () => {
+    const missing: Record<string, unknown> = { ...DEFAULT_POMODORO_SETTINGS };
+    delete missing.autoStartPomodoros;
+    expect(isValidPomodoroSettings(missing)).toBe(false);
+  });
+
+  it("rejects a field that is not the right type", () => {
+    expect(isValidPomodoroSettings({ ...settings(), pomodoroMinutes: "25" })).toBe(false);
+    expect(isValidPomodoroSettings({ ...settings(), shortBreakMinutes: 2.5 })).toBe(false);
+    expect(isValidPomodoroSettings({ ...settings(), autoStartBreaks: "true" })).toBe(false);
+    expect(isValidPomodoroSettings({ ...settings(), autoStartPomodoros: 1 })).toBe(false);
+  });
+
+  it("rejects a value one outside each limit", () => {
+    expect(isValidPomodoroSettings({ ...settings(), longBreakMinutes: 0 })).toBe(false);
+    expect(isValidPomodoroSettings({ ...settings(), pomodoroMinutes: 100 })).toBe(false);
+    expect(isValidPomodoroSettings({ ...settings(), longBreakEvery: 13 })).toBe(false);
+  });
+
+  it("rejects a value that is not an object", () => {
+    expect(isValidPomodoroSettings(null)).toBe(false);
+    expect(isValidPomodoroSettings("settings")).toBe(false);
   });
 });
 
