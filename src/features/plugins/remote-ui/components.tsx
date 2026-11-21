@@ -1141,17 +1141,47 @@ function findScrollableAncestor(start: HTMLElement): HTMLElement | null {
 }
 
 /**
- * The height of everything that renders after the list inside the scroller's
- * content (e.g. the Echoes "Show 200 more" button): from the list's bottom to
- * the bottom of the scroller's last child, so flex gaps, margins, and wrapper
- * padding count too. Both edges move together when the list resizes, so the
- * value does not depend on the list's own height and a re-measure converges
- * instead of oscillating (as the scroller's overflow would).
+ * The height of everything that renders after the list inside the scroller
+ * (e.g. the Echoes "Show 200 more" button), so the list leaves room for it.
+ *
+ * Walking up from the list, the content after it is the elements that follow
+ * the path at each level; the outermost level that has any holds the last of
+ * it, so its bottom, from the list's bottom, covers flex gaps and margins in
+ * between. The containers around that content add their own bottom padding
+ * and border. Only rendered elements count, never a container's own height: a
+ * Plugin page body stretched to the page height (`flex-1`) ends at the same
+ * place however tall the list is, and counting its empty space made the list
+ * keep whatever height it was first measured at. The siblings move with the
+ * list's bottom, so the value does not depend on the list's own height and a
+ * re-measure converges instead of oscillating.
  */
 function trailingSpaceAfter(list: HTMLElement, scroller: HTMLElement): number {
-  const last = scroller.lastElementChild;
-  if (!last) return 0;
-  return Math.max(0, last.getBoundingClientRect().bottom - list.getBoundingClientRect().bottom);
+  const listBottom = list.getBoundingClientRect().bottom;
+  let contentBottom: number | null = null;
+  let enclosing = 0;
+  let node: Element = list;
+  for (let parent = node.parentElement; parent; parent = node.parentElement) {
+    let levelBottom: number | null = null;
+    for (let next = node.nextElementSibling; next; next = next.nextElementSibling) {
+      const rect = next.getBoundingClientRect();
+      if (rect.bottom - rect.top <= 0) continue;
+      const bottom = rect.bottom + pixelsOf(getComputedStyle(next).marginBottom);
+      levelBottom = Math.max(levelBottom ?? bottom, bottom);
+    }
+    // Content at an outer level renders after the inner levels' content, and
+    // its position already includes the padding of the containers between.
+    if (levelBottom !== null) {
+      contentBottom = levelBottom;
+      enclosing = 0;
+    }
+    // The scroller's own padding and borders are the caller's to subtract.
+    if (parent === scroller) break;
+    const style = getComputedStyle(parent);
+    enclosing += pixelsOf(style.paddingBottom) + pixelsOf(style.borderBottomWidth);
+    node = parent;
+  }
+  const after = contentBottom === null ? 0 : Math.max(0, contentBottom - listBottom);
+  return after + enclosing;
 }
 
 /** A computed CSS length in pixels, 0 when absent or unparsable. */
