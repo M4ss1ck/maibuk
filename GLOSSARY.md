@@ -652,6 +652,11 @@ _Avoid_: stats, metrics (reserved for writing data), system usage
 
 Accepted in `docs/adr/`; the app does not work this way yet. ADR 0004 also widens Reading Position to cover the Last Opened Chapter.
 
+**E-ink Mode**:
+A per-device switch that suits Maibuk to an e-ink screen: the app's own colors turn grayscale, nothing moves, and color never carries meaning alone. Light or Dark still decides whether text is black on white or white on black, and what the author colored (Canvas items, Covers, highlights) keeps its colors. The author turns it on; Maibuk never detects the screen.
+_UI_: en "E-ink mode" / es "Modo tinta electrónica"
+_Avoid_: e-paper mode, paper mode, reading mode, monochrome theme
+
 **Plugin**:
 A packaged addition to Maibuk that adds its own Commands, pages, Settings rows, or buttons without changing Maibuk itself, and reaches the author's work only through the Plugin Permissions it was granted. Maibuk's own and the author's Plugins work the same way (ADR 0019).
 _Avoid_: extension (TipTap's word in code), add-on, mod
