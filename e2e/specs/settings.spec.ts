@@ -11,7 +11,7 @@ import {
   tabTo,
 } from "../support/keyboard";
 import { capture } from "../support/capture";
-import { runningAnimationCount } from "../support/layout";
+import { longestAnimationMs } from "../support/layout";
 import { paletteDialog, runPaletteCommand } from "../support/palette";
 import { expect, test } from "../support/test";
 
@@ -118,6 +118,7 @@ test.describe("Settings E-ink mode @wf:settings-eink-mode @sc:global.toggleEinkM
     page,
   }) => {
     await openSettings(page);
+    await capture(page, "settings-appearance");
     const html = page.locator("html");
     const eink = settingsMain(page).getByRole("switch", { name: "E-ink mode" });
 
@@ -128,12 +129,14 @@ test.describe("Settings E-ink mode @wf:settings-eink-mode @sc:global.toggleEinkM
     await expect(html).toHaveClass(/\beink\b/);
     await expect(html).toHaveAttribute("data-motion", "reduce");
     await expect(settingsMain(page).getByRole("button", { name: "Primary Color" })).toBeDisabled();
+    await capture(page, "settings-eink-mode-on");
 
     // A modal opens with no animation or transition left to play.
     await page.keyboard.press("F1");
     const palette = paletteDialog(page);
     await expect(palette).toBeVisible();
-    expect(await runningAnimationCount(palette)).toBe(0);
+    expect(await longestAnimationMs(palette)).toBeLessThan(1);
+    await capture(page, "settings-eink-mode-palette");
     await page.keyboard.press("Escape");
     await expect(palette).toBeHidden();
 

@@ -2130,6 +2130,18 @@ li.footnote-item,
   outline-offset: -1px;
 }
 
+/* State drawn by a white thumb or a shadow alone vanishes on paper: the
+   Switch thumb gets an ink edge, and a pressed toggle an ink outline. */
+.eink .switch-thumb {
+  background-color: var(--color-background);
+  border: 2px solid var(--color-foreground);
+}
+
+.eink [aria-pressed="true"] {
+  outline: 2px solid var(--color-foreground);
+  outline-offset: -2px;
+}
+
 .eink :focus-visible {
   /* biome-ignore lint/complexity/noImportantStyles: component focus styles outrank a bare :focus-visible; the ring must survive. */
   outline: 2px solid var(--color-foreground) !important;

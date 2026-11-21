@@ -3,8 +3,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 // Issue #901: E-ink Mode keeps the semantic tokens but pins them to a
-// three-value black/white/gray palette. Unit 1 puts class "eink" on <html>
-// beside "dark", so every `.dark ...` override needs an identical `.eink`
+// three-value black/white/gray palette. ThemeProvider puts class "eink" on
+// <html> beside "dark", so every `.dark ...` override needs an identical `.eink`
 // counterpart; equal specificity alone does not reach rules the selector text
 // never matches.
 const source = readFileSync(join(process.cwd(), "src/index.css"), "utf8");
@@ -163,5 +163,19 @@ describe("E-ink palette", () => {
       }
     }
     expect([...missing]).toEqual([]);
+  });
+
+  // On paper a white Switch thumb and a shadow-drawn pressed state both vanish,
+  // so each carries an ink edge instead.
+  it("draws the Switch thumb and pressed toggles in ink", () => {
+    const switchSource = readFileSync(join(process.cwd(), "src/components/ui/Switch.tsx"), "utf8");
+    expect(switchSource).toContain("switch-thumb");
+    const rules = parseRules(stripComments(source));
+    const bodyOf = (selector: string) =>
+      rules.find((rule) => rule.selectors.includes(selector))?.body ?? "";
+    expect(bodyOf(".eink .switch-thumb")).toMatch(/border:\s*2px solid var\(--color-foreground\)/);
+    expect(bodyOf('.eink [aria-pressed="true"]')).toMatch(
+      /outline:\s*2px solid var\(--color-foreground\)/
+    );
   });
 });
