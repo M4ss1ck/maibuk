@@ -98,7 +98,10 @@ export async function openChapter(page: Page) {
 
 export async function startDictation(page: Page) {
   await page.keyboard.press("ControlOrMeta+Shift+Space");
-  await expect(dictationStatus(page)).toHaveText(/Dictation on, English/);
+  // "Dictation on" is announced once the model has loaded into the Worker and
+  // the microphone started; on a busy host the load alone outlasts the
+  // default 5 s, so the wait is bounded like the model download above.
+  await expect(dictationStatus(page)).toHaveText(/Dictation on, English/, { timeout: 60_000 });
 }
 
 export async function stopDictation(page: Page) {
