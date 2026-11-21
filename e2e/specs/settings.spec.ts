@@ -11,6 +11,8 @@ import {
   tabTo,
 } from "../support/keyboard";
 import { capture } from "../support/capture";
+import { runningAnimationCount } from "../support/layout";
+import { paletteDialog, runPaletteCommand } from "../support/palette";
 import { expect, test } from "../support/test";
 
 test.use({ library: "oneBookThreeChapters" });
@@ -108,6 +110,40 @@ test.describe("Settings tray Resource Usage @wf:settings-tray-resource-usage", (
     await expect(palette.getByText("No results", { exact: true })).toBeVisible();
     await expect(palette.getByRole("option", { name: label, exact: true })).toHaveCount(0);
     await page.keyboard.press("Escape");
+  });
+});
+
+test.describe("Settings E-ink mode @wf:settings-eink-mode @sc:global.toggleEinkMode", () => {
+  test("the switch turns E-ink mode on by keyboard, stills modals, persists, and the Command turns it off", async ({
+    page,
+  }) => {
+    await openSettings(page);
+    const html = page.locator("html");
+    const eink = settingsMain(page).getByRole("switch", { name: "E-ink mode" });
+
+    await expect(eink).not.toBeChecked();
+    await tabTo(page, eink);
+    await page.keyboard.press("Space");
+    await expect(eink).toBeChecked();
+    await expect(html).toHaveClass(/\beink\b/);
+    await expect(html).toHaveAttribute("data-motion", "reduce");
+    await expect(settingsMain(page).getByRole("button", { name: "Primary Color" })).toBeDisabled();
+
+    // A modal opens with no animation or transition left to play.
+    await page.keyboard.press("F1");
+    const palette = paletteDialog(page);
+    await expect(palette).toBeVisible();
+    expect(await runningAnimationCount(palette)).toBe(0);
+    await page.keyboard.press("Escape");
+    await expect(palette).toBeHidden();
+
+    await page.reload();
+    await expect(html).toHaveClass(/\beink\b/);
+    await expect(eink).toBeChecked();
+
+    await runPaletteCommand(page, "Toggle E-ink mode");
+    await expect(html).not.toHaveClass(/\beink\b/);
+    await expect(eink).not.toBeChecked();
   });
 });
 

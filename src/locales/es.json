@@ -1396,7 +1396,7 @@
     "gotoCanvas": "Ir a Lienzos",
     "gotoEphemeral": "Ir a Efímero",
     "toggleTheme": "Cambiar tema",
-    "toggleEinkMode": "Modo tinta electrónica",
+    "toggleEinkMode": "Alternar modo tinta electrónica",
     "toggleShortcutHints": "Alternar atajos visuales",
     "toggleAlwaysOnTop": "Alternar siempre visible",
     "openReleaseNotes": "Mostrar novedades",
@@ -2012,7 +2012,7 @@
       "settings": {
         "appearance": {
           "title": "Apariencia",
-          "body": "Tema, fuente, tamaño de letra y el color principal que marca los controles activos."
+          "body": "Tema, modo tinta electrónica para pantallas de papel electrónico, fuente, tamaño de letra y el color principal que marca los controles activos."
         },
         "window": {
           "title": "Ventana",

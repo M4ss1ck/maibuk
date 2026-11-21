@@ -1390,7 +1390,7 @@
     "gotoCanvas": "Go to Canvas",
     "gotoEphemeral": "Go to Ephemeral",
     "toggleTheme": "Cycle theme",
-    "toggleEinkMode": "E-ink mode",
+    "toggleEinkMode": "Toggle E-ink mode",
     "toggleShortcutHints": "Toggle shortcut hints",
     "toggleAlwaysOnTop": "Toggle always on top",
     "openReleaseNotes": "Show what's new",
@@ -2000,7 +2000,7 @@
       "settings": {
         "appearance": {
           "title": "Appearance",
-          "body": "Theme, font, font size and the primary color that marks active controls."
+          "body": "Theme, E-ink mode for e-paper screens, font, font size and the primary color that marks active controls."
         },
         "window": {
           "title": "Window",

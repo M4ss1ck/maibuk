@@ -161,7 +161,7 @@ export const TUTORIAL_SECTIONS: readonly TutorialSection[] = [
     route: "/settings",
     nameKey: "tutorial.sections.settings",
     steps: [
-      step("settings.appearance", []),
+      step("settings.appearance", ["E-ink Mode"]),
       step("settings.window", []),
       step("settings.general", []),
       step("settings.shortcuts", [
@@ -246,7 +246,6 @@ export const TUTORIAL_OUT_OF_SCOPE_TERMS: Readonly<Record<string, string>> = {
   "Entity Sync": "architecture vocabulary (ADR 0006); never shown to the author",
   "Plugin Platforms":
     "a manifest field the Plugin author writes, never shown on screen; Android Plugins are not shown to users yet (#516)",
-  "E-ink Mode": "decided, not built (#898); there is no switch in the app to point at",
   Plugin: "decided, not built (ADR 0019); there is no Plugin in the app to point at",
   "Built-in Plugin": "decided, not built (ADR 0019); there is no Plugin in the app to point at",
   "Plugin Directory": "decided, not built (ADR 0020); there is no Plugin in the app to point at",
