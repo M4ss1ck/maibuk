@@ -112,15 +112,21 @@ describe("CI workflow", () => {
 
   // A PR pays for the tests its diff reaches, not the whole suite; the guards
   // cover the tests that read the repo from disk, which the import graph
-  // cannot see (issue #853).
+  // cannot see (issue #853). Hub files such as src/locales/en.json reach most of
+  // the suite, so this lane is sharded three ways like the full run; the guards
+  // run once, on shard 1 (issue #905).
   it("runs only the tests a PR reaches, plus the guards, unless a trigger changed", () => {
     expect(job("tests")).toContain(
       ["if: $", "{{ needs.changes.outputs.full == 'true' }}"].join("")
     );
     const changed = job("tests-changed");
     expect(changed).toContain(["if: $", "{{ needs.changes.outputs.full == 'false' }}"].join(""));
+    expect(changed).toContain("shard: [1, 2, 3]");
+    expect(changed).toContain("fail-fast: false");
     expect(changed).toContain('run: pnpm exec vitest run --changed "$BASE"');
+    expect(changed).toContain(["--shard=$", "{{ matrix.shard }}/3"].join(""));
     expect(changed).toContain("run: pnpm test:guards");
+    expect(changed).toContain(["if: $", "{{ matrix.shard == 1 }}"].join(""));
     expect(changed).not.toContain("--coverage");
   });
 
