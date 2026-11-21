@@ -138,6 +138,13 @@ export function GlobalShortcuts() {
       },
     },
     {
+      id: "global.toggleEinkMode",
+      onTrigger: () => {
+        const { eink, setEink } = useThemeStore.getState();
+        setEink(!eink);
+      },
+    },
+    {
       id: "global.themeSystem",
       onTrigger: () => {
         setTheme("system");

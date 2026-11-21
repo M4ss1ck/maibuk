@@ -281,13 +281,13 @@ describe("Settings outline motion", () => {
   // shows stacked slivers of two half-clipped labels.
   it("a fold cuts at most one of the section's rows at any offset", async () => {
     const { moveTo } = renderOutline("appearance");
-    const fourRows = rowKeysOf("appearance");
-    expect(fourRows).toHaveLength(4);
+    const fiveRows = rowKeysOf("appearance");
+    expect(fiveRows).toHaveLength(5);
 
     await act(async () => moveTo("general"));
 
     const folding = resizes("appearance");
-    expect(folding.map((call) => call.key)).toEqual(fourRows);
+    expect(folding.map((call) => call.key)).toEqual(fiveRows);
     // The edge really sweeps: at every offset at most one row is between full
     // and nothing, and at some offset exactly one is.
     for (let i = 0; i < folding[0].keyframes.length; i++) {
@@ -339,8 +339,8 @@ describe("Settings outline motion", () => {
 
     // Half way through the fold, which is all the author sees when they scroll
     // back before it ends. Each row paints half a row: the edge sits at the
-    // middle of the stack, so the top two rows are full and the bottom two are
-    // nothing.
+    // middle of the stack, so the top two rows are full, the third is cut in
+    // half, and the bottom two are nothing.
     for (const call of folding) call.animation.seek(ROW_HEIGHT / 2);
     const before = calls.length;
 
@@ -354,12 +354,13 @@ describe("Settings outline motion", () => {
     expect(reversing.map((call) => startHeight(call))).toEqual([
       `${ROW_HEIGHT}px`,
       `${ROW_HEIGHT}px`,
+      `${ROW_HEIGHT / 2}px`,
       "0px",
       "0px",
     ]);
     expect(
       reversing.reduce((total, call) => total + Number.parseFloat(startHeight(call) ?? "0"), 0)
-    ).toBeCloseTo(2 * ROW_HEIGHT, 4);
+    ).toBeCloseTo(2.5 * ROW_HEIGHT, 4);
     expect(reversing[0].keyframes.at(-1)!.height).toBe(`${ROW_HEIGHT}px`);
     expect(reversing.every(onlyHeight)).toBe(true);
     // Half the distance, half the time: a reversal with little left to travel

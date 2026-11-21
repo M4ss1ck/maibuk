@@ -232,6 +232,12 @@ export const COMMANDS = {
     defaults: [],
     voice: { phrases: { en: ["dark theme"], es: ["tema oscuro"] } },
   },
+  "global.toggleEinkMode": {
+    labelKey: "shortcuts.toggleEinkMode",
+    contexts: ["global"],
+    defaults: [],
+    keywordsKey: "shortcuts.keywords.toggleEinkMode",
+  },
   "global.themeSystem": {
     labelKey: "settings.system",
     contexts: ["global"],

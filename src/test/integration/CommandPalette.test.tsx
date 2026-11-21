@@ -31,6 +31,7 @@ import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { deferAnimationFrames } from "@/test/support/animation-frame";
+import { useThemeStore } from "@/features/theme/store";
 
 describe("Command Palette", () => {
   it("opens with F1 with focus in the search field, in Commands mode", async () => {
@@ -228,6 +229,18 @@ describe("Command Palette", () => {
     expect(options).toHaveLength(1);
     expect(options[0]).toHaveTextContent("Dark");
     expect(within(reopened).queryByText("Commands")).toBeNull();
+  });
+
+  it("toggles E-ink mode with the global.toggleEinkMode Command on and off", async () => {
+    renderApp("/");
+    await settleOn("/");
+    useThemeStore.setState({ eink: false });
+
+    expect(await runCommand("global.toggleEinkMode", { source: "voice" })).toBe("ran");
+    expect(useThemeStore.getState().eink).toBe(true);
+
+    expect(await runCommand("global.toggleEinkMode", { source: "voice" })).toBe("ran");
+    expect(useThemeStore.getState().eink).toBe(false);
   });
 
   it("lists Dark on a Book page and running it applies dark", async () => {
