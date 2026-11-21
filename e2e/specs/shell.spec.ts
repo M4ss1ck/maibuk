@@ -320,7 +320,7 @@ test.describe("main sidebar keyboard resize @wf:shell-nav-sidebar-resize", () =>
 });
 
 test.describe("g sequences @wf:shell-goto-sequences", () => {
-  test("g p, g n, g c, g e, g m, g s go to each screen @sc:global.gotoProjects @sc:global.gotoNotes @sc:global.gotoCanvas @sc:global.gotoEphemeral @sc:global.gotoMetrics @sc:global.gotoSettings @palette-entry", async ({
+  test("g b, g n, g c, g e, g m, g s go to each screen @sc:global.gotoProjects @sc:global.gotoNotes @sc:global.gotoCanvas @sc:global.gotoEphemeral @sc:global.gotoMetrics @sc:global.gotoSettings @palette-entry", async ({
     page,
   }) => {
     await openHome(page);
@@ -330,7 +330,7 @@ test.describe("g sequences @wf:shell-goto-sequences", () => {
       ["e", /\/ephemeral$/, "Ephemeral"],
       ["m", /\/metrics$/, "Metrics"],
       ["s", /\/settings$/, "Settings"],
-      ["p", /\/$/, "My Books"],
+      ["b", /\/$/, "My Books"],
     ];
     for (const [key, url, heading] of screens) {
       await page.keyboard.press("g");

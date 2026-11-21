@@ -156,7 +156,7 @@ export const ROWS: MatrixRow[] = [
   {
     id: "shell-goto-sequences",
     area: "shell",
-    workflow: "g p, g n, g c, g e, g m, g s from Home; asserts: URL + heading per route",
+    workflow: "g b, g n, g c, g e, g m, g s from Home; asserts: URL + heading per route",
     edges: ["Sequences ignored while typing in an input (isTypingTarget)"],
     terms: [],
     shortcuts: [
