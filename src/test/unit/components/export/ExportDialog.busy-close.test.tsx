@@ -71,7 +71,7 @@ describe("ExportDialog busy close", () => {
     mockGenerateEpub.mockReturnValue(generation.promise);
     const onClose = vi.fn();
     await renderAndStartExport(onClose);
-    expect(await screen.findByText("export.preparingStatus")).toBeInTheDocument();
+    await screen.findByText("export.preparingStatus");
 
     closeThroughModalStore();
 
@@ -87,7 +87,7 @@ describe("ExportDialog busy close", () => {
     mockGenerateEpub.mockResolvedValue(blob);
     const onClose = vi.fn();
     await renderAndStartExport(onClose);
-    expect(await screen.findByText("export.savingStatus")).toBeInTheDocument();
+    await screen.findByText("export.savingStatus");
 
     closeThroughModalStore();
 
@@ -100,7 +100,7 @@ describe("ExportDialog busy close", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const onClose = vi.fn();
     await renderAndStartExport(onClose);
-    expect(await screen.findByText("boom")).toBeInTheDocument();
+    await screen.findByText("boom");
 
     closeThroughModalStore();
 

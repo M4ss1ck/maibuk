@@ -817,7 +817,7 @@ describe("NotesList", () => {
 
     dropAt(container, dataTransfer, 20);
 
-    expect(await screen.findByRole("status")).toBeInTheDocument();
+    await screen.findByRole("status");
     await waitFor(() => expect(onImportFiles).toHaveBeenCalledOnce());
     expect(screen.getByRole("status")).toBeInTheDocument();
     resolveImport?.();
@@ -1552,7 +1552,7 @@ describe("NotesList item menu", () => {
     await arrowFromFirstRowTo(user, "common.moreActionsFor");
     await user.keyboard("{Enter}");
 
-    expect(await screen.findByRole("menu")).toBeInTheDocument();
+    await screen.findByRole("menu");
   });
 
   it("opens from the focused row with Shift+F10 and closes back to it with Escape", async () => {
@@ -1790,13 +1790,13 @@ describe("virtualized Notes tree (#562): small viewport", () => {
     await user.keyboard("{Enter}");
     expect(screen.queryByText("Book note")).not.toBeInTheDocument();
     await user.keyboard("{Enter}");
-    expect(await screen.findByText("Book note")).toBeInTheDocument();
+    await screen.findByText("Book note");
 
     novelToggle.focus();
     await user.keyboard("{Enter}");
     expect(screen.queryByText("Book note")).not.toBeInTheDocument();
     await user.keyboard("{Enter}");
-    expect(await screen.findByText("Book note")).toBeInTheDocument();
+    await screen.findByText("Book note");
 
     // The Unfiled group's toggle is on the same forward Tab pass.
     dateToggle.focus();
@@ -1837,7 +1837,7 @@ describe("virtualized Notes tree (#562): small viewport", () => {
     await user.keyboard("{Enter}");
     expect(screen.queryByText("Book note")).not.toBeInTheDocument();
     await user.keyboard("{Enter}");
-    expect(await screen.findByText("Book note")).toBeInTheDocument();
+    await screen.findByText("Book note");
     await user.keyboard("{ArrowRight}");
     expect(addNote).toHaveFocus();
   });

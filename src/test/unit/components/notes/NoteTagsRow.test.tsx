@@ -44,7 +44,7 @@ describe("NoteTagsRow", () => {
 
     render(<NoteTagsRow tags={["draft", "ideas", "research"]} dateLabel="Edited today" />);
 
-    expect(await screen.findByRole("button", { name: "+3" })).toBeInTheDocument();
+    await screen.findByRole("button", { name: "+3" });
     expect(screen.queryByRole("button", { name: "+2" })).not.toBeInTheDocument();
   });
 
@@ -63,7 +63,7 @@ describe("NoteTagsRow", () => {
     const row = screen.getAllByText("Edited today")[0].parentElement;
 
     expect(row?.textContent).toMatch(/^Edited todayAdd tag/);
-    expect(await screen.findByRole("button", { name: "+3" })).toBeInTheDocument();
+    await screen.findByRole("button", { name: "+3" });
     expect(screen.queryByRole("button", { name: "+2" })).not.toBeInTheDocument();
   });
 });

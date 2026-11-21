@@ -180,7 +180,7 @@ describe("BackupSection", () => {
 
     render(<BackupSection />);
 
-    expect(await screen.findByText("close")).toBeInTheDocument();
+    await screen.findByText("close");
     expect(mockTranslate).toHaveBeenCalledWith("backup.trigger.close");
   });
 
@@ -564,7 +564,7 @@ describe("BackupSection", () => {
       await typeDirectory(user, input, "/mnt/slow");
       await user.keyboard("{Enter}");
 
-      expect(await screen.findByText("common.loading")).toBeInTheDocument();
+      await screen.findByText("common.loading");
       expect(screen.getByLabelText("backup.directoryLabel")).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "backup.createBackup" })).toBeInTheDocument();
 
@@ -583,7 +583,7 @@ describe("BackupSection", () => {
       // Some ICU versions put a no-break space in "a. m."; the text matcher
       // collapses the page's whitespace but not ours, so collapse it here too.
       const shown = (language: string) => formatBackupDate(created, language).replace(/\s+/g, " ");
-      expect(await screen.findByText(shown("es"))).toBeInTheDocument();
+      await screen.findByText(shown("es"));
       expect(screen.queryByText(shown("en"))).not.toBeInTheDocument();
     });
   });
@@ -757,7 +757,7 @@ describe("BackupSection", () => {
         })
       );
 
-      expect(await screen.findByText("backup.deleteSomeFailed:1")).toBeInTheDocument();
+      await screen.findByText("backup.deleteSomeFailed:1");
       expect(mockAdapter.deleteBackup).toHaveBeenCalledTimes(3);
       expect(success).toHaveBeenCalledWith("backup.deletedCount:2");
       await user.keyboard("{Escape}");

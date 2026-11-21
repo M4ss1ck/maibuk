@@ -163,7 +163,7 @@ describe("Map editor uploads (#756)", () => {
       await user.keyboard("{Enter}");
 
       const limit = (ASSET_MAX_BYTES / (1024 * 1024)).toFixed(1);
-      expect(await screen.findByText(format(en["upload.tooLarge"], { limit }))).toBeInTheDocument();
+      await screen.findByText(format(en["upload.tooLarge"], { limit }));
       expect(storage.get(ASSETS_KEY)).toBeUndefined();
       expect(runtime.editor?.getSnapshot().elements).toEqual([]);
 
@@ -191,7 +191,7 @@ describe("Map editor uploads (#756)", () => {
       expect(upload).toHaveFocus();
       await user.keyboard("{Enter}");
 
-      expect(await screen.findByText(en["upload.invalid"])).toBeInTheDocument();
+      await screen.findByText(en["upload.invalid"]);
       expect(storage.get(ASSETS_KEY)).toBeUndefined();
       expect(runtime.editor?.getSnapshot().elements).toEqual([]);
 

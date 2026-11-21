@@ -603,13 +603,13 @@ describe("renderPage", () => {
       const page = await host.renderPage("main");
       const user = userEvent.setup();
 
-      expect(await screen.findByRole("heading", { name: "Find" })).toBeInTheDocument();
+      await screen.findByRole("heading", { name: "Find" });
 
       const field = screen.getByRole("textbox", { name: "Search" });
       for (let i = 0; i < 10 && document.activeElement !== field; i++) await user.tab();
       expect(field).toHaveFocus();
       await user.keyboard("dune");
-      expect(await screen.findByText("You typed: dune")).toBeInTheDocument();
+      await screen.findByText("You typed: dune");
 
       const go = screen.getByRole("button", { name: "Go" });
       for (let i = 0; i < 10 && document.activeElement !== go; i++) await user.tab();
@@ -685,7 +685,7 @@ describe("renderPage", () => {
       for (let i = 0; i < 10 && document.activeElement !== trigger; i++) await user.tab();
       expect(trigger).toHaveFocus();
       await user.keyboard("{Enter}");
-      expect(await screen.findByRole("dialog", { name: "Details" })).toBeInTheDocument();
+      await screen.findByRole("dialog", { name: "Details" });
 
       // The Worker stops with the dialog open: the host must still dismiss and
       // return focus, without waiting for an echo over the closed port.

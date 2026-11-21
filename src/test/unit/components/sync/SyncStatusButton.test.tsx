@@ -133,7 +133,7 @@ describe("SyncStatusButton", () => {
     const scopeSelect = screen.getByRole("button", { name: /sync\.scopeAll/ });
     scopeSelect.focus();
     await user.keyboard("{ArrowDown}");
-    expect(await screen.findByRole("listbox")).toBeInTheDocument();
+    await screen.findByRole("listbox");
     expect(document.activeElement).toHaveAttribute("role", "option");
 
     await user.keyboard("{ArrowDown}");

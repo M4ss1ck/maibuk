@@ -627,7 +627,7 @@ describe("ChapterList", () => {
 
       await user.keyboard("{Control>}{Shift>}X{/Shift}{/Control}");
 
-      expect(await screen.findByText("common.deleteConfirm")).toBeInTheDocument();
+      await screen.findByText("common.deleteConfirm");
     });
 
     it("lets the title use the action area until the overlay is revealed", () => {
@@ -713,7 +713,7 @@ describe("ChapterList", () => {
       expect(screen.getByRole("menuitem", { name: "chapters.deleteChapter" })).toHaveFocus();
       await user.keyboard("{Enter}");
 
-      expect(await screen.findByText("common.deleteConfirm")).toBeInTheDocument();
+      await screen.findByText("common.deleteConfirm");
     });
 
     it("Escape closes the item menu and keeps focus on that chapter", async () => {
@@ -1340,7 +1340,7 @@ describe("ChapterList", () => {
       dispatchDragEvent(grid, "dragover", dataTransfer, 55);
       dispatchDragEvent(grid, "drop", dataTransfer, 55);
 
-      expect(await screen.findByRole("status")).toBeInTheDocument();
+      await screen.findByRole("status");
       await waitFor(() => expect(onImportFiles).toHaveBeenCalledTimes(1));
       await act(async () => rejectImport?.(error));
       await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
@@ -1549,7 +1549,7 @@ describe("nested row controls by keyboard", () => {
     const edit = screen.getByRole("button", { name: "chapters.editChapter" });
     await arrowToButton(user, row, edit);
     await user.keyboard(key);
-    expect(await screen.findByDisplayValue("First")).toBeInTheDocument();
+    await screen.findByDisplayValue("First");
     expect(onSelect).not.toHaveBeenCalled();
   });
 
@@ -1565,7 +1565,7 @@ describe("nested row controls by keyboard", () => {
     const del = screen.getByRole("button", { name: "chapters.deleteChapter" });
     await arrowToButton(user, row, del);
     await user.keyboard(key);
-    expect(await screen.findByText("common.deleteConfirm")).toBeInTheDocument();
+    await screen.findByText("common.deleteConfirm");
     expect(onSelect).not.toHaveBeenCalled();
   });
 });

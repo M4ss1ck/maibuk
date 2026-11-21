@@ -155,7 +155,7 @@ describe("DictationBar", () => {
     await user.tab();
     expect(screen.getByRole("button", { name: /download a dictation model/i })).toHaveFocus();
     await user.keyboard("{Enter}");
-    expect(await screen.findByText("settings page")).toBeInTheDocument();
+    await screen.findByText("settings page");
     expect(useSettingsRevealStore.getState().pendingRowId).toBe("dictationEnabled");
     expect(toggle).not.toHaveBeenCalled();
   });
@@ -167,7 +167,7 @@ describe("DictationBar", () => {
     await user.tab();
     await user.tab();
     await user.keyboard("{Enter}");
-    expect(await screen.findByText("settings page")).toBeInTheDocument();
+    await screen.findByText("settings page");
     // The row request waits for Settings to finish loading before it scrolls,
     // which a bare hash link did not.
     expect(useSettingsRevealStore.getState()).toMatchObject({

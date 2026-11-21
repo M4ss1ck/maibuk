@@ -197,7 +197,7 @@ describe("Echoes report page", () => {
     try {
       const page = await host.renderPage(REPORT_PAGE_ID);
 
-      expect(await screen.findByRole("tab", { name: en["tab.nearby"] })).toBeInTheDocument();
+      await screen.findByRole("tab", { name: en["tab.nearby"] });
       expect(screen.getByLabelText(en["report.book"])).toHaveTextContent("Dune");
       expect(screen.getByLabelText(en["report.scope"])).toHaveTextContent(en.wholeBook);
 
@@ -273,11 +273,11 @@ describe("Echoes report page", () => {
       // The arrow changes what the visible panel shows, not just an attribute:
       // the overused tab's empty line replaces the nearby tab's rows.
       await user.keyboard("{ArrowRight}");
-      expect(await screen.findByText(en["empty.overused"])).toBeInTheDocument();
+      await screen.findByText(en["empty.overused"]);
       expect(screen.queryByRole("option", { name: /harbor/ })).not.toBeInTheDocument();
 
       await user.keyboard("{ArrowRight}");
-      expect(await screen.findByRole("option", { name: /The harbor was/ })).toBeInTheDocument();
+      await screen.findByRole("option", { name: /The harbor was/ });
       expect(screen.queryByText(en["empty.overused"])).not.toBeInTheDocument();
 
       await page.unmount();
@@ -302,7 +302,7 @@ describe("Echoes report page", () => {
 
       // Switch to the other Book: its own Echo appears.
       await pickOption(user, en["report.book"], "Emma");
-      expect(await screen.findByRole("option", { name: /garden/ })).toBeInTheDocument();
+      await screen.findByRole("option", { name: /garden/ });
 
       await page.unmount();
     } finally {
@@ -553,7 +553,7 @@ describe("Echoes report page", () => {
         ).toBe(true)
       );
 
-      expect(await screen.findByText(en.stale)).toBeInTheDocument();
+      await screen.findByText(en.stale);
       expect(screen.getAllByRole("option").map((row) => row.textContent)).toEqual(before);
 
       const refresh = screen.getByRole("button", { name: en.refresh });
@@ -603,7 +603,7 @@ describe("Echoes report page", () => {
       await waitFor(() =>
         expect(screen.getByLabelText(en["report.scope"])).toHaveTextContent("Chapter One")
       );
-      expect(await screen.findByRole("option", { name: /harbor/ })).toBeInTheDocument();
+      await screen.findByRole("option", { name: /harbor/ });
       expect(screen.queryByRole("option", { name: /shore/ })).not.toBeInTheDocument();
 
       await page.unmount();
@@ -631,7 +631,7 @@ describe("Echoes report page", () => {
       expect(phrase).toHaveFocus();
 
       // Its panel says the check is off rather than showing an empty list.
-      expect(await screen.findByText(en["kind.off"])).toBeInTheDocument();
+      await screen.findByText(en["kind.off"]);
 
       await page.unmount();
     } finally {
@@ -669,7 +669,7 @@ describe("Echoes report page", () => {
     startEchoes(createPluginClient(host.port), servePluginUi);
     try {
       const page = await host.renderPage(REPORT_PAGE_ID);
-      expect(await screen.findByText("Limited support for fr")).toBeInTheDocument();
+      await screen.findByText("Limited support for fr");
       await page.unmount();
     } finally {
       await host.stop();
@@ -683,7 +683,7 @@ describe("Echoes report page", () => {
     try {
       const page = await host.renderPage(REPORT_PAGE_ID);
 
-      expect(await screen.findByRole("option", { name: /shore/ })).toBeInTheDocument();
+      await screen.findByRole("option", { name: /shore/ });
       expect(screen.queryByRole("option", { name: /harbor/ })).not.toBeInTheDocument();
 
       await page.unmount();
@@ -701,10 +701,10 @@ describe("Echoes report page", () => {
     startEchoes(createPluginClient(host.port), servePluginUi);
     try {
       const page = await host.renderPage(REPORT_PAGE_ID);
-      expect(await screen.findByRole("tab", { name: en["tab.nearby"] })).toBeInTheDocument();
+      await screen.findByRole("tab", { name: en["tab.nearby"] });
 
       await waitFor(() => host.setLanguage("es"));
-      expect(await screen.findByRole("tab", { name: es["tab.nearby"] })).toBeInTheDocument();
+      await screen.findByRole("tab", { name: es["tab.nearby"] });
 
       await page.unmount();
     } finally {
@@ -847,7 +847,7 @@ describe("Echoes report page", () => {
       await first.unmount();
 
       const second = await host.renderPage(REPORT_PAGE_ID);
-      expect(await screen.findByRole("option", { name: /harbor/ })).toBeInTheDocument();
+      await screen.findByRole("option", { name: /harbor/ });
       expect(screen.getAllByRole("option").map((row) => row.textContent)).toEqual(before);
       expect(screen.queryByText(en.stale)).not.toBeInTheDocument();
       // No Chapter was read again: the kept report answered the page.
@@ -881,7 +881,7 @@ describe("Echoes report page", () => {
       const second = await host.renderPage(REPORT_PAGE_ID);
       const user = userEvent.setup();
       // The notice shows, and the rows are still the kept ones.
-      expect(await screen.findByText(en.stale)).toBeInTheDocument();
+      await screen.findByText(en.stale);
       expect(screen.getByRole("option", { name: /harbor/ })).toBeInTheDocument();
       expect(reads.mock.calls.length).toBe(computedReads);
 
@@ -891,7 +891,7 @@ describe("Echoes report page", () => {
       await user.keyboard("{Enter}");
       await waitFor(() => expect(screen.queryByText(en.stale)).not.toBeInTheDocument());
       await waitFor(() => expect(reads.mock.calls.length).toBeGreaterThan(computedReads));
-      expect(await screen.findByRole("option", { name: /harbor/ })).toBeInTheDocument();
+      await screen.findByRole("option", { name: /harbor/ });
 
       await second.unmount();
     } finally {
@@ -929,7 +929,7 @@ describe("Echoes report page", () => {
 
       // The kept report remembers the change it missed.
       const second = await host.renderPage(REPORT_PAGE_ID);
-      expect(await screen.findByText(en.stale)).toBeInTheDocument();
+      await screen.findByText(en.stale);
       await second.unmount();
     } finally {
       await host.stop();
@@ -957,7 +957,7 @@ describe("Echoes report page", () => {
       await first.unmount();
 
       const second = await host.renderPage(REPORT_PAGE_ID);
-      expect(await screen.findByRole("option", { name: /shore/ })).toBeInTheDocument();
+      await screen.findByRole("option", { name: /shore/ });
       expect(screen.queryByRole("option", { name: /harbor/ })).not.toBeInTheDocument();
       expect(reads.mock.calls.length).toBe(readsAfterIgnore);
 
@@ -1021,7 +1021,7 @@ describe("Echoes report page", () => {
       await waitFor(() =>
         expect(screen.getByLabelText(en["report.scope"])).toHaveTextContent("Chapter One")
       );
-      expect(await screen.findByRole("option", { name: /harbor/ })).toBeInTheDocument();
+      await screen.findByRole("option", { name: /harbor/ });
       expect(screen.queryByRole("option", { name: /shore/ })).not.toBeInTheDocument();
 
       await second.unmount();
@@ -1044,7 +1044,7 @@ describe("Echoes report page", () => {
       const second = await host.renderPage(REPORT_PAGE_ID);
       // The stored settings differ, so the report recomputes for the new cache
       // key and the ignored row goes.
-      expect(await screen.findByRole("option", { name: /shore/ })).toBeInTheDocument();
+      await screen.findByRole("option", { name: /shore/ });
       await waitFor(() =>
         expect(screen.queryByRole("option", { name: /harbor/ })).not.toBeInTheDocument()
       );
@@ -1082,7 +1082,7 @@ describe("Echoes report page", () => {
       await waitFor(() =>
         expect(screen.getByLabelText(en["report.book"])).toHaveTextContent("Emma")
       );
-      expect(await screen.findByRole("option", { name: /garden/ })).toBeInTheDocument();
+      await screen.findByRole("option", { name: /garden/ });
 
       await second.unmount();
     } finally {
@@ -1139,7 +1139,7 @@ describe("Echoes report page", () => {
 
       // The initial load has resolved, so the header is drawn and the compute
       // bar reports progress; the cold "Checking the Book…" screen is gone.
-      expect(await screen.findByText(en["report.computing"])).toBeInTheDocument();
+      await screen.findByText(en["report.computing"]);
       expect(screen.getByLabelText(en["report.book"])).toBeInTheDocument();
       expect(screen.queryByText(en["report.loading"])).not.toBeInTheDocument();
 

@@ -619,7 +619,7 @@ describe("SelectionToolbar with the Font and Line Height fields", () => {
     await walkRightTo(user, sizeField());
 
     await user.keyboard("{ArrowDown}");
-    expect(await screen.findByRole("listbox")).toBeInTheDocument();
+    await screen.findByRole("listbox");
 
     // Down opens on the current 18, the next Downs step to 24, Up goes back to 20.
     await user.keyboard("{ArrowDown}{ArrowDown}{ArrowUp}{Enter}");

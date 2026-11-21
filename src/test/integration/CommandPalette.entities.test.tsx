@@ -141,7 +141,7 @@ describe("Command Palette entities and pages", () => {
     expect(screen.getByRole("dialog", { name: PALETTE_NAME })).toBeInTheDocument();
     expect(paletteSearch(dialog)).toHaveValue("");
     expect(within(dialog).getByText("Open Chapter")).toBeInTheDocument();
-    expect(await within(dialog).findByText("Showing Open Chapter")).toBeInTheDocument();
+    await within(dialog).findByText("Showing Open Chapter");
 
     // The row carries the Book as its description, so compare names, not text.
     expect(within(dialog).getAllByRole("option").map(optionLabel)).toEqual(["Mine Only"]);
@@ -275,7 +275,7 @@ describe("Command Palette entities and pages", () => {
     // A row every platform has is still there.
     await user.clear(search);
     await user.keyboard(">Choose your preferred theme");
-    expect(await within(dialog).findByRole("option", { name: "Theme" })).toBeInTheDocument();
+    await within(dialog).findByRole("option", { name: "Theme" });
   });
 
   it("drops a deleted Note from Recent on the next open, without an error", async () => {
@@ -325,7 +325,7 @@ describe("Command Palette entities and pages", () => {
     await user.keyboard("{ArrowDown}");
     await waitFor(() => expect(activeResultLabel(search)).toContain("Open Note…"));
     await user.keyboard("{Enter}");
-    expect(await within(dialog).findByText("Showing Open Note")).toBeInTheDocument();
+    await within(dialog).findByText("Showing Open Note");
     expect(within(dialog).getAllByRole("option").map(optionLabel)).toEqual(["Findable"]);
   });
 

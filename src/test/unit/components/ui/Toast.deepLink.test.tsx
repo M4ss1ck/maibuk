@@ -20,7 +20,7 @@ describe("Toast deep-link focus-mode bypass", () => {
     expect(screen.queryByText("should be blocked")).not.toBeInTheDocument();
 
     forceToastError("deep link error");
-    expect(await screen.findByText("deep link error")).toBeInTheDocument();
+    await screen.findByText("deep link error");
 
     document.body.removeChild(focusDiv);
   });
@@ -28,6 +28,6 @@ describe("Toast deep-link focus-mode bypass", () => {
   it("normal toast works without focus-mode", async () => {
     render(<ToastViewport />);
     toast.error("normal error");
-    expect(await screen.findByText("normal error")).toBeInTheDocument();
+    await screen.findByText("normal error");
   });
 });

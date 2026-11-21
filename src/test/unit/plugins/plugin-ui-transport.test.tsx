@@ -229,7 +229,7 @@ describe("the Plugin page's Remote UI transport", () => {
     install(fakeLifecycle({ runtime: runtimeOf(run.broker), status: "ready" }));
 
     renderBoundary();
-    expect(await screen.findByRole("heading", { name: "Hello" })).toBeInTheDocument();
+    await screen.findByRole("heading", { name: "Hello" });
   });
 
   it("shows the could-not-display text when the mount is refused and does not stop the Plugin", async () => {
@@ -262,7 +262,7 @@ describe("the Plugin page's Remote UI transport", () => {
     const lifecycle = fakeLifecycle({ runtime: runtimeOf(first.broker), status: "ready" });
     install(lifecycle);
     renderBoundary();
-    expect(await screen.findByRole("heading", { name: "First" })).toBeInTheDocument();
+    await screen.findByRole("heading", { name: "First" });
     const firstSurface = first.mounts[0].surface;
 
     const second = createRun(sends(() => heading("Second")));
@@ -274,7 +274,7 @@ describe("the Plugin page's Remote UI transport", () => {
     expect(first.unmounts[0].surface).toBe(firstSurface);
     await vi.waitFor(() => expect(second.mounts).toHaveLength(1));
     expect(second.mounts[0].surface).not.toBe(firstSurface);
-    expect(await screen.findByRole("heading", { name: "Second" })).toBeInTheDocument();
+    await screen.findByRole("heading", { name: "Second" });
   });
 
   it("renders nothing and sends no mount while the Plugin is starting", async () => {
@@ -305,7 +305,7 @@ describe("the Plugin page's Remote UI transport", () => {
     act(() => {
       lifecycle.setRuntime(runtimeOf(run.broker), "ready");
     });
-    expect(await screen.findByRole("heading", { name: "Body" })).toBeInTheDocument();
+    await screen.findByRole("heading", { name: "Body" });
     // The content can paint before the mount's `then` clears the pending status,
     // so the status removal is awaited, not read at the instant the heading appears.
     await vi.waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
@@ -323,7 +323,7 @@ describe("the Plugin page's Remote UI transport", () => {
         pending={<p role="status">waiting</p>}
       />
     );
-    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    await screen.findByRole("alert");
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 

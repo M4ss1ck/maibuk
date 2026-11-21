@@ -86,7 +86,7 @@ describe("ExportDialog PDF text warning", () => {
     await choosePdf(user);
     await pressExport(user);
 
-    expect(await screen.findByRole("alertdialog")).toBeInTheDocument();
+    await screen.findByRole("alertdialog");
     expect(mockGeneratePdf).not.toHaveBeenCalled();
   });
 

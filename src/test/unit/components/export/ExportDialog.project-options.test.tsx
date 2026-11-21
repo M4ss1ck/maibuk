@@ -60,7 +60,7 @@ describe("ExportDialog project EPUB options", () => {
       />
     );
 
-    expect(await screen.findByText("Imported EPUB options")).toBeInTheDocument();
+    await screen.findByText("Imported EPUB options");
     expect(screen.getByLabelText("Use Maibuk default styling")).toBeInTheDocument();
     expect(screen.getByLabelText("Include imported CSS")).toBeInTheDocument();
     expect(screen.getByLabelText("Generate Maibuk TOC")).toBeInTheDocument();

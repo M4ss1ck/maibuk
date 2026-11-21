@@ -351,12 +351,12 @@ describe("the narrow editor's bar and regions (#779)", () => {
       await user.keyboard("{Enter}");
       await waitFor(() => expect(full).toHaveAttribute("aria-pressed", "true"));
       // The region grew, and the drawing's own page did not resize with it.
-      expect(await screen.findByLabelText(en["properties.lineStyle"])).toBeInTheDocument();
+      await screen.findByLabelText(en["properties.lineStyle"]);
       expect(runtime.editor?.getSnapshot().doc.page).toEqual(pageBefore);
 
       await user.keyboard("{Enter}");
       await waitFor(() => expect(full).toHaveAttribute("aria-pressed", "false"));
-      expect(await screen.findByLabelText(en["properties.lineStyle"])).toBeInTheDocument();
+      await screen.findByLabelText(en["properties.lineStyle"]);
 
       await page.unmount();
     } finally {

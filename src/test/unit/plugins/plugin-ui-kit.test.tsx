@@ -172,7 +172,7 @@ describe("the Remote UI kit, part 2", () => {
       // The row is the control: Enter on it expands the panel.
       await userEvent.tab();
       await userEvent.keyboard("{Enter}");
-      expect(await screen.findByText("Row one detail")).toBeInTheDocument();
+      await screen.findByText("Row one detail");
 
       // A collection is one Tab stop, so the arrow moves between rows and the
       // row's Enter is the keyboard path to its Item Menu.
@@ -429,7 +429,7 @@ describe("the Remote UI kit, part 2", () => {
       const trigger = screen.getByRole("button", { name: "Open details" });
       await userEvent.tab();
       await userEvent.keyboard("{Enter}");
-      expect(await screen.findByRole("dialog", { name: "Details" })).toBeInTheDocument();
+      await screen.findByRole("dialog", { name: "Details" });
 
       await userEvent.keyboard("{Escape}");
 
@@ -463,9 +463,7 @@ describe("the Remote UI kit, part 2", () => {
       const trigger = screen.getByRole("button", { name: "Ask" });
       await userEvent.tab();
       await userEvent.keyboard("{Enter}");
-      expect(
-        await screen.findByRole("alertdialog", { name: "Delete chapter?" })
-      ).toBeInTheDocument();
+      await screen.findByRole("alertdialog", { name: "Delete chapter?" });
 
       await tabToButton("Confirm");
       await userEvent.keyboard("{Enter}");
@@ -486,7 +484,7 @@ describe("the Remote UI kit, part 2", () => {
       const trigger = screen.getByRole("button", { name: "Options" });
       await userEvent.tab();
       await userEvent.keyboard("{Enter}");
-      expect(await screen.findByText("Popover body")).toBeInTheDocument();
+      await screen.findByText("Popover body");
 
       await userEvent.keyboard("{Escape}");
       expect(screen.queryByText("Popover body")).not.toBeInTheDocument();
@@ -509,7 +507,7 @@ describe("the Remote UI kit, part 2", () => {
       expect(await screen.findByRole("tooltip")).toHaveTextContent("Map style");
 
       await userEvent.keyboard("{Enter}");
-      expect(await screen.findByText("Style body")).toBeInTheDocument();
+      await screen.findByText("Style body");
 
       await userEvent.keyboard("{Escape}");
       expect(screen.queryByText("Style body")).not.toBeInTheDocument();
@@ -548,7 +546,7 @@ describe("the Remote UI kit, part 2", () => {
       const trigger = screen.getByRole("button", { name: "Open details" });
       await userEvent.tab();
       await userEvent.keyboard("{Enter}");
-      expect(await screen.findByRole("dialog", { name: "Details" })).toBeInTheDocument();
+      await screen.findByRole("dialog", { name: "Details" });
 
       harness.stopWorker();
 
@@ -568,7 +566,7 @@ describe("the Remote UI kit, part 2", () => {
       const trigger = screen.getByRole("button", { name: "Options" });
       await userEvent.tab();
       await userEvent.keyboard("{Enter}");
-      expect(await screen.findByText("Popover body")).toBeInTheDocument();
+      await screen.findByText("Popover body");
 
       harness.stopWorker();
 
@@ -598,12 +596,12 @@ describe("the Remote UI kit, part 2", () => {
 
       await userEvent.tab();
       await userEvent.keyboard("{Enter}");
-      expect(await screen.findByRole("dialog", { name: "Details" })).toBeInTheDocument();
+      await screen.findByRole("dialog", { name: "Details" });
 
       // Escape dismisses at once; the Worker's answer then reopens it, because
       // the Plugin still says `isOpen` is true.
       await userEvent.keyboard("{Escape}");
-      expect(await screen.findByRole("dialog", { name: "Details" })).toBeInTheDocument();
+      await screen.findByRole("dialog", { name: "Details" });
     });
 
     it("reopens a modal after the Plugin acknowledges the dismissal and asks again", async () => {
@@ -624,7 +622,7 @@ describe("the Remote UI kit, part 2", () => {
       const trigger = screen.getByRole("button", { name: "Open details" });
       await userEvent.tab();
       await userEvent.keyboard("{Enter}");
-      expect(await screen.findByRole("dialog", { name: "Details" })).toBeInTheDocument();
+      await screen.findByRole("dialog", { name: "Details" });
 
       // Escape: the host dismisses, the Plugin acknowledges with isOpen=false.
       await userEvent.keyboard("{Escape}");
@@ -633,7 +631,7 @@ describe("the Remote UI kit, part 2", () => {
 
       // The Plugin asks again: isOpen=false -> true is a real reopen.
       await userEvent.keyboard("{Enter}");
-      expect(await screen.findByRole("dialog", { name: "Details" })).toBeInTheDocument();
+      await screen.findByRole("dialog", { name: "Details" });
     });
 
     it("reopens a modal on a same-tick isOpen false then true", async () => {
@@ -664,7 +662,7 @@ describe("the Remote UI kit, part 2", () => {
 
       await userEvent.tab();
       await userEvent.keyboard("{Enter}");
-      expect(await screen.findByRole("dialog", { name: "Details" })).toBeInTheDocument();
+      await screen.findByRole("dialog", { name: "Details" });
 
       // Escape: the host dismisses, the Plugin acknowledges with isOpen=false.
       await userEvent.keyboard("{Escape}");
@@ -673,7 +671,7 @@ describe("the Remote UI kit, part 2", () => {
       // Focus is back on the trigger; Tab to the reopen button and press it.
       await userEvent.tab();
       await userEvent.keyboard("{Enter}");
-      expect(await screen.findByRole("dialog", { name: "Details" })).toBeInTheDocument();
+      await screen.findByRole("dialog", { name: "Details" });
     });
 
     it("reopens a confirmation dialog when the Plugin answers Escape with a batched false then true @ui-kbd:maibuk-confirm-dialog", async () => {
@@ -702,14 +700,10 @@ describe("the Remote UI kit, part 2", () => {
 
       await userEvent.tab();
       await userEvent.keyboard("{Enter}");
-      expect(
-        await screen.findByRole("alertdialog", { name: "Delete chapter?" })
-      ).toBeInTheDocument();
+      await screen.findByRole("alertdialog", { name: "Delete chapter?" });
 
       await userEvent.keyboard("{Escape}");
-      expect(
-        await screen.findByRole("alertdialog", { name: "Delete chapter?" })
-      ).toBeInTheDocument();
+      await screen.findByRole("alertdialog", { name: "Delete chapter?" });
     });
 
     it("reopens a modal when the Plugin answers Escape with a batched false then true @ui-kbd:maibuk-modal", async () => {
@@ -739,10 +733,10 @@ describe("the Remote UI kit, part 2", () => {
 
       await userEvent.tab();
       await userEvent.keyboard("{Enter}");
-      expect(await screen.findByRole("dialog", { name: "Details" })).toBeInTheDocument();
+      await screen.findByRole("dialog", { name: "Details" });
 
       await userEvent.keyboard("{Escape}");
-      expect(await screen.findByRole("dialog", { name: "Details" })).toBeInTheDocument();
+      await screen.findByRole("dialog", { name: "Details" });
     });
 
     it("shows a tooltip on focus @ui-kbd:maibuk-tooltip", async () => {

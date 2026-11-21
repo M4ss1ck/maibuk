@@ -102,7 +102,7 @@ describe("CanvasReferencePicker keyboard", () => {
     await user.clear(searchField());
     await user.type(searchField(), "zzz");
 
-    expect(await screen.findByText("canvas.referenceEmpty")).toBeInTheDocument();
+    await screen.findByText("canvas.referenceEmpty");
   });
 
   it("walks the tabs with Tab, Shift+Tab, and the arrows, each tab listing on its own", async () => {
@@ -120,13 +120,13 @@ describe("CanvasReferencePicker keyboard", () => {
     await user.tab();
     await user.keyboard("{ArrowRight}");
 
-    expect(await screen.findByText("canvas.referenceListFailed")).toBeInTheDocument();
+    await screen.findByText("canvas.referenceListFailed");
     expect(screen.queryByRole("option", { name: /^Alpha/ })).not.toBeInTheDocument();
     expect(fake.listB).toHaveBeenCalledWith("", { canvasId: "canvas-1" });
 
     await user.keyboard("{ArrowLeft}");
 
-    expect(await screen.findByRole("option", { name: /^Alpha/ })).toBeInTheDocument();
+    await screen.findByRole("option", { name: /^Alpha/ });
     expect(screen.queryByText("canvas.referenceListFailed")).not.toBeInTheDocument();
   });
 
@@ -214,6 +214,6 @@ describe("CanvasReferencePicker keyboard", () => {
         screen.getByRole("textbox", { name: "canvas.referenceSearchPlaceholder" })
       ).toHaveValue("")
     );
-    expect(await screen.findByRole("option", { name: /^Alpha/ })).toBeInTheDocument();
+    await screen.findByRole("option", { name: /^Alpha/ });
   });
 });

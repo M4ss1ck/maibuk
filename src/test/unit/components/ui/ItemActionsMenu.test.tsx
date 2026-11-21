@@ -186,7 +186,7 @@ describe("ItemActionsMenu keyboard", () => {
 
     fireEvent.contextMenu(screen.getByTestId("row"));
 
-    expect(await screen.findByRole("menu")).toBeInTheDocument();
+    await screen.findByRole("menu");
   });
 });
 
@@ -199,7 +199,7 @@ describe("ItemActionsMenu pointer gestures", () => {
     const event = fireEvent.contextMenu(title);
 
     expect(event).toBe(false);
-    expect(await screen.findByRole("menu")).toBeInTheDocument();
+    await screen.findByRole("menu");
     expect(onSelect).not.toHaveBeenCalled();
   });
 

@@ -53,7 +53,7 @@ describe("Home when the Library cannot be read", () => {
     while (document.activeElement !== retry) await user.tab();
     await user.keyboard("{Enter}");
 
-    expect(await screen.findByText("Kept Book")).toBeInTheDocument();
+    await screen.findByText("Kept Book");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
@@ -62,7 +62,7 @@ describe("Home when the Library cannot be read", () => {
     mockGetDatabase.mockResolvedValue(db);
     render(<Home />);
 
-    expect(await screen.findByText("Your stories begin here")).toBeInTheDocument();
+    await screen.findByText("Your stories begin here");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });

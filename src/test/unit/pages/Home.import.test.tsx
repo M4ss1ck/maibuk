@@ -105,7 +105,7 @@ describe("Home EPUB import", () => {
       });
     });
     expect(mockScanEpubForImport).toHaveBeenCalledWith(new Uint8Array([1, 2, 3]));
-    expect(await screen.findByText("Imported Book")).toBeInTheDocument();
+    await screen.findByText("Imported Book");
   });
 
   it("keeps focus on Import EPUB while it scans, so closing the report returns there", async () => {
@@ -142,7 +142,7 @@ describe("Home EPUB import", () => {
     expect(mockOpenWithData).toHaveBeenCalledTimes(1);
 
     finishScan();
-    expect(await screen.findByText("Imported Book")).toBeInTheDocument();
+    await screen.findByText("Imported Book");
     await user.keyboard("{Escape}");
     await waitFor(() => expect(screen.getByRole("button", { name: /Import EPUB/i })).toHaveFocus());
   });

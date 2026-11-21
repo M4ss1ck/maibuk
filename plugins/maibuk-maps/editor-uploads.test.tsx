@@ -144,9 +144,7 @@ describe("Map editor uploads (#756)", () => {
       expect(runtime.editor?.getSnapshot().selectedId).toBe(image.id);
 
       // The panel offers the Map Image's own controls.
-      expect(
-        await screen.findByRole("slider", { name: en["properties.image.opacity"] })
-      ).toBeInTheDocument();
+      await screen.findByRole("slider", { name: en["properties.image.opacity"] });
       expect(
         screen.getByRole("switch", { name: en["properties.image.exportable"] })
       ).toBeInTheDocument();

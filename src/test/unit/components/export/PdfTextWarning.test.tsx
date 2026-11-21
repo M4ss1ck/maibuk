@@ -189,7 +189,7 @@ describe("usePdfTextWarning", () => {
 
     await user.click(screen.getByRole("button", { name: "Export PDF" }));
 
-    expect(await screen.findByRole("alertdialog")).toBeInTheDocument();
+    await screen.findByRole("alertdialog");
     expect(run).not.toHaveBeenCalled();
   });
 
@@ -201,7 +201,7 @@ describe("usePdfTextWarning", () => {
 
     await user.click(screen.getByRole("button", { name: "Export PDF" }));
 
-    expect(await screen.findByRole("alertdialog")).toBeInTheDocument();
+    await screen.findByRole("alertdialog");
     expect(run).not.toHaveBeenCalled();
   });
 
@@ -372,9 +372,9 @@ describe("PDF font Commands", () => {
 
     trigger("export.downloadPdfFontLatin");
 
-    expect(await screen.findByText("Downloading Latin, Cyrillic, and Greek")).toBeInTheDocument();
+    await screen.findByText("Downloading Latin, Cyrillic, and Greek");
     await waitFor(() => expect(usePdfFonts.getState().installed).toContain("latin"));
-    expect(await screen.findByText("Installed")).toBeInTheDocument();
+    await screen.findByText("Installed");
   });
 
   it("announces a failed Command download", async () => {
@@ -391,8 +391,8 @@ describe("PDF font Commands", () => {
 
     trigger("export.downloadPdfFontLatin");
 
-    expect(await screen.findByText("Downloading Latin, Cyrillic, and Greek")).toBeInTheDocument();
-    expect(await screen.findByText("Download failed. Try again.")).toBeInTheDocument();
+    await screen.findByText("Downloading Latin, Cyrillic, and Greek");
+    await screen.findByText("Download failed. Try again.");
     expect(usePdfFonts.getState().installed).toEqual([]);
   });
 

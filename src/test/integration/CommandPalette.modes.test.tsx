@@ -70,7 +70,7 @@ describe("Command Palette modes", () => {
       )
     );
     await user.keyboard("Paged");
-    expect(await within(dialog).findByRole("option", { name: "Paged Book" })).toBeInTheDocument();
+    await within(dialog).findByRole("option", { name: "Paged Book" });
   });
 
   it("Backspace on a lone > switches to Library Search instead of closing", async () => {
@@ -111,7 +111,7 @@ describe("Command Palette modes", () => {
     await user.keyboard("Open Note");
     const page = await within(dialog).findByRole("option", { name: "Open Note…" });
     await arrowToAndChoose(user, dialog, search, page);
-    expect(await within(dialog).findByText("Showing Open Note")).toBeInTheDocument();
+    await within(dialog).findByText("Showing Open Note");
     expect(within(dialog).getAllByRole("option").map(optionLabel)).toEqual(["Nested Note"]);
 
     // > always means Commands, so it leaves the page instead of searching it.
@@ -513,7 +513,7 @@ describe("Command Palette text results", () => {
     // The list virtualizes to its viewport, so jsdom mounts only the visible
     // rows: the cap shows as the refine line, which renders only when the
     // module reports more than the Text section's 50 rows.
-    expect(await within(dialog).findByText(en("commandPalette.textRefine"))).toBeInTheDocument();
+    await within(dialog).findByText(en("commandPalette.textRefine"));
     const rendered = sectionOptions(dialog, "Text");
     expect(rendered.length).toBeGreaterThan(2);
     expect(rendered.length).toBeLessThanOrEqual(50);
@@ -534,7 +534,7 @@ describe("Command Palette text results", () => {
     await user.keyboard("Open Note");
     const page = await within(dialog).findByRole("option", { name: "Open Note…" });
     await arrowToAndChoose(user, dialog, search, page);
-    expect(await within(dialog).findByText("Showing Open Note")).toBeInTheDocument();
+    await within(dialog).findByText("Showing Open Note");
 
     await user.paste("sharedword");
     await within(dialog).findByRole("group", { name: "Text" });
@@ -585,9 +585,7 @@ describe("Command Palette text results", () => {
     // all the same and types literally.
     await user.keyboard("(unclosed");
 
-    expect(
-      await within(dialog).findByText(en("commandPalette.textInvalidRegex"), { exact: false })
-    ).toBeInTheDocument();
+    await within(dialog).findByText(en("commandPalette.textInvalidRegex"), { exact: false });
     expect(within(dialog).queryByRole("group", { name: "Text" })).toBeNull();
   });
 
@@ -616,10 +614,8 @@ describe("Command Palette text results", () => {
 
       const dialog = await openLibrarySearch(user);
       await user.paste("harbour");
-      expect(
-        await within(dialog).findByText(en("commandPalette.textIndexing"))
-      ).toBeInTheDocument();
-      expect(await within(dialog).findByRole("group", { name: "Text" })).toBeInTheDocument();
+      await within(dialog).findByText(en("commandPalette.textIndexing"));
+      await within(dialog).findByRole("group", { name: "Text" });
     } finally {
       releaseRebuild();
       await rebuildPromise;
@@ -654,15 +650,13 @@ describe("Command Palette text results", () => {
 
       const dialog = await openLibrarySearch(user);
       await user.paste("harbour");
-      expect(
-        await within(dialog).findByText(en("commandPalette.textIndexing"))
-      ).toBeInTheDocument();
+      await within(dialog).findByText(en("commandPalette.textIndexing"));
       expect(within(dialog).queryByRole("group", { name: "Text" })).toBeNull();
 
       indexBlank.value = false;
       releaseRebuild();
       await rebuildPromise;
-      expect(await within(dialog).findByRole("group", { name: "Text" })).toBeInTheDocument();
+      await within(dialog).findByRole("group", { name: "Text" });
     } finally {
       indexBlank.value = false;
       releaseRebuild();
@@ -812,7 +806,7 @@ describe("Command Palette entry buttons", () => {
     renderApp(`/notes/${note.id}`);
     await waitFor(() => expect(path).toBe(`/notes/${note.id}`));
 
-    expect(await screen.findByText("1 pinned")).toBeInTheDocument();
+    await screen.findByText("1 pinned");
     expect(visiblePaletteButtons()).toHaveLength(1);
     await openFromButton(user, await tabToEntryButton(user));
   });

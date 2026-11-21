@@ -70,7 +70,7 @@ describe("the floating editor's chrome (#778)", () => {
     const page = await host.renderPage(MAP_PAGE_ID);
     try {
       await openLayers(userEvent.setup({ delay: null }));
-      expect(await screen.findByText(en["elements.empty"])).toBeInTheDocument();
+      await screen.findByText(en["elements.empty"]);
       expect(screen.queryByRole("listitem")).toBeNull();
 
       await page.unmount();

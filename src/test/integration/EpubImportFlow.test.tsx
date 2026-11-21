@@ -121,7 +121,7 @@ describe("EPUB import flow", () => {
     render(<Home />);
 
     await user.click(await screen.findByRole("button", { name: /Import EPUB/i }));
-    expect(await screen.findByText("Lossy Import")).toBeInTheDocument();
+    await screen.findByText("Lossy Import");
     expect(screen.getByRole("button", { name: "Import EPUB" })).toBeDisabled();
 
     await user.click(screen.getByRole("switch", { name: "Acknowledge compatibility warnings" }));
@@ -145,9 +145,7 @@ describe("EPUB import flow", () => {
 
     await user.click(await screen.findByRole("button", { name: /Import EPUB/i }));
 
-    expect(
-      await screen.findByText(/Encrypted or DRM-protected EPUB files cannot be imported/)
-    ).toBeInTheDocument();
+    await screen.findByText(/Encrypted or DRM-protected EPUB files cannot be imported/);
     expect(screen.getByRole("button", { name: "Import EPUB" })).toBeDisabled();
     expect(mockNavigate).not.toHaveBeenCalled();
   });
@@ -171,6 +169,6 @@ describe("EPUB import flow", () => {
     await useBookStore.getState().loadBooks();
     rerender(<Home />);
 
-    expect(await screen.findByText("Fixture Book")).toBeInTheDocument();
+    await screen.findByText("Fixture Book");
   });
 });

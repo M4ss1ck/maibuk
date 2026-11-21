@@ -140,7 +140,7 @@ describe("MCP Server live page", () => {
       const key = await waitForStoredKey(storage);
       const page = await host.renderPage(CONNECT_PAGE_ID);
 
-      expect(await screen.findByText(en.noConnections)).toBeInTheDocument();
+      await screen.findByText(en.noConnections);
       expect(screen.getByText(en.connectionsEmpty)).toBeInTheDocument();
 
       freezeClock(START);
@@ -246,7 +246,7 @@ describe("MCP Server live page", () => {
       await mcpRequest(host, key, toolsCall("read_note", { note: "notealpha1" }, 2));
 
       const log = await screen.findByRole("table", { name: en.activityLabel });
-      expect(await within(log).findByText("read_note")).toBeInTheDocument();
+      await within(log).findByText("read_note");
       expect(within(log).getByText("notealpha1")).toBeInTheDocument();
       expect(within(log).getByText(en.resultOk)).toBeInTheDocument();
       expect(within(log).getByText("Claude Code")).toBeInTheDocument();
@@ -264,7 +264,7 @@ describe("MCP Server live page", () => {
       // A failing call reads as Error, and the newest row heads the table.
       await mcpRequest(host, key, toolsCall("read_note", { note: "missingnote" }, 5));
       const fresh = screen.getByRole("table", { name: en.activityLabel });
-      expect(await within(fresh).findByText(en.resultError)).toBeInTheDocument();
+      await within(fresh).findByText(en.resultError);
       expect(within(fresh).getAllByText("missingnote")).toHaveLength(1);
       const rows = within(fresh).getAllByRole("row");
       expect(rows[1]?.textContent).toContain("missingnote");
@@ -352,7 +352,7 @@ describe("MCP Server live page", () => {
       );
 
       const log = await screen.findByRole("table", { name: en.activityLabel });
-      expect(await within(log).findByText("write_chapter")).toBeInTheDocument();
+      await within(log).findByText("write_chapter");
       expect(page.container.textContent).not.toContain("ZEBRA-SENTINEL-TEXT");
       expect(page.container.textContent).not.toContain("ZEBRA-TITLE-SENTINEL");
 
@@ -368,7 +368,7 @@ describe("MCP Server live page", () => {
       const key = await waitForStoredKey(storage);
       const page = await host.renderPage(CONNECT_PAGE_ID);
 
-      expect(await screen.findByText(es.noConnections)).toBeInTheDocument();
+      await screen.findByText(es.noConnections);
       expect(screen.getByRole("heading", { name: es.connectionsHeading })).toBeInTheDocument();
       expect(screen.getByText(es.connectionsEmpty)).toBeInTheDocument();
       expect(screen.getByRole("heading", { name: es.activityHeading })).toBeInTheDocument();
@@ -377,7 +377,7 @@ describe("MCP Server live page", () => {
       await mcpRequest(host, key, initializeFrom("Claude Code"));
       await mcpRequest(host, key, toolsCall("read_note", { note: "notealpha1" }, 2));
 
-      expect(await screen.findByText(es.connectedOne)).toBeInTheDocument();
+      await screen.findByText(es.connectedOne);
       const log = await screen.findByRole("table", { name: es.activityLabel });
       expect(within(log).getByText(es.toolColumn)).toBeInTheDocument();
       expect(within(log).getByText(es.agentColumn)).toBeInTheDocument();

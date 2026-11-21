@@ -76,7 +76,7 @@ describe("Map editor page", () => {
       const editorPage = await host.renderPage(MAP_PAGE_ID);
       // The Map's own name is the top-left pill's second control (#778), and the
       // belt holds every tool: an IconButton each, the Pencil among them.
-      expect(await screen.findByRole("button", { name: "Coast" })).toBeInTheDocument();
+      await screen.findByRole("button", { name: "Coast" });
       expect(screen.getByRole("button", { name: en["tools.pencil"] })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: en["map.backToMaps"] })).toBeInTheDocument();
       // The Layers card starts shut (#778), so its Elements list is not drawn
@@ -94,7 +94,7 @@ describe("Map editor page", () => {
     const { host } = editorHostFor(new Map());
     try {
       const page = await host.renderPage(MAP_PAGE_ID);
-      expect(await screen.findByText(en["map.emptyTitle"])).toBeInTheDocument();
+      await screen.findByText(en["map.emptyTitle"]);
       const user = userEvent.setup({ delay: null });
       const back = screen.getByRole("button", { name: en["map.backToMaps"] });
       await tabTo(user, back, 120);
@@ -880,7 +880,7 @@ describe("Map editor page", () => {
 
       await openLayers(user);
       const list = await screen.findByRole("list");
-      expect(await within(list).findByRole("button", { name: /^Fill 1/ })).toBeInTheDocument();
+      await within(list).findByRole("button", { name: /^Fill 1/ });
       const poured = storedMap(storage).elements.find(
         (element): element is MapFillElement => element.kind === "fill"
       );

@@ -20,9 +20,7 @@ describe("WebLibraryGate", () => {
       </WebLibraryGate>
     );
 
-    expect(
-      await screen.findByRole("heading", { name: "Maibuk is open in another tab" })
-    ).toBeInTheDocument();
+    await screen.findByRole("heading", { name: "Maibuk is open in another tab" });
     expect(screen.queryByText("the app")).not.toBeInTheDocument();
     expect(open).toHaveBeenCalledTimes(1);
   });
@@ -44,7 +42,7 @@ describe("WebLibraryGate", () => {
 
     await user.keyboard("{Enter}");
 
-    expect(await screen.findByText("the app")).toBeInTheDocument();
+    await screen.findByText("the app");
     expect(
       screen.queryByRole("heading", { name: "Maibuk is open in another tab" })
     ).not.toBeInTheDocument();
@@ -65,9 +63,7 @@ describe("WebLibraryGate", () => {
     await user.keyboard("{Enter}");
 
     await waitFor(() => expect(open).toHaveBeenCalledTimes(2));
-    expect(
-      await screen.findByRole("heading", { name: "Maibuk is open in another tab" })
-    ).toBeInTheDocument();
+    await screen.findByRole("heading", { name: "Maibuk is open in another tab" });
     expect(screen.queryByText("the app")).not.toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("button", { name: "Try again" })).toHaveFocus());
   });
@@ -80,7 +76,7 @@ describe("WebLibraryGate", () => {
       </WebLibraryGate>
     );
 
-    expect(await screen.findByText("the app")).toBeInTheDocument();
+    await screen.findByText("the app");
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
@@ -93,7 +89,7 @@ describe("WebLibraryGate", () => {
       </WebLibraryGate>
     );
 
-    expect(await screen.findByText("the app")).toBeInTheDocument();
+    await screen.findByText("the app");
     const notice = screen.getByRole("status");
     expect(notice).toHaveTextContent("Your Library will not be kept");
     expect(notice).toHaveTextContent("is lost when you reload or close this window");
@@ -110,7 +106,7 @@ describe("WebLibraryGate", () => {
       </WebLibraryGate>
     );
 
-    expect(await screen.findByText("the app")).toBeInTheDocument();
+    await screen.findByText("the app");
     const notice = screen.getByRole("alert");
     expect(notice).toHaveTextContent("Your Library could not be moved");
     expect(notice).toHaveTextContent("nothing was changed");
@@ -128,7 +124,7 @@ describe("WebLibraryGate", () => {
       </WebLibraryGate>
     );
 
-    expect(await screen.findByText("the app")).toBeInTheDocument();
+    await screen.findByText("the app");
     expect(screen.getByRole("alert")).toHaveTextContent("not enough storage space");
   });
 });

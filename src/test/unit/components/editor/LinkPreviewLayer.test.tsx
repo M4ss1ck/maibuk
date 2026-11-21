@@ -141,7 +141,7 @@ describe("Link Preview", () => {
       expect(screen.queryByRole("tooltip", { name: "linkPreview.label" })).not.toBeInTheDocument();
 
       await user.keyboard("{ArrowLeft}");
-      expect(await screen.findByRole("tooltip", { name: "linkPreview.label" })).toBeInTheDocument();
+      await screen.findByRole("tooltip", { name: "linkPreview.label" });
     });
 
     it("hides on Escape and keeps the caret in the editor", async () => {
@@ -258,7 +258,7 @@ describe("Link Preview", () => {
 
     it("shows a Book's author and description", async () => {
       const preview = await previewOf("maibuk://book/b1");
-      expect(await within(preview).findByText("The Long Road")).toBeInTheDocument();
+      await within(preview).findByText("The Long Road");
       expect(within(preview).getByText("linkPreview.byAuthor(Ana Ruiz)")).toBeInTheDocument();
       expect(within(preview).getByText("A journey north.")).toBeInTheDocument();
     });
@@ -271,12 +271,12 @@ describe("Link Preview", () => {
 
     it("says when the target no longer exists", async () => {
       const preview = await previewOf("maibuk://note/gone");
-      expect(await within(preview).findByText("deepLink.resourceGone")).toBeInTheDocument();
+      await within(preview).findByText("deepLink.resourceGone");
     });
 
     it("keeps the breadcrumb when the heading is gone", async () => {
       const preview = await previewOf("maibuk://heading/c1/h-gone");
-      expect(await within(preview).findByText("deepLink.headingGone")).toBeInTheDocument();
+      await within(preview).findByText("deepLink.headingGone");
       expect(within(preview).getByText("Departure")).toBeInTheDocument();
     });
   });

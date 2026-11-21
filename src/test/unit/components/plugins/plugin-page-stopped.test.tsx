@@ -105,7 +105,7 @@ describe("a Stopped Plugin's page", () => {
 
     expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
     expect(screen.queryByText("Word Stats stopped")).toBeNull();
-    expect(await screen.findByText("Plugin body")).toBeInTheDocument();
+    await screen.findByText("Plugin body");
     // Focus stays on the page, not dropped to the document with the button.
     expect(screen.getByRole("heading", { name: "Report" })).toHaveFocus();
   });

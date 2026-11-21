@@ -122,7 +122,7 @@ describe("FontSizeSelect rendered by the Editor Toolbar", () => {
 
     const user = await focusField();
     await user.keyboard("{ArrowDown}");
-    expect(await screen.findByRole("listbox")).toBeInTheDocument();
+    await screen.findByRole("listbox");
 
     await user.tab();
 
@@ -210,7 +210,7 @@ describe("FontFamilySelect rendered by the Editor Toolbar", () => {
 
     const user = await focusField();
     await user.keyboard("{ArrowDown}");
-    expect(await screen.findByRole("listbox")).toBeInTheDocument();
+    await screen.findByRole("listbox");
 
     await user.tab();
 
@@ -241,7 +241,7 @@ describe("LineHeightSelect rendered by the Editor Toolbar", () => {
 
     const user = await focusField();
     await user.keyboard("{ArrowDown}");
-    expect(await screen.findByRole("listbox")).toBeInTheDocument();
+    await screen.findByRole("listbox");
 
     await user.tab();
 

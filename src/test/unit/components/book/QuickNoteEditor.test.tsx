@@ -251,7 +251,7 @@ describe("QuickNoteEditor", () => {
       await user.click(editor);
       await user.keyboard("{Control>}{Alt>}n{/Alt}{/Control}");
 
-      expect(await screen.findByRole("dialog", { name: "editor.footnote" })).toBeInTheDocument();
+      await screen.findByRole("dialog", { name: "editor.footnote" });
     });
 
     it("toggles Spell Check from the palette", async () => {
@@ -274,7 +274,7 @@ describe("QuickNoteEditor", () => {
       await waitFor(() => expect(find).toHaveFocus());
 
       await user.type(find, "world");
-      expect(await screen.findByText("editor.matchesOf:1/1")).toBeInTheDocument();
+      await screen.findByText("editor.matchesOf:1/1");
 
       await user.keyboard("{Escape}");
       await waitFor(() =>
@@ -289,7 +289,7 @@ describe("QuickNoteEditor", () => {
 
       await user.click(editor);
       await user.keyboard("{Control>}k{/Control}");
-      expect(await screen.findByRole("dialog", { name: "editor.insertLink" })).toBeInTheDocument();
+      await screen.findByRole("dialog", { name: "editor.insertLink" });
 
       await user.keyboard("{Escape}");
       await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
@@ -301,7 +301,7 @@ describe("QuickNoteEditor", () => {
       const { editor } = await renderFocusedNote();
 
       expect(await runCommand("editor.insertSymbol", { source: "palette" })).toBe("ran");
-      expect(await screen.findByRole("dialog", { name: "symbols.title" })).toBeInTheDocument();
+      await screen.findByRole("dialog", { name: "symbols.title" });
 
       await user.keyboard("{Escape}");
       await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
@@ -323,16 +323,14 @@ describe("QuickNoteEditor", () => {
       await renderFocusedNote();
 
       expect(await runCommand("editor.insertImage", { source: "palette" })).toBe("ran");
-      expect(await screen.findByRole("dialog", { name: "editor.insertImage" })).toBeInTheDocument();
+      await screen.findByRole("dialog", { name: "editor.insertImage" });
     });
 
     it("opens the dictionary prompt from the palette when nothing is selected", async () => {
       await renderFocusedNote();
 
       expect(await runCommand("editor.dictionary", { source: "palette" })).toBe("ran");
-      expect(
-        await screen.findByRole("dialog", { name: "dictionary.promptTitle" })
-      ).toBeInTheDocument();
+      await screen.findByRole("dialog", { name: "dictionary.promptTitle" });
     });
 
     it("colors the selected text from the palette", async () => {

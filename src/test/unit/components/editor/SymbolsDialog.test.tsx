@@ -175,7 +175,7 @@ describe("SymbolsDialog", () => {
 
     render(<SymbolsDialog editor={editor} isOpen onClose={() => {}} />);
 
-    expect(await screen.findByText("symbols.resultLimit")).toBeInTheDocument();
+    await screen.findByText("symbols.resultLimit");
   });
 
   it("filters by category using only the keyboard", async () => {

@@ -151,7 +151,7 @@ describe("Remote UI under the QuickJS runner", () => {
     const { run, host } = await startRemoteUi();
     try {
       const page = await host.renderPage("main");
-      expect(await screen.findByRole("heading", { name: "Find" })).toBeInTheDocument();
+      await screen.findByRole("heading", { name: "Find" });
 
       const user = userEvent.setup();
       const field = screen.getByRole("textbox", { name: "Search" });
@@ -159,7 +159,7 @@ describe("Remote UI under the QuickJS runner", () => {
       expect(field).toHaveFocus();
       await user.keyboard("dune");
 
-      expect(await screen.findByText("You typed: dune")).toBeInTheDocument();
+      await screen.findByText("You typed: dune");
       expect(page.violations).toEqual([]);
       await page.unmount();
     } finally {
@@ -173,7 +173,7 @@ describe("Remote UI under the QuickJS runner", () => {
     const { run, host } = await startRemoteUi();
     try {
       const row = await host.renderSettingsRow("threshold");
-      expect(await screen.findByRole("switch", { name: "Threshold" })).toBeInTheDocument();
+      await screen.findByRole("switch", { name: "Threshold" });
 
       const user = userEvent.setup();
       const control = screen.getByRole("switch", { name: "Threshold" });
@@ -202,7 +202,7 @@ describe("Remote UI under the QuickJS runner", () => {
       expect(go).toHaveFocus();
       await user.keyboard("{Enter}");
 
-      expect(await screen.findByText("Runs: 1")).toBeInTheDocument();
+      await screen.findByText("Runs: 1");
     } finally {
       // Stop first: the host asks the live Plugin to unmount each open page.
       await host.stop();

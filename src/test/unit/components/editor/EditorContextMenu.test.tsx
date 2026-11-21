@@ -187,9 +187,7 @@ describe("EditorContextMenu", () => {
 
     await user.keyboard("{Shift>}{F10}{/Shift}");
 
-    expect(
-      await screen.findByRole("menuitem", { name: "editor.noSuggestions" })
-    ).toBeInTheDocument();
+    await screen.findByRole("menuitem", { name: "editor.noSuggestions" });
   });
 
   it("renders duplicate suggestions without crashing and applies the chosen one", async () => {

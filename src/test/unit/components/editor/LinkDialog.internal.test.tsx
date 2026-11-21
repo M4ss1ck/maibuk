@@ -207,7 +207,7 @@ describe("LinkDialog internal target picker", () => {
         title: "Novel Draft",
       })
     );
-    expect(await screen.findByText("Opening Chapter")).toBeInTheDocument();
+    await screen.findByText("Opening Chapter");
 
     fireEvent.click(screen.getByText("Opening Chapter"));
 
@@ -246,7 +246,7 @@ describe("LinkDialog internal target picker", () => {
 
     fireEvent.click(screen.getByLabelText("editor.expandLinkTarget Research Note"));
 
-    expect(await screen.findByText("Research Question")).toBeInTheDocument();
+    await screen.findByText("Research Question");
 
     fireEvent.click(screen.getByText("Research Question"));
 

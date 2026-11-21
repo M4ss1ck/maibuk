@@ -38,3 +38,16 @@ A full-suite round under load (8420 tests, 28 minutes) found one more failure: `
 Issue #511 removed the fixed waits that were left: about 90 lines in 31 files. Each file passed `pnpm test:stress <file> --rounds 5`. `FIXED_WAIT_BASELINE` now holds one entry, `src/test/support/frames/probe.ts` (1). That wait runs in a real browser for the frame lane. The browser queues Long Animation Frame entries on its own schedule and fires no completion event, and `takeRecords()` after one frame came back empty in headless Chromium. The comment above the line gives the reason.
 
 The guard does not catch every disguised wait: a helper that counts microtasks or animation frames passes it. #511 also removed the ones it found (`flushRuns()` in `dictation/session.test.ts`, frame counting in `PluginsSettings.test.tsx`). Watch for that shape in review.
+
+## November 2026: stale matches (#893)
+
+Run 44915068955 on `main` failed one test, `plugins/maibuk-mcp/connect-page.test.tsx` "copies each exact text with the keyboard", after 258 ms, far inside the 10 s find limit. The test copies four snippets in a loop and, after each, ran `expect(await screen.findByText("Copied")).toBeInTheDocument()`. The previous snippet's "Copied" status stays mounted for `COPIED_MS` (2 s), so the page-wide find matched that stale node at once. When the Plugin's copy reply crossed the MessagePort in the next turn, `setCopied` moved the status to the new row, the stale node detached, and the presence check failed. On an idle machine the reply lands later and the test passes without checking the row it copied. This is a different class from October's: the wait was real, but it waited for the wrong element.
+
+Changes:
+
+- The test waits for "Copied" inside the copied snippet's own row, then checks it shows on one row only.
+- The `expect(await …findBy*(…)).toBeInTheDocument()` wrapper is gone from the suite (about 220 sites in 79 files). A resolved find already proves presence; the wrapper only adds the detached-node window. `src/test/unit/test-find-then-assert.test.ts` fails on a new one, with no baseline.
+- A read of every loop and repeated step that pairs an action with a page-wide query found one more assertion that passed before its action: `Canvas.editSession.test.tsx` "viewport moves are not content and never save" read the "saved" label, which reads "saved" before the move. It now asserts no save was attempted.
+- `CODING_STANDARDS.md` "An assertion after an action must fail if the action did nothing" states the rule.
+
+The guard catches the wrapper, not the stale match itself, which needs a reader: a query for text an earlier step left on screen passes no lint. Watch for it in review, mainly in loops and around status, toast and "Saved" text.

@@ -263,11 +263,9 @@ describe("Settings rows", () => {
     screen.getByRole("switch", { name: "settings.pasteCleanup.promptMarkdownLabel" }).focus();
     await tabToButton(user, "settings.pasteCleanup.advanced");
     await user.keyboard("{Enter}");
-    expect(
-      await screen.findByRole("switch", {
-        name: "settings.pasteCleanup.option.demoteHeadings",
-      })
-    ).toBeInTheDocument();
+    await screen.findByRole("switch", {
+      name: "settings.pasteCleanup.option.demoteHeadings",
+    });
   });
 
   it("opens the Advanced block with Tab and Enter alone", async () => {
@@ -277,9 +275,7 @@ describe("Settings rows", () => {
     screen.getByRole("button", { name: "tutorial.settings.startAll" }).focus();
     await tabToButton(user, "settings.advanced");
     await user.keyboard("{Enter}");
-    expect(
-      await screen.findByRole("button", { name: "settings.exportDatabaseButton" })
-    ).toBeInTheDocument();
+    await screen.findByRole("button", { name: "settings.exportDatabaseButton" });
   });
 
   it("focuses the control of a normal row", async () => {

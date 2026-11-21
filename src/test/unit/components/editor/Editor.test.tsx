@@ -918,7 +918,7 @@ describe("Editor", () => {
 
   it("falls back to a generic text label", async () => {
     render(<Editor content={"<p>hello</p>"} onUpdate={vi.fn()} />);
-    expect(await screen.findByRole("textbox", { name: "editor.textLabel" })).toBeInTheDocument();
+    await screen.findByRole("textbox", { name: "editor.textLabel" });
   });
 
   it("puts the caret in the text on mount when autoFocus is set", async () => {

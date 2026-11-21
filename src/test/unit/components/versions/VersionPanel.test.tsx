@@ -262,7 +262,7 @@ describe("VersionPanel", () => {
 
     await user.click(screen.getByRole("button", { name: "Preview" }));
 
-    expect(await screen.findByRole("heading", { name: "First draft" })).toBeInTheDocument();
+    await screen.findByRole("heading", { name: "First draft" });
     expect(mockSerializeBook).not.toHaveBeenCalled();
   });
 
@@ -360,7 +360,7 @@ describe("VersionPanel", () => {
 
     await user.keyboard("{Enter}");
 
-    expect(await screen.findByRole("heading", { name: "First draft" })).toBeInTheDocument();
+    await screen.findByRole("heading", { name: "First draft" });
     expect(mockSerializeBook).not.toHaveBeenCalled();
   });
 
@@ -671,12 +671,12 @@ describe("VersionPanel", () => {
     await user.keyboard("{PageDown}");
 
     await waitFor(() => expect(setPageSpy).toHaveBeenCalledWith(2));
-    expect(await screen.findByText("Page 2 of 3")).toBeInTheDocument();
+    await screen.findByText("Page 2 of 3");
 
     await user.keyboard("{PageUp}");
 
     await waitFor(() => expect(setPageSpy).toHaveBeenCalledWith(1));
-    expect(await screen.findByText("Page 1 of 3")).toBeInTheDocument();
+    await screen.findByText("Page 1 of 3");
   });
 
   it("requests page 1 on open and renders the store's page slice", async () => {
