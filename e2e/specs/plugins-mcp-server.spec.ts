@@ -21,7 +21,7 @@ import { capture } from "../support/capture";
 import { readClipboard } from "../support/clipboard";
 import { dispatchEndpoint, setEndpointAddress } from "../support/endpoint";
 import { expectFocusWithin, isFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
-import { expectActiveOption, runPaletteCommand } from "../support/palette";
+import { arrowToOption, runPaletteCommand } from "../support/palette";
 import { SEED_BOOK, SEED_CHAPTERS } from "../support/seed/names";
 import { expect, test } from "../support/test";
 
@@ -386,7 +386,7 @@ test.describe("MCP Server page @wf:plugins-mcp-server @chromium-only", () => {
     await page.keyboard.type(CHAPTER);
     const option = dialog.getByRole("option", { name: new RegExp(CHAPTER) }).first();
     await expect(option).toBeVisible();
-    await expectActiveOption(dialog, option);
+    await arrowToOption(page, dialog, option);
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/book\/[^/]+$/);
     const chapterText = page.getByRole("textbox", { name: `Text of ${CHAPTER}` });

@@ -41,6 +41,39 @@ export async function expectActiveOption(dialog: Locator, option: Locator): Prom
   await expect(dialog.getByRole("searchbox")).toHaveAttribute("aria-activedescendant", id!);
 }
 
+/**
+ * Arrows until `option` is the palette's active result in Library Search.
+ * There the Library and text rows arrive after the keystrokes, and a later
+ * deferred list can drop the active row so that none is active; waiting
+ * alone can then wait forever. Each poll re-reads the list and steps toward
+ * the option, so a row that lands mid-walk only costs another press. Commands
+ * mode settles from the query alone: use `expectActiveOption` there.
+ */
+export async function arrowToOption(page: Page, dialog: Locator, option: Locator): Promise<void> {
+  const key = await option.getAttribute("data-key");
+  expect(key, "the option has no data-key to arrow to").toBeTruthy();
+  const searchbox = dialog.getByRole("searchbox");
+  await expect
+    .poll(async () => {
+      const active = (await searchbox.getAttribute("aria-activedescendant")) ?? "";
+      const keys = await dialog
+        .getByRole("option")
+        .evaluateAll((rows) => rows.map((row) => row.getAttribute("data-key")));
+      const activeKey = active ? (keyOfOptionId(active, keys) ?? null) : null;
+      if (activeKey === key) return activeKey;
+      // No active row: ArrowDown lands on the first. Otherwise step toward it.
+      const below = activeKey === null || keys.indexOf(activeKey) < keys.indexOf(key);
+      await page.keyboard.press(below ? "ArrowDown" : "ArrowUp");
+      return activeKey;
+    })
+    .toBe(key);
+}
+
+/** The listed key whose option id `active` names (`<listbox id>-option-<key>`). */
+function keyOfOptionId(active: string, keys: readonly (string | null)[]): string | undefined {
+  return keys.find((key): key is string => key !== null && active.endsWith(`-option-${key}`));
+}
+
 /** Opens the palette with F1, runs the Command named `label`, and waits for it to close. */
 export async function runPaletteCommand(
   page: Page,
