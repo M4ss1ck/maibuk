@@ -769,6 +769,15 @@ test.describe("Clock Alarms @wf:plugins-clock-alarms @chromium-only", () => {
     await expect(editedToggle).toHaveCount(0);
     await expect(clockFrame(page).getByText(ALARM_LABEL, { exact: true })).toHaveCount(0);
     await capture(page, "clock-alarms-deleted");
+
+    // A short window makes the form's own column taller than the dialog, so
+    // the capture carries its scrollbar.
+    await expect(addAlarmButton(page)).toBeFocused();
+    await page.setViewportSize({ width: 900, height: 560 });
+    await page.keyboard.press("Enter");
+    const shortForm = alarmForm(page, "Add alarm");
+    await expect(shortForm).toBeVisible();
+    await capture(page, "clock-alarms-form-short", { around: [shortForm] });
   });
 });
 
