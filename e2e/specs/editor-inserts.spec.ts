@@ -4,6 +4,7 @@ import {
   expectTabContained,
   isFocusWithin,
   pressUntilFocused,
+  selectedText,
   tabTo,
 } from "../support/keyboard";
 import { DOT_PNG, IMAGE_FIXTURE_DIR } from "../support/fixtures/images";
@@ -170,7 +171,16 @@ test.describe("link dialog @wf:editor-link-dialog @sc:editor.insertLink", () => 
     await page.keyboard.press("ControlOrMeta+End");
     for (let i = 0; i < 30; i++) await page.keyboard.press("Enter");
     await page.keyboard.type("Charts");
-    for (let i = 0; i < 6; i++) await page.keyboard.press("Shift+ArrowLeft");
+    // Select the line's word. A transaction landing late can put back the
+    // selection a press had just extended, so the key repeats until the page
+    // reports the word selected; Shift+Home selects the same word every time.
+    await expect
+      .poll(async () => {
+        const selected = await selectedText(page);
+        if (selected !== "Charts") await page.keyboard.press("Shift+Home");
+        return selected;
+      })
+      .toBe("Charts");
     await page.keyboard.press("ControlOrMeta+k");
     const insert = page.getByRole("dialog", { name: "Insert Link" });
     await expect(insert).toBeVisible();
