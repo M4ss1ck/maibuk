@@ -804,6 +804,21 @@ describe("Clock Frame", () => {
     expect(el("pomodoro-reset").getAttribute("aria-label")).toBe("Reiniciar ciclo");
     expect(el("timer-primary-label").textContent).toBe("Iniciar 25:00");
     expect(el("pomodoros-today").textContent).toBe("Pomodoros hoy: 3");
+    expect(el("pomodoro-settings-open").getAttribute("aria-label")).toBe(
+      "Ajustes del Pomodoro, 25 · 5 · 15 min, los descansos empiezan solos"
+    );
+    expect(el("pomodoro-settings-title").textContent).toBe("Ajustes del Pomodoro");
+    expect(el("pomodoro-settings-reset").textContent).toBe("Restablecer valores predeterminados");
+    expect(el("pomodoro-settings-cancel").textContent).toBe("Cancelar");
+    expect(el("pomodoro-settings-save").textContent).toBe("Guardar");
+    expect(el("settings-pomodoro-label").textContent).toBe("Pomodoro (minutos)");
+    expect(el("settings-every-label").textContent).toBe("Pomodoros antes del descanso largo");
+    expect(el("settings-auto-breaks-label").textContent).toBe(
+      "Iniciar los descansos automáticamente"
+    );
+    expect(el("settings-auto-pomodoros-label").textContent).toBe(
+      "Iniciar el siguiente Pomodoro automáticamente"
+    );
 
     expect(el("laps-title").textContent).toBe("Vueltas");
     expect(el("laps-col-lap-time").textContent).toBe("Tiempo de vuelta");
@@ -870,6 +885,8 @@ describe("Clock Frame", () => {
       "today",
       "tomorrow",
       "Leave every day off",
+      "Pomodoro settings",
+      "Reset to defaults",
     ];
     for (const word of english) expect(visible).not.toContain(word);
   });
@@ -878,5 +895,215 @@ describe("Clock Frame", () => {
     const port = renderFrame();
     window.dispatchEvent(new Event("pagehide"));
     expect(posted(port, "closed")).toHaveLength(1);
+  });
+});
+
+describe("Clock Frame Pomodoro settings", () => {
+  /** The six settings at their defaults: what Reset fills and hides itself for. */
+  const DEFAULTS = {
+    pomodoroMinutes: 25,
+    shortBreakMinutes: 5,
+    longBreakMinutes: 15,
+    longBreakEvery: 4,
+    autoStartBreaks: false,
+    autoStartPomodoros: false,
+  };
+
+  /** The whole Clock state with the Pomodoro settings replaced. */
+  function settingsState(settings: Record<string, unknown> = DEFAULTS): Record<string, unknown> {
+    const state = stateMessage();
+    const pomodoro = state.pomodoro as Record<string, unknown>;
+    return { ...state, pomodoro: { ...pomodoro, settings } };
+  }
+
+  /** Opens the Pomodoro tab and the settings dialog from the lengths row by keyboard. */
+  async function openSettings(user: User): Promise<void> {
+    await user.tab();
+    await user.keyboard("{ArrowLeft}");
+    await tabTo(user, el("pomodoro-settings-open"));
+    await user.keyboard("{Enter}");
+  }
+
+  it("opens the settings from the lengths row with the current values filled in", async () => {
+    renderFrame({
+      state: settingsState({
+        pomodoroMinutes: 30,
+        shortBreakMinutes: 7,
+        longBreakMinutes: 20,
+        longBreakEvery: 3,
+        autoStartBreaks: true,
+        autoStartPomodoros: true,
+      }),
+    });
+    const user = keyboardUser();
+    const row = el("pomodoro-settings-open");
+    expect(row.getAttribute("aria-label")).toBe(
+      "Pomodoro settings, 30 · 7 · 20 min, breaks start on their own"
+    );
+
+    await openSettings(user);
+    expect(el("pomodoro-settings").hidden).toBe(false);
+    expect(el("pomodoro-settings-title").textContent).toBe("Pomodoro settings");
+    expect(document.activeElement).toBe(el("settings-pomodoro"));
+    expect(inputValue("settings-pomodoro")).toBe("30");
+    expect(inputValue("settings-short")).toBe("7");
+    expect(inputValue("settings-long")).toBe("20");
+    expect(inputValue("settings-every")).toBe("3");
+    expect(el("settings-auto-breaks").getAttribute("aria-checked")).toBe("true");
+    expect(el("settings-auto-pomodoros").getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("saves the edited settings and gives focus back to the row", async () => {
+    const port = renderFrame({ state: settingsState() });
+    const user = keyboardUser();
+    const row = el("pomodoro-settings-open");
+    await openSettings(user);
+
+    await user.clear(el("settings-pomodoro"));
+    await user.type(el("settings-pomodoro"), "30");
+    await user.clear(el("settings-short"));
+    await user.type(el("settings-short"), "7");
+    await user.clear(el("settings-long"));
+    await user.type(el("settings-long"), "20");
+    await user.clear(el("settings-every"));
+    await user.type(el("settings-every"), "3");
+    await tabTo(user, el("settings-auto-breaks"));
+    await user.keyboard(" ");
+    await tabTo(user, el("settings-auto-pomodoros"));
+    await user.keyboard(" ");
+
+    await tabTo(user, el("pomodoro-settings-save"));
+    await user.keyboard("{Enter}");
+
+    expect(posted(port, "pomodoro.setSettings")).toEqual([
+      {
+        kind: "pomodoro.setSettings",
+        settings: {
+          pomodoroMinutes: 30,
+          shortBreakMinutes: 7,
+          longBreakMinutes: 20,
+          longBreakEvery: 3,
+          autoStartBreaks: true,
+          autoStartPomodoros: true,
+        },
+      },
+    ]);
+    expect(el("pomodoro-settings").hidden).toBe(true);
+    expect(document.activeElement).toBe(row);
+  });
+
+  it("discards the edits on Cancel and reopens with the saved values", async () => {
+    const port = renderFrame({ state: settingsState() });
+    const user = keyboardUser();
+    await openSettings(user);
+
+    await user.clear(el("settings-pomodoro"));
+    await user.type(el("settings-pomodoro"), "40");
+    await tabTo(user, el("pomodoro-settings-cancel"));
+    await user.keyboard("{Enter}");
+
+    expect(el("pomodoro-settings").hidden).toBe(true);
+    expect(document.activeElement).toBe(el("pomodoro-settings-open"));
+    expect(posted(port, "pomodoro.setSettings")).toEqual([]);
+
+    await user.keyboard("{Enter}");
+    expect(inputValue("settings-pomodoro")).toBe("25");
+  });
+
+  it("discards the edits on Escape and reopens with the saved values", async () => {
+    const port = renderFrame({ state: settingsState() });
+    const user = keyboardUser();
+    await openSettings(user);
+
+    await user.clear(el("settings-short"));
+    await user.type(el("settings-short"), "9");
+    await user.keyboard("{Escape}");
+
+    expect(el("pomodoro-settings").hidden).toBe(true);
+    expect(document.activeElement).toBe(el("pomodoro-settings-open"));
+    expect(posted(port, "pomodoro.setSettings")).toEqual([]);
+
+    await user.keyboard("{Enter}");
+    expect(inputValue("settings-short")).toBe("5");
+  });
+
+  it("discards the edits on the close button and reopens with the saved values", async () => {
+    const port = renderFrame({ state: settingsState() });
+    const user = keyboardUser();
+    await openSettings(user);
+
+    await user.clear(el("settings-every"));
+    await user.type(el("settings-every"), "6");
+    await tabTo(user, el("pomodoro-settings-close"));
+    await user.keyboard("{Enter}");
+
+    expect(el("pomodoro-settings").hidden).toBe(true);
+    expect(document.activeElement).toBe(el("pomodoro-settings-open"));
+    expect(posted(port, "pomodoro.setSettings")).toEqual([]);
+
+    await user.keyboard("{Enter}");
+    expect(inputValue("settings-every")).toBe("4");
+  });
+
+  it("discards the edits on a press on the backdrop", async () => {
+    const port = renderFrame({ state: settingsState() });
+    const user = keyboardUser();
+    await openSettings(user);
+
+    await user.clear(el("settings-long"));
+    await user.type(el("settings-long"), "30");
+
+    await user.pointer({ target: el("pomodoro-settings"), keys: "[MouseLeft]" });
+    expect(el("pomodoro-settings").hidden).toBe(true);
+    expect(document.activeElement).toBe(el("pomodoro-settings-open"));
+    expect(posted(port, "pomodoro.setSettings")).toEqual([]);
+  });
+
+  it("keeps Tab and Shift+Tab inside the settings dialog", async () => {
+    renderFrame({ state: settingsState() });
+    const user = keyboardUser();
+    await openSettings(user);
+    expect(document.activeElement).toBe(el("settings-pomodoro"));
+
+    await tabTo(user, el("pomodoro-settings-save"));
+    await user.tab();
+    expect(document.activeElement).toBe(el("pomodoro-settings-close"));
+
+    await user.keyboard("{Shift>}{Tab}{/Shift}");
+    expect(document.activeElement).toBe(el("pomodoro-settings-save"));
+    expect(el("pomodoro-settings").hidden).toBe(false);
+  });
+
+  it("shows Reset only while the fields differ from the defaults", async () => {
+    const port = renderFrame({ state: settingsState() });
+    const user = keyboardUser();
+    await openSettings(user);
+
+    // At the defaults, Shift+Tab from Cancel skips the hidden Reset.
+    await tabTo(user, el("pomodoro-settings-cancel"));
+    await user.keyboard("{Shift>}{Tab}{/Shift}");
+    expect(document.activeElement).toBe(el("settings-auto-pomodoros"));
+
+    // One field away from the defaults puts Reset back in the Tab order.
+    await user.clear(el("settings-pomodoro"));
+    await user.type(el("settings-pomodoro"), "30");
+    await tabTo(user, el("settings-auto-pomodoros"));
+    await user.tab();
+    expect(document.activeElement).toBe(el("pomodoro-settings-reset"));
+
+    // Reset fills the defaults and posts nothing; it leaves the Tab order again.
+    await user.keyboard("{Enter}");
+    expect(inputValue("settings-pomodoro")).toBe("25");
+    expect(inputValue("settings-short")).toBe("5");
+    expect(inputValue("settings-long")).toBe("15");
+    expect(inputValue("settings-every")).toBe("4");
+    expect(el("settings-auto-breaks").getAttribute("aria-checked")).toBe("false");
+    expect(el("settings-auto-pomodoros").getAttribute("aria-checked")).toBe("false");
+    expect(document.activeElement).toBe(el("settings-pomodoro"));
+    expect(posted(port, "pomodoro.setSettings")).toEqual([]);
+
+    await tabTo(user, el("pomodoro-settings-cancel"));
+    await user.keyboard("{Shift>}{Tab}{/Shift}");
+    expect(document.activeElement).toBe(el("settings-auto-pomodoros"));
   });
 });
