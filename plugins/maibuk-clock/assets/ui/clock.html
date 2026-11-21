@@ -553,6 +553,520 @@
         line-height: 1.55;
       }
 
+      .hero-stopwatch {
+        padding: 56px 24px;
+        justify-content: center;
+        gap: 40px;
+      }
+
+      .stopwatch-main {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+      }
+
+      .stopwatch-time {
+        display: flex;
+        align-items: baseline;
+        font-variant-numeric: tabular-nums;
+        line-height: 1;
+      }
+
+      .stopwatch-digits {
+        font-size: 96px;
+        font-weight: 300;
+        letter-spacing: -0.045em;
+      }
+
+      .stopwatch-hundredths {
+        font-size: 40px;
+        font-weight: 300;
+        color: var(--maibuk-color-muted-foreground);
+        letter-spacing: -0.02em;
+      }
+
+      .stopwatch-lap {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 14px;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .lap-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--maibuk-color-primary) 14%, transparent);
+        color: var(--maibuk-color-foreground);
+        font-weight: 600;
+      }
+
+      .stopwatch-lap-time {
+        font-variant-numeric: tabular-nums;
+      }
+
+      .lap-bars {
+        width: 100%;
+        max-width: 420px;
+        height: 6px;
+        display: flex;
+        gap: 3px;
+      }
+
+      .lap-bar {
+        flex: 1 1 0;
+        border-radius: 3px;
+        background: var(--maibuk-color-muted);
+      }
+
+      .lap-bar.current {
+        background: var(--maibuk-color-primary);
+      }
+
+      .pill {
+        min-height: 44px;
+        min-width: 128px;
+        height: 56px;
+        padding: 0 24px;
+        border-radius: 28px;
+        border: 1px solid var(--maibuk-color-border);
+        background: var(--maibuk-color-card);
+        color: var(--maibuk-color-card-foreground);
+        font-size: 16px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+      }
+
+      .laps-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .laps-table th {
+        text-align: left;
+        font-weight: 500;
+        color: var(--maibuk-color-muted-foreground);
+        font-size: 12px;
+        padding: 8px 0;
+        border-bottom: 1px solid var(--maibuk-color-border);
+      }
+
+      .laps-table th.numeric,
+      .laps-table td.numeric {
+        text-align: right;
+      }
+
+      .laps-table td {
+        padding: 12px 0;
+        border-bottom: 1px solid color-mix(in srgb, var(--maibuk-color-border) 50%, transparent);
+      }
+
+      .laps-table td.numeric {
+        font-weight: 600;
+      }
+
+      .laps-table td.total {
+        font-weight: 400;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .lap-number {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .lap-number .number {
+        min-width: 16px;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .tag {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 999px;
+      }
+
+      .tag.fastest {
+        background: var(--maibuk-color-success-bg);
+        color: var(--maibuk-color-success-text);
+      }
+
+      .tag.slowest {
+        background: var(--maibuk-color-warning-bg);
+        color: var(--maibuk-color-warning-text);
+      }
+
+      .alarms {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .next-alarm,
+      .no-alarms {
+        margin: 0;
+        font-size: 14px;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .primary.add-alarm {
+        min-width: 0;
+        height: 44px;
+        padding: 0 20px;
+        border-radius: 22px;
+        font-size: 15px;
+      }
+
+      .alarm-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 16px;
+      }
+
+      .alarm {
+        background: var(--maibuk-color-card);
+        color: var(--maibuk-color-card-foreground);
+        border: 1px solid var(--maibuk-color-border);
+        border-radius: 20px;
+        padding: 22px 22px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+
+      .alarm-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .alarm-text {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-width: 0;
+      }
+
+      .alarm-time {
+        font-size: 48px;
+        font-weight: 300;
+        letter-spacing: -0.04em;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .alarm-label {
+        font-size: 14px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .alarm.off .alarm-time,
+      .alarm.off .alarm-label {
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .switch {
+        flex: none;
+        width: 52px;
+        min-height: 44px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        display: flex;
+        align-items: center;
+      }
+
+      .switch .track {
+        display: flex;
+        align-items: center;
+        width: 52px;
+        height: 32px;
+        padding: 3px;
+        border-radius: 16px;
+        background: var(--maibuk-color-muted);
+      }
+
+      .switch[aria-checked="true"] .track {
+        justify-content: flex-end;
+        background: var(--maibuk-color-primary);
+      }
+
+      .switch .knob {
+        width: 26px;
+        height: 26px;
+        border-radius: 13px;
+        background: var(--maibuk-color-card);
+        box-shadow: 0 1px 3px color-mix(in srgb, var(--maibuk-color-foreground) 35%, transparent);
+      }
+
+      .switch:focus-visible .track {
+        outline: 2px solid var(--maibuk-color-primary);
+        outline-offset: 2px;
+      }
+
+      .alarm-foot {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding-top: 14px;
+        border-top: 1px solid var(--maibuk-color-border);
+      }
+
+      .alarm-repeat {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 13px;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .day-chip {
+        flex: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .day-chip.on {
+        background: color-mix(in srgb, var(--maibuk-color-primary) 18%, transparent);
+        color: var(--maibuk-color-foreground);
+      }
+
+      .alarm-actions {
+        display: flex;
+        gap: 2px;
+      }
+
+      .icon-button {
+        width: 44px;
+        height: 44px;
+        padding: 0;
+        border: 0;
+        border-radius: 22px;
+        background: transparent;
+        color: var(--maibuk-color-muted-foreground);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .icon-button:hover {
+        background: color-mix(in srgb, var(--maibuk-color-muted) 60%, transparent);
+      }
+
+      .icon-button.destructive {
+        color: var(--maibuk-color-destructive);
+      }
+
+      .overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px 16px;
+        background: color-mix(in srgb, var(--maibuk-color-foreground) 40%, transparent);
+      }
+
+      .dialog {
+        width: 100%;
+        max-width: 480px;
+        max-height: calc(100vh - 48px);
+        overflow-y: auto;
+        background: var(--maibuk-color-card);
+        color: var(--maibuk-color-card-foreground);
+        border: 1px solid var(--maibuk-color-border);
+        border-radius: 28px;
+        padding: 32px;
+        display: flex;
+        flex-direction: column;
+        gap: 28px;
+        box-shadow: 0 32px 64px -24px
+          color-mix(in srgb, var(--maibuk-color-foreground) 45%, transparent);
+      }
+
+      .dialog-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .dialog-head h2 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+
+      .dialog-close {
+        flex: none;
+        background: color-mix(in srgb, var(--maibuk-color-muted) 60%, transparent);
+        color: var(--maibuk-color-card-foreground);
+      }
+
+      .dialog-fields {
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        gap: 8px;
+      }
+
+      .dialog .field input {
+        width: 120px;
+        height: 104px;
+        font-size: 64px;
+      }
+
+      .dialog .field-separator {
+        font-size: 64px;
+        line-height: 104px;
+      }
+
+      .dialog-label {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .dialog-label label,
+      .dialog-repeat legend {
+        font-size: 14px;
+        font-weight: 500;
+      }
+
+      .dialog-label input {
+        height: 48px;
+        padding: 0 16px;
+        border-radius: 14px;
+        border: 1px solid var(--maibuk-color-border);
+        background: var(--maibuk-color-background);
+        color: var(--maibuk-color-foreground);
+        font-size: 15px;
+      }
+
+      .dialog-label input:focus-visible {
+        outline: 2px solid var(--maibuk-color-primary);
+        outline-offset: 2px;
+      }
+
+      .dialog-repeat {
+        border: 0;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .dialog-repeat legend {
+        padding: 0;
+        margin-bottom: 10px;
+      }
+
+      .day-toggles {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .day {
+        position: relative;
+        display: block;
+      }
+
+      .day input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+      }
+
+      .day span {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 52px;
+        height: 44px;
+        border-radius: 12px;
+        border: 1px solid var(--maibuk-color-border);
+        background: transparent;
+        color: var(--maibuk-color-muted-foreground);
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .day input:checked + span {
+        border-color: var(--maibuk-color-primary);
+        background: var(--maibuk-color-primary);
+        color: var(--maibuk-color-primary-foreground);
+      }
+
+      .day input:focus-visible + span {
+        outline: 2px solid var(--maibuk-color-primary);
+        outline-offset: 2px;
+      }
+
+      .hint {
+        margin: 0;
+        font-size: 13px;
+        color: var(--maibuk-color-muted-foreground);
+      }
+
+      .dialog-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+      }
+
+      .secondary {
+        min-height: 48px;
+        padding: 0 22px;
+        border-radius: 24px;
+        border: 1px solid var(--maibuk-color-border);
+        background: var(--maibuk-color-card);
+        color: var(--maibuk-color-card-foreground);
+        font-size: 15px;
+        font-weight: 600;
+      }
+
+      .dialog-actions .primary {
+        min-width: 0;
+        height: 48px;
+        padding: 0 28px;
+        border-radius: 24px;
+        font-size: 15px;
+      }
+
       @media (max-width: 640px) {
         #clock {
           padding: 20px 16px 24px;
@@ -634,6 +1148,38 @@
         .dial-time {
           font-size: 68px;
         }
+
+        .stopwatch-digits {
+          font-size: 64px;
+        }
+
+        .stopwatch-hundredths {
+          font-size: 28px;
+        }
+
+        .alarm-list {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .alarm-time {
+          font-size: 40px;
+        }
+
+        .dialog {
+          padding: 24px;
+          border-radius: 24px;
+        }
+
+        .dialog .field input {
+          width: 92px;
+          height: 96px;
+          font-size: 56px;
+        }
+
+        .dialog .field-separator {
+          font-size: 56px;
+          line-height: 96px;
+        }
       }
     </style>
   </head>
@@ -695,6 +1241,10 @@
           </button>
         </nav>
         <p id="pomodoros-today" class="today"></p>
+        <button id="add-alarm" class="primary add-alarm" type="button">
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+          <span id="add-alarm-label"></span>
+        </button>
       </header>
 
       <div id="live" class="sr-only" role="status" aria-live="polite"></div>
@@ -835,8 +1385,92 @@
         role="tabpanel"
         aria-labelledby="tab-stopwatch"
         hidden
-      ></div>
-      <div id="panel-alarms" class="layout" role="tabpanel" aria-labelledby="tab-alarms" hidden></div>
+      >
+        <div class="hero hero-stopwatch">
+          <div class="stopwatch-main">
+            <div id="stopwatch-time" class="stopwatch-time" role="timer" aria-label="">
+              <span id="stopwatch-digits" class="stopwatch-digits"></span>
+              <span id="stopwatch-hundredths" class="stopwatch-hundredths"></span>
+            </div>
+            <div id="stopwatch-lap-line" class="stopwatch-lap" hidden>
+              <span id="stopwatch-lap-pill" class="lap-pill"></span>
+              <span id="stopwatch-lap-time" class="stopwatch-lap-time"></span>
+            </div>
+          </div>
+          <div id="stopwatch-bars" class="lap-bars" aria-hidden="true"></div>
+          <div class="controls">
+            <button id="stopwatch-lap" class="pill" type="button" hidden>
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22V4"></path><path d="M4 4h12l-2 4 2 4H4"></path></svg>
+              <span id="stopwatch-lap-label"></span>
+            </button>
+            <button id="stopwatch-reset" class="round" type="button" hidden>
+              <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5"></path></svg>
+            </button>
+            <button id="stopwatch-primary" class="primary" type="button">
+              <svg id="stopwatch-primary-icon" aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"></svg>
+              <span id="stopwatch-primary-label"></span>
+            </button>
+          </div>
+        </div>
+        <aside id="laps-panel" class="side" hidden>
+          <div id="laps-card" class="card" hidden>
+            <h2 id="laps-title"></h2>
+            <div class="table-wrap">
+              <table class="laps-table">
+                <thead>
+                  <tr>
+                    <th scope="col" id="laps-col-lap"></th>
+                    <th scope="col" id="laps-col-lap-time" class="numeric"></th>
+                    <th scope="col" id="laps-col-total" class="numeric"></th>
+                  </tr>
+                </thead>
+                <tbody id="laps-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <div id="panel-alarms" class="alarms" role="tabpanel" aria-labelledby="tab-alarms" hidden>
+        <p id="next-alarm" class="next-alarm" hidden></p>
+        <p id="no-alarms" class="no-alarms" hidden></p>
+        <ul id="alarm-list" class="alarm-list"></ul>
+      </div>
+
+      <div id="alarm-editor" class="overlay" hidden>
+        <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="alarm-editor-title">
+          <div class="dialog-head">
+            <h2 id="alarm-editor-title"></h2>
+            <button id="alarm-editor-close" class="icon-button dialog-close" type="button">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12"></path><path d="M18 6L6 18"></path></svg>
+            </button>
+          </div>
+          <div class="dialog-fields">
+            <div class="field">
+              <input id="alarm-hour" type="number" min="0" max="23" inputmode="numeric" />
+              <label id="alarm-hour-label" for="alarm-hour"></label>
+            </div>
+            <span class="field-separator" aria-hidden="true">:</span>
+            <div class="field">
+              <input id="alarm-minute" type="number" min="0" max="59" inputmode="numeric" />
+              <label id="alarm-minute-label" for="alarm-minute"></label>
+            </div>
+          </div>
+          <div class="dialog-label">
+            <label id="alarm-label-caption" for="alarm-label"></label>
+            <input id="alarm-label" type="text" />
+          </div>
+          <fieldset class="dialog-repeat">
+            <legend id="alarm-repeat-legend"></legend>
+            <div id="alarm-days" class="day-toggles"></div>
+            <p id="alarm-repeat-hint" class="hint"></p>
+          </fieldset>
+          <div class="dialog-actions">
+            <button id="alarm-cancel" class="secondary" type="button"></button>
+            <button id="alarm-save" class="primary" type="button"></button>
+          </div>
+        </section>
+      </div>
     </main>
 
     <script src="clock.js"></script>

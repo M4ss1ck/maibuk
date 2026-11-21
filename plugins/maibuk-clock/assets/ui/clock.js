@@ -1,13 +1,13 @@
 // @ts-check
-/* The Clock Frame's shell (#886): the Pomodoro and Timer tabs, the section bar
-   they share, the notifications banner, and the live region. The Frame's only
-   host channel is `window.maibuk.port`: the Worker sends the localized labels
-   and the whole state as raw JSON, and the Frame answers with one control
-   message per press. Labels may arrive after the first state, so the page stays
-   empty until both have arrived.
+/* The Clock Frame (#886): the four panels (Pomodoro, Timer, Stopwatch, Alarms),
+   the section bar they share, the notifications banner, the live region, and the
+   Alarms' editor dialog. The Frame's only host channel is `window.maibuk.port`:
+   the Worker sends the localized labels and the whole state as raw JSON, and the
+   Frame answers with one control message per press. Labels may arrive after the
+   first state, so the page stays empty until both have arrived.
 
-   The Stopwatch and Alarms tabs' own panels are unit 2b; this script draws
-   their tabs and running dots and leaves the panels empty.
+   The Frame owns its keyboard: the tabs, the dialog's focus trap and Escape, and
+   nothing else, so every other key reaches the host's Commands.
 
    The wire shapes mirror `frame-protocol.ts`. It is a classic script, not a
    module: a relative `import` cannot resolve in the Frame's opaque origin. */
@@ -32,6 +32,8 @@
    * @typedef {{ kind: "state", timer: TimerSnapshot, pomodoro: PomodoroSnapshot, stopwatch: StopwatchState, alarms: Alarm[], notifications: FrameNotificationStatus | null }} FrameStateMessage
    * @typedef {FrameLabelsMessage | FrameStateMessage} WorkerToFrameMessage
    * @typedef {{ progress: number, title: string, subtitle: string, target: "pomodoro" | "stopwatch" }} AlsoData
+   * @typedef {{ id: string | null, hour: number, minute: number, label: string, weekdays: number[], time: string | null }} AlarmDraft
+   * @typedef {AlarmDraft & { opener: HTMLElement | null }} OpenAlarmDraft
    */
 
   const SVG_NS = "http://www.w3.org/2000/svg";
@@ -54,9 +56,29 @@
   const MAX_HOURS = 99;
   const MAX_MINUTES = 59;
   const MAX_SECONDS = 59;
+  const MAX_ALARM_HOUR = 23;
   const TICK_MS = 1_000;
+  const HUNDREDTH_MS = 10;
+  const DAYS_PER_WEEK = 7;
+  const EPOCH_WEEKDAY = 4;
+
+  const WEEKDAY_KEYS = [
+    "weekdaySun",
+    "weekdayMon",
+    "weekdayTue",
+    "weekdayWed",
+    "weekdayThu",
+    "weekdayFri",
+    "weekdaySat",
+  ];
 
   const PLAY_PATH = "M7 4.5v15a1 1 0 0 0 1.5.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5z";
+
+  /** The elements' icon paths the Alarms' edit and delete buttons draw. */
+  const ICON_PATHS = {
+    edit: ["M12 20h9", "M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"],
+    remove: ["M3 6h18", "M8 6V4h8v2", "M19 6l-1 14H6L5 6"],
+  };
 
   /** @param {string} id @returns {HTMLElement} */
   function el(id) {
@@ -106,6 +128,123 @@
   /** @param {number} ms @returns {string} */
   function formatElapsed(ms) {
     return formatWholeSeconds(Math.floor(Math.max(0, ms) / MS_PER_SECOND));
+  }
+
+  /** The Stopwatch's "hh:mm:ss" digits, counted down to the whole second. @param {number} ms @returns {string} */
+  function formatStopwatch(ms) {
+    const total = Math.floor(Math.max(0, ms) / MS_PER_SECOND);
+    const hours = Math.floor(total / SECONDS_PER_HOUR);
+    const minutes = Math.floor(total / SECONDS_PER_MINUTE) % MINUTES_PER_HOUR;
+    return `${pad2(hours)}:${pad2(minutes)}:${pad2(total % SECONDS_PER_MINUTE)}`;
+  }
+
+  /** The Stopwatch's ".cc" hundredths. @param {number} ms @returns {string} */
+  function formatHundredths(ms) {
+    const hundredths = Math.floor((Math.max(0, ms) % MS_PER_SECOND) / HUNDREDTH_MS);
+    return `.${pad2(hundredths)}`;
+  }
+
+  /** A Lap or a Stopwatch instant as the Laps table reads it: "hh:mm:ss.cc". @param {number} ms @returns {string} */
+  function formatLap(ms) {
+    return `${formatStopwatch(ms)}${formatHundredths(ms)}`;
+  }
+
+  /** @param {number} day 0=Sunday through 6 @returns {string} */
+  function weekdayName(day) {
+    const key = WEEKDAY_KEYS[((day % DAYS_PER_WEEK) + DAYS_PER_WEEK) % DAYS_PER_WEEK];
+    return key === undefined ? "" : label(key);
+  }
+
+  /** @param {Alarm} alarm @returns {string} */
+  function alarmTimeText(alarm) {
+    const at = new Date(2000, 0, 1, alarm.hour, alarm.minute).getTime();
+    return formatClockTime(at, new Date(at).getTimezoneOffset(), hourCycle);
+  }
+
+  /** @param {Alarm} alarm @returns {string} */
+  function alarmRepeatText(alarm) {
+    if (alarm.weekdays.length === 0) return label("repeatOnce");
+    const days = [];
+    for (let day = 0; day < DAYS_PER_WEEK; day++) {
+      if (alarm.weekdays.includes(day)) days.push(weekdayName(day));
+    }
+    return days.join(", ");
+  }
+
+  /**
+   * The Alarm's name for its controls: its time alone, or its time, label, and
+   * weekdays when another Alarm shares the time and the bare time would be
+   * ambiguous.
+   * @param {Alarm} alarm
+   * @param {Alarm[]} list
+   * @returns {string}
+   */
+  function alarmName(alarm, list) {
+    const time = alarmTimeText(alarm);
+    const shared = list.some(
+      (other) => other.id !== alarm.id && other.hour === alarm.hour && other.minute === alarm.minute
+    );
+    if (!shared) return time;
+    return [time, alarm.label, alarmRepeatText(alarm)].filter((part) => part !== "").join(", ");
+  }
+
+  /**
+   * The "Next alarm ..." line for the nearest enabled Alarm, or null when none
+   * is on.
+   * @param {number} now
+   * @returns {string | null}
+   */
+  function nextAlarmText(now) {
+    if (!frameState) return null;
+    /** @type {number | null} */
+    let soonest = null;
+    for (const alarm of frameState.alarms) {
+      if (!alarm.enabled || alarm.nextAt === null) continue;
+      if (soonest === null || alarm.nextAt < soonest) soonest = alarm.nextAt;
+    }
+    if (soonest === null) return null;
+    const offset = offsetNow();
+    const today = Math.floor((now - offset * MS_PER_MINUTE) / MS_PER_DAY);
+    const day = Math.floor(
+      (soonest - new Date(soonest).getTimezoneOffset() * MS_PER_MINUTE) / MS_PER_DAY
+    );
+    const ahead = day - today;
+    /** @type {string} */
+    let dayWord;
+    if (ahead <= 0) dayWord = label("today");
+    else if (ahead === 1) dayWord = label("tomorrow");
+    else dayWord = weekdayName(day + EPOCH_WEEKDAY);
+    const minutes = Math.max(0, Math.ceil((soonest - now) / MS_PER_MINUTE));
+    const inText =
+      minutes >= MINUTES_PER_HOUR
+        ? fill(label("inHoursMinutes"), {
+            h: Math.floor(minutes / MINUTES_PER_HOUR),
+            m: minutes % MINUTES_PER_HOUR,
+          })
+        : fill(label("inMinutes"), { m: minutes });
+    return fill(label("nextAlarm"), {
+      day: dayWord,
+      time: formatClockTime(soonest, new Date(soonest).getTimezoneOffset(), hourCycle),
+      in: inText,
+    });
+  }
+
+  /**
+   * The Lap indexes the Laps table tags, or -1 for each when there are fewer
+   * than two Laps or every Lap took the same time. A tie keeps the first Lap.
+   * @param {Lap[]} laps
+   * @returns {{ fastest: number, slowest: number }}
+   */
+  function lapBounds(laps) {
+    if (laps.length < 2) return { fastest: -1, slowest: -1 };
+    let fastest = 0;
+    let slowest = 0;
+    laps.forEach((lap, index) => {
+      if (lap.length < laps[fastest].length) fastest = index;
+      if (lap.length > laps[slowest].length) slowest = index;
+    });
+    if (fastest === slowest) return { fastest: -1, slowest: -1 };
+    return { fastest, slowest };
   }
 
   /** @param {number} value @param {number} max @returns {number} */
@@ -276,7 +415,15 @@
   /** @type {string} */
   let activeTab = "timer";
   let tickHandle = 0;
+  let rafHandle = 0;
   let alsoKeys = "";
+  let alarmKeys = "";
+  let lapKeys = "";
+  let lapBarKeys = "";
+  let daysKey = "";
+  let stopwatchIcon = "";
+  /** @type {OpenAlarmDraft | null} */
+  let editor = null;
 
   /** @param {string} key @returns {string} */
   function label(key) {
@@ -288,6 +435,12 @@
   function setText(id, text) {
     const node = el(id);
     if (node.textContent !== text) node.textContent = text;
+  }
+
+  /** @param {string} id @param {string} name @param {string} value */
+  function setAttr(id, name, value) {
+    const node = el(id);
+    if (node.getAttribute(name) !== value) node.setAttribute(name, value);
   }
 
   /** @param {string} phase @returns {string} */
@@ -363,8 +516,12 @@
       tab.tabIndex = selected ? 0 : -1;
       el(`panel-${key}`).hidden = !selected;
     }
+    const alarms = name === "alarms";
+    el("add-alarm").hidden = !alarms;
+    el("pomodoros-today").hidden = alarms;
     if (focus) el(`tab-${name}`).focus();
     scheduleTick();
+    scheduleAnimation();
   }
 
   function drawStatic() {
@@ -384,6 +541,23 @@
     el("pomodoro-reset").setAttribute("aria-label", label("resetCycle"));
     el("pomodoro-skip").setAttribute("aria-label", label("skip"));
     el("timer-reset").setAttribute("aria-label", label("reset"));
+    setText("laps-title", label("laps"));
+    setText("laps-col-lap", label("lap"));
+    setText("laps-col-lap-time", label("lapTime"));
+    setText("laps-col-total", label("total"));
+    setText("stopwatch-lap-label", label("lap"));
+    el("stopwatch-reset").setAttribute("aria-label", label("reset"));
+    setText("add-alarm-label", label("addAlarm"));
+    setText("alarm-hour-label", label("hour"));
+    setText("alarm-minute-label", label("minute"));
+    setText("alarm-label-caption", label("alarmLabel"));
+    setText("alarm-repeat-legend", label("repeat"));
+    setText("alarm-repeat-hint", label("repeatHint"));
+    setText("alarm-cancel", label("cancel"));
+    setText("alarm-save", label("saveAlarm"));
+    el("alarm-editor-close").setAttribute("aria-label", label("cancel"));
+    drawDays();
+    drawEditorTitle();
   }
 
   function drawTabs() {
@@ -602,6 +776,126 @@
   }
 
   /**
+   * Draws the Laps table, newest first, with the Fastest and Slowest Lap tagged.
+   * @param {Lap[]} laps
+   */
+  function drawLaps(laps) {
+    const shown = laps.length > 0;
+    el("laps-panel").hidden = !shown;
+    el("laps-card").hidden = !shown;
+    const bounds = lapBounds(laps);
+    const key = `${laps.map((lap) => `${lap.length}:${lap.total}`).join(",")}|${label("fastest")}|${label("slowest")}`;
+    if (key === lapKeys) return;
+    lapKeys = key;
+    const rows = [];
+    for (let index = laps.length - 1; index >= 0; index--) {
+      const lap = laps[index];
+      const row = document.createElement("tr");
+      const number = document.createElement("td");
+      const group = document.createElement("span");
+      group.className = "lap-number";
+      const ordinal = document.createElement("span");
+      ordinal.className = "number";
+      ordinal.textContent = String(index + 1);
+      group.append(ordinal);
+      /** @type {"fastest" | "slowest" | null} */
+      let tag = null;
+      if (index === bounds.fastest) tag = "fastest";
+      else if (index === bounds.slowest) tag = "slowest";
+      if (tag !== null) {
+        const badge = document.createElement("span");
+        badge.className = `tag ${tag}`;
+        badge.textContent = label(tag);
+        group.append(badge);
+      }
+      number.append(group);
+      const lapCell = document.createElement("td");
+      lapCell.className = "numeric";
+      lapCell.textContent = formatLap(lap.length);
+      const totalCell = document.createElement("td");
+      totalCell.className = "numeric total";
+      totalCell.textContent = formatLap(lap.total);
+      row.append(number, lapCell, totalCell);
+      rows.push(row);
+    }
+    el("laps-body").replaceChildren(...rows);
+  }
+
+  /**
+   * Draws one bar per Lap, with the Lap in progress in the primary color.
+   * @param {Lap[]} laps
+   * @param {boolean} running
+   * @param {number} current
+   */
+  function drawLapBars(laps, running, current) {
+    /** @param {number} ms @returns {number} */
+    const flexOf = (ms) => Math.max(1, Math.floor(ms / MS_PER_SECOND));
+    const strip = el("stopwatch-bars");
+    const key = `${laps.map((lap) => Math.round(lap.length)).join(",")}|${running}`;
+    if (key === lapBarKeys) {
+      if (running) {
+        const bar = strip.lastElementChild;
+        if (bar instanceof HTMLElement) bar.style.flexGrow = String(flexOf(current));
+      }
+      return;
+    }
+    lapBarKeys = key;
+    /** @type {number[]} */
+    const lengths = laps.map((lap) => lap.length);
+    if (running) lengths.push(current);
+    strip.hidden = lengths.length === 0;
+    strip.replaceChildren(
+      ...lengths.map((length, index) => {
+        const bar = document.createElement("span");
+        const last = index === lengths.length - 1;
+        bar.className = running && last ? "lap-bar current" : "lap-bar";
+        bar.style.flexGrow = String(flexOf(length));
+        return bar;
+      })
+    );
+  }
+
+  function drawStopwatch() {
+    if (!frameState) return;
+    const state = frameState.stopwatch;
+    const now = Date.now();
+    const elapsed = elapsedStopwatch(state, now);
+    const laps = state.status === "idle" ? [] : state.laps;
+    const running = state.status === "running";
+
+    setText("stopwatch-digits", formatStopwatch(elapsed));
+    setText("stopwatch-hundredths", formatHundredths(elapsed));
+    setAttr(
+      "stopwatch-time",
+      "aria-label",
+      fill(label("timeElapsed"), { time: formatStopwatch(elapsed) })
+    );
+
+    el("stopwatch-lap").hidden = !running;
+    el("stopwatch-reset").hidden = state.status !== "paused";
+    setText(
+      "stopwatch-primary-label",
+      label(running ? "pause" : state.status === "paused" ? "resume" : "start")
+    );
+    const icon = running ? "pause" : "play";
+    if (icon !== stopwatchIcon) {
+      stopwatchIcon = icon;
+      drawIcon("stopwatch-primary-icon", icon);
+    }
+
+    const lastTotal = laps.length > 0 ? laps[laps.length - 1].total : 0;
+    const current = Math.max(0, elapsed - lastTotal);
+    el("stopwatch-lap-line").hidden = !running;
+    if (running) {
+      setText("stopwatch-lap-pill", fill(label("lapNumber"), { n: laps.length + 1 }));
+      setText("stopwatch-lap-time", fill(label("thisLap"), { time: formatLap(current) }));
+    }
+
+    drawLapBars(laps, running, current);
+    drawLaps(laps);
+  }
+
+  /**
    * @param {AlsoData} data
    * @returns {HTMLElement}
    */
@@ -738,6 +1032,321 @@
     if (message !== null) setText("alerts-text", message);
   }
 
+  /** @param {keyof typeof ICON_PATHS} kind @returns {HTMLButtonElement} */
+  function iconButton(kind) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "icon-button";
+    const svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("width", "18");
+    svg.setAttribute("height", "18");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "2");
+    svg.setAttribute("stroke-linecap", "round");
+    svg.setAttribute("stroke-linejoin", "round");
+    for (const path of ICON_PATHS[kind]) {
+      const shape = document.createElementNS(SVG_NS, "path");
+      shape.setAttribute("d", path);
+      svg.append(shape);
+    }
+    button.append(svg);
+    return button;
+  }
+
+  /** @param {string} id @returns {Alarm | null} */
+  function currentAlarm(id) {
+    if (!frameState) return null;
+    return frameState.alarms.find((alarm) => alarm.id === id) ?? null;
+  }
+
+  /** @param {Alarm} alarm @returns {AlarmDraft} */
+  function alarmDraft(alarm) {
+    return {
+      id: alarm.id,
+      hour: alarm.hour,
+      minute: alarm.minute,
+      label: alarm.label,
+      weekdays: [...alarm.weekdays],
+      time: alarmTimeText(alarm),
+    };
+  }
+
+  /**
+   * @param {Alarm} alarm
+   * @returns {HTMLElement}
+   */
+  function buildAlarmRow(alarm) {
+    const item = document.createElement("li");
+    item.className = "alarm";
+
+    const top = document.createElement("div");
+    top.className = "alarm-top";
+    const text = document.createElement("div");
+    text.className = "alarm-text";
+    const time = document.createElement("span");
+    time.className = "alarm-time";
+    const caption = document.createElement("span");
+    caption.className = "alarm-label";
+    text.append(time, caption);
+
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "switch";
+    toggle.setAttribute("role", "switch");
+    const track = document.createElement("span");
+    track.className = "track";
+    const knob = document.createElement("span");
+    knob.className = "knob";
+    track.append(knob);
+    toggle.append(track);
+    toggle.addEventListener("click", () => {
+      const current = currentAlarm(alarm.id);
+      if (current !== null) {
+        post({ kind: "alarm.setEnabled", id: alarm.id, enabled: !current.enabled });
+      }
+    });
+    top.append(text, toggle);
+
+    const foot = document.createElement("div");
+    foot.className = "alarm-foot";
+    const repeat = document.createElement("span");
+    repeat.className = "alarm-repeat";
+    const actions = document.createElement("span");
+    actions.className = "alarm-actions";
+    const edit = iconButton("edit");
+    edit.addEventListener("click", () => {
+      const current = currentAlarm(alarm.id);
+      if (current !== null) openEditor(alarmDraft(current), edit);
+    });
+    const remove = iconButton("remove");
+    remove.className = "icon-button destructive";
+    remove.addEventListener("click", () => post({ kind: "alarm.remove", id: alarm.id }));
+    actions.append(edit, remove);
+    foot.append(repeat, actions);
+
+    item.append(top, foot);
+    return item;
+  }
+
+  /**
+   * The seven weekday chips, on for the days the Alarm repeats on. Each letter
+   * is the first character of the localized short weekday name.
+   * @param {Alarm} alarm
+   * @returns {HTMLElement[]}
+   */
+  function repeatChips(alarm) {
+    return WEEKDAY_KEYS.map((name, day) => {
+      const chip = document.createElement("span");
+      chip.className = alarm.weekdays.includes(day) ? "day-chip on" : "day-chip";
+      chip.setAttribute("aria-hidden", "true");
+      chip.textContent = label(name).slice(0, 1);
+      return chip;
+    });
+  }
+
+  /**
+   * @param {HTMLElement} repeat the row's repeat container
+   * @param {Alarm} alarm
+   */
+  function applyRepeat(repeat, alarm) {
+    const text = alarmRepeatText(alarm);
+    const key = `${alarm.weekdays.join(",")}|${text}`;
+    if (repeat.dataset.key === key) return;
+    repeat.dataset.key = key;
+    if (alarm.weekdays.length === 0) {
+      repeat.removeAttribute("aria-label");
+      repeat.textContent = text;
+      return;
+    }
+    repeat.setAttribute("aria-label", text);
+    repeat.replaceChildren(...repeatChips(alarm));
+  }
+
+  /**
+   * @param {HTMLElement} row
+   * @param {Alarm} alarm
+   * @param {Alarm[]} list
+   */
+  function applyAlarmRow(row, alarm, list) {
+    row.className = alarm.enabled ? "alarm" : "alarm off";
+    const time = row.querySelector(".alarm-time");
+    if (time !== null) time.textContent = alarmTimeText(alarm);
+    const caption = row.querySelector(".alarm-label");
+    if (caption !== null) {
+      caption.textContent = alarm.label;
+      caption.hidden = alarm.label === "";
+    }
+    const name = alarmName(alarm, list);
+    const toggle = row.querySelector(".switch");
+    if (toggle !== null) {
+      toggle.setAttribute("aria-checked", alarm.enabled ? "true" : "false");
+      toggle.setAttribute("aria-label", fill(label("alarmSwitch"), { time: name }));
+    }
+    const repeat = row.querySelector(".alarm-repeat");
+    if (repeat instanceof HTMLElement) applyRepeat(repeat, alarm);
+    const actions = row.querySelectorAll(".icon-button");
+    const edit = actions[0];
+    if (edit !== undefined) {
+      edit.setAttribute("aria-label", fill(label("editAlarm"), { time: name }));
+    }
+    const remove = actions[1];
+    if (remove !== undefined) {
+      remove.setAttribute("aria-label", fill(label("deleteAlarm"), { time: name }));
+    }
+  }
+
+  function drawAlarms() {
+    if (!frameState) return;
+    const list = frameState.alarms;
+    const next = nextAlarmText(Date.now());
+    el("next-alarm").hidden = next === null;
+    if (next !== null) setText("next-alarm", next);
+
+    el("no-alarms").hidden = list.length > 0;
+    setText("no-alarms", label("noAlarms"));
+
+    const items = el("alarm-list");
+    const key = list.map((alarm) => alarm.id).join(",");
+    if (key !== alarmKeys) {
+      alarmKeys = key;
+      items.replaceChildren(...list.map((alarm) => buildAlarmRow(alarm)));
+    }
+    list.forEach((alarm, index) => {
+      const row = items.children[index];
+      if (row instanceof HTMLElement) applyAlarmRow(row, alarm, list);
+    });
+  }
+
+  /** @returns {HTMLInputElement[]} */
+  function dayInputs() {
+    return Array.from(el("alarm-days").querySelectorAll("input"));
+  }
+
+  /** Draws the seven weekday toggles, keeping the ones already checked. */
+  function drawDays() {
+    const key = WEEKDAY_KEYS.map((name) => label(name)).join("|");
+    if (key === daysKey) return;
+    daysKey = key;
+    const checked = new Set(
+      dayInputs()
+        .filter((input) => input.checked)
+        .map((input) => input.value)
+    );
+    const days = WEEKDAY_KEYS.map((name, day) => {
+      const wrapper = document.createElement("label");
+      wrapper.className = "day";
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.value = String(day);
+      input.checked = checked.has(input.value);
+      const text = document.createElement("span");
+      text.textContent = label(name);
+      wrapper.append(input, text);
+      return wrapper;
+    });
+    el("alarm-days").replaceChildren(...days);
+  }
+
+  function drawEditorTitle() {
+    if (editor === null) return;
+    setText(
+      "alarm-editor-title",
+      editor.id === null ? label("addAlarm") : fill(label("editAlarm"), { time: editor.time ?? "" })
+    );
+  }
+
+  /** @returns {AlarmDraft} */
+  function newAlarmDraft() {
+    const local = new Date();
+    return {
+      id: null,
+      hour: local.getHours(),
+      minute: local.getMinutes(),
+      label: "",
+      weekdays: [],
+      time: null,
+    };
+  }
+
+  /**
+   * Opens the editor with a draft, and remembers the control to give focus back
+   * to once it closes.
+   * @param {AlarmDraft} draft
+   * @param {HTMLElement | null} opener
+   */
+  function openEditor(draft, opener) {
+    editor = { ...draft, opener };
+    /** @type {HTMLInputElement} */ (el("alarm-hour")).value = pad2(draft.hour);
+    /** @type {HTMLInputElement} */ (el("alarm-minute")).value = pad2(draft.minute);
+    /** @type {HTMLInputElement} */ (el("alarm-label")).value = draft.label;
+    for (const input of dayInputs()) input.checked = draft.weekdays.includes(Number(input.value));
+    el("alarm-editor").hidden = false;
+    drawEditorTitle();
+    el("alarm-label").focus();
+  }
+
+  function closeEditor() {
+    if (editor === null) return;
+    const { opener } = editor;
+    editor = null;
+    el("alarm-editor").hidden = true;
+    if (opener !== null && document.contains(opener)) opener.focus();
+  }
+
+  function saveEditor() {
+    if (editor === null) return;
+    const input = {
+      hour: clamp(readInput("alarm-hour"), MAX_ALARM_HOUR),
+      minute: clamp(readInput("alarm-minute"), MAX_MINUTES),
+      label: /** @type {HTMLInputElement} */ (el("alarm-label")).value,
+      weekdays: dayInputs()
+        .filter((input) => input.checked)
+        .map((input) => Number(input.value))
+        .sort((a, b) => a - b),
+    };
+    if (editor.id === null) post({ kind: "alarm.add", input });
+    else post({ kind: "alarm.edit", id: editor.id, input });
+    closeEditor();
+  }
+
+  /** @param {HTMLElement} root @returns {HTMLElement[]} */
+  function focusableIn(root) {
+    /** @type {HTMLElement[]} */
+    const items = [];
+    for (const node of root.querySelectorAll("button, input, [tabindex]")) {
+      if (!(node instanceof HTMLElement) || node.hidden) continue;
+      if (node.getAttribute("tabindex") === "-1") continue;
+      if (node instanceof HTMLInputElement && node.type === "hidden") continue;
+      items.push(node);
+    }
+    return items;
+  }
+
+  /** @param {KeyboardEvent} event */
+  function onEditorKeyDown(event) {
+    if (editor === null) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeEditor();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const items = focusableIn(el("alarm-editor"));
+    if (items.length === 0) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
   function drawTimed() {
     if (!labels || !frameState) return;
     drawLive();
@@ -745,6 +1354,8 @@
     drawPomodoro();
     drawTimerTime();
     drawAlsoRunning();
+    drawStopwatch();
+    drawAlarms();
   }
 
   function scheduleTick() {
@@ -762,6 +1373,26 @@
     }
   }
 
+  /** Draws each animation frame while the Stopwatch runs and its tab shows, and no other time. */
+  function animationFrame() {
+    rafHandle = 0;
+    if (!frameState) return;
+    if (frameState.stopwatch.status !== "running" || activeTab !== "stopwatch") return;
+    drawStopwatch();
+    rafHandle = window.requestAnimationFrame(animationFrame);
+  }
+
+  function scheduleAnimation() {
+    if (rafHandle !== 0) {
+      window.cancelAnimationFrame(rafHandle);
+      rafHandle = 0;
+    }
+    if (!frameState) return;
+    if (frameState.stopwatch.status === "running" && activeTab === "stopwatch") {
+      rafHandle = window.requestAnimationFrame(animationFrame);
+    }
+  }
+
   function renderAll() {
     const ready = labels !== null && frameState !== null;
     el("clock").hidden = !ready;
@@ -775,7 +1406,10 @@
     drawTimer();
     drawAlsoRunning();
     drawAlerts();
+    drawStopwatch();
+    drawAlarms();
     scheduleTick();
+    scheduleAnimation();
   }
 
   /** @param {MessageEvent} event */
@@ -850,6 +1484,21 @@
   });
   el("timer-reset").addEventListener("click", () => post({ kind: "timer.reset" }));
 
+  el("stopwatch-primary").addEventListener("click", () => {
+    if (!frameState) return;
+    post({
+      kind: frameState.stopwatch.status === "running" ? "stopwatch.pause" : "stopwatch.start",
+    });
+  });
+  el("stopwatch-lap").addEventListener("click", () => post({ kind: "stopwatch.lap" }));
+  el("stopwatch-reset").addEventListener("click", () => post({ kind: "stopwatch.reset" }));
+
+  el("add-alarm").addEventListener("click", () => openEditor(newAlarmDraft(), el("add-alarm")));
+  el("alarm-editor-close").addEventListener("click", closeEditor);
+  el("alarm-cancel").addEventListener("click", closeEditor);
+  el("alarm-save").addEventListener("click", saveEditor);
+  el("alarm-editor").addEventListener("keydown", onEditorKeyDown);
+
   for (const key of ["timer-hours", "timer-minutes", "timer-seconds"]) {
     el(key).addEventListener("input", postLength);
   }
@@ -860,6 +1509,10 @@
     if (tickHandle !== 0) {
       clearInterval(tickHandle);
       tickHandle = 0;
+    }
+    if (rafHandle !== 0) {
+      window.cancelAnimationFrame(rafHandle);
+      rafHandle = 0;
     }
     post({ kind: "closed" });
   });
