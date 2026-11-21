@@ -1184,8 +1184,7 @@ describe("NotesList reorder", () => {
 
       await arrowToHandle(user, "b");
       await user.keyboard("{Enter}");
-      // React Aria moves focus to the first drop target once the drag starts.
-      await waitFor(() => expect(handleOf("b")).not.toHaveFocus());
+      await waitForKeyboardDrag();
       const seen = new Set<string>();
       for (let i = 0; i < 6; i++) {
         seen.add(document.activeElement?.getAttribute("aria-label") ?? "");
