@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, Eye, EyeOff, Lock, Unlock } from "lucide-react"
 import { useTranslation } from "react-i18next";
 import { useCoverStore } from "@/features/covers/store";
 import type { Layer } from "@/features/covers/scene/schema";
+import { isIgnoredKeyEvent } from "@/lib/shortcut-keys";
 import { Tooltip } from "@/components/ui";
 
 function layerLabel(layer: Layer): string {
@@ -56,7 +57,8 @@ export function LayersPanel() {
                     setEditingId(null);
                   }}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                    if (e.key === "Enter" && !isIgnoredKeyEvent(e.nativeEvent))
+                      (e.target as HTMLInputElement).blur();
                     if (e.key === "Escape") setEditingId(null);
                   }}
                 />

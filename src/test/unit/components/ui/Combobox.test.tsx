@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Combobox } from "@/components/ui/Combobox";
 
@@ -155,6 +155,37 @@ describe("Combobox", () => {
       expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
     });
 
+    it("does not commit on an Enter that commits an IME composition", async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+
+      render(
+        <Combobox
+          value="Arial"
+          onChange={onChange}
+          options={options}
+          ariaLabel="Font"
+          explicitCommitOnly
+        />
+      );
+
+      const input = screen.getByRole("combobox");
+      await user.click(input);
+      await user.keyboard("{Control>}a{/Control}Georgia");
+
+      // The IME's own Enter: still composing, and Safari's commit Enter that
+      // only `keyCode` 229 tells apart. Neither may commit the typed text.
+      fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+      fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
+      expect(onChange).not.toHaveBeenCalled();
+      expect(input).toHaveValue("Georgia");
+
+      // The author's Enter still commits.
+      await user.keyboard("{Enter}");
+      expect(onChange).toHaveBeenCalledTimes(1);
+      expect(onChange).toHaveBeenCalledWith("Georgia");
+    });
+
     it("leaves the default commit behavior alone when off", async () => {
       const user = userEvent.setup();
       const onChange = vi.fn();
@@ -209,6 +240,28 @@ describe("Combobox", () => {
       await user.type(input, "MyFont");
       await user.keyboard("{NumpadEnter}");
 
+      expect(onChange).toHaveBeenCalledWith("MyFont");
+    });
+
+    it("does not accept a custom value on an Enter that commits an IME composition", async () => {
+      const user = userEvent.setup();
+      const onChange = vi.fn();
+
+      render(<Combobox value="" onChange={onChange} options={options} ariaLabel="Font" />);
+
+      const input = screen.getByRole("combobox");
+      await user.click(input);
+      await user.type(input, "MyFont");
+
+      // The IME's own Enter: still composing, and Safari's commit Enter that
+      // only `keyCode` 229 tells apart. Neither may commit the typed text.
+      fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+      fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
+      expect(onChange).not.toHaveBeenCalled();
+      expect(input).toHaveValue("MyFont");
+
+      // The author's Enter still commits.
+      await user.keyboard("{Enter}");
       expect(onChange).toHaveBeenCalledWith("MyFont");
     });
   });

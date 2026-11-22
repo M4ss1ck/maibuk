@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -114,6 +114,19 @@ describe("EdgeInspectorCard style controls", () => {
     await user.keyboard("{Enter}");
 
     expect(mocks.onStyleChange).toHaveBeenLastCalledWith({ color: "#EF4444" });
+  });
+
+  it("commits the connection label on Enter but not while an IME is composing", () => {
+    renderCard();
+    const label = screen.getByRole("textbox", { name: "Connection label" });
+    label.focus();
+
+    fireEvent.keyDown(label, { key: "Enter", isComposing: true });
+    fireEvent.keyDown(label, { key: "Enter", keyCode: 229 });
+    expect(mocks.onLabelCommit).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(label, { key: "Enter" });
+    expect(mocks.onLabelCommit).toHaveBeenCalledTimes(1);
   });
 
   it("still closes the card with Escape", async () => {

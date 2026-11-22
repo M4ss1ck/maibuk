@@ -4878,7 +4878,7 @@ describe("the on-map text box (#800)", () => {
     });
   };
   /** One key pressed in the text box, which answers whether anything handled it. */
-  const type = (name: string, init: KeyboardEventInit = {}) => {
+  const type = (name: string, init: KeyboardEventInit & { keyCode?: number } = {}) => {
     const event = new KeyboardEvent("keydown", {
       key: name,
       bubbles: true,
@@ -4998,6 +4998,30 @@ describe("the on-map text box (#800)", () => {
     if (box === null) throw new Error("no text box");
     box.value = "Bay";
     box.blur();
+    expect(field()).toBeNull();
+    expect(frame?.port.messages).toEqual([{ kind: "labelText", id: "e1", text: "Bay" }]);
+  });
+
+  it("ignores the composing Escape and Ctrl+Enter that belong to an IME", () => {
+    open();
+    const box = field();
+    if (box === null) throw new Error("no text box");
+    box.value = "Bay";
+
+    // The IME's own keys: still composing, and Safari's commit key that only
+    // `keyCode` 229 tells apart. None may commit, and none cancels the key.
+    const composing = [
+      type("Enter", { ctrlKey: true, isComposing: true }),
+      type("Enter", { ctrlKey: true, keyCode: 229 }),
+      type("Escape", { isComposing: true }),
+      type("Escape", { keyCode: 229 }),
+    ];
+    for (const event of composing) expect(event.defaultPrevented).toBe(false);
+    expect(field()).not.toBeNull();
+    expect(frame?.port.messages).toEqual([]);
+
+    // The author's Ctrl+Enter still commits.
+    type("Enter", { ctrlKey: true });
     expect(field()).toBeNull();
     expect(frame?.port.messages).toEqual([{ kind: "labelText", id: "e1", text: "Bay" }]);
   });

@@ -27,6 +27,7 @@ import { useSettingsStore } from "@/features/settings/store";
 import { BACKUP_LIST_PAGE_SIZE_OPTIONS } from "@/features/settings/types";
 import { SettingRow } from "@/components/settings/SettingRow";
 import { SETTINGS_ROW_CLASS } from "@/components/settings/SettingsSection";
+import { isIgnoredKeyEvent } from "@/lib/shortcut-keys";
 
 const SIZE_WARNING_THRESHOLD = 500 * 1024 * 1024; // 500MB
 
@@ -437,7 +438,7 @@ export function BackupSection() {
               if (!directoryNeedsApproval) setDirectoryError(null);
             }}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
+              if (e.key === "Enter" && !isIgnoredKeyEvent(e.nativeEvent)) {
                 e.preventDefault();
                 void commitDirectoryDraft();
               } else if (e.key === "Escape" && directoryDraft !== null) {

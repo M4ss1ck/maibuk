@@ -4,6 +4,7 @@ import type { NodeViewProps } from "@tiptap/react";
 import { useTranslation } from "react-i18next";
 import { Check, Copy } from "lucide-react";
 import { Tooltip } from "@/components/ui";
+import { isIgnoredKeyEvent } from "@/lib/shortcut-keys";
 
 export function CodeBlockView({ node, updateAttributes }: NodeViewProps) {
   const { t } = useTranslation();
@@ -66,7 +67,7 @@ export function CodeBlockView({ node, updateAttributes }: NodeViewProps) {
           onChange={(e) => setLanguageDraft(e.target.value)}
           onBlur={saveLanguage}
           onKeyDown={(e) => {
-            if (e.key === "Enter") {
+            if (e.key === "Enter" && !isIgnoredKeyEvent(e.nativeEvent)) {
               e.preventDefault();
               saveLanguage();
             }

@@ -65,6 +65,7 @@ import { CANVAS_TEXT_NODE_DEFAULT_WIDTH } from "@/constants";
 import { isPlacementTool, type CanvasPosition } from "@/features/canvas/types";
 import { claimPastedImage } from "@/lib/pasted-image";
 import { IS_TAURI, getFileSystem } from "@/lib/platform";
+import { isIgnoredKeyEvent } from "@/lib/shortcut-keys";
 import { useShortcuts } from "@/lib/shortcuts";
 
 const DEFAULT_SESSION_VIEWPORT = { x: 0, y: 0, zoom: 1 };
@@ -944,7 +945,8 @@ function CanvasEditor() {
             current && titleDraft !== current.title && void renameCanvas(current.id, titleDraft)
           }
           onKeyDown={(event) => {
-            if (event.key === "Enter") event.currentTarget.blur();
+            if (event.key === "Enter" && !isIgnoredKeyEvent(event.nativeEvent))
+              event.currentTarget.blur();
             if (event.key === "Escape") {
               setTitleDraft(current?.title ?? "");
               event.currentTarget.blur();

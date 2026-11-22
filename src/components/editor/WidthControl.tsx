@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { MoveHorizontal } from "lucide-react";
 import { Tooltip } from "@/components/ui";
 import { useSettingsStore } from "@/features/settings/store";
+import { isIgnoredKeyEvent } from "@/lib/shortcut-keys";
 import {
   EDITOR_CONTENT_WIDTH_MIN,
   EDITOR_CONTENT_WIDTH_MAX,
@@ -179,7 +180,7 @@ export function WidthControl() {
                   setIsEditingWidth(false);
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") {
+                  if (e.key === "Enter" && !isIgnoredKeyEvent(e.nativeEvent)) {
                     commitWidthInput();
                     e.currentTarget.blur();
                   }

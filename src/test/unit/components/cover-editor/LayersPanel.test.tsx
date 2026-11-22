@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -79,6 +79,27 @@ describe("LayersPanel", () => {
     expect(visibility[1]).toHaveAttribute("aria-pressed", "false");
     expect(lock[0]).toHaveAttribute("aria-pressed", "true");
     expect(lock[1]).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("renames on Enter but not while an IME is composing", async () => {
+    const user = userEvent.setup();
+    render(<LayersPanel />);
+    const label = screen.getByRole("button", { name: "Arrival" });
+    await user.dblClick(label);
+
+    const field = screen.getByDisplayValue("title");
+    field.focus();
+    fireEvent.change(field, { target: { value: "Heading" } });
+
+    fireEvent.keyDown(field, { key: "Enter", isComposing: true });
+    fireEvent.keyDown(field, { key: "Enter", keyCode: 229 });
+    expect(mocks.store.updateLayer).not.toHaveBeenCalled();
+    expect(field).toHaveFocus();
+
+    fireEvent.keyDown(field, { key: "Enter" });
+    expect(mocks.store.updateLayer).toHaveBeenCalledWith("layer-title", { name: "Heading" });
+    expect(screen.queryByDisplayValue("Heading")).toBeNull();
+    expect(field).not.toHaveFocus();
   });
 
   it("toggles visibility and lock on the pressed row", async () => {

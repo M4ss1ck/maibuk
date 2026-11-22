@@ -149,7 +149,29 @@ describe("PagePaddingControl", () => {
     expect(onChange).toHaveBeenLastCalledWith(0);
   });
 
-  it("calls onChange with the clamped side value when a custom side input is edited and Enter is pressed", () => {
+  it("ignores an IME Enter in the simple padding input", () => {
+    const onChange = vi.fn();
+    render(
+      <PagePaddingControl
+        padding={{ top: 32, right: 32, bottom: 32, left: 32 }}
+        onChange={onChange}
+      />
+    );
+    fireEvent.click(screen.getByText("32px"));
+    const input = screen.getByLabelText("editor.pagePadding px");
+    fireEvent.input(input, { target: { value: "64" } });
+
+    // The IME's own Enter and Safari's commit Enter may not commit the value.
+    fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+    fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("editor.pagePadding px")).toBeInTheDocument();
+
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onChange).toHaveBeenLastCalledWith(64);
+  });
+
+  it("ignores an IME Enter in a custom side padding input", () => {
     const onChange = vi.fn();
     render(
       <PagePaddingControl
@@ -161,6 +183,13 @@ describe("PagePaddingControl", () => {
     fireEvent.click(screen.getByLabelText("editor.pagePaddingTop px"));
     const input = screen.getByLabelText("editor.pagePaddingTop px");
     fireEvent.input(input, { target: { value: "56" } });
+
+    // The IME's own Enter and Safari's commit Enter may not commit the side.
+    fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+    fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("editor.pagePaddingTop px")).toBeInTheDocument();
+
     fireEvent.keyDown(input, { key: "Enter" });
     expect(onChange).toHaveBeenLastCalledWith({ top: 56 });
   });

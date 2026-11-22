@@ -38,6 +38,7 @@ import {
 } from "@/features/markdown";
 import { pickTextFiles, type DroppedTextFile } from "@/hooks/useTextFileDrop";
 import type { ListDropTarget } from "@/lib/drop-target";
+import { isIgnoredKeyEvent } from "@/lib/shortcut-keys";
 import { useTranslation } from "react-i18next";
 import {
   BackIcon,
@@ -1642,7 +1643,7 @@ export function BookEditor() {
           value={saveVersionName}
           onChange={(e) => setSaveVersionName(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") {
+            if (e.key === "Enter" && !isIgnoredKeyEvent(e.nativeEvent)) {
               e.preventDefault();
               void handleConfirmSaveVersion();
             }

@@ -3,6 +3,7 @@ import { forwardRef, useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { ChevronDown, X } from "lucide-react";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { isIgnoredKeyEvent } from "@/lib/shortcut-keys";
 
 interface MultiSelectComboboxProps {
   value: string[];
@@ -188,7 +189,11 @@ export const MultiSelectCombobox = forwardRef<HTMLInputElement, MultiSelectCombo
         return;
       }
 
-      if ((event.key === "Enter" || event.code === "NumpadEnter") && trimmedQuery) {
+      if (
+        (event.key === "Enter" || event.code === "NumpadEnter") &&
+        !isIgnoredKeyEvent(event.nativeEvent) &&
+        trimmedQuery
+      ) {
         event.preventDefault();
         createCustomValue();
       }

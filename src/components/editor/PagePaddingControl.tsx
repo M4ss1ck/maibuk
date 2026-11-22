@@ -7,6 +7,7 @@ import {
   EDITOR_PAGE_PADDING_STEP,
   clampEditorPagePadding,
 } from "@/features/settings/types";
+import { isIgnoredKeyEvent } from "@/lib/shortcut-keys";
 
 function sanitizeNumericInput(value: string): string {
   return value.replace(/[^0-9-]/g, "").replace(/(?!^)-/g, "");
@@ -105,7 +106,7 @@ function SimplePaddingControl({ value, onChange }: SimplePaddingControlProps) {
             setIsEditing(false);
           }}
           onKeyDown={(e) => {
-            if (e.key === "Enter") {
+            if (e.key === "Enter" && !isIgnoredKeyEvent(e.nativeEvent)) {
               commit();
               e.currentTarget.blur();
             }
@@ -218,7 +219,7 @@ function PaddingSideControl({ side, value, onChange }: PaddingSideControlProps) 
             setIsEditing(false);
           }}
           onKeyDown={(e) => {
-            if (e.key === "Enter") {
+            if (e.key === "Enter" && !isIgnoredKeyEvent(e.nativeEvent)) {
               commit();
               e.currentTarget.blur();
             }

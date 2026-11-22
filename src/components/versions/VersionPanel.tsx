@@ -37,6 +37,7 @@ import type { BookVersion } from "@/features/versions/types";
 import type { BookSnapshot } from "@/features/sync/types";
 import { serializeBook } from "@/features/sync/serializer";
 import { VersionPreview } from "@/components/versions/VersionPreview";
+import { isIgnoredKeyEvent } from "@/lib/shortcut-keys";
 
 const VersionCompare = lazy(() =>
   import("@/components/versions/VersionCompare").then((module) => ({
@@ -500,7 +501,7 @@ export function VersionPanel({ isOpen, onClose, bookId, flushBeforeCompare }: Ve
                           onChange={(e) => setRenameValue(e.target.value)}
                           onKeyDown={(e) => {
                             e.stopPropagation();
-                            if (e.key === "Enter") {
+                            if (e.key === "Enter" && !isIgnoredKeyEvent(e.nativeEvent)) {
                               e.preventDefault();
                               void handleRename(version.id);
                             }

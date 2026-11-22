@@ -30,6 +30,7 @@ import { useSearchSwitchesStore } from "@/features/search/switches";
 import { Tooltip, TooltipGroup } from "@/components/ui";
 import type { CommandId } from "@/lib/shortcut-registry";
 import { useBoundShortcutIds } from "@/lib/bound-shortcuts";
+import { isIgnoredKeyEvent } from "@/lib/shortcut-keys";
 import { useShortcuts } from "@/lib/shortcuts";
 
 interface FindReplaceProps {
@@ -340,7 +341,7 @@ export function FindReplace({
       // The bar owns this Escape: an enclosing panel must not also close.
       e.stopPropagation();
       closeAndReturnFocus();
-    } else if (e.key === "Enter") {
+    } else if (e.key === "Enter" && !isIgnoredKeyEvent(e.nativeEvent)) {
       e.preventDefault();
       if (e.shiftKey) findPrev();
       else findNext();
@@ -353,7 +354,7 @@ export function FindReplace({
       // The bar owns this Escape: an enclosing panel must not also close.
       e.stopPropagation();
       closeAndReturnFocus();
-    } else if (e.key === "Enter") {
+    } else if (e.key === "Enter" && !isIgnoredKeyEvent(e.nativeEvent)) {
       e.preventDefault();
       replaceCurrent();
     }

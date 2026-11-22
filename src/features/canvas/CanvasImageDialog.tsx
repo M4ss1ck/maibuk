@@ -12,6 +12,7 @@ import {
 import { fitCanvasImageSize, scaleCanvasImageSize } from "@/features/canvas/imageEncoding";
 import { useCanvasStore } from "@/features/canvas/store";
 import type { CanvasImageDialogTarget, ImageCanvasNode } from "@/features/canvas/types";
+import { isIgnoredKeyEvent } from "@/lib/shortcut-keys";
 
 type PlaceTarget = Extract<CanvasImageDialogTarget, { kind: "place" }>;
 type ReplaceTarget = Extract<CanvasImageDialogTarget, { kind: "replace" }>;
@@ -144,7 +145,7 @@ function CanvasAltTextDialog({ nodeId, onClose }: { nodeId: string; onClose: () 
         value={alt}
         onChange={(event) => setAlt(event.target.value)}
         onKeyDown={(event) => {
-          if (event.key === "Enter") {
+          if (event.key === "Enter" && !isIgnoredKeyEvent(event.nativeEvent)) {
             event.preventDefault();
             save();
           }

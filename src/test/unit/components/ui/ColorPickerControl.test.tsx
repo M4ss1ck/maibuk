@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { ColorPickerControl } from "@/components/ui/ColorPickerControl";
@@ -226,6 +226,24 @@ describe("ColorPickerControl", () => {
     expect(onPreview).toHaveBeenCalled();
     await user.keyboard("{Escape}");
     expect(onPreview).toHaveBeenLastCalledWith(null);
+  });
+
+  it("commits a hex edit on Enter but not while an IME is composing", async () => {
+    const user = userEvent.setup();
+    const onCommit = vi.fn();
+    render(<ColorPickerControl label="Accent" value="#3B82F6" onCommit={onCommit} />);
+    screen.getByRole("button", { name: "Accent" }).focus();
+    await user.keyboard("{Enter}");
+    const field = await screen.findByRole("textbox", { name: "colorPicker.hexValue" });
+    await user.clear(field);
+    await user.type(field, "#abc123");
+
+    fireEvent.keyDown(field, { key: "Enter", isComposing: true });
+    fireEvent.keyDown(field, { key: "Enter", keyCode: 229 });
+    expect(onCommit).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(field, { key: "Enter" });
+    expect(onCommit).toHaveBeenCalledWith("#ABC123");
   });
 
   it("Escape from an edited hex field cancels without committing", async () => {

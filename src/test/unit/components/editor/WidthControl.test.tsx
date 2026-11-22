@@ -139,6 +139,24 @@ describe("WidthControl", () => {
     });
   });
 
+  it("ignores an IME Enter in the width input", () => {
+    render(<WidthControl />);
+    fireEvent.click(screen.getByRole("button", { name: "editor.contentWidth" }));
+    fireEvent.click(screen.getByRole("button", { name: "editor.contentWidth px" }));
+
+    const input = screen.getByRole("textbox", { name: "editor.contentWidth px" });
+    fireEvent.change(input, { target: { value: "731" } });
+
+    // The IME's own Enter and Safari's commit Enter may not commit the width.
+    fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+    fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
+    expect(useSettingsStore.getState().editorContentWidth).toBe(720);
+    expect(screen.getByRole("textbox", { name: "editor.contentWidth px" })).toBeInTheDocument();
+
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(useSettingsStore.getState().editorContentWidth).toBe(740);
+  });
+
   it("renders the page padding control", () => {
     render(<WidthControl />);
     fireEvent.click(screen.getByRole("button", { name: "editor.contentWidth" }));

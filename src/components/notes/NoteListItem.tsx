@@ -1,5 +1,6 @@
 import type { DragEvent, KeyboardEvent } from "react";
 import { keepRowFromActing } from "@/lib/arrow-navigation";
+import { isIgnoredKeyEvent } from "@/lib/shortcut-keys";
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BookOpen, Copy, GripVertical, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
@@ -187,8 +188,9 @@ export function NoteListItem({
     // The field keeps its keys: the list's typeahead would otherwise swallow
     // a space typed after a letter.
     event.stopPropagation();
-    if (event.key === "Enter" || event.key === "Escape") refocusRowAfterEdit.current = true;
-    if (event.key === "Enter") {
+    if ((event.key === "Enter" && !isIgnoredKeyEvent(event.nativeEvent)) || event.key === "Escape")
+      refocusRowAfterEdit.current = true;
+    if (event.key === "Enter" && !isIgnoredKeyEvent(event.nativeEvent)) {
       event.preventDefault();
       commitTitle();
     } else if (event.key === "Escape") {
