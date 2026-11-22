@@ -41,6 +41,8 @@ describe("Echoes manifest", () => {
     expect(open?.navigates).toBe(true);
     const page = contributes?.pages?.find((candidate) => candidate.id === "report");
     expect(page?.command).toBe("openEchoes");
+    // The sidebar entry already names the page, so the host title row is hidden.
+    expect(page?.hideTitle).toBe(true);
     expect(contributes?.sidebarEntries?.find((entry) => entry.page === "report")?.icon).toBe(
       "waves"
     );

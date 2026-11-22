@@ -4,7 +4,7 @@
   "name": "Echoes",
   "description": "Points out words and phrases repeated closely enough, or often enough, that a reader would notice.",
   "author": "Maibuk",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "apiVersion": "^0.1.2",
   "entry": "index.js",
   "platforms": ["web", "desktop", "android"],
@@ -47,7 +47,7 @@
         "defaults": [["Alt+Shift+F8"]]
       }
     ],
-    "pages": [{ "id": "report", "title": "Echoes", "command": "openEchoes" }],
+    "pages": [{ "id": "report", "title": "Echoes", "command": "openEchoes", "hideTitle": true }],
     "sidebarEntries": [{ "page": "report", "icon": "waves" }],
     "toolbarButtons": [
       {
