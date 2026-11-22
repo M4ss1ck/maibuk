@@ -5,6 +5,24 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.0] - 2026-11-22
+
+### Added
+- E-ink Mode with grayscale palette, flat surfaces, monochrome code, non-color cues, a switch under The app, a Command toggle, and an Appearance tutorial step
+- Android support for Frame plugins, including the built-in Clock
+- App-wide reduced-motion support that follows the OS preference live and disables animations, transitions, and smooth scrolling
+
+### Changed
+- Sync states are distinguished by icon as well as color
+- Frame plugins can read the current motion preference through `--maibuk-motion`
+
+### Fixed
+- Maps and Reader work on Android with reliable binary data transfer, file saves, PDF loading, password-protected PDFs, and file-grant handling
+- Reader surfaces PDF load failures and keeps timed-out documents openable after the inactivity deadline
+- Collection plugins measure available height correctly in stretched page bodies and with out-of-flow siblings
+- Toolbar add-divider controls are hidden while dragging a row
+- E-ink switch and pressed toggles render correctly
+
 ## [0.25.0] - 2026-11-21
 
 ### Added
