@@ -11,6 +11,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import en from "./locales/runtime/en.json";
@@ -491,6 +492,14 @@ describe("search", () => {
     const user = userEvent.setup();
     await user.keyboard("{Control>}f{/Control}");
     await user.type(el("search-input"), "spice");
+    // An Enter the IME owns searches nothing: still composing, and Safari's
+    // commit Enter that only `keyCode` 229 tells apart.
+    fireEvent.keyDown(el("search-input"), { key: "Enter", isComposing: true });
+    fireEvent.keyDown(el("search-input"), { key: "Enter", keyCode: 229 });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(el("search-status").textContent).toBe("");
+    expect(el("page-indicator").textContent).toBe("1 of 4");
+
     await user.keyboard("{Enter}");
     await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("3 of 4"));
     expect(el("search-status").textContent).toBe("1 of 1");
@@ -626,6 +635,15 @@ describe("pdf.js failures", () => {
       await vi.waitFor(() => expect(form.hidden).toBe(false));
 
       const user = userEvent.setup();
+      await user.type(el("password-input"), "hunter2");
+      // An Enter the IME owns sends nothing: still composing, and Safari's
+      // commit Enter that only `keyCode` 229 tells apart.
+      fireEvent.keyDown(el("password-input"), { key: "Enter", isComposing: true });
+      fireEvent.keyDown(el("password-input"), { key: "Enter", keyCode: 229 });
+      expect(form.hidden).toBe(false);
+      expect(el("password-error").hidden).toBe(true);
+
+      await user.clear(el("password-input"));
       await user.type(el("password-input"), "wrong");
       await user.keyboard("{Enter}");
       await vi.waitFor(() => expect(el("password-error").hidden).toBe(false));

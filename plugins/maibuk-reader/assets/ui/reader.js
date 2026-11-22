@@ -3428,6 +3428,8 @@
   if (searchCloseButton) searchCloseButton.addEventListener("click", () => closeSearch(true));
   if (searchInput) {
     searchInput.addEventListener("keydown", (event) => {
+      // deprecated-api: Safari's IME-commit Enter has isComposing false; keyCode 229 is its only tell.
+      if (event.isComposing || event.keyCode === 229) return;
       if (event.key === "Enter") {
         event.preventDefault();
         nextOrRun(event.shiftKey);
@@ -3447,6 +3449,8 @@
   if (passwordSubmit) passwordSubmit.addEventListener("click", onPasswordSubmit);
   if (passwordInput) {
     passwordInput.addEventListener("keydown", (event) => {
+      // deprecated-api: Safari's IME-commit Enter has isComposing false; keyCode 229 is its only tell.
+      if (event.isComposing || event.keyCode === 229) return;
       if (event.key === "Enter") onPasswordSubmit(event);
     });
   }

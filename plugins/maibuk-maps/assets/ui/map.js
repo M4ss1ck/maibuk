@@ -3067,6 +3067,8 @@
    */
   function onLabelEditorKey(event) {
     event.stopPropagation();
+    // deprecated-api: Safari's IME-commit Enter has isComposing false; keyCode 229 is its only tell.
+    if (event.isComposing || event.keyCode === 229) return;
     if (event.key === "Escape" || (event.key === "Enter" && (event.ctrlKey || event.metaKey))) {
       event.preventDefault();
       commitLabelEditor();
