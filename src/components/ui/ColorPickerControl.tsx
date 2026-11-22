@@ -19,6 +19,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { ChevronDownIcon } from "@/components/icons";
 import { contrastRatio, normalizeHexColor } from "@/lib/color";
+import { isIgnoredKeyEvent } from "@/lib/shortcut-keys";
 
 export const DEFAULT_COLOR_PRESETS = [
   "#000000",
@@ -244,7 +245,7 @@ export function ColorPickerControl({
                   skipBlurCommit.current = true;
                   return;
                 }
-                if (event.key === "Enter") {
+                if (event.key === "Enter" && !isIgnoredKeyEvent(event.nativeEvent)) {
                   event.preventDefault();
                   commitHex();
                 }

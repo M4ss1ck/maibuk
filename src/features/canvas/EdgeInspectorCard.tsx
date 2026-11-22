@@ -17,6 +17,7 @@ import {
 } from "@/features/canvas/types";
 import { connectionDash } from "@/features/canvas/reactFlowAdapter";
 import { readThemeColor } from "@/lib/color";
+import { isIgnoredKeyEvent } from "@/lib/shortcut-keys";
 
 const THICKNESS_NAMES = {
   1: "thin",
@@ -90,7 +91,7 @@ export function EdgeInspectorCard({
           // Commit in place instead of blurring: losing focus resets WebKit's
           // Tab order to the top of the page, so the next Tab never reaches
           // the controls below (the directed switch).
-          if (event.key === "Enter") {
+          if (event.key === "Enter" && !isIgnoredKeyEvent(event.nativeEvent)) {
             event.preventDefault();
             onLabelCommit();
           }

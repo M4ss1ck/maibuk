@@ -652,6 +652,41 @@ describe("VersionPanel", () => {
     }
   });
 
+  it("renames on Enter but not while an IME is composing", async () => {
+    const user = userEvent.setup();
+    const uninstall = installArrowNavigation();
+    try {
+      render(
+        <VersionPanel
+          isOpen
+          onClose={() => {}}
+          bookId="book-1"
+          flushBeforeCompare={mockFlushBeforeCompare}
+        />
+      );
+
+      const row = await screen.findByRole("row", { name: "First draft" });
+      await waitFor(() => expect(row).toHaveFocus());
+      await user.keyboard("{F2}");
+
+      const input = screen.getByRole("textbox");
+      await waitFor(() => expect(input).toHaveFocus());
+      fireEvent.change(input, { target: { value: "Second draft" } });
+
+      fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+      fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
+      expect(mockRenameVersion).not.toHaveBeenCalled();
+      expect(screen.getByRole("textbox")).toBeInTheDocument();
+
+      fireEvent.keyDown(input, { key: "Enter" });
+      await waitFor(() =>
+        expect(mockRenameVersion).toHaveBeenCalledWith("version-1", "Second draft")
+      );
+    } finally {
+      uninstall();
+    }
+  });
+
   it("PageDown and PageUp page the list from the keyboard", async () => {
     const user = userEvent.setup();
     setStoreVersions(manyVersions);

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { CanvasImageDialog } from "@/features/canvas/CanvasImageDialog";
@@ -145,6 +145,26 @@ describe("CanvasImageDialog", () => {
     await user.clear(field);
     await user.type(field, "A cat on a mat{Enter}");
 
+    await waitFor(() => expect(useCanvasStore.getState().imageDialog).toBeNull());
+    expect(currentImage().alt).toBe("A cat on a mat");
+  });
+
+  it("applies new alt text on Enter but not while an IME is composing", async () => {
+    const user = userEvent.setup();
+    seed([imageNode()]);
+    useCanvasStore.getState().openImageDialog({ kind: "altText", nodeId: "image-1" });
+    render(<CanvasImageDialog />);
+
+    const field = screen.getByRole("textbox", { name: "canvas.altText" });
+    await user.clear(field);
+    await user.type(field, "A cat on a mat");
+
+    fireEvent.keyDown(field, { key: "Enter", isComposing: true });
+    fireEvent.keyDown(field, { key: "Enter", keyCode: 229 });
+    expect(useCanvasStore.getState().imageDialog).not.toBeNull();
+    expect(currentImage().alt).toBe("Old alt");
+
+    fireEvent.keyDown(field, { key: "Enter" });
     await waitFor(() => expect(useCanvasStore.getState().imageDialog).toBeNull());
     expect(currentImage().alt).toBe("A cat on a mat");
   });

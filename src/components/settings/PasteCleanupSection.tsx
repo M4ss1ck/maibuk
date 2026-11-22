@@ -27,6 +27,7 @@ import { ChevronDownIcon } from "@/components/icons";
 import { SettingRow } from "@/components/settings/SettingRow";
 import { SETTINGS_ROWS_CLASS, SETTINGS_ROW_CLASS } from "@/components/settings/SettingsSection";
 import { useSettingsRevealStore } from "@/features/settings/settings-reveal-store";
+import { isIgnoredKeyEvent } from "@/lib/shortcut-keys";
 
 export function PasteCleanupSection() {
   const { t } = useTranslation();
@@ -219,7 +220,7 @@ export function PasteCleanupSection() {
                       value={newProperty}
                       onChange={(e) => setNewProperty(e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter") {
+                        if (e.key === "Enter" && !isIgnoredKeyEvent(e.nativeEvent)) {
                           e.preventDefault();
                           handleAddProperty();
                         }

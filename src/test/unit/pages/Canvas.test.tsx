@@ -1153,6 +1153,22 @@ describe("Canvas page", () => {
     expect(mocks.actions.clearSelection).toHaveBeenCalled();
   });
 
+  it("keeps the Canvas title focused on an IME Enter and blurs on a plain one", () => {
+    renderCanvas();
+    const title = screen.getByRole("textbox", { name: "canvas.renameCanvas" });
+    act(() => title.focus());
+    fireEvent.change(title, { target: { value: "Atlas" } });
+
+    fireEvent.keyDown(title, { key: "Enter", isComposing: true });
+    fireEvent.keyDown(title, { key: "Enter", keyCode: 229 });
+    expect(title).toHaveFocus();
+    expect(mocks.actions.renameCanvas).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(title, { key: "Enter" });
+    expect(title).not.toHaveFocus();
+    expect(mocks.actions.renameCanvas).toHaveBeenCalledWith("canvas-1", "Atlas");
+  });
+
   it("uses editor-safe delete and undo shortcuts", () => {
     renderCanvas();
     fireEvent.keyDown(window, { key: "Backspace" });

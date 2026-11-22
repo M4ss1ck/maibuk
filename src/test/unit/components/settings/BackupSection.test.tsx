@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BackupSection } from "@/components/settings/BackupSection";
@@ -355,6 +355,22 @@ describe("BackupSection", () => {
       await waitFor(() => expect(mockCreateBackup).toHaveBeenLastCalledWith("/mnt/custom backups"));
       expect(input).toHaveFocus();
       expect(screen.getByRole("button", { name: "backup.createBackup" })).toBeInTheDocument();
+    });
+
+    it("commits the typed path on Enter but not while an IME is composing", async () => {
+      const { user, input } = await renderWithDirectoryField();
+
+      await typeDirectory(user, input, "/mnt/typed");
+      fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+      fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
+      expect(mockRequestBackupDirectory).not.toHaveBeenCalled();
+      expect(useSettingsStore.getState().backupDirectory).toBeNull();
+      expect(input).toHaveValue("/mnt/typed");
+
+      await user.keyboard("{Enter}");
+      await waitFor(() =>
+        expect(mockRequestBackupDirectory).toHaveBeenCalledWith("/mnt/typed", "en")
+      );
     });
 
     it("asks for approval when the field loses focus", async () => {

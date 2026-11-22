@@ -5,6 +5,7 @@ import {
   type ReactNode,
 } from "react";
 import { keepRowFromActing } from "@/lib/arrow-navigation";
+import { isIgnoredKeyEvent } from "@/lib/shortcut-keys";
 import { Network, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Canvas } from "@/features/canvas/types";
@@ -89,7 +90,7 @@ export function CanvasCard({
   };
 
   const handleRenameKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Enter") saveRename();
+    if (event.key === "Enter" && !isIgnoredKeyEvent(event.nativeEvent)) saveRename();
     if (event.key === "Escape") {
       setDraft(canvas.title);
       setRenaming(false);

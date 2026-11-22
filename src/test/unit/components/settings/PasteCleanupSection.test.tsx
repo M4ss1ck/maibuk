@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -146,6 +146,30 @@ describe("PasteCleanupSection — open from HTML view", () => {
     expect(promptRow).not.toBeNull();
     expect(promptRow).toHaveClass("flex-col", "@lg:flex-row");
     expect(promptRow).not.toHaveClass("sm:flex-row");
+  });
+
+  it("adds a stripped property on Enter but not while an IME is composing", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/settings"]}>
+        <PasteCleanupSection />
+      </MemoryRouter>
+    );
+
+    await user.click(screen.getByRole("button", { name: "settings.pasteCleanup.advanced" }));
+    const field = screen.getByPlaceholderText("settings.pasteCleanup.strip.addPropertyPlaceholder");
+    await user.type(field, "my-prop");
+
+    fireEvent.keyDown(field, { key: "Enter", isComposing: true });
+    fireEvent.keyDown(field, { key: "Enter", keyCode: 229 });
+    expect(useSettingsStore.getState().pasteCleanup.options.strippedProperties).not.toContain(
+      "my-prop"
+    );
+
+    fireEvent.keyDown(field, { key: "Enter" });
+    expect(useSettingsStore.getState().pasteCleanup.options.strippedProperties).toContain(
+      "my-prop"
+    );
   });
 
   it("uses a container variant for the strip properties grid", async () => {
