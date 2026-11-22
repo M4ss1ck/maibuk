@@ -5,6 +5,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.2] - 2026-11-22
+
+### Fixed
+- Prevent “Reader is not responding” errors when opening image-heavy EPUBs on slow e-ink devices
+- Skip Enter while an IME composition is still in progress across text fields
+- Keep arrow-key navigation and mouse text selection working in Chapter and Notes list rename fields
+
 ## [0.26.1] - 2026-11-22
 
 ### Fixed
