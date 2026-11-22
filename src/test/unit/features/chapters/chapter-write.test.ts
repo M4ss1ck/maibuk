@@ -146,11 +146,12 @@ describe("chapter write path", () => {
     // notification must not be lost with the failure.
     const realDb = testDb;
     let calls = 0;
+    const diskFull = new Error("disk full");
     mockGetDatabase.mockResolvedValue({
       ...realDb,
       execute: async (sql: string, params?: unknown[]) => {
         calls++;
-        if (calls > 1) throw new Error("disk full");
+        if (calls > 1) throw diskFull;
         return realDb.execute(sql, params);
       },
       select: realDb.select.bind(realDb),
@@ -162,9 +163,9 @@ describe("chapter write path", () => {
     });
 
     try {
-      await expect(
-        useChapterStore.getState().reorderChapters("book-1", ["ch-1", "ch-2"])
-      ).rejects.toThrow("Failed to reorder chapter 2/2");
+      const failure = useChapterStore.getState().reorderChapters("book-1", ["ch-1", "ch-2"]);
+      await expect(failure).rejects.toThrow("Failed to reorder chapter 2/2");
+      await expect(failure).rejects.toMatchObject({ cause: diskFull });
     } finally {
       offSignals();
     }

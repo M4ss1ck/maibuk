@@ -607,7 +607,8 @@ export async function applyBookSnapshotData(
               ? error.message
               : String(error);
         throw new Error(
-          `Sync apply failed on chapter ${i + 1}/${normalizedChapters.length} ("${ch.title}"): ${detail}`
+          `Sync apply failed on chapter ${i + 1}/${normalizedChapters.length} ("${ch.title}"): ${detail}`,
+          { cause: error }
         );
       }
     }

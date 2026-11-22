@@ -408,7 +408,9 @@ export async function reorderChapterRows(
       if (persisted > 0) {
         await emitChange({ entity: "book", id: bookId, origin, kind: "metadata" }, viewMeta);
       }
-      throw new Error(`Failed to reorder chapter ${i + 1}/${chapterIds.length}: ${detail}`);
+      throw new Error(`Failed to reorder chapter ${i + 1}/${chapterIds.length}: ${detail}`, {
+        cause: error,
+      });
     }
     if (affected > 0) persisted++;
   }
