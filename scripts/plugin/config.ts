@@ -157,9 +157,9 @@ function pluginPaths(pluginRoot: string, maibukRoot: string): Record<string, str
 
 /** Maibuk's own `compilerOptions`, mirrored so the Plugin checks under the same rules. */
 const MIRRORED_COMPILER_OPTIONS = {
-  target: "ES2020",
+  target: "ES2022",
   useDefineForClassFields: true,
-  lib: ["ES2020", "DOM", "DOM.Iterable"],
+  lib: ["ES2023", "DOM", "DOM.Iterable"],
   module: "ESNext",
   skipLibCheck: true,
   moduleResolution: "bundler",

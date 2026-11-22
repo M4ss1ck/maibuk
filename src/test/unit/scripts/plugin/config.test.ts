@@ -117,7 +117,13 @@ describe("tsconfigForCheck()", () => {
     };
     const { compilerOptions } = config;
 
-    expect(compilerOptions.target).toBe("ES2020");
+    // The mirror follows Maibuk's own tsconfig, or a Plugin's typecheck rejects
+    // host code it reaches through the SDK (#915 raised the lib to ES2023).
+    const hostConfig = readFileSync("tsconfig.json", "utf8");
+    expect(hostConfig).toContain(`"target": "${compilerOptions.target}"`);
+    expect(hostConfig).toContain(
+      `"lib": ${JSON.stringify(compilerOptions.lib).replaceAll(",", ", ")}`
+    );
     expect(compilerOptions.strict).toBe(true);
     expect(compilerOptions.noEmit).toBe(true);
     // TypeScript 7 removed `baseUrl`; the paths are absolute.
