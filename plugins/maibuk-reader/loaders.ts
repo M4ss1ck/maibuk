@@ -17,6 +17,10 @@
  *   `blob:` module in an opaque origin cannot resolve a relative specifier.
  * - DOMPurify: {@link purifySource} is its browser ESM build, which the Frame
  *   imports from a `blob:` URL and uses to sanitize every archive's markup.
+ * - core-js polyfills (`polyfills.min.js`): the recent APIs pdf.js calls
+ *   unguarded that the oldest supported engine lacks (READER_ENGINE_FLOOR in
+ *   `scripts/vendor-reader.mjs`). {@link withPdfPolyfills} prepends them to both
+ *   pdf.js sources, so they run first in whichever context loads each one.
  *
  * The Vite build has no code splitting, so these strings sit in the entry as
  * string literals; importing this module starts nothing.
@@ -30,6 +34,7 @@ import domPurifySource from "./vendor/dompurify/purify.es.mjs?raw";
 import pdfDisplay from "./vendor/pdfjs/pdf.min.mjs?raw";
 import pdfWorker from "./vendor/pdfjs/pdf.worker.min.mjs?raw";
 import pdfViewerStyles from "./vendor/pdfjs/pdf_viewer.css.txt?raw";
+import pdfPolyfills from "./vendor/pdfjs/polyfills.min.js?raw";
 
 /** A started pdf.js core and the way to give its resources back. */
 export interface PdfCore {
@@ -80,6 +85,16 @@ export function classicPdfCoreSource(source: string): string {
 }
 
 /**
+ * `source` with the core-js polyfills ahead of it. The bundle is a classic
+ * script with no exports, so it runs as the head of a classic script and of an
+ * ES module alike. core-js installs a polyfill only where the engine has no
+ * working native, so a current engine keeps its own.
+ */
+export function withPdfPolyfills(source: string): string {
+  return `${pdfPolyfills}\n${source}`;
+}
+
+/**
  * The threading spike's inline core (issue #653): the pdf.js core runs in the
  * Plugin Worker itself, loaded with the same classic `importScripts` the nested
  * Worker uses, and answers the Frame's port there. It exists only so
@@ -92,7 +107,7 @@ export function classicPdfCoreSource(source: string): string {
  */
 function startInlinePdfCore(): PdfCore {
   const coreUrl = URL.createObjectURL(
-    new Blob([classicPdfCoreSource(pdfWorker)], { type: "text/javascript" })
+    new Blob([withPdfPolyfills(classicPdfCoreSource(pdfWorker))], { type: "text/javascript" })
   );
   let loaded = false;
   return {
@@ -131,7 +146,7 @@ function startInlinePdfCore(): PdfCore {
 export function startPdfCore(options: PdfCoreOptions = {}): PdfCore {
   if (options.inline ?? pdfCoreInlineRequested()) return startInlinePdfCore();
   const coreUrl = URL.createObjectURL(
-    new Blob([classicPdfCoreSource(pdfWorker)], { type: "text/javascript" })
+    new Blob([withPdfPolyfills(classicPdfCoreSource(pdfWorker))], { type: "text/javascript" })
   );
   const bootstrap = [
     `importScripts(${JSON.stringify(coreUrl)});`,
@@ -156,9 +171,27 @@ export function startPdfCore(options: PdfCoreOptions = {}): PdfCore {
   };
 }
 
+/**
+ * Whether this engine can start the nested core Worker {@link startPdfCore}
+ * needs. The Android QuickJS engine has no `Worker` or `MessageChannel`, so
+ * there the Frame runs the core itself from {@link pdfCoreSource}.
+ */
+export function canStartPdfCore(): boolean {
+  return typeof Worker === "function" && typeof MessageChannel === "function";
+}
+
+/**
+ * pdf.js's core as a classic script, for a Frame that runs it on its own
+ * thread: loaded, it sets `globalThis.pdfjsWorker`, and pdf.js's display module
+ * then answers from it instead of starting a Worker the Frame may not start.
+ */
+export function pdfCoreSource(): string {
+  return withPdfPolyfills(classicPdfCoreSource(pdfWorker));
+}
+
 /** The pdf.js display module's source, for the Frame to import from a `blob:` URL. */
 export function pdfDisplaySource(): string {
-  return pdfDisplay;
+  return withPdfPolyfills(pdfDisplay);
 }
 
 /** pdf.js's viewer CSS, which carries the text layer rules the Page view needs. */

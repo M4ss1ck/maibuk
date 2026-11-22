@@ -19,3 +19,7 @@ Decided while triaging [#735](https://github.com/M4ss1ck/maibuk/issues/735), whi
 - The broker's size defense still covers every JSON message. The `blob` message is the only non-string message the broker accepts, and only for a method whose table row says it takes one.
 - Cloning a `Blob` across a MessagePort from an opaque-origin Frame or a Worker into WebKitGTK is standard behavior, but it was unproven in this codebase when this ADR was written. The first implementation step proves it in the `@sandbox` E2E lane.
 - On the desktop the host writes to a sibling `.part` file and renames it over the target, so a save that fails partway never destroys a file the author chose to replace. On Android the save picker creates a new document, so there is no old file to protect: the host writes it in place and empties it when a save fails, where the provider allows it.
+
+## Amendment: bytes from an engine with no Blob (2026-11-21)
+
+The Android QuickJS engine has no `Blob` (#516), so `files.save` was refused there before its bytes were read. A Plugin in that engine now sends the bytes themselves: when `typeof Blob` is undefined, the SDK folds the accepted shapes into one `Uint8Array` and posts it in the same `blob` slot. The broker accepts a `Uint8Array` or `ArrayBuffer` in the slot, wraps it as `new Blob([bytes], { type: mimeType })` with the MIME type from the call head, and refuses anything else exactly as before. The Blob path is unchanged where a Blob exists, the checks are the same, and there is still no size cap: the author's disk is the limit.

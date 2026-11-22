@@ -13,7 +13,7 @@
  */
 
 import type { QuickJSContext, QuickJSHandle } from "quickjs-emscripten-core";
-import { toVmValue } from "@/features/plugins/quickjs/bridge";
+import { fromVmValue, installOutEncoder, toVmValue } from "@/features/plugins/quickjs/bridge";
 
 /**
  * The globals the Android engine provides to a Plugin, by name. The Android
@@ -83,10 +83,11 @@ export function installQuickJsGlobals(
     handle.dispose();
   };
 
+  installOutEncoder(context);
   put(
     "postMessage",
-    context.newFunction("postMessage", (value) => {
-      host.postMessage(context.dump(value));
+    context.newFunction("postMessage", (encoded) => {
+      host.postMessage(fromVmValue(context, encoded));
     })
   );
   put(
@@ -213,7 +214,9 @@ function buildGlobalsSource(): string {
   globalThis.removeEventListener = function (type, listener) {
     if (type === "message") scopeListeners.delete(listener);
   };
-  globalThis.postMessage = function (data) { host.postMessage(data); };
+  globalThis.postMessage = function (data) {
+    host.postMessage(globalThis.__maibukEncodeOut(data));
+  };
 
   function toDelay(value) {
     var n = Number(value);

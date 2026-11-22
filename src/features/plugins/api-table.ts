@@ -87,12 +87,12 @@ const uint8Array = z
 /**
  * The file bytes an `acceptsBlob` method takes. They never travel in the JSON
  * input (the wire shape is the call head alone): the SDK folds the three
- * accepted shapes into one `Blob` and sends it right after the call, so JSON
- * Schema has no type for them and `api-codegen` adds this description's field
- * to the SDK's input type only (ADR 0040).
+ * accepted shapes into one `Blob` right after the call, or one `Uint8Array` on
+ * an engine with no Blob, so JSON Schema has no type for them and `api-codegen`
+ * adds this description's field to the SDK's input type only (ADR 0040).
  */
 export const BLOB_BYTES_SCHEMA_DESCRIPTION =
-  "The file's bytes: a Uint8Array, a Blob, or an AsyncIterable of Uint8Array pieces. The SDK folds them into one Blob and sends it right after the call (ADR 0040).";
+  "The file's bytes: a Uint8Array, a Blob, or an AsyncIterable of Uint8Array pieces. The SDK folds them into one Blob and sends it right after the call, or into one Uint8Array on a device with no Blob (ADR 0040).";
 
 const content = z.strictObject({
   text: z.string().describe("Plain text."),
@@ -823,7 +823,7 @@ export const PLUGIN_API_TABLE = [
   defineApiRow({
     id: "files.save",
     description:
-      "Saves a file under the name and MIME type you give: Maibuk asks the author where to save it and writes the bytes you send as one Blob right after this call. Maibuk keeps only the base name (no folders, no leading dots, at most 255 bytes) and refuses a name that names no file type or one an executable uses. Refused with user-action-required unless the author's own click, key press, or Command run caused the call, and not-implemented on a device that cannot save yet.",
+      "Saves a file under the name and MIME type you give: Maibuk asks the author where to save it and writes the bytes you send right after this call. Maibuk keeps only the base name (no folders, no leading dots, at most 255 bytes) and refuses a name that names no file type or one an executable uses. Refused with user-action-required unless the author's own click, key press, or Command run caused the call, and not-implemented on a device that cannot save yet.",
     input: z.strictObject({
       name: z.string().describe("The file name the dialog is prefilled with, such as map.png."),
       mimeType: z.string().describe("The file's MIME type, such as image/png."),

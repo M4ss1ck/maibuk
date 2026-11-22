@@ -136,31 +136,58 @@ export function rc4(key, data) {
   return out;
 }
 
-/** `password`, padded to the 32 bytes the Standard security handler hashes. */
+/**
+ * `password`, padded to the 32 bytes the Standard security handler hashes:
+ * the password's bytes first, then as much of the padding string as fills the
+ * rest (Algorithm 2 step a). Putting the padding first would shift it by the
+ * password's length and hash the wrong bytes.
+ */
 function paddedPassword(password) {
-  const bytes = new TextEncoder().encode(password);
+  const bytes = new TextEncoder().encode(password).slice(0, 32);
   const padded = new Uint8Array(32);
-  padded.set(PASSWORD_PADDING);
-  padded.set(bytes.slice(0, 32));
+  padded.set(bytes);
+  padded.set(PASSWORD_PADDING.slice(0, 32 - bytes.length), bytes.length);
   return padded;
 }
 
-/** The `/O` entry: the user password encrypted under the owner key. */
+/** The `/O` entry: the user password encrypted under the owner key (Algorithm 3). */
 function ownerEntry(userPassword, ownerPassword) {
   const key = md5(paddedPassword(ownerPassword)).slice(0, 5);
   return rc4(key, paddedPassword(userPassword));
 }
 
-/** The `/U` entry: the padding encrypted under the user key. */
-function userEntry(userPassword) {
-  const key = md5(paddedPassword(userPassword)).slice(0, 5);
-  return rc4(key, PASSWORD_PADDING);
+/**
+ * The file encryption key for a user password (Algorithm 2, revision 2): MD5
+ * over the padded password, the 32-byte `/O` entry, `/P` as four little-endian
+ * bytes, and the first file identifier, keeping the first five bytes.
+ */
+function fileKey(userPassword, owner, permissions, fileId) {
+  const input = new Uint8Array(32 + owner.length + 4 + fileId.length);
+  input.set(paddedPassword(userPassword), 0);
+  input.set(owner, 32);
+  new DataView(input.buffer).setInt32(32 + owner.length, permissions, true);
+  input.set(fileId, 32 + owner.length + 4);
+  return md5(input).slice(0, 5);
+}
+
+/** The `/U` entry: the padding encrypted under the file key (Algorithm 4). */
+function userEntry(userPassword, owner, permissions, fileId) {
+  return rc4(fileKey(userPassword, owner, permissions, fileId), PASSWORD_PADDING);
 }
 
 function hex(bytes) {
   let text = "";
   for (const byte of bytes) text += byte.toString(16).padStart(2, "0").toUpperCase();
   return text;
+}
+
+/** The bytes of an even-length hex string, as {@link FILE_ID} and `/O` use. */
+function hexToBytes(text) {
+  const bytes = new Uint8Array(text.length / 2);
+  for (let index = 0; index < bytes.length; index += 1) {
+    bytes[index] = Number.parseInt(text.slice(index * 2, index * 2 + 2), 16);
+  }
+  return bytes;
 }
 
 /**
@@ -185,25 +212,42 @@ function buildPdf(bodies, trailerEntries) {
 /** A fixed file identifier, so the trailer carries one without a timestamp. */
 const FILE_ID = "00112233445566778899AABBCCDDEEFF";
 
-/** Twelve pages: roman prelims, then 1..10, an outline, and one nested section. */
+/** A page's content stream: its page number in Helvetica, near the top-left. */
+function pageNumberContent(pageNumber) {
+  const text = `BT\n/F1 24 Tf\n72 720 Td\n(${pageNumber}) Tj\nET\n`;
+  return `<< /Length ${Buffer.byteLength(text, "latin1")} >>\nstream\n${text}endstream`;
+}
+
+/**
+ * Twelve pages: roman prelims, then 1..10, each drawing its page number, an
+ * outline, and one nested section. Object 15 is the Helvetica font, objects
+ * 16..27 are one content stream per page, and the outline follows at 28.
+ */
 export function buildTwelvePagePdf() {
   const bodies = [
-    "<< /Type /Catalog /Pages 2 0 R /Outlines 15 0 R " +
+    "<< /Type /Catalog /Pages 2 0 R /Outlines 28 0 R " +
       "/PageLabels << /Nums [0 << /S /r >> 2 << /S /D >>] >> >>",
   ];
   const kids = Array.from({ length: 12 }, (_, index) => `${index + 3} 0 R`).join(" ");
   bodies.push(`<< /Type /Pages /Kids [${kids}] /Count 12 >>`);
   for (let index = 0; index < 12; index += 1) {
-    bodies.push("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>");
+    bodies.push(
+      "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] " +
+        `/Resources << /Font << /F1 15 0 R >> >> /Contents ${16 + index} 0 R >>`
+    );
   }
-  bodies.push("<< /Type /Outlines /First 16 0 R /Last 18 0 R /Count 4 >>");
-  bodies.push("<< /Title (Chapter One) /Parent 15 0 R /Dest [3 0 R /Fit] /Next 17 0 R >>");
+  bodies.push("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+  for (let pageNumber = 1; pageNumber <= 12; pageNumber += 1) {
+    bodies.push(pageNumberContent(pageNumber));
+  }
+  bodies.push("<< /Type /Outlines /First 29 0 R /Last 31 0 R /Count 4 >>");
+  bodies.push("<< /Title (Chapter One) /Parent 28 0 R /Dest [3 0 R /Fit] /Next 30 0 R >>");
   bodies.push(
-    "<< /Title (Chapter Two) /Parent 15 0 R /Dest [7 0 R /Fit] /Next 18 0 R " +
-      "/First 19 0 R /Last 19 0 R /Count 1 >>"
+    "<< /Title (Chapter Two) /Parent 28 0 R /Dest [7 0 R /Fit] /Next 31 0 R " +
+      "/First 32 0 R /Last 32 0 R /Count 1 >>"
   );
-  bodies.push("<< /Title (Chapter Three) /Parent 15 0 R /Dest [11 0 R /Fit] /Prev 17 0 R >>");
-  bodies.push("<< /Title (A Section) /Parent 17 0 R /Dest [9 0 R /Fit] >>");
+  bodies.push("<< /Title (Chapter Three) /Parent 28 0 R /Dest [11 0 R /Fit] /Prev 30 0 R >>");
+  bodies.push("<< /Title (A Section) /Parent 30 0 R /Dest [9 0 R /Fit] >>");
   return buildPdf(bodies, `/Root 1 0 R /ID [<${FILE_ID}><${FILE_ID}>]`);
 }
 
@@ -212,14 +256,16 @@ export function buildPasswordPdf() {
   const R = 2;
   const keyLength = 5;
   const permissions = -4;
+  const fileId = hexToBytes(FILE_ID);
+  const owner = ownerEntry(PASSWORD, OWNER_PASSWORD);
   const bodies = [
     "<< /Type /Catalog /Pages 2 0 R >>",
     "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>",
     "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>",
     "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>",
     `<< /Filter /Standard /V 1 /R ${R} /Length ${keyLength * 8} ` +
-      `/O <${hex(ownerEntry(PASSWORD, OWNER_PASSWORD))}> ` +
-      `/U <${hex(userEntry(PASSWORD))}> /P ${permissions} >>`,
+      `/O <${hex(owner)}> ` +
+      `/U <${hex(userEntry(PASSWORD, owner, permissions, fileId))}> /P ${permissions} >>`,
   ];
   return buildPdf(bodies, `/Root 1 0 R /Encrypt 5 0 R /ID [<${FILE_ID}><${FILE_ID}>]`);
 }

@@ -2,7 +2,8 @@
 // Vendors Reader's rendering libraries into plugins/maibuk-reader/vendor/
 // (issue #653): pdf.js (core worker, display, text-layer CSS) and the foliate-js
 // parser modules, plus a self-contained bundle of the parsers the Frame can
-// import from a blob: URL. Run it with `node scripts/vendor-reader.mjs`; the
+// import from a blob: URL, and the core-js polyfills pdf.js needs on the oldest
+// engine Reader supports (READER_ENGINE_FLOOR). Run it with `node scripts/vendor-reader.mjs`; the
 // output is committed, so a second run leaves the working tree unchanged.
 //
 // The Frame's content security policy forbids Workers and relative module
@@ -24,17 +25,118 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import coreJsCompat from "core-js-compat";
 import { build } from "vite";
 
 /** The pdf.js release Reader pins. */
-export const PDFJS_VERSION = "6.4.299";
+export const PDFJS_VERSION = "6.5.438";
 
 /** The foliate-js commit Reader pins. */
 export const FOLIATE_COMMIT = "78914aef4466eb960965702401634c2cb348e9b1";
 
-/** The `npm pack pdfjs-dist@6.4.299` tarball, pinned so a changed package fails loudly. */
+/** The `npm pack pdfjs-dist@6.5.438` tarball, pinned so a changed package fails loudly. */
 export const PDFJS_TARBALL_SHA256 =
-  "86269b40170eb41740ea05ad2102d71d33de4f122b34eb2f478be0ea7779c415";
+  "7461aefcd27c4ef0dd76f9ca5760f09466eb6b3f934432670c12132e7b3d6faa";
+
+/**
+ * The oldest engine Reader runs pdf.js on, as core-js-compat targets. Maibuk
+ * supports Android 8 onwards, and Chrome 138 is the last Android System WebView
+ * Android 8 and 9 receive (Chrome 139 dropped them). pdf.js's modern build
+ * calls some newer APIs unguarded, so the polyfills that engine lacks ship with
+ * it; core-js installs each one only where the engine has no working native.
+ */
+export const READER_ENGINE_FLOOR = { chrome: "138", android: "138" };
+
+/** pdf.js's iterator helper calls on a Map or Set iterator, as core-js modules. */
+const ITERATOR_HELPERS = [
+  ["map", "map"],
+  ["filter", "filter"],
+  ["find", "find"],
+  ["some", "some"],
+  ["every", "every"],
+  ["toArray", "to-array"],
+  ["reduce", "reduce"],
+  ["forEach", "for-each"],
+  ["flatMap", "flat-map"],
+  ["take", "take"],
+  ["drop", "drop"],
+];
+
+/** The Set methods of ES2025, as core-js modules. */
+const SET_METHODS = [
+  ["union", "union"],
+  ["intersection", "intersection"],
+  ["difference", "difference"],
+  ["symmetricDifference", "symmetric-difference"],
+  ["isSubsetOf", "is-subset-of"],
+  ["isSupersetOf", "is-superset-of"],
+  ["isDisjointFrom", "is-disjoint-from"],
+];
+
+/**
+ * Each recent API pdf.js may call, as the pattern that finds a call in its
+ * minified source and the core-js modules that polyfill it. A call pdf.js
+ * guards itself (`Float16Array` behind `FeatureTest`) is left out. A false
+ * match costs only a polyfill core-js skips at runtime; a missing row is the
+ * risk, so a pdf.js update reviews this table against its release notes.
+ */
+export const PDFJS_RECENT_APIS = [
+  [/\bPromise\.try\b/, ["es.promise.try"]],
+  [/\bPromise\.withResolvers\b/, ["es.promise.with-resolvers"]],
+  [/\bPromise\.allSettled\b/, ["es.promise.all-settled"]],
+  [
+    /\.getOrInsertComputed\(/,
+    ["es.map.get-or-insert-computed", "es.weak-map.get-or-insert-computed"],
+  ],
+  [/\.getOrInsert\(/, ["es.map.get-or-insert", "es.weak-map.get-or-insert"]],
+  [/\bMath\.sumPrecise\b/, ["es.math.sum-precise"]],
+  [/\bUint8Array\.fromBase64\b/, ["es.uint8-array.from-base64"]],
+  [/\bUint8Array\.fromHex\b/, ["es.uint8-array.from-hex"]],
+  [/\.setFromBase64\(/, ["es.uint8-array.set-from-base64"]],
+  [/\.setFromHex\(/, ["es.uint8-array.set-from-hex"]],
+  [/\.toBase64\(/, ["es.uint8-array.to-base64"]],
+  [/\.toHex\(/, ["es.uint8-array.to-hex"]],
+  [/\bIterator\b/, ["es.iterator.constructor"]],
+  [/\bIterator\.from\b/, ["es.iterator.from"]],
+  ...ITERATOR_HELPERS.map(([method, module]) => [
+    new RegExp(`\\.(?:values|keys|entries)\\(\\)\\.${method}\\(`),
+    ["es.iterator.constructor", `es.iterator.${module}`],
+  ]),
+  ...SET_METHODS.map(([method, module]) => [
+    new RegExp(`\\.${method}\\(`),
+    [`es.set.${module}.v2`],
+  ]),
+  [/\bArray\.fromAsync\b/, ["es.array.from-async"]],
+  [/\.findLast(?:Index)?\(/, ["es.array.find-last", "es.array.find-last-index"]],
+  [/\bObject\.groupBy\b/, ["es.object.group-by"]],
+  [/\bMap\.groupBy\b/, ["es.map.group-by"]],
+  [/\bURL\.parse\b/, ["web.url.parse"]],
+  [/\bURL\.canParse\b/, ["web.url.can-parse"]],
+];
+
+/**
+ * The core-js modules pdf.js's `sources` need on {@link READER_ENGINE_FLOOR},
+ * sorted: the recent APIs they call, less those core-js-compat says the floor
+ * engine already has.
+ */
+export function pdfjsPolyfillModules(sources) {
+  const used = new Set(
+    PDFJS_RECENT_APIS.filter(([pattern]) => sources.some((source) => pattern.test(source))).flatMap(
+      ([, modules]) => modules
+    )
+  );
+  return coreJsCompat({ targets: READER_ENGINE_FLOOR, modules: [...used] }).list.sort();
+}
+
+/** The entry module's text for `modules`. */
+export function polyfillEntrySource(modules) {
+  return [
+    "// Generated by scripts/vendor-reader.mjs from pdf.js's sources and",
+    "// READER_ENGINE_FLOOR. Do not edit; rerun the script.",
+    ...modules.map((module) => `import "core-js/modules/${module}.js";`),
+    "",
+  ].join("\n");
+}
 
 /**
  * The foliate-js files Reader vendors, each pinned by SHA-256 so a commit that
@@ -62,6 +164,17 @@ const FOLIATE_ENTRY = join(VENDOR_DIR, "foliate/bundle.ts");
 
 /** The single ESM module the Frame imports for every reflowable format. */
 export const FOLIATE_BUNDLE = join(VENDOR_DIR, "foliate/foliate-parsers.min.mjs");
+
+/** The polyfill entry, generated from {@link pdfjsPolyfillModules}. */
+export const POLYFILL_ENTRY = join(VENDOR_DIR, "pdfjs/polyfills.ts");
+
+/** The polyfills as one classic script, prepended to both pdf.js sources. */
+export const POLYFILL_BUNDLE = join(VENDOR_DIR, "pdfjs/polyfills.min.js");
+
+/** The core-js release the polyfill bundle is built from (its `package.json`). */
+const CORE_JS_VERSION = JSON.parse(
+  readFileSync(join(REPO_ROOT, "node_modules/core-js/package.json"), "utf8")
+).version;
 
 /** The SHA-256 of some bytes, lowercase hex. */
 function sha256(bytes) {
@@ -132,8 +245,8 @@ async function vendorFoliate(outDir) {
   }
 }
 
-/** Bundles `bundle.ts` into one minified, self-contained ESM string module. */
-async function bundleFoliate() {
+/** Bundles `entry` into one minified, self-contained chunk of `format` and returns its code. */
+async function bundle(entry, format, fileName) {
   const result = await build({
     configFile: false,
     logLevel: "warn",
@@ -143,9 +256,10 @@ async function bundleFoliate() {
       minify: "esbuild",
       emptyOutDir: false,
       lib: {
-        entry: FOLIATE_ENTRY,
-        formats: ["es"],
-        fileName: () => "foliate-parsers.min",
+        entry,
+        formats: [format],
+        name: "maibukReaderPolyfills",
+        fileName: () => fileName,
       },
       rollupOptions: { external: [] },
     },
@@ -155,9 +269,33 @@ async function bundleFoliate() {
     .flatMap((output) => ("output" in output ? output.output : []))
     .find((file) => file.type === "chunk");
   if (chunk === undefined || !("code" in chunk)) {
-    throw new Error("the foliate bundle produced no chunk");
+    throw new Error(`the ${fileName} bundle produced no chunk`);
   }
-  writeIfChanged(FOLIATE_BUNDLE, `${chunk.code.trimEnd()}\n`);
+  return chunk.code.trimEnd();
+}
+
+/** Bundles `bundle.ts` into one minified, self-contained ESM string module. */
+async function bundleFoliate() {
+  writeIfChanged(FOLIATE_BUNDLE, `${await bundle(FOLIATE_ENTRY, "es", "foliate-parsers.min")}\n`);
+}
+
+/**
+ * Writes the polyfill entry for the vendored pdf.js and bundles it into one
+ * classic script with no exports, so it runs as the head of both the core's
+ * classic script and the display module.
+ */
+async function bundlePolyfills() {
+  const sources = ["pdf.min.mjs", "pdf.worker.min.mjs"].map((name) =>
+    readFileSync(join(VENDOR_DIR, "pdfjs", name), "utf8")
+  );
+  writeIfChanged(POLYFILL_ENTRY, polyfillEntrySource(pdfjsPolyfillModules(sources)));
+  const code = await bundle(POLYFILL_ENTRY, "iife", "polyfills.min");
+  const banner = `/*! core-js ${CORE_JS_VERSION} | MIT | https://github.com/zloirock/core-js */`;
+  writeIfChanged(POLYFILL_BUNDLE, `${banner}\n${code}\n`);
+  copyFileSync(
+    join(REPO_ROOT, "node_modules/core-js/LICENSE"),
+    join(VENDOR_DIR, "pdfjs/core-js.LICENSE")
+  );
 }
 
 async function main() {
@@ -166,10 +304,13 @@ async function main() {
     vendorPdfjs(packPdfjs(tempDir), join(VENDOR_DIR, "pdfjs"));
     await vendorFoliate(join(VENDOR_DIR, "foliate"));
     await bundleFoliate();
+    await bundlePolyfills();
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
-  console.log(`vendored pdf.js ${PDFJS_VERSION} and foliate-js ${FOLIATE_COMMIT.slice(0, 12)}`);
+  console.log(
+    `vendored pdf.js ${PDFJS_VERSION}, foliate-js ${FOLIATE_COMMIT.slice(0, 12)}, core-js ${CORE_JS_VERSION}`
+  );
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

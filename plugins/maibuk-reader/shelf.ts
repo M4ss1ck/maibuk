@@ -9,6 +9,7 @@
  * (`library.ts`) and the page read the same names.
  */
 
+import { format, translate, type ReaderKey } from "./i18n";
 import { sha256Hex } from "./sha256";
 
 /** The formats Reader opens. `azw` is Kindle's older extension for AZW3. */
@@ -388,10 +389,13 @@ const DAY = 24 * HOUR;
 const MONTH = 30 * DAY;
 const YEAR = 365 * DAY;
 
+/** The units {@link relativeTimestamp} names a time in. */
+export type RelativeUnit = "second" | "minute" | "hour" | "day" | "month" | "year";
+
 /**
  * The last-read time as a localized relative phrase ("yesterday", "hace 3
- * días"). Uses `Intl.RelativeTimeFormat`; the app ships no Android reader, so
- * the engine always has `Intl`.
+ * días"). Uses `Intl.RelativeTimeFormat` where the engine has it, and
+ * {@link relativePhrase} where it does not (the Android QuickJS engine).
  */
 export function relativeTimestamp(
   language: string,
@@ -412,6 +416,27 @@ export function relativeTimestamp(
             : magnitude < 11 * MONTH
               ? [Math.round(seconds / MONTH), "month"]
               : [Math.round(seconds / YEAR), "year"];
+  if (typeof Intl === "undefined" || typeof Intl.RelativeTimeFormat !== "function") {
+    return relativePhrase(language, value, unit as RelativeUnit);
+  }
   const formatter = new Intl.RelativeTimeFormat(language, { numeric: "auto" });
   return formatter.format(value, unit as Intl.RelativeTimeFormatUnit);
+}
+
+/**
+ * The phrase `Intl.RelativeTimeFormat` with `numeric: "auto"` gives for the
+ * values {@link relativeTimestamp} produces, from Reader's own catalogs: the
+ * engine-independent path. A word the language has for an exact offset
+ * ("yesterday", "anteayer") wins; otherwise a plural phrase carries the count.
+ * Zero only ever comes with "second", which reads "now".
+ */
+export function relativePhrase(language: string, value: number, unit: RelativeUnit): string {
+  if (value === 0) return translate(language, "time.now");
+  const exact = `time.${unit}.${value}`;
+  const word = translate(language, exact as ReaderKey);
+  if (word !== exact) return word;
+  const count = Math.abs(value);
+  const direction = value < 0 ? "past" : "future";
+  const plural = count === 1 ? "one" : "other";
+  return format(translate(language, `time.${unit}.${direction}.${plural}` as ReaderKey), { count });
 }

@@ -46,8 +46,15 @@ interface StubOptions {
   metadata?: { Title?: string; Author?: string };
   /** When set, the first open rejects until this password arrives. */
   password?: string;
+  /** When set, the document waits for `onPassword` like pdf.js does. */
+  pendingPassword?: boolean;
   /** When set, opening fails with this error name. */
   failWith?: string;
+  /** When set, `getDocument().promise` never settles. */
+  hang?: boolean;
+  /** With `hang`, send this many `onProgress` events this far apart. */
+  progressEveryMs?: number;
+  progressCount?: number;
   text?: (pageNumber: number) => string;
 }
 
@@ -56,6 +63,7 @@ function createPdfStub(options: StubOptions = {}) {
   const pages = options.pages ?? 12;
   const documents: { password?: string }[] = [];
   const openedIndices: number[] = [];
+  let progressCalls = 0;
 
   class StubPage {
     constructor(private readonly number: number) {}
@@ -107,9 +115,12 @@ function createPdfStub(options: StubOptions = {}) {
   }
 
   class StubWorker {
-    constructor(readonly options: { port: MessagePort }) {}
+    constructor(readonly options?: { port: MessagePort }) {
+      pdfWorkers.push(this);
+    }
     destroy() {}
   }
+  const pdfWorkers: StubWorker[] = [];
 
   class StubTextLayer {
     constructor(readonly options: Record<string, unknown>) {}
@@ -135,8 +146,26 @@ function createPdfStub(options: StubOptions = {}) {
   function getDocument(params: { password?: string }) {
     const task = {
       onPassword: null as null | ((update: (password: string) => void, reason: number) => void),
+      onProgress: null as null | ((progress: { loaded: number; total: number }) => void),
       promise: Promise.resolve() as Promise<unknown>,
     };
+    if (options.hang) {
+      task.promise = new Promise(() => {});
+      if (options.progressEveryMs) {
+        const every = options.progressEveryMs;
+        const count = options.progressCount ?? 1;
+        let sent = 0;
+        const report = () => {
+          if (sent >= count) return;
+          sent += 1;
+          progressCalls += 1;
+          task.onProgress?.({ loaded: sent, total: count });
+          setTimeout(report, every);
+        };
+        setTimeout(report, every);
+      }
+      return task;
+    }
     if (options.failWith) {
       const error = new Error(`stub ${options.failWith}`);
       error.name = options.failWith;
@@ -144,6 +173,16 @@ function createPdfStub(options: StubOptions = {}) {
       return task;
     }
     if (options.password !== undefined && params.password !== options.password) {
+      if (options.pendingPassword) {
+        task.promise = new Promise((resolve, reject) => {
+          const update = (value: string) => {
+            if (value === options.password) resolve(new StubDocument());
+            else reject(new PasswordException("No password given"));
+          };
+          queueMicrotask(() => task.onPassword?.(update, 1));
+        });
+        return task;
+      }
       task.promise = Promise.reject(new PasswordException("No password given"));
       return task;
     }
@@ -162,6 +201,10 @@ function createPdfStub(options: StubOptions = {}) {
     },
     documents,
     openedIndices,
+    pdfWorkers,
+    get progressCalls() {
+      return progressCalls;
+    },
   };
 }
 
@@ -169,12 +212,14 @@ function createPdfStub(options: StubOptions = {}) {
 class FakePort {
   onmessage: ((event: MessageEvent) => void) | null = null;
   readonly messages: Record<string, unknown>[] = [];
+  /** When false, a `read` gets no answer, the way a stalled provider behaves. */
+  answerReads = true;
   constructor(private readonly fileSize: number) {}
   start(): void {}
   close(): void {}
   postMessage(message: Record<string, unknown>): void {
     this.messages.push(message);
-    if (message.kind !== "read") return;
+    if (message.kind !== "read" || !this.answerReads) return;
     const offset = Number(message.offset);
     const length = Math.min(Number(message.length), Math.max(0, this.fileSize - offset));
     const buffer = new ArrayBuffer(length);
@@ -192,6 +237,9 @@ class FakePdfPort {
   readonly close = vi.fn();
 }
 
+/** The pdf.js core sources the Frame evaluated itself, in order. */
+const loadedCores: string[] = [];
+
 interface Frame {
   port: FakePort;
   pdfPort: FakePdfPort;
@@ -200,7 +248,11 @@ interface Frame {
 }
 
 /** Loads the Frame's markup and script with the stub pdf.js. */
-function loadFrame(stub: ReturnType<typeof createPdfStub>, fileSize = 4096): Frame {
+function loadFrame(
+  stub: ReturnType<typeof createPdfStub>,
+  fileSize = 4096,
+  hookOverrides: Record<string, unknown> = {}
+): Frame {
   document.documentElement.innerHTML = HTML.replace(/^<!doctype html>\s*/i, "");
   const port = new FakePort(fileSize);
   (window as unknown as { maibuk: unknown }).maibuk = { port };
@@ -208,7 +260,11 @@ function loadFrame(stub: ReturnType<typeof createPdfStub>, fileSize = 4096): Fra
   const pdfPort = new FakePdfPort();
   (globalThis as Record<string, unknown>).__readerTestHooks = {
     importPdfjs: async () => stub.module,
+    loadPdfCore: async (source: string) => {
+      loadedCores.push(source);
+    },
     onReady: (cleanup: () => void) => cleanups.push(cleanup),
+    ...hookOverrides,
   };
   try {
     new Function(SCRIPT)();
@@ -255,6 +311,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  loadedCores.length = 0;
   for (const cleanup of frame?.cleanups ?? []) cleanup();
   frame = null;
   delete (window as unknown as { maibuk?: unknown }).maibuk;
@@ -294,6 +351,24 @@ describe("Page view", () => {
         coverDataUrl: "data:image/jpeg;base64,COVER",
       })
     );
+  });
+
+  it("runs the pdf.js core itself when the Worker sends its source instead of a port", async () => {
+    const stub = createPdfStub();
+    frame = loadFrame(stub);
+    frame.open({
+      pdf: {
+        displaySource: "export {};",
+        css: ".textLayer { position: absolute; }",
+        coreSource: "self.pdfjsWorker = {};",
+      },
+      pdfPort: undefined,
+    });
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 12"));
+    expect(loadedCores).toEqual(["self.pdfjsWorker = {};"]);
+    expect(stub.pdfWorkers).toHaveLength(1);
+    expect(stub.pdfWorkers[0].options).toBeUndefined();
+    expect(frame.pdfPort.start).not.toHaveBeenCalled();
   });
 
   it("answers a Worker Command without a key press", async () => {
@@ -514,6 +589,57 @@ describe("pdf.js failures", () => {
     expect(posted).not.toContain("wrong");
   });
 
+  it("keeps waiting for the password without running the load deadline", async () => {
+    const stub = createPdfStub({ password: "hunter2", pendingPassword: true });
+    frame = loadFrame(stub, 4096, { loadTimeoutMs: 20 });
+    frame.open();
+    const form = el("password-form");
+    await vi.waitFor(() => expect(form.hidden).toBe(false));
+    // Run the clock well past the 20ms deadline while the form is open.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      await vi.advanceTimersByTimeAsync(100);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(form.hidden).toBe(false);
+    expect(el("message").hidden).toBe(true);
+
+    const user = userEvent.setup();
+    await user.type(el("password-input"), "hunter2");
+    await user.keyboard("{Enter}");
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 12"));
+    expect(form.hidden).toBe(true);
+  });
+
+  it("opens a password PDF by Enter and by the Open button without submitting a form", async () => {
+    // The Frame sandbox has no `allow-forms`, so a real browser blocks every
+    // form submission: the password must travel without one.
+    const submits: Event[] = [];
+    const onSubmit = (event: Event) => submits.push(event);
+    document.addEventListener("submit", onSubmit, true);
+    try {
+      const stub = createPdfStub({ password: "hunter2" });
+      frame = loadFrame(stub);
+      frame.open();
+      const form = el("password-form");
+      await vi.waitFor(() => expect(form.hidden).toBe(false));
+
+      const user = userEvent.setup();
+      await user.type(el("password-input"), "wrong");
+      await user.keyboard("{Enter}");
+      await vi.waitFor(() => expect(el("password-error").hidden).toBe(false));
+
+      await user.clear(el("password-input"));
+      await user.type(el("password-input"), "hunter2");
+      await user.click(el("password-submit"));
+      await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 12"));
+      expect(submits).toEqual([]);
+    } finally {
+      document.removeEventListener("submit", onSubmit, true);
+    }
+  });
+
   it("says why a damaged PDF will not open and tells the Worker", async () => {
     const stub = createPdfStub({ failWith: "InvalidPDFException" });
     frame = loadFrame(stub);
@@ -538,6 +664,99 @@ describe("pdf.js failures", () => {
     await vi.waitFor(() =>
       expect(frame?.port.messages.some((message) => message.kind === "back")).toBe(true)
     );
+  });
+
+  it.each([
+    ["before it announces itself", false],
+    ["after it announces itself", true],
+  ])("reports a core script that throws %s, instead of hanging", async (_label, announces) => {
+    const url = URL as unknown as Record<string, unknown>;
+    Object.defineProperty(url, "createObjectURL", {
+      configurable: true,
+      value: vi.fn(() => "blob:reader-core"),
+    });
+    Object.defineProperty(url, "revokeObjectURL", { configurable: true, value: vi.fn() });
+    try {
+      frame = loadFrame(createPdfStub(), 4096, { loadPdfCore: undefined });
+      // Installed after loadFrame, because loading the markup replaces <head>.
+      const append = vi.spyOn(document.head, "append").mockImplementation((...nodes) => {
+        const script = nodes.find(
+          (node): node is HTMLScriptElement => node instanceof HTMLScriptElement
+        );
+        if (!script) return;
+        queueMicrotask(() => {
+          if (announces) (globalThis as Record<string, unknown>).pdfjsWorker = {};
+          window.dispatchEvent(
+            new ErrorEvent("error", {
+              message: "Promise.try is not a function",
+              filename: "blob:reader-core",
+              error: new TypeError("Promise.try is not a function"),
+            })
+          );
+          script.dispatchEvent(new Event("load"));
+        });
+      });
+      frame.open({
+        pdf: { displaySource: "export {};", css: "", coreSource: "self.pdfjsWorker = {};" },
+        pdfPort: undefined,
+      });
+      const message = el("message");
+      await vi.waitFor(() => expect(message.hidden).toBe(false));
+      expect(message.textContent).toBe(LABELS.errorGeneric);
+      expect(message.dataset.error).toBe("true");
+      expect(frame.port.messages).toContainEqual({
+        kind: "load-error",
+        code: "corrupt",
+        reason: LABELS.errorGeneric,
+      });
+      append.mockRestore();
+    } finally {
+      delete (globalThis as Record<string, unknown>).pdfjsWorker;
+      delete url.createObjectURL;
+      delete url.revokeObjectURL;
+    }
+  });
+
+  it("reports a load that never settles instead of leaving the stage hidden", async () => {
+    const stub = createPdfStub({ hang: true });
+    frame = loadFrame(stub, 4096, { loadTimeoutMs: 20 });
+    frame.open();
+    const message = el("message");
+    await vi.waitFor(() => expect(message.hidden).toBe(false));
+    expect(message.textContent).toBe(LABELS.errorTimeout);
+    expect(message.dataset.error).toBe("true");
+    expect(frame.port.messages).toContainEqual({
+      kind: "load-error",
+      code: "timeout",
+      reason: LABELS.errorTimeout,
+    });
+  });
+
+  it("reports a first read that never answers, instead of spinning forever", async () => {
+    const stub = createPdfStub();
+    frame = loadFrame(stub, 4096, { loadTimeoutMs: 20 });
+    frame.port.answerReads = false;
+    frame.open();
+    const message = el("message");
+    await vi.waitFor(() => expect(message.hidden).toBe(false));
+    expect(message.textContent).toBe(LABELS.errorTimeout);
+    expect(message.dataset.error).toBe("true");
+    expect(frame.port.messages).toContainEqual({
+      kind: "load-error",
+      code: "timeout",
+      reason: LABELS.errorTimeout,
+    });
+    expect(stub.openedIndices).toEqual([]);
+  });
+
+  it("keeps waiting while the load reports progress, even past one deadline", async () => {
+    const stub = createPdfStub({ hang: true, progressEveryMs: 40, progressCount: 4 });
+    frame = loadFrame(stub, 4096, { loadTimeoutMs: 100 });
+    frame.open();
+    const message = el("message");
+    await vi.waitFor(() => expect(stub.progressCalls).toBeGreaterThanOrEqual(4));
+    expect(message.hidden).toBe(true);
+    expect(frame.port.messages.some((entry) => entry.kind === "load-error")).toBe(false);
   });
 });
 

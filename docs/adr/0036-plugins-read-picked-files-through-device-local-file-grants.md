@@ -18,3 +18,20 @@ Decided while scoping the Reader Built-in Plugin ([#653](https://github.com/M4ss
 
 - A Document moved or deleted outside Maibuk turns unreadable. Picking the file again refreshes its File Grant.
 - Reset settings, which clears Plugin grants, also clears File Grants. Restoring a Backup leaves them alone.
+
+## Amendment: File Grants on Android (2026-11-21)
+
+Android keeps File Grants too, through the same Rust record as desktop. The picker is the system document picker (`ACTION_OPEN_DOCUMENT`), and Maibuk takes a persisted read permission on the document it returns, so a Plugin's grant still reads after a restart. The record holds the document's `content://` URI and its display name in place of a path; the URI stays in Rust, and the webview only sees the grant id. Rust reads the bytes through the content resolver, in ranges, as on desktop. When the last grant on a document ends, Maibuk gives the permission back.
+
+Why: Reader and Maps run on Android (ADR 0021, 2026-11-21 amendment), and both pick files. Before this, Android used the memory store, so no file could be read at all.
+
+Considered Options:
+
+- The dialog plugin's picker: rejected. It uses `ACTION_GET_CONTENT`, whose permission ends with the process, so every grant would read as gone after a restart, and it returns no display name.
+- Copy the picked file into app storage: rejected for the same reasons as copying into Plugin storage above, and a copy would also stop matching the author's file when they change it.
+
+Consequences:
+
+- A document from a provider that offers no persisted permission reads for this run and as gone after a restart; picking it again refreshes it, as for a moved file on desktop.
+- Android caps how many persisted permissions an app holds (128 before Android 11, 512 from Android 11). Releasing a grant gives its permission back, so the cap counts live grants only.
+- Dropping files on a Plugin page stays desktop and web only: Android has no file drop.

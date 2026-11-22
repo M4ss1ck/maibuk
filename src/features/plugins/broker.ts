@@ -533,6 +533,24 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
   }
 
   /**
+   * The bytes one `blob` payload carries, or null when it is not bytes. A
+   * Uint8Array that crossed from another realm is still bytes, so a view is
+   * checked by its buffer slot and its tag, not `instanceof` (the QuickJS bridge
+   * and a Worker each rebuild the value in the realm that receives it).
+   */
+  function blobBytesOf(payload: unknown): Uint8Array | null {
+    if (ArrayBuffer.isView(payload)) {
+      return Object.prototype.toString.call(payload) === "[object Uint8Array]"
+        ? (payload as Uint8Array)
+        : null;
+    }
+    if (Object.prototype.toString.call(payload) === "[object ArrayBuffer]") {
+      return new Uint8Array(payload as ArrayBuffer);
+    }
+    return null;
+  }
+
+  /**
    * Runs one Plugin call, and always releases its `blob` slot: a blob for a
    * refused or finished call finds no pending entry and is dropped (ADR 0040).
    */
@@ -616,8 +634,8 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
     }
     // A row that takes one `blob` message waits for it here, after every check
     // that can refuse the call: the bytes are handed to the handler only once
-    // the call is accepted, and a payload that is not a Blob is refused without
-    // the handler ever running (ADR 0040).
+    // the call is accepted, and a payload that is neither a Blob nor bytes is
+    // refused without the handler ever running (ADR 0040).
     let blob: Blob | undefined;
     if (row.acceptsBlob) {
       if (blobRequest === undefined) {
@@ -630,16 +648,44 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
         fail(id, refusal("rate-limited", "Too many calls", { method: received.method }));
         return;
       }
-      if (!(received instanceof Blob)) {
-        fail(
-          id,
-          refusal("invalid-params", "blob: the call must be followed by one Blob message", {
-            method,
-          })
-        );
-        return;
+      if (received instanceof Blob) {
+        blob = received;
+      } else {
+        const bytes = blobBytesOf(received);
+        if (bytes === null) {
+          fail(
+            id,
+            refusal(
+              "invalid-params",
+              "blob: the call must be followed by one Blob or Uint8Array message",
+              { method }
+            )
+          );
+          return;
+        }
+        // An engine with no Blob (the Android QuickJS engine, #516) sends the
+        // bytes themselves in the same slot. They become the Blob the saver
+        // takes, typed from the call head, with the same checks as a Blob: the
+        // `blob` message is not JSON, so no size cap applies to either.
+        const mimeType = (parsed.data as { mimeType?: unknown }).mimeType;
+        try {
+          blob = new Blob([bytes as BlobPart], {
+            type: typeof mimeType === "string" ? mimeType : "",
+          });
+        } catch {
+          // `new Blob` throws on a view over a detached or shared buffer. The
+          // throw must answer the call: escaping here rejects the caller's
+          // fire-and-forget `handleCall`, which leaves the Plugin's promise for
+          // this id pending forever.
+          fail(
+            id,
+            refusal("invalid-params", "blob: the call's bytes could not be read into a Blob", {
+              method,
+            })
+          );
+          return;
+        }
       }
-      blob = received;
     }
     if (row.minIntervalMs !== undefined && !solicited) lastAcceptedAt.set(method, now());
 

@@ -1240,8 +1240,9 @@ export interface PluginApiRow<
   requiresUserAction?: true;
   /**
    * True when the call is followed by one `blob` message carrying the file's
-   * bytes as a cloned `Blob` (ADR 0040). The row's input schema is the JSON
-   * call head only.
+   * bytes as a cloned `Blob`, or as one `Uint8Array` on an engine with no Blob
+   * (ADR 0040). The broker turns the bytes into a Blob before the handler runs.
+   * The row's input schema is the JSON call head only.
    */
   acceptsBlob?: true;
   /** At most one accepted call per this many milliseconds, per Plugin. */
@@ -1417,7 +1418,8 @@ export interface PluginHandlerContext {
   pluginId: string;
   /**
    * The bytes a row with `acceptsBlob` was followed by, checked to be a real
-   * `Blob` before the handler runs (ADR 0040). Absent for every other row.
+   * `Blob` (the broker wraps the `Uint8Array` an engine with no Blob sends)
+   * before the handler runs (ADR 0040). Absent for every other row.
    */
   blob?: Blob;
 }

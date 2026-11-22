@@ -10,6 +10,11 @@ string, evaluated only when a Document of its format opens
 
 - pdf.js's core runs in a nested Worker the Plugin Worker starts from a `blob:`
   of the worker source (the Plugin sandbox allows `worker-src blob:`).
+  On Android the Plugin runs in QuickJS, which has no `Worker`, so the Plugin
+  sends the worker source to the Frame instead; the Frame runs it as a `blob:`
+  classic script and pdf.js then parses on the Frame's own thread
+  (`canStartPdfCore()` in `../loaders.ts`, `loadPdfCore` in
+  `../assets/ui/reader.js`).
 - pdf.js's display module and viewer CSS travel to the Frame over the port, which
   imports the module from a `blob:` URL (`script-src blob:`).
 - foliate-js's parser modules import each other relatively, and a `blob:` module
@@ -30,8 +35,9 @@ run leaves the working tree unchanged.
 
 | Library  | Version                                | Source                                                                                                     | Licence                              | Files                                                                                                                                                                                                 |
 | -------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| pdf.js   | 6.4.299 (`pdfjs-dist`)                 | https://www.npmjs.com/package/pdfjs-dist/v/6.4.299 (https://github.com/mozilla/pdf.js)                     | Apache-2.0, `pdfjs/LICENSE`          | `pdfjs/pdf.worker.min.mjs` (package `build/pdf.worker.min.mjs`), `pdfjs/pdf.min.mjs` (package `build/pdf.min.mjs`), `pdfjs/pdf_viewer.css.txt` (package `web/pdf_viewer.css`), `pdfjs/LICENSE`        |
+| pdf.js   | 6.5.438 (`pdfjs-dist`)                 | https://www.npmjs.com/package/pdfjs-dist/v/6.5.438 (https://github.com/mozilla/pdf.js)                     | Apache-2.0, `pdfjs/LICENSE`          | `pdfjs/pdf.worker.min.mjs` (package `build/pdf.worker.min.mjs`), `pdfjs/pdf.min.mjs` (package `build/pdf.min.mjs`), `pdfjs/pdf_viewer.css.txt` (package `web/pdf_viewer.css`), `pdfjs/LICENSE`        |
 | foliate-js | commit `78914aef4466eb960965702401634c2cb348e9b1` | https://github.com/johnfactotum/foliate-js/tree/78914aef4466eb960965702401634c2cb348e9b1 | MIT, `foliate/LICENSE`               | `foliate/epub.js`, `foliate/mobi.js`, `foliate/fb2.js`, `foliate/comic-book.js`, `foliate/epubcfi.js`, `foliate/search.js`, `foliate/LICENSE`, `foliate/bundle.ts`, `foliate/foliate-parsers.min.mjs` |
+| core-js  | 3.51.0 (`core-js`, a devDependency)   | https://www.npmjs.com/package/core-js/v/3.51.0 (https://github.com/zloirock/core-js)                       | MIT, `pdfjs/core-js.LICENSE`         | `pdfjs/polyfills.ts` (generated entry), `pdfjs/polyfills.min.js` (its bundle)                                                                                                                       |
 
 `pdfjs/pdf_viewer.css.txt` is pdf.js's `web/pdf_viewer.css` under a `.txt`
 extension, so Vite hands the Plugin the file's bytes as a `?raw` string instead
@@ -44,6 +50,31 @@ surface Reader needs (`EPUB`, `MOBI`, `isMOBI`, `makeFB2`, `makeComicBook`,
 output. Parser modules only: foliate's `paginator.js`, `fixed-layout.js`, and
 `view.js` render into nested iframes and read `contentDocument`, which the
 Frame's `sandbox="allow-scripts"` forbids.
+
+## Polyfills for the oldest supported engine
+
+Maibuk supports Android 8 onwards, and Chrome 138 is the last Android System
+WebView Android 8 and 9 receive (Chrome 139 requires Android 10;
+https://support.google.com/chrome/thread/352616098). pdf.js ships only its
+modern build here, and that build calls some newer APIs without a feature check:
+`Uint8Array.prototype.toHex` (Chrome 140) on every document open, plus
+`Map`/`WeakMap` `getOrInsert(Computed)` (145), `Math.sumPrecise` (147),
+`Uint8Array.fromBase64` and `toBase64` (140), and `Promise.try` (128).
+
+`scripts/vendor-reader.mjs` scans both pdf.js files for the recent APIs in its
+`PDFJS_RECENT_APIS` table, asks core-js-compat which of them
+`READER_ENGINE_FLOOR` (Chrome 138) lacks, writes `pdfjs/polyfills.ts` importing
+exactly those core-js modules, and bundles it into the classic script
+`pdfjs/polyfills.min.js`. `withPdfPolyfills` in `../loaders.ts` prepends it to
+the core and the display module, so it runs first wherever each one loads (the
+nested Worker, or the Frame on Android). core-js installs a polyfill only where
+the engine has no working native, so a current engine keeps its own.
+
+`src/test/unit/scripts/vendor-reader-polyfills.test.ts` fails when the
+committed entry no longer matches the scan of the vendored pdf.js, so a pdf.js
+update that starts calling another listed API cannot land without its polyfill.
+An API missing from the table is not caught: on a pdf.js update, read its
+release notes against the table.
 
 fflate and DOMPurify, which the reading surface also uses, are ordinary Maibuk
 dependencies and are imported normally, not vendored here.

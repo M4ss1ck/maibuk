@@ -94,6 +94,10 @@ pub fn run() {
         // A Plugin File Save writes on desktop and Android alike (ADR 0040).
         .manage(plugins::files::SaveStore::default());
 
+    // File Grants on Android: the document picker and resolver (ADR 0036).
+    #[cfg(target_os = "android")]
+    let builder = builder.plugin(plugins::files::android::init());
+
     #[cfg(desktop)]
     let builder = builder
         .plugin(
@@ -176,6 +180,20 @@ pub fn run() {
             plugins::files::plugin_files_clear_plugin,
             #[cfg(desktop)]
             plugins::files::plugin_files_clear_all,
+            #[cfg(target_os = "android")]
+            plugins::files::android::plugin_files_pick,
+            #[cfg(target_os = "android")]
+            plugins::files::android::plugin_files_read,
+            #[cfg(target_os = "android")]
+            plugins::files::android::plugin_files_stat,
+            #[cfg(target_os = "android")]
+            plugins::files::android::plugin_files_release,
+            #[cfg(target_os = "android")]
+            plugins::files::android::plugin_files_list,
+            #[cfg(target_os = "android")]
+            plugins::files::android::plugin_files_clear_plugin,
+            #[cfg(target_os = "android")]
+            plugins::files::android::plugin_files_clear_all,
             plugins::files::plugin_files_save_begin,
             plugins::files::plugin_files_save_write,
             plugins::files::plugin_files_save_commit,
@@ -225,6 +243,26 @@ pub fn run() {
             #[cfg(any(target_os = "linux", target_os = "windows"))]
             plugins::secrets::init();
 
+            // File Grants (ADR 0036) live in an app data file beside the other
+            // device-local Plugin records, never in the Library, so Backups and
+            // Sync do not carry them. Without an app data folder they last for
+            // this run. Android keeps them too, as document URIs.
+            #[cfg(any(desktop, target_os = "android"))]
+            {
+                use tauri::Manager;
+
+                let grants = match app.path().app_data_dir() {
+                    Ok(data) => {
+                        plugins::files::GrantStore::new(data.join(plugins::files::GRANTS_FILE))
+                    }
+                    Err(error) => {
+                        eprintln!("File Grants not kept: {error}");
+                        plugins::files::GrantStore::in_memory()
+                    }
+                };
+                app.manage(grants);
+            }
+
             #[cfg(desktop)]
             {
                 use tauri::Manager;
@@ -243,21 +281,6 @@ pub fn run() {
                     }
                 };
                 app.manage(endpoint);
-
-                // File Grants (ADR 0036) live in an app data file beside the
-                // other device-local Plugin records, never in the Library, so
-                // Backups and Sync do not carry them. Without an app data folder
-                // they last for this run.
-                let grants = match app.path().app_data_dir() {
-                    Ok(data) => {
-                        plugins::files::GrantStore::new(data.join(plugins::files::GRANTS_FILE))
-                    }
-                    Err(error) => {
-                        eprintln!("File Grants not kept: {error}");
-                        plugins::files::GrantStore::in_memory()
-                    }
-                };
-                app.manage(grants);
 
                 #[cfg(any(target_os = "linux", target_os = "windows"))]
                 {

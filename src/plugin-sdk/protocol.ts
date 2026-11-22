@@ -7,9 +7,9 @@
  * oversized message by its length before decoding it. Each one starts with
  * `kind`, `id`, then `method` or `event`, so a refusal can name the call
  * without decoding the rest. The one exception is the `blob` message that
- * follows a `files.save` call: a plain object carrying a cloned `Blob`, whose
- * bytes the broker never decodes (ADR 0040). Host to Plugin messages are plain
- * objects and uncapped.
+ * follows a `files.save` call: a plain object carrying a cloned `Blob`, or the
+ * one `Uint8Array` an engine with no Blob sends, whose bytes the broker never
+ * decodes (ADR 0040). Host to Plugin messages are plain objects and uncapped.
  */
 
 export const PLUGIN_API_ERROR_CODES = [
@@ -75,10 +75,11 @@ export type PluginToHostMessage =
   | { kind: "end"; id: number }
   /**
    * The one non-JSON message: the bytes of a `files.save` call, sent right
-   * after its `call` head with the same id, as a cloned `Blob` the broker never
-   * decodes (ADR 0040). The method's table row must say `acceptsBlob`.
+   * after its `call` head with the same id, as a cloned `Blob` (or, on an engine
+   * with no Blob, one `Uint8Array`) the broker never decodes (ADR 0040). The
+   * method's table row must say `acceptsBlob`.
    */
-  | { kind: "blob"; id: number; blob: Blob };
+  | { kind: "blob"; id: number; blob: Blob | Uint8Array };
 
 /**
  * `result` settles a call, subscribe, or unsubscribe. A streaming call's
@@ -416,6 +417,21 @@ const BASE64_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz012
 const BASE64_VALUES: Record<string, number> = {};
 for (let i = 0; i < BASE64_ALPHABET.length; i++) BASE64_VALUES[BASE64_ALPHABET[i]] = i;
 
+/** The ASCII code of each alphabet character, for the encoder's output buffer. */
+const BASE64_CODES = new Uint8Array(64);
+for (let i = 0; i < 64; i++) BASE64_CODES[i] = BASE64_ALPHABET.charCodeAt(i);
+/** The '=' code the encoder pads with. */
+const BASE64_PAD = 0x3d;
+
+/**
+ * Largest run of ASCII codes handed to one `String.fromCharCode` call. The
+ * encoder fills a `Uint8Array` and emits it in these slices, so the cost stays
+ * linear: a per-group `+=` copies the whole accumulated string every time,
+ * which is quadratic on an engine without string ropes (the Android QuickJS
+ * engine), where a multi-megabyte image would spin for minutes.
+ */
+const BASE64_CHUNK_CODES = 0x8000;
+
 /**
  * Decodes base64 without `atob`, which not every Plugin engine has (the Android
  * QuickJS engine does not). Throws on anything that is not base64.
@@ -460,23 +476,37 @@ export function base64DecodedLength(text: string): number {
 
 /** Encodes bytes as base64 without `btoa`, for the same reason. */
 export function bytesToBase64(bytes: Uint8Array): string {
-  let output = "";
+  const groups = Math.floor(bytes.length / 3);
+  const rest = bytes.length - groups * 3;
+  const codes = new Uint8Array(groups * 4 + (rest === 0 ? 0 : 4));
+  let written = 0;
   let i = 0;
-  for (; i + 2 < bytes.length; i += 3) {
+  for (let group = 0; group < groups; group++) {
     const value = (bytes[i] << 16) | (bytes[i + 1] << 8) | bytes[i + 2];
-    output +=
-      BASE64_ALPHABET[(value >> 18) & 63] +
-      BASE64_ALPHABET[(value >> 12) & 63] +
-      BASE64_ALPHABET[(value >> 6) & 63] +
-      BASE64_ALPHABET[value & 63];
+    i += 3;
+    codes[written++] = BASE64_CODES[(value >> 18) & 63];
+    codes[written++] = BASE64_CODES[(value >> 12) & 63];
+    codes[written++] = BASE64_CODES[(value >> 6) & 63];
+    codes[written++] = BASE64_CODES[value & 63];
   }
-  const rest = bytes.length - i;
   if (rest === 1) {
     const value = bytes[i] << 16;
-    output += `${BASE64_ALPHABET[(value >> 18) & 63]}${BASE64_ALPHABET[(value >> 12) & 63]}==`;
+    codes[written++] = BASE64_CODES[(value >> 18) & 63];
+    codes[written++] = BASE64_CODES[(value >> 12) & 63];
+    codes[written++] = BASE64_PAD;
+    codes[written++] = BASE64_PAD;
   } else if (rest === 2) {
     const value = (bytes[i] << 16) | (bytes[i + 1] << 8);
-    output += `${BASE64_ALPHABET[(value >> 18) & 63]}${BASE64_ALPHABET[(value >> 12) & 63]}${BASE64_ALPHABET[(value >> 6) & 63]}=`;
+    codes[written++] = BASE64_CODES[(value >> 18) & 63];
+    codes[written++] = BASE64_CODES[(value >> 12) & 63];
+    codes[written++] = BASE64_CODES[(value >> 6) & 63];
+    codes[written++] = BASE64_PAD;
   }
-  return output;
+  if (codes.length === 0) return "";
+  const parts: string[] = [];
+  for (let offset = 0; offset < codes.length; offset += BASE64_CHUNK_CODES) {
+    const slice = codes.subarray(offset, offset + BASE64_CHUNK_CODES) as unknown as number[];
+    parts.push(String.fromCharCode.apply(null, slice));
+  }
+  return parts.join("");
 }

@@ -1,8 +1,12 @@
 allowBuilds:
   canvas: false
+  # postinstall only prints a funding banner; the Reader polyfills need no build step.
+  core-js: false
   esbuild: true
 onlyBuiltDependencies:
   - esbuild
+patchedDependencies:
+  path-data-parser@0.1.0: patches/path-data-parser@0.1.0.patch
 peerDependencyRules:
   # i18next types only; checked clean under TypeScript 7.
   allowedVersions:

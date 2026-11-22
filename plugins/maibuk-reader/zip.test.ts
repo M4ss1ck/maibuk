@@ -86,6 +86,19 @@ describe("opening an archive", () => {
     await expect(opened.read("b.txt")).rejects.toMatchObject({ code: "missing" });
     expect(await opened.readText("b.txt")).toBeNull();
   });
+
+  it("returns a stored entry's bytes whole, the way the fixtures pack them", async () => {
+    // Every committed fixture stores its entries, images included: the bytes
+    // come straight out of the archive with no inflate step.
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0xff, 0x00]);
+    const bytes = zipSync({ "OEBPS/images/figure.png": png }, { level: 0 });
+    const opened = await openZip(reader(bytes).read, bytes.length);
+    const entry = opened.entries.find(({ name }) => name === "OEBPS/images/figure.png");
+    expect(entry?.method).toBe(0);
+    const read = await opened.read("OEBPS/images/figure.png");
+    expect(read.byteLength).toBe(png.byteLength);
+    expect(Array.from(read)).toEqual(Array.from(png));
+  });
 });
 
 describe("refusing a damaged archive", () => {

@@ -166,8 +166,9 @@ function hasRequiredInput(row: PluginApiRow): boolean {
 
 /**
  * A row's SDK input type. A row with `acceptsBlob` also takes `bytes`, which
- * never appears in the wire schema: the SDK folds it into one Blob and sends it
- * right after the call (ADR 0040).
+ * never appears in the wire schema: the SDK folds it into one Blob (or one
+ * Uint8Array where the engine has no Blob) and sends it right after the call
+ * (ADR 0040).
  */
 function inputTypeOf(row: PluginApiRow, indent: string): string {
   const schema = inputJsonSchema(row);

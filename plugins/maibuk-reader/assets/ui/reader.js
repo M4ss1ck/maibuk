@@ -35,7 +35,7 @@
    * @typedef {PagePosition | CfiPosition | SectionPosition} ReadingPosition
    * @typedef {{ id: string, title: string, author: string, format: string }} FrameEntry
    * @typedef {{ fontSize: number, lineWidth: string, pdfFit: "width" | "page", pdfLayout: "single" | "continuous" }} ReaderSettings
-   * @typedef {{ displaySource: string, css: string }} FramePdf
+   * @typedef {{ displaySource: string, css: string, coreSource?: string }} FramePdf
    * @typedef {{ source: string, purify: string }} FrameFoliate
    * @typedef {{ name: string, size: number }} FrameZipEntry
    * @typedef {Object} FrameLabels
@@ -71,6 +71,7 @@
    * @property {string} errorDrm
    * @property {string} errorDamaged
    * @property {string} errorTooLarge
+   * @property {string} errorTimeout
    * @property {string} sectionPage
    * @property {string} increaseFontSize
    * @property {string} decreaseFontSize
@@ -123,6 +124,7 @@
       errorDrm: "This Document is protected by DRM, so Reader can't open it.",
       errorDamaged: "This file is damaged, so Reader can't open it.",
       errorTooLarge: "This file is too large for Reader to open.",
+      errorTimeout: "This file took too long to open. Try again.",
       sectionPage: "{{page}} of {{count}} in this section",
       increaseFontSize: "Increase font size",
       decreaseFontSize: "Decrease font size",
@@ -163,6 +165,7 @@
       errorDrm: "Este documento está protegido con DRM, así que Lector no puede abrirlo.",
       errorDamaged: "Este archivo está dañado, así que Lector no puede abrirlo.",
       errorTooLarge: "Este archivo es demasiado grande para que Lector lo abra.",
+      errorTimeout: "Este archivo tardó demasiado en abrirse. Inténtalo de nuevo.",
       sectionPage: "{{page}} de {{count}} en esta sección",
       increaseFontSize: "Aumentar tamaño de letra",
       decreaseFontSize: "Reducir tamaño de letra",
@@ -178,6 +181,18 @@
   const INITIAL_CHUNK_BYTES = 1 << 20;
   const RANGE_CHUNK_BYTES = 1 << 20;
   const MAX_CACHED_PAGES = 5;
+  /**
+   * How long a PDF may take to answer before the Frame reports a load failure.
+   * pdf.js's core answers through a `MessageHandler` that calls `Promise.try`
+   * inside a deferred `LoopbackPort` callback. An engine below pdf.js's floor
+   * (the polyfills cover only Chrome 138) has no `Promise.try`, so that call
+   * throws after `getDocument` was called; the throw becomes an unhandled
+   * rejection and no `GetDoc` or `DocException` ever arrives, so the loading
+   * task's promise never settles and `handleLoadError` never runs. 30s leaves a
+   * slow, large Document on a low-end device ample room while turning a
+   * permanent hang into the visible error the author can act on.
+   */
+  const PDF_LOAD_TIMEOUT_MS = 30000;
   /** How far a wheel gesture pushes past a page's edge before it turns the page. */
   const WHEEL_PAGE_THRESHOLD = 50;
   /** A pause this long between wheel events starts a new gesture. */
@@ -584,6 +599,42 @@
 
   /* Opening --------------------------------------------------------------- */
 
+  /** The open timeout, which the test harness may shorten through `hooks`. */
+  function pdfLoadTimeoutMs() {
+    return hooks && typeof hooks.loadTimeoutMs === "number"
+      ? hooks.loadTimeoutMs
+      : PDF_LOAD_TIMEOUT_MS;
+  }
+
+  /**
+   * Rejects when `promise` neither resolves nor rejects within the open
+   * timeout, so a wedged pdf.js still reaches {@link handleLoadError}. The
+   * underlying work is left to pdf.js and to `destroyDocument`, which the
+   * failure path calls.
+   *
+   * @param {Promise<any>} promise
+   * @returns {Promise<any>}
+   */
+  function withPdfLoadTimeout(promise) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        const error = new Error("pdf.js did not answer in time");
+        /** @type {any} */ (error).name = "LoadTimeoutError";
+        reject(error);
+      }, pdfLoadTimeoutMs());
+      promise.then(
+        (value) => {
+          clearTimeout(timer);
+          resolve(value);
+        },
+        (error) => {
+          clearTimeout(timer);
+          reject(error);
+        }
+      );
+    });
+  }
+
   /** @param {FrameOpenMessage} message */
   async function handleOpen(message) {
     entry = message.entry || null;
@@ -598,8 +649,8 @@
       showMessage(t("empty"), false);
       return;
     }
-    if (message.pdf && message.pdfPort) {
-      await openPdf(message.pdf, message.pdfPort, position);
+    if (message.pdf && (message.pdfPort || typeof message.pdf.coreSource === "string")) {
+      await openPdf(message.pdf, message.pdfPort || null, position);
       return;
     }
     if (message.foliate) {
@@ -636,23 +687,36 @@
   }
 
   /**
+   * Opens a PDF. With a port, pdf.js's core answers from the Plugin Worker's
+   * nested Worker. Without one (Android), the Worker sent the core's source:
+   * the Frame loads it, and pdf.js runs the core on this thread, since the
+   * Frame may not start a Worker of its own.
+   *
    * @param {FramePdf} pdf
-   * @param {MessagePort} pdfPort
+   * @param {MessagePort | null} pdfPort
    * @param {ReadingPosition | null} saved
    */
   async function openPdf(pdf, pdfPort, saved) {
     try {
-      pdfjs = await importPdfjs(pdf.displaySource);
+      pdfjs = await withPdfLoadTimeout(importPdfjs(pdf.displaySource));
       injectCss(pdf.css);
-      activePdfPort = pdfPort;
-      pdfPort.start();
-      pdfWorker = new pdfjs.PDFWorker({ port: pdfPort });
+      if (pdfPort) {
+        activePdfPort = pdfPort;
+        pdfPort.start();
+        pdfWorker = new pdfjs.PDFWorker({ port: pdfPort });
+      } else {
+        await withPdfLoadTimeout(loadPdfCore(/** @type {string} */ (pdf.coreSource)));
+        pdfWorker = new pdfjs.PDFWorker();
+      }
       zoomSetting =
         saved && (typeof saved.zoom === "number" || saved.zoom === "width" || saved.zoom === "page")
           ? saved.zoom
           : settings.pdfFit;
       const initialLength = Math.min(fileSize > 0 ? fileSize : 0, INITIAL_CHUNK_BYTES);
-      const initial = await requestBytes(0, initialLength);
+      // The first read is as likely to stall as any later one, so it runs under
+      // the same deadline; a provider that never answers must not leave the
+      // spinner up with no way out.
+      const initial = await withPdfLoadTimeout(requestBytes(0, initialLength));
       transport = new pdfjs.PDFDataRangeTransport(fileSize, initial);
       transport.requestDataRange = (begin, end) => {
         void requestBytes(begin, Math.min(end - begin, RANGE_CHUNK_BYTES))
@@ -684,6 +748,65 @@
     }
   }
 
+  /**
+   * Runs pdf.js's core, a classic script, once per Frame: it sets
+   * `globalThis.pdfjsWorker`, which pdf.js's display module then answers from.
+   *
+   * @param {string} source
+   * @returns {Promise<void>}
+   */
+  async function loadPdfCore(source) {
+    if (hooks && typeof hooks.loadPdfCore === "function") return hooks.loadPdfCore(source);
+    if (/** @type {any} */ (globalThis).pdfjsWorker) return;
+    const url = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
+    try {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        /**
+         * A classic script that throws while it evaluates (a missing API such
+         * as `Promise.try`) still fires `load`, so only the window's `error`
+         * event reports it. Blob URLs are same-origin, so the event names this
+         * script as its source.
+         *
+         * @param {ErrorEvent} event
+         */
+        const onWindowError = (event) => {
+          if (event.filename !== url) return;
+          cleanup();
+          reject(
+            event.error instanceof Error
+              ? event.error
+              : new Error(event.message || "pdf.js's core failed to evaluate")
+          );
+        };
+        const cleanup = () => {
+          window.removeEventListener("error", onWindowError);
+          script.remove();
+        };
+        window.addEventListener("error", onWindowError);
+        script.src = url;
+        script.onload = () => {
+          cleanup();
+          // The core defines this global as it evaluates; an absent one means
+          // it stopped before it could serve the display module.
+          const scope = /** @type {any} */ (globalThis);
+          if (!scope.pdfjsWorker) {
+            reject(new Error("pdf.js's core did not finish loading"));
+            return;
+          }
+          resolve(undefined);
+        };
+        script.onerror = () => {
+          cleanup();
+          reject(new Error("pdf.js's core did not load"));
+        };
+        document.head.append(script);
+      });
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
   /** @param {string} css */
   function injectCss(css) {
     const previous = document.getElementById("reader-pdf-css");
@@ -708,20 +831,54 @@
     if (typeof password === "string") params.password = password;
     const task = pdfjs.getDocument(params);
     loadingTask = task;
+    // A password request keeps `task.promise` pending while the author types,
+    // so that wait is exempt from the load deadline: the clock stops when the
+    // form shows and starts again only when the author submits. Every progress
+    // report restarts the clock, so a slow but moving load is left alone and
+    // only an inactive one fails.
+    let timer = 0;
+    let done = false;
+    let rejectTimeout = () => {};
+    const timeout = new Promise((_resolve, reject) => {
+      rejectTimeout = () => {
+        const error = new Error("pdf.js did not answer in time");
+        /** @type {any} */ (error).name = "LoadTimeoutError";
+        reject(error);
+      };
+    });
+    const armTimeout = () => {
+      if (done) return;
+      clearTimeout(timer);
+      timer = setTimeout(rejectTimeout, pdfLoadTimeoutMs());
+    };
+    armTimeout();
     if (typeof task === "object" && task !== null) {
+      task.onProgress = () => {
+        // While the password form is open the deadline stays paused, even if a
+        // stray progress frame arrives.
+        if (passwordForm && !passwordForm.hidden) return;
+        armTimeout();
+      };
       task.onPassword = (updatePassword, reason) => {
-        passwordCallback = updatePassword;
+        clearTimeout(timer);
+        passwordCallback = (value) => {
+          armTimeout();
+          updatePassword(value);
+        };
         showPassword(reason === 2);
       };
     }
     try {
-      pdfDoc = await task.promise;
+      pdfDoc = await Promise.race([task.promise, timeout]);
     } catch (error) {
       if (isPasswordError(error)) {
         showPassword(typeof password === "string");
         return;
       }
       throw error;
+    } finally {
+      done = true;
+      clearTimeout(timer);
     }
     await onOpened();
   }
@@ -2965,6 +3122,12 @@
       showPassword(false);
       return;
     }
+    if (name === "LoadTimeoutError") {
+      // Transient: a slow provider is not a damaged file, so the Worker leaves
+      // the Shelf row openable and the author can try again.
+      fail("timeout", t("errorTimeout"));
+      return;
+    }
     if (
       name === "InvalidPDFException" ||
       name === "FormatError" ||
@@ -2980,7 +3143,7 @@
     fail("corrupt", t("errorGeneric"));
   }
 
-  /** @param {"corrupt" | "encrypted" | "unsupported"} code @param {string} message */
+  /** @param {"corrupt" | "encrypted" | "unsupported" | "timeout"} code @param {string} message */
   function fail(code, message) {
     destroyDocument();
     stage.hidden = true;
@@ -3279,7 +3442,14 @@
       }
     });
   }
-  if (passwordForm) passwordForm.addEventListener("submit", onPasswordSubmit);
+  // The Frame sandbox has no `allow-forms`, so the password never travels as a
+  // form submission: the Open button and Enter in the field send it directly.
+  if (passwordSubmit) passwordSubmit.addEventListener("click", onPasswordSubmit);
+  if (passwordInput) {
+    passwordInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") onPasswordSubmit(event);
+    });
+  }
   document.addEventListener("keydown", onKeyDown);
   window.addEventListener("pagehide", onPageHide);
   window.addEventListener("resize", onResize);
