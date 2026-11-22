@@ -494,9 +494,10 @@ describe("search", () => {
     await user.type(el("search-input"), "spice");
     // An Enter the IME owns searches nothing: still composing, and Safari's
     // commit Enter that only `keyCode` 229 tells apart.
-    fireEvent.keyDown(el("search-input"), { key: "Enter", isComposing: true });
-    fireEvent.keyDown(el("search-input"), { key: "Enter", keyCode: 229 });
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    // The search handler claims its Enter with preventDefault, synchronously,
+    // so an unclaimed event proves it ran nothing.
+    expect(fireEvent.keyDown(el("search-input"), { key: "Enter", isComposing: true })).toBe(true);
+    expect(fireEvent.keyDown(el("search-input"), { key: "Enter", keyCode: 229 })).toBe(true);
     expect(el("search-status").textContent).toBe("");
     expect(el("page-indicator").textContent).toBe("1 of 4");
 
