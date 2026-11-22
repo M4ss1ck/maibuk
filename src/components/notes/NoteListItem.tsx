@@ -1,6 +1,6 @@
 import type { DragEvent, KeyboardEvent } from "react";
 import { keepRowFromActing } from "@/lib/arrow-navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BookOpen, Copy, GripVertical, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import type { Note } from "@/features/notes";
@@ -40,6 +40,13 @@ interface NoteListItemProps {
   onDragOver?: (e: DragEvent<HTMLDivElement>) => void;
   onDrop?: (e: DragEvent<HTMLDivElement>) => void;
   onDragEnd?: (e: DragEvent<HTMLDivElement>) => void;
+  /**
+   * Called with true when the inline rename field opens and false when it
+   * closes or the row unmounts with it open. The list turns its row drag off
+   * meanwhile: a mouse drag in a draggable row moves the row instead of
+   * selecting the title's text.
+   */
+  onEditingChange?: (isEditing: boolean) => void;
 }
 
 export function NoteListItem({
@@ -59,6 +66,7 @@ export function NoteListItem({
   onDragOver,
   onDrop,
   onDragEnd,
+  onEditingChange,
 }: NoteListItemProps) {
   const { t, i18n } = useTranslation();
   const locale = i18n?.language ?? "en";
@@ -145,6 +153,13 @@ export function NoteListItem({
     [setOwnerRef]
   );
   useItemCommands(rowRef, actions, { enabled: !isEditing });
+
+  const reportEditing = useEffectEvent((editing: boolean) => onEditingChange?.(editing));
+  useEffect(() => {
+    if (!isEditing) return;
+    reportEditing(true);
+    return () => reportEditing(false);
+  }, [isEditing]);
 
   const commitTitle = () => {
     const nextTitle = draftTitle.trim();

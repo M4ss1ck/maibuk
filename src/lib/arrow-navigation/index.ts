@@ -124,11 +124,20 @@ export function handleArrowKey(event: KeyboardEvent): void {
 
 function routeArrowKey(event: KeyboardEvent, beforeFocus?: BeforeFocus): void {
   if (!isArrowKey(event.key)) return;
+  const active = document.activeElement;
+  // A text field inside a row (an inline rename) keeps every arrow, with or
+  // without modifiers. React Aria's row capture handler takes Left and Right
+  // with any modifier to move between the row's controls, and Up and Down to
+  // move between rows; the caret needs them to move and to extend a
+  // selection (Shift+Left), and the row never sees them.
+  if (active instanceof HTMLElement && isTextEntry(active) && active.closest('[role="row"]')) {
+    event.stopPropagation();
+    return;
+  }
   if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
   if (event.isComposing || event.defaultPrevented) return;
   const key = event.key;
   const layer = topmostLayer();
-  const active = document.activeElement;
 
   if (!(active instanceof HTMLElement) || active === document.body || active === layer) {
     if (
@@ -151,18 +160,7 @@ function routeArrowKey(event: KeyboardEvent, beforeFocus?: BeforeFocus): void {
     }
     return;
   }
-  if (ownsArrows(active)) {
-    // React Aria's row capture handler takes Left/Right from a text field
-    // inside a row to move between the row's controls; the caret keeps them.
-    if (
-      (key === "ArrowLeft" || key === "ArrowRight") &&
-      isTextEntry(active) &&
-      active.closest('[role="row"]')
-    ) {
-      event.stopPropagation();
-    }
-    return;
-  }
+  if (ownsArrows(active)) return;
 
   const outcome = arrowOutcome(active, key);
   if (outcome.kind === "inside") return;

@@ -1,5 +1,11 @@
 import type { Page } from "@playwright/test";
-import { describeFocus, expectFocusWithin, pressUntilFocused, tabTo } from "../support/keyboard";
+import {
+  describeFocus,
+  expectFocusWithin,
+  expectRowFieldKeepsArrows,
+  pressUntilFocused,
+  tabTo,
+} from "../support/keyboard";
 import { capture } from "../support/capture";
 import { SEED_BOOK } from "../support/seed/names";
 import { expect, test } from "../support/test";
@@ -156,6 +162,23 @@ test.describe("renaming and Chapter Type @wf:chapters-rename-type", () => {
     await expect(
       row(page, "The Beacon").getByRole("button", { name: "Chapter Type" })
     ).toContainText("Prologue");
+  });
+
+  test("arrows and Shift+arrows move and extend the caret in the rename field", async ({
+    page,
+  }) => {
+    await openBook(page);
+    await focusRowAction(page, "The Lamp", "Edit Chapter");
+    await page.keyboard.press("Enter");
+    const input = row(page, "The Lamp").getByRole("textbox");
+
+    await expectRowFieldKeepsArrows(page, input, "The Lamp");
+
+    // The selection the arrows left (the whole title) is what typing replaces.
+    await page.keyboard.type("The Beacon");
+    await expect(input).toHaveValue("The Beacon");
+    await page.keyboard.press("Escape");
+    await expect(row(page, "The Lamp")).toBeFocused();
   });
 
   test("Cancel discards the rename and returns focus to the row", async ({ page }) => {

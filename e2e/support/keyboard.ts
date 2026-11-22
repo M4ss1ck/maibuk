@@ -89,6 +89,44 @@ export async function fieldCaret(target: Locator): Promise<{ start: number; end:
 }
 
 /**
+ * Proves a focused single-line text field inside a list row keeps every arrow
+ * key, plain or with Shift: each one moves or extends the caret, and the list
+ * never takes one to move focus to a row or a row's button. `value` is the
+ * field's current text, at least three characters long.
+ */
+export async function expectRowFieldKeepsArrows(
+  page: Page,
+  field: Locator,
+  value: string
+): Promise<void> {
+  await expect(field).toBeFocused();
+  await expect(field).toHaveValue(value);
+  const end = value.length;
+
+  await page.keyboard.press("End");
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("ArrowRight");
+  expect(await fieldCaret(field)).toEqual({ start: end - 1, end: end - 1 });
+
+  await page.keyboard.press("Shift+ArrowLeft");
+  await page.keyboard.press("Shift+ArrowLeft");
+  expect(await fieldCaret(field)).toEqual({ start: end - 3, end: end - 1 });
+
+  // In a single-line field Up goes to the start and Down to the end.
+  await page.keyboard.press("ArrowUp");
+  expect(await fieldCaret(field)).toEqual({ start: 0, end: 0 });
+  await page.keyboard.press("Shift+ArrowDown");
+  expect(await fieldCaret(field)).toEqual({ start: 0, end });
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Shift+ArrowUp");
+  expect(await fieldCaret(field)).toEqual({ start: 0, end });
+
+  await expect(field).toBeFocused();
+  await expect(field).toHaveValue(value);
+}
+
+/**
  * Presses Shift+Tab until focus leaves `frameElement` for the host page. A Frame
  * keeps keyboard focus while it is mounted, so a host Command (the palette) must
  * be reached from the host after the Frame has handed focus back.
