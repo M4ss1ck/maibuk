@@ -795,9 +795,14 @@ describe("book snapshot serializer", () => {
       },
     ];
 
-    await expect(applyBookSnapshot(snapshot)).rejects.toThrow(
+    const failure = applyBookSnapshot(snapshot);
+    await expect(failure).rejects.toThrow(
       'Sync apply failed on chapter 1/1 ("Orphan"): FOREIGN KEY constraint failed'
     );
+    // The engine's error stays reachable, with its own stack, as the cause.
+    await expect(failure).rejects.toMatchObject({
+      cause: { message: expect.stringContaining("FOREIGN KEY constraint failed") },
+    });
   });
 
   it("keeps the Book's Checkpoints and EPUB structure when a pull updates it", async () => {

@@ -258,7 +258,8 @@ async function replaceRestoreData(
       error.index >= deletes.length
     ) {
       throw new Error(
-        `Restore failed on statement ${error.index - deletes.length + 1}/${statements.length}: ${error.detail}`
+        `Restore failed on statement ${error.index - deletes.length + 1}/${statements.length}: ${error.detail}`,
+        { cause: error }
       );
     }
     throw error;
@@ -394,7 +395,7 @@ export class BackupService {
       await cancelBulkReplace("restore");
       const detail = error instanceof Error ? error.message : String(error);
       console.error("Restore data replacement failed:", detail);
-      throw new Error(`RESTORE_FAILED: ${detail}`);
+      throw new Error(`RESTORE_FAILED: ${detail}`, { cause: error });
     }
 
     // Once replaceRestoreData resolved, the replacement committed and the

@@ -619,15 +619,20 @@ describe("BackupService", () => {
         }
         return [];
       });
-      mockDb.executeAtomic.mockRejectedValueOnce(
-        new AtomicStatementError(10, "UNIQUE constraint failed", 11)
-      );
+      const engineError = new AtomicStatementError(10, "UNIQUE constraint failed", 11);
+      mockDb.executeAtomic.mockRejectedValueOnce(engineError);
 
-      await expect(
-        service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql")
-      ).rejects.toThrow(
+      const failure = service.restoreBackup("maibuk-backup-manual-2026-03-15T10-00-00.sql");
+      await expect(failure).rejects.toThrow(
         "RESTORE_FAILED: Restore failed on statement 1/1: UNIQUE constraint failed"
       );
+      // The wrapped errors keep the engine's error (and its stack) as their cause.
+      await expect(failure).rejects.toMatchObject({
+        cause: {
+          message: expect.stringMatching(/^Restore failed on statement/),
+          cause: engineError,
+        },
+      });
 
       expect(mockDb.executeAtomic).toHaveBeenCalledTimes(1);
       expect(mockLoadBooks).not.toHaveBeenCalled();
