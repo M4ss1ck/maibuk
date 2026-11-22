@@ -4,7 +4,7 @@
   "name": "MCP Server",
   "description": "Let outside AI tools read and change the Library through the Model Context Protocol.",
   "author": "Maibuk",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "apiVersion": "^0.1.8",
   "entry": "index.js",
   "platforms": ["desktop"],
@@ -48,7 +48,9 @@
         "contexts": ["global"]
       }
     ],
-    "pages": [{ "id": "connect", "title": "MCP Server", "command": "openConnect" }],
+    "pages": [
+      { "id": "connect", "title": "MCP Server", "command": "openConnect", "hideTitle": true }
+    ],
     "sidebarEntries": [{ "page": "connect", "icon": "plug" }]
   }
 }

@@ -46,7 +46,11 @@ describe("Maps manifest", () => {
     expect(contributes?.commands?.find((command) => command.id === "openMaps")?.navigates).toBe(
       true
     );
-    expect(contributes?.pages?.find((page) => page.id === "maps")?.command).toBe("openMaps");
+    expect(contributes?.pages?.find((page) => page.id === "maps")).toMatchObject({
+      command: "openMaps",
+      // The sidebar entry already names the page, so the host title row is hidden.
+      hideTitle: true,
+    });
     expect(contributes?.sidebarEntries).toEqual([{ page: "maps", icon: "map" }]);
   });
 
