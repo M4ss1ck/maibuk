@@ -4,9 +4,11 @@
  * reattaching a located file, and the Reader settings bounds.
  */
 
+import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_READER_SETTINGS,
+  FINGERPRINT_WINDOW,
   clampSettings,
   fingerprint,
   formatFromName,
@@ -138,6 +140,24 @@ describe("fingerprint()", () => {
     const head = encoder.encode("head");
     const tail = encoder.encode("tail");
     expect(await fingerprint(9, head, tail)).not.toBe(await fingerprint(8, head, tail));
+  });
+
+  // On Android the Worker runs in QuickJS, where hashing both 64 KB windows in
+  // one go blocks the Worker past the host's one-second heartbeat on a slow
+  // e-ink device, and the page reads "Reader is not responding".
+  it("yields to the event loop between blocks, so the Worker still answers the heartbeat", async () => {
+    const head = new Uint8Array(FINGERPRINT_WINDOW).fill(1);
+    const tail = new Uint8Array(FINGERPRINT_WINDOW).fill(2);
+    const expected = createHash("sha256").update(head).update(tail).digest("hex");
+    let turns = 0;
+    const tick = () => {
+      turns += 1;
+      if (turns < 100) setTimeout(tick, 0);
+    };
+    setTimeout(tick, 0);
+    const print = await fingerprint(FINGERPRINT_WINDOW * 4, head, tail);
+    expect(print).toBe(`${FINGERPRINT_WINDOW * 4}:${expected}`);
+    expect(turns).toBeGreaterThanOrEqual(4);
   });
 
   it("still fingerprints where crypto.subtle is undefined, as in the Plugin Worker", async () => {

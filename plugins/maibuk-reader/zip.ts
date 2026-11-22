@@ -1,9 +1,14 @@
 /**
  * The zip reader the Reader Worker runs for EPUB and CBZ files (#653). The
- * Frame cannot read a file, so it asks for one entry at a time and the Worker
- * inflates it here. Opening the archive reads only the end-of-central-directory
- * record and the central directory through ranged `files.read` calls; an entry
- * is inflated only when the Frame asks for it.
+ * Frame cannot read a file, so it asks for one entry at a time. Opening the
+ * archive reads only the end-of-central-directory record and the central
+ * directory through ranged `files.read` calls; an entry is read only when the
+ * Frame asks for it, and handed over as stored (`stored`): the Frame inflates
+ * it with the platform's `DecompressionStream`. On Android the Worker runs in
+ * QuickJS, where inflating one large image here blocked it for over a second
+ * on a slow e-ink device and the page read "Reader is not responding".
+ * `read` and `readText` inflate here, for the small entries the Worker itself
+ * reads (`META-INF/encryption.xml`).
  *
  * It also decides whether the archive is DRM-protected: an EPUB's
  * `META-INF/encryption.xml` may list obfuscated fonts (which Reader still
@@ -46,12 +51,20 @@ export interface ZipEntry {
   flags: number;
 }
 
+/** One entry's bytes as stored: raw deflate when `deflated`, the file itself otherwise. */
+export interface StoredEntry {
+  bytes: Uint8Array;
+  deflated: boolean;
+}
+
 /** Reads `length` bytes at `offset`; the caller caps each call. */
 export type RangedRead = (offset: number, length: number) => Promise<Uint8Array>;
 
 /** An opened archive, ready to answer entry reads. */
 export interface ZipArchive {
   entries: ZipEntry[];
+  /** The bytes of `name` as the archive stores them, and whether they are raw deflate. */
+  stored(name: string): Promise<StoredEntry>;
   /** The uncompressed bytes of `name`. */
   read(name: string): Promise<Uint8Array>;
   /** The uncompressed text of `name`, decoded as UTF-8. */
@@ -182,7 +195,7 @@ export async function openZip(read: RangedRead, size: number): Promise<ZipArchiv
 
   const archive: ZipArchive = {
     entries,
-    async read(name: string): Promise<Uint8Array> {
+    async stored(name: string): Promise<StoredEntry> {
       const entry = entries.find((candidate) => candidate.name === name);
       if (entry === undefined) throw new ZipError("missing", `This archive has no ${name}`);
       const header = await read(entry.offset, LOCAL_HEADER_SIZE);
@@ -190,13 +203,17 @@ export async function openZip(read: RangedRead, size: number): Promise<ZipArchiv
         throw new ZipError("corrupt", `This archive's entry ${name} is malformed`);
       }
       const dataStart = entry.offset + LOCAL_HEADER_SIZE + u16(header, 26) + u16(header, 28);
-      const compressed = await read(dataStart, entry.compressedSize);
-      if (compressed.length < entry.compressedSize) {
+      const bytes = await read(dataStart, entry.compressedSize);
+      if (bytes.length < entry.compressedSize) {
         throw new ZipError("corrupt", `This archive's entry ${name} is truncated`);
       }
-      if (entry.method === 0) return compressed;
+      return { bytes, deflated: entry.method === 8 };
+    },
+    async read(name: string): Promise<Uint8Array> {
+      const { bytes, deflated } = await archive.stored(name);
+      if (!deflated) return bytes;
       try {
-        return inflateSync(compressed);
+        return inflateSync(bytes);
       } catch {
         throw new ZipError("corrupt", `This archive's entry ${name} will not inflate`);
       }

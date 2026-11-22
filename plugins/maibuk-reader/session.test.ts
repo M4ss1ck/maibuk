@@ -17,7 +17,7 @@ import { createShelfService } from "./library";
 import { SHELF_PAGE_ID, followReturnTarget, leaveReading } from "./runtime";
 import { createReaderSession, frameLabels, type ReaderSession } from "./session";
 import { SHELF_KEY, positionKey, type DocumentFormat, type ShelfEntry } from "./shelf";
-import { readerManifest, shelfEntry } from "./test-support";
+import { deflatedArchive, inflateRaw, readerManifest, shelfEntry } from "./test-support";
 
 /** The Worker the session starts for pdf.js's core, recording what it was told. */
 class RecordedWorker {
@@ -294,9 +294,11 @@ describe("archive", () => {
   async function pickFixture(
     harness: Harness,
     fixture: string,
-    format: DocumentFormat = "epub"
+    format: DocumentFormat = "epub",
+    { deflated = false }: { deflated?: boolean } = {}
   ): Promise<ShelfEntry> {
-    const bytes = new Uint8Array(readFileSync(join(__dirname, "fixtures", fixture)));
+    const stored = new Uint8Array(readFileSync(join(__dirname, "fixtures", fixture)));
+    const bytes = deflated ? deflatedArchive(stored) : stored;
     harness.host.files.queuePick({ name: fixture, bytes });
     const picked = await harness.client.files.pick({
       extensions: [format],
@@ -336,30 +338,34 @@ describe("archive", () => {
     }
   });
 
-  it("inflates a text entry and transfers a binary entry", async () => {
+  // On Android the Worker runs in QuickJS, where inflating a large image or
+  // decoding a long chapter blocks it for seconds on a slow e-ink device and the
+  // page reads "Reader is not responding". The Worker passes the bytes on as
+  // stored; the Frame inflates and decodes them natively.
+  it("transfers an entry as the archive stores it and leaves inflating to the Frame", async () => {
     const harness = setup();
     try {
-      const entry = await pickFixture(harness, "flowing.epub");
+      const entry = await pickFixture(harness, "flowing.epub", "epub", { deflated: true });
       harness.session.setEntry(entry);
       await opened(harness);
-      harness.send({
-        kind: "zip-entry",
-        id: 2,
-        name: "OEBPS/chapter1.xhtml",
-        as: "text",
-      });
-      const text = await messageOf(harness, "zip-data");
-      expect(text.id).toBe(2);
-      expect(text.text).toContain("The spice must flow");
-      expect(text.buffer).toBeUndefined();
+      harness.send({ kind: "zip-entry", id: 2, name: "OEBPS/chapter1.xhtml" });
+      const chapter = await messageOf(harness, "zip-data");
+      expect(chapter.id).toBe(2);
+      expect(chapter.deflated).toBe(true);
+      expect(chapter.text).toBeUndefined();
+      const stored = new Uint8Array(chapter.buffer as ArrayBuffer);
+      expect(new TextDecoder().decode(stored)).not.toContain("The spice must flow");
+      expect(new TextDecoder().decode(await inflateRaw(stored))).toContain("The spice must flow");
 
-      harness.send({ kind: "zip-entry", id: 3, name: "OEBPS/images/cover.png", as: "bytes" });
+      harness.send({ kind: "zip-entry", id: 3, name: "OEBPS/images/cover.png" });
       await vi.waitFor(() =>
         expect(harness.messages.filter((message) => message.kind === "zip-data")).toHaveLength(2)
       );
       const image = harness.messages.filter((message) => message.kind === "zip-data")[1];
       expect(image.id).toBe(3);
-      expect((image.buffer as ArrayBuffer).byteLength).toBe(83);
+      const bytes = new Uint8Array(image.buffer as ArrayBuffer);
+      expect(image.deflated).toBe(true);
+      expect((await inflateRaw(bytes)).byteLength).toBe(83);
     } finally {
       await harness.stop();
     }
@@ -371,7 +377,7 @@ describe("archive", () => {
       const entry = await pickFixture(harness, "flowing.epub");
       harness.session.setEntry(entry);
       await opened(harness);
-      harness.send({ kind: "zip-entry", id: 4, name: "OEBPS/nothing.xhtml", as: "text" });
+      harness.send({ kind: "zip-entry", id: 4, name: "OEBPS/nothing.xhtml" });
       const error = await messageOf(harness, "zip-error");
       expect(error).toMatchObject({ kind: "zip-error", id: 4, code: "missing" });
     } finally {

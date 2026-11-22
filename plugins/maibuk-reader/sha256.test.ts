@@ -7,7 +7,7 @@
 
 import { createHash, randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { sha256Hex } from "./sha256";
+import { createSha256, sha256Hex } from "./sha256";
 
 const encoder = new TextEncoder();
 
@@ -42,5 +42,25 @@ describe("sha256Hex()", () => {
     const message = new Uint8Array(randomBytes(128 * 1024));
     const expected = createHash("sha256").update(message).digest("hex");
     expect(sha256Hex(message)).toBe(expected);
+  });
+});
+
+describe("createSha256()", () => {
+  it("gives the same digest fed in pieces, across block boundaries, as fed at once", () => {
+    const message = new Uint8Array(randomBytes(128 * 1024 + 37));
+    const expected = createHash("sha256").update(message).digest("hex");
+    for (const piece of [1, 63, 64, 65, 1000, 16 * 1024]) {
+      const hash = createSha256();
+      for (let offset = 0; offset < message.length; offset += piece) {
+        hash.update(message.subarray(offset, offset + piece));
+      }
+      expect(hash.digestHex(), `pieces of ${piece}`).toBe(expected);
+    }
+  });
+
+  it("hashes nothing fed as the empty message", () => {
+    const hash = createSha256();
+    hash.update(new Uint8Array(0));
+    expect(hash.digestHex()).toBe(sha256Hex(new Uint8Array(0)));
   });
 });

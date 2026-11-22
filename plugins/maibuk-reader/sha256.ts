@@ -3,9 +3,11 @@
  *
  * Reader needs it for the Fingerprint, and the Fingerprint is built in the
  * Plugin Worker: a Worker started from a `blob:` URL is not a secure context,
- * so `crypto.subtle` is undefined there. Hashing 128 KB is a few milliseconds,
- * so the pure implementation costs the author nothing and gives the same digest
- * in the Worker, the app, and a test.
+ * so `crypto.subtle` is undefined there. The pure implementation gives the same
+ * digest in the Worker, the app, and a test. Hashing 128 KB takes a few
+ * milliseconds in V8 but over a second in Android's QuickJS on a slow e-ink
+ * device, so `createSha256` takes the message in pieces and the Fingerprint
+ * yields between them.
  */
 
 /** The 64 round constants: the first 32 bits of the cube roots of the primes. */
@@ -30,28 +32,36 @@ function rotr(value: number, bits: number): number {
   return (value >>> bits) | (value << (32 - bits));
 }
 
-/**
- * The SHA-256 digest of `bytes`, as 64 lowercase hex characters. The message is
- * padded in place: one 0x80 byte, zeros, then the length in bits as a 64-bit
- * big-endian integer.
- */
-export function sha256Hex(bytes: Uint8Array): string {
-  const length = bytes.length;
-  const paddedLength = (((length + 8) >> 6) << 6) + 64;
-  const message = new Uint8Array(paddedLength);
-  message.set(bytes);
-  message[length] = 0x80;
-  const view = new DataView(message.buffer);
-  // The bit length as two words: 2^32 bits is 2^29 bytes, and `<< 3` keeps the
-  // low word modulo 2^32.
-  view.setUint32(paddedLength - 8, Math.floor(length / 0x20000000));
-  view.setUint32(paddedLength - 4, (length << 3) >>> 0);
+/** A SHA-256 fed in pieces: the same digest as hashing the pieces joined. */
+export interface Sha256 {
+  /** Feeds the next bytes of the message. */
+  update(bytes: Uint8Array): void;
+  /** Pads the message and returns its digest as 64 lowercase hex characters. */
+  digestHex(): string;
+}
 
+/**
+ * A SHA-256 that takes the message in pieces, so a caller can hash a large
+ * buffer a slice at a time and yield between slices. The Fingerprint does: on
+ * Android the Plugin Worker runs in QuickJS, where hashing 128 KB at once
+ * blocks the Worker past the host's heartbeat on a slow e-ink device.
+ */
+export function createSha256(): Sha256 {
   const hash = new Uint32Array(INITIAL);
   const w = new Uint32Array(64);
+  /** The bytes of a block not yet full. */
+  const pending = new Uint8Array(64);
+  let pendingLength = 0;
+  /** The message length so far, in bytes. */
+  let length = 0;
 
-  for (let offset = 0; offset < paddedLength; offset += 64) {
-    for (let index = 0; index < 16; index++) w[index] = view.getUint32(offset + index * 4);
+  /** Runs one 64-byte block at `offset` of `block` through the compression. */
+  function compress(block: Uint8Array, offset: number): void {
+    for (let index = 0; index < 16; index++) {
+      const at = offset + index * 4;
+      w[index] =
+        ((block[at] << 24) | (block[at + 1] << 16) | (block[at + 2] << 8) | block[at + 3]) >>> 0;
+    }
     for (let index = 16; index < 64; index++) {
       const s0 = rotr(w[index - 15], 7) ^ rotr(w[index - 15], 18) ^ (w[index - 15] >>> 3);
       const s1 = rotr(w[index - 2], 17) ^ rotr(w[index - 2], 19) ^ (w[index - 2] >>> 10);
@@ -94,7 +104,50 @@ export function sha256Hex(bytes: Uint8Array): string {
     hash[7] += h;
   }
 
-  let hex = "";
-  for (const word of hash) hex += word.toString(16).padStart(8, "0");
-  return hex;
+  function update(bytes: Uint8Array): void {
+    length += bytes.length;
+    let offset = 0;
+    if (pendingLength > 0) {
+      const take = Math.min(64 - pendingLength, bytes.length);
+      pending.set(bytes.subarray(0, take), pendingLength);
+      pendingLength += take;
+      offset = take;
+      if (pendingLength < 64) return;
+      compress(pending, 0);
+      pendingLength = 0;
+    }
+    for (; offset + 64 <= bytes.length; offset += 64) compress(bytes, offset);
+    pending.set(bytes.subarray(offset), 0);
+    pendingLength = bytes.length - offset;
+  }
+
+  /**
+   * The padding is one 0x80 byte, zeros, then the length in bits as a 64-bit
+   * big-endian integer, filling the last block or spilling into one more.
+   */
+  function digestHex(): string {
+    const tailLength = pendingLength + 9 > 64 ? 128 : 64;
+    const tail = new Uint8Array(tailLength);
+    tail.set(pending.subarray(0, pendingLength));
+    tail[pendingLength] = 0x80;
+    const view = new DataView(tail.buffer);
+    // The bit length as two words: 2^32 bits is 2^29 bytes, and `<< 3` keeps
+    // the low word modulo 2^32.
+    view.setUint32(tailLength - 8, Math.floor(length / 0x20000000));
+    view.setUint32(tailLength - 4, (length << 3) >>> 0);
+    for (let offset = 0; offset < tailLength; offset += 64) compress(tail, offset);
+
+    let hex = "";
+    for (const word of hash) hex += word.toString(16).padStart(8, "0");
+    return hex;
+  }
+
+  return { update, digestHex };
+}
+
+/** The SHA-256 digest of `bytes`, as 64 lowercase hex characters. */
+export function sha256Hex(bytes: Uint8Array): string {
+  const hash = createSha256();
+  hash.update(bytes);
+  return hash.digestHex();
 }

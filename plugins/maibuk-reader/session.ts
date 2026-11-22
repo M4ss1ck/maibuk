@@ -12,9 +12,10 @@
  * to the core directly.
  *
  * Opening a zip-packed Document (EPUB and CBZ) makes the session read the
- * archive's directory and answer `zip-entry` requests with inflated bytes, so
- * the Frame never holds the whole file. The same `open` carries foliate's
- * parsers and DOMPurify as source the Frame imports from `blob:` URLs.
+ * archive's directory and answer `zip-entry` requests with each entry's bytes
+ * as stored, so the Frame never holds the whole file and inflates each entry
+ * natively. The same `open` carries foliate's parsers and DOMPurify as source
+ * the Frame imports from `blob:` URLs.
  *
  * Imports only `@/plugin-sdk` (types and the read cap) and this Plugin's files.
  */
@@ -374,24 +375,21 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     }
   }
 
+  /**
+   * Hands over one entry as the archive stores it. The Frame inflates and
+   * decodes it natively: on Android this Worker runs in QuickJS, where
+   * inflating a large image or decoding a long chapter here blocked it past the
+   * host's heartbeat on a slow e-ink device.
+   */
   async function answerZipEntry(message: FrameZipEntryRequest): Promise<void> {
     try {
       const opened = await ensureArchive();
-      if (message.as === "text") {
-        const text = await opened.readText(message.name);
-        if (text === null) {
-          post({ kind: "zip-error", id: message.id, code: "missing" });
-          return;
-        }
-        post({ kind: "zip-data", id: message.id, text });
-        return;
-      }
-      const bytes = await opened.read(message.name);
+      const { bytes, deflated } = await opened.stored(message.name);
       const buffer = bytes.buffer.slice(
         bytes.byteOffset,
         bytes.byteOffset + bytes.byteLength
       ) as ArrayBuffer;
-      post({ kind: "zip-data", id: message.id, buffer }, [buffer]);
+      post({ kind: "zip-data", id: message.id, buffer, deflated }, [buffer]);
     } catch (error) {
       post({ kind: "zip-error", id: message.id, code: zipCode(error) });
     }

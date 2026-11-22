@@ -18,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import purify from "./vendor/dompurify/purify.es.mjs";
 // @ts-expect-error -- vendored plain JavaScript, no type declarations
 import * as foliate from "./vendor/foliate/foliate-parsers.min.mjs";
+import { deflatedArchive } from "./test-support";
 import { ZipError, openZip } from "./zip";
 import en from "./locales/runtime/en.json";
 
@@ -94,6 +95,10 @@ interface OpenOptions {
   settings?: { fontSize: number; lineWidth: string; pdfFit: "width" | "page" };
   /** Extra `__readerTestHooks` seams, such as a search clock. */
   hooks?: Record<string, unknown>;
+  /** Re-zip the fixture with every entry deflated, so the Frame inflates each one. */
+  deflated?: boolean;
+  /** Garble every deflated entry the port hands over, so none inflates. */
+  garbled?: boolean;
 }
 
 /** One `window.maibuk.port`: answers reads and archive requests from a fixture. */
@@ -102,7 +107,10 @@ class FakeBookPort {
   readonly messages: Record<string, unknown>[] = [];
   private opened: ReturnType<typeof openZip> | null = null;
 
-  constructor(private readonly bytes: Uint8Array) {}
+  constructor(
+    private readonly bytes: Uint8Array,
+    private readonly garbled = false
+  ) {}
 
   start(): void {}
   close(): void {}
@@ -141,21 +149,14 @@ class FakeBookPort {
         return;
       }
       const name = String(message.name);
-      if (message.as === "text") {
-        const text = await archive.readText(name);
-        if (text === null) {
-          this.deliver({ kind: "zip-error", id, code: "missing" });
-          return;
-        }
-        this.deliver({ kind: "zip-data", id, text });
-        return;
-      }
-      const bytes = await archive.read(name);
+      const { bytes, deflated } = await archive.stored(name);
       const buffer = bytes.buffer.slice(
         bytes.byteOffset,
         bytes.byteOffset + bytes.byteLength
       ) as ArrayBuffer;
-      this.deliver({ kind: "zip-data", id, buffer });
+      // A garbled archive keeps its directory but its deflated data will not inflate.
+      if (this.garbled && deflated) new Uint8Array(buffer).fill(0xff);
+      this.deliver({ kind: "zip-data", id, buffer, deflated });
     } catch (error) {
       const code = error instanceof ZipError ? error.code : "corrupt";
       this.deliver({ kind: "zip-error", id, code });
@@ -178,9 +179,9 @@ interface Frame {
 
 /** Loads the Frame's markup, sanitizer, script, and stubs, with a fixture port. */
 function loadFrame(name: string, options: OpenOptions = {}): Frame {
-  const bytes = fixture(name);
+  const bytes = options.deflated === true ? deflatedArchive(fixture(name)) : fixture(name);
   document.documentElement.innerHTML = HTML.replace(/^<!doctype html>\s*/i, "");
-  const port = new FakeBookPort(bytes);
+  const port = new FakeBookPort(bytes, options.garbled === true);
   (window as unknown as { maibuk: unknown }).maibuk = { port };
   const cleanups: (() => void)[] = [];
   (globalThis as Record<string, unknown>).__readerTestHooks = {
@@ -438,6 +439,20 @@ describe("Document markup", () => {
     expect(sources.some((src) => src?.includes("example.com"))).toBe(false);
     expect(sources.filter((src) => src === null)).toHaveLength(2);
   });
+
+  // Most real EPUBs deflate their entries. The Worker hands them over as stored
+  // and the Frame inflates them natively, so the Worker never stalls on them.
+  it("inflates a deflated EPUB's sections and images in the Frame", async () => {
+    frame = loadFrame("flowing.epub", { deflated: true });
+    frame.open();
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 3 in this section"));
+    expect(frame.shadowText()).toContain("The spice must flow");
+    const host = document.getElementById("stage")?.firstElementChild as HTMLElement;
+    const sources = Array.from((host.shadowRoot as ShadowRoot).querySelectorAll("img")).map(
+      (image) => image.getAttribute("src")
+    );
+    expect(sources.filter((src) => src?.startsWith("blob:"))).toHaveLength(1);
+  });
 });
 
 describe("Escape order", () => {
@@ -534,6 +549,18 @@ describe("the other reflowable formats", () => {
 describe("refusing an unreadable Document", () => {
   it("reports a corrupt EPUB as damaged", async () => {
     frame = loadFrame("corrupt.epub");
+    frame.open();
+    await vi.waitFor(() => expect(el("message").hidden).toBe(false));
+    expect(el("message").textContent).toBe(LABELS.errorDamaged);
+    expect(frame.port.messages).toContainEqual({
+      kind: "load-error",
+      code: "corrupt",
+      reason: LABELS.errorDamaged,
+    });
+  });
+
+  it("reports an EPUB whose entries will not inflate as damaged", async () => {
+    frame = loadFrame("flowing.epub", { deflated: true, garbled: true });
     frame.open();
     await vi.waitFor(() => expect(el("message").hidden).toBe(false));
     expect(el("message").textContent).toBe(LABELS.errorDamaged);

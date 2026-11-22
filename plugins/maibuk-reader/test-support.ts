@@ -9,6 +9,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type userEvent from "@testing-library/user-event";
+import { unzipSync, zipSync } from "fflate";
 import type { PluginManifest } from "@/features/plugins/types";
 import { parsePluginManifest } from "@/features/plugins/manifest-validate";
 import type { DocumentFormat, ShelfEntry } from "./shelf";
@@ -36,6 +37,35 @@ export function readerStorage(): Map<string, unknown> {
 }
 
 const encoder = new TextEncoder();
+
+/**
+ * Inflates raw deflate bytes with the platform's `DecompressionStream`, the
+ * way the Frame inflates an entry the Worker hands it stored.
+ */
+export async function inflateRaw(bytes: Uint8Array<ArrayBuffer>): Promise<Uint8Array> {
+  const source = new ReadableStream<Uint8Array<ArrayBuffer>>({
+    start(controller) {
+      controller.enqueue(bytes);
+      controller.close();
+    },
+  });
+  const inflated = source.pipeThrough(new DecompressionStream("deflate-raw"));
+  return new Uint8Array(await new Response(inflated).arrayBuffer());
+}
+
+/**
+ * The same archive with every entry deflated, except `mimetype`, which an EPUB
+ * keeps stored. The committed fixtures are all stored, so a test that must see
+ * the Frame inflate an entry opens this copy.
+ */
+export function deflatedArchive(bytes: Uint8Array): Uint8Array {
+  const entries = unzipSync(bytes);
+  const out: Record<string, [Uint8Array, { level: 0 | 6 }]> = {};
+  for (const [name, data] of Object.entries(entries)) {
+    out[name] = [data, { level: name === "mimetype" ? 0 : 6 }];
+  }
+  return zipSync(out);
+}
 
 /** A tiny PDF: enough magic for sniffing, no pages to render yet. */
 export function pdfBytes(text = "Reader test"): Uint8Array {
