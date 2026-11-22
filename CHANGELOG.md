@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.1] - 2026-11-22
+
+### Fixed
+- Hide redundant title rows on the Echoes, Maps, and MCP Server plugin pages while preserving accessible headings
+- Keep the Plugin enable and Remember switches pill-shaped on touch screens with larger touch targets without enlarging the switch track
+
 ## [0.26.0] - 2026-11-22
 
 ### Added

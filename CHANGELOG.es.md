@@ -5,6 +5,12 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 y este proyecto sigue el [Versionado Semántico](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.1] - 2026-11-22
+
+### Fixed
+- Ocultar las filas de título redundantes en las páginas de los complementos Echoes, Maps y MCP Server sin dejar de conservar encabezados accesibles
+- Mantener los interruptores de activación de complementos y Recordar en forma de píldora en pantallas táctiles con áreas táctiles más grandes sin ampliar la pista del interruptor
+
 ## [0.26.0] - 2026-11-22
 
 ### Added
