@@ -5,6 +5,13 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 y este proyecto sigue el [Versionado Semántico](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.2] - 2026-11-22
+
+### Fixed
+- Evitar los errores «El lector no responde» al abrir EPUB con muchas imágenes en dispositivos de tinta electrónica lentos
+- Omitir la tecla Intro mientras una composición de IME sigue en curso en los campos de texto
+- Mantener en funcionamiento la navegación con las teclas de flecha y la selección de texto con el ratón en los campos de cambio de nombre de las listas de Capítulos y Notas
+
 ## [0.26.1] - 2026-11-22
 
 ### Fixed
