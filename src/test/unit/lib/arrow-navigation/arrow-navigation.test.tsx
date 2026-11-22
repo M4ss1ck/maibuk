@@ -254,6 +254,40 @@ describe("arrow navigation (ADR 0025)", () => {
     expect(field).toHaveFocus();
   });
 
+  // React Aria's row takes Left and Right with any modifier, and Up and Down,
+  // from anything inside it: Shift+Left would leave the field instead of
+  // selecting a letter.
+  it.each([
+    "{Shift>}{ArrowLeft}{/Shift}",
+    "{Shift>}{ArrowRight}{/Shift}",
+    "{Control>}{ArrowLeft}{/Control}",
+    "{Alt>}{ArrowRight}{/Alt}",
+    "{Meta>}{ArrowLeft}{/Meta}",
+    "{Control>}{Shift>}{ArrowLeft}{/Shift}{/Control}",
+    "{ArrowUp}",
+    "{ArrowDown}",
+    "{Shift>}{ArrowUp}{/Shift}",
+    "{Shift>}{ArrowDown}{/Shift}",
+  ])("leaves a text field inside a row %s, to move or extend the caret", async (keys) => {
+    const user = userEvent.setup();
+    render(<NotesFixture rename />);
+    const field = screen.getByRole("textbox", { name: "Rename A" });
+    act(() => field.focus());
+    // Kept to read once every handler, React Aria's included, has run.
+    const arrows: KeyboardEvent[] = [];
+    const record = (event: KeyboardEvent) => {
+      if (event.key.startsWith("Arrow")) arrows.push(event);
+    };
+    window.addEventListener("keydown", record, true);
+
+    await user.keyboard(keys);
+    window.removeEventListener("keydown", record, true);
+
+    expect(field).toHaveFocus();
+    expect(arrows).toHaveLength(1);
+    expect(arrows[0].defaultPrevented).toBe(false);
+  });
+
   it("leaves arrow owners alone: text, the editor, and a resize handle", async () => {
     const user = userEvent.setup();
     render(<NotesFixture />);

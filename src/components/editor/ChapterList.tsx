@@ -281,6 +281,9 @@ export function ChapterList({
 
   const { dragAndDropHooks } = useDragAndDrop({
     ...parkedSelection,
+    // A mouse drag inside a draggable row starts a row drag, never a text
+    // selection, so the rename field needs the rows still while it is open.
+    isDisabled: editingId !== null,
     getItems: (keys) =>
       [...keys].map((key) => ({
         [CHAPTER_DND_TYPE]: String(key),

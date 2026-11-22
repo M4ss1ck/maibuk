@@ -184,6 +184,8 @@ export function NotesList({
   const [isFilterOpen, setFilterOpen] = useState(false);
   const filter = useNoteFilter(notes);
   const [draggedId, setDraggedId] = useState<string | null>(null);
+  // The Note whose title is being renamed in the list, if any.
+  const [renamingId, setRenamingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -451,8 +453,10 @@ export function NotesList({
   });
   const { dragAndDropHooks } = useDragAndDrop({
     // Always passed to the GridList (swapping hooks on a mounted list breaks
-    // React's hook order), and off while a search hides Notes.
-    isDisabled: !canReorder,
+    // React's hook order), and off while a search hides Notes. Off too while a
+    // title is renamed: a mouse drag in a draggable row moves the row instead
+    // of selecting the title's text.
+    isDisabled: !canReorder || renamingId !== null,
     dropTargetDelegate,
     getItems: (keys) => [...keys].map((key) => ({ [NOTE_DND_TYPE]: String(key) })),
     ...dragHandlers,
@@ -731,6 +735,9 @@ export function NotesList({
         onMove={moveNote}
         reorderLabel={canReorder ? t("notes.reorder") : undefined}
         isDragging={draggedId === note.id}
+        onEditingChange={(editing) =>
+          setRenamingId((current) => (editing ? note.id : current === note.id ? null : current))
+        }
       />
       {renderDropIndicator(note, "after")}
     </GridListItem>

@@ -298,6 +298,29 @@ describe("ChapterList", () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
+  // A browser starts a row drag, not a text selection, when the mouse drags
+  // inside a draggable row; the open rename field has to be plain text.
+  it("makes no row draggable while a Chapter title is being renamed, and restores it after", async () => {
+    const user = userEvent.setup();
+    renderCL({
+      chapters: [
+        buildChapter({ id: "ch-1", title: "First", order: 1 }),
+        buildChapter({ id: "ch-2", title: "Second", order: 2 }),
+      ],
+    });
+    const draggableRows = () => document.querySelectorAll('[role="row"][draggable="true"]');
+    expect(draggableRows()).toHaveLength(2);
+
+    await user.pointer({ target: screen.getByText("Second"), keys: "[MouseRight]" });
+    await user.click(await screen.findByRole("menuitem", { name: "chapters.editChapter" }));
+    const field = await screen.findByDisplayValue("Second");
+    expect(field.closest("[draggable='true']")).toBeNull();
+    expect(draggableRows()).toHaveLength(0);
+
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(draggableRows()).toHaveLength(2));
+  });
+
   // ---------------------------------------------------------------------------
   describe("keyboard DnD reorder", () => {
     it("cancels keyboard reorder with Escape", async () => {

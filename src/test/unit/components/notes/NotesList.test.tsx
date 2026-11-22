@@ -278,6 +278,39 @@ describe("NotesList", () => {
       expect(props.onSelectNote).not.toHaveBeenCalled();
     });
 
+    // A browser starts a row drag, not a text selection, when the mouse drags
+    // inside a draggable row; the open rename field has to be plain text.
+    it("makes no row draggable while a Note title is being renamed, and restores it after", async () => {
+      const user = userEvent.setup();
+      const props = {
+        onSelectNote: vi.fn(),
+        onRenameNote: vi.fn(),
+        onDuplicateNote: vi.fn(),
+        onDeleteNote: vi.fn(),
+      };
+      render(
+        <NotesList
+          notes={[buildNote({ id: "a", title: "Alpha" }), buildNote({ id: "b", title: "Bravo" })]}
+          currentNoteId={null}
+          onCreateNote={vi.fn()}
+          onReorderNotes={vi.fn()}
+          {...props}
+        />
+      );
+      const draggableRows = () => document.querySelectorAll('[role="row"][draggable="true"]');
+      expect(draggableRows()).toHaveLength(2);
+      const row = screen.getAllByRole("row").filter((item) => item.hasAttribute("data-key"))[0];
+
+      await arrowToButton(user, row, "common.edit");
+      await user.keyboard("{Enter}");
+      const field = await screen.findByRole("textbox", { name: "common.rename" });
+      expect(field.closest("[draggable='true']")).toBeNull();
+      expect(draggableRows()).toHaveLength(0);
+
+      await user.keyboard("{Escape}");
+      await waitFor(() => expect(draggableRows()).toHaveLength(2));
+    });
+
     it("types a space in the rename field instead of feeding the list's typeahead", async () => {
       const user = userEvent.setup();
       const { props, row } = renderActionList();

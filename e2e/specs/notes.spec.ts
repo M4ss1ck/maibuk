@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { capCenterOffset, coveredTopEdge, stacksAbove } from "../support/layout";
-import { pressUntilFocused, tabTo } from "../support/keyboard";
+import { expectRowFieldKeepsArrows, pressUntilFocused, tabTo } from "../support/keyboard";
 import { SEED_BOOK, SEED_NOTES, SEED_NOTE_TAGS } from "../support/seed/names";
 import { expect, test } from "../support/test";
 
@@ -642,6 +642,23 @@ test.describe("Note Item Menu @wf:notes-item-menu", () => {
     await chooseFromItemMenu(page, "Duplicate note");
     await expect(galleryCard(page, `${SEED_NOTES.tideTables} (copy)`)).toBeVisible();
     await expect(galleryCard(page, SEED_NOTES.tideTables)).toBeFocused();
+  });
+
+  test("arrows and Shift+arrows move and extend the caret in the Notes list rename field", async ({
+    page,
+  }) => {
+    await openNote(page, SEED_NOTES.keeperLog);
+    await tabTo(page, notesListRow(page, SEED_NOTES.keeperLog), { max: 60 });
+    await chooseFromItemMenu(page, "Rename");
+    const field = page.getByRole("textbox", { name: "Rename" });
+
+    await expectRowFieldKeepsArrows(page, field, SEED_NOTES.keeperLog);
+
+    // The selection the arrows left (the whole title) is what typing replaces.
+    await page.keyboard.type("Night Watch Log");
+    await expect(field).toHaveValue("Night Watch Log");
+    await page.keyboard.press("Escape");
+    await expect(notesListRow(page, SEED_NOTES.keeperLog)).toBeFocused();
   });
 
   test("the Notes list Item Menu renames and pins by keyboard, persisting both", async ({
