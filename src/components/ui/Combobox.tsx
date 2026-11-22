@@ -122,12 +122,7 @@ export function Combobox({
           // skips `isComposing`, so Safari's keyCode-229 commit would otherwise
           // commit the held value and wipe the typed text (#914).
           onKeyDownCapture={(e) => {
-            if (
-              (e.key === "Enter" || e.key === "NumpadEnter") &&
-              isIgnoredKeyEvent(e.nativeEvent)
-            ) {
-              e.stopPropagation();
-            }
+            if (e.key === "Enter" && isIgnoredKeyEvent(e.nativeEvent)) e.stopPropagation();
           }}
         />
         <Button className="absolute inset-y-0 right-0 flex items-center pr-1.5">
