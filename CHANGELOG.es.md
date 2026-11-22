@@ -5,6 +5,24 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 y este proyecto sigue el [Versionado Semántico](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.0] - 2026-11-22
+
+### Added
+- Modo tinta electrónica con paleta de escala de grises, superficies planas, código monocromático, indicaciones no cromáticas, un interruptor en La aplicación, un conmutador de Comando y un paso del tutorial de Apariencia
+- Compatibilidad con Android para complementos de Frame, incluido el Reloj integrado
+- Compatibilidad con movimiento reducido en toda la aplicación que sigue en tiempo real la preferencia del sistema operativo y desactiva animaciones, transiciones y desplazamiento suave
+
+### Changed
+- Los estados de sincronización se distinguen por icono y también por color
+- Los complementos de Frame pueden leer la preferencia de movimiento actual mediante `--maibuk-motion`
+
+### Fixed
+- Mapas y Lector funcionan en Android con transferencia fiable de datos binarios, guardado de archivos, carga de PDF, PDF protegidos con contraseña y manejo de concesiones de archivos
+- El Lector muestra los fallos de carga de PDF y mantiene la posibilidad de abrir los documentos que agotaron el tiempo de espera después del plazo de inactividad
+- Los complementos de colección miden correctamente la altura disponible en cuerpos de página estirados y con hermanos fuera del flujo
+- Los controles de añadir separador de la barra de herramientas se ocultan mientras se arrastra una fila
+- El interruptor de tinta electrónica y los conmutadores presionados se muestran correctamente
+
 ## [0.25.0] - 2026-11-21
 
 ### Added
