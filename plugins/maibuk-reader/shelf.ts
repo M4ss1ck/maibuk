@@ -10,7 +10,7 @@
  */
 
 import { format, translate, type ReaderKey } from "./i18n";
-import { sha256Hex } from "./sha256";
+import { createSha256 } from "./sha256";
 
 /** The formats Reader opens. `azw` is Kindle's older extension for AZW3. */
 export type DocumentFormat = "pdf" | "epub" | "mobi" | "azw3" | "fb2" | "cbz";
@@ -153,10 +153,26 @@ export async function fingerprint(
   head: Uint8Array,
   tail: Uint8Array
 ): Promise<string> {
-  const joined = new Uint8Array(head.length + tail.length);
-  joined.set(head, 0);
-  joined.set(tail, head.length);
-  return `${size}:${sha256Hex(joined)}`;
+  const hash = createSha256();
+  for (const bytes of [head, tail]) {
+    for (let offset = 0; offset < bytes.length; offset += FINGERPRINT_SLICE) {
+      hash.update(bytes.subarray(offset, offset + FINGERPRINT_SLICE));
+      await yieldToEventLoop();
+    }
+  }
+  return `${size}:${hash.digestHex()}`;
+}
+
+/**
+ * How much the Fingerprint hashes before it yields. On Android the Worker runs
+ * in QuickJS, where 8 KB is about 10 ms on a desktop and about 100 ms on a slow
+ * e-ink device, well inside the host's one-second heartbeat.
+ */
+const FINGERPRINT_SLICE = 8 * 1024;
+
+/** A macrotask turn, so the Worker answers a host message waiting behind the hash. */
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 /** The Shelf, most recently read first. */

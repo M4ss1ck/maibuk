@@ -9,6 +9,7 @@
 import { strToU8, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import { ZipError, openZip, protectsContent, type RangedRead } from "./zip";
+import { inflateRaw } from "./test-support";
 
 /** A ranged read over `bytes`, recording what each call asked for. */
 function reader(bytes: Uint8Array): { read: RangedRead; calls: [number, number][] } {
@@ -59,6 +60,33 @@ describe("opening an archive", () => {
     ]);
     expect(UTF8.decode(await opened.read("META-INF/container.xml"))).toBe("<container/>");
     expect(await opened.readText("OEBPS/chapter1.xhtml")).toContain("spice");
+  });
+
+  it("hands back an entry as stored, deflated or not, without inflating it", async () => {
+    const text = `<html><body>${"spice ".repeat(500)}</body></html>`;
+    const bytes = zipSync({
+      "OEBPS/chapter1.xhtml": strToU8(text),
+      "OEBPS/images/plate.jpg": [new Uint8Array([0xff, 0xd8, 0xff, 0xe0]), { level: 0 }],
+    });
+    const opened = await openZip(reader(bytes).read, bytes.length);
+
+    const chapter = await opened.stored("OEBPS/chapter1.xhtml");
+    const entry = opened.entries.find(({ name }) => name === "OEBPS/chapter1.xhtml");
+    expect(chapter.deflated).toBe(true);
+    expect(chapter.bytes.length).toBe(entry?.compressedSize);
+    expect(chapter.bytes.length).toBeLessThan(text.length);
+    expect(UTF8.decode(await inflateRaw(chapter.bytes.slice()))).toBe(text);
+
+    expect(await opened.stored("OEBPS/images/plate.jpg")).toEqual({
+      bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xe0]),
+      deflated: false,
+    });
+  });
+
+  it("refuses a stored read of an entry the archive does not hold", async () => {
+    const bytes = archive({ "a.txt": "a" });
+    const opened = await openZip(reader(bytes).read, bytes.length);
+    await expect(opened.stored("b.txt")).rejects.toMatchObject({ code: "missing" });
   });
 
   it("reads the tail and the directory, never the whole file", async () => {

@@ -198,13 +198,18 @@ export interface FrameZipListMessage {
   entries: FrameZipEntry[];
 }
 
-/** Answers one `zip-entry`; exactly one of `text` and `buffer` is set. */
+/**
+ * Answers one `zip-entry` with the entry as the archive stores it. The Frame
+ * inflates `deflated` bytes with `DecompressionStream("deflate-raw")` and
+ * decodes text itself, so the Worker (QuickJS on Android) never does either.
+ */
 export interface FrameZipDataMessage {
   kind: "zip-data";
   id: number;
-  text?: string;
   /** Transferred. */
-  buffer?: ArrayBuffer;
+  buffer: ArrayBuffer;
+  /** True when `buffer` is raw deflate, false when the entry is stored as is. */
+  deflated: boolean;
 }
 
 /** Refuses one archive request; `code` is `corrupt`, `drm`, or `missing`. */
@@ -287,15 +292,11 @@ export interface FrameZipListRequest {
   id: number;
 }
 
-/**
- * Asks for one archive entry. `as: "text"` decodes it as UTF-8, and
- * `as: "bytes"` transfers the bytes for a `blob:` URL.
- */
+/** Asks for one archive entry, answered with `zip-data` or `zip-error`. */
 export interface FrameZipEntryRequest {
   kind: "zip-entry";
   id: number;
   name: string;
-  as: "text" | "bytes";
 }
 
 /** Reports a settings change the Frame made, such as a font size step. */

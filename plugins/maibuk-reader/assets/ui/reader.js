@@ -84,7 +84,7 @@
    * @typedef {{ kind: "command", id: string }} FrameCommandMessage
    * @typedef {{ kind: "language", language: string, labels?: FrameLabels }} FrameLanguageMessage
    * @typedef {{ kind: "zip-list", id: number, entries: FrameZipEntry[] }} FrameZipListMessage
-   * @typedef {{ kind: "zip-data", id: number, text?: string, buffer?: ArrayBuffer }} FrameZipDataMessage
+   * @typedef {{ kind: "zip-data", id: number, buffer: ArrayBuffer, deflated: boolean }} FrameZipDataMessage
    * @typedef {{ kind: "zip-error", id: number, code: "corrupt" | "drm" | "missing" }} FrameZipErrorMessage
    * @typedef {FrameOpenMessage | FrameBytesMessage | FrameReadErrorMessage | FrameCommandMessage | FrameLanguageMessage | FrameZipListMessage | FrameZipDataMessage | FrameZipErrorMessage} WorkerToFrameMessage
    * @typedef {{ index: number, canvas: HTMLCanvasElement, textLayer: HTMLDivElement, page: any, scale: number }} RenderedPage
@@ -541,7 +541,7 @@
         settleZip(data.id, { entries: data.entries });
         return;
       case "zip-data":
-        settleZip(data.id, { text: data.text, buffer: data.buffer });
+        settleZip(data.id, { buffer: data.buffer, deflated: data.deflated === true });
         return;
       case "zip-error":
         rejectZip(data.id, data.code);
@@ -1017,6 +1017,9 @@
 
   /* Archive access -------------------------------------------------------- */
 
+  /** Decodes archive text, as the Worker's zip reader once did. */
+  const UTF8 = new TextDecoder("utf-8");
+
   /** @returns {Promise<FrameZipEntry[]>} */
   function requestZipList() {
     const id = nextZipId++;
@@ -1026,12 +1029,12 @@
     });
   }
 
-  /** @param {string} name @param {"text" | "bytes"} as @returns {Promise<any>} */
-  function requestZipEntry(name, as) {
+  /** @param {string} name @returns {Promise<any>} */
+  function requestZipEntry(name) {
     const id = nextZipId++;
     return new Promise((resolve, reject) => {
       pendingZip.set(id, { resolve, reject });
-      post({ kind: "zip-entry", id, name, as });
+      post({ kind: "zip-entry", id, name });
     });
   }
 
@@ -1045,18 +1048,40 @@
     for (const item of zipEntries) zipByName.set(item.name, item);
   }
 
+  /**
+   * Inflates raw deflate bytes with the platform's own decompressor. The
+   * Worker hands entries over as stored because on Android it runs in QuickJS,
+   * where inflating a large image blocked it past the host's heartbeat on a
+   * slow e-ink device; native inflation here is fast and never blocks it.
+   * @param {Uint8Array} bytes @param {string} name @returns {Promise<Uint8Array>}
+   */
+  async function inflateEntry(bytes, name) {
+    try {
+      const source = new ReadableStream({
+        start(controller) {
+          controller.enqueue(bytes);
+          controller.close();
+        },
+      });
+      const inflated = source.pipeThrough(new DecompressionStream("deflate-raw"));
+      return new Uint8Array(await new Response(inflated).arrayBuffer());
+    } catch {
+      throw new DocumentError("corrupt", `The archive's entry ${name} will not inflate`);
+    }
+  }
+
   /** @param {string} name @returns {Promise<Uint8Array>} */
   async function zipBytes(name) {
-    const data = await requestZipEntry(name, "bytes");
+    const data = await requestZipEntry(name);
     if (!(data && data.buffer)) throw new DocumentError("corrupt", `The archive has no ${name}`);
-    return new Uint8Array(data.buffer);
+    const bytes = new Uint8Array(data.buffer);
+    return data.deflated ? inflateEntry(bytes, name) : bytes;
   }
 
   /** @param {string} name @returns {Promise<string | null>} */
   async function zipText(name) {
     try {
-      const data = await requestZipEntry(name, "text");
-      return typeof data.text === "string" ? data.text : null;
+      return UTF8.decode(await zipBytes(name));
     } catch (error) {
       if (isErrorLike(error) && /** @type {any} */ (error).code === "missing") return null;
       throw error;
