@@ -236,6 +236,19 @@ describe("ImageView", () => {
     document.body.style.userSelect = "";
   });
 
+  it("leaves an IME Enter in the image caption for the IME", () => {
+    renderImage();
+    const caption = document.querySelector(".image-caption");
+    if (!(caption instanceof HTMLElement)) throw new Error("Missing image caption");
+
+    // An IME's Enter must not be swallowed: the composition needs it to commit.
+    expect(fireEvent.keyDown(caption, { key: "Enter", isComposing: true })).toBe(true);
+    expect(fireEvent.keyDown(caption, { key: "Enter", keyCode: 229 })).toBe(true);
+
+    // The author's Enter still never starts a new line in the caption.
+    expect(fireEvent.keyDown(caption, { key: "Enter" })).toBe(false);
+  });
+
   it("changes image width with the localized keyboard controls", async () => {
     const user = userEvent.setup();
     const { props } = renderImage();

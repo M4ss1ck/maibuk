@@ -100,6 +100,37 @@ describe("NoteListItem title editing", () => {
     expect(onRename).toHaveBeenCalledWith(note, "New title");
   });
 
+  it("ignores an IME Enter when saving a renamed note title", async () => {
+    const user = userEvent.setup();
+    const onRename = vi.fn();
+    const note = buildNote();
+
+    render(
+      <ul>
+        <NoteListItem note={note} isSelected={false} onSelect={vi.fn()} onRename={onRename} />
+      </ul>
+    );
+
+    await user.click(screen.getByRole("button", { name: "common.moreActionsFor" }));
+    await user.click(await screen.findByRole("menuitem", { name: "common.rename" }));
+    const input = screen.getByDisplayValue("Old title");
+    await waitFor(() => expect(input).toHaveFocus());
+
+    await user.clear(input);
+    await user.type(input, "New title");
+
+    // The IME's own Enter and Safari's commit Enter may not save the rename,
+    // nor hand focus back to the row: the field stays in edit mode.
+    fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+    fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
+    expect(onRename).not.toHaveBeenCalled();
+    expect(input).toHaveFocus();
+    expect(screen.getByDisplayValue("New title")).toBeInTheDocument();
+
+    await user.keyboard("{Enter}");
+    expect(onRename).toHaveBeenCalledWith(note, "New title");
+  });
+
   it("renames by keyboard from the item menu and keeps focus in the title field", async () => {
     const user = userEvent.setup();
     const onRename = vi.fn();

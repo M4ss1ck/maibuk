@@ -6,6 +6,7 @@ import { Toolbar } from "react-aria-components/Toolbar";
 import { AlignLeft, AlignCenter, AlignRight, Minus, Plus, Trash2 } from "lucide-react";
 import { NodeSelection } from "@tiptap/pm/state";
 import { Button, Tooltip } from "@/components/ui";
+import { isIgnoredKeyEvent } from "@/lib/shortcut-keys";
 import {
   imageAlignment,
   imageFigureBox,
@@ -133,7 +134,7 @@ export function ImageView({
 
   const handleCaptionKeyDown = useCallback((e: React.KeyboardEvent) => {
     // Prevent Enter from creating newlines in caption
-    if (e.key === "Enter") {
+    if (e.key === "Enter" && !isIgnoredKeyEvent(e.nativeEvent)) {
       e.preventDefault();
       e.stopPropagation();
     }

@@ -15,6 +15,7 @@ import { Select } from "@/components/ui/Select";
 import { useTranslation } from "react-i18next";
 import { FileUp, Flag, List, ListTree, Rows3 } from "lucide-react";
 import type { CommandId } from "@/lib/shortcut-registry";
+import { isIgnoredKeyEvent } from "@/lib/shortcut-keys";
 import { ChapterIcon, EditIcon } from "@/components/icons";
 import { DeleteIcon } from "@/components/icons/DeleteIcon";
 import { AddIcon } from "@/components/icons/AddIcon";
@@ -537,7 +538,7 @@ export function ChapterList({
             className="w-full px-3 py-2 text-sm border border-border rounded mb-2 bg-background text-foreground"
             autoFocus
             onKeyDown={(e) => {
-              if (e.key === "Enter") handleCreate();
+              if (e.key === "Enter" && !isIgnoredKeyEvent(e.nativeEvent)) handleCreate();
               if (e.key === "Escape") closeNewDialog();
             }}
           />
@@ -704,7 +705,8 @@ export function ChapterList({
                               // The field keeps its keys: the list's typeahead
                               // would otherwise swallow a space typed after a letter.
                               e.stopPropagation();
-                              if (e.key === "Enter") handleUpdate();
+                              if (e.key === "Enter" && !isIgnoredKeyEvent(e.nativeEvent))
+                                handleUpdate();
                               if (e.key === "Escape") cancelEditing();
                             }}
                           />

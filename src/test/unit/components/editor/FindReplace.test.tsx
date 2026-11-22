@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useBoundShortcutStore } from "@/lib/bound-shortcuts";
 import { useSearchSwitchesStore } from "@/features/search/switches";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Editor } from "@tiptap/core";
 import { EditorContent } from "@tiptap/react";
@@ -134,6 +134,53 @@ describe("FindReplace", () => {
 
     unmount();
     expect(Object.keys(useBoundShortcutStore.getState().counts)).not.toContain("editor.findNext");
+  });
+
+  it("ignores an IME Enter in the find input", async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderFindReplace(() => {}, "<p>cat sat cat</p>");
+
+    const find = screen.getByPlaceholderText("editor.find");
+    await user.click(find);
+    await user.keyboard("cat");
+    await waitFor(() => expect(document.querySelectorAll(".search-result")).toHaveLength(2));
+
+    const activeIndex = () =>
+      [...document.querySelectorAll(".search-result")].findIndex((result) =>
+        result.classList.contains("search-result-active")
+      );
+    expect(activeIndex()).toBe(0);
+
+    // The IME's own Enter and Safari's commit Enter may not step to the next match.
+    fireEvent.keyDown(find, { key: "Enter", isComposing: true });
+    fireEvent.keyDown(find, { key: "Enter", keyCode: 229 });
+    expect(activeIndex()).toBe(0);
+
+    await user.keyboard("{Enter}");
+    expect(activeIndex()).toBe(1);
+    unmount();
+  });
+
+  it("ignores an IME Enter in the replace input", async () => {
+    const user = userEvent.setup();
+    const { editor, unmount } = renderFindReplace(() => {}, "<p>cat sat cat</p>");
+
+    await user.click(screen.getByPlaceholderText("editor.find"));
+    await user.keyboard("cat");
+    await waitFor(() => expect(document.querySelectorAll(".search-result")).toHaveLength(2));
+
+    const replace = screen.getByPlaceholderText("editor.replaceWith");
+    await user.click(replace);
+    await user.keyboard("dog");
+
+    // The IME's own Enter and Safari's commit Enter may not replace the match.
+    fireEvent.keyDown(replace, { key: "Enter", isComposing: true });
+    fireEvent.keyDown(replace, { key: "Enter", keyCode: 229 });
+    expect(editor.getText()).toBe("cat sat cat");
+
+    await user.keyboard("{Enter}");
+    expect(editor.getText()).toBe("dog sat cat");
+    unmount();
   });
 
   it("closes with Escape from the find input", async () => {

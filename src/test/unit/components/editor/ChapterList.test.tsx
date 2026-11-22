@@ -883,6 +883,24 @@ describe("ChapterList", () => {
       expect(onCreate).toHaveBeenCalledWith("New Chapter", "chapter");
     });
 
+    it("ignores an IME Enter when creating a Chapter", async () => {
+      const user = userEvent.setup();
+      const onCreate = vi.fn();
+      renderCL({ onCreateChapter: onCreate });
+      await user.click(screen.getByRole("button", { name: "chapters.addChapter" }));
+      const input = screen.getByPlaceholderText("chapters.chapterTitlePlaceholder");
+      await user.type(input, "New Chapter");
+
+      // The IME's own Enter and Safari's commit Enter may not create a Chapter.
+      fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+      fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
+      expect(onCreate).not.toHaveBeenCalled();
+      expect(screen.getByPlaceholderText("chapters.chapterTitlePlaceholder")).toBeInTheDocument();
+
+      await user.keyboard("{Enter}");
+      expect(onCreate).toHaveBeenCalledWith("New Chapter", "chapter");
+    });
+
     it("cancels create on Escape", async () => {
       const user = userEvent.setup();
       renderCL();
@@ -955,6 +973,28 @@ describe("ChapterList", () => {
       await user.clear(input);
       await user.type(input, "Updated Title{Enter}");
 
+      expect(onUpdate).toHaveBeenCalledWith("ch-1", "Updated Title", "chapter");
+    });
+
+    it("ignores an IME Enter when renaming a Chapter", async () => {
+      const user = userEvent.setup();
+      const onUpdate = vi.fn();
+      const chapters = [buildChapter({ id: "ch-1", title: "First", order: 1 })];
+      renderCL({ chapters, currentChapterId: chapters[0].id, onUpdateChapter: onUpdate });
+
+      await openChapterMenu(user);
+      await user.keyboard("{Enter}");
+      const input = await screen.findByDisplayValue("First");
+      await user.clear(input);
+      await user.type(input, "Updated Title");
+
+      // The IME's own Enter and Safari's commit Enter may not save the rename.
+      fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+      fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
+      expect(onUpdate).not.toHaveBeenCalled();
+      expect(screen.getByDisplayValue("Updated Title")).toBeInTheDocument();
+
+      await user.keyboard("{Enter}");
       expect(onUpdate).toHaveBeenCalledWith("ch-1", "Updated Title", "chapter");
     });
 

@@ -870,6 +870,35 @@ describe("Editor", () => {
     });
   });
 
+  it("ignores an IME Enter when changing a code block language", async () => {
+    const onUpdate = vi.fn();
+
+    render(
+      <Editor
+        content={'<pre><code class="language-javascript">const value = 1</code></pre>'}
+        onUpdate={onUpdate}
+      />
+    );
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "editor.editCodeBlockLanguage" })
+    );
+    const languageInput = screen.getByLabelText("editor.codeBlockLanguage");
+    await userEvent.clear(languageInput);
+    await userEvent.type(languageInput, "python");
+
+    // The IME's own Enter and Safari's commit Enter may not save the language.
+    fireEvent.keyDown(languageInput, { key: "Enter", isComposing: true });
+    fireEvent.keyDown(languageInput, { key: "Enter", keyCode: 229 });
+    expect(onUpdate).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("editor.codeBlockLanguage")).toBeInTheDocument();
+
+    fireEvent.keyDown(languageInput, { key: "Enter" });
+    await waitFor(() => {
+      expect(onUpdate).toHaveBeenCalledWith(expect.stringContaining('class="language-python"'));
+    });
+  });
+
   it("does not refocus the previous selection when a heading toggle is clicked", async () => {
     let editor: TiptapEditor | null = null;
 
