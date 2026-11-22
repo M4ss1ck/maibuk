@@ -1,4 +1,4 @@
-import { act, screen, within } from "@testing-library/react";
+import { act, fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createElement, useState } from "react";
 import { RouterProvider } from "react-aria-components";
@@ -147,6 +147,31 @@ describe("the Remote UI renderer", () => {
       const field = screen.getByRole("textbox", { name: "Title" });
       await userEvent.type(field, "!");
       expect(committed).toEqual([]);
+      await userEvent.keyboard("{Enter}");
+      expect(committed).toEqual(["start!"]);
+    });
+
+    it("does not commit on the Enter that ends an IME composition @ui-kbd:maibuk-text-field", async () => {
+      const committed: string[] = [];
+      harness = renderRemoteUi();
+      await harness.mount(
+        <ui.TextField
+          label="Title"
+          value="start"
+          onChange={(event) => committed.push(event.detail)}
+        />
+      );
+      const field = screen.getByRole("textbox", { name: "Title" });
+      await userEvent.type(field, "!");
+
+      // The IME's own Enter: still composing, and Safari's commit Enter that
+      // only `keyCode` 229 tells apart. Neither may commit the field.
+      fireEvent.keyDown(field, { key: "Enter", isComposing: true });
+      fireEvent.keyDown(field, { key: "Enter", keyCode: 229 });
+      expect(committed).toEqual([]);
+      expect(field).toHaveValue("start!");
+
+      // The author's Enter still commits.
       await userEvent.keyboard("{Enter}");
       expect(committed).toEqual(["start!"]);
     });

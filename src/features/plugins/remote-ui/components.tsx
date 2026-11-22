@@ -82,6 +82,7 @@ import { createEchoTracker, type PluginEchoTracker } from "@/features/plugins/re
 import { useItemContextMenu, useRestoreFocus } from "@/hooks";
 import { normalizeHexColor } from "@/lib/color";
 import { openExternal } from "@/lib/platform";
+import { isIgnoredKeyEvent } from "@/lib/shortcut-keys";
 import { PLUGIN_UI_TABLE } from "@/plugin-sdk/ui-table";
 import type { PluginUiOption } from "@/plugin-sdk/ui.generated";
 
@@ -183,7 +184,7 @@ function TextFieldHost({
         data-autofocus={autoFocus ? "" : undefined}
         className={INPUT_CLASS}
         onKeyDown={(event) => {
-          if (event.key === "Enter") onChange?.(local);
+          if (event.key === "Enter" && !isIgnoredKeyEvent(event.nativeEvent)) onChange?.(local);
         }}
         onBlur={() => onChange?.(local)}
       />

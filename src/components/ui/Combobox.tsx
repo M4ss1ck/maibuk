@@ -6,6 +6,7 @@ import { Popover } from "react-aria-components/Popover";
 import { ListBox, ListBoxItem } from "react-aria-components/ListBox";
 import { Separator } from "react-aria-components/Separator";
 import { ChevronDownIcon } from "@/components/icons";
+import { isIgnoredKeyEvent } from "@/lib/shortcut-keys";
 
 const CUSTOM_VALUE_KEY = "__custom_value__";
 
@@ -116,6 +117,18 @@ export function Combobox({
           placeholder={placeholder}
           autoFocus={autoFocus}
           onKeyDown={handleKeyDown}
+          // An Enter that commits an IME composition stops here: React Aria's
+          // own ComboBox commit runs on this element's bubble phase and only
+          // skips `isComposing`, so Safari's keyCode-229 commit would otherwise
+          // commit the held value and wipe the typed text (#914).
+          onKeyDownCapture={(e) => {
+            if (
+              (e.key === "Enter" || e.key === "NumpadEnter") &&
+              isIgnoredKeyEvent(e.nativeEvent)
+            ) {
+              e.stopPropagation();
+            }
+          }}
         />
         <Button className="absolute inset-y-0 right-0 flex items-center pr-1.5">
           <ChevronIcon className="h-4 w-4 text-muted-foreground" />

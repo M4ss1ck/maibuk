@@ -1,5 +1,5 @@
 import { createRef } from "react";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { MultiSelectCombobox } from "@/components/ui/MultiSelectCombobox";
@@ -131,6 +131,30 @@ describe("MultiSelectCombobox", () => {
 
     expect(onChange).toHaveBeenCalledWith(["draft", "plot"]);
     expect(screen.queryByText('"plot"')).not.toBeInTheDocument();
+  });
+
+  it("does not create a custom value on an Enter that commits an IME composition", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+
+    render(
+      <MultiSelectCombobox value={["draft"]} onChange={onChange} options={options} allowCustom />
+    );
+
+    const input = screen.getByRole("combobox");
+    await user.click(input);
+    await user.type(input, "plot");
+
+    // The IME's own Enter: still composing, and Safari's commit Enter that only
+    // `keyCode` 229 tells apart. Neither may create the value.
+    fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+    fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(input).toHaveValue("plot");
+
+    // The author's Enter still creates it.
+    await user.keyboard("{Enter}");
+    expect(onChange).toHaveBeenCalledWith(["draft", "plot"]);
   });
 
   it("removes selected values from their chips", async () => {
