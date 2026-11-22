@@ -6,7 +6,7 @@
  * `fitUnderCap` takes the encoder, so no test needs a canvas.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_DPI,
   ExportTooLargeError,
@@ -144,6 +144,19 @@ describe("placePixelSize()", () => {
 });
 
 describe("dataUri()", () => {
+  it("writes the same URI and reads the bundled fonts without atob or btoa, as on Android", () => {
+    vi.stubGlobal("atob", undefined);
+    vi.stubGlobal("btoa", undefined);
+    try {
+      expect(dataUri("image/png", new Uint8Array([0, 255, 1]))).toBe("data:image/png;base64,AP8B");
+      const fonts = bundledFonts();
+      expect(fonts.length).toBeGreaterThan(0);
+      for (const font of fonts) expect(font.bytes.length).toBeGreaterThan(1000);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("writes the bytes as a base64 data URI, without Buffer", () => {
     expect(dataUri("image/png", new Uint8Array([0, 255, 1]))).toBe("data:image/png;base64,AP8B");
   });

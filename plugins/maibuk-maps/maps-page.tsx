@@ -11,7 +11,7 @@
 
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import { ui, type PluginClient } from "@/plugin-sdk";
-import { format, translate, type MapsKey } from "./i18n";
+import { format, mediumDate, translate, type MapsKey } from "./i18n";
 import { PAGE_PRESETS, type MapIndexEntry, type MapStore, type PagePreset } from "./maps";
 import {
   MAP_TEMPLATE_IDS,
@@ -286,10 +286,7 @@ export function createMapsPage(deps: MapsPageDeps): ComponentType {
     }
 
     function edited(entry: MapIndexEntry): string {
-      const when = new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(
-        entry.updatedAt
-      );
-      return format(t("list.edited"), { when });
+      return format(t("list.edited"), { when: mediumDate(language, entry.updatedAt) });
     }
 
     function action(label: string, icon: string, onPress: () => void) {

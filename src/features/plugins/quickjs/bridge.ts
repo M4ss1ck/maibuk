@@ -16,7 +16,7 @@ import type { QuickJSContext, QuickJSHandle } from "quickjs-emscripten-core";
 
 /** The host end of the bridge: where a VM port's calls go. */
 export interface QuickJsBridgeHost {
-  /** A VM port called `postMessage`; forward the dumped value to the real port. */
+  /** A VM port called `postMessage`; forward the value it posted to the real port. */
   portPostMessage(portId: number, value: unknown): void;
   /** A VM port called `close()`. */
   portClose(portId: number): void;
@@ -105,6 +105,177 @@ export function toVmValue(
 }
 
 /**
+ * The VM half of "marshalling out": what a Plugin posts has to survive its way
+ * to the host, and QuickJS has no structured clone, so the host receives a JSON
+ * pass (`dump`). A JSON pass has no binary form: an `ArrayBuffer` dumps as `{}`
+ * and a typed array as an object of indices, which is how every archive image
+ * reached the Reader Frame as a zero-length buffer while a string entry
+ * arrived whole. This encoder runs the same JSON pass with a replacer that lifts
+ * each `ArrayBuffer` and view into a list, leaving a marker where it sat;
+ * {@link fromVmValue} puts those bytes back from that list.
+ */
+const OUT_ENCODER_SOURCE = `(function () {
+  if (typeof globalThis.__maibukEncodeOut === "function") return;
+  globalThis.__maibukEncodeOut = function (value) {
+    var buffers = [];
+    var json = JSON.stringify(value, function (key, held) {
+      if (held instanceof ArrayBuffer) {
+        buffers.push(held);
+        return { __maibukBytes: buffers.length - 1 };
+      }
+      if (ArrayBuffer.isView(held)) {
+        // A view carries only its own bytes: its buffer may hold data the
+        // message never included.
+        buffers.push(new Uint8Array(held.buffer, held.byteOffset, held.byteLength).slice().buffer);
+        return { __maibukBytes: buffers.length - 1, __maibukView: held.constructor.name };
+      }
+      return held;
+    });
+    return { json: json, buffers: buffers };
+  };
+})();`;
+
+/** The marker key the encoder writes where an `ArrayBuffer` or view sat. */
+const BYTES_KEY = "__maibukBytes";
+/** The marker key naming a view's own type, so it comes back as that view. */
+const VIEW_KEY = "__maibukView";
+
+/** Every view type a message may carry, rebuilt from its bytes on the host. */
+const VIEW_TYPES = new Map<string, new (buffer: ArrayBuffer) => ArrayBufferView>([
+  ["DataView", DataView],
+  ["Int8Array", Int8Array],
+  ["Uint8Array", Uint8Array],
+  ["Uint8ClampedArray", Uint8ClampedArray],
+  ["Int16Array", Int16Array],
+  ["Uint16Array", Uint16Array],
+  ["Int32Array", Int32Array],
+  ["Uint32Array", Uint32Array],
+  ["Float32Array", Float32Array],
+  ["Float64Array", Float64Array],
+  ["BigInt64Array", BigInt64Array],
+  ["BigUint64Array", BigUint64Array],
+]);
+
+/**
+ * Install the encoder the port and scope `postMessage` shims call. Idempotent:
+ * the VM keeps the first one, so both shims can ensure it before use.
+ */
+export function installOutEncoder(context: QuickJSContext): void {
+  const installed = context.evalCode(OUT_ENCODER_SOURCE);
+  if (installed.error) {
+    const dumped = context.dump(installed.error) as { message?: unknown } | string;
+    installed.error.dispose();
+    throw new Error(
+      typeof dumped === "string" ? dumped : String(dumped?.message ?? "encoder install failed")
+    );
+  }
+  installed.value.dispose();
+}
+
+/**
+ * Convert one value the encoder returned — `{ json, buffers }` — back into a
+ * host value, with each marker replaced by its bytes. This is the `dump` half
+ * of "data crosses by structured value": strings, numbers, booleans, null,
+ * arrays, and plain objects arrive as they were posted, `ArrayBuffer`s arrive
+ * as `ArrayBuffer`s, and views arrive as their own type.
+ */
+export function fromVmValue(context: QuickJSContext, encoded: QuickJSHandle): unknown {
+  const jsonHandle = context.getProp(encoded, "json");
+  const buffersHandle = context.getProp(encoded, "buffers");
+  try {
+    // `JSON.stringify` answers undefined for a value it cannot encode at all.
+    if (context.typeof(jsonHandle) === "undefined") return undefined;
+    const parsed: unknown = JSON.parse(context.getString(jsonHandle));
+    return reviveBytes(parsed, readBuffers(context, buffersHandle));
+  } finally {
+    jsonHandle.dispose();
+    buffersHandle.dispose();
+  }
+}
+
+/**
+ * The most buffers one message may carry. The encoder lifts one buffer per
+ * marker in the JSON, so a real message never comes close; a forged `buffers`
+ * with a length in the billions would otherwise make the host loop once per
+ * claimed entry, outside the VM's CPU budget and its heap cap.
+ */
+const MAX_MESSAGE_BUFFERS = 4096;
+
+/** What a `buffers` entry that is not an ArrayBuffer refuses with. */
+const NOT_A_BUFFER = "A Plugin message's buffers must be ArrayBuffers";
+
+/** Copy one `buffers` entry the VM produced. */
+function copyBuffer(context: QuickJSContext, item: QuickJSHandle): ArrayBuffer {
+  // A forged message can put anything under `buffers`; `getArrayBuffer` only
+  // makes sense on an ArrayBuffer, and the encoder writes nothing else.
+  if (context.typeof(item) !== "object") throw new Error(NOT_A_BUFFER);
+  let copied: ReturnType<QuickJSContext["getArrayBuffer"]>;
+  try {
+    copied = context.getArrayBuffer(item);
+  } catch {
+    throw new Error(NOT_A_BUFFER);
+  }
+  try {
+    // `getArrayBuffer` hands back a view of the Wasm heap the lifetime frees;
+    // the slice is this message's own copy.
+    return copied.value.slice().buffer as ArrayBuffer;
+  } finally {
+    copied.dispose();
+  }
+}
+
+/** Copy each buffer the encoder lifted out of the VM. */
+function readBuffers(context: QuickJSContext, handle: QuickJSHandle): ArrayBuffer[] {
+  // Read the array's own `length` property. `context.getLength` reads a
+  // `Uint32Array` cached over the Wasm heap when the context was created; a
+  // growing heap detaches that view, the read answers undefined, and every
+  // buffer in the message vanished (#516).
+  const lengthHandle = context.getProp(handle, "length");
+  let length: number;
+  try {
+    length = context.getNumber(lengthHandle);
+  } finally {
+    lengthHandle.dispose();
+  }
+  if (!Number.isInteger(length) || length < 0) return [];
+  if (length > MAX_MESSAGE_BUFFERS) {
+    throw new Error(`A Plugin message may carry at most ${MAX_MESSAGE_BUFFERS} buffers`);
+  }
+  const buffers: ArrayBuffer[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const item = context.getProp(handle, index);
+    try {
+      buffers.push(copyBuffer(context, item));
+    } finally {
+      // Released even when the entry is refused: the VM's `postMessage` ends in
+      // a thrown exception, and a leaked handle would hold its value until the
+      // run ends.
+      item.dispose();
+    }
+  }
+  return buffers;
+}
+
+/** Replace every bytes marker in the dumped value with its bytes. */
+function reviveBytes(value: unknown, buffers: readonly ArrayBuffer[]): unknown {
+  if (Array.isArray(value)) return value.map((item) => reviveBytes(item, buffers));
+  if (typeof value !== "object" || value === null) return value;
+  const record = value as Record<string, unknown>;
+  const index = record[BYTES_KEY];
+  if (typeof index === "number" && Number.isInteger(index)) {
+    const buffer = buffers[index];
+    if (buffer !== undefined) {
+      const kind = record[VIEW_KEY];
+      const View = typeof kind === "string" ? VIEW_TYPES.get(kind) : undefined;
+      return View === undefined ? buffer : new View(buffer);
+    }
+  }
+  const out: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(record)) out[key] = reviveBytes(item, buffers);
+  return out;
+}
+
+/**
  * The VM port shim. `Port` keeps `onmessage` as an ordinary property so
  * assigning it reads back exactly like a Worker `MessagePort`; the runner's
  * delivery calls back into it through `deliver`.
@@ -121,7 +292,7 @@ const BRIDGE_SOURCE = `(function () {
     this.__started = false;
   }
   Port.prototype.postMessage = function (data) {
-    host.portPostMessage(this.__id, data);
+    host.portPostMessage(this.__id, globalThis.__maibukEncodeOut(data));
   };
   Port.prototype.start = function () {
     this.__started = true;
@@ -167,9 +338,10 @@ export function installPortBridge(
   context: QuickJSContext,
   host: QuickJsBridgeHost
 ): QuickJsPortBridge {
+  installOutEncoder(context);
   const hostObject = context.newObject();
   const portPostMessage = context.newFunction("portPostMessage", (idHandle, dataHandle) => {
-    host.portPostMessage(context.getNumber(idHandle), context.dump(dataHandle));
+    host.portPostMessage(context.getNumber(idHandle), fromVmValue(context, dataHandle));
   });
   const portClose = context.newFunction("portClose", (idHandle) => {
     host.portClose(context.getNumber(idHandle));

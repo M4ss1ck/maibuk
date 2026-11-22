@@ -562,7 +562,10 @@ runs a Plugin on Android only when its manifest lists "android"
 (`manifestRunsOn` in `src/features/plugins/host-platform.ts`), in the memory-capped
 QuickJS engine (#492, #516): the 64 MB cap is hard, so a Plugin that exhausts its
 heap stops with `out-of-memory` and the WebView renderer survives. Custom Frame UI
-stays off on Android. The Android conformance run is judged on T1 to T8 like
+mounts on Android too (ADR 0021, 2026-11-21 amendment), and the T2 frame probe runs
+there. That check is expected to fail on Android until a Tauri fix ships (the
+amendment says why), so an Android run exits 1 on `T2-frame-ipc` alone; any other
+failing check is a real regression. The Android conformance run is judged on T1 to T8 like
 Linux: T8 must stop the hostile Plugin with exactly `out-of-memory` while a healthy
 Plugin beside it keeps answering. The lane's seam reports the true Android directory
 kind, and the hostile and healthy fixtures list `"android"` in their manifest

@@ -1483,7 +1483,7 @@ Output:
 
 ### `files.save`
 
-Saves a file under the name and MIME type you give: Maibuk asks the author where to save it and writes the bytes you send as one Blob right after this call. Maibuk keeps only the base name (no folders, no leading dots, at most 255 bytes) and refuses a name that names no file type or one an executable uses. Refused with user-action-required unless the author's own click, key press, or Command run caused the call, and not-implemented on a device that cannot save yet.
+Saves a file under the name and MIME type you give: Maibuk asks the author where to save it and writes the bytes you send right after this call. Maibuk keeps only the base name (no folders, no leading dots, at most 255 bytes) and refuses a name that names no file type or one an executable uses. Refused with user-action-required unless the author's own click, key press, or Command run caused the call, and not-implemented on a device that cannot save yet.
 
 - Plugin Permission: `files:save`
 - Effect: write

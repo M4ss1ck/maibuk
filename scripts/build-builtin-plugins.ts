@@ -55,8 +55,11 @@ export const BUNDLE_SIZE_LIMIT_OVERRIDES: Readonly<Record<string, number>> = {
   // Reader carries pdf.js's core worker and display module and the foliate-js
   // parsers as raw source strings (plugins/maibuk-reader/loaders.ts, vendored
   // under plugins/maibuk-reader/vendor/): about 653 KB gzip on their own, and
-  // 668,642 bytes with the Plugin and SDK. Rounded up to the next 50 KB.
-  "maibuk-reader": 700 * 1024,
+  // 668,642 bytes with the Plugin and SDK. pdf.js 6.5.438 and the core-js
+  // polyfills it needs on the oldest supported WebView (Chrome 138,
+  // vendor/README.md) added about 19 KB gzip: 722,924 bytes measured
+  // 2026-11-21. Rounded up to the next 50 KB.
+  "maibuk-reader": 750 * 1024,
   // Maps carries @turf/polygonize for the Bucket's faces and its base Stamp
   // art as path data (plugins/maibuk-maps/stamp-art.ts, about 5 KB gzip). It
   // also carries its four bundled Map Label fonts, imported as `?inline` data

@@ -26,7 +26,7 @@
  * own files and the SDK's protocol constants.
  */
 
-import { PLUGIN_MESSAGE_MAX_BYTES } from "@/plugin-sdk/protocol";
+import { PLUGIN_MESSAGE_MAX_BYTES, bytesToBase64 } from "@/plugin-sdk/protocol";
 import type { MapAsset } from "./assets";
 import { roundedMm } from "./geometry";
 import type { MapDocument, MapPage } from "./maps";
@@ -234,16 +234,12 @@ export async function fitUnderCap(
   throw new ExportTooLargeError(capBytes);
 }
 
-/** The bytes packed as one base64 data URI; no `Buffer`, so a Worker can call it. */
+/**
+ * The bytes packed as one base64 data URI. No `Buffer` and no `btoa`, which the
+ * Android QuickJS engine lacks, so any Plugin engine can call it.
+ */
 export function dataUri(mime: string, bytes: Uint8Array): string {
-  // `String.fromCharCode` takes its arguments on the stack, so a big picture
-  // goes in chunks rather than in one spread.
-  const chunk = 0x8000;
-  let binary = "";
-  for (let index = 0; index < bytes.length; index += chunk) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + chunk));
-  }
-  return `data:${mime};base64,${btoa(binary)}`;
+  return `data:${mime};base64,${bytesToBase64(bytes)}`;
 }
 
 /**

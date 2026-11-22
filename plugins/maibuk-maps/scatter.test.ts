@@ -4,9 +4,9 @@
  * every time.
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { MapPoint } from "./maps";
-import { scatterPoints } from "./scatter";
+import { newScatterSeed, scatterPoints } from "./scatter";
 
 /** A square ring 40 mm a side, with its top-left corner at `origin`. */
 function square(origin = 0, size = 40): MapPoint[] {
@@ -101,5 +101,22 @@ describe("scatterPoints", () => {
     expect(scatterPoints([square()], 0, 1, PAGE_MM, PAGE_MM)).toEqual([]);
     expect(scatterPoints([square()], Number.NaN, 1, PAGE_MM, PAGE_MM)).toEqual([]);
     expect(scatterPoints([square()], 5, 1, 0, PAGE_MM)).toEqual([]);
+  });
+});
+
+describe("newScatterSeed", () => {
+  it("draws a full-range seed from a getRandomValues that fills bytes, as on Android", () => {
+    const bytes = [0x12, 0x34, 0x56, 0x78];
+    vi.stubGlobal("crypto", {
+      getRandomValues(array: Uint8Array | Uint32Array) {
+        for (let index = 0; index < array.length; index++) array[index] = bytes[index % 4];
+        return array;
+      },
+    });
+    try {
+      expect(newScatterSeed()).toBe(0x1234_5679);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

@@ -352,21 +352,14 @@ export async function runConformanceChecks(
     await onCheck?.(check);
   };
 
-  // Custom Frame UI is off on Android (#517): skip it
-  // entirely so no sandboxed-frame IPC result is ever probed or recorded.
-  if (seam.platform !== "android") {
-    await record(
-      await measure(T2_FRAME_CHECK_ID, async () => {
-        const observation = await seam.probeFrameIpc();
-        return observation.reached
-          ? fail(T2_FRAME_CHECK_ID, `the sandboxed frame reached Tauri IPC: ${observation.detail}`)
-          : pass(
-              T2_FRAME_CHECK_ID,
-              observation.detail || "the sandboxed frame reached no Tauri IPC"
-            );
-      })
-    );
-  }
+  await record(
+    await measure(T2_FRAME_CHECK_ID, async () => {
+      const observation = await seam.probeFrameIpc();
+      return observation.reached
+        ? fail(T2_FRAME_CHECK_ID, `the sandboxed frame reached Tauri IPC: ${observation.detail}`)
+        : pass(T2_FRAME_CHECK_ID, observation.detail || "the sandboxed frame reached no Tauri IPC");
+    })
+  );
 
   await record(
     await measure(T2_WORKER_CHECK_ID, async () => {

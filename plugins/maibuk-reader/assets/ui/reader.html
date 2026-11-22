@@ -374,13 +374,13 @@
           <div id="text-layer" class="textLayer"></div>
         </div>
         <p id="message" hidden></p>
-        <form id="password-form" hidden>
+        <div id="password-form" role="group" aria-labelledby="password-title" hidden>
           <h2 id="password-title">This PDF is password-protected</h2>
           <label for="password-input" id="password-label">Password</label>
           <input id="password-input" type="password" autocomplete="off" />
           <p id="password-error" hidden></p>
-          <button id="password-submit" type="submit">Open</button>
-        </form>
+          <button id="password-submit" type="button">Open</button>
+        </div>
       </main>
     </div>
 

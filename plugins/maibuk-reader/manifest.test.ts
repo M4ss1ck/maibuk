@@ -20,9 +20,9 @@ describe("Reader manifest", () => {
     expect(result.ok ? [] : result.problems).toEqual([]);
   });
 
-  it("runs on desktop and the web, on demand, with custom UI", () => {
+  it("runs on desktop, the web, and Android, on demand, with custom UI", () => {
     const parsed = manifest();
-    expect(parsed.platforms).toEqual(["desktop", "web"]);
+    expect(parsed.platforms).toEqual(["desktop", "web", "android"]);
     expect(parsed.lifecycle).toBe("on-demand");
     expect(parsed.customUi).toBe(true);
     expect(parsed.apiVersion).toBe("^0.1.15");

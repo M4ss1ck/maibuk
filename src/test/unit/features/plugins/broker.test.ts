@@ -1654,6 +1654,66 @@ describe("files.save (ADR 0040)", () => {
     expect([...saver.saves[0].bytes]).toEqual([...BYTES]);
   });
 
+  it("takes a Uint8Array blob message as a Blob with the head's MIME type", async () => {
+    const { saver, port } = saveSetup();
+    const head = JSON.stringify({
+      kind: "call",
+      id: 43,
+      method: "files.save",
+      params: { name: "map.png", mimeType: "image/png" },
+    });
+
+    const reply = raw(port, head);
+    port.postMessage({ kind: "blob", id: 43, blob: BYTES });
+
+    expect(await reply).toMatchObject({
+      kind: "result",
+      id: 43,
+      ok: true,
+      result: { status: "saved" },
+    });
+    expect(saver.saves[0]).toMatchObject({ name: "map.png", mimeType: "image/png" });
+    expect([...saver.saves[0].bytes]).toEqual([...BYTES]);
+  });
+
+  it("takes an ArrayBuffer blob message as a Blob too", async () => {
+    const { saver, port } = saveSetup();
+    const head = JSON.stringify({
+      kind: "call",
+      id: 44,
+      method: "files.save",
+      params: { name: "map.svg", mimeType: "image/svg+xml" },
+    });
+
+    const reply = raw(port, head);
+    port.postMessage({ kind: "blob", id: 44, blob: BYTES.slice().buffer });
+
+    expect(await reply).toMatchObject({ ok: true, result: { status: "saved" } });
+    expect(saver.saves[0]).toMatchObject({ name: "map.svg", mimeType: "image/svg+xml" });
+    expect([...saver.saves[0].bytes]).toEqual([...BYTES]);
+  });
+
+  it("takes bytes over the JSON message cap, as a Blob that size is taken", async () => {
+    const { saver, port } = saveSetup();
+    // The `blob` message is not JSON, so the 4 MB cap that bounds every JSON
+    // message never applied to the Blob path and does not apply to bytes: the
+    // author's disk is the limit (ADR 0040).
+    const large = new Uint8Array(PLUGIN_MESSAGE_MAX_BYTES + 1).fill(7);
+    const head = JSON.stringify({
+      kind: "call",
+      id: 45,
+      method: "files.save",
+      params: { name: "big.bin", mimeType: "application/octet-stream" },
+    });
+
+    const reply = raw(port, head);
+    port.postMessage({ kind: "blob", id: 45, blob: large });
+
+    expect(await reply).toMatchObject({ ok: true, result: { status: "saved" } });
+    expect(saver.saves[0].bytes.length).toBe(large.length);
+    expect(saver.saves[0].bytes[0]).toBe(7);
+  });
+
   it("collects an AsyncIterable into one Blob and saves it byte for byte", async () => {
     const { saver, client } = saveSetup();
     const bytes = (async function* () {
@@ -1732,16 +1792,47 @@ describe("files.save (ADR 0040)", () => {
     expect(saver.saves).toEqual([]);
   });
 
-  it("rejects not-implemented when the device has no Blob", async () => {
-    const { saver, client } = saveSetup();
-    vi.stubGlobal("Blob", undefined);
+  it("answers a call whose bytes cannot become a Blob with invalid-params", async () => {
+    // `new Blob` throws on a view over a detached or shared buffer. The call has
+    // already been accepted, so the throw must still answer it: escaped, it
+    // rejected the fire-and-forget `handleCall` and the Plugin's promise for
+    // this id never settled.
+    const { saver, port } = saveSetup();
+    const DETACHED = 0xde;
+    /** True for the marked payload, in whichever realm the bytes arrived. */
+    function isUnreadable(part: BlobPart | undefined): boolean {
+      return (
+        Object.prototype.toString.call(part) === "[object Uint8Array]" &&
+        (part as Uint8Array)[0] === DETACHED
+      );
+    }
+    class UnreadableBlob extends NodeBlob {
+      constructor(parts?: BlobPart[], options?: BlobPropertyBag) {
+        if (Array.isArray(parts) && parts.some(isUnreadable)) {
+          throw new TypeError("Cannot construct a Blob from a detached buffer");
+        }
+        // Node's own Blob names its parts with the Node union; the web and Node
+        // unions differ only in which typed arrays they spell out.
+        super((parts ?? []) as ConstructorParameters<typeof NodeBlob>[0], options);
+      }
+    }
+    vi.stubGlobal("Blob", UnreadableBlob);
+    const head = JSON.stringify({
+      kind: "call",
+      id: 46,
+      method: "files.save",
+      params: { name: "detached.bin", mimeType: "application/octet-stream" },
+    });
 
-    const error = await refusal(
-      client.files.save({ name: "a.txt", mimeType: "text/plain", bytes: BYTES })
-    );
+    const reply = raw(port, head);
+    port.postMessage({ kind: "blob", id: 46, blob: new Uint8Array([DETACHED, 1, 2]) });
 
-    expect(error.code).toBe("not-implemented");
-    expect(error.message).toBe("files.save is not available on this device");
+    expect(await reply).toMatchObject({
+      kind: "result",
+      id: 46,
+      ok: false,
+      error: { code: "invalid-params", method: "files.save" },
+    });
     expect(saver.saves).toEqual([]);
   });
 

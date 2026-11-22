@@ -17,6 +17,7 @@
 //! document, so there is no existing file to protect and the save writes that
 //! open file in place. Either way the webview holds only a token.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -59,13 +60,42 @@ fn internal_error(detail: &str) -> String {
 
 /// One persisted grant: the Plugin it belongs to, the id it is named by, and
 /// the file it points at. The path never leaves this module.
+///
+/// On desktop `path` is a canonical file path. On Android it is the
+/// `content://` URI of a document the picker handed over with a persisted read
+/// permission, which is the only handle that survives a restart there; `name`
+/// keeps the display name, because a document URI does not carry it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[cfg_attr(mobile, allow(dead_code))]
-struct GrantRecord {
+pub(crate) struct GrantRecord {
     plugin_id: String,
     grant_id: String,
     path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
+    /// The size the pick reported. A provider that streams a document reports
+    /// none on a later `stat`, and this stands in for it then; desktop leaves
+    /// it out, because a file's own metadata is authoritative there.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(not(target_os = "android"), allow(dead_code))]
+    size: Option<u64>,
+}
+
+/// The size a `stat` reports for a document: the provider's own when it
+/// reports one, else the size the pick recorded, else 0 for a document nobody
+/// can read any more.
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+fn stat_size(reported: Option<u64>, recorded: Option<u64>) -> u64 {
+    reported.or(recorded).unwrap_or(0)
+}
+
+impl GrantRecord {
+    /// The name a Plugin sees: the stored display name, else the path's own.
+    fn display_name(&self) -> String {
+        self.name
+            .clone()
+            .unwrap_or_else(|| file_name(Path::new(&self.path)))
+    }
 }
 
 /// What `files.pick` returns and `files.list` lists: a live grant, named and
@@ -79,7 +109,7 @@ pub struct GrantInfo {
 }
 
 /// What `files.stat` reads without opening the file's bytes.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(mobile, allow(dead_code))]
 pub struct GrantStat {
     pub name: String,
@@ -142,24 +172,71 @@ impl GrantStore {
         }
         let name = file_name(&canonical);
         let key = canonical.to_string_lossy().into_owned();
+        self.grant_key(plugin_id, key, None, None, name, metadata.len())
+    }
 
+    #[cfg_attr(not(target_os = "android"), allow(dead_code))]
+    /// Grants the Android document `uri` to `plugin_id` under its display
+    /// `name`, returning the grant this Plugin already holds for the same
+    /// document instead of a second one. The caller has already taken the
+    /// persisted read permission the URI needs after a restart.
+    pub fn grant_document(
+        &self,
+        plugin_id: &str,
+        uri: &str,
+        name: &str,
+        size: u64,
+    ) -> Result<GrantInfo, String> {
+        validate_plugin_id(plugin_id)?;
+        if uri.is_empty() {
+            return Err(file_missing("the picked document has no address"));
+        }
+        self.grant_key(
+            plugin_id,
+            uri.to_string(),
+            Some(name.to_string()),
+            Some(size),
+            name.to_string(),
+            size,
+        )
+    }
+
+    /// The record write both kinds of grant share: reuse this Plugin's grant
+    /// for `key`, else mint one and persist it before handing it out.
+    fn grant_key(
+        &self,
+        plugin_id: &str,
+        key: String,
+        stored_name: Option<String>,
+        stored_size: Option<u64>,
+        name: String,
+        size: u64,
+    ) -> Result<GrantInfo, String> {
         let mut slot = self.records()?;
         let records = slot.as_mut().expect("records() loads the record");
         if let Some(existing) = records
-            .iter()
+            .iter_mut()
             .find(|record| record.plugin_id == plugin_id && record.path == key)
         {
-            return Ok(GrantInfo {
-                grant: existing.grant_id.clone(),
-                name,
-                size: metadata.len(),
-            });
+            let grant = existing.grant_id.clone();
+            // A document renamed or grown since the last pick shows what the
+            // new pick saw; a record that cannot be rewritten still names the
+            // right document.
+            let changed = existing.name != stored_name || existing.size != stored_size;
+            if stored_name.is_some() && changed {
+                existing.name = stored_name;
+                existing.size = stored_size;
+                let _ = self.save(records);
+            }
+            return Ok(GrantInfo { grant, name, size });
         }
         let grant = new_grant_id();
         records.push(GrantRecord {
             plugin_id: plugin_id.to_string(),
             grant_id: grant.clone(),
             path: key,
+            name: stored_name,
+            size: stored_size,
         });
         // A record Maibuk could not write must not be granted: the grant would
         // vanish on the next launch.
@@ -167,11 +244,7 @@ impl GrantStore {
             let _ = records.pop();
             return Err(error);
         }
-        Ok(GrantInfo {
-            grant,
-            name,
-            size: metadata.len(),
-        })
+        Ok(GrantInfo { grant, name, size })
     }
 
     /// Reads up to `length` bytes from `offset`. A range past the end returns
@@ -183,36 +256,40 @@ impl GrantStore {
         offset: u64,
         length: u32,
     ) -> Result<Vec<u8>, String> {
+        self.read_range_with(plugin_id, grant, offset, length, |path| {
+            std::fs::File::open(path)
+        })
+    }
+
+    /// `read_range` through `open`, which turns the record's path into an open
+    /// file: a plain open on desktop, a content resolver open on Android.
+    pub fn read_range_with<F>(
+        &self,
+        plugin_id: &str,
+        grant: &str,
+        offset: u64,
+        length: u32,
+        open: impl FnOnce(&str) -> std::io::Result<F>,
+    ) -> Result<Vec<u8>, String>
+    where
+        F: Read + Seek,
+    {
         if length > MAX_READ_BYTES {
             return Err(invalid_params(&format!(
                 "a read is capped at {MAX_READ_BYTES} bytes"
             )));
         }
-        let path = self.path_for(plugin_id, grant)?;
-        let mut file = std::fs::File::open(&path)
-            .map_err(|_| file_missing("the file behind this File Grant is gone or unreadable"))?;
-        let size = file
-            .metadata()
-            .map_err(|_| file_missing("the file behind this File Grant is gone or unreadable"))?
-            .len();
-        if offset >= size {
-            return Ok(Vec::new());
-        }
-        file.seek(SeekFrom::Start(offset))
-            .map_err(|_| file_missing("the file behind this File Grant is gone or unreadable"))?;
-        let wanted = u64::from(length).min(size - offset);
-        let mut bytes = Vec::with_capacity(wanted as usize);
-        file.take(wanted)
-            .read_to_end(&mut bytes)
-            .map_err(|_| file_missing("the file behind this File Grant is gone or unreadable"))?;
-        Ok(bytes)
+        let record = self.record_for(plugin_id, grant)?;
+        let gone = |_| file_missing("the file behind this File Grant is gone or unreadable");
+        let file = open(&record.path).map_err(gone)?;
+        read_from(file, offset, length).map_err(gone)
     }
 
     /// The grant's name, size, and last-modified time, without reading its
     /// bytes. A file that moved or was deleted is `file-missing`, which is how a
     /// Shelf marks a Missing Document.
     pub fn stat(&self, plugin_id: &str, grant: &str) -> Result<GrantStat, String> {
-        let path = self.path_for(plugin_id, grant)?;
+        let path = PathBuf::from(self.record_for(plugin_id, grant)?.path);
         let metadata = std::fs::metadata(&path)
             .map_err(|_| file_missing("the file behind this File Grant is gone or unreadable"))?;
         Ok(GrantStat {
@@ -223,58 +300,93 @@ impl GrantStore {
     }
 
     /// Ends one grant. A file that is already gone still ends here: the author
-    /// removed the Document from the Shelf.
-    pub fn release(&self, plugin_id: &str, grant: &str) -> Result<(), String> {
+    /// removed the Document from the Shelf. Returns the paths no grant names
+    /// any more, so Android can give their read permission back.
+    pub fn release(&self, plugin_id: &str, grant: &str) -> Result<Vec<String>, String> {
         validate_plugin_id(plugin_id)?;
-        let mut slot = self.records()?;
-        let records = slot.as_mut().expect("records() loads the record");
-        let before = records.len();
-        records.retain(|record| !(record.plugin_id == plugin_id && record.grant_id == grant));
-        if records.len() == before {
-            return Err(file_missing("this Plugin holds no such File Grant"));
+        if grant.is_empty() {
+            return Err(invalid_params("the File Grant id is empty"));
         }
-        self.save(records)
+        self.remove_where(|record| record.plugin_id == plugin_id && record.grant_id == grant)
+            .and_then(|(removed, orphaned)| {
+                if removed == 0 {
+                    Err(file_missing("this Plugin holds no such File Grant"))
+                } else {
+                    Ok(orphaned)
+                }
+            })
     }
 
     /// Every live grant the Plugin holds. A file that is gone is still listed,
     /// with size 0, so the author can locate it again.
     pub fn list(&self, plugin_id: &str) -> Result<Vec<GrantInfo>, String> {
+        self.list_with(plugin_id, |record| {
+            std::fs::metadata(&record.path)
+                .map(|metadata| metadata.len())
+                .ok()
+        })
+    }
+
+    /// `list` with `size_of` reading each record's size, `None` when it is
+    /// gone. It gets the whole record, since a document provider may report no
+    /// size at all and the size the pick recorded stands in for it. The record
+    /// lock is not held while `size_of` runs, since on Android it asks the
+    /// content resolver.
+    pub fn list_with(
+        &self,
+        plugin_id: &str,
+        size_of: impl Fn(&GrantRecord) -> Option<u64>,
+    ) -> Result<Vec<GrantInfo>, String> {
         validate_plugin_id(plugin_id)?;
-        let mut slot = self.records()?;
-        let records = slot.as_mut().expect("records() loads the record");
-        Ok(records
-            .iter()
-            .filter(|record| record.plugin_id == plugin_id)
+        let held: Vec<GrantRecord> = {
+            let mut slot = self.records()?;
+            let records = slot.as_mut().expect("records() loads the record");
+            records
+                .iter()
+                .filter(|record| record.plugin_id == plugin_id)
+                .cloned()
+                .collect()
+        };
+        Ok(held
+            .into_iter()
             .map(|record| GrantInfo {
-                grant: record.grant_id.clone(),
-                name: file_name(Path::new(&record.path)),
-                size: std::fs::metadata(&record.path)
-                    .map(|metadata| metadata.len())
-                    .unwrap_or(0),
+                name: record.display_name(),
+                size: size_of(&record).unwrap_or(0),
+                grant: record.grant_id,
             })
             .collect())
     }
 
-    /// Ends every grant the Plugin holds, and no other Plugin's.
-    pub fn clear_plugin(&self, plugin_id: &str) -> Result<(), String> {
+    /// Ends every grant the Plugin holds, and no other Plugin's. Returns the
+    /// paths no grant names any more.
+    pub fn clear_plugin(&self, plugin_id: &str) -> Result<Vec<String>, String> {
         validate_plugin_id(plugin_id)?;
-        let mut slot = self.records()?;
-        let records = slot.as_mut().expect("records() loads the record");
-        records.retain(|record| record.plugin_id != plugin_id);
-        self.save(records)
+        self.remove_where(|record| record.plugin_id == plugin_id)
+            .map(|(_, orphaned)| orphaned)
     }
 
-    /// Ends every File Grant on this device.
-    pub fn clear_all(&self) -> Result<(), String> {
-        let mut slot = self.records()?;
-        let records = slot.as_mut().expect("records() loads the record");
-        records.clear();
-        self.save(records)
+    /// Ends every File Grant on this device. Returns every path it held.
+    pub fn clear_all(&self) -> Result<Vec<String>, String> {
+        self.remove_where(|_| true).map(|(_, orphaned)| orphaned)
     }
 
-    /// The file behind (plugin_id, grant). A grant of another Plugin is unknown
-    /// here, so it reports the same `file-missing` as an id that never existed.
-    fn path_for(&self, plugin_id: &str, grant: &str) -> Result<PathBuf, String> {
+    #[cfg_attr(not(target_os = "android"), allow(dead_code))]
+    /// Whether any Plugin's grant names `path`.
+    pub fn holds(&self, path: &str) -> bool {
+        self.records()
+            .map(|mut slot| {
+                slot.as_mut()
+                    .expect("records() loads the record")
+                    .iter()
+                    .any(|record| record.path == path)
+            })
+            .unwrap_or(false)
+    }
+
+    /// The record behind (plugin_id, grant). A grant of another Plugin is
+    /// unknown here, so it reports the same `file-missing` as an id that never
+    /// existed.
+    fn record_for(&self, plugin_id: &str, grant: &str) -> Result<GrantRecord, String> {
         validate_plugin_id(plugin_id)?;
         if grant.is_empty() {
             return Err(invalid_params("the File Grant id is empty"));
@@ -284,8 +396,33 @@ impl GrantStore {
         records
             .iter()
             .find(|record| record.plugin_id == plugin_id && record.grant_id == grant)
-            .map(|record| PathBuf::from(&record.path))
+            .cloned()
             .ok_or_else(|| file_missing("this Plugin holds no such File Grant"))
+    }
+
+    /// Drops every record `matches` picks and saves, returning how many went
+    /// and the paths that no remaining record names. Two Plugins can hold the
+    /// same document, and Android's read permission is the app's, so it may
+    /// only be given back once the last grant on it ends. A record that cannot
+    /// be written back is restored, so a failed release changes nothing.
+    fn remove_where(
+        &self,
+        matches: impl Fn(&GrantRecord) -> bool,
+    ) -> Result<(usize, Vec<String>), String> {
+        let mut slot = self.records()?;
+        let records = slot.as_mut().expect("records() loads the record");
+        let (removed, kept): (Vec<GrantRecord>, Vec<GrantRecord>) =
+            records.iter().cloned().partition(|record| matches(record));
+        self.save(&kept)?;
+        *records = kept;
+        let mut orphaned: Vec<String> = removed
+            .iter()
+            .map(|record| record.path.clone())
+            .filter(|path| !records.iter().any(|record| &record.path == path))
+            .collect();
+        orphaned.sort();
+        orphaned.dedup();
+        Ok((removed.len(), orphaned))
     }
 
     /// The record, read from disk the first time anything asks for it.
@@ -593,6 +730,21 @@ fn abort_in_place(file: std::fs::File) {
     drop(file);
 }
 
+/// Up to `length` bytes of `file` from `offset`: shorter past the end, empty
+/// at or past it. A file that cannot seek, such as a pipe a cloud document
+/// provider hands over, reads and drops the bytes before `offset` instead.
+fn read_from(mut file: impl Read + Seek, offset: u64, length: u32) -> std::io::Result<Vec<u8>> {
+    if file.seek(SeekFrom::Start(offset)).is_err() {
+        let skipped = std::io::copy(&mut (&mut file).take(offset), &mut std::io::sink())?;
+        if skipped < offset {
+            return Ok(Vec::new());
+        }
+    }
+    let mut bytes = Vec::new();
+    file.take(u64::from(length)).read_to_end(&mut bytes)?;
+    Ok(bytes)
+}
+
 /// Whether every extension is lowercase letters and digits, 1 to 16 long: the
 /// shape a dialog filter takes, and nothing that could widen what it shows.
 #[cfg_attr(mobile, allow(dead_code))]
@@ -735,7 +887,7 @@ pub fn plugin_files_release(
     plugin_id: String,
     grant: String,
 ) -> Result<(), String> {
-    state.release(&plugin_id, &grant)
+    state.release(&plugin_id, &grant).map(drop)
 }
 
 /// Every live grant the Plugin holds on this device.
@@ -755,14 +907,241 @@ pub fn plugin_files_clear_plugin(
     state: tauri::State<'_, GrantStore>,
     plugin_id: String,
 ) -> Result<(), String> {
-    state.clear_plugin(&plugin_id)
+    state.clear_plugin(&plugin_id).map(drop)
 }
 
 /// End every File Grant on this device.
 #[cfg(desktop)]
 #[tauri::command]
 pub fn plugin_files_clear_all(state: tauri::State<'_, GrantStore>) -> Result<(), String> {
-    state.clear_all()
+    state.clear_all().map(drop)
+}
+
+/// File Grants on Android (ADR 0036). The system document picker
+/// (`ACTION_OPEN_DOCUMENT`) hands over a `content://` URI, and Maibuk takes a
+/// persisted read permission on it, so a Shelf still opens the document after a
+/// restart. The URI stays in Rust like a desktop path does: the webview only
+/// ever sees a grant id. The Kotlin half is `FileGrantsPlugin` in the Android
+/// project; the bytes come through the `fs` plugin's content resolver open, so
+/// they never cross the Kotlin bridge.
+#[cfg(target_os = "android")]
+pub mod android {
+    use super::{
+        file_missing, internal_error, stat_size, validate_extensions, validate_plugin_id, GrantInfo,
+        GrantStat, GrantStore,
+    };
+    use serde::{Deserialize, Serialize};
+    use tauri::plugin::{Builder, PluginHandle, TauriPlugin};
+    use tauri::{AppHandle, Manager, Runtime};
+
+    /// The Kotlin plugin's package and class.
+    const KOTLIN_PACKAGE: &str = "com.massick.maibuk";
+    const KOTLIN_CLASS: &str = "FileGrantsPlugin";
+
+    /// The handle to the Kotlin document picker and resolver.
+    pub struct Documents<R: Runtime>(PluginHandle<R>);
+
+    impl<R: Runtime> Documents<R> {
+        /// Name, size, and last-modified time from the content resolver, with
+        /// no bytes read. A provider that streams a document reports no size,
+        /// which the answer leaves out; a revoked permission and a deleted
+        /// document both fail.
+        fn stat(&self, uri: &str) -> Result<StatAnswer, String> {
+            self.0
+                .run_mobile_plugin::<StatAnswer>("stat", UriArgs { uri })
+                .map_err(|_| file_missing("the file behind this File Grant is gone or unreadable"))
+        }
+
+        /// Gives the persisted read permission on `uri` back to the system.
+        /// Best-effort: a permission already gone has nothing to give back.
+        fn release(&self, uri: &str) {
+            let _ = self
+                .0
+                .run_mobile_plugin::<serde_json::Value>("release", UriArgs { uri });
+        }
+
+        fn release_all(&self, uris: &[String]) {
+            for uri in uris {
+                self.release(uri);
+            }
+        }
+    }
+
+    /// Registers the Kotlin half. A Tauri plugin with no commands of its own:
+    /// the webview reaches it only through the `plugin_files_*` commands below.
+    pub fn init<R: Runtime>() -> TauriPlugin<R> {
+        Builder::new("maibuk-file-grants")
+            .setup(|app, api| {
+                let handle = api.register_android_plugin(KOTLIN_PACKAGE, KOTLIN_CLASS)?;
+                app.manage(Documents(handle));
+                Ok(())
+            })
+            .build()
+    }
+
+    #[derive(Serialize)]
+    struct PickArgs {
+        extensions: Vec<String>,
+    }
+
+    #[derive(Serialize)]
+    struct UriArgs<'a> {
+        uri: &'a str,
+    }
+
+    /// The picker's answer: no URI when the author cancelled.
+    #[derive(Deserialize)]
+    struct Picked {
+        uri: Option<String>,
+        #[serde(default)]
+        name: String,
+        #[serde(default)]
+        size: u64,
+    }
+
+    /// The resolver's `stat` answer: `size` is absent when the provider reports
+    /// none, which a streaming document provider does.
+    #[derive(Deserialize)]
+    struct StatAnswer {
+        #[serde(default)]
+        name: String,
+        #[serde(default)]
+        size: Option<u64>,
+        #[serde(default)]
+        modified: u64,
+    }
+
+    fn documents<R: Runtime>(app: &AppHandle<R>) -> Result<tauri::State<'_, Documents<R>>, String> {
+        app.try_state::<Documents<R>>()
+            .ok_or_else(|| internal_error("the document picker is not available"))
+    }
+
+    /// Open the system document picker filtered to `extensions` and grant the
+    /// author's pick to `plugin_id`. Resolves to `None` when the author cancels.
+    #[tauri::command]
+    pub async fn plugin_files_pick<R: Runtime>(
+        app: AppHandle<R>,
+        plugin_id: String,
+        extensions: Vec<String>,
+    ) -> Result<Option<GrantInfo>, String> {
+        validate_extensions(&extensions)?;
+        validate_plugin_id(&plugin_id)?;
+        let handle = documents(&app)?.0.clone();
+        // The call waits for the author, so it waits off the async workers.
+        let picked = tauri::async_runtime::spawn_blocking(move || {
+            handle.run_mobile_plugin::<Picked>("pick", PickArgs { extensions })
+        })
+        .await
+        .map_err(|_| internal_error("the document picker stopped"))?
+        .map_err(|_| internal_error("the document picker failed"))?;
+        let Some(uri) = picked.uri else {
+            return Ok(None);
+        };
+        let grants = app.state::<GrantStore>();
+        let granted = grants.grant_document(&plugin_id, &uri, &picked.name, picked.size);
+        // A grant that could not be recorded must not keep the permission.
+        if granted.is_err() && !grants.holds(&uri) {
+            documents(&app)?.release(&uri);
+        }
+        granted.map(Some)
+    }
+
+    /// Read a byte range through a grant, opening the document through the
+    /// content resolver. The bytes cross as raw IPC. The open and the read both
+    /// block on the system, and the invoke handler runs inline, so they run on
+    /// the blocking pool instead of holding an async worker or the bridge.
+    #[tauri::command]
+    pub async fn plugin_files_read<R: Runtime>(
+        app: AppHandle<R>,
+        plugin_id: String,
+        grant: String,
+        offset: u64,
+        length: u32,
+    ) -> Result<tauri::ipc::Response, String> {
+        let bytes = tauri::async_runtime::spawn_blocking(
+            move || -> Result<Vec<u8>, String> {
+                use tauri_plugin_fs::{FilePath, FsExt, OpenOptions};
+
+                let grants = app.state::<GrantStore>();
+                grants.read_range_with(&plugin_id, &grant, offset, length, |uri| {
+                    let url = tauri::Url::parse(uri).map_err(|error| {
+                        std::io::Error::new(std::io::ErrorKind::InvalidInput, error)
+                    })?;
+                    let mut options = OpenOptions::new();
+                    options.read(true);
+                    app.fs().open(FilePath::Url(url), options)
+                })
+            },
+        )
+        .await
+        .map_err(|_| internal_error("the read stopped"))??;
+        Ok(tauri::ipc::Response::new(bytes))
+    }
+
+    /// The grant's name, size, and last-modified time.
+    #[tauri::command]
+    pub async fn plugin_files_stat<R: Runtime>(
+        app: AppHandle<R>,
+        plugin_id: String,
+        grant: String,
+    ) -> Result<GrantStat, String> {
+        let record = app.state::<GrantStore>().record_for(&plugin_id, &grant)?;
+        let answer = documents(&app)?.stat(&record.path)?;
+        Ok(GrantStat {
+            name: answer.name,
+            // A provider that reports no size leaves the pick's in place.
+            size: stat_size(answer.size, record.size),
+            modified: answer.modified,
+        })
+    }
+
+    /// End one grant, and give the read permission back once no grant names
+    /// the document.
+    #[tauri::command]
+    pub async fn plugin_files_release<R: Runtime>(
+        app: AppHandle<R>,
+        plugin_id: String,
+        grant: String,
+    ) -> Result<(), String> {
+        let orphaned = app.state::<GrantStore>().release(&plugin_id, &grant)?;
+        documents(&app)?.release_all(&orphaned);
+        Ok(())
+    }
+
+    /// Every live grant the Plugin holds; a document that is gone lists with
+    /// size 0, and one whose provider reports no size keeps the pick's.
+    #[tauri::command]
+    pub async fn plugin_files_list<R: Runtime>(
+        app: AppHandle<R>,
+        plugin_id: String,
+    ) -> Result<Vec<GrantInfo>, String> {
+        let documents = documents(&app)?;
+        app.state::<GrantStore>().list_with(&plugin_id, |record| {
+            documents
+                .stat(&record.path)
+                .ok()
+                .map(|answer| stat_size(answer.size, record.size))
+        })
+    }
+
+    /// End every grant the Plugin holds, and no other Plugin's.
+    #[tauri::command]
+    pub async fn plugin_files_clear_plugin<R: Runtime>(
+        app: AppHandle<R>,
+        plugin_id: String,
+    ) -> Result<(), String> {
+        let orphaned = app.state::<GrantStore>().clear_plugin(&plugin_id)?;
+        documents(&app)?.release_all(&orphaned);
+        Ok(())
+    }
+
+    /// End every File Grant on this device.
+    #[tauri::command]
+    pub async fn plugin_files_clear_all<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
+        let orphaned = app.state::<GrantStore>().clear_all()?;
+        documents(&app)?.release_all(&orphaned);
+        Ok(())
+    }
 }
 
 /// Open the native save dialog prefilled with `name`, filtered to its own
@@ -822,23 +1201,73 @@ pub async fn plugin_files_save_begin<R: tauri::Runtime>(
     }
 }
 
-/// Append one chunk to the save `token` names. The bytes cross as raw IPC, so
-/// the webview never holds the file's path, and the body is not parsed.
+/// What one save write carries: the bytes, and the save token when the JSON
+/// body names it. `None` means the token must come from the request header.
+#[derive(Debug)]
+struct SaveWrite<'a> {
+    token: Option<u64>,
+    bytes: Cow<'a, [u8]>,
+}
+
+/// Reads a save write's token and bytes from either body shape. The raw path is
+/// the desktop one and is borrowed untouched; the JSON path is Android's and
+/// decodes its base64 `data` string. Anything else is `invalid-params`.
+fn save_write_body(body: &tauri::ipc::InvokeBody) -> Result<SaveWrite<'_>, String> {
+    use base64::Engine as _;
+
+    match body {
+        tauri::ipc::InvokeBody::Raw(bytes) => Ok(SaveWrite {
+            token: None,
+            bytes: Cow::Borrowed(bytes),
+        }),
+        tauri::ipc::InvokeBody::Json(value) => {
+            let object = value
+                .as_object()
+                .ok_or_else(|| invalid_params("a save write's JSON body must be an object"))?;
+            let data = object
+                .get("data")
+                .and_then(serde_json::Value::as_str)
+                .ok_or_else(|| {
+                    invalid_params("a save write's JSON body needs a base64 \"data\" string")
+                })?;
+            let token =
+                match object.get("token") {
+                    None => None,
+                    Some(value) => Some(value.as_u64().ok_or_else(|| {
+                        invalid_params("a save write's JSON token must be a number")
+                    })?),
+                };
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(data)
+                .map_err(|_| invalid_params("a save write's JSON data is not base64"))?;
+            Ok(SaveWrite {
+                token,
+                bytes: Cow::Owned(bytes),
+            })
+        }
+    }
+}
+
+/// Append one chunk to the save `token` names. Desktop sends the bytes as raw
+/// IPC, so the body is not parsed and the webview never holds the file's path.
+/// Android never delivers `InvokeBody::Raw`, so there the chunk arrives as JSON
+/// `{"token": n, "data": "<base64>"}`: the token travels in the body when the
+/// header is missing too, and the base64 decodes here before the bytes reach
+/// the store. A malformed body is `invalid-params`.
 #[tauri::command]
 pub fn plugin_files_save_write(
     state: tauri::State<'_, SaveStore>,
     request: tauri::ipc::Request<'_>,
 ) -> Result<(), String> {
+    let write = save_write_body(request.body())?;
     let token = request
         .headers()
         .get(SAVE_TOKEN_HEADER)
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.parse::<u64>().ok())
+        .or(write.token)
         .ok_or_else(|| invalid_params("the save token header is missing"))?;
-    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
-        return Err(invalid_params("a save write carries raw bytes"));
-    };
-    state.write(token, bytes)
+    state.write(token, &write.bytes)
 }
 
 /// Put the finished part in the target's place.
@@ -862,6 +1291,7 @@ pub fn plugin_files_save_abort(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     /// A fresh folder per test, with the grant record inside it.
     fn temp_dir(name: &str) -> PathBuf {
@@ -1077,6 +1507,17 @@ mod tests {
         // Releasing it twice is the same as naming a grant that never existed.
         let again = store.release("tracer", &grant).unwrap_err();
         assert!(again.starts_with("file-missing:"), "{again}");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn releasing_an_empty_grant_is_invalid_params() {
+        let dir = temp_dir("release-empty");
+        let store = store_in(&dir);
+
+        let error = store.release("tracer", "").unwrap_err();
+
+        assert!(error.starts_with("invalid-params:"), "{error}");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
@@ -1328,7 +1769,10 @@ mod tests {
         commit_save(file, &part, &target).unwrap();
 
         assert_eq!(std::fs::read(&target).unwrap(), b"new");
-        assert!(!part.exists(), "the part is gone once it took the target's place");
+        assert!(
+            !part.exists(),
+            "the part is gone once it took the target's place"
+        );
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
@@ -1381,6 +1825,75 @@ mod tests {
     }
 
     #[test]
+    fn a_json_save_write_carries_its_token_and_decoded_bytes() {
+        let body = tauri::ipc::InvokeBody::Json(json!({ "token": 12, "data": "aGVsbG8=" }));
+
+        let write = save_write_body(&body).unwrap();
+
+        assert_eq!(write.token, Some(12));
+        assert_eq!(&*write.bytes, b"hello");
+    }
+
+    #[test]
+    fn a_json_save_write_without_a_token_leaves_it_to_the_header() {
+        let body = tauri::ipc::InvokeBody::Json(json!({ "data": "aGVsbG8=" }));
+
+        let write = save_write_body(&body).unwrap();
+
+        assert_eq!(write.token, None);
+        assert_eq!(&*write.bytes, b"hello");
+    }
+
+    #[test]
+    fn a_json_save_write_appends_the_decoded_bytes_to_its_save() {
+        let dir = temp_dir("save-json");
+        let target = dir.join("map.png");
+        let store = SaveStore::default();
+        let token = store.begin(target.clone()).unwrap();
+
+        let body = tauri::ipc::InvokeBody::Json(json!({ "data": "MDEyMw==" }));
+        let write = save_write_body(&body).unwrap();
+        store.write(token, &write.bytes).unwrap();
+        store.commit(token).unwrap();
+
+        assert_eq!(std::fs::read(&target).unwrap(), b"0123");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_json_save_write_refuses_bad_base64() {
+        let body = tauri::ipc::InvokeBody::Json(json!({ "data": "not base64!" }));
+
+        let error = save_write_body(&body).unwrap_err();
+
+        assert!(error.starts_with("invalid-params:"), "{error}");
+    }
+
+    #[test]
+    fn a_json_save_write_refuses_the_wrong_shape() {
+        for value in [
+            json!({}),
+            json!({ "data": 7 }),
+            json!({ "data": "aGVsbG8=", "token": "seven" }),
+            json!(["aGVsbG8="]),
+        ] {
+            let body = tauri::ipc::InvokeBody::Json(value);
+            let error = save_write_body(&body).unwrap_err();
+            assert!(error.starts_with("invalid-params:"), "{error}");
+        }
+    }
+
+    #[test]
+    fn a_raw_save_write_still_carries_its_bytes() {
+        let body = tauri::ipc::InvokeBody::Raw(b"raw bytes".to_vec());
+
+        let write = save_write_body(&body).unwrap();
+
+        assert_eq!(write.token, None);
+        assert_eq!(&*write.bytes, b"raw bytes");
+    }
+
+    #[test]
     fn a_save_store_begin_leaves_an_existing_target_alone() {
         let dir = temp_dir("save-existing");
         let target = file_in(&dir, "map.png", b"old");
@@ -1425,7 +1938,10 @@ mod tests {
 
         let token = store.begin(dir.join("other.png")).unwrap();
         store.abort(token).unwrap();
-        assert!(store.write(token, b"late").is_err(), "an aborted save is gone");
+        assert!(
+            store.write(token, b"late").is_err(),
+            "an aborted save is gone"
+        );
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
@@ -1476,6 +1992,269 @@ mod tests {
 
         // The save the store does hold still commits.
         store.commit(token).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    // Android document grants: the record holds a content URI and its display
+    // name, and the bytes come through an opener the platform supplies.
+
+    const BOOK_URI: &str = "content://com.android.providers.downloads.documents/document/42";
+
+    #[test]
+    fn grants_a_document_under_its_display_name_and_size() {
+        let store = GrantStore::in_memory();
+
+        let info = store
+            .grant_document("tracer", BOOK_URI, "Moby Dick.epub", 1234)
+            .unwrap();
+
+        assert_eq!(info.name, "Moby Dick.epub");
+        assert_eq!(info.size, 1234);
+        assert_eq!(info.grant.len(), 32);
+        let listed = store.list_with("tracer", |_| Some(99)).unwrap();
+        assert_eq!(listed.len(), 1);
+        // The list shows the stored name, never the URI's last segment.
+        assert_eq!(listed[0].name, "Moby Dick.epub");
+        assert_eq!(listed[0].size, 99);
+    }
+
+    #[test]
+    fn picking_the_same_document_again_returns_the_same_grant_with_its_new_name() {
+        let dir = temp_dir("document-repick");
+        let store = store_in(&dir);
+        let first = store
+            .grant_document("tracer", BOOK_URI, "draft.pdf", 10)
+            .unwrap();
+
+        let again = store
+            .grant_document("tracer", BOOK_URI, "final.pdf", 12)
+            .unwrap();
+
+        assert_eq!(again.grant, first.grant);
+        assert_eq!(again.name, "final.pdf");
+        assert_eq!(
+            store_in(&dir).list_with("tracer", |_| None).unwrap()[0].name,
+            "final.pdf"
+        );
+        // Another Plugin picking it gets a grant of its own.
+        let other = store
+            .grant_document("other", BOOK_URI, "final.pdf", 12)
+            .unwrap();
+        assert_ne!(other.grant, first.grant);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn document_grants_survive_a_restart() {
+        let dir = temp_dir("document-persist");
+        let grant = store_in(&dir)
+            .grant_document("tracer", BOOK_URI, "book.epub", 5)
+            .unwrap()
+            .grant;
+
+        let restarted = store_in(&dir);
+
+        let listed = restarted.list_with("tracer", |_| Some(5)).unwrap();
+        assert_eq!(listed[0].grant, grant);
+        assert_eq!(listed[0].name, "book.epub");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn refuses_a_document_with_no_address_or_plugin() {
+        let store = GrantStore::in_memory();
+        let error = store
+            .grant_document("tracer", "", "book.pdf", 1)
+            .unwrap_err();
+        assert!(error.starts_with("file-missing:"), "{error}");
+        let error = store
+            .grant_document("", BOOK_URI, "book.pdf", 1)
+            .unwrap_err();
+        assert!(error.starts_with("invalid-params:"), "{error}");
+    }
+
+    #[test]
+    fn a_record_written_before_names_were_kept_still_loads() {
+        let dir = temp_dir("legacy-record");
+        let path = file_in(&dir, "book.pdf", b"0123456789");
+        let canonical = std::fs::canonicalize(&path).unwrap();
+        let legacy = serde_json::json!([
+            { "pluginId": "tracer", "grantId": "abc", "path": canonical.to_string_lossy() }
+        ]);
+        std::fs::write(dir.join(GRANTS_FILE), legacy.to_string()).unwrap();
+
+        let store = store_in(&dir);
+
+        assert_eq!(store.list("tracer").unwrap()[0].name, "book.pdf");
+        assert_eq!(store.read_range("tracer", "abc", 2, 3).unwrap(), b"234");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_desktop_record_stays_free_of_a_stored_name_and_size() {
+        let dir = temp_dir("no-name-field");
+        let path = file_in(&dir, "book.pdf", b"x");
+        store_in(&dir).grant("tracer", &path).unwrap();
+
+        let text = std::fs::read_to_string(dir.join(GRANTS_FILE)).unwrap();
+
+        assert!(!text.contains("\"name\""), "{text}");
+        assert!(!text.contains("\"size\""), "{text}");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_stat_with_no_size_keeps_the_one_the_pick_recorded() {
+        // The provider's own size wins, the pick's stands in for a missing
+        // one, and 0 is left for a document nobody can read.
+        assert_eq!(stat_size(Some(9), Some(12)), 9);
+        assert_eq!(stat_size(None, Some(12)), 12);
+        assert_eq!(stat_size(None, None), 0);
+    }
+
+    #[test]
+    fn a_provider_that_reports_no_size_leaves_the_picked_one_in_the_list() {
+        let dir = temp_dir("document-no-size");
+        store_in(&dir)
+            .grant_document("tracer", BOOK_URI, "streamed.pdf", 4096)
+            .unwrap();
+
+        // A fresh store proves the size was written to the record, not kept in
+        // memory, and the stat answer carries none.
+        let listed = store_in(&dir)
+            .list_with("tracer", |record| Some(stat_size(None, record.size)))
+            .unwrap();
+
+        assert_eq!(listed[0].size, 4096);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_repick_refreshes_the_recorded_size() {
+        let store = GrantStore::in_memory();
+        store
+            .grant_document("tracer", BOOK_URI, "draft.pdf", 10)
+            .unwrap();
+        store
+            .grant_document("tracer", BOOK_URI, "final.pdf", 12)
+            .unwrap();
+
+        let listed = store
+            .list_with("tracer", |record| Some(stat_size(None, record.size)))
+            .unwrap();
+
+        assert_eq!(listed[0].size, 12);
+    }
+
+    #[test]
+    fn reads_a_document_through_the_opener_it_is_given() {
+        let store = GrantStore::in_memory();
+        let grant = store
+            .grant_document("tracer", BOOK_URI, "book.pdf", 10)
+            .unwrap()
+            .grant;
+
+        let mut opened = None;
+        let bytes = store
+            .read_range_with("tracer", &grant, 3, 4, |uri| {
+                opened = Some(uri.to_string());
+                Ok(std::io::Cursor::new(b"0123456789".to_vec()))
+            })
+            .unwrap();
+
+        assert_eq!(bytes, b"3456");
+        assert_eq!(opened.as_deref(), Some(BOOK_URI));
+        // An opener that fails is a gone document.
+        let error = store
+            .read_range_with::<std::io::Cursor<Vec<u8>>>("tracer", &grant, 0, 4, |_| {
+                Err(std::io::Error::other("permission revoked"))
+            })
+            .unwrap_err();
+        assert!(error.starts_with("file-missing:"), "{error}");
+        assert!(!error.contains("revoked"), "{error}");
+    }
+
+    /// A reader that refuses to seek, like a pipe a cloud provider hands over.
+    struct Pipe(std::io::Cursor<Vec<u8>>);
+
+    impl Read for Pipe {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            self.0.read(buf)
+        }
+    }
+
+    impl Seek for Pipe {
+        fn seek(&mut self, _: SeekFrom) -> std::io::Result<u64> {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Unsupported,
+                "a pipe",
+            ))
+        }
+    }
+
+    #[test]
+    fn a_file_that_cannot_seek_reads_by_skipping() {
+        let pipe = || Pipe(std::io::Cursor::new(b"0123456789".to_vec()));
+
+        assert_eq!(read_from(pipe(), 4, 3).unwrap(), b"456");
+        assert_eq!(read_from(pipe(), 8, 10).unwrap(), b"89");
+        assert!(read_from(pipe(), 10, 4).unwrap().is_empty());
+        assert!(read_from(pipe(), 50, 4).unwrap().is_empty());
+    }
+
+    #[test]
+    fn release_names_a_document_only_once_no_grant_holds_it() {
+        let store = GrantStore::in_memory();
+        let mine = store
+            .grant_document("tracer", BOOK_URI, "b.pdf", 1)
+            .unwrap()
+            .grant;
+        let theirs = store
+            .grant_document("other", BOOK_URI, "b.pdf", 1)
+            .unwrap()
+            .grant;
+
+        // Another Plugin still reads it, so the permission stays.
+        assert!(store.release("tracer", &mine).unwrap().is_empty());
+        assert!(store.holds(BOOK_URI));
+
+        assert_eq!(
+            store.release("other", &theirs).unwrap(),
+            vec![BOOK_URI.to_string()]
+        );
+        assert!(!store.holds(BOOK_URI));
+    }
+
+    #[test]
+    fn clearing_names_every_document_left_unheld() {
+        let store = GrantStore::in_memory();
+        let shared = "content://docs/document/shared";
+        let own = "content://docs/document/own";
+        store.grant_document("tracer", shared, "s.pdf", 1).unwrap();
+        store.grant_document("tracer", own, "o.pdf", 1).unwrap();
+        store.grant_document("other", shared, "s.pdf", 1).unwrap();
+
+        assert_eq!(store.clear_plugin("tracer").unwrap(), vec![own.to_string()]);
+        assert_eq!(store.clear_all().unwrap(), vec![shared.to_string()]);
+        assert!(!store.holds(shared));
+    }
+
+    #[test]
+    fn a_release_that_cannot_be_written_changes_nothing() {
+        let dir = temp_dir("unwritable-release");
+        let store = store_in(&dir);
+        let grant = store
+            .grant_document("tracer", BOOK_URI, "b.pdf", 1)
+            .unwrap()
+            .grant;
+        // A folder where the record's temp file goes makes every save fail.
+        std::fs::create_dir_all(dir.join(GRANTS_FILE).with_extension("tmp")).unwrap();
+
+        let error = store.release("tracer", &grant).unwrap_err();
+
+        assert!(error.starts_with("internal-error:"), "{error}");
+        assert!(store.holds(BOOK_URI));
+        assert_eq!(store.list_with("tracer", |_| None).unwrap()[0].grant, grant);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

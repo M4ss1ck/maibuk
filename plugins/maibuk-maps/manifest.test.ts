@@ -23,8 +23,8 @@ describe("Maps manifest", () => {
     expect(result.ok ? [] : result.problems).toEqual([]);
   });
 
-  it("runs on the web and desktop, not Android", () => {
-    expect(manifest().platforms).toEqual(["web", "desktop"]);
+  it("runs on the web, desktop, and Android", () => {
+    expect(manifest().platforms).toEqual(["web", "desktop", "android"]);
   });
 
   it("asks for Library reads, editor writes, and file pick and save", () => {

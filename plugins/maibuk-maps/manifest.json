@@ -7,7 +7,7 @@
   "version": "0.7.0",
   "apiVersion": "^0.1.15",
   "entry": "index.js",
-  "platforms": ["web", "desktop"],
+  "platforms": ["web", "desktop", "android"],
   "lifecycle": "on-demand",
   "warmStart": "intent",
   "customUi": true,

@@ -62,9 +62,11 @@ export function manifestRunsOn(
 
 /**
  * The Frame gate's rule (#454, D6), over one Tauri platform string (or null)
- * and the committed Windows record: the Frame is off on Android (custom Frame UI
- * stays off there even for a Plugin that lists "android", #517), and off on Windows until a manual WebView2 Frame
- * conformance run is recorded and every Frame check in it passed. Windows
+ * and the committed Windows record: the Frame is off on Windows until a manual
+ * WebView2 Frame conformance run is recorded and every Frame check in it passed,
+ * and on everywhere else. Android is on: a Plugin that lists "android" gets its
+ * Frame there like on Linux, because the user owns what they install (ADR 0021,
+ * 2026-11-21 amendment). Windows
  * detection is the Tauri platform string, which is null on the web build: a web
  * build opened in a Windows browser is not gated (the gate is about the WebView2
  * desktop shell). The record is a parameter with a default so a test drives
@@ -74,7 +76,6 @@ export function pluginFrameAvailableOn(
   platform: string | null,
   windowsRecord: WindowsFrameRecord | null | undefined = WINDOWS_FRAME_RECORD
 ): boolean {
-  if (platform === "android") return false;
   if (platform === "windows") return windowsFrameRecordPasses(windowsRecord);
   return true;
 }

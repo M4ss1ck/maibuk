@@ -87,6 +87,7 @@ export interface FrameLabels {
   errorDrm: string;
   errorDamaged: string;
   errorTooLarge: string;
+  errorTimeout: string;
   sectionPage: string;
   increaseFontSize: string;
   decreaseFontSize: string;
@@ -109,6 +110,11 @@ export interface FramePdf {
   displaySource: string;
   /** pdf.js's viewer CSS, which carries the text-layer rules. */
   css: string;
+  /**
+   * pdf.js's core as a classic script, sent instead of `pdfPort` when the
+   * Worker cannot start the core itself (Android): the Frame runs it.
+   */
+  coreSource?: string;
 }
 
 /**
@@ -263,10 +269,15 @@ export interface FrameClosedMessage {
   kind: "closed";
 }
 
-/** The Frame could not open the Document; the Worker marks it unreadable. */
+/**
+ * The Frame could not open the Document. `timeout` is transient (the source
+ * stopped answering); the Worker keeps the Document openable so the author can
+ * retry, while the other codes mark it unreadable. `reason` is the localized
+ * message the Frame already showed.
+ */
 export interface FrameLoadErrorMessage {
   kind: "load-error";
-  code: "corrupt" | "encrypted" | "unsupported";
+  code: "corrupt" | "encrypted" | "unsupported" | "timeout";
   reason: string;
 }
 

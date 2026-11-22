@@ -61,7 +61,7 @@ export async function deviceAndroidTarget(serial: string): Promise<string | null
 /** Builds the debug APK with `VITE_PLUGIN_CONFORMANCE=1`, for one target when known. */
 export function buildAndroidApp(options: { root: string; target: string | null }): void {
   const target = options.target ? ["--target", options.target] : [];
-  execFileSync("pnpm", ["tauri", "android", "build", "--debug", "--apk", "true", ...target], {
+  execFileSync("pnpm", ["tauri", "android", "build", "--debug", "--apk", ...target], {
     cwd: options.root,
     stdio: "inherit",
     env: { ...process.env, VITE_PLUGIN_CONFORMANCE: "1" },

@@ -1,6 +1,7 @@
-// The Frame platform gate (#454, D6): Custom Frame UI is off on Android (#517), on
-// Windows until a manual WebView2 Frame conformance run is recorded (and every
-// Frame check in it passed), and on everywhere else. The rule is pure, so it is
+// The Frame platform gate (#454, D6): Custom Frame UI is on everywhere but
+// Windows, where it stays off until a manual WebView2 Frame conformance run is recorded (and every
+// Frame check in it passed). Android is on like Linux: the user owns what they
+// install, so the gate no longer keeps every Frame Plugin off Android. The rule is pure, so it is
 // proven over each platform string and an injected record, without the build env
 // or module mocking.
 
@@ -45,9 +46,9 @@ describe("pluginFrameAvailableOn()", () => {
     expect(pluginFrameAvailableOn("linux", windowsRecord())).toBe(true);
   });
 
-  it("is unavailable on Android, whatever the record says", () => {
-    expect(pluginFrameAvailableOn("android")).toBe(false);
-    expect(pluginFrameAvailableOn("android", windowsRecord())).toBe(false);
+  it("is available on Android, with no Windows record needed", () => {
+    expect(pluginFrameAvailableOn("android", null)).toBe(true);
+    expect(pluginFrameAvailableOn("android", windowsRecord({ checks: [] }))).toBe(true);
   });
 
   it("is unavailable on Windows with no committed record (not run yet)", () => {

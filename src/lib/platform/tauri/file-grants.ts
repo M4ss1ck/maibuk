@@ -1,7 +1,9 @@
 /**
- * The desktop File Grant store: Rust keeps the grant record and reads the bytes
- * (ADR 0036), so a Plugin never learns where a picked file lives and the
- * webview `fs` scope stays as narrow as ADR 0010 left it. A refused command
+ * The desktop and Android File Grant store: Rust keeps the grant record and
+ * reads the bytes (ADR 0036), from a file path on desktop and from a document
+ * URI with a persisted read permission on Android, so a Plugin never learns
+ * where a picked file lives and the webview `fs` scope stays as narrow as
+ * ADR 0010 left it. A refused command
  * arrives as a bare string whose `file-missing:` or `invalid-params:` prefix
  * becomes the Plugin API error code; anything else is rethrown unchanged.
  */
@@ -43,7 +45,7 @@ async function call<T>(command: string, args?: Record<string, unknown>): Promise
   }
 }
 
-/** The Rust-backed store the app registers on desktop. */
+/** The Rust-backed store the app registers on desktop and Android. */
 export function createTauriPluginFileGrantStore(): PluginFileGrantStore {
   return {
     async pick(pluginId: string, extensions: readonly string[]): Promise<PluginFileGrant | null> {

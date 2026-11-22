@@ -36,9 +36,12 @@ export const MAX_SCATTER_SPACING_MM = 30;
  * reads as a Fill that never picked one.
  */
 export function newScatterSeed(): number {
-  const bytes = new Uint32Array(1);
+  // Four bytes, not one Uint32: the Android engine's `getRandomValues` fills
+  // each element with a byte, which would leave a Uint32 only 256 seeds.
+  const bytes = new Uint8Array(4);
   crypto.getRandomValues(bytes);
-  return (bytes[0] % 0x7fff_ffff) + 1;
+  const value = ((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]) >>> 0;
+  return (value % 0x7fff_ffff) + 1;
 }
 
 /**

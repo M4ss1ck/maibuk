@@ -1,19 +1,21 @@
 /**
  * Reader's fixtures (#653): the committed files must still be exactly what
  * `scripts/generate-fixtures.mjs` writes, and each must carry the structure the
- * Reader tests rely on — PDFs with twelve pages, an outline, and page labels;
- * an EPUB with two spine chapters, a fixed-layout one, and an encrypted one;
- * a CBZ of eight pages; an FB2; and MOBI/AZW3 files whose PalmDB headers carry
- * the version and encryption flag the Reader reads. `pdf-lib` and `openZip` read
- * them here as independent parsers; pdf.js's own core cannot run in Node without
- * its `legacy` build, which this repository does not vendor (`fixtures/README.md`).
+ * Reader tests rely on — PDFs with twelve pages that each draw their number, an
+ * outline and page labels; a password PDF that really opens with `reader`; an
+ * EPUB with two spine chapters, a fixed-layout one, and an encrypted one; a CBZ
+ * of eight pages; an FB2; and MOBI/AZW3 files whose PalmDB headers carry the
+ * version and encryption flag the Reader reads. The PDFs are parsed by the
+ * vendored pdf.js itself, the engine Reader runs, through the helpers below;
+ * `pdf-lib` and `openZip` read the structure beside it.
  */
 
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PDFDocument } from "pdf-lib";
+import { pathToFileURL } from "node:url";
+import { PDFDocument, PDFRawStream } from "pdf-lib";
 import { afterAll, describe, expect, it } from "vitest";
 import { ZipError, openZip } from "./zip";
 
@@ -57,6 +59,70 @@ function regenerate(): Record<string, Buffer> {
 /** The committed bytes of one fixture. */
 function fixture(name: string): Uint8Array {
   return new Uint8Array(readFileSync(join(HERE, name)));
+}
+
+/** One page's text, as pdf.js reports it. */
+interface PdfTextPage {
+  getTextContent(): Promise<{ items: { str?: string }[] }>;
+}
+
+/** A loaded pdf.js document: the page count and one page's text. */
+interface PdfDocument {
+  numPages: number;
+  getPage(pageNumber: number): Promise<PdfTextPage>;
+}
+
+/** The task `getDocument` returns; destroying it tears down the fake Worker. */
+interface PdfLoadingTask {
+  promise: Promise<PdfDocument>;
+  destroy(): Promise<void>;
+}
+
+/** The slice of pdf.js this file drives. */
+interface PdfJs {
+  getDocument(params: Record<string, unknown>): PdfLoadingTask;
+  GlobalWorkerOptions: { workerSrc: string };
+  PasswordException: new (...args: never[]) => Error;
+}
+
+let pdfjsModule: Promise<PdfJs> | null = null;
+
+/**
+ * The vendored pdf.js, loaded into the plain Node test. Its browser build needs
+ * what a Worker supplies: the core-js polyfills Node lacks
+ * (`Uint8Array.prototype.toHex`), `self`, and a `workerSrc` pointing at the
+ * vendored worker so pdf.js's fake Worker can start. Loaded once per file.
+ */
+function pdfjs(): Promise<PdfJs> {
+  pdfjsModule ??= (async () => {
+    const vendor = join(__dirname, "vendor", "pdfjs");
+    const scope = globalThis as unknown as { self?: unknown };
+    scope.self ??= globalThis;
+    await import(/* @vite-ignore */ pathToFileURL(join(vendor, "polyfills.min.js")).href);
+    const module = (await import(
+      /* @vite-ignore */ pathToFileURL(join(vendor, "pdf.min.mjs")).href
+    )) as PdfJs;
+    module.GlobalWorkerOptions.workerSrc = pathToFileURL(join(vendor, "pdf.worker.min.mjs")).href;
+    return module;
+  })();
+  return pdfjsModule;
+}
+
+/** Opens one committed fixture with pdf.js, or rejects with its PasswordException. */
+async function openPdf(name: string, password?: string): Promise<PdfLoadingTask> {
+  const module = await pdfjs();
+  return module.getDocument({
+    data: fixture(name),
+    isEvalSupported: false,
+    ...(password === undefined ? {} : { password }),
+  });
+}
+
+/** The text on one page of an open pdf.js document. */
+async function pageText(document: PdfDocument, pageNumber: number): Promise<string> {
+  const page = await document.getPage(pageNumber);
+  const content = await page.getTextContent();
+  return content.items.map((item) => item.str ?? "").join("");
 }
 
 /** A ranged read over `bytes`, the way the Worker opens an archive. */
@@ -104,12 +170,69 @@ describe("the fixture generator", () => {
     expect(source).toContain("(A Section)");
   });
 
+  it("gives every page a content stream that draws its number", async () => {
+    const pdf = await PDFDocument.load(
+      new Uint8Array(readFileSync(join(HERE, "twelve-pages.pdf")))
+    );
+    expect(pdf.getPageCount()).toBe(12);
+    for (let index = 0; index < 12; index += 1) {
+      const contents = pdf.getPage(index).node.Contents();
+      if (!(contents instanceof PDFRawStream)) {
+        throw new Error(`page ${index + 1} has no content stream`);
+      }
+      expect(Buffer.from(contents.getContents()).toString("latin1")).toContain(`(${index + 1}) Tj`);
+    }
+  });
+
+  it("reads page 3's number as text through pdf.js", async () => {
+    const task = await openPdf("twelve-pages.pdf");
+    try {
+      const document = await task.promise;
+      expect(document.numPages).toBe(12);
+      expect(await pageText(document, 3)).toContain("3");
+      expect(await pageText(document, 1)).toContain("1");
+      expect(await pageText(document, 12)).toContain("12");
+    } finally {
+      await task.destroy();
+    }
+  });
+
   it("keeps the password fixture encrypted, so a reader must ask", async () => {
     const bytes = new Uint8Array(readFileSync(join(HERE, "password.pdf")));
     const source = Buffer.from(bytes).toString("latin1");
     expect(source).toContain("/Filter /Standard");
     expect(source).toContain("/R 2");
     await expect(PDFDocument.load(bytes)).rejects.toThrow(/encrypted/i);
+  });
+
+  it("opens the password fixture with the documented user password", async () => {
+    const task = await openPdf("password.pdf", "reader");
+    try {
+      const document = await task.promise;
+      expect(document.numPages).toBe(2);
+    } finally {
+      await task.destroy();
+    }
+  });
+
+  it("rejects a wrong password with a PasswordException", async () => {
+    const module = await pdfjs();
+    const task = await openPdf("password.pdf", "wrong");
+    const error = await task.promise.catch((thrown: unknown) => thrown);
+    // INCORRECT_PASSWORD: the password was read and did not match.
+    expect(error).toBeInstanceOf(module.PasswordException);
+    expect((error as { code?: number }).code).toBe(2);
+    await task.destroy().catch(() => undefined);
+  });
+
+  it("asks for a password when none is supplied", async () => {
+    const module = await pdfjs();
+    const task = await openPdf("password.pdf");
+    const error = await task.promise.catch((thrown: unknown) => thrown);
+    // NEED_PASSWORD: the document opens only after the reader supplies one.
+    expect(error).toBeInstanceOf(module.PasswordException);
+    expect((error as { code?: number }).code).toBe(1);
+    await task.destroy().catch(() => undefined);
   });
 });
 

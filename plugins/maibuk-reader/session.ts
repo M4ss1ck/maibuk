@@ -23,8 +23,10 @@ import { FILE_READ_MAX_BYTES, type PluginClient } from "@/plugin-sdk";
 import type { PluginApiErrorCode } from "@/plugin-sdk";
 import type { ShelfService } from "./library";
 import {
+  canStartPdfCore,
   foliateSource,
   purifySource,
+  pdfCoreSource,
   startPdfCore,
   pdfDisplaySource,
   pdfViewerCss,
@@ -37,6 +39,7 @@ import {
   type FrameLoadErrorMessage,
   type FrameMetaMessage,
   type FrameOpenMessage,
+  type FramePdf,
   type FramePositionMessage,
   type FrameReadMessage,
   type FrameSettingsMessage,
@@ -191,6 +194,7 @@ export function frameLabels(language: string, returnLabel: string | null = null)
     errorDrm: translate(language, "viewer.errorDrm"),
     errorDamaged: translate(language, "viewer.errorDamaged"),
     errorTooLarge: translate(language, "viewer.errorTooLarge"),
+    errorTimeout: translate(language, "viewer.errorTimeout"),
     sectionPage: translate(language, "viewer.sectionPage"),
     increaseFontSize: translate(language, "viewer.increaseFontSize"),
     decreaseFontSize: translate(language, "viewer.decreaseFontSize"),
@@ -254,8 +258,22 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     }
   }
 
-  /** Starts the pdf.js core and hands the Frame one end of its channel. */
-  function startPdfBridge(): { pdf: { displaySource: string; css: string }; port: MessagePort } {
+  /**
+   * Starts the pdf.js core and hands the Frame one end of its channel. Where
+   * this engine cannot start a Worker (Android), the Frame gets the core's
+   * source instead and runs it on its own thread, with no port.
+   */
+  function startPdfBridge(): { pdf: FramePdf; port: MessagePort | null } {
+    if (!canStartPdfCore()) {
+      return {
+        pdf: {
+          displaySource: pdfDisplaySource(),
+          css: pdfViewerCss(),
+          coreSource: pdfCoreSource(),
+        },
+        port: null,
+      };
+    }
     core = startPdfCore();
     const channel = new MessageChannel();
     pdfPort = channel.port2;
@@ -284,8 +302,12 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     if (entry !== null && entry.format === "pdf") {
       const bridge = startPdfBridge();
       message.pdf = bridge.pdf;
-      message.pdfPort = bridge.port;
-      post(message, [bridge.port]);
+      if (bridge.port === null) {
+        post(message);
+      } else {
+        message.pdfPort = bridge.port;
+        post(message, [bridge.port]);
+      }
     } else if (entry !== null) {
       message.foliate = { source: foliateSource(), purify: purifySource() };
       post(message);
@@ -484,6 +506,9 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
   }
 
   async function markUnreadable(message: FrameLoadErrorMessage): Promise<void> {
+    // A timeout is transient (a provider that stopped answering), not a
+    // damaged Document: the row stays openable so the author can try again.
+    if (message.code === "timeout") return;
     if (entry === null) return;
     const current = entry;
     try {

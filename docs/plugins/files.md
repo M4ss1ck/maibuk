@@ -69,7 +69,7 @@ A File Grant is read-only: Maibuk never writes to, moves, or deletes the file be
 
 ## Saving a file
 
-`client.files.save({ name, mimeType, bytes })` hands Maibuk one file to write where the author chooses. Pass the bytes as a `Uint8Array`, a `Blob`, or an `AsyncIterable<Uint8Array>`; the SDK gathers them into one `Blob` and sends it right after the call, so the file travels as a `blob` message instead of inside the JSON one. There is no size cap.
+`client.files.save({ name, mimeType, bytes })` hands Maibuk one file to write where the author chooses. Pass the bytes as a `Uint8Array`, a `Blob`, or an `AsyncIterable<Uint8Array>`; the SDK gathers them into one `Blob` (or one `Uint8Array` on the Android QuickJS engine, which has no `Blob`) and sends it right after the call, so the file travels as a `blob` message instead of inside the JSON one. There is no size cap.
 
 The call resolves with `{ status: "saved" }` once Maibuk wrote the file, or `{ status: "cancelled" }` when the author closed the save dialog without choosing a place. A save that fails, such as on a full disk, is refused with `internal-error`, carrying the reason.
 
@@ -110,7 +110,7 @@ On desktop, Rust keeps the grant's path in its own store and reads the file only
 
 In the web build the grant is a browser file handle kept in IndexedDB. The browser may ask the author for access again, inside a click, before the bytes can be read; that is the `file-needs-permission` refusal. Where the browser has no such handles, the grant lasts only for the session, and the Plugin picks the file again after a reload. Saving uses the browser's save picker where there is one; a browser without it, or one that refuses the picker because the page is insecure or the click window ran out, downloads the file instead, and `saved` then means the browser took it.
 
-On Android no native grant store is registered yet, so grants live in memory and last for the session. Saving works there through the same Tauri saver: the picker always creates a new document, so there is no earlier file to protect and Rust writes that document in place, emptying it when a save fails partway where the provider allows it; a cloud provider can hand out a stream that cannot be truncated. A cancelled dialog creates nothing.
+On Android `files.pick` opens the system document picker, and Maibuk keeps the read permission the picker grants, so the File Grant survives a restart as on desktop. A document from a provider that does not let an app keep that permission, such as some cloud storage apps, reads until Maibuk closes and as `file-missing` after; picking it again refreshes the grant. Android has no file drop, so `files.dropped` never fires there. Saving works through the same Tauri saver: the picker always creates a new document, so there is no earlier file to protect and Rust writes that document in place, emptying it when a save fails partway where the provider allows it; a cloud provider can hand out a stream that cannot be truncated. A cancelled dialog creates nothing.
 
 ## When a grant ends, and when it survives
 

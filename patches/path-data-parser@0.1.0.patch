@@ -1,0 +1,79 @@
+diff --git a/lib/parser.js b/lib/parser.js
+index 1aeffdacf2c2abec5c1942b22a7f63e898232db0..8405fa02f234f65ca172c20476e3ccaaad930482 100644
+--- a/lib/parser.js
++++ b/lib/parser.js
+@@ -5,20 +5,24 @@ const PARAMS = { A: 7, a: 7, C: 6, c: 6, H: 1, h: 1, L: 2, l: 2, M: 2, m: 2, Q:
+ function tokenize(d) {
+     const tokens = new Array();
+     while (d !== '') {
+-        if (d.match(/^([ \t\r\n,]+)/)) {
+-            d = d.substr(RegExp.$1.length);
++        let match = d.match(/^([ \t\r\n,]+)/);
++        if (match !== null) {
++            d = d.substr(match[1].length);
++            continue;
+         }
+-        else if (d.match(/^([aAcChHlLmMqQsStTvVzZ])/)) {
+-            tokens[tokens.length] = { type: COMMAND, text: RegExp.$1 };
+-            d = d.substr(RegExp.$1.length);
++        match = d.match(/^([aAcChHlLmMqQsStTvVzZ])/);
++        if (match !== null) {
++            tokens[tokens.length] = { type: COMMAND, text: match[1] };
++            d = d.substr(match[1].length);
++            continue;
+         }
+-        else if (d.match(/^(([-+]?[0-9]+(\.[0-9]*)?|[-+]?\.[0-9]+)([eE][-+]?[0-9]+)?)/)) {
+-            tokens[tokens.length] = { type: NUMBER, text: `${parseFloat(RegExp.$1)}` };
+-            d = d.substr(RegExp.$1.length);
+-        }
+-        else {
+-            return [];
++        match = d.match(/^(([-+]?[0-9]+(\.[0-9]*)?|[-+]?\.[0-9]+)([eE][-+]?[0-9]+)?)/);
++        if (match !== null) {
++            tokens[tokens.length] = { type: NUMBER, text: `${parseFloat(match[1])}` };
++            d = d.substr(match[1].length);
++            continue;
+         }
++        return [];
+     }
+     tokens[tokens.length] = { type: EOD, text: '' };
+     return tokens;
+diff --git a/src/parser.ts b/src/parser.ts
+index 3c335e24d9497c19ae18998695cb4f625a9e6611..7fe28aecc57821ff8dfdb03be0778fee13cf4c5d 100644
+--- a/src/parser.ts
++++ b/src/parser.ts
+@@ -18,17 +18,24 @@ const PARAMS: { [key: string]: number } = { A: 7, a: 7, C: 6, c: 6, H: 1, h: 1,
+ function tokenize(d: string): PathToken[] {
+   const tokens: PathToken[] = new Array();
+   while (d !== '') {
+-    if (d.match(/^([ \t\r\n,]+)/)) {
+-      d = d.substr(RegExp.$1.length);
+-    } else if (d.match(/^([aAcChHlLmMqQsStTvVzZ])/)) {
+-      tokens[tokens.length] = { type: COMMAND, text: RegExp.$1 };
+-      d = d.substr(RegExp.$1.length);
+-    } else if (d.match(/^(([-+]?[0-9]+(\.[0-9]*)?|[-+]?\.[0-9]+)([eE][-+]?[0-9]+)?)/)) {
+-      tokens[tokens.length] = { type: NUMBER, text: `${parseFloat(RegExp.$1)}` };
+-      d = d.substr(RegExp.$1.length);
+-    } else {
+-      return [];
++    let match = d.match(/^([ \t\r\n,]+)/);
++    if (match !== null) {
++      d = d.substr(match[1].length);
++      continue;
++    }
++    match = d.match(/^([aAcChHlLmMqQsStTvVzZ])/);
++    if (match !== null) {
++      tokens[tokens.length] = { type: COMMAND, text: match[1] };
++      d = d.substr(match[1].length);
++      continue;
++    }
++    match = d.match(/^(([-+]?[0-9]+(\.[0-9]*)?|[-+]?\.[0-9]+)([eE][-+]?[0-9]+)?)/);
++    if (match !== null) {
++      tokens[tokens.length] = { type: NUMBER, text: `${parseFloat(match[1])}` };
++      d = d.substr(match[1].length);
++      continue;
+     }
++    return [];
+   }
+   tokens[tokens.length] = { type: EOD, text: '' };
+   return tokens;

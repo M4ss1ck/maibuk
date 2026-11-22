@@ -770,14 +770,14 @@ export interface PluginApiMethods {
       size: number;
     } | null;
   };
-  /** Saves a file under the name and MIME type you give: Maibuk asks the author where to save it and writes the bytes you send as one Blob right after this call. Maibuk keeps only the base name (no folders, no leading dots, at most 255 bytes) and refuses a name that names no file type or one an executable uses. Refused with user-action-required unless the author's own click, key press, or Command run caused the call, and not-implemented on a device that cannot save yet. */
+  /** Saves a file under the name and MIME type you give: Maibuk asks the author where to save it and writes the bytes you send right after this call. Maibuk keeps only the base name (no folders, no leading dots, at most 255 bytes) and refuses a name that names no file type or one an executable uses. Refused with user-action-required unless the author's own click, key press, or Command run caused the call, and not-implemented on a device that cannot save yet. */
   "files.save": {
     input: {
       /** The file name the dialog is prefilled with, such as map.png. */
       name: string;
       /** The file's MIME type, such as image/png. */
       mimeType: string;
-      /** The file's bytes: a Uint8Array, a Blob, or an AsyncIterable of Uint8Array pieces. The SDK folds them into one Blob and sends it right after the call (ADR 0040). */
+      /** The file's bytes: a Uint8Array, a Blob, or an AsyncIterable of Uint8Array pieces. The SDK folds them into one Blob and sends it right after the call, or into one Uint8Array on a device with no Blob (ADR 0040). */
       bytes: Uint8Array | Blob | AsyncIterable<Uint8Array>;
     };
     output: {
@@ -1043,7 +1043,7 @@ export interface PluginApi {
   files: {
     /** Shows Maibuk's file dialog filtered to these file types and returns the picked file's File Grant, or null when the author cancels. Refused with user-action-required unless the author's own click, key press, or Command run caused the call. Picking a file this Plugin already holds a grant for returns the same grant id. */
     pick(params: PluginApiMethods["files.pick"]["input"]): Promise<PluginApiMethods["files.pick"]["output"]>;
-    /** Saves a file under the name and MIME type you give: Maibuk asks the author where to save it and writes the bytes you send as one Blob right after this call. Maibuk keeps only the base name (no folders, no leading dots, at most 255 bytes) and refuses a name that names no file type or one an executable uses. Refused with user-action-required unless the author's own click, key press, or Command run caused the call, and not-implemented on a device that cannot save yet. */
+    /** Saves a file under the name and MIME type you give: Maibuk asks the author where to save it and writes the bytes you send right after this call. Maibuk keeps only the base name (no folders, no leading dots, at most 255 bytes) and refuses a name that names no file type or one an executable uses. Refused with user-action-required unless the author's own click, key press, or Command run caused the call, and not-implemented on a device that cannot save yet. */
     save(params: PluginApiMethods["files.save"]["input"]): Promise<PluginApiMethods["files.save"]["output"]>;
     /** Reads a byte range from a File Grant. A range past the end of the file returns the bytes that exist: shorter than asked, and empty at or past the end. Refused with file-missing when the file is gone or unreadable, or file-needs-permission on the web when the browser must ask the author again. */
     read(params: PluginApiMethods["files.read"]["input"]): Promise<PluginApiMethods["files.read"]["output"]>;

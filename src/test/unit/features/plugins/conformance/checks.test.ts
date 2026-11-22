@@ -160,9 +160,9 @@ describe("runConformanceChecks T2", () => {
     expect(check.detail).toContain("invoke resolved");
   });
 
-  it("omits the frame probe on Android but keeps the worker probe", async () => {
+  it("probes the frame on Android too, since Frames run there", async () => {
     const checks = await runConformanceChecks(makeSeam({ platform: "android" }));
-    expect(checks.map((check) => check.id)).not.toContain(T2_FRAME_CHECK_ID);
+    expect(byId(checks, T2_FRAME_CHECK_ID).status).toBe("pass");
     expect(byId(checks, T2_WORKER_CHECK_ID).status).toBe("pass");
   });
 

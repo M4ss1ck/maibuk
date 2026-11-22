@@ -1,17 +1,31 @@
 /**
- * The desktop Plugin File Saver (ADR 0040): Rust shows the save dialog and
+ * The Tauri Plugin File Saver (ADR 0040): Rust shows the save dialog and
  * writes the bytes to a sibling `.part` file, so the webview only learns a
- * token. Each chunk crosses IPC as raw bytes in order, the commit ends the
- * save, and any failure aborts it before the error reaches the Plugin.
+ * token. On desktop each chunk crosses IPC as raw bytes in order; Android
+ * cannot deliver raw IPC, so each chunk crosses as base64 in a JSON body with
+ * the token beside it. The commit ends the save, and any failure aborts it
+ * before the error reaches the Plugin.
  */
 import { ReadableStream } from "node:stream/web";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { base64ToBytes } from "@/plugin-sdk/protocol";
 
 const mockInvoke = vi.hoisted(() => vi.fn());
 
 vi.mock("@tauri-apps/api/core", () => ({ invoke: mockInvoke }));
 
-import { createTauriPluginFileSaver } from "@/lib/platform/tauri/file-save";
+/** The Android JSON path's chunk limit, in decoded bytes. */
+const ANDROID_CHUNK_BYTES = 512 * 1024;
+
+type CreateSaver = typeof import("@/lib/platform/tauri/file-save")["createTauriPluginFileSaver"];
+
+/** Loads the saver with the platform's Android flag set as the test needs. */
+async function loadSaver(android: boolean): Promise<CreateSaver> {
+  vi.resetModules();
+  vi.doMock("@/lib/platform", () => ({ IS_ANDROID: android }));
+  const module = await import("@/lib/platform/tauri/file-save");
+  return module.createTauriPluginFileSaver;
+}
 
 /** A `Blob` whose stream yields exactly `chunks`, which jsdom's own Blob cannot. */
 function blobOf(...chunks: Uint8Array[]): Blob {
@@ -26,6 +40,13 @@ function blobOf(...chunks: Uint8Array[]): Blob {
   } as unknown as Blob;
 }
 
+/** The arguments each `plugin_files_save_write` call carried. */
+function writeCalls(): unknown[] {
+  return mockInvoke.mock.calls
+    .filter(([command]) => command === "plugin_files_save_write")
+    .map(([, args]) => args);
+}
+
 const encoder = new TextEncoder();
 
 beforeEach(() => {
@@ -35,7 +56,7 @@ beforeEach(() => {
 describe("createTauriPluginFileSaver()", () => {
   it("returns cancelled when the author closes the save dialog", async () => {
     mockInvoke.mockResolvedValue(null);
-    const saver = createTauriPluginFileSaver();
+    const saver = (await loadSaver(false))();
 
     await expect(saver.save("map.png", "image/png", blobOf())).resolves.toBe("cancelled");
 
@@ -43,12 +64,12 @@ describe("createTauriPluginFileSaver()", () => {
     expect(mockInvoke).toHaveBeenCalledWith("plugin_files_save_begin", { name: "map.png" });
   });
 
-  it("writes every chunk in order, then commits", async () => {
+  it("writes every desktop chunk as raw bytes in order, then commits", async () => {
     mockInvoke.mockImplementation(async (command: string) => {
       if (command === "plugin_files_save_begin") return 7;
       return undefined;
     });
-    const saver = createTauriPluginFileSaver();
+    const saver = (await loadSaver(false))();
     const first = encoder.encode("abc");
     const second = encoder.encode("def");
 
@@ -70,13 +91,58 @@ describe("createTauriPluginFileSaver()", () => {
     expect(mockInvoke).toHaveBeenNthCalledWith(4, "plugin_files_save_commit", { token: 7 });
   });
 
+  it("writes every Android chunk as base64 JSON with the token in the body", async () => {
+    mockInvoke.mockImplementation(async (command: string) => {
+      if (command === "plugin_files_save_begin") return 7;
+      return undefined;
+    });
+    const saver = (await loadSaver(true))();
+    const first = encoder.encode("abc");
+    const second = encoder.encode("def");
+
+    await expect(saver.save("map.png", "image/png", blobOf(first, second))).resolves.toBe("saved");
+
+    const writes = writeCalls() as { token: number; data: string }[];
+    expect(writes).toHaveLength(2);
+    expect(writes[0].token).toBe(7);
+    expect(writes[1].token).toBe(7);
+    expect(base64ToBytes(writes[0].data)).toEqual(first);
+    expect(base64ToBytes(writes[1].data)).toEqual(second);
+    // The token travels in the body, so no header (and no raw bytes) is sent.
+    for (const call of mockInvoke.mock.calls) {
+      if (call[0] === "plugin_files_save_write") expect(call[2]).toBeUndefined();
+    }
+  });
+
+  it("splits an Android chunk at 512 KiB and decodes back to the same bytes", async () => {
+    mockInvoke.mockImplementation(async (command: string) => {
+      if (command === "plugin_files_save_begin") return 3;
+      return undefined;
+    });
+    const saver = (await loadSaver(true))();
+    const bytes = new Uint8Array(ANDROID_CHUNK_BYTES + 1024);
+    for (let i = 0; i < bytes.length; i++) bytes[i] = i % 251;
+
+    await expect(saver.save("map.png", "image/png", blobOf(bytes))).resolves.toBe("saved");
+
+    const writes = writeCalls() as { token: number; data: string }[];
+    expect(writes).toHaveLength(2);
+    const chunks = writes.map(({ data }) => base64ToBytes(data));
+    expect(chunks[0]).toHaveLength(ANDROID_CHUNK_BYTES);
+    expect(chunks[1]).toHaveLength(1024);
+    const joined = new Uint8Array(bytes.length);
+    joined.set(chunks[0], 0);
+    joined.set(chunks[1], ANDROID_CHUNK_BYTES);
+    expect(joined).toEqual(bytes);
+  });
+
   it("aborts the save and rejects with the OS message when a write fails", async () => {
     mockInvoke.mockImplementation(async (command: string) => {
       if (command === "plugin_files_save_begin") return 9;
       if (command === "plugin_files_save_write") throw "Permission denied (os error 13)";
       return undefined;
     });
-    const saver = createTauriPluginFileSaver();
+    const saver = (await loadSaver(false))();
 
     await expect(saver.save("map.png", "image/png", blobOf(encoder.encode("abc")))).rejects.toThrow(
       "Permission denied (os error 13)"
@@ -86,13 +152,27 @@ describe("createTauriPluginFileSaver()", () => {
     expect(mockInvoke).not.toHaveBeenCalledWith("plugin_files_save_commit", { token: 9 });
   });
 
+  it("aborts an Android save when a write fails", async () => {
+    mockInvoke.mockImplementation(async (command: string) => {
+      if (command === "plugin_files_save_begin") return 5;
+      if (command === "plugin_files_save_write") throw "write failed";
+      return undefined;
+    });
+    const saver = (await loadSaver(true))();
+
+    await expect(saver.save("map.png", "image/png", blobOf(encoder.encode("abc")))).rejects.toThrow(
+      "write failed"
+    );
+    expect(mockInvoke).toHaveBeenCalledWith("plugin_files_save_abort", { token: 5 });
+  });
+
   it("aborts the save when the commit fails", async () => {
     mockInvoke.mockImplementation(async (command: string) => {
       if (command === "plugin_files_save_begin") return 4;
       if (command === "plugin_files_save_commit") throw "No space left on device (os error 28)";
       return undefined;
     });
-    const saver = createTauriPluginFileSaver();
+    const saver = (await loadSaver(false))();
 
     await expect(saver.save("map.png", "image/png", blobOf())).rejects.toThrow(
       "No space left on device (os error 28)"
