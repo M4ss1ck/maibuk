@@ -76,6 +76,19 @@ describe("Switch", () => {
       expect(label).not.toBeNull();
       expect(label!.className).toContain("my-switch");
     });
+
+    it("grows the touch target with an inset pseudo-element, never the track", () => {
+      render(<Switch checked={false} onChange={() => {}} />);
+      const label = screen.getByRole("switch").closest("label")!;
+      const classes = label.className.split(/\s+/);
+
+      // The track stays a 24px pill on touch; a min-height on it turned the
+      // Plugin switches into tall circles on phones.
+      expect(classes).toEqual(
+        expect.arrayContaining(["h-6", "w-11", "pointer-coarse:after:-inset-3"])
+      );
+      expect(classes.filter((c) => /^pointer-coarse:(min-)?[hw]-/.test(c))).toEqual([]);
+    });
   });
 
   describe("disabled", () => {

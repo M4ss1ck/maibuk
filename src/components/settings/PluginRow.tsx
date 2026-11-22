@@ -271,7 +271,6 @@ export function PluginRow({
               }}
               label={t("plugins.management.enableSwitch", { name })}
               data-command="settings.togglePlugin"
-              className="pointer-coarse:min-h-12 pointer-coarse:min-w-12"
             />
           </>
         )}
@@ -461,7 +460,6 @@ export function PluginRow({
                         checked={secrets.remembered}
                         onChange={(next) => secrets.setRemembered(next)}
                         label={t("plugins.management.remember")}
-                        className="pointer-coarse:min-h-12"
                       />
                     </div>
                   )}

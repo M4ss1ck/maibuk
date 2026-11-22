@@ -42,7 +42,9 @@ export function Switch({
       <SwitchButton
         data-command={dataCommand}
         className={({ isSelected, isFocusVisible, isDisabled }) =>
-          `group relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent bg-muted transition-colors duration-200 ease-in-out focus:outline-none ${
+          // On touch the hit area grows through an inset pseudo-element, not the
+          // track, so the track keeps its 24px pill shape.
+          `group relative inline-flex h-6 w-11 shrink-0 rounded-full after:absolute after:content-[''] pointer-coarse:after:-inset-3 border-2 border-transparent bg-muted transition-colors duration-200 ease-in-out focus:outline-none ${
             isSelected ? "bg-primary" : ""
           } ${isFocusVisible ? "ring-2 ring-primary ring-offset-2" : ""} ${
             isDisabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"
