@@ -39,9 +39,7 @@ export const WATCHED_DIRS = [
 
 /**
  * Where the dependency scan starts: the page and every Worker entry the dev
- * server can start. The QuickJS runner (`quickjs/worker-entry.ts`) is left out:
- * it only exists on Android builds, and scanning it would pre-bundle its engine
- * for every other platform.
+ * server can start.
  */
 export const DEP_SCAN_ENTRIES = [
   "index.html",

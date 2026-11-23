@@ -52,8 +52,7 @@ export type User = ReturnType<typeof userEvent.setup>;
  * host ones. The export tests then hand the SDK the Plugin's own encoded bytes,
  * which fail its `bytes instanceof Uint8Array` check on `files.save`, and hand
  * the editor a rasterizer's `ArrayBuffer` its own parse refuses. The host
- * intrinsics are put back in every file that imports this module, as
- * `src/test/support/bundle-plugin-fixture.ts` does for its bundle.
+ * intrinsics are put back in every file that imports this module.
  */
 export const hostBytes = new TextEncoder().encode("");
 export const globalsWithBytes = globalThis as {
