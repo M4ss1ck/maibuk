@@ -89,7 +89,6 @@ export const USAGE = [
   "  lint       Lint the Plugin with Maibuk's Biome",
   "  test       Run the Plugin's tests through the test kit",
   "  boundary   Check the Plugin's imports against the boundary",
-  "  android    Evaluate the built entry in the Android QuickJS engine (when platforms lists android)",
   "  package   Zip <plugin>/dist/<id>/ into <plugin>/dist/<id>-<version>.zip",
   "  layout     Check the packaged zip's layout",
   "  check      Run every step, stopping at the first failure",
