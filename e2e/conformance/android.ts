@@ -166,8 +166,10 @@ export async function launchAndroidApp(options: {
 /**
  * Sends Maibuk to the background and kills its WebView renderer (#922). Assumes
  * Maibuk is the only WebView app running, which holds on the lane's AVDs: every
- * `:sandboxed_process` seen by `ps` is its renderer. Uses `su` rather than `adb
- * root`, which would restart adbd; the emulator lane's Google APIs AVDs have it.
+ * `:sandbox` process seen by `ps` is its renderer. The match is `:sandbox`, not
+ * `:sandboxed_process`, because API 26's `ps` cuts names at 27 characters
+ * (`com.android.webview:sandboxe`). Uses `su` rather than `adb root`, which
+ * would restart adbd; the emulator lane's Google APIs AVDs have `su`.
  */
 export async function backgroundAndKillRenderer(device: AndroidDevice): Promise<void> {
   await device.shell(["input", "keyevent", "KEYCODE_HOME"]);
@@ -177,11 +179,11 @@ export async function backgroundAndKillRenderer(device: AndroidDevice): Promise<
   const pids = (await device.shell(["ps", "-A", "-o", "PID,NAME"]))
     .split("\n")
     .map((line) => line.trim().split(/\s+/))
-    .filter(([pid, name]) => /^\d+$/.test(pid ?? "") && (name ?? "").includes(":sandboxed_process"))
+    .filter(([pid, name]) => /^\d+$/.test(pid ?? "") && (name ?? "").includes(":sandbox"))
     .map(([pid]) => pid);
   if (pids.length === 0) {
     throw new Error(
-      "no WebView renderer process (:sandboxed_process) found after sending the app to the background"
+      "no WebView renderer process (:sandbox) found after sending the app to the background"
     );
   }
   // Best effort: a renderer the system reclaimed between `ps` and `kill` makes
