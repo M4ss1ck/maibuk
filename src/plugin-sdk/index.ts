@@ -202,14 +202,13 @@ export function createPluginClient(port: PluginMessagePort): PluginClient {
   // `kind` and `id` lead, then `method` or `event`, so the broker can answer a
   // refused message without decoding it. A `blob` method posts its bytes
   // (`{ kind: "blob", id, blob }`) right after this JSON head, with the same id
-  // (ADR 0040). The bytes are a `Blob` where the engine has one and a
-  // `Uint8Array` where it does not.
+  // (ADR 0040). The bytes are always a `Blob`; every Plugin engine has one.
   function send(
     head:
       | { kind: "call"; method: string; params: unknown }
       | { kind: "subscribe" | "unsubscribe"; event: string },
     listener?: PluginStreamListener<unknown>,
-    blob?: Blob | Uint8Array
+    blob?: Blob
   ): Promise<unknown> {
     if (stopReason !== null) return Promise.reject(stoppedError(stopReason));
     const id = nextId++;
@@ -235,45 +234,18 @@ export function createPluginClient(port: PluginMessagePort): PluginClient {
   }
 
   /**
-   * Folds the three accepted `bytes` shapes into what the host takes: one Blob,
-   * or, on an engine with no Blob (#516), one
-   * Uint8Array. A Blob input cannot exist where there is no Blob.
+   * Folds the three accepted `bytes` shapes into what the host takes: one Blob.
+   * The host broker still accepts raw bytes (ADR 0040), but the SDK always
+   * sends a Blob now that every Plugin engine has one.
    */
-  async function foldBytes(
-    bytes: unknown,
-    mimeType: string,
-    method: string
-  ): Promise<Blob | Uint8Array> {
-    const hasBlob = typeof Blob !== "undefined";
-    if (hasBlob && bytes instanceof Blob) {
+  async function foldBytes(bytes: unknown, mimeType: string, method: string): Promise<Blob> {
+    if (bytes instanceof Blob) {
       return bytes.type === mimeType ? bytes : new Blob([bytes], { type: mimeType });
     }
     if (bytes instanceof Uint8Array) {
-      return hasBlob ? new Blob([bytes as BlobPart], { type: mimeType }) : bytes;
+      return new Blob([bytes as BlobPart], { type: mimeType });
     }
     if (isAsyncIterable(bytes)) {
-      if (!hasBlob) {
-        const pieces: Uint8Array[] = [];
-        let length = 0;
-        for await (const part of bytes) {
-          if (!(part instanceof Uint8Array)) {
-            throw new PluginApiError({
-              code: "invalid-params",
-              message: "bytes: every piece of the stream must be a Uint8Array",
-              method,
-            });
-          }
-          pieces.push(part);
-          length += part.byteLength;
-        }
-        const folded = new Uint8Array(length);
-        let offset = 0;
-        for (const piece of pieces) {
-          folded.set(piece, offset);
-          offset += piece.byteLength;
-        }
-        return folded;
-      }
       const parts: BlobPart[] = [];
       for await (const part of bytes) {
         if (!(part instanceof Uint8Array)) {
@@ -296,8 +268,7 @@ export function createPluginClient(port: PluginMessagePort): PluginClient {
 
   /**
    * A call whose bytes follow as one `blob` message: the `bytes` field is folded
-   * into a Blob (or one Uint8Array where the engine has no Blob) and stripped, so
-   * the JSON head carries only the wire shape.
+   * into a Blob and stripped, so the JSON head carries only the wire shape.
    */
   async function sendBlobCall(method: string, params: unknown): Promise<unknown> {
     const { bytes, ...head } = (params ?? {}) as { bytes?: unknown; mimeType?: unknown };
