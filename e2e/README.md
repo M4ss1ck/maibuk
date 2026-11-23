@@ -573,6 +573,12 @@ kind, and the hostile and healthy fixtures list `"android"` in their manifest
 `platforms`, so the real launch scan starts them. A measured Android run records the engine's start time and call latency (no
 gate on them, decision-401).
 
+### Death phase (Android)
+
+After the main phase on Android, the lane runs the death phase (#922). It launches the app again into its own log, `logcat-android-death.txt`, and waits for the launch report the app posts. It then sends the app to the background with the Home key, finds the WebView renderer process (every process whose name contains `:sandboxed_process`), and kills it with `su 0 kill -9`. It waits for the app process to exit quietly, relaunches with `am start`, and waits for the second launch report. The `death-background` check passes when the process exited, every Plugin enabled before the kill is still enabled after the relaunch, and the relaunched app posted no notice.
+
+Every wait in this phase is bounded, so a missing app or a missing launch report fails the phase instead of hanging the lane. This is the only phase that expects a process death: outside it, an app that dies before `/done` is still a failure. The phase assumes the lane's AVDs run a Google APIs image (which has `su`) and that Maibuk is the only WebView app running, so every `:sandboxed_process` belongs to it.
+
 ## Plugins bench lane
 
 `pnpm bench:plugins` measures the browser Plugin budget (issue #448) against

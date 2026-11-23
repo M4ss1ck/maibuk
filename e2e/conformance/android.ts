@@ -128,6 +128,8 @@ async function waitForPid(device: AndroidDevice): Promise<number> {
 export async function launchAndroidApp(options: {
   device: AndroidDevice;
   runDir: RunDir;
+  /** The logcat file name under the run directory (default `logcat-android.txt`). */
+  logName?: string;
 }): Promise<RunningApp> {
   const { device } = options;
   await adb(device.serial, [
@@ -136,7 +138,8 @@ export async function launchAndroidApp(options: {
     `tcp:${CONFORMANCE_COLLECTOR_PORT}`,
   ]);
 
-  const log = createWriteStream(resolve(options.runDir.dir, "logcat-android.txt"));
+  const logName = options.logName ?? "logcat-android.txt";
+  const log = createWriteStream(resolve(options.runDir.dir, logName));
   const logcat = spawn("adb", ["-s", device.serial, "logcat", "-v", "time"], {
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -158,4 +161,33 @@ export async function launchAndroidApp(options: {
       );
     },
   };
+}
+
+/**
+ * Sends Maibuk to the background and kills its WebView renderer (#922). Assumes
+ * Maibuk is the only WebView app running, which holds on the lane's AVDs: every
+ * `:sandboxed_process` seen by `ps` is its renderer. Uses `su` rather than `adb
+ * root`, which would restart adbd; the emulator lane's Google APIs AVDs have it.
+ */
+export async function backgroundAndKillRenderer(device: AndroidDevice): Promise<void> {
+  await device.shell(["input", "keyevent", "KEYCODE_HOME"]);
+  // Let the Activity stop being resumed before the renderer is torn down.
+  await new Promise((done) => setTimeout(done, 1000));
+
+  const pids = (await device.shell(["ps", "-A", "-o", "PID,NAME"]))
+    .split("\n")
+    .map((line) => line.trim().split(/\s+/))
+    .filter(([pid, name]) => /^\d+$/.test(pid ?? "") && (name ?? "").includes(":sandboxed_process"))
+    .map(([pid]) => pid);
+  if (pids.length === 0) {
+    throw new Error(
+      "no WebView renderer process (:sandboxed_process) found after sending the app to the background"
+    );
+  }
+  await device.shell(["su", "0", "kill", "-9", ...pids]);
+}
+
+/** Starts the app again after its renderer died, waiting for the Activity. */
+export async function relaunchAndroidApp(device: AndroidDevice): Promise<void> {
+  await device.shell(["am", "start", "-W", "-n", ANDROID_ACTIVITY]);
 }
