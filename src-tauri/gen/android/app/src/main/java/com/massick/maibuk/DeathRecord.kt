@@ -1,5 +1,7 @@
 package com.massick.maibuk
 
+import android.webkit.JavascriptInterface
+
 const val DEATH_RECORD_PREFS = "maibuk_renderer_death"
 const val DEATH_RECORD_KEY = "last"
 
@@ -67,4 +69,21 @@ private fun jsonString(value: String): String = buildString {
     }
   }
   append('"')
+}
+
+/**
+ * Hands the page the saved death record once, then clears it, so the next
+ * launch does not answer the same death again (#927).
+ */
+class DeathRecordBridge(
+  private val read: () -> String?,
+  private val clear: () -> Unit,
+) {
+  @JavascriptInterface
+  @Synchronized
+  fun take(): String? {
+    val record = read() ?: return null
+    clear()
+    return record
+  }
 }

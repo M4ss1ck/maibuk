@@ -102,4 +102,13 @@ class DeathRecordTest {
       activity.snapshot(),
     )
   }
+
+  @Test
+  fun bridgeTakesTheRecordOnceThenClearsIt() {
+    var stored: String? = "{\"at\":1}"
+    val bridge = DeathRecordBridge(read = { stored }, clear = { stored = null })
+
+    assertEquals("{\"at\":1}", bridge.take())
+    assertEquals(null, bridge.take())
+  }
 }
