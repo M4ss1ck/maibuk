@@ -935,6 +935,131 @@ export function buildLargeEpub({ sections = LARGE_EPUB_SECTIONS } = {}) {
   return buildZip(files);
 }
 
+/**
+ * A deterministic noisy RGB PNG: `colour` plus three seeded pseudo-random bits
+ * per channel, drawn from a small LCG so two seeds never give the same bytes.
+ * Low-bit noise defeats the long runs deflate exploits, so 800×1200 comes out
+ * around a megabyte, the size the Android emulator lane wants from a page image.
+ */
+function buildNoisyPng(width, height, colour, seed) {
+  let state = seed >>> 0;
+  const next = () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state;
+  };
+  // The LCG's high bits carry the entropy; its low bits repeat quickly.
+  const noise = () => (next() >>> 29) - 4;
+  const stride = width * 3 + 1;
+  const raw = Buffer.alloc(stride * height);
+  for (let y = 0; y < height; y += 1) {
+    raw[y * stride] = 0; // filter: none
+    for (let x = 0; x < width; x += 1) {
+      const at = y * stride + 1 + x * 3;
+      raw[at] = colour[0] + noise();
+      raw[at + 1] = colour[1] + noise();
+      raw[at + 2] = colour[2] + noise();
+    }
+  }
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8; // bit depth
+  header[9] = 2; // colour type: truecolour
+  return Buffer.concat([
+    PNG_SIGNATURE,
+    pngChunk("IHDR", header),
+    pngChunk("IDAT", deflateSync(raw)),
+    pngChunk("IEND", Buffer.alloc(0)),
+  ]);
+}
+
+/** One page of a bench image fixture: 800×1200, shaded by the page number. */
+function benchPagePng(index) {
+  const colour = [64 + ((index * 37) % 128), 64 + ((index * 53) % 128), 64 + ((index * 71) % 128)];
+  return buildNoisyPng(800, 1200, colour, index + 1);
+}
+
+/** One reflowable chapter holding its own plate, sized for the emulator lane. */
+function imageChapter(index, total) {
+  const n = index + 1;
+  return xhtml(
+    `Plate ${n}`,
+    `<section epub:type="chapter" id="ch${n}">
+      <h1>Plate ${n}</h1>
+      <p>Plate ${n} of ${total}, a full page of seeded noise.</p>
+      <img src="images/page${n}.png" alt="Plate ${n}"/>
+    </section>`
+  );
+}
+
+/**
+ * A reflowable EPUB 3 for the Android emulator lane: {@link chapters} short
+ * chapters, each an `<img>` of its own deterministic 800×1200 noisy PNG with a
+ * distinct seed, a nav with one entry per chapter, and a stylesheet. Like the
+ * other large builders it is generated per bench run, never written to
+ * `fixtures/`, and lands around 20 MB.
+ */
+export function buildImageEpub({ chapters = 20 } = {}) {
+  const files = [
+    { name: "mimetype", data: "application/epub+zip" },
+    { name: "META-INF/container.xml", data: CONTAINER_XML },
+  ];
+  const items = [
+    '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>',
+    '<item id="css" href="style.css" media-type="text/css"/>',
+  ];
+  const spine = [];
+  const nav = [];
+  for (let index = 0; index < chapters; index += 1) {
+    const n = index + 1;
+    items.push(`<item id="ch${n}" href="ch${n}.xhtml" media-type="application/xhtml+xml"/>`);
+    items.push(`<item id="img${n}" href="images/page${n}.png" media-type="image/png"/>`);
+    spine.push(`<itemref idref="ch${n}"/>`);
+    nav.push([`Plate ${n}`, `ch${n}.xhtml`]);
+    files.push({ name: `OEBPS/ch${n}.xhtml`, data: imageChapter(index, chapters) });
+    files.push({ name: `OEBPS/images/page${n}.png`, data: benchPagePng(index) });
+  }
+  files.push({
+    name: "OEBPS/content.opf",
+    data: `<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="bookid">urn:uuid:00000000-0000-4000-8000-000000000925</dc:identifier>
+    <dc:title>Plates, large</dc:title>
+    <dc:creator>Maibuk</dc:creator>
+    <dc:language>en</dc:language>
+    <meta property="dcterms:modified">2024-01-01T00:00:00Z</meta>
+  </metadata>
+  <manifest>
+    ${items.join("\n    ")}
+  </manifest>
+  <spine>
+    ${spine.join("\n    ")}
+  </spine>
+</package>`,
+  });
+  files.push({ name: "OEBPS/nav.xhtml", data: navDocument(nav) });
+  files.push({
+    name: "OEBPS/style.css",
+    data: "body { font-family: serif; } p { margin: 0 0 1em; } img { max-width: 100%; }",
+  });
+  return buildZip(files);
+}
+
+/**
+ * A comic book for the Android emulator lane: {@link pages} 800×1200 PNG pages,
+ * each its own deterministic noisy image with a distinct seed, named like
+ * {@link buildComicBook} so natural file-name order still applies. Generated
+ * per bench run, never written to `fixtures/`, and around 20 MB.
+ */
+export function buildLargeComicBook({ pages = 20 } = {}) {
+  const files = [{ name: "mimetype", data: "application/vnd.comicbook+zip" }];
+  for (let index = 0; index < pages; index += 1) {
+    files.push({ name: `page-${index + 1}.png`, data: benchPagePng(index) });
+  }
+  return buildZip(files);
+}
+
 /** Every fixture this script writes, keyed by file name. */
 export function buildAll() {
   return {
