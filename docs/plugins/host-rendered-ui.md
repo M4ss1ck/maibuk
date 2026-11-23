@@ -41,14 +41,13 @@ An `on-demand` Plugin starts when a surface it contributes becomes reachable. `w
 
 The schema accepts `"android"` in every case, so a published manifest that already lists it runs on Android with no change.
 
-On Android a Plugin runs in a memory-capped QuickJS engine inside the same sandbox Worker, not in the WebView's own engine. Four things differ from desktop and web:
+On Android a Plugin runs in the WebView's own engine inside the same sandbox Worker as desktop, so it sees the same globals (`Intl` and `WebAssembly` included) and has no fixed heap cap. A Frame mounts on Android as on desktop, in that same engine. One thing differs from desktop and web:
 
-- **Globals.** The Plugin sees `setTimeout`, `clearTimeout`, `setInterval`, `clearInterval`, `queueMicrotask`, `performance.now`, `URL`, `URLSearchParams`, `TextEncoder`, `TextDecoder`, `crypto.getRandomValues`, and `console` (every method a Worker has: `log`, `info`, `warn`, `error`, and `debug` reach the host console, `assert` logs a failed assertion as an error, and the counters and timers do nothing), plus the worker scope bridge: `self`, `WorkerGlobalScope`, `globalThis`, `postMessage`, `onmessage`, `addEventListener`, and `removeEventListener`, and the DOM-like shims some bundled libraries rely on: `EventTarget`, `Event`, `CustomEvent`, `AbortSignal`, `AbortController`, `HTMLElement`, and `MutationObserver`. `Intl` and `WebAssembly` are absent. A Plugin that needs either one bundles its own implementation into its entry.
-- **Memory.** Each Plugin gets a 64 MB heap. A Plugin that allocates past it stops with the stop reason `out-of-memory`, and the app keeps running.
-- **Custom UI.** A Frame mounts on Android as on desktop. Its page runs in the WebView's own engine, not QuickJS, so the globals and the 64 MB cap above apply to the Plugin's entry, not to the Frame.
 - **Files.** `files.pick` opens the system document picker, and a File Grant survives a restart as on desktop. The author cannot drop files on a Plugin page, so `files.dropped` never fires. See [Files](files.md).
 
-Check Android without a device with `pnpm plugin:check <path>`. When the manifest lists `"android"`, its Android step evaluates the built entry in the same engine and fails with a readable message on a missing global, a module that does not evaluate, or a setup error. Without `"android"` the step is skipped.
+A Plugin that exhausts Android's memory takes the WebView renderer down with it. Maibuk answers the death record at the next launch: a Plugin whose last activity falls in the 10 seconds before a foreground death is disabled through its approval switch, its System Notifications are withdrawn, and a sticky error toast names it and offers Plugin settings. A foreground death with no blamed Plugin says Maibuk restarted; a background death is silent.
+
+`pnpm plugin:check <path>` does not check Android, so run the Plugin on an Android device to check it there.
 
 ## Manifest contributions
 

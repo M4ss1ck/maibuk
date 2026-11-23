@@ -56,6 +56,6 @@ client.onHostRequest((method, params) => {
 
 ## Android
 
-The built folder is the same for every platform. A Plugin that lists `"android"` in `platforms` runs on Android from that folder, so run `pnpm plugin:check <path>` before you package and read its Android step. The step runs only when the manifest lists `"android"`.
+The built folder is the same for every platform. A Plugin that lists `"android"` in `platforms` runs on Android from that folder. `pnpm plugin:check <path>` does not check Android, so run the Plugin on an Android device to check it there.
 
-Android's engine has no `Intl` and no `WebAssembly`. If your Plugin needs either, bundle your own implementation into the entry so it ships inside `dist/<id>/`. Android also caps each Plugin at 64 MB; see [Platforms](host-rendered-ui.md#platforms).
+Android uses the WebView's own engine, with the same globals as desktop (`Intl` and `WebAssembly` included) and no fixed heap cap; see [Platforms](host-rendered-ui.md#platforms).
