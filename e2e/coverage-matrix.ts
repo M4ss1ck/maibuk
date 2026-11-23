@@ -42,6 +42,14 @@ export const EXCLUSIONS: Exclusion[] = [
   },
   {
     kind: "term",
+    items: ["Out-of-Memory Restart"],
+    reason:
+      "Android-only: needs the WebView renderer to die, which the browser lanes cannot cause; the notice is a generic toast whose action and close are keyboard-tested in Vitest",
+    owner:
+      "Vitest crash-containment and Toast suites, Kotlin DeathRecordTest, and the Android conformance death phase (#922)",
+  },
+  {
+    kind: "term",
     items: ["Plugin Platforms"],
     reason:
       "A manifest field the Plugin author writes, never shown on screen; Android Plugins are not shown to users yet (#516), so no workflow reaches the term",

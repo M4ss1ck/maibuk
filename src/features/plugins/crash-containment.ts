@@ -5,15 +5,16 @@
  * Only a foreground death blames a Plugin: one whose last activity falls in the
  * 10 seconds before the death was running when the process ran out of memory.
  * At the next launch, before any Plugin warm-starts, each blamed Plugin is
- * disabled through the existing approval switch, and one sticky error toast
- * names them and offers Plugin settings. A foreground death with no blamed
- * Plugin says Maibuk restarted. A background death is silent: nothing was on
- * screen, so nothing is blamed. Desktop and web have no bridge, so this is a
- * no-op there.
+ * disabled through the existing approval switch and its System Notifications
+ * are withdrawn, and one sticky error toast names them and offers Plugin
+ * settings. A foreground death with no blamed Plugin says Maibuk restarted. A
+ * background death is silent: nothing was on screen, so nothing is blamed.
+ * Desktop and web have no bridge, so this is a no-op there.
  */
 
 import { toast } from "@/components/ui/Toast";
 import { disablePlugin, getPluginApproval, savePluginApproval } from "@/features/plugins/approvals";
+import { cancelPluginSystemNotifications } from "@/features/plugins/handlers";
 import { getKnownPlugin } from "@/features/plugins/known";
 import i18n from "@/i18n";
 
@@ -95,6 +96,8 @@ export function applyDeathRecord(
     // Only an enabled Plugin can have been running; a disabled one stays off.
     if (!approval || !approval.enabled) continue;
     savePluginApproval(disablePlugin(approval));
+    // A disabled Plugin leaves nothing pending on the OS, as disable() does.
+    void cancelPluginSystemNotifications(plugin.pluginId);
     names.push(getKnownPlugin(plugin.pluginId)?.manifest.name ?? plugin.pluginId);
   }
 

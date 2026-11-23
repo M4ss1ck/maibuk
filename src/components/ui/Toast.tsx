@@ -19,8 +19,8 @@ type Toast = {
   id: string;
   message: string;
   variant: ToastVariant;
-  /** `null` keeps the toast until its close button removes it. */
-  durationMs: number | null;
+  /** Kept until its close button removes it, however many toasts arrive. */
+  sticky: boolean;
   action?: ToastAction;
 };
 
@@ -43,8 +43,11 @@ const useToastStore = create<ToastStore>((set) => ({
   addToast: (toast) =>
     set((state) => {
       const next = [...state.toasts, toast];
-      if (next.length > MAX_TOASTS) {
-        next.splice(0, next.length - MAX_TOASTS);
+      while (next.length > MAX_TOASTS) {
+        // A sticky toast is waiting for its close button, so the oldest timed
+        // toast goes first; only when every toast is sticky does the oldest go.
+        const victim = next.findIndex((entry) => !entry.sticky);
+        next.splice(victim === -1 ? 0 : victim, 1);
       }
       return { toasts: next };
     }),
@@ -76,7 +79,7 @@ function showToast(input: InternalToastInput): void {
     id,
     message: input.message,
     variant: input.variant ?? "success",
-    durationMs,
+    sticky: durationMs === null,
     action: input.action,
   };
 
@@ -161,8 +164,7 @@ export function ToastViewport() {
       aria-live="polite"
     >
       {toasts.map((toast) => {
-        const sticky = toast.durationMs === null;
-        const interactive = sticky || toast.action !== undefined;
+        const interactive = toast.sticky || toast.action !== undefined;
         return (
           <div
             key={toast.id}
@@ -173,7 +175,7 @@ export function ToastViewport() {
             {toast.variant === "error" && <XIcon className="h-4 w-4 text-destructive" />}
             <span>{toast.message}</span>
             {toast.action && <ToastActionButton id={toast.id} action={toast.action} />}
-            {sticky && <ToastCloseButton id={toast.id} />}
+            {toast.sticky && <ToastCloseButton id={toast.id} />}
           </div>
         );
       })}

@@ -123,6 +123,28 @@ describe("Toast", () => {
       expect(screen.getByText("Three")).toBeInTheDocument();
       expect(screen.getByText("Four")).toBeInTheDocument();
     });
+
+    it("keeps a sticky toast when three timed toasts arrive after it", () => {
+      render(<ToastViewport />);
+
+      act(() => {
+        toast.info("Pinned", { durationMs: null });
+        toast.success("One");
+        toast.success("Two");
+        toast.success("Three");
+      });
+
+      // The oldest timed toast is evicted, never the sticky one.
+      expect(screen.getByText("Pinned")).toBeInTheDocument();
+      expect(screen.queryByText("One")).not.toBeInTheDocument();
+      expect(screen.getByText("Two")).toBeInTheDocument();
+      expect(screen.getByText("Three")).toBeInTheDocument();
+
+      // A sticky toast survives the outer afterEach's runAllTimers, so close
+      // this one to leave the store empty for the next test.
+      fireEvent.click(screen.getByRole("button", { name: "common.close" }));
+      expect(screen.queryByText("Pinned")).not.toBeInTheDocument();
+    });
   });
 
   describe("focus mode suppression", () => {

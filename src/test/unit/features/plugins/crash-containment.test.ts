@@ -6,6 +6,10 @@
  * death is silent.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { createElement as h } from "react";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import {
   clearPluginApprovals,
   getPluginApproval,
@@ -13,6 +17,12 @@ import {
 } from "@/features/plugins/approvals";
 import { clearKnownPlugins, saveKnownPlugin } from "@/features/plugins/known";
 import { PLUGIN_MANIFEST } from "@/test/support/plugin-fixtures";
+
+const { cancelPluginSystemNotifications } = vi.hoisted(() => ({
+  cancelPluginSystemNotifications: vi.fn(async () => {}),
+}));
+
+vi.mock("@/features/plugins/handlers", () => ({ cancelPluginSystemNotifications }));
 
 const AT = 100_000;
 
@@ -70,6 +80,7 @@ async function applyAndReadToasts(take: () => string | null): Promise<string[]> 
 beforeEach(() => {
   clearPluginApprovals();
   clearKnownPlugins();
+  cancelPluginSystemNotifications.mockClear();
 });
 
 describe("Plugin crash containment (#927)", () => {
@@ -140,7 +151,7 @@ describe("Plugin crash containment (#927)", () => {
     expect(messages).toEqual(["Maibuk restarted because it ran out of memory."]);
   });
 
-  it("takes the record once per application", async () => {
+  it("calls take() once per applyDeathRecord, since the native bridge clears the record", async () => {
     const take = vi.fn(() => recordJson());
     vi.resetModules();
     const { applyDeathRecord } = await import("@/features/plugins/crash-containment");
@@ -150,6 +161,69 @@ describe("Plugin crash containment (#927)", () => {
     applyDeathRecord({ bridge });
 
     expect(take).toHaveBeenCalledTimes(2);
+  });
+
+  it("withdraws the blamed Plugin's System Notifications, and only the blamed one", async () => {
+    approve("alpha");
+    approve("idle");
+    know("alpha", "Alpha");
+    know("idle", "Idle");
+
+    await applyAndReadToasts(() =>
+      recordJson({
+        plugins: [
+          { pluginId: "alpha", lastActivityAt: AT - 1_000 },
+          { pluginId: "idle", lastActivityAt: AT - 30_000 },
+        ],
+      })
+    );
+
+    expect(getPluginApproval("alpha")).toMatchObject({ enabled: false });
+    expect(cancelPluginSystemNotifications).toHaveBeenCalledTimes(1);
+    expect(cancelPluginSystemNotifications).toHaveBeenCalledWith("alpha");
+  });
+
+  it("takes a keyboard user from the notice to Plugin settings", async () => {
+    approve("alpha");
+    know("alpha", "Alpha");
+
+    vi.resetModules();
+    const [{ applyDeathRecord }, { ToastViewport }] = await Promise.all([
+      import("@/features/plugins/crash-containment"),
+      import("@/components/ui/Toast"),
+    ]);
+    applyDeathRecord({
+      bridge: () => ({
+        take: () => recordJson({ plugins: [{ pluginId: "alpha", lastActivityAt: AT - 1_000 }] }),
+      }),
+    });
+
+    function SettingsRoute() {
+      const location = useLocation();
+      return h("p", null, `Settings at ${location.hash}`);
+    }
+
+    const user = userEvent.setup();
+    render(
+      h(
+        MemoryRouter,
+        { initialEntries: ["/"] },
+        h(
+          Routes,
+          null,
+          h(Route, { path: "/", element: h("p", null, "Library") }),
+          h(Route, { path: "/settings", element: h(SettingsRoute) })
+        ),
+        h(ToastViewport)
+      )
+    );
+
+    await user.tab();
+    expect(screen.getByRole("button", { name: "Open Plugins settings" })).toHaveFocus();
+    await user.keyboard("{Enter}");
+
+    expect(screen.getByText("Settings at #plugins")).toBeInTheDocument();
+    expect(screen.queryByText(/ran out of memory/)).not.toBeInTheDocument();
   });
 
   it("does nothing without a bridge, a null record, a throwing take, or unparsable JSON", async () => {

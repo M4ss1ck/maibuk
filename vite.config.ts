@@ -397,6 +397,7 @@ export default defineConfig(() => ({
         "src/features/plugins/quickjs/bridge.ts",
         "src/features/plugins/quickjs/runner.ts",
         "src/features/plugins/lifecycle.ts",
+        "src/features/plugins/crash-containment.ts",
         "src/features/plugins/approvals.ts",
         "src/features/plugins/launch.ts",
         "src/features/plugins/review.ts",
