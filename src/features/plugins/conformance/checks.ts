@@ -58,6 +58,7 @@ import {
   type CanvasReferenceObservation,
   type CommandObservation,
   type ConformanceCheck,
+  type ConformanceLaunchPlan,
   type ConformanceSeam,
   type FileGrantObservation,
   type FileSaveObservation,
@@ -70,6 +71,12 @@ export const T2_FRAME_CHECK_ID = "T2-frame-ipc";
 export const T2_WORKER_CHECK_ID = "T2-worker-ipc";
 export const T7_CHECK_ID = "T7-hang";
 export const T8_CHECK_ID = "T8-oom";
+
+/** The hostile fixture Plugin's id, which is also its folder name in the build output. */
+export const FIXTURE_HOSTILE_ID = "fixture-hostile";
+
+/** The healthy neighbour fixture Plugin's id (#516); it keeps answering beside the hostile one. */
+export const FIXTURE_HEALTHY_ID = "fixture-healthy";
 /** The tight-loop allocation Command's own check (D1's `escape-<name>` shape). */
 export const ESCAPE_ALLOCATE_CHECK_ID = "escape-allocate";
 
@@ -325,19 +332,27 @@ function canvasReferenceCheck(observation: CanvasReferenceObservation): Conforma
 }
 
 /**
- * Runs every check, in schema order (T2 frame, T2 worker, the fixture Commands,
- * T7, the tight allocation, T8, the File Grant rows, `files.save`, then the
- * Canvas Reference requests), and hands each result to `onCheck` as soon as it
- * is known, so the route can POST `/progress` before the run ends.
+ * Runs the checks the launch plan allows (#928), in schema order (T2 frame, T2
+ * worker, the fixture Commands, T7, the tight allocation, T8, the File Grant
+ * rows, `files.save`, then the Canvas Reference requests), and hands each result
+ * to `onCheck` as soon as it is known, so the route can POST `/progress` before
+ * the run ends.
  */
 export interface RunConformanceOptions {
   /**
    * True when the run is under the Android QuickJS engine (#516). T8 then
    * requires exactly `out-of-memory`: the 64 MB cap is hard, so any other stop
-   * is a fail. The route passes `QUICKJS_ENGINE_ENABLED`; the default keeps the
-   * desktop and web behavior.
+   * is a fail. No route passes it since Android runs the native Worker (#928);
+   * #929 deletes it with the engine.
    */
   quickjs?: boolean;
+  /**
+   * The collector's launch plan (#928). `"all"` (the default) runs every check;
+   * `"no-t8"` runs every check but T8, the Android main phase; `"t8-only"` runs
+   * T8 alone, the Android foreground death phase. `"launch-only"` never reaches
+   * the runner.
+   */
+  plan?: Exclude<ConformanceLaunchPlan, "launch-only">;
 }
 
 export async function runConformanceChecks(
@@ -351,6 +366,50 @@ export async function runConformanceChecks(
     checks.push(check);
     await onCheck?.(check);
   };
+
+  /**
+   * T8's block, kept in one place so the launch plan can run it alone
+   * (`t8-only`) or leave it out (`no-t8`) without reordering the other checks
+   * (#928).
+   */
+  const t8Check = (): Promise<ConformanceCheck> =>
+    measure(T8_CHECK_ID, async () => {
+      const oom = await seam.probeOom();
+      const alive = await seam.heartbeat();
+      if (!alive) return fail(T8_CHECK_ID, RENDERER_DIED_DETAIL);
+      // A hostile Plugin's memory death must not take a healthy neighbour down
+      // with it (#516): the seam asks it a call once more after the stop.
+      if (oom.stopped && oom.neighbourAlive !== true) {
+        return fail(T8_CHECK_ID, T8_NEIGHBOUR_DIED_DETAIL);
+      }
+      if (!oom.stopped) {
+        return oom.allocatedMb >= T8_ALLOCATION_CAP_MB
+          ? pass(
+              T8_CHECK_ID,
+              `no engine memory limit by ${oom.allocatedMb} MB; the Worker kept running and the host answered`
+            )
+          : unmeasured(T8_CHECK_ID, `no stop within the budget; allocated ${oom.allocatedMb} MB`);
+      }
+      const facts = `reason ${oom.reason}, allocated ${oom.allocatedMb} MB`;
+      if (oom.reason === T8_UNRESPONSIVE_STOP_REASON) {
+        return unmeasured(T8_CHECK_ID, `${T8_UNRESPONSIVE_DETAIL} (${facts})`);
+      }
+      return t8Reasons.includes(oom.reason)
+        ? pass(
+            T8_CHECK_ID,
+            `stopped with ${oom.reason} after ${oom.allocatedMb} MB and the host answered, with a healthy Plugin beside it`
+          )
+        : fail(T8_CHECK_ID, `stopped with an unexpected reason; ${facts} and the host answered`);
+    });
+
+  const plan = options.plan ?? "all";
+  // The Android foreground death launch runs T8 and nothing else: the
+  // renderer dies under the native Worker, so everything else waits for the
+  // main launch (#928).
+  if (plan === "t8-only") {
+    await record(await t8Check());
+    return checks;
+  }
 
   await record(
     await measure(T2_FRAME_CHECK_ID, async () => {
@@ -403,36 +462,11 @@ export async function runConformanceChecks(
     })
   );
 
-  await record(
-    await measure(T8_CHECK_ID, async () => {
-      const oom = await seam.probeOom();
-      const alive = await seam.heartbeat();
-      if (!alive) return fail(T8_CHECK_ID, RENDERER_DIED_DETAIL);
-      // A hostile Plugin's memory death must not take a healthy neighbour down
-      // with it (#516): the seam asks it a call once more after the stop.
-      if (oom.stopped && oom.neighbourAlive !== true) {
-        return fail(T8_CHECK_ID, T8_NEIGHBOUR_DIED_DETAIL);
-      }
-      if (!oom.stopped) {
-        return oom.allocatedMb >= T8_ALLOCATION_CAP_MB
-          ? pass(
-              T8_CHECK_ID,
-              `no engine memory limit by ${oom.allocatedMb} MB; the Worker kept running and the host answered`
-            )
-          : unmeasured(T8_CHECK_ID, `no stop within the budget; allocated ${oom.allocatedMb} MB`);
-      }
-      const facts = `reason ${oom.reason}, allocated ${oom.allocatedMb} MB`;
-      if (oom.reason === T8_UNRESPONSIVE_STOP_REASON) {
-        return unmeasured(T8_CHECK_ID, `${T8_UNRESPONSIVE_DETAIL} (${facts})`);
-      }
-      return t8Reasons.includes(oom.reason)
-        ? pass(
-            T8_CHECK_ID,
-            `stopped with ${oom.reason} after ${oom.allocatedMb} MB and the host answered, with a healthy Plugin beside it`
-          )
-        : fail(T8_CHECK_ID, `stopped with an unexpected reason; ${facts} and the host answered`);
-    })
-  );
+  // The Android main launch leaves T8 for its own launch, since the renderer
+  // death would take the remaining checks down with it (#928).
+  if (plan !== "no-t8") {
+    await record(await t8Check());
+  }
 
   await record(
     await measure(FILE_GRANTS_CHECK_ID, async () => fileGrantsCheck(await seam.probeFileGrants()))

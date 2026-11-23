@@ -15,6 +15,7 @@ import { CONFORMANCE_COLLECTOR_PATHS } from "@/features/plugins/conformance/repo
 import type {
   ConformanceCheck,
   ConformanceEngine,
+  ConformanceLaunchPlan,
   ConformanceLaunchReport,
   ConformanceResult,
 } from "@/features/plugins/conformance/types";
@@ -52,6 +53,11 @@ export interface CollectorState {
   done: boolean;
   /** `/heartbeat` arrived: the host renderer answered after T8. */
   heartbeat: boolean;
+  /**
+   * The plan every `/launch` answers with (#928): which checks the launch runs.
+   * `all` until the runner sets one (Linux always runs them all).
+   */
+  plan: ConformanceLaunchPlan;
   /** Requests that were not the reporter's contract (Plugin leaks). */
   leaks: number;
   /** Every request received, leaks included. */
@@ -92,6 +98,7 @@ export function initialCollectorState(): CollectorState {
     result: null,
     done: false,
     heartbeat: false,
+    plan: "all",
     leaks: 0,
     requests: 0,
   };
@@ -187,7 +194,8 @@ export function applyCollectorRequest(
   }
   if (method === "POST" && path === paths.launch) {
     if (isLaunchReport(request.body)) next.launches = [...state.launches, request.body];
-    return { state: next, reply: { status: 204 } };
+    // The reply is the plan this launch obeys (#928); the report is still kept.
+    return { state: next, reply: { status: 200, body: { plan: state.plan } } };
   }
   if (method === "POST" && path === paths.progress) {
     if (isCheck(request.body)) next.progress = [...state.progress, request.body];

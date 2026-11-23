@@ -24,7 +24,12 @@ import type { RemoteMutationRecord } from "@remote-dom/core";
 import { ThreadMessagePort } from "@quilted/threads";
 
 import { savePluginApproval } from "@/features/plugins/approvals";
-import { loadFixtureHealthy, loadFixtureHostile } from "@/features/plugins/conformance/fixture";
+import {
+  FIXTURE_HEALTHY_ID,
+  FIXTURE_HOSTILE_ID,
+  loadFixtureHealthy,
+  loadFixtureHostile,
+} from "@/features/plugins/conformance/fixture";
 import {
   CONFORMANCE_FILE,
   CONFORMANCE_FILE_RANGE,
@@ -47,7 +52,7 @@ import {
   type FileSaveObservation,
   type IpcObservation,
   type OomObservation,
-  type QuickJsTimings,
+  type PluginTimings,
   type StopObservation,
   T8_ALLOCATION_CAP_MB,
 } from "@/features/plugins/conformance/types";
@@ -59,7 +64,6 @@ import {
 import { createMemoryPluginFileGrantStore } from "@/features/plugins/file-grants";
 import { createPluginHandlers } from "@/features/plugins/handlers";
 import { createPluginLifecycle, HEARTBEAT_INTERVAL_MS } from "@/features/plugins/lifecycle";
-import { QUICKJS_ENGINE_ENABLED } from "@/features/plugins/quickjs/engine-flag";
 import { openPluginUiMount } from "@/features/plugins/remote-ui/mount";
 import { createPluginRemoteUi } from "@/features/plugins/remote-ui/receiver";
 import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
@@ -81,11 +85,6 @@ import {
   PLUGIN_CANVAS_REFERENCE_RESOLVE_REQUEST,
   PLUGIN_COMMAND_RUN_REQUEST,
 } from "@/plugin-sdk/protocol";
-
-/** The fixture Plugin's folder name and id (see `fixture.ts`). */
-const FIXTURE_HOSTILE_ID = "fixture-hostile";
-/** The healthy neighbour fixture's id (#516): it stays ready beside the hostile one. */
-const FIXTURE_HEALTHY_ID = "fixture-healthy";
 
 /**
  * The healthy fixture's one Canvas Reference source (#836), and the ids the
@@ -117,7 +116,7 @@ const FILE_SAVE_PROBE_MANIFEST: Pick<PluginManifest, "id" | "name"> = {
  */
 const YIELDING_ALLOCATION_COMMAND = "escapeAllocateYielding";
 /**
- * The fixture Command the QuickJS call-latency measurement runs (#516): a single
+ * The fixture Command the Plugin call-latency measurement runs (#516): a single
  * Plugin Permission call (`library.books.list()`) that reaches no network, so it
  * is safe to run repeatedly before the escape checks. Its report is accepted
  * without a rate limit because the host is awaiting this `command.run`
@@ -231,13 +230,13 @@ const FRAME_IPC_PROBE = `(async () => {
   parent.postMessage({ __conformanceFrameProbe: { reached, detail } }, "*");
 })();`;
 
-function readPlatform(): ConformancePlatform {
+export function readPlatform(): ConformancePlatform {
   if (IS_ANDROID) return "android";
   if (IS_DESKTOP) return "desktop";
   return "web";
 }
 
-function readEngine(platform: ConformancePlatform): ConformanceEngine {
+export function readEngine(platform: ConformancePlatform): ConformanceEngine {
   const userAgent = typeof navigator === "undefined" ? "" : navigator.userAgent;
   const name =
     platform === "android"
@@ -268,10 +267,10 @@ export async function createRuntimeSeam(
   let allocatedMb = 0;
   /** `performance.now()` when the hostile Plugin's first launch began (#516). */
   let launchStartedAt = 0;
-  /** The QuickJS start time, measured once the hostile Plugin is first ready (#516). */
-  let quickjsStartMs: number | null = null;
-  /** The QuickJS call latency, measured once the hostile Plugin is first ready (#516). */
-  let quickjsCallLatencyMs: number | null = null;
+  /** The Plugin start time, measured once the hostile Plugin is first ready (#516). */
+  let pluginStartMs: number | null = null;
+  /** The Plugin call latency, measured once the hostile Plugin is first ready (#516). */
+  let pluginCallLatencyMs: number | null = null;
 
   const { folder, pinnedHash } = await loadFixtureHostile();
   const read = readPluginManifest(folder);
@@ -394,7 +393,7 @@ export async function createRuntimeSeam(
       const runtime = lifecycle.runtime(FIXTURE_HOSTILE_ID);
       const status = lifecycle.state(FIXTURE_HOSTILE_ID)?.status;
       if (runtime && !runtime.broker.stopped && (status === "ready" || status === "unavailable")) {
-        await noteQuickJsReady(runtime);
+        await notePluginReady(runtime);
         return runtime;
       }
       if (status === "stopped") {
@@ -409,18 +408,16 @@ export async function createRuntimeSeam(
   }
 
   /**
-   * Records the QuickJS engine's own timings (#516) the first time the hostile
+   * Records the Plugin engine's own timings (#516) the first time the hostile
    * Plugin is ready: the start-to-ready time, and the round-trip of one fixture
-   * Command that makes one Plugin Permission call. Off the QuickJS engine this
-   * is a no-op, so desktop and web runs measure nothing.
+   * Command that makes one Plugin Permission call. Measured on every platform.
    */
-  async function noteQuickJsReady(runtime: PluginRuntime): Promise<void> {
-    if (!QUICKJS_ENGINE_ENABLED) return;
-    if (quickjsStartMs === null) {
-      quickjsStartMs = performance.now() - launchStartedAt;
+  async function notePluginReady(runtime: PluginRuntime): Promise<void> {
+    if (pluginStartMs === null) {
+      pluginStartMs = performance.now() - launchStartedAt;
     }
-    if (quickjsCallLatencyMs === null) {
-      quickjsCallLatencyMs = await measureCallLatency(runtime);
+    if (pluginCallLatencyMs === null) {
+      pluginCallLatencyMs = await measureCallLatency(runtime);
     }
   }
 
@@ -889,12 +886,11 @@ export async function createRuntimeSeam(
   return {
     platform,
     engine: readEngine(platform),
-    get quickjs(): QuickJsTimings | undefined {
-      // Only the Android QuickJS engine measures these (#516); `undefined`
-      // everywhere else, and until `ensureReady` has measured them.
-      if (!QUICKJS_ENGINE_ENABLED) return undefined;
-      if (quickjsStartMs === null || quickjsCallLatencyMs === null) return undefined;
-      return { startMs: quickjsStartMs, callLatencyMs: quickjsCallLatencyMs };
+    get timings(): PluginTimings | undefined {
+      // Measured on every platform (#516); `undefined` until `ensureReady` has
+      // measured them.
+      if (pluginStartMs === null || pluginCallLatencyMs === null) return undefined;
+      return { startMs: pluginStartMs, callLatencyMs: pluginCallLatencyMs };
     },
     runCommand,
     probeFrameIpc,

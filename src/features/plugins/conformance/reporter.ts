@@ -12,10 +12,12 @@
  * renderer.
  */
 
-import type {
-  ConformanceCheck,
-  ConformanceLaunchReport,
-  ConformanceResult,
+import {
+  type ConformanceCheck,
+  type ConformanceLaunchPlan,
+  type ConformanceLaunchReport,
+  type ConformanceResult,
+  isConformanceLaunchPlan,
 } from "@/features/plugins/conformance/types";
 
 /** The collector origin the lane binds (D3); a fixed constant, not configurable. */
@@ -48,8 +50,11 @@ export interface ConformanceCollectorLeaks {
 }
 
 export interface ConformanceReporter {
-  /** The launch report, posted before the run begins (#922). */
-  launch(report: ConformanceLaunchReport): Promise<void>;
+  /**
+   * The launch report, posted before the run begins (#922). Resolves with the
+   * plan the collector answers (#928); `"all"` when it cannot say.
+   */
+  launch(report: ConformanceLaunchReport): Promise<ConformanceLaunchPlan>;
   /** One check, posted as it settles. */
   progress(check: ConformanceCheck): Promise<void>;
   /** The whole run: the engine and every check. */
@@ -82,7 +87,23 @@ export function createReporter(
 
   return {
     async launch(report) {
-      await post(paths.launch, report);
+      // The reply is the launch plan (#928). A missing collector, a non-JSON
+      // body, or a value outside the plan union all mean `"all"`: the run still
+      // happens as it always did.
+      try {
+        const response = await fetchImpl(`${base}${paths.launch}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(report),
+        });
+        if (!response) return "all";
+        const data: unknown = await response.json();
+        const plan =
+          typeof data === "object" && data !== null ? (data as { plan?: unknown }).plan : undefined;
+        return isConformanceLaunchPlan(plan) ? plan : "all";
+      } catch {
+        return "all";
+      }
     },
     async progress(check) {
       await post(paths.progress, check);

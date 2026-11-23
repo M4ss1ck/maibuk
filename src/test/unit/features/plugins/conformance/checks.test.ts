@@ -529,6 +529,22 @@ describe("runConformanceChecks T8 under the Android QuickJS engine (#516)", () =
   });
 });
 
+describe("runConformanceChecks launch plan (#928)", () => {
+  it("runs every check but T8 under no-t8", async () => {
+    const checks = await runConformanceChecks(makeSeam(), undefined, { plan: "no-t8" });
+    expect(checks.some((check) => check.id === T8_CHECK_ID)).toBe(false);
+    expect(byId(checks, T2_FRAME_CHECK_ID).status).toBe("pass");
+    expect(byId(checks, FILE_GRANTS_CHECK_ID).status).toBe("pass");
+    expect(byId(checks, CANVAS_REFERENCE_CHECK_ID).status).toBe("pass");
+  });
+
+  it("runs T8 alone under t8-only", async () => {
+    const checks = await runConformanceChecks(makeSeam(), undefined, { plan: "t8-only" });
+    expect(checks.map((check) => check.id)).toEqual([T8_CHECK_ID]);
+    expect(checks[0]?.status).toBe("pass");
+  });
+});
+
 describe("runConformanceChecks File Grants", () => {
   it("passes when read, stat, and release agree with the seeded file", async () => {
     const checks = await runConformanceChecks(makeSeam());

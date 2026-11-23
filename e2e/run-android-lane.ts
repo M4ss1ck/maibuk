@@ -1,6 +1,6 @@
 // `pnpm bench:android-lane [options]`: the Android emulator lane (issue #925).
 // It measures, on both AVDs `scripts/android-avds.sh` creates, the Plugin
-// engine's own start-up and QuickJS call latency (the Plugin conformance run),
+// engine's own start-up and call latency (the Plugin conformance run),
 // Reader's start-up measure, and how long Reader takes to open a large EPUB, a
 // ~50 MB PDF, and a large CBZ from its Shelf, with the host's heartbeat misses
 // for each fixture. It writes e2e/.output/android-lane/<started>/report.json and
@@ -78,8 +78,8 @@ interface Fixture {
   path: string;
 }
 
-/** The QuickJS timings the conformance run recorded, null when it recorded none. */
-interface QuickJs {
+/** The Plugin timings the conformance run recorded, null when it recorded none. */
+interface PluginTimings {
   startMs: number | null;
   callLatencyMs: number | null;
 }
@@ -98,7 +98,7 @@ interface FixtureSamples {
 interface AvdReport {
   name: AvdName;
   webViewVersion: string;
-  quickjs: QuickJs;
+  plugin: PluginTimings;
   readerStartMs: number | null;
   fixtures: FixtureSamples[];
 }
@@ -183,11 +183,11 @@ function stopAvd(serial: string): void {
 }
 
 /**
- * Runs the Plugin conformance lane against the booted AVD and reads the QuickJS
+ * Runs the Plugin conformance lane against the booted AVD and reads the Plugin
  * timings it wrote. Android's T2-frame-ipc fails by design, so the exit code is
  * not the result: the JSON is.
  */
-function runConformance(outPath: string): QuickJs {
+function runConformance(outPath: string): PluginTimings {
   const apk = resolve(root, CONFORMANCE_APK);
   if (!existsSync(apk))
     throw new PrerequisiteMissing(`${CONFORMANCE_APK} is missing; run without --skip-build`);
@@ -199,11 +199,11 @@ function runConformance(outPath: string): QuickJs {
   const file = join(outPath, "plugins-conformance-android.json");
   if (!existsSync(file)) throw new PrerequisiteMissing(`conformance wrote no ${file}`);
   const run = JSON.parse(readFileSync(file, "utf8")) as {
-    quickjs?: { startMs: number; callLatencyMs: number };
+    timings?: { startMs: number; callLatencyMs: number };
   };
   return {
-    startMs: run.quickjs?.startMs ?? null,
-    callLatencyMs: run.quickjs?.callLatencyMs ?? null,
+    startMs: run.timings?.startMs ?? null,
+    callLatencyMs: run.timings?.callLatencyMs ?? null,
   };
 }
 
@@ -390,13 +390,13 @@ async function measureAvd(
   process.env.ANDROID_SERIAL = serial;
   console.log(`[android-lane] ${name} is ${serial}`);
   try {
-    const quickjs = runConformance(join(runDir, name));
+    const plugin = runConformance(join(runDir, name));
     const benchApk = resolve(root, BENCH_APK);
     if (!existsSync(benchApk)) {
       throw new PrerequisiteMissing(`${BENCH_APK} is missing; run without --skip-build`);
     }
     const reader = await measureReader(join(runDir, name), options, fixtures, benchApk);
-    return { name, ...reader, quickjs };
+    return { name, ...reader, plugin };
   } finally {
     stopAvd(serial);
   }
@@ -414,8 +414,8 @@ function printTable(reports: AvdReport[]): void {
   const rows = reports.map((report) => [
     report.name,
     report.webViewVersion,
-    ms(report.quickjs.startMs),
-    ms(report.quickjs.callLatencyMs),
+    ms(report.plugin.startMs),
+    ms(report.plugin.callLatencyMs),
     ms(report.readerStartMs),
     ms(fixtureMedian(report, "epub")),
     ms(fixtureMedian(report, "pdf")),
@@ -425,8 +425,8 @@ function printTable(reports: AvdReport[]): void {
   const header = [
     "AVD",
     "WebView",
-    "quickjs start",
-    "quickjs call",
+    "plugin start",
+    "plugin call",
     "reader start",
     "epub open",
     "pdf open",

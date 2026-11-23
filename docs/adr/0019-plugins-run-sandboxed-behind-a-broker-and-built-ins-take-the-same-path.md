@@ -29,6 +29,8 @@ The conformance:plugins T8 run on the Android emulator showed a Plugin allocatin
 
 ## Amendment: Android runs Plugins in a memory-capped QuickJS, by opt-in (2026-10-16)
 
+Superseded by the 2026-11-23 amendment below (Android runs the native Worker with crash containment).
+
 Decided in the #492 grilling; this replaces the 2026-10-13 amendment once it ships. On Android only, the sandbox Worker evaluates the Plugin's module graph in QuickJS compiled to Wasm (`quickjs-emscripten-core` with the quickjs-ng sync variant) instead of handing it to the WebView's engine. The iframe, Worker, port, broker, Permissions, and limits stay as above; only the evaluator changes. Each Plugin gets its own 64 MB QuickJS heap, and the Wasm memory maximum is that cap plus fixed interpreter headroom, so a Plugin that allocates past it stops with the existing `out-of-memory` reason and the renderer survives. Desktop and web keep the native Worker.
 
 The QuickJS shim provides a fixed set of globals: timers, `queueMicrotask`, `performance.now`, `URL`, `TextEncoder`/`TextDecoder`, `console`, and a `MessagePort`-shaped bridge for the SDK and Remote DOM. `Intl` and `WebAssembly` are absent; a Plugin that needs them bundles its own.
@@ -38,6 +40,8 @@ Android is opt-in: a Plugin runs there only when its manifest's `platforms` list
 Considered and rejected: native QuickJS in Rust (`rquickjs`), which needs a second broker transport over IPC and puts Rust in the trust boundary; QuickJS on every platform, which makes every desktop Plugin pay the interpreter cost; parity by hiding `Intl` and `WebAssembly` from desktop Workers, which takes working globals away from desktop Plugins for no gain; a separate Android WebView, because every WebView in an app shares one renderer process. An `onRenderProcessGone` handler that keeps the app alive when the renderer dies is defense in depth, tracked on its own, and does not lift the Android ban.
 
 ## Amendment: the capped QuickJS engine ships in the sandbox Worker (2026-10-16)
+
+Superseded by the 2026-11-23 amendment below.
 
 #516 ships the amendment above: on Android Plugins now run in a 64 MB capped QuickJS engine inside the same sandbox Worker, so the iframe, Worker, port, broker, Permissions, and limits are unchanged and a Plugin that reaches the cap stops with the existing `out-of-memory` reason while the renderer survives.
 
@@ -51,3 +55,11 @@ A Plugin now declares `warmStart`: `surface` (the default, unchanged) or `intent
 Warm-on-intent was not made global. Making `sidebar` and `context` non-warming for every on-demand Plugin would change Echoes at launch: its Item Menu entry "Find echoes" is disabled while its Plugin is stopped (`usePluginItemMenuActions`, `isDisabled: status !== "ready"`), and Echoes today is warm from its global "Open Echoes" Command. Echoes keeps `surface`; the Reader sets `"warmStart": "intent"` in `plugins/maibuk-reader/manifest.json`. The manifest field is a `"surface" | "intent"` enum; `intent` on a `persistent` Plugin is refused.
 
 **Stop when the page closes.** An `intent` Plugin does not wait out the five-minute idle window after its page closes. It stops `INTENT_IDLE_STOP_MS` (3 seconds) after its last page closes, or after a hover-only warm that never opened a page. Its idle timer is the same one the five-minute stop uses (`armIdle` in `src/features/plugins/lifecycle.ts`), with the shorter window. The stop waits while the host still has open work on the Plugin: a Command run, another host request, an Endpoint answer, or a Plugin call whose handler has not finished (`PluginBroker.hasOpenWork`, which ignores the heartbeat's health check). A page, Frame, or Settings row that is open always keeps it warm. The stop is a normal `idle` stop: no stop toast and no restart. Reopening the page warms it again. Surface and persistent Plugins keep the five-minute window and never read `warmStart`. The Reader saves its Reading Position as Plugin calls (`storage.set`, then the shelf write). `back` awaits that save before it navigates away; `closed` does not wait, so the open-work check is what keeps the Plugin running until the save's calls settle.
+
+## Amendment: Android runs the native Worker, with crash containment in place of the cap (2026-11-23)
+
+Decided in the #920 grilling; supersedes both 2026-10-16 amendments. On Android, Plugins run in the native sandbox Worker, the same path as desktop and web (#928). QuickJS is an interpreter with no JIT: on a Boox Go 6 the Reader's unzip, decode, and hash each took over a second in its Worker, long enough for the host heartbeat to call it unresponsive (#918). Its missing `Intl`, `WebAssembly`, `Blob`, and `Worker` also forced Plugin-side fallbacks. The native Worker has all four.
+
+The 64 MB cap is replaced by containment, not by another cap. A Plugin can still exhaust the WebView renderer's memory, and Android then kills the renderer. When that happens in the foreground, Kotlin writes a death record with each running Plugin's last activity, the app restarts, and before any Plugin warm-starts every Plugin active in the 10 seconds before the death is disabled through the existing switch, with one notice naming them (#926, #927). A background death ends the process quietly and disables nothing (#924). Built-in Plugins get no exception.
+
+Unchanged: the iframe, Worker, port, broker, Permissions, and limits; the sandbox CSP, which keeps `'wasm-unsafe-eval'` because desktop Plugins already use `WebAssembly`; and Plugin Platforms, so a Plugin runs on Android only when its manifest lists `"android"`. The switch was gated on emulators: every conformance escape check, the foreground T8 death case, and start, call, and Reader open times equal to or better than the QuickJS baseline with zero heartbeat misses (#925). Out of scope: any memory cap for Plugins or Frames on Android, and a separate Android process for Plugins.

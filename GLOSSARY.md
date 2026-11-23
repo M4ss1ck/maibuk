@@ -669,7 +669,7 @@ The folder on this device that Maibuk loads Plugins from, chosen in Settings (AD
 _Avoid_: plugins folder, extensions folder
 
 **Plugin Platforms**:
-The devices a Plugin says it runs on. A Plugin that names none runs on desktop and the web; it runs on Android only when it names Android, because there it runs in a slower, memory-capped engine that its author must have tried.
+The devices a Plugin says it runs on. A Plugin that names none runs on desktop and the web; it runs on Android only when it names Android, because its author must have tried it there.
 _Avoid_: targets, supported OS
 
 **Plugin Permission**:

@@ -11,6 +11,7 @@
 
 import { createServer, type IncomingMessage, type Server } from "node:http";
 
+import type { ConformanceLaunchPlan } from "@/features/plugins/conformance/types";
 import { CONFORMANCE_COLLECTOR_ORIGIN } from "@/test/support/plugin-conformance/csp";
 import {
   type CollectorState,
@@ -122,6 +123,8 @@ export interface ConformanceCollector {
   url: string;
   /** The requests seen since the last `reset()`. */
   state(): CollectorState;
+  /** Sets the plan every `/launch` answers with, until the next `reset()` (#928). */
+  setPlan(plan: ConformanceLaunchPlan): void;
   /** Forgets a previous platform's run before the next launch. */
   reset(): void;
   close(): Promise<void>;
@@ -161,6 +164,9 @@ export function startConformanceCollector(): Promise<ConformanceCollector> {
         resolveServer({
           url: CONFORMANCE_COLLECTOR_ORIGIN,
           state: () => current,
+          setPlan: (plan) => {
+            current = { ...current, plan };
+          },
           reset: () => {
             current = initialCollectorState();
           },

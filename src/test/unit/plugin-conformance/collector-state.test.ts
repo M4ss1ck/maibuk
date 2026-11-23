@@ -77,6 +77,26 @@ describe("applyCollectorRequest()", () => {
     expect(state.launches).toEqual([]);
   });
 
+  it("answers /launch with the state plan and still records the report", () => {
+    const report = { plugins: [{ id: "example.alpha", enabled: true }], notices: [] };
+    const { state, reply } = applyCollectorRequest(initialCollectorState(), {
+      method: "POST",
+      path: "/launch",
+      body: report,
+    });
+    expect(reply).toEqual({ status: 200, body: { plan: "all" } });
+    expect(state.launches).toEqual([report]);
+  });
+
+  it("answers /launch with the plan the runner set (#928)", () => {
+    const report = { plugins: [{ id: "example.alpha", enabled: true }], notices: [] };
+    const { reply } = applyCollectorRequest(
+      { ...initialCollectorState(), plan: "t8-only" },
+      { method: "POST", path: "/launch", body: report }
+    );
+    expect(reply).toEqual({ status: 200, body: { plan: "t8-only" } });
+  });
+
   it("collects progress lines in order", () => {
     const state = fold([
       { method: "POST", path: "/progress", body: PASS },
@@ -96,14 +116,14 @@ describe("applyCollectorRequest()", () => {
     expect(state.userAgent).toBe("UA");
   });
 
-  it("keeps the QuickJS timings on the stored result (#516)", () => {
+  it("keeps the Plugin timings on the stored result (#516)", () => {
     const result = {
       engine: { name: "tauri-android", version: "1", userAgent: "UA" },
       checks: [PASS],
-      quickjs: { startMs: 12, callLatencyMs: 3 },
+      timings: { startMs: 12, callLatencyMs: 3 },
     };
     const state = fold([{ method: "POST", path: "/result", body: result }]);
-    expect(state.result?.quickjs).toEqual({ startMs: 12, callLatencyMs: 3 });
+    expect(state.result?.timings).toEqual({ startMs: 12, callLatencyMs: 3 });
   });
 
   it("keeps the userAgent from the first /progress or /result that carries it", () => {
