@@ -26,7 +26,7 @@
  * own files and the SDK's protocol constants.
  */
 
-import { PLUGIN_MESSAGE_MAX_BYTES, bytesToBase64 } from "@/plugin-sdk/protocol";
+import { PLUGIN_MESSAGE_MAX_BYTES } from "@/plugin-sdk/protocol";
 import type { MapAsset } from "./assets";
 import { roundedMm } from "./geometry";
 import type { MapDocument, MapPage } from "./maps";
@@ -235,11 +235,25 @@ export async function fitUnderCap(
 }
 
 /**
- * The bytes packed as one base64 data URI. No `Buffer` and no `btoa`, which
- * not every engine has, so any Plugin engine can call it.
+ * The most bytes one `String.fromCharCode` call takes: a multi-megabyte picture
+ * builds its binary string in slices of this size, so no call spreads more
+ * arguments than the stack holds.
  */
+const BINARY_STRING_CHUNK_BYTES = 0x8000;
+
+/** `bytes` as one binary string, one character per byte, built in chunks. */
+function binaryString(bytes: Uint8Array): string {
+  const parts: string[] = [];
+  for (let offset = 0; offset < bytes.length; offset += BINARY_STRING_CHUNK_BYTES) {
+    const slice = bytes.subarray(offset, offset + BINARY_STRING_CHUNK_BYTES);
+    parts.push(String.fromCharCode.apply(null, slice as unknown as number[]));
+  }
+  return parts.join("");
+}
+
+/** The bytes packed as one base64 data URI. */
 export function dataUri(mime: string, bytes: Uint8Array): string {
-  return `data:${mime};base64,${bytesToBase64(bytes)}`;
+  return `data:${mime};base64,${btoa(binaryString(bytes))}`;
 }
 
 /**

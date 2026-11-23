@@ -237,18 +237,5 @@
   "chrome.more": "More actions",
   "chrome.expandProperties": "Full-height Properties",
   "chrome.expandLayers": "Full-height Layers",
-  "chrome.closeLayers": "Close Layers",
-  "date.medium": "{{month}} {{day}}, {{year}}",
-  "date.month.1": "Jan",
-  "date.month.2": "Feb",
-  "date.month.3": "Mar",
-  "date.month.4": "Apr",
-  "date.month.5": "May",
-  "date.month.6": "Jun",
-  "date.month.7": "Jul",
-  "date.month.8": "Aug",
-  "date.month.9": "Sep",
-  "date.month.10": "Oct",
-  "date.month.11": "Nov",
-  "date.month.12": "Dec"
+  "chrome.closeLayers": "Close Layers"
 }
