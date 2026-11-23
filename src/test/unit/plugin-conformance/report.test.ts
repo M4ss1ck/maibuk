@@ -202,31 +202,31 @@ describe("buildPlatformRun()", () => {
     expect("followUp" in run).toBe(false);
   });
 
-  it("carries the QuickJS timings of an Android run that measured QuickJS (#516)", () => {
-    const quickjs = { startMs: 12, callLatencyMs: 3 };
+  it("carries the Plugin timings of an Android run that measured them (#516)", () => {
+    const timings = { startMs: 12, callLatencyMs: 3 };
     const run = buildPlatformRun({
       platform: "android",
       engine: ENGINE,
       checks: [T7],
       ranAt: "t",
       exit: 0,
-      quickjs,
+      timings,
     });
-    expect(run.quickjs).toEqual(quickjs);
+    expect(run.timings).toEqual(timings);
     expect("support" in run).toBe(false);
     expect("followUp" in run).toBe(false);
   });
 
-  it("carries QuickJS timings on a Linux run too, without a support marker", () => {
+  it("carries Plugin timings on a Linux run too, without a support marker", () => {
     const run = buildPlatformRun({
       platform: "linux",
       engine: ENGINE,
       checks: [T7],
       ranAt: "t",
       exit: 0,
-      quickjs: { startMs: 5, callLatencyMs: 1 },
+      timings: { startMs: 5, callLatencyMs: 1 },
     });
-    expect(run.quickjs).toEqual({ startMs: 5, callLatencyMs: 1 });
+    expect(run.timings).toEqual({ startMs: 5, callLatencyMs: 1 });
     expect("support" in run).toBe(false);
   });
 
@@ -240,7 +240,7 @@ describe("buildPlatformRun()", () => {
     });
     expect("support" in run).toBe(false);
     expect("followUp" in run).toBe(false);
-    expect("quickjs" in run).toBe(false);
+    expect("timings" in run).toBe(false);
   });
 });
 
@@ -369,20 +369,20 @@ describe("formatConformanceTable()", () => {
     expect(formatConformanceTable([])).toContain("no platform ran");
   });
 
-  it("prints the QuickJS timings when the run measured them (#516)", () => {
+  it("prints the Plugin timings when the run measured them (#516)", () => {
     const table = formatConformanceTable([
       {
         platform: "android",
         outcome: { checks: [check("T8-oom", "pass")], exitCode: 0, note: "all checks passed" },
         leaks: 0,
         engine: ENGINE,
-        quickjs: { startMs: 42, callLatencyMs: 1.5 },
+        timings: { startMs: 42, callLatencyMs: 1.5 },
       },
     ]);
-    expect(table).toContain("android: QuickJS start 42 ms, call latency 1.5 ms");
+    expect(table).toContain("android: Plugin start 42 ms, call latency 1.5 ms");
   });
 
-  it("prints no QuickJS line when the run measured none", () => {
+  it("prints no Plugin timings line when the run measured none", () => {
     const table = formatConformanceTable([
       {
         platform: "linux",
@@ -391,6 +391,6 @@ describe("formatConformanceTable()", () => {
         engine: ENGINE,
       },
     ]);
-    expect(table).not.toContain("QuickJS");
+    expect(table).not.toContain("Plugin start");
   });
 });

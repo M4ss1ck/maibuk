@@ -336,9 +336,9 @@ async function measurePlatform(
       ranAt,
       exit: outcome.exitCode,
       device: started.device,
-      // The Android QuickJS timings (#516) arrive on `/result`; absent on every
-      // other engine and on a run that died before `/result`.
-      quickjs: state.result?.quickjs,
+      // The Plugin timings (#516) arrive on `/result`; absent on a run that died
+      // before `/result`.
+      timings: state.result?.timings,
     }),
     stack: stackFromCargoLock(cargoLockText, started.stackExtra),
   };
@@ -422,7 +422,7 @@ async function main(): Promise<void> {
         outcome: result.outcome,
         leaks: result.leaks,
         engine: result.engine,
-        quickjs: result.run.quickjs,
+        timings: result.run.timings,
       });
       console.log(`[conformance] ${platform}: report at ${outPath}`);
 

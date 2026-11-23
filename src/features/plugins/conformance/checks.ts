@@ -334,8 +334,8 @@ export interface RunConformanceOptions {
   /**
    * True when the run is under the Android QuickJS engine (#516). T8 then
    * requires exactly `out-of-memory`: the 64 MB cap is hard, so any other stop
-   * is a fail. The route passes `QUICKJS_ENGINE_ENABLED`; the default keeps the
-   * desktop and web behavior.
+   * is a fail. No route passes it since Android runs the native Worker (#928);
+   * #929 deletes it with the engine.
    */
   quickjs?: boolean;
 }

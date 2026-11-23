@@ -96,14 +96,14 @@ describe("applyCollectorRequest()", () => {
     expect(state.userAgent).toBe("UA");
   });
 
-  it("keeps the QuickJS timings on the stored result (#516)", () => {
+  it("keeps the Plugin timings on the stored result (#516)", () => {
     const result = {
       engine: { name: "tauri-android", version: "1", userAgent: "UA" },
       checks: [PASS],
-      quickjs: { startMs: 12, callLatencyMs: 3 },
+      timings: { startMs: 12, callLatencyMs: 3 },
     };
     const state = fold([{ method: "POST", path: "/result", body: result }]);
-    expect(state.result?.quickjs).toEqual({ startMs: 12, callLatencyMs: 3 });
+    expect(state.result?.timings).toEqual({ startMs: 12, callLatencyMs: 3 });
   });
 
   it("keeps the userAgent from the first /progress or /result that carries it", () => {

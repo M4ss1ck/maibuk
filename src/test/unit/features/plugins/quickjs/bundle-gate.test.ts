@@ -4,13 +4,11 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 /**
- * The Android QuickJS engine (#516) is compile-time gated: on web and desktop
- * `QUICKJS_ENGINE_ENABLED` folds to `false` and Rollup drops the runner, its
- * Wasm, and the bundled runner module. This follows the conformance route-gate
- * test: it walks the static value-import graph from `main.tsx` and proves the
- * engine is never statically reachable, then pins the guarded shape the
- * production build tree-shakes, and scans the whole `src/` tree so a lazy chunk
- * cannot sneak a static engine import either. The real proof is the lane's
+ * The Android QuickJS engine (#516) must never reach a shipped build. This
+ * follows the conformance route-gate test: it walks the static value-import
+ * graph from `main.tsx` and proves the engine is never statically reachable,
+ * then scans the whole `src/` tree so a lazy chunk cannot sneak a static engine
+ * import either. The real proof is the lane's
  * `pnpm build:web && ! find dist -name '*.wasm' | xargs -r grep -l -a quickjs`;
  * this test is the cheap standing guard that fails on the obvious regression.
  */
@@ -124,8 +122,8 @@ describe("the QuickJS engine is absent from a shipped build", () => {
     expect(bad).toEqual([]);
   });
 
-  it("statically reaches nothing under quickjs but the flag and its constants leaf", () => {
-    const allowed = ["constants.ts", "engine-flag.ts"];
+  it("statically reaches nothing under quickjs but its constants leaf", () => {
+    const allowed = ["constants.ts"];
     const underQuickjs = [...reachable]
       .filter((file) => file.startsWith(`${QUICKJS_DIR}/`))
       .map((file) => file.slice(QUICKJS_DIR.length + 1));
@@ -140,18 +138,8 @@ describe("the QuickJS engine is absent from a shipped build", () => {
     }
   });
 
-  it("guards the only reach to the engine with the compile-time flag and a dynamic import", () => {
+  it("leaves runtime.ts with no quickjs import at all", () => {
     const runtime = readFileSync(resolve(SRC_ROOT, "features/plugins/runtime.ts"), "utf8");
-    expect(runtime).toContain("QUICKJS_ENGINE_ENABLED");
-    expect(runtime).toContain('await import("@/features/plugins/quickjs/host-assets")');
-    // No static import sneaks the loader into the chunk.
-    expect(runtime).not.toMatch(
-      /\bimport\s+[^;]*?from\s+["']@\/features\/plugins\/quickjs\/host-assets["']/
-    );
-    // The flag is the compile-time platform check, never the runtime platform rule.
-    const flag = readFileSync(resolve(QUICKJS_DIR, "engine-flag.ts"), "utf8");
-    expect(flag).toContain('import.meta.env.TAURI_ENV_PLATFORM === "android"');
-    expect(flag).not.toContain("host-platform");
-    expect(flag).not.toContain("pluginsRunOn");
+    expect(runtime).not.toContain("quickjs");
   });
 });

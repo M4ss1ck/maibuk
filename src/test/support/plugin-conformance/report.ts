@@ -15,7 +15,7 @@ import {
 import type {
   ConformanceCheck,
   ConformanceEngine,
-  QuickJsTimings,
+  PluginTimings,
 } from "@/features/plugins/conformance/types";
 import { readCargoLockVersions } from "../../../../scripts/plugin-conformance-gate.mjs";
 import type { CollectorState } from "@/test/support/plugin-conformance/collector-state";
@@ -47,10 +47,10 @@ export interface PlatformRun {
   /** The lane exit code this run recorded (0 or 1; only a measured run records). */
   exit: ExitCode;
   /**
-   * The QuickJS engine's own timings (#516), recorded only when the run measured
-   * under it; there is no gate on them (decision-401).
+   * The Plugin engine's own timings (#516), recorded once the run measured them;
+   * there is no gate on them (decision-401).
    */
-  quickjs?: QuickJsTimings;
+  timings?: PluginTimings;
   checks: ConformanceCheck[];
 }
 
@@ -198,15 +198,15 @@ export function buildPlatformRun(input: {
   /** The lane exit code the run settled on (0 or 1). */
   exit: ExitCode;
   device?: string;
-  /** The measured QuickJS timings (#516); absent off the QuickJS engine. */
-  quickjs?: QuickJsTimings;
+  /** The measured Plugin timings (#516). */
+  timings?: PluginTimings;
 }): PlatformRun {
   return {
     ranAt: input.ranAt,
     engine: input.engine,
     ...(input.device === undefined ? {} : { device: input.device }),
     exit: input.exit,
-    ...(input.quickjs === undefined ? {} : { quickjs: input.quickjs }),
+    ...(input.timings === undefined ? {} : { timings: input.timings }),
     checks: input.checks,
   };
 }
@@ -246,8 +246,8 @@ export interface PlatformSummary {
   outcome: PlatformOutcome;
   leaks: number;
   engine: ConformanceEngine | null;
-  /** The QuickJS timings to print, when the run measured them (#516). */
-  quickjs?: QuickJsTimings;
+  /** The Plugin timings to print, when the run measured them (#516). */
+  timings?: PluginTimings;
 }
 
 function counts(checks: ConformanceCheck[]): { pass: number; fail: number; unmeasured: number } {
@@ -285,11 +285,11 @@ export function formatConformanceTable(summaries: PlatformSummary[]): string {
     );
   }
   for (const summary of summaries) {
-    // The QuickJS timings (#516) are evidence, not a gate: print them so a
-    // reader sees what the Android engine measured.
-    if (summary.quickjs !== undefined) {
+    // The Plugin timings (#516) are evidence, not a gate: print them so a
+    // reader sees what each engine measured.
+    if (summary.timings !== undefined) {
       out.push(
-        `${summary.platform}: QuickJS start ${summary.quickjs.startMs} ms, call latency ${summary.quickjs.callLatencyMs} ms`
+        `${summary.platform}: Plugin start ${summary.timings.startMs} ms, call latency ${summary.timings.callLatencyMs} ms`
       );
     }
     for (const check of summary.outcome.checks) {

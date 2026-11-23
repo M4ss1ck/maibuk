@@ -33,14 +33,14 @@ export interface ConformanceEngine {
 }
 
 /**
- * The QuickJS engine's own timings (#516, decision-401). Measured on the host
- * only when the Android QuickJS engine is enabled (`QUICKJS_ENGINE_ENABLED`):
- * the lane records them with **no gate** on them, so they are evidence, never a
- * pass/fail rule. `startMs` runs from starting the fixture Plugin to its ready;
- * `callLatencyMs` is the round-trip of one fixture Command that makes one Plugin
- * Permission call.
+ * The Plugin engine's own timings (#516, decision-401), measured on every
+ * platform: the lane records them with **no gate** on them, so they are
+ * evidence, never a pass/fail rule. `startMs` runs from starting the fixture
+ * Plugin to its ready; `callLatencyMs` is the round-trip of one fixture Command
+ * that makes one Plugin Permission call. The Android emulator lane compares
+ * them across engines.
  */
-export interface QuickJsTimings {
+export interface PluginTimings {
   /** Milliseconds from starting the fixture Plugin to its ready. */
   startMs: number;
   /** Milliseconds for one fixture Command's Plugin Permission call round-trip. */
@@ -52,10 +52,10 @@ export interface ConformanceResult {
   engine: ConformanceEngine;
   checks: ConformanceCheck[];
   /**
-   * The QuickJS timings (#516), present only when the run was measured under the
-   * Android QuickJS engine; there is no gate on them (decision-401).
+   * The Plugin timings (#516), present once the run measured them; there is no
+   * gate on them (decision-401).
    */
-  quickjs?: QuickJsTimings;
+  timings?: PluginTimings;
 }
 
 /**
@@ -191,10 +191,10 @@ export interface ConformanceSeam {
   platform: ConformancePlatform;
   engine: ConformanceEngine;
   /**
-   * The QuickJS timings (#516), present only when the seam measured them under
-   * the Android QuickJS engine; `undefined` on every other engine.
+   * The Plugin timings (#516), measured on every platform; `undefined` until the
+   * seam has measured them.
    */
-  quickjs?: QuickJsTimings;
+  timings?: PluginTimings;
   /** Runs one fixture-hostile escape Command and reports what was observed. */
   runCommand(command: string): Promise<CommandObservation>;
   /** T2 from a sandboxed frame (desktop only; never called on Android). */
