@@ -23,11 +23,11 @@
 import { hashPluginDirectory } from "@/features/plugins/directory-hash";
 import type { PluginFolder, PluginFolderFile } from "@/features/plugins/types";
 
-/** The hostile fixture Plugin's id, which is also its folder name in the build output. */
-export const FIXTURE_HOSTILE_ID = "fixture-hostile";
+// The ids live in checks.ts so the Node harness can read them without this
+// module's import.meta.glob (#928).
+import { FIXTURE_HEALTHY_ID, FIXTURE_HOSTILE_ID } from "@/features/plugins/conformance/checks";
 
-/** The healthy neighbour fixture Plugin's id (#516); it keeps answering beside the hostile one. */
-export const FIXTURE_HEALTHY_ID = "fixture-healthy";
+export { FIXTURE_HEALTHY_ID, FIXTURE_HOSTILE_ID };
 
 /** The built hostile fixture's files, inlined as raw text at build time (see above). */
 const RAW_HOSTILE_FILES = import.meta.glob("../../../../e2e/.output/plugins/fixture-hostile/**/*", {

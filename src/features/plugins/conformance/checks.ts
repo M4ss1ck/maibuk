@@ -70,6 +70,12 @@ export const T2_FRAME_CHECK_ID = "T2-frame-ipc";
 export const T2_WORKER_CHECK_ID = "T2-worker-ipc";
 export const T7_CHECK_ID = "T7-hang";
 export const T8_CHECK_ID = "T8-oom";
+
+/** The hostile fixture Plugin's id, which is also its folder name in the build output. */
+export const FIXTURE_HOSTILE_ID = "fixture-hostile";
+
+/** The healthy neighbour fixture Plugin's id (#516); it keeps answering beside the hostile one. */
+export const FIXTURE_HEALTHY_ID = "fixture-healthy";
 /** The tight-loop allocation Command's own check (D1's `escape-<name>` shape). */
 export const ESCAPE_ALLOCATE_CHECK_ID = "escape-allocate";
 

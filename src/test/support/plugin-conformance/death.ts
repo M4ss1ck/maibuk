@@ -13,7 +13,7 @@
 // `foregroundDeathCheck`.
 
 import { T8_CHECK_ID } from "@/features/plugins/conformance/checks";
-import { FIXTURE_HEALTHY_ID, FIXTURE_HOSTILE_ID } from "@/features/plugins/conformance/fixture";
+import { FIXTURE_HEALTHY_ID, FIXTURE_HOSTILE_ID } from "@/features/plugins/conformance/checks";
 import type {
   ConformanceCheck,
   ConformanceLaunchReport,

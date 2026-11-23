@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { FIXTURE_HEALTHY_ID, FIXTURE_HOSTILE_ID } from "@/features/plugins/conformance/fixture";
+import { FIXTURE_HEALTHY_ID, FIXTURE_HOSTILE_ID } from "@/features/plugins/conformance/checks";
 import type { ConformanceLaunchReport } from "@/features/plugins/conformance/types";
 import {
   BACKGROUND_DEATH_CHECK_ID,
