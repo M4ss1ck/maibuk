@@ -3,9 +3,10 @@
  * host runs Plugins on.
  *
  * Android runs a Plugin only when its manifest lists "android" in `platforms`
- * (#517, see {@link manifestRunsOn}). The Android Plugin host runs each Plugin in
- * a 64 MB capped QuickJS engine inside the sandbox Worker (#492), so a Plugin
- * that exhausts its heap stops with `out-of-memory` and the renderer survives.
+ * (#517, see {@link manifestRunsOn}). Since #928 the Android Plugin host runs
+ * each Plugin in the WebView's native sandbox Worker, the same as desktop, so a
+ * Plugin blamed for an out-of-memory restart is disabled (#927) and the rest of
+ * the app survives.
  *
  * This module stays a leaf — its imports are the build-time Windows Frame
  * record ({@link WINDOWS_FRAME_RECORD}) and the build-time platform leaf
@@ -29,9 +30,9 @@ export type PluginHostPlatform = "web" | "desktop" | "android";
 
 /**
  * The platforms the host runs no Plugin on, whatever a manifest declares. Empty
- * since #517: Android runs a Plugin once its manifest lists "android" (the
- * memory-capped QuickJS engine, #492). The mechanism stays so a future platform
- * can be refused in one place.
+ * since #517: Android runs a Plugin once its manifest lists "android" (in the
+ * WebView native sandbox Worker, the same as desktop). The mechanism stays so a
+ * future platform can be refused in one place.
  */
 export const PLUGIN_HOST_UNSUPPORTED_PLATFORMS: readonly PluginHostPlatform[] = [];
 

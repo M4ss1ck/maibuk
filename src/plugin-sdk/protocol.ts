@@ -257,36 +257,13 @@ export const PLUGIN_READY_MESSAGE = { kind: "maibuk:plugin-ready" } as const;
 export const PLUGIN_ERROR_MESSAGE = { kind: "maibuk:plugin-error" } as const;
 
 /**
- * The boot message's shape. On every engine it carries `entry`: on the native
- * engines that is the entry module's `blob:` URL; on the Android QuickJS engine
- * (#516) it is the Plugin-relative path that keys {@link PluginBootMessage.sources}.
- *
- * The four Android-only fields are present only when the build selected the
- * QuickJS engine, and are named so the `queueMicrotask` prelude can read them
- * without evaluating any Plugin bytes:
- *
- * - `engine` is `"quickjs"`; omitted means the native `import(entry)` path.
- * - `runner` is the frame-created `blob:` URL of the bundled QuickJS runner
- *   module (`host-assets.ts`), which the prelude imports.
- * - `sources` is the verified Plugin module graph as data, keyed by
- *   Plugin-relative path — never turned into `blob:` URLs on this path.
- * - `wasmBinary` is the raw QuickJS Wasm bytes. They cross the frame as a copied
- *   `ArrayBuffer` and the runner compiles them inside the Worker; a compiled
- *   `WebAssembly.Module` cannot cross the frame (the message is dropped), so the
- *   bytes stay bytes until the Worker has them.
+ * The boot message's shape: `entry` is the entry module's `blob:` URL, which the
+ * Worker's prelude imports before replaying the init message to the Plugin.
  */
 export interface PluginBootMessage {
   kind: typeof PLUGIN_BOOT_MESSAGE.kind;
-  /** The entry module's `blob:` URL, or its `sources` key on the QuickJS engine. */
+  /** The entry module's `blob:` URL. */
   entry: string;
-  /** The engine the prelude must run the module graph in; omitted is the native import. */
-  engine?: "quickjs";
-  /** The frame-created URL of the bundled QuickJS runner module. */
-  runner?: string;
-  /** The verified Plugin module sources, keyed by Plugin-relative path. */
-  sources?: Record<string, string>;
-  /** The raw QuickJS Wasm bytes the Worker compiles before instantiating. */
-  wasmBinary?: ArrayBuffer;
 }
 
 /** True for the boot message's shape, so the sandbox and a test share one check. */
@@ -427,14 +404,14 @@ const BASE64_PAD = 0x3d;
  * Largest run of ASCII codes handed to one `String.fromCharCode` call. The
  * encoder fills a `Uint8Array` and emits it in these slices, so the cost stays
  * linear: a per-group `+=` copies the whole accumulated string every time,
- * which is quadratic on an engine without string ropes (the Android QuickJS
- * engine), where a multi-megabyte image would spin for minutes.
+ * which is quadratic on an engine without string ropes, where a multi-megabyte
+ * image would spin for minutes.
  */
 const BASE64_CHUNK_CODES = 0x8000;
 
 /**
- * Decodes base64 without `atob`, which not every Plugin engine has (the Android
- * QuickJS engine does not). Throws on anything that is not base64.
+ * Decodes base64 without `atob`, which not every Plugin engine has. Throws on
+ * anything that is not base64.
  */
 export function base64ToBytes(text: string): Uint8Array {
   const length = base64DecodedLength(text);

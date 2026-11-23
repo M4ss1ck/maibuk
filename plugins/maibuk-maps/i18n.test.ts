@@ -1,7 +1,7 @@
 /**
  * Maps' runtime strings: the medium date the Maps list writes, which falls
- * back to the catalogs where the engine has no `Intl` (the Android QuickJS
- * engine), and must read exactly as `Intl` writes it.
+ * back to the catalogs where the engine has no `Intl`, and must read exactly
+ * as `Intl` writes it.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mediumDate } from "./i18n";

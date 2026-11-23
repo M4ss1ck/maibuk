@@ -40,7 +40,7 @@ type PluralCategory = "one" | "other";
 /**
  * The CLDR cardinal category both shipped languages pick for a count: "one" for
  * a magnitude of exactly 1, "other" for everything else Maps counts. Written
- * out because the Android QuickJS global set has no `Intl`.
+ * out because not every engine has `Intl`.
  */
 function pluralCategory(count: number): PluralCategory {
   return Math.abs(count) === 1 ? "one" : "other";
@@ -79,8 +79,8 @@ export function format(
 
 /**
  * A date as `Intl.DateTimeFormat`'s `dateStyle: "medium"` writes it ("Nov 21,
- * 2026", "21 nov 2026"), in the device's time zone. The Android QuickJS engine
- * has no `Intl`, so there the catalogs' month names and pattern write it.
+ * 2026", "21 nov 2026"), in the device's time zone. An engine without `Intl`
+ * falls back to the catalogs' month names and pattern.
  */
 export function mediumDate(language: string, time: number): string {
   if (typeof Intl !== "undefined" && typeof Intl.DateTimeFormat === "function") {

@@ -2,7 +2,7 @@
  * The Plugin-side node budget (#516, decision 2a), per mount. The host checks
  * `PLUGIN_UI_NODE_LIMIT` per mount: one shadow tree per receiver (validate.ts).
  * This budget is the same measure, taken where each node is made, so the render
- * stops before the rest of the tree is built on the QuickJS engine.
+ * stops before the rest of the tree is built in the sandbox.
  *
  * What counts. The host's shadow counts every node it replays: elements and text
  * nodes (validate.ts `checkSerialization`: an element adds one, and so does each

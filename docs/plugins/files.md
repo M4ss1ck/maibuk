@@ -69,7 +69,7 @@ A File Grant is read-only: Maibuk never writes to, moves, or deletes the file be
 
 ## Saving a file
 
-`client.files.save({ name, mimeType, bytes })` hands Maibuk one file to write where the author chooses. Pass the bytes as a `Uint8Array`, a `Blob`, or an `AsyncIterable<Uint8Array>`; the SDK gathers them into one `Blob` (or one `Uint8Array` on the Android QuickJS engine, which has no `Blob`) and sends it right after the call, so the file travels as a `blob` message instead of inside the JSON one. There is no size cap.
+`client.files.save({ name, mimeType, bytes })` hands Maibuk one file to write where the author chooses. Pass the bytes as a `Uint8Array`, a `Blob`, or an `AsyncIterable<Uint8Array>`; the SDK gathers them into one `Blob` (or one `Uint8Array` on an engine with no `Blob`) and sends it right after the call, so the file travels as a `blob` message instead of inside the JSON one. There is no size cap.
 
 The call resolves with `{ status: "saved" }` once Maibuk wrote the file, or `{ status: "cancelled" }` when the author closed the save dialog without choosing a place. A save that fails, such as on a full disk, is refused with `internal-error`, carrying the reason.
 

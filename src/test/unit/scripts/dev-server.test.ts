@@ -127,9 +127,6 @@ describe("dev-server guard", () => {
   });
 });
 
-/** Worker entries the dev server never starts: the QuickJS runner is Android-only. */
-const ANDROID_ONLY_WORKERS = ["src/features/plugins/quickjs/worker-entry.ts"];
-
 const WORKER_ENTRY =
   /new Worker\(\s*new URL\(\s*["']([^"']+)["']|["']([^"']+)\?worker(?:&url)?["']/g;
 
@@ -146,9 +143,7 @@ describe("DEP_SCAN_ENTRIES", () => {
       }
     }
     expect(workers.size).toBeGreaterThan(5);
-    const missing = [...workers].filter(
-      (worker) => !DEP_SCAN_ENTRIES.includes(worker) && !ANDROID_ONLY_WORKERS.includes(worker)
-    );
+    const missing = [...workers].filter((worker) => !DEP_SCAN_ENTRIES.includes(worker));
     expect(missing).toEqual([]);
   });
 

@@ -106,9 +106,9 @@ async function createHarness(folders: PluginFolder[], granted: PluginPermissionI
       const frame = fakePluginFrame();
       // The host end of the Plugin's port is handed over when the frame starts.
       const startWorker = frame.startWorker.bind(frame);
-      frame.startWorker = (entryUrl, port, quickJs) => {
+      frame.startWorker = (entryUrl, port) => {
         ports.set(manifest.id, port);
-        return startWorker(entryUrl, port, quickJs);
+        return startWorker(entryUrl, port);
       };
       return frame;
     },

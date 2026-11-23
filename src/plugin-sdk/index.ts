@@ -236,7 +236,7 @@ export function createPluginClient(port: PluginMessagePort): PluginClient {
 
   /**
    * Folds the three accepted `bytes` shapes into what the host takes: one Blob,
-   * or, on an engine with no Blob (the Android QuickJS engine, #516), one
+   * or, on an engine with no Blob (#516), one
    * Uint8Array. A Blob input cannot exist where there is no Blob.
    */
   async function foldBytes(

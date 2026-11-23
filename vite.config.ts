@@ -13,39 +13,6 @@ import { TEST_TIMEOUT_MS } from "./src/test/time-budget";
 const host = process.env.TAURI_DEV_HOST;
 const buildTarget = process.env.VITE_BUILD_TARGET || "tauri";
 const isWeb = buildTarget === "web";
-// The Android QuickJS engine is the only build that carries the runner Worker
-// bundle and its Wasm (#516); every other platform runs Plugins natively.
-const isAndroidBuild = process.env.TAURI_ENV_PLATFORM === "android";
-
-/**
- * Keeps the Android QuickJS engine's assets out of every non-Android build
- * (#516). `host-assets.ts` imports the runner with `?worker&url` and the Wasm
- * with `?url`; Vite emits those assets as soon as it loads the module, and
- * Rollup loads a dynamic import's target even when the importing branch is
- * statically false. So the flag alone drops the code but still leaves an orphan
- * runner Worker and a QuickJS `.wasm` in `dist/`. Resolving the loader to an
- * empty module on other platforms means those imports are never loaded, and the
- * assets are never emitted. `runtime.ts` reaches the loader only through the
- * flag-guarded dynamic import, which is dead on those builds.
- */
-function quickJsEngineAndroidOnly(): Plugin {
-  const STUB_ID = "\0maibuk:quickjs-host-assets-stub";
-  return {
-    name: "maibuk-quickjs-engine-android-only",
-    enforce: "pre",
-    resolveId(id) {
-      if (isAndroidBuild) return null;
-      if (id === "@/features/plugins/quickjs/host-assets" || id.endsWith("/quickjs/host-assets")) {
-        return STUB_ID;
-      }
-      return null;
-    },
-    load(id) {
-      if (id === STUB_ID) return "export {};";
-      return null;
-    },
-  };
-}
 
 /**
  * Serves the Built-in Plugin build output (`dist/plugins/`) at `/plugins/`
@@ -106,32 +73,6 @@ function builtInPluginsDevServe(): Plugin {
   };
 }
 
-/**
- * Makes the QuickJS runner Worker a single self-contained module (#516). Vite
- * builds every Worker entry with `preserveEntrySignatures: false`, which drops a
- * pure re-export and would emit `worker-entry.ts` as an empty runner; the runner
- * also splits its `quickjs-emscripten` dynamic imports into sibling chunks. The
- * sandbox Worker imports the runner from a `blob:` URL, where a relative
- * `import("./chunk.js")` cannot resolve, so this keeps that one entry's export
- * and inlines its dynamic imports. Every other Worker is a side-effect script
- * with no exports and is left untouched.
- */
-function quickJsRunnerWorkerBundle(): Plugin {
-  let isRunnerEntry = false;
-  return {
-    name: "maibuk-quickjs-runner-worker",
-    options(options) {
-      isRunnerEntry =
-        typeof options.input === "string" && options.input.includes("quickjs/worker-entry");
-      return isRunnerEntry ? { ...options, preserveEntrySignatures: "strict" } : null;
-    },
-    outputOptions(options) {
-      if (!isRunnerEntry) return null;
-      return { ...options, inlineDynamicImports: true };
-    },
-  };
-}
-
 // Shared by both dev lanes. `watch` keeps the watcher to what the app imports
 // (scripts/dev-server.mjs). `warmup` transforms the app's static module graph
 // as soon as the server starts, while `tauri dev` is still compiling Rust or
@@ -158,7 +99,6 @@ const isolation = {
 export default defineConfig(() => ({
   envPrefix: ["VITE_", "TAURI_ENV_"],
   plugins: [
-    quickJsEngineAndroidOnly(),
     react(),
     tailwindcss(),
     builtInPluginsDevServe(),
@@ -184,7 +124,6 @@ export default defineConfig(() => ({
   },
   worker: {
     format: "es" as const,
-    plugins: () => [quickJsRunnerWorkerBundle()],
   },
   define: {
     __APP_VERSION__: JSON.stringify(`v${version}`),
@@ -387,15 +326,6 @@ export default defineConfig(() => ({
         "src/features/plugins/modules.ts",
         "src/features/plugins/sandbox.ts",
         "src/features/plugins/runtime.ts",
-        // Android QuickJS Plugin engine (issue #516): the runner, its global
-        // set, its port bridge, and its constants. No build reaches `host-assets.ts`
-        // since Android runs the native Worker (#928); #929 deletes the engine.
-        // `worker-entry.ts` and `index.ts` are pure re-exports, so neither is
-        // listed, like every other bare re-export and constant leaf.
-        "src/features/plugins/quickjs/constants.ts",
-        "src/features/plugins/quickjs/globals.ts",
-        "src/features/plugins/quickjs/bridge.ts",
-        "src/features/plugins/quickjs/runner.ts",
         "src/features/plugins/lifecycle.ts",
         "src/features/plugins/crash-containment.ts",
         "src/features/plugins/approvals.ts",

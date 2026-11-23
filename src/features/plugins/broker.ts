@@ -535,7 +535,7 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
   /**
    * The bytes one `blob` payload carries, or null when it is not bytes. A
    * Uint8Array that crossed from another realm is still bytes, so a view is
-   * checked by its buffer slot and its tag, not `instanceof` (the QuickJS bridge
+   * checked by its buffer slot and its tag, not `instanceof` (the message bridge
    * and a Worker each rebuild the value in the realm that receives it).
    */
   function blobBytesOf(payload: unknown): Uint8Array | null {
@@ -663,7 +663,7 @@ export function createPluginBroker(options: PluginBrokerOptions): PluginBroker {
           );
           return;
         }
-        // An engine with no Blob (the Android QuickJS engine, #516) sends the
+        // An engine with no Blob (#516) sends the
         // bytes themselves in the same slot. They become the Blob the saver
         // takes, typed from the call head, with the same checks as a Blob: the
         // `blob` message is not JSON, so no size cap applies to either.

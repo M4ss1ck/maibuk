@@ -525,7 +525,7 @@ clear com.massick.maibuk`.
 
 ```bash
 pnpm conformance:plugins --platform linux --record    # Linux (WebKitGTK)
-pnpm conformance:plugins --platform android --record  # the adb device (Android QuickJS)
+pnpm conformance:plugins --platform android --record  # the adb device (Android WebView)
 pnpm conformance:plugins --platform all               # every available platform
 pnpm conformance:plugins --platform linux --skip-build --out .bench
 pnpm conformance:plugins --help
@@ -548,9 +548,9 @@ display, no device, a build failure, a timeout before any result, or an
 `docs/research/plugins-conformance.results.json`; an exit-2 run never does, and
 a failure while the host is supported still records, keeping exit 1, so the file
 shows it. Android is judged on the same checks as Linux, T1 to T8, so an Android
-run records its exit like any other platform. A run that measured the QuickJS
-engine also records its `startMs` and `callLatencyMs` timings, with no gate on
-them.
+run records its exit like any other platform. A measured run also records its
+`startMs` and `callLatencyMs` timings, the Plugin engine's start time and its call
+latency, with no gate on them.
 
 **Version gate.** The recorded results pin the Tauri and wry versions read from
 `src-tauri/Cargo.lock` (`scripts/plugin-conformance-gate.mjs`, run by its vitest
@@ -560,9 +560,9 @@ engine it was measured on, so rerun on any Tauri or wry bump.
 
 **Android runs Plugins that list "android" in `platforms` (#517).** The product
 runs a Plugin on Android only when its manifest lists "android"
-(`manifestRunsOn` in `src/features/plugins/host-platform.ts`), in the memory-capped
-QuickJS engine (#492, #516): the 64 MB cap is hard, so a Plugin that exhausts its
-heap stops with `out-of-memory` and the WebView renderer survives. Custom Frame UI
+(`manifestRunsOn` in `src/features/plugins/host-platform.ts`), in the WebView's
+own engine inside the same sandbox Worker as desktop, so it sees the same globals
+(`Intl` and `WebAssembly` included) and has no fixed heap cap. Custom Frame UI
 mounts on Android too (ADR 0021, 2026-11-21 amendment), and the T2 frame probe runs
 there. That check is expected to fail on Android until a Tauri fix ships (the
 amendment says why), so an Android run exits 1 on `T2-frame-ipc` alone; any other
@@ -771,7 +771,7 @@ timer in the Plugin Worker runs during the open, and writes
 `pnpm bench:android-lane` measures, on two emulators and with no physical
 device, what a low-end and a current Android phone pay for Plugins and Reader
 (issue #925). It is a periodic baseline with no gate. Run it when the Plugin
-engine, the QuickJS bridge, or Reader's loaders move, and before a release that
+engine or Reader's loaders move, and before a release that
 touches them. It never runs in CI, because it boots emulators.
 
 **The two AVDs.** `scripts/android-avds.sh create` makes both from scratch:
@@ -826,7 +826,7 @@ conformance build (`VITE_PLUGIN_CONFORMANCE=1`) and the bench build
 time:
 
 1. `conformance:plugins --apk` runs the Plugin conformance checks and gives the
-   QuickJS engine's start time and call latency. `T2-frame-ipc` fails on Android
+   Plugin engine's start time and call latency. `T2-frame-ipc` fails on Android
    by design (see "Plugin conformance lane"), so the lane takes the timings and
    ignores that exit code.
 2. It installs the bench APK, pushes three generated fixtures to
@@ -841,7 +841,7 @@ The fixtures are made by `plugins/maibuk-reader/scripts/generate-fixtures.mjs`:
 an EPUB with twenty 800x1200 plates (about 27 MB), the ~50 MB PDF
 `bench:reader` uses, and a CBZ of twenty pages (about 27 MB).
 
-**Output.** A table of medians in ms, one row per AVD (WebView, QuickJS start
+**Output.** A table of medians in ms, one row per AVD (WebView, engine start
 and call, Reader start, EPUB, PDF and CBZ open, heartbeat misses), and
 `e2e/.output/android-lane/<started>/report.json` with every sample. On a failed
 step it writes `failure.png` and `failure-aria.txt` to `<started>/<AVD>/`. The

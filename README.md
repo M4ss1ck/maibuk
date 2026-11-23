@@ -114,9 +114,8 @@ Downloaded models remain available to manage while Dictation is off.
 
 Plugins are available in the desktop app, in compatible web browsers, and on
 Android. A Plugin runs on Android when its manifest lists `"android"` in
-`platforms`; it runs in a memory-capped QuickJS engine (64 MiB), and the Custom
-Frame UI stays off there. See [docs/plugins/](docs/plugins/README.md) for the
-details.
+`platforms`, in the WebView's own engine. See
+[docs/plugins/](docs/plugins/README.md) for the details.
 
 ## Tech Stack
 

@@ -26,9 +26,6 @@
  *     survived. The time budget running out below the cap is `unmeasured`,
  *     naming the MB allocated. A missing heartbeat is `renderer-died` whatever
  *     the stop reason.
- *   - On the Android QuickJS engine (#516) T8 requires exactly `out-of-memory`:
- *     the cap is hard, so a `crashed` stop is a fail there, not the desktop
- *     best-effort pass. Every other engine keeps `out-of-memory` or `crashed`.
  *   - A check whose setup throws (the runtime never produced an observation) is
  *     `unmeasured`, never a fail: the run could not tell.
  *   - The File Grant rows (#653) pass when `files.read` returned the seeded
@@ -98,15 +95,8 @@ const CANVAS_REFERENCE_UNKNOWN_ID = "absent";
 /** T7's only acceptable stop: the heartbeat missed until the Plugin was closed. */
 export const T7_STOP_REASON = "unresponsive";
 
-/** The stop reasons T8 accepts as a real memory death on the native engines. */
+/** The stop reasons T8 accepts as a real memory death. */
 export const T8_MEMORY_STOP_REASONS: readonly string[] = ["out-of-memory", "crashed"];
-
-/**
- * T8's only acceptable stop under the Android QuickJS engine (#516): the 64 MB
- * cap is hard, so the stop is exactly `out-of-memory`, never the best-effort
- * `crashed` a native Worker engine may report.
- */
-export const T8_QUICKJS_MEMORY_STOP_REASONS: readonly string[] = ["out-of-memory"];
 
 /** The stop reason that means the heartbeat policy fired before memory ran out. */
 export const T8_UNRESPONSIVE_STOP_REASON = "unresponsive";
@@ -120,14 +110,6 @@ export const RENDERER_DIED_DETAIL = "renderer-died";
 /** T8's detail when a healthy Plugin beside the hostile one stopped answering (#516). */
 export const T8_NEIGHBOUR_DIED_DETAIL =
   "the healthy Plugin beside it did not answer after the stop";
-
-/**
- * The stop reasons T8 accepts. Under the Android QuickJS engine (#516) only
- * `out-of-memory` passes; everywhere else `out-of-memory` or `crashed`.
- */
-export function t8MemoryStopReasons(quickjs: boolean): readonly string[] {
-  return quickjs ? T8_QUICKJS_MEMORY_STOP_REASONS : T8_MEMORY_STOP_REASONS;
-}
 
 /**
  * The terminal fixture Commands, each its own probe rather than a `command.run`
@@ -340,13 +322,6 @@ function canvasReferenceCheck(observation: CanvasReferenceObservation): Conforma
  */
 export interface RunConformanceOptions {
   /**
-   * True when the run is under the Android QuickJS engine (#516). T8 then
-   * requires exactly `out-of-memory`: the 64 MB cap is hard, so any other stop
-   * is a fail. No route passes it since Android runs the native Worker (#928);
-   * #929 deletes it with the engine.
-   */
-  quickjs?: boolean;
-  /**
    * The collector's launch plan (#928). `"all"` (the default) runs every check;
    * `"no-t8"` runs every check but T8, the Android main phase; `"t8-only"` runs
    * T8 alone, the Android foreground death phase. `"launch-only"` never reaches
@@ -361,7 +336,6 @@ export async function runConformanceChecks(
   options: RunConformanceOptions = {}
 ): Promise<ConformanceCheck[]> {
   const checks: ConformanceCheck[] = [];
-  const t8Reasons = t8MemoryStopReasons(options.quickjs ?? false);
   const record = async (check: ConformanceCheck): Promise<void> => {
     checks.push(check);
     await onCheck?.(check);
@@ -394,7 +368,7 @@ export async function runConformanceChecks(
       if (oom.reason === T8_UNRESPONSIVE_STOP_REASON) {
         return unmeasured(T8_CHECK_ID, `${T8_UNRESPONSIVE_DETAIL} (${facts})`);
       }
-      return t8Reasons.includes(oom.reason)
+      return T8_MEMORY_STOP_REASONS.includes(oom.reason)
         ? pass(
             T8_CHECK_ID,
             `stopped with ${oom.reason} after ${oom.allocatedMb} MB and the host answered, with a healthy Plugin beside it`

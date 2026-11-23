@@ -41,8 +41,8 @@ export function catalogFor(language: string): Readonly<Catalog> {
 export type PluralCategory = "one" | "other";
 
 /**
- * CLDR cardinal rules for the two shipped languages, written out because the
- * Android QuickJS global set has no `Intl`. Both languages select "one" for the
+ * CLDR cardinal rules for the two shipped languages, written out because a
+ * Plugin engine may have no `Intl`. Both languages select "one" for the
  * integer 1 (in magnitude) and "other" for everything else Echoes counts. Spanish
  * CLDR also has a "many" form for exact multiples of a million, but no shipped
  * key carries one, so `translate()` reads `_other` for it, as Intl would.

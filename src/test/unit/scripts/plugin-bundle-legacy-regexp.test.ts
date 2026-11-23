@@ -1,5 +1,5 @@
-// The Android QuickJS engine has no legacy `RegExp.$1` static, so a dependency
-// that reads it crashes a Plugin there. path-data-parser@0.1.0 (through
+// Not every engine has the legacy `RegExp.$1` static, so a dependency
+// that reads it crashes a Plugin. path-data-parser@0.1.0 (through
 // rough.js) was the one such dependency in the Maps bundle; this guard reads
 // the files that entry bundles, resolved from the Plugin's own folder the way
 // esbuild resolves them, and fails if the legacy static is still in any of

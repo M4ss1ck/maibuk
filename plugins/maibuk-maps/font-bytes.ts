@@ -64,6 +64,6 @@ function decodeDataUri(data: string): { bytes: Uint8Array; mime: string } {
     throw new Error("a bundled font is not an inlined data URI");
   }
   const mime = data.slice("data:".length, data.indexOf(";")) || "font/ttf";
-  // No `atob`: the Android QuickJS engine lacks it.
+  // No `atob`: not every engine has it.
   return { bytes: base64ToBytes(data.slice(comma + 1)), mime };
 }

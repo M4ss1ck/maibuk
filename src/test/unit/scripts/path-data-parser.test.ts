@@ -1,8 +1,8 @@
 // path-data-parser@0.1.0 tokenizes with the legacy `RegExp.$1` static, which
-// Android's QuickJS engine does not implement, so a Maps template built from a
-// rough.js path threw "cannot read property length of undefined". The patch in
-// `patches/` rewrites `tokenize()` to read the `match` array; this proves the
-// parser returns the same segments while `RegExp.$1` is unavailable.
+// not every engine implements, so a Maps template built from a rough.js path
+// threw "cannot read property length of undefined". The patch in `patches/`
+// rewrites `tokenize()` to read the `match` array; this proves the parser
+// returns the same segments while `RegExp.$1` is unavailable.
 import { parsePath } from "path-data-parser";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -17,7 +17,7 @@ const EXPECTED = [
 
 const original = Object.getOwnPropertyDescriptor(RegExp, "$1");
 
-/** Makes the legacy static read as `undefined`, the way QuickJS leaves it. */
+/** Makes the legacy static read as `undefined`, the way an engine without it does. */
 function hideLegacyRegExpStatics(): void {
   Object.defineProperty(RegExp, "$1", {
     get() {
