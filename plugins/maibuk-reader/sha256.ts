@@ -5,9 +5,9 @@
  * Plugin Worker: a Worker started from a `blob:` URL is not a secure context,
  * so `crypto.subtle` is undefined there. The pure implementation gives the same
  * digest in the Worker, the app, and a test. Hashing 128 KB takes a few
- * milliseconds in V8 but over a second in Android's QuickJS on a slow e-ink
- * device, so `createSha256` takes the message in pieces and the Fingerprint
- * yields between them.
+ * milliseconds on a desktop but over a second on a slow e-ink device, so
+ * `createSha256` takes the message in pieces and the Fingerprint yields
+ * between them.
  */
 
 /** The 64 round constants: the first 32 bits of the cube roots of the primes. */
@@ -42,9 +42,9 @@ export interface Sha256 {
 
 /**
  * A SHA-256 that takes the message in pieces, so a caller can hash a large
- * buffer a slice at a time and yield between slices. The Fingerprint does: on
- * Android the Plugin Worker runs in QuickJS, where hashing 128 KB at once
- * blocks the Worker past the host's heartbeat on a slow e-ink device.
+ * buffer a slice at a time and yield between slices. The Fingerprint does:
+ * hashing 128 KB at once blocks the Plugin Worker past the host's heartbeat on
+ * a slow e-ink device.
  */
 export function createSha256(): Sha256 {
   const hash = new Uint32Array(INITIAL);

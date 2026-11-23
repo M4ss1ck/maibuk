@@ -201,7 +201,7 @@ export interface FrameZipListMessage {
 /**
  * Answers one `zip-entry` with the entry as the archive stores it. The Frame
  * inflates `deflated` bytes with `DecompressionStream("deflate-raw")` and
- * decodes text itself, so the Worker (QuickJS on Android) never does either.
+ * decodes text itself, so the Plugin Worker never does either.
  */
 export interface FrameZipDataMessage {
   kind: "zip-data";

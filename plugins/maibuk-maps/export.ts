@@ -235,8 +235,8 @@ export async function fitUnderCap(
 }
 
 /**
- * The bytes packed as one base64 data URI. No `Buffer` and no `btoa`, which the
- * Android QuickJS engine lacks, so any Plugin engine can call it.
+ * The bytes packed as one base64 data URI. No `Buffer` and no `btoa`, which
+ * not every engine has, so any Plugin engine can call it.
  */
 export function dataUri(mime: string, bytes: Uint8Array): string {
   return `data:${mime};base64,${bytesToBase64(bytes)}`;

@@ -4,9 +4,9 @@
  * archive reads only the end-of-central-directory record and the central
  * directory through ranged `files.read` calls; an entry is read only when the
  * Frame asks for it, and handed over as stored (`stored`): the Frame inflates
- * it with the platform's `DecompressionStream`. On Android the Worker runs in
- * QuickJS, where inflating one large image here blocked it for over a second
- * on a slow e-ink device and the page read "Reader is not responding".
+ * it with the platform's `DecompressionStream`. Inflating one large image here
+ * blocked the Worker for over a second on a slow e-ink device and the page read
+ * "Reader is not responding".
  * `read` and `readText` inflate here, for the small entries the Worker itself
  * reads (`META-INF/encryption.xml`).
  *

@@ -338,10 +338,10 @@ describe("archive", () => {
     }
   });
 
-  // On Android the Worker runs in QuickJS, where inflating a large image or
-  // decoding a long chapter blocks it for seconds on a slow e-ink device and the
-  // page reads "Reader is not responding". The Worker passes the bytes on as
-  // stored; the Frame inflates and decodes them natively.
+  // Inflating a large image or decoding a long chapter in the Plugin Worker
+  // blocks it on a slow e-ink device: the page reads "Reader is not responding"
+  // for seconds. The Worker passes the bytes on as stored; the Frame inflates
+  // and decodes them natively.
   it("transfers an entry as the archive stores it and leaves inflating to the Frame", async () => {
     const harness = setup();
     try {

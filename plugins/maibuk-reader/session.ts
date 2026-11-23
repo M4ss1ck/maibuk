@@ -377,9 +377,8 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
 
   /**
    * Hands over one entry as the archive stores it. The Frame inflates and
-   * decodes it natively: on Android this Worker runs in QuickJS, where
-   * inflating a large image or decoding a long chapter here blocked it past the
-   * host's heartbeat on a slow e-ink device.
+   * decodes it natively: inflating a large image or decoding a long chapter in
+   * this Worker blocked it past the host's heartbeat on a slow e-ink device.
    */
   async function answerZipEntry(message: FrameZipEntryRequest): Promise<void> {
     try {

@@ -164,9 +164,9 @@ export async function fingerprint(
 }
 
 /**
- * How much the Fingerprint hashes before it yields. On Android the Worker runs
- * in QuickJS, where 8 KB is about 10 ms on a desktop and about 100 ms on a slow
- * e-ink device, well inside the host's one-second heartbeat.
+ * How much the Fingerprint hashes before it yields. 8 KB is about 10 ms on a
+ * desktop and about 100 ms on a slow e-ink device, well inside the host's
+ * one-second heartbeat.
  */
 const FINGERPRINT_SLICE = 8 * 1024;
 
@@ -411,7 +411,7 @@ export type RelativeUnit = "second" | "minute" | "hour" | "day" | "month" | "yea
 /**
  * The last-read time as a localized relative phrase ("yesterday", "hace 3
  * días"). Uses `Intl.RelativeTimeFormat` where the engine has it, and
- * {@link relativePhrase} where it does not (the Android QuickJS engine).
+ * {@link relativePhrase} where it does not.
  */
 export function relativeTimestamp(
   language: string,

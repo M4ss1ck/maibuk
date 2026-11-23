@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
- * `files.save` on a Plugin engine with no `Blob` (the Android QuickJS engine,
- * #516): the SDK folds the accepted `bytes` shapes into one `Uint8Array` and
- * sends it where the `Blob` goes, so a save still reaches the host.
+ * `files.save` on a Plugin engine with no `Blob` (#516): the SDK folds the
+ * accepted `bytes` shapes into one `Uint8Array` and sends it where the `Blob`
+ * goes, so a save still reaches the host.
  *
  * These tests drive the real client over a recording port and assert the bytes
  * themselves, so the message can only pass by carrying its data.

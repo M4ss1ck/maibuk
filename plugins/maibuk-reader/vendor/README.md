@@ -10,9 +10,9 @@ string, evaluated only when a Document of its format opens
 
 - pdf.js's core runs in a nested Worker the Plugin Worker starts from a `blob:`
   of the worker source (the Plugin sandbox allows `worker-src blob:`).
-  On Android the Plugin runs in QuickJS, which has no `Worker`, so the Plugin
-  sends the worker source to the Frame instead; the Frame runs it as a `blob:`
-  classic script and pdf.js then parses on the Frame's own thread
+  Not every Plugin engine has `Worker`, so the Plugin sends the worker source
+  to the Frame instead; the Frame runs it as a `blob:` classic script and
+  pdf.js then parses on the Frame's own thread
   (`canStartPdfCore()` in `../loaders.ts`, `loadPdfCore` in
   `../assets/ui/reader.js`).
 - pdf.js's display module and viewer CSS travel to the Frame over the port, which

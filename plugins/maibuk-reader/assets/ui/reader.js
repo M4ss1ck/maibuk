@@ -1050,9 +1050,9 @@
 
   /**
    * Inflates raw deflate bytes with the platform's own decompressor. The
-   * Worker hands entries over as stored because on Android it runs in QuickJS,
-   * where inflating a large image blocked it past the host's heartbeat on a
-   * slow e-ink device; native inflation here is fast and never blocks it.
+   * Worker hands entries over as stored because inflating a large image there
+   * blocked it past the host's heartbeat on a slow e-ink device; native
+   * inflation here is fast and never blocks it.
    * @param {Uint8Array} bytes @param {string} name @returns {Promise<Uint8Array>}
    */
   async function inflateEntry(bytes, name) {

@@ -51,7 +51,7 @@ describe("translate() plurals", () => {
 });
 
 describe("pluralCategory() without Intl (#517)", () => {
-  // The Android QuickJS global set has no Intl, so Echoes ships its own en/es
+  // Not every Plugin engine has Intl, so Echoes ships its own en/es
   // CLDR rules. Each case stubs Intl away and loads a fresh module, so no cached
   // value or earlier Intl call can stand in for the rule.
   afterEach(() => {

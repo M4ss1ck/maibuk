@@ -142,9 +142,9 @@ describe("fingerprint()", () => {
     expect(await fingerprint(9, head, tail)).not.toBe(await fingerprint(8, head, tail));
   });
 
-  // On Android the Worker runs in QuickJS, where hashing both 64 KB windows in
-  // one go blocks the Worker past the host's one-second heartbeat on a slow
-  // e-ink device, and the page reads "Reader is not responding".
+  // Hashing both 64 KB windows in one go blocks the Plugin Worker past the
+  // host's one-second heartbeat on a slow e-ink device, and the page reads
+  // "Reader is not responding".
   it("yields to the event loop between blocks, so the Worker still answers the heartbeat", async () => {
     const head = new Uint8Array(FINGERPRINT_WINDOW).fill(1);
     const tail = new Uint8Array(FINGERPRINT_WINDOW).fill(2);

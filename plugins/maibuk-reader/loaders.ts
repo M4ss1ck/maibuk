@@ -173,8 +173,8 @@ export function startPdfCore(options: PdfCoreOptions = {}): PdfCore {
 
 /**
  * Whether this engine can start the nested core Worker {@link startPdfCore}
- * needs. The Android QuickJS engine has no `Worker` or `MessageChannel`, so
- * there the Frame runs the core itself from {@link pdfCoreSource}.
+ * needs. Not every Plugin engine has `Worker` or `MessageChannel`, so there
+ * the Frame runs the core itself from {@link pdfCoreSource}.
  */
 export function canStartPdfCore(): boolean {
   return typeof Worker === "function" && typeof MessageChannel === "function";
