@@ -21,6 +21,15 @@ import type { ConformanceResult } from "@/features/plugins/conformance/types";
 /** How long the route waits for main.tsx to install the app's Plugin lifecycle. */
 const LIFECYCLE_INSTALL_TIMEOUT_MS = 10_000;
 
+/** How often the route checks whether the lifecycle is installed. */
+const LIFECYCLE_POLL_MS = 50;
+
+/**
+ * How long past the blame window a `t8-only` launch waits, so a heartbeat
+ * that lands on the window's edge cannot still blame the healthy fixture.
+ */
+const BLAME_WINDOW_MARGIN_MS = 2_000;
+
 /**
  * Waits until main.tsx has installed the app's Plugin lifecycle, which applies
  * the Android death record synchronously as it launches (#927). main.tsx renders
@@ -31,7 +40,7 @@ const LIFECYCLE_INSTALL_TIMEOUT_MS = 10_000;
 async function waitForPluginLifecycle(): Promise<void> {
   const deadline = Date.now() + LIFECYCLE_INSTALL_TIMEOUT_MS;
   while (getPluginLifecycle() === null && Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, LIFECYCLE_POLL_MS));
   }
 }
 
@@ -66,7 +75,9 @@ export async function runConformance(): Promise<ConformanceResult> {
     // window first so the healthy fixture is idle when the death record is
     // written, rather than blamed for the hostile Plugin's death (#928).
     if (plan === "t8-only") {
-      await new Promise((resolve) => setTimeout(resolve, PLUGIN_BLAME_WINDOW_MS + 2_000));
+      await new Promise((resolve) =>
+        setTimeout(resolve, PLUGIN_BLAME_WINDOW_MS + BLAME_WINDOW_MARGIN_MS)
+      );
     }
     const checks = await runConformanceChecks(seam, (check) => reporter.progress(check), { plan });
     const result: ConformanceResult = {
