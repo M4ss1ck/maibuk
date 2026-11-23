@@ -87,6 +87,40 @@ describe("createReporter", () => {
     expect(calls[0]?.body).toEqual(report);
   });
 
+  it("returns the launch plan the collector answers (#928)", async () => {
+    const fetchImpl = (async () => ({
+      json: async () => ({ plan: "t8-only" }),
+    })) as unknown as typeof fetch;
+    const reporter = createReporter(CONFORMANCE_COLLECTOR_BASE_URL, fetchImpl);
+    await expect(reporter.launch({ plugins: [], notices: [] })).resolves.toBe("t8-only");
+  });
+
+  it("falls back to all when the collector cannot be reached", async () => {
+    const fetchImpl = (async () => {
+      throw new Error("connect ECONNREFUSED 127.0.0.1:8787");
+    }) as unknown as typeof fetch;
+    const reporter = createReporter(CONFORMANCE_COLLECTOR_BASE_URL, fetchImpl);
+    await expect(reporter.launch({ plugins: [], notices: [] })).resolves.toBe("all");
+  });
+
+  it("falls back to all when the /launch reply is not JSON", async () => {
+    const fetchImpl = (async () => ({
+      json: async () => {
+        throw new SyntaxError("Unexpected token at position 0");
+      },
+    })) as unknown as typeof fetch;
+    const reporter = createReporter(CONFORMANCE_COLLECTOR_BASE_URL, fetchImpl);
+    await expect(reporter.launch({ plugins: [], notices: [] })).resolves.toBe("all");
+  });
+
+  it("falls back to all when the /launch reply names an unknown plan", async () => {
+    const fetchImpl = (async () => ({
+      json: async () => ({ plan: "bogus" }),
+    })) as unknown as typeof fetch;
+    const reporter = createReporter(CONFORMANCE_COLLECTOR_BASE_URL, fetchImpl);
+    await expect(reporter.launch({ plugins: [], notices: [] })).resolves.toBe("all");
+  });
+
   it("swallows a collector that cannot be reached, so the page keeps working", async () => {
     const fetchImpl = (async () => {
       throw new Error("connect ECONNREFUSED 127.0.0.1:8787");

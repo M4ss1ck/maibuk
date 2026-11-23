@@ -69,6 +69,26 @@ export interface ConformanceLaunchReport {
 }
 
 /**
+ * What the collector plans for this launch (#928). Under the native Worker the
+ * Android renderer dies when T8 runs, so the harness runs T8 in its own launch;
+ * the collector answers the app's `/launch` with one of these and the route
+ * obeys it.
+ *
+ * - `all`: every check (the default; Linux).
+ * - `no-t8`: every check but T8 (the Android main phase).
+ * - `t8-only`: wait out the crash-containment blame window, then T8 alone (the
+ *   Android foreground death phase).
+ * - `launch-only`: post the launch report and nothing else (relaunches, the
+ *   background death phase).
+ */
+export type ConformanceLaunchPlan = "all" | "no-t8" | "t8-only" | "launch-only";
+
+/** Narrows a collector's `/launch` reply to a plan the route obeys (#928). */
+export function isConformanceLaunchPlan(value: unknown): value is ConformanceLaunchPlan {
+  return value === "all" || value === "no-t8" || value === "t8-only" || value === "launch-only";
+}
+
+/**
  * What one fixture Command produced.
  *
  * `refused` is the Plugin's typed refusal, `stopped` is the host stopping it

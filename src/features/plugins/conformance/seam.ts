@@ -230,13 +230,13 @@ const FRAME_IPC_PROBE = `(async () => {
   parent.postMessage({ __conformanceFrameProbe: { reached, detail } }, "*");
 })();`;
 
-function readPlatform(): ConformancePlatform {
+export function readPlatform(): ConformancePlatform {
   if (IS_ANDROID) return "android";
   if (IS_DESKTOP) return "desktop";
   return "web";
 }
 
-function readEngine(platform: ConformancePlatform): ConformanceEngine {
+export function readEngine(platform: ConformancePlatform): ConformanceEngine {
   const userAgent = typeof navigator === "undefined" ? "" : navigator.userAgent;
   const name =
     platform === "android"
