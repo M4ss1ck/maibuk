@@ -86,6 +86,16 @@ class RenderProcessGoneTest {
     }
 
     @Test
+    fun rendererGoneActionIsRebirthWhenResumed() {
+        assertEquals(RendererGoneAction.Rebirth, rendererGoneAction(isResumed = true))
+    }
+
+    @Test
+    fun rendererGoneActionIsQuietExitWhenNotResumed() {
+        assertEquals(RendererGoneAction.QuietExit, rendererGoneAction(isResumed = false))
+    }
+
+    @Test
     fun rendererGoneInvokesOnGoneOnceWithSameViewAndReturnsTrue() {
         val view = newWebView()
         val detail = fakeDetail()

@@ -115,3 +115,9 @@ fun describeRenderProcessGone(didCrash: Boolean, priorityAtExit: Int): String {
     val cause = if (didCrash) "crashed" else "killed by system"
     return "WebView renderer gone: $cause (priority=$priorityAtExit)"
 }
+
+enum class RendererGoneAction { Rebirth, QuietExit }
+
+/** Rebirth while the activity is resumed, quiet exit while it is in the background (#924). */
+fun rendererGoneAction(isResumed: Boolean): RendererGoneAction =
+    if (isResumed) RendererGoneAction.Rebirth else RendererGoneAction.QuietExit
