@@ -184,7 +184,9 @@ export async function backgroundAndKillRenderer(device: AndroidDevice): Promise<
       "no WebView renderer process (:sandboxed_process) found after sending the app to the background"
     );
   }
-  await device.shell(["su", "0", "kill", "-9", ...pids]);
+  // Best effort: a renderer the system reclaimed between `ps` and `kill` makes
+  // `kill` exit 1. A renderer that survives shows up as the app not exiting.
+  await device.shell(["su", "0", "kill", "-9", ...pids]).catch(() => "");
 }
 
 /** Starts the app again after its renderer died, waiting for the Activity. */

@@ -228,8 +228,10 @@ async function runDeathPhase(
       await backgroundAndKillRenderer(device);
       processExited = await waitForExit(app, DEATH_EXIT_TIMEOUT_MS);
       if (processExited) {
+        // Only a report that arrives after the relaunch counts as `after`.
+        const reportsBeforeRelaunch = collector.state().launches.length;
         await relaunchAndroidApp(device);
-        after = await waitForLaunch(collector, 2);
+        after = await waitForLaunch(collector, reportsBeforeRelaunch + 1);
       }
     }
 
@@ -298,12 +300,17 @@ async function measurePlatform(
   }
   // The death phase is Android-only and runs after the main phase settled. Its
   // check folds into the written report; a pass never masks a main-phase failure.
+  let leaks = state.leaks;
   if (started.androidDevice !== undefined) {
     const deathCheck = await runDeathPhase(started.androidDevice, runDir, collector);
+    // The relaunches run the probe again, so their leaks count too.
+    leaks += collector.state().leaks;
     outcome.checks = [...outcome.checks, deathCheck];
     const deathExit = exitCodeForChecks([deathCheck]);
     outcome.exitCode = outcome.exitCode > deathExit ? outcome.exitCode : deathExit;
-    if (deathCheck.status !== "pass") outcome.note = `death phase: ${deathCheck.detail}`;
+    if (deathCheck.status !== "pass") {
+      outcome.note = `${outcome.note}; death phase: ${deathCheck.detail}`;
+    }
   }
   // The engine records the engine's own version — WebKitGTK on Linux, System
   // WebView `versionName` on Android — never the app version (#447 D1). The name
@@ -320,7 +327,7 @@ async function measurePlatform(
   return {
     platform,
     outcome,
-    leaks: state.leaks,
+    leaks,
     engine,
     run: buildPlatformRun({
       platform,
