@@ -285,6 +285,8 @@ interface Entry {
   surfaces: Set<string>;
   heartbeat: ReturnType<typeof setInterval> | null;
   beatInFlight: boolean;
+  /** When the last heartbeat tick ran, so a late tick can be blamed on the host (#923). */
+  lastTick: number;
   misses: number;
   idleTimer: ReturnType<typeof setTimeout> | null;
   restartTimer: ReturnType<typeof setTimeout> | null;
@@ -529,8 +531,14 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
   function startHeartbeat(entry: Entry): void {
     entry.misses = 0;
     entry.beatInFlight = false;
+    entry.lastTick = Date.now();
     entry.heartbeat = setInterval(() => {
+      const now = Date.now();
+      const tickLate = now - entry.lastTick >= HEARTBEAT_INTERVAL_MS * 1.5;
+      entry.lastTick = now;
       if (entry.beatInFlight) {
+        // A tick this late means the host main thread stalled, so the unanswered beat is not the Plugin's: count no miss and give it another interval (#923).
+        if (tickLate) return;
         entry.misses += 1;
         if (entry.misses >= HEARTBEAT_MISS_LIMIT) {
           stopEntry(entry, "unresponsive");
@@ -812,6 +820,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       surfaces: surfacesOf(installed.pluginId),
       heartbeat: null,
       beatInFlight: false,
+      lastTick: Date.now(),
       misses: 0,
       idleTimer: null,
       restartTimer: null,

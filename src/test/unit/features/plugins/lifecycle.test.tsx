@@ -709,6 +709,25 @@ describe("Plugin lifecycle: heartbeat", () => {
     await advance(0);
     expect(h.lifecycle.state("alpha")).toEqual({ status: "ready", startReason: "launch" });
   });
+
+  it("counts no miss when the host itself stalled past a beat (#923)", async () => {
+    const h = await createHarness({ approved: [makePlugin("alpha")] });
+    await launchAll(h);
+    const frame = h.framesFor("alpha")[0];
+    frame.holdAnswers = true;
+    await advance(HEARTBEAT_INTERVAL_MS);
+
+    // The main thread is busy: the clock moves on but no timer or message runs,
+    // so the next beat fires late, ahead of the answer queued behind the stall.
+    vi.setSystemTime(Date.now() + HEARTBEAT_INTERVAL_MS * 3);
+    await advance(HEARTBEAT_INTERVAL_MS);
+    expect(h.lifecycle.state("alpha")).toEqual({ status: "ready", startReason: "launch" });
+
+    frame.holdAnswers = false;
+    frame.answerHeldRequests();
+    await advance(HEARTBEAT_INTERVAL_MS * HEARTBEAT_MISS_LIMIT);
+    expect(h.lifecycle.state("alpha")).toEqual({ status: "ready", startReason: "launch" });
+  });
 });
 
 describe("Plugin lifecycle: stop reasons", () => {
