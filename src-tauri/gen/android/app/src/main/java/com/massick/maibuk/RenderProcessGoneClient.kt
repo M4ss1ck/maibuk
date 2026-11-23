@@ -14,6 +14,7 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.net.http.SslError
+import androidx.lifecycle.Lifecycle
 
 /**
  * Wraps the WebViewClient that wry installs so a dead renderer process is
@@ -23,7 +24,8 @@ import android.net.http.SslError
  *
  * Defense in depth for #518 (see also #492): when [onGone] fires, the activity
  * restarts the process via ProcessPhoenix, because recreating the activity
- * crashes wry's native state.
+ * crashes wry's native state. In the background it ends the process quietly
+ * instead (#924); [rendererGoneAction] picks which.
  */
 class RenderProcessGoneClient(
     private val delegate: WebViewClient,
@@ -118,6 +120,11 @@ fun describeRenderProcessGone(didCrash: Boolean, priorityAtExit: Int): String {
 
 enum class RendererGoneAction { Rebirth, QuietExit }
 
-/** Rebirth while the activity is resumed, quiet exit while it is in the background (#924). */
-fun rendererGoneAction(isResumed: Boolean): RendererGoneAction =
-    if (isResumed) RendererGoneAction.Rebirth else RendererGoneAction.QuietExit
+/**
+ * Rebirth only while the activity is visible: a paused but visible activity
+ * (split screen, a permission prompt on top) still has a window the user is
+ * looking at. Hidden, a rebirth would cold start a blank screen, so the
+ * process ends quietly and the next open is a clean cold start (#924).
+ */
+fun rendererGoneAction(state: Lifecycle.State): RendererGoneAction =
+    if (state.isAtLeast(Lifecycle.State.STARTED)) RendererGoneAction.Rebirth else RendererGoneAction.QuietExit

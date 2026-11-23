@@ -6,6 +6,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.lifecycle.Lifecycle
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -86,13 +87,15 @@ class RenderProcessGoneTest {
     }
 
     @Test
-    fun rendererGoneActionIsRebirthWhenResumed() {
-        assertEquals(RendererGoneAction.Rebirth, rendererGoneAction(isResumed = true))
+    fun rendererGoneRebirthsWhileVisible() {
+        assertEquals(RendererGoneAction.Rebirth, rendererGoneAction(Lifecycle.State.RESUMED))
+        // Paused but visible: split screen, or a permission prompt on top.
+        assertEquals(RendererGoneAction.Rebirth, rendererGoneAction(Lifecycle.State.STARTED))
     }
 
     @Test
-    fun rendererGoneActionIsQuietExitWhenNotResumed() {
-        assertEquals(RendererGoneAction.QuietExit, rendererGoneAction(isResumed = false))
+    fun rendererGoneExitsQuietlyInTheBackground() {
+        assertEquals(RendererGoneAction.QuietExit, rendererGoneAction(Lifecycle.State.CREATED))
     }
 
     @Test

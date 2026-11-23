@@ -14,7 +14,6 @@ import androidx.activity.enableEdgeToEdge
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.lifecycle.Lifecycle
 
 class MainActivity : TauriActivity() {
   // Set once a renderer death has been handled, so each death is logged and
@@ -62,7 +61,7 @@ class MainActivity : TauriActivity() {
     Log.e("Maibuk", describeRenderProcessGone(detail.didCrash(), detail.rendererPriorityAtExit()))
     (view.parent as? ViewGroup)?.removeView(view)
     view.destroy()
-    when (rendererGoneAction(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))) {
+    when (rendererGoneAction(lifecycle.currentState)) {
       RendererGoneAction.Rebirth -> ProcessPhoenix.triggerRebirth(this)
       RendererGoneAction.QuietExit -> {
         finishAndRemoveTask()
