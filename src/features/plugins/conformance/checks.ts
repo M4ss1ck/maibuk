@@ -58,6 +58,7 @@ import {
   type CanvasReferenceObservation,
   type CommandObservation,
   type ConformanceCheck,
+  type ConformanceLaunchPlan,
   type ConformanceSeam,
   type FileGrantObservation,
   type FileSaveObservation,
@@ -351,7 +352,7 @@ export interface RunConformanceOptions {
    * T8 alone, the Android foreground death phase. `"launch-only"` never reaches
    * the runner.
    */
-  plan?: "all" | "no-t8" | "t8-only";
+  plan?: Exclude<ConformanceLaunchPlan, "launch-only">;
 }
 
 export async function runConformanceChecks(

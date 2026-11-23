@@ -26,6 +26,7 @@ import { ThreadMessagePort } from "@quilted/threads";
 import { savePluginApproval } from "@/features/plugins/approvals";
 import {
   FIXTURE_HEALTHY_ID,
+  FIXTURE_HOSTILE_ID,
   loadFixtureHealthy,
   loadFixtureHostile,
 } from "@/features/plugins/conformance/fixture";
@@ -84,9 +85,6 @@ import {
   PLUGIN_CANVAS_REFERENCE_RESOLVE_REQUEST,
   PLUGIN_COMMAND_RUN_REQUEST,
 } from "@/plugin-sdk/protocol";
-
-/** The fixture Plugin's folder name and id (see `fixture.ts`). */
-const FIXTURE_HOSTILE_ID = "fixture-hostile";
 
 /**
  * The healthy fixture's one Canvas Reference source (#836), and the ids the
