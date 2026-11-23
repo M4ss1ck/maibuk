@@ -12,13 +12,32 @@
 import { currentToastMessages } from "@/components/ui/Toast";
 import { listPluginApprovals } from "@/features/plugins/approvals";
 import { PLUGIN_BLAME_WINDOW_MS } from "@/features/plugins/crash-containment";
+import { getPluginLifecycle } from "@/features/plugins/lifecycle-instance";
 import { runConformanceChecks } from "@/features/plugins/conformance/checks";
 import { createReporter } from "@/features/plugins/conformance/reporter";
 import { createRuntimeSeam, readEngine, readPlatform } from "@/features/plugins/conformance/seam";
 import type { ConformanceResult } from "@/features/plugins/conformance/types";
 
+/** How long the route waits for main.tsx to install the app's Plugin lifecycle. */
+const LIFECYCLE_INSTALL_TIMEOUT_MS = 10_000;
+
+/**
+ * Waits until main.tsx has installed the app's Plugin lifecycle, which applies
+ * the Android death record synchronously as it launches (#927). main.tsx renders
+ * first and loads Plugins on idle, so without this wait the launch report would
+ * show the Plugins before containment disabled any (#928). Bounded: a lifecycle
+ * that never installs leaves the report as it is.
+ */
+async function waitForPluginLifecycle(): Promise<void> {
+  const deadline = Date.now() + LIFECYCLE_INSTALL_TIMEOUT_MS;
+  while (getPluginLifecycle() === null && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
 export async function runConformance(): Promise<ConformanceResult> {
   const reporter = createReporter();
+  await waitForPluginLifecycle();
   // First, before the seam runs anything, so the report shows the state the app
   // launched with: the Plugins it knows and the notices it is showing (#922).
   // The collector answers with the plan this launch obeys (#928).
