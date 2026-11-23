@@ -1,6 +1,7 @@
 package com.massick.maibuk
 
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.os.Process
 import android.util.Log
@@ -24,6 +25,9 @@ class MainActivity : TauriActivity() {
   // tap fires before any page listens, so the tapped id waits here until the
   // page takes it (#870).
   private val notificationTaps = NotificationTaps()
+
+  // Each running Plugin's last activity as the page reports it, for the death record (#926).
+  private val pluginActivity = PluginActivity()
   private var webView: WebView? = null
 
   override fun onWebViewCreate(webView: WebView) {
@@ -32,6 +36,7 @@ class MainActivity : TauriActivity() {
     this.webView = webView
     // Added before wry loads the page, so the page sees it from the start.
     webView.addJavascriptInterface(notificationTaps, "MaibukNotificationTaps")
+    webView.addJavascriptInterface(pluginActivity, "MaibukPluginActivity")
     // wry calls setWebView (this callback) before it calls setWebViewClient, so
     // wrapping here would be overwritten. Posting runs after wry's synchronous
     // setup on the main thread.
@@ -54,20 +59,42 @@ class MainActivity : TauriActivity() {
   // render thread, which kills the process. ProcessPhoenix kills this process
   // and relaunches the launcher activity, which builds a fresh WebView on the
   // app start route. In the background there is nothing to show, so the process
-  // exits quietly instead (#924).
+  // exits quietly instead (#924). Either way one death record is written first
+  // (#926).
   private fun handleRendererGone(view: WebView, detail: RenderProcessGoneDetail) {
     if (rendererGoneHandled) return
     rendererGoneHandled = true
     Log.e("Maibuk", describeRenderProcessGone(detail.didCrash(), detail.rendererPriorityAtExit()))
     (view.parent as? ViewGroup)?.removeView(view)
     view.destroy()
-    when (rendererGoneAction(lifecycle.currentState)) {
-      RendererGoneAction.Rebirth -> ProcessPhoenix.triggerRebirth(this)
-      RendererGoneAction.QuietExit -> {
+    val record = DeathRecord(
+      at = System.currentTimeMillis(),
+      didCrash = detail.didCrash(),
+      rendererPriorityAtExit = detail.rendererPriorityAtExit(),
+      foreground = rendererGoneAction(lifecycle.currentState) == RendererGoneAction.Rebirth,
+      plugins = pluginActivity.snapshot(),
+      appVersion = runCatching {
+        packageManager.getPackageInfo(packageName, 0).versionName
+      }.getOrNull() ?: "",
+      androidVersion = "${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
+      webViewVersion = runCatching {
+        WebView.getCurrentWebViewPackage()?.versionName
+      }.getOrNull() ?: "",
+    )
+    handleRendererDeath(
+      record,
+      save = {
+        getSharedPreferences(DEATH_RECORD_PREFS, MODE_PRIVATE)
+          .edit()
+          .putString(DEATH_RECORD_KEY, it)
+          .commit()
+      },
+      rebirth = { ProcessPhoenix.triggerRebirth(this) },
+      quietExit = {
         finishAndRemoveTask()
         Process.killProcess(Process.myPid())
-      }
-    }
+      },
+    )
   }
 
   override fun onNewIntent(intent: Intent) {
