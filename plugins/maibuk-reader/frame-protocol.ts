@@ -110,11 +110,6 @@ export interface FramePdf {
   displaySource: string;
   /** pdf.js's viewer CSS, which carries the text-layer rules. */
   css: string;
-  /**
-   * pdf.js's core as a classic script, sent instead of `pdfPort` when the
-   * Worker cannot start the core itself (Android): the Frame runs it.
-   */
-  coreSource?: string;
 }
 
 /**

@@ -24,10 +24,8 @@ import { FILE_READ_MAX_BYTES, type PluginClient } from "@/plugin-sdk";
 import type { PluginApiErrorCode } from "@/plugin-sdk";
 import type { ShelfService } from "./library";
 import {
-  canStartPdfCore,
   foliateSource,
   purifySource,
-  pdfCoreSource,
   startPdfCore,
   pdfDisplaySource,
   pdfViewerCss,
@@ -260,21 +258,9 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
   }
 
   /**
-   * Starts the pdf.js core and hands the Frame one end of its channel. Where
-   * this engine cannot start a Worker (Android), the Frame gets the core's
-   * source instead and runs it on its own thread, with no port.
+   * Starts the pdf.js core and hands the Frame one end of its channel.
    */
-  function startPdfBridge(): { pdf: FramePdf; port: MessagePort | null } {
-    if (!canStartPdfCore()) {
-      return {
-        pdf: {
-          displaySource: pdfDisplaySource(),
-          css: pdfViewerCss(),
-          coreSource: pdfCoreSource(),
-        },
-        port: null,
-      };
-    }
+  function startPdfBridge(): { pdf: FramePdf; port: MessagePort } {
     core = startPdfCore();
     const channel = new MessageChannel();
     pdfPort = channel.port2;
@@ -303,12 +289,8 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     if (entry !== null && entry.format === "pdf") {
       const bridge = startPdfBridge();
       message.pdf = bridge.pdf;
-      if (bridge.port === null) {
-        post(message);
-      } else {
-        message.pdfPort = bridge.port;
-        post(message, [bridge.port]);
-      }
+      message.pdfPort = bridge.port;
+      post(message, [bridge.port]);
     } else if (entry !== null) {
       message.foliate = { source: foliateSource(), purify: purifySource() };
       post(message);

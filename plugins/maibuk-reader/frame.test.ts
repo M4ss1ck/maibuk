@@ -238,9 +238,6 @@ class FakePdfPort {
   readonly close = vi.fn();
 }
 
-/** The pdf.js core sources the Frame evaluated itself, in order. */
-const loadedCores: string[] = [];
-
 interface Frame {
   port: FakePort;
   pdfPort: FakePdfPort;
@@ -261,9 +258,6 @@ function loadFrame(
   const pdfPort = new FakePdfPort();
   (globalThis as Record<string, unknown>).__readerTestHooks = {
     importPdfjs: async () => stub.module,
-    loadPdfCore: async (source: string) => {
-      loadedCores.push(source);
-    },
     onReady: (cleanup: () => void) => cleanups.push(cleanup),
     ...hookOverrides,
   };
@@ -312,7 +306,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  loadedCores.length = 0;
   for (const cleanup of frame?.cleanups ?? []) cleanup();
   frame = null;
   delete (window as unknown as { maibuk?: unknown }).maibuk;
@@ -352,24 +345,6 @@ describe("Page view", () => {
         coverDataUrl: "data:image/jpeg;base64,COVER",
       })
     );
-  });
-
-  it("runs the pdf.js core itself when the Worker sends its source instead of a port", async () => {
-    const stub = createPdfStub();
-    frame = loadFrame(stub);
-    frame.open({
-      pdf: {
-        displaySource: "export {};",
-        css: ".textLayer { position: absolute; }",
-        coreSource: "self.pdfjsWorker = {};",
-      },
-      pdfPort: undefined,
-    });
-    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 12"));
-    expect(loadedCores).toEqual(["self.pdfjsWorker = {};"]);
-    expect(stub.pdfWorkers).toHaveLength(1);
-    expect(stub.pdfWorkers[0].options).toBeUndefined();
-    expect(frame.pdfPort.start).not.toHaveBeenCalled();
   });
 
   it("answers a Worker Command without a key press", async () => {
@@ -683,57 +658,6 @@ describe("pdf.js failures", () => {
     await vi.waitFor(() =>
       expect(frame?.port.messages.some((message) => message.kind === "back")).toBe(true)
     );
-  });
-
-  it.each([
-    ["before it announces itself", false],
-    ["after it announces itself", true],
-  ])("reports a core script that throws %s, instead of hanging", async (_label, announces) => {
-    const url = URL as unknown as Record<string, unknown>;
-    Object.defineProperty(url, "createObjectURL", {
-      configurable: true,
-      value: vi.fn(() => "blob:reader-core"),
-    });
-    Object.defineProperty(url, "revokeObjectURL", { configurable: true, value: vi.fn() });
-    try {
-      frame = loadFrame(createPdfStub(), 4096, { loadPdfCore: undefined });
-      // Installed after loadFrame, because loading the markup replaces <head>.
-      const append = vi.spyOn(document.head, "append").mockImplementation((...nodes) => {
-        const script = nodes.find(
-          (node): node is HTMLScriptElement => node instanceof HTMLScriptElement
-        );
-        if (!script) return;
-        queueMicrotask(() => {
-          if (announces) (globalThis as Record<string, unknown>).pdfjsWorker = {};
-          window.dispatchEvent(
-            new ErrorEvent("error", {
-              message: "Promise.try is not a function",
-              filename: "blob:reader-core",
-              error: new TypeError("Promise.try is not a function"),
-            })
-          );
-          script.dispatchEvent(new Event("load"));
-        });
-      });
-      frame.open({
-        pdf: { displaySource: "export {};", css: "", coreSource: "self.pdfjsWorker = {};" },
-        pdfPort: undefined,
-      });
-      const message = el("message");
-      await vi.waitFor(() => expect(message.hidden).toBe(false));
-      expect(message.textContent).toBe(LABELS.errorGeneric);
-      expect(message.dataset.error).toBe("true");
-      expect(frame.port.messages).toContainEqual({
-        kind: "load-error",
-        code: "corrupt",
-        reason: LABELS.errorGeneric,
-      });
-      append.mockRestore();
-    } finally {
-      delete (globalThis as Record<string, unknown>).pdfjsWorker;
-      delete url.createObjectURL;
-      delete url.revokeObjectURL;
-    }
   });
 
   it("reports a load that never settles instead of leaving the stage hidden", async () => {

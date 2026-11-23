@@ -190,23 +190,6 @@ describe("open", () => {
     }
   });
 
-  it("hands the Frame the pdf.js core source when this engine cannot start a Worker", async () => {
-    vi.stubGlobal("Worker", undefined);
-    const entry = shelfEntry({ id: "doc-1", grant: "grant-1", format: "pdf" });
-    const harness = setup({ entry });
-    try {
-      const open = await opened(harness);
-      const pdf = open.pdf as { displaySource: string; css: string; coreSource?: string };
-      expect(pdf.displaySource.length).toBeGreaterThan(100_000);
-      expect(pdf.coreSource).toContain("pdfjsWorker");
-      expect(pdf.coreSource).not.toContain("import.meta");
-      expect(open.pdfPort).toBeUndefined();
-      expect(workers).toHaveLength(0);
-    } finally {
-      await harness.stop();
-    }
-  });
-
   it("sends no pdf resources for a Document that is not a PDF", async () => {
     const entry = shelfEntry({ id: "doc-2", grant: "grant-2", format: "epub" });
     const harness = setup({ entry });
