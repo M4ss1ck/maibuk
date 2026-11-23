@@ -13,6 +13,7 @@ describe("parsePluginConformanceArgs()", () => {
       platform: "all",
       record: false,
       skipBuild: false,
+      apk: null,
       out: ".bench",
       timeoutMinutes: 10,
       help: false,
@@ -28,6 +29,7 @@ describe("parsePluginConformanceArgs()", () => {
   it("accepts `--flag=value` as well as `--flag value`", () => {
     expect(parsePluginConformanceArgs(["--platform=android"]).platform).toBe("android");
     expect(parsePluginConformanceArgs(["--out=artifacts"]).out).toBe("artifacts");
+    expect(parsePluginConformanceArgs(["--apk=app.apk"]).apk).toBe("app.apk");
   });
 
   it("reads --record, --skip-build, --out and --timeout", () => {
@@ -46,6 +48,14 @@ describe("parsePluginConformanceArgs()", () => {
       out: ".bench/custom",
       timeoutMinutes: 3,
     });
+  });
+
+  it("reads --apk as a prebuilt APK, implying --skip-build", () => {
+    expect(parsePluginConformanceArgs(["--apk", "x.apk"])).toMatchObject({
+      apk: "x.apk",
+      skipBuild: true,
+    });
+    expect(parsePluginConformanceArgs([]).apk).toBeNull();
   });
 
   it("recognizes --help and -h", () => {
@@ -69,6 +79,7 @@ describe("parsePluginConformanceArgs()", () => {
 
   it("rejects a missing value and an unknown option", () => {
     expect(() => parsePluginConformanceArgs(["--out"])).toThrow(/--out needs a value/);
+    expect(() => parsePluginConformanceArgs(["--apk"])).toThrow(/--apk needs a value/);
     expect(() => parsePluginConformanceArgs(["--platform", "--record"])).toThrow(/needs a value/);
     expect(() => parsePluginConformanceArgs(["--nope"])).toThrow(/unknown option "--nope"/);
   });

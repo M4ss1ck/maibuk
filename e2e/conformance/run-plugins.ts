@@ -118,7 +118,7 @@ async function startPlatform(
 
   const serial = await assertOneAdbDevice();
   if (!options.skipBuild) buildAndroidApp({ root, target: await deviceAndroidTarget(serial) });
-  const apk = findDebugApk(root);
+  const apk = options.apk ?? findDebugApk(root);
   if (!apk) throw new PrerequisiteMissing("no debug APK under the Android build outputs");
   await installAndroidApp(serial, apk);
   const device = await connectDevice();

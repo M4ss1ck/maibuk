@@ -533,8 +533,9 @@ pnpm conformance:plugins --help
 
 Flags: `--platform linux|android|all` (default `all`, skipping an unavailable
 one), `--record` (merge each measured run into the committed results),
-`--skip-build` (reuse the last build), `--out <dir>` (default `.bench`), and
-`--timeout <minutes>` (default 10).
+`--skip-build` (reuse the last build), `--apk <path>` (install that Android APK
+instead of building, implying `--skip-build`), `--out <dir>` (default `.bench`),
+and `--timeout <minutes>` (default 10).
 
 Exit codes: 0 every check passed, 1 a check failed, 2 it could not measure (no
 display, no device, a build failure, a timeout before any result, or an
