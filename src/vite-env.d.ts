@@ -13,7 +13,7 @@ interface ImportMetaEnv {
   /**
    * "1" only in the production `bench:plugins` build (#448): it turns on the
    * User Timing marks behind `benchMarksEnabled()` (`plugin.start:<id>`,
-   * `app.gallery.first-render`), which a normal production build leaves out.
+   * `plugin.heartbeat-miss:<id>`, `app.gallery.first-render`), which a normal production build leaves out.
    */
   readonly VITE_PLUGIN_BENCH?: string;
   /**

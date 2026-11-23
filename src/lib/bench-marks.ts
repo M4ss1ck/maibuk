@@ -23,3 +23,12 @@ export function benchMarksEnabled(): boolean {
 export function pluginHighlightsMeasureName(pluginId: string): string {
   return `plugin.highlights:${pluginId}`;
 }
+
+/**
+ * The User Timing mark the host leaves for each heartbeat miss it counts
+ * against one Plugin (#925). One source, shared by `lifecycle.ts` (which emits
+ * it) and `bench:android-lane` (which counts it), so the two never drift.
+ */
+export function pluginHeartbeatMissMarkName(pluginId: string): string {
+  return `plugin.heartbeat-miss:${pluginId}`;
+}
