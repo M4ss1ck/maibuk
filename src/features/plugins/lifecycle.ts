@@ -46,6 +46,7 @@ import { reportPluginActivity } from "@/features/plugins/activity-report";
 import { createBuiltInPluginSource } from "@/features/plugins/builtin";
 import { registerPluginContributions } from "@/features/plugins/contributions";
 import { dropSeededPluginContributions } from "@/features/plugins/contributions-registry";
+import { applyDeathRecord } from "@/features/plugins/crash-containment";
 import { hashPluginDigests, pluginFileDigests } from "@/features/plugins/directory-hash";
 import {
   clearPluginHighlights,
@@ -990,6 +991,9 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       if (launched || disposed) return;
       launched = true;
       try {
+        // The death record is applied before the copy, the scan, or any start,
+        // so no Plugin warm-starts ahead of it (#927).
+        applyDeathRecord();
         // Copy the shipped Built-in Plugins into the Plugin Directory before
         // the scan and before the management store first classifies Plugins:
         // a missing copy is installed and an untouched copy is replaced on an

@@ -1,12 +1,17 @@
 import { PLUGIN_UI_NODE_LIMIT_MARKER } from "@/plugin-sdk/ui-node-limit";
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 import { Editor } from "@tiptap/core";
 import { createRichTextExtensions } from "@/components/editor/extensions/createRichTextExtensions";
 import { buildPlainTextMap, pmToPlainOffset } from "@/components/editor/plain-text-offsets";
 import { ToastViewport } from "@/components/ui/Toast";
 import { APP_VERSION } from "@/constants";
-import { PLUGIN_APPROVALS_STORAGE_KEY, savePluginApproval } from "@/features/plugins/approvals";
+import {
+  PLUGIN_APPROVALS_STORAGE_KEY,
+  getPluginApproval,
+  savePluginApproval,
+} from "@/features/plugins/approvals";
 import { PLUGIN_API_VERSION } from "@/features/plugins/api-table";
 import {
   getPluginSidebarEntries,
@@ -308,6 +313,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
   localStorage.removeItem(PLUGIN_APPROVALS_STORAGE_KEY);
   localStorage.removeItem(PLUGIN_SIDEBAR_SNAPSHOT_KEY);
+  delete (window as Window & { MaibukDeathRecord?: unknown }).MaibukDeathRecord;
   resetLibrarySwitchForTests();
   resetPluginLifecycleForTests();
 });
@@ -357,6 +363,42 @@ describe("Plugin lifecycle: launch", () => {
     expect(h.lifecycle.installed()).toEqual([]);
     expect(h.lifecycle.state("off-one")).toBeNull();
     expect(h.directory.readFolder).not.toHaveBeenCalled();
+  });
+
+  // #927: the death record is applied before the scan, so a Plugin blamed by
+  // the last foreground death never registers or starts at this launch.
+  it("disables a Plugin blamed by the death record before it can start", async () => {
+    const h = await createHarness({ approved: [makePlugin("blamed")] });
+    Object.assign(window, {
+      MaibukDeathRecord: {
+        take: () =>
+          JSON.stringify({
+            at: 100_000,
+            didCrash: true,
+            rendererPriorityAtExit: 0,
+            foreground: true,
+            plugins: [{ pluginId: "blamed", version: "1.0.0", lastActivityAt: 95_000 }],
+            appVersion: APP_VERSION,
+            androidVersion: "15",
+            webViewVersion: "130.0.6723.58",
+          }),
+      },
+    });
+
+    await launchAll(h);
+
+    expect(h.lifecycle.installed()).toEqual([]);
+    expect(h.frameCount()).toBe(0);
+    expect(getPluginApproval("blamed")?.enabled).toBe(false);
+
+    // The notice is sticky: dismiss it through its close button so the shared
+    // toast store starts the next test empty.
+    render(
+      <MemoryRouter>
+        <ToastViewport />
+      </MemoryRouter>
+    );
+    fireEvent.click(screen.getByRole("button", { name: i18n.t("common.close") }));
   });
 
   it("starts persistent Plugins one at a time in idle time", async () => {

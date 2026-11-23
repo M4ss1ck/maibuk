@@ -2455,6 +2455,10 @@
       "outOfMemory": "{{name}} used too much memory and was stopped.",
       "crashed": "{{name}} stopped unexpectedly."
     },
+    "outOfMemory": {
+      "disabled": "Maibuk ran out of memory and restarted. Disabled: {{names}}.",
+      "restarted": "Maibuk restarted because it ran out of memory."
+    },
     "conformance": {
       "running": "Running Plugin conformance checks…",
       "done": "Plugin conformance checks finished.",
