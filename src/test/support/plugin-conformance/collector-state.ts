@@ -15,6 +15,7 @@ import { CONFORMANCE_COLLECTOR_PATHS } from "@/features/plugins/conformance/repo
 import type {
   ConformanceCheck,
   ConformanceEngine,
+  ConformanceLaunchReport,
   ConformanceResult,
 } from "@/features/plugins/conformance/types";
 
@@ -37,6 +38,12 @@ export interface CollectorState {
    * `/result` (#447 D1).
    */
   userAgent: string | null;
+  /**
+   * Every `/launch` report, in arrival order (#922): the Plugins and notices the
+   * app started with. The death phase compares the one before a renderer death
+   * with the one after the relaunch.
+   */
+  launches: ConformanceLaunchReport[];
   /** Every `/progress` check, in arrival order. */
   progress: ConformanceCheck[];
   /** The whole `/result`, once it arrived. */
@@ -68,6 +75,7 @@ export interface CollectorContractEntry {
  * exported paths so a change there changes the collector too.
  */
 export const CONFORMANCE_COLLECTOR_CONTRACT: readonly CollectorContractEntry[] = [
+  { method: "POST", path: CONFORMANCE_COLLECTOR_PATHS.launch },
   { method: "POST", path: CONFORMANCE_COLLECTOR_PATHS.progress },
   { method: "POST", path: CONFORMANCE_COLLECTOR_PATHS.result },
   { method: "POST", path: CONFORMANCE_COLLECTOR_PATHS.done },
@@ -79,6 +87,7 @@ export function initialCollectorState(): CollectorState {
   return {
     engine: null,
     userAgent: null,
+    launches: [],
     progress: [],
     result: null,
     done: false,
@@ -120,6 +129,23 @@ function isResult(value: unknown): value is ConformanceResult {
   );
 }
 
+function isLaunchReport(value: unknown): value is ConformanceLaunchReport {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as { plugins?: unknown; notices?: unknown };
+  return (
+    Array.isArray(record.plugins) &&
+    record.plugins.every(
+      (plugin: unknown) =>
+        typeof plugin === "object" &&
+        plugin !== null &&
+        typeof (plugin as { id?: unknown }).id === "string" &&
+        typeof (plugin as { enabled?: unknown }).enabled === "boolean"
+    ) &&
+    Array.isArray(record.notices) &&
+    record.notices.every((notice: unknown) => typeof notice === "string")
+  );
+}
+
 /**
  * The userAgent a `/progress` or `/result` body carries, or null: `engine.
  * userAgent` on a result, or a top-level `userAgent` on either. The route sends
@@ -157,6 +183,10 @@ export function applyCollectorRequest(
   const paths = CONFORMANCE_COLLECTOR_PATHS;
 
   if (method === "OPTIONS") {
+    return { state: next, reply: { status: 204 } };
+  }
+  if (method === "POST" && path === paths.launch) {
+    if (isLaunchReport(request.body)) next.launches = [...state.launches, request.body];
     return { state: next, reply: { status: 204 } };
   }
   if (method === "POST" && path === paths.progress) {

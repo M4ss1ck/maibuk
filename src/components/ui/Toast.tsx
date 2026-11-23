@@ -85,6 +85,14 @@ export function forceToastError(message: string): void {
   showToast({ message, variant: "error", bypassFocusMode: true });
 }
 
+/**
+ * The messages of the toasts currently showing. The conformance launch report
+ * records them (#922); the store itself stays private.
+ */
+export function currentToastMessages(): string[] {
+  return useToastStore.getState().toasts.map((toast) => toast.message);
+}
+
 export function ToastViewport() {
   const toasts = useToastStore((state) => state.toasts);
 

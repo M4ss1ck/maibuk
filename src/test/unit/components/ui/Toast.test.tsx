@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, act } from "@testing-library/react";
-import { toast, ToastViewport } from "@/components/ui/Toast";
+import { toast, ToastViewport, currentToastMessages } from "@/components/ui/Toast";
 
 describe("Toast", () => {
   beforeEach(() => {
@@ -136,6 +136,16 @@ describe("Toast", () => {
 
       // Cleanup
       document.body.removeChild(focusEl);
+    });
+  });
+
+  describe("currentToastMessages()", () => {
+    it("returns the message of every toast currently in the store", () => {
+      act(() => {
+        toast.error("x");
+      });
+
+      expect(currentToastMessages()).toContain("x");
     });
   });
 

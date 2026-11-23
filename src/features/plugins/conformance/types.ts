@@ -59,6 +59,16 @@ export interface ConformanceResult {
 }
 
 /**
+ * What the app looked like at launch (`/launch`, #922). Posted on every launch
+ * of the conformance build; the Android death phase compares the report before
+ * and after a process death.
+ */
+export interface ConformanceLaunchReport {
+  plugins: { id: string; enabled: boolean }[];
+  notices: string[];
+}
+
+/**
  * What one fixture Command produced.
  *
  * `refused` is the Plugin's typed refusal, `stopped` is the host stopping it
