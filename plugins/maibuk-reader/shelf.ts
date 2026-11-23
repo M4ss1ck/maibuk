@@ -164,9 +164,8 @@ export async function fingerprint(
 }
 
 /**
- * How much the Fingerprint hashes before it yields. 8 KB is about 10 ms on a
- * desktop and about 100 ms on a slow e-ink device, well inside the host's
- * one-second heartbeat.
+ * How much the Fingerprint hashes before it yields: small enough that a slow
+ * device stays well inside the host's one-second heartbeat.
  */
 const FINGERPRINT_SLICE = 8 * 1024;
 

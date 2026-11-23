@@ -4,10 +4,9 @@
  * Reader needs it for the Fingerprint, and the Fingerprint is built in the
  * Plugin Worker: a Worker started from a `blob:` URL is not a secure context,
  * so `crypto.subtle` is undefined there. The pure implementation gives the same
- * digest in the Worker, the app, and a test. Hashing 128 KB takes a few
- * milliseconds on a desktop but over a second on a slow e-ink device, so
- * `createSha256` takes the message in pieces and the Fingerprint yields
- * between them.
+ * digest in the Worker, the app, and a test. A pure hash of a large buffer can
+ * hold a slow device's Worker past the host's heartbeat, so `createSha256`
+ * takes the message in pieces and the Fingerprint yields between them.
  */
 
 /** The 64 round constants: the first 32 bits of the cube roots of the primes. */
@@ -42,9 +41,8 @@ export interface Sha256 {
 
 /**
  * A SHA-256 that takes the message in pieces, so a caller can hash a large
- * buffer a slice at a time and yield between slices. The Fingerprint does:
- * hashing 128 KB at once blocks the Plugin Worker past the host's heartbeat on
- * a slow e-ink device.
+ * buffer a slice at a time and yield between slices. The Fingerprint does, so
+ * the Plugin Worker keeps answering the host's heartbeat on a slow device.
  */
 export function createSha256(): Sha256 {
   const hash = new Uint32Array(INITIAL);
