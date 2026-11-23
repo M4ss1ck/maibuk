@@ -2,6 +2,7 @@ package com.massick.maibuk
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.Process
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
@@ -52,14 +53,21 @@ class MainActivity : TauriActivity() {
   // state with "FORTIFY: pthread_mutex_lock called on a destroyed mutex" on the
   // render thread, which kills the process. ProcessPhoenix kills this process
   // and relaunches the launcher activity, which builds a fresh WebView on the
-  // app start route.
+  // app start route. In the background there is nothing to show, so the process
+  // exits quietly instead (#924).
   private fun handleRendererGone(view: WebView, detail: RenderProcessGoneDetail) {
     if (rendererGoneHandled) return
     rendererGoneHandled = true
     Log.e("Maibuk", describeRenderProcessGone(detail.didCrash(), detail.rendererPriorityAtExit()))
     (view.parent as? ViewGroup)?.removeView(view)
     view.destroy()
-    ProcessPhoenix.triggerRebirth(this)
+    when (rendererGoneAction(lifecycle.currentState)) {
+      RendererGoneAction.Rebirth -> ProcessPhoenix.triggerRebirth(this)
+      RendererGoneAction.QuietExit -> {
+        finishAndRemoveTask()
+        Process.killProcess(Process.myPid())
+      }
+    }
   }
 
   override fun onNewIntent(intent: Intent) {

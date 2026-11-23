@@ -6,6 +6,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.lifecycle.Lifecycle
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -83,6 +84,18 @@ class RenderProcessGoneTest {
             "WebView renderer gone: killed by system (priority=2)",
             describeRenderProcessGone(didCrash = false, priorityAtExit = 2),
         )
+    }
+
+    @Test
+    fun rendererGoneRebirthsWhileVisible() {
+        assertEquals(RendererGoneAction.Rebirth, rendererGoneAction(Lifecycle.State.RESUMED))
+        // Paused but visible: split screen, or a permission prompt on top.
+        assertEquals(RendererGoneAction.Rebirth, rendererGoneAction(Lifecycle.State.STARTED))
+    }
+
+    @Test
+    fun rendererGoneExitsQuietlyInTheBackground() {
+        assertEquals(RendererGoneAction.QuietExit, rendererGoneAction(Lifecycle.State.CREATED))
     }
 
     @Test
