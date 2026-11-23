@@ -42,6 +42,7 @@ import {
   getPluginApproval,
   recordStartupError,
 } from "@/features/plugins/approvals";
+import { reportPluginActivity } from "@/features/plugins/activity-report";
 import { createBuiltInPluginSource } from "@/features/plugins/builtin";
 import { registerPluginContributions } from "@/features/plugins/contributions";
 import { dropSeededPluginContributions } from "@/features/plugins/contributions-registry";
@@ -312,6 +313,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
   const whenLaunchSettled = options.whenLaunchSettled ?? whenPluginLaunchSettled;
   const scheduleIdle = options.scheduleIdle ?? defaultScheduleIdle;
   const stopMessage = options.stopMessage ?? pluginStoppedMessage;
+  const reportActivity = options.reportActivity ?? reportPluginActivity;
   const handlers = options.handlers ?? createPluginHandlers;
   // A broker call that reads or writes the Library must refuse while the
   // Tutorial Library is active (ADR 0008), like every other background job.
@@ -526,6 +528,12 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
   function noteCall(entry: Entry): void {
     if (entry.state.status !== "ready" && entry.state.status !== "unavailable") return;
     armIdle(entry);
+    noteActivity(entry);
+  }
+
+  /** Reports Plugin activity for the Android death record (#926). */
+  function noteActivity(entry: Entry): void {
+    reportActivity(entry.installed.pluginId, entry.installed.manifest.version);
   }
 
   function startHeartbeat(entry: Entry): void {
@@ -557,6 +565,8 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       }
       const broker = entry.runtime?.broker;
       if (!broker) return;
+      // Open work or an open page or Frame is activity for the death record (#926).
+      if (broker.hasOpenWork() || hasWarmSurface(entry)) noteActivity(entry);
       entry.beatInFlight = true;
       const answered = () => {
         entry.beatInFlight = false;
@@ -1073,6 +1083,10 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       surfacesOf(pluginId).add(surface);
       const entry = entries.get(pluginId);
       if (!entry) return;
+      // A running Plugin is doing something for the author (#926).
+      if (entry.state.status === "ready" || entry.state.status === "unavailable") {
+        noteActivity(entry);
+      }
       if (hasWarmSurface(entry)) {
         if (entry.idleTimer !== null) {
           clearTimeout(entry.idleTimer);

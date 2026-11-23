@@ -179,6 +179,8 @@ interface HarnessOptions {
   /** Frames that do not signal ready by themselves. */
   deferReady?: boolean;
   stopMessage?: (name: string, reason: PluginLifecycleStopReason) => string | null;
+  /** Reports Plugin activity to the Android death-record bridge (#926). */
+  reportActivity?: (pluginId: string, version: string) => void;
   /** Method handlers; omitted leaves the lifecycle's own default wiring. */
   handlers?: (manifest: PluginManifest) => PluginApiHandlers;
   isLibraryAvailable?: () => boolean;
@@ -264,6 +266,7 @@ async function createHarness(options: HarnessOptions = {}) {
         }),
     },
     stopMessage: options.stopMessage,
+    reportActivity: options.reportActivity,
   });
 
   const changes: PluginLifecycleChange[] = [];
@@ -2586,5 +2589,72 @@ describe("Plugin lifecycle: intent idle grace", () => {
 
     await advance(2_000);
     expect(h.lifecycle.state("surface-page")?.status).toBe("stopped");
+  });
+});
+
+describe("Plugin lifecycle: activity reports (#926)", () => {
+  it("reports a Plugin call, id and version included", async () => {
+    const reportActivity = vi.fn();
+    const h = await createHarness({
+      approved: [makePlugin("alpha")],
+      reportActivity,
+      handlers: () => ({ "notifications.show": async () => null }),
+    });
+    await launchAll(h);
+
+    await h.framesFor("alpha")[0].call("notifications.show", { variant: "info", message: "hi" });
+
+    expect(reportActivity).toHaveBeenCalledWith("alpha", "1.0.0");
+  });
+
+  it("reports a heartbeat tick while the host still waits on the Plugin", async () => {
+    const reportActivity = vi.fn();
+    const h = await createHarness({ approved: [makePlugin("alpha")], reportActivity });
+    await launchAll(h);
+    const frame = h.framesFor("alpha")[0];
+
+    // A host request the Plugin never answers is open work (#926).
+    frame.holdAnswers = true;
+    const pending = h.lifecycle.runtime("alpha")?.broker.request("command.run", { id: "open" });
+    // The dispose at the end of the test rejects it; the run itself is not asserted.
+    pending?.catch(() => undefined);
+    await advance(0);
+
+    await advance(HEARTBEAT_INTERVAL_MS);
+
+    expect(reportActivity).toHaveBeenCalledWith("alpha", "1.0.0");
+  });
+
+  it("reports a reached surface and a heartbeat tick while it stays warm", async () => {
+    const reportActivity = vi.fn();
+    const h = await createHarness({
+      approved: [makePlugin("surface-page", { lifecycle: "on-demand", ...pagePluginOverrides() })],
+      reportActivity,
+    });
+    await launchAll(h);
+
+    h.lifecycle.surfaceReached("surface-page", "page:report");
+    await advanceUntil(
+      () => h.lifecycle.state("surface-page")?.status === "ready",
+      "surface-page ready"
+    );
+    reportActivity.mockClear();
+
+    h.lifecycle.surfaceReached("surface-page", "page:report");
+    expect(reportActivity).toHaveBeenCalledWith("surface-page", "1.0.0");
+
+    reportActivity.mockClear();
+    await advance(HEARTBEAT_INTERVAL_MS);
+    expect(reportActivity).toHaveBeenCalledWith("surface-page", "1.0.0");
+  });
+
+  it("stays silent on a heartbeat tick with no open work and no surface", async () => {
+    const reportActivity = vi.fn();
+    const h = await createHarness({ approved: [makePlugin("alpha")], reportActivity });
+    await launchAll(h);
+
+    await advance(HEARTBEAT_INTERVAL_MS);
+
+    expect(reportActivity).not.toHaveBeenCalled();
   });
 });

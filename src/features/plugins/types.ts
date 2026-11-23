@@ -705,6 +705,8 @@ export interface PluginLifecycleOptions {
   scheduleIdle?: (work: () => void) => void;
   /** The stop toast text, or null for a silent stop. Defaults to the localized copy. */
   stopMessage?: (name: string, reason: PluginLifecycleStopReason) => string | null;
+  /** Reports Plugin activity to the Android death-record bridge (#926); defaults to the throttled reporter. */
+  reportActivity?: (pluginId: string, version: string) => void;
   /** Runs once when the lifecycle is disposed, after every Plugin stopped (host services the app started with it). */
   onDispose?: () => void;
 }
