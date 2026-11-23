@@ -154,6 +154,11 @@ export async function launchAndroidApp(options: {
       (await device.shell(["pidof", ANDROID_PACKAGE]).catch(() => "")).trim() !== "",
     async stop() {
       await device.shell(["am", "force-stop", ANDROID_PACKAGE]).catch(() => "");
+      // Unpipe first: logcat can still flush after SIGTERM, and a write to the
+      // ended file is an unhandled error that crashes the lane (seen once the
+      // death phase kept the lane running past the main phase's stop, #922).
+      logcat.stdout?.unpipe(log);
+      logcat.stderr?.unpipe(log);
       logcat.kill("SIGTERM");
       log.end();
       await adb(device.serial, ["reverse", "--remove", `tcp:${CONFORMANCE_COLLECTOR_PORT}`]).catch(
