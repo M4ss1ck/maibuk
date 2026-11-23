@@ -667,6 +667,51 @@ describe("Plugin lifecycle: on-demand warm start and idle stop", () => {
 });
 
 describe("Plugin lifecycle: heartbeat", () => {
+  /** The marks the lifecycle made; jsdom has no User Timing, so `mark` is a stand-in. */
+  let marks: string[] = [];
+  const missMarks = () => marks.filter((name) => name === "plugin.heartbeat-miss:alpha");
+
+  beforeEach(() => {
+    marks = [];
+    Object.assign(performance, { mark: (name: string) => marks.push(name) });
+  });
+
+  afterEach(() => {
+    delete (performance as { mark?: unknown }).mark;
+  });
+
+  it("marks each counted heartbeat miss for the perf lane (#925)", async () => {
+    const h = await createHarness({ approved: [makePlugin("alpha")] });
+    await launchAll(h);
+    const frame = h.framesFor("alpha")[0];
+    frame.holdAnswers = true;
+
+    await advance(HEARTBEAT_INTERVAL_MS);
+    await advance(HEARTBEAT_INTERVAL_MS);
+
+    expect(h.lifecycle.state("alpha")).toEqual({
+      status: "unavailable",
+      startReason: "launch",
+      heartbeatMisses: 1,
+    });
+    expect(missMarks()).toHaveLength(1);
+  });
+
+  it("marks no miss when the host itself stalled past a beat (#923)", async () => {
+    const h = await createHarness({ approved: [makePlugin("alpha")] });
+    await launchAll(h);
+    const frame = h.framesFor("alpha")[0];
+    frame.holdAnswers = true;
+    await advance(HEARTBEAT_INTERVAL_MS);
+
+    // The main thread is busy: the clock moves on but no timer or message runs,
+    // so the next beat fires late, ahead of the answer queued behind the stall.
+    vi.setSystemTime(Date.now() + HEARTBEAT_INTERVAL_MS * 3);
+    await advance(HEARTBEAT_INTERVAL_MS);
+
+    expect(missMarks()).toHaveLength(0);
+  });
+
   it("marks a Plugin unavailable on the first missed beat and stops it on the fifth", async () => {
     const h = await createHarness({ approved: [makePlugin("alpha")] });
     render(<ToastViewport />);

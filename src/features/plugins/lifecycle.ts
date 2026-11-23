@@ -102,7 +102,7 @@ import { APP_VERSION } from "@/constants";
 import { useSettingsStore } from "@/features/settings/store";
 import { useSyncStore } from "@/features/sync/store";
 import i18n from "@/i18n";
-import { benchMarksEnabled } from "@/lib/bench-marks";
+import { benchMarksEnabled, pluginHeartbeatMissMarkName } from "@/lib/bench-marks";
 import { waitForDatabaseReady } from "@/lib/db";
 import { getPluginDirectory } from "@/lib/platform";
 import { PLUGIN_MIGRATE_DATA_REQUEST } from "@/plugin-sdk/protocol";
@@ -539,6 +539,8 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       if (entry.beatInFlight) {
         // A tick this late means the host main thread stalled, so the unanswered beat is not the Plugin's: count no miss and give it another interval (#923).
         if (tickLate) return;
+        // Only a counted miss is marked, so a perf lane can count them (#925).
+        benchMark(pluginHeartbeatMissMarkName(entry.installed.pluginId));
         entry.misses += 1;
         if (entry.misses >= HEARTBEAT_MISS_LIMIT) {
           stopEntry(entry, "unresponsive");

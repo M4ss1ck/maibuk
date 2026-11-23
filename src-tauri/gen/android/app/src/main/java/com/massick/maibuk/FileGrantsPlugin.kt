@@ -29,14 +29,18 @@ class DocumentArgs {
 
 /**
  * The MIME types the document picker filters to for a Plugin's extensions. An
- * extension the platform cannot name a type for is left out, so a Reader that
- * asks for `pdf`, `epub` and `cbz` still hides every document that is none of
- * them; the filter goes away only when no extension names a type at all, since
- * then nothing would be left to filter by. Rust validated the extensions' shape
- * before they got here.
+ * extension the platform cannot name a type for adds `application/octet-stream`,
+ * the type providers report for such a file: Android 8 names none for `cbz`,
+ * and without it the picker greys every comic out. The filter goes away only
+ * when no extension names a type at all, since then nothing would be left to
+ * filter by. Rust validated the extensions' shape before they got here.
  */
-fun pickerMimeTypes(extensions: List<String>, lookup: (String) -> String?): List<String> =
-  extensions.mapNotNull(lookup).distinct()
+fun pickerMimeTypes(extensions: List<String>, lookup: (String) -> String?): List<String> {
+  val types = extensions.map { lookup(it) ?: GENERIC_MIME_TYPE }.distinct()
+  return if (types.all { it == GENERIC_MIME_TYPE }) emptyList() else types
+}
+
+private const val GENERIC_MIME_TYPE = "application/octet-stream"
 
 /**
  * The size a description carries: the column the provider filled, else the

@@ -15,7 +15,12 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { _android as android, type AndroidWebView, type Page } from "@playwright/test";
+import {
+  _android as android,
+  type AndroidDevice as PwAndroidDevice,
+  type AndroidWebView,
+  type Page,
+} from "@playwright/test";
 
 const run = promisify(execFile);
 
@@ -226,6 +231,8 @@ export interface AndroidSession {
   origin: string;
   /** The WebView's Chrome version, from its user agent. */
   version: string;
+  /** Playwright's handle on the device, for the system UI outside the WebView. */
+  pw: PwAndroidDevice;
   close(): Promise<void>;
 }
 
@@ -253,6 +260,7 @@ export async function attachWebView(device: AndroidDevice): Promise<AndroidSessi
     page,
     origin: APP_ORIGIN,
     version: version ?? "unknown",
+    pw,
     async close() {
       await pw.close().catch(() => {});
       await stopApp(device);

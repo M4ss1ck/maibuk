@@ -13,6 +13,8 @@ export interface PluginConformanceOptions {
   record: boolean;
   /** Reuse the last build instead of rebuilding. */
   skipBuild: boolean;
+  /** An Android APK to install instead of building, or null to build. */
+  apk: string | null;
   /** Directory each platform's `.json` is written under. */
   out: string;
   /** How long to wait for `/done`, in minutes. */
@@ -26,6 +28,8 @@ export const PLUGIN_CONFORMANCE_USAGE = `usage: pnpm conformance:plugins [option
   --record                        merge a measured platform run (exit 0 or 1) into
                                   docs/research/plugins-conformance.results.json
   --skip-build                    reuse the last build instead of rebuilding
+  --apk <path>                    install this Android APK instead of building
+                                  (implies --skip-build)
   --out <dir>                     where each platform's JSON is written (default .bench)
   --timeout <minutes>             wait for /done before giving up (default 10)
   --help                          print this and exit`;
@@ -46,6 +50,7 @@ export function parsePluginConformanceArgs(argv: string[]): PluginConformanceOpt
     platform: "all",
     record: false,
     skipBuild: false,
+    apk: null,
     out: ".bench",
     timeoutMinutes: 10,
     help: false,
@@ -73,6 +78,10 @@ export function parsePluginConformanceArgs(argv: string[]): PluginConformanceOpt
         options.record = true;
         break;
       case "--skip-build":
+        options.skipBuild = true;
+        break;
+      case "--apk":
+        options.apk = value();
         options.skipBuild = true;
         break;
       case "--out":

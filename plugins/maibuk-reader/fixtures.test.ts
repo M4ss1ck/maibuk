@@ -7,7 +7,9 @@
  * of eight pages; an FB2; and MOBI/AZW3 files whose PalmDB headers carry the
  * version and encryption flag the Reader reads. The PDFs are parsed by the
  * vendored pdf.js itself, the engine Reader runs, through the helpers below;
- * `pdf-lib` and `openZip` read the structure beside it.
+ * `pdf-lib` and `openZip` read the structure beside it. The two bench-only image
+ * fixtures (#925) are generated per run, so only their zip shape and size are
+ * checked here.
  */
 
 import { execFileSync } from "node:child_process";
@@ -17,6 +19,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { PDFDocument, PDFRawStream } from "pdf-lib";
 import { afterAll, describe, expect, it } from "vitest";
+import { buildImageEpub, buildLargeComicBook } from "./scripts/generate-fixtures.mjs";
 import { ZipError, openZip } from "./zip";
 
 const HERE = join(__dirname, "fixtures");
@@ -343,5 +346,17 @@ describe("the MOBI-family headers", () => {
     // No INDX record: the pointer the KF8 reader needs stays empty.
     const bytes = fixture("story.azw3");
     expect(u32be(bytes, u32be(bytes, 78) + 244)).toBe(0xffffffff);
+  });
+});
+
+describe("the bench image fixtures", () => {
+  it.each([
+    ["buildImageEpub", buildImageEpub],
+    ["buildLargeComicBook", buildLargeComicBook],
+  ])("%s builds a zip of twenty page images over 10 MB", async (_name, build) => {
+    const bytes = new Uint8Array(build());
+    const archive = await openZip(ranged(bytes), bytes.length);
+    expect(archive.entries.filter(({ name }) => name.endsWith(".png"))).toHaveLength(20);
+    expect(bytes.length).toBeGreaterThan(10_000_000);
   });
 });

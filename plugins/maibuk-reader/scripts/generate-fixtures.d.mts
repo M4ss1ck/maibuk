@@ -3,3 +3,5 @@ export const LARGE_PDF_IMAGE: number;
 export const LARGE_EPUB_SECTIONS: number;
 export function buildLargePdf(options?: { pages?: number; imageSize?: number }): Buffer;
 export function buildLargeEpub(options?: { sections?: number }): Buffer;
+export function buildImageEpub(options?: { chapters?: number }): Buffer;
+export function buildLargeComicBook(options?: { pages?: number }): Buffer;

@@ -26,10 +26,12 @@ class FileGrantsPluginTest {
     assertEquals(listOf("image/jpeg"), pickerMimeTypes(listOf("jpg", "jpeg")) { known[it] })
   }
 
+  // Android 8 names no type for cbz, and its providers report such a file as
+  // application/octet-stream; filtering that out greyed the file in the picker.
   @Test
-  fun anUnknownExtensionLeavesTheKnownTypesFiltering() {
+  fun anUnknownExtensionAddsTheGenericTypeBesideTheKnownOnes() {
     assertEquals(
-      listOf("application/pdf"),
+      listOf("application/pdf", "application/octet-stream"),
       pickerMimeTypes(listOf("pdf", "fb2", "cbz")) { known[it] },
     )
   }
@@ -37,7 +39,7 @@ class FileGrantsPluginTest {
   @Test
   fun aKnownExtensionAfterAnUnknownOneStillFilters() {
     assertEquals(
-      listOf("application/pdf"),
+      listOf("application/octet-stream", "application/pdf"),
       pickerMimeTypes(listOf("cbz", "pdf")) { known[it] },
     )
   }
