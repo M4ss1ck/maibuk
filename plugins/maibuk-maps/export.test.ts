@@ -6,7 +6,7 @@
  * `fitUnderCap` takes the encoder, so no test needs a canvas.
  */
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   DEFAULT_DPI,
   ExportTooLargeError,
@@ -33,7 +33,8 @@ import {
   svgAtPixelSize,
   svgPixelSize,
 } from "./export";
-import { bundledFonts } from "./font-bytes";
+import { bundledFonts, bundledFontBytes } from "./font-bytes";
+import cinzelFontFile from "./assets/ui/fonts/Cinzel-wght.ttf?inline";
 import {
   DEFAULT_LABEL_FONT,
   DEFAULT_LABEL_HALO_MM,
@@ -144,24 +145,41 @@ describe("placePixelSize()", () => {
 });
 
 describe("dataUri()", () => {
-  it("writes the same URI and reads the bundled fonts without atob or btoa, as on Android", () => {
-    vi.stubGlobal("atob", undefined);
-    vi.stubGlobal("btoa", undefined);
-    try {
-      expect(dataUri("image/png", new Uint8Array([0, 255, 1]))).toBe("data:image/png;base64,AP8B");
-      const fonts = bundledFonts();
-      expect(fonts.length).toBeGreaterThan(0);
-      for (const font of fonts) expect(font.bytes.length).toBeGreaterThan(1000);
-    } finally {
-      vi.unstubAllGlobals();
+  /** A repeatable "random" byte array, so a 1 MB payload reads the same every run. */
+  function randomBytes(length: number): Uint8Array {
+    const bytes = new Uint8Array(length);
+    let seed = 0x2f6e2b1;
+    for (let i = 0; i < length; i++) {
+      // A 32-bit linear congruential generator: cheap, and deterministic.
+      seed = (seed * 1_664_525 + 1_013_904_223) >>> 0;
+      bytes[i] = seed >>> 24;
     }
-  });
+    return bytes;
+  }
+
+  const PAYLOADS: ReadonlyArray<readonly [string, Uint8Array]> = [
+    ["no bytes", new Uint8Array(0)],
+    ["every byte value", Uint8Array.from({ length: 256 }, (_, value) => value)],
+    ["a megabyte of random bytes", randomBytes(1024 * 1024)],
+  ];
 
   it("writes the bytes as a base64 data URI, without Buffer", () => {
     expect(dataUri("image/png", new Uint8Array([0, 255, 1]))).toBe("data:image/png;base64,AP8B");
   });
 
+  it("writes an empty payload as an empty base64", () => {
+    expect(dataUri("image/png", new Uint8Array(0))).toBe("data:image/png;base64,");
+  });
+
+  it.each(PAYLOADS)("round-trips %s through the URI's base64", (_name, bytes) => {
+    const base64 = dataUri("image/png", bytes).slice("data:image/png;base64,".length);
+    expect(Buffer.from(base64, "base64")).toEqual(Buffer.from(bytes));
+    expect(base64).toBe(Buffer.from(bytes).toString("base64"));
+  });
+
   it("handles more bytes than one call can spread", () => {
+    // 40 000 bytes is past the argument count a single `String.fromCharCode`
+    // call takes, so the binary string is built in chunks.
     const bytes = new Uint8Array(40_000).fill(65);
     const uri = dataUri("image/jpeg", bytes);
     expect(uri.startsWith("data:image/jpeg;base64,")).toBe(true);
@@ -501,6 +519,24 @@ describe("the bundled font bytes", () => {
     const [first] = bundledFonts();
     const [second] = bundledFonts();
     expect(second.bytes).toBe(first.bytes);
+  });
+
+  it("gives one face by family, matching the base64 its inlined URI carries", () => {
+    const family = MAP_LABEL_FONT_FAMILIES.cinzel;
+    const bytes = bundledFontBytes(family);
+    if (bytes === null) throw new Error(`${family} is not a shipped family`);
+
+    const base64 = cinzelFontFile.slice(cinzelFontFile.indexOf(",") + 1);
+    expect(Buffer.from(bytes)).toEqual(Buffer.from(base64, "base64"));
+    // A TrueType file opens with 0x00010000, an OpenType one with "OTTO".
+    const magic = Array.from(bytes.slice(0, 4), (byte) => byte.toString(16).padStart(2, "0")).join(
+      " "
+    );
+    expect(["00 01 00 00", "4f 54 54 4f"]).toContain(magic);
+  });
+
+  it("answers null for a family the Plugin does not ship", () => {
+    expect(bundledFontBytes("comic-sans")).toBeNull();
   });
 });
 

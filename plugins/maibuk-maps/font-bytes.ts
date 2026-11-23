@@ -17,7 +17,6 @@ import cinzel from "./assets/ui/fonts/Cinzel-wght.ttf?inline";
 import imFellEnglish from "./assets/ui/fonts/IMFeENrm28P.ttf?inline";
 import medievalSharp from "./assets/ui/fonts/MedievalSharp.ttf?inline";
 import uncialAntiqua from "./assets/ui/fonts/UncialAntiqua-Regular.ttf?inline";
-import { base64ToBytes } from "@/plugin-sdk/protocol";
 import type { ExportFont } from "./export";
 import { MAP_LABEL_FONT_FAMILIES } from "./maps";
 
@@ -57,6 +56,13 @@ export function bundledFontBytes(family: string): Uint8Array | null {
   return data === undefined ? null : decodeDataUri(data).bytes;
 }
 
+/** The bytes a binary string's character codes make, one per byte. */
+function binaryToBytes(binary: string): Uint8Array {
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
 /** The mime type and bytes a `data:` URI carries. */
 function decodeDataUri(data: string): { bytes: Uint8Array; mime: string } {
   const comma = data.indexOf(",");
@@ -64,6 +70,5 @@ function decodeDataUri(data: string): { bytes: Uint8Array; mime: string } {
     throw new Error("a bundled font is not an inlined data URI");
   }
   const mime = data.slice("data:".length, data.indexOf(";")) || "font/ttf";
-  // No `atob`: not every engine has it.
-  return { bytes: base64ToBytes(data.slice(comma + 1)), mime };
+  return { bytes: binaryToBytes(atob(data.slice(comma + 1))), mime };
 }

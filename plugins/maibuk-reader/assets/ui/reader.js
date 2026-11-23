@@ -35,7 +35,7 @@
    * @typedef {PagePosition | CfiPosition | SectionPosition} ReadingPosition
    * @typedef {{ id: string, title: string, author: string, format: string }} FrameEntry
    * @typedef {{ fontSize: number, lineWidth: string, pdfFit: "width" | "page", pdfLayout: "single" | "continuous" }} ReaderSettings
-   * @typedef {{ displaySource: string, css: string, coreSource?: string }} FramePdf
+   * @typedef {{ displaySource: string, css: string }} FramePdf
    * @typedef {{ source: string, purify: string }} FrameFoliate
    * @typedef {{ name: string, size: number }} FrameZipEntry
    * @typedef {Object} FrameLabels
@@ -649,8 +649,8 @@
       showMessage(t("empty"), false);
       return;
     }
-    if (message.pdf && (message.pdfPort || typeof message.pdf.coreSource === "string")) {
-      await openPdf(message.pdf, message.pdfPort || null, position);
+    if (message.pdf && message.pdfPort) {
+      await openPdf(message.pdf, message.pdfPort, position);
       return;
     }
     if (message.foliate) {
@@ -687,27 +687,20 @@
   }
 
   /**
-   * Opens a PDF. With a port, pdf.js's core answers from the Plugin Worker's
-   * nested Worker. Without one (Android), the Worker sent the core's source:
-   * the Frame loads it, and pdf.js runs the core on this thread, since the
-   * Frame may not start a Worker of its own.
+   * Opens a PDF. pdf.js's core answers from the Plugin Worker's nested Worker
+   * through `pdfPort`.
    *
    * @param {FramePdf} pdf
-   * @param {MessagePort | null} pdfPort
+   * @param {MessagePort} pdfPort
    * @param {ReadingPosition | null} saved
    */
   async function openPdf(pdf, pdfPort, saved) {
     try {
       pdfjs = await withPdfLoadTimeout(importPdfjs(pdf.displaySource));
       injectCss(pdf.css);
-      if (pdfPort) {
-        activePdfPort = pdfPort;
-        pdfPort.start();
-        pdfWorker = new pdfjs.PDFWorker({ port: pdfPort });
-      } else {
-        await withPdfLoadTimeout(loadPdfCore(/** @type {string} */ (pdf.coreSource)));
-        pdfWorker = new pdfjs.PDFWorker();
-      }
+      activePdfPort = pdfPort;
+      pdfPort.start();
+      pdfWorker = new pdfjs.PDFWorker({ port: pdfPort });
       zoomSetting =
         saved && (typeof saved.zoom === "number" || saved.zoom === "width" || saved.zoom === "page")
           ? saved.zoom
@@ -743,65 +736,6 @@
     const url = URL.createObjectURL(new Blob([displaySource], { type: "text/javascript" }));
     try {
       return await import(/* @vite-ignore */ url);
-    } finally {
-      URL.revokeObjectURL(url);
-    }
-  }
-
-  /**
-   * Runs pdf.js's core, a classic script, once per Frame: it sets
-   * `globalThis.pdfjsWorker`, which pdf.js's display module then answers from.
-   *
-   * @param {string} source
-   * @returns {Promise<void>}
-   */
-  async function loadPdfCore(source) {
-    if (hooks && typeof hooks.loadPdfCore === "function") return hooks.loadPdfCore(source);
-    if (/** @type {any} */ (globalThis).pdfjsWorker) return;
-    const url = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
-    try {
-      await new Promise((resolve, reject) => {
-        const script = document.createElement("script");
-        /**
-         * A classic script that throws while it evaluates (a missing API such
-         * as `Promise.try`) still fires `load`, so only the window's `error`
-         * event reports it. Blob URLs are same-origin, so the event names this
-         * script as its source.
-         *
-         * @param {ErrorEvent} event
-         */
-        const onWindowError = (event) => {
-          if (event.filename !== url) return;
-          cleanup();
-          reject(
-            event.error instanceof Error
-              ? event.error
-              : new Error(event.message || "pdf.js's core failed to evaluate")
-          );
-        };
-        const cleanup = () => {
-          window.removeEventListener("error", onWindowError);
-          script.remove();
-        };
-        window.addEventListener("error", onWindowError);
-        script.src = url;
-        script.onload = () => {
-          cleanup();
-          // The core defines this global as it evaluates; an absent one means
-          // it stopped before it could serve the display module.
-          const scope = /** @type {any} */ (globalThis);
-          if (!scope.pdfjsWorker) {
-            reject(new Error("pdf.js's core did not finish loading"));
-            return;
-          }
-          resolve(undefined);
-        };
-        script.onerror = () => {
-          cleanup();
-          reject(new Error("pdf.js's core did not load"));
-        };
-        document.head.append(script);
-      });
     } finally {
       URL.revokeObjectURL(url);
     }

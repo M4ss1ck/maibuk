@@ -40,7 +40,7 @@ type PluralCategory = "one" | "other";
 /**
  * The CLDR cardinal category both shipped languages pick for a count: "one" for
  * a magnitude of exactly 1, "other" for everything else Maps counts. Written
- * out because not every engine has `Intl`.
+ * out because no other category can appear in a shipped catalog.
  */
 function pluralCategory(count: number): PluralCategory {
   return Math.abs(count) === 1 ? "one" : "other";
@@ -79,18 +79,8 @@ export function format(
 
 /**
  * A date as `Intl.DateTimeFormat`'s `dateStyle: "medium"` writes it ("Nov 21,
- * 2026", "21 nov 2026"), in the device's time zone. An engine without `Intl`
- * falls back to the catalogs' month names and pattern.
+ * 2026", "21 nov 2026"), in the device's time zone.
  */
 export function mediumDate(language: string, time: number): string {
-  if (typeof Intl !== "undefined" && typeof Intl.DateTimeFormat === "function") {
-    return new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(time);
-  }
-  const date = new Date(time);
-  const month = translate(language, `date.month.${date.getMonth() + 1}` as MapsKey);
-  return format(translate(language, "date.medium"), {
-    month,
-    day: date.getDate(),
-    year: date.getFullYear(),
-  });
+  return new Intl.DateTimeFormat(language, { dateStyle: "medium" }).format(time);
 }

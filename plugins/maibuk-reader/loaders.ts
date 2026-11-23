@@ -171,24 +171,6 @@ export function startPdfCore(options: PdfCoreOptions = {}): PdfCore {
   };
 }
 
-/**
- * Whether this engine can start the nested core Worker {@link startPdfCore}
- * needs. Not every Plugin engine has `Worker` or `MessageChannel`, so there
- * the Frame runs the core itself from {@link pdfCoreSource}.
- */
-export function canStartPdfCore(): boolean {
-  return typeof Worker === "function" && typeof MessageChannel === "function";
-}
-
-/**
- * pdf.js's core as a classic script, for a Frame that runs it on its own
- * thread: loaded, it sets `globalThis.pdfjsWorker`, and pdf.js's display module
- * then answers from it instead of starting a Worker the Frame may not start.
- */
-export function pdfCoreSource(): string {
-  return withPdfPolyfills(classicPdfCoreSource(pdfWorker));
-}
-
 /** The pdf.js display module's source, for the Frame to import from a `blob:` URL. */
 export function pdfDisplaySource(): string {
   return withPdfPolyfills(pdfDisplay);

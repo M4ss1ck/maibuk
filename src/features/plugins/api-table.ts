@@ -87,12 +87,11 @@ const uint8Array = z
 /**
  * The file bytes an `acceptsBlob` method takes. They never travel in the JSON
  * input (the wire shape is the call head alone): the SDK folds the three
- * accepted shapes into one `Blob` right after the call, or one `Uint8Array` on
- * an engine with no Blob, so JSON Schema has no type for them and `api-codegen`
+ * accepted shapes into one `Blob` right after the call, so JSON Schema has no type for them and `api-codegen`
  * adds this description's field to the SDK's input type only (ADR 0040).
  */
 export const BLOB_BYTES_SCHEMA_DESCRIPTION =
-  "The file's bytes: a Uint8Array, a Blob, or an AsyncIterable of Uint8Array pieces. The SDK folds them into one Blob and sends it right after the call, or into one Uint8Array on a device with no Blob (ADR 0040).";
+  "The file's bytes: a Uint8Array, a Blob, or an AsyncIterable of Uint8Array pieces. The SDK folds them into one Blob and sends it right after the call (ADR 0040).";
 
 const content = z.strictObject({
   text: z.string().describe("Plain text."),

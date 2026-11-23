@@ -5,7 +5,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   DEFAULT_READER_SETTINGS,
   FINGERPRINT_WINDOW,
@@ -17,9 +17,7 @@ import {
   positionKey,
   progressSummary,
   reattach,
-  relativePhrase,
   relativeTimestamp,
-  type RelativeUnit,
   removeEntry,
   sniffFormat,
   sortShelf,
@@ -355,46 +353,6 @@ describe("relativeTimestamp()", () => {
     expect(relativeTimestamp("es", now, now)).toBe("ahora");
     expect(relativeTimestamp("en", now - 3 * 24 * 60 * 60 * 1000, now)).toBe("3 days ago");
     expect(relativeTimestamp("es", now - 3 * 24 * 60 * 60 * 1000, now)).toBe("hace 3 días");
-  });
-
-  it("names the same phrases without Intl, as on the Android engine", () => {
-    vi.stubGlobal("Intl", undefined);
-    try {
-      expect(relativeTimestamp("en", now, now)).toBe("now");
-      expect(relativeTimestamp("es", now - 2 * 24 * 60 * 60 * 1000, now)).toBe("anteayer");
-      expect(relativeTimestamp("en", now - 3 * 24 * 60 * 60 * 1000, now)).toBe("3 days ago");
-    } finally {
-      vi.unstubAllGlobals();
-    }
-  });
-});
-
-describe("relativePhrase()", () => {
-  // Every value relativeTimestamp() can produce: zero only in seconds, and each
-  // larger unit from 1 up to where the next unit takes over.
-  const reachable: [RelativeUnit, number][] = [
-    ["minute", 59],
-    ["hour", 23],
-    ["day", 25],
-    ["month", 11],
-    ["year", 30],
-  ];
-
-  it.each([
-    "en",
-    "es",
-  ])("matches Intl.RelativeTimeFormat in %s for every reachable value", (language) => {
-    const intl = new Intl.RelativeTimeFormat(language, { numeric: "auto" });
-    expect(relativePhrase(language, 0, "second")).toBe(intl.format(0, "second"));
-    for (const [unit, max] of reachable) {
-      for (let count = 1; count <= max; count++) {
-        for (const value of [-count, count]) {
-          expect(`${unit} ${value}: ${relativePhrase(language, value, unit)}`).toBe(
-            `${unit} ${value}: ${intl.format(value, unit)}`
-          );
-        }
-      }
-    }
   });
 });
 

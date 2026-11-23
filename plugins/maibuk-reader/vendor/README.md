@@ -9,12 +9,8 @@ string, evaluated only when a Document of its format opens
 (`../loaders.ts`):
 
 - pdf.js's core runs in a nested Worker the Plugin Worker starts from a `blob:`
-  of the worker source (the Plugin sandbox allows `worker-src blob:`).
-  Not every Plugin engine has `Worker`, so the Plugin sends the worker source
-  to the Frame instead; the Frame runs it as a `blob:` classic script and
-  pdf.js then parses on the Frame's own thread
-  (`canStartPdfCore()` in `../loaders.ts`, `loadPdfCore` in
-  `../assets/ui/reader.js`).
+  of the worker source (the Plugin sandbox allows `worker-src blob:`), on
+  every platform, and hands the Frame one end of its channel.
 - pdf.js's display module and viewer CSS travel to the Frame over the port, which
   imports the module from a `blob:` URL (`script-src blob:`).
 - foliate-js's parser modules import each other relatively, and a `blob:` module
@@ -67,7 +63,7 @@ modern build here, and that build calls some newer APIs without a feature check:
 exactly those core-js modules, and bundles it into the classic script
 `pdfjs/polyfills.min.js`. `withPdfPolyfills` in `../loaders.ts` prepends it to
 the core and the display module, so it runs first wherever each one loads (the
-nested Worker, or the Frame on Android). core-js installs a polyfill only where
+nested Worker or the Frame). core-js installs a polyfill only where
 the engine has no working native, so a current engine keeps its own.
 
 `src/test/unit/scripts/vendor-reader-polyfills.test.ts` fails when the

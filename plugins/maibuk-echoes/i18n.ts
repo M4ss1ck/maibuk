@@ -7,7 +7,7 @@
  * sibling files still serve, is untouched by runtime keys it would refuse.
  *
  * A string that carries a count ships its forms under `_one` / `_other` (the
- * categories `pluralCategory` selects for en and es); every other string ships a
+ * categories `Intl.PluralRules` selects for en and es); every other string ships a
  * single key. A count-less lookup of a plural key reads `_other`.
  *
  * This module imports only its own files.
@@ -32,36 +32,26 @@ export type EchoKey = LogicalKey<keyof Catalog>;
 
 const CATALOGS: Readonly<Record<string, Readonly<Catalog>>> = { en, es };
 
+/**
+ * One plural rule per shipped catalog, built once: a report fills thousands of
+ * labels, and a language with no catalog reads English with English's rule.
+ */
+const PLURAL_RULES: Readonly<Record<string, Intl.PluralRules>> = {
+  en: new Intl.PluralRules("en"),
+  es: new Intl.PluralRules("es"),
+};
+
 /** The catalog for a language tag, following the base subtag and falling back to English. */
 export function catalogFor(language: string): Readonly<Catalog> {
   return CATALOGS[baseLanguage(language)] ?? en;
 }
 
-/** The plural categories Echoes' shipped catalogs use (`_one` / `_other`). */
-export type PluralCategory = "one" | "other";
-
-/**
- * CLDR cardinal rules for the two shipped languages, written out because a
- * Plugin engine may have no `Intl`. Both languages select "one" for the
- * integer 1 (in magnitude) and "other" for everything else Echoes counts. Spanish
- * CLDR also has a "many" form for exact multiples of a million, but no shipped
- * key carries one, so `translate()` reads `_other` for it, as Intl would.
- */
-const CARDINAL_RULES: Readonly<Record<string, (count: number) => PluralCategory>> = {
-  en: (count) => (Math.abs(count) === 1 ? "one" : "other"),
-  es: (count) => (Math.abs(count) === 1 ? "one" : "other"),
-};
-
-/** The CLDR plural category ("one" or "other") for a count, in the language's rule. */
-export function pluralCategory(language: string, count: number): PluralCategory {
-  const rule = CARDINAL_RULES[baseLanguage(language)] ?? CARDINAL_RULES.en;
-  return rule(count);
-}
-
 /**
  * Looks one runtime string up in the language the host signals. With a `count`,
- * a plural string resolves to its `_one` / `_other` form for that count's
- * category; a missing form falls back to `_other`, then to the key itself.
+ * a plural string resolves to the form `Intl.PluralRules` selects for that count;
+ * a missing form falls back to `_other`, then to the key itself. Spanish CLDR has
+ * a "many" form for exact millions, but no shipped key carries one, so those
+ * counts read `_other` too.
  */
 export function translate(language: string, key: EchoKey, count?: number): string {
   const catalog = catalogFor(language) as Readonly<Record<string, string>>;
@@ -71,7 +61,8 @@ export function translate(language: string, key: EchoKey, count?: number): strin
     const plain = catalog[key];
     return typeof plain === "string" ? plain : key;
   }
-  const form = catalog[`${key}_${pluralCategory(language, count)}`];
+  const rules = PLURAL_RULES[baseLanguage(language)] ?? PLURAL_RULES.en;
+  const form = catalog[`${key}_${rules.select(count)}`];
   if (typeof form === "string") return form;
   if (typeof other === "string") return other;
   const plain = catalog[key];
