@@ -65,6 +65,7 @@
     "bench:frames": "tsx e2e/run-frames.ts",
     "bench:reader": "tsx e2e/run-reader-bench.ts",
     "bench:plugins": "tsx e2e/run-plugins-bench.ts",
+    "bench:android-lane": "tsx e2e/run-android-lane.ts",
     "eval:mcp": "tsx e2e/run-mcp-eval.ts",
     "e2e:voice-audio": "bash scripts/e2e-voice-audio.sh"
   },

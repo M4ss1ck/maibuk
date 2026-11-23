@@ -58,13 +58,20 @@ export async function deviceAndroidTarget(serial: string): Promise<string | null
   return tauriAndroidTarget(await adb(serial, ["shell", "getprop", "ro.product.cpu.abi"]));
 }
 
-/** Builds the debug APK with `VITE_PLUGIN_CONFORMANCE=1`, for one target when known. */
-export function buildAndroidApp(options: { root: string; target: string | null }): void {
+/**
+ * Builds the debug APK with `VITE_PLUGIN_CONFORMANCE=1` (or `env`), for one
+ * target when known.
+ */
+export function buildAndroidApp(options: {
+  root: string;
+  target: string | null;
+  env?: Record<string, string>;
+}): void {
   const target = options.target ? ["--target", options.target] : [];
   execFileSync("pnpm", ["tauri", "android", "build", "--debug", "--apk", ...target], {
     cwd: options.root,
     stdio: "inherit",
-    env: { ...process.env, VITE_PLUGIN_CONFORMANCE: "1" },
+    env: { ...process.env, ...(options.env ?? { VITE_PLUGIN_CONFORMANCE: "1" }) },
   });
 }
 

@@ -760,6 +760,92 @@ timer in the Plugin Worker runs during the open, and writes
 `.bench/reader-spike.json`. The results are recorded in
 `plugins/maibuk-reader/vendor/README.md` under "Threading spike".
 
+## Android emulator lane
+
+`pnpm bench:android-lane` measures, on two emulators and with no physical
+device, what a low-end and a current Android phone pay for Plugins and Reader
+(issue #925). It is a periodic baseline with no gate. Run it when the Plugin
+engine, the QuickJS bridge, or Reader's loaders move, and before a release that
+touches them. It never runs in CI, because it boots emulators.
+
+**The two AVDs.** `scripts/android-avds.sh create` makes both from scratch:
+
+| AVD | Image | CPU, RAM | WebView |
+| --- | --- | --- | --- |
+| `maibuk_api26` | Android 8.0, Google APIs, x86_64 | 2 cores, 2 GB | Chromium 138.0.7204.0 |
+| `maibuk_api36` | Android 16, Google APIs, x86_64 | 4 cores, 4 GB | Chromium 138.0.7204.0 |
+
+API 26 is the app's Android floor and the 2 GB phone it has to work on. Both
+run the same pinned WebView, Chromium snapshot 1465693 (the last build before
+the M138 branch, since Chrome 139 dropped Android 8), so the two rows differ by
+OS and hardware only. API 36's image ships WebView 133, below the app's 138
+floor.
+
+How the WebView gets there: the snapshot's `SystemWebView.apk` is package
+`com.android.webview`, which the Google APIs images do not accept as a provider.
+The script writes a static framework overlay to `/vendor/overlay` (labelled
+`vendor_overlay_file`) that adds it to the provider list, installs the APK as an
+ordinary app. API 36 still prefers Google's own provider after every boot, so
+`boot` selects ours each time with `cmd webviewupdate
+set-webview-implementation`, and refuses to go on under WebView 138. The overlay lives in each AVD's writable system
+copy, so both always boot with `-writable-system`. Downloads are cached in
+`~/.cache/maibuk-avds` (`MAIBUK_AVD_CACHE`).
+
+Fallback, if the overlay route ever stops working on a new emulator build: use
+a Google Play image, update Android System WebView from the Play Store once by
+hand, and save the AVD as a snapshot. It cannot be scripted, and the WebView
+version then drifts with the Play Store, so record it with every result.
+
+`scripts/android-avds.sh boot NAME` boots one headless and prints its serial;
+`scripts/android-avds.sh stop SERIAL` shuts it down. The lane does both itself.
+
+**Prerequisites.** The Android SDK (`ANDROID_HOME`, with `cmdline-tools`,
+`emulator`, `platform-tools`), KVM, `adb` on `PATH`, the Tauri Android toolchain
+(`pnpm tauri android build` works), and Playwright's Android driver:
+`pnpm exec playwright install android`. Run `scripts/android-avds.sh create`
+once.
+
+**Run.**
+
+```bash
+pnpm bench:android-lane                    # both AVDs, 5 opens per fixture
+pnpm bench:android-lane --avd maibuk_api26 # one AVD
+pnpm bench:android-lane --opens 2          # fewer opens, quicker
+pnpm bench:android-lane --skip-build       # reuse the APKs from the last run
+```
+
+It builds two x86_64 debug APKs into `e2e/.output/android-lane/`: the
+conformance build (`VITE_PLUGIN_CONFORMANCE=1`) and the bench build
+(`VITE_PLUGIN_BENCH=1`, which turns on User Timing marks). Then, one AVD at a
+time:
+
+1. `conformance:plugins --apk` runs the Plugin conformance checks and gives the
+   QuickJS engine's start time and call latency. `T2-frame-ipc` fails on Android
+   by design (see "Plugin conformance lane"), so the lane takes the timings and
+   ignores that exit code.
+2. It installs the bench APK, pushes three generated fixtures to
+   `/sdcard/Download`, turns Reader on in Settings, and reads Reader's
+   `plugin.start:maibuk-reader` measure.
+3. It shelves each fixture once through the system file picker, then opens it
+   from the Shelf `--opens` times, from the Open press to the page indicator
+   showing "N of M". Each open counts the host's
+   `plugin.heartbeat-miss:maibuk-reader` marks.
+
+The fixtures are made by `plugins/maibuk-reader/scripts/generate-fixtures.mjs`:
+an EPUB with twenty 800x1200 plates (about 27 MB), the ~50 MB PDF
+`bench:reader` uses, and a CBZ of twenty pages (about 27 MB).
+
+**Output.** A table of medians in ms, one row per AVD (WebView, QuickJS start
+and call, Reader start, EPUB, PDF and CBZ open, heartbeat misses), and
+`e2e/.output/android-lane/<started>/report.json` with every sample. On a failed
+step it writes `failure.png` and `failure-aria.txt` to `<started>/<AVD>/`. The
+conformance report labels its engine with `com.google.android.webview`'s
+version, not the active provider's; the lane's own WebView column comes from
+the user agent and is the one to trust.
+
+Exit codes: 0 measured, 2 could not measure (usage, a missing AVD or APK, a
+step that timed out).
+
 ## MCP Server Agent eval
 
 `pnpm eval:mcp` checks that a real Agent can use the MCP Server Built-in Plugin
