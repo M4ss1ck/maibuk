@@ -1,5 +1,8 @@
+import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import { create } from "zustand";
 import { CheckIcon, XIcon } from "@/components/icons";
+import { Button } from "@/components/ui/Button";
 
 const DEFAULT_DURATION_MS = 2000;
 const MAX_TOASTS = 3;
@@ -7,16 +10,26 @@ const MAX_TOASTS = 3;
 /** `info` is text only: a hint, not the outcome of an action. */
 type ToastVariant = "success" | "error" | "info";
 
+type ToastAction = {
+  label: string;
+  to: string;
+};
+
 type Toast = {
   id: string;
   message: string;
   variant: ToastVariant;
+  /** Kept until its close button removes it, however many toasts arrive. */
+  sticky: boolean;
+  action?: ToastAction;
 };
 
 type ToastInput = {
   message: string;
   variant?: ToastVariant;
-  durationMs?: number;
+  /** `null` keeps the toast until closed. Omitted, it dismisses after the default. */
+  durationMs?: number | null;
+  action?: ToastAction;
 };
 
 interface ToastStore {
@@ -30,8 +43,11 @@ const useToastStore = create<ToastStore>((set) => ({
   addToast: (toast) =>
     set((state) => {
       const next = [...state.toasts, toast];
-      if (next.length > MAX_TOASTS) {
-        next.splice(0, next.length - MAX_TOASTS);
+      while (next.length > MAX_TOASTS) {
+        // A sticky toast is waiting for its close button, so the oldest timed
+        // toast goes first; only when every toast is sticky does the oldest go.
+        const victim = next.findIndex((entry) => !entry.sticky);
+        next.splice(victim === -1 ? 0 : victim, 1);
       }
       return { toasts: next };
     }),
@@ -58,18 +74,21 @@ type InternalToastInput = ToastInput & { bypassFocusMode?: boolean };
 function showToast(input: InternalToastInput): void {
   if (!input.bypassFocusMode && isFocusModeActive()) return;
   const id = createToastId();
+  const durationMs = input.durationMs === undefined ? DEFAULT_DURATION_MS : input.durationMs;
   const toast: Toast = {
     id,
     message: input.message,
     variant: input.variant ?? "success",
+    sticky: durationMs === null,
+    action: input.action,
   };
 
   useToastStore.getState().addToast(toast);
 
-  const duration = input.durationMs ?? DEFAULT_DURATION_MS;
+  if (durationMs === null) return;
   setTimeout(() => {
     useToastStore.getState().removeToast(id);
-  }, duration);
+  }, durationMs);
 }
 
 export const toast = {
@@ -93,31 +112,73 @@ export function currentToastMessages(): string[] {
   return useToastStore.getState().toasts.map((toast) => toast.message);
 }
 
+/** Mounted only by a toast with an action, so the viewport needs no Router. */
+function ToastActionButton({ id, action }: { id: string; action: ToastAction }) {
+  const navigate = useNavigate();
+  const removeToast = useToastStore((state) => state.removeToast);
+
+  return (
+    <Button
+      size="sm"
+      variant="secondary"
+      onClick={() => {
+        removeToast(id);
+        navigate(action.to);
+      }}
+    >
+      {action.label}
+    </Button>
+  );
+}
+
+/** Mounted only by a sticky toast, so the viewport needs no i18n provider. */
+function ToastCloseButton({ id }: { id: string }) {
+  const { t } = useTranslation();
+  const removeToast = useToastStore((state) => state.removeToast);
+
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      aria-label={t("common.close")}
+      onClick={() => removeToast(id)}
+    >
+      <XIcon className="h-4 w-4" />
+    </Button>
+  );
+}
+
 export function ToastViewport() {
   const toasts = useToastStore((state) => state.toasts);
 
   // Toasts paint above an open Modal: z-60 clears the Modal's z-50 backdrop,
   // which is portaled after this viewport and would otherwise cover it. They
   // also join React Aria's top layer, so the Modal leaves them visible to
-  // assistive technology, as React Aria's own toast region does. No toast has
-  // a control, so none catches a click or tap meant for what lies beneath.
+  // assistive technology, as React Aria's own toast region does. The region
+  // stays pointer-events-none; only a toast with an action or a close button
+  // catches a click or tap, so the rest pass through to what lies beneath.
   return (
     <div
       data-react-aria-top-layer
       className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] right-[calc(1.5rem+env(safe-area-inset-right))] z-60 flex flex-col gap-2 pointer-events-none"
       aria-live="polite"
     >
-      {toasts.map((toast) => (
-        <div
-          key={toast.id}
-          className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 shadow-lg text-sm text-foreground toast-enter"
-          role="status"
-        >
-          {toast.variant === "success" && <CheckIcon className="h-4 w-4 text-success" />}
-          {toast.variant === "error" && <XIcon className="h-4 w-4 text-destructive" />}
-          <span>{toast.message}</span>
-        </div>
-      ))}
+      {toasts.map((toast) => {
+        const interactive = toast.sticky || toast.action !== undefined;
+        return (
+          <div
+            key={toast.id}
+            className={`flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 shadow-lg text-sm text-foreground toast-enter${interactive ? " pointer-events-auto" : ""}`}
+            role="status"
+          >
+            {toast.variant === "success" && <CheckIcon className="h-4 w-4 text-success" />}
+            {toast.variant === "error" && <XIcon className="h-4 w-4 text-destructive" />}
+            <span>{toast.message}</span>
+            {toast.action && <ToastActionButton id={toast.id} action={toast.action} />}
+            {toast.sticky && <ToastCloseButton id={toast.id} />}
+          </div>
+        );
+      })}
     </div>
   );
 }

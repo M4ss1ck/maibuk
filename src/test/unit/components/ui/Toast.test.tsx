@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, act } from "@testing-library/react";
+import { render, screen, act, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { toast, ToastViewport, currentToastMessages } from "@/components/ui/Toast";
+
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({ t: (key: string) => key, i18n: { language: "en" } }),
+}));
 
 describe("Toast", () => {
   beforeEach(() => {
@@ -117,6 +123,28 @@ describe("Toast", () => {
       expect(screen.getByText("Three")).toBeInTheDocument();
       expect(screen.getByText("Four")).toBeInTheDocument();
     });
+
+    it("keeps a sticky toast when three timed toasts arrive after it", () => {
+      render(<ToastViewport />);
+
+      act(() => {
+        toast.info("Pinned", { durationMs: null });
+        toast.success("One");
+        toast.success("Two");
+        toast.success("Three");
+      });
+
+      // The oldest timed toast is evicted, never the sticky one.
+      expect(screen.getByText("Pinned")).toBeInTheDocument();
+      expect(screen.queryByText("One")).not.toBeInTheDocument();
+      expect(screen.getByText("Two")).toBeInTheDocument();
+      expect(screen.getByText("Three")).toBeInTheDocument();
+
+      // A sticky toast survives the outer afterEach's runAllTimers, so close
+      // this one to leave the store empty for the next test.
+      fireEvent.click(screen.getByRole("button", { name: "common.close" }));
+      expect(screen.queryByText("Pinned")).not.toBeInTheDocument();
+    });
   });
 
   describe("focus mode suppression", () => {
@@ -159,6 +187,76 @@ describe("Toast", () => {
     it("renders empty when no toasts", () => {
       render(<ToastViewport />);
       expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("sticky and actionable toasts", () => {
+    function SettingsRoute() {
+      const location = useLocation();
+      return <p>Settings at {location.hash}</p>;
+    }
+
+    it("keeps a durationMs null toast after every timer runs", () => {
+      render(<ToastViewport />);
+
+      act(() => {
+        toast.info("Pinned", { durationMs: null });
+      });
+      act(() => {
+        vi.runAllTimers();
+      });
+
+      expect(screen.getByText("Pinned")).toBeInTheDocument();
+
+      // Sticky toasts survive the outer afterEach's runAllTimers, so close
+      // this one to leave the store empty for the next test.
+      fireEvent.click(screen.getByRole("button", { name: "common.close" }));
+      expect(screen.queryByText("Pinned")).not.toBeInTheDocument();
+    });
+
+    it("follows its action on Enter and dismisses the toast", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+      render(
+        <MemoryRouter initialEntries={["/"]}>
+          <Routes>
+            <Route path="/" element={<p>Library</p>} />
+            <Route path="/settings" element={<SettingsRoute />} />
+          </Routes>
+          <ToastViewport />
+        </MemoryRouter>
+      );
+
+      act(() => {
+        toast.info("Enable the plugin", {
+          action: { label: "Open settings", to: "/settings#plugins" },
+        });
+      });
+
+      await user.tab();
+      expect(screen.getByRole("button", { name: "Open settings" })).toHaveFocus();
+      await user.keyboard("{Enter}");
+
+      expect(screen.queryByText("Enable the plugin")).not.toBeInTheDocument();
+      expect(screen.getByText("Settings at #plugins")).toBeInTheDocument();
+    });
+
+    it("closes a sticky toast on Enter in its close button", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+      render(<ToastViewport />);
+
+      act(() => {
+        toast.error("Could not save", { durationMs: null });
+      });
+
+      await user.tab();
+      expect(screen.getByRole("button", { name: "common.close" })).toHaveFocus();
+      await user.keyboard("{Enter}");
+
+      expect(screen.queryByText("Could not save")).not.toBeInTheDocument();
     });
   });
 });

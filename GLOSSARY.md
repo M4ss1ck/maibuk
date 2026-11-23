@@ -707,6 +707,11 @@ An enabled Plugin that stopped on a limit (a crash, the startup limit, no answer
 _UI_: en "Stopped"
 _Avoid_: broken plugin, plugin issue, error state, crashed plugin (a crash is one reason among several)
 
+**Out-of-Memory Restart**:
+On Android, Maibuk restarting because the page ran out of memory while visible. At the next launch, before any Plugin starts, each Plugin active in the 10 seconds before it is disabled, and one notice names them with a way to Plugin settings; with no active Plugin the notice only says Maibuk restarted. A death in the background is silent.
+_UI_: en "Maibuk restarted because it ran out of memory."
+_Avoid_: crash (the page died, not a Plugin), quarantine, blocked plugin
+
 **Retained Plugin Preference**:
 A Custom Shortcut or custom Voice Command under `plugin.<pluginId>.` kept on this device while its Plugin is away, inactive until it returns. Removing a Plugin offers to erase it, Reset all always does, and a Shortcut File carries it like any other preference. (ADR 0024)
 

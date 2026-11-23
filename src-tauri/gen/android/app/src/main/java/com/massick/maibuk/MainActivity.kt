@@ -37,6 +37,14 @@ class MainActivity : TauriActivity() {
     // Added before wry loads the page, so the page sees it from the start.
     webView.addJavascriptInterface(notificationTaps, "MaibukNotificationTaps")
     webView.addJavascriptInterface(pluginActivity, "MaibukPluginActivity")
+    val deathRecords = getSharedPreferences(DEATH_RECORD_PREFS, MODE_PRIVATE)
+    webView.addJavascriptInterface(
+      DeathRecordBridge(
+        read = { deathRecords.getString(DEATH_RECORD_KEY, null) },
+        clear = { deathRecords.edit().remove(DEATH_RECORD_KEY).commit() },
+      ),
+      "MaibukDeathRecord",
+    )
     // wry calls setWebView (this callback) before it calls setWebViewClient, so
     // wrapping here would be overwritten. Posting runs after wry's synchronous
     // setup on the main thread.

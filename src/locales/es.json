@@ -2467,6 +2467,10 @@
       "outOfMemory": "{{name}} usó demasiada memoria y se detuvo.",
       "crashed": "{{name}} se detuvo inesperadamente."
     },
+    "outOfMemory": {
+      "disabled": "Maibuk se quedó sin memoria y se reinició. Desactivados: {{names}}.",
+      "restarted": "Maibuk se reinició porque se quedó sin memoria."
+    },
     "conformance": {
       "running": "Ejecutando las comprobaciones de conformidad del Plugin…",
       "done": "Las comprobaciones de conformidad del Plugin terminaron.",
