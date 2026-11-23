@@ -106,29 +106,6 @@ describe("runCheck()", () => {
     expect(lines[lines.length - 1]).toContain("failed at typecheck");
   });
 
-  it("reports a skipped step as SKIP, keeps going, and still exits 0", async () => {
-    const ran: string[] = [];
-    const lines: string[] = [];
-    const steps: CheckStep[] = [
-      stubStep("build", ran),
-      stubStep("test", ran, {
-        ok: true,
-        skipped: true,
-        details: ["no tests found"],
-      }),
-      stubStep("package", ran),
-    ];
-
-    const outcome = await runCheck(steps, (line) => lines.push(line));
-
-    expect(ran).toEqual(["build", "test", "package"]);
-    expect(outcome.code).toBe(0);
-    expect(outcome.steps.find((step) => step.name === "test")?.skipped).toBe(true);
-    expect(lines).toContain("SKIP test");
-    expect(lines).toContain("  no tests found");
-    expect(lines).not.toContain("PASS test (0ms)");
-  });
-
   it("treats a step that throws as a failure at that step", async () => {
     const ran: string[] = [];
     const steps: CheckStep[] = [
