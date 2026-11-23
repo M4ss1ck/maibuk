@@ -32,6 +32,15 @@ export type EchoKey = LogicalKey<keyof Catalog>;
 
 const CATALOGS: Readonly<Record<string, Readonly<Catalog>>> = { en, es };
 
+/**
+ * One plural rule per shipped catalog, built once: a report fills thousands of
+ * labels, and a language with no catalog reads English with English's rule.
+ */
+const PLURAL_RULES: Readonly<Record<string, Intl.PluralRules>> = {
+  en: new Intl.PluralRules("en"),
+  es: new Intl.PluralRules("es"),
+};
+
 /** The catalog for a language tag, following the base subtag and falling back to English. */
 export function catalogFor(language: string): Readonly<Catalog> {
   return CATALOGS[baseLanguage(language)] ?? en;
@@ -52,8 +61,8 @@ export function translate(language: string, key: EchoKey, count?: number): strin
     const plain = catalog[key];
     return typeof plain === "string" ? plain : key;
   }
-  const category = new Intl.PluralRules(language).select(count);
-  const form = catalog[`${key}_${category}`];
+  const rules = PLURAL_RULES[baseLanguage(language)] ?? PLURAL_RULES.en;
+  const form = catalog[`${key}_${rules.select(count)}`];
   if (typeof form === "string") return form;
   if (typeof other === "string") return other;
   const plain = catalog[key];

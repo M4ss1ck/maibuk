@@ -36,6 +36,11 @@ describe("translate() plurals", () => {
     expect(translate("en-US", "report.summary", 2)).toBe("{{count}} times · {{chapters}}");
   });
 
+  it("reads English with English's rule for a language with no catalog, an empty tag included", () => {
+    expect(translate("fr", "report.summary", 1)).toBe("{{count}} time · {{chapters}}");
+    expect(translate("", "report.summary", 2)).toBe("{{count}} times · {{chapters}}");
+  });
+
   it("leaves a string without a count untouched, with or without one passed", () => {
     expect(translate("en", "echo.highlightsOff")).toBe("Echo highlights are off");
     expect(translate("en", "echo.highlightsOff", 1)).toBe("Echo highlights are off");

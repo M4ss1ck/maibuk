@@ -777,7 +777,7 @@ export interface PluginApiMethods {
       name: string;
       /** The file's MIME type, such as image/png. */
       mimeType: string;
-      /** The file's bytes: a Uint8Array, a Blob, or an AsyncIterable of Uint8Array pieces. The SDK folds them into one Blob and sends it right after the call, or into one Uint8Array on a device with no Blob (ADR 0040). */
+      /** The file's bytes: a Uint8Array, a Blob, or an AsyncIterable of Uint8Array pieces. The SDK folds them into one Blob and sends it right after the call (ADR 0040). */
       bytes: Uint8Array | Blob | AsyncIterable<Uint8Array>;
     };
     output: {

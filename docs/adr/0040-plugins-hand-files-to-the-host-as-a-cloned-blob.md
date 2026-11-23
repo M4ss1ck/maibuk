@@ -24,4 +24,4 @@ Decided while triaging [#735](https://github.com/M4ss1ck/maibuk/issues/735), whi
 
 The Android QuickJS engine has no `Blob` (#516), so `files.save` was refused there before its bytes were read. A Plugin in that engine now sends the bytes themselves: when `typeof Blob` is undefined, the SDK folds the accepted shapes into one `Uint8Array` and posts it in the same `blob` slot. The broker accepts a `Uint8Array` or `ArrayBuffer` in the slot, wraps it as `new Blob([bytes], { type: mimeType })` with the MIME type from the call head, and refuses anything else exactly as before. The Blob path is unchanged where a Blob exists, the checks are the same, and there is still no size cap: the author's disk is the limit.
 
-Since ADR 0019's 2026-11-23 amendment no Maibuk engine lacks `Blob`; the broker still accepts raw bytes, since that is public API (ADR 0029).
+Since ADR 0019's 2026-11-23 amendment no Maibuk engine lacks `Blob`; the SDK always sends a Blob since #930, and the broker still accepts raw bytes, since that is public API (ADR 0029).

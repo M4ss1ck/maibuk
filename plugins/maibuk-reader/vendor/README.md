@@ -63,7 +63,7 @@ modern build here, and that build calls some newer APIs without a feature check:
 exactly those core-js modules, and bundles it into the classic script
 `pdfjs/polyfills.min.js`. `withPdfPolyfills` in `../loaders.ts` prepends it to
 the core and the display module, so it runs first wherever each one loads (the
-nested Worker, or the Frame on Android). core-js installs a polyfill only where
+nested Worker or the Frame). core-js installs a polyfill only where
 the engine has no working native, so a current engine keeps its own.
 
 `src/test/unit/scripts/vendor-reader-polyfills.test.ts` fails when the
