@@ -1,9 +1,19 @@
-// The Android death phase's background-death rule (#922). Pure, so the check is
-// tested without a device, an adb, or a WebView: `e2e/conformance/run-plugins.ts`
-// launches the app, takes the launch report it posts, backgrounds it, kills its
-// renderer, waits for the process to exit, relaunches, and hands both reports
-// and the exit fact to `backgroundDeathCheck`.
+// The Android death phase's rules (#922, #928). Pure, so the checks are tested
+// without a device, an adb, or a WebView: `e2e/conformance/run-plugins.ts` drives
+// the app and hands the launch reports to these rules.
+//
+// Background death (#922): launch, take the launch report, background the app,
+// kill its renderer, wait for the process to exit, relaunch, and hand both
+// reports and the exit fact to `backgroundDeathCheck`.
+//
+// Foreground death (#928): under the native Worker T8 kills the Android renderer
+// in the foreground, so the app restarts itself through ProcessPhoenix; the
+// foreground phase waits out the blame window, launches with the collector
+// saying `t8-only`, waits for the rebirth, and hands both reports to
+// `foregroundDeathCheck`.
 
+import { T8_CHECK_ID } from "@/features/plugins/conformance/checks";
+import { FIXTURE_HEALTHY_ID, FIXTURE_HOSTILE_ID } from "@/features/plugins/conformance/fixture";
 import type {
   ConformanceCheck,
   ConformanceLaunchReport,
@@ -55,5 +65,46 @@ export function backgroundDeathCheck(input: {
     id: BACKGROUND_DEATH_CHECK_ID,
     status: "pass",
     detail: `cold start with ${enabled} ${enabled === 1 ? "Plugin" : "Plugins"} still enabled and no notice`,
+  };
+}
+
+/**
+ * The foreground-death rule (#928): after T8 killed the renderer, the app came
+ * back on its own with the hostile Plugin disabled and the healthy one still
+ * enabled, and showed a notice. First match wins.
+ */
+export function foregroundDeathCheck(input: {
+  /** The launch report the app posted before T8. */
+  before: ConformanceLaunchReport | null;
+  /** The launch report the app posted after its renderer died during T8. */
+  after: ConformanceLaunchReport | null;
+}): ConformanceCheck {
+  const fail = (detail: string): ConformanceCheck => ({
+    id: T8_CHECK_ID,
+    status: "fail",
+    detail,
+  });
+  if (input.before === null) {
+    return fail("the app posted no launch report before T8");
+  }
+  if (input.after === null) {
+    return fail("the app did not come back after its renderer died during T8");
+  }
+
+  const afterEnabled = new Map(input.after.plugins.map((plugin) => [plugin.id, plugin.enabled]));
+  if (afterEnabled.get(FIXTURE_HOSTILE_ID) === true) {
+    return fail("the hostile Plugin is still enabled after the death");
+  }
+  if (afterEnabled.get(FIXTURE_HEALTHY_ID) !== true) {
+    return fail("the idle healthy Plugin was disabled");
+  }
+  if (input.after.notices.length === 0) {
+    return fail("no notice was shown after the death");
+  }
+
+  return {
+    id: T8_CHECK_ID,
+    status: "pass",
+    detail: `the renderer died in the foreground; fixture-hostile disabled, fixture-healthy still enabled, notice: ${input.after.notices[0]}`,
   };
 }

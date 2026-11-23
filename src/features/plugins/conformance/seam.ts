@@ -24,7 +24,11 @@ import type { RemoteMutationRecord } from "@remote-dom/core";
 import { ThreadMessagePort } from "@quilted/threads";
 
 import { savePluginApproval } from "@/features/plugins/approvals";
-import { loadFixtureHealthy, loadFixtureHostile } from "@/features/plugins/conformance/fixture";
+import {
+  FIXTURE_HEALTHY_ID,
+  loadFixtureHealthy,
+  loadFixtureHostile,
+} from "@/features/plugins/conformance/fixture";
 import {
   CONFORMANCE_FILE,
   CONFORMANCE_FILE_RANGE,
@@ -83,8 +87,6 @@ import {
 
 /** The fixture Plugin's folder name and id (see `fixture.ts`). */
 const FIXTURE_HOSTILE_ID = "fixture-hostile";
-/** The healthy neighbour fixture's id (#516): it stays ready beside the hostile one. */
-const FIXTURE_HEALTHY_ID = "fixture-healthy";
 
 /**
  * The healthy fixture's one Canvas Reference source (#836), and the ids the

@@ -77,6 +77,26 @@ describe("applyCollectorRequest()", () => {
     expect(state.launches).toEqual([]);
   });
 
+  it("answers /launch with the state plan and still records the report", () => {
+    const report = { plugins: [{ id: "example.alpha", enabled: true }], notices: [] };
+    const { state, reply } = applyCollectorRequest(initialCollectorState(), {
+      method: "POST",
+      path: "/launch",
+      body: report,
+    });
+    expect(reply).toEqual({ status: 200, body: { plan: "all" } });
+    expect(state.launches).toEqual([report]);
+  });
+
+  it("answers /launch with the plan the runner set (#928)", () => {
+    const report = { plugins: [{ id: "example.alpha", enabled: true }], notices: [] };
+    const { reply } = applyCollectorRequest(
+      { ...initialCollectorState(), plan: "t8-only" },
+      { method: "POST", path: "/launch", body: report }
+    );
+    expect(reply).toEqual({ status: 200, body: { plan: "t8-only" } });
+  });
+
   it("collects progress lines in order", () => {
     const state = fold([
       { method: "POST", path: "/progress", body: PASS },

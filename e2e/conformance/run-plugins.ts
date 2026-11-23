@@ -7,14 +7,20 @@
 // needs a display, a device, or both.
 //
 // The rules live in `src/test/support/plugin-conformance/` and get unit tests;
-// this file is the process and socket shell around them. On Android it also runs
-// the death phase: background the app, kill its WebView renderer with `su`, wait
-// for a quiet exit, relaunch, and compare the two launch reports (#922).
+// this file is the process and socket shell around them. It uses the collector's
+// launch plan (#928): the Android main phase runs every check but T8 (`no-t8`),
+// T8's foreground death phase runs T8 alone (`t8-only`), and the relaunches post
+// the launch report only (`launch-only`); Linux runs them all. On Android it also
+// runs two death phases: the foreground one, where T8 kills the renderer and the
+// app restarts itself through ProcessPhoenix, and the background one: background
+// the app, kill its WebView renderer with `su`, wait for a quiet exit, relaunch,
+// and compare the two launch reports (#922, #928).
 
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+import { T8_CHECK_ID } from "@/features/plugins/conformance/checks";
 import { CONFORMANCE_COLLECTOR_BASE_URL } from "@/features/plugins/conformance/reporter";
 import type {
   ConformanceCheck,
@@ -48,6 +54,7 @@ import {
 import {
   BACKGROUND_DEATH_CHECK_ID,
   backgroundDeathCheck,
+  foregroundDeathCheck,
 } from "@/test/support/plugin-conformance/death";
 import {
   FIRST_CONTACT_TIMEOUT_MS,
@@ -83,6 +90,13 @@ const POLL_MS = 250;
 
 /** How long the death phase waits for the app process to exit after its renderer dies. */
 const DEATH_EXIT_TIMEOUT_MS = 15_000;
+
+/**
+ * How long the foreground death phase waits for the reborn app's launch report
+ * (#928): the blame window the app waits out first, then the allocation until
+ * the system kills the renderer, then the ProcessPhoenix rebirth.
+ */
+const T8_DEATH_TIMEOUT_MS = 180_000;
 
 function refuse(message: string): never {
   console.error(`[conformance] cannot run: ${message}`);
@@ -180,16 +194,17 @@ function printAppLogTail(platform: ConformanceEngineName, runDir: RunDir): void 
   for (const line of tail.split("\n")) console.warn(`[conformance]   ${line}`);
 }
 
-/** The nth launch report the collector saw, waiting up to first contact, or null. */
+/** The nth launch report the collector saw, waiting up to the timeout, or null. */
 async function waitForLaunch(
   collector: ConformanceCollector,
-  count: number
+  count: number,
+  timeoutMs = FIRST_CONTACT_TIMEOUT_MS
 ): Promise<ConformanceLaunchReport | null> {
   const startedAt = Date.now();
   for (;;) {
     const launches = collector.state().launches;
     if (launches.length >= count) return launches[count - 1];
-    if (Date.now() - startedAt >= FIRST_CONTACT_TIMEOUT_MS) return null;
+    if (Date.now() - startedAt >= timeoutMs) return null;
     await sleep(POLL_MS);
   }
 }
@@ -201,6 +216,47 @@ async function waitForExit(app: RunningApp, timeoutMs: number): Promise<boolean>
     if (!(await app.isAlive())) return true;
     if (Date.now() - startedAt >= timeoutMs) return false;
     await sleep(POLL_MS);
+  }
+}
+
+/**
+ * The Android foreground death phase (#928): under the native Worker T8 kills the
+ * renderer in the foreground, so the app restarts itself through ProcessPhoenix.
+ * The phase waits out the blame window and runs T8 alone (`t8-only`), then hands
+ * the launch reports before and after the death to `foregroundDeathCheck`. Every
+ * wait is bounded, so a missing report fails the check instead of hanging.
+ */
+async function runForegroundDeathPhase(
+  device: AndroidDevice,
+  runDir: RunDir,
+  collector: ConformanceCollector
+): Promise<ConformanceCheck> {
+  let app: RunningApp | null = null;
+  try {
+    collector.reset();
+    // T8 alone: the blame window, then the allocation that kills the renderer.
+    collector.setPlan("t8-only");
+    console.log("[conformance] android: foreground death phase starting");
+    app = await launchAndroidApp({ device, runDir, logName: "logcat-android-t8.txt" });
+
+    const before = await waitForLaunch(collector, 1);
+    // The reborn app posts its report and nothing else; it must not run T8 again.
+    collector.setPlan("launch-only");
+    const after = await waitForLaunch(collector, 2, T8_DEATH_TIMEOUT_MS);
+
+    const check = foregroundDeathCheck({ before, after });
+    console.log(
+      `[conformance] android: foreground death phase ${check.id} ${check.status}: ${check.detail}`
+    );
+    return check;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.log(
+      `[conformance] android: foreground death phase ${T8_CHECK_ID} unmeasured: ${message}`
+    );
+    return { id: T8_CHECK_ID, status: "unmeasured", detail: message };
+  } finally {
+    if (app !== null) await app.stop();
   }
 }
 
@@ -218,6 +274,8 @@ async function runDeathPhase(
   let app: RunningApp | null = null;
   try {
     collector.reset();
+    // The relaunch posts its launch report only; the background phase runs no check.
+    collector.setPlan("launch-only");
     console.log("[conformance] android: death phase starting");
     app = await launchAndroidApp({ device, runDir, logName: "logcat-android-death.txt" });
 
@@ -257,6 +315,10 @@ async function measurePlatform(
   cargoLockText: string
 ): Promise<PlatformResult> {
   collector.reset();
+  // Android's main phase runs every check but T8: T8 kills the renderer in the
+  // foreground under the native Worker, so the foreground death phase owns it
+  // (#928). Linux keeps the default `all`.
+  if (platform === "android") collector.setPlan("no-t8");
   const started = await startPlatform(platform, options, runDir);
   console.log(`[conformance] ${platform}: launched; waiting for /done`);
 
@@ -298,18 +360,21 @@ async function measurePlatform(
     // all, which is a different failure from a run that started and went quiet.
     outcome.note = "app never contacted the collector";
   }
-  // The death phase is Android-only and runs after the main phase settled. Its
-  // check folds into the written report; a pass never masks a main-phase failure.
+  // The death phases are Android-only and run after the main phase settled. Their
+  // checks fold into the written report; a pass never masks a main-phase failure.
+  // The foreground phase runs first: it is the one T8 kills in (#928).
   let leaks = state.leaks;
   if (started.androidDevice !== undefined) {
-    const deathCheck = await runDeathPhase(started.androidDevice, runDir, collector);
-    // The relaunches run the probe again, so their leaks count too.
-    leaks += collector.state().leaks;
-    outcome.checks = [...outcome.checks, deathCheck];
-    const deathExit = exitCodeForChecks([deathCheck]);
-    outcome.exitCode = outcome.exitCode > deathExit ? outcome.exitCode : deathExit;
-    if (deathCheck.status !== "pass") {
-      outcome.note = `${outcome.note}; death phase: ${deathCheck.detail}`;
+    for (const runPhase of [runForegroundDeathPhase, runDeathPhase]) {
+      const deathCheck = await runPhase(started.androidDevice, runDir, collector);
+      // The relaunches run the probe again, so their leaks count too.
+      leaks += collector.state().leaks;
+      outcome.checks = [...outcome.checks, deathCheck];
+      const deathExit = exitCodeForChecks([deathCheck]);
+      outcome.exitCode = outcome.exitCode > deathExit ? outcome.exitCode : deathExit;
+      if (deathCheck.status !== "pass") {
+        outcome.note = `${outcome.note}; death phase: ${deathCheck.detail}`;
+      }
     }
   }
   // The engine records the engine's own version — WebKitGTK on Linux, System
