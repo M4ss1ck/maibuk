@@ -536,6 +536,14 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
     reportActivity(entry.installed.pluginId, entry.installed.manifest.version);
   }
 
+  /** An open Plugin page (and any Frame on it); sidebar, toolbar, and Settings entries are not activity. */
+  function hasOpenPage(entry: Entry): boolean {
+    for (const surface of entry.surfaces) {
+      if (surface.startsWith("page:")) return true;
+    }
+    return false;
+  }
+
   function startHeartbeat(entry: Entry): void {
     entry.misses = 0;
     entry.beatInFlight = false;
@@ -566,7 +574,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       const broker = entry.runtime?.broker;
       if (!broker) return;
       // Open work or an open page or Frame is activity for the death record (#926).
-      if (broker.hasOpenWork() || hasWarmSurface(entry)) noteActivity(entry);
+      if (broker.hasOpenWork() || hasOpenPage(entry)) noteActivity(entry);
       entry.beatInFlight = true;
       const answered = () => {
         entry.beatInFlight = false;
@@ -1083,8 +1091,11 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       surfacesOf(pluginId).add(surface);
       const entry = entries.get(pluginId);
       if (!entry) return;
-      // A running Plugin is doing something for the author (#926).
-      if (entry.state.status === "ready" || entry.state.status === "unavailable") {
+      // An opened page is activity for the death record (#926).
+      if (
+        surface.startsWith("page:") &&
+        (entry.state.status === "ready" || entry.state.status === "unavailable")
+      ) {
         noteActivity(entry);
       }
       if (hasWarmSurface(entry)) {

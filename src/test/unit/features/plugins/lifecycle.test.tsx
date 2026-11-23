@@ -2648,13 +2648,20 @@ describe("Plugin lifecycle: activity reports (#926)", () => {
     expect(reportActivity).toHaveBeenCalledWith("surface-page", "1.0.0");
   });
 
-  it("stays silent on a heartbeat tick with no open work and no surface", async () => {
+  it("stays silent with no open work and only sidebar or toolbar entries, then reports an opened page", async () => {
     const reportActivity = vi.fn();
     const h = await createHarness({ approved: [makePlugin("alpha")], reportActivity });
     await launchAll(h);
 
+    h.lifecycle.surfaceReached("alpha", "sidebar:report");
+    h.lifecycle.surfaceReached("alpha", "toolbar:go");
     await advance(HEARTBEAT_INTERVAL_MS);
-
     expect(reportActivity).not.toHaveBeenCalled();
+
+    // The same tick path reports once a page is open, so the silence above was not a missing tick.
+    h.lifecycle.surfaceReached("alpha", "page:report");
+    reportActivity.mockClear();
+    await advance(HEARTBEAT_INTERVAL_MS);
+    expect(reportActivity).toHaveBeenCalledWith("alpha", "1.0.0");
   });
 });
