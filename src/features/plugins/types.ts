@@ -93,22 +93,6 @@ export type PluginModulePlan =
 
 // Sandbox (sandbox.ts)
 
-/**
- * The Android QuickJS boot payload the host hands the frame (#516). The frame
- * relays it to the Worker on the boot message; `runner` is a frame-created
- * `blob:` URL and `wasmBinary` is the raw QuickJS Wasm bytes, copied (never
- * transferred) through the frame, so the Worker never fetches and never needs a
- * `WebAssembly.Module` to cross an agent-cluster boundary.
- */
-export interface PluginFrameQuickJsBoot {
-  /** The frame-created URL of the bundled QuickJS runner module. */
-  runner: string;
-  /** The verified Plugin module sources, keyed by Plugin-relative path. */
-  sources: Record<string, string>;
-  /** The raw QuickJS Wasm bytes the Worker compiles before instantiating. */
-  wasmBinary: ArrayBuffer;
-}
-
 export interface PluginSandboxFrame {
   /** The hidden iframe, appended to the host document. */
   readonly element: HTMLIFrameElement;
@@ -116,13 +100,8 @@ export interface PluginSandboxFrame {
   readonly ready: Promise<void>;
   /** Creates a `blob:` URL inside the frame for one module source. */
   createModule(source: string): Promise<string>;
-  /**
-   * Starts the Worker from a frame-created URL and hands it the port. On the
-   * Android QuickJS engine, `entryUrl` is the Plugin-relative entry path and
-   * `quickJs` carries the runner URL, sources, and raw Wasm bytes the Worker
-   * runs instead of importing the entry natively (#516).
-   */
-  startWorker(entryUrl: string, port: MessagePort, quickJs?: PluginFrameQuickJsBoot): Promise<void>;
+  /** Starts the Worker from a frame-created URL and hands it the port. */
+  startWorker(entryUrl: string, port: MessagePort): Promise<void>;
   /** Worker messages posted to the frame (readiness and heartbeats). */
   onWorkerMessage(handler: (data: unknown) => void): void;
   /** A Worker `error` event: the Plugin crashed or was killed. */

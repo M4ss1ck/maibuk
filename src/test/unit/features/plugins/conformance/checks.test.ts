@@ -488,47 +488,6 @@ describe("runConformanceChecks terminal probes", () => {
   });
 });
 
-describe("runConformanceChecks T8 under the Android QuickJS engine (#516)", () => {
-  it("passes on exactly out-of-memory", async () => {
-    const checks = await runConformanceChecks(makeSeam(), undefined, { quickjs: true });
-    const check = byId(checks, T8_CHECK_ID);
-    expect(check.status).toBe("pass");
-    expect(check.detail).toContain("out-of-memory");
-  });
-
-  it("fails a crashed stop the desktop engines would pass", async () => {
-    const checks = await runConformanceChecks(
-      makeSeam({
-        probeOom: async () => ({
-          stopped: true,
-          reason: "crashed",
-          allocatedMb: 1_536,
-          neighbourAlive: true,
-        }),
-      }),
-      undefined,
-      { quickjs: true }
-    );
-    const check = byId(checks, T8_CHECK_ID);
-    expect(check.status).toBe("fail");
-    expect(check.detail).toContain("crashed");
-  });
-
-  it("still accepts a crashed stop off the QuickJS engine by default", async () => {
-    const checks = await runConformanceChecks(
-      makeSeam({
-        probeOom: async () => ({
-          stopped: true,
-          reason: "crashed",
-          allocatedMb: 1_536,
-          neighbourAlive: true,
-        }),
-      })
-    );
-    expect(byId(checks, T8_CHECK_ID).status).toBe("pass");
-  });
-});
-
 describe("runConformanceChecks launch plan (#928)", () => {
   it("runs every check but T8 under no-t8", async () => {
     const checks = await runConformanceChecks(makeSeam(), undefined, { plan: "no-t8" });
