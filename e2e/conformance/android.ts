@@ -128,6 +128,8 @@ async function waitForPid(device: AndroidDevice): Promise<number> {
 export async function launchAndroidApp(options: {
   device: AndroidDevice;
   runDir: RunDir;
+  /** The logcat file name under the run directory (default `logcat-android.txt`). */
+  logName?: string;
 }): Promise<RunningApp> {
   const { device } = options;
   await adb(device.serial, [
@@ -136,7 +138,8 @@ export async function launchAndroidApp(options: {
     `tcp:${CONFORMANCE_COLLECTOR_PORT}`,
   ]);
 
-  const log = createWriteStream(resolve(options.runDir.dir, "logcat-android.txt"));
+  const logName = options.logName ?? "logcat-android.txt";
+  const log = createWriteStream(resolve(options.runDir.dir, logName));
   const logcat = spawn("adb", ["-s", device.serial, "logcat", "-v", "time"], {
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -151,6 +154,11 @@ export async function launchAndroidApp(options: {
       (await device.shell(["pidof", ANDROID_PACKAGE]).catch(() => "")).trim() !== "",
     async stop() {
       await device.shell(["am", "force-stop", ANDROID_PACKAGE]).catch(() => "");
+      // Unpipe first: logcat can still flush after SIGTERM, and a write to the
+      // ended file is an unhandled error that crashes the lane (seen once the
+      // death phase kept the lane running past the main phase's stop, #922).
+      logcat.stdout?.unpipe(log);
+      logcat.stderr?.unpipe(log);
       logcat.kill("SIGTERM");
       log.end();
       await adb(device.serial, ["reverse", "--remove", `tcp:${CONFORMANCE_COLLECTOR_PORT}`]).catch(
@@ -158,4 +166,37 @@ export async function launchAndroidApp(options: {
       );
     },
   };
+}
+
+/**
+ * Sends Maibuk to the background and kills its WebView renderer (#922). Assumes
+ * Maibuk is the only WebView app running, which holds on the lane's AVDs: every
+ * `:sandbox` process seen by `ps` is its renderer. The match is `:sandbox`, not
+ * `:sandboxed_process`, because API 26's `ps` cuts names at 27 characters
+ * (`com.android.webview:sandboxe`). Uses `su` rather than `adb root`, which
+ * would restart adbd; the emulator lane's Google APIs AVDs have `su`.
+ */
+export async function backgroundAndKillRenderer(device: AndroidDevice): Promise<void> {
+  await device.shell(["input", "keyevent", "KEYCODE_HOME"]);
+  // Let the Activity stop being resumed before the renderer is torn down.
+  await new Promise((done) => setTimeout(done, 1000));
+
+  const pids = (await device.shell(["ps", "-A", "-o", "PID,NAME"]))
+    .split("\n")
+    .map((line) => line.trim().split(/\s+/))
+    .filter(([pid, name]) => /^\d+$/.test(pid ?? "") && (name ?? "").includes(":sandbox"))
+    .map(([pid]) => pid);
+  if (pids.length === 0) {
+    throw new Error(
+      "no WebView renderer process (:sandbox) found after sending the app to the background"
+    );
+  }
+  // Best effort: a renderer the system reclaimed between `ps` and `kill` makes
+  // `kill` exit 1. A renderer that survives shows up as the app not exiting.
+  await device.shell(["su", "0", "kill", "-9", ...pids]).catch(() => "");
+}
+
+/** Starts the app again after its renderer died, waiting for the Activity. */
+export async function relaunchAndroidApp(device: AndroidDevice): Promise<void> {
+  await device.shell(["am", "start", "-W", "-n", ANDROID_ACTIVITY]);
 }

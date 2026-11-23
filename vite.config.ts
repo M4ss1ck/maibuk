@@ -573,6 +573,7 @@ export default defineConfig(() => ({
         "src/test/support/plugin-conformance/args.ts",
         "src/test/support/plugin-conformance/collector-state.ts",
         "src/test/support/plugin-conformance/csp.ts",
+        "src/test/support/plugin-conformance/death.ts",
         "src/test/support/plugin-conformance/report.ts",
         "src/test/support/plugin-conformance/wait.ts",
         "scripts/plugin-conformance-gate.mjs",

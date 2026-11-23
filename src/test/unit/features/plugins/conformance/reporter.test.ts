@@ -5,7 +5,10 @@ import {
   CONFORMANCE_COLLECTOR_PATHS,
   createReporter,
 } from "@/features/plugins/conformance/reporter";
-import type { ConformanceCheck } from "@/features/plugins/conformance/types";
+import type {
+  ConformanceCheck,
+  ConformanceLaunchReport,
+} from "@/features/plugins/conformance/types";
 
 interface Posted {
   url: string;
@@ -32,6 +35,7 @@ const FAIL: ConformanceCheck = { id: "T7-hang", status: "fail", detail: "crashed
 describe("createReporter", () => {
   it("exports the collector contract the conformance runner unit imports", () => {
     expect(CONFORMANCE_COLLECTOR_PATHS).toEqual({
+      launch: "/launch",
       progress: "/progress",
       result: "/result",
       done: "/done",
@@ -65,6 +69,22 @@ describe("createReporter", () => {
       checks: [PASS, FAIL],
     });
     expect(calls[3]?.body).toBeUndefined();
+  });
+
+  it("posts the launch report to /launch", async () => {
+    const { calls, fetchImpl } = recordingFetch();
+    const reporter = createReporter(CONFORMANCE_COLLECTOR_BASE_URL, fetchImpl);
+    const report: ConformanceLaunchReport = {
+      plugins: [{ id: "example.alpha", enabled: true }],
+      notices: ["Plugin failed to start"],
+    };
+
+    await reporter.launch(report);
+
+    expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual([
+      "POST http://127.0.0.1:8787/launch",
+    ]);
+    expect(calls[0]?.body).toEqual(report);
   });
 
   it("swallows a collector that cannot be reached, so the page keeps working", async () => {

@@ -1,9 +1,10 @@
 /**
  * The collector client (#447, D3). The route auto-runs on load and reports to a
  * Node collector the `conformance:plugins` lane starts on `127.0.0.1:8787`:
- * one `/progress` per check as it settles, then `/result` with the engine and
- * the whole list, then `/done`. It also posts `/heartbeat`, the host-side proof
- * T8's renderer survived (D4).
+ * one `/launch` with the app's launch report (#922), one `/progress` per check
+ * as it settles, then `/result` with the engine and the whole list, then
+ * `/done`. It also posts `/heartbeat`, the host-side proof T8's renderer
+ * survived (D4).
  *
  * A missing or slow collector must never break the page: every call swallows
  * its error. `heartbeat()` is the one call whose failure is meaningful — it
@@ -11,7 +12,11 @@
  * renderer.
  */
 
-import type { ConformanceCheck, ConformanceResult } from "@/features/plugins/conformance/types";
+import type {
+  ConformanceCheck,
+  ConformanceLaunchReport,
+  ConformanceResult,
+} from "@/features/plugins/conformance/types";
 
 /** The collector origin the lane binds (D3); a fixed constant, not configurable. */
 export const CONFORMANCE_COLLECTOR_BASE_URL = "http://127.0.0.1:8787";
@@ -23,6 +28,8 @@ export const CONFORMANCE_COLLECTOR_BASE_URL = "http://127.0.0.1:8787";
  * paths instead of repeating the strings.
  */
 export const CONFORMANCE_COLLECTOR_PATHS = {
+  /** `POST` the launch report: the Plugins and notices the app started with (#922). */
+  launch: "/launch",
   /** `POST` one `ConformanceCheck` as it settles. */
   progress: "/progress",
   /** `POST` the whole `ConformanceResult`. */
@@ -41,6 +48,8 @@ export interface ConformanceCollectorLeaks {
 }
 
 export interface ConformanceReporter {
+  /** The launch report, posted before the run begins (#922). */
+  launch(report: ConformanceLaunchReport): Promise<void>;
   /** One check, posted as it settles. */
   progress(check: ConformanceCheck): Promise<void>;
   /** The whole run: the engine and every check. */
@@ -72,6 +81,9 @@ export function createReporter(
   }
 
   return {
+    async launch(report) {
+      await post(paths.launch, report);
+    },
     async progress(check) {
       await post(paths.progress, check);
     },

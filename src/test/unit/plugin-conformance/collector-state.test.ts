@@ -23,6 +23,7 @@ function fold(requests: Parameters<typeof applyCollectorRequest>[1][]): Collecto
 describe("CONFORMANCE_COLLECTOR_CONTRACT", () => {
   it("is the reporter's contract, method and path", () => {
     expect(CONFORMANCE_COLLECTOR_CONTRACT).toEqual([
+      { method: "POST", path: CONFORMANCE_COLLECTOR_PATHS.launch },
       { method: "POST", path: CONFORMANCE_COLLECTOR_PATHS.progress },
       { method: "POST", path: CONFORMANCE_COLLECTOR_PATHS.result },
       { method: "POST", path: CONFORMANCE_COLLECTOR_PATHS.done },
@@ -53,6 +54,29 @@ describe("isPluginLeak()", () => {
 });
 
 describe("applyCollectorRequest()", () => {
+  it("appends a valid launch report and never counts it as a leak", () => {
+    const report = {
+      plugins: [
+        { id: "example.alpha", enabled: true },
+        { id: "example.beta", enabled: false },
+      ],
+      notices: ["Plugin failed to start"],
+    };
+    const state = fold([{ method: "POST", path: "/launch", body: report }]);
+    expect(state.launches).toEqual([report]);
+    expect(state.leaks).toBe(0);
+    expect(state.requests).toBe(1);
+  });
+
+  it("does not append a malformed launch body", () => {
+    const state = fold([
+      { method: "POST", path: "/launch", body: { plugins: "nope", notices: [] } },
+      { method: "POST", path: "/launch", body: { plugins: [], notices: [1] } },
+      { method: "POST", path: "/launch", body: 42 },
+    ]);
+    expect(state.launches).toEqual([]);
+  });
+
   it("collects progress lines in order", () => {
     const state = fold([
       { method: "POST", path: "/progress", body: PASS },

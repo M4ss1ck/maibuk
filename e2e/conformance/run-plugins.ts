@@ -7,14 +7,20 @@
 // needs a display, a device, or both.
 //
 // The rules live in `src/test/support/plugin-conformance/` and get unit tests;
-// this file is the process and socket shell around them.
+// this file is the process and socket shell around them. On Android it also runs
+// the death phase: background the app, kill its WebView renderer with `su`, wait
+// for a quiet exit, relaunch, and compare the two launch reports (#922).
 
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { CONFORMANCE_COLLECTOR_BASE_URL } from "@/features/plugins/conformance/reporter";
-import type { ConformanceEngine } from "@/features/plugins/conformance/types";
+import type {
+  ConformanceCheck,
+  ConformanceEngine,
+  ConformanceLaunchReport,
+} from "@/features/plugins/conformance/types";
 import {
   PLUGIN_CONFORMANCE_USAGE,
   PluginConformanceUsageError,
@@ -31,6 +37,7 @@ import {
   type PlatformSummary,
   buildPlatformRun,
   canRecord,
+  exitCodeForChecks,
   finalizeRun,
   formatConformanceTable,
   laneExitCode,
@@ -39,29 +46,43 @@ import {
   stackFromCargoLock,
 } from "@/test/support/plugin-conformance/report";
 import {
+  BACKGROUND_DEATH_CHECK_ID,
+  backgroundDeathCheck,
+} from "@/test/support/plugin-conformance/death";
+import {
   FIRST_CONTACT_TIMEOUT_MS,
   type WaitOutcome,
   lastLogLines,
   waitOutcome,
 } from "@/test/support/plugin-conformance/wait";
 import { CARGO_LOCK_PATH, checkConformanceGate } from "../../scripts/plugin-conformance-gate.mjs";
-import { PrerequisiteMissing, claimTestInstall, connectDevice } from "../frames/android";
+import {
+  type AndroidDevice,
+  PrerequisiteMissing,
+  claimTestInstall,
+  connectDevice,
+} from "../frames/android";
 import { buildPluginFixtures } from "../support/plugin-fixtures-build";
 import { root, wallClock } from "../run-steps.mjs";
 import {
   androidWebViewVersion,
   assertOneAdbDevice,
+  backgroundAndKillRenderer,
   buildAndroidApp,
   deviceAndroidTarget,
   findDebugApk,
   installAndroidApp,
   launchAndroidApp,
+  relaunchAndroidApp,
 } from "./android";
 import { type ConformanceCollector, startConformanceCollector } from "./collector";
 import { assertLinuxPrerequisites, buildLinuxApp, launchLinuxApp } from "./linux";
 import type { ConformanceEngineName, RunningApp, RunDir } from "./types";
 
 const POLL_MS = 250;
+
+/** How long the death phase waits for the app process to exit after its renderer dies. */
+const DEATH_EXIT_TIMEOUT_MS = 15_000;
 
 function refuse(message: string): never {
   console.error(`[conformance] cannot run: ${message}`);
@@ -101,6 +122,8 @@ function warnOnGate(cargoLockText: string): void {
 interface StartedPlatform {
   app: RunningApp;
   device?: string;
+  /** Set on Android: the device the death phase drives (#922). */
+  androidDevice?: AndroidDevice;
   stackExtra: Omit<ConformanceStack, "tauri" | "wry">;
 }
 
@@ -128,6 +151,7 @@ async function startPlatform(
   return {
     app,
     device: `${device.model} (${device.abi}, Android ${device.androidVersion})`,
+    androidDevice: device,
     stackExtra: { androidWebView },
   };
 }
@@ -154,6 +178,75 @@ function printAppLogTail(platform: ConformanceEngineName, runDir: RunDir): void 
   if (tail === "") return;
   console.warn(`[conformance] ${platform}: last app log lines (${path}):`);
   for (const line of tail.split("\n")) console.warn(`[conformance]   ${line}`);
+}
+
+/** The nth launch report the collector saw, waiting up to first contact, or null. */
+async function waitForLaunch(
+  collector: ConformanceCollector,
+  count: number
+): Promise<ConformanceLaunchReport | null> {
+  const startedAt = Date.now();
+  for (;;) {
+    const launches = collector.state().launches;
+    if (launches.length >= count) return launches[count - 1];
+    if (Date.now() - startedAt >= FIRST_CONTACT_TIMEOUT_MS) return null;
+    await sleep(POLL_MS);
+  }
+}
+
+/** Whether the app died within the timeout: `!isAlive` polled, never unbounded. */
+async function waitForExit(app: RunningApp, timeoutMs: number): Promise<boolean> {
+  const startedAt = Date.now();
+  for (;;) {
+    if (!(await app.isAlive())) return true;
+    if (Date.now() - startedAt >= timeoutMs) return false;
+    await sleep(POLL_MS);
+  }
+}
+
+/**
+ * The Android death phase (#922): launch, take the launch report, background the
+ * app, kill its renderer, wait for the quiet exit, relaunch, and hand both
+ * reports and the exit fact to `backgroundDeathCheck`. Every wait is bounded, so
+ * a missing app or report fails the check instead of hanging the lane.
+ */
+async function runDeathPhase(
+  device: AndroidDevice,
+  runDir: RunDir,
+  collector: ConformanceCollector
+): Promise<ConformanceCheck> {
+  let app: RunningApp | null = null;
+  try {
+    collector.reset();
+    console.log("[conformance] android: death phase starting");
+    app = await launchAndroidApp({ device, runDir, logName: "logcat-android-death.txt" });
+
+    const before = await waitForLaunch(collector, 1);
+    let processExited = false;
+    let after: ConformanceLaunchReport | null = null;
+    if (before !== null) {
+      await backgroundAndKillRenderer(device);
+      processExited = await waitForExit(app, DEATH_EXIT_TIMEOUT_MS);
+      if (processExited) {
+        // Only a report that arrives after the relaunch counts as `after`.
+        const reportsBeforeRelaunch = collector.state().launches.length;
+        await relaunchAndroidApp(device);
+        after = await waitForLaunch(collector, reportsBeforeRelaunch + 1);
+      }
+    }
+
+    const check = backgroundDeathCheck({ before, processExited, after });
+    console.log(`[conformance] android: death phase ${check.id} ${check.status}: ${check.detail}`);
+    return check;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.log(
+      `[conformance] android: death phase ${BACKGROUND_DEATH_CHECK_ID} unmeasured: ${message}`
+    );
+    return { id: BACKGROUND_DEATH_CHECK_ID, status: "unmeasured", detail: message };
+  } finally {
+    if (app !== null) await app.stop();
+  }
 }
 
 async function measurePlatform(
@@ -205,6 +298,20 @@ async function measurePlatform(
     // all, which is a different failure from a run that started and went quiet.
     outcome.note = "app never contacted the collector";
   }
+  // The death phase is Android-only and runs after the main phase settled. Its
+  // check folds into the written report; a pass never masks a main-phase failure.
+  let leaks = state.leaks;
+  if (started.androidDevice !== undefined) {
+    const deathCheck = await runDeathPhase(started.androidDevice, runDir, collector);
+    // The relaunches run the probe again, so their leaks count too.
+    leaks += collector.state().leaks;
+    outcome.checks = [...outcome.checks, deathCheck];
+    const deathExit = exitCodeForChecks([deathCheck]);
+    outcome.exitCode = outcome.exitCode > deathExit ? outcome.exitCode : deathExit;
+    if (deathCheck.status !== "pass") {
+      outcome.note = `${outcome.note}; death phase: ${deathCheck.detail}`;
+    }
+  }
   // The engine records the engine's own version — WebKitGTK on Linux, System
   // WebView `versionName` on Android — never the app version (#447 D1). The name
   // and userAgent come from the run that reported them (the first `/progress` or
@@ -220,7 +327,7 @@ async function measurePlatform(
   return {
     platform,
     outcome,
-    leaks: state.leaks,
+    leaks,
     engine,
     run: buildPlatformRun({
       platform,
