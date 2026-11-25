@@ -32,33 +32,23 @@
 
 import { createArchive, DocumentError } from "./archive";
 import { createComic } from "./comic";
-import { createContents, documentOutline, type OutlineItem } from "./contents";
+import { createContents, documentOutline } from "./contents";
 import { createFind } from "./find";
 import { createFlow, textNodes, type FlowAnchor } from "./flow";
 import { hooks, positionDebounceMs } from "./hooks";
 import { createMeta } from "./meta";
+import { createPdf, MAX_CACHED_PAGES } from "./pdf";
 import { createPosition } from "./position";
 import { createFrameProtocol, errorCode, type FrameOpenMessage } from "./protocol";
 import type {
   FrameEntry,
   FrameFoliate,
   FrameLabels,
-  FramePdf,
   FrameZoom,
   PagePosition,
   ReaderSettings,
   ReadingPosition,
 } from "./types";
-
-/** One drawn PDF page, kept in a slot until the cache drops it. */
-interface RenderedPage {
-  index: number;
-  canvas: HTMLCanvasElement;
-  textLayer: HTMLDivElement;
-  page: any;
-  scale: number;
-  bitmap: ImageBitmap | null;
-}
 
 const STRINGS: Record<string, Record<string, string>> = {
   en: {
@@ -145,21 +135,6 @@ const STRINGS: Record<string, Record<string, string>> = {
   },
 };
 
-const INITIAL_CHUNK_BYTES = 1 << 20;
-const RANGE_CHUNK_BYTES = 1 << 20;
-const MAX_CACHED_PAGES = 5;
-/**
- * How long a PDF may take to answer before the Frame reports a load failure.
- * pdf.js's core answers through a `MessageHandler` that calls `Promise.try`
- * inside a deferred `LoopbackPort` callback. An engine below pdf.js's floor
- * (the polyfills cover only Chrome 138) has no `Promise.try`, so that call
- * throws after `getDocument` was called; the throw becomes an unhandled
- * rejection and no `GetDoc` or `DocException` ever arrives, so the loading
- * task's promise never settles and `handleLoadError` never runs. 30s leaves a
- * slow, large Document on a low-end device ample room while turning a
- * permanent hang into the visible error the author can act on.
- */
-const PDF_LOAD_TIMEOUT_MS = 30000;
 /** How far a wheel gesture pushes past a page's edge before it turns the page. */
 const WHEEL_PAGE_THRESHOLD = 50;
 /** A pause this long between wheel events starts a new gesture. */
@@ -177,7 +152,7 @@ const archive = createArchive({ requestZipList, requestZipEntry });
 /* The Document's title, author, page count, and cover, posted once per open. */
 const meta = createMeta({
   post,
-  pdf: () => pdfDoc,
+  pdf: () => pdf.document(),
   document: () => currentDocument,
   format: () => documentFormat,
   comicFiles: () => comic.files(),
@@ -197,7 +172,7 @@ const positionEngine = createPosition({
   sections: () => (currentDocument ? currentDocument.sections.length : null),
   pageIndex: () => pageIndex,
   zoom: () => zoomSetting,
-  pdfPageCount: () => (pdfDoc ? pdfDoc.numPages : 0),
+  pdfPageCount: () => pdf.pageCount(),
 });
 const backButton = el("back");
 const contentsToggle = el("contents-toggle");
@@ -238,7 +213,7 @@ const contents = createContents({
   button: () => contentsToggle,
   tree: () => contentsTree,
   t: (key) => t(key),
-  pdf: () => pdfDoc,
+  pdf: () => pdf.document(),
   document: () => currentDocument,
   flowing: () => mode === "flow",
   goToPage,
@@ -258,11 +233,11 @@ const find = createFind({
   t: (key, values) => t(key, values),
   flowing: () => mode === "flow",
   destroyed: () => destroyed,
-  pdf: () => pdfDoc,
+  pdf: () => pdf.document(),
   document: () => currentDocument,
   foliate: () => foliate,
   flow: () => flowEngine.state(),
-  pages: () => pageCache,
+  pages: () => pdf.pages(),
   stage: () => stage,
   textNodes,
   now: () => nowMs(),
@@ -311,20 +286,13 @@ let settings: ReaderSettings = {
 let position: ReadingPosition | null = null;
 let fileSize = 0;
 
-let pdfjs: any = null;
-let pdfDoc: any = null;
-let loadingTask: any = null;
-let pdfWorker: any = null;
-let transport: any = null;
-let activePdfPort: MessagePort | null = null;
-
 let pageIndex = 0;
 let zoomSetting: FrameZoom = "width";
 let currentScale = 1;
 let destroyed = false;
 let viewGeneration = 0;
 let resizeTimer = 0;
-let passwordCallback: ((password: string) => void) | null = null;
+let passwordResolver: ((value: string | undefined) => void) | null = null;
 
 /* Documents: foliate's parsers, the archive, and the three views. */
 let foliate: any = null;
@@ -333,22 +301,64 @@ let currentDocument: any = null;
 let mode: "pdf" | "flow" | "fixed" | "comic" = "pdf";
 let documentFormat: string = "";
 
-const pageCache: Map<number, RenderedPage> = new Map();
-/** The renders in flight, so a page never draws twice at once. */
-const renderingPages: Map<number, Promise<RenderedPage>> = new Map();
-/** One slot per PDF page; a drawn page lives in its slot until the cache drops it. */
-let slots: HTMLElement[] = [];
-/** The first page's unscaled size, which every slot takes until its page renders. */
-let pdfBase: { width: number; height: number } | null = null;
-let slotObserver: IntersectionObserver | null = null;
-const visiblePages = new Set<number>();
-/** The scrollTop a programmatic scroll left, so the scroll sync ignores it. */
-let scrollTarget: number | null = null;
 let wheelCarry = 0;
 let lastWheelAt = 0;
 let wheelTurned = false;
 
 let pageLabels: string[] | null = null;
+
+/* The PDF engine: pdf.js through the Worker, the page slots and Continuous
+   scroll, the zoom and fit math, and the render cache. */
+const pdf = createPdf({
+  stage: () => stage,
+  viewer: () => viewer,
+  settings: () => settings,
+  saveSettings: (next) => {
+    settings = next;
+    post({ kind: "settings", settings });
+  },
+  requestBytes,
+  abortReads: (reason) => protocol.abortReads(reason),
+  fileSize: () => fileSize,
+  destroyed: () => destroyed,
+  generation: () => viewGeneration,
+  beginGeneration: () => ++viewGeneration,
+  pageIndex: () => pageIndex,
+  setPage: (index) => {
+    pageIndex = index;
+  },
+  zoom: () => zoomSetting,
+  setZoomSetting: (zoom) => {
+    zoomSetting = zoom;
+  },
+  setScale: (scale) => {
+    currentScale = scale;
+  },
+  updateIndicator,
+  updateControls,
+  updateFindStatus: () => find.updateStatus(),
+  revealPdfMatch: () => find.revealPdfMatch(),
+  paintPdfMatches: (container, index) => find.paintPdfMatches(container, index),
+  schedulePosition: () => positionEngine.schedule(),
+  showZoom: (percent) => {
+    if (zoomLevel) zoomLevel.textContent = t("zoomLevel", { percent });
+  },
+  showOutline: (outline) => contents.show(outline),
+  setPageLabels: (labels) => {
+    pageLabels = labels;
+  },
+  showStage: () => {
+    stage.hidden = false;
+    messageElement.hidden = true;
+    passwordForm.hidden = true;
+  },
+  sendMeta: () => {
+    void meta.send();
+  },
+  passwordOpen: () => Boolean(passwordForm && !passwordForm.hidden),
+  requestPassword,
+  handleLoadError,
+});
 
 function t(key: string, values?: Record<string, string | number>): string {
   const base = STRINGS[language.split(/[-_]/)[0]] || STRINGS.en;
@@ -402,7 +412,8 @@ function isInactive(button: any) {
 
 /** Whether the shown page is the first and the last one. */
 function pageBounds() {
-  if (pdfDoc) return { first: pageIndex <= 0, last: pageIndex >= pdfDoc.numPages - 1 };
+  const doc = pdf.document();
+  if (doc) return { first: pageIndex <= 0, last: pageIndex >= doc.numPages - 1 };
   const flow = flowEngine.state();
   if (mode === "flow" && flow && currentDocument) {
     return {
@@ -421,16 +432,17 @@ function pageBounds() {
 /** Brings the toolbar in line with the open Document and where the author is. */
 function updateControls() {
   const open = hasDocument();
-  document.body.dataset.mode = pdfDoc ? "pdf" : open ? mode : "";
+  const doc = pdf.document();
+  document.body.dataset.mode = doc ? "pdf" : open ? mode : "";
   const bounds = pageBounds();
   setInactive(pagePreviousButton, !open || bounds.first);
   setInactive(pageNextButton, !open || bounds.last);
-  const flowing = mode === "flow" && !pdfDoc;
+  const flowing = mode === "flow" && !doc;
   labelButton(zoomOutButton, t(flowing ? "decreaseFontSize" : "zoomOut"));
   labelButton(zoomInButton, t(flowing ? "increaseFontSize" : "zoomIn"));
   if (fitWidthButton) fitWidthButton.setAttribute("aria-pressed", String(zoomSetting === "width"));
   if (fitPageButton) fitPageButton.setAttribute("aria-pressed", String(zoomSetting === "page"));
-  if (layoutToggle) layoutToggle.setAttribute("aria-pressed", String(isContinuous()));
+  if (layoutToggle) layoutToggle.setAttribute("aria-pressed", String(pdf.isContinuous()));
   if (fullscreenToggle) {
     fullscreenToggle.hidden = !fullscreenAvailable();
     fullscreenToggle.setAttribute("aria-pressed", String(fullscreen));
@@ -474,18 +486,12 @@ function ascii(bytes: Uint8Array, offset: number, length: number): string {
 
 /** Whether any Document is open, PDF or document. */
 function hasDocument() {
-  return Boolean(pdfDoc || currentDocument);
+  return Boolean(pdf.document() || currentDocument);
 }
 
 /** Whether the current Document turns whole pages rather than columns. */
 function isPageMode() {
-  return Boolean(pdfDoc) || mode === "fixed" || mode === "comic";
-}
-
-function isPasswordError(error: unknown): boolean {
-  if (!isErrorLike(error)) return false;
-  if (error.name === "PasswordException") return true;
-  return Boolean(pdfjs && pdfjs.PasswordException && error instanceof pdfjs.PasswordException);
+  return Boolean(pdf.document()) || mode === "fixed" || mode === "comic";
 }
 
 /* Messaging ------------------------------------------------------------- */
@@ -496,39 +502,6 @@ function onMessage(event: MessageEvent) {
 }
 
 /* Opening --------------------------------------------------------------- */
-
-/** The open timeout, which the test harness may shorten through `hooks`. */
-function pdfLoadTimeoutMs() {
-  return hooks && typeof hooks.loadTimeoutMs === "number"
-    ? hooks.loadTimeoutMs
-    : PDF_LOAD_TIMEOUT_MS;
-}
-
-/**
- * Rejects when `promise` neither resolves nor rejects within the open
- * timeout, so a wedged pdf.js still reaches {@link handleLoadError}. The
- * underlying work is left to pdf.js and to `destroyDocument`, which the
- * failure path calls.
- */
-function withPdfLoadTimeout(promise: Promise<any>): Promise<any> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      const error = new Error("pdf.js did not answer in time");
-      (error as any).name = "LoadTimeoutError";
-      reject(error);
-    }, pdfLoadTimeoutMs());
-    promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (error) => {
-        clearTimeout(timer);
-        reject(error);
-      }
-    );
-  });
-}
 
 async function handleOpen(message: FrameOpenMessage) {
   entry = message.entry || null;
@@ -544,7 +517,7 @@ async function handleOpen(message: FrameOpenMessage) {
     return;
   }
   if (message.pdf && message.pdfPort) {
-    await openPdf(message.pdf, message.pdfPort, position);
+    await pdf.open(message.pdf, message.pdfPort, position);
     return;
   }
   if (message.foliate) {
@@ -573,161 +546,6 @@ function resetDocument() {
   if (passwordForm) passwordForm.hidden = true;
   if (stage) stage.hidden = true;
   find.close(false);
-}
-
-/**
- * Opens a PDF. pdf.js's core answers from the Plugin Worker's nested Worker
- * through `pdfPort`.
- */
-async function openPdf(pdf: FramePdf, pdfPort: MessagePort, saved: ReadingPosition | null) {
-  try {
-    pdfjs = await withPdfLoadTimeout(importPdfjs(pdf.displaySource));
-    injectCss(pdf.css);
-    activePdfPort = pdfPort;
-    pdfPort.start();
-    pdfWorker = new pdfjs.PDFWorker({ port: pdfPort });
-    zoomSetting =
-      saved &&
-      (typeof (saved as PagePosition).zoom === "number" ||
-        (saved as PagePosition).zoom === "width" ||
-        (saved as PagePosition).zoom === "page")
-        ? (saved as PagePosition).zoom
-        : settings.pdfFit;
-    const initialLength = Math.min(fileSize > 0 ? fileSize : 0, INITIAL_CHUNK_BYTES);
-    // The first read is as likely to stall as any later one, so it runs under
-    // the same deadline; a provider that never answers must not leave the
-    // spinner up with no way out.
-    const initial = await withPdfLoadTimeout(requestBytes(0, initialLength));
-    transport = new pdfjs.PDFDataRangeTransport(fileSize, initial);
-    transport.requestDataRange = (begin: number, end: number) => {
-      void requestBytes(begin, Math.min(end - begin, RANGE_CHUNK_BYTES))
-        .then((bytes) => transport.onDataRange(begin, bytes))
-        .catch(() => {
-          /* A refused range fails the page render; the Frame reports it once. */
-        });
-    };
-    transport.abort = () => {
-      protocol.abortReads("Reader stopped reading");
-    };
-    await loadDocument(undefined);
-  } catch (error) {
-    if (!destroyed) handleLoadError(error);
-  }
-}
-
-async function importPdfjs(displaySource: string): Promise<any> {
-  if (hooks && typeof hooks.importPdfjs === "function") return hooks.importPdfjs(displaySource);
-  const url = URL.createObjectURL(new Blob([displaySource], { type: "text/javascript" }));
-  try {
-    return await import(/* @vite-ignore */ url);
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}
-
-function injectCss(css: string) {
-  const previous = document.getElementById("reader-pdf-css");
-  if (previous) previous.remove();
-  const style = document.createElement("style");
-  style.id = "reader-pdf-css";
-  style.textContent = css;
-  document.head.append(style);
-}
-
-async function loadDocument(password: string | undefined) {
-  if (!pdfjs || !transport) return;
-  const params: Record<string, unknown> = {
-    range: transport,
-    worker: pdfWorker,
-    isEvalSupported: false,
-    disableAutoFetch: true,
-    disableStream: true,
-    rangeChunkSize: RANGE_CHUNK_BYTES,
-  };
-  if (typeof password === "string") params.password = password;
-  const task = pdfjs.getDocument(params);
-  loadingTask = task;
-  // A password request keeps `task.promise` pending while the author types,
-  // so that wait is exempt from the load deadline: the clock stops when the
-  // form shows and starts again only when the author submits. Every progress
-  // report restarts the clock, so a slow but moving load is left alone and
-  // only an inactive one fails.
-  let timer = 0;
-  let done = false;
-  let rejectTimeout = () => {};
-  const timeout = new Promise((_resolve, reject) => {
-    rejectTimeout = () => {
-      const error = new Error("pdf.js did not answer in time");
-      (error as any).name = "LoadTimeoutError";
-      reject(error);
-    };
-  });
-  const armTimeout = () => {
-    if (done) return;
-    clearTimeout(timer);
-    timer = window.setTimeout(rejectTimeout, pdfLoadTimeoutMs());
-  };
-  armTimeout();
-  if (typeof task === "object" && task !== null) {
-    task.onProgress = () => {
-      // While the password form is open the deadline stays paused, even if a
-      // stray progress frame arrives.
-      if (passwordForm && !passwordForm.hidden) return;
-      armTimeout();
-    };
-    task.onPassword = (updatePassword: (password: string) => void, reason: number) => {
-      clearTimeout(timer);
-      passwordCallback = (value) => {
-        armTimeout();
-        updatePassword(value);
-      };
-      showPassword(reason === 2);
-    };
-  }
-  try {
-    pdfDoc = await Promise.race([task.promise, timeout]);
-  } catch (error) {
-    if (isPasswordError(error)) {
-      showPassword(typeof password === "string");
-      return;
-    }
-    throw error;
-  } finally {
-    done = true;
-    clearTimeout(timer);
-  }
-  await onOpened();
-}
-
-async function onOpened() {
-  if (!pdfDoc) return;
-  try {
-    pageLabels = await pdfDoc.getPageLabels();
-  } catch {
-    pageLabels = null;
-  }
-  let outline: OutlineItem[] | null = null;
-  try {
-    outline = await pdfDoc.getOutline();
-  } catch {
-    outline = null;
-  }
-  contents.show(outline);
-  const savedIndex = position && position.kind === "page" ? position.page : 0;
-  pageIndex = clamp(Math.floor(savedIndex), 0, Math.max(0, pdfDoc.numPages - 1));
-  stage.hidden = false;
-  messageElement.hidden = true;
-  passwordForm.hidden = true;
-  try {
-    const first = await pdfDoc.getPage(1);
-    pdfBase = first.getViewport({ scale: 1 });
-  } catch {
-    pdfBase = null;
-  }
-  if (destroyed || !pdfDoc) return;
-  updateIndicator();
-  await rebuildPdfView();
-  void meta.send();
 }
 
 /* Documents: archive, parsers, Flowing and Page views ----------------------- */
@@ -942,13 +760,14 @@ function nowMs(): number {
   return performance.now();
 }
 
-/* Rendering ------------------------------------------------------------- */
+/** Updates the page indicator for the Document now shown. */
 function updateIndicator() {
   updateControls();
   if (!pageIndicator) return;
-  if (pdfDoc) {
+  const doc = pdf.document();
+  if (doc) {
     const number = pageIndex + 1;
-    const count = pdfDoc.numPages;
+    const count = doc.numPages;
     const label =
       pageLabels && typeof pageLabels[pageIndex] === "string" ? pageLabels[pageIndex] : "";
     pageIndicator.textContent =
@@ -973,323 +792,9 @@ function updateIndicator() {
   }
 }
 
-function scaleFor(base: { width: number; height: number }): number {
-  if (typeof zoomSetting === "number") return clamp(zoomSetting, 0.5, 4);
-  const width = viewer.clientWidth > 0 ? viewer.clientWidth - 32 : base.width;
-  const height = viewer.clientHeight > 0 ? viewer.clientHeight - 32 : base.height;
-  const byWidth = width / Math.max(1, base.width);
-  if (zoomSetting === "page") return Math.min(byWidth, height / Math.max(1, base.height));
-  return byWidth;
-}
-
-function isContinuous() {
-  return Boolean(pdfDoc) && settings.pdfLayout === "continuous";
-}
-
-/**
- * Lays out one slot per page, each sized from the first page until its own
- * page renders. A drawn canvas stays in its slot until the cache drops it:
- * the Frame never detaches a canvas and shows it again, which WebKit can hand
- * back blank.
- */
-function buildPdfSlots() {
-  if (!pdfDoc) return;
-  viewGeneration += 1;
-  stopObserving();
-  clearCache();
-  const base = pdfBase || { width: 612, height: 792 };
-  const scale = scaleFor(base);
-  const continuous = isContinuous();
-  stage.textContent = "";
-  stage.className = "pdf-pages";
-  stage.style.width = "";
-  stage.style.height = "";
-  slots = [];
-  for (let index = 0; index < pdfDoc.numPages; index += 1) {
-    const slot = document.createElement("div");
-    slot.className = "pdf-page";
-    slot.dataset.page = String(index);
-    slot.style.width = `${Math.round(base.width * scale)}px`;
-    slot.style.height = `${Math.round(base.height * scale)}px`;
-    slot.hidden = !continuous && index !== pageIndex;
-    slots.push(slot);
-  }
-  stage.append(...slots);
-  stage.hidden = false;
-  currentScale = scale;
-  if (zoomLevel) zoomLevel.textContent = t("zoomLevel", { percent: Math.round(scale * 100) });
-}
-
-/**
- * Draws the PDF in the current layout and zoom: the shown page and its
- * neighbors, or, in Continuous scroll, the pages near the viewport.
- */
-function rebuildPdfView(): Promise<void> {
-  if (!pdfDoc) return Promise.resolve();
-  buildPdfSlots();
-  updateControls();
-  if (isContinuous()) {
-    observeSlots();
-    scrollToSlot(pageIndex);
-    return renderPage(pageIndex)
-      .then(() => find.revealPdfMatch())
-      .catch((error) => {
-        if (!destroyed) handleLoadError(error);
-      });
-  }
-  viewer.scrollTop = 0;
-  const shown = renderCurrent();
-  renderNeighbors();
-  return shown;
-}
-
-/** Shows only the current page's slot. */
-function showSlot(index: number) {
-  for (const slot of slots) {
-    const shown = Number(slot.dataset.page) === index;
-    if (slot.hidden === shown) slot.hidden = !shown;
-  }
-}
-
-async function renderCurrent() {
-  if (!pdfDoc) return;
-  if (slots.length !== pdfDoc.numPages) buildPdfSlots();
-  const generation = viewGeneration;
-  const index = pageIndex;
-  if (!isContinuous()) showSlot(index);
-  try {
-    const rendered = await renderPage(index);
-    if (destroyed || generation !== viewGeneration || index !== pageIndex) return;
-    showRendered(rendered);
-  } catch (error) {
-    if (!destroyed && generation === viewGeneration) handleLoadError(error);
-  }
-}
-
-/**
- * The page drawn into its slot: from the cache, from the render already in
- * flight, or freshly drawn.
- */
-function renderPage(index: number): Promise<RenderedPage> {
-  const cached = pageCache.get(index);
-  if (cached) {
-    pageCache.delete(index);
-    pageCache.set(index, cached);
-    return Promise.resolve(cached);
-  }
-  const pending = renderingPages.get(index);
-  if (pending) return pending;
-  const promise = drawPage(index, viewGeneration).finally(() => {
-    if (renderingPages.get(index) === promise) renderingPages.delete(index);
-  });
-  renderingPages.set(index, promise);
-  return promise;
-}
-
-async function drawPage(index: number, generation: number): Promise<RenderedPage> {
-  if (!pdfDoc) throw new Error("No Document open");
-  const page = await pdfDoc.getPage(index + 1);
-  const base = page.getViewport({ scale: 1 });
-  const scale = scaleFor(base);
-  const ratio = window.devicePixelRatio || 1;
-  const viewport = page.getViewport({ scale: scale * ratio });
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.floor(viewport.width));
-  canvas.height = Math.max(1, Math.floor(viewport.height));
-  canvas.style.width = `${base.width * scale}px`;
-  canvas.style.height = `${base.height * scale}px`;
-  const context = canvas.getContext("2d");
-  if (!context) throw new Error("This device cannot draw the page");
-  const task = page.render({ canvasContext: context, viewport });
-  if (task && task.promise) await task.promise;
-  const textLayer = document.createElement("div");
-  textLayer.className = "textLayer";
-  textLayer.style.width = `${base.width * scale}px`;
-  textLayer.style.height = `${base.height * scale}px`;
-  try {
-    const textContent = await page.getTextContent();
-    if (pdfjs && pdfjs.TextLayer) {
-      const layer = new pdfjs.TextLayer({
-        textContentSource: textContent,
-        container: textLayer,
-        viewport: page.getViewport({ scale }),
-      });
-      await layer.render();
-    }
-  } catch {
-    /* A page without a text layer is still readable. */
-  }
-  // WebKit drops a canvas's pixels once it has been shown and then hidden,
-  // so a page keeps a bitmap copy to paint back when it shows again.
-  let bitmap = null;
-  if (typeof createImageBitmap === "function") {
-    try {
-      bitmap = await createImageBitmap(canvas);
-    } catch {
-      bitmap = null;
-    }
-  }
-  const rendered: RenderedPage = { index, canvas, textLayer, page, scale, bitmap };
-  // A zoom, a resize, or a layout switch rebuilt the slots meanwhile: this
-  // drawing belongs to a view that is gone.
-  if (destroyed || generation !== viewGeneration) return rendered;
-  find.paintPdfMatches(textLayer, index);
-  placeRendered(rendered);
-  pageCache.set(index, rendered);
-  trimCache();
-  return rendered;
-}
-
-/** Puts a drawn page in its slot, keeping the reading spot when a slot above it grows. */
-function placeRendered(rendered: RenderedPage) {
-  const slot = slots[rendered.index];
-  if (!slot) return;
-  const before = slot.offsetHeight;
-  const above = isContinuous() && stage.offsetTop + slot.offsetTop < viewer.scrollTop;
-  slot.textContent = "";
-  slot.style.width = rendered.canvas.style.width;
-  slot.style.height = rendered.canvas.style.height;
-  slot.append(rendered.canvas, rendered.textLayer);
-  const delta = slot.offsetHeight - before;
-  if (above && delta !== 0) {
-    viewer.scrollTop += delta;
-    scrollTarget = viewer.scrollTop;
-  }
-}
-
-/** Paints a page's saved bitmap back onto its canvas, for a page shown again. */
-function repaint(rendered: RenderedPage) {
-  if (!rendered.bitmap) return;
-  const context = rendered.canvas.getContext("2d");
-  if (!context || typeof context.drawImage !== "function") return;
-  context.clearRect(0, 0, rendered.canvas.width, rendered.canvas.height);
-  context.drawImage(rendered.bitmap, 0, 0);
-}
-
-function showRendered(rendered: RenderedPage) {
-  repaint(rendered);
-  currentScale = rendered.scale;
-  if (zoomLevel)
-    zoomLevel.textContent = t("zoomLevel", { percent: Math.round(rendered.scale * 100) });
-  updateIndicator();
-  find.revealPdfMatch();
-}
-
-function renderNeighbors() {
-  if (!pdfDoc) return;
-  for (const offset of [1, -1]) {
-    const index = pageIndex + offset;
-    if (index < 0 || index >= pdfDoc.numPages) continue;
-    if (pageCache.has(index) || renderingPages.has(index)) continue;
-    void renderPage(index).catch(() => {
-      /* Prefetching is best effort; the current page already renders. */
-    });
-  }
-}
-
-/** Takes a drawn page out of its slot and frees its pixels. */
-function evict(rendered: RenderedPage) {
-  if (rendered.bitmap && typeof rendered.bitmap.close === "function") rendered.bitmap.close();
-  rendered.bitmap = null;
-  rendered.canvas.remove();
-  rendered.textLayer.remove();
-  rendered.canvas.width = 0;
-  rendered.canvas.height = 0;
-}
-
-function trimCache() {
-  for (const [index, rendered] of pageCache) {
-    if (pageCache.size <= MAX_CACHED_PAGES) break;
-    if (index === pageIndex || visiblePages.has(index)) continue;
-    pageCache.delete(index);
-    evict(rendered);
-  }
-}
-
-function clearCache() {
-  for (const rendered of pageCache.values()) evict(rendered);
-  pageCache.clear();
-  renderingPages.clear();
-}
-
-/* Continuous scroll ----------------------------------------------------- */
-
-/** Draws the pages that come near the viewport as the author scrolls. */
-function observeSlots() {
-  stopObserving();
-  if (typeof IntersectionObserver !== "function") {
-    renderNeighbors();
-    return;
-  }
-  slotObserver = new IntersectionObserver(
-    (entries) => {
-      for (const entry of entries) {
-        const index = Number((entry.target as HTMLElement).dataset.page);
-        if (entry.isIntersecting) visiblePages.add(index);
-        else visiblePages.delete(index);
-      }
-      for (const index of visiblePages) {
-        void renderPage(index).catch(() => {
-          /* A page that fails to draw stays a blank slot; the rest still read. */
-        });
-      }
-    },
-    { root: viewer, rootMargin: "50% 0px" }
-  );
-  for (const slot of slots) slotObserver.observe(slot);
-}
-
-function stopObserving() {
-  if (slotObserver) slotObserver.disconnect();
-  slotObserver = null;
-  visiblePages.clear();
-}
-
-/** Scrolls a page's top into view, and marks the scroll as the Frame's own. */
-function scrollToSlot(index: number) {
-  const slot = slots[index];
-  if (!slot) return;
-  viewer.scrollTop = Math.max(0, stage.offsetTop + slot.offsetTop - 16);
-  scrollTarget = viewer.scrollTop;
-}
-
-/** The page under the upper third of the viewport. */
-function pageAtScroll() {
-  const line = viewer.scrollTop + viewer.clientHeight / 3 - stage.offsetTop;
-  let low = 0;
-  let high = slots.length - 1;
-  while (low < high) {
-    const middle = Math.ceil((low + high) / 2);
-    if (slots[middle].offsetTop <= line) low = middle;
-    else high = middle - 1;
-  }
-  return low;
-}
-
-/** In Continuous scroll, the page the author scrolls to becomes the current page. */
+/** In Continuous scroll, the PDF engine syncs the current page to the scroll. */
 function onViewerScroll() {
-  if (!isContinuous() || slots.length === 0) return;
-  if (scrollTarget !== null) {
-    if (Math.abs(viewer.scrollTop - scrollTarget) < 2) return;
-    scrollTarget = null;
-  }
-  const next = pageAtScroll();
-  if (next === pageIndex) return;
-  pageIndex = next;
-  updateIndicator();
-  positionEngine.schedule();
-  find.updateStatus();
-}
-
-function setPdfLayout(layout: "single" | "continuous") {
-  if (!pdfDoc || settings.pdfLayout === layout) return;
-  settings = { ...settings, pdfLayout: layout };
-  post({ kind: "settings", settings });
-  void rebuildPdfView();
-}
-
-function toggleContinuous() {
-  setPdfLayout(isContinuous() ? "single" : "continuous");
+  pdf.handleScroll();
 }
 
 /* Full screen ----------------------------------------------------------- */
@@ -1334,7 +839,7 @@ function onWheel(event: WheelEvent) {
     if (event.deltaY !== 0) zoomBy(event.deltaY < 0 ? 1.1 : 1 / 1.1);
     return;
   }
-  if (isContinuous()) return;
+  if (pdf.isContinuous()) return;
   const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? viewer.clientHeight : 1;
   const delta = event.deltaY * unit;
   if (delta === 0 || Math.abs(delta) < Math.abs(event.deltaX * unit)) return;
@@ -1366,7 +871,7 @@ function onWheel(event: WheelEvent) {
 function destroyDocument() {
   viewGeneration += 1;
   find.invalidate();
-  clearCache();
+  pdf.clearCache();
   archive.revoke();
   comic.clearCache();
   protocol.abortArchive("Reader closed");
@@ -1382,50 +887,7 @@ function destroyDocument() {
   comic.reset();
   archive.reset();
   protocol.abortReads("Reader closed");
-  if (loadingTask && typeof loadingTask.destroy === "function") {
-    try {
-      void loadingTask.destroy();
-    } catch {
-      /* Already gone. */
-    }
-  }
-  loadingTask = null;
-  if (pdfDoc && typeof pdfDoc.destroy === "function") {
-    try {
-      void pdfDoc.destroy();
-    } catch {
-      /* Already gone. */
-    }
-  }
-  pdfDoc = null;
-  if (pdfWorker && typeof pdfWorker.destroy === "function") {
-    try {
-      pdfWorker.destroy();
-    } catch {
-      /* Already gone. */
-    }
-  }
-  pdfWorker = null;
-  if (transport && typeof transport.abort === "function") {
-    try {
-      transport.abort();
-    } catch {
-      /* Already gone. */
-    }
-  }
-  transport = null;
-  if (activePdfPort) {
-    try {
-      activePdfPort.close();
-    } catch {
-      /* The Worker may have closed its end first. */
-    }
-    activePdfPort = null;
-  }
-  currentScale = 1;
-  stopObserving();
-  slots = [];
-  pdfBase = null;
+  pdf.destroy();
   if (stage) {
     stage.textContent = "";
     stage.className = "";
@@ -1440,32 +902,8 @@ function destroyDocument() {
  * `atEnd` opens a tall page at its bottom, the way paging back by wheel expects.
  */
 function goToPage(index: number, options: { atEnd?: boolean } = {}) {
-  if (pdfDoc) {
-    const next = clamp(Math.floor(index), 0, Math.max(0, pdfDoc.numPages - 1));
-    if (isContinuous()) {
-      pageIndex = next;
-      updateIndicator();
-      positionEngine.schedule();
-      scrollToSlot(next);
-      void renderPage(next)
-        .then(() => {
-          if (next === pageIndex) find.revealPdfMatch();
-        })
-        .catch(() => {
-          /* The slot stays blank; scrolling on draws the rest. */
-        });
-      find.updateStatus();
-      return;
-    }
-    if (next === pageIndex) return;
-    pageIndex = next;
-    updateIndicator();
-    positionEngine.schedule();
-    showSlot(next);
-    viewer.scrollTop = options.atEnd ? viewer.scrollHeight : 0;
-    void renderCurrent();
-    renderNeighbors();
-    find.updateStatus();
+  if (pdf.isOpen()) {
+    pdf.goToPage(index, options);
     return;
   }
   if (!currentDocument || mode === "flow") return;
@@ -1480,7 +918,7 @@ function goToPage(index: number, options: { atEnd?: boolean } = {}) {
 }
 
 function nextPage() {
-  if (pdfDoc) {
+  if (pdf.isOpen()) {
     goToPage(pageIndex + 1);
     return;
   }
@@ -1492,7 +930,7 @@ function nextPage() {
 }
 
 function previousPage(options?: { atEnd?: boolean }) {
-  if (pdfDoc) {
+  if (pdf.isOpen()) {
     goToPage(pageIndex - 1, options);
     return;
   }
@@ -1507,8 +945,8 @@ function setZoom(next: FrameZoom) {
   if (!hasDocument()) return;
   zoomSetting = next;
   positionEngine.schedule();
-  if (pdfDoc) {
-    void rebuildPdfView();
+  if (pdf.isOpen()) {
+    void pdf.rebuild();
   } else if (mode === "comic") {
     void comic.render();
   } else if (mode === "fixed") {
@@ -1536,6 +974,14 @@ function showPassword(wrong: boolean) {
   if (wrong) passwordError.textContent = t("passwordWrong");
   passwordInput.value = "";
   passwordInput.focus();
+}
+
+/** Asks for the password the PDF engine needs, resolving with what was submitted. */
+function requestPassword(wrong: boolean): Promise<string | undefined> {
+  showPassword(wrong);
+  return new Promise((resolve) => {
+    passwordResolver = resolve;
+  });
 }
 
 function handleLoadError(error: unknown) {
@@ -1594,15 +1040,14 @@ function onPasswordSubmit(event: Event) {
   }
   passwordForm.hidden = true;
   passwordError.hidden = true;
-  if (passwordCallback) {
-    const update = passwordCallback;
-    passwordCallback = null;
-    update(value);
+  if (passwordResolver) {
+    const resolve = passwordResolver;
+    passwordResolver = null;
+    resolve(value);
     return;
   }
-  void loadDocument(value).catch((error) => {
-    if (!destroyed) handleLoadError(error);
-  });
+  // No request is waiting: the form was shown outside a load, so retry one.
+  pdf.retry(value);
 }
 
 /* Commands and keyboard ------------------------------------------------- */
@@ -1619,7 +1064,7 @@ function runCommand(id: string) {
       else goToPage(0);
       return;
     case "lastPage":
-      if (pdfDoc) goToPage(pdfDoc.numPages - 1);
+      if (pdf.isOpen()) goToPage(pdf.pageCount() - 1);
       else if (mode === "flow" && currentDocument)
         void goToFlowSection(currentDocument.sections.length - 1);
       else if (currentDocument) goToPage(currentDocument.sections.length - 1);
@@ -1649,7 +1094,7 @@ function runCommand(id: string) {
       flowEngine.stepFontSize(-10);
       return;
     case "toggleContinuousScroll":
-      toggleContinuous();
+      pdf.toggleContinuous();
       return;
     case "backToShelf":
       leave();
@@ -1713,7 +1158,7 @@ function onKeyDown(event: KeyboardEvent) {
       return;
     case "End":
       event.preventDefault();
-      if (pdfDoc) goToPage(pdfDoc.numPages - 1);
+      if (pdf.isOpen()) goToPage(pdf.pageCount() - 1);
       else if (mode === "flow" && currentDocument)
         void goToFlowSection(currentDocument.sections.length - 1);
       else if (currentDocument) goToPage(currentDocument.sections.length - 1);
@@ -1787,11 +1232,11 @@ function onPageHide() {
 
 function onResize() {
   if (!hasDocument()) return;
-  if (typeof zoomSetting === "number" && pdfDoc) return;
+  if (typeof zoomSetting === "number" && pdf.isOpen()) return;
   clearTimeout(resizeTimer);
   resizeTimer = window.setTimeout(() => {
-    if (pdfDoc) {
-      void rebuildPdfView();
+    if (pdf.isOpen()) {
+      void pdf.rebuild();
     } else if (mode === "flow") {
       const state = flowEngine.state();
       if (state) void flowEngine.repaginateFlow(flowEngine.flowCfi(), state.index, state.pageIndex);
@@ -1829,7 +1274,7 @@ if (zoomOutButton) zoomOutButton.addEventListener("click", () => zoomBy(1 / 1.1)
 if (zoomInButton) zoomInButton.addEventListener("click", () => zoomBy(1.1));
 if (fitWidthButton) fitWidthButton.addEventListener("click", () => setZoom("width"));
 if (fitPageButton) fitPageButton.addEventListener("click", () => setZoom("page"));
-if (layoutToggle) layoutToggle.addEventListener("click", toggleContinuous);
+if (layoutToggle) layoutToggle.addEventListener("click", () => pdf.toggleContinuous());
 if (fullscreenToggle) fullscreenToggle.addEventListener("click", toggleFullscreen);
 if (pagePreviousButton)
   pagePreviousButton.addEventListener("click", () => {
