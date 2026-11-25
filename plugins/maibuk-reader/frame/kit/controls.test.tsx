@@ -116,6 +116,11 @@ describe("Icon", () => {
     swap: "M7 7h13M16 3l4 4-4 4M17 17H4M8 13l-4 4 4 4",
     eye: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6",
     hyphen: "M4 7h9M4 12h6M14 12h3M4 17h9",
+    fitWidth: "M18 8l4 4-4 4M2 12h20M6 8l-4 4 4 4",
+    fitPage: "M12 2v20M8 18l4 4 4-4M8 6l4-4 4 4",
+    continuous: "M5 3h14v7H5zM5 14h14v7H5z",
+    fullscreenExit:
+      "M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3",
   } as const;
 
   it("names every inventory icon in artboard order", () => {
@@ -213,6 +218,32 @@ describe("IconButton", () => {
     });
     expect(button.style.width).toBe("44px");
     expect(button.style.height).toBe("44px");
+  });
+
+  it("forwards an explicit buttonRef to its native button", async () => {
+    const ref: { current: HTMLButtonElement | null } = { current: null };
+    await mount(<IconButton label="Search" icon="search" buttonRef={ref} />);
+
+    const button = screen.getByRole("button", { name: "Search" });
+    expect(ref.current).toBe(button);
+    ref.current?.focus();
+    expect(document.activeElement).toBe(button);
+  });
+
+  it("hides its tooltip wrapper along with the native button", async () => {
+    const container = await mount(
+      <div>
+        <IconButton label="Shown" icon="search" />
+        <IconButton label="Hidden" icon="search" hidden />
+      </div>
+    );
+
+    const wrappers = container.querySelectorAll(".kit-icon-button");
+    expect(wrappers).toHaveLength(2);
+    expect(wrappers[0]).not.toHaveAttribute("hidden");
+    expect(wrappers[1]).toHaveAttribute("hidden");
+    expect(screen.getByRole("button", { name: "Shown" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Hidden" })).not.toBeInTheDocument();
   });
 
   it("shows the tooltip after 500 ms on Wide and hides it on leave", async () => {

@@ -20,6 +20,7 @@ import {
   render,
 } from "preact";
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { Button, IconButton } from "./kit";
 import type { Appearance } from "./types";
 import { useReducedMotion } from "./use-reduced-motion";
 
@@ -192,37 +193,6 @@ export function FrameRoot({ children }: { children?: ComponentChildren }) {
   );
 }
 
-/** One icon button, named for screen readers and its tooltip. */
-function IconButton(props: {
-  id: string;
-  label: string;
-  onClick: () => void;
-  pressed?: boolean;
-  hidden?: boolean;
-  expanded?: boolean;
-  disabled?: boolean;
-  buttonRef?: RefObject<HTMLButtonElement | null>;
-  children: ComponentChildren;
-}) {
-  return (
-    <button
-      id={props.id}
-      class="icon-button"
-      type="button"
-      aria-label={props.label}
-      title={props.label}
-      aria-pressed={props.pressed}
-      aria-expanded={props.expanded}
-      aria-disabled={props.disabled ? "true" : undefined}
-      hidden={props.hidden}
-      ref={props.buttonRef}
-      onClick={props.onClick}
-    >
-      {props.children}
-    </button>
-  );
-}
-
 /** The toolbar: Back, Contents, Find, paging, zoom, fit, layout, full screen. */
 function Toolbar(props: {
   contentsToggleRef: RefObject<HTMLButtonElement | null>;
@@ -236,144 +206,76 @@ function Toolbar(props: {
   return (
     <header>
       <div class="group">
-        <IconButton id="back" label={labels.back} onClick={actions.back}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="m12 19-7-7 7-7" />
-            <path d="M19 12H5" />
-          </svg>
-        </IconButton>
+        <IconButton id="back" label={labels.back} icon="back" onClick={actions.back} />
         <IconButton
           id="contents-toggle"
           label={labels.contents}
-          expanded={state.surfaces.contentsOpen}
+          icon="contents"
+          aria-expanded={state.surfaces.contentsOpen}
           buttonRef={props.contentsToggleRef}
           onClick={actions.toggleContents}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M3 6h.01" />
-            <path d="M3 12h.01" />
-            <path d="M3 18h.01" />
-            <path d="M8 6h13" />
-            <path d="M8 12h13" />
-            <path d="M8 18h13" />
-          </svg>
-        </IconButton>
+        />
         <IconButton
           id="find-toggle"
           label={labels.find}
+          icon="search"
           buttonRef={props.findToggleRef}
           onClick={actions.openFind}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.3-4.3" />
-          </svg>
-        </IconButton>
+        />
       </div>
       <div class="group pager">
         <IconButton
           id="page-previous"
           label={labels.previousPage}
+          icon="back"
           disabled={toolbar.previousDisabled}
-          onClick={() => {
-            if (!toolbar.previousDisabled) actions.previousPage();
-          }}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="m15 18-6-6 6-6" />
-          </svg>
-        </IconButton>
+          onClick={actions.previousPage}
+        />
         <span id="page-indicator" aria-live="polite">
           {state.pageIndicator}
         </span>
         <IconButton
           id="page-next"
           label={labels.nextPage}
+          icon="fwd"
           disabled={toolbar.nextDisabled}
-          onClick={() => {
-            if (!toolbar.nextDisabled) actions.nextPage();
-          }}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="m9 18 6-6-6-6" />
-          </svg>
-        </IconButton>
+          onClick={actions.nextPage}
+        />
       </div>
       <div class="group zoom">
-        <IconButton id="zoom-out" label={zoomOutLabel} onClick={actions.zoomOut}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.3-4.3" />
-            <path d="M8 11h6" />
-          </svg>
-        </IconButton>
+        <IconButton id="zoom-out" label={zoomOutLabel} icon="minus" onClick={actions.zoomOut} />
         <span id="zoom-level">{state.zoomLevel}</span>
-        <IconButton id="zoom-in" label={zoomInLabel} onClick={actions.zoomIn}>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.3-4.3" />
-            <path d="M8 11h6" />
-            <path d="M11 8v6" />
-          </svg>
-        </IconButton>
+        <IconButton id="zoom-in" label={zoomInLabel} icon="plus" onClick={actions.zoomIn} />
         <span class="divider" aria-hidden="true" />
         <IconButton
           id="fit-width"
           label={labels.fitWidth}
-          pressed={toolbar.fitWidthPressed}
+          icon="fitWidth"
+          aria-pressed={toolbar.fitWidthPressed}
           onClick={actions.fitWidth}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="m18 8 4 4-4 4" />
-            <path d="M2 12h20" />
-            <path d="m6 8-4 4 4 4" />
-          </svg>
-        </IconButton>
+        />
         <IconButton
           id="fit-page"
           label={labels.fitPage}
-          pressed={toolbar.fitPagePressed}
+          icon="fitPage"
+          aria-pressed={toolbar.fitPagePressed}
           onClick={actions.fitPage}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 2v20" />
-            <path d="m8 18 4 4 4-4" />
-            <path d="m8 6 4-4 4 4" />
-          </svg>
-        </IconButton>
+        />
         <IconButton
           id="layout-toggle"
           label={labels.continuousScroll}
-          pressed={toolbar.layoutPressed}
+          icon="continuous"
+          aria-pressed={toolbar.layoutPressed}
           onClick={actions.toggleContinuous}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="5" y="2" width="14" height="9" rx="1.5" />
-            <rect x="5" y="13" width="14" height="9" rx="1.5" />
-          </svg>
-        </IconButton>
+        />
         <IconButton
           id="fullscreen-toggle"
           label={fullscreenLabel}
-          pressed={toolbar.fullscreen}
+          icon={toolbar.fullscreen ? "fullscreenExit" : "fullscreen"}
+          aria-pressed={toolbar.fullscreen}
           hidden={!toolbar.fullscreenAvailable}
           onClick={actions.toggleFullscreen}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <g class="when-windowed">
-              <path d="M8 3H5a2 2 0 0 0-2 2v3" />
-              <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
-              <path d="M3 16v3a2 2 0 0 0 2 2h3" />
-              <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
-            </g>
-            <g class="when-fullscreen">
-              <path d="M8 3v3a2 2 0 0 1-2 2H3" />
-              <path d="M21 8h-3a2 2 0 0 1-2-2V3" />
-              <path d="M3 16h3a2 2 0 0 1 2 2v3" />
-              <path d="M16 21v-3a2 2 0 0 1 2-2h3" />
-            </g>
-          </svg>
-        </IconButton>
+        />
       </div>
     </header>
   );
@@ -392,40 +294,9 @@ function SearchBar() {
         placeholder={labels.searchPlaceholder}
       />
       <span id="search-status" aria-live="polite" />
-      <button
-        id="search-previous"
-        class="icon-button"
-        type="button"
-        aria-label={labels.searchPrevious}
-        title={labels.searchPrevious}
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="m18 15-6-6-6 6" />
-        </svg>
-      </button>
-      <button
-        id="search-next"
-        class="icon-button"
-        type="button"
-        aria-label={labels.searchNext}
-        title={labels.searchNext}
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="m6 9 6 6 6-6" />
-        </svg>
-      </button>
-      <button
-        id="search-close"
-        class="icon-button"
-        type="button"
-        aria-label={labels.searchClose}
-        title={labels.searchClose}
-      >
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M18 6 6 18" />
-          <path d="m6 6 12 12" />
-        </svg>
-      </button>
+      <IconButton id="search-previous" label={labels.searchPrevious} icon="up" />
+      <IconButton id="search-next" label={labels.searchNext} icon="down" />
+      <IconButton id="search-close" label={labels.searchClose} icon="close" />
     </div>
   );
 }
@@ -504,9 +375,9 @@ function PasswordPrompt() {
       <p id="password-error" hidden={!password.wrong}>
         {labels.passwordWrong}
       </p>
-      <button id="password-submit" type="button" onClick={submit}>
+      <Button id="password-submit" onClick={submit}>
         {labels.passwordSubmit}
-      </button>
+      </Button>
     </div>
   );
 }

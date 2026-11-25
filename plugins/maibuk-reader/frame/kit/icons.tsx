@@ -1,10 +1,11 @@
 /** @jsxImportSource preact */
 /**
  * The Reader Frame's icon inventory (#943 unit 2). The names and path data are
- * the design sheet's, in its gallery order; every icon draws on the same 24 px
- * grid at 20 px with a 1.75 stroke, round caps and joins. The gallery's dots for
- * `more` and `moreV` are the one exception the sheet corrects: the stroke stays
- * 1.75 for every icon.
+ * the design sheet's, in its gallery order, followed by the four toolbar
+ * controls the gallery lacks, drawn on the same 24 px grid at 20 px with a
+ * 1.75 stroke, round caps and joins, which the sheet allows. The gallery's
+ * dots for `more` and `moreV` are the one exception the sheet corrects: the
+ * stroke stays 1.75 for every icon.
  */
 
 /** The path data every icon draws, keyed by the name screens use. */
@@ -56,6 +57,11 @@ const ICON_PATHS = {
   swap: "M7 7h13M16 3l4 4-4 4M17 17H4M8 13l-4 4 4 4",
   eye: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6",
   hyphen: "M4 7h9M4 12h6M14 12h3M4 17h9",
+  fitWidth: "M18 8l4 4-4 4M2 12h20M6 8l-4 4 4 4",
+  fitPage: "M12 2v20M8 18l4 4 4-4M8 6l4-4 4 4",
+  continuous: "M5 3h14v7H5zM5 14h14v7H5z",
+  fullscreenExit:
+    "M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3",
 } as const;
 
 /** Every icon screens may ask for, in the design sheet's gallery order. */

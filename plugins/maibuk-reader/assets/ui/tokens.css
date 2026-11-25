@@ -20,6 +20,9 @@
   --pfg: var(--maibuk-color-primary-foreground);
   --danger: var(--maibuk-color-error-text);
 
+  /* A PDF page and its canvas draw on this surface, whatever the chrome. */
+  --pdf-page: #ffffff;
+
   /* Reading chrome follows a Reading Theme when one is chosen. */
   --chrome-bg: var(--reading-page, var(--maibuk-color-background));
   --chrome-fg: var(--reading-ink, var(--maibuk-color-foreground));
@@ -209,5 +212,7 @@
   --cover-shadow: none;
   --cover-spine: none;
   --cover-pending-border: var(--reading-ink, var(--maibuk-color-foreground));
+  --border: var(--fg);
+  --chrome-border: var(--chrome-fg);
   --reading-border: var(--reading-ink, var(--maibuk-color-foreground));
 }

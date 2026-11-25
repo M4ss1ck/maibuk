@@ -78,6 +78,10 @@ describe("chrome tokens", () => {
       "var(--reading-border, var(--maibuk-color-border))"
     );
   });
+
+  it("gives the PDF page its own surface token", () => {
+    expect(token(":root", "--pdf-page")).toBe("#ffffff");
+  });
 });
 
 describe("Reading Themes", () => {
@@ -249,6 +253,8 @@ describe("motion", () => {
 
   it("draws borders in full ink in E-ink Mode and under reduced motion", () => {
     for (const selector of ['[data-eink="true"]', '[data-motion="reduce"]']) {
+      expect(token(selector, "--border")).toBe("var(--fg)");
+      expect(token(selector, "--chrome-border")).toBe("var(--chrome-fg)");
       expect(token(selector, "--reading-border")).toBe(
         "var(--reading-ink, var(--maibuk-color-foreground))"
       );

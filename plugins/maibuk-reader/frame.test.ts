@@ -792,7 +792,6 @@ describe("labels", () => {
     // Zoom, fit, and full screen are named from the live view state rather
     // than once at boot, so the port must recompute them in Spanish too.
     expect(el("zoom-out").getAttribute("aria-label")).toBe(LABELS_ES.zoomOut);
-    expect(el("zoom-out").getAttribute("title")).toBe(LABELS_ES.zoomOut);
     expect(el("fit-page").getAttribute("aria-label")).toBe(LABELS_ES.fitPage);
     expect(el("fullscreen-toggle").getAttribute("aria-label")).toBe(LABELS_ES.fullScreen);
   });
@@ -832,11 +831,11 @@ describe("toolbar and paging", () => {
   const slotCanvas = (index: number) =>
     document.querySelector<HTMLCanvasElement>(`.pdf-page[data-page="${index}"] canvas`);
 
-  it("names every toolbar button for screen readers and the pointer, with no text", () => {
+  it("names every toolbar button for screen readers, drawing the shared kit, with no text", () => {
     frame = loadFrame(createPdfStub());
     for (const button of Array.from(document.querySelectorAll("header button"))) {
       expect(button.getAttribute("aria-label"), button.id).toBeTruthy();
-      expect(button.getAttribute("title"), button.id).toBe(button.getAttribute("aria-label"));
+      expect(button.classList.contains("kit-icon-button__button"), button.id).toBe(true);
       expect(button.textContent?.trim(), button.id).toBe("");
     }
     expect(el("page-next").getAttribute("aria-label")).toBe(LABELS.nextPage);
@@ -849,12 +848,12 @@ describe("toolbar and paging", () => {
     const indicator = el("page-indicator");
     await vi.waitFor(() => expect(indicator.textContent).toBe("1 of 12"));
     const user = userEvent.setup();
-    expect(el("page-previous").getAttribute("aria-disabled")).toBe("true");
+    expect((el("page-previous") as HTMLButtonElement).disabled).toBe(true);
     await user.click(el("page-previous"));
     expect(indicator.textContent).toBe("1 of 12");
     await user.click(el("page-next"));
     await vi.waitFor(() => expect(indicator.textContent).toBe("2 of 12"));
-    expect(el("page-previous").hasAttribute("aria-disabled")).toBe(false);
+    expect((el("page-previous") as HTMLButtonElement).disabled).toBe(false);
     el("page-next").focus();
     await user.keyboard("{Enter}");
     await vi.waitFor(() => expect(indicator.textContent).toBe("3 of 12"));

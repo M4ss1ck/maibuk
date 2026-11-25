@@ -11,7 +11,7 @@
  * selected or accented controls use `--primary`.
  */
 
-import type { ComponentChildren, ComponentProps, TargetedKeyboardEvent } from "preact";
+import type { ComponentChildren, ComponentProps, Ref, TargetedKeyboardEvent } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { useLayoutMode } from "../use-layout-mode";
 import { Icon, type IconName } from "./icons";
@@ -51,6 +51,8 @@ export function Button({
 export interface IconButtonProps extends Omit<ComponentProps<"button">, "class" | "children"> {
   label: string;
   icon: IconName;
+  /** Handed to the native button, for callers that move focus back to it. */
+  buttonRef?: Ref<HTMLButtonElement>;
 }
 
 /**
@@ -58,7 +60,14 @@ export interface IconButtonProps extends Omit<ComponentProps<"button">, "class" 
  * accessible name; on Wide it also becomes a tooltip after a short hover, which
  * a quick leave cancels.
  */
-export function IconButton({ label, icon, type = "button", ...rest }: IconButtonProps) {
+export function IconButton({
+  label,
+  icon,
+  type = "button",
+  buttonRef,
+  hidden,
+  ...rest
+}: IconButtonProps) {
   const { mode, target } = useLayoutMode();
   const [tooltip, setTooltip] = useState(false);
   const timer = useRef<number | null>(null);
@@ -95,12 +104,14 @@ export function IconButton({ label, icon, type = "button", ...rest }: IconButton
   }, [mode]);
 
   return (
-    <span class="kit-icon-button">
+    <span class="kit-icon-button" hidden={hidden}>
       <button
         {...rest}
+        ref={buttonRef}
         type={type}
         class="kit-icon-button__button"
         aria-label={label}
+        hidden={hidden}
         style={{ width: `${target}px`, height: `${target}px`, ...styleObject(rest.style) }}
         onPointerEnter={schedule}
         onPointerLeave={hide}

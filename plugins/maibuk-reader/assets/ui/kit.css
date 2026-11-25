@@ -107,6 +107,18 @@
   background: var(--chrome-border);
 }
 
+.kit-icon-button__button[aria-pressed="true"],
+.kit-icon-button__button[aria-expanded="true"] {
+  background: var(--chrome-border);
+  color: var(--primary);
+}
+
+.kit-icon-button__button svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
 .kit-icon-button__button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
