@@ -71,6 +71,28 @@ export const BUNDLE_SIZE_LIMIT_OVERRIDES: Readonly<Record<string, number>> = {
   "maibuk-maps": 600 * 1024,
 };
 
+/**
+ * The growth allowance for one Frame bundle, gzipped (#917): the whole Reader
+ * overhaul may add at most this much to the Frame bundle, fonts excluded. Fonts
+ * never bundle into a Frame entry, they stay vendored and loaded by the HTML,
+ * so the measured number is font-free by construction.
+ */
+export const FRAME_BUNDLE_HEADROOM_BYTES = 150 * 1024;
+
+/**
+ * A per-Built-in Frame baseline, keyed by Plugin id: the gzipped size its Frame
+ * bundle landed at, which FRAME_BUNDLE_HEADROOM_BYTES is added to. Measured
+ * 2026-11-25 after the TypeScript Frame migration. Do NOT bump it in later
+ * overhaul tickets; record a new Plugin's landing baseline when it gains a
+ * Frame entry.
+ */
+export const FRAME_BUNDLE_BASELINE_BYTES: Readonly<Record<string, number>> = {
+  // The Reader's reading surface (#653): the Frame draws the PDF, Flowing, and
+  // Page views and ships Preact with them. Measured with this file's own
+  // gzipSync level 9 (GNU gzip reads 93 bytes lower at the same level).
+  "maibuk-reader": 15_343,
+};
+
 export interface BuildBuiltInPluginsOptions {
   /** The folder holding `plugins/<id>/` sources. */
   sourceRoot: string;
@@ -86,6 +108,15 @@ export interface BuildBuiltInPluginsOptions {
 export interface BundleSizeResult {
   id: string;
   /** The gzip byte size of the built entry JS. */
+  bytes: number;
+  limitBytes: number;
+  ok: boolean;
+}
+
+/** One built Frame bundle's gzip size against its baseline plus headroom. */
+export interface FrameBundleSizeResult {
+  id: string;
+  /** The gzip byte size of the built Frame bundle JS. */
   bytes: number;
   limitBytes: number;
   ok: boolean;
@@ -181,6 +212,29 @@ export function checkBundleSize(
   });
 }
 
+/**
+ * The gzip byte size of each built Plugin's Frame bundle in
+ * `<outRoot>/index.json`, against that Plugin's baseline plus `headroom`. A
+ * Plugin with no recorded baseline gets the bare headroom as its budget, so an
+ * unrecorded Frame entry is still checked. Fonts never bundle into a Frame
+ * entry, so the measurement is font-free by construction.
+ */
+export function checkFrameBundleSize(
+  outRoot: string,
+  baselines: Readonly<Record<string, number>> = FRAME_BUNDLE_BASELINE_BYTES,
+  headroom: number = FRAME_BUNDLE_HEADROOM_BYTES
+): FrameBundleSizeResult[] {
+  const index = JSON.parse(readFileSync(join(outRoot, "index.json"), "utf8")) as BuiltInPluginIndex;
+  return index.plugins.flatMap((plugin) => {
+    const frameEntry = plugin.manifest.frameEntry;
+    if (frameEntry === undefined) return [];
+    const bundle = readFileSync(join(outRoot, plugin.id, frameEntry.bundle));
+    const bytes = gzipSync(bundle, { level: 9 }).length;
+    const limit = (baselines[plugin.id] ?? 0) + headroom;
+    return [{ id: plugin.id, bytes, limitBytes: limit, ok: bytes <= limit }];
+  });
+}
+
 /** The target a build ships for when `--target` is absent. */
 export function defaultTarget(env: Record<string, string | undefined> = process.env): PluginTarget {
   const tauri = env.TAURI_ENV_PLATFORM;
@@ -229,6 +283,17 @@ async function main(): Promise<void> {
       console.log(`  ${size.id}: ${kb} KB gzip`);
     } else {
       console.error(`  ${size.id}: ${kb} KB gzip, over the ${size.limitBytes / 1024} KB budget`);
+      overBudget = true;
+    }
+  }
+  for (const size of checkFrameBundleSize(outRoot)) {
+    const kb = (size.bytes / 1024).toFixed(1);
+    if (size.ok) {
+      console.log(`  ${size.id} frame: ${kb} KB gzip`);
+    } else {
+      console.error(
+        `  ${size.id} frame: ${kb} KB gzip, over the ${size.limitBytes / 1024} KB budget`
+      );
       overBudget = true;
     }
   }

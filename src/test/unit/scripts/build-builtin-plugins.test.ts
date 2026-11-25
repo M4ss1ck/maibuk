@@ -4,7 +4,8 @@
 // an index with no fixtures, and the gzip bundle-size gate reports the offender.
 // A Plugin that declares `frameEntry` (issue #940) gets its TypeScript Frame
 // entry bundled as one classic script beside the entry, opt-in.
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -12,11 +13,15 @@ import { hashPluginDirectory } from "@/features/plugins/directory-hash";
 import { readFolderFiles } from "@/test/support/plugin-fixtures";
 import {
   BUNDLE_SIZE_LIMIT_OVERRIDES,
+  FRAME_BUNDLE_BASELINE_BYTES,
+  FRAME_BUNDLE_HEADROOM_BYTES,
   buildBuiltInPlugins,
   checkBundleSize,
+  checkFrameBundleSize,
   defaultTarget,
   parseTargetArg,
 } from "../../../../scripts/build-builtin-plugins";
+import { buildPluginFrameEntry } from "../../../../scripts/build-plugin";
 
 const REPO_ROOT = resolve(import.meta.dirname, "../../../..");
 const FIXTURE_ROOT = resolve(REPO_ROOT, "src/test/fixtures/builtin-plugins");
@@ -31,6 +36,36 @@ function tempOutRoot(): string {
 
 function readIndex(outRoot: string): { plugins: Array<Record<string, unknown>> } {
   return JSON.parse(readFileSync(join(outRoot, "index.json"), "utf8"));
+}
+
+/**
+ * Writes the index `checkFrameBundleSize()` reads for a build that bundled only
+ * one Plugin's Frame entry: its real manifest, hash, and files, as the app
+ * would see them, without building the Plugin's entry too.
+ */
+async function writeFrameOnlyIndex(
+  outRoot: string,
+  id: string,
+  manifestPath: string
+): Promise<void> {
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+    id: string;
+    frameEntry?: { bundle: string };
+  };
+  const files = readFolderFiles(join(outRoot, id));
+  writeFileSync(
+    join(outRoot, "index.json"),
+    JSON.stringify({
+      plugins: [
+        {
+          id,
+          manifest,
+          hash: await hashPluginDirectory(files),
+          files: files.map((file) => file.path),
+        },
+      ],
+    })
+  );
 }
 
 afterEach(() => {
@@ -263,6 +298,69 @@ describe("checkBundleSize()", () => {
       "maibuk-reader": 750 * 1024,
       "maibuk-maps": 600 * 1024,
     });
+  });
+});
+
+describe("checkFrameBundleSize()", () => {
+  it("fails a Frame bundle over the headroom an unrecorded Plugin gets", async () => {
+    const outRoot = tempOutRoot();
+    await buildBuiltInPlugins({
+      sourceRoot: FIXTURE_ROOT,
+      ids: ["frame-builtin"],
+      outRoot,
+      target: "web",
+    });
+
+    // Incompressible junk, so the gzip size sits above the whole allowance.
+    writeFileSync(
+      join(outRoot, "frame-builtin/assets/frame.js"),
+      randomBytes(FRAME_BUNDLE_HEADROOM_BYTES + 4096)
+    );
+
+    const [size] = checkFrameBundleSize(outRoot);
+    expect(size.id).toBe("frame-builtin");
+    expect(size.bytes).toBeGreaterThan(FRAME_BUNDLE_HEADROOM_BYTES);
+    expect(size.limitBytes).toBe(FRAME_BUNDLE_HEADROOM_BYTES);
+    expect(size.ok).toBe(false);
+  });
+
+  it("gives a Plugin with no recorded baseline the bare headroom as its budget", async () => {
+    const outRoot = tempOutRoot();
+    await buildBuiltInPlugins({
+      sourceRoot: FIXTURE_ROOT,
+      ids: ["frame-builtin"],
+      outRoot,
+      target: "web",
+    });
+
+    const [size] = checkFrameBundleSize(outRoot);
+    expect(size).toMatchObject({
+      id: "frame-builtin",
+      limitBytes: FRAME_BUNDLE_HEADROOM_BYTES,
+      ok: true,
+    });
+    expect(size.bytes).toBeLessThanOrEqual(FRAME_BUNDLE_HEADROOM_BYTES);
+  });
+
+  it("passes the real Reader Frame bundle inside its baseline plus headroom (#917)", async () => {
+    const sourceDir = join(REPO_ROOT, "plugins/maibuk-reader");
+    const manifestPath = join(sourceDir, "manifest.json");
+    const outRoot = tempOutRoot();
+    await buildPluginFrameEntry({
+      sourceDir,
+      manifestPath,
+      outDir: join(outRoot, "maibuk-reader"),
+    });
+    await writeFrameOnlyIndex(outRoot, "maibuk-reader", manifestPath);
+
+    const [size] = checkFrameBundleSize(outRoot);
+    expect(size.id).toBe("maibuk-reader");
+    expect(size.bytes).toBeGreaterThan(0);
+    expect(size.limitBytes).toBe(
+      FRAME_BUNDLE_BASELINE_BYTES["maibuk-reader"] + FRAME_BUNDLE_HEADROOM_BYTES
+    );
+    expect(size.bytes).toBeLessThanOrEqual(size.limitBytes);
+    expect(size.ok).toBe(true);
   });
 });
 
