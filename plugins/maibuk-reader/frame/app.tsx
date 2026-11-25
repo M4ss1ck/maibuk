@@ -1,15 +1,24 @@
 /** @jsxImportSource preact */
-/* The Reader Frame's Preact app (#942). It draws the toolbar, the page
-   indicator, the message area, and the password prompt inside the Frame's
-   `#app-root`, and re-renders them in place when Maibuk's language or the
-   reading state changes, so the DOM UI `entry.ts` wires never reloads or
-   reopens. The Contents tree, the find bar, and the viewer/stage stay with
-   `entry.ts` this unit.
+/* The Reader Frame's Preact app (#942). It draws the toolbar, the search bar,
+   the Contents panel and its tree, the page indicator, the message area, and
+   the password prompt, and re-renders them in place when Maibuk's language or
+   the reading state changes, so the UI `entry.ts` wires never reloads or
+   reopens. The Contents and Find engines stay non-React: they keep writing the
+   tree and the status line, while the app publishes their open state and owns
+   the toggles' `aria-expanded` and post-close focus. The viewer/stage stays
+   with `entry.ts`.
 
    The Frame is bundled as one classic script, so this file takes Preact's
    automatic runtime and nothing else. */
 
-import { type ComponentChildren, createContext, createPortal, options, render } from "preact";
+import {
+  type ComponentChildren,
+  type RefObject,
+  createContext,
+  createPortal,
+  options,
+  render,
+} from "preact";
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { Appearance } from "./types";
 
@@ -47,6 +56,10 @@ export interface ChromeLabels {
   passwordLabel: string;
   passwordSubmit: string;
   passwordWrong: string;
+  searchPlaceholder: string;
+  searchNext: string;
+  searchPrevious: string;
+  searchClose: string;
 }
 
 /** The toolbar state `entry.ts` computes from the open Document. */
@@ -75,6 +88,14 @@ export interface PasswordState {
   wrong: boolean;
 }
 
+/** The two surfaces the non-React engines show and hide. */
+export interface SurfacesState {
+  contentsOpen: boolean;
+  findOpen: boolean;
+  /** A close that returns focus to a toggle; the token makes repeats fire. */
+  focus: { target: "contents" | "find"; token: number } | null;
+}
+
 /** Everything the ported surfaces draw. */
 export interface ChromeState {
   labels: ChromeLabels;
@@ -83,6 +104,7 @@ export interface ChromeState {
   zoomLevel: string;
   message: MessageState;
   password: PasswordState;
+  surfaces: SurfacesState;
 }
 
 /** What the ported controls ask `entry.ts` to do. */
@@ -111,6 +133,7 @@ export interface FrameBridge {
   setZoomLevel(text: string): void;
   setMessage(message: MessageState): void;
   setPassword(password: PasswordState): void;
+  setSurfaces(surfaces: SurfacesState): void;
   actions: ChromeActions;
 }
 
@@ -147,6 +170,7 @@ function IconButton(props: {
   hidden?: boolean;
   expanded?: boolean;
   disabled?: boolean;
+  buttonRef?: RefObject<HTMLButtonElement | null>;
   children: ComponentChildren;
 }) {
   return (
@@ -160,6 +184,7 @@ function IconButton(props: {
       aria-expanded={props.expanded}
       aria-disabled={props.disabled ? "true" : undefined}
       hidden={props.hidden}
+      ref={props.buttonRef}
       onClick={props.onClick}
     >
       {props.children}
@@ -168,7 +193,10 @@ function IconButton(props: {
 }
 
 /** The toolbar: Back, Contents, Find, paging, zoom, fit, layout, full screen. */
-function Toolbar() {
+function Toolbar(props: {
+  contentsToggleRef: RefObject<HTMLButtonElement | null>;
+  findToggleRef: RefObject<HTMLButtonElement | null>;
+}) {
   const { state, actions } = useChrome();
   const { labels, toolbar } = state;
   const zoomOutLabel = toolbar.flowing ? labels.decreaseFontSize : labels.zoomOut;
@@ -186,7 +214,8 @@ function Toolbar() {
         <IconButton
           id="contents-toggle"
           label={labels.contents}
-          expanded={false}
+          expanded={state.surfaces.contentsOpen}
+          buttonRef={props.contentsToggleRef}
           onClick={actions.toggleContents}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -198,7 +227,12 @@ function Toolbar() {
             <path d="M8 18h13" />
           </svg>
         </IconButton>
-        <IconButton id="find-toggle" label={labels.find} onClick={actions.openFind}>
+        <IconButton
+          id="find-toggle"
+          label={labels.find}
+          buttonRef={props.findToggleRef}
+          onClick={actions.openFind}
+        >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <circle cx="11" cy="11" r="8" />
             <path d="m21 21-4.3-4.3" />
@@ -314,6 +348,68 @@ function Toolbar() {
   );
 }
 
+/** The search bar: the query, the status line, and the Find engine's controls. */
+function SearchBar() {
+  const { state } = useChrome();
+  const { labels, surfaces } = state;
+  return (
+    <div id="search-bar" hidden={!surfaces.findOpen}>
+      <input
+        id="search-input"
+        type="search"
+        autocomplete="off"
+        placeholder={labels.searchPlaceholder}
+      />
+      <span id="search-status" aria-live="polite" />
+      <button
+        id="search-previous"
+        class="icon-button"
+        type="button"
+        aria-label={labels.searchPrevious}
+        title={labels.searchPrevious}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m18 15-6-6-6 6" />
+        </svg>
+      </button>
+      <button
+        id="search-next"
+        class="icon-button"
+        type="button"
+        aria-label={labels.searchNext}
+        title={labels.searchNext}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </button>
+      <button
+        id="search-close"
+        class="icon-button"
+        type="button"
+        aria-label={labels.searchClose}
+        title={labels.searchClose}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
+/** The Contents panel: its title and the tree the Contents engine draws into. */
+function ContentsPanel() {
+  const { state } = useChrome();
+  return (
+    <aside id="contents" hidden={!state.surfaces.contentsOpen} aria-labelledby="contents-title">
+      <h2 id="contents-title">{state.labels.contents}</h2>
+      <div id="contents-tree" role="tree" />
+    </aside>
+  );
+}
+
 /** The Missing and error surface. */
 function MessageArea() {
   const { state } = useChrome();
@@ -399,6 +495,23 @@ function App({ appearance, subscribe, bridge }: AppProps) {
   useLayoutEffect(() => subscribe(setCurrent), [subscribe]);
   const [chrome, setChrome] = useState<ChromeState>(() => bridge.current());
   useLayoutEffect(() => bridge.subscribe(setChrome), [bridge]);
+
+  const contentsToggleRef = useRef<HTMLButtonElement>(null);
+  const findToggleRef = useRef<HTMLButtonElement>(null);
+
+  // A surface closing returns focus to its toolbar toggle. The request carries
+  // a token so a repeated close fires again, and a silent reset sends none.
+  const focusRequest = chrome.surfaces.focus;
+  useEffect(() => {
+    if (!focusRequest) return;
+    if (focusRequest.target === "contents") contentsToggleRef.current?.focus();
+    else findToggleRef.current?.focus();
+  }, [focusRequest]);
+
+  // The surfaces live where the legacy markup held them: the bar between the
+  // toolbar and `#body`, the panel inside `#body` beside the stage.
+  const searchRoot = document.getElementById("search-root");
+  const contentsRoot = document.getElementById("contents-root");
   // The message and password prompt live in `#viewer`, beside the stage the
   // legacy wiring draws; portals keep them in that same place and order.
   const viewer = document.getElementById("viewer");
@@ -406,8 +519,10 @@ function App({ appearance, subscribe, bridge }: AppProps) {
     <AppearanceContext.Provider value={current}>
       <ChromeContext.Provider value={{ state: chrome, actions: bridge.actions }}>
         <FrameRoot>
-          <Toolbar />
+          <Toolbar contentsToggleRef={contentsToggleRef} findToggleRef={findToggleRef} />
         </FrameRoot>
+        {searchRoot ? createPortal(<SearchBar />, searchRoot) : null}
+        {contentsRoot ? createPortal(<ContentsPanel />, contentsRoot) : null}
         {viewer ? createPortal(<MessageArea />, viewer) : null}
         {viewer ? createPortal(<PasswordPrompt />, viewer) : null}
       </ChromeContext.Provider>

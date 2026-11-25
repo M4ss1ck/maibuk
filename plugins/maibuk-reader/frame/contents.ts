@@ -35,7 +35,6 @@ export interface FoliateOutlineEntry {
 /** One entry of a flattened outline, in draw order. */
 export interface FlatOutlineEntry {
   item: OutlineItem;
-  element?: HTMLElement;
 }
 
 /** The pdf.js Document, as far as destination resolution reads it. */
@@ -176,7 +175,7 @@ export function createContents(deps: FrameContentsDeps): FrameContents {
         if (event.target !== li && event.target !== title) return;
         void activate(item, li);
       });
-      li.addEventListener("keydown", (event) => onTreeItemKey(event, li));
+      li.addEventListener("keydown", (event) => onTreeItemKey(event, li, item));
       list.append(li);
     }
     return list;
@@ -206,7 +205,7 @@ export function createContents(deps: FrameContentsDeps): FrameContents {
     item.focus();
   }
 
-  function onTreeItemKey(event: KeyboardEvent, item: HTMLElement): void {
+  function onTreeItemKey(event: KeyboardEvent, item: HTMLElement, entry: OutlineItem): void {
     const items = treeItems();
     const position = items.indexOf(item);
     switch (event.key) {
@@ -260,7 +259,7 @@ export function createContents(deps: FrameContentsDeps): FrameContents {
       case " ":
         event.preventDefault();
         event.stopPropagation();
-        if (position >= 0) void activateOutlineItemFromElement(item);
+        if (position >= 0) void activate(entry, item);
         return;
       case "Escape":
         event.preventDefault();
@@ -270,12 +269,6 @@ export function createContents(deps: FrameContentsDeps): FrameContents {
       default:
         return;
     }
-  }
-
-  async function activateOutlineItemFromElement(item: HTMLElement): Promise<void> {
-    const items = outline ? flattenOutline(outline) : [];
-    const match = items.find((candidate) => candidate.element === item);
-    if (match) await activate(match.item, item);
   }
 
   async function activate(item: OutlineItem, element: HTMLElement): Promise<void> {

@@ -182,28 +182,26 @@ const positionEngine = createPosition({
   zoom: () => zoomSetting,
   pdfPageCount: () => pdf.pageCount(),
 });
-const searchBar = el("search-bar");
-const searchInput = el("search-input");
-const searchStatus = el("search-status");
-const searchPreviousButton = el("search-previous");
-const searchNextButton = el("search-next");
-const searchCloseButton = el("search-close");
-const contentsPanel = el("contents");
-const contentsTitle = el("contents-title");
-const contentsTree = el("contents-tree");
+/* The Preact app draws the search bar, the Contents panel, and its tree; the
+   Frame adopts those elements once the app mounts, before any Document opens,
+   so the non-React engines keep their element accessors. */
+let searchBar: HTMLElement | null = null;
+let searchInput: HTMLInputElement | null = null;
+let searchStatus: HTMLElement | null = null;
+let searchPreviousButton: HTMLElement | null = null;
+let searchNextButton: HTMLElement | null = null;
+let searchCloseButton: HTMLElement | null = null;
+let contentsPanel: HTMLElement | null = null;
+let contentsTree: HTMLElement | null = null;
 const viewer = el("viewer");
 const stage = el("stage");
-/* The Contents and Find engines still own the two toolbar toggles they focus
-   and mark expanded; the Preact toolbar draws those elements in the same place,
-   so a lookup at call time finds the live one. */
-const contentsToggle = () => document.getElementById("contents-toggle");
-const findToggle = () => document.getElementById("find-toggle");
 
 /* The Contents panel: the outline tree, its keyboard navigation, and where its
    entries land. */
 const contents = createContents({
   panel: () => contentsPanel,
-  button: contentsToggle,
+  // The app owns the toolbar toggle's aria-expanded and post-close focus.
+  button: () => null,
   tree: () => contentsTree,
   t: (key) => t(key),
   pdf: () => pdf.document(),
@@ -219,7 +217,8 @@ const find = createFind({
   bar: () => searchBar,
   input: () => searchInput,
   status: () => searchStatus,
-  toggle: findToggle,
+  // The app owns the toolbar toggle's post-close focus.
+  toggle: () => null,
   nextButton: () => searchNextButton,
   previousButton: () => searchPreviousButton,
   closeButton: () => searchCloseButton,
@@ -320,6 +319,7 @@ let chrome: ChromeState = {
   zoomLevel: "100%",
   message: { hidden: true, text: "", error: false },
   password: { visible: false, wrong: false },
+  surfaces: { contentsOpen: false, findOpen: false, focus: null },
 };
 
 const chromeListeners = new Set<(state: ChromeState) => void>();
@@ -356,6 +356,9 @@ const bridge: FrameBridge = {
   setPassword(password) {
     publishChrome({ ...chrome, password });
   },
+  setSurfaces(surfaces) {
+    publishChrome({ ...chrome, surfaces });
+  },
   actions: {
     back: () => leave(),
     toggleContents: () => contents.toggle(undefined),
@@ -371,6 +374,58 @@ const bridge: FrameBridge = {
     submitPassword: (value) => onPasswordSubmit(value),
   },
 };
+
+/* The engines toggle their surface's `hidden` themselves; the observer turns
+   that DOM state into chrome the app draws (aria-expanded, the bar's
+   visibility), whether the close came from the app, Escape, or the tree. */
+let surfacesObserver: MutationObserver | null = null;
+let focusToken = 0;
+
+/** Reads the two surfaces' current visibility from the DOM. */
+function surfacesFromDom() {
+  return {
+    contentsOpen: Boolean(contentsPanel && !contentsPanel.hidden),
+    findOpen: Boolean(searchBar && !searchBar.hidden),
+  };
+}
+
+/**
+ * Publishes the surfaces' DOM state to the app, when it differs. A surface
+ * that just closed asks the app to put focus back on its toolbar toggle,
+ * unless the close is a silent reset (`suppressFocus`).
+ */
+function publishSurfaces(options: { suppressFocus?: boolean } = {}) {
+  const open = surfacesFromDom();
+  const before = chrome.surfaces;
+  if (open.contentsOpen === before.contentsOpen && open.findOpen === before.findOpen) return;
+  let focus = before.focus;
+  if (!options.suppressFocus) {
+    if (before.contentsOpen && !open.contentsOpen) {
+      focus = { target: "contents", token: ++focusToken };
+    } else if (before.findOpen && !open.findOpen) {
+      focus = { target: "find", token: ++focusToken };
+    }
+  }
+  bridge.setSurfaces({ ...open, focus });
+}
+
+/** Adopts the elements the app just drew and observes their visibility. */
+function adoptSurfaces() {
+  searchBar = el("search-bar");
+  searchInput = el("search-input") as HTMLInputElement | null;
+  searchStatus = el("search-status");
+  searchPreviousButton = el("search-previous");
+  searchNextButton = el("search-next");
+  searchCloseButton = el("search-close");
+  contentsPanel = el("contents");
+  contentsTree = el("contents-tree");
+  publishSurfaces();
+  surfacesObserver?.disconnect();
+  surfacesObserver = new MutationObserver(() => publishSurfaces());
+  for (const node of [contentsPanel, searchBar]) {
+    if (node) surfacesObserver.observe(node, { attributes: true, attributeFilter: ["hidden"] });
+  }
+}
 
 /** Hides the message area, keeping its text and tone for the next failure. */
 function hideMessage() {
@@ -440,14 +495,7 @@ function t(key: string, values?: Record<string, string | number>): string {
   );
 }
 
-/** Names an icon button for screen readers and its tooltip. */
-function labelButton(button: any, label: string) {
-  if (!button) return;
-  button.setAttribute("aria-label", label);
-  button.title = label;
-}
-
-/** The label strings the Preact toolbar and password prompt draw. */
+/** The label strings the Preact toolbar, search bar, and prompts draw. */
 function labelsFromStrings(): ChromeLabels {
   return {
     back: t("back"),
@@ -468,17 +516,16 @@ function labelsFromStrings(): ChromeLabels {
     passwordLabel: t("passwordLabel"),
     passwordSubmit: t("passwordSubmit"),
     passwordWrong: t("passwordWrong"),
+    searchPlaceholder: t("searchPlaceholder"),
+    searchNext: t("searchNext"),
+    searchPrevious: t("searchPrevious"),
+    searchClose: t("searchClose"),
   };
 }
 
 function setLabels() {
   document.documentElement.lang = language;
   bridge.setLabels(labelsFromStrings());
-  if (searchInput) searchInput.placeholder = t("searchPlaceholder");
-  labelButton(searchPreviousButton, t("searchPrevious"));
-  labelButton(searchNextButton, t("searchNext"));
-  labelButton(searchCloseButton, t("searchClose"));
-  if (contentsTitle) contentsTitle.textContent = t("contents");
   updateIndicator();
   if (searchBar && !searchBar.hidden) find.updateStatus();
 }
@@ -629,6 +676,8 @@ function resetDocument() {
   bridge.setPassword({ visible: false, wrong: false });
   if (stage) stage.hidden = true;
   find.close(false);
+  // Opening another Document closes the bar without moving focus.
+  publishSurfaces({ suppressFocus: true });
 }
 
 /* Documents: archive, parsers, Flowing and Page views ----------------------- */
@@ -1189,11 +1238,11 @@ function onKeyDown(event: KeyboardEvent) {
       toggleFullscreen();
       return;
     }
-    if (!searchBar.hidden) {
+    if (searchBar && !searchBar.hidden) {
       find.close(true);
       return;
     }
-    if (!contentsPanel.hidden) {
+    if (contentsPanel && !contentsPanel.hidden) {
       contents.toggle(false);
       return;
     }
@@ -1205,7 +1254,7 @@ function onKeyDown(event: KeyboardEvent) {
     if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
       return;
     }
-    if (contentsPanel.contains(target)) return;
+    if (contentsPanel && contentsPanel.contains(target)) return;
   }
   if (!hasDocument()) return;
   switch (event.key) {
@@ -1324,6 +1373,7 @@ function cleanup() {
   destroyed = true;
   protocol.close();
   positionEngine.stop();
+  surfacesObserver?.disconnect();
   clearTimeout(resizeTimer);
   document.removeEventListener("keydown", onKeyDown);
   window.removeEventListener("pagehide", onPageHide);
@@ -1339,7 +1389,6 @@ function cleanup() {
 /* Wiring ---------------------------------------------------------------- */
 setLabels();
 
-find.bind();
 document.addEventListener("keydown", onKeyDown);
 window.addEventListener("pagehide", onPageHide);
 window.addEventListener("resize", onResize);
@@ -1350,11 +1399,18 @@ viewer.addEventListener("scroll", onViewerScroll, { passive: true });
 window.addEventListener("message", onHostMessage);
 updateControls();
 
+/** Mounts the app, then adopts the surfaces it drew and binds the search bar. */
+function startApp(root: HTMLElement) {
+  mountApp(root, appearance, subscribeAppearance, bridge);
+  adoptSurfaces();
+  find.bind();
+}
+
 /* The Preact app mounts into `#app-root` and draws the appearance, toolbar,
-   message area, and password prompt (#942). */
+   search bar, Contents panel, message area, and password prompt (#942). */
 const appRoot = el("app-root");
 if (appRoot) {
-  mountApp(appRoot, appearance, subscribeAppearance, bridge);
+  startApp(appRoot);
 } else {
   // `#app-root` follows this script in the Frame's HTML, so a fresh parse has
   // not reached it yet; mount once the document is complete.
@@ -1362,7 +1418,7 @@ if (appRoot) {
     "DOMContentLoaded",
     () => {
       const root = el("app-root");
-      if (root) mountApp(root, appearance, subscribeAppearance, bridge);
+      if (root) startApp(root);
     },
     { once: true }
   );

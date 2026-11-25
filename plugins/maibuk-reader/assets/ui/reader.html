@@ -148,6 +148,13 @@
         white-space: nowrap;
       }
 
+      /* The Preact app draws the search bar and the Contents panel into these
+         roots; `display: contents` keeps them in the layout their markup held. */
+      #search-root,
+      #contents-root {
+        display: contents;
+      }
+
       #search-bar {
         display: flex;
         align-items: center;
@@ -331,23 +338,17 @@
     </style>
   </head>
   <body>
-    <!-- The Preact app (#942) draws the toolbar, page indicator, message area,
-         and password prompt; reader.js mounts into this root. -->
+    <!-- The Preact app (#942) draws the toolbar; reader.js mounts into this
+         root. The search bar, Contents panel, message area, and password
+         prompt are portals the same app draws into their own roots. -->
     <div id="app-root"></div>
 
-    <div id="search-bar" hidden>
-      <input id="search-input" type="search" autocomplete="off" />
-      <span id="search-status" aria-live="polite"></span>
-      <button id="search-previous" class="icon-button" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg></button>
-      <button id="search-next" class="icon-button" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
-      <button id="search-close" class="icon-button" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
-    </div>
+    <!-- The Preact app (#942) draws the search bar into this root. -->
+    <div id="search-root"></div>
 
     <div id="body">
-      <aside id="contents" hidden aria-labelledby="contents-title">
-        <h2 id="contents-title">Contents</h2>
-        <div id="contents-tree" role="tree"></div>
-      </aside>
+      <!-- The Preact app (#942) draws the Contents panel into this root. -->
+      <div id="contents-root"></div>
 
       <main id="viewer">
         <div id="stage" hidden>

@@ -99,8 +99,9 @@ function createPdfStub(options: StubOptions = {}) {
       if (name === "chapter-3") return [{}, { name: "Page" }, 3];
       return null;
     }
-    async getPageIndex() {
-      return 0;
+    async getPageIndex(ref: unknown) {
+      // A numeric destination is the page index itself, as pdf.js reads it.
+      return typeof ref === "number" ? ref : 0;
     }
     async destroy() {}
   }
@@ -547,6 +548,73 @@ describe("search", () => {
 
     const selection = window.getSelection();
     expect(selection === null || selection.rangeCount === 0 || selection.isCollapsed).toBe(true);
+  });
+});
+
+describe("contents", () => {
+  it("draws the outline, navigates it by keyboard, and returns focus to its toggle", async () => {
+    const outline = [
+      { title: "Chapter One", dest: [3] },
+      { title: "Chapter Two", dest: [4], items: [{ title: "Section", dest: [3] }] },
+    ];
+    frame = loadFrame(createPdfStub({ outline }));
+    frame.open();
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 12"));
+
+    const user = userEvent.setup();
+    await user.click(el("contents-toggle"));
+    expect(el("contents").hidden).toBe(false);
+    await vi.waitFor(() =>
+      expect(el("contents-toggle").getAttribute("aria-expanded")).toBe("true")
+    );
+
+    const items = () =>
+      Array.from(el("contents-tree").querySelectorAll<HTMLElement>('[role="treeitem"]'));
+    await vi.waitFor(() => expect(items()).toHaveLength(3));
+    expect(document.activeElement).toBe(items()[0]);
+
+    await user.keyboard("{ArrowDown}");
+    expect(document.activeElement).toBe(items()[1]);
+    // Chapter Two is expanded, so Right enters its child.
+    await user.keyboard("{ArrowRight}");
+    expect(document.activeElement).toBe(items()[2]);
+    await user.keyboard("{Home}");
+    expect(document.activeElement).toBe(items()[0]);
+    await user.keyboard("{End}");
+    expect(document.activeElement).toBe(items()[2]);
+    // Enter on a focused entry activates it like a click does.
+    await user.keyboard("{Home}");
+    await user.keyboard("{Enter}");
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("4 of 12"));
+    // Selecting an entry lands on its destination and keeps focus on it.
+    await user.click(items()[0]);
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("4 of 12"));
+    expect(document.activeElement).toBe(items()[0]);
+
+    // Escape inside the tree closes only the panel and returns focus.
+    await user.keyboard("{Escape}");
+    expect(el("contents").hidden).toBe(true);
+    await vi.waitFor(() =>
+      expect(el("contents-toggle").getAttribute("aria-expanded")).toBe("false")
+    );
+    await vi.waitFor(() => expect(document.activeElement).toBe(el("contents-toggle")));
+  });
+});
+
+describe("find focus", () => {
+  it("returns focus to the Find toggle when Escape closes the bar", async () => {
+    frame = loadFrame(createPdfStub());
+    frame.open();
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 12"));
+
+    const user = userEvent.setup();
+    await user.keyboard("{Control>}f{/Control}");
+    expect(el("search-bar").hidden).toBe(false);
+    expect(document.activeElement).toBe(el("search-input"));
+
+    await user.keyboard("{Escape}");
+    expect(el("search-bar").hidden).toBe(true);
+    await vi.waitFor(() => expect(document.activeElement).toBe(el("find-toggle")));
   });
 });
 
