@@ -42,7 +42,15 @@ import {
   type PluginApiMethods,
 } from "@/plugin-sdk/api.generated";
 
-const UNGATED = new Set(["storage", "navigation", "language", "fonts", "permissions", "toolbar"]);
+const UNGATED = new Set([
+  "storage",
+  "navigation",
+  "language",
+  "appearance",
+  "fonts",
+  "permissions",
+  "toolbar",
+]);
 
 describe("PLUGIN_API_TABLE", () => {
   it("names every method <namespace>.<verb> with unique ids", () => {
@@ -94,6 +102,19 @@ describe("PLUGIN_API_TABLE", () => {
   it("rate-limits notifications to one per 5 s", () => {
     const show = PLUGIN_API_TABLE.find((r) => r.id === "notifications.show");
     expect(show?.minIntervalMs).toBe(5000);
+  });
+
+  it("reads the resolved color scheme and applied E-ink Mode with no permission (#942)", () => {
+    const row = PLUGIN_API_TABLE.find((entry) => entry.id === "appearance.get");
+    if (!row) throw new Error("appearance.get is missing from the table");
+    expect(row.permission).toBeNull();
+    expect(row.effect).toBe("read");
+    expect(row.output.safeParse({ colorScheme: "dark", eink: true }).success).toBe(true);
+    // The resolved scheme is never `system`, and no third field rides along.
+    expect(row.output.safeParse({ colorScheme: "system", eink: true }).success).toBe(false);
+    expect(
+      row.output.safeParse({ colorScheme: "light", eink: false, motion: "reduce" }).success
+    ).toBe(false);
   });
 
   it("describes every method and takes an object as input", () => {
@@ -189,11 +210,12 @@ function propertyNames(schema: unknown): string[] {
 }
 
 describe("PLUGIN_API_EVENTS", () => {
-  it("lists the events: library, availability, language, the return target, the endpoint address, permissions, dropped files, and the two editor events", () => {
+  it("lists the events: library, availability, language, appearance, the return target, the endpoint address, permissions, dropped files, and the two editor events", () => {
     expect(PLUGIN_API_EVENTS.map((event) => event.id)).toEqual([
       "library.changed",
       "library.availabilityChanged",
       "language.changed",
+      "appearance.changed",
       "navigation.returnTargetChanged",
       "endpoint.addressChanged",
       "permissions.changed",
@@ -210,6 +232,7 @@ describe("PLUGIN_API_EVENTS", () => {
       const ungated =
         event.id === "library.availabilityChanged" ||
         event.id === "language.changed" ||
+        event.id === "appearance.changed" ||
         event.id === "navigation.returnTargetChanged" ||
         event.id === "permissions.changed";
       const expected = ungated
@@ -221,6 +244,18 @@ describe("PLUGIN_API_EVENTS", () => {
             : `${namespace}:read`;
       expect(event.permission, event.id).toBe(expected);
     }
+  });
+
+  it("carries exactly the resolved scheme and the applied E-ink Mode on appearance.changed (#942)", () => {
+    const event = PLUGIN_API_EVENTS.find((entry) => entry.id === "appearance.changed");
+    if (!event) throw new Error("appearance.changed is missing from the table");
+    expect(event.permission).toBeNull();
+    expect(event.replays).toBe(true);
+    expect(event.payload.safeParse({ colorScheme: "dark", eink: true }).success).toBe(true);
+    expect(event.payload.safeParse({ colorScheme: "system", eink: true }).success).toBe(false);
+    expect(
+      event.payload.safeParse({ colorScheme: "dark", eink: true, motion: "reduce" }).success
+    ).toBe(false);
   });
 
   it("carries ids only, never content", () => {

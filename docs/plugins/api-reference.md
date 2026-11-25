@@ -981,6 +981,30 @@ Output:
 }
 ```
 
+## appearance
+
+### `appearance.get`
+
+Reads the appearance Maibuk draws with: the resolved color scheme and whether E-ink Mode is applied. No permission is required.
+
+- Plugin Permission: none (rate-limited instead)
+- Effect: read
+
+Input:
+
+```ts
+Record<string, never>
+```
+
+Output:
+
+```ts
+{
+  colorScheme: "light" | "dark";
+  eink: boolean;
+}
+```
+
 ## fonts
 
 ### `fonts.list`
@@ -1675,6 +1699,21 @@ Payload:
 ```ts
 {
   language: string;
+}
+```
+
+### `appearance.changed`
+
+Maibuk's appearance changed: the resolved color scheme, whether E-ink Mode is applied, or both. The current value is delivered on subscription, so a Plugin that starts after a change never misses it.
+
+- Plugin Permission: none
+
+Payload:
+
+```ts
+{
+  colorScheme: "light" | "dark";
+  eink: boolean;
 }
 ```
 

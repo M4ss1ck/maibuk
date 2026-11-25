@@ -20,6 +20,7 @@ import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { countWords } from "@/features/metrics/word-count";
 import { createPluginBroker } from "@/features/plugins/broker";
+import type { PluginAppearance } from "@/features/plugins/appearance";
 import {
   collectEndpointAnswer,
   dispatchEndpointRequest,
@@ -333,6 +334,9 @@ export function createTestHost(options: TestHostOptions): TestHost {
   // The pressed state of each Toggle Button the Plugin set, by its local id.
   const toolbarPressedState = new Map<string, boolean>();
   let language = options.language ?? "en";
+  // What the appearance rows serve: the host's own state, so a test drives a
+  // scheme and E-ink change without a DOM or a ThemeProvider.
+  let appearance: PluginAppearance = options.appearance ?? { colorScheme: "light", eink: false };
   let libraryAvailable = true;
   // The place the Plugin's page on screen returns to (#786): a `hideBack` page
   // draws its own Back from this label and asks the host for the return.
@@ -838,6 +842,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
       return { status };
     },
     "language.get": () => ({ language }),
+    "appearance.get": () => appearance,
     // The PDF Fonts the test declared as installed (#751): `fonts.read` gives
     // back the byte array the test seeded, and an id it did not seed is refused
     // the way the app's handler refuses an uninstalled font.
@@ -880,6 +885,7 @@ export function createTestHost(options: TestHostOptions): TestHost {
     hasUserActivation: () => options.userActivation ?? true,
     eventSnapshot: (event) => {
       if (event === "language.changed") return { language };
+      if (event === "appearance.changed") return appearance;
       if (event === "endpoint.addressChanged") {
         return { url: endpointUrlFor(endpointState, options.manifest.id) };
       }
@@ -1181,6 +1187,9 @@ export function createTestHost(options: TestHostOptions): TestHost {
     get language() {
       return language;
     },
+    get appearance() {
+      return appearance;
+    },
     get clipboard() {
       return clipboard;
     },
@@ -1241,6 +1250,10 @@ export function createTestHost(options: TestHostOptions): TestHost {
     setLanguage(next) {
       language = next;
       broker.emit("language.changed", { language });
+    },
+    setAppearance(next) {
+      appearance = next;
+      broker.emit("appearance.changed", appearance);
     },
     setReturnTarget(next) {
       const changed = next !== returnTarget;
