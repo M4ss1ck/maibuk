@@ -1,23 +1,28 @@
-/* The Reader Frame's reading surface (#653). The Frame's only host channel is
- `window.maibuk.port`: the Worker sends `open` with the Document, its Reading
- Position, the Reader settings, the file's size, and localized labels. For a
- PDF it also transfers the pdf.js display source, the viewer CSS, and one end
- of a MessageChannel wired to the pdf.js core Worker. For every other format it
- carries foliate's parsers and DOMPurify as source the Frame imports from
- `blob:` URLs.
+/* The Reader Frame's entry (#653, #941): the UI wiring that composes the
+ `frame/` modules and draws the reading surface. The Frame's only host channel
+ is `window.maibuk.port`: the Worker sends `open` with the Document, its
+ Reading Position, the Reader settings, the file's size, and localized labels.
+ For a PDF it also transfers the pdf.js display source, the viewer CSS, and one
+ end of a MessageChannel wired to the pdf.js core Worker. For every other
+ format it carries foliate's parsers and DOMPurify as source the Frame imports
+ from `blob:` URLs.
 
  The Frame then draws one of three views: pdf.js pages, a Flowing view for a
  reflowable EPUB, MOBI, AZW3, or FB2 (one sanitized section at a time, paged
  with CSS multi-columns), or a Page view for a CBZ or a fixed-layout EPUB
- (one image or pre-paginated section at a time). It answers nothing itself and
- asks the Worker for byte ranges with `read`, and for archive entries with
- `zip-list` / `zip-entry`.
+ (one image or pre-paginated section at a time). It answers nothing itself; the
+ protocol client in `protocol.ts` asks the Worker for byte ranges with `read`,
+ and for archive entries with `zip-list` / `zip-entry`.
 
- It is a classic script, not a module: a relative `import` cannot resolve in
- the Frame's opaque origin. pdf.js's display module, foliate's parsers, and
- DOMPurify are imported from `blob:` URLs the `open` message carries, and the
- core Worker is the Worker's business, not the Frame's (the Frame CSP forbids
- `worker-src`).
+ The `frame/` folder is bundled into one classic script, not a module: a
+ relative `import` cannot resolve in the Frame's opaque origin, so
+ `scripts/build-plugin.ts` inlines the folder into `assets/ui/reader.js`.
+ Nothing under `frame/` may import a Worker-side file such as
+ `../frame-protocol.ts` or `../shelf.ts`: those run in the Plugin Worker, so
+ the Frame declares the shapes it needs itself (`types.ts`, `protocol.ts`).
+ pdf.js's display module, foliate's parsers, and DOMPurify are imported from
+ `blob:` URLs the `open` message carries, and the core Worker is the Worker's
+ business, not the Frame's (the Frame CSP forbids `worker-src`).
 
  The wire shapes mirror `frame-protocol.ts`. Tests inject stubs and layout
  seams through `globalThis.__readerTestHooks`; production never defines it.
@@ -25,181 +30,19 @@
  This is the TypeScript source; `scripts/build-plugin.ts` bundles it to the
  classic script `assets/ui/reader.js`, which the Frame's HTML loads. */
 
-/** The page fit a fresh Document opens with, or a numeric zoom scale. */
-type FrameZoom = number | "width" | "page";
-
-/** Where the author was in a fixed-page Document. */
-interface PagePosition {
-  kind: "page";
-  page: number;
-  zoom: FrameZoom;
-}
-
-/** Where the author was in a reflowable Document, by its canonical fragment identifier. */
-interface CfiPosition {
-  kind: "cfi";
-  cfi: string;
-}
-
-/** Where the author was in a format with no fragment identifier, by spine index. */
-interface SectionPosition {
-  kind: "section";
-  index: number;
-  fraction: number;
-}
-
-/** Where the author was in a Document. */
-type ReadingPosition = PagePosition | CfiPosition | SectionPosition;
-
-/** The Document fields the Frame draws. */
-interface FrameEntry {
-  id: string;
-  title: string;
-  author: string;
-  format: string;
-}
-
-/** The Reader settings the Worker hands the Frame. */
-interface ReaderSettings {
-  fontSize: number;
-  lineWidth: string;
-  pdfFit: "width" | "page";
-  pdfLayout: "single" | "continuous";
-}
-
-/** The pdf.js resources the Worker hands the Frame when a PDF opens. */
-interface FramePdf {
-  displaySource: string;
-  css: string;
-}
-
-/** The modules the Frame evaluates for a reflowable or fixed-layout Document. */
-interface FrameFoliate {
-  source: string;
-  purify: string;
-}
-
-/** One entry in the archive a reflowable Document is packed in. */
-interface FrameZipEntry {
-  name: string;
-  size: number;
-}
-
-/** The localized UI strings the Frame shows, built by the Worker from i18n. */
-interface FrameLabels {
-  back: string;
-  contents: string;
-  contentsEmpty: string;
-  find: string;
-  searchPlaceholder: string;
-  searchNext: string;
-  searchPrevious: string;
-  searchClose: string;
-  searchNoMatches: string;
-  searchMatches: string;
-  pageOf: string;
-  pageLabeled: string;
-  zoomIn: string;
-  zoomOut: string;
-  fitWidth: string;
-  fitPage: string;
-  zoomLevel: string;
-  loading: string;
-  empty: string;
-  previousPage: string;
-  nextPage: string;
-  passwordTitle: string;
-  passwordLabel: string;
-  passwordSubmit: string;
-  passwordWrong: string;
-  errorCorrupt: string;
-  errorEncrypted: string;
-  errorUnsupported: string;
-  errorGeneric: string;
-  errorDrm: string;
-  errorDamaged: string;
-  errorTooLarge: string;
-  errorTimeout: string;
-  sectionPage: string;
-  increaseFontSize: string;
-  decreaseFontSize: string;
-  continuousScroll: string;
-  fullScreen: string;
-  exitFullScreen: string;
-}
-
-/** Opens one Document. `pdfPort` is transferred alongside the message. */
-interface FrameOpenMessage {
-  kind: "open";
-  entry: FrameEntry | null;
-  position: ReadingPosition | null;
-  settings: ReaderSettings;
-  size: number;
-  labels: FrameLabels;
-  language: string;
-  pdf?: FramePdf;
-  pdfPort?: MessagePort;
-  foliate?: FrameFoliate;
-}
-
-/** Answers one `read`. */
-interface FrameBytesMessage {
-  kind: "bytes";
-  id: number;
-  buffer: ArrayBuffer;
-}
-
-/** Refuses one `read`. */
-interface FrameReadErrorMessage {
-  kind: "read-error";
-  id: number;
-  code: string;
-}
-
-/** Forwards one reading Command to the mounted Frame. */
-interface FrameCommandMessage {
-  kind: "command";
-  id: string;
-}
-
-/** Tells the Frame the app language changed. */
-interface FrameLanguageMessage {
-  kind: "language";
-  language: string;
-  labels?: FrameLabels;
-}
-
-/** Lists every entry of the archive the Document is packed in. */
-interface FrameZipListMessage {
-  kind: "zip-list";
-  id: number;
-  entries: FrameZipEntry[];
-}
-
-/** Answers one `zip-entry`. */
-interface FrameZipDataMessage {
-  kind: "zip-data";
-  id: number;
-  buffer: ArrayBuffer;
-  deflated: boolean;
-}
-
-/** Refuses one archive request. */
-interface FrameZipErrorMessage {
-  kind: "zip-error";
-  id: number;
-  code: "corrupt" | "drm" | "missing";
-}
-
-type WorkerToFrameMessage =
-  | FrameOpenMessage
-  | FrameBytesMessage
-  | FrameReadErrorMessage
-  | FrameCommandMessage
-  | FrameLanguageMessage
-  | FrameZipListMessage
-  | FrameZipDataMessage
-  | FrameZipErrorMessage;
+import { hooks, positionDebounceMs } from "./hooks";
+import { createFrameProtocol, errorCode, type FrameOpenMessage } from "./protocol";
+import type {
+  FrameEntry,
+  FrameFoliate,
+  FrameLabels,
+  FramePdf,
+  FrameZipEntry,
+  FrameZoom,
+  PagePosition,
+  ReaderSettings,
+  ReadingPosition,
+} from "./types";
 
 /** The Document's own title, author, page count, and optional cover. */
 interface FrameMetaMessage {
@@ -234,25 +77,6 @@ interface FlowSearchMatch {
 
 /** A search result, shaped by the view the Document is drawn in. */
 type SearchMatch = PageSearchMatch | FlowSearchMatch;
-
-/** The seam the tests use to inject stubs and layout; production never defines it. */
-interface ReaderTestHooks {
-  positionDebounceMs?: number;
-  loadTimeoutMs?: number;
-  importPdfjs?: (displaySource: string) => Promise<any> | any;
-  importFoliate?: (source: string) => Promise<any> | any;
-  importPurify?: (source: string) => Promise<any> | any;
-  viewportWidth?: number;
-  viewportHeight?: number;
-  measureFlow?: (geometry: {
-    columns: HTMLElement;
-    pageWidth: number;
-    sectionIndex: number;
-  }) => number;
-  now?: () => number;
-  onSearchSlice?: () => void;
-  onReady?: (cleanup: () => void) => void;
-}
 
 const STRINGS: Record<string, Record<string, string>> = {
   en: {
@@ -339,10 +163,6 @@ const STRINGS: Record<string, Record<string, string>> = {
   },
 };
 
-const hooks =
-  (globalThis as { __readerTestHooks?: ReaderTestHooks | null }).__readerTestHooks || null;
-const positionDebounceMs =
-  hooks && typeof hooks.positionDebounceMs === "number" ? hooks.positionDebounceMs : 1000;
 const INITIAL_CHUNK_BYTES = 1 << 20;
 const RANGE_CHUNK_BYTES = 1 << 20;
 const MAX_CACHED_PAGES = 5;
@@ -371,6 +191,8 @@ function el(id: string): any {
 
 const hostWindow = window as Window & { maibuk?: { port?: MessagePort } };
 const port = hostWindow.maibuk && hostWindow.maibuk.port;
+const protocol = createFrameProtocol(port);
+const { post, requestBytes, requestZipList, requestZipEntry } = protocol;
 const backButton = el("back");
 const contentsToggle = el("contents-toggle");
 const findToggle = el("find-toggle");
@@ -443,9 +265,6 @@ let flow: any = null;
 let zipEntries: FrameZipEntry[] = [];
 const zipByName: Map<string, FrameZipEntry> = new Map();
 const objectUrls: Set<string> = new Set();
-const pendingZip: Map<number, { resolve: (value: any) => void; reject: (error: Error) => void }> =
-  new Map();
-let nextZipId = 1;
 const comicCache: Map<number, string> = new Map();
 let comicFiles: string[] = [];
 const FLOW_GAP = 40;
@@ -464,11 +283,6 @@ let scrollTarget: number | null = null;
 let wheelCarry = 0;
 let lastWheelAt = 0;
 let wheelTurned = false;
-const pendingReads: Map<
-  number,
-  { resolve: (bytes: Uint8Array) => void; reject: (error: Error) => void }
-> = new Map();
-let nextReadId = 1;
 
 const search = {
   query: "",
@@ -567,12 +381,6 @@ function updateControls() {
   }
 }
 
-function post(message: unknown, transfer?: Transferable[]) {
-  if (destroyed || !port) return;
-  if (transfer === undefined) port.postMessage(message);
-  else port.postMessage(message, transfer);
-}
-
 function clamp(value: unknown, min: number, max: number): number {
   return Math.min(max, Math.max(min, value as number));
 }
@@ -648,82 +456,10 @@ function countMatches(text: string, query: string): number {
 }
 
 /* Messaging ------------------------------------------------------------- */
+
+/** Hands one port message to the protocol client, which settles or dispatches it. */
 function onMessage(event: MessageEvent) {
-  const data = event.data as WorkerToFrameMessage | null;
-  if (!data || typeof data !== "object") return;
-  switch (data.kind) {
-    case "open":
-      void handleOpen(data);
-      return;
-    case "bytes":
-      settleRead(data.id, data.buffer);
-      return;
-    case "read-error":
-      rejectRead(data.id, data.code);
-      return;
-    case "command":
-      runCommand(data.id);
-      return;
-    case "language":
-      if (typeof data.language === "string") {
-        language = data.language;
-        if (data.labels) providedLabels = data.labels;
-        setLabels();
-      }
-      return;
-    case "zip-list":
-      settleZip(data.id, { entries: data.entries });
-      return;
-    case "zip-data":
-      settleZip(data.id, { buffer: data.buffer, deflated: data.deflated === true });
-      return;
-    case "zip-error":
-      rejectZip(data.id, data.code);
-      return;
-    default:
-      return;
-  }
-}
-
-function settleZip(id: number, value: any) {
-  const pending = pendingZip.get(id);
-  if (!pending) return;
-  pendingZip.delete(id);
-  pending.resolve(value);
-}
-
-function rejectZip(id: number, code: string) {
-  const pending = pendingZip.get(id);
-  if (!pending) return;
-  pendingZip.delete(id);
-  const error = new Error(`Reader could not read this archive (${code})`);
-  (error as any).code = code;
-  pending.reject(error);
-}
-
-function settleRead(id: number, buffer: ArrayBuffer) {
-  const pending = pendingReads.get(id);
-  if (!pending) return;
-  pendingReads.delete(id);
-  pending.resolve(new Uint8Array(buffer));
-}
-
-function rejectRead(id: number, code: string) {
-  const pending = pendingReads.get(id);
-  if (!pending) return;
-  pendingReads.delete(id);
-  const error = new Error(`Reader could not read this file (${code})`);
-  (error as any).code = code;
-  pending.reject(error);
-}
-
-function requestBytes(offset: number, length: number): Promise<Uint8Array> {
-  if (length <= 0) return Promise.resolve(new Uint8Array(0));
-  const id = nextReadId++;
-  return new Promise((resolve, reject) => {
-    pendingReads.set(id, { resolve, reject });
-    post({ kind: "read", id, offset, length });
-  });
+  protocol.receive(event.data);
 }
 
 /* Opening --------------------------------------------------------------- */
@@ -843,10 +579,7 @@ async function openPdf(pdf: FramePdf, pdfPort: MessagePort, saved: ReadingPositi
         });
     };
     transport.abort = () => {
-      for (const pending of pendingReads.values()) {
-        pending.reject(new Error("Reader stopped reading"));
-      }
-      pendingReads.clear();
+      protocol.abortReads("Reader stopped reading");
     };
     await loadDocument(undefined);
   } catch (error) {
@@ -1072,22 +805,6 @@ function purifyFrom(module: any) {
 /** Decodes archive text, as the Worker's zip reader once did. */
 const UTF8 = new TextDecoder("utf-8");
 
-function requestZipList(): Promise<{ entries: FrameZipEntry[] }> {
-  const id = nextZipId++;
-  return new Promise((resolve, reject) => {
-    pendingZip.set(id, { resolve, reject });
-    post({ kind: "zip-list", id });
-  });
-}
-
-function requestZipEntry(name: string): Promise<any> {
-  const id = nextZipId++;
-  return new Promise((resolve, reject) => {
-    pendingZip.set(id, { resolve, reject });
-    post({ kind: "zip-entry", id, name });
-  });
-}
-
 /** Lists the archive once and keeps the entry table. */
 async function openZip() {
   if (zipEntries.length > 0) return;
@@ -1129,7 +846,7 @@ async function zipText(name: string): Promise<string | null> {
   try {
     return UTF8.decode(await zipBytes(name));
   } catch (error) {
-    if (isErrorLike(error) && (error as any).code === "missing") return null;
+    if (errorCode(error) === "missing") return null;
     throw error;
   }
 }
@@ -1253,8 +970,7 @@ async function openDocument(
 
 /** Maps an open failure to the message the author sees and the Worker stores. */
 function failDocument(error: unknown) {
-  const code =
-    isErrorLike(error) && typeof (error as any).code === "string" ? (error as any).code : "";
+  const code = errorCode(error);
   if (code === "drm") {
     fail("encrypted", t("errorDrm"));
     return;
@@ -2498,8 +2214,7 @@ function destroyDocument() {
   clearCache();
   revokeObjectUrls();
   clearComicCache();
-  for (const pending of pendingZip.values()) pending.reject(new Error("Reader closed"));
-  pendingZip.clear();
+  protocol.abortArchive("Reader closed");
   if (currentDocument && typeof currentDocument.destroy === "function") {
     try {
       currentDocument.destroy();
@@ -2512,8 +2227,7 @@ function destroyDocument() {
   comicFiles = [];
   zipEntries = [];
   zipByName.clear();
-  for (const pending of pendingReads.values()) pending.reject(new Error("Reader closed"));
-  pendingReads.clear();
+  protocol.abortReads("Reader closed");
   if (loadingTask && typeof loadingTask.destroy === "function") {
     try {
       void loadingTask.destroy();
@@ -3400,6 +3114,7 @@ function onResize() {
 
 function cleanup() {
   destroyed = true;
+  protocol.close();
   clearTimeout(positionTimer);
   clearTimeout(resizeTimer);
   document.removeEventListener("keydown", onKeyDown);
@@ -3474,13 +3189,17 @@ viewer.addEventListener("scroll", onViewerScroll, { passive: true });
 window.addEventListener("message", onHostMessage);
 updateControls();
 
+protocol.onOpen = handleOpen;
+protocol.onCommand = runCommand;
+protocol.onLanguage = (nextLanguage, labels) => {
+  language = nextLanguage;
+  if (labels) providedLabels = labels;
+  setLabels();
+};
+
 if (port) {
   port.onmessage = onMessage;
   port.start();
   port.postMessage({ kind: "ready" });
 }
 if (hooks && typeof hooks.onReady === "function") hooks.onReady(cleanup);
-
-// An empty export keeps these declarations module-scoped instead of global; the
-// bundler still writes the file as one classic script with nothing external.
-export {};
