@@ -21,6 +21,7 @@ import {
 } from "preact";
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { Appearance } from "./types";
+import { useReducedMotion } from "./use-reduced-motion";
 
 /** The appearance the Frame draws with until Maibuk hands it another. */
 export const DEFAULT_APPEARANCE: Appearance = { colorScheme: "light", eink: false };
@@ -152,10 +153,40 @@ function useChrome(): ChromeValue {
 }
 
 /** The Frame's drawn root: its data attributes are the appearance it shows. */
-function FrameRoot({ children }: { children?: ComponentChildren }) {
+export function FrameRoot({ children }: { children?: ComponentChildren }) {
   const appearance = useContext(AppearanceContext);
+  const motion = useReducedMotion() ? "reduce" : "no-preference";
+  const { colorScheme, eink } = appearance;
+
+  // The Frame's chrome includes portals drawn outside this wrapper, so the
+  // attributes also go on the Frame document's root, where every descendant
+  // and any selector on the root can see them. The cleanup puts back whatever
+  // the document carried before this root wrote its values.
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    const previous = {
+      "data-color-scheme": root.getAttribute("data-color-scheme"),
+      "data-eink": root.getAttribute("data-eink"),
+      "data-motion": root.getAttribute("data-motion"),
+    };
+    const restore = (name: string, value: string | null) => {
+      if (value === null) root.removeAttribute(name);
+      else root.setAttribute(name, value);
+    };
+    restore("data-color-scheme", colorScheme);
+    restore("data-eink", String(eink));
+    restore("data-motion", motion);
+    return () => {
+      for (const [name, value] of Object.entries(previous)) restore(name, value);
+    };
+  }, [colorScheme, eink, motion]);
+
   return (
-    <div data-color-scheme={appearance.colorScheme} data-eink={String(appearance.eink)}>
+    <div
+      data-color-scheme={appearance.colorScheme}
+      data-eink={String(appearance.eink)}
+      data-motion={motion}
+    >
       {children}
     </div>
   );

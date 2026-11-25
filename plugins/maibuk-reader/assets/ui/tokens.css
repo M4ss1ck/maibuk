@@ -1,0 +1,184 @@
+/* The Reader Frame's design tokens (#943 unit 1). Tokens belong here, and only
+   here may a color literal live: every Reader screen reads these names, so the
+   chrome follows Maibuk's theme, a Reading Theme can take the reading surfaces
+   over, and E-ink or reduced motion can flatten the result without each screen
+   repeating the rules.
+
+   Chrome comes from the host's public `--maibuk-*` Frame tokens. Reading Themes
+   are the Reader's own page palette; `--chrome-*` prefers a theme value and
+   falls back to Maibuk so a screen drawn outside reading still matches the app. */
+
+:root {
+  /* Chrome, mapped from the host's Frame theme tokens. */
+  --bg: var(--maibuk-color-background);
+  --fg: var(--maibuk-color-foreground);
+  --card: var(--maibuk-color-card);
+  --muted: var(--maibuk-color-muted);
+  --mfg: var(--maibuk-color-muted-foreground);
+  --border: var(--maibuk-color-border);
+  --primary: var(--maibuk-color-primary);
+  --pfg: var(--maibuk-color-primary-foreground);
+  --danger: var(--maibuk-color-error-text);
+
+  /* Reading chrome follows a Reading Theme when one is chosen. */
+  --chrome-bg: var(--reading-page, var(--maibuk-color-background));
+  --chrome-fg: var(--reading-ink, var(--maibuk-color-foreground));
+  --chrome-meta: var(--reading-meta, var(--maibuk-color-muted-foreground));
+  --chrome-border: var(--reading-border, var(--maibuk-color-border));
+
+  /* Highlight fills never change with the theme, for any of the five colors. */
+  --highlight-yellow: rgba(250, 204, 21, 0.42);
+  --highlight-green: rgba(74, 222, 128, 0.36);
+  --highlight-blue: rgba(96, 165, 250, 0.36);
+  --highlight-pink: rgba(244, 114, 182, 0.34);
+  --highlight-purple: rgba(167, 139, 250, 0.38);
+
+  /* E-ink underlines keep the five Highlights apart on a grayscale panel. */
+  --highlight-underline-yellow: 2px solid;
+  --highlight-underline-green: 2px dashed;
+  --highlight-underline-blue: 2px dotted;
+  --highlight-underline-pink: 3px double;
+  --highlight-underline-purple: 2px wavy;
+
+  /* Type scale. Reading text uses the user's serif; chrome uses their sans. */
+  --type-ui: Inter, var(--maibuk-font-sans, system-ui, sans-serif);
+  --type-reading: Literata, var(--maibuk-font-serif, Georgia, serif);
+  --type-code: "JetBrains Mono", var(--maibuk-font-mono, ui-monospace, monospace);
+  --type-display-size: 28px;
+  --type-display-line: 34px;
+  --type-display-weight: 600;
+  --type-title-size: 20px;
+  --type-title-line: 28px;
+  --type-title-weight: 600;
+  --type-heading-size: 16px;
+  --type-heading-line: 24px;
+  --type-heading-weight: 600;
+  --type-body-size: 14px;
+  --type-body-line: 20px;
+  --type-body-weight: 400;
+  --type-body-strong-weight: 500;
+  --type-small-size: 13px;
+  --type-small-line: 18px;
+  --type-small-weight: 400;
+  --type-label-size: 12px;
+  --type-label-line: 16px;
+  --type-label-weight: 600;
+  --type-label-tracking: 0.04em;
+  --type-label-transform: uppercase;
+  --type-status-size: 12px;
+  --type-status-line: 16px;
+  --type-status-weight: 500;
+  --type-numeric: tabular-nums;
+  --type-cover-family: Literata, var(--maibuk-font-serif, Georgia, serif);
+  --type-cover-weight: 600;
+  --type-cover-scale: 0.15;
+  --type-code-size: 13px;
+  --type-code-line: 20px;
+
+  /* Radii. */
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --radius-sheet: 16px 16px 0 0;
+  --radius-cover: 4px;
+
+  /* Spacing: one 4 px grid. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-9: 36px;
+  --space-10: 40px;
+  --space-11: 44px;
+  --space-12: 48px;
+
+  /* Sheet and dialog scrim, on Maibuk's scheme. */
+  --scrim: rgba(28, 25, 23, 0.45);
+
+  /* Paper depth; E-ink and reduced motion drop it. */
+  --shadow-stage: 0 1px 6px rgba(0, 0, 0, 0.18);
+  --shadow-page: 0 1px 6px rgba(0, 0, 0, 0.18);
+
+  /* Motion: bars slide 8 px and fade, sheets slide and their scrim fades,
+     page turns slide, covers fade. */
+  --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-duration-bars: 160ms;
+  --motion-duration-sheet: 200ms;
+  --motion-duration-scrim: 160ms;
+  --motion-duration-page: 180ms;
+  --motion-duration-cover: 120ms;
+  --motion-bar-distance: 8px;
+  --motion-bars:
+    transform var(--motion-duration-bars) var(--motion-ease),
+    opacity var(--motion-duration-bars) var(--motion-ease);
+  --motion-sheet: transform var(--motion-duration-sheet) var(--motion-ease);
+  --motion-scrim: opacity var(--motion-duration-scrim) var(--motion-ease);
+  --motion-page: transform var(--motion-duration-page) var(--motion-ease);
+  --motion-cover: opacity var(--motion-duration-cover) var(--motion-ease);
+
+  /* Layers, in paint order: page and tap grid, status bar, bars, side panel,
+     selection menu and Look up, sheets and dialogs, Import progress. */
+  --z-page: 0;
+  --z-status: 10;
+  --z-bars: 20;
+  --z-panel: 30;
+  --z-popover: 40;
+  --z-dialog: 50;
+  --z-import: 60;
+}
+
+/* Reading Themes: page, ink, meta, and ink at 14% for reading chrome borders. */
+:root[data-reading-theme="light"] {
+  --reading-page: #fbfaf8;
+  --reading-ink: #1c1917;
+  --reading-meta: #78716c;
+  --reading-border: rgba(28, 25, 23, 0.14);
+}
+
+:root[data-reading-theme="sepia"] {
+  --reading-page: #f4ecd8;
+  --reading-ink: #3b2f20;
+  --reading-meta: #76623f;
+  --reading-border: rgba(59, 47, 32, 0.14);
+}
+
+:root[data-reading-theme="dark"] {
+  --reading-page: #1c1917;
+  --reading-ink: #e7e5e4;
+  --reading-meta: #a8a29e;
+  --reading-border: rgba(231, 229, 228, 0.14);
+}
+
+:root[data-reading-theme="black"] {
+  --reading-page: #000000;
+  --reading-ink: #d6d3d1;
+  --reading-meta: #8f8a85;
+  --reading-border: rgba(214, 211, 209, 0.14);
+}
+
+[data-color-scheme="dark"] {
+  --scrim: rgba(0, 0, 0, 0.6);
+}
+
+/* E-ink Mode and reduced motion resolve every duration to zero, remove the
+   fades and slides, drop the paper shadows, and draw borders in full ink. */
+[data-eink="true"],
+[data-motion="reduce"] {
+  --motion-duration-bars: 0ms;
+  --motion-duration-sheet: 0ms;
+  --motion-duration-scrim: 0ms;
+  --motion-duration-page: 0ms;
+  --motion-duration-cover: 0ms;
+  --motion-bar-distance: 0px;
+  --motion-bars: none;
+  --motion-sheet: none;
+  --motion-scrim: none;
+  --motion-page: none;
+  --motion-cover: none;
+  --shadow-stage: none;
+  --shadow-page: none;
+  --reading-border: var(--reading-ink, var(--maibuk-color-foreground));
+}
