@@ -501,8 +501,11 @@ function App({ appearance, subscribe, bridge }: AppProps) {
 
   // A surface closing returns focus to its toolbar toggle. The request carries
   // a token so a repeated close fires again, and a silent reset sends none.
+  // A layout effect, not an effect: Preact 11 defers effects through a timer,
+  // and a focus return that lands late steals focus from a surface the author
+  // just opened (the legacy wiring focused the button synchronously).
   const focusRequest = chrome.surfaces.focus;
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!focusRequest) return;
     if (focusRequest.target === "contents") contentsToggleRef.current?.focus();
     else findToggleRef.current?.focus();
