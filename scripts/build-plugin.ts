@@ -15,7 +15,7 @@
  * caller's job: the Built-in build validates before it calls `buildPlugin`, and
  * the fixture sources are validated by `src/test/unit/plugins/`.
  */
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { cp } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { type Alias, build } from "vite";
@@ -127,11 +127,18 @@ async function buildFrameEntry(options: {
       },
     },
   });
-  if (!existsSync(join(outDir, frameEntry.bundle))) {
+  const bundlePath = join(outDir, frameEntry.bundle);
+  if (!existsSync(bundlePath)) {
     throw new Error(
       `built ${id ?? sourceDir} but ${frameEntry.bundle} is missing; the manifest frameEntry.bundle must match`
     );
   }
+  // Minification drops a Rollup banner, so the file says where it came from
+  // after the build: the bundle lives in the source tree during tests, and a
+  // reader there must know not to edit it.
+  const banner = `// Generated from ${frameEntry.source} by scripts/build-plugin.ts; do not edit.\n`;
+  const bundled = readFileSync(bundlePath, "utf8");
+  if (!bundled.startsWith(banner)) writeFileSync(bundlePath, banner + bundled);
 }
 
 /**
@@ -213,4 +220,46 @@ export async function buildPlugin(options: BuildPluginOptions): Promise<void> {
   // Third-party art the Plugin derives from ships its notice beside the bundle.
   const licenses = join(sourceDir, "LICENSES");
   if (existsSync(licenses)) await cp(licenses, join(outDir, "LICENSES"));
+}
+
+/** How to build one Plugin's Frame entry without building the whole Plugin. */
+export interface BuildPluginFrameEntryOptions {
+  /** The Plugin source folder; both manifest paths are relative to it. */
+  sourceDir: string;
+  /** The manifest declaring `frameEntry`. */
+  manifestPath: string;
+  /** Where the bundle lands; defaults to `sourceDir`, the source tree. */
+  outDir?: string;
+  /** Minify the bundle; defaults to true, like the Built-in build. */
+  minify?: boolean;
+}
+
+/**
+ * Bundles one Plugin's Frame entry on its own. The Vitest global setup calls it
+ * before the Frame tests read the built script from the source tree, so they
+ * run the exact artifact the Plugin build ships at the manifest's `bundle`
+ * path.
+ */
+export async function buildPluginFrameEntry(options: BuildPluginFrameEntryOptions): Promise<void> {
+  const { sourceDir, manifestPath, outDir = sourceDir, minify = true } = options;
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as BuildPluginManifest;
+  const frameEntry = manifest.frameEntry;
+  if (
+    frameEntry === undefined ||
+    typeof frameEntry.source !== "string" ||
+    frameEntry.source === "" ||
+    typeof frameEntry.bundle !== "string" ||
+    frameEntry.bundle === ""
+  ) {
+    throw new Error(`${manifestPath} declares no valid frameEntry`);
+  }
+  await buildFrameEntry({
+    id: manifest.id,
+    sourceDir,
+    outDir,
+    frameEntry,
+    minify,
+    define: {},
+    alias: undefined,
+  });
 }

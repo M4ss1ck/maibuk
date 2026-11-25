@@ -11,6 +11,7 @@
   "lifecycle": "on-demand",
   "warmStart": "intent",
   "customUi": true,
+  "frameEntry": { "source": "frame/entry.ts", "bundle": "assets/ui/reader.js" },
   "defaultLanguage": "en",
   "permissions": {
     "required": ["files:pick"],
