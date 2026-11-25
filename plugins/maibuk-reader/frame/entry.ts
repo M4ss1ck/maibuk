@@ -30,6 +30,7 @@
  This is the TypeScript source; `scripts/build-plugin.ts` bundles it to the
  classic script `assets/ui/reader.js`, which the Frame's HTML loads. */
 
+import { createArchive, DocumentError, IMAGE_EXTENSIONS } from "./archive";
 import { hooks, positionDebounceMs } from "./hooks";
 import { createFrameProtocol, errorCode, type FrameOpenMessage } from "./protocol";
 import type {
@@ -37,7 +38,6 @@ import type {
   FrameFoliate,
   FrameLabels,
   FramePdf,
-  FrameZipEntry,
   FrameZoom,
   PagePosition,
   ReaderSettings,
@@ -193,6 +193,7 @@ const hostWindow = window as Window & { maibuk?: { port?: MessagePort } };
 const port = hostWindow.maibuk && hostWindow.maibuk.port;
 const protocol = createFrameProtocol(port);
 const { post, requestBytes, requestZipList, requestZipEntry } = protocol;
+const archive = createArchive({ requestZipList, requestZipEntry });
 const backButton = el("back");
 const contentsToggle = el("contents-toggle");
 const findToggle = el("find-toggle");
@@ -262,9 +263,6 @@ let currentDocument: any = null;
 let mode: "pdf" | "flow" | "fixed" | "comic" = "pdf";
 let documentFormat: string = "";
 let flow: any = null;
-let zipEntries: FrameZipEntry[] = [];
-const zipByName: Map<string, FrameZipEntry> = new Map();
-const objectUrls: Set<string> = new Set();
 const comicCache: Map<number, string> = new Map();
 let comicFiles: string[] = [];
 const FLOW_GAP = 40;
@@ -750,27 +748,6 @@ async function makeCover(): Promise<string | null> {
 /* Documents: archive, parsers, Flowing and Page views ----------------------- */
 const sanitizer = (globalThis as any).ReaderSanitizer;
 const FB2_MAX_BYTES = 20 * 1024 * 1024;
-const IMAGE_EXTENSIONS = [
-  ".jpg",
-  ".jpeg",
-  ".png",
-  ".gif",
-  ".bmp",
-  ".webp",
-  ".svg",
-  ".jxl",
-  ".avif",
-];
-
-/** Why a document could not be opened. */
-class DocumentError extends Error {
-  declare code: "drm" | "corrupt" | "too-large";
-  constructor(code: "drm" | "corrupt" | "too-large", message: string) {
-    super(message);
-    this.name = "DocumentError";
-    this.code = code;
-  }
-}
 
 /** Imports foliate's bundled parsers from the `blob:` URL the `open` carries. */
 async function importFoliate(source: string) {
@@ -800,101 +777,6 @@ function purifyFrom(module: any) {
   return module && module.default ? module.default : module;
 }
 
-/* Archive access -------------------------------------------------------- */
-
-/** Decodes archive text, as the Worker's zip reader once did. */
-const UTF8 = new TextDecoder("utf-8");
-
-/** Lists the archive once and keeps the entry table. */
-async function openZip() {
-  if (zipEntries.length > 0) return;
-  const response = await requestZipList();
-  const list = response && Array.isArray(response.entries) ? response.entries : [];
-  zipEntries = list;
-  zipByName.clear();
-  for (const item of zipEntries) zipByName.set(item.name, item);
-}
-
-/**
- * Inflates raw deflate bytes with the platform's own decompressor. The
- * Worker hands entries over as stored so a large image never holds it past
- * the host's heartbeat; the Frame inflates them here.
- */
-async function inflateEntry(bytes: Uint8Array, name: string): Promise<Uint8Array> {
-  try {
-    const source = new ReadableStream({
-      start(controller) {
-        controller.enqueue(bytes);
-        controller.close();
-      },
-    });
-    const inflated = source.pipeThrough(new DecompressionStream("deflate-raw"));
-    return new Uint8Array(await new Response(inflated).arrayBuffer());
-  } catch {
-    throw new DocumentError("corrupt", `The archive's entry ${name} will not inflate`);
-  }
-}
-
-async function zipBytes(name: string): Promise<Uint8Array> {
-  const data = await requestZipEntry(name);
-  if (!(data && data.buffer)) throw new DocumentError("corrupt", `The archive has no ${name}`);
-  const bytes = new Uint8Array(data.buffer);
-  return data.deflated ? inflateEntry(bytes, name) : bytes;
-}
-
-async function zipText(name: string): Promise<string | null> {
-  try {
-    return UTF8.decode(await zipBytes(name));
-  } catch (error) {
-    if (errorCode(error) === "missing") return null;
-    throw error;
-  }
-}
-
-function zipSize(name: string): number {
-  const item = zipByName.get(name);
-  return item ? item.size : 0;
-}
-
-/** The loader foliate's EPUB parser expects, backed by the Worker's archive. */
-function zipLoader() {
-  return {
-    loadText: zipText,
-
-    loadBlob: async (name: string) =>
-      new Blob([(await zipBytes(name)) as BlobPart], { type: sanitizer.mediaTypeFor(name) }),
-    getSize: zipSize,
-  };
-}
-
-/** Creates a `blob:` URL the Frame owns and revokes when the section changes. */
-function newObjectUrl(blob: Blob) {
-  const url = URL.createObjectURL(blob);
-  objectUrls.add(url);
-  return url;
-}
-
-async function archiveAssetUrl(path: string, type: string): Promise<string | null> {
-  if (!path) return null;
-  try {
-    const bytes = await zipBytes(path);
-    return newObjectUrl(new Blob([bytes as BlobPart], { type }));
-  } catch {
-    return null;
-  }
-}
-
-function revokeObjectUrls() {
-  for (const url of objectUrls) {
-    try {
-      URL.revokeObjectURL(url);
-    } catch {
-      /* The platform may already have dropped it. */
-    }
-  }
-  objectUrls.clear();
-}
-
 /* Opening documents --------------------------------------------------------- */
 
 /**
@@ -910,10 +792,10 @@ async function openDocument(
     foliate = await importFoliate(resources.source);
     purify = purifyFrom(await importPurify(resources.purify));
     documentFormat = format;
-    if (format === "epub" || format === "cbz") await openZip();
+    if (format === "epub" || format === "cbz") await archive.open();
 
     if (format === "epub") {
-      currentDocument = new foliate.EPUB(zipLoader());
+      currentDocument = new foliate.EPUB(archive.loader());
       await currentDocument.init();
     } else if (format === "cbz") {
       openComic();
@@ -1018,7 +900,8 @@ function mobiFile() {
 /** A CBZ as a minimal document: one section per image, sorted naturally. */
 function openComic() {
   const collator = new Intl.Collator(undefined, { numeric: true });
-  comicFiles = zipEntries
+  comicFiles = archive
+    .entries()
     .map((item) => item.name)
     .filter((name) => IMAGE_EXTENSIONS.some((extension) => name.toLowerCase().endsWith(extension)))
     .sort(collator.compare);
@@ -1058,8 +941,8 @@ async function renderSection(section: any, options?: { fixed?: boolean }) {
   sanitizer.sanitizeDocument(doc, purify);
   await sanitizer.rewriteDocument(doc, {
     base: typeof section.id === "string" ? section.id : "",
-    assetUrl: archiveAssetUrl,
-    assetText: zipText,
+    assetUrl: archive.assetUrl,
+    assetText: archive.text,
   });
   const body = doc.body || doc.querySelector("body") || doc.documentElement;
 
@@ -1128,7 +1011,7 @@ async function loadFlowSection(
   const section = currentDocument.sections[index];
   if (!section) return;
   const generation = ++viewGeneration;
-  revokeObjectUrls();
+  archive.revoke();
   const geometry = flowGeometry();
   const rendered = await renderSection(section, {});
   if (destroyed || generation !== viewGeneration) return;
@@ -1413,7 +1296,7 @@ async function renderFixedPage() {
   const section = currentDocument.sections[pageIndex];
   if (!section) return;
   const generation = ++viewGeneration;
-  revokeObjectUrls();
+  archive.revoke();
   const rendered = await renderSection(section, { fixed: true });
   if (destroyed || generation !== viewGeneration) return;
   const viewport = rendered.viewport || fixedViewport(rendered.doc);
@@ -1439,7 +1322,7 @@ async function comicUrl(index: number): Promise<string | null> {
   if (cached) return cached;
   const name = comicFiles[index];
   if (!name) return null;
-  const bytes = await zipBytes(name);
+  const bytes = await archive.bytes(name);
   const url = URL.createObjectURL(
     new Blob([bytes as BlobPart], { type: sanitizer.mediaTypeFor(name) })
   );
@@ -1577,7 +1460,7 @@ async function documentCover() {
   let blob = null;
   try {
     if (documentFormat === "cbz") {
-      const bytes = await zipBytes(comicFiles[0]);
+      const bytes = await archive.bytes(comicFiles[0]);
       blob = new Blob([bytes as BlobPart], { type: sanitizer.mediaTypeFor(comicFiles[0]) });
     } else if (typeof currentDocument.getCover === "function") {
       blob = await currentDocument.getCover();
@@ -2212,7 +2095,7 @@ function destroyDocument() {
   viewGeneration += 1;
   search.generation += 1;
   clearCache();
-  revokeObjectUrls();
+  archive.revoke();
   clearComicCache();
   protocol.abortArchive("Reader closed");
   if (currentDocument && typeof currentDocument.destroy === "function") {
@@ -2225,8 +2108,7 @@ function destroyDocument() {
   currentDocument = null;
   flow = null;
   comicFiles = [];
-  zipEntries = [];
-  zipByName.clear();
+  archive.reset();
   protocol.abortReads("Reader closed");
   if (loadingTask && typeof loadingTask.destroy === "function") {
     try {
