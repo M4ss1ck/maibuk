@@ -34,6 +34,15 @@ export interface SectionPosition {
 /** Where the author was in a Document. */
 export type ReadingPosition = PagePosition | CfiPosition | SectionPosition;
 
+/**
+ * The appearance Maibuk draws with: the resolved color scheme and whether
+ * E-ink Mode is applied, exactly as the host serves them.
+ */
+export interface Appearance {
+  colorScheme: "light" | "dark";
+  eink: boolean;
+}
+
 /** The Document fields the Frame draws. */
 export interface FrameEntry {
   id: string;

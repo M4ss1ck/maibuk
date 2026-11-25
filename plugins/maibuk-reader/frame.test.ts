@@ -279,6 +279,7 @@ function loadFrame(
         size: fileSize,
         labels: LABELS,
         language: "en",
+        appearance: { colorScheme: "light", eink: false },
         pdf: { displaySource: "export {};", css: ".textLayer { position: absolute; }" },
         pdfPort,
         ...options,
@@ -712,6 +713,35 @@ describe("labels", () => {
     frame.port.deliver({ kind: "language", language: "es", labels: LABELS_ES });
     expect(el("back").getAttribute("aria-label")).toBe("Volver al estante");
     expect(el("page-indicator").textContent).toBe("1 de 12");
+  });
+});
+
+describe("appearance", () => {
+  /** The div the Preact app draws inside the Frame's `#app-root`. */
+  function drawnRoot(): HTMLElement {
+    const drawn = el("app-root").firstElementChild;
+    if (!(drawn instanceof HTMLElement)) throw new Error("the app root drew nothing");
+    return drawn;
+  }
+
+  it("draws the appearance Maibuk opened with, then follows a change without reopening", async () => {
+    const stub = createPdfStub();
+    frame = loadFrame(stub);
+    frame.open({ appearance: { colorScheme: "dark", eink: true } });
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 12"));
+    expect(drawnRoot().dataset.colorScheme).toBe("dark");
+    expect(drawnRoot().dataset.eink).toBe("true");
+
+    // The author turns to page 2; the change must redraw the app, not the Document.
+    await userEvent.setup().keyboard("{ArrowRight}");
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("2 of 12"));
+
+    frame.port.deliver({ kind: "appearance", appearance: { colorScheme: "light", eink: false } });
+    await vi.waitFor(() => expect(drawnRoot().dataset.colorScheme).toBe("light"));
+    expect(drawnRoot().dataset.eink).toBe("false");
+    expect(el("page-indicator").textContent).toBe("2 of 12");
+    expect(stub.documents).toHaveLength(1);
+    expect(frame.port.messages.filter((message) => message.kind === "ready")).toHaveLength(1);
   });
 });
 

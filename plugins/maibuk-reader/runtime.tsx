@@ -174,6 +174,11 @@ export function startReader(client: PluginClient, serve: ReaderServe): void {
       for (const session of runtime.sessions.values()) session.setLanguage(payload.language);
     })
     .catch(() => {});
+  void client
+    .on("appearance.changed", (payload) => {
+      for (const session of runtime.sessions.values()) session.setAppearance(payload);
+    })
+    .catch(() => {});
   followReturnTarget(client, runtime);
   void client
     .on("files.dropped", (payload) => {

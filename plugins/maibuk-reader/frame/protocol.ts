@@ -10,6 +10,7 @@
  */
 
 import type {
+  Appearance,
   FrameEntry,
   FrameFoliate,
   FrameLabels,
@@ -28,6 +29,7 @@ export interface FrameOpenMessage {
   size: number;
   labels: FrameLabels;
   language: string;
+  appearance: Appearance;
   pdf?: FramePdf;
   pdfPort?: MessagePort;
   foliate?: FrameFoliate;
@@ -60,6 +62,12 @@ export interface FrameLanguageMessage {
   labels?: FrameLabels;
 }
 
+/** Tells the Frame Maibuk's appearance changed, so it redraws in it. */
+export interface FrameAppearanceMessage {
+  kind: "appearance";
+  appearance: Appearance;
+}
+
 /** Lists every entry of the archive the Document is packed in. */
 export interface FrameZipListMessage {
   kind: "zip-list";
@@ -88,6 +96,7 @@ export type WorkerToFrameMessage =
   | FrameReadErrorMessage
   | FrameCommandMessage
   | FrameLanguageMessage
+  | FrameAppearanceMessage
   | FrameZipListMessage
   | FrameZipDataMessage
   | FrameZipErrorMessage;
@@ -152,6 +161,8 @@ export interface FrameProtocol {
   onCommand?: (id: string) => void;
   /** Handles `language`; `entry.ts` re-labels its chrome. */
   onLanguage?: (language: string, labels: FrameLabels | null) => void;
+  /** Handles `appearance`; `entry.ts` redraws the app in it. */
+  onAppearance?: (appearance: Appearance) => void;
 }
 
 /** Whether one port message names a message the Frame handles. */
@@ -278,6 +289,11 @@ export function createFrameProtocol(port: MessagePort | null | undefined): Frame
       case "language":
         if (typeof data.language === "string") {
           client.onLanguage?.(data.language, data.labels ?? null);
+        }
+        return;
+      case "appearance":
+        if (typeof data.appearance === "object" && data.appearance !== null) {
+          client.onAppearance?.(data.appearance);
         }
         return;
       case "zip-list":

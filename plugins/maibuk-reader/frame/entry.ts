@@ -30,7 +30,7 @@
  This is the TypeScript source; `scripts/build-plugin.ts` bundles it to the
  classic script `assets/ui/reader.js`, which the Frame's HTML loads. */
 
-import { mountApp } from "./app";
+import { mountApp, DEFAULT_APPEARANCE } from "./app";
 import { createArchive, DocumentError } from "./archive";
 import { createComic } from "./comic";
 import { createContents, documentOutline } from "./contents";
@@ -42,6 +42,7 @@ import { createPdf, MAX_CACHED_PAGES } from "./pdf";
 import { createPosition } from "./position";
 import { createFrameProtocol, errorCode, type FrameOpenMessage } from "./protocol";
 import type {
+  Appearance,
   FrameEntry,
   FrameFoliate,
   FrameLabels,
@@ -276,6 +277,7 @@ const comic = createComic({
 });
 
 let language = "en";
+let appearance: Appearance = DEFAULT_APPEARANCE;
 let providedLabels: FrameLabels | null = null;
 let entry: FrameEntry | null = null;
 let settings: ReaderSettings = {
@@ -400,6 +402,21 @@ function setLabels() {
   if (searchBar && !searchBar.hidden) find.updateStatus();
 }
 
+/** The Preact app's appearance listeners; nothing else redraws with it. */
+const appearanceListeners = new Set<(next: Appearance) => void>();
+
+/** Records Maibuk's appearance and redraws the Preact app in it. */
+function applyAppearance(next: Appearance) {
+  appearance = next;
+  for (const listener of appearanceListeners) listener(next);
+}
+
+/** Hands the Preact app every appearance change; returns its unsubscribe. */
+function subscribeAppearance(listener: (next: Appearance) => void): () => void {
+  appearanceListeners.add(listener);
+  return () => appearanceListeners.delete(listener);
+}
+
 /** A button that stays focusable while it does nothing, so focus never drops. */
 function setInactive(button: any, inactive: boolean) {
   if (!button) return;
@@ -511,6 +528,7 @@ async function handleOpen(message: FrameOpenMessage) {
   fileSize = typeof message.size === "number" ? message.size : 0;
   providedLabels = message.labels || null;
   language = typeof message.language === "string" ? message.language : language;
+  applyAppearance(message.appearance);
   setLabels();
   resetDocument();
   if (!entry) {
@@ -1306,9 +1324,22 @@ viewer.addEventListener("scroll", onViewerScroll, { passive: true });
 window.addEventListener("message", onHostMessage);
 updateControls();
 
-/* The Preact app mounts into `#app-root`; it renders nothing yet (#942). */
+/* The Preact app mounts into `#app-root` and draws the appearance (#942). */
 const appRoot = el("app-root");
-if (appRoot) mountApp(appRoot);
+if (appRoot) {
+  mountApp(appRoot, appearance, subscribeAppearance);
+} else {
+  // `#app-root` follows this script in the Frame's HTML, so a fresh parse has
+  // not reached it yet; mount once the document is complete.
+  document.addEventListener(
+    "DOMContentLoaded",
+    () => {
+      const root = el("app-root");
+      if (root) mountApp(root, appearance, subscribeAppearance);
+    },
+    { once: true }
+  );
+}
 
 protocol.onOpen = handleOpen;
 protocol.onCommand = runCommand;
@@ -1317,6 +1348,7 @@ protocol.onLanguage = (nextLanguage, labels) => {
   if (labels) providedLabels = labels;
   setLabels();
 };
+protocol.onAppearance = applyAppearance;
 
 if (port) {
   port.onmessage = onMessage;
