@@ -30,7 +30,13 @@
  This is the TypeScript source; `scripts/build-plugin.ts` bundles it to the
  classic script `assets/ui/reader.js`, which the Frame's HTML loads. */
 
-import { mountApp, DEFAULT_APPEARANCE } from "./app";
+import {
+  mountApp,
+  DEFAULT_APPEARANCE,
+  type ChromeLabels,
+  type ChromeState,
+  type FrameBridge,
+} from "./app";
 import { createArchive, DocumentError } from "./archive";
 import { createComic } from "./comic";
 import { createContents, documentOutline } from "./contents";
@@ -176,19 +182,6 @@ const positionEngine = createPosition({
   zoom: () => zoomSetting,
   pdfPageCount: () => pdf.pageCount(),
 });
-const backButton = el("back");
-const contentsToggle = el("contents-toggle");
-const findToggle = el("find-toggle");
-const zoomOutButton = el("zoom-out");
-const zoomInButton = el("zoom-in");
-const fitWidthButton = el("fit-width");
-const fitPageButton = el("fit-page");
-const layoutToggle = el("layout-toggle");
-const fullscreenToggle = el("fullscreen-toggle");
-const pagePreviousButton = el("page-previous");
-const pageNextButton = el("page-next");
-const zoomLevel = el("zoom-level");
-const pageIndicator = el("page-indicator");
 const searchBar = el("search-bar");
 const searchInput = el("search-input");
 const searchStatus = el("search-status");
@@ -200,19 +193,17 @@ const contentsTitle = el("contents-title");
 const contentsTree = el("contents-tree");
 const viewer = el("viewer");
 const stage = el("stage");
-const messageElement = el("message");
-const passwordForm = el("password-form");
-const passwordTitle = el("password-title");
-const passwordLabel = el("password-label");
-const passwordInput = el("password-input");
-const passwordError = el("password-error");
-const passwordSubmit = el("password-submit");
+/* The Contents and Find engines still own the two toolbar toggles they focus
+   and mark expanded; the Preact toolbar draws those elements in the same place,
+   so a lookup at call time finds the live one. */
+const contentsToggle = () => document.getElementById("contents-toggle");
+const findToggle = () => document.getElementById("find-toggle");
 
 /* The Contents panel: the outline tree, its keyboard navigation, and where its
    entries land. */
 const contents = createContents({
   panel: () => contentsPanel,
-  button: () => contentsToggle,
+  button: contentsToggle,
   tree: () => contentsTree,
   t: (key) => t(key),
   pdf: () => pdf.document(),
@@ -228,7 +219,7 @@ const find = createFind({
   bar: () => searchBar,
   input: () => searchInput,
   status: () => searchStatus,
-  toggle: () => findToggle,
+  toggle: findToggle,
   nextButton: () => searchNextButton,
   previousButton: () => searchPreviousButton,
   closeButton: () => searchCloseButton,
@@ -270,7 +261,7 @@ const comic = createComic({
   updateIndicator,
   schedulePosition: () => positionEngine.schedule(),
   showZoom: (scale) => {
-    if (zoomLevel) zoomLevel.textContent = t("zoomLevel", { percent: Math.round(scale * 100) });
+    bridge.setZoomLevel(t("zoomLevel", { percent: Math.round(scale * 100) }));
   },
   fail: (error) => failDocument(error),
   maxCachedPages: MAX_CACHED_PAGES,
@@ -310,6 +301,82 @@ let wheelTurned = false;
 
 let pageLabels: string[] | null = null;
 
+/* The chrome the Preact app draws: labels, toolbar state, page indicator, zoom
+   level, message, and password prompt. `entry.ts` owns the state and hands it
+   over the bridge; the app renders it and calls back through the actions. */
+let chrome: ChromeState = {
+  labels: labelsFromStrings(),
+  toolbar: {
+    previousDisabled: true,
+    nextDisabled: true,
+    fitWidthPressed: true,
+    fitPagePressed: false,
+    layoutPressed: false,
+    fullscreenAvailable: fullscreenAvailable(),
+    fullscreen: false,
+    flowing: false,
+  },
+  pageIndicator: "",
+  zoomLevel: "100%",
+  message: { hidden: true, text: "", error: false },
+  password: { visible: false, wrong: false },
+};
+
+const chromeListeners = new Set<(state: ChromeState) => void>();
+
+/** Records the chrome state and hands it to every mounted app listener. */
+function publishChrome(next: ChromeState) {
+  chrome = next;
+  for (const listener of chromeListeners) listener(next);
+}
+
+const bridge: FrameBridge = {
+  current: () => chrome,
+  subscribe(listener) {
+    chromeListeners.add(listener);
+    return () => {
+      chromeListeners.delete(listener);
+    };
+  },
+  setLabels(labels) {
+    publishChrome({ ...chrome, labels });
+  },
+  setToolbar(toolbar) {
+    publishChrome({ ...chrome, toolbar });
+  },
+  setPageIndicator(pageIndicator) {
+    publishChrome({ ...chrome, pageIndicator });
+  },
+  setZoomLevel(zoomLevel) {
+    publishChrome({ ...chrome, zoomLevel });
+  },
+  setMessage(message) {
+    publishChrome({ ...chrome, message });
+  },
+  setPassword(password) {
+    publishChrome({ ...chrome, password });
+  },
+  actions: {
+    back: () => leave(),
+    toggleContents: () => contents.toggle(undefined),
+    openFind: () => find.open(),
+    zoomIn: () => zoomBy(1.1),
+    zoomOut: () => zoomBy(1 / 1.1),
+    fitWidth: () => setZoom("width"),
+    fitPage: () => setZoom("page"),
+    toggleContinuous: () => pdf.toggleContinuous(),
+    toggleFullscreen: () => toggleFullscreen(),
+    previousPage: () => previousPage(),
+    nextPage: () => nextPage(),
+    submitPassword: (value) => onPasswordSubmit(value),
+  },
+};
+
+/** Hides the message area, keeping its text and tone for the next failure. */
+function hideMessage() {
+  bridge.setMessage({ ...chrome.message, hidden: true });
+}
+
 /* The PDF engine: pdf.js through the Worker, the page slots and Continuous
    scroll, the zoom and fit math, and the render cache. */
 const pdf = createPdf({
@@ -344,7 +411,7 @@ const pdf = createPdf({
   paintPdfMatches: (container, index) => find.paintPdfMatches(container, index),
   schedulePosition: () => positionEngine.schedule(),
   showZoom: (percent) => {
-    if (zoomLevel) zoomLevel.textContent = t("zoomLevel", { percent });
+    bridge.setZoomLevel(t("zoomLevel", { percent }));
   },
   showOutline: (outline) => contents.show(outline),
   setPageLabels: (labels) => {
@@ -352,13 +419,13 @@ const pdf = createPdf({
   },
   showStage: () => {
     stage.hidden = false;
-    messageElement.hidden = true;
-    passwordForm.hidden = true;
+    hideMessage();
+    bridge.setPassword({ visible: false, wrong: false });
   },
   sendMeta: () => {
     void meta.send();
   },
-  passwordOpen: () => Boolean(passwordForm && !passwordForm.hidden),
+  passwordOpen: () => chrome.password.visible,
   requestPassword,
   handleLoadError,
 });
@@ -380,24 +447,38 @@ function labelButton(button: any, label: string) {
   button.title = label;
 }
 
+/** The label strings the Preact toolbar and password prompt draw. */
+function labelsFromStrings(): ChromeLabels {
+  return {
+    back: t("back"),
+    contents: t("contents"),
+    find: t("find"),
+    previousPage: t("previousPage"),
+    nextPage: t("nextPage"),
+    zoomIn: t("zoomIn"),
+    zoomOut: t("zoomOut"),
+    increaseFontSize: t("increaseFontSize"),
+    decreaseFontSize: t("decreaseFontSize"),
+    fitWidth: t("fitWidth"),
+    fitPage: t("fitPage"),
+    continuousScroll: t("continuousScroll"),
+    fullScreen: t("fullScreen"),
+    exitFullScreen: t("exitFullScreen"),
+    passwordTitle: t("passwordTitle"),
+    passwordLabel: t("passwordLabel"),
+    passwordSubmit: t("passwordSubmit"),
+    passwordWrong: t("passwordWrong"),
+  };
+}
+
 function setLabels() {
   document.documentElement.lang = language;
-  labelButton(backButton, t("back"));
-  labelButton(contentsToggle, t("contents"));
-  labelButton(findToggle, t("find"));
-  labelButton(pagePreviousButton, t("previousPage"));
-  labelButton(pageNextButton, t("nextPage"));
-  labelButton(fitWidthButton, t("fitWidth"));
-  labelButton(fitPageButton, t("fitPage"));
-  labelButton(layoutToggle, t("continuousScroll"));
+  bridge.setLabels(labelsFromStrings());
   if (searchInput) searchInput.placeholder = t("searchPlaceholder");
   labelButton(searchPreviousButton, t("searchPrevious"));
   labelButton(searchNextButton, t("searchNext"));
   labelButton(searchCloseButton, t("searchClose"));
   if (contentsTitle) contentsTitle.textContent = t("contents");
-  if (passwordTitle) passwordTitle.textContent = t("passwordTitle");
-  if (passwordLabel) passwordLabel.textContent = t("passwordLabel");
-  if (passwordSubmit) passwordSubmit.textContent = t("passwordSubmit");
   updateIndicator();
   if (searchBar && !searchBar.hidden) find.updateStatus();
 }
@@ -415,17 +496,6 @@ function applyAppearance(next: Appearance) {
 function subscribeAppearance(listener: (next: Appearance) => void): () => void {
   appearanceListeners.add(listener);
   return () => appearanceListeners.delete(listener);
-}
-
-/** A button that stays focusable while it does nothing, so focus never drops. */
-function setInactive(button: any, inactive: boolean) {
-  if (!button) return;
-  if (inactive) button.setAttribute("aria-disabled", "true");
-  else button.removeAttribute("aria-disabled");
-}
-
-function isInactive(button: any) {
-  return button.getAttribute("aria-disabled") === "true";
 }
 
 /** Whether the shown page is the first and the last one. */
@@ -451,21 +521,19 @@ function pageBounds() {
 function updateControls() {
   const open = hasDocument();
   const doc = pdf.document();
-  document.body.dataset.mode = doc ? "pdf" : open ? mode : "";
   const bounds = pageBounds();
-  setInactive(pagePreviousButton, !open || bounds.first);
-  setInactive(pageNextButton, !open || bounds.last);
   const flowing = mode === "flow" && !doc;
-  labelButton(zoomOutButton, t(flowing ? "decreaseFontSize" : "zoomOut"));
-  labelButton(zoomInButton, t(flowing ? "increaseFontSize" : "zoomIn"));
-  if (fitWidthButton) fitWidthButton.setAttribute("aria-pressed", String(zoomSetting === "width"));
-  if (fitPageButton) fitPageButton.setAttribute("aria-pressed", String(zoomSetting === "page"));
-  if (layoutToggle) layoutToggle.setAttribute("aria-pressed", String(pdf.isContinuous()));
-  if (fullscreenToggle) {
-    fullscreenToggle.hidden = !fullscreenAvailable();
-    fullscreenToggle.setAttribute("aria-pressed", String(fullscreen));
-    labelButton(fullscreenToggle, t(fullscreen ? "exitFullScreen" : "fullScreen"));
-  }
+  document.body.dataset.mode = doc ? "pdf" : open ? mode : "";
+  bridge.setToolbar({
+    previousDisabled: !open || bounds.first,
+    nextDisabled: !open || bounds.last,
+    fitWidthPressed: zoomSetting === "width",
+    fitPagePressed: zoomSetting === "page",
+    layoutPressed: pdf.isContinuous(),
+    fullscreenAvailable: fullscreenAvailable(),
+    fullscreen,
+    flowing,
+  });
 }
 
 function clamp(value: unknown, min: number, max: number): number {
@@ -556,13 +624,9 @@ function resetDocument() {
   mode = "pdf";
   documentFormat = "";
   find.reset();
-  if (pageIndicator) pageIndicator.textContent = "";
-  if (messageElement) {
-    messageElement.hidden = true;
-    messageElement.textContent = "";
-    delete messageElement.dataset.error;
-  }
-  if (passwordForm) passwordForm.hidden = true;
+  bridge.setPageIndicator("");
+  bridge.setMessage({ hidden: true, text: "", error: false });
+  bridge.setPassword({ visible: false, wrong: false });
   if (stage) stage.hidden = true;
   find.close(false);
 }
@@ -603,7 +667,7 @@ const flowEngine = createFlow({
   highlightFlow: () => find.highlightFlow(),
   schedulePosition: () => positionEngine.schedule(),
   showZoom: (percent) => {
-    if (zoomLevel) zoomLevel.textContent = t("zoomLevel", { percent });
+    bridge.setZoomLevel(t("zoomLevel", { percent }));
   },
 });
 
@@ -693,8 +757,8 @@ async function openDocument(
     if (destroyed || !currentDocument) return;
     contents.show(documentOutline(currentDocument.toc));
     stage.hidden = false;
-    messageElement.hidden = true;
-    passwordForm.hidden = true;
+    hideMessage();
+    bridge.setPassword({ visible: false, wrong: false });
     const fixed = format === "cbz" || currentDocument.rendition?.layout === "pre-paginated";
     if (format === "cbz") {
       mode = "comic";
@@ -782,32 +846,36 @@ function nowMs(): number {
 /** Updates the page indicator for the Document now shown. */
 function updateIndicator() {
   updateControls();
-  if (!pageIndicator) return;
   const doc = pdf.document();
   if (doc) {
     const number = pageIndex + 1;
     const count = doc.numPages;
     const label =
       pageLabels && typeof pageLabels[pageIndex] === "string" ? pageLabels[pageIndex] : "";
-    pageIndicator.textContent =
+    bridge.setPageIndicator(
       label !== "" && label !== String(number)
         ? t("pageLabeled", { label, page: number, count })
-        : t("pageOf", { page: number, count });
+        : t("pageOf", { page: number, count })
+    );
     return;
   }
   const flow = flowEngine.state();
   if (mode === "flow" && flow) {
-    pageIndicator.textContent = t("sectionPage", {
-      page: flow.pageIndex + 1,
-      count: flow.pages,
-    });
+    bridge.setPageIndicator(
+      t("sectionPage", {
+        page: flow.pageIndex + 1,
+        count: flow.pages,
+      })
+    );
     return;
   }
   if (currentDocument) {
-    pageIndicator.textContent = t("pageOf", {
-      page: pageIndex + 1,
-      count: currentDocument.sections.length,
-    });
+    bridge.setPageIndicator(
+      t("pageOf", {
+        page: pageIndex + 1,
+        count: currentDocument.sections.length,
+      })
+    );
   }
 }
 
@@ -987,12 +1055,8 @@ function zoomBy(factor: number) {
 /* Password and errors --------------------------------------------------- */
 function showPassword(wrong: boolean) {
   stage.hidden = true;
-  messageElement.hidden = true;
-  passwordForm.hidden = false;
-  passwordError.hidden = !wrong;
-  if (wrong) passwordError.textContent = t("passwordWrong");
-  passwordInput.value = "";
-  passwordInput.focus();
+  hideMessage();
+  bridge.setPassword({ visible: true, wrong });
 }
 
 /** Asks for the password the PDF engine needs, resolving with what was submitted. */
@@ -1034,31 +1098,20 @@ function handleLoadError(error: unknown) {
 function fail(code: "corrupt" | "encrypted" | "unsupported" | "timeout", message: string) {
   destroyDocument();
   stage.hidden = true;
-  passwordForm.hidden = true;
-  messageElement.hidden = false;
-  messageElement.dataset.error = "true";
-  messageElement.textContent = message;
+  bridge.setPassword({ visible: false, wrong: false });
+  bridge.setMessage({ hidden: false, text: message, error: true });
   post({ kind: "load-error", code, reason: message });
 }
 
 function showMessage(message: string, isError: boolean) {
   stage.hidden = true;
-  passwordForm.hidden = true;
-  messageElement.hidden = false;
-  messageElement.textContent = message;
-  if (isError) messageElement.dataset.error = "true";
-  else delete messageElement.dataset.error;
+  bridge.setPassword({ visible: false, wrong: false });
+  bridge.setMessage({ hidden: false, text: message, error: isError });
 }
 
-function onPasswordSubmit(event: Event) {
-  event.preventDefault();
-  const value = passwordInput.value;
-  if (value === "") {
-    passwordInput.focus();
-    return;
-  }
-  passwordForm.hidden = true;
-  passwordError.hidden = true;
+/** Takes the password the prompt submitted and hands it to a waiting engine. */
+function onPasswordSubmit(value: string) {
+  bridge.setPassword({ visible: false, wrong: false });
   if (passwordResolver) {
     const resolve = passwordResolver;
     passwordResolver = null;
@@ -1286,34 +1339,7 @@ function cleanup() {
 /* Wiring ---------------------------------------------------------------- */
 setLabels();
 
-if (backButton) backButton.addEventListener("click", leave);
-if (contentsToggle) contentsToggle.addEventListener("click", () => contents.toggle(undefined));
-if (findToggle) findToggle.addEventListener("click", () => find.open());
-if (zoomOutButton) zoomOutButton.addEventListener("click", () => zoomBy(1 / 1.1));
-if (zoomInButton) zoomInButton.addEventListener("click", () => zoomBy(1.1));
-if (fitWidthButton) fitWidthButton.addEventListener("click", () => setZoom("width"));
-if (fitPageButton) fitPageButton.addEventListener("click", () => setZoom("page"));
-if (layoutToggle) layoutToggle.addEventListener("click", () => pdf.toggleContinuous());
-if (fullscreenToggle) fullscreenToggle.addEventListener("click", toggleFullscreen);
-if (pagePreviousButton)
-  pagePreviousButton.addEventListener("click", () => {
-    if (!isInactive(pagePreviousButton)) previousPage();
-  });
-if (pageNextButton)
-  pageNextButton.addEventListener("click", () => {
-    if (!isInactive(pageNextButton)) nextPage();
-  });
 find.bind();
-// The Frame sandbox has no `allow-forms`, so the password never travels as a
-// form submission: the Open button and Enter in the field send it directly.
-if (passwordSubmit) passwordSubmit.addEventListener("click", onPasswordSubmit);
-if (passwordInput) {
-  passwordInput.addEventListener("keydown", (event: KeyboardEvent) => {
-    // deprecated-api: Safari's IME-commit Enter has isComposing false; keyCode 229 is its only tell.
-    if (event.isComposing || event.keyCode === 229) return;
-    if (event.key === "Enter") onPasswordSubmit(event);
-  });
-}
 document.addEventListener("keydown", onKeyDown);
 window.addEventListener("pagehide", onPageHide);
 window.addEventListener("resize", onResize);
@@ -1324,10 +1350,11 @@ viewer.addEventListener("scroll", onViewerScroll, { passive: true });
 window.addEventListener("message", onHostMessage);
 updateControls();
 
-/* The Preact app mounts into `#app-root` and draws the appearance (#942). */
+/* The Preact app mounts into `#app-root` and draws the appearance, toolbar,
+   message area, and password prompt (#942). */
 const appRoot = el("app-root");
 if (appRoot) {
-  mountApp(appRoot, appearance, subscribeAppearance);
+  mountApp(appRoot, appearance, subscribeAppearance, bridge);
 } else {
   // `#app-root` follows this script in the Frame's HTML, so a fresh parse has
   // not reached it yet; mount once the document is complete.
@@ -1335,7 +1362,7 @@ if (appRoot) {
     "DOMContentLoaded",
     () => {
       const root = el("app-root");
-      if (root) mountApp(root, appearance, subscribeAppearance);
+      if (root) mountApp(root, appearance, subscribeAppearance, bridge);
     },
     { once: true }
   );

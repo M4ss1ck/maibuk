@@ -215,6 +215,7 @@ function loadFrame(name: string, options: OpenOptions = {}): Frame {
         size: bytes.length,
         labels: LABELS,
         language: "en",
+        appearance: { colorScheme: "light", eink: false },
         foliate: { source: "export {};", purify: "export default {};" },
       });
     },

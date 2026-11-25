@@ -714,6 +714,20 @@ describe("labels", () => {
     expect(el("back").getAttribute("aria-label")).toBe("Volver al estante");
     expect(el("page-indicator").textContent).toBe("1 de 12");
   });
+
+  it("re-labels the view-dependent toolbar controls on a language change", async () => {
+    const stub = createPdfStub();
+    frame = loadFrame(stub);
+    frame.open();
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 12"));
+    frame.port.deliver({ kind: "language", language: "es", labels: LABELS_ES });
+    // Zoom, fit, and full screen are named from the live view state rather
+    // than once at boot, so the port must recompute them in Spanish too.
+    expect(el("zoom-out").getAttribute("aria-label")).toBe(LABELS_ES.zoomOut);
+    expect(el("zoom-out").getAttribute("title")).toBe(LABELS_ES.zoomOut);
+    expect(el("fit-page").getAttribute("aria-label")).toBe(LABELS_ES.fitPage);
+    expect(el("fullscreen-toggle").getAttribute("aria-label")).toBe(LABELS_ES.fullScreen);
+  });
 });
 
 describe("appearance", () => {
