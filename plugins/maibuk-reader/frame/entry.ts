@@ -30,6 +30,7 @@
  This is the TypeScript source; `scripts/build-plugin.ts` bundles it to the
  classic script `assets/ui/reader.js`, which the Frame's HTML loads. */
 
+import { mountApp } from "./app";
 import { createArchive, DocumentError } from "./archive";
 import { createComic } from "./comic";
 import { createContents, documentOutline } from "./contents";
@@ -1304,6 +1305,10 @@ viewer.addEventListener("wheel", onWheel, { passive: false });
 viewer.addEventListener("scroll", onViewerScroll, { passive: true });
 window.addEventListener("message", onHostMessage);
 updateControls();
+
+/* The Preact app mounts into `#app-root`; it renders nothing yet (#942). */
+const appRoot = el("app-root");
+if (appRoot) mountApp(appRoot);
 
 protocol.onOpen = handleOpen;
 protocol.onCommand = runCommand;
