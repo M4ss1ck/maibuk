@@ -383,8 +383,8 @@ The span from opening one Chapter, Note, or Canvas for editing to leaving it, du
 _Avoid_: editor state, autosave
 
 **Reading Position**:
-Where the author was on this device: caret and scroll in a Chapter or Note, pan and zoom on a Canvas, and the spot a Plugin's reading view returns to.
-_Avoid_: bookmark, cursor position
+Where the author was on this device: which page of Maibuk they were on, so Maibuk reopens there; caret and scroll in a Chapter or Note; pan and zoom on a Canvas; and the spot a Plugin's reading view returns to.
+_Avoid_: bookmark, cursor position, session location, last path
 
 **Last Opened Chapter**:
 The Chapter a Book reopens to.
@@ -420,7 +420,7 @@ _UI_: en "PDF fonts" / es "Fuentes para PDF"
 _Avoid_: font pack
 
 **Word Lookup**:
-Finding a word's definition while writing.
+Finding a word's definition while writing, or while reading in a Plugin such as Reader.
 _UI_: en "Look up word", "Word lookup" / es "Buscar palabra"
 _Avoid_: dictionary (reserved for Custom Dictionary)
 
