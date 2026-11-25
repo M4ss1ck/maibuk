@@ -43,6 +43,7 @@ import {
   recordStartupError,
 } from "@/features/plugins/approvals";
 import { reportPluginActivity } from "@/features/plugins/activity-report";
+import { currentPluginAppearance, onPluginAppearanceChange } from "@/features/plugins/appearance";
 import { createBuiltInPluginSource } from "@/features/plugins/builtin";
 import { registerPluginContributions } from "@/features/plugins/contributions";
 import { dropSeededPluginContributions } from "@/features/plugins/contributions-registry";
@@ -729,6 +730,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
         trackLibraryWork,
         eventSnapshot: (event) => {
           if (event === "language.changed") return { language: currentPluginLanguage() };
+          if (event === "appearance.changed") return currentPluginAppearance();
           if (event === "endpoint.addressChanged") {
             return { url: endpointUrlFor(usePluginManagementStore.getState().endpoint, pluginId) };
           }
@@ -948,6 +950,14 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
   const offLanguage = onPluginLanguageChange((language) => {
     for (const entry of entries.values()) {
       entry.runtime?.broker.emit("language.changed", { language });
+    }
+  });
+  // E-ink Mode and the resolved color scheme reach every running Plugin the
+  // way language does: the source reads the classes ThemeProvider applies, so
+  // a Frame and a Plugin never disagree (#942).
+  const offAppearance = onPluginAppearanceChange((appearance) => {
+    for (const entry of entries.values()) {
+      entry.runtime?.broker.emit("appearance.changed", appearance);
     }
   });
   // A shown page's return target belongs to that one Plugin (#786): only its
@@ -1267,6 +1277,7 @@ export function createPluginLifecycle(options: PluginLifecycleOptions = {}): Plu
       offBeforeBulkReplace();
       offBulkReplaceCancelled();
       offLanguage();
+      offAppearance();
       offReturnTarget();
       offEndpointAddress();
       offEditorContent();

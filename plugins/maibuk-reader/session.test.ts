@@ -601,6 +601,35 @@ describe("commands", () => {
   });
 });
 
+describe("appearance", () => {
+  it("opens with Maibuk's appearance and forwards a change to the Frame", async () => {
+    const entry = shelfEntry({ id: "doc-1", grant: "grant-1" });
+    const harness = setup({ entry });
+    // The runtime hands every mounted Frame the appearance the host serves.
+    const off = await harness.client.on("appearance.changed", (payload) =>
+      harness.session.setAppearance(payload)
+    );
+    try {
+      const open = await opened(harness);
+      expect(open.appearance).toEqual({ colorScheme: "light", eink: false });
+
+      harness.host.setAppearance({ colorScheme: "dark", eink: true });
+      await vi.waitFor(() => {
+        const [last] = harness.messages
+          .filter((message) => message.kind === "appearance")
+          .slice(-1);
+        expect(last).toEqual({
+          kind: "appearance",
+          appearance: { colorScheme: "dark", eink: true },
+        });
+      });
+    } finally {
+      off();
+      await harness.stop();
+    }
+  });
+});
+
 describe("back", () => {
   it("saves a pending Reading Position before leaving for the Shelf", async () => {
     const entry = shelfEntry({ id: "doc-1", grant: "grant-1", lastReadAt: 1_000 });

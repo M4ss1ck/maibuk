@@ -468,6 +468,38 @@ describe("createTestHost() events and language", () => {
     }
   });
 
+  it("reads the appearance, replays it on subscription, and delivers every change", async () => {
+    const host = createTestHost({
+      manifest: fixtureManifest(),
+      appearance: { colorScheme: "light", eink: false },
+    });
+    try {
+      const client = createPluginClient(host.port);
+      const seen: { colorScheme: "light" | "dark"; eink: boolean }[] = [];
+      const off = await client.on("appearance.changed", (payload) => seen.push(payload));
+
+      // The current value arrives on subscription, so a Plugin activated after
+      // a change still learns it and no change is missed.
+      await vi.waitFor(() => expect(seen).toEqual([{ colorScheme: "light", eink: false }]));
+      host.setAppearance({ colorScheme: "dark", eink: false });
+      host.setAppearance({ colorScheme: "dark", eink: true });
+      await vi.waitFor(() =>
+        expect(seen).toEqual([
+          { colorScheme: "light", eink: false },
+          { colorScheme: "dark", eink: false },
+          { colorScheme: "dark", eink: true },
+        ])
+      );
+      await expect(client.appearance.get({})).resolves.toEqual({
+        colorScheme: "dark",
+        eink: true,
+      });
+      await off();
+    } finally {
+      await host.stop();
+    }
+  });
+
   it("delivers library.changed per entity and in bulk, and availability ungated", async () => {
     const host = createTestHost({
       manifest: {

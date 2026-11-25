@@ -24,6 +24,7 @@ export const PLUGIN_API_NAMESPACES = [
   "editor",
   "navigation",
   "language",
+  "appearance",
   "fonts",
   "endpoint",
   "permissions",
@@ -567,6 +568,15 @@ export const PLUGIN_API_TABLE = [
     effect: "read",
   }),
   defineApiRow({
+    id: "appearance.get",
+    description:
+      "Reads the appearance Maibuk draws with: the resolved color scheme and whether E-ink Mode is applied. No permission is required.",
+    input: none,
+    output: z.strictObject({ colorScheme: z.enum(["light", "dark"]), eink: z.boolean() }),
+    permission: null,
+    effect: "read",
+  }),
+  defineApiRow({
     id: "fonts.list",
     description:
       "Lists the PDF Fonts installed on this device, in catalog order, each with the id fonts.read takes and the family name it draws in. No permission is required.",
@@ -924,6 +934,14 @@ export const PLUGIN_API_EVENTS = [
     description:
       "Maibuk's language changed. The current value is delivered on subscription, so a Plugin that starts after a change never misses it.",
     payload: z.strictObject({ language: z.string() }),
+    permission: null,
+    replays: true,
+  }),
+  defineApiEvent({
+    id: "appearance.changed",
+    description:
+      "Maibuk's appearance changed: the resolved color scheme, whether E-ink Mode is applied, or both. The current value is delivered on subscription, so a Plugin that starts after a change never misses it.",
+    payload: z.strictObject({ colorScheme: z.enum(["light", "dark"]), eink: z.boolean() }),
     permission: null,
     replays: true,
   }),

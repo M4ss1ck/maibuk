@@ -215,6 +215,7 @@ function loadFrame(name: string, options: OpenOptions = {}): Frame {
         size: bytes.length,
         labels: LABELS,
         language: "en",
+        appearance: { colorScheme: "light", eink: false },
         foliate: { source: "export {};", purify: "export default {};" },
       });
     },
@@ -476,6 +477,29 @@ describe("Escape order", () => {
     await user.keyboard("{Escape}");
     await vi.waitFor(() =>
       expect(frame?.port.messages.some((message) => message.kind === "back")).toBe(true)
+    );
+  });
+
+  it("never lets an appearance redraw flip a surface the author just opened", async () => {
+    frame = loadFrame("flowing.epub");
+    frame.open();
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 3 in this section"));
+
+    // The author opens Contents: the engine writes the panel's visibility, and
+    // the app mirrors it into the toggle's aria-expanded a microtask later. A
+    // native click holds the task open across the next two lines, which is the
+    // only way to reach the redraw before the mirror lands (user-event flushes
+    // microtasks inside every step, and the race never happens there).
+    el("contents-toggle").click();
+    expect(el("contents").hidden).toBe(false);
+
+    // An appearance change in the same task re-renders the app before that
+    // mirror lands. The redraw must never re-impose its stale surfaces state
+    // on the DOM: the panel stays open, the toggle reads expanded.
+    frame.port.deliver({ kind: "appearance", appearance: { colorScheme: "dark", eink: false } });
+    expect(el("contents").hidden).toBe(false);
+    await vi.waitFor(() =>
+      expect(el("contents-toggle").getAttribute("aria-expanded")).toBe("true")
     );
   });
 });

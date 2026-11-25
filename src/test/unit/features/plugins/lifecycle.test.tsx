@@ -1709,6 +1709,47 @@ describe("Plugin lifecycle: library and language events", () => {
     ).toEqual(["en", "es"]);
   });
 
+  it("replays and forwards appearance changes to a running Plugin", async () => {
+    const root = document.documentElement;
+    // The classes ThemeProvider writes: `.dark` for the resolved scheme and
+    // `.eink` for applied E-ink Mode.
+    root.classList.remove("dark", "eink");
+    const h = await createHarness({ approved: [makePlugin("alpha")] });
+    try {
+      await launchAll(h);
+      const port = h.framesFor("alpha")[0].pluginPort;
+      if (!port) throw new Error("alpha has no plugin port");
+
+      const seen: { colorScheme?: string; eink?: boolean }[] = [];
+      const original = port.onmessage;
+      port.onmessage = (event) => {
+        const data = event.data as { kind?: string; event?: string; payload?: unknown } | null;
+        if (data && data.kind === "event" && data.event === "appearance.changed") {
+          seen.push(data.payload as { colorScheme?: string; eink?: boolean });
+          return;
+        }
+        original?.call(port, event);
+      };
+      port.postMessage(JSON.stringify({ kind: "subscribe", id: 1, event: "appearance.changed" }));
+      await advance(0);
+
+      root.classList.add("dark");
+      await advance(0);
+      root.classList.add("eink");
+      await advance(0);
+
+      expect(seen).toEqual([
+        // The subscription replays the current value, then every change.
+        { colorScheme: "light", eink: false },
+        { colorScheme: "dark", eink: false },
+        { colorScheme: "dark", eink: true },
+      ]);
+    } finally {
+      root.classList.remove("dark", "eink");
+      h.lifecycle.dispose();
+    }
+  });
+
   it("delivers no Library content signal while the Library is unavailable (the Tutorial)", async () => {
     let available = false;
     const h = await createHarness({

@@ -10,7 +10,8 @@
  * Library namespace; `navigation.openEntity` opens an entity through the app
  * shell;
  * `navigation.openPage` opens a Plugin page;
- * `language.get` reads the app language; `fonts.*` lists and reads the PDF
+ * `language.get` reads the app language; `appearance.get` reads the resolved
+ * color scheme and the applied E-ink Mode; `fonts.*` lists and reads the PDF
  * Fonts installed on this device; `endpoint.address` reads this Plugin's
  * Plugin Endpoint address; `permissions.granted` lists the calling Plugin's own
  * Plugin Permissions; `secrets.*` writes the calling
@@ -42,6 +43,7 @@ import { endpointUrlFor } from "@/features/plugins/endpoint";
 import { getPluginFileSaver, savePluginFile } from "@/features/plugins/file-save";
 import { getPluginFileGrantStore, type PluginFileGrantStore } from "@/features/plugins/file-grants";
 import { listPluginPdfFonts, readPluginPdfFont } from "@/features/plugins/fonts";
+import { currentPluginAppearance } from "@/features/plugins/appearance";
 import { currentPluginLanguage } from "@/features/plugins/language";
 import {
   checkpointPluginBook,
@@ -271,6 +273,7 @@ export function createPluginHandlers(manifest: PluginHandlersManifest): PluginAp
       openPluginPage(pluginId ?? context.pluginId, pageId, context.pluginId),
     "navigation.return": (_params, { pluginId }) => returnFromPluginPage(pluginId),
     "language.get": async () => ({ language: currentPluginLanguage() }),
+    "appearance.get": () => currentPluginAppearance(),
     "fonts.list": () => listPluginPdfFonts(),
     "fonts.read": ({ id }) => readPluginPdfFont(id),
     "endpoint.address": (_params, { pluginId }) => ({

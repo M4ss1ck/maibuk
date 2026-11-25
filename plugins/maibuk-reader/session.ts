@@ -32,6 +32,7 @@ import {
   type PdfCore,
 } from "./loaders";
 import {
+  type Appearance,
   type FrameCommandId,
   type FrameEntry,
   type FrameLabels,
@@ -59,8 +60,11 @@ import {
 } from "./shelf";
 import { translate } from "./i18n";
 
-/** The SDK surface a session needs: the File Grant and Plugin storage. */
-export type SessionClient = Pick<PluginClient, "files" | "storage">;
+/** The SDK surface a session needs: the File Grant, Plugin storage, and the host's appearance. */
+export type SessionClient = Pick<PluginClient, "files" | "storage" | "appearance">;
+
+/** The appearance the Frame draws with when the host serves none. */
+const DEFAULT_APPEARANCE: Appearance = { colorScheme: "light", eink: false };
 
 /** What the runtime gives one mounted Frame. */
 export interface ReaderSessionDeps {
@@ -90,6 +94,8 @@ export interface ReaderSession {
   setEntry(entry: ShelfEntry | null): void;
   /** Tells the Frame the app language changed. */
   setLanguage(language: string): void;
+  /** Tells the Frame Maibuk's appearance changed, so it redraws in it. */
+  setAppearance(appearance: Appearance): void;
   /** Forwards one manifest reading Command. */
   command(id: FrameCommandId): void;
   /** Stops pdf.js, releases the port, and ignores anything later. */
@@ -257,6 +263,19 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     }
   }
 
+  /** The appearance Maibuk draws with now; the light scheme when the host refuses. */
+  async function currentAppearance(): Promise<Appearance> {
+    try {
+      const value = await client.appearance.get({});
+      return {
+        colorScheme: value.colorScheme === "dark" ? "dark" : "light",
+        eink: value.eink === true,
+      };
+    } catch {
+      return DEFAULT_APPEARANCE;
+    }
+  }
+
   /**
    * Starts the pdf.js core and hands the Frame one end of its channel.
    */
@@ -275,6 +294,7 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     if (disposed || opened) return;
     opened = true;
     const settings = await loadSettings();
+    const appearance = await currentAppearance();
     if (disposed) return;
     const position = await storedPosition(settings);
     const message: FrameOpenMessage = {
@@ -285,6 +305,7 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
       size: entry === null ? 0 : sizeFromFingerprint(entry.fingerprint),
       labels: frameLabels(language, deps.returnLabel()),
       language,
+      appearance,
     };
     if (entry !== null && entry.format === "pdf") {
       const bridge = startPdfBridge();
@@ -614,6 +635,9 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     setLanguage(next: string): void {
       language = next;
       post({ kind: "language", language: next, labels: frameLabels(next, deps.returnLabel()) });
+    },
+    setAppearance(next: Appearance): void {
+      post({ kind: "appearance", appearance: next });
     },
     command(id: FrameCommandId): void {
       post({ kind: "command", id });

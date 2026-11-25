@@ -12,6 +12,7 @@ import type { ChapterStatus, ChapterType } from "@/features/chapters/types";
 import type { Language } from "@/features/settings/types";
 import type { PluginStopMessageReason } from "@/features/plugins/stop-messages";
 import type { MemoryPluginFileGrantFile, PluginFileGrant } from "@/features/plugins/file-grants";
+import type { PluginAppearance } from "@/features/plugins/appearance";
 import type { MemorySystemNotificationAdapter } from "@/features/plugins/system-notifications";
 import type { PluginDirectoryAdapter, PluginFetchAdapter } from "@/lib/platform/types";
 import type { PluginUiViolation } from "@/features/plugins/remote-ui/validate";
@@ -806,6 +807,11 @@ export interface TestHostOptions {
   /** The app language the host serves; defaults to `en`. */
   language?: string;
   /**
+   * The appearance the host serves through `appearance.get` and replays on
+   * `appearance.changed`; defaults to the light scheme with E-ink Mode off.
+   */
+  appearance?: PluginAppearance;
+  /**
    * The storage the `storage.*` handlers serve, `Map<key, value>`. Share one
    * Map across two hosts to simulate a reload over the same device storage.
    */
@@ -1003,6 +1009,8 @@ export interface TestHost {
   readonly checkpoints: ReadonlyArray<TestCheckpoint>;
   /** The app language the host serves right now. */
   language: string;
+  /** The appearance the host serves right now. */
+  readonly appearance: PluginAppearance;
   /** The clipboard text the host holds; `clipboard.writeText` replaces it. */
   readonly clipboard: string;
   /** Replaces the clipboard text `clipboard.readText` serves. */
@@ -1019,6 +1027,12 @@ export interface TestHost {
   toolbarPressed(button: string): boolean;
   /** Publishes a language change to every subscribed Plugin. */
   setLanguage(language: string): void;
+  /**
+   * Sets the appearance the host serves and publishes `appearance.changed` to
+   * a subscribed Plugin: the resolved color scheme and whether E-ink Mode is
+   * applied.
+   */
+  setAppearance(appearance: PluginAppearance): void;
   /**
    * Sets the return target of the Plugin's page on screen, the place Back
    * returns to, and publishes `navigation.returnTargetChanged` to a subscribed

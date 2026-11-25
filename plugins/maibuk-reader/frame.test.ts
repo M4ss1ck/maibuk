@@ -99,8 +99,9 @@ function createPdfStub(options: StubOptions = {}) {
       if (name === "chapter-3") return [{}, { name: "Page" }, 3];
       return null;
     }
-    async getPageIndex() {
-      return 0;
+    async getPageIndex(ref: unknown) {
+      // A numeric destination is the page index itself, as pdf.js reads it.
+      return typeof ref === "number" ? ref : 0;
     }
     async destroy() {}
   }
@@ -279,6 +280,7 @@ function loadFrame(
         size: fileSize,
         labels: LABELS,
         language: "en",
+        appearance: { colorScheme: "light", eink: false },
         pdf: { displaySource: "export {};", css: ".textLayer { position: absolute; }" },
         pdfPort,
         ...options,
@@ -549,6 +551,73 @@ describe("search", () => {
   });
 });
 
+describe("contents", () => {
+  it("draws the outline, navigates it by keyboard, and returns focus to its toggle", async () => {
+    const outline = [
+      { title: "Chapter One", dest: [3] },
+      { title: "Chapter Two", dest: [4], items: [{ title: "Section", dest: [3] }] },
+    ];
+    frame = loadFrame(createPdfStub({ outline }));
+    frame.open();
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 12"));
+
+    const user = userEvent.setup();
+    await user.click(el("contents-toggle"));
+    expect(el("contents").hidden).toBe(false);
+    await vi.waitFor(() =>
+      expect(el("contents-toggle").getAttribute("aria-expanded")).toBe("true")
+    );
+
+    const items = () =>
+      Array.from(el("contents-tree").querySelectorAll<HTMLElement>('[role="treeitem"]'));
+    await vi.waitFor(() => expect(items()).toHaveLength(3));
+    expect(document.activeElement).toBe(items()[0]);
+
+    await user.keyboard("{ArrowDown}");
+    expect(document.activeElement).toBe(items()[1]);
+    // Chapter Two is expanded, so Right enters its child.
+    await user.keyboard("{ArrowRight}");
+    expect(document.activeElement).toBe(items()[2]);
+    await user.keyboard("{Home}");
+    expect(document.activeElement).toBe(items()[0]);
+    await user.keyboard("{End}");
+    expect(document.activeElement).toBe(items()[2]);
+    // Enter on a focused entry activates it like a click does.
+    await user.keyboard("{Home}");
+    await user.keyboard("{Enter}");
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("4 of 12"));
+    // Selecting an entry lands on its destination and keeps focus on it.
+    await user.click(items()[0]);
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("4 of 12"));
+    expect(document.activeElement).toBe(items()[0]);
+
+    // Escape inside the tree closes only the panel and returns focus.
+    await user.keyboard("{Escape}");
+    expect(el("contents").hidden).toBe(true);
+    await vi.waitFor(() =>
+      expect(el("contents-toggle").getAttribute("aria-expanded")).toBe("false")
+    );
+    await vi.waitFor(() => expect(document.activeElement).toBe(el("contents-toggle")));
+  });
+});
+
+describe("find focus", () => {
+  it("returns focus to the Find toggle when Escape closes the bar", async () => {
+    frame = loadFrame(createPdfStub());
+    frame.open();
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 12"));
+
+    const user = userEvent.setup();
+    await user.keyboard("{Control>}f{/Control}");
+    expect(el("search-bar").hidden).toBe(false);
+    expect(document.activeElement).toBe(el("search-input"));
+
+    await user.keyboard("{Escape}");
+    expect(el("search-bar").hidden).toBe(true);
+    await vi.waitFor(() => expect(document.activeElement).toBe(el("find-toggle")));
+  });
+});
+
 describe("pdf.js failures", () => {
   it("asks for the password, then opens the Document, and never posts it", async () => {
     const stub = createPdfStub({ password: "hunter2" });
@@ -712,6 +781,49 @@ describe("labels", () => {
     frame.port.deliver({ kind: "language", language: "es", labels: LABELS_ES });
     expect(el("back").getAttribute("aria-label")).toBe("Volver al estante");
     expect(el("page-indicator").textContent).toBe("1 de 12");
+  });
+
+  it("re-labels the view-dependent toolbar controls on a language change", async () => {
+    const stub = createPdfStub();
+    frame = loadFrame(stub);
+    frame.open();
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 12"));
+    frame.port.deliver({ kind: "language", language: "es", labels: LABELS_ES });
+    // Zoom, fit, and full screen are named from the live view state rather
+    // than once at boot, so the port must recompute them in Spanish too.
+    expect(el("zoom-out").getAttribute("aria-label")).toBe(LABELS_ES.zoomOut);
+    expect(el("zoom-out").getAttribute("title")).toBe(LABELS_ES.zoomOut);
+    expect(el("fit-page").getAttribute("aria-label")).toBe(LABELS_ES.fitPage);
+    expect(el("fullscreen-toggle").getAttribute("aria-label")).toBe(LABELS_ES.fullScreen);
+  });
+});
+
+describe("appearance", () => {
+  /** The div the Preact app draws inside the Frame's `#app-root`. */
+  function drawnRoot(): HTMLElement {
+    const drawn = el("app-root").firstElementChild;
+    if (!(drawn instanceof HTMLElement)) throw new Error("the app root drew nothing");
+    return drawn;
+  }
+
+  it("draws the appearance Maibuk opened with, then follows a change without reopening", async () => {
+    const stub = createPdfStub();
+    frame = loadFrame(stub);
+    frame.open({ appearance: { colorScheme: "dark", eink: true } });
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 12"));
+    expect(drawnRoot().dataset.colorScheme).toBe("dark");
+    expect(drawnRoot().dataset.eink).toBe("true");
+
+    // The author turns to page 2; the change must redraw the app, not the Document.
+    await userEvent.setup().keyboard("{ArrowRight}");
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("2 of 12"));
+
+    frame.port.deliver({ kind: "appearance", appearance: { colorScheme: "light", eink: false } });
+    await vi.waitFor(() => expect(drawnRoot().dataset.colorScheme).toBe("light"));
+    expect(drawnRoot().dataset.eink).toBe("false");
+    expect(el("page-indicator").textContent).toBe("2 of 12");
+    expect(stub.documents).toHaveLength(1);
+    expect(frame.port.messages.filter((message) => message.kind === "ready")).toHaveLength(1);
   });
 });
 

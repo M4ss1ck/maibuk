@@ -45,6 +45,15 @@ export interface SectionPosition {
 /** Where the author was in a Document. */
 export type ReadingPosition = PagePosition | CfiPosition | SectionPosition;
 
+/**
+ * The appearance Maibuk draws with: the resolved color scheme and whether
+ * E-ink Mode is applied, exactly what `appearance.get` serves.
+ */
+export interface Appearance {
+  colorScheme: "light" | "dark";
+  eink: boolean;
+}
+
 /** The Document fields the Frame draws; the File Grant never leaves the Worker. */
 export interface FrameEntry {
   id: string;
@@ -152,6 +161,8 @@ export interface FrameOpenMessage {
   size: number;
   labels: FrameLabels;
   language: string;
+  /** The appearance Maibuk draws with right now. */
+  appearance: Appearance;
   pdf?: FramePdf;
   pdfPort?: MessagePort;
   /** The parsers and sanitizer a non-PDF Document needs. */
@@ -184,6 +195,12 @@ export interface FrameLanguageMessage {
   language: string;
   /** The same labels, rebuilt in the new language. */
   labels?: FrameLabels;
+}
+
+/** Tells the Frame Maibuk's appearance changed, so it redraws in it. */
+export interface FrameAppearanceMessage {
+  kind: "appearance";
+  appearance: Appearance;
 }
 
 /** Lists every entry of the archive the Document is packed in. */
@@ -220,6 +237,7 @@ export type WorkerToFrameMessage =
   | FrameReadErrorMessage
   | FrameCommandMessage
   | FrameLanguageMessage
+  | FrameAppearanceMessage
   | FrameZipListMessage
   | FrameZipDataMessage
   | FrameZipErrorMessage;

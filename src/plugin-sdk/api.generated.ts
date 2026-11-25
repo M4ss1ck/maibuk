@@ -34,6 +34,7 @@ export const PLUGIN_API_METHODS = [
   "navigation.openPage",
   "navigation.return",
   "language.get",
+  "appearance.get",
   "fonts.list",
   "fonts.read",
   "endpoint.address",
@@ -594,6 +595,14 @@ export interface PluginApiMethods {
       language: string;
     };
   };
+  /** Reads the appearance Maibuk draws with: the resolved color scheme and whether E-ink Mode is applied. No permission is required. */
+  "appearance.get": {
+    input: Record<string, never>;
+    output: {
+      colorScheme: "light" | "dark";
+      eink: boolean;
+    };
+  };
   /** Lists the PDF Fonts installed on this device, in catalog order, each with the id fonts.read takes and the family name it draws in. No permission is required. */
   "fonts.list": {
     input: Record<string, never>;
@@ -836,6 +845,7 @@ export const PLUGIN_API_EVENT_IDS = [
   "library.changed",
   "library.availabilityChanged",
   "language.changed",
+  "appearance.changed",
   "navigation.returnTargetChanged",
   "endpoint.addressChanged",
   "permissions.changed",
@@ -867,6 +877,11 @@ export interface PluginApiEvents {
   /** Maibuk's language changed. The current value is delivered on subscription, so a Plugin that starts after a change never misses it. */
   "language.changed": {
     language: string;
+  };
+  /** Maibuk's appearance changed: the resolved color scheme, whether E-ink Mode is applied, or both. The current value is delivered on subscription, so a Plugin that starts after a change never misses it. */
+  "appearance.changed": {
+    colorScheme: "light" | "dark";
+    eink: boolean;
   };
   /** The return target of this Plugin's page on screen changed: label is the place Back returns to, or null when there is none. A page that declares hideBack draws its own Back from it and calls navigation.return. The current value is delivered on subscription. */
   "navigation.returnTargetChanged": {
@@ -981,6 +996,10 @@ export interface PluginApi {
   language: {
     /** Reads the language Maibuk runs in. No permission is required. */
     get(params?: PluginApiMethods["language.get"]["input"]): Promise<PluginApiMethods["language.get"]["output"]>;
+  };
+  appearance: {
+    /** Reads the appearance Maibuk draws with: the resolved color scheme and whether E-ink Mode is applied. No permission is required. */
+    get(params?: PluginApiMethods["appearance.get"]["input"]): Promise<PluginApiMethods["appearance.get"]["output"]>;
   };
   fonts: {
     /** Lists the PDF Fonts installed on this device, in catalog order, each with the id fonts.read takes and the family name it draws in. No permission is required. */

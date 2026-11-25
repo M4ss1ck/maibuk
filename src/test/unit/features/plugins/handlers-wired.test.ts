@@ -170,6 +170,26 @@ describe("createPluginHandlers(): the wired rows", () => {
     }
   });
 
+  it("reads the resolved color scheme and applied E-ink Mode through appearance.get", async () => {
+    const root = document.documentElement;
+    const read = createPluginHandlers(PLUGIN_MANIFEST)["appearance.get"];
+    if (!read) throw new Error("appearance.get is not wired");
+    const before = { dark: root.classList.contains("dark"), eink: root.classList.contains("eink") };
+    try {
+      // The same classes ThemeProvider writes: `.dark` and `.eink` on the root.
+      root.classList.add("dark");
+      root.classList.remove("eink");
+      expect(read({}, context)).toEqual({ colorScheme: "dark", eink: false });
+
+      root.classList.remove("dark");
+      root.classList.add("eink");
+      expect(read({}, context)).toEqual({ colorScheme: "light", eink: true });
+    } finally {
+      root.classList.toggle("dark", before.dark);
+      root.classList.toggle("eink", before.eink);
+    }
+  });
+
   it("returns a typed no-target from the editor rows with no focused editor", async () => {
     resetPluginEditorHostForTests();
     const handlers = createPluginHandlers(PLUGIN_MANIFEST);
