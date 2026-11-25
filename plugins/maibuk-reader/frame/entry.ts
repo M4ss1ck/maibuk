@@ -30,7 +30,8 @@
  This is the TypeScript source; `scripts/build-plugin.ts` bundles it to the
  classic script `assets/ui/reader.js`, which the Frame's HTML loads. */
 
-import { createArchive, DocumentError, IMAGE_EXTENSIONS } from "./archive";
+import { createArchive, DocumentError } from "./archive";
+import { createComic } from "./comic";
 import { createContents, documentOutline, type OutlineItem } from "./contents";
 import { createFind } from "./find";
 import { hooks, positionDebounceMs } from "./hooks";
@@ -178,7 +179,7 @@ const meta = createMeta({
   pdf: () => pdfDoc,
   document: () => currentDocument,
   format: () => documentFormat,
-  comicFiles: () => comicFiles,
+  comicFiles: () => comic.files(),
   archive,
   isPageMode,
   mediaTypeFor: (name) => sanitizer.mediaTypeFor(name),
@@ -271,6 +272,32 @@ const find = createFind({
   schedulePosition: () => positionEngine.schedule(),
 });
 
+/* The Comic view: a CBZ's pages, the neighbours prefetched around the one on
+   screen, and the page cache that keeps them. */
+const comic = createComic({
+  archive,
+  mediaTypeFor: (name) => sanitizer.mediaTypeFor(name),
+  title: () => (entry ? entry.title : ""),
+  documentOpen: () => currentDocument != null,
+  destroyed: () => destroyed,
+  generation: () => viewGeneration,
+  beginGeneration: () => ++viewGeneration,
+  pageIndex: () => pageIndex,
+  zoom: () => zoomSetting,
+  stage: () => stage,
+  viewer: () => viewer,
+  setScale: (scale) => {
+    currentScale = scale;
+  },
+  updateIndicator,
+  schedulePosition: () => positionEngine.schedule(),
+  showZoom: (scale) => {
+    if (zoomLevel) zoomLevel.textContent = t("zoomLevel", { percent: Math.round(scale * 100) });
+  },
+  fail: (error) => failDocument(error),
+  maxCachedPages: MAX_CACHED_PAGES,
+});
+
 let language = "en";
 let providedLabels: FrameLabels | null = null;
 let entry: FrameEntry | null = null;
@@ -305,8 +332,6 @@ let currentDocument: any = null;
 let mode: "pdf" | "flow" | "fixed" | "comic" = "pdf";
 let documentFormat: string = "";
 let flow: any = null;
-const comicCache: Map<number, string> = new Map();
-let comicFiles: string[] = [];
 const FLOW_GAP = 40;
 
 const pageCache: Map<number, RenderedPage> = new Map();
@@ -385,7 +410,8 @@ function pageBounds() {
       last: flow.index >= currentDocument.sections.length - 1 && flow.pageIndex >= flow.pages - 1,
     };
   }
-  if (mode === "comic") return { first: pageIndex <= 0, last: pageIndex >= comicFiles.length - 1 };
+  if (mode === "comic")
+    return { first: pageIndex <= 0, last: pageIndex >= comic.files().length - 1 };
   if (currentDocument) {
     return { first: pageIndex <= 0, last: pageIndex >= currentDocument.sections.length - 1 };
   }
@@ -768,7 +794,7 @@ async function openDocument(
       currentDocument = new foliate.EPUB(archive.loader());
       await currentDocument.init();
     } else if (format === "cbz") {
-      openComic();
+      currentDocument = comic.load();
     } else if (format === "fb2") {
       if (fileSize > FB2_MAX_BYTES) throw new DocumentError("too-large", "This file is too large");
       const bytes = await requestBytes(0, fileSize);
@@ -797,8 +823,8 @@ async function openDocument(
         saved && typeof (saved as PagePosition).zoom !== "undefined"
           ? (saved as PagePosition).zoom
           : settings.pdfFit;
-      pageIndex = clamp(pageIndex, 0, Math.max(0, comicFiles.length - 1));
-      await renderComicPage();
+      pageIndex = clamp(pageIndex, 0, Math.max(0, comic.files().length - 1));
+      await comic.render();
     } else if (fixed) {
       mode = "fixed";
       pageIndex = saved && saved.kind === "page" ? Math.max(0, Math.floor(saved.page)) : 0;
@@ -863,26 +889,6 @@ function mobiFile() {
         },
       };
     },
-  };
-}
-
-/** A CBZ as a minimal document: one section per image, sorted naturally. */
-function openComic() {
-  const collator = new Intl.Collator(undefined, { numeric: true });
-  comicFiles = archive
-    .entries()
-    .map((item) => item.name)
-    .filter((name) => IMAGE_EXTENSIONS.some((extension) => name.toLowerCase().endsWith(extension)))
-    .sort(collator.compare);
-  if (comicFiles.length === 0) throw new DocumentError("corrupt", "This archive has no images");
-  currentDocument = {
-    metadata: { title: entry ? entry.title : "" },
-    sections: comicFiles.map((name) => ({ id: name })),
-    toc: comicFiles.map((name) => ({ label: name, href: name })),
-
-    resolveHref: (href: string) => ({ index: comicFiles.indexOf(href) }),
-    rendition: { layout: "pre-paginated" },
-    destroy() {},
   };
 }
 
@@ -1275,99 +1281,6 @@ async function renderFixedPage() {
   updateIndicator();
   positionEngine.schedule();
   if (zoomLevel) zoomLevel.textContent = t("zoomLevel", { percent: Math.round(scale * 100) });
-}
-
-async function comicUrl(index: number): Promise<string | null> {
-  const cached = comicCache.get(index);
-  if (cached) return cached;
-  const name = comicFiles[index];
-  if (!name) return null;
-  const bytes = await archive.bytes(name);
-  const url = URL.createObjectURL(
-    new Blob([bytes as BlobPart], { type: sanitizer.mediaTypeFor(name) })
-  );
-  comicCache.set(index, url);
-  return url;
-}
-
-async function renderComicPage() {
-  if (!currentDocument) return;
-  const generation = ++viewGeneration;
-  const index = pageIndex;
-  let url = null;
-  try {
-    url = await comicUrl(index);
-  } catch (error) {
-    if (!destroyed && generation === viewGeneration) failDocument(error);
-    return;
-  }
-  if (destroyed || generation !== viewGeneration || index !== pageIndex || url === null) return;
-
-  const image = document.createElement("img");
-  image.className = "reader-comic-page";
-  image.src = url;
-  image.alt = comicFiles[index] || "";
-  const width = viewer.clientWidth > 32 ? viewer.clientWidth - 32 : 800;
-  if (typeof zoomSetting === "number") {
-    image.style.width = `${Math.round(width * clamp(zoomSetting, 0.5, 4))}px`;
-    image.style.height = "auto";
-    currentScale = clamp(zoomSetting, 0.5, 4);
-  } else if (zoomSetting === "page") {
-    image.style.maxWidth = "100%";
-    image.style.maxHeight = `${viewer.clientHeight > 32 ? viewer.clientHeight - 32 : 600}px`;
-    image.style.width = "auto";
-    currentScale = 1;
-  } else {
-    image.style.width = `${width}px`;
-    image.style.height = "auto";
-    currentScale = 1;
-  }
-
-  stage.textContent = "";
-  stage.style.width = typeof zoomSetting === "number" ? image.style.width : "auto";
-  stage.style.height = "auto";
-  stage.hidden = false;
-  stage.append(image);
-  updateIndicator();
-  positionEngine.schedule();
-  if (zoomLevel)
-    zoomLevel.textContent = t("zoomLevel", { percent: Math.round(currentScale * 100) });
-  prefetchComic();
-  trimComicCache();
-}
-
-function prefetchComic() {
-  for (const offset of [1, -1]) {
-    const index = pageIndex + offset;
-    if (index < 0 || index >= comicFiles.length || comicCache.has(index)) continue;
-    void comicUrl(index).catch(() => {
-      /* Prefetching is best effort. */
-    });
-  }
-}
-
-function trimComicCache() {
-  for (const [index, url] of comicCache) {
-    if (comicCache.size <= MAX_CACHED_PAGES) break;
-    if (Math.abs(index - pageIndex) <= 1) continue;
-    comicCache.delete(index);
-    try {
-      URL.revokeObjectURL(url);
-    } catch {
-      /* Already gone. */
-    }
-  }
-}
-
-function clearComicCache() {
-  for (const url of comicCache.values()) {
-    try {
-      URL.revokeObjectURL(url);
-    } catch {
-      /* Already gone. */
-    }
-  }
-  comicCache.clear();
 }
 
 /* Time ------------------------------------------------------------------ */
@@ -1802,7 +1715,7 @@ function destroyDocument() {
   find.invalidate();
   clearCache();
   archive.revoke();
-  clearComicCache();
+  comic.clearCache();
   protocol.abortArchive("Reader closed");
   if (currentDocument && typeof currentDocument.destroy === "function") {
     try {
@@ -1813,7 +1726,7 @@ function destroyDocument() {
   }
   currentDocument = null;
   flow = null;
-  comicFiles = [];
+  comic.reset();
   archive.reset();
   protocol.abortReads("Reader closed");
   if (loadingTask && typeof loadingTask.destroy === "function") {
@@ -1908,7 +1821,7 @@ function goToPage(index: number, options: { atEnd?: boolean } = {}) {
   pageIndex = next;
   updateIndicator();
   positionEngine.schedule();
-  if (mode === "comic") void renderComicPage();
+  if (mode === "comic") void comic.render();
   else void renderFixedPage();
   find.updateStatus();
 }
@@ -1944,7 +1857,7 @@ function setZoom(next: FrameZoom) {
   if (pdfDoc) {
     void rebuildPdfView();
   } else if (mode === "comic") {
-    void renderComicPage();
+    void comic.render();
   } else if (mode === "fixed") {
     void renderFixedPage();
   }
@@ -2229,7 +2142,7 @@ function onResize() {
     } else if (mode === "flow" && flow) {
       void repaginateFlow(flowCfi(), flow.index, flow.pageIndex);
     } else if (mode === "comic") {
-      void renderComicPage();
+      void comic.render();
     } else if (mode === "fixed") {
       void renderFixedPage();
     }
