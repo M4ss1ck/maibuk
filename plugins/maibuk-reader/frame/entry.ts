@@ -35,6 +35,7 @@ import { createContents, documentOutline, type OutlineItem } from "./contents";
 import { createFind } from "./find";
 import { hooks, positionDebounceMs } from "./hooks";
 import { createMeta } from "./meta";
+import { createPosition } from "./position";
 import { createFrameProtocol, errorCode, type FrameOpenMessage } from "./protocol";
 import type {
   FrameEntry,
@@ -182,6 +183,20 @@ const meta = createMeta({
   isPageMode,
   mediaTypeFor: (name) => sanitizer.mediaTypeFor(name),
 });
+/* The Reading Position: the message each view reports, debounced once the author
+   settles. */
+const positionEngine = createPosition({
+  post,
+  debounceMs: positionDebounceMs,
+  hasDocument,
+  flowing: () => mode === "flow",
+  flow: () => flow,
+  flowCfi,
+  sections: () => (currentDocument ? currentDocument.sections.length : null),
+  pageIndex: () => pageIndex,
+  zoom: () => zoomSetting,
+  pdfPageCount: () => (pdfDoc ? pdfDoc.numPages : 0),
+});
 const backButton = el("back");
 const contentsToggle = el("contents-toggle");
 const findToggle = el("find-toggle");
@@ -253,7 +268,7 @@ const find = createFind({
   loadFlowSection,
   applyFlowPage,
   pageForCharOffset,
-  schedulePosition,
+  schedulePosition: () => positionEngine.schedule(),
 });
 
 let language = "en";
@@ -280,8 +295,6 @@ let zoomSetting: FrameZoom = "width";
 let currentScale = 1;
 let destroyed = false;
 let viewGeneration = 0;
-let positionTimer = 0;
-let positionDirty = false;
 let resizeTimer = 0;
 let passwordCallback: ((password: string) => void) | null = null;
 
@@ -1015,7 +1028,7 @@ async function loadFlowSection(
   }
   applyFlowPage(page);
   updateIndicator();
-  schedulePosition();
+  positionEngine.schedule();
   find.highlightFlow();
 }
 
@@ -1031,12 +1044,12 @@ function nextFlowPage() {
   if (!flow) return;
   if (flow.pageIndex + 1 < flow.pages) {
     applyFlowPage(flow.pageIndex + 1);
-    schedulePosition();
+    positionEngine.schedule();
     return;
   }
   if (flow.index + 1 < currentDocument.sections.length) {
     void loadFlowSection(flow.index + 1, 0);
-    schedulePosition();
+    positionEngine.schedule();
   }
 }
 
@@ -1044,12 +1057,12 @@ function previousFlowPage() {
   if (!flow) return;
   if (flow.pageIndex > 0) {
     applyFlowPage(flow.pageIndex - 1);
-    schedulePosition();
+    positionEngine.schedule();
     return;
   }
   if (flow.index > 0) {
     void loadFlowSection(flow.index - 1, Number.MAX_SAFE_INTEGER);
-    schedulePosition();
+    positionEngine.schedule();
   }
 }
 
@@ -1068,7 +1081,7 @@ async function goToFlowSection(index: number, anchor?: any) {
   } else {
     applyFlowPage(0);
   }
-  schedulePosition();
+  positionEngine.schedule();
 }
 
 /** The CFI of the first character on the current Flowing page. */
@@ -1260,7 +1273,7 @@ async function renderFixedPage() {
   stage.append(rendered.host);
   currentScale = scale;
   updateIndicator();
-  schedulePosition();
+  positionEngine.schedule();
   if (zoomLevel) zoomLevel.textContent = t("zoomLevel", { percent: Math.round(scale * 100) });
 }
 
@@ -1316,7 +1329,7 @@ async function renderComicPage() {
   stage.hidden = false;
   stage.append(image);
   updateIndicator();
-  schedulePosition();
+  positionEngine.schedule();
   if (zoomLevel)
     zoomLevel.textContent = t("zoomLevel", { percent: Math.round(currentScale * 100) });
   prefetchComic();
@@ -1698,7 +1711,7 @@ function onViewerScroll() {
   if (next === pageIndex) return;
   pageIndex = next;
   updateIndicator();
-  schedulePosition();
+  positionEngine.schedule();
   find.updateStatus();
 }
 
@@ -1866,7 +1879,7 @@ function goToPage(index: number, options: { atEnd?: boolean } = {}) {
     if (isContinuous()) {
       pageIndex = next;
       updateIndicator();
-      schedulePosition();
+      positionEngine.schedule();
       scrollToSlot(next);
       void renderPage(next)
         .then(() => {
@@ -1881,7 +1894,7 @@ function goToPage(index: number, options: { atEnd?: boolean } = {}) {
     if (next === pageIndex) return;
     pageIndex = next;
     updateIndicator();
-    schedulePosition();
+    positionEngine.schedule();
     showSlot(next);
     viewer.scrollTop = options.atEnd ? viewer.scrollHeight : 0;
     void renderCurrent();
@@ -1894,7 +1907,7 @@ function goToPage(index: number, options: { atEnd?: boolean } = {}) {
   if (next === pageIndex) return;
   pageIndex = next;
   updateIndicator();
-  schedulePosition();
+  positionEngine.schedule();
   if (mode === "comic") void renderComicPage();
   else void renderFixedPage();
   find.updateStatus();
@@ -1927,7 +1940,7 @@ function previousPage(options?: { atEnd?: boolean }) {
 function setZoom(next: FrameZoom) {
   if (!hasDocument()) return;
   zoomSetting = next;
-  schedulePosition();
+  positionEngine.schedule();
   if (pdfDoc) {
     void rebuildPdfView();
   } else if (mode === "comic") {
@@ -1946,67 +1959,6 @@ function zoomBy(factor: number) {
   if (!hasDocument()) return;
   const baseScale = currentScale > 0 ? currentScale : 1;
   setZoom(clamp(baseScale * factor, 0.5, 4));
-}
-
-function positionMessage() {
-  if (mode === "flow" && flow) {
-    const cfi = flowCfi();
-    const fraction = flowFraction();
-    return {
-      kind: "position",
-      position: cfi
-        ? { kind: "cfi", cfi }
-        : { kind: "section", index: flow.index, fraction: flowPageFraction() },
-      progress: { fraction },
-    };
-  }
-  if (currentDocument) {
-    return {
-      kind: "position",
-      position: {
-        kind: "page",
-        page: pageIndex,
-        zoom: typeof zoomSetting === "number" ? Math.round(zoomSetting * 1000) / 1000 : zoomSetting,
-      },
-      progress: { page: pageIndex + 1, pageCount: currentDocument.sections.length },
-    };
-  }
-  return {
-    kind: "position",
-    position: {
-      kind: "page",
-      page: pageIndex,
-      zoom: typeof zoomSetting === "number" ? Math.round(zoomSetting * 1000) / 1000 : zoomSetting,
-    },
-    progress: { page: pageIndex + 1, pageCount: pdfDoc ? pdfDoc.numPages : 0 },
-  };
-}
-
-/** How far into the current Flowing section the author is, from 0 to 1. */
-function flowPageFraction() {
-  if (!flow || flow.pages <= 1) return 0;
-  return flow.pageIndex / flow.pages;
-}
-
-/** How far through the whole Flowing Document the author is, from 0 to 1. */
-function flowFraction() {
-  if (!flow || !currentDocument) return 0;
-  const total = Math.max(1, currentDocument.sections.length);
-  return clamp((flow.index + flowPageFraction()) / total, 0, 1);
-}
-
-function schedulePosition() {
-  if (!hasDocument()) return;
-  positionDirty = true;
-  clearTimeout(positionTimer);
-  positionTimer = window.setTimeout(flushPosition, positionDebounceMs);
-}
-
-function flushPosition() {
-  if (!positionDirty || !hasDocument()) return;
-  positionDirty = false;
-  clearTimeout(positionTimer);
-  post(positionMessage());
 }
 
 /* Password and errors --------------------------------------------------- */
@@ -2255,13 +2207,13 @@ function onPointerUp(event: PointerEvent) {
 /* Leaving --------------------------------------------------------------- */
 function leave() {
   if (destroyed) return;
-  flushPosition();
+  positionEngine.flush();
   destroyDocument();
   post({ kind: "back" });
 }
 
 function onPageHide() {
-  flushPosition();
+  positionEngine.flush();
   destroyDocument();
   // Gone without a Back: the Worker releases the pdf.js core it holds for us.
   post({ kind: "closed" });
@@ -2287,7 +2239,7 @@ function onResize() {
 function cleanup() {
   destroyed = true;
   protocol.close();
-  clearTimeout(positionTimer);
+  positionEngine.stop();
   clearTimeout(resizeTimer);
   document.removeEventListener("keydown", onKeyDown);
   window.removeEventListener("pagehide", onPageHide);
