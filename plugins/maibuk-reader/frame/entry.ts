@@ -32,6 +32,7 @@
 
 import { createArchive, DocumentError, IMAGE_EXTENSIONS } from "./archive";
 import { createContents, documentOutline, type OutlineItem } from "./contents";
+import { createFind } from "./find";
 import { hooks, positionDebounceMs } from "./hooks";
 import { createMeta } from "./meta";
 import { createFrameProtocol, errorCode, type FrameOpenMessage } from "./protocol";
@@ -55,21 +56,6 @@ interface RenderedPage {
   scale: number;
   bitmap: ImageBitmap | null;
 }
-
-/** One fixed-page search match: a page and how many times the query occurs on it. */
-interface PageSearchMatch {
-  page: number;
-  count: number;
-}
-
-/** One flowing search match: the section and the character offset in it. */
-interface FlowSearchMatch {
-  section: number;
-  offset: number;
-}
-
-/** A search result, shaped by the view the Document is drawn in. */
-type SearchMatch = PageSearchMatch | FlowSearchMatch;
 
 const STRINGS: Record<string, Record<string, string>> = {
   en: {
@@ -242,6 +228,34 @@ const contents = createContents({
   goToFlowSection,
 });
 
+/* The Find surface: the search bar, matching in either view, and the marks and
+   stepping between hits. */
+const find = createFind({
+  bar: () => searchBar,
+  input: () => searchInput,
+  status: () => searchStatus,
+  toggle: () => findToggle,
+  nextButton: () => searchNextButton,
+  previousButton: () => searchPreviousButton,
+  closeButton: () => searchCloseButton,
+  t: (key, values) => t(key, values),
+  flowing: () => mode === "flow",
+  destroyed: () => destroyed,
+  pdf: () => pdfDoc,
+  document: () => currentDocument,
+  foliate: () => foliate,
+  flow: () => flow,
+  pages: () => pageCache,
+  stage: () => stage,
+  textNodes,
+  now: () => nowMs(),
+  goToPage,
+  loadFlowSection,
+  applyFlowPage,
+  pageForCharOffset,
+  schedulePosition,
+});
+
 let language = "en";
 let providedLabels: FrameLabels | null = null;
 let entry: FrameEntry | null = null;
@@ -297,14 +311,6 @@ let wheelCarry = 0;
 let lastWheelAt = 0;
 let wheelTurned = false;
 
-const search = {
-  query: "",
-  matches: [] as SearchMatch[],
-  index: -1,
-  generation: 0,
-  running: false,
-};
-
 let pageLabels: string[] | null = null;
 
 function t(key: string, values?: Record<string, string | number>): string {
@@ -343,7 +349,7 @@ function setLabels() {
   if (passwordLabel) passwordLabel.textContent = t("passwordLabel");
   if (passwordSubmit) passwordSubmit.textContent = t("passwordSubmit");
   updateIndicator();
-  if (searchBar && !searchBar.hidden) updateSearchStatus();
+  if (searchBar && !searchBar.hidden) find.updateStatus();
 }
 
 /** A button that stays focusable while it does nothing, so focus never drops. */
@@ -454,19 +460,6 @@ function isPasswordError(error: unknown): boolean {
   return Boolean(pdfjs && pdfjs.PasswordException && error instanceof pdfjs.PasswordException);
 }
 
-function countMatches(text: string, query: string): number {
-  if (query === "") return 0;
-  const haystack = text.toLocaleLowerCase();
-  const needle = query.toLocaleLowerCase();
-  let count = 0;
-  let index = haystack.indexOf(needle);
-  while (index !== -1) {
-    count += 1;
-    index = haystack.indexOf(needle, index + needle.length);
-  }
-  return count;
-}
-
 /* Messaging ------------------------------------------------------------- */
 
 /** Hands one port message to the protocol client, which settles or dispatches it. */
@@ -542,11 +535,7 @@ function resetDocument() {
   pageLabels = null;
   mode = "pdf";
   documentFormat = "";
-  search.query = "";
-  search.matches = [];
-  search.index = -1;
-  search.generation += 1;
-  if (searchStatus) searchStatus.textContent = "";
+  find.reset();
   if (pageIndicator) pageIndicator.textContent = "";
   if (messageElement) {
     messageElement.hidden = true;
@@ -555,7 +544,7 @@ function resetDocument() {
   }
   if (passwordForm) passwordForm.hidden = true;
   if (stage) stage.hidden = true;
-  closeSearch(false);
+  find.close(false);
 }
 
 /**
@@ -1027,7 +1016,7 @@ async function loadFlowSection(
   applyFlowPage(page);
   updateIndicator();
   schedulePosition();
-  highlightFlow();
+  find.highlightFlow();
 }
 
 function applyFlowPage(page: number) {
@@ -1035,7 +1024,7 @@ function applyFlowPage(page: number) {
   flow.pageIndex = clamp(Math.floor(page), 0, Math.max(0, flow.pages - 1));
   flow.columns.style.transform = `translateX(-${flow.pageIndex * (flow.pageWidth + flow.gap)}px)`;
   updateIndicator();
-  updateSearchStatus();
+  find.updateStatus();
 }
 
 function nextFlowPage() {
@@ -1368,154 +1357,11 @@ function clearComicCache() {
   comicCache.clear();
 }
 
-/* Flowing search -------------------------------------------------------- */
+/* Time ------------------------------------------------------------------ */
+/** The clock the Flowing search slices by and the wheel gesture measures, testable through `hooks`. */
 function nowMs(): number {
   if (hooks && typeof hooks.now === "function") return hooks.now();
   return performance.now();
-}
-
-function yieldToLoop() {
-  return new Promise((resolve) => setTimeout(resolve, 0));
-}
-
-async function runFlowSearch(query: string) {
-  if (!currentDocument || !foliate) return;
-  const generation = ++search.generation;
-  search.query = query;
-  search.matches = [];
-  search.index = -1;
-  search.running = true;
-  if (searchStatus) searchStatus.textContent = "";
-  let sliceStart = nowMs();
-  for (let index = 0; index < currentDocument.sections.length; index += 1) {
-    if (generation !== search.generation || destroyed) return;
-    const section = currentDocument.sections[index];
-    if (section.linear === "no") continue;
-    let text = "";
-    try {
-      const doc = await section.createDocument();
-      const body = doc.body || doc.querySelector("body") || doc.documentElement;
-      // Join the same text nodes the Flowing view pages by, so a match's
-      // offset still names the same character when the page is computed.
-      text = textNodes(body)
-        .map((node) => node.nodeValue || "")
-        .join("");
-    } catch {
-      text = "";
-    }
-    for (const result of foliate.search([text], query, {
-      granularity: "grapheme",
-      sensitivity: "base",
-    })) {
-      search.matches.push({ section: index, offset: result.range.startOffset });
-    }
-    if (nowMs() - sliceStart > 16) {
-      if (hooks && typeof hooks.onSearchSlice === "function") hooks.onSearchSlice();
-      await yieldToLoop();
-      sliceStart = nowMs();
-    }
-  }
-  if (generation !== search.generation || destroyed) return;
-  search.running = false;
-  if (search.matches.length === 0) {
-    if (searchStatus) searchStatus.textContent = t("searchNoMatches");
-    return;
-  }
-  search.index = 0;
-  updateSearchStatus();
-  await showFlowMatch(search.matches[0] as FlowSearchMatch);
-}
-
-async function showFlowMatch(match: { section: number; offset: number }) {
-  if (!currentDocument) return;
-  if (!flow || flow.index !== match.section) {
-    await loadFlowSection(match.section, 0);
-  }
-  if (flow && flow.index === match.section) {
-    applyFlowPage(pageForCharOffset(flow.doc, match.offset));
-    highlightFlow();
-    revealFlowHit();
-    schedulePosition();
-  }
-}
-
-/**
- * The character offset of the current match when it lies in the section on
- * screen, or -1. Offsets count the same text nodes `highlightFlow` walks.
- */
-function currentFlowOffset() {
-  if (!flow || search.index < 0) return -1;
-  const match = search.matches[search.index] as FlowSearchMatch | undefined;
-  return match && match.section === flow.index ? match.offset : -1;
-}
-
-/**
- * Turns to the Flowing page that holds the current mark. The estimate in
- * `pageForCharOffset` is by character count, which images and headings skew,
- * so the mark's own column decides. Columns are measured only when there is
- * layout to measure.
- */
-function revealFlowHit() {
-  if (!flow) return;
-  const hit = flow.shadow.querySelector(".reader-search-hit.is-current");
-  const columns = flow.columns.getBoundingClientRect();
-  if (!hit || columns.width === 0) return;
-  const column = hit.getBoundingClientRect().left - columns.left;
-  const stride = flow.pageWidth + flow.gap;
-  const page = clamp(Math.floor(column / stride), 0, Math.max(0, flow.pages - 1));
-  if (page !== flow.pageIndex) applyFlowPage(page);
-}
-
-function stepFlowMatch(backwards: boolean) {
-  if (search.matches.length === 0) return;
-  const length = search.matches.length;
-  search.index = (search.index + (backwards ? -1 : 1) + length) % length;
-  updateSearchStatus();
-  void showFlowMatch(search.matches[search.index] as FlowSearchMatch);
-}
-
-function highlightFlow() {
-  clearFlowHighlights();
-  if (!flow || search.query === "") return;
-  const needle = search.query.toLocaleLowerCase();
-  const current = currentFlowOffset();
-  // `base` is the section offset where the node starts, the same count the
-  // search's match offsets use.
-  let base = 0;
-  for (const node of textNodes(flow.content)) {
-    const text = node.nodeValue || "";
-    const haystack = text.toLocaleLowerCase();
-    let index = haystack.indexOf(needle);
-    if (index === -1) {
-      base += text.length;
-      continue;
-    }
-    const fragment = document.createDocumentFragment();
-    let last = 0;
-    while (index !== -1) {
-      fragment.append(text.slice(last, index));
-      const mark = document.createElement("mark");
-      mark.className =
-        base + index === current ? "reader-search-hit is-current" : "reader-search-hit";
-      mark.textContent = text.slice(index, index + needle.length);
-      fragment.append(mark);
-      last = index + needle.length;
-      index = haystack.indexOf(needle, last);
-    }
-    fragment.append(text.slice(last));
-    node.parentNode?.replaceChild(fragment, node);
-    base += text.length;
-  }
-}
-
-function clearFlowHighlights() {
-  if (!flow) return;
-  for (const hit of Array.from(flow.shadow.querySelectorAll(".reader-search-hit")) as Element[]) {
-    const parent = hit.parentNode;
-    if (!parent) continue;
-    parent.replaceChild(document.createTextNode(hit.textContent || ""), hit);
-    parent.normalize();
-  }
 }
 
 /* Rendering ------------------------------------------------------------- */
@@ -1607,7 +1453,7 @@ function rebuildPdfView(): Promise<void> {
     observeSlots();
     scrollToSlot(pageIndex);
     return renderPage(pageIndex)
-      .then(() => revealPdfMatch())
+      .then(() => find.revealPdfMatch())
       .catch((error) => {
         if (!destroyed) handleLoadError(error);
       });
@@ -1708,7 +1554,7 @@ async function drawPage(index: number, generation: number): Promise<RenderedPage
   // A zoom, a resize, or a layout switch rebuilt the slots meanwhile: this
   // drawing belongs to a view that is gone.
   if (destroyed || generation !== viewGeneration) return rendered;
-  paintPdfMatches(textLayer, index);
+  find.paintPdfMatches(textLayer, index);
   placeRendered(rendered);
   pageCache.set(index, rendered);
   trimCache();
@@ -1747,7 +1593,7 @@ function showRendered(rendered: RenderedPage) {
   if (zoomLevel)
     zoomLevel.textContent = t("zoomLevel", { percent: Math.round(rendered.scale * 100) });
   updateIndicator();
-  revealPdfMatch();
+  find.revealPdfMatch();
 }
 
 function renderNeighbors() {
@@ -1853,7 +1699,7 @@ function onViewerScroll() {
   pageIndex = next;
   updateIndicator();
   schedulePosition();
-  updateSearchStatus();
+  find.updateStatus();
 }
 
 function setPdfLayout(layout: "single" | "continuous") {
@@ -1940,7 +1786,7 @@ function onWheel(event: WheelEvent) {
 
 function destroyDocument() {
   viewGeneration += 1;
-  search.generation += 1;
+  find.invalidate();
   clearCache();
   archive.revoke();
   clearComicCache();
@@ -2024,12 +1870,12 @@ function goToPage(index: number, options: { atEnd?: boolean } = {}) {
       scrollToSlot(next);
       void renderPage(next)
         .then(() => {
-          if (next === pageIndex) revealPdfMatch();
+          if (next === pageIndex) find.revealPdfMatch();
         })
         .catch(() => {
           /* The slot stays blank; scrolling on draws the rest. */
         });
-      updateSearchStatus();
+      find.updateStatus();
       return;
     }
     if (next === pageIndex) return;
@@ -2040,7 +1886,7 @@ function goToPage(index: number, options: { atEnd?: boolean } = {}) {
     viewer.scrollTop = options.atEnd ? viewer.scrollHeight : 0;
     void renderCurrent();
     renderNeighbors();
-    updateSearchStatus();
+    find.updateStatus();
     return;
   }
   if (!currentDocument || mode === "flow") return;
@@ -2051,7 +1897,7 @@ function goToPage(index: number, options: { atEnd?: boolean } = {}) {
   schedulePosition();
   if (mode === "comic") void renderComicPage();
   else void renderFixedPage();
-  updateSearchStatus();
+  find.updateStatus();
 }
 
 function nextPage() {
@@ -2163,210 +2009,6 @@ function flushPosition() {
   post(positionMessage());
 }
 
-/* Search ---------------------------------------------------------------- */
-function openSearch() {
-  searchBar.hidden = false;
-  searchInput.focus();
-  searchInput.select();
-  searchInput.value = search.query;
-  updateSearchStatus();
-}
-
-function closeSearch(restoreFocus: boolean) {
-  if (!searchBar) return;
-  searchBar.hidden = true;
-  search.query = "";
-  search.matches = [];
-  search.index = -1;
-  search.generation += 1;
-  if (searchStatus) searchStatus.textContent = "";
-  clearHighlights();
-  if (restoreFocus !== false) findToggle.focus();
-}
-
-/**
- * Marks each match of `query` in the text under `container`. The `current`
- * ordinal, counted in document order across the container, gets the
- * `is-current` class as well.
- */
-function highlightText(container: HTMLElement, query: string, current: number = -1) {
-  if (!query) return;
-  const needle = query.toLocaleLowerCase();
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-  const nodes: Text[] = [];
-  while (walker.nextNode()) {
-    if (walker.currentNode.nodeValue && walker.currentNode.nodeValue.trim() !== "") {
-      nodes.push(walker.currentNode as Text);
-    }
-  }
-  let ordinal = 0;
-  for (const node of nodes) {
-    const text = node.nodeValue || "";
-    const haystack = text.toLocaleLowerCase();
-    let index = haystack.indexOf(needle);
-    if (index === -1) continue;
-    const fragment = document.createDocumentFragment();
-    let last = 0;
-    while (index !== -1) {
-      fragment.append(text.slice(last, index));
-      const mark = document.createElement("span");
-      mark.className = ordinal === current ? "reader-search-hit is-current" : "reader-search-hit";
-      mark.textContent = text.slice(index, index + needle.length);
-      fragment.append(mark);
-      ordinal += 1;
-      last = index + needle.length;
-      index = haystack.indexOf(needle, last);
-    }
-    fragment.append(text.slice(last));
-    node.parentNode?.replaceChild(fragment, node);
-  }
-}
-
-function unwrapHits(root: ParentNode) {
-  for (const hit of Array.from(root.querySelectorAll(".reader-search-hit"))) {
-    const parent = hit.parentNode;
-    if (!parent) continue;
-    parent.replaceChild(document.createTextNode(hit.textContent || ""), hit);
-    parent.normalize();
-  }
-}
-
-function clearHighlights() {
-  unwrapHits(document);
-  clearFlowHighlights();
-}
-
-/** Every Page view match is one occurrence; `search.index` counts them all. */
-function pdfMatchTotal() {
-  let total = 0;
-  for (const match of search.matches as PageSearchMatch[]) total += match.count;
-  return total;
-}
-
-/** The page an occurrence sits on, and its place among that page's matches. */
-function pdfMatchAt(index: number): { page: number; ordinal: number } | null {
-  let first = 0;
-  for (const match of search.matches as PageSearchMatch[]) {
-    if (index < first + match.count) return { page: match.page, ordinal: index - first };
-    first += match.count;
-  }
-  return null;
-}
-
-/**
- * Repaints one page's marks for the current query, flagging the current
- * occurrence when it sits on this page.
- */
-function paintPdfMatches(container: HTMLElement, index: number) {
-  unwrapHits(container);
-  const at = search.index >= 0 ? pdfMatchAt(search.index) : null;
-  highlightText(container, search.query, at && at.page === index ? at.ordinal : -1);
-}
-
-/** Repaints every rendered page, then brings the current mark into view. */
-function repaintPdfMatches() {
-  for (const [index, rendered] of pageCache) paintPdfMatches(rendered.textLayer, index);
-  revealPdfMatch();
-}
-
-/** Scrolls the shown page's current mark into view, if it has one. */
-function revealPdfMatch() {
-  const hit = stage.querySelector(".reader-search-hit.is-current");
-  if (hit && typeof hit.scrollIntoView === "function") {
-    hit.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }
-}
-
-async function runSearch(query: string) {
-  if (mode === "flow" && currentDocument) {
-    await runFlowSearch(query);
-    return;
-  }
-  if (!pdfDoc) return;
-  const generation = ++search.generation;
-  search.query = query;
-  search.matches = [];
-  search.index = -1;
-  search.running = true;
-  if (searchStatus) searchStatus.textContent = "";
-  let sliceStart = performance.now();
-  for (let index = 0; index < pdfDoc.numPages; index += 1) {
-    if (generation !== search.generation || destroyed) return;
-    const page = await pdfDoc.getPage(index + 1);
-    const content = await page.getTextContent();
-    const text = content.items
-      .map((item: any) => (typeof item.str === "string" ? item.str : ""))
-      .join(" ");
-    const count = countMatches(text, query);
-    if (count > 0) search.matches.push({ page: index, count });
-    if (performance.now() - sliceStart > 16) {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      sliceStart = performance.now();
-    }
-  }
-  if (generation !== search.generation || destroyed) return;
-  search.running = false;
-  if (search.matches.length === 0) {
-    if (searchStatus) searchStatus.textContent = t("searchNoMatches");
-    return;
-  }
-  search.index = 0;
-  updateSearchStatus();
-  goToPage((search.matches[0] as PageSearchMatch).page);
-  repaintPdfMatches();
-}
-
-function nextOrRun(backwards: boolean) {
-  const query = searchInput.value.trim();
-  if (query === "") {
-    if (searchStatus) searchStatus.textContent = "";
-    return;
-  }
-  if (query !== search.query || search.matches.length === 0) {
-    void runSearch(query);
-    return;
-  }
-  stepMatch(backwards);
-}
-
-function stepMatch(backwards: boolean) {
-  if (search.matches.length === 0) return;
-  if (mode === "flow") {
-    stepFlowMatch(backwards);
-    return;
-  }
-  const length = pdfMatchTotal();
-  if (length === 0) return;
-  search.index = (search.index + (backwards ? -1 : 1) + length) % length;
-  updateSearchStatus();
-  const at = pdfMatchAt(search.index);
-  if (at) goToPage(at.page);
-  repaintPdfMatches();
-}
-
-function updateSearchStatus() {
-  if (!searchStatus || searchBar.hidden) return;
-  if (search.matches.length === 0) {
-    if (search.query === "" && searchStatus.textContent === t("searchNoMatches")) {
-      searchStatus.textContent = "";
-    }
-    return;
-  }
-  // A search still running has no current match yet.
-  if (search.index < 0) return;
-  if (mode === "flow") {
-    searchStatus.textContent = t("searchMatches", {
-      current: search.index + 1,
-      total: search.matches.length,
-    });
-    return;
-  }
-  searchStatus.textContent = t("searchMatches", {
-    current: search.index + 1,
-    total: pdfMatchTotal(),
-  });
-}
-
 /* Password and errors --------------------------------------------------- */
 function showPassword(wrong: boolean) {
   stage.hidden = true;
@@ -2465,7 +2107,7 @@ function runCommand(id: string) {
       else if (currentDocument) goToPage(currentDocument.sections.length - 1);
       return;
     case "findInDocument":
-      openSearch();
+      find.open();
       return;
     case "toggleContents":
       contents.toggle();
@@ -2503,7 +2145,7 @@ function onKeyDown(event: KeyboardEvent) {
   if (event.defaultPrevented) return;
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
     event.preventDefault();
-    openSearch();
+    find.open();
     return;
   }
   if (event.key === "Escape") {
@@ -2513,7 +2155,7 @@ function onKeyDown(event: KeyboardEvent) {
       return;
     }
     if (!searchBar.hidden) {
-      closeSearch(true);
+      find.close(true);
       return;
     }
     if (!contentsPanel.hidden) {
@@ -2663,7 +2305,7 @@ setLabels();
 
 if (backButton) backButton.addEventListener("click", leave);
 if (contentsToggle) contentsToggle.addEventListener("click", () => contents.toggle(undefined));
-if (findToggle) findToggle.addEventListener("click", openSearch);
+if (findToggle) findToggle.addEventListener("click", () => find.open());
 if (zoomOutButton) zoomOutButton.addEventListener("click", () => zoomBy(1 / 1.1));
 if (zoomInButton) zoomInButton.addEventListener("click", () => zoomBy(1.1));
 if (fitWidthButton) fitWidthButton.addEventListener("click", () => setZoom("width"));
@@ -2678,27 +2320,7 @@ if (pageNextButton)
   pageNextButton.addEventListener("click", () => {
     if (!isInactive(pageNextButton)) nextPage();
   });
-if (searchPreviousButton) searchPreviousButton.addEventListener("click", () => nextOrRun(true));
-if (searchNextButton) searchNextButton.addEventListener("click", () => nextOrRun(false));
-if (searchCloseButton) searchCloseButton.addEventListener("click", () => closeSearch(true));
-if (searchInput) {
-  searchInput.addEventListener("keydown", (event: KeyboardEvent) => {
-    // deprecated-api: Safari's IME-commit Enter has isComposing false; keyCode 229 is its only tell.
-    if (event.isComposing || event.keyCode === 229) return;
-    if (event.key === "Enter") {
-      event.preventDefault();
-      nextOrRun(event.shiftKey);
-    }
-  });
-  searchInput.addEventListener("input", () => {
-    if (searchInput.value.trim() !== search.query) {
-      search.matches = [];
-      search.index = -1;
-      search.generation += 1;
-      if (searchStatus) searchStatus.textContent = "";
-    }
-  });
-}
+find.bind();
 // The Frame sandbox has no `allow-forms`, so the password never travels as a
 // form submission: the Open button and Enter in the field send it directly.
 if (passwordSubmit) passwordSubmit.addEventListener("click", onPasswordSubmit);
