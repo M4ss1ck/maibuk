@@ -34,6 +34,20 @@ const VOICE_VERB_CLASSES = Object.keys(VOICE_VOCABULARY.en.verbs) as readonly Vo
 const SEMVER_PATTERN = new RegExp(`^${SEMVER_SOURCE}$`);
 
 /**
+ * A Plugin-folder-relative path to a file ending in `extension`: no leading
+ * slash, backslash, empty segment, `..` segment, URL, query, or fragment.
+ * `manifest-validate.ts` applies the same rules to `entry` and a page `frame`;
+ * a `frameEntry` path is checked here so the shipped JSON Schema refuses an
+ * escaping path too.
+ */
+function relativeFilePath(extension: string): RegExp {
+  return new RegExp(
+    `^(?!\\/)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.(?:\\/|$))(?!.*[?#]).+\\.${extension}$`,
+    "u"
+  );
+}
+
+/**
  * An object that refuses unknown fields except `x-*`, with one message per
  * offending key. The JSON Schema emitter drops refinements, so the generator
  * turns the `additionalProperties` it sees into the same rule.
@@ -253,6 +267,29 @@ export function buildPluginManifestSchema(options: { builtIn: boolean }) {
       .boolean()
       .optional()
       .describe("Required when the Plugin draws its own UI with Frame."),
+    frameEntry: strictObject({
+      source: z
+        .string()
+        .min(1)
+        .regex(
+          relativeFilePath("(?:ts|tsx)"),
+          "must be a relative .ts or .tsx path in the Plugin folder"
+        )
+        .describe(
+          "A relative path to the .ts or .tsx source of the Plugin's Frame entry; the build bundles it."
+        ),
+      bundle: z
+        .string()
+        .min(1)
+        .regex(relativeFilePath("js"), "must be a relative .js path in the Plugin folder")
+        .describe(
+          "A relative path to the built .js classic script; the Frame's HTML loads it with a <script> tag."
+        ),
+    })
+      .optional()
+      .describe(
+        "Opt-in: the build bundles source into one self-contained classic script at bundle, which the Frame's HTML loads with a <script> tag. Heavy vendored runtimes such as pdf.js stay vendored and loaded by the HTML, never bundled. A Plugin that draws Frames usually also sets customUi: true."
+      ),
     warmStart: z
       .enum(["surface", "intent"])
       .optional()

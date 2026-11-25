@@ -2,7 +2,9 @@
 // test-only ids list lands as an installable folder whose `index.json` hash the
 // app recomputes, an excluded platform is omitted, the empty shipped list writes
 // an index with no fixtures, and the gzip bundle-size gate reports the offender.
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+// A Plugin that declares `frameEntry` (issue #940) gets its TypeScript Frame
+// entry bundled as one classic script beside the entry, opt-in.
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -151,6 +153,67 @@ describe("buildBuiltInPlugins()", () => {
       "maibuk-maps",
       "maibuk-clock",
     ]);
+  });
+});
+
+describe("a Built-in Plugin with a Frame entry (#940)", () => {
+  it("bundles the Frame entry to the manifest path and the hash covers it", async () => {
+    const outRoot = tempOutRoot();
+    await buildBuiltInPlugins({
+      sourceRoot: FIXTURE_ROOT,
+      ids: ["frame-builtin"],
+      outRoot,
+      target: "web",
+    });
+
+    const pluginDir = join(outRoot, "frame-builtin");
+    const built = readFolderFiles(pluginDir)
+      .map((file) => file.path)
+      .sort();
+    expect(built).toEqual(["assets/frame.js", "index.js", "manifest.json"]);
+    expect(existsSync(join(pluginDir, "assets/frame.js"))).toBe(true);
+
+    const [entry] = readIndex(outRoot).plugins as unknown as [
+      { id: string; hash: string; files: string[] },
+    ];
+    expect(entry.files).toEqual(built);
+    // The bundle is part of the folder the app hashes, not a build leftover.
+    expect(entry.hash).toBe(await hashPluginDirectory(readFolderFiles(pluginDir)));
+  });
+
+  it("is opt-in: a Plugin without frameEntry builds unchanged and gets no bundle", async () => {
+    const outRoot = tempOutRoot();
+    await buildBuiltInPlugins({
+      sourceRoot: FIXTURE_ROOT,
+      ids: ["sample-builtin"],
+      outRoot,
+      target: "web",
+    });
+
+    const built = readFolderFiles(join(outRoot, "sample-builtin"))
+      .map((file) => file.path)
+      .sort();
+    expect(built).toEqual(["assets/note.txt", "index.js", "manifest.json"]);
+    expect(built.some((path) => path.endsWith("frame.js"))).toBe(false);
+  });
+
+  it("emits one self-contained classic script with Preact bundled in", async () => {
+    const outRoot = tempOutRoot();
+    await buildBuiltInPlugins({
+      sourceRoot: FIXTURE_ROOT,
+      ids: ["frame-builtin"],
+      outRoot,
+      target: "web",
+    });
+
+    const bundle = readFileSync(join(outRoot, "frame-builtin/assets/frame.js"), "utf8");
+    // A classic script: no top-level ESM export or import the opaque Frame
+    // origin could not resolve, and no external Preact import left behind.
+    expect(bundle).not.toMatch(/^\s*(?:export|import)\b/mu);
+    expect(bundle).not.toMatch(/from\s*["']preact["']/u);
+    // The fixture's Preact component and the runtime that renders it are inside.
+    expect(bundle).toContain("frame-builtin");
+    expect(bundle).toMatch(/_diff|__k|createElement/u);
   });
 });
 

@@ -26,6 +26,18 @@ An embedded Frame keeps a fixed 16rem box unless `fill` is set. With `fill`, it 
 
 The page's `frame` and the component's `src` both name a relative path to an .html file inside your Plugin folder. The page `frame` field carries no length cap of its own; the manifest as a whole is capped at 64 KB (src/features/plugins/manifest-validate.ts, `MAX_MANIFEST_BYTES`). The kit `Frame` component is stricter: its `src` prop is capped at 1024 characters, and its `title` prop, the iframe's accessible name, is required and capped at 512 characters (src/plugin-sdk/ui-table.ts).
 
+## Bundling a TypeScript Frame script
+
+A Frame's script can be TypeScript that the build bundles for you. Declare the optional top-level `frameEntry`:
+
+```json
+{ "frameEntry": { "source": "frame/entry.tsx", "bundle": "assets/frame.js" } }
+```
+
+The build compiles `source` into one self-contained classic script at `bundle`, which the Frame's HTML loads with a plain `<script src="assets/frame.js"></script>` (never `type="module"`). The output is an IIFE with nothing external and no code splitting, because the Frame's opaque origin cannot resolve relative ES module imports. JSX uses Preact's automatic runtime, so a Preact Frame bundles Preact into that one file.
+
+Heavy vendored runtimes such as pdf.js stay vendored: keep their files in the Plugin folder and load them from the Frame's HTML as separate classic `<script>` tags. The build never bundles them into the Frame script.
+
 ## Theme tokens
 
 The host writes its semantic theme tokens onto the Frame's `<html>` as public `--maibuk-*` properties on load and again whenever the theme, accent, or font changes (src/features/plugins/frame/theme-tokens.ts). Use them instead of hard-coded colors so the Frame follows a light/dark flip. The names are a stable Plugin-facing contract:

@@ -64,6 +64,27 @@ inside it and reference them with relative paths. A Frame's only host channel is
 the Worker receives the other end through `client.onFrame`, and the two exchange
 raw messages (see [Frame UI](../docs/plugins/frame-ui.md)).
 
+A Built-in Plugin can write its Frame script in TypeScript instead of shipping
+hand-written JavaScript. Declare the optional top-level `frameEntry` with the
+source and the built script:
+
+```json
+{
+  "customUi": true,
+  "frameEntry": { "source": "frame/entry.tsx", "bundle": "assets/frame.js" }
+}
+```
+
+The build compiles `source` into one self-contained classic script at `bundle`,
+so the Frame's HTML loads it with a plain `<script src="assets/frame.js">`. The
+output is an IIFE with nothing external and no code splitting, because the
+Frame's opaque origin cannot resolve relative ES module imports. JSX uses
+Preact's automatic runtime, so Preact bundles into that file. Heavy vendored
+runtimes such as pdf.js stay vendored: keep their files in the Plugin folder and
+load them from the Frame's HTML as separate classic `<script>` tags; the build
+never bundles them. The step is opt-in, so a Built-in without `frameEntry`
+builds exactly as before.
+
 A Frame is styled with the host's semantic theme tokens: the host writes each
 public `--maibuk-*` property below onto the Frame's `<html>` on load and again
 whenever the theme, accent, or font changes, so use them instead of hard-coded

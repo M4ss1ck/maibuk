@@ -1,0 +1,21 @@
+{
+  "manifestVersion": 1,
+  "id": "frame-builtin",
+  "name": "Frame Built-in",
+  "description": "A Built-in Plugin fixture whose Frame entry the build bundles.",
+  "author": "Maibuk",
+  "version": "1.0.0",
+  "apiVersion": "^0.1",
+  "entry": "index.js",
+  "platforms": ["web", "desktop", "android"],
+  "lifecycle": "on-demand",
+  "defaultLanguage": "en",
+  "permissions": {
+    "required": [],
+    "optional": []
+  },
+  "frameEntry": {
+    "source": "frame/entry.tsx",
+    "bundle": "assets/frame.js"
+  }
+}
