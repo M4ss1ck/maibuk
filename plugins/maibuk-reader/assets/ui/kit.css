@@ -1,0 +1,311 @@
+/* The Reader Frame's kit (#943 unit 2): Button, IconButton, Segmented, Chip,
+   Switch and Slider. Every color comes from tokens.css; this file states no
+   color of its own. Reading-aware controls draw in `--chrome-*`, the Segmented
+   track and thumb in `--muted`/`--card`, and selected or accented controls in
+   `--primary`, so a Reading Theme and E-ink Mode take the kit over with the
+   rest of the chrome. Motion uses the token durations, which E-ink Mode and
+   reduced motion resolve to zero. */
+
+/* One visible focus ring for every kit control. */
+.kit-button:focus-visible,
+.kit-icon-button__button:focus-visible,
+.kit-segmented__option:focus-visible,
+.kit-chip:focus-visible,
+.kit-chip__remove:focus-visible,
+.kit-switch:focus-visible,
+.kit-slider__range:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Button: 36 px high, 8 px radius, 14/500. */
+.kit-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--chrome-fg);
+  font-family: var(--type-ui);
+  font-size: var(--type-body-size);
+  font-weight: 500;
+  line-height: var(--type-body-line);
+  cursor: pointer;
+  transition:
+    background-color var(--motion-duration-bars) var(--motion-ease),
+    border-color var(--motion-duration-bars) var(--motion-ease),
+    color var(--motion-duration-bars) var(--motion-ease);
+}
+
+.kit-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.kit-button--primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--pfg);
+}
+
+.kit-button--primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.kit-button--secondary {
+  background: var(--card);
+  border-color: var(--chrome-border);
+}
+
+.kit-button--secondary:hover:not(:disabled) {
+  background: var(--muted);
+}
+
+.kit-button--ghost {
+  background: transparent;
+}
+
+.kit-button--ghost:hover:not(:disabled) {
+  background: var(--chrome-border);
+}
+
+.kit-button--destructive {
+  background: transparent;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.kit-button--destructive:hover:not(:disabled) {
+  background: var(--danger);
+  color: var(--chrome-bg);
+}
+
+/* IconButton: the square target comes from useLayoutMode on the element. */
+.kit-icon-button {
+  position: relative;
+  display: inline-flex;
+}
+
+.kit-icon-button__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--chrome-fg);
+  cursor: pointer;
+  transition: background-color var(--motion-duration-bars) var(--motion-ease);
+}
+
+.kit-icon-button__button:hover:not(:disabled) {
+  background: var(--chrome-border);
+}
+
+.kit-icon-button__button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* The Wide-only tooltip, placed under its button. */
+.kit-tooltip {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 50%;
+  z-index: var(--z-popover);
+  transform: translateX(-50%);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--space-1);
+  background: var(--chrome-fg);
+  color: var(--chrome-bg);
+  font-family: var(--type-ui);
+  font-size: var(--type-small-size);
+  font-weight: 500;
+  line-height: var(--type-small-line);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Segmented: muted track, 3 px pad, card thumb. */
+.kit-segmented {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: var(--radius-control);
+  background: var(--muted);
+}
+
+.kit-segmented__option {
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: calc(var(--radius-control) - 3px);
+  background: transparent;
+  color: var(--chrome-meta);
+  font-family: var(--type-ui);
+  font-size: var(--type-small-size);
+  font-weight: 500;
+  line-height: var(--type-small-line);
+  cursor: pointer;
+  transition:
+    background-color var(--motion-duration-bars) var(--motion-ease),
+    color var(--motion-duration-bars) var(--motion-ease);
+}
+
+.kit-segmented__option[aria-checked="true"] {
+  background: var(--card);
+  color: var(--chrome-fg);
+  box-shadow: var(--shadow-page);
+}
+
+/* Chip: a 32 px pill; pressed fills with ink. */
+.kit-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 32px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--chrome-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--chrome-fg);
+  font-family: var(--type-ui);
+  font-size: var(--type-small-size);
+  font-weight: var(--type-small-weight);
+  line-height: var(--type-small-line);
+  white-space: nowrap;
+}
+
+button.kit-chip {
+  cursor: pointer;
+  transition:
+    background-color var(--motion-duration-bars) var(--motion-ease),
+    color var(--motion-duration-bars) var(--motion-ease);
+}
+
+.kit-chip[aria-pressed="true"] {
+  background: var(--chrome-fg);
+  border-color: var(--chrome-fg);
+  color: var(--chrome-bg);
+}
+
+.kit-chip--removable {
+  padding-right: var(--space-1);
+}
+
+.kit-chip__label {
+  min-width: 0;
+}
+
+.kit-chip__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background-color var(--motion-duration-bars) var(--motion-ease);
+}
+
+.kit-chip__remove:hover {
+  background: var(--chrome-border);
+}
+
+/* Switch: a 40x24 track, label at the left, the whole row is the control. */
+.kit-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--chrome-fg);
+  font-family: var(--type-ui);
+  font-size: var(--type-body-size);
+  font-weight: var(--type-body-weight);
+  line-height: var(--type-body-line);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--motion-duration-bars) var(--motion-ease);
+}
+
+.kit-switch:hover:not(:disabled) {
+  background: var(--chrome-border);
+}
+
+.kit-switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.kit-switch__label {
+  min-width: 0;
+}
+
+.kit-switch__track {
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--muted);
+  transition: background-color var(--motion-duration-bars) var(--motion-ease);
+}
+
+.kit-switch[aria-checked="true"] .kit-switch__track {
+  background: var(--primary);
+}
+
+.kit-switch__thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--card);
+  box-shadow: var(--shadow-page);
+  transition: transform var(--motion-duration-bars) var(--motion-ease);
+}
+
+.kit-switch[aria-checked="true"] .kit-switch__thumb {
+  transform: translateX(16px);
+}
+
+/* Slider: native range with the accent, a tabular value at the right. */
+.kit-slider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.kit-slider__range {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--primary);
+}
+
+.kit-slider__value {
+  min-width: 3ch;
+  color: var(--chrome-meta);
+  font-family: var(--type-ui);
+  font-size: var(--type-small-size);
+  font-weight: var(--type-status-weight);
+  font-variant-numeric: var(--type-numeric);
+  line-height: var(--type-small-line);
+  text-align: right;
+  white-space: nowrap;
+}
