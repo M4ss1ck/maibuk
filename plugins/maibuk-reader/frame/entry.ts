@@ -34,6 +34,7 @@ import { createArchive, DocumentError } from "./archive";
 import { createComic } from "./comic";
 import { createContents, documentOutline, type OutlineItem } from "./contents";
 import { createFind } from "./find";
+import { createFlow, textNodes, type FlowAnchor } from "./flow";
 import { hooks, positionDebounceMs } from "./hooks";
 import { createMeta } from "./meta";
 import { createPosition } from "./position";
@@ -191,8 +192,8 @@ const positionEngine = createPosition({
   debounceMs: positionDebounceMs,
   hasDocument,
   flowing: () => mode === "flow",
-  flow: () => flow,
-  flowCfi,
+  flow: () => flowEngine.state(),
+  flowCfi: () => flowEngine.flowCfi(),
   sections: () => (currentDocument ? currentDocument.sections.length : null),
   pageIndex: () => pageIndex,
   zoom: () => zoomSetting,
@@ -260,7 +261,7 @@ const find = createFind({
   pdf: () => pdfDoc,
   document: () => currentDocument,
   foliate: () => foliate,
-  flow: () => flow,
+  flow: () => flowEngine.state(),
   pages: () => pageCache,
   stage: () => stage,
   textNodes,
@@ -331,8 +332,6 @@ let purify: any = null;
 let currentDocument: any = null;
 let mode: "pdf" | "flow" | "fixed" | "comic" = "pdf";
 let documentFormat: string = "";
-let flow: any = null;
-const FLOW_GAP = 40;
 
 const pageCache: Map<number, RenderedPage> = new Map();
 /** The renders in flight, so a page never draws twice at once. */
@@ -404,6 +403,7 @@ function isInactive(button: any) {
 /** Whether the shown page is the first and the last one. */
 function pageBounds() {
   if (pdfDoc) return { first: pageIndex <= 0, last: pageIndex >= pdfDoc.numPages - 1 };
+  const flow = flowEngine.state();
   if (mode === "flow" && flow && currentDocument) {
     return {
       first: flow.index <= 0 && flow.pageIndex <= 0,
@@ -470,17 +470,6 @@ function ascii(bytes: Uint8Array, offset: number, length: number): string {
     text += String.fromCharCode(bytes[index]);
   }
   return text;
-}
-
-/** Every non-empty text node under `root`, in document order. */
-function textNodes(root: ParentNode): Text[] {
-  const nodes: Text[] = [];
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  while (walker.nextNode()) {
-    const node = walker.currentNode as Text;
-    if ((node.nodeValue || "").trim() !== "") nodes.push(node);
-  }
-  return nodes;
 }
 
 /** Whether any Document is open, PDF or document. */
@@ -745,6 +734,60 @@ async function onOpened() {
 const sanitizer = (globalThis as any).ReaderSanitizer;
 const FB2_MAX_BYTES = 20 * 1024 * 1024;
 
+/* The Flowing engine: one sanitized section at a time, its columns, the CFI and
+   character offsets they report, and the Page view a pre-paginated EPUB draws
+   with the same renderer. */
+const flowEngine = createFlow({
+  stage: () => stage,
+  viewer: () => viewer,
+  document: () => currentDocument,
+  foliate: () => foliate,
+  format: () => documentFormat,
+  settings: () => settings,
+  saveSettings: (next) => {
+    settings = next;
+    post({ kind: "settings", settings });
+  },
+  sanitizer,
+  purify: () => purify,
+  archive,
+  hasDocument,
+  flowing: () => mode === "flow",
+  destroyed: () => destroyed,
+  generation: () => viewGeneration,
+  beginGeneration: () => ++viewGeneration,
+  pageIndex: () => pageIndex,
+  zoom: () => zoomSetting,
+  setScale: (scale) => {
+    currentScale = scale;
+  },
+  updateIndicator,
+  updateFindStatus: () => find.updateStatus(),
+  highlightFlow: () => find.highlightFlow(),
+  schedulePosition: () => positionEngine.schedule(),
+  showZoom: (percent) => {
+    if (zoomLevel) zoomLevel.textContent = t("zoomLevel", { percent });
+  },
+});
+
+/* The Flowing view's navigation, routed to the engine under the names Find and
+   Contents already take. */
+function loadFlowSection(index: number, page?: number, anchor?: FlowAnchor | null) {
+  return flowEngine.loadFlowSection(index, page, anchor);
+}
+
+function applyFlowPage(page: number) {
+  flowEngine.applyFlowPage(page);
+}
+
+function pageForCharOffset(doc: Document, offset: number) {
+  return flowEngine.pageForCharOffset(doc, offset);
+}
+
+async function goToFlowSection(index: number, anchor?: unknown) {
+  await flowEngine.goToFlowSection(index, (anchor as FlowAnchor | null) ?? null);
+}
+
 /** Imports foliate's bundled parsers from the `blob:` URL the `open` carries. */
 async function importFoliate(source: string) {
   if (hooks && typeof hooks.importFoliate === "function") return hooks.importFoliate(source);
@@ -833,10 +876,10 @@ async function openDocument(
           ? (saved as PagePosition).zoom
           : settings.pdfFit;
       pageIndex = clamp(pageIndex, 0, Math.max(0, currentDocument.sections.length - 1));
-      await renderFixedPage();
+      await flowEngine.renderFixedPage();
     } else {
       mode = "flow";
-      const start = flowStart(saved);
+      const start = flowEngine.flowStart(saved);
       await loadFlowSection(start.index, start.page, start.anchor);
     }
     void meta.sendDocument();
@@ -892,397 +935,6 @@ function mobiFile() {
   };
 }
 
-/* Rendering a section --------------------------------------------------- */
-
-/**
- * Parses, sanitizes, and rewrites one section, then draws its body inside a
- * shadow root. The parsed Document stays alive so CFIs can be computed from
- * it after the shadow copy has been highlighted.
- */
-async function renderSection(section: any, options?: { fixed?: boolean }) {
-  const doc = await section.createDocument();
-  // The viewport meta is captured before sanitizing, because DOMPurify
-  // removes `meta` along with every other element that can restyle the Frame.
-  const viewport = fixedViewport(doc);
-  sanitizer.sanitizeDocument(doc, purify);
-  await sanitizer.rewriteDocument(doc, {
-    base: typeof section.id === "string" ? section.id : "",
-    assetUrl: archive.assetUrl,
-    assetText: archive.text,
-  });
-  const body = doc.body || doc.querySelector("body") || doc.documentElement;
-
-  const host = document.createElement("div");
-  host.className = "reader-document";
-  host.dataset.section = String(
-    currentDocument && currentDocument.sections ? currentDocument.sections.indexOf(section) : 0
-  );
-  const shadow = host.attachShadow({ mode: "open" });
-  const style = document.createElement("style");
-  style.textContent = sanitizer.readingCss(settings);
-  if (options && options.fixed) {
-    style.textContent +=
-      "\n:host { display: block; width: 100%; height: 100%; overflow: hidden; }" +
-      "\n.reader-flow { max-width: none; width: 100%; height: 100%; margin: 0; }";
-  }
-  shadow.append(style);
-  for (const element of Array.from(doc.querySelectorAll("style")) as HTMLElement[]) {
-    shadow.append(element.cloneNode(true));
-  }
-
-  const content = document.createElement("div");
-  content.className = "reader-flow";
-  for (const child of Array.from(body.childNodes) as ChildNode[])
-    content.append(child.cloneNode(true));
-  shadow.append(content);
-  return { doc, body, host, shadow, content, viewport };
-}
-
-/** The width and height the Flowing view pages within. */
-function flowGeometry() {
-  const availableWidth =
-    (hooks && typeof hooks.viewportWidth === "number" ? hooks.viewportWidth : 0) ||
-    (viewer.clientWidth > 32 ? viewer.clientWidth - 32 : 800);
-  const availableHeight =
-    (hooks && typeof hooks.viewportHeight === "number" ? hooks.viewportHeight : 0) ||
-    (viewer.clientHeight > 32 ? viewer.clientHeight - 32 : 600);
-  const em = Number.parseFloat(sanitizer.LINE_WIDTHS[settings.lineWidth]) || 38;
-  const scale = Math.max(0.6, Math.min(2, settings.fontSize / 100));
-  const lineWidth = 16 * scale * em;
-  return {
-    width: Math.max(200, Math.min(availableWidth, lineWidth)),
-    height: Math.max(200, availableHeight),
-  };
-}
-
-function flowPageCount(columns: HTMLElement, pageWidth: number, sectionIndex: number) {
-  if (hooks && typeof hooks.measureFlow === "function") {
-    return Math.max(1, Math.floor(hooks.measureFlow({ columns, pageWidth, sectionIndex })));
-  }
-  const scroll = columns.scrollWidth || 0;
-  if (scroll <= pageWidth) return 1;
-  return Math.max(1, Math.round((scroll + FLOW_GAP) / (pageWidth + FLOW_GAP)));
-}
-
-/**
- * Loads one Flowing section and pages to `targetPage` or to the page that
- * holds `anchor`'s range.
- */
-async function loadFlowSection(
-  index: number,
-  targetPage?: number,
-  anchor?: ((doc: Document) => Range | null) | null
-) {
-  if (!currentDocument) return;
-  const section = currentDocument.sections[index];
-  if (!section) return;
-  const generation = ++viewGeneration;
-  archive.revoke();
-  const geometry = flowGeometry();
-  const rendered = await renderSection(section, {});
-  if (destroyed || generation !== viewGeneration) return;
-
-  const columns = document.createElement("div");
-  columns.className = "reader-columns";
-  columns.style.columnWidth = `${geometry.width}px`;
-  columns.style.width = `${geometry.width}px`;
-  columns.style.height = `${geometry.height}px`;
-  columns.style.columnGap = `${FLOW_GAP}px`;
-  columns.append(rendered.content);
-  const viewport = document.createElement("div");
-  viewport.className = "reader-viewport";
-  viewport.style.width = `${geometry.width}px`;
-  viewport.style.height = `${geometry.height}px`;
-  viewport.style.overflow = "hidden";
-  viewport.append(columns);
-  rendered.shadow.append(viewport);
-
-  // The host must be in the rendered document before the columns are
-  // measured: an element outside it has no layout, so `scrollWidth` is 0 and
-  // every section would look like a single page.
-  stage.textContent = "";
-  stage.style.width = `${geometry.width}px`;
-  stage.style.height = `${geometry.height}px`;
-  stage.hidden = false;
-  stage.append(rendered.host);
-
-  const pages = flowPageCount(columns, geometry.width, index);
-  flow = {
-    index,
-    pageIndex: 0,
-    pages,
-    doc: rendered.doc,
-    body: rendered.body,
-    host: rendered.host,
-    shadow: rendered.shadow,
-    columns,
-    content: rendered.content,
-    pageWidth: geometry.width,
-    height: geometry.height,
-    gap: FLOW_GAP,
-    sectionCfi: typeof section.cfi === "string" ? section.cfi : null,
-  };
-
-  let page = typeof targetPage === "number" ? targetPage : 0;
-  if (anchor) {
-    try {
-      const range = anchor(rendered.doc);
-      if (range) page = pageForDocRange(range);
-    } catch {
-      /* A CFI that no longer resolves falls back to the first page. */
-    }
-  }
-  applyFlowPage(page);
-  updateIndicator();
-  positionEngine.schedule();
-  find.highlightFlow();
-}
-
-function applyFlowPage(page: number) {
-  if (!flow) return;
-  flow.pageIndex = clamp(Math.floor(page), 0, Math.max(0, flow.pages - 1));
-  flow.columns.style.transform = `translateX(-${flow.pageIndex * (flow.pageWidth + flow.gap)}px)`;
-  updateIndicator();
-  find.updateStatus();
-}
-
-function nextFlowPage() {
-  if (!flow) return;
-  if (flow.pageIndex + 1 < flow.pages) {
-    applyFlowPage(flow.pageIndex + 1);
-    positionEngine.schedule();
-    return;
-  }
-  if (flow.index + 1 < currentDocument.sections.length) {
-    void loadFlowSection(flow.index + 1, 0);
-    positionEngine.schedule();
-  }
-}
-
-function previousFlowPage() {
-  if (!flow) return;
-  if (flow.pageIndex > 0) {
-    applyFlowPage(flow.pageIndex - 1);
-    positionEngine.schedule();
-    return;
-  }
-  if (flow.index > 0) {
-    void loadFlowSection(flow.index - 1, Number.MAX_SAFE_INTEGER);
-    positionEngine.schedule();
-  }
-}
-
-async function goToFlowSection(index: number, anchor?: any) {
-  if (!flow || flow.index !== index) {
-    await loadFlowSection(index, 0, anchor || null);
-    return;
-  }
-  if (anchor) {
-    try {
-      const range = anchor(flow.doc);
-      if (range) applyFlowPage(pageForDocRange(range));
-    } catch {
-      /* Keep the current page. */
-    }
-  } else {
-    applyFlowPage(0);
-  }
-  positionEngine.schedule();
-}
-
-/** The CFI of the first character on the current Flowing page. */
-function flowCfi() {
-  if (!foliate || !flow || documentFormat !== "epub") return null;
-  const base = flow.sectionCfi || (foliate.CFI ? foliate.CFI.fake.fromIndex(flow.index) : null);
-  if (!base) return null;
-  const range = rangeForFlowPage();
-  if (!range) return base;
-  try {
-    return foliate.CFI.joinIndir(base, foliate.CFI.fromRange(range));
-  } catch {
-    return base;
-  }
-}
-
-/** The range at the first character of the current page, in the parsed Document. */
-function rangeForFlowPage() {
-  if (!flow) return null;
-  const nodes = textNodes(flow.body);
-  if (nodes.length === 0) return null;
-  const fraction = flow.pages > 1 ? flow.pageIndex / flow.pages : 0;
-  return rangeForCharOffset(flow.doc, flow.body, Math.floor(textLength(nodes) * fraction));
-}
-
-/** The total length of `nodes`' text. */
-function textLength(nodes: Text[]) {
-  let total = 0;
-  for (const node of nodes) total += (node.nodeValue || "").length;
-  return total;
-}
-
-/** A collapsed range at `offset` through the body's text. */
-function rangeForCharOffset(doc: Document, body: HTMLElement, offset: number): Range | null {
-  const nodes = textNodes(body);
-  let remaining = Math.max(0, offset);
-  for (const node of nodes) {
-    const length = (node.nodeValue || "").length;
-    if (remaining <= length) {
-      const range = doc.createRange();
-      range.setStart(node, Math.min(length, remaining));
-      range.collapse(true);
-      return range;
-    }
-    remaining -= length;
-  }
-  if (nodes.length === 0) return null;
-  const range = doc.createRange();
-  const last = nodes[nodes.length - 1];
-  range.setStart(last, (last.nodeValue || "").length);
-  range.collapse(true);
-  return range;
-}
-
-/** The Flowing page a range in the parsed Document falls on. */
-function pageForDocRange(range: Range): number {
-  if (!flow) return 0;
-  const nodes = textNodes(flow.body);
-  const total = textLength(nodes);
-  if (total === 0) return 0;
-  let offset = 0;
-  const start = range.startContainer;
-  if (start.nodeType === Node.TEXT_NODE) {
-    for (const node of nodes) {
-      if (node === start) {
-        offset += Math.min(range.startOffset, (node.nodeValue || "").length);
-        break;
-      }
-      offset += (node.nodeValue || "").length;
-    }
-  }
-  return clamp(Math.floor((offset / total) * flow.pages), 0, Math.max(0, flow.pages - 1));
-}
-
-function pageForCharOffset(doc: Document, offset: number): number {
-  if (!flow) return 0;
-  const range = rangeForCharOffset(doc, flow.body, offset);
-  return range ? pageForDocRange(range) : 0;
-}
-
-/** The Reading Position a Flowing Document resumes at. */
-function flowStart(saved: ReadingPosition | null) {
-  if (
-    saved &&
-    saved.kind === "cfi" &&
-    currentDocument &&
-    typeof currentDocument.resolveCFI === "function"
-  ) {
-    try {
-      const resolved = currentDocument.resolveCFI(saved.cfi);
-      if (resolved && typeof resolved.index === "number" && resolved.index >= 0) {
-        return { index: resolved.index, page: 0, anchor: resolved.anchor };
-      }
-    } catch {
-      /* Fall through to the first section. */
-    }
-  }
-  if (saved && saved.kind === "section") {
-    return {
-      index: clamp(Math.floor(saved.index), 0, Math.max(0, currentDocument.sections.length - 1)),
-      page: 0,
-    };
-  }
-  return { index: 0, page: 0 };
-}
-
-/** Re-paginates the current section after a typography change, keeping the CFI. */
-async function repaginateFlow(
-  cfi: string | null,
-  sectionIndex: number,
-  page: number
-): Promise<void> {
-  if (!currentDocument) return;
-  let index = typeof sectionIndex === "number" ? sectionIndex : 0;
-  let anchor = null;
-  if (cfi && typeof currentDocument.resolveCFI === "function") {
-    try {
-      const resolved = currentDocument.resolveCFI(cfi);
-      if (resolved && typeof resolved.index === "number" && resolved.index >= 0) {
-        index = resolved.index;
-        anchor = resolved.anchor;
-      }
-    } catch {
-      /* Keep the section and page the caller gave. */
-    }
-  }
-  await loadFlowSection(index, typeof page === "number" ? page : 0, anchor);
-}
-
-function stepFontSize(delta: number) {
-  if (!hasDocument()) return;
-  const next = clamp(Math.round((settings.fontSize + delta) / 10) * 10, 60, 200);
-  if (next === settings.fontSize) return;
-  settings = { ...settings, fontSize: next };
-  post({ kind: "settings", settings });
-  if (mode === "flow" && flow) {
-    const cfi = flowCfi();
-    const index = flow.index;
-    const page = flow.pageIndex;
-    void repaginateFlow(cfi, index, page);
-  } else if (zoomLevel) {
-    zoomLevel.textContent = t("zoomLevel", { percent: settings.fontSize });
-  }
-}
-
-/* Fixed-layout pages and comics ----------------------------------------- */
-
-/** The `width`/`height` a fixed-layout section declares, or a document default. */
-function fixedViewport(doc: Document) {
-  const meta = doc.querySelector('meta[name="viewport"]');
-  const content = meta ? meta.getAttribute("content") || "" : "";
-  const width = /(?:^|,)\s*width\s*=\s*([\d.]+)/i.exec(content);
-  const height = /(?:^|,)\s*height\s*=\s*([\d.]+)/i.exec(content);
-  return {
-    width: width ? Math.max(1, Number.parseFloat(width[1])) : 1200,
-    height: height ? Math.max(1, Number.parseFloat(height[1])) : 1600,
-  };
-}
-
-/** The scale that fits a fixed-layout page, honoring a numeric zoom. */
-function fixedScale(width: number, height: number): number {
-  const availableWidth = viewer.clientWidth > 32 ? viewer.clientWidth - 32 : 800;
-  const availableHeight = viewer.clientHeight > 32 ? viewer.clientHeight - 32 : 600;
-  const fit = Math.min(availableWidth / width, availableHeight / height);
-  if (typeof zoomSetting === "number") return clamp(zoomSetting, 0.25, 4);
-  if (zoomSetting === "width") return clamp(availableWidth / width, 0.1, 4);
-  return clamp(fit, 0.1, 4);
-}
-
-async function renderFixedPage() {
-  if (!currentDocument) return;
-  const section = currentDocument.sections[pageIndex];
-  if (!section) return;
-  const generation = ++viewGeneration;
-  archive.revoke();
-  const rendered = await renderSection(section, { fixed: true });
-  if (destroyed || generation !== viewGeneration) return;
-  const viewport = rendered.viewport || fixedViewport(rendered.doc);
-  const scale = fixedScale(viewport.width, viewport.height);
-  rendered.host.style.width = `${viewport.width}px`;
-  rendered.host.style.height = `${viewport.height}px`;
-  rendered.host.style.transform = `scale(${scale})`;
-  rendered.host.style.transformOrigin = "top left";
-
-  stage.textContent = "";
-  stage.style.width = `${Math.round(viewport.width * scale)}px`;
-  stage.style.height = `${Math.round(viewport.height * scale)}px`;
-  stage.hidden = false;
-  stage.append(rendered.host);
-  currentScale = scale;
-  updateIndicator();
-  positionEngine.schedule();
-  if (zoomLevel) zoomLevel.textContent = t("zoomLevel", { percent: Math.round(scale * 100) });
-}
-
 /* Time ------------------------------------------------------------------ */
 /** The clock the Flowing search slices by and the wheel gesture measures, testable through `hooks`. */
 function nowMs(): number {
@@ -1305,6 +957,7 @@ function updateIndicator() {
         : t("pageOf", { page: number, count });
     return;
   }
+  const flow = flowEngine.state();
   if (mode === "flow" && flow) {
     pageIndicator.textContent = t("sectionPage", {
       page: flow.pageIndex + 1,
@@ -1725,7 +1378,7 @@ function destroyDocument() {
     }
   }
   currentDocument = null;
-  flow = null;
+  flowEngine.reset();
   comic.reset();
   archive.reset();
   protocol.abortReads("Reader closed");
@@ -1822,7 +1475,7 @@ function goToPage(index: number, options: { atEnd?: boolean } = {}) {
   updateIndicator();
   positionEngine.schedule();
   if (mode === "comic") void comic.render();
-  else void renderFixedPage();
+  else void flowEngine.renderFixedPage();
   find.updateStatus();
 }
 
@@ -1832,7 +1485,7 @@ function nextPage() {
     return;
   }
   if (mode === "flow") {
-    nextFlowPage();
+    flowEngine.nextFlowPage();
     return;
   }
   goToPage(pageIndex + 1);
@@ -1844,7 +1497,7 @@ function previousPage(options?: { atEnd?: boolean }) {
     return;
   }
   if (mode === "flow") {
-    previousFlowPage();
+    flowEngine.previousFlowPage();
     return;
   }
   goToPage(pageIndex - 1, options);
@@ -1859,14 +1512,14 @@ function setZoom(next: FrameZoom) {
   } else if (mode === "comic") {
     void comic.render();
   } else if (mode === "fixed") {
-    void renderFixedPage();
+    void flowEngine.renderFixedPage();
   }
   updateControls();
 }
 
 function zoomBy(factor: number) {
   if (mode === "flow") {
-    stepFontSize(factor > 1 ? 10 : -10);
+    flowEngine.stepFontSize(factor > 1 ? 10 : -10);
     return;
   }
   if (!hasDocument()) return;
@@ -1990,10 +1643,10 @@ function runCommand(id: string) {
       setZoom("page");
       return;
     case "increaseFontSize":
-      stepFontSize(10);
+      flowEngine.stepFontSize(10);
       return;
     case "decreaseFontSize":
-      stepFontSize(-10);
+      flowEngine.stepFontSize(-10);
       return;
     case "toggleContinuousScroll":
       toggleContinuous();
@@ -2139,12 +1792,13 @@ function onResize() {
   resizeTimer = window.setTimeout(() => {
     if (pdfDoc) {
       void rebuildPdfView();
-    } else if (mode === "flow" && flow) {
-      void repaginateFlow(flowCfi(), flow.index, flow.pageIndex);
+    } else if (mode === "flow") {
+      const state = flowEngine.state();
+      if (state) void flowEngine.repaginateFlow(flowEngine.flowCfi(), state.index, state.pageIndex);
     } else if (mode === "comic") {
       void comic.render();
     } else if (mode === "fixed") {
-      void renderFixedPage();
+      void flowEngine.renderFixedPage();
     }
   }, 150);
 }
