@@ -1,7 +1,7 @@
 /**
- * The Reader Frame kit (#943 unit 2): its icon inventory and the six basic
- * controls, exported as one entry point for the chrome screens that compose
- * them.
+ * The Reader Frame kit (#943 units 2 and 3): its icon inventory, the six basic
+ * controls, and the Sheet, Dialog, Popover and Menu overlays, exported as one
+ * entry point for the chrome screens that compose them.
  */
 
 export { Button, type ButtonProps, type ButtonVariant, Chip, type ChipProps } from "./controls";
@@ -17,3 +17,14 @@ export {
   type SwitchProps,
 } from "./controls";
 export { Icon, ICON_NAMES, type IconName, type IconProps } from "./icons";
+export {
+  Dialog,
+  type DialogProps,
+  Menu,
+  type MenuItem,
+  type MenuProps,
+  Popover,
+  type PopoverProps,
+  Sheet,
+  type SheetProps,
+} from "./overlays";
