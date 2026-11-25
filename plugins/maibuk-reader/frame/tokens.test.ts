@@ -273,6 +273,49 @@ describe("layers", () => {
   });
 });
 
+describe("Cover", () => {
+  const tones: Array<[number, string, string]> = [
+    [1, "#2f4a3a", "#efe9dc"],
+    [2, "#7a2e2a", "#f6e7d8"],
+    [3, "#1f3a5f", "#e8eef6"],
+    [4, "#4a3b5c", "#efe8f4"],
+    [5, "#8a5a1f", "#fbf1e1"],
+    [6, "#3d3a36", "#ece7df"],
+    [7, "#e8dcc4", "#3b2f20"],
+    [8, "#cfd8cc", "#1f2e24"],
+  ];
+
+  it.each(tones)("defines tone %i as its surface and ink pair", (index, background, ink) => {
+    expect(token(":root", `--cover-tone-${index}-bg`)).toBe(background);
+    expect(token(":root", `--cover-tone-${index}-ink`)).toBe(ink);
+  });
+
+  it("draws the pending cover on the muted surface with a dashed border color", () => {
+    expect(token(":root", "--cover-pending-bg")).toBe("#e7e5e4");
+    expect(token(":root", "--cover-pending-ink")).toBe("#57534e");
+    expect(token(":root", "--cover-pending-border")).toBe("#a8a29e");
+  });
+
+  it("carries the spine shade and the artboard's exact two-part shadow", () => {
+    expect(token(":root", "--cover-spine")).toBe(
+      "linear-gradient(90deg, rgba(0, 0, 0, 0.18) 0, rgba(0, 0, 0, 0) 6%)"
+    );
+    expect(token(":root", "--cover-shadow")).toBe(
+      "0 1px 2px rgba(28, 25, 23, 0.18), 0 4px 12px rgba(28, 25, 23, 0.1)"
+    );
+  });
+
+  it("drops the shade and shadow and draws the pending border in full ink", () => {
+    for (const selector of ['[data-eink="true"]', '[data-motion="reduce"]']) {
+      expect(token(selector, "--cover-shadow")).toBe("none");
+      expect(token(selector, "--cover-spine")).toBe("none");
+      expect(token(selector, "--cover-pending-border")).toBe(
+        "var(--reading-ink, var(--maibuk-color-foreground))"
+      );
+    }
+  });
+});
+
 describe("reader.html", () => {
   it("links tokens.css before the Frame's existing inline styles", () => {
     const link = html.indexOf('<link rel="stylesheet" href="tokens.css"');

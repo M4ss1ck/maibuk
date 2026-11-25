@@ -564,3 +564,156 @@ button.kit-chip {
   animation: none;
   transition: none;
 }
+
+/* Cover and ProgressCard (#943 unit 4). A generated Cover draws the
+   artboard's tone surface with a spine shade; a pending cover draws the muted
+   dashed surface; a real image fades in over the generated cover with the
+   120 ms Cover motion token. ProgressCard floats at the Shelf's bottom-right
+   on the import layer. Every color and the cover shadow come from
+   tokens.css; E-ink Mode and reduced motion drop the shade, shadow and fade,
+   and draw the pending border in full ink. */
+
+.kit-cover {
+  position: relative;
+  flex: none;
+  overflow: hidden;
+  border-radius: var(--radius-cover);
+  box-shadow: var(--cover-shadow);
+}
+
+.kit-cover__generated,
+.kit-cover__pending {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+}
+
+/* The generated surface: tone background and ink from the cover tokens, the
+   padding and gap from the size, and the artboard's left-edge spine shade. */
+.kit-cover__generated {
+  display: flex;
+  flex-direction: column;
+  background-image: var(--cover-spine);
+}
+
+.kit-cover__rule {
+  display: block;
+  width: 24%;
+  height: 2px;
+  background: currentColor;
+  opacity: 0.55;
+}
+
+.kit-cover__title {
+  flex: 1;
+  overflow: hidden;
+  font-family: var(--type-cover-family);
+  font-weight: var(--type-cover-weight);
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+}
+
+.kit-cover__author {
+  font-family: var(--type-ui);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+/* The pending surface: muted fill, dashed border, format label and title. */
+.kit-cover__pending {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border: 1px dashed var(--cover-pending-border);
+  border-radius: var(--radius-cover);
+  background: var(--cover-pending-bg);
+  color: var(--cover-pending-ink);
+  font-family: var(--type-ui);
+}
+
+.kit-cover__format {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.kit-cover__pending-title {
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+/* A real cover arrives over the placeholder in 120 ms; an error removes it and
+   the generated cover stays. */
+.kit-cover__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  animation: kit-cover-in var(--motion-duration-cover) var(--motion-ease);
+}
+
+@keyframes kit-cover-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ProgressCard: floating at the Shelf's bottom-right on the import layer. */
+.kit-progress-card {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: var(--z-import);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(320px, calc(100vw - var(--space-8)));
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--chrome-border);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  color: var(--chrome-fg);
+  box-shadow: var(--shadow-page);
+  font-family: var(--type-ui);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+
+.kit-progress-card__title {
+  margin: 0;
+  font-size: var(--type-body-size);
+  font-weight: 600;
+  line-height: var(--type-body-line);
+}
+
+.kit-progress-card__bar {
+  width: 100%;
+  accent-color: var(--primary);
+}
+
+.kit-progress-card__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.kit-progress-card__count {
+  color: var(--chrome-meta);
+  font-size: var(--type-small-size);
+  font-weight: var(--type-status-weight);
+  font-variant-numeric: var(--type-numeric);
+  line-height: var(--type-small-line);
+}
+
+/* E-ink Mode and reduced motion: no cover fade, no shadows. The pending
+   border turns full ink through its token. */
+[data-eink="true"] .kit-cover__image,
+[data-motion="reduce"] .kit-cover__image {
+  animation: none;
+}

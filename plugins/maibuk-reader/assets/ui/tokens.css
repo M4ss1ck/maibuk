@@ -102,6 +102,32 @@
   --shadow-stage: 0 1px 6px rgba(0, 0, 0, 0.18);
   --shadow-page: 0 1px 6px rgba(0, 0, 0, 0.18);
 
+  /* Generated covers: the artboard's eight tone pairs, the pending cover's
+     muted surface, the spine shade, and its two-part shadow. E-ink and
+     reduced motion drop the shade and shadow and draw the pending border in
+     full ink. */
+  --cover-tone-1-bg: #2f4a3a;
+  --cover-tone-1-ink: #efe9dc;
+  --cover-tone-2-bg: #7a2e2a;
+  --cover-tone-2-ink: #f6e7d8;
+  --cover-tone-3-bg: #1f3a5f;
+  --cover-tone-3-ink: #e8eef6;
+  --cover-tone-4-bg: #4a3b5c;
+  --cover-tone-4-ink: #efe8f4;
+  --cover-tone-5-bg: #8a5a1f;
+  --cover-tone-5-ink: #fbf1e1;
+  --cover-tone-6-bg: #3d3a36;
+  --cover-tone-6-ink: #ece7df;
+  --cover-tone-7-bg: #e8dcc4;
+  --cover-tone-7-ink: #3b2f20;
+  --cover-tone-8-bg: #cfd8cc;
+  --cover-tone-8-ink: #1f2e24;
+  --cover-pending-bg: #e7e5e4;
+  --cover-pending-ink: #57534e;
+  --cover-pending-border: #a8a29e;
+  --cover-spine: linear-gradient(90deg, rgba(0, 0, 0, 0.18) 0, rgba(0, 0, 0, 0) 6%);
+  --cover-shadow: 0 1px 2px rgba(28, 25, 23, 0.18), 0 4px 12px rgba(28, 25, 23, 0.1);
+
   /* Motion: bars slide 8 px and fade, sheets slide and their scrim fades,
      page turns slide, covers fade. */
   --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -180,5 +206,8 @@
   --motion-cover: none;
   --shadow-stage: none;
   --shadow-page: none;
+  --cover-shadow: none;
+  --cover-spine: none;
+  --cover-pending-border: var(--reading-ink, var(--maibuk-color-foreground));
   --reading-border: var(--reading-ink, var(--maibuk-color-foreground));
 }
