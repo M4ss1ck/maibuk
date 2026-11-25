@@ -394,6 +394,33 @@ function MenuCase({
   );
 }
 
+/**
+ * A Menu that is always open and hands `items` a new array and new rows on
+ * every render, so a caller-supplied fresh array cannot re-run open focus.
+ */
+function FreshItemsMenuCase() {
+  const [tick, setTick] = useState(0);
+  return (
+    <div>
+      <button
+        type="button"
+        class="rerender-menu"
+        data-tick={tick}
+        onClick={() => setTick((value) => value + 1)}
+      >
+        Rerender
+      </button>
+      <Menu
+        open
+        onClose={() => {}}
+        label="Actions"
+        items={MENU_ITEMS.map((item) => ({ ...item }))}
+        onSelect={() => {}}
+      />
+    </div>
+  );
+}
+
 describe("Menu", () => {
   it("focuses its first enabled row and sizes rows 40 px by default", async () => {
     setWidth(1024);
@@ -496,6 +523,24 @@ describe("Menu", () => {
     expect(seen).toEqual([]);
     expect(screen.getByRole("menu")).toBeInTheDocument();
   });
+
+  it("keeps the focused row when it rerenders open with a fresh items array", async () => {
+    setWidth(1024);
+    const user = userEvent.setup({ delay: null });
+    await mount(<FreshItemsMenuCase />);
+
+    const settings = screen.getByRole("menuitem", { name: /Settings/ });
+    await press(() => user.keyboard("{ArrowDown}"));
+    expect(document.activeElement).toBe(settings);
+
+    const rerender = document.querySelector<HTMLButtonElement>(".rerender-menu");
+    if (!rerender) throw new Error("case has no rerender control");
+    await act(() => {
+      rerender.click();
+    });
+    expect(rerender.dataset.tick).toBe("1");
+    expect(document.activeElement).toBe(screen.getByRole("menuitem", { name: /Settings/ }));
+  });
 });
 
 function NestedCase() {
@@ -528,6 +573,22 @@ function NestedCase() {
 }
 
 describe("layer stack", () => {
+  it("marks a Menu opened over a Dialog as nested", async () => {
+    setWidth(1024);
+    const user = userEvent.setup({ delay: null });
+    await mount(<NestedCase />);
+
+    await press(() => user.click(screen.getByRole("button", { name: "Open dialog" })));
+    await press(() => user.click(screen.getByRole("button", { name: "Open menu" })));
+    expect(screen.getByRole("menu")).toHaveClass("kit-menu--nested");
+  });
+
+  it("leaves a standalone Menu on the default popover layer", async () => {
+    setWidth(1024);
+    await mount(<MenuCase startOpen />);
+    expect(screen.getByRole("menu")).not.toHaveClass("kit-menu--nested");
+  });
+
   it("closes the Menu before the Dialog and returns focus inside the Dialog", async () => {
     setWidth(1024);
     const user = userEvent.setup({ delay: null });

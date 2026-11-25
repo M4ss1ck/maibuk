@@ -5,7 +5,9 @@
  * the document body with their own focus management: a module-local layer
  * stack makes Escape close only the top open layer, a capture-phase handler
  * stops the host from also acting on a handled Escape, modal layers trap Tab
- * and return focus to the trigger, and a Menu owns its roving tab stop.
+ * and return focus to the trigger, and a Menu owns its roving tab stop. A
+ * Popover or Menu opened over an open modal is marked nested so it paints
+ * above the modal and its scrim.
  *
  * Every user-visible string is a prop, so the Worker's catalogs own the copy.
  * The kit draws with the tokens in `kit.css`; no color is stated here.
@@ -19,6 +21,7 @@ import {
 } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { useLayoutMode } from "../use-layout-mode";
+import { Button } from "./controls";
 import { Icon, type IconName } from "./icons";
 
 /** One overlay's claim on the Escape key and the modal focus trap. */
@@ -140,24 +143,36 @@ interface UseLayerOptions {
   focusFirstControl?: boolean;
 }
 
+/** A layer's element ref, plus whether it opened over an existing modal. */
+interface LayerHandle {
+  ref: RefObject<HTMLDivElement | null>;
+  nested: boolean;
+}
+
 /**
  * Registers a layer while it is open, focuses its first control, and on close
  * returns focus to whatever held it when the layer opened. A nested layer
  * therefore restores into its parent's control, not the outer trigger.
+ *
+ * A non-modal layer that opens while a modal is already on the stack is nested:
+ * it must paint above that modal and its scrim, so only this instance is marked
+ * nested. A plain non-modal layer stays below the sheet-and-dialog layer.
  */
 function useLayer({
   active,
   onEscape,
   modal,
   focusFirstControl = true,
-}: UseLayerOptions): RefObject<HTMLDivElement | null> {
+}: UseLayerOptions): LayerHandle {
   const elementRef = useRef<HTMLDivElement | null>(null);
   const previous = useRef<HTMLElement | null>(null);
   const escapeRef = useRef(onEscape);
   escapeRef.current = onEscape;
+  const [nested, setNested] = useState(false);
 
   useLayoutEffect(() => {
     if (!active) return;
+    setNested(!modal && layers.some((layer) => layer.modal));
     const element = elementRef.current;
     previous.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -175,7 +190,7 @@ function useLayer({
     };
   }, [active, modal, focusFirstControl]);
 
-  return elementRef;
+  return { ref: elementRef, nested };
 }
 
 /** A stable id for a layer's accessible name. */
@@ -241,7 +256,7 @@ export function Sheet({ open, onClose, title, doneLabel, children, class: extra 
   const { mode } = useLayoutMode();
   const active = open && mode === "narrow";
   const titleId = useOverlayId();
-  const layerRef = useLayer({ active, onEscape: onClose, modal: true });
+  const { ref: layerRef } = useLayer({ active, onEscape: onClose, modal: true });
 
   if (!active) return null;
 
@@ -262,9 +277,9 @@ export function Sheet({ open, onClose, title, doneLabel, children, class: extra 
           <h2 id={titleId} class="kit-sheet__title">
             {title}
           </h2>
-          <button type="button" class="kit-button kit-button--ghost" onClick={onClose}>
+          <Button variant="ghost" onClick={onClose}>
             {doneLabel}
-          </button>
+          </Button>
         </div>
         <div class="kit-sheet__body">{children}</div>
       </div>
@@ -292,7 +307,7 @@ export function Dialog({ open, onClose, title, children, actions, class: extra }
   const { mode } = useLayoutMode();
   const active = open && mode === "wide";
   const titleId = useOverlayId();
-  const layerRef = useLayer({ active, onEscape: onClose, modal: true });
+  const { ref: layerRef } = useLayer({ active, onEscape: onClose, modal: true });
 
   if (!active) return null;
 
@@ -346,7 +361,7 @@ export function Popover({
   const { mode } = useLayoutMode();
   const active = open && mode === "wide";
   const labelId = useOverlayId();
-  const layerRef = useLayer({ active, onEscape: onClose, modal: false });
+  const { ref: layerRef, nested } = useLayer({ active, onEscape: onClose, modal: false });
   usePosition(layerRef, triggerRef, active);
 
   if (!active) return null;
@@ -354,7 +369,7 @@ export function Popover({
   return createPortal(
     <div
       ref={layerRef}
-      class={`kit-popover ${extra ?? ""}`.trim()}
+      class={`kit-popover ${nested ? "kit-popover--nested" : ""} ${extra ?? ""}`.trim()}
       role="dialog"
       aria-labelledby={labelId}
       tabIndex={-1}
@@ -410,7 +425,7 @@ function nextEnabled(items: ReadonlyArray<MenuItem>, from: number, delta: number
  */
 export function Menu({ open, onClose, label, items, onSelect, class: extra }: MenuProps) {
   const { target } = useLayoutMode();
-  const layerRef = useLayer({
+  const { ref: layerRef, nested } = useLayer({
     active: open,
     onEscape: onClose,
     modal: false,
@@ -419,6 +434,8 @@ export function Menu({ open, onClose, label, items, onSelect, class: extra }: Me
   const anchorRef = useRef<HTMLElement | null>(null);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const search = useRef({ text: "", at: 0 });
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
   const [active, setActive] = useState(() => firstEnabled(items));
 
   useLayoutEffect(() => {
@@ -436,10 +453,10 @@ export function Menu({ open, onClose, label, items, onSelect, class: extra }: Me
 
   useEffect(() => {
     if (!open) return;
-    const index = firstEnabled(items);
+    const index = firstEnabled(itemsRef.current);
     setActive(index);
     itemRefs.current[index]?.focus();
-  }, [open, items]);
+  }, [open]);
 
   const moveTo = (index: number) => {
     setActive(index);
@@ -509,7 +526,7 @@ export function Menu({ open, onClose, label, items, onSelect, class: extra }: Me
   return createPortal(
     <div
       ref={layerRef}
-      class={`kit-menu ${extra ?? ""}`.trim()}
+      class={`kit-menu ${nested ? "kit-menu--nested" : ""} ${extra ?? ""}`.trim()}
       role="menu"
       aria-label={label}
       tabIndex={-1}

@@ -51,6 +51,23 @@ describe("color contract", () => {
   });
 });
 
+describe("layer order", () => {
+  const css = withoutComments(read("assets", "ui", "kit.css"));
+
+  it("keeps a plain Popover and Menu below the sheet-and-dialog layer", () => {
+    const menu = css.match(/\.kit-menu\s*\{[^}]*\}/);
+    const popover = css.match(/\.kit-popover\s*\{[^}]*\}/);
+    expect(menu?.[0]).toMatch(/z-index:\s*var\(--z-popover\)/);
+    expect(popover?.[0]).toMatch(/z-index:\s*var\(--z-popover\)/);
+  });
+
+  it("raises a nested Popover or Menu one step above the modal layer", () => {
+    const rule = css.match(/\.kit-popover--nested[^{]*\{[^}]*\}/);
+    expect(rule?.[0]).toContain(".kit-menu--nested");
+    expect(rule?.[0]).toMatch(/z-index:\s*calc\(var\(--z-dialog\)\s*\+\s*1\)/);
+  });
+});
+
 describe("live chrome", () => {
   const app = withoutComments(read("frame", "app.tsx"));
   const reader = withoutComments(read("assets", "ui", "reader.html"));

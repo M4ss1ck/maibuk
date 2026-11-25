@@ -472,6 +472,14 @@ button.kit-chip {
   box-shadow: var(--shadow-page);
 }
 
+/* A Popover or Menu opened while a Sheet or Dialog is already on the stack is
+   nested: only that instance moves one step above the modal layer so it clears
+   the modal and its scrim. Plain Popover and Menu stay on --z-popover. */
+.kit-popover--nested,
+.kit-menu--nested {
+  z-index: calc(var(--z-dialog) + 1);
+}
+
 .kit-menu__item {
   display: flex;
   align-items: center;
