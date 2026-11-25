@@ -31,6 +31,7 @@
  classic script `assets/ui/reader.js`, which the Frame's HTML loads. */
 
 import { createArchive, DocumentError, IMAGE_EXTENSIONS } from "./archive";
+import { createContents, documentOutline, type OutlineItem } from "./contents";
 import { hooks, positionDebounceMs } from "./hooks";
 import { createMeta } from "./meta";
 import { createFrameProtocol, errorCode, type FrameOpenMessage } from "./protocol";
@@ -214,7 +215,7 @@ const searchStatus = el("search-status");
 const searchPreviousButton = el("search-previous");
 const searchNextButton = el("search-next");
 const searchCloseButton = el("search-close");
-const contents = el("contents");
+const contentsPanel = el("contents");
 const contentsTitle = el("contents-title");
 const contentsTree = el("contents-tree");
 const viewer = el("viewer");
@@ -226,6 +227,20 @@ const passwordLabel = el("password-label");
 const passwordInput = el("password-input");
 const passwordError = el("password-error");
 const passwordSubmit = el("password-submit");
+
+/* The Contents panel: the outline tree, its keyboard navigation, and where its
+   entries land. */
+const contents = createContents({
+  panel: () => contentsPanel,
+  button: () => contentsToggle,
+  tree: () => contentsTree,
+  t: (key) => t(key),
+  pdf: () => pdfDoc,
+  document: () => currentDocument,
+  flowing: () => mode === "flow",
+  goToPage,
+  goToFlowSection,
+});
 
 let language = "en";
 let providedLabels: FrameLabels | null = null;
@@ -290,7 +305,6 @@ const search = {
   running: false,
 };
 
-let outline: any[] | null = null;
 let pageLabels: string[] | null = null;
 
 function t(key: string, values?: Record<string, string | number>): string {
@@ -524,7 +538,7 @@ function resetDocument() {
   pageIndex = 0;
   currentScale = 1;
   meta.reset();
-  outline = null;
+  contents.reset();
   pageLabels = null;
   mode = "pdf";
   documentFormat = "";
@@ -534,7 +548,6 @@ function resetDocument() {
   search.generation += 1;
   if (searchStatus) searchStatus.textContent = "";
   if (pageIndicator) pageIndicator.textContent = "";
-  if (contentsTree) contentsTree.textContent = "";
   if (messageElement) {
     messageElement.hidden = true;
     messageElement.textContent = "";
@@ -676,12 +689,13 @@ async function onOpened() {
   } catch {
     pageLabels = null;
   }
+  let outline: OutlineItem[] | null = null;
   try {
     outline = await pdfDoc.getOutline();
   } catch {
     outline = null;
   }
-  renderContents();
+  contents.show(outline);
   const savedIndex = position && position.kind === "page" ? position.page : 0;
   pageIndex = clamp(Math.floor(savedIndex), 0, Math.max(0, pdfDoc.numPages - 1));
   stage.hidden = false;
@@ -769,8 +783,7 @@ async function openDocument(
     }
 
     if (destroyed || !currentDocument) return;
-    outline = documentOutline(currentDocument.toc);
-    renderContents();
+    contents.show(documentOutline(currentDocument.toc));
     stage.hidden = false;
     messageElement.hidden = true;
     passwordForm.hidden = true;
@@ -869,15 +882,6 @@ function openComic() {
     rendition: { layout: "pre-paginated" },
     destroy() {},
   };
-}
-
-function documentOutline(items: any[] | undefined): any[] {
-  if (!Array.isArray(items)) return [];
-  return items.map((item) => ({
-    title: typeof item.label === "string" ? item.label : "",
-    dest: item.href,
-    items: documentOutline(item.subitems || item.items),
-  }));
 }
 
 /* Rendering a section --------------------------------------------------- */
@@ -2159,205 +2163,6 @@ function flushPosition() {
   post(positionMessage());
 }
 
-/* Contents -------------------------------------------------------------- */
-function toggleContents(open?: boolean | undefined) {
-  const next = typeof open === "boolean" ? open : contents.hidden;
-  contents.hidden = !next;
-  contentsToggle.setAttribute("aria-expanded", String(next));
-  if (next) {
-    renderContents();
-    const first = treeItems()[0];
-    if (first) first.focus();
-  } else {
-    contentsToggle.focus();
-  }
-}
-
-function renderContents() {
-  contentsTree.textContent = "";
-  if (!outline || outline.length === 0) {
-    const empty = document.createElement("p");
-    empty.textContent = t("contentsEmpty");
-    contentsTree.append(empty);
-    return;
-  }
-  contentsTree.append(buildOutline(outline));
-}
-
-function buildOutline(items: any[]): HTMLUListElement {
-  const list = document.createElement("ul");
-  list.setAttribute("role", "group");
-  for (const item of items) {
-    const li = document.createElement("li");
-    li.setAttribute("role", "treeitem");
-    li.tabIndex = -1;
-    const title = document.createElement("span");
-    title.textContent = typeof item.title === "string" ? item.title : "";
-    li.append(title);
-    if (Array.isArray(item.items) && item.items.length > 0) {
-      li.setAttribute("aria-expanded", "true");
-      li.append(buildOutline(item.items));
-    }
-    li.addEventListener("click", (event) => {
-      if (event.target !== li && event.target !== title) return;
-      void activateOutlineItem(item, li);
-    });
-    li.addEventListener("keydown", (event) => onTreeItemKey(event, li));
-    list.append(li);
-  }
-  return list;
-}
-
-function treeItems(): HTMLElement[] {
-  return (Array.from(contentsTree.querySelectorAll('[role="treeitem"]')) as HTMLElement[]).filter(
-    (item) => isTreeItemVisible(item)
-  );
-}
-
-function isTreeItemVisible(item: HTMLElement): boolean {
-  let parent = item.parentElement;
-  while (parent && parent !== contentsTree) {
-    if (parent.tagName === "UL" && parent.hidden) return false;
-    parent = parent.parentElement;
-  }
-  return true;
-}
-
-function focusTreeItem(item: HTMLElement) {
-  for (const other of treeItems()) other.tabIndex = -1;
-  item.tabIndex = 0;
-  item.focus();
-}
-
-function onTreeItemKey(event: KeyboardEvent, item: HTMLElement) {
-  const items = treeItems();
-  const position = items.indexOf(item);
-  switch (event.key) {
-    case "ArrowDown":
-      event.preventDefault();
-      event.stopPropagation();
-      if (position >= 0 && position < items.length - 1) focusTreeItem(items[position + 1]);
-      return;
-    case "ArrowUp":
-      event.preventDefault();
-      event.stopPropagation();
-      if (position > 0) focusTreeItem(items[position - 1]);
-      return;
-    case "Home":
-      event.preventDefault();
-      event.stopPropagation();
-      if (items.length > 0) focusTreeItem(items[0]);
-      return;
-    case "End":
-      event.preventDefault();
-      event.stopPropagation();
-      if (items.length > 0) focusTreeItem(items[items.length - 1]);
-      return;
-    case "ArrowRight": {
-      event.preventDefault();
-      event.stopPropagation();
-      const child = item.querySelector(':scope > ul > [role="treeitem"]');
-      if (item.getAttribute("aria-expanded") === "false") {
-        item.setAttribute("aria-expanded", "true");
-        const group = item.querySelector(":scope > ul");
-        if (group) (group as HTMLElement).hidden = false;
-      } else if (child) {
-        focusTreeItem(child as HTMLElement);
-      }
-      return;
-    }
-    case "ArrowLeft": {
-      event.preventDefault();
-      event.stopPropagation();
-      if (item.getAttribute("aria-expanded") === "true") {
-        item.setAttribute("aria-expanded", "false");
-        const group = item.querySelector(":scope > ul");
-        if (group) (group as HTMLElement).hidden = true;
-      } else {
-        const parent = item.parentElement && item.parentElement.closest('[role="treeitem"]');
-        if (parent) focusTreeItem(parent as HTMLElement);
-      }
-      return;
-    }
-    case "Enter":
-    case " ":
-      event.preventDefault();
-      event.stopPropagation();
-      if (position >= 0) void activateOutlineItemFromElement(item);
-      return;
-    case "Escape":
-      event.preventDefault();
-      event.stopPropagation();
-      toggleContents(false);
-      return;
-    default:
-      return;
-  }
-}
-
-async function activateOutlineItemFromElement(item: HTMLElement) {
-  const items = outline ? flattenOutline(outline) : [];
-  const match = items.find((candidate) => candidate.element === item);
-  if (match) await activateOutlineItem(match.item, item);
-}
-
-function flattenOutline(items: any[], into?: any[]): { item: any; element?: HTMLElement }[] {
-  const flat = into || [];
-  for (const item of items) {
-    flat.push({ item });
-    if (Array.isArray(item.items)) flattenOutline(item.items, flat);
-  }
-  return flat;
-}
-
-async function activateOutlineItem(item: any, element: HTMLElement) {
-  if (pdfDoc) {
-    const index = await resolveDestination(item.dest);
-    if (index === null) return;
-    goToPage(index);
-    element.focus();
-    return;
-  }
-  if (!currentDocument) return;
-  let target = null;
-  try {
-    target =
-      typeof currentDocument.resolveHref === "function"
-        ? currentDocument.resolveHref(String(item.dest))
-        : null;
-  } catch {
-    target = null;
-  }
-  if (!target || typeof target.index !== "number" || target.index < 0) return;
-  if (mode === "flow") {
-    await goToFlowSection(target.index, target.anchor || null);
-  } else {
-    goToPage(target.index);
-  }
-  element.focus();
-}
-
-async function resolveDestination(dest: unknown): Promise<number | null> {
-  if (!pdfDoc) return null;
-  try {
-    if (typeof dest === "string") {
-      const resolved = await pdfDoc.getDestination(dest);
-      return resolved ? await resolveDestination(resolved) : null;
-    }
-    if (Array.isArray(dest) && dest.length > 0) {
-      const target = dest[0];
-      if (typeof target === "string") return await resolveDestination(target);
-      if (target && typeof pdfDoc.getPageIndex === "function") {
-        return await pdfDoc.getPageIndex(target);
-      }
-      if (typeof target === "number") return target;
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
-
 /* Search ---------------------------------------------------------------- */
 function openSearch() {
   searchBar.hidden = false;
@@ -2663,7 +2468,7 @@ function runCommand(id: string) {
       openSearch();
       return;
     case "toggleContents":
-      toggleContents();
+      contents.toggle();
       return;
     case "zoomIn":
       zoomBy(1.1);
@@ -2711,8 +2516,8 @@ function onKeyDown(event: KeyboardEvent) {
       closeSearch(true);
       return;
     }
-    if (!contents.hidden) {
-      toggleContents(false);
+    if (!contentsPanel.hidden) {
+      contents.toggle(false);
       return;
     }
     leave();
@@ -2723,7 +2528,7 @@ function onKeyDown(event: KeyboardEvent) {
     if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
       return;
     }
-    if (contents.contains(target)) return;
+    if (contentsPanel.contains(target)) return;
   }
   if (!hasDocument()) return;
   switch (event.key) {
@@ -2857,7 +2662,7 @@ function cleanup() {
 setLabels();
 
 if (backButton) backButton.addEventListener("click", leave);
-if (contentsToggle) contentsToggle.addEventListener("click", () => toggleContents(undefined));
+if (contentsToggle) contentsToggle.addEventListener("click", () => contents.toggle(undefined));
 if (findToggle) findToggle.addEventListener("click", openSearch);
 if (zoomOutButton) zoomOutButton.addEventListener("click", () => zoomBy(1 / 1.1));
 if (zoomInButton) zoomInButton.addEventListener("click", () => zoomBy(1.1));
