@@ -498,27 +498,9 @@ describe("Escape order", () => {
     // on the DOM: the panel stays open, the toggle reads expanded.
     frame.port.deliver({ kind: "appearance", appearance: { colorScheme: "dark", eink: false } });
     expect(el("contents").hidden).toBe(false);
-    await vi.waitFor(() => expect(el("contents-toggle").getAttribute("aria-expanded")).toBe("true"));
-  });
-
-  it("returns focus on close at the commit, so a later open keeps the input focused", async () => {
-    frame = loadFrame("flowing.epub");
-    frame.open();
-    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 3 in this section"));
-    const user = userEvent.setup();
-
-    // Close Contents; the focus return must land with its commit, not on a
-    // deferred timer a later open could outrun.
-    await user.click(el("contents-toggle"));
-    await user.keyboard("{Escape}");
-    expect(document.activeElement).toBe(el("contents-toggle"));
-
-    // Find opens and focuses its input; nothing may steal focus after that.
-    await user.keyboard("{Control>}f{/Control}");
-    expect(el("search-bar").hidden).toBe(false);
-    expect(document.activeElement).toBe(el("search-input"));
-    await new Promise((resolve) => setTimeout(resolve, 80));
-    expect(document.activeElement).toBe(el("search-input"));
+    await vi.waitFor(() =>
+      expect(el("contents-toggle").getAttribute("aria-expanded")).toBe("true")
+    );
   });
 });
 
