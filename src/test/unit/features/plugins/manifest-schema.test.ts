@@ -85,6 +85,42 @@ describe("manifest.schema.json", () => {
   });
 });
 
+describe("frameEntry", () => {
+  const withFrameEntry = (frameEntry: unknown) => ({ ...PLUGIN_MANIFEST, frameEntry });
+
+  it("accepts a relative .ts or .tsx source and a relative .js bundle, without customUi", () => {
+    for (const source of ["frame/entry.tsx", "frame/entry.ts", "./frame/entry.tsx"]) {
+      expect(
+        pluginManifestSchema.safeParse(withFrameEntry({ source, bundle: "assets/frame.js" }))
+          .success,
+        source
+      ).toBe(true);
+    }
+    expect(
+      pluginManifestSchema.safeParse(
+        withFrameEntry({ source: "frame/entry.tsx", bundle: "./frame.js" })
+      ).success
+    ).toBe(true);
+  });
+
+  it("refuses a path that leaves the Plugin folder or names the wrong file type", () => {
+    for (const frameEntry of [
+      { source: "../frame/entry.tsx", bundle: "assets/frame.js" },
+      { source: "/frame/entry.tsx", bundle: "assets/frame.js" },
+      { source: "frame\\entry.tsx", bundle: "assets/frame.js" },
+      { source: "frame/entry.js", bundle: "assets/frame.js" },
+      { source: "frame/entry.tsx", bundle: "../assets/frame.js" },
+      { source: "frame/entry.tsx", bundle: "assets/frame.ts" },
+      { source: "frame/entry.tsx" },
+    ]) {
+      expect(
+        pluginManifestSchema.safeParse(withFrameEntry(frameEntry)).success,
+        JSON.stringify(frameEntry)
+      ).toBe(false);
+    }
+  });
+});
+
 describe("manifest language and platform names", () => {
   it("matches the Dictation languages", () => {
     expect([...MANIFEST_LANGUAGES]).toEqual([...DICTATION_LANGUAGES]);

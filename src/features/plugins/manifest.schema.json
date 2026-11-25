@@ -102,6 +102,29 @@
       "description": "Required when the Plugin draws its own UI with Frame.",
       "type": "boolean"
     },
+    "frameEntry": {
+      "description": "Opt-in: the build bundles source into one self-contained classic script at bundle, which the Frame's HTML loads with a <script> tag. Heavy vendored runtimes such as pdf.js stay vendored and loaded by the HTML, never bundled. A Plugin that draws Frames usually also sets customUi: true.",
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!\\/)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.(?:\\/|$))(?!.*[?#]).+\\.(?:ts|tsx)$",
+          "description": "A relative path to the .ts or .tsx source of the Plugin's Frame entry; the build bundles it."
+        },
+        "bundle": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!\\/)(?!.*\\\\)(?!.*\\/\\/)(?!.*(?:^|\\/)\\.\\.(?:\\/|$))(?!.*[?#]).+\\.js$",
+          "description": "A relative path to the built .js classic script; the Frame's HTML loads it with a <script> tag."
+        }
+      },
+      "required": ["source", "bundle"],
+      "additionalProperties": false,
+      "patternProperties": {
+        "^x-": {}
+      }
+    },
     "warmStart": {
       "description": "surface (the default) warm-starts an on-demand Plugin when a surface it contributes is reached, sidebar entries and Command Contexts included; intent warms it only on an intent: its page mounting, a hover, focus, or press on its sidebar entry, or running one of its Commands. Requires an on-demand lifecycle.",
       "type": "string",

@@ -129,6 +129,9 @@ export default defineConfig(() => ({
     __APP_VERSION__: JSON.stringify(`v${version}`),
   },
   test: {
+    // Builds each Plugin's Frame entry into the source tree before the Frame
+    // tests read it from the manifest's `bundle` path.
+    globalSetup: ["./src/test/support/frame-bundle-setup.ts"],
     setupFiles: ["./src/test/setup.ts"],
     // A change to any of these makes `vitest --changed` / `vitest related` run
     // every test. This array replaces the Vitest defaults, so it lists

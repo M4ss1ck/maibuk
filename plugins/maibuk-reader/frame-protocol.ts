@@ -2,9 +2,9 @@
  * Reader's Frame wire protocol (#653): the messages the Plugin Worker and the
  * reading Frame exchange over the Frame's MessagePort. The host never parses
  * them (`docs/plugins/frame-ui.md`), so this file is the one place both sides
- * agree on. `assets/ui/reader.js` mirrors these shapes as JSDoc typedefs and
- * cannot import this module: a Frame script is a classic script in an opaque
- * origin, so a relative import would fail closed.
+ * agree on. `frame/entry.ts` declares these shapes again and cannot import this
+ * module: the build bundles it to `assets/ui/reader.js` as a classic script in
+ * an opaque origin, so a relative import would fail closed.
  *
  * Every message starts with `kind`. The Worker opens the Document, answers byte
  * reads, forwards Commands, and saves the Reading Position the Frame reports.
