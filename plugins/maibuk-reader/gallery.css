@@ -1,0 +1,265 @@
+/* The Reader component gallery (#943 unit 5): a dev-only screenshots page.
+   Every color comes from tokens.css and kit.css; this file states no color of
+   its own. It sits at the Plugin root, outside assets/, so the Plugin package
+   never copies it. */
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--type-ui);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+
+.gallery,
+.gallery *,
+.gallery *::before,
+.gallery *::after {
+  box-sizing: border-box;
+}
+
+.gallery {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-6) var(--space-12);
+}
+
+.gallery-header {
+  margin-bottom: var(--space-6);
+}
+
+.gallery-header h1 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--type-display-size);
+  font-weight: var(--type-display-weight);
+  line-height: var(--type-display-line);
+}
+
+.gallery-header code,
+.gallery-note code {
+  padding: 0 var(--space-1);
+  border-radius: var(--space-1);
+  background: var(--muted);
+  color: var(--fg);
+  font-family: var(--type-code);
+  font-size: var(--type-label-size);
+}
+
+.gallery-section {
+  padding: var(--space-6) 0;
+  border-top: 1px solid var(--border);
+}
+
+.gallery-section:first-of-type {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.gallery-section h2 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--type-title-size);
+  font-weight: var(--type-title-weight);
+  line-height: var(--type-title-line);
+}
+
+.gallery-section h3 {
+  margin: var(--space-4) 0 var(--space-2);
+  color: var(--mfg);
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  line-height: var(--type-label-line);
+  text-transform: var(--type-label-transform);
+}
+
+.gallery-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.gallery-note {
+  margin: var(--space-2) 0 0;
+  color: var(--mfg);
+  font-size: var(--type-small-size);
+  font-weight: var(--type-small-weight);
+  line-height: var(--type-small-line);
+}
+
+.gallery-icon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+  gap: var(--space-3) var(--space-2);
+}
+
+.gallery-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) 0;
+  border-radius: var(--radius-control);
+  color: var(--fg);
+}
+
+.gallery-icon-name {
+  color: var(--mfg);
+  font-family: var(--type-code);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+}
+
+.gallery-switch-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(360px, 100%);
+}
+
+.gallery-cover-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-4);
+}
+
+.gallery-cover {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+}
+
+.gallery-cover figcaption {
+  color: var(--mfg);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+}
+
+.gallery-progress-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+/* The shelf's floating card becomes two side-by-side samples here. */
+.gallery-progress-row .kit-progress-card {
+  position: static;
+  width: 100%;
+}
+
+.gallery-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.gallery-theme-swatch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-5);
+  border: 1px solid var(--reading-border);
+  border-radius: var(--radius-card);
+  background: var(--reading-page);
+  color: var(--reading-ink);
+}
+
+.gallery-theme-name {
+  font-family: var(--type-cover-family);
+  font-size: var(--type-title-size);
+  font-weight: var(--type-cover-weight);
+  line-height: var(--type-title-line);
+}
+
+.gallery-theme-meta {
+  color: var(--reading-meta);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+}
+
+.gallery-highlight-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.gallery-highlight-row {
+  display: grid;
+  grid-template-columns: 120px 48px minmax(160px, 1fr) 120px;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.gallery-highlight {
+  padding: 0 var(--space-1);
+}
+
+.gallery-highlight-row .gallery-note {
+  margin: 0;
+}
+
+.gallery-highlight--yellow {
+  background: var(--highlight-yellow);
+}
+
+.gallery-highlight--green {
+  background: var(--highlight-green);
+}
+
+.gallery-highlight--blue {
+  background: var(--highlight-blue);
+}
+
+.gallery-highlight--pink {
+  background: var(--highlight-pink);
+}
+
+.gallery-highlight--purple {
+  background: var(--highlight-purple);
+}
+
+.gallery-underline {
+  text-underline-offset: 4px;
+}
+
+.gallery-underline--yellow {
+  text-decoration: var(--highlight-underline-yellow);
+}
+
+.gallery-underline--green {
+  text-decoration: var(--highlight-underline-green);
+}
+
+.gallery-underline--blue {
+  text-decoration: var(--highlight-underline-blue);
+}
+
+.gallery-underline--pink {
+  text-decoration: var(--highlight-underline-pink);
+}
+
+.gallery-underline--purple {
+  text-decoration: var(--highlight-underline-purple);
+}
+
+@media (max-width: 599px) {
+  .gallery {
+    padding: var(--space-5) var(--space-3) var(--space-9);
+  }
+
+  .gallery-theme-grid,
+  .gallery-progress-row {
+    grid-template-columns: 1fr;
+  }
+
+  .gallery-highlight-row {
+    grid-template-columns: 88px 1fr;
+  }
+}

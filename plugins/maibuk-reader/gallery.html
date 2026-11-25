@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Reader component gallery (dev only)</title>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap"
+    />
+    <link rel="stylesheet" href="assets/ui/tokens.css" />
+    <link rel="stylesheet" href="assets/ui/kit.css" />
+    <link rel="stylesheet" href="gallery.css" />
+    <style>
+      /* DEV ONLY: the host normally writes these Frame tokens onto the Frame's
+         html from Maibuk's theme. This page has no host, so it defines the exact
+         --maibuk-* light values from src/index.css and a dark
+         data-color-scheme override. Gallery code stays out of the Plugin
+         package; nothing here ships. */
+      :root {
+        color-scheme: light;
+        --maibuk-color-scheme: light;
+        --maibuk-motion: no-preference;
+        --maibuk-color-primary: #3b82f6;
+        --maibuk-color-primary-hover: #2563eb;
+        --maibuk-color-primary-foreground: #000000;
+        --maibuk-color-secondary: #78716c;
+        --maibuk-color-background: #fafaf9;
+        --maibuk-color-foreground: #1c1917;
+        --maibuk-color-muted: #e7e5e4;
+        --maibuk-color-muted-foreground: #78716c;
+        --maibuk-color-border: #d6d3d1;
+        --maibuk-color-card: #ffffff;
+        --maibuk-color-card-foreground: #1c1917;
+        --maibuk-color-destructive: #ef4444;
+        --maibuk-color-destructive-hover: #dc2626;
+        --maibuk-color-success: #22c55e;
+        --maibuk-color-error-bg: #fee2e2;
+        --maibuk-color-error-text: #991b1b;
+        --maibuk-font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+        --maibuk-font-serif: "Literata", ui-serif, Georgia, serif;
+        --maibuk-font-mono: ui-monospace, SFMono-Regular, monospace;
+        --maibuk-font-size: 16px;
+        --maibuk-spacing-editor-max: 720px;
+      }
+
+      [data-color-scheme="dark"] {
+        color-scheme: dark;
+        --maibuk-color-scheme: dark;
+        --maibuk-color-primary: #60a5fa;
+        --maibuk-color-primary-hover: #3b82f6;
+        --maibuk-color-primary-foreground: #000000;
+        --maibuk-color-secondary: #a8a29e;
+        --maibuk-color-background: #1c1917;
+        --maibuk-color-foreground: #fafaf9;
+        --maibuk-color-muted: #44403c;
+        --maibuk-color-muted-foreground: #a8a29e;
+        --maibuk-color-border: #36312d;
+        --maibuk-color-card: #292524;
+        --maibuk-color-card-foreground: #fafaf9;
+        --maibuk-color-destructive: #f87171;
+        --maibuk-color-destructive-hover: #ef4444;
+        --maibuk-color-success: #4ade80;
+        --maibuk-color-error-bg: rgba(220, 38, 38, 0.15);
+        --maibuk-color-error-text: #fecaca;
+      }
+
+      /* tokens.css scopes the Reading Themes to :root. Repeat the same values at
+         element scope so the four swatches can show every palette at once. */
+      [data-reading-theme="light"] {
+        --reading-page: #fbfaf8;
+        --reading-ink: #1c1917;
+        --reading-meta: #78716c;
+        --reading-border: rgba(28, 25, 23, 0.14);
+      }
+
+      [data-reading-theme="sepia"] {
+        --reading-page: #f4ecd8;
+        --reading-ink: #3b2f20;
+        --reading-meta: #76623f;
+        --reading-border: rgba(59, 47, 32, 0.14);
+      }
+
+      [data-reading-theme="dark"] {
+        --reading-page: #1c1917;
+        --reading-ink: #e7e5e4;
+        --reading-meta: #a8a29e;
+        --reading-border: rgba(231, 229, 228, 0.14);
+      }
+
+      [data-reading-theme="black"] {
+        --reading-page: #000000;
+        --reading-ink: #d6d3d1;
+        --reading-meta: #8f8a85;
+        --reading-border: rgba(214, 211, 209, 0.14);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="gallery-root"></div>
+    <script type="module" src="./frame/gallery-entry.tsx"></script>
+  </body>
+</html>
