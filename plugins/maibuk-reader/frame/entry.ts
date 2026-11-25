@@ -32,6 +32,7 @@
 
 import { createArchive, DocumentError, IMAGE_EXTENSIONS } from "./archive";
 import { hooks, positionDebounceMs } from "./hooks";
+import { createMeta } from "./meta";
 import { createFrameProtocol, errorCode, type FrameOpenMessage } from "./protocol";
 import type {
   FrameEntry,
@@ -43,15 +44,6 @@ import type {
   ReaderSettings,
   ReadingPosition,
 } from "./types";
-
-/** The Document's own title, author, page count, and optional cover. */
-interface FrameMetaMessage {
-  kind: "meta";
-  title?: string;
-  author?: string;
-  pageCount?: number;
-  coverDataUrl?: string;
-}
 
 /** One drawn PDF page, kept in a slot until the cache drops it. */
 interface RenderedPage {
@@ -182,8 +174,6 @@ const PDF_LOAD_TIMEOUT_MS = 30000;
 const WHEEL_PAGE_THRESHOLD = 50;
 /** A pause this long between wheel events starts a new gesture. */
 const WHEEL_GESTURE_GAP_MS = 180;
-const COVER_MAX_WIDTH = 240;
-const COVER_MAX_BYTES = 50 * 1024;
 
 function el(id: string): any {
   return document.getElementById(id);
@@ -194,6 +184,17 @@ const port = hostWindow.maibuk && hostWindow.maibuk.port;
 const protocol = createFrameProtocol(port);
 const { post, requestBytes, requestZipList, requestZipEntry } = protocol;
 const archive = createArchive({ requestZipList, requestZipEntry });
+/* The Document's title, author, page count, and cover, posted once per open. */
+const meta = createMeta({
+  post,
+  pdf: () => pdfDoc,
+  document: () => currentDocument,
+  format: () => documentFormat,
+  comicFiles: () => comicFiles,
+  archive,
+  isPageMode,
+  mediaTypeFor: (name) => sanitizer.mediaTypeFor(name),
+});
 const backButton = el("back");
 const contentsToggle = el("contents-toggle");
 const findToggle = el("find-toggle");
@@ -252,7 +253,6 @@ let destroyed = false;
 let viewGeneration = 0;
 let positionTimer = 0;
 let positionDirty = false;
-let metaSent = false;
 let resizeTimer = 0;
 let passwordCallback: ((password: string) => void) | null = null;
 
@@ -523,7 +523,7 @@ function resetDocument() {
   destroyDocument();
   pageIndex = 0;
   currentScale = 1;
-  metaSent = false;
+  meta.reset();
   outline = null;
   pageLabels = null;
   mode = "pdf";
@@ -696,53 +696,7 @@ async function onOpened() {
   if (destroyed || !pdfDoc) return;
   updateIndicator();
   await rebuildPdfView();
-  void sendMeta();
-}
-
-async function sendMeta() {
-  if (metaSent || !pdfDoc) return;
-  metaSent = true;
-  let info: any = {};
-  try {
-    const metadata = await pdfDoc.getMetadata();
-    info = metadata && metadata.info ? metadata.info : {};
-  } catch {
-    info = {};
-  }
-  const message: FrameMetaMessage = { kind: "meta", pageCount: pdfDoc.numPages };
-  if (typeof info.Title === "string" && info.Title.trim() !== "") message.title = info.Title;
-  if (typeof info.Author === "string" && info.Author.trim() !== "") message.author = info.Author;
-  try {
-    const cover = await makeCover();
-    if (cover !== null) message.coverDataUrl = cover;
-  } catch {
-    /* A cover is optional. */
-  }
-  post(message);
-}
-
-async function makeCover(): Promise<string | null> {
-  if (!pdfDoc) return null;
-  const page = await pdfDoc.getPage(1);
-  const base = page.getViewport({ scale: 1 });
-  const scale = Math.min(1, COVER_MAX_WIDTH / Math.max(1, base.width));
-  const viewport = page.getViewport({ scale });
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.floor(viewport.width));
-  canvas.height = Math.max(1, Math.floor(viewport.height));
-  const context = canvas.getContext("2d");
-  if (!context) return null;
-  const task = page.render({ canvasContext: context, viewport });
-  if (task && task.promise) await task.promise;
-  let url = "";
-  try {
-    url = canvas.toDataURL("image/jpeg", 0.7);
-  } catch {
-    return null;
-  }
-  if (typeof url !== "string" || !url.startsWith("data:image/jpeg")) return null;
-  if (url.length > COVER_MAX_BYTES) return null;
-  return url;
+  void meta.send();
 }
 
 /* Documents: archive, parsers, Flowing and Page views ----------------------- */
@@ -844,7 +798,7 @@ async function openDocument(
       const start = flowStart(saved);
       await loadFlowSection(start.index, start.page, start.anchor);
     }
-    void sendDocumentMeta();
+    void meta.sendDocument();
   } catch (error) {
     if (!destroyed) failDocument(error);
   }
@@ -1408,117 +1362,6 @@ function clearComicCache() {
     }
   }
   comicCache.clear();
-}
-
-/* Document metadata and covers ---------------------------------------------- */
-
-/** A metadata value as plain text: a string, a language map, or contributors. */
-function textOf(value: unknown): string {
-  if (typeof value === "string") return value.trim();
-  if (Array.isArray(value)) {
-    return value
-      .map(textOf)
-      .filter((part) => part !== "")
-      .join(", ");
-  }
-  if (value && typeof value === "object") {
-    if ("name" in value) return textOf((value as any).name);
-    const values = Object.values(value);
-    if (values.length > 0) return textOf(values[0]);
-  }
-  return "";
-}
-
-async function sendDocumentMeta() {
-  if (metaSent || !currentDocument) return;
-  metaSent = true;
-  const metadata = currentDocument.metadata || {};
-  const message: {
-    kind: "meta";
-    title?: string;
-    author?: string;
-    pageCount?: number;
-    coverDataUrl?: string;
-  } = { kind: "meta" };
-  const title = textOf(metadata.title);
-  const author = textOf(metadata.author);
-  if (title !== "") message.title = title;
-  if (author !== "") message.author = author;
-  if (isPageMode()) message.pageCount = currentDocument.sections.length;
-  try {
-    const cover = await documentCover();
-    if (cover !== null) message.coverDataUrl = cover;
-  } catch {
-    /* A cover is optional. */
-  }
-  post(message);
-}
-
-/** The cover image as a small JPEG data URL, or null. */
-async function documentCover() {
-  if (!currentDocument) return null;
-  let blob = null;
-  try {
-    if (documentFormat === "cbz") {
-      const bytes = await archive.bytes(comicFiles[0]);
-      blob = new Blob([bytes as BlobPart], { type: sanitizer.mediaTypeFor(comicFiles[0]) });
-    } else if (typeof currentDocument.getCover === "function") {
-      blob = await currentDocument.getCover();
-    }
-  } catch {
-    return null;
-  }
-  if (!(blob instanceof Blob)) return null;
-  return await coverDataUrl(blob);
-}
-
-async function coverDataUrl(blob: Blob): Promise<string | null> {
-  let bitmap: ImageBitmap | HTMLImageElement | null = null;
-  try {
-    if (typeof createImageBitmap === "function") {
-      bitmap = await createImageBitmap(blob);
-    } else {
-      bitmap = await loadImage(blob);
-    }
-  } catch {
-    return null;
-  }
-  if (!bitmap) return null;
-  const width = bitmap.width || 1;
-  const height = bitmap.height || 1;
-  const scale = Math.min(1, COVER_MAX_WIDTH / Math.max(1, width));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.floor(width * scale));
-  canvas.height = Math.max(1, Math.floor(height * scale));
-  const context = canvas.getContext("2d");
-  if (!context) return null;
-  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  let url = "";
-  try {
-    url = canvas.toDataURL("image/jpeg", 0.7);
-  } catch {
-    return null;
-  }
-  if (typeof url !== "string" || !url.startsWith("data:image/jpeg")) return null;
-  if (url.length > COVER_MAX_BYTES) return null;
-  return url;
-}
-
-/** Decodes an image Blob through an `<img>`, for platforms without `createImageBitmap`. */
-function loadImage(blob: Blob): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(blob);
-    const image = new Image();
-    image.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(image);
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("The cover image will not decode"));
-    };
-    image.src = url;
-  });
 }
 
 /* Flowing search -------------------------------------------------------- */
