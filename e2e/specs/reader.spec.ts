@@ -73,9 +73,12 @@ const pageFrame = (page: Page): FrameLocator =>
 /** The wrapper's iframe, as a host locator, for the keyboard helpers. */
 const frameElement = (page: Page) => pageFrameWrapper(page).locator("iframe");
 
-/** The Shelf's own heading, drawn inside the Frame. */
+/**
+ * The Shelf's own heading, drawn inside the Frame: "All Documents" on the Wide
+ * toolbar, "Shelf" in the phone header (#945).
+ */
 const shelfHeading = (page: Page) =>
-  pageFrame(page).getByRole("heading", { name: "Shelf", level: 1 });
+  pageFrame(page).getByRole("heading", { name: /^(All Documents|Shelf)$/, level: 1 });
 
 /** The Shelf row for a Document, by the title its cover and title line carry. */
 const shelfRow = (page: Page, title: string) =>
@@ -447,6 +450,86 @@ test.describe("Reader", () => {
     await page.keyboard.press("Enter");
     await expect(shelfRow(page, "twelve-pages")).toHaveCount(0);
     await expect(pageFrame(page).getByText("Your Shelf is empty", { exact: true })).toBeVisible();
+  });
+
+  test("switch the Shelf's view, sort by title, filter by format, search, and find it all again after a reload @wf:reader-shelf-view @sc:plugin.maibuk-reader.searchShelf @sc:plugin.maibuk-reader.showShelfOptions @sc:plugin.maibuk-reader.clearShelfFilters @sandbox", async ({
+    page,
+  }) => {
+    const frame = pageFrame(page);
+    await page.goto("/");
+    await openReader(page);
+    // Two Documents on the Shelf: the PDF from the empty state, then the EPUB
+    // from the toolbar's Import.
+    await importFiles(page);
+    await focusDocument(page);
+    await page.keyboard.press("Escape");
+    await expect(shelfRow(page, "twelve-pages")).toBeVisible();
+    await chooseNextFile(page, EPUB);
+    await tabTo(page, frame.getByRole("button", { name: "Import", exact: true }), { max: 60 });
+    await page.keyboard.press("Enter");
+    await focusDocument(page);
+    await page.keyboard.press("Escape");
+    await expect(shelfRow(page, "Dune")).toBeVisible();
+    await expect(frame.getByText("2 Documents", { exact: true })).toBeVisible();
+    // Opened once, so neither Document is new any more.
+    await expect(frame.getByText("New", { exact: true })).toHaveCount(0);
+
+    // View: the Shelf view radio group is one Tab stop; ArrowRight picks List.
+    const views = frame.getByRole("radiogroup", { name: "Shelf view" });
+    await tabTo(page, views.getByRole("radio", { name: "Grid" }), { max: 60 });
+    await page.keyboard.press("ArrowRight");
+    await expect(views.getByRole("radio", { name: "List" })).toBeChecked();
+    await expect(frame.getByRole("radiogroup", { name: "Cover size" })).toHaveCount(0);
+    await capture(page, "reader-shelf-list");
+
+    // Sort: the Sort popover's radio list, by keyboard, to Title (A to Z).
+    await tabTo(page, frame.getByRole("button", { name: "Sort by: Recent" }), { max: 60 });
+    await page.keyboard.press("Enter");
+    const sorts = frame.getByRole("radiogroup", { name: "Sort by" });
+    await expect(sorts.getByRole("radio", { name: "Recent" })).toBeVisible();
+    await tabTo(page, sorts.getByRole("radio", { name: "Recent" }), { max: 10 });
+    await page.keyboard.press("ArrowDown");
+    await expect(sorts.getByRole("radio", { name: "Title" })).toBeChecked();
+    await page.keyboard.press("Escape");
+    await expect(frame.getByRole("button", { name: "Sort by: Title" })).toBeVisible();
+    const titles = frame.locator(".shelf-list__title");
+    await expect(titles).toHaveText(["Dune", "twelve-pages"]);
+
+    // Filter: the Filters popover's PDF chip leaves the PDF alone, with its chip.
+    await tabTo(page, frame.getByRole("button", { name: /^Filters/ }), { max: 60 });
+    await page.keyboard.press("Enter");
+    await tabTo(page, frame.getByRole("button", { name: "PDF", exact: true }), { max: 20 });
+    await page.keyboard.press("Space");
+    await page.keyboard.press("Escape");
+    await expect(frame.getByRole("button", { name: "Remove filter Format: PDF" })).toBeVisible();
+    await expect(titles).toHaveText(["twelve-pages"]);
+    await expect(frame.getByText("1 of 2", { exact: true })).toBeVisible();
+    await capture(page, "reader-shelf-filtered");
+    await runHostCommand(page, "View, sort and filter…");
+    await expect(frame.getByRole("dialog", { name: "Filters" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await runHostCommand(page, "Clear Shelf filters");
+    await expect(titles).toHaveText(["Dune", "twelve-pages"]);
+
+    // Search: / focuses the field from the grid, typing filters, Escape clears
+    // it and hands focus back to the row it came from.
+    await tabTo(page, shelfRow(page, "Dune"), { max: 60 });
+    await page.keyboard.press("/");
+    const search = frame.getByRole("searchbox", { name: "Search the Shelf" });
+    await expect(search).toBeFocused();
+    await page.keyboard.type("twelve");
+    await expect(titles).toHaveText(["twelve-pages"]);
+    await page.keyboard.press("Escape");
+    await expect(search).toHaveValue("");
+    await expect(titles).toHaveText(["Dune", "twelve-pages"]);
+    await expect(shelfRow(page, "Dune")).toBeFocused();
+
+    // Remembered: a reload draws the same List view and Title sort.
+    await page.reload();
+    await expect(shelfHeading(page)).toBeVisible({ timeout: 30_000 });
+    await expect(views.getByRole("radio", { name: "List" })).toBeChecked();
+    await expect(frame.getByRole("button", { name: "Sort by: Title" })).toBeVisible();
+    await expect(titles).toHaveText(["Dune", "twelve-pages"]);
   });
 
   test("drop the EPUB on the Shelf Frame, then the PDF on the open Document @wf:reader-drop @sandbox", async ({
