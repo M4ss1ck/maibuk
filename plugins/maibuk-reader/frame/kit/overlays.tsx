@@ -71,6 +71,11 @@ function focusable(root: HTMLElement): HTMLElement[] {
 }
 
 function focusFirst(root: HTMLElement): void {
+  // Firefox ignores an element's focus() while the Frame's document is not
+  // focused, which happens when a host palette Command opens the layer: the
+  // host still holds the keyboard. Take the Frame's focus first, so the
+  // control below really becomes the focused one.
+  if (!document.hasFocus()) window.focus();
   const first = focusable(root)[0];
   if (first) first.focus();
   else root.focus();
