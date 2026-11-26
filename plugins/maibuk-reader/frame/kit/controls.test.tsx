@@ -427,6 +427,40 @@ describe("Segmented", () => {
     expect(stops).toHaveLength(1);
     expect(stops[0]).toHaveAccessibleName("Continuous");
   });
+
+  it("names an icon-only or short option by its full label", async () => {
+    const seen: string[] = [];
+    const user = userEvent.setup({ delay: null });
+    function Drawn() {
+      const [value, setValue] = useState("grid");
+      return (
+        <Segmented
+          label="Shelf view"
+          value={value}
+          options={[
+            { value: "grid", label: "Grid", icon: "grid", iconOnly: true },
+            { value: "small", label: "Small", text: "S" },
+          ]}
+          onChange={(next) => {
+            setValue(next);
+            seen.push(next);
+          }}
+        />
+      );
+    }
+    await mount(<Drawn />);
+
+    const grid = screen.getByRole("radio", { name: "Grid" });
+    expect(grid).toHaveTextContent("");
+    expect(grid.querySelector("svg")).not.toBeNull();
+    const small = screen.getByRole("radio", { name: "Small" });
+    expect(small).toHaveTextContent("S");
+
+    await press(() => user.tab());
+    await press(() => user.keyboard("{ArrowRight}"));
+    expect(document.activeElement).toBe(small);
+    expect(seen).toEqual(["small"]);
+  });
 });
 
 function ToggleChipHarness({ onChange }: { onChange?: (pressed: boolean) => void }) {
