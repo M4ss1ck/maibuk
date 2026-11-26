@@ -483,7 +483,11 @@ test.describe("Reader", () => {
     await capture(page, "reader-shelf-list");
 
     // Sort: the Sort popover's radio list, by keyboard, to Title (A to Z).
-    await tabTo(page, frame.getByRole("button", { name: "Sort by: Recent" }), { max: 60 });
+    // Sort and Filters sit before the view switch, so Shift+Tab walks back.
+    await tabTo(page, frame.getByRole("button", { name: "Sort by: Recent" }), {
+      max: 10,
+      backwards: true,
+    });
     await page.keyboard.press("Enter");
     const sorts = frame.getByRole("radiogroup", { name: "Sort by" });
     await expect(sorts.getByRole("radio", { name: "Recent" })).toBeVisible();
