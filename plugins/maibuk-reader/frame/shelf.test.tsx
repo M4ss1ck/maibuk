@@ -1427,7 +1427,14 @@ describe("Collections (#946)", () => {
     expect(onCollection).not.toHaveBeenCalled();
 
     await press(() => user.clear(field));
-    await press(() => user.keyboard("  Poetry {Enter}"));
+    await press(() => user.keyboard("  Poetry "));
+    // An Enter that commits an IME composition is the composition's, not a submit.
+    await act(() => {
+      fireEvent.keyDown(field, { key: "Enter", isComposing: true });
+      fireEvent.keyDown(field, { key: "Enter", keyCode: 229 });
+    });
+    expect(onCollection).not.toHaveBeenCalled();
+    await press(() => user.keyboard("{Enter}"));
     expect(onCollection).toHaveBeenCalledWith({
       kind: "shelf-collection",
       action: "create",

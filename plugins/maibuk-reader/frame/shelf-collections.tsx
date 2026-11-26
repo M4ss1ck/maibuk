@@ -11,7 +11,7 @@
  */
 
 import type { TargetedDragEvent, TargetedKeyboardEvent } from "preact";
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useId, useRef, useState } from "preact/hooks";
 import { Button, Dialog, Icon, IconButton, Menu, Popover, Sheet } from "./kit";
 import { fill } from "./shelf-query";
 import type { FrameCollection, FrameShelfLabels } from "./types";
@@ -22,7 +22,12 @@ export const DOCUMENT_DRAG_TYPE = "application/x-maibuk-document";
 /** The rail's small icon buttons, 28 px as the artboard draws its New button. */
 const SMALL_BUTTON = { width: "28px", height: "28px" } as const;
 
-/** The longest Collection name the Worker keeps, in characters. */
+/**
+ * The longest Collection name the Worker keeps, in characters. This and the
+ * duplicate check below mirror `collectionName` and `sameCollectionName` in the
+ * Worker's `shelf.ts`: the Frame is its own bundle and cannot import them, and
+ * the Worker stays the judge (it trims, cuts by code point, and refuses).
+ */
 const NAME_LIMIT = 100;
 
 /** A name as the Worker stores it, folded for the duplicate check. */
@@ -377,7 +382,7 @@ export function CollectionDialog({
   onClose,
 }: CollectionDialogProps) {
   const [name, setName] = useState(() => (dialog.kind === "rename" ? dialog.collection.name : ""));
-  const formId = useRef(`shelf-collection-${Math.random().toString(36).slice(2)}`).current;
+  const formId = `shelf-collection-${useId()}`;
 
   if (dialog.kind === "delete") {
     const title = fill(labels.deleteCollectionTitle, { name: dialog.collection.name });
@@ -441,6 +446,8 @@ export function CollectionDialog({
           // The submit button sits in the layer's actions, outside the form.
           onKeyDown={(event) => {
             if (event.key !== "Enter") return;
+            // deprecated-api: Safari's IME-commit Enter has isComposing false; keyCode 229 is its only tell.
+            if (event.isComposing || event.keyCode === 229) return;
             event.preventDefault();
             submit(event.currentTarget.value);
           }}
