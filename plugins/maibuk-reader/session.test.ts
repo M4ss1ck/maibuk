@@ -40,6 +40,29 @@ class RecordedWorker {
 
 const workers: RecordedWorker[] = [];
 
+/** A storage Map the test can make throw mid-session, so a failure path runs. */
+class FailingStorage extends Map<string, unknown> {
+  failing = false;
+  /** Every value written to the Shelf key, so a test can prove none happened. */
+  shelfWrites: unknown[] = [];
+
+  get(key: string): unknown {
+    if (this.failing) throw new Error("storage is down");
+    return super.get(key);
+  }
+
+  set(key: string, value: unknown): this {
+    // The Map constructor calls set() before this class's fields initialize,
+    // so the log is created lazily; the field then resets it to empty, which
+    // keeps the seeded entries out of it.
+    if (key === SHELF_KEY) {
+      this.shelfWrites ??= [];
+      this.shelfWrites.push(value);
+    }
+    return super.set(key, value);
+  }
+}
+
 beforeEach(() => {
   workers.length = 0;
   vi.stubGlobal("Worker", RecordedWorker);
@@ -456,6 +479,62 @@ describe("shelf", () => {
       harness.send({ kind: "shelf-command", id: "locateDocument", documentId: "doc-1" });
       const result = await messageOf(harness, "shelf-result");
       expect(result.message).toBe("Reader couldn't find that Document on your Shelf.");
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("reports a failed Locate as a Locate failure, not an open failure", async () => {
+    const entry = shelfEntry({ id: "doc-1", grant: "grant-1", state: "missing" });
+    const storage = new FailingStorage([[SHELF_KEY, [entry]]]);
+    const harness = setup({ view: "shelf", storage });
+    try {
+      await opened(harness);
+      await messageOf(harness, "shelf");
+      storage.failing = true;
+      harness.send({ kind: "shelf-command", id: "locateDocument", documentId: "doc-1" });
+      const result = await messageOf(harness, "shelf-result");
+      expect(result.message).toBe("Reader couldn't reattach that Document.");
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("shows the Shelf's error state when a failed read precedes the Remove", async () => {
+    const storage = new FailingStorage([
+      [SHELF_KEY, [shelfEntry({ id: "doc-1", grant: "grant-1" })]],
+    ]);
+    storage.failing = true;
+    const harness = setup({ view: "shelf", storage });
+    try {
+      const open = await opened(harness);
+      expect(open.shelf).toEqual({ status: "loading", entries: [] });
+      // The refresh that follows the open is what could not read the shelf.
+      await vi.waitFor(() => {
+        const states = harness.messages.filter((message) => message.kind === "shelf");
+        expect(states.at(-1)?.state).toEqual({ status: "error", entries: [] });
+      });
+      harness.send({ kind: "shelf-remove", documentId: "doc-1" });
+      const result = await messageOf(harness, "shelf-result");
+      expect(result.message).toBe("Reader couldn't remove that Document.");
+      // A removal that could not read the shelf never writes over it.
+      expect(storage.shelfWrites).toEqual([]);
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("reports a failed removal as a removal failure, not an open failure", async () => {
+    const entry = shelfEntry({ id: "doc-1", grant: "grant-1" });
+    const storage = new FailingStorage([[SHELF_KEY, [entry]]]);
+    const harness = setup({ view: "shelf", storage });
+    try {
+      await opened(harness);
+      await messageOf(harness, "shelf");
+      storage.failing = true;
+      harness.send({ kind: "shelf-remove", documentId: "doc-1" });
+      const result = await messageOf(harness, "shelf-result");
+      expect(result.message).toBe("Reader couldn't remove that Document.");
     } finally {
       await harness.stop();
     }

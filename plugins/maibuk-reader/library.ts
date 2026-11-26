@@ -157,11 +157,10 @@ export interface ShelfService {
 export function createShelfService(client: ReaderClient): ShelfService {
   const library: ShelfService = {
     async loadShelf(): Promise<ShelfEntry[]> {
-      try {
-        return sortShelf(parseShelf(await client.storage.get({ key: SHELF_KEY })));
-      } catch {
-        return [];
-      }
+      // A failed read throws: the callers decide what it means, and the
+      // mutating paths below refuse rather than write over a shelf they could
+      // not read.
+      return sortShelf(parseShelf(await client.storage.get({ key: SHELF_KEY })));
     },
 
     async rememberCurrent(id): Promise<void> {
@@ -231,6 +230,8 @@ export function createShelfService(client: ReaderClient): ShelfService {
         progress: null,
         state: "ok",
       };
+      // A failed read throws before any write. The picked grant stays held: an
+      // unread Shelf may already hold that same grant for another Document.
       const shelf = await library.loadShelf();
       const existing = shelf.find((candidate) => candidate.fingerprint === print);
       const next = upsertByFingerprint(shelf, entry);

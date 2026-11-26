@@ -641,27 +641,35 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
         }
         case "removeFromShelf": {
           if (documentId === null) return;
-          const shelf = await library.loadShelf();
-          const target = shelf.find((candidate) => candidate.id === documentId);
-          if (target === undefined) return;
-          const counts = await library.removalCounts(documentId);
-          const copy = shelfRemovalCopy(language, target.title, counts);
-          post({
-            kind: "remove-counts",
-            documentId,
-            title: copy.title,
-            body: copy.body,
-            stats: copy.stats,
-          });
+          try {
+            const shelf = await library.loadShelf();
+            const target = shelf.find((candidate) => candidate.id === documentId);
+            if (target === undefined) return;
+            const counts = await library.removalCounts(documentId);
+            const copy = shelfRemovalCopy(language, target.title, counts);
+            post({
+              kind: "remove-counts",
+              documentId,
+              title: copy.title,
+              body: copy.body,
+              stats: copy.stats,
+            });
+          } catch {
+            post({ kind: "shelf-result", message: translate(language, "shelf.remove.failed") });
+          }
           return;
         }
         case "locateDocument": {
           if (documentId === null) return;
-          const result = await library.locateAgain(documentId);
-          publishShelf(await library.loadShelf());
-          if (result.ok) return;
-          const notice = locateNotice(result.reason);
-          if (notice !== null) post({ kind: "shelf-result", message: notice });
+          try {
+            const result = await library.locateAgain(documentId);
+            publishShelf(await library.loadShelf());
+            if (result.ok) return;
+            const notice = locateNotice(result.reason);
+            if (notice !== null) post({ kind: "shelf-result", message: notice });
+          } catch {
+            post({ kind: "shelf-result", message: translate(language, "shelf.locate.failed") });
+          }
           return;
         }
         case "openFile": {
@@ -681,7 +689,7 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
       if (selectedDocumentId === message.documentId) selectedDocumentId = null;
       publishShelf(shelf);
     } catch {
-      post({ kind: "shelf-result", message: translate(language, "shelf.openFailed") });
+      post({ kind: "shelf-result", message: translate(language, "shelf.remove.failed") });
     }
   }
 

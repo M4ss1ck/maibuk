@@ -264,6 +264,41 @@ describe("shelveGrant()", () => {
       await host.stop();
     }
   });
+
+  it("throws without writing over a Shelf it could not read", async () => {
+    const kept = shelfEntry({ id: "doc-kept", grant: "grant-kept" });
+    let shelfReadable = true;
+    const shelfWrites: unknown[] = [];
+    class FlakyShelfStorage extends Map<string, unknown> {
+      get(key: string): unknown {
+        if (key === SHELF_KEY && !shelfReadable) throw new Error("storage is down");
+        return super.get(key);
+      }
+      set(key: string, value: unknown): this {
+        if (key === SHELF_KEY) shelfWrites.push(value);
+        return super.set(key, value);
+      }
+    }
+    const storage = new FlakyShelfStorage([[SHELF_KEY, [kept]]]);
+    shelfWrites.length = 0;
+    const host = createTestHost({ manifest: readerManifest(), storage });
+    const client = createPluginClient(host.port);
+    const library = createShelfService(client);
+    try {
+      host.files.queuePick({ name: "Dune.pdf", bytes: pdfBytes("a dropped PDF") });
+      const picked = await client.files.pick({ extensions: ["pdf"] });
+      if (picked === null) throw new Error("no File Grant to shelve");
+      shelfReadable = false;
+      await expect(library.shelveGrant(picked)).rejects.toThrow();
+      expect(shelfWrites).toEqual([]);
+      shelfReadable = true;
+      expect(storage.get(SHELF_KEY)).toEqual([kept]);
+      // The grant is kept: an unread Shelf may hold it for another Document.
+      await expect(host.files.grants()).resolves.toHaveLength(1);
+    } finally {
+      await host.stop();
+    }
+  });
 });
 
 describe("refreshStates()", () => {

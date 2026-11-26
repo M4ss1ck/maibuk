@@ -7,6 +7,8 @@
   "shelf.progress.percent": "{{percent}}%",
   "shelf.locate.mismatch": "That file is a different Document. Reader kept the Missing Document on your Shelf.",
   "shelf.locate.notFound": "Reader couldn't find that Document on your Shelf.",
+  "shelf.locate.failed": "Reader couldn't reattach that Document.",
+  "shelf.remove.failed": "Reader couldn't remove that Document.",
   "shelf.loading": "Loading your Shelf…",
   "shelf.openFailed": "Reader can't open that file.",
   "shelf.dropSkipped.one": "Reader can't open 1 dropped file.",
