@@ -176,6 +176,23 @@ export function createShelfService(client: ReaderClient): ShelfService {
       } catch {
         /* Storage full or blocked: a relaunch shows the Shelf's choice again. */
       }
+      // The first open stamps the Document as opened, so it is no longer new
+      // even before a Reading Position is saved, and it reads as most recent.
+      try {
+        const shelf = await library.loadShelf();
+        const entry = shelf.find((candidate) => candidate.id === id);
+        if (entry === undefined || entry.openedAt !== undefined) return;
+        const now = Date.now();
+        await library.saveShelf(
+          sortShelf(
+            shelf.map((candidate) =>
+              candidate.id === id ? { ...candidate, openedAt: now, lastReadAt: now } : candidate
+            )
+          )
+        );
+      } catch {
+        /* An unread Shelf is never written over; the Document stays new until it is read. */
+      }
     },
 
     async loadCurrent(): Promise<ShelfEntry | null> {

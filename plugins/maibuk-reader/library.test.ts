@@ -621,6 +621,18 @@ describe("the current Document", () => {
     expect((await library.loadCurrent())?.title).toBe("Emma");
   });
 
+  it("records when a Document is first opened, and reads it as most recent", async () => {
+    const { storage, library } = setup();
+    storage.set(SHELF_KEY, [shelfEntry({ id: "doc-1", grant: "grant-1", lastReadAt: 2 })]);
+    await library.rememberCurrent("doc-1");
+    const [opened] = storage.get(SHELF_KEY) as ShelfEntry[];
+    expect(opened.openedAt).toBeGreaterThan(2);
+    expect(opened.lastReadAt).toBe(opened.openedAt);
+
+    await library.rememberCurrent("doc-1");
+    expect((storage.get(SHELF_KEY) as ShelfEntry[])[0].openedAt).toBe(opened.openedAt);
+  });
+
   it("forgets a Document that left the Shelf", async () => {
     const { storage, library } = setup();
     storage.set(SHELF_KEY, [shelfEntry({ id: "doc-1", grant: "grant-1" })]);

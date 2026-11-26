@@ -433,9 +433,21 @@ describe("progressFraction()", () => {
   });
 });
 
+describe("parseShelf() openedAt", () => {
+  it("keeps a stored openedAt and drops a malformed one", () => {
+    const base = { id: "a", grant: "g", fingerprint: "f", title: "T", format: "pdf" };
+    expect(parseShelf([{ ...base, openedAt: 7 }])[0].openedAt).toBe(7);
+    expect(parseShelf([{ ...base, openedAt: "x" }])[0]).not.toHaveProperty("openedAt");
+  });
+});
+
 describe("shelfStatus()", () => {
   it("is new when the Document was never opened", () => {
     expect(shelfStatus({ progress: null })).toBe("new");
+  });
+
+  it("is reading once opened, before any position is saved", () => {
+    expect(shelfStatus({ progress: null, openedAt: 5 })).toBe("reading");
   });
 
   it("is reading below 99%", () => {

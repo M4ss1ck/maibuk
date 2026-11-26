@@ -29,13 +29,20 @@ export function shelfTone(id: string): number {
   return (hash >>> 0) % TONE_COUNT;
 }
 
-/** The progress line for one row, localized, or New when the Shelf knows nothing yet. */
+/**
+ * The progress line for one row, localized: New until the Document is opened,
+ * then its page or percentage (0% before a position is saved).
+ */
 function progressText(language: string, entry: ShelfEntry): string {
   if (shelfStatus(entry) === "finished") {
     return translate(language, "shelf.frame.finishedLabel");
   }
   const summary = progressSummary(entry.progress);
-  if (summary === null) return translate(language, "shelf.frame.newLabel");
+  if (summary === null) {
+    return shelfStatus(entry) === "new"
+      ? translate(language, "shelf.frame.newLabel")
+      : format(translate(language, "shelf.progress.percent"), { percent: 0 });
+  }
   if (summary.kind === "page") {
     return format(translate(language, "shelf.progress.page"), {
       page: summary.page,
@@ -52,10 +59,10 @@ function progressText(language: string, entry: ShelfEntry): string {
  */
 function progressPercent(entry: ShelfEntry): number | null {
   const progress = entry.progress;
-  if (progress === null) return null;
+  if (shelfStatus(entry) === "new") return null;
   if (shelfStatus(entry) === "finished") return 100;
   const summary = progressSummary(progress);
-  if (summary === null) return null;
+  if (summary === null) return 0;
   if (summary.kind === "page") {
     return Math.min(100, Math.max(0, Math.round((summary.page / summary.pageCount) * 100)));
   }

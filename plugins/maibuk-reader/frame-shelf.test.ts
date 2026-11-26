@@ -348,6 +348,16 @@ describe("frameShelfEntry()", () => {
     expect(JSON.stringify(mapped)).not.toContain("fp-secret");
   });
 
+  it("reads an opened Document with no saved position as reading at 0%", () => {
+    const mapped = frameShelfEntry(
+      "en",
+      shelfEntry({ id: "doc-1", grant: "grant-1", progress: null, openedAt: 2_000 })
+    );
+    expect(mapped.status).toBe("reading");
+    expect(mapped.progressText).toBe("0%");
+    expect(mapped.progressPercent).toBe(0);
+  });
+
   it("leaves the cover out when the row has none", () => {
     const mapped = frameShelfEntry("en", shelfEntry({ id: "doc-1", grant: "g1" }));
     expect(mapped).not.toHaveProperty("coverDataUrl");

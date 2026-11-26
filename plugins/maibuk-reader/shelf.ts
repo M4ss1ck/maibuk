@@ -87,6 +87,8 @@ export interface ShelfEntry {
   addedAt: number;
   /** Milliseconds since the Unix epoch when the author first reached the last page. */
   finishedAt?: number;
+  /** Milliseconds since the Unix epoch when the author first opened it; absent while new. */
+  openedAt?: number;
   progress: ShelfProgress | null;
   /** Defaults to `ok`; a Missing Document carries `missing` and a reason. */
   state?: DocumentState;
@@ -399,6 +401,9 @@ export function parseShelf(value: unknown): ShelfEntry[] {
         typeof item.addedAt === "number" && Number.isFinite(item.addedAt)
           ? item.addedAt
           : lastReadAt,
+      ...(typeof item.openedAt === "number" && Number.isFinite(item.openedAt)
+        ? { openedAt: item.openedAt }
+        : {}),
       ...(typeof item.finishedAt === "number" && Number.isFinite(item.finishedAt)
         ? { finishedAt: item.finishedAt }
         : {}),
@@ -469,8 +474,8 @@ export function progressFraction(progress: ShelfProgress | null): number {
 }
 
 /** Where the author is in a Document: never opened, reading, or finished. */
-export function shelfStatus(entry: Pick<ShelfEntry, "progress">): ShelfStatus {
-  if (entry.progress === null) return "new";
+export function shelfStatus(entry: Pick<ShelfEntry, "progress" | "openedAt">): ShelfStatus {
+  if (entry.progress === null) return entry.openedAt === undefined ? "new" : "reading";
   return progressFraction(entry.progress) >= FINISHED_THRESHOLD ? "finished" : "reading";
 }
 
