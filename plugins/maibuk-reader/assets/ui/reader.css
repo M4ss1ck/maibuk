@@ -1,0 +1,276 @@
+:root {
+  color-scheme: var(--maibuk-color-scheme, light dark);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* `hidden` has to win over the `display` rules the Frame's panels set. */
+[hidden] {
+  /* biome-ignore lint/complexity/noImportantStyles: the id-selector panel rules (#search-bar, #password-form) outrank [hidden] without it */
+  display: none !important;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--type-ui);
+  overflow: hidden;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  padding: 0.375rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+}
+
+.group {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+}
+
+.divider {
+  width: 1px;
+  height: 1.25rem;
+  margin: 0 0.25rem;
+  background: var(--border);
+}
+
+/* The PDF-only controls; a Flowing view sizes its text instead. */
+body[data-mode="flow"] #fit-width,
+body[data-mode="flow"] #fit-page,
+body[data-mode="flow"] .zoom .divider,
+body:not([data-mode="pdf"]) #layout-toggle {
+  display: none;
+}
+
+/* The kit wraps each icon button for its tooltip; hide that wrapper too,
+   so a hidden control leaves no gap in the group. */
+body[data-mode="flow"] .zoom > .kit-icon-button:has(#fit-width),
+body[data-mode="flow"] .zoom > .kit-icon-button:has(#fit-page),
+body:not([data-mode="pdf"]) .zoom > .kit-icon-button:has(#layout-toggle) {
+  display: none;
+}
+
+#page-indicator {
+  min-width: 6.5rem;
+  text-align: center;
+  font-size: 0.875rem;
+}
+
+#zoom-level {
+  min-width: 3rem;
+  text-align: center;
+  font-size: 0.875rem;
+}
+
+#page-indicator,
+#zoom-level,
+#search-status {
+  font-variant-numeric: tabular-nums;
+  color: var(--mfg);
+  white-space: nowrap;
+}
+
+/* The Preact app draws the search bar and the Contents panel into these
+   roots; `display: contents` keeps them in the layout their markup held. */
+#search-root,
+#contents-root {
+  display: contents;
+}
+
+#search-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+}
+
+#search-input {
+  flex: 1;
+  min-width: 8rem;
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+  border-radius: 0.4rem;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
+}
+
+#body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+#contents {
+  width: 18rem;
+  max-width: 40vw;
+  overflow: auto;
+  padding: 0.75rem;
+  border-right: 1px solid var(--border);
+  background: var(--card);
+}
+
+#contents h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+#contents-tree ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 0.9rem;
+}
+
+#contents-tree > ul {
+  padding-left: 0;
+}
+
+[role="treeitem"] {
+  padding: 0.25rem 0.35rem;
+  border-radius: 0.35rem;
+  cursor: pointer;
+  outline-offset: -1px;
+}
+
+[role="treeitem"]:hover {
+  background: var(--muted);
+}
+
+#viewer {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 1rem;
+  background: var(--muted);
+}
+
+#stage {
+  position: relative;
+  flex: 0 0 auto;
+  background: var(--bg);
+  box-shadow: var(--shadow-page);
+}
+
+/* A Flowing Document reads as one page: the area around its text column
+   takes the page's color, so the column needs no visible edge. */
+body[data-mode="flow"] #viewer {
+  background: var(--bg);
+}
+
+body[data-mode="flow"] #stage {
+  box-shadow: none;
+}
+
+/* A PDF stage holds one slot per page: one shown at a time, or all of
+   them stacked in Continuous scroll. Rendered pages stay in their slot. */
+#stage.pdf-pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  background: transparent;
+  box-shadow: none;
+}
+
+.pdf-page {
+  position: relative;
+  flex: 0 0 auto;
+  background: var(--pdf-page);
+  box-shadow: var(--shadow-page);
+}
+
+#stage canvas {
+  display: block;
+  background: var(--pdf-page);
+}
+
+/* pdf.js puts the selectable text over the canvas; the viewer CSS that
+   travels with the display source carries the rest of the text-layer rules. */
+#text-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  line-height: 1;
+  text-align: initial;
+  text-size-adjust: none;
+  transform-origin: 0 0;
+  opacity: 1;
+  z-index: 2;
+}
+
+.reader-search-hit {
+  background: var(--maibuk-color-warning-bg);
+  color: inherit;
+  border-radius: 2px;
+}
+
+.reader-search-hit.is-current {
+  background: var(--primary);
+  color: var(--pfg);
+}
+
+#message {
+  margin: 2rem auto;
+  max-width: 34rem;
+  color: var(--mfg);
+  text-align: center;
+  line-height: 1.5;
+}
+
+#message[data-error="true"] {
+  color: var(--danger);
+}
+
+#password-form {
+  margin: 3rem auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: min(22rem, 100%);
+  padding: 1.25rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--card);
+}
+
+#password-form h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+#password-input {
+  font: inherit;
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.4rem;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
+}
+
+#password-error {
+  margin: 0;
+  color: var(--danger);
+}

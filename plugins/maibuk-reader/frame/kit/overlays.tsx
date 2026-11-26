@@ -71,6 +71,11 @@ function focusable(root: HTMLElement): HTMLElement[] {
 }
 
 function focusFirst(root: HTMLElement): void {
+  // Firefox ignores an element's focus() while the Frame's document is not
+  // focused, which happens when a host palette Command opens the layer: the
+  // host still holds the keyboard. Take the Frame's focus first, so the
+  // control below really becomes the focused one.
+  if (!document.hasFocus()) window.focus();
   const first = focusable(root)[0];
   if (first) first.focus();
   else root.focus();
@@ -237,22 +242,42 @@ function usePosition(
   }, [active, layerRef, anchorRef]);
 }
 
-/** The props a Sheet takes: open state, close, the title, and the Done label. */
+/**
+ * The props a Sheet takes: open state, close, the title, and an optional Done
+ * label. Omitting the label leaves the header with its title alone, so a
+ * confirmation can draw only its own actions.
+ */
 export interface SheetProps {
   open: boolean;
   onClose: () => void;
   title: string;
-  doneLabel: string;
+  doneLabel?: string;
+  /**
+   * Keep the title as the Sheet's accessible name but do not draw it, for a
+   * Sheet whose body opens with its own heading, such as a Document summary.
+   */
+  titleHidden?: boolean;
+  /** The layer's ARIA role; confirmation sheets announce an alertdialog. */
+  role?: "dialog" | "alertdialog";
   children?: ComponentChildren;
   class?: string;
 }
 
 /**
  * Narrow only: a bottom sheet with a 16 px top radius, a grab handle, and a
- * title row holding the Done button. Focus is trapped and returned; Escape and
- * a scrim tap close it.
+ * title row holding the Done button when one is named. Focus is trapped and
+ * returned; Escape and a scrim tap close it.
  */
-export function Sheet({ open, onClose, title, doneLabel, children, class: extra }: SheetProps) {
+export function Sheet({
+  open,
+  onClose,
+  title,
+  doneLabel,
+  titleHidden = false,
+  role = "dialog",
+  children,
+  class: extra,
+}: SheetProps) {
   const { mode } = useLayoutMode();
   const active = open && mode === "narrow";
   const titleId = useOverlayId();
@@ -264,22 +289,34 @@ export function Sheet({ open, onClose, title, doneLabel, children, class: extra 
     <div class={`kit-layer kit-layer--sheet ${extra ?? ""}`.trim()}>
       {/* biome-ignore lint/a11y/useKeyWithClickEvents: a scrim tap is the pointer shortcut for Escape, which the layer stack handles. */}
       <div class="kit-scrim" onClick={onClose} />
+      {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: aria-modal is valid on both dialog and alertdialog. */}
       <div
         ref={layerRef}
         class="kit-sheet"
-        role="dialog"
+        role={role}
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
       >
         <div class="kit-sheet__grab" aria-hidden="true" />
-        <div class="kit-sheet__header">
-          <h2 id={titleId} class="kit-sheet__title">
+        <div
+          class={
+            titleHidden && doneLabel === undefined
+              ? "kit-sheet__header kit-sheet__header--bare"
+              : "kit-sheet__header"
+          }
+        >
+          <h2
+            id={titleId}
+            class={titleHidden ? "kit-sheet__title kit-visually-hidden" : "kit-sheet__title"}
+          >
             {title}
           </h2>
-          <Button variant="ghost" onClick={onClose}>
-            {doneLabel}
-          </Button>
+          {doneLabel === undefined ? null : (
+            <Button variant="ghost" onClick={onClose}>
+              {doneLabel}
+            </Button>
+          )}
         </div>
         <div class="kit-sheet__body">{children}</div>
       </div>
@@ -293,6 +330,8 @@ export interface DialogProps {
   open: boolean;
   onClose: () => void;
   title: string;
+  /** The layer's ARIA role; a confirmation announces an alertdialog. */
+  role?: "dialog" | "alertdialog";
   children?: ComponentChildren;
   actions?: ComponentChildren;
   class?: string;
@@ -303,7 +342,15 @@ export interface DialogProps {
  * right-aligned actions. Focus is trapped and returned; Escape and a scrim tap
  * close it.
  */
-export function Dialog({ open, onClose, title, children, actions, class: extra }: DialogProps) {
+export function Dialog({
+  open,
+  onClose,
+  title,
+  role = "dialog",
+  children,
+  actions,
+  class: extra,
+}: DialogProps) {
   const { mode } = useLayoutMode();
   const active = open && mode === "wide";
   const titleId = useOverlayId();
@@ -315,10 +362,11 @@ export function Dialog({ open, onClose, title, children, actions, class: extra }
     <div class={`kit-layer kit-layer--dialog ${extra ?? ""}`.trim()}>
       {/* biome-ignore lint/a11y/useKeyWithClickEvents: a scrim tap is the pointer shortcut for Escape, which the layer stack handles. */}
       <div class="kit-scrim" onClick={onClose} />
+      {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: aria-modal is valid on both dialog and alertdialog. */}
       <div
         ref={layerRef}
         class="kit-dialog"
-        role="dialog"
+        role={role}
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
@@ -390,15 +438,27 @@ export interface MenuItem {
   icon?: IconName;
   shortcut?: string;
   disabled?: boolean;
+  /** Draws the row in the danger color, for an action that deletes. */
+  destructive?: boolean;
+  /** Starts a new group: a divider separates the row from the rows above it. */
+  groupStart?: boolean;
 }
 
-/** The props a Menu takes: open state, close, its label, rows, and selection. */
+/** The props a Menu takes: open state, close, its label, optional header, rows, and selection. */
 export interface MenuProps {
   open: boolean;
   onClose: () => void;
   label: string;
   items: ReadonlyArray<MenuItem>;
   onSelect: (id: string) => void;
+  /** Content drawn above the rows, such as the row summary a Document menu shows. */
+  header?: ComponentChildren;
+  /**
+   * Draw the rows in place, as the body of the Sheet or Popover that holds
+   * them. That container is the layer: it owns position, Escape, and focus
+   * return, so an inline Menu neither portals nor registers a layer of its own.
+   */
+  inline?: boolean;
   class?: string;
 }
 
@@ -423,10 +483,19 @@ function nextEnabled(items: ReadonlyArray<MenuItem>, from: number, delta: number
  * Space select, and Escape closes through the layer stack. Rows are 40 px on a
  * fine pointer and 44 px when the layout asks for the larger touch target.
  */
-export function Menu({ open, onClose, label, items, onSelect, class: extra }: MenuProps) {
+export function Menu({
+  open,
+  onClose,
+  label,
+  items,
+  onSelect,
+  header,
+  inline = false,
+  class: extra,
+}: MenuProps) {
   const { target } = useLayoutMode();
   const { ref: layerRef, nested } = useLayer({
-    active: open,
+    active: open && !inline,
     onEscape: onClose,
     modal: false,
     focusFirstControl: false,
@@ -449,7 +518,7 @@ export function Menu({ open, onClose, label, items, onSelect, class: extra }: Me
     }
   }, [open]);
 
-  usePosition(layerRef, anchorRef, open);
+  usePosition(layerRef, anchorRef, open && !inline);
 
   useEffect(() => {
     if (!open) return;
@@ -523,15 +592,17 @@ export function Menu({ open, onClose, label, items, onSelect, class: extra }: Me
 
   if (!open) return null;
 
-  return createPortal(
+  const modifier = inline ? "kit-menu--inline" : nested ? "kit-menu--nested" : "";
+  const menu = (
     <div
       ref={layerRef}
-      class={`kit-menu ${nested ? "kit-menu--nested" : ""} ${extra ?? ""}`.trim()}
+      class={`kit-menu ${modifier} ${extra ?? ""}`.trim()}
       role="menu"
       aria-label={label}
       tabIndex={-1}
       onKeyDown={onKeyDown}
     >
+      {header ?? null}
       {items.map((item, index) => (
         <button
           key={item.id}
@@ -540,7 +611,9 @@ export function Menu({ open, onClose, label, items, onSelect, class: extra }: Me
           }}
           type="button"
           role="menuitem"
-          class="kit-menu__item"
+          class={`kit-menu__item${item.destructive ? " kit-menu__item--destructive" : ""}${
+            item.groupStart ? " kit-menu__item--group-start" : ""
+          }`}
           tabIndex={index === active && !item.disabled ? 0 : -1}
           disabled={item.disabled}
           style={{ height: `${target}px` }}
@@ -551,7 +624,8 @@ export function Menu({ open, onClose, label, items, onSelect, class: extra }: Me
           {item.shortcut ? <span class="kit-menu__shortcut">{item.shortcut}</span> : null}
         </button>
       ))}
-    </div>,
-    document.body
+    </div>
   );
+
+  return inline ? menu : createPortal(menu, document.body);
 }

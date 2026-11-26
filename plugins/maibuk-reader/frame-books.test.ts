@@ -18,9 +18,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import purify from "./vendor/dompurify/purify.es.mjs";
 // @ts-expect-error -- vendored plain JavaScript, no type declarations
 import * as foliate from "./vendor/foliate/foliate-parsers.min.mjs";
+import type { FrameShelfEntry, FrameShelfLabels, FrameShelfState } from "./frame/types";
 import { deflatedArchive } from "./test-support";
 import { ZipError, openZip } from "./zip";
 import en from "./locales/runtime/en.json";
+import es from "./locales/runtime/es.json";
 
 const HERE = __dirname;
 const HTML = readFileSync(join(HERE, "assets/ui/reader.html"), "utf8");
@@ -37,6 +39,98 @@ function labelsFrom(catalog: Record<string, string>): Record<string, string> {
 }
 
 const LABELS = labelsFrom(en as Record<string, string>);
+const LABELS_ES = labelsFrom(es as Record<string, string>);
+
+/** The `shelfLabels` map the Worker builds from its runtime catalog. */
+function shelfLabelsFrom(catalog: Record<string, string>): FrameShelfLabels {
+  return {
+    shelf: catalog["page.shelf"],
+    import: catalog["shelf.frame.import"],
+    importFiles: catalog["shelf.frame.importFiles"],
+    emptyTitle: catalog["shelf.emptyTitle"],
+    emptyDescription: catalog["shelf.frame.emptyDescription"],
+    loading: catalog["shelf.loading"],
+    error: catalog["shelf.frame.error"],
+    documentsCountOne: catalog["shelf.frame.documentsCount.one"],
+    documentsCountOther: catalog["shelf.frame.documentsCount.other"],
+    open: catalog["shelf.open"],
+    remove: catalog["shelf.frame.remove"],
+    locate: catalog["shelf.frame.locate"],
+    missing: catalog["shelf.frame.missing"],
+    moreFor: catalog["shelf.frame.moreFor"],
+    removeConfirm: catalog["shelf.frame.removeConfirm"],
+    cancel: catalog["shelf.frame.cancel"],
+    newLabel: catalog["shelf.frame.newLabel"],
+    finishedLabel: catalog["shelf.frame.finishedLabel"],
+    documentActions: catalog["shelf.frame.documentActions"],
+    dismiss: catalog["shelf.frame.dismiss"],
+  };
+}
+
+const SHELF_LABELS = shelfLabelsFrom(en as Record<string, string>);
+const SHELF_LABELS_ES = shelfLabelsFrom(es as Record<string, string>);
+
+/**
+ * One Shelf row as the Worker sends it, plus the fields the Frame must never
+ * draw: the File Grant, the Fingerprint, and the storage key stay in the Worker.
+ */
+type WireShelfRow = FrameShelfEntry & {
+  grant: string;
+  fingerprint: string;
+  storageKey: string;
+};
+
+/** A wire row with every drawn field, and the three the Frame never sees. */
+function wireRow(overrides: Partial<FrameShelfEntry> & { id: string }): WireShelfRow {
+  return {
+    title: "A Document",
+    author: "",
+    format: "epub",
+    state: "ok",
+    progressText: "New",
+    progressPercent: null,
+    statusText: null,
+    tone: 0,
+    grant: `grant-${overrides.id}`,
+    fingerprint: `fingerprint-${overrides.id}`,
+    storageKey: `reader.shelf.${overrides.id}`,
+    ...overrides,
+  };
+}
+
+const READABLE_ROW = wireRow({
+  id: "doc-1",
+  title: "Dune",
+  author: "Frank Herbert",
+  format: "epub",
+  progressText: "42%",
+  progressPercent: 42,
+});
+
+const MISSING_ROW = wireRow({
+  id: "doc-2",
+  title: "Emma",
+  author: "Jane Austen",
+  format: "pdf",
+  state: "missing",
+  statusText: "Missing",
+  tone: 1,
+});
+
+const UNREADABLE_ROW = wireRow({
+  id: "doc-3",
+  title: "Broken Spine",
+  format: "mobi",
+  state: "unreadable",
+  statusText: "Can't open this file",
+  tone: 2,
+});
+
+/** A ready Shelf holding one readable, one Missing, and one unreadable row. */
+const READY_SHELF: FrameShelfState = {
+  status: "ready",
+  entries: [READABLE_ROW, MISSING_ROW, UNREADABLE_ROW],
+};
 
 /** One committed fixture's bytes. */
 function fixture(name: string): Uint8Array {
@@ -99,6 +193,12 @@ interface OpenOptions {
   deflated?: boolean;
   /** Garble every deflated entry the port hands over, so none inflates. */
   garbled?: boolean;
+  /** Opens the Frame on the Shelf, with these rows, instead of a Document. */
+  shelf?: FrameShelfState;
+  /** The Shelf's localized strings; a shelf open without them draws nothing. */
+  shelfLabels?: FrameShelfLabels;
+  /** The language the open message names, so `labels` stay a matching set. */
+  language?: string;
 }
 
 /** One `window.maibuk.port`: answers reads and archive requests from a fixture. */
@@ -206,16 +306,31 @@ function loadFrame(name: string, options: OpenOptions = {}): Frame {
     port,
     cleanups,
     open(openOptions: OpenOptions = {}) {
-      port.deliver({
+      const shelf = openOptions.shelf ?? options.shelf;
+      const language = openOptions.language ?? options.language ?? "en";
+      const shared = {
         kind: "open",
-        entry: { id: "doc-1", title: "Fixture", author: "", format: openOptions.format ?? format },
         position: openOptions.position ?? options.position ?? null,
         settings: openOptions.settings ??
           options.settings ?? { fontSize: 100, lineWidth: "medium", pdfFit: "width" },
         size: bytes.length,
-        labels: LABELS,
-        language: "en",
+        labels: language === "es" ? LABELS_ES : LABELS,
+        language,
         appearance: { colorScheme: "light", eink: false },
+      };
+      if (shelf !== undefined) {
+        port.deliver({
+          ...shared,
+          view: "shelf",
+          entry: null,
+          shelf,
+          shelfLabels: openOptions.shelfLabels ?? options.shelfLabels ?? null,
+        });
+        return;
+      }
+      port.deliver({
+        ...shared,
+        entry: { id: "doc-1", title: "Fixture", author: "", format: openOptions.format ?? format },
         foliate: { source: "export {};", purify: "export default {};" },
       });
     },
@@ -238,6 +353,70 @@ function el(id: string): HTMLElement {
   const element = document.getElementById(id);
   if (element === null) throw new Error(`missing #${id}`);
   return element;
+}
+
+/** The Shelf's cells, as the Frame drew them, in grid order. */
+function shelfCells(): HTMLElement[] {
+  return Array.from(el("shelf-root").querySelectorAll<HTMLElement>('[role="gridcell"]'));
+}
+
+/** The title line of one drawn cell. */
+function cellTitle(cell: HTMLElement): string {
+  return cell.querySelector(".shelf-card__title")?.textContent ?? "";
+}
+
+/** The cell whose title line reads `title`. */
+function shelfCell(title: string): HTMLElement {
+  const cell = shelfCells().find((candidate) => cellTitle(candidate) === title);
+  if (cell === undefined) throw new Error(`no Shelf row titled ${title}`);
+  return cell;
+}
+
+/** The row index the grid draws `cell` in. */
+function shelfRowOf(cell: HTMLElement): number {
+  const rows = Array.from(el("shelf-root").querySelectorAll('[role="row"]'));
+  const row = cell.closest('[role="row"]');
+  return row === null ? -1 : rows.indexOf(row);
+}
+
+/** The Shelf's heading text. */
+function shelfHeading(): string {
+  return el("shelf-root").querySelector(".shelf__heading")?.textContent ?? "";
+}
+
+/** The Shelf's count line. */
+function shelfCount(): string {
+  return el("shelf-root").querySelector(".shelf__count")?.textContent ?? "";
+}
+
+/** The Shelf button carrying `label` as its text, or the More button for a title. */
+function shelfButton(label: string): HTMLButtonElement {
+  const button = Array.from(el("shelf-root").querySelectorAll("button")).find(
+    (candidate) => candidate.textContent === label || candidate.getAttribute("aria-label") === label
+  );
+  if (button === undefined) throw new Error(`no Shelf button labelled ${label}`);
+  return button;
+}
+
+/** The labels of the Menu rows currently drawn, in order. */
+function menuRows(): string[] {
+  return Array.from(document.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]')).map(
+    (item) => item.textContent ?? ""
+  );
+}
+
+/** The drawn Menu row carrying `label`. */
+function menuRow(label: string): HTMLButtonElement {
+  const item = Array.from(
+    document.querySelectorAll<HTMLButtonElement>('[role="menu"] [role="menuitem"]')
+  ).find((candidate) => candidate.textContent === label);
+  if (item === undefined) throw new Error(`no Menu row labelled ${label}`);
+  return item;
+}
+
+/** Every message the Frame posted with this `kind`. */
+function posted(kind: string): Record<string, unknown>[] {
+  return frame?.port.messages.filter((message) => message.kind === kind) ?? [];
 }
 
 /** The indexes of the marks the Frame has flagged as the current match. */
@@ -629,5 +808,285 @@ describe("refusing an unreadable Document", () => {
       code: "corrupt",
       reason: LABELS.errorDamaged,
     });
+  });
+});
+
+/**
+ * The Shelf seam in the built bundle (#944 packet 7): the rows the Worker sends
+ * draw into `#shelf-root`, the grid's keys and menus answer, and every Shelf
+ * action comes back as the message the Worker acts on. Each test plays the
+ * Worker's half by delivering the answer it would post.
+ */
+describe("the Shelf", () => {
+  it("draws a wire-shaped Shelf without the File Grant or Fingerprint", async () => {
+    frame = loadFrame("flowing.epub");
+    frame.open({ shelf: READY_SHELF, shelfLabels: SHELF_LABELS });
+    await vi.waitFor(() => expect(shelfCells()).toHaveLength(3));
+
+    expect(shelfHeading()).toBe("Shelf");
+    expect(shelfCount()).toBe("3 Documents");
+    expect(shelfCells().map(cellTitle)).toEqual(["Dune", "Emma", "Broken Spine"]);
+    expect(shelfCell("Dune").querySelector(".shelf-card__meta")?.textContent).toBe(
+      "Frank Herbert · 42%"
+    );
+    expect(shelfCell("Emma").querySelector(".shelf-card__meta")?.textContent).toBe(
+      "Jane Austen · New"
+    );
+    expect(shelfCell("Broken Spine").querySelector(".shelf-card__meta")?.textContent).toBe("New");
+    expect(shelfCell("Broken Spine").querySelector(".shelf-card__status")?.textContent).toBe(
+      "Can't open this file"
+    );
+
+    // A Missing Document wears the chip; a readable or unreadable one does not.
+    const chip = shelfCell("Emma").querySelector(".shelf-card__chip");
+    expect(chip?.textContent).toBe("Missing");
+    expect(shelfCell("Dune").querySelector(".shelf-card__chip")).toBeNull();
+    expect(shelfCell("Broken Spine").querySelector(".shelf-card__chip")).toBeNull();
+
+    // Whatever the Worker sent alongside a row, the Frame draws none of it.
+    const markup = el("shelf-root").innerHTML;
+    for (const row of [READABLE_ROW, MISSING_ROW, UNREADABLE_ROW]) {
+      expect(markup).not.toContain(row.grant);
+      expect(markup).not.toContain(row.fingerprint);
+      expect(markup).not.toContain(row.storageKey);
+    }
+    expect(markup).not.toContain("grant-");
+    expect(markup).not.toContain("fingerprint-");
+    expect(markup).not.toContain("reader.shelf.");
+  });
+
+  it("moves the grid's cell focus by key and opens the menu from the focused row", async () => {
+    const rows = Array.from({ length: 8 }, (_, index) =>
+      wireRow({
+        id: `shelf-doc-${index + 1}`,
+        title: `Shelf Book ${index + 1}`,
+        progressText: `${index * 10}%`,
+        progressPercent: index * 10,
+      })
+    );
+    frame = loadFrame("flowing.epub");
+    frame.open({ shelf: { status: "ready", entries: rows }, shelfLabels: SHELF_LABELS });
+    await vi.waitFor(() => expect(shelfCells()).toHaveLength(8));
+    const user = userEvent.setup();
+
+    // The Shelf's header button is the first tab stop, the grid's single cell
+    // the second: Tab reaches the grid, not each of its eight rows.
+    await user.tab();
+    expect(document.activeElement).toBe(shelfButton("Import"));
+    await user.tab();
+    expect(document.activeElement).toBe(shelfCells()[0]);
+
+    await user.keyboard("{ArrowRight}");
+    expect(document.activeElement).toBe(shelfCells()[1]);
+    expect(cellTitle(document.activeElement as HTMLElement)).toBe("Shelf Book 2");
+    await user.keyboard("{ArrowLeft}");
+    expect(document.activeElement).toBe(shelfCells()[0]);
+    // A six-column Wide grid puts the next row six cells along.
+    await user.keyboard("{ArrowDown}");
+    expect(document.activeElement).toBe(shelfCells()[6]);
+    expect(shelfRowOf(document.activeElement as HTMLElement)).toBe(1);
+    await user.keyboard("{ArrowUp}");
+    expect(document.activeElement).toBe(shelfCells()[0]);
+    expect(shelfRowOf(document.activeElement as HTMLElement)).toBe(0);
+    await user.keyboard("{End}");
+    expect(document.activeElement).toBe(shelfCells()[7]);
+    await user.keyboard("{Home}");
+    expect(document.activeElement).toBe(shelfCells()[0]);
+
+    // Enter on a readable row asks the Worker for its Document.
+    await user.keyboard("{Enter}");
+    expect(posted("shelf-command")).toContainEqual({
+      kind: "shelf-command",
+      id: "openDocument",
+      documentId: "shelf-doc-1",
+    });
+
+    await user.keyboard("{ContextMenu}");
+    await vi.waitFor(() => expect(menuRows()).toEqual(["Open", "Remove from Shelf…"]));
+    await user.keyboard("{Escape}");
+    await vi.waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
+    expect(document.activeElement).toBe(shelfCells()[0]);
+
+    await user.keyboard("{Shift>}{F10}{/Shift}");
+    await vi.waitFor(() => expect(menuRows()).toEqual(["Open", "Remove from Shelf…"]));
+    await vi.waitFor(() => expect(document.activeElement).toBe(menuRow("Open")));
+
+    // Escape closes the menu and returns focus to the cell that opened it.
+    await user.keyboard("{Escape}");
+    await vi.waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
+    expect(document.activeElement).toBe(shelfCells()[0]);
+  });
+
+  it("opens the row's Document and comes back to the same Frame with focus on that row", async () => {
+    frame = loadFrame("flowing.epub");
+    frame.open({ shelf: READY_SHELF, shelfLabels: SHELF_LABELS });
+    await vi.waitFor(() => expect(shelfCells()).toHaveLength(3));
+    // The toolbar is hidden on the Shelf, but mounted: its node is the proof
+    // that Back never remounts the app.
+    const backButton = el("back");
+
+    const user = userEvent.setup();
+    await user.tab();
+    await user.tab();
+    expect(document.activeElement).toBe(shelfCell("Dune"));
+    await user.keyboard("{Enter}");
+    expect(posted("shelf-command")).toContainEqual({
+      kind: "shelf-command",
+      id: "openDocument",
+      documentId: "doc-1",
+    });
+
+    // The Worker plays its half: it opens the Document the row named.
+    frame.open();
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 3 in this section"));
+    expect(frame.shadowText()).toContain("The spice must flow");
+
+    await user.keyboard("{Escape}");
+    await vi.waitFor(() => expect(posted("back")).toHaveLength(1));
+
+    frame.open({ shelf: READY_SHELF, shelfLabels: SHELF_LABELS });
+    await vi.waitFor(() => expect(shelfCells()).toHaveLength(3));
+    await vi.waitFor(() => expect(document.activeElement).toBe(shelfCell("Dune")));
+    expect(el("back")).toBe(backButton);
+    expect(posted("back")).toHaveLength(1);
+  });
+
+  it("offers a Missing row Locate and Remove only, and posts locateDocument", async () => {
+    frame = loadFrame("flowing.epub");
+    frame.open({ shelf: READY_SHELF, shelfLabels: SHELF_LABELS });
+    await vi.waitFor(() => expect(shelfCells()).toHaveLength(3));
+    const user = userEvent.setup();
+
+    await user.tab();
+    await user.tab();
+    await user.keyboard("{ArrowRight}");
+    expect(document.activeElement).toBe(shelfCell("Emma"));
+    await user.keyboard("{Enter}");
+    await vi.waitFor(() => expect(menuRows()).toEqual(["Locate", "Remove from Shelf…"]));
+    expect(menuRows()).not.toContain("Open");
+
+    await user.click(menuRow("Locate"));
+    expect(posted("shelf-command")).toContainEqual({
+      kind: "shelf-command",
+      id: "locateDocument",
+      documentId: "doc-2",
+    });
+  });
+
+  it("states the Worker's real counts and removes the row the confirmation named", async () => {
+    const copy = {
+      title: 'Remove "Dune" from the Shelf?',
+      body: "Its 3 Bookmarks and 12 Highlights (5 with notes) are deleted too.",
+      stats: "Reading Stats are kept. The file stays on your device.",
+    };
+    frame = loadFrame("flowing.epub");
+    frame.open({ shelf: READY_SHELF, shelfLabels: SHELF_LABELS });
+    await vi.waitFor(() => expect(shelfCells()).toHaveLength(3));
+    const user = userEvent.setup();
+
+    await user.click(shelfButton("More for Dune"));
+    await vi.waitFor(() => expect(menuRows()).toEqual(["Open", "Remove from Shelf…"]));
+    await user.click(menuRow("Remove from Shelf…"));
+    expect(posted("shelf-command")).toContainEqual({
+      kind: "shelf-command",
+      id: "removeFromShelf",
+      documentId: "doc-1",
+    });
+
+    frame.port.deliver({ kind: "remove-counts", documentId: "doc-1", ...copy });
+    await vi.waitFor(() => expect(document.querySelector('[role="alertdialog"]')).not.toBeNull());
+    const dialog = document.querySelector('[role="alertdialog"]') as HTMLElement;
+    expect(dialog.querySelector(".kit-dialog__title")?.textContent).toBe(copy.title);
+    expect(dialog.textContent).toContain(copy.body);
+    expect(dialog.textContent).toContain(copy.stats);
+
+    const remove = Array.from(dialog.querySelectorAll("button")).find(
+      (button) => button.textContent === "Remove"
+    ) as HTMLButtonElement | undefined;
+    expect(remove).toBeDefined();
+    await user.click(remove as HTMLButtonElement);
+    expect(posted("shelf-remove")).toContainEqual({ kind: "shelf-remove", documentId: "doc-1" });
+
+    frame.port.deliver({
+      kind: "shelf",
+      state: { status: "ready", entries: [MISSING_ROW, UNREADABLE_ROW] },
+    });
+    await vi.waitFor(() => expect(document.querySelector('[role="alertdialog"]')).toBeNull());
+    expect(shelfCells().map(cellTitle)).toEqual(["Emma", "Broken Spine"]);
+  });
+
+  it("imports files from the empty Shelf through the pick flow", async () => {
+    frame = loadFrame("flowing.epub");
+    frame.open({ shelf: { status: "ready", entries: [] }, shelfLabels: SHELF_LABELS });
+    await vi.waitFor(() => expect(shelfHeading()).toBe("Shelf"));
+
+    expect(shelfCount()).toBe("0 Documents");
+    expect(el("shelf-root").textContent).toContain("Your Shelf is empty");
+    expect(el("shelf-root").textContent).toContain(
+      "Open PDF, EPUB, MOBI, AZW3, FB2, or CBZ files from your device."
+    );
+
+    await userEvent.setup().click(shelfButton("Import files"));
+    expect(posted("shelf-command")).toContainEqual({ kind: "shelf-command", id: "openFile" });
+  });
+
+  it("re-labels the Shelf copy on a language change", async () => {
+    frame = loadFrame("flowing.epub");
+    frame.open({ shelf: READY_SHELF, shelfLabels: SHELF_LABELS });
+    await vi.waitFor(() => expect(shelfHeading()).toBe("Shelf"));
+
+    frame.port.deliver({
+      kind: "language",
+      language: "es",
+      labels: LABELS_ES,
+      shelfLabels: SHELF_LABELS_ES,
+    });
+    await vi.waitFor(() => expect(shelfHeading()).toBe("Estante"));
+    expect(shelfButton("Importar").textContent).toBe("Importar");
+    expect(shelfCount()).toBe("3 documentos");
+  });
+
+  it("acts on the selected row for a host Command, and names no row without one", async () => {
+    frame = loadFrame("flowing.epub");
+    frame.open({ shelf: READY_SHELF, shelfLabels: SHELF_LABELS });
+    await vi.waitFor(() => expect(shelfCells()).toHaveLength(3));
+
+    // A fresh Shelf has no selected row, so the Command names none; the Worker
+    // falls back to its own selection (`session.ts`) and, with neither, does
+    // nothing.
+    frame.port.deliver({ kind: "command", id: "removeFromShelf" });
+    expect(posted("shelf-command")).toEqual([{ kind: "shelf-command", id: "removeFromShelf" }]);
+    expect(posted("shelf-command")[0]).not.toHaveProperty("documentId");
+
+    // Selecting Emma makes it the row the next Command acts on.
+    const user = userEvent.setup();
+    await user.tab();
+    await user.tab();
+    await user.keyboard("{ArrowRight}");
+    expect(posted("shelf-select")).toContainEqual({ kind: "shelf-select", documentId: "doc-2" });
+
+    frame.port.deliver({ kind: "command", id: "removeFromShelf" });
+    expect(posted("shelf-command")).toEqual([
+      { kind: "shelf-command", id: "removeFromShelf" },
+      { kind: "shelf-command", id: "removeFromShelf", documentId: "doc-2" },
+    ]);
+  });
+
+  it("ignores a reading Command on the Shelf and runs it once a Document is open", async () => {
+    frame = loadFrame("flowing.epub");
+    frame.open({ shelf: READY_SHELF, shelfLabels: SHELF_LABELS });
+    await vi.waitFor(() => expect(shelfCells()).toHaveLength(3));
+    // Find is a reading Command: with the Shelf as the view nothing it acts on
+    // is drawn, so a host Command for it is a no-op.
+    expect(el("search-bar").hidden).toBe(true);
+    frame.port.deliver({ kind: "command", id: "findInDocument" });
+    await Promise.resolve();
+    expect(el("search-bar").hidden).toBe(true);
+
+    // The same Command opens the bar once the Frame draws a Document.
+    frame.open();
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 3 in this section"));
+    frame.port.deliver({ kind: "command", id: "findInDocument" });
+    await vi.waitFor(() => expect(el("search-bar").hidden).toBe(false));
   });
 });

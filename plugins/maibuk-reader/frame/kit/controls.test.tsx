@@ -77,7 +77,7 @@ describe("Icon", () => {
     minus: "M5 12h14",
     close: "M6 6l12 12M18 6L6 18",
     check: "M5 12l5 5 9-11",
-    import: "M12 3v12M7 10l5 5 5-5M4 20h16",
+    import: "M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5M12 11v6M9 14h6",
     export: "M12 15V3M7 8l5-5 5 5M4 14v6h16v-6",
     folder: "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",
     file: "M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5",

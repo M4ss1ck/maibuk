@@ -1,12 +1,12 @@
 /** @jsxImportSource preact */
-/* The Reader Frame's Preact app (#942). It draws the toolbar, the search bar,
-   the Contents panel and its tree, the page indicator, the message area, and
-   the password prompt, and re-renders them in place when Maibuk's language or
-   the reading state changes, so the UI `entry.ts` wires never reloads or
-   reopens. The Contents and Find engines stay non-React: they keep writing the
-   tree and the status line, while the app publishes their open state and owns
-   the toggles' `aria-expanded` and post-close focus. The viewer/stage stays
-   with `entry.ts`.
+/* The Reader Frame's Preact app (#942, #944). It draws the toolbar, the search
+   bar, the Contents panel and its tree, the page indicator, the message area,
+   the password prompt, and the Shelf, and re-renders them in place when
+   Maibuk's language, the reading state, or the Shelf changes, so the UI
+   `entry.ts` wires never reloads or reopens. The Contents and Find engines stay
+   non-React: they keep writing the tree and the status line, while the app
+   publishes their open state and owns the toggles' `aria-expanded` and
+   post-close focus. The viewer/stage stays with `entry.ts`.
 
    The Frame is bundled as one classic script, so this file takes Preact's
    automatic runtime and nothing else. */
@@ -21,7 +21,8 @@ import {
 } from "preact";
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { Button, IconButton } from "./kit";
-import type { Appearance } from "./types";
+import { Shelf, type ShelfNotice, type ShelfRemoval } from "./shelf";
+import type { Appearance, FrameShelfCommandId, FrameShelfLabels, FrameShelfState } from "./types";
 import { useReducedMotion } from "./use-reduced-motion";
 
 /** The appearance the Frame draws with until Maibuk hands it another. */
@@ -98,8 +99,12 @@ export interface SurfacesState {
   focus: { target: "contents" | "find"; token: number } | null;
 }
 
+/** The Frame's two views: the Shelf, or one open Document. */
+export type FrameView = "shelf" | "document";
+
 /** Everything the ported surfaces draw. */
 export interface ChromeState {
+  view: FrameView;
   labels: ChromeLabels;
   toolbar: ToolbarState;
   pageIndicator: string;
@@ -107,6 +112,18 @@ export interface ChromeState {
   message: MessageState;
   password: PasswordState;
   surfaces: SurfacesState;
+  /** The Shelf the Worker last sent. */
+  shelf: FrameShelfState;
+  /** The Shelf's localized strings, or null until the Worker sends them. */
+  shelfLabels: FrameShelfLabels | null;
+  /** A failed Shelf action's dismissible notice. */
+  shelfNotice: ShelfNotice | null;
+  /** The Remove from Shelf confirmation, or null. */
+  shelfRemoval: ShelfRemoval | null;
+  /** The Shelf row whose Document menu is open. */
+  menuDocumentId: string | null;
+  /** The Shelf row that takes focus the next time the grid draws. */
+  focusDocumentId: string | null;
 }
 
 /** What the ported controls ask `entry.ts` to do. */
@@ -123,12 +140,16 @@ export interface ChromeActions {
   previousPage(): void;
   nextPage(): void;
   submitPassword(value: string): void;
+  shelfCommand(id: FrameShelfCommandId, documentId?: string): void;
+  shelfSelect(documentId: string): void;
+  shelfRemove(documentId: string): void;
 }
 
 /** The small bridge `entry.ts` hands the app: its state in, its actions out. */
 export interface FrameBridge {
   current(): ChromeState;
   subscribe(listener: (state: ChromeState) => void): () => void;
+  setView(view: FrameView): void;
   setLabels(labels: ChromeLabels): void;
   setToolbar(toolbar: ToolbarState): void;
   setPageIndicator(text: string): void;
@@ -136,6 +157,12 @@ export interface FrameBridge {
   setMessage(message: MessageState): void;
   setPassword(password: PasswordState): void;
   setSurfaces(surfaces: SurfacesState): void;
+  setShelf(shelf: FrameShelfState): void;
+  setShelfLabels(labels: FrameShelfLabels | null): void;
+  setShelfNotice(notice: ShelfNotice | null): void;
+  setShelfRemoval(removal: ShelfRemoval | null): void;
+  setMenuDocumentId(documentId: string | null): void;
+  setFocusDocumentId(documentId: string | null): void;
   actions: ChromeActions;
 }
 
@@ -204,7 +231,9 @@ function Toolbar(props: {
   const zoomInLabel = toolbar.flowing ? labels.increaseFontSize : labels.zoomIn;
   const fullscreenLabel = toolbar.fullscreen ? labels.exitFullScreen : labels.fullScreen;
   return (
-    <header>
+    // The Shelf draws its own header; the reading toolbar stays mounted so its
+    // elements keep their ids, but hidden while the Shelf is the view.
+    <header hidden={state.view === "shelf"}>
       <div class="group">
         <IconButton id="back" label={labels.back} icon="back" onClick={actions.back} />
         <IconButton
@@ -417,9 +446,29 @@ function App({ appearance, subscribe, bridge }: AppProps) {
   // toolbar and `#body`, the panel inside `#body` beside the stage.
   const searchRoot = document.getElementById("search-root");
   const contentsRoot = document.getElementById("contents-root");
+  // The Shelf fills `#body` above the reading surface, the way the markup the
+  // Worker once drew in the host did.
+  const shelfRoot = document.getElementById("shelf-root");
   // The message and password prompt live in `#viewer`, beside the stage the
   // legacy wiring draws; portals keep them in that same place and order.
   const viewer = document.getElementById("viewer");
+  const shelf =
+    chrome.view === "shelf" && chrome.shelfLabels !== null ? (
+      <Shelf
+        state={chrome.shelf}
+        labels={chrome.shelfLabels}
+        notice={chrome.shelfNotice}
+        removal={chrome.shelfRemoval}
+        menuDocumentId={chrome.menuDocumentId}
+        focusDocumentId={chrome.focusDocumentId}
+        onCommand={bridge.actions.shelfCommand}
+        onSelect={bridge.actions.shelfSelect}
+        onMenuChange={(documentId) => bridge.setMenuDocumentId(documentId)}
+        onRemove={bridge.actions.shelfRemove}
+        onRemoveClose={() => bridge.setShelfRemoval(null)}
+        onNoticeClose={() => bridge.setShelfNotice(null)}
+      />
+    ) : null;
   return (
     <AppearanceContext.Provider value={current}>
       <ChromeContext.Provider value={{ state: chrome, actions: bridge.actions }}>
@@ -428,6 +477,7 @@ function App({ appearance, subscribe, bridge }: AppProps) {
         </FrameRoot>
         {searchRoot ? createPortal(<SearchBar />, searchRoot) : null}
         {contentsRoot ? createPortal(<ContentsPanel />, contentsRoot) : null}
+        {shelf !== null && shelfRoot ? createPortal(shelf, shelfRoot) : null}
         {viewer ? createPortal(<MessageArea />, viewer) : null}
         {viewer ? createPortal(<PasswordPrompt />, viewer) : null}
       </ChromeContext.Provider>

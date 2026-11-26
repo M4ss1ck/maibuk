@@ -10,7 +10,14 @@ import { createPluginClient } from "@/plugin-sdk";
 import { createTestHost } from "@/features/plugins/test-kit";
 import { describe, expect, it } from "vitest";
 import { createShelfService, type ReaderClient } from "./library";
-import { SHELF_KEY, positionKey, fingerprint, type ShelfEntry } from "./shelf";
+import {
+  SHELF_KEY,
+  bookmarksKey,
+  fingerprint,
+  highlightsKey,
+  positionKey,
+  type ShelfEntry,
+} from "./shelf";
 import { pdfBytes, readerManifest, shelfEntry } from "./test-support";
 
 function setup() {
@@ -257,6 +264,41 @@ describe("shelveGrant()", () => {
       await host.stop();
     }
   });
+
+  it("throws without writing over a Shelf it could not read", async () => {
+    const kept = shelfEntry({ id: "doc-kept", grant: "grant-kept" });
+    let shelfReadable = true;
+    const shelfWrites: unknown[] = [];
+    class FlakyShelfStorage extends Map<string, unknown> {
+      get(key: string): unknown {
+        if (key === SHELF_KEY && !shelfReadable) throw new Error("storage is down");
+        return super.get(key);
+      }
+      set(key: string, value: unknown): this {
+        if (key === SHELF_KEY) shelfWrites.push(value);
+        return super.set(key, value);
+      }
+    }
+    const storage = new FlakyShelfStorage([[SHELF_KEY, [kept]]]);
+    shelfWrites.length = 0;
+    const host = createTestHost({ manifest: readerManifest(), storage });
+    const client = createPluginClient(host.port);
+    const library = createShelfService(client);
+    try {
+      host.files.queuePick({ name: "Dune.pdf", bytes: pdfBytes("a dropped PDF") });
+      const picked = await client.files.pick({ extensions: ["pdf"] });
+      if (picked === null) throw new Error("no File Grant to shelve");
+      shelfReadable = false;
+      await expect(library.shelveGrant(picked)).rejects.toThrow();
+      expect(shelfWrites).toEqual([]);
+      shelfReadable = true;
+      expect(storage.get(SHELF_KEY)).toEqual([kept]);
+      // The grant is kept: an unread Shelf may hold it for another Document.
+      await expect(host.files.grants()).resolves.toHaveLength(1);
+    } finally {
+      await host.stop();
+    }
+  });
 });
 
 describe("refreshStates()", () => {
@@ -316,18 +358,64 @@ describe("refreshStates()", () => {
 });
 
 describe("removeFromShelf()", () => {
-  it("releases the File Grant, deletes the Reading Position, and forgets the Document", async () => {
+  it("reports what removal discards and deletes only the Document's keys", async () => {
     const { host, storage, library } = setup();
     try {
       host.files.queuePick({ name: "Dune.pdf", bytes: pdfBytes() });
       const entry = await library.openFileFlow();
-      storage.set(positionKey(entry?.id as string), { page: 12 });
+      const id = entry?.id as string;
+      storage.set(positionKey(id), { page: 12 });
+      storage.set(bookmarksKey(id), [
+        { id: "b1", anchor: 1 },
+        { id: "b2", anchor: 2 },
+        { id: "b3", anchor: 3 },
+      ]);
+      storage.set(
+        highlightsKey(id),
+        Array.from({ length: 12 }, (_, index) => ({
+          id: `h${index + 1}`,
+          ...(index < 5 ? { note: `note ${index + 1}` } : {}),
+        }))
+      );
+      storage.set(`stats:${id}`, { minutes: 30 });
 
-      const shelf = await library.removeFromShelf(entry?.id as string);
+      await expect(library.removalCounts(id)).resolves.toEqual({
+        bookmarks: 3,
+        highlights: 12,
+        notes: 5,
+      });
+
+      const shelf = await library.removeFromShelf(id);
       expect(shelf).toEqual([]);
       expect(storage.get(SHELF_KEY)).toEqual([]);
-      expect(storage.has(positionKey(entry?.id as string))).toBe(false);
+      expect(storage.has(positionKey(id))).toBe(false);
+      expect(storage.has(bookmarksKey(id))).toBe(false);
+      expect(storage.has(highlightsKey(id))).toBe(false);
+      expect(storage.get(`stats:${id}`)).toEqual({ minutes: 30 });
       await expect(host.files.grants()).resolves.toEqual([]);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("counts missing or malformed stored values as zero", async () => {
+    const { host, storage, library } = setup();
+    try {
+      storage.set(SHELF_KEY, [shelfEntry({ id: "doc-1", grant: "grant-1" })]);
+
+      await expect(library.removalCounts("doc-1")).resolves.toEqual({
+        bookmarks: 0,
+        highlights: 0,
+        notes: 0,
+      });
+
+      storage.set(bookmarksKey("doc-1"), "not a list");
+      storage.set(highlightsKey("doc-1"), { note: "not a list either" });
+      await expect(library.removalCounts("doc-1")).resolves.toEqual({
+        bookmarks: 0,
+        highlights: 0,
+        notes: 0,
+      });
     } finally {
       await host.stop();
     }

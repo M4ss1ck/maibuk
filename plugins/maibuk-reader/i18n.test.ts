@@ -26,8 +26,8 @@ describe("runtime catalog", () => {
   });
 
   it("looks strings up in the signaled language, following the base subtag", () => {
-    expect(translate("en", "shelf.openFile")).toBe("Open file…");
-    expect(translate("es", "shelf.openFile")).toBe("Abrir archivo…");
+    expect(translate("en", "shelf.loading")).toBe("Loading your Shelf…");
+    expect(translate("es", "shelf.loading")).toBe("Cargando tu estante…");
     expect(translate("es-MX", "shelf.open")).toBe("Abrir");
     expect(translate("fr", "shelf.open")).toBe("Open");
   });
@@ -40,6 +40,24 @@ describe("runtime catalog", () => {
       "pág. 34 de 210"
     );
     expect(format(translate("en", "shelf.progress.percent"), { percent: 42 })).toBe("42%");
+  });
+
+  it("ships the Shelf Frame copy in both languages", () => {
+    expect(runtimeEn["shelf.frame.import"]).toBe("Import");
+    expect(runtimeEs["shelf.frame.import"]).toBe("Importar");
+    expect(runtimeEn["shelf.frame.importFiles"]).toBe("Import files");
+    expect(runtimeEn["shelf.frame.removeTitle"]).toBe('Remove "{{title}}" from the Shelf?');
+    expect(runtimeEs["shelf.frame.removeTitle"]).toBe('¿Quitar "{{title}}" del estante?');
+    expect(runtimeEn["shelf.frame.removeNote"]).toBe(" ({{count}} with note)");
+    expect(runtimeEn["shelf.frame.removeNotes"]).toBe(" ({{count}} with notes)");
+    expect(runtimeEn["shelf.frame.newLabel"]).toBe("New");
+    expect(runtimeEs["shelf.frame.finishedLabel"]).toBe("Terminado");
+    expect(runtimeEn["shelf.locate.notFound"]).toBe(
+      "Reader couldn't find that Document on your Shelf."
+    );
+    expect(runtimeEs["shelf.locate.notFound"]).toBe(
+      "Lector no encontró ese documento en tu estante."
+    );
   });
 });
 

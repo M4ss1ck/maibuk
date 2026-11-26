@@ -3,9 +3,9 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parsePluginLocale, parsePluginManifest } from "@/features/plugins/manifest-validate";
 
-// The Reader manifest (#653): the host-rendered Shelf page behind a sidebar
-// entry, the whole-page Frame that will hold the reading surface, and the
-// reading Commands scoped to that Frame's page id.
+// The Reader manifest (#653, #944): the Shelf and reading Frames behind their
+// sidebar entry and Command, and the reading Commands scoped to the reading
+// page's id.
 describe("Reader manifest", () => {
   const text = readFileSync(join(__dirname, "manifest.json"), "utf8");
 
@@ -42,13 +42,17 @@ describe("Reader manifest", () => {
     expect(parsed.permissions.optional).toEqual([]);
   });
 
-  it("opens the Shelf from a navigating Command behind a sidebar entry", () => {
+  it("opens the Shelf Frame from a navigating Command behind a sidebar entry", () => {
     const contributes = manifest().contributes;
     const open = contributes?.commands?.find((command) => command.id === "openReader");
     expect(open?.navigates).toBe(true);
     const page = contributes?.pages?.find((candidate) => candidate.id === "reader");
-    expect(page).toMatchObject({ title: "Reader", command: "openReader" });
-    expect(page?.frame).toBeUndefined();
+    expect(page).toMatchObject({
+      title: "Reader",
+      command: "openReader",
+      frame: "assets/ui/shelf.html",
+      hideTitle: true,
+    });
     expect(contributes?.sidebarEntries).toEqual([{ page: "reader", icon: "book-open-text" }]);
   });
 
@@ -66,7 +70,7 @@ describe("Reader manifest", () => {
     expect(open?.contexts).toEqual(["reader"]);
   });
 
-  it("declares the Command set, with reading Commands scoped to the reading page", () => {
+  it("declares the Command set, with reading Commands on both Reader pages", () => {
     const commands = manifest().contributes?.commands ?? [];
     expect(commands.map((command) => command.id)).toEqual([
       "openReader",
@@ -86,6 +90,8 @@ describe("Reader manifest", () => {
       "decreaseFontSize",
       "toggleContinuousScroll",
       "backToShelf",
+      "removeFromShelf",
+      "locateDocument",
     ]);
     for (const id of ["openReader", "openFile"]) {
       expect(commands.find((command) => command.id === id)?.contexts, id).toEqual(["global"]);
@@ -106,7 +112,31 @@ describe("Reader manifest", () => {
       "toggleContinuousScroll",
       "backToShelf",
     ]) {
-      expect(commands.find((command) => command.id === id)?.contexts, id).toEqual(["document"]);
+      // The Shelf lives on the reader page and opens Documents in its Frame, so
+      // a reading Command must be reachable there too (#944), beside the
+      // reading page a cold open still navigates to.
+      expect(commands.find((command) => command.id === id)?.contexts, id).toEqual([
+        "document",
+        "reader",
+      ]);
+    }
+    for (const id of ["removeFromShelf", "locateDocument"]) {
+      expect(commands.find((command) => command.id === id)?.contexts, id).toEqual(["reader"]);
+    }
+  });
+
+  it("offers the Shelf's row Commands on the Shelf page, with no default shortcuts", () => {
+    const commands = manifest().contributes?.commands ?? [];
+    for (const [id, label] of [
+      ["removeFromShelf", "Remove from Shelf…"],
+      ["locateDocument", "Locate"],
+    ] as const) {
+      const command = commands.find((candidate) => candidate.id === id);
+      expect(command?.contexts, id).toEqual(["reader"]);
+      expect(command?.label, id).toBe(label);
+      // The spec sheet's Keyboard table defines the grid's keys only, so these
+      // Commands reach the author through the menu, never a Default Shortcut.
+      expect(command?.defaults, id).toBeUndefined();
     }
   });
 

@@ -386,6 +386,11 @@ button.kit-chip {
   min-height: 56px;
 }
 
+/* Nothing drawn in the header: the body's own heading sits under the grab. */
+.kit-sheet__header--bare {
+  min-height: 0;
+}
+
 .kit-sheet__title {
   min-width: 0;
   margin: 0;
@@ -480,6 +485,19 @@ button.kit-chip {
   z-index: calc(var(--z-dialog) + 1);
 }
 
+/* An inline Menu is the body of the Sheet or Popover that holds it: that
+   container already draws the surface, so the rows sit flat inside it. */
+.kit-menu.kit-menu--inline {
+  position: static;
+  z-index: auto;
+  min-width: 0;
+  max-width: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .kit-menu__item {
   display: flex;
   align-items: center;
@@ -507,6 +525,15 @@ button.kit-chip {
 .kit-menu__item:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: -2px;
+}
+
+.kit-menu__item--destructive {
+  color: var(--danger);
+}
+
+.kit-menu__item--group-start {
+  margin-top: var(--space-1);
+  border-top: 1px solid var(--chrome-border);
 }
 
 .kit-menu__item:disabled {
@@ -577,6 +604,12 @@ button.kit-chip {
   box-shadow: none;
   animation: none;
   transition: none;
+}
+
+/* The container already draws the ink border around an inline Menu. */
+[data-eink="true"] .kit-menu.kit-menu--inline,
+[data-motion="reduce"] .kit-menu.kit-menu--inline {
+  border: 0;
 }
 
 [data-eink="true"] .kit-scrim,

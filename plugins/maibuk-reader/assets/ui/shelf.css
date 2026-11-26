@@ -1,0 +1,347 @@
+/* The Reader Frame's Shelf (#944 packet 5). The cover grid is 128 x 192 in both
+   layouts; Narrow pads and gaps by 16 and 12 px, Wide by 24 px, and the Frame
+   decides how many covers fit. Every color comes from tokens.css through the
+   `--chrome-*`, `--card`, `--muted`, `--primary`, and `--danger` names; no rule
+   here states a color of its own. */
+
+/* The portal target (#944): `#body`'s remaining region above the reading
+   surface. It takes the width and height the hidden viewer leaves and keeps
+   its own scroll; empty, it takes no room at all. */
+#shelf-root {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+#shelf-root:empty {
+  display: none;
+}
+
+.shelf {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: var(--chrome-bg);
+  color: var(--chrome-fg);
+  font-family: var(--type-ui);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+
+/* The 56 px bar is fixed; the body under it takes the rest and scrolls. */
+.shelf__header {
+  box-sizing: border-box;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  height: 56px;
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--chrome-border);
+}
+
+.shelf__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-4);
+}
+
+.shelf__titles {
+  min-width: 0;
+}
+
+.shelf__heading {
+  margin: 0;
+  font-size: var(--type-title-size);
+  font-weight: var(--type-title-weight);
+  line-height: var(--type-title-line);
+}
+
+.shelf__count {
+  margin: var(--space-1) 0 0;
+  color: var(--chrome-meta);
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line);
+}
+
+.shelf__message {
+  margin: 0;
+  color: var(--chrome-meta);
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line);
+}
+
+.shelf__message--error {
+  color: var(--danger);
+}
+
+.shelf__empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+}
+
+.shelf__empty-title {
+  margin: 0;
+  font-size: var(--type-heading-size);
+  font-weight: var(--type-heading-weight);
+  line-height: var(--type-heading-line);
+}
+
+.shelf__empty-text {
+  margin: 0;
+  color: var(--chrome-meta);
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line);
+}
+
+/* The grid is one row per line of covers; each row carries the number of
+   128 px columns the Frame measured, so the covers stay exactly 128 x 192. */
+.shelf__grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.shelf__row {
+  display: grid;
+  column-gap: var(--space-3);
+}
+
+.shelf-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-card);
+  background: transparent;
+  color: var(--chrome-fg);
+  text-align: left;
+}
+
+.shelf-card:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.shelf-card__cover {
+  position: relative;
+  width: 128px;
+  height: 192px;
+}
+
+.shelf-card__format {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--format-badge-bg);
+  color: var(--format-badge-fg);
+  font-size: 10px;
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  line-height: var(--type-label-line);
+  text-transform: uppercase;
+}
+
+/* The Missing chip as drawn: the alert icon and label in the danger color. */
+.shelf-card__chip {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  height: 22px;
+  padding: 0 var(--space-2);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--danger);
+  font-size: var(--type-label-size);
+  font-weight: 600;
+  line-height: var(--type-label-line);
+}
+
+.shelf-card__chip svg {
+  width: 14px;
+  height: 14px;
+}
+
+.shelf-card__progress {
+  display: block;
+  width: 128px;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--muted);
+}
+
+.shelf-card__progress-fill {
+  display: block;
+  height: 100%;
+  background: var(--chrome-fg);
+}
+
+.shelf-card__title {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+  font-size: var(--type-body-size);
+  font-weight: var(--type-body-strong-weight);
+  line-height: var(--type-body-line);
+}
+
+.shelf-card__meta {
+  overflow-wrap: anywhere;
+  color: var(--chrome-meta);
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line);
+}
+
+.shelf-card__status {
+  overflow-wrap: anywhere;
+  color: var(--danger);
+  font-size: var(--type-status-size);
+  font-weight: var(--type-status-weight);
+  line-height: var(--type-status-line);
+}
+
+/* Title and meta beside the More button, as "Shelf · desktop · grid M" draws them. */
+.shelf-card__info {
+  display: flex;
+  gap: var(--space-1);
+  align-items: flex-start;
+}
+
+.shelf-card__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.shelf-card__more {
+  flex: none;
+  margin-right: -6px;
+  color: var(--chrome-meta);
+}
+
+/* The Document a menu acts on, drawn above the menu rows in both layouts. */
+.shelf-summary {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--chrome-border);
+}
+
+.shelf-summary__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.shelf-summary__title {
+  overflow-wrap: anywhere;
+  font-size: var(--type-body-size);
+  font-weight: var(--type-body-strong-weight);
+  line-height: var(--type-body-line);
+}
+
+.shelf-summary__meta {
+  overflow-wrap: anywhere;
+  color: var(--chrome-meta);
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line);
+}
+
+.shelf-summary__format {
+  color: var(--chrome-meta);
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  line-height: var(--type-label-line);
+  text-transform: uppercase;
+}
+
+.shelf-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--chrome-border);
+  border-radius: var(--radius-card);
+  background: var(--card);
+}
+
+.shelf-notice--error {
+  border-color: var(--danger);
+}
+
+.shelf-notice__text {
+  min-width: 0;
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line);
+}
+
+.shelf-remove__body,
+.shelf-remove__stats {
+  margin: 0 0 var(--space-3);
+}
+
+.shelf-remove__stats {
+  color: var(--chrome-meta);
+}
+
+.shelf-remove__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+@media (min-width: 600px) {
+  .shelf__header {
+    padding: 0 var(--space-6);
+  }
+
+  .shelf__body {
+    gap: var(--space-6);
+    padding: var(--space-6);
+  }
+
+  .shelf__grid {
+    gap: var(--space-6);
+  }
+
+  .shelf__row {
+    column-gap: var(--space-6);
+  }
+}

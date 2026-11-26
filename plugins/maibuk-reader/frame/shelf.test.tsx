@@ -1,0 +1,719 @@
+/** @jsxImportSource preact */
+/**
+ * The Reader Frame's Shelf (#944 packet 5): the ready grid, its roving focus,
+ * the per-row Document menu, and the Remove confirmation, driven through a real
+ * Preact tree in jsdom. Every keyboard path is a real `user-event` press and
+ * every assertion is the behavior a reader sees (focus, the open layer, the
+ * command fired), never an attached handler or an attribute standing in for
+ * operability.
+ */
+
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { configure, getConfig, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import type { ComponentChild } from "preact";
+import { render } from "preact";
+import { useState } from "preact/hooks";
+import { act } from "preact/test-utils";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { Shelf, type ShelfNotice, type ShelfRemoval } from "./shelf";
+import type { FrameShelfEntry, FrameShelfLabels, FrameShelfState } from "./types";
+
+const containers: HTMLElement[] = [];
+const nativeWidth = window.innerWidth;
+const baseConfig = getConfig();
+const shelfCss = readFileSync(join(__dirname, "..", "assets", "ui", "shelf.css"), "utf8");
+
+const LABELS: FrameShelfLabels = {
+  shelf: "Shelf",
+  import: "Import",
+  importFiles: "Import files",
+  emptyTitle: "Your Shelf is empty",
+  emptyDescription: "Open PDF, EPUB, MOBI, AZW3, FB2, or CBZ files from your device.",
+  loading: "Loading your Shelf…",
+  error: "Reader couldn't load your Shelf.",
+  documentsCountOne: "{{count}} Document",
+  documentsCountOther: "{{count}} Documents",
+  open: "Open",
+  remove: "Remove from Shelf…",
+  locate: "Locate",
+  missing: "Missing",
+  moreFor: "More for {{title}}",
+  removeConfirm: "Remove",
+  cancel: "Cancel",
+  newLabel: "New",
+  finishedLabel: "Finished",
+  documentActions: "Document actions",
+  dismiss: "Dismiss",
+};
+
+const REMOVAL: ShelfRemoval = {
+  documentId: "doc-1",
+  title: 'Remove "Dune" from the Shelf?',
+  body: "Its 3 Bookmarks and 12 Highlights (5 with notes) are deleted too.",
+  stats: "Reading Stats are kept. The file stays on your device.",
+};
+
+function entry(overrides: Partial<FrameShelfEntry> = {}): FrameShelfEntry {
+  return {
+    id: "doc-1",
+    title: "Dune",
+    author: "Frank Herbert",
+    format: "epub",
+    state: "ok",
+    progressText: "42%",
+    progressPercent: 42,
+    statusText: null,
+    tone: 0,
+    ...overrides,
+  };
+}
+
+function many(count: number): FrameShelfEntry[] {
+  return Array.from({ length: count }, (_, index) =>
+    entry({
+      id: `doc-${index + 1}`,
+      title: `Book ${index + 1}`,
+      author: `Author ${index + 1}`,
+      progressPercent: 10 * (index + 1),
+      progressText: `${10 * (index + 1)}%`,
+    })
+  );
+}
+
+interface HarnessProps {
+  entries?: FrameShelfEntry[];
+  status?: FrameShelfState["status"];
+  notice?: ShelfNotice | null;
+  removal?: ShelfRemoval | null;
+  focusDocumentId?: string | null;
+  onCommand?: (id: string, documentId?: string) => void;
+  onSelect?: (documentId: string) => void;
+  onRemove?: (documentId: string) => void;
+  onRemoveClose?: () => void;
+  onNoticeClose?: () => void;
+}
+
+/** The controlled Shelf a real caller draws, with its menu and removal state. */
+function Harness(props: HarnessProps) {
+  const { entries = [entry()], status = "ready" } = props;
+  const [menuDocumentId, setMenuDocumentId] = useState<string | null>(null);
+  const [removal, setRemoval] = useState<ShelfRemoval | null>(props.removal ?? null);
+  const [notice, setNotice] = useState<ShelfNotice | null>(props.notice ?? null);
+  return (
+    <div>
+      <button type="button">Before</button>
+      <Shelf
+        state={{ status, entries }}
+        labels={LABELS}
+        notice={notice}
+        removal={removal}
+        menuDocumentId={menuDocumentId}
+        focusDocumentId={props.focusDocumentId}
+        onCommand={props.onCommand ?? (() => {})}
+        onSelect={props.onSelect ?? (() => {})}
+        onMenuChange={setMenuDocumentId}
+        onRemove={(documentId) => {
+          props.onRemove?.(documentId);
+          setRemoval(null);
+        }}
+        onRemoveClose={() => {
+          props.onRemoveClose?.();
+          setRemoval(null);
+        }}
+        onNoticeClose={() => {
+          props.onNoticeClose?.();
+          setNotice(null);
+        }}
+      />
+      <button type="button">After</button>
+    </div>
+  );
+}
+
+/** A trigger that opens the Remove confirmation, so focus return can be checked. */
+function RemovalCase({
+  removal = REMOVAL,
+  onRemove = () => {},
+  onRemoveClose = () => {},
+}: {
+  removal?: ShelfRemoval;
+  onRemove?: (documentId: string) => void;
+  onRemoveClose?: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <button type="button" onClick={() => setOpen(true)}>
+        Request removal
+      </button>
+      <Shelf
+        state={{ status: "ready", entries: [entry()] }}
+        labels={LABELS}
+        removal={open ? removal : null}
+        menuDocumentId={null}
+        onCommand={() => {}}
+        onSelect={() => {}}
+        onMenuChange={() => {}}
+        onRemove={(documentId) => onRemove(documentId)}
+        onRemoveClose={() => {
+          onRemoveClose();
+          setOpen(false);
+        }}
+        onNoticeClose={() => {}}
+      />
+    </div>
+  );
+}
+
+function setWidth(width: number) {
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    writable: true,
+    value: width,
+  });
+}
+
+async function mount(node: ComponentChild): Promise<HTMLElement> {
+  const container = document.createElement("div");
+  document.body.append(container);
+  containers.push(container);
+  await act(() => {
+    render(node, container);
+  });
+  return container;
+}
+
+async function press(action: () => Promise<unknown>): Promise<void> {
+  await act(async () => {
+    await action();
+  });
+}
+
+beforeEach(() => {
+  setWidth(nativeWidth);
+  configure({ asyncWrapper: async (callback) => callback() });
+});
+
+afterEach(async () => {
+  await act(() => {
+    for (const container of containers.splice(0)) {
+      render(null, container);
+      container.remove();
+    }
+  });
+  vi.restoreAllMocks();
+  configure({ asyncWrapper: baseConfig.asyncWrapper });
+  setWidth(nativeWidth);
+});
+
+describe("Shelf grid", () => {
+  it("draws 128 by 192 covers and three columns in Narrow", async () => {
+    setWidth(500);
+    const container = await mount(<Harness entries={many(7)} />);
+
+    const covers = Array.from(container.querySelectorAll<HTMLElement>(".kit-cover"));
+    expect(covers[0].style.width).toBe("128px");
+    expect(covers[0].style.height).toBe("192px");
+
+    const rows = screen.getAllByRole("row");
+    expect(rows).toHaveLength(3);
+    expect(within(rows[0]).getAllByRole("gridcell")).toHaveLength(3);
+    expect(within(rows[1]).getAllByRole("gridcell")).toHaveLength(3);
+    expect(within(rows[2]).getAllByRole("gridcell")).toHaveLength(1);
+  });
+
+  it("draws six columns in Wide and keeps the Worker order", async () => {
+    setWidth(1200);
+    await mount(
+      <Harness
+        entries={[
+          entry({ id: "doc-b", title: "Second in the Worker" }),
+          entry({ id: "doc-a", title: "First in the Worker" }),
+          ...many(5),
+        ]}
+      />
+    );
+
+    const rows = screen.getAllByRole("row");
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0]).getAllByRole("gridcell")).toHaveLength(6);
+    expect(within(rows[1]).getAllByRole("gridcell")).toHaveLength(1);
+
+    const titles = screen
+      .getAllByRole("gridcell")
+      .map((cell) => cell.querySelector(".shelf-card__title")?.textContent);
+    expect(titles.slice(0, 2)).toEqual(["Second in the Worker", "First in the Worker"]);
+  });
+
+  it("draws the header, scrolling body, centered empty state, and ink progress from tokens", () => {
+    const shell = shelfCss.match(/\.shelf\s*\{[^}]*\}/);
+    expect(shell?.[0]).toMatch(/height:\s*100%/);
+
+    const header = shelfCss.match(/\.shelf__header\s*\{[^}]*\}/);
+    expect(header?.[0]).toMatch(/height:\s*56px/);
+    expect(header?.[0]).toMatch(/border-bottom:\s*1px solid var\(--chrome-border\)/);
+
+    const body = shelfCss.match(/\.shelf__body\s*\{[^}]*\}/);
+    expect(body?.[0]).toMatch(/overflow-y:\s*auto/);
+
+    const empty = shelfCss.match(/\.shelf__empty\s*\{[^}]*\}/);
+    expect(empty?.[0]).toMatch(/align-items:\s*center/);
+    expect(empty?.[0]).toMatch(/text-align:\s*center/);
+
+    const format = shelfCss.match(/\.shelf-card__format\s*\{[^}]*\}/);
+    // The drawn badge: 6 px in from the corner, an ink pill from the tokens.
+    expect(format?.[0]).toMatch(/right:\s*6px/);
+    expect(format?.[0]).toMatch(/background:\s*var\(--format-badge-bg\)/);
+    expect(format?.[0]).toMatch(/color:\s*var\(--format-badge-fg\)/);
+
+    const progress = shelfCss.match(/\.shelf-card__progress\s*\{[^}]*\}/);
+    expect(progress?.[0]).toMatch(/height:\s*3px/);
+    const fill = shelfCss.match(/\.shelf-card__progress-fill\s*\{[^}]*\}/);
+    expect(fill?.[0]).toMatch(/background:\s*var\(--chrome-fg\)/);
+  });
+
+  it("draws the Missing chip and 40% cover for Missing and permission rows only", async () => {
+    setWidth(1200);
+    const container = await mount(
+      <Harness
+        entries={[
+          entry({ id: "doc-1", title: "Missing one", state: "missing", statusText: "Missing" }),
+          entry({
+            id: "doc-2",
+            title: "Permission one",
+            state: "needs-permission",
+            statusText: "Missing",
+          }),
+          entry({
+            id: "doc-3",
+            title: "Unreadable one",
+            state: "unreadable",
+            statusText: "Can't open this file",
+          }),
+          entry({ id: "doc-4", title: "Readable one" }),
+        ]}
+      />
+    );
+
+    const covers = Array.from(container.querySelectorAll<HTMLElement>(".kit-cover"));
+    expect(covers[0].style.opacity).toBe("0.4");
+    expect(covers[1].style.opacity).toBe("0.4");
+    expect(covers[2].style.opacity).toBe("1");
+    expect(covers[3].style.opacity).toBe("1");
+
+    // The chip carries the alert icon and the "Missing" label, as drawn.
+    const chips = screen.getAllByText("Missing");
+    expect(chips).toHaveLength(2);
+    for (const chip of chips) expect(chip.querySelector("svg")).not.toBeNull();
+    expect(screen.getByText("Can't open this file")).toBeInTheDocument();
+  });
+});
+
+describe("Shelf keyboard", () => {
+  it("keeps one Tab stop and moves by cell with the arrow keys, Home, and End", async () => {
+    setWidth(500);
+    const user = userEvent.setup({ delay: null });
+    const selected: string[] = [];
+    const commands: Array<[string, string | undefined]> = [];
+    await mount(
+      <Harness
+        entries={many(7)}
+        onSelect={(id) => selected.push(id)}
+        onCommand={(id, documentId) => commands.push([id, documentId])}
+      />
+    );
+
+    const cells = screen.getAllByRole("gridcell");
+    await press(() => user.click(cells[0]));
+    expect(document.activeElement).toBe(cells[0]);
+
+    await press(() => user.keyboard("{ArrowRight}"));
+    expect(document.activeElement).toBe(cells[1]);
+    expect(selected.at(-1)).toBe("doc-2");
+
+    await press(() => user.keyboard("{ArrowDown}"));
+    expect(document.activeElement).toBe(cells[4]);
+
+    await press(() => user.keyboard("{End}"));
+    expect(document.activeElement).toBe(cells[6]);
+
+    await press(() => user.keyboard("{Home}"));
+    expect(document.activeElement).toBe(cells[0]);
+
+    await press(() => user.keyboard("{Enter}"));
+    expect(commands).toEqual([["openDocument", "doc-1"]]);
+
+    // Tab leaves the grid and Shift+Tab returns: the grid owns exactly one tab
+    // stop, and a More button is pointer-reachable without being another one.
+    await press(() => user.tab());
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "After" }));
+    await press(() => user.tab({ shift: true }));
+    expect(document.activeElement).toBe(cells[0]);
+  });
+
+  it("opens the Document menu instead of acting when a row is not readable", async () => {
+    setWidth(1200);
+    const user = userEvent.setup({ delay: null });
+    const commands: Array<[string, string | undefined]> = [];
+    await mount(
+      <Harness
+        entries={[
+          entry({ id: "doc-1" }),
+          entry({ id: "doc-2", title: "Gone", state: "missing", statusText: "Missing" }),
+          entry({
+            id: "doc-3",
+            title: "Needs permission",
+            state: "needs-permission",
+            statusText: "Missing",
+          }),
+          entry({
+            id: "doc-4",
+            title: "Broken",
+            state: "unreadable",
+            statusText: "Can't open this file",
+          }),
+        ]}
+        onCommand={(id, documentId) => commands.push([id, documentId])}
+      />
+    );
+
+    const cells = screen.getAllByRole("gridcell");
+    await press(() => user.click(cells[0]));
+
+    await press(() => user.keyboard("{ArrowRight}"));
+    await press(() => user.keyboard(" "));
+    expect(commands).toEqual([]);
+    expect(
+      within(screen.getByRole("menu", { name: "Document actions" }))
+        .getAllByRole("menuitem")
+        .map((item) => item.textContent)
+    ).toEqual(["Locate", "Remove from Shelf…"]);
+    await press(() => user.keyboard("{Escape}"));
+    expect(document.activeElement).toBe(cells[1]);
+
+    await press(() => user.keyboard("{ArrowRight}"));
+    await press(() => user.keyboard("{Enter}"));
+    expect(commands).toEqual([]);
+    expect(
+      within(screen.getByRole("menu", { name: "Document actions" }))
+        .getAllByRole("menuitem")
+        .map((item) => item.textContent)
+    ).toEqual(["Locate", "Remove from Shelf…"]);
+    await press(() => user.keyboard("{Escape}"));
+
+    await press(() => user.keyboard("{ArrowRight}"));
+    await press(() => user.keyboard("{Enter}"));
+    expect(commands).toEqual([]);
+    expect(
+      within(screen.getByRole("menu", { name: "Document actions" }))
+        .getAllByRole("menuitem")
+        .map((item) => item.textContent)
+    ).toEqual(["Remove from Shelf…"]);
+    expect(document.activeElement).toBe(
+      screen.getByRole("menuitem", { name: "Remove from Shelf…" })
+    );
+    expect(document.activeElement).not.toBe(cells[3]);
+  });
+
+  it("opens the Document menu with Shift+F10 and ContextMenu, and returns focus", async () => {
+    setWidth(1024);
+    const user = userEvent.setup({ delay: null });
+    await mount(<Harness />);
+
+    const cell = screen.getByRole("gridcell");
+    await press(() => user.click(cell));
+    expect(document.activeElement).toBe(cell);
+
+    await press(() => user.keyboard("{Shift>}{F10}{/Shift}"));
+    expect(screen.getByRole("menu", { name: "Document actions" })).toBeInTheDocument();
+    expect(document.activeElement).toBe(screen.getByRole("menuitem", { name: "Open" }));
+
+    await press(() => user.keyboard("{Escape}"));
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(cell);
+
+    await press(() => user.keyboard("{ContextMenu}"));
+    expect(screen.getByRole("menu", { name: "Document actions" })).toBeInTheDocument();
+  });
+
+  it("returns focus to focusDocumentId when the caller supplies it", async () => {
+    setWidth(1200);
+    await mount(<Harness entries={many(2)} focusDocumentId="doc-2" />);
+    expect(document.activeElement).toBe(screen.getAllByRole("gridcell")[1]);
+  });
+});
+
+describe("Document menu", () => {
+  it("shows Open and Remove for a readable row, Locate for Missing rows, and Remove alone for unreadable", async () => {
+    setWidth(1024);
+    const user = userEvent.setup({ delay: null });
+    const commands: Array<[string, string | undefined]> = [];
+    await mount(
+      <Harness
+        entries={[
+          entry({ id: "doc-1", title: "Readable" }),
+          entry({ id: "doc-2", title: "Gone", state: "missing", statusText: "Missing" }),
+          entry({
+            id: "doc-3",
+            title: "Needs permission",
+            state: "needs-permission",
+            statusText: "Missing",
+          }),
+          entry({
+            id: "doc-4",
+            title: "Broken",
+            state: "unreadable",
+            statusText: "Can't open this file",
+          }),
+        ]}
+        onCommand={(id, documentId) => commands.push([id, documentId])}
+      />
+    );
+
+    await press(() => user.click(screen.getByRole("button", { name: "More for Readable" })));
+    expect(
+      within(screen.getByRole("menu", { name: "Document actions" }))
+        .getAllByRole("menuitem")
+        .map((item) => item.textContent)
+    ).toEqual(["Open", "Remove from Shelf…"]);
+    expect(commands).toEqual([]);
+    await press(() => user.keyboard("{Escape}"));
+
+    await press(() => user.click(screen.getByRole("button", { name: "More for Gone" })));
+    expect(
+      within(screen.getByRole("menu", { name: "Document actions" }))
+        .getAllByRole("menuitem")
+        .map((item) => item.textContent)
+    ).toEqual(["Locate", "Remove from Shelf…"]);
+    await press(() => user.keyboard("{Escape}"));
+
+    await press(() =>
+      user.click(screen.getByRole("button", { name: "More for Needs permission" }))
+    );
+    expect(
+      within(screen.getByRole("menu", { name: "Document actions" }))
+        .getAllByRole("menuitem")
+        .map((item) => item.textContent)
+    ).toEqual(["Locate", "Remove from Shelf…"]);
+    await press(() => user.keyboard("{Escape}"));
+
+    await press(() => user.click(screen.getByRole("button", { name: "More for Broken" })));
+    expect(
+      within(screen.getByRole("menu", { name: "Document actions" }))
+        .getAllByRole("menuitem")
+        .map((item) => item.textContent)
+    ).toEqual(["Remove from Shelf…"]);
+  });
+
+  it("uses a Popover plus Menu in Wide and a Sheet plus Menu in Narrow", async () => {
+    setWidth(1024);
+    const user = userEvent.setup({ delay: null });
+    await mount(<Harness />);
+    await press(() => user.click(screen.getByRole("button", { name: "More for Dune" })));
+    const popover = screen.getByRole("dialog", { name: "Dune" });
+    expect(popover).toHaveClass("kit-popover");
+    // The rows are drawn inside the Popover, not in a second floating layer.
+    expect(within(popover).getByRole("menu", { name: "Document actions" })).toBeInTheDocument();
+    await press(() => user.keyboard("{Escape}"));
+
+    setWidth(500);
+    await act(() => {
+      window.dispatchEvent(new Event("resize"));
+    });
+    await press(() => user.click(screen.getByRole("button", { name: "More for Dune" })));
+    // As drawn, the Sheet is named by its Document; the summary is its heading.
+    const sheet = screen.getByRole("dialog", { name: "Dune" });
+    expect(within(sheet).queryByText("Document actions")).not.toBeInTheDocument();
+    expect(sheet).toHaveClass("kit-sheet");
+    // The rows are the Sheet's body: a Menu floating beside it sits under the
+    // Sheet's scrim, where a tap cannot reach it.
+    expect(within(sheet).getByRole("menu", { name: "Document actions" })).toBeInTheDocument();
+    expect(within(sheet).getByRole("menuitem", { name: "Open" })).toHaveFocus();
+    await press(() => user.keyboard("{ArrowDown}"));
+    expect(within(sheet).getByRole("menuitem", { name: "Remove from Shelf…" })).toHaveFocus();
+    await press(() => user.keyboard("{Escape}"));
+    expect(screen.queryByRole("dialog", { name: "Dune" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "More for Dune" })).toHaveFocus();
+  });
+
+  it("counts one Document in the singular and more in the plural", async () => {
+    setWidth(1024);
+    await mount(<Harness entries={[entry()]} />);
+    expect(screen.getByText("1 Document", { exact: true })).toBeInTheDocument();
+    await mount(<Harness entries={many(2)} />);
+    expect(screen.getByText("2 Documents", { exact: true })).toBeInTheDocument();
+  });
+
+  it("draws the row summary above the menu rows in Wide and Narrow", async () => {
+    setWidth(1024);
+    const user = userEvent.setup({ delay: null });
+    await mount(<Harness />);
+
+    await press(() => user.click(screen.getByRole("button", { name: "More for Dune" })));
+    let menu = screen.getByRole("menu", { name: "Document actions" });
+    let summary = menu.querySelector(".shelf-summary");
+    expect(summary).not.toBeNull();
+    expect(menu.firstElementChild).toBe(summary);
+    expect(summary?.querySelector<HTMLElement>(".kit-cover")?.style.width).toBe("40px");
+    expect(summary?.querySelector(".shelf-summary__title")?.textContent).toBe("Dune");
+    expect(summary?.querySelector(".shelf-summary__meta")?.textContent).toBe("Frank Herbert · 42%");
+    expect(summary?.querySelector(".shelf-summary__format")?.textContent).toBe("EPUB");
+    await press(() => user.keyboard("{Escape}"));
+
+    setWidth(500);
+    await act(() => {
+      window.dispatchEvent(new Event("resize"));
+    });
+    await press(() => user.click(screen.getByRole("button", { name: "More for Dune" })));
+    menu = screen.getByRole("menu", { name: "Document actions" });
+    summary = menu.querySelector(".shelf-summary");
+    expect(summary).not.toBeNull();
+    expect(menu.firstElementChild).toBe(summary);
+    expect(summary?.querySelector(".shelf-summary__title")?.textContent).toBe("Dune");
+    expect(summary?.querySelector(".shelf-summary__meta")?.textContent).toBe("Frank Herbert · 42%");
+    expect(summary?.querySelector(".shelf-summary__format")?.textContent).toBe("EPUB");
+  });
+
+  it("fires the command for the row it acts on", async () => {
+    setWidth(1024);
+    const user = userEvent.setup({ delay: null });
+    const commands: Array<[string, string | undefined]> = [];
+    await mount(<Harness onCommand={(id, documentId) => commands.push([id, documentId])} />);
+
+    await press(() => user.click(screen.getByRole("button", { name: "More for Dune" })));
+    await press(() => user.click(screen.getByRole("menuitem", { name: "Remove from Shelf…" })));
+    expect(commands).toEqual([["removeFromShelf", "doc-1"]]);
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+});
+
+describe("Shelf states", () => {
+  it("shows the empty state and imports files", async () => {
+    setWidth(1024);
+    const user = userEvent.setup({ delay: null });
+    const commands: Array<[string, string | undefined]> = [];
+    await mount(
+      <Harness entries={[]} onCommand={(id, documentId) => commands.push([id, documentId])} />
+    );
+
+    expect(screen.getByRole("heading", { name: "Your Shelf is empty" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Open PDF, EPUB, MOBI, AZW3, FB2, or CBZ files from your device.")
+    ).toBeInTheDocument();
+    await press(() => user.click(screen.getByRole("button", { name: "Import files" })));
+    expect(commands).toEqual([["openFile", undefined]]);
+  });
+
+  it("shows the loading and error states", async () => {
+    setWidth(1024);
+    await mount(<Harness status="loading" entries={[]} />);
+    expect(screen.getByText("Loading your Shelf…")).toBeInTheDocument();
+  });
+
+  it("shows an error state", async () => {
+    setWidth(1024);
+    await mount(<Harness status="error" entries={[]} />);
+    expect(screen.getByText("Reader couldn't load your Shelf.")).toBeInTheDocument();
+  });
+
+  it("shows a dismissible notice", async () => {
+    setWidth(1024);
+    const user = userEvent.setup({ delay: null });
+    const onNoticeClose = vi.fn();
+    await mount(
+      <Harness
+        notice={{ text: "That file is a different Document.", error: true }}
+        onNoticeClose={onNoticeClose}
+      />
+    );
+
+    const status = screen.getByRole("status");
+    expect(within(status).getByText("That file is a different Document.")).toBeInTheDocument();
+    await press(() => user.click(within(status).getByRole("button", { name: "Dismiss" })));
+    expect(onNoticeClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("uses the primary labeled Import button in Wide and the labeled icon button in Narrow", async () => {
+    setWidth(1024);
+    const wide = await mount(<Harness />);
+    expect(screen.getByRole("button", { name: "Import" })).toHaveClass("kit-button--primary");
+    wide.remove();
+
+    setWidth(500);
+    await mount(<Harness />);
+    const narrowImport = screen.getByRole("button", { name: "Import" });
+    expect(narrowImport).toHaveClass("kit-icon-button__button");
+  });
+});
+
+describe("Remove confirmation", () => {
+  it("renders the exact seeded counts as a Wide alertdialog and returns focus on Escape", async () => {
+    setWidth(1024);
+    const user = userEvent.setup({ delay: null });
+    const onRemoveClose = vi.fn();
+    await mount(<RemovalCase onRemoveClose={onRemoveClose} />);
+
+    const trigger = screen.getByRole("button", { name: "Request removal" });
+    await press(() => user.click(trigger));
+    const dialog = screen.getByRole("alertdialog", { name: REMOVAL.title });
+    expect(dialog).toHaveClass("kit-dialog");
+    expect(within(dialog).getByText(REMOVAL.body)).toBeInTheDocument();
+    expect(within(dialog).getByText(REMOVAL.stats)).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Cancel" })).toHaveClass(
+      "kit-button--secondary"
+    );
+    expect(within(dialog).getByRole("button", { name: "Remove" })).toHaveClass(
+      "kit-button--destructive"
+    );
+
+    await press(() => user.keyboard("{Escape}"));
+    expect(screen.queryByRole("alertdialog", { name: REMOVAL.title })).not.toBeInTheDocument();
+    expect(onRemoveClose).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("removes the Document from the Wide alertdialog", async () => {
+    setWidth(1024);
+    const user = userEvent.setup({ delay: null });
+    const onRemove = vi.fn();
+    await mount(<RemovalCase onRemove={onRemove} />);
+
+    await press(() => user.click(screen.getByRole("button", { name: "Request removal" })));
+    await press(() => user.click(screen.getByRole("button", { name: "Remove" })));
+    expect(onRemove).toHaveBeenCalledWith("doc-1");
+  });
+
+  it("renders the exact seeded counts as a Narrow alertdialog sheet with no Done", async () => {
+    setWidth(500);
+    const user = userEvent.setup({ delay: null });
+    const onRemove = vi.fn();
+    const onRemoveClose = vi.fn();
+    await mount(<RemovalCase onRemove={onRemove} onRemoveClose={onRemoveClose} />);
+
+    const trigger = screen.getByRole("button", { name: "Request removal" });
+    await press(() => user.click(trigger));
+    const sheet = screen.getByRole("alertdialog", { name: REMOVAL.title });
+    expect(sheet).toHaveClass("kit-sheet");
+    expect(screen.queryByRole("button", { name: "Done" })).not.toBeInTheDocument();
+    expect(within(sheet).getByText(REMOVAL.body)).toBeInTheDocument();
+    expect(within(sheet).getByText(REMOVAL.stats)).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: "Cancel" })).toHaveClass(
+      "kit-button--secondary"
+    );
+    expect(within(sheet).getByRole("button", { name: "Remove" })).toHaveClass(
+      "kit-button--destructive"
+    );
+
+    await press(() => user.keyboard("{Escape}"));
+    expect(screen.queryByRole("alertdialog", { name: REMOVAL.title })).not.toBeInTheDocument();
+    expect(onRemoveClose).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).toBe(trigger);
+
+    await press(() => user.click(trigger));
+    await press(() => user.click(screen.getByRole("button", { name: "Remove" })));
+    expect(onRemove).toHaveBeenCalledWith("doc-1");
+  });
+});

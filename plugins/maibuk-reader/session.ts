@@ -43,11 +43,15 @@ import {
   type FramePositionMessage,
   type FrameReadMessage,
   type FrameSettingsMessage,
+  type FrameShelfCommandMessage,
+  type FrameShelfRemoveMessage,
+  type FrameShelfState,
   type FrameToWorkerMessage,
   type FrameZipEntryRequest,
   type FrameZipListRequest,
   type ReadingPosition,
 } from "./frame-protocol";
+import { frameShelfLabels, frameShelfState, shelfRemovalCopy } from "./frame-shelf";
 import { ZipError, openZip, type ZipArchive } from "./zip";
 import {
   DEFAULT_READER_SETTINGS,
@@ -81,6 +85,17 @@ export interface ReaderSessionDeps {
   returnLabel: () => string | null;
   /** Leaves the reading surface; the runtime opens the Shelf page. */
   navigateToShelf(): Promise<void> | void;
+  /** The view the Frame mounts on; the Document view when absent. */
+  view?: "shelf" | "document";
+  /**
+   * Whether the Frame owns the Shelf, so Back returns to it inside the Frame
+   * instead of leaving the page (#944).
+   */
+  shelfInFrame?: boolean;
+  /** Opens a Document the author picked or chose on the Frame's Shelf. */
+  openEntry?(entry: ShelfEntry): Promise<void> | void;
+  /** Told which view the session switched to, so the runtime can remember it. */
+  onViewChange?(view: "shelf" | "document"): void;
   /** Called once when the session stops, so the runtime forgets the Frame. */
   onDispose?(): void;
 }
@@ -92,6 +107,12 @@ export interface ReaderSession {
   start(): void;
   /** Opens `entry` in this Frame, replacing whatever it showed. */
   setEntry(entry: ShelfEntry | null): void;
+  /**
+   * Switches the Frame to its Shelf without leaving the page (#944): flushes
+   * the pending Reading Position, releases the open Document, and publishes a
+   * fresh `open`.
+   */
+  showShelf(): Promise<void>;
   /** Tells the Frame the app language changed. */
   setLanguage(language: string): void;
   /** Tells the Frame Maibuk's appearance changed, so it redraws in it. */
@@ -224,10 +245,14 @@ function joinChunks(chunks: readonly Uint8Array[], total: number): Uint8Array {
 /** Creates one session for one Frame port. Nothing starts until {@link ReaderSession.start}. */
 export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
   const { client, library, port } = deps;
-  let entry = deps.entry;
+  let view: "shelf" | "document" = deps.view ?? "document";
+  let entry = view === "shelf" ? null : deps.entry;
+  let selectedDocumentId: string | null = null;
   let language = deps.language;
   let disposed = false;
   let opened = false;
+  /** Bumped whenever the open Document is released, so a stale `open` never posts. */
+  let openGeneration = 0;
   let metaApplied = false;
   let core: PdfCore | null = null;
   let pdfPort: MessagePort | null = null;
@@ -290,34 +315,97 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     };
   }
 
+  /** Stops what the open Document holds, ready for another Document or the Shelf. */
+  function releaseDocument(): void {
+    openGeneration += 1;
+    metaApplied = false;
+    opened = false;
+    archive = null;
+    openingArchive = null;
+    if (core !== null) {
+      core.dispose();
+      core = null;
+    }
+    if (pdfPort !== null) {
+      try {
+        pdfPort.close();
+      } catch {
+        // Already closed.
+      }
+      pdfPort = null;
+    }
+  }
+
+  /** Draws `shelf` in the Frame; the File Grant and Fingerprint stay here. */
+  function publishShelf(shelf: readonly ShelfEntry[]): void {
+    post({ kind: "shelf", state: frameShelfState(language, shelf) });
+  }
+
+  /** Refreshes every File Grant and replaces the Shelf the Frame draws. */
+  async function refreshShelf(): Promise<void> {
+    try {
+      const shelf = await library.refreshStates();
+      if (disposed || view !== "shelf") return;
+      publishShelf(shelf);
+    } catch {
+      if (disposed || view !== "shelf") return;
+      const state: FrameShelfState = { status: "error", entries: [] };
+      post({ kind: "shelf", state });
+    }
+  }
+
   async function sendOpen(): Promise<void> {
     if (disposed || opened) return;
     opened = true;
+    const generation = openGeneration;
     const settings = await loadSettings();
+    if (disposed || generation !== openGeneration) return;
     const appearance = await currentAppearance();
-    if (disposed) return;
+    if (disposed || generation !== openGeneration) return;
     const position = await storedPosition(settings);
+    if (disposed || generation !== openGeneration) return;
+    const shelfView = view === "shelf";
+    const currentEntry = shelfView ? null : entry;
+    let shelf: FrameShelfState;
+    if (shelfView) {
+      shelf = { status: "loading", entries: [] };
+    } else {
+      try {
+        shelf = frameShelfState(language, await library.loadShelf());
+      } catch {
+        shelf = { status: "error", entries: [] };
+      }
+    }
+    if (disposed || generation !== openGeneration) return;
     const message: FrameOpenMessage = {
       kind: "open",
-      entry: entry === null ? null : frameEntry(entry),
-      position,
+      view: shelfView ? "shelf" : "document",
+      entry: currentEntry === null ? null : frameEntry(currentEntry),
+      position: currentEntry === null ? null : position,
       settings,
-      size: entry === null ? 0 : sizeFromFingerprint(entry.fingerprint),
+      size: currentEntry === null ? 0 : sizeFromFingerprint(currentEntry.fingerprint),
       labels: frameLabels(language, deps.returnLabel()),
+      shelf,
+      shelfLabels: frameShelfLabels(language),
       language,
       appearance,
     };
-    if (entry !== null && entry.format === "pdf") {
+    if (shelfView) {
+      post(message);
+      void refreshShelf();
+      return;
+    }
+    if (currentEntry !== null && currentEntry.format === "pdf") {
       const bridge = startPdfBridge();
       message.pdf = bridge.pdf;
       message.pdfPort = bridge.port;
       post(message, [bridge.port]);
-    } else if (entry !== null) {
-      message.foliate = { source: foliateSource(), purify: purifySource() };
-      post(message);
-    } else {
-      post(message);
+      return;
     }
+    if (currentEntry !== null) {
+      message.foliate = { source: foliateSource(), purify: purifySource() };
+    }
+    post(message);
   }
 
   /** Reads `length` bytes at `offset`, in the chunks the File Grant API allows. */
@@ -526,7 +614,100 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     }
   }
 
+  /** The localized notice a failed Locate leaves on the Shelf, or null when it should stay quiet. */
+  function locateNotice(reason: "cancelled" | "not-found" | "fingerprint-mismatch"): string | null {
+    switch (reason) {
+      case "fingerprint-mismatch":
+        return translate(language, "shelf.locate.mismatch");
+      case "not-found":
+        return translate(language, "shelf.locate.notFound");
+      default:
+        // A cancelled pick is not a failure the author needs told about.
+        return null;
+    }
+  }
+
+  async function handleShelfCommand(message: FrameShelfCommandMessage): Promise<void> {
+    const documentId = message.documentId ?? selectedDocumentId;
+    try {
+      switch (message.id) {
+        case "openDocument": {
+          if (documentId === null) return;
+          const shelf = await library.loadShelf();
+          const target = shelf.find((candidate) => candidate.id === documentId);
+          if (target === undefined || (target.state ?? "ok") !== "ok") return;
+          await deps.openEntry?.(target);
+          return;
+        }
+        case "removeFromShelf": {
+          if (documentId === null) return;
+          try {
+            const shelf = await library.loadShelf();
+            const target = shelf.find((candidate) => candidate.id === documentId);
+            if (target === undefined) return;
+            const counts = await library.removalCounts(documentId);
+            const copy = shelfRemovalCopy(language, target.title, counts);
+            post({
+              kind: "remove-counts",
+              documentId,
+              title: copy.title,
+              body: copy.body,
+              stats: copy.stats,
+            });
+          } catch {
+            post({ kind: "shelf-result", message: translate(language, "shelf.remove.failed") });
+          }
+          return;
+        }
+        case "locateDocument": {
+          if (documentId === null) return;
+          try {
+            const result = await library.locateAgain(documentId);
+            publishShelf(await library.loadShelf());
+            if (result.ok) return;
+            const notice = locateNotice(result.reason);
+            if (notice !== null) post({ kind: "shelf-result", message: notice });
+          } catch {
+            post({ kind: "shelf-result", message: translate(language, "shelf.locate.failed") });
+          }
+          return;
+        }
+        case "openFile": {
+          const picked = await library.openFileFlow();
+          if (picked !== null) await deps.openEntry?.(picked);
+          return;
+        }
+      }
+    } catch {
+      post({ kind: "shelf-result", message: translate(language, "shelf.openFailed") });
+    }
+  }
+
+  async function handleShelfRemove(message: FrameShelfRemoveMessage): Promise<void> {
+    try {
+      const shelf = await library.removeFromShelf(message.documentId);
+      if (selectedDocumentId === message.documentId) selectedDocumentId = null;
+      publishShelf(shelf);
+    } catch {
+      post({ kind: "shelf-result", message: translate(language, "shelf.remove.failed") });
+    }
+  }
+
+  async function showShelf(): Promise<void> {
+    await pendingPosition;
+    if (disposed) return;
+    view = "shelf";
+    entry = null;
+    releaseDocument();
+    if (!disposed) await sendOpen();
+    if (!disposed) deps.onViewChange?.("shelf");
+  }
+
   async function handleBack(): Promise<void> {
+    if (deps.shelfInFrame === true) {
+      await showShelf();
+      return;
+    }
     try {
       await pendingPosition;
       await deps.navigateToShelf();
@@ -565,6 +746,15 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
         return;
       case "load-error":
         void markUnreadable(message);
+        return;
+      case "shelf-select":
+        selectedDocumentId = message.documentId;
+        return;
+      case "shelf-command":
+        void handleShelfCommand(message);
+        return;
+      case "shelf-remove":
+        void handleShelfRemove(message);
         return;
       case "back":
         void handleBack();
@@ -614,27 +804,22 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     },
     setEntry(next: ShelfEntry | null): void {
       entry = next;
-      metaApplied = false;
-      opened = false;
-      archive = null;
-      openingArchive = null;
-      if (core !== null) {
-        core.dispose();
-        core = null;
+      if (next !== null) {
+        view = "document";
+        deps.onViewChange?.("document");
       }
-      if (pdfPort !== null) {
-        try {
-          pdfPort.close();
-        } catch {
-          // Already closed.
-        }
-        pdfPort = null;
-      }
+      releaseDocument();
       if (!disposed) void sendOpen();
     },
+    showShelf,
     setLanguage(next: string): void {
       language = next;
-      post({ kind: "language", language: next, labels: frameLabels(next, deps.returnLabel()) });
+      post({
+        kind: "language",
+        language: next,
+        labels: frameLabels(next, deps.returnLabel()),
+        shelfLabels: frameShelfLabels(next),
+      });
     },
     setAppearance(next: Appearance): void {
       post({ kind: "appearance", appearance: next });

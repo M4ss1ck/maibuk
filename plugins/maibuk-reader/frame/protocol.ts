@@ -15,19 +15,25 @@ import type {
   FrameFoliate,
   FrameLabels,
   FramePdf,
+  FrameShelfCommandId,
+  FrameShelfLabels,
+  FrameShelfState,
   FrameZipEntry,
   ReaderSettings,
   ReadingPosition,
 } from "./types";
 
-/** Opens one Document. `pdfPort` is transferred alongside the message. */
+/** Opens the Frame on the Shelf or on one Document. `pdfPort` is transferred alongside the message. */
 export interface FrameOpenMessage {
   kind: "open";
+  view?: "shelf" | "document";
   entry: FrameEntry | null;
   position: ReadingPosition | null;
   settings: ReaderSettings;
   size: number;
   labels: FrameLabels;
+  shelf?: FrameShelfState;
+  shelfLabels?: FrameShelfLabels;
   language: string;
   appearance: Appearance;
   pdf?: FramePdf;
@@ -60,6 +66,7 @@ export interface FrameLanguageMessage {
   kind: "language";
   language: string;
   labels?: FrameLabels;
+  shelfLabels?: FrameShelfLabels;
 }
 
 /** Tells the Frame Maibuk's appearance changed, so it redraws in it. */
@@ -90,6 +97,27 @@ export interface FrameZipErrorMessage {
   code: "corrupt" | "drm" | "missing";
 }
 
+/** Replaces the Shelf the Frame draws with its loading, ready, or error state. */
+export interface FrameShelfMessage {
+  kind: "shelf";
+  state: FrameShelfState;
+}
+
+/** The localized Remove from Shelf copy for one Document, built from real counts. */
+export interface FrameRemoveCountsMessage {
+  kind: "remove-counts";
+  documentId: string;
+  title: string;
+  body: string;
+  stats: string;
+}
+
+/** Answers a Shelf Command; `message` is a localized notice, or omitted when it succeeded. */
+export interface FrameShelfResultMessage {
+  kind: "shelf-result";
+  message?: string;
+}
+
 export type WorkerToFrameMessage =
   | FrameOpenMessage
   | FrameBytesMessage
@@ -99,7 +127,34 @@ export type WorkerToFrameMessage =
   | FrameAppearanceMessage
   | FrameZipListMessage
   | FrameZipDataMessage
-  | FrameZipErrorMessage;
+  | FrameZipErrorMessage
+  | FrameShelfMessage
+  | FrameRemoveCountsMessage
+  | FrameShelfResultMessage;
+
+/** Runs one Shelf Command; `documentId` names the row it acts on. */
+export interface FrameShelfCommandMessage {
+  kind: "shelf-command";
+  id: FrameShelfCommandId;
+  documentId?: string;
+}
+
+/** Selects one row in the Shelf grid. */
+export interface FrameShelfSelectMessage {
+  kind: "shelf-select";
+  documentId: string;
+}
+
+/** Confirms removal of one Document from the Shelf. */
+export interface FrameShelfRemoveMessage {
+  kind: "shelf-remove";
+  documentId: string;
+}
+
+export type FrameToWorkerShelfMessage =
+  | FrameShelfCommandMessage
+  | FrameShelfSelectMessage
+  | FrameShelfRemoveMessage;
 
 /** An error that carries the protocol's failure `code`. */
 export interface CodedError extends Error {
@@ -159,10 +214,20 @@ export interface FrameProtocol {
   onOpen?: (message: FrameOpenMessage) => void;
   /** Handles `command`; `entry.ts` assigns `runCommand`. */
   onCommand?: (id: string) => void;
-  /** Handles `language`; `entry.ts` re-labels its chrome. */
-  onLanguage?: (language: string, labels: FrameLabels | null) => void;
+  /** Handles `language`; `entry.ts` re-labels its chrome and the Shelf. */
+  onLanguage?: (
+    language: string,
+    labels: FrameLabels | null,
+    shelfLabels: FrameShelfLabels | null
+  ) => void;
   /** Handles `appearance`; `entry.ts` redraws the app in it. */
   onAppearance?: (appearance: Appearance) => void;
+  /** Handles `shelf`; the Frame redraws the Shelf. */
+  onShelf?: (state: FrameShelfState) => void;
+  /** Handles `remove-counts`; the Frame opens its removal confirmation. */
+  onRemoveCounts?: (message: FrameRemoveCountsMessage) => void;
+  /** Handles `shelf-result`; the Frame shows the notice, or clears it. */
+  onShelfResult?: (message: string | null) => void;
 }
 
 /** Whether one port message names a message the Frame handles. */
@@ -288,7 +353,7 @@ export function createFrameProtocol(port: MessagePort | null | undefined): Frame
         return;
       case "language":
         if (typeof data.language === "string") {
-          client.onLanguage?.(data.language, data.labels ?? null);
+          client.onLanguage?.(data.language, data.labels ?? null, data.shelfLabels ?? null);
         }
         return;
       case "appearance":
@@ -304,6 +369,17 @@ export function createFrameProtocol(port: MessagePort | null | undefined): Frame
         return;
       case "zip-error":
         rejectZip(data.id, data.code);
+        return;
+      case "shelf":
+        if (typeof data.state === "object" && data.state !== null) {
+          client.onShelf?.(data.state);
+        }
+        return;
+      case "remove-counts":
+        client.onRemoveCounts?.(data);
+        return;
+      case "shelf-result":
+        client.onShelfResult?.(typeof data.message === "string" ? data.message : null);
         return;
       default:
         return;

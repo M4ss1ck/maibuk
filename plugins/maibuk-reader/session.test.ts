@@ -16,8 +16,15 @@ import { createTestHost } from "@/features/plugins/test-kit";
 import { createShelfService } from "./library";
 import { SHELF_PAGE_ID, followReturnTarget, leaveReading } from "./runtime";
 import { createReaderSession, frameLabels, type ReaderSession } from "./session";
-import { SHELF_KEY, positionKey, type DocumentFormat, type ShelfEntry } from "./shelf";
-import { deflatedArchive, inflateRaw, readerManifest, shelfEntry } from "./test-support";
+import {
+  SHELF_KEY,
+  bookmarksKey,
+  highlightsKey,
+  positionKey,
+  type DocumentFormat,
+  type ShelfEntry,
+} from "./shelf";
+import { deflatedArchive, inflateRaw, pdfBytes, readerManifest, shelfEntry } from "./test-support";
 
 /** The Worker the session starts for pdf.js's core, recording what it was told. */
 class RecordedWorker {
@@ -32,6 +39,29 @@ class RecordedWorker {
 }
 
 const workers: RecordedWorker[] = [];
+
+/** A storage Map the test can make throw mid-session, so a failure path runs. */
+class FailingStorage extends Map<string, unknown> {
+  failing = false;
+  /** Every value written to the Shelf key, so a test can prove none happened. */
+  shelfWrites: unknown[] = [];
+
+  get(key: string): unknown {
+    if (this.failing) throw new Error("storage is down");
+    return super.get(key);
+  }
+
+  set(key: string, value: unknown): this {
+    // The Map constructor calls set() before this class's fields initialize,
+    // so the log is created lazily; the field then resets it to empty, which
+    // keeps the seeded entries out of it.
+    if (key === SHELF_KEY) {
+      this.shelfWrites ??= [];
+      this.shelfWrites.push(value);
+    }
+    return super.set(key, value);
+  }
+}
 
 beforeEach(() => {
   workers.length = 0;
@@ -65,6 +95,10 @@ interface Harness {
   /** Sends one Frame -> Worker message. */
   send(message: unknown): void;
   navigateToShelf: ReturnType<typeof vi.fn>;
+  /** Handed the Document the author opens or picks from the Shelf. */
+  openEntry: ReturnType<typeof vi.fn>;
+  /** Told which view the session switched to. */
+  onViewChange: ReturnType<typeof vi.fn>;
   stop(): Promise<void>;
 }
 
@@ -77,6 +111,14 @@ function setup(
     onDispose?: () => void;
     /** The place the host's Back returns to; null while the page has none. */
     returnLabel?: () => string | null;
+    /** The view the Frame mounted on. */
+    view?: "shelf" | "document";
+    /** Whether Back returns to the Shelf inside the Frame. */
+    shelfInFrame?: boolean;
+    /** Handed a Document the author opens or picks from the Shelf. */
+    openEntry?: (entry: ShelfEntry) => Promise<void> | void;
+    /** Told which view the session switched to. */
+    onViewChange?: (view: "shelf" | "document") => void;
   } = {}
 ): Harness {
   const storage = options.storage ?? new Map<string, unknown>();
@@ -90,6 +132,8 @@ function setup(
     messages.push(event.data as Record<string, unknown>);
   };
   const navigateToShelf = vi.fn(options.navigateToShelf ?? (async () => {}));
+  const openEntry = vi.fn(options.openEntry ?? (async () => {}));
+  const onViewChange = vi.fn(options.onViewChange ?? (() => {}));
   const session = createReaderSession({
     client,
     library,
@@ -99,6 +143,10 @@ function setup(
     navigateToShelf,
     onDispose: options.onDispose,
     returnLabel: options.returnLabel ?? (() => null),
+    view: options.view,
+    shelfInFrame: options.shelfInFrame,
+    openEntry,
+    onViewChange,
   });
   session.start();
   return {
@@ -112,6 +160,8 @@ function setup(
       channel.port2.postMessage(message);
     },
     navigateToShelf,
+    openEntry,
+    onViewChange,
     async stop() {
       session.dispose();
       channel.port2.close();
@@ -132,6 +182,20 @@ async function messageOf(harness: Harness, kind: string): Promise<Record<string,
 async function opened(harness: Harness): Promise<Record<string, unknown>> {
   harness.send({ kind: "ready" });
   return messageOf(harness, "open");
+}
+
+/** A Shelf row whose File Grant the host holds, so a state refresh finds it readable. */
+async function liveShelfEntry(
+  harness: Harness,
+  overrides: Partial<ShelfEntry> & Pick<ShelfEntry, "id">
+): Promise<ShelfEntry> {
+  harness.host.files.queuePick({
+    name: `${overrides.title ?? overrides.id}.pdf`,
+    bytes: pdfBytes(overrides.id),
+  });
+  const picked = await harness.client.files.pick({ extensions: ["pdf"], multiple: false });
+  if (picked === null) throw new Error("the pick was refused");
+  return shelfEntry({ ...overrides, grant: picked.grant });
 }
 
 describe("frameLabels", () => {
@@ -210,6 +274,283 @@ describe("open", () => {
       expect(open.entry).toBeNull();
       expect(open.position).toBeNull();
       expect(open.size).toBe(0);
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("carries a wire-safe Shelf state and labels with every open", async () => {
+    const entry = shelfEntry({
+      id: "doc-1",
+      grant: "grant-1",
+      fingerprint: "1234:abcdef",
+      title: "Dune",
+    });
+    const storage = new Map<string, unknown>([[SHELF_KEY, [entry]]]);
+    const harness = setup({ entry, language: "es", storage });
+    try {
+      const open = await opened(harness);
+      expect(open.view).toBe("document");
+      const shelf = open.shelf as { status: string; entries: Record<string, unknown>[] };
+      expect(shelf.status).toBe("ready");
+      expect(shelf.entries).toHaveLength(1);
+      expect(shelf.entries[0]).toMatchObject({ id: "doc-1", title: "Dune", format: "pdf" });
+      const wire = JSON.stringify(open.shelf);
+      expect(wire).not.toContain("grant-1");
+      expect(wire).not.toContain("1234:abcdef");
+      expect((open.shelfLabels as Record<string, string>).shelf).toBe("Estante");
+      expect((open.shelfLabels as Record<string, string>).emptyTitle).toBe("Tu estante está vacío");
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("opens on the Shelf with a loading state, then refreshes every File Grant", async () => {
+    const storage = new Map<string, unknown>();
+    const harness = setup({ view: "shelf", storage });
+    const readable = await liveShelfEntry(harness, { id: "doc-1", title: "Dune" });
+    const lost = await liveShelfEntry(harness, { id: "doc-2", title: "Emma" });
+    storage.set(SHELF_KEY, [readable, lost]);
+    harness.host.files.setMissing(lost.grant);
+    try {
+      const open = await opened(harness);
+      expect(open.view).toBe("shelf");
+      expect(open.entry).toBeNull();
+      expect(open.shelf).toEqual({ status: "loading", entries: [] });
+
+      const shelf = await messageOf(harness, "shelf");
+      const state = shelf.state as { status: string; entries: Record<string, unknown>[] };
+      expect(state.status).toBe("ready");
+      expect(state.entries.find((row) => row.id === "doc-2")).toMatchObject({
+        state: "missing",
+        statusText: "Missing",
+      });
+      expect(state.entries.find((row) => row.id === "doc-1")).toMatchObject({ state: "ok" });
+    } finally {
+      await harness.stop();
+    }
+  });
+});
+
+describe("shelf", () => {
+  it("opens the Document the Shelf selected", async () => {
+    const storage = new Map<string, unknown>();
+    const harness = setup({ view: "shelf", storage });
+    const entry = await liveShelfEntry(harness, { id: "doc-1", title: "Dune" });
+    storage.set(SHELF_KEY, [entry]);
+    try {
+      await opened(harness);
+      harness.send({ kind: "shelf-select", documentId: "doc-1" });
+      harness.send({ kind: "shelf-command", id: "openDocument" });
+      await vi.waitFor(() => expect(harness.openEntry).toHaveBeenCalledTimes(1));
+      expect(harness.openEntry.mock.calls[0][0]).toMatchObject({
+        id: "doc-1",
+        title: "Dune",
+        format: "pdf",
+      });
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("opens the Document a Shelf command names", async () => {
+    const storage = new Map<string, unknown>();
+    const harness = setup({ view: "shelf", storage });
+    const first = await liveShelfEntry(harness, { id: "doc-1" });
+    const second = await liveShelfEntry(harness, { id: "doc-2", title: "Emma" });
+    storage.set(SHELF_KEY, [first, second]);
+    try {
+      await opened(harness);
+      harness.send({ kind: "shelf-command", id: "openDocument", documentId: "doc-2" });
+      await vi.waitFor(() => expect(harness.openEntry).toHaveBeenCalledTimes(1));
+      expect(harness.openEntry.mock.calls[0][0]).toMatchObject({ id: "doc-2", title: "Emma" });
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("sends the real counts with the Remove from Shelf copy", async () => {
+    const entry = shelfEntry({ id: "doc-1", grant: "grant-1", title: "Dune" });
+    const storage = new Map<string, unknown>([
+      [SHELF_KEY, [entry]],
+      [bookmarksKey("doc-1"), [{ id: "b1" }, { id: "b2" }]],
+      [highlightsKey("doc-1"), [{ id: "h1", note: "A thought" }, { id: "h2" }]],
+    ]);
+    const harness = setup({ view: "shelf", storage });
+    try {
+      await opened(harness);
+      harness.send({ kind: "shelf-command", id: "removeFromShelf", documentId: "doc-1" });
+      const message = await messageOf(harness, "remove-counts");
+      expect(message).toEqual({
+        kind: "remove-counts",
+        documentId: "doc-1",
+        title: 'Remove "Dune" from the Shelf?',
+        body: "Its 2 Bookmarks and 2 Highlights (1 with note) are deleted too.",
+        stats: "Reading Stats are kept. The file stays on your device.",
+      });
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("removes the Document, its own keys, and republishes the Shelf", async () => {
+    const entry = shelfEntry({ id: "doc-1", grant: "grant-1" });
+    const storage = new Map<string, unknown>([
+      [SHELF_KEY, [entry]],
+      [positionKey("doc-1"), { kind: "page", page: 2, zoom: 1 }],
+      [bookmarksKey("doc-1"), [{ id: "b1" }]],
+      [highlightsKey("doc-1"), [{ id: "h1" }]],
+    ]);
+    const harness = setup({ view: "shelf", storage });
+    try {
+      await opened(harness);
+      await messageOf(harness, "shelf");
+      harness.send({ kind: "shelf-remove", documentId: "doc-1" });
+      await vi.waitFor(() => expect(storage.get(SHELF_KEY)).toEqual([]));
+      expect(storage.get(positionKey("doc-1"))).toBeUndefined();
+      expect(storage.get(bookmarksKey("doc-1"))).toBeUndefined();
+      expect(storage.get(highlightsKey("doc-1"))).toBeUndefined();
+      await vi.waitFor(() => {
+        const states = harness.messages.filter((message) => message.kind === "shelf");
+        expect(states).toHaveLength(2);
+        expect(states[1].state).toEqual({ status: "ready", entries: [] });
+      });
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("keeps a Missing Document when Locate picks a different file", async () => {
+    const entry = shelfEntry({
+      id: "doc-1",
+      grant: "grant-1",
+      fingerprint: "original:fingerprint",
+      state: "missing",
+    });
+    const storage = new Map<string, unknown>([[SHELF_KEY, [entry]]]);
+    const harness = setup({ view: "shelf", storage });
+    try {
+      await opened(harness);
+      await messageOf(harness, "shelf");
+      harness.host.files.queuePick({ name: "Other.pdf", bytes: pdfBytes("Another Document") });
+      harness.send({ kind: "shelf-command", id: "locateDocument", documentId: "doc-1" });
+      const result = await messageOf(harness, "shelf-result");
+      expect(result.message).toBe(
+        "That file is a different Document. Reader kept the Missing Document on your Shelf."
+      );
+      const shelf = storage.get(SHELF_KEY) as ShelfEntry[];
+      expect(shelf[0]).toMatchObject({
+        id: "doc-1",
+        grant: "grant-1",
+        fingerprint: "original:fingerprint",
+        state: "missing",
+      });
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("stays quiet when the author cancels Locate", async () => {
+    const entry = shelfEntry({ id: "doc-1", grant: "grant-1", state: "missing" });
+    const storage = new Map<string, unknown>([[SHELF_KEY, [entry]]]);
+    const harness = setup({ view: "shelf", storage });
+    try {
+      await opened(harness);
+      await messageOf(harness, "shelf");
+      harness.send({ kind: "shelf-command", id: "locateDocument", documentId: "doc-1" });
+      await vi.waitFor(() =>
+        expect(harness.messages.filter((message) => message.kind === "shelf")).toHaveLength(2)
+      );
+      expect(harness.messages.some((message) => message.kind === "shelf-result")).toBe(false);
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("names a Document Locate can no longer find", async () => {
+    const entry = shelfEntry({ id: "doc-1", grant: "grant-1", state: "missing" });
+    const storage = new Map<string, unknown>([[SHELF_KEY, [entry]]]);
+    const harness = setup({ view: "shelf", storage });
+    try {
+      await opened(harness);
+      await messageOf(harness, "shelf");
+      storage.set(SHELF_KEY, []);
+      harness.host.files.queuePick({ name: "Other.pdf", bytes: pdfBytes("Another Document") });
+      harness.send({ kind: "shelf-command", id: "locateDocument", documentId: "doc-1" });
+      const result = await messageOf(harness, "shelf-result");
+      expect(result.message).toBe("Reader couldn't find that Document on your Shelf.");
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("reports a failed Locate as a Locate failure, not an open failure", async () => {
+    const entry = shelfEntry({ id: "doc-1", grant: "grant-1", state: "missing" });
+    const storage = new FailingStorage([[SHELF_KEY, [entry]]]);
+    const harness = setup({ view: "shelf", storage });
+    try {
+      await opened(harness);
+      await messageOf(harness, "shelf");
+      storage.failing = true;
+      harness.send({ kind: "shelf-command", id: "locateDocument", documentId: "doc-1" });
+      const result = await messageOf(harness, "shelf-result");
+      expect(result.message).toBe("Reader couldn't reattach that Document.");
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("shows the Shelf's error state when a failed read precedes the Remove", async () => {
+    const storage = new FailingStorage([
+      [SHELF_KEY, [shelfEntry({ id: "doc-1", grant: "grant-1" })]],
+    ]);
+    storage.failing = true;
+    const harness = setup({ view: "shelf", storage });
+    try {
+      const open = await opened(harness);
+      expect(open.shelf).toEqual({ status: "loading", entries: [] });
+      // The refresh that follows the open is what could not read the shelf.
+      await vi.waitFor(() => {
+        const states = harness.messages.filter((message) => message.kind === "shelf");
+        expect(states.at(-1)?.state).toEqual({ status: "error", entries: [] });
+      });
+      harness.send({ kind: "shelf-remove", documentId: "doc-1" });
+      const result = await messageOf(harness, "shelf-result");
+      expect(result.message).toBe("Reader couldn't remove that Document.");
+      // A removal that could not read the shelf never writes over it.
+      expect(storage.shelfWrites).toEqual([]);
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("reports a failed removal as a removal failure, not an open failure", async () => {
+    const entry = shelfEntry({ id: "doc-1", grant: "grant-1" });
+    const storage = new FailingStorage([[SHELF_KEY, [entry]]]);
+    const harness = setup({ view: "shelf", storage });
+    try {
+      await opened(harness);
+      await messageOf(harness, "shelf");
+      storage.failing = true;
+      harness.send({ kind: "shelf-remove", documentId: "doc-1" });
+      const result = await messageOf(harness, "shelf-result");
+      expect(result.message).toBe("Reader couldn't remove that Document.");
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("shelves a picked file and opens it", async () => {
+    const harness = setup({ view: "shelf" });
+    try {
+      await opened(harness);
+      harness.host.files.queuePick({ name: "New.pdf", bytes: pdfBytes("New") });
+      harness.send({ kind: "shelf-command", id: "openFile" });
+      await vi.waitFor(() => expect(harness.openEntry).toHaveBeenCalledTimes(1));
+      expect(harness.openEntry.mock.calls[0][0]).toMatchObject({
+        title: "New",
+        format: "pdf",
+      });
     } finally {
       await harness.stop();
     }
@@ -601,6 +942,47 @@ describe("commands", () => {
   });
 });
 
+describe("view switch", () => {
+  it("does not post a Document open that a later switch overtook", async () => {
+    const first = shelfEntry({ id: "doc-1", grant: "grant-1", title: "Dune" });
+    const second = shelfEntry({ id: "doc-2", grant: "grant-2", title: "Emma" });
+    const harness = setup({ entry: first });
+    let release: () => void = () => {};
+    try {
+      const stalled = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const get = harness.client.appearance.get.bind(harness.client.appearance);
+      let firstRead: ReturnType<typeof get> | undefined;
+      const spy = vi.spyOn(harness.client.appearance, "get").mockImplementationOnce(() => {
+        firstRead = (async () => {
+          await stalled;
+          return get({});
+        })();
+        return firstRead;
+      });
+
+      harness.send({ kind: "ready" });
+      await vi.waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+      harness.session.setEntry(second);
+      await vi.waitFor(() => {
+        const opens = harness.messages.filter((message) => message.kind === "open");
+        expect(opens).toHaveLength(1);
+      });
+      release();
+      // The stale read's own promise, with one reaction wrapped around it, settles
+      // after the continuation that checks the open generation.
+      await firstRead?.then(() => {});
+      const opens = harness.messages.filter((message) => message.kind === "open");
+      expect(opens).toHaveLength(1);
+      expect(opens[0].entry).toMatchObject({ id: "doc-2", title: "Emma" });
+    } finally {
+      release();
+      await harness.stop();
+    }
+  });
+});
+
 describe("appearance", () => {
   it("opens with Maibuk's appearance and forwards a change to the Frame", async () => {
     const entry = shelfEntry({ id: "doc-1", grant: "grant-1" });
@@ -625,6 +1007,74 @@ describe("appearance", () => {
       });
     } finally {
       off();
+      await harness.stop();
+    }
+  });
+});
+
+describe("language", () => {
+  it("sends refreshed Shelf labels when the app language changes", async () => {
+    const harness = setup({ view: "shelf" });
+    try {
+      await opened(harness);
+      harness.session.setLanguage("es");
+      const message = await messageOf(harness, "language");
+      expect((message.labels as Record<string, string>).back).toBe("Volver al estante");
+      expect((message.shelfLabels as Record<string, string>).shelf).toBe("Estante");
+      expect((message.shelfLabels as Record<string, string>).documentsCountOther).toBe(
+        "{{count}} documentos"
+      );
+    } finally {
+      await harness.stop();
+    }
+  });
+});
+
+describe("in-app back", () => {
+  it("returns to the Shelf inside the Frame and keeps the session alive", async () => {
+    const entry = shelfEntry({ id: "doc-1", grant: "grant-1" });
+    const storage = new Map<string, unknown>([[SHELF_KEY, [entry]]]);
+    const harness = setup({ entry, storage, shelfInFrame: true });
+    try {
+      await opened(harness);
+      expect(workers).toHaveLength(1);
+      harness.send({ kind: "back" });
+      await vi.waitFor(() =>
+        expect(harness.messages.filter((message) => message.kind === "open")).toHaveLength(2)
+      );
+      const opens = harness.messages.filter((message) => message.kind === "open");
+      expect(opens[1]).toMatchObject({
+        kind: "open",
+        view: "shelf",
+        entry: null,
+        position: null,
+        size: 0,
+      });
+      expect(harness.session.disposed).toBe(false);
+      expect(harness.navigateToShelf).not.toHaveBeenCalled();
+      expect(harness.onViewChange).toHaveBeenCalledWith("shelf");
+      expect(workers[0].terminate).toHaveBeenCalledTimes(1);
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("switches to the Document view when a Document opens", async () => {
+    const entry = shelfEntry({ id: "doc-1", grant: "grant-1" });
+    const harness = setup({ view: "shelf" });
+    try {
+      await opened(harness);
+      harness.session.setEntry(entry);
+      await vi.waitFor(() => expect(harness.onViewChange).toHaveBeenCalledWith("document"));
+      await vi.waitFor(() =>
+        expect(harness.messages.filter((message) => message.kind === "open")).toHaveLength(2)
+      );
+      const opens = harness.messages.filter((message) => message.kind === "open");
+      expect(opens[1]).toMatchObject({
+        view: "document",
+        entry: { id: "doc-1", format: "pdf" },
+      });
+    } finally {
       await harness.stop();
     }
   });

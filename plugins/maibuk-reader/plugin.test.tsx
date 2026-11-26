@@ -1,15 +1,15 @@
 /**
- * Reader's Shelf (#653) through the supported Plugin test kit: the real broker,
- * File Grant fakes, and Remote UI renderer. Every action is reached with
- * `user-event` key presses and asserted by what the host drew and stored, never
- * by checking attributes. `index.tsx` (the Worker bootstrap) is never imported.
+ * Reader's Worker half (#653, #944) through the supported Plugin test kit: the
+ * real broker and File Grant fakes. The Shelf now draws in the Frame, so these
+ * tests drive the Commands and the drop handler and assert what the host
+ * navigated to and what storage holds, never what a page drew. `index.tsx` (the
+ * Worker bootstrap) is never imported.
  */
 
-import { screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { createTestHost } from "@/features/plugins/test-kit";
-import { createPluginClient } from "@/plugin-sdk";
+import { PLUGIN_FRAME_MESSAGE, createPluginClient, type PluginMessagePort } from "@/plugin-sdk";
 import {
   PLUGIN_CANVAS_REFERENCE_LIST_REQUEST,
   PLUGIN_CANVAS_REFERENCE_OPEN_REQUEST,
@@ -27,14 +27,35 @@ import {
   positionKey,
   type ShelfEntry,
 } from "./shelf";
-import {
-  epubBytes,
-  pdfBytes,
-  readerManifest,
-  readerStorage,
-  shelfEntry,
-  tabTo,
-} from "./test-support";
+import { epubBytes, pdfBytes, readerManifest, readerStorage, shelfEntry } from "./test-support";
+
+/** A Plugin port the test can also hand a Frame, the way the host runtime does. */
+function frameAwarePort(inner: MessagePort) {
+  let listener: ((event: MessageEvent) => void) | null = null;
+  inner.onmessage = (event) => listener?.(event);
+  const port = {
+    postMessage: (message: unknown, transfer?: Transferable[]) => {
+      if (transfer === undefined) inner.postMessage(message);
+      else inner.postMessage(message, transfer);
+    },
+    get onmessage() {
+      return listener;
+    },
+    set onmessage(next: ((event: MessageEvent) => void) | null) {
+      listener = next;
+    },
+    /** Hands the Plugin one Frame and returns the test's end of its port. */
+    frame(frameId: string, src: string): MessagePort {
+      const channel = new MessageChannel();
+      listener?.({
+        data: { kind: PLUGIN_FRAME_MESSAGE.kind, frameId, src },
+        ports: [channel.port1],
+      } as unknown as MessageEvent);
+      return channel.port2;
+    },
+  };
+  return port;
+}
 
 function hostFor(
   options: { files?: { name: string; bytes: Uint8Array }[]; storage?: Map<string, unknown> } = {}
@@ -45,8 +66,9 @@ function hostFor(
     storage,
     files: options.files,
   });
-  startReader(createPluginClient(host.port), servePluginUi);
-  return { host, storage };
+  const port = frameAwarePort(host.port);
+  startReader(createPluginClient(port as PluginMessagePort), servePluginUi);
+  return { host, storage, port };
 }
 
 /** A Shelf row whose Fingerprint matches the seeded file exactly. */
@@ -61,118 +83,7 @@ async function seededEntry(bytes: Uint8Array, id = "doc-1"): Promise<ShelfEntry>
   });
 }
 
-describe("Reader Shelf", () => {
-  it("opens a picked file from the keyboard and lands on the Frame page", async () => {
-    const { host } = hostFor();
-    try {
-      host.files.queuePick({ name: "Dune.pdf", bytes: pdfBytes("a PDF") });
-      const page = await host.renderPage(SHELF_PAGE_ID);
-      await screen.findByText(en["shelf.emptyTitle"]);
-
-      const user = userEvent.setup();
-      const open = screen.getByRole("button", { name: en["shelf.openFile"] });
-      await tabTo(user, open);
-      expect(open).toHaveFocus();
-      await user.keyboard("{Enter}");
-
-      await screen.findByText("Dune");
-      await waitFor(() =>
-        expect(host.pageNavigations).toEqual([{ pluginId: "maibuk-reader", pageId: "document" }])
-      );
-      await page.unmount();
-    } finally {
-      await host.stop();
-    }
-  });
-
-  it("removes a Document from the keyboard, releasing its File Grant", async () => {
-    const bytes = pdfBytes("a PDF to forget");
-    const storage = readerStorage();
-    storage.set(SHELF_KEY, [await seededEntry(bytes)]);
-    storage.set(positionKey("doc-1"), { page: 42, pageCount: 210 });
-    const { host } = hostFor({ files: [{ name: "Dune.pdf", bytes }], storage });
-    try {
-      const page = await host.renderPage(SHELF_PAGE_ID);
-      await screen.findByText("Dune");
-
-      const user = userEvent.setup();
-      const remove = screen.getByRole("button", { name: en["shelf.remove"] });
-      await tabTo(user, remove);
-      expect(remove).toHaveFocus();
-      await user.keyboard("{Enter}");
-
-      await screen.findByText(en["shelf.emptyTitle"]);
-      expect(screen.queryByText("Dune")).not.toBeInTheDocument();
-      await waitFor(async () => expect(await host.files.grants()).toEqual([]));
-      expect(storage.get(SHELF_KEY)).toEqual([]);
-      expect(storage.has(positionKey("doc-1"))).toBe(false);
-      await page.unmount();
-    } finally {
-      await host.stop();
-    }
-  });
-
-  it("lays the Shelf out as a grid of covers with icon-only actions", async () => {
-    const bytes = pdfBytes("a grid of one");
-    const storage = readerStorage();
-    storage.set(SHELF_KEY, [await seededEntry(bytes)]);
-    const { host } = hostFor({ files: [{ name: "Dune.pdf", bytes }], storage });
-    try {
-      const page = await host.renderPage(SHELF_PAGE_ID);
-      const open = await screen.findByRole("button", { name: en["shelf.open"] });
-      const remove = screen.getByRole("button", { name: en["shelf.remove"] });
-      for (const button of [open, remove]) expect(button.textContent?.trim()).toBe("");
-      const surface = open.closest("[data-plugin-ui]");
-      expect(surface?.querySelector("style")?.textContent).toMatch(/display:\s*grid/);
-      expect(surface?.querySelector("ul li")).toContainElement(open);
-      // The cover is a button too, named by the title, and opens the Document.
-      const cover = surface?.querySelector("li > button:first-child") as HTMLElement;
-      expect(cover).not.toBeNull();
-      await userEvent.setup().click(cover);
-      await waitFor(() =>
-        expect(host.pageNavigations).toEqual([{ pluginId: "maibuk-reader", pageId: "document" }])
-      );
-      await page.unmount();
-    } finally {
-      await host.stop();
-    }
-  });
-
-  it("locates a Missing Document again from the keyboard, keeping its Reading Position", async () => {
-    const bytes = pdfBytes("the file that moved");
-    const storage = readerStorage();
-    const entry = await seededEntry(bytes);
-    storage.set(SHELF_KEY, [entry]);
-    storage.set(positionKey("doc-1"), { page: 42, pageCount: 210 });
-    const { host } = hostFor({ files: [{ name: "Dune.pdf", bytes }], storage });
-    try {
-      host.files.setMissing("grant-1");
-      host.files.queuePick({ name: "Dune.pdf", bytes });
-
-      const page = await host.renderPage(SHELF_PAGE_ID);
-      await screen.findByText(en["shelf.status.missing"]);
-
-      const user = userEvent.setup();
-      const locate = screen.getByRole("button", { name: en["shelf.locate"] });
-      await tabTo(user, locate);
-      expect(locate).toHaveFocus();
-      await user.keyboard("{Enter}");
-
-      await waitFor(() =>
-        expect(screen.queryByText(en["shelf.status.missing"])).not.toBeInTheDocument()
-      );
-      expect(screen.getByRole("button", { name: en["shelf.open"] })).toBeInTheDocument();
-
-      const shelf = storage.get(SHELF_KEY) as ShelfEntry[];
-      expect(shelf).toHaveLength(1);
-      expect(shelf[0]).toMatchObject({ id: "doc-1", state: "ok", grant: "grant-1" });
-      expect(storage.get(positionKey("doc-1"))).toEqual({ page: 42, pageCount: 210 });
-      await page.unmount();
-    } finally {
-      await host.stop();
-    }
-  });
-
+describe("Reader Commands", () => {
   it("opens the Shelf from its navigating Command", async () => {
     const { host } = hostFor();
     try {
@@ -182,25 +93,48 @@ describe("Reader Shelf", () => {
       await host.stop();
     }
   });
+
+  it.each([
+    "removeFromShelf",
+    "locateDocument",
+  ])("forwards %s to the mounted Shelf Frame", async (id) => {
+    const { host, port } = hostFor();
+    try {
+      // The Frame is mounted and its session is listening by the time this
+      // returns; the Worker must forward the Command to that same port.
+      const frame = port.frame("frame-1", "assets/ui/shelf.html");
+      const messages: Record<string, unknown>[] = [];
+      frame.onmessage = (event) => messages.push(event.data as Record<string, unknown>);
+      frame.start();
+
+      await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id });
+
+      await waitFor(() => expect(messages).toContainEqual({ kind: "command", id }));
+    } finally {
+      await host.stop();
+    }
+  });
 });
 
 // The author drops files from their device onto the Shelf or an open Document
 // (#828): each supported file lands on the Shelf like a pick, the first opens,
-// and the files Reader cannot open are reported once with the count.
+// and the files Reader cannot open are reported once with the count. The Shelf
+// draws in the Frame, so these drive the Worker directly and read storage.
 describe("Reader file drop", () => {
   type Host = ReturnType<typeof hostFor>["host"];
 
-  /** Opens the Shelf page and waits for it to finish loading, so Reader has subscribed. */
-  async function shelfPage(host: Host, text: string) {
-    const page = await host.renderPage(SHELF_PAGE_ID);
-    await screen.findByText(text);
-    return page;
+  /**
+   * Waits until Reader's activation subscription for drops reaches the broker.
+   * `startReader` subscribes on activation, so no page needs to render first.
+   */
+  async function subscribed(host: Host): Promise<void> {
+    await waitFor(() => expect(host.broker.accepts("files.dropped")).toBe(true));
   }
 
   it("adds a dropped file to the Shelf and opens its Document", async () => {
     const { host, storage } = hostFor();
     try {
-      const page = await shelfPage(host, en["shelf.emptyTitle"]);
+      await subscribed(host);
 
       await expect(
         host.files.drop(SHELF_PAGE_ID, [{ name: "Dune.pdf", bytes: pdfBytes("a dropped PDF") }])
@@ -214,7 +148,6 @@ describe("Reader file drop", () => {
       expect(shelf[0]).toMatchObject({ title: "Dune", format: "pdf", state: "ok" });
       expect(await host.files.grants()).toHaveLength(1);
       expect(host.notifications).toEqual([]);
-      await page.unmount();
     } finally {
       await host.stop();
     }
@@ -226,7 +159,7 @@ describe("Reader file drop", () => {
     storage.set(SHELF_KEY, [await seededEntry(bytes)]);
     const { host } = hostFor({ files: [{ name: "Dune.pdf", bytes }], storage });
     try {
-      const page = await shelfPage(host, "Dune");
+      await subscribed(host);
 
       await host.files.drop(SHELF_PAGE_ID, [{ name: "Dune.pdf", bytes }]);
 
@@ -237,7 +170,6 @@ describe("Reader file drop", () => {
       expect(shelf).toHaveLength(1);
       expect(shelf[0]).toMatchObject({ id: "doc-1", grant: "grant-1", state: "ok" });
       expect(host.notifications).toEqual([]);
-      await page.unmount();
     } finally {
       await host.stop();
     }
@@ -246,7 +178,7 @@ describe("Reader file drop", () => {
   it("adds every file in a multi-file drop and opens the first", async () => {
     const { host, storage } = hostFor();
     try {
-      const page = await shelfPage(host, en["shelf.emptyTitle"]);
+      await subscribed(host);
 
       await host.files.drop(SHELF_PAGE_ID, [
         { name: "Dune.pdf", bytes: pdfBytes("the first file") },
@@ -259,7 +191,6 @@ describe("Reader file drop", () => {
       const first = shelf.find((entry) => entry.title === "Dune");
       expect(storage.get(CURRENT_DOCUMENT_KEY)).toBe(first?.id);
       expect(host.notifications).toEqual([]);
-      await page.unmount();
     } finally {
       await host.stop();
     }
@@ -268,7 +199,7 @@ describe("Reader file drop", () => {
   it("releases an unsupported file, reports it once, and opens nothing", async () => {
     const { host, storage } = hostFor();
     try {
-      const page = await shelfPage(host, en["shelf.emptyTitle"]);
+      await subscribed(host);
 
       await host.files.drop(SHELF_PAGE_ID, [
         { name: "notes.docx", bytes: new TextEncoder().encode("notes, not a book") },
@@ -280,8 +211,7 @@ describe("Reader file drop", () => {
       ]);
       expect(host.pageNavigations).toEqual([]);
       expect(await host.files.grants()).toEqual([]);
-      expect(storage.get(SHELF_KEY)).toEqual([]);
-      await page.unmount();
+      expect(storage.get(SHELF_KEY) ?? []).toEqual([]);
     } finally {
       await host.stop();
     }
@@ -290,7 +220,7 @@ describe("Reader file drop", () => {
   it("counts every unsupported file in one notification and opens nothing", async () => {
     const { host } = hostFor();
     try {
-      const page = await shelfPage(host, en["shelf.emptyTitle"]);
+      await subscribed(host);
 
       await host.files.drop(SHELF_PAGE_ID, [
         { name: "notes.docx", bytes: new TextEncoder().encode("notes") },
@@ -306,7 +236,6 @@ describe("Reader file drop", () => {
       ]);
       expect(host.pageNavigations).toEqual([]);
       expect(await host.files.grants()).toEqual([]);
-      await page.unmount();
     } finally {
       await host.stop();
     }
@@ -320,7 +249,7 @@ describe("Reader file drop", () => {
     const { host } = hostFor({ files: [{ name: "Dune.pdf", bytes }], storage });
     try {
       host.files.setMissing("grant-1");
-      const page = await shelfPage(host, en["shelf.status.missing"]);
+      await subscribed(host);
 
       await host.files.drop(SHELF_PAGE_ID, [{ name: "Dune.pdf", bytes }]);
 
@@ -332,7 +261,6 @@ describe("Reader file drop", () => {
       expect(shelf[0]).toMatchObject({ id: "doc-1", state: "ok", grant: "grant-1" });
       expect(storage.get(positionKey("doc-1"))).toEqual({ page: 42, pageCount: 210 });
       expect(host.notifications).toEqual([]);
-      await page.unmount();
     } finally {
       await host.stop();
     }
@@ -341,7 +269,7 @@ describe("Reader file drop", () => {
   it("opens a Document dropped on the Document page", async () => {
     const { host, storage } = hostFor();
     try {
-      const page = await shelfPage(host, en["shelf.emptyTitle"]);
+      await subscribed(host);
 
       await host.files.drop(DOCUMENT_PAGE_ID, [{ name: "Emma.epub", bytes: epubBytes() }]);
 
@@ -350,7 +278,6 @@ describe("Reader file drop", () => {
       );
       const shelf = storage.get(SHELF_KEY) as ShelfEntry[];
       expect(shelf.map((entry) => entry.title)).toEqual(["Emma"]);
-      await page.unmount();
     } finally {
       await host.stop();
     }
@@ -359,7 +286,7 @@ describe("Reader file drop", () => {
   it("handles two quick drops in order, leaving the second Document open", async () => {
     const { host, storage } = hostFor();
     try {
-      const page = await shelfPage(host, en["shelf.emptyTitle"]);
+      await subscribed(host);
 
       const first = host.files.drop(SHELF_PAGE_ID, [
         { name: "Dune.pdf", bytes: pdfBytes("the first drop") },
@@ -375,7 +302,6 @@ describe("Reader file drop", () => {
       const last = shelf.find((entry) => entry.title === "Emma");
       expect(storage.get(CURRENT_DOCUMENT_KEY)).toBe(last?.id);
       expect(host.notifications).toEqual([]);
-      await page.unmount();
     } finally {
       await host.stop();
     }

@@ -341,19 +341,27 @@ async function createMap(page: Page, name: string): Promise<void> {
   await expect(mapNames(page).first()).toHaveAccessibleName(name);
 }
 
-/** Opens Reader from the sidebar, waiting for the Plugin's launch scan. */
+/** Opens Reader from the sidebar, waiting for the Frame's Shelf. */
 async function openReader(page: Page): Promise<void> {
   await expect(navOption(page, READER)).toBeVisible({ timeout: 60_000 });
   await tabTo(page, navOption(page, "Books"), { max: 60 });
   await pressUntilFocused(page, "ArrowDown", navOption(page, READER), { max: 20 });
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
-  await expect(page.getByRole("heading", { name: "Shelf", level: 2 })).toBeVisible();
+  await expect(shelfHeading(page)).toBeVisible({ timeout: 30_000 });
 }
 
-/** The whole-page Frame an open Document renders, and its own page indicator. */
+/**
+ * The reader page's one page Frame: it draws the Shelf, and the Document opened
+ * inside it, so both the Shelf and the page indicator live here.
+ */
 const documentFrame = (page: Page) => page.frameLocator('[data-plugin-frame="page"] iframe');
 const pageIndicator = (page: Page) => documentFrame(page).locator("#page-indicator");
+/** The Shelf's own heading and its rows, drawn inside that Frame. */
+const shelfHeading = (page: Page) =>
+  documentFrame(page).getByRole("heading", { name: "Shelf", level: 1 });
+const shelfRow = (page: Page, title: string) =>
+  documentFrame(page).getByRole("gridcell", { name: new RegExp(title) });
 
 test.describe("Maps and Documents Canvas References @wf:plugins-canvas-references @sc:canvas.addReference @sandbox", () => {
   test.use({
@@ -498,14 +506,18 @@ test.describe("Maps and Documents Canvas References @wf:plugins-canvas-reference
   }) => {
     // A file pick, a PDF parse, and two Settings round trips outrun the 30s default.
     test.setTimeout(90_000);
-    // Reader shelves the picked PDF; the Shelf then answers the Documents tab.
+    // Reader shelves the picked PDF and opens it inside the reader page's own
+    // Frame: the host URL never leaves /reader. The Shelf then answers the
+    // Documents tab.
     await page.goto("/");
     await openReader(page);
-    await tabTo(page, page.getByRole("button", { name: "Open file…", exact: true }), {
-      max: 60,
-    });
+    await tabTo(
+      page,
+      documentFrame(page).getByRole("button", { name: "Import files", exact: true }),
+      { max: 60 }
+    );
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/document$/);
+    await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
     await expect(pageIndicator(page)).toContainText("of 12", { timeout: 30_000 });
 
     await openMapCanvas(page);
@@ -588,12 +600,29 @@ test.describe("Maps and Documents Canvas References @wf:plugins-canvas-reference
     // Remove from Shelf forgets the Document, which leaves the card Missing.
     // Tab from Settings never leaves the page in Firefox, so the Shelf opens by URL.
     await page.goto("/plugin/maibuk-reader/reader");
-    await expect(page.getByRole("heading", { name: "Shelf", level: 2 })).toBeVisible();
-    await tabTo(page, page.getByRole("button", { name: "Remove from Shelf", exact: true }), {
-      max: 60,
-    });
+    await expect(shelfHeading(page)).toBeVisible({ timeout: 30_000 });
+    // Shift+F10 opens the row's Document menu; Remove from Shelf… asks first,
+    // and the confirmation's Remove takes the row away.
+    await tabTo(page, shelfRow(page, DOCUMENT_TITLE), { max: 60 });
+    await page.keyboard.press("Shift+F10");
+    const menu = documentFrame(page).getByRole("menu", { name: "Document actions" });
+    await expect(menu.getByRole("menuitem", { name: "Open", exact: true })).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(
+      menu.getByRole("menuitem", { name: "Remove from Shelf…", exact: true })
+    ).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect(page.getByText("Your Shelf is empty", { exact: true })).toBeVisible();
+    const confirm = documentFrame(page).getByRole("alertdialog", {
+      name: `Remove "${DOCUMENT_TITLE}" from the Shelf?`,
+    });
+    await expect(confirm).toBeVisible();
+    await expect(confirm.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(confirm.getByRole("button", { name: "Remove", exact: true })).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(
+      documentFrame(page).getByText("Your Shelf is empty", { exact: true })
+    ).toBeVisible();
 
     await page.goto(canvasUrl);
     await expectCanvasReady(page);

@@ -12,7 +12,10 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const css = readFileSync(join(__dirname, "..", "assets", "ui", "tokens.css"), "utf8");
-const html = readFileSync(join(__dirname, "..", "assets", "ui", "reader.html"), "utf8");
+const shells = ["reader.html", "shelf.html"].map((name) => ({
+  name,
+  html: readFileSync(join(__dirname, "..", "assets", "ui", name), "utf8"),
+}));
 
 interface Rule {
   selectors: string[];
@@ -322,12 +325,15 @@ describe("Cover", () => {
   });
 });
 
-describe("reader.html", () => {
-  it("links tokens.css before the Frame's existing inline styles", () => {
-    const link = html.indexOf('<link rel="stylesheet" href="tokens.css"');
-    const style = html.indexOf("<style>");
-    expect(link).toBeGreaterThan(-1);
-    expect(style).toBeGreaterThan(-1);
-    expect(link).toBeLessThan(style);
+describe("Frame shells", () => {
+  it.each(shells)("links tokens.css, kit.css, reader.css, then shelf.css in $name", ({ html }) => {
+    const tokens = html.indexOf('<link rel="stylesheet" href="tokens.css"');
+    const kit = html.indexOf('<link rel="stylesheet" href="kit.css"');
+    const reader = html.indexOf('<link rel="stylesheet" href="reader.css"');
+    const shelf = html.indexOf('<link rel="stylesheet" href="shelf.css"');
+    expect(tokens).toBeGreaterThan(-1);
+    expect(kit).toBeGreaterThan(tokens);
+    expect(reader).toBeGreaterThan(kit);
+    expect(shelf).toBeGreaterThan(reader);
   });
 });
