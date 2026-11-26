@@ -195,6 +195,67 @@ export interface FrameShelfLabels {
   finishedLabel: string;
   documentActions: string;
   dismiss: string;
+  allDocuments: string;
+  /** Placeholders: {{shown}}, {{total}}. */
+  shownOf: string;
+  searchLabel: string;
+  searchPlaceholder: string;
+  closeSearch: string;
+  clearSearch: string;
+  /** Placeholders: {{count}}, {{layout}}, {{search}}. */
+  searchMatchesOne: string;
+  /** Placeholders: {{count}}, {{layout}}, {{search}}. */
+  searchMatchesOther: string;
+  gridView: string;
+  listView: string;
+  compactView: string;
+  viewOptions: string;
+  viewOptionsTitle: string;
+  reset: string;
+  done: string;
+  layout: string;
+  layoutLabel: string;
+  layoutGrid: string;
+  layoutList: string;
+  layoutCompact: string;
+  coverSize: string;
+  coverSmall: string;
+  coverMedium: string;
+  coverLarge: string;
+  coverSmallShort: string;
+  coverMediumShort: string;
+  coverLargeShort: string;
+  sortBy: string;
+  sortRecent: string;
+  sortTitle: string;
+  sortAuthor: string;
+  sortProgress: string;
+  sortAdded: string;
+  reverseOrder: string;
+  newestFirst: string;
+  oldestFirst: string;
+  aToZ: string;
+  zToA: string;
+  mostReadFirst: string;
+  leastReadFirst: string;
+  recentFirst: string;
+  filters: string;
+  status: string;
+  format: string;
+  all: string;
+  statusNew: string;
+  statusReading: string;
+  statusFinished: string;
+  /** Placeholders: {{status}}. */
+  statusChip: string;
+  /** Placeholders: {{format}}. */
+  formatChip: string;
+  /** Placeholders: {{filter}}. */
+  removeFilter: string;
+  clearFilters: string;
+  noMatch: string;
+  /** Placeholders: {{shown}}, {{total}}. */
+  remembered: string;
 }
 
 /** What the Shelf draws: its loading, ready, or error state and its rows. */
