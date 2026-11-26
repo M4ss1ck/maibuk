@@ -847,6 +847,11 @@
   border-radius: 8px;
 }
 
+/* Inside a row the item takes the width the More button leaves. */
+.shelf-rail__row .shelf-rail__item {
+  flex: 1;
+}
+
 .shelf-rail__row--drop {
   outline: 2px dashed var(--primary);
   outline-offset: -2px;
@@ -855,7 +860,7 @@
 .shelf-rail__item {
   box-sizing: border-box;
   display: flex;
-  flex: 1;
+  flex: none;
   align-items: center;
   gap: 10px;
   min-width: 0;
@@ -909,7 +914,8 @@
   color: var(--fg);
 }
 
-/* The More button covers the count while the row is hovered or holds focus; touch always shows it. */
+/* The More button covers the count while the row is hovered or holds focus; touch always shows
+   it. The count fades rather than hides, so it stays in the row's accessible name. */
 .shelf-rail__more {
   position: absolute;
   right: 4px;
@@ -924,7 +930,7 @@
 
 .shelf-rail__row:hover .shelf-rail__count,
 .shelf-rail__row:focus-within .shelf-rail__count {
-  visibility: hidden;
+  opacity: 0;
 }
 
 @media (pointer: coarse) {
@@ -934,7 +940,7 @@
   }
 
   .shelf-rail__row .shelf-rail__count {
-    visibility: visible;
+    opacity: 1;
   }
 }
 

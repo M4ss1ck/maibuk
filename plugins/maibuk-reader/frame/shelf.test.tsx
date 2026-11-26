@@ -1289,6 +1289,15 @@ describe("Collections (#946)", () => {
     return screen.getByRole("complementary", { name: "Collections" });
   }
 
+  it("keeps the rail's rows at their height and their counts in the rows' names", () => {
+    // jsdom draws no layout: these are the two rules a browser run caught.
+    const item = shelfCss.match(/^\.shelf-rail__item\s*\{[^}]*\}/m)?.[0] ?? "";
+    expect(item).toMatch(/flex:\s*none/);
+    const rail = shelfCss.slice(shelfCss.indexOf(".shelf-rail {"));
+    // A hidden count drops out of the accessible name; it may only fade.
+    expect(rail).not.toMatch(/shelf-rail__count[^{]*\{[^}]*visibility:\s*hidden/);
+  });
+
   it("draws the rail on Wide from 960 px, and not at 959", async () => {
     setWidth(959);
     const first = await mount(<Harness entries={filed()} collections={COLLECTIONS} />);
