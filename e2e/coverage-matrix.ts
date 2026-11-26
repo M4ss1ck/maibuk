@@ -3421,6 +3421,25 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "reader-collections",
+    area: "plugins",
+    workflow:
+      "Collections on the Shelf (#946), by keyboard inside the reader page's Frame at a desktop width that draws the Collections rail: the palette's “New Collection…” Command opens the New Collection dialog and Enter creates “Research”, which the rail lists with a count of 0; Shift+F10 on the Dune row opens its Document menu, whose Research check box files it (the rail counts 1) and keeps the menu open; Enter on the rail's Research row narrows the Shelf to Dune and names the heading “Research”; a reload keeps that Collection; the palette's “Rename Collection…” Command renames the filtered Collection to “Notes”, and “Delete Collection…” asks “Delete “Notes”?” and confirming it brings every Document back; asserts: the rail rows and counts, the check box state, the drawn rows, the heading, and the restored filter; persists: yes (Collections and the Shelf's filtered Collection in Plugin storage on this device). Drag and drop onto the rail, the rail's More menu, the duplicate name error, the Narrow picker Sheet, and the Document menu's New Collection field are proven at the Frame seam in Reader's Vitest suite (frame/shelf.test.tsx, frame-books.test.ts)",
+    edges: [
+      "make a Collection, file a Document from its menu, filter the Shelf to it from the rail, reload, rename it, and delete it",
+    ],
+    terms: [],
+    shortcuts: [
+      "plugin.maibuk-reader.newCollection",
+      "plugin.maibuk-reader.renameCollection",
+      "plugin.maibuk-reader.deleteCollection",
+    ],
+    routes: ["/", "/plugin/:pluginId/:pageId"],
+    fixture: "empty",
+    tags: ["sandbox"],
+    status: "accepted",
+  },
+  {
     id: "reader-drop",
     area: "plugins",
     workflow:

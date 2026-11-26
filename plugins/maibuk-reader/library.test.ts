@@ -9,8 +9,9 @@
 import { createPluginClient } from "@/plugin-sdk";
 import { createTestHost } from "@/features/plugins/test-kit";
 import { describe, expect, it } from "vitest";
-import { createShelfService, type ReaderClient } from "./library";
+import { CollectionError, createShelfService, type ReaderClient } from "./library";
 import {
+  COLLECTIONS_KEY,
   DEFAULT_SHELF_VIEW,
   SHELF_KEY,
   SHELF_VIEW_KEY,
@@ -651,6 +652,7 @@ describe("the Shelf view", () => {
     formats: ["pdf", "epub"],
     statuses: ["reading"],
     search: "Dune",
+    collection: null,
   };
 
   it("saves the view and reads the same view back", async () => {
@@ -684,6 +686,7 @@ describe("the Shelf view", () => {
         formats: ["pdf"],
         statuses: ["finished"],
         search: "x".repeat(200),
+        collection: null,
       });
     } finally {
       await host.stop();
@@ -716,5 +719,333 @@ describe("the Shelf view", () => {
     await expect(createShelfService(client).saveShelfView(CHOSEN)).rejects.toThrow(
       "storage is down"
     );
+  });
+});
+
+describe("Collections", () => {
+  /** Seeds the Shelf with one Document per id. */
+  function seedShelf(storage: Map<string, unknown>, ids: string[]): void {
+    storage.set(
+      SHELF_KEY,
+      ids.map((id) => shelfEntry({ id, grant: `grant-${id}` }))
+    );
+  }
+
+  it("creates a Collection under its trimmed name with no Documents", async () => {
+    const { host, storage, library } = setup();
+    try {
+      const collections = await library.createCollection("  Summer reads  ");
+      expect(collections).toEqual([
+        { id: expect.any(String), name: "Summer reads", documentIds: [] },
+      ]);
+      expect(storage.get(COLLECTIONS_KEY)).toEqual(collections);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("refuses an empty or blank name with empty-name and writes nothing", async () => {
+    const { host, storage, library } = setup();
+    try {
+      await expect(library.createCollection("   ")).rejects.toMatchObject({
+        name: "CollectionError",
+        code: "empty-name",
+      });
+      await expect(library.createCollection("")).rejects.toBeInstanceOf(CollectionError);
+      expect(storage.has(COLLECTIONS_KEY)).toBe(false);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("reuses a Collection whose name matches in another case and files the Document", async () => {
+    const { host, storage, library } = setup();
+    try {
+      seedShelf(storage, ["doc-1"]);
+      storage.set(COLLECTIONS_KEY, [{ id: "col-a", name: "Sci-Fi", documentIds: [] }]);
+
+      const collections = await library.createCollection(" sci-fi ", "doc-1");
+      expect(collections).toEqual([{ id: "col-a", name: "Sci-Fi", documentIds: ["doc-1"] }]);
+
+      // Creating it again with the same Document files it once.
+      await expect(library.createCollection("SCI-FI", "doc-1")).resolves.toEqual([
+        { id: "col-a", name: "Sci-Fi", documentIds: ["doc-1"] },
+      ]);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("files a new Collection's Document when its id is on the Shelf", async () => {
+    const { host, storage, library } = setup();
+    try {
+      seedShelf(storage, ["doc-1"]);
+      await expect(library.createCollection("Dune", "doc-1")).resolves.toEqual([
+        { id: expect.any(String), name: "Dune", documentIds: ["doc-1"] },
+      ]);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("does not file a Document id that is not on the Shelf", async () => {
+    const { host, storage, library } = setup();
+    try {
+      seedShelf(storage, ["doc-1"]);
+      await expect(library.createCollection("Dune", "doc-9")).resolves.toEqual([
+        { id: expect.any(String), name: "Dune", documentIds: [] },
+      ]);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("shows a Document in every Collection it is filed in, and removing it from one keeps the other and the Shelf", async () => {
+    const { host, storage, library } = setup();
+    try {
+      seedShelf(storage, ["doc-1"]);
+      await library.createCollection("Dune", "doc-1");
+      const both = await library.createCollection("Favourites", "doc-1");
+      const [first, second] = both;
+      expect(both.map((collection) => collection.documentIds)).toEqual([["doc-1"], ["doc-1"]]);
+
+      const after = await library.setInCollection(first.id, "doc-1", false);
+      expect(after.find((collection) => collection.id === first.id)?.documentIds).toEqual([]);
+      expect(after.find((collection) => collection.id === second.id)?.documentIds).toEqual([
+        "doc-1",
+      ]);
+      await expect(library.loadShelf()).resolves.toEqual([
+        expect.objectContaining({ id: "doc-1" }),
+      ]);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("adds a Document to a Collection once, and refuses a Document that is not on the Shelf", async () => {
+    const { host, storage, library } = setup();
+    try {
+      seedShelf(storage, ["doc-1"]);
+      storage.set(COLLECTIONS_KEY, [{ id: "col-a", name: "Dune", documentIds: [] }]);
+
+      await expect(library.setInCollection("col-a", "doc-1", true)).resolves.toEqual([
+        { id: "col-a", name: "Dune", documentIds: ["doc-1"] },
+      ]);
+      await expect(library.setInCollection("col-a", "doc-1", true)).resolves.toEqual([
+        { id: "col-a", name: "Dune", documentIds: ["doc-1"] },
+      ]);
+
+      const before = storage.get(COLLECTIONS_KEY);
+      await expect(library.setInCollection("col-a", "doc-9", true)).resolves.toEqual([
+        { id: "col-a", name: "Dune", documentIds: ["doc-1"] },
+      ]);
+      expect(storage.get(COLLECTIONS_KEY)).toBe(before);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("leaves the list alone, with no write, for an unknown Collection or a removal that changes nothing", async () => {
+    const { host, storage, library } = setup();
+    try {
+      seedShelf(storage, ["doc-1"]);
+      const stored = [{ id: "col-a", name: "Dune", documentIds: [] }];
+      storage.set(COLLECTIONS_KEY, stored);
+
+      await expect(library.setInCollection("col-x", "doc-1", true)).resolves.toEqual(stored);
+      await expect(library.setInCollection("col-a", "doc-1", false)).resolves.toEqual(stored);
+      expect(storage.get(COLLECTIONS_KEY)).toBe(stored);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("renames a Collection to its trimmed name", async () => {
+    const { host, storage, library } = setup();
+    try {
+      storage.set(COLLECTIONS_KEY, [{ id: "col-a", name: "Dune", documentIds: ["doc-1"] }]);
+      await expect(library.renameCollection("col-a", "  Dune Messiah ")).resolves.toEqual([
+        { id: "col-a", name: "Dune Messiah", documentIds: ["doc-1"] },
+      ]);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("allows a rename to the same name in another case", async () => {
+    const { host, storage, library } = setup();
+    try {
+      storage.set(COLLECTIONS_KEY, [{ id: "col-a", name: "Dune", documentIds: [] }]);
+      await expect(library.renameCollection("col-a", "DUNE")).resolves.toEqual([
+        { id: "col-a", name: "DUNE", documentIds: [] },
+      ]);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("refuses another Collection's name with duplicate-name and writes nothing", async () => {
+    const { host, storage, library } = setup();
+    try {
+      const stored = [
+        { id: "col-a", name: "Dune", documentIds: [] },
+        { id: "col-b", name: "Emma", documentIds: [] },
+      ];
+      storage.set(COLLECTIONS_KEY, stored);
+      await expect(library.renameCollection("col-b", " dune ")).rejects.toMatchObject({
+        name: "CollectionError",
+        code: "duplicate-name",
+      });
+      expect(storage.get(COLLECTIONS_KEY)).toBe(stored);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("refuses an empty name with empty-name and writes nothing", async () => {
+    const { host, storage, library } = setup();
+    try {
+      const stored = [{ id: "col-a", name: "Dune", documentIds: [] }];
+      storage.set(COLLECTIONS_KEY, stored);
+      await expect(library.renameCollection("col-a", "  ")).rejects.toMatchObject({
+        code: "empty-name",
+      });
+      expect(storage.get(COLLECTIONS_KEY)).toBe(stored);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("renames an unknown Collection to nothing: the list is unchanged and not written", async () => {
+    const { host, storage, library } = setup();
+    try {
+      const stored = [{ id: "col-a", name: "Dune", documentIds: [] }];
+      storage.set(COLLECTIONS_KEY, stored);
+      await expect(library.renameCollection("col-x", "Emma")).resolves.toEqual(stored);
+      expect(storage.get(COLLECTIONS_KEY)).toBe(stored);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("deleteCollection leaves every Document on the Shelf and in other Collections", async () => {
+    const { host, storage, library } = setup();
+    try {
+      seedShelf(storage, ["doc-1", "doc-2"]);
+      storage.set(COLLECTIONS_KEY, [
+        { id: "col-a", name: "Dune", documentIds: ["doc-1", "doc-2"] },
+        { id: "col-b", name: "Emma", documentIds: ["doc-1"] },
+      ]);
+
+      await expect(library.deleteCollection("col-a")).resolves.toEqual([
+        { id: "col-b", name: "Emma", documentIds: ["doc-1"] },
+      ]);
+      const shelf = await library.loadShelf();
+      expect(shelf.map((entry) => entry.id).sort()).toEqual(["doc-1", "doc-2"]);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("deleteCollection on an unknown id changes nothing and writes nothing", async () => {
+    const { host, storage, library } = setup();
+    try {
+      const stored = [{ id: "col-a", name: "Dune", documentIds: [] }];
+      storage.set(COLLECTIONS_KEY, stored);
+      await expect(library.deleteCollection("col-x")).resolves.toEqual(stored);
+      expect(storage.get(COLLECTIONS_KEY)).toBe(stored);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("removeFromShelf takes the Document out of every Collection and keeps the Collections", async () => {
+    const { host, storage, library } = setup();
+    try {
+      seedShelf(storage, ["doc-1", "doc-2"]);
+      storage.set(COLLECTIONS_KEY, [
+        { id: "col-a", name: "Dune", documentIds: ["doc-1", "doc-2"] },
+        { id: "col-b", name: "Emma", documentIds: ["doc-1"] },
+      ]);
+
+      const shelf = await library.removeFromShelf("doc-1");
+      expect(shelf.map((entry) => entry.id)).toEqual(["doc-2"]);
+      await expect(library.loadCollections()).resolves.toEqual([
+        { id: "col-a", name: "Dune", documentIds: ["doc-2"] },
+        { id: "col-b", name: "Emma", documentIds: [] },
+      ]);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("keeps the Shelf removal when the Collections cannot be saved", async () => {
+    const map = new Map<string, unknown>();
+    map.set(SHELF_KEY, [shelfEntry({ id: "doc-1", grant: "grant-1" })]);
+    map.set(COLLECTIONS_KEY, [{ id: "col-a", name: "Dune", documentIds: ["doc-1"] }]);
+    const client = {
+      files: { release: async () => null },
+      storage: {
+        get: async ({ key }: { key: string }) => map.get(key) ?? null,
+        set: async ({ key, value }: { key: string; value: unknown }) => {
+          if (key === COLLECTIONS_KEY) throw new Error("storage is down");
+          map.set(key, value);
+          return null;
+        },
+        delete: async ({ key }: { key: string }) => {
+          map.delete(key);
+          return null;
+        },
+      },
+    } as unknown as ReaderClient;
+
+    await expect(createShelfService(client).removeFromShelf("doc-1")).resolves.toEqual([]);
+    expect(map.get(SHELF_KEY)).toEqual([]);
+  });
+
+  it("loadCollections reads malformed storage as the clean list", async () => {
+    const { host, storage, library } = setup();
+    try {
+      storage.set(COLLECTIONS_KEY, [
+        null,
+        "Dune",
+        { name: "No id", documentIds: [] },
+        { id: "", name: "Empty id", documentIds: [] },
+        { id: "col-bad", name: 7, documentIds: [] },
+        { id: "col-blank", name: "   ", documentIds: [] },
+        { id: "col-a", name: "  Dune  ", documentIds: ["doc-1", 3, "doc-1", "doc-2", null] },
+        { id: "col-a", name: "Duplicate", documentIds: ["doc-9"] },
+        { id: "col-b", name: "Emma", documentIds: "doc-1" },
+      ]);
+      await expect(library.loadCollections()).resolves.toEqual([
+        { id: "col-a", name: "Dune", documentIds: ["doc-1", "doc-2"] },
+        { id: "col-b", name: "Emma", documentIds: [] },
+      ]);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("loadCollections reads a non-array value as no Collections", async () => {
+    const { host, storage, library } = setup();
+    try {
+      storage.set(COLLECTIONS_KEY, { id: "col-a", name: "Dune" });
+      await expect(library.loadCollections()).resolves.toEqual([]);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("loadCollections throws when the stored read fails", async () => {
+    const client = {
+      files: {},
+      storage: {
+        get: async () => {
+          throw new Error("storage is down");
+        },
+        set: async () => null,
+      },
+    } as unknown as ReaderClient;
+    await expect(createShelfService(client).loadCollections()).rejects.toThrow("storage is down");
   });
 });

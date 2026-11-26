@@ -8,7 +8,13 @@
  * import only Frame-local modules.
  */
 
-import type { FrameShelfEntry, ShelfCoverSize, ShelfSort, ShelfViewSettings } from "./types";
+import type {
+  FrameCollection,
+  FrameShelfEntry,
+  ShelfCoverSize,
+  ShelfSort,
+  ShelfViewSettings,
+} from "./types";
 
 /**
  * Fills `{{name}}` placeholders in a localized template; an unknown name fills
@@ -101,17 +107,45 @@ export function matchRanges(text: string, search: string): Array<[number, number
   return merged;
 }
 
-/** Keeps the Documents that match the format, status, and search filters, in input order. */
+/** The Collection the Shelf is filtered to, or null when none is set or the id is stale. */
+export function activeCollection(
+  settings: Pick<ShelfViewSettings, "collection">,
+  collections: readonly FrameCollection[]
+): FrameCollection | null {
+  if (settings.collection === null) return null;
+  return collections.find((collection) => collection.id === settings.collection) ?? null;
+}
+
+/** Keeps the Documents that match the format, status, Collection, and search filters, in input order. */
 export function filterShelf<T extends FrameShelfEntry>(
   entries: readonly T[],
-  settings: Pick<ShelfViewSettings, "formats" | "statuses" | "search">
+  settings: Pick<ShelfViewSettings, "formats" | "statuses" | "search" | "collection">,
+  collections: readonly FrameCollection[] = []
 ): T[] {
+  const collection = activeCollection(settings, collections);
   return entries.filter(
     (entry) =>
       (settings.formats.length === 0 || settings.formats.includes(entry.format)) &&
       (settings.statuses.length === 0 || settings.statuses.includes(entry.status)) &&
+      (collection === null || (entry.collections ?? []).includes(collection.id)) &&
       matchesSearch(entry, settings.search)
   );
+}
+
+/** How many Documents are filed in each Collection, by id; unknown ids are not counted. */
+export function collectionCounts(
+  entries: readonly Pick<FrameShelfEntry, "collections">[],
+  collections: readonly FrameCollection[]
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const collection of collections) counts.set(collection.id, 0);
+  for (const entry of entries) {
+    for (const id of new Set(entry.collections ?? [])) {
+      const count = counts.get(id);
+      if (count !== undefined) counts.set(id, count + 1);
+    }
+  }
+  return counts;
 }
 
 const collators = new Map<string, Intl.Collator>();
@@ -178,23 +212,31 @@ export function sortShelf<T extends FrameShelfEntry>(
   });
 }
 
-/** The Shelf's rows for a view: filtered by the view's filters and search, then sorted. */
+/** The Shelf's rows for a view: filtered by its filters, Collection, and search, then sorted. */
 export function queryShelf<T extends FrameShelfEntry>(
   entries: readonly T[],
   settings: ShelfViewSettings,
-  language: string
+  language: string,
+  collections: readonly FrameCollection[] = []
 ): T[] {
-  return sortShelf(filterShelf(entries, settings), settings.sort, settings.descending, language);
+  return sortShelf(
+    filterShelf(entries, settings, collections),
+    settings.sort,
+    settings.descending,
+    language
+  );
 }
 
-/** True when a format, a status, or a non-blank search narrows the Shelf. */
+/** True when a format, a status, a non-blank search, or a known Collection narrows the Shelf. */
 export function hasActiveFilters(
-  settings: Pick<ShelfViewSettings, "formats" | "statuses" | "search">
+  settings: Pick<ShelfViewSettings, "formats" | "statuses" | "search" | "collection">,
+  collections: readonly FrameCollection[] = []
 ): boolean {
   return (
     settings.formats.length > 0 ||
     settings.statuses.length > 0 ||
-    searchTokens(settings.search).length > 0
+    searchTokens(settings.search).length > 0 ||
+    activeCollection(settings, collections) !== null
   );
 }
 

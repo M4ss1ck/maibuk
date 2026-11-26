@@ -504,6 +504,7 @@ describe("Reader Shelf view memory", () => {
       formats: ["pdf"],
       statuses: ["reading"],
       search: "austen",
+      collection: "col-1",
     };
     try {
       const first = mountShelf(port, "frame-1");
@@ -544,6 +545,7 @@ describe("Reader Shelf view memory", () => {
         formats: [],
         statuses: ["finished"],
         search: "Dune",
+        collection: null,
       });
     } finally {
       await host.stop();

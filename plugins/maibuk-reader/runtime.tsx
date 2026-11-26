@@ -62,6 +62,9 @@ export const LOCATE_DOCUMENT = "locateDocument";
 export const SEARCH_SHELF = "searchShelf";
 export const SHOW_SHELF_OPTIONS = "showShelfOptions";
 export const CLEAR_SHELF_FILTERS = "clearShelfFilters";
+export const NEW_COLLECTION = "newCollection";
+export const RENAME_COLLECTION = "renameCollection";
+export const DELETE_COLLECTION = "deleteCollection";
 
 /** The Commands the Frame handles itself, forwarded while it is open. */
 const FRAME_COMMANDS: ReadonlySet<FrameCommandId> = new Set<FrameCommandId>([
@@ -84,6 +87,9 @@ const FRAME_COMMANDS: ReadonlySet<FrameCommandId> = new Set<FrameCommandId>([
   SEARCH_SHELF,
   SHOW_SHELF_OPTIONS,
   CLEAR_SHELF_FILTERS,
+  NEW_COLLECTION,
+  RENAME_COLLECTION,
+  DELETE_COLLECTION,
 ]);
 
 /**

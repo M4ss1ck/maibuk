@@ -23,6 +23,9 @@
   "commands.searchShelf.label": "Search the Shelf",
   "commands.showShelfOptions.label": "View, sort and filter…",
   "commands.clearShelfFilters.label": "Clear Shelf filters",
+  "commands.newCollection.label": "New Collection…",
+  "commands.renameCollection.label": "Rename Collection…",
+  "commands.deleteCollection.label": "Delete Collection…",
   "pages.reader.title": "Reader",
   "pages.document.title": "Reading",
   "canvasReferenceSources.documents.label": "Documents"

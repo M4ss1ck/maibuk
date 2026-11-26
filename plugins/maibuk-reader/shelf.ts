@@ -66,6 +66,8 @@ export interface ShelfViewSettings {
   formats: string[];
   statuses: ShelfStatus[];
   search: string;
+  /** The Collection the Shelf is narrowed to, by id, or null for every Document. */
+  collection: string | null;
 }
 
 /** One Document on the Shelf. */
@@ -495,6 +497,64 @@ export function withProgress(entry: ShelfEntry, progress: ShelfProgress, now: nu
 /** The key the Shelf's remembered view, sort, filters, and search live under. */
 export const SHELF_VIEW_KEY = "shelfView";
 
+/** One Collection: a group of Documents the author makes and names (#946). */
+export interface Collection {
+  /** Plugin-local id. */
+  id: string;
+  /** The author's name for it, trimmed, at most COLLECTION_NAME_LIMIT characters. */
+  name: string;
+  /** The Shelf Documents filed in it, once each, in the order they were added. */
+  documentIds: string[];
+}
+
+/** The key the author's Collections live under. */
+export const COLLECTIONS_KEY = "collections";
+
+/** The longest Collection name, in characters (code points). */
+export const COLLECTION_NAME_LIMIT = 100;
+
+/** A Collection name as the author meant it: trimmed, and cut to COLLECTION_NAME_LIMIT characters. */
+export function collectionName(value: string): string {
+  return Array.from(value.trim()).slice(0, COLLECTION_NAME_LIMIT).join("").trim();
+}
+
+/** Whether two names are the same Collection name, ignoring case and the ends' spaces. */
+export function sameCollectionName(a: string, b: string): boolean {
+  return collectionName(a).toLocaleLowerCase() === collectionName(b).toLocaleLowerCase();
+}
+
+/**
+ * The Collections from anything stored, record by record: a record needs a
+ * non-empty id and a name that is not blank, and a repeated id keeps the first
+ * record that passed. Names are stored normalized, and documentIds keep only
+ * strings, once each, in order. A value that is not an array reads as none.
+ */
+export function parseCollections(value: unknown): Collection[] {
+  if (!Array.isArray(value)) return [];
+  const collections: Collection[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (!isRecord(item)) continue;
+    const { id, name, documentIds } = item;
+    if (typeof id !== "string" || id === "" || seen.has(id)) continue;
+    if (typeof name !== "string") continue;
+    const cleaned = collectionName(name);
+    if (cleaned === "") continue;
+    seen.add(id);
+    const ids = Array.isArray(documentIds) ? documentIds : [];
+    collections.push({
+      id,
+      name: cleaned,
+      documentIds: [
+        ...new Set(
+          ids.filter((documentId): documentId is string => typeof documentId === "string")
+        ),
+      ],
+    });
+  }
+  return collections;
+}
+
 /** Titles and authors read A to Z; everything else reads from the largest value down. */
 export function defaultDescending(sort: ShelfSort): boolean {
   return sort !== "title" && sort !== "author";
@@ -509,10 +569,14 @@ export const DEFAULT_SHELF_VIEW: ShelfViewSettings = {
   formats: [],
   statuses: [],
   search: "",
+  collection: null,
 };
 
 /** The longest search the Shelf remembers, in characters. */
 const SHELF_SEARCH_LIMIT = 200;
+
+/** The longest Collection id the Shelf remembers, in characters. */
+const SHELF_COLLECTION_LIMIT = 200;
 
 /** The formats in the order the Shelf's filter lists them. */
 const SHELF_FORMAT_ORDER: readonly DocumentFormat[] = ["pdf", "epub", "mobi", "azw3", "fb2", "cbz"];
@@ -524,8 +588,9 @@ const SHELF_STATUS_ORDER: readonly ShelfStatus[] = ["new", "reading", "finished"
  * The Shelf's view from anything stored, field by field: an unknown layout,
  * cover size, or sort falls back to the default; a missing direction follows
  * the sort; formats and statuses keep only the known values, once each, in
- * their canonical order; and the search is cut to 200 characters. The arrays
- * are always fresh, never the default's.
+ * their canonical order; the search is cut to 200 characters; and a Collection
+ * id is kept when it is a string of 1 to 200 characters, otherwise the Shelf
+ * shows every Document. The arrays are always fresh, never the default's.
  */
 export function clampShelfView(value: unknown): ShelfViewSettings {
   if (!isRecord(value)) return { ...DEFAULT_SHELF_VIEW, formats: [], statuses: [] };
@@ -547,5 +612,11 @@ export function clampShelfView(value: unknown): ShelfViewSettings {
       typeof value.search === "string"
         ? Array.from(value.search).slice(0, SHELF_SEARCH_LIMIT).join("")
         : "",
+    collection:
+      typeof value.collection === "string" &&
+      Array.from(value.collection).length >= 1 &&
+      Array.from(value.collection).length <= SHELF_COLLECTION_LIMIT
+        ? value.collection
+        : null,
   };
 }

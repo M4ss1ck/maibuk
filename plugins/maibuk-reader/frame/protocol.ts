@@ -159,11 +159,28 @@ export interface FrameShelfViewMessage {
   settings: ShelfViewSettings;
 }
 
+/**
+ * Creates, renames, or deletes a Collection, or files a Document in one or
+ * takes it out (#946). The Worker stores the change and sends the Shelf again.
+ */
+export type FrameShelfCollectionMessage =
+  | { kind: "shelf-collection"; action: "create"; name: string; documentId?: string }
+  | { kind: "shelf-collection"; action: "rename"; collectionId: string; name: string }
+  | { kind: "shelf-collection"; action: "delete"; collectionId: string }
+  | {
+      kind: "shelf-collection";
+      action: "file";
+      collectionId: string;
+      documentId: string;
+      member: boolean;
+    };
+
 export type FrameToWorkerShelfMessage =
   | FrameShelfCommandMessage
   | FrameShelfSelectMessage
   | FrameShelfRemoveMessage
-  | FrameShelfViewMessage;
+  | FrameShelfViewMessage
+  | FrameShelfCollectionMessage;
 
 /** An error that carries the protocol's failure `code`. */
 export interface CodedError extends Error {

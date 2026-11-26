@@ -14,6 +14,7 @@ import { baseLanguage } from "./language";
 import {
   progressFraction,
   progressSummary,
+  type Collection,
   type ShelfEntry,
   type ShelfStatus,
   shelfStatus,
@@ -113,9 +114,33 @@ export function frameShelfEntry(language: string, entry: ShelfEntry): FrameShelf
   };
 }
 
-/** A ready Shelf and every row it draws, localized in one language. */
-export function frameShelfState(language: string, entries: readonly ShelfEntry[]): FrameShelfState {
-  return { status: "ready", entries: entries.map((entry) => frameShelfEntry(language, entry)) };
+/**
+ * A ready Shelf and every row it draws, localized in one language, with the
+ * author's Collections (#946). Each row names the Collections it is filed in;
+ * an id a Collection keeps for a Document no longer on the Shelf draws nothing.
+ */
+export function frameShelfState(
+  language: string,
+  entries: readonly ShelfEntry[],
+  collections: readonly Collection[] = []
+): FrameShelfState {
+  const filed = new Map<string, string[]>();
+  for (const collection of collections) {
+    for (const documentId of collection.documentIds) {
+      const ids = filed.get(documentId);
+      if (ids === undefined) filed.set(documentId, [collection.id]);
+      else ids.push(collection.id);
+    }
+  }
+  return {
+    status: "ready",
+    entries: entries.map((entry) => {
+      const row = frameShelfEntry(language, entry);
+      const ids = filed.get(entry.id);
+      return ids === undefined ? row : { ...row, collections: ids };
+    }),
+    collections: collections.map(({ id, name }) => ({ id, name })),
+  };
 }
 
 /** The localized Shelf strings the Frame shows. */
@@ -198,6 +223,26 @@ export function frameShelfLabels(language: string): FrameShelfLabels {
     clearFilters: translate(language, "shelf.frame.clearFilters"),
     noMatch: translate(language, "shelf.frame.noMatch"),
     remembered: translate(language, "shelf.frame.remembered"),
+    collections: translate(language, "shelf.frame.collections"),
+    newCollection: translate(language, "shelf.frame.newCollection"),
+    newCollectionName: translate(language, "shelf.frame.newCollectionName"),
+    add: translate(language, "shelf.frame.add"),
+    railHint: translate(language, "shelf.frame.railHint"),
+    collection: translate(language, "shelf.frame.collection"),
+    anyCollection: translate(language, "shelf.frame.anyCollection"),
+    collectionChip: translate(language, "shelf.frame.collectionChip"),
+    moreForCollection: translate(language, "shelf.frame.moreForCollection"),
+    collectionName: translate(language, "shelf.frame.collectionName"),
+    create: translate(language, "shelf.frame.create"),
+    renameCollection: translate(language, "shelf.frame.renameCollection"),
+    renameAction: translate(language, "shelf.frame.renameAction"),
+    rename: translate(language, "shelf.frame.rename"),
+    deleteAction: translate(language, "shelf.frame.deleteAction"),
+    deleteCollectionTitle: translate(language, "shelf.frame.deleteCollectionTitle"),
+    deleteCollectionBody: translate(language, "shelf.frame.deleteCollectionBody"),
+    delete: translate(language, "shelf.frame.delete"),
+    duplicateCollection: translate(language, "shelf.frame.duplicateCollection"),
+    noCollections: translate(language, "shelf.frame.noCollections"),
   };
 }
 

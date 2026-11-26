@@ -41,7 +41,18 @@ import {
   statusLabel,
 } from "./shelf-options";
 import {
+  CollectionDialog,
+  type CollectionDialogState,
+  CollectionMenu,
+  CollectionPicker,
+  CollectionRail,
+  DOCUMENT_DRAG_TYPE,
+  NewCollectionField,
+} from "./shelf-collections";
+import {
+  activeCollection,
   COVER_WIDTHS,
+  collectionCounts,
   fill,
   gridColumns,
   hasActiveFilters,
@@ -49,12 +60,14 @@ import {
   queryShelf,
 } from "./shelf-query";
 import type {
+  FrameCollection,
   FrameShelfCommandId,
   FrameShelfEntry,
   FrameShelfLabels,
   FrameShelfState,
   ShelfViewSettings,
 } from "./types";
+import type { FrameShelfCollectionMessage } from "./protocol";
 import { useLayoutMode } from "./use-layout-mode";
 
 /** The More button's size beside a cover's title on Wide, as "Shelf · desktop · grid M" draws it. */
@@ -65,6 +78,25 @@ const NARROW_GUTTER = 16;
 const NARROW_COLUMN_GAP = 12;
 const NARROW_ROW_GAP = 18;
 const WIDE_ROW_GAP = 28;
+
+/** The Wide width from which the Collections rail is drawn, and the rail's own width. */
+const RAIL_MIN_WIDTH = 960;
+const RAIL_WIDTH = 240;
+
+/** The Menu row id prefix of a Document menu's Collection check box. */
+const COLLECTION_ROW = "collection:";
+
+/** The Collections of a Shelf state that sends none, shared so memoized queries keep. */
+const EMPTY_COLLECTIONS: readonly FrameCollection[] = [];
+
+/** The host Collection Commands the Shelf answers (#946). */
+export type ShelfCollectionCommand = "newCollection" | "renameCollection" | "deleteCollection";
+
+/** One host Collection Command; `serial` changes on every request, so a repeat runs again. */
+export interface ShelfCollectionRequest {
+  command: ShelfCollectionCommand;
+  serial: number;
+}
 
 /** The list and compact row heights the spec sheet fixes. */
 const LIST_ROW = 76;
@@ -113,6 +145,10 @@ export interface ShelfProps {
   onNoticeClose: () => void;
   /** The author changed the view, sort, filters, or search. */
   onSettingsChange?: (settings: ShelfViewSettings) => void;
+  /** The author made, renamed, deleted, or filed into a Collection (#946). */
+  onCollection?: (message: FrameShelfCollectionMessage) => void;
+  /** The latest host Collection Command, or null. */
+  collectionRequest?: ShelfCollectionRequest | null;
 }
 
 /** The Frame's own width, updated when the Pane resizes. */
@@ -241,6 +277,8 @@ export function Shelf({
   onRemoveClose,
   onNoticeClose,
   onSettingsChange,
+  onCollection = () => {},
+  collectionRequest = null,
 }: ShelfProps) {
   const { mode } = useLayoutMode();
   const wide = mode === "wide";
@@ -254,13 +292,26 @@ export function Shelf({
   };
 
   const all = state.entries;
-  const entries = useMemo(() => queryShelf(all, settings, language), [all, settings, language]);
-  const filtering = hasActiveFilters(settings);
+  const collections = state.collections ?? EMPTY_COLLECTIONS;
+  const entries = useMemo(
+    () => queryShelf(all, settings, language, collections),
+    [all, settings, language, collections]
+  );
+  const filtering = hasActiveFilters(settings, collections);
+  const active = activeCollection(settings, collections);
+  const counts = useMemo(() => collectionCounts(all, collections), [all, collections]);
   const layout = settings.layout;
-  const columns = layout === "grid" ? gridColumns(wide, width, settings.coverSize) : 1;
+  const rail = wide && width >= RAIL_MIN_WIDTH && state.status === "ready" && all.length > 0;
+  const gridWidth = rail ? width - RAIL_WIDTH : width;
+  const columns = layout === "grid" ? gridColumns(wide, gridWidth, settings.coverSize) : 1;
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [options, setOptions] = useState<ShelfOptionsPart | null>(null);
+  const [picker, setPicker] = useState(false);
+  const pickerAnchor = useRef<HTMLElement | null>(null);
+  const [collectionMenu, setCollectionMenu] = useState<FrameCollection | null>(null);
+  const collectionMenuAnchor = useRef<HTMLElement | null>(null);
+  const [dialog, setDialog] = useState<CollectionDialogState | null>(null);
   const [searchOpen, setSearchOpen] = useState(() => settings.search !== "");
   const cells = useRef(new Map<number, HTMLDivElement>());
   const moreButtons = useRef(new Map<number, HTMLButtonElement>());
@@ -408,7 +459,62 @@ export function Shelf({
     menuDocumentId === null
       ? null
       : (all.find((candidate) => candidate.id === menuDocumentId) ?? null);
-  const layerOpen = menuEntry !== null || removal !== null || options !== null;
+  const layerOpen =
+    menuEntry !== null ||
+    removal !== null ||
+    options !== null ||
+    dialog !== null ||
+    collectionMenu !== null;
+
+  // The host's Collection Commands: New opens its dialog; Rename and Delete act
+  // on the Collection the Shelf is filtered to, and do nothing without one.
+  useEffect(() => {
+    if (collectionRequest === null) return;
+    if (collectionRequest.command === "newCollection") {
+      setDialog({ kind: "create" });
+      return;
+    }
+    if (active === null) return;
+    setDialog({
+      kind: collectionRequest.command === "renameCollection" ? "rename" : "delete",
+      collection: active,
+    });
+  }, [collectionRequest?.serial]);
+
+  /** Narrows the Shelf to one Collection, or back to every Document. */
+  const chooseCollection = (collection: string | null) => {
+    if (settings.collection !== collection) change({ ...settings, collection });
+  };
+
+  const openCollectionMenu = (collection: FrameCollection, anchor: HTMLElement) => {
+    collectionMenuAnchor.current = anchor;
+    setCollectionMenu(collection);
+  };
+
+  const submitDialog = (name: string) => {
+    if (dialog?.kind === "create") {
+      onCollection(
+        dialog.documentId === undefined
+          ? { kind: "shelf-collection", action: "create", name }
+          : { kind: "shelf-collection", action: "create", name, documentId: dialog.documentId }
+      );
+    } else if (dialog?.kind === "rename") {
+      onCollection({
+        kind: "shelf-collection",
+        action: "rename",
+        collectionId: dialog.collection.id,
+        name,
+      });
+    }
+    setDialog(null);
+  };
+
+  const deleteCollection = (collection: FrameCollection) => {
+    onCollection({ kind: "shelf-collection", action: "delete", collectionId: collection.id });
+    // The Shelf filtered to the deleted Collection goes back to every Document.
+    if (settings.collection === collection.id) change({ ...settings, collection: null });
+    setDialog(null);
+  };
 
   const closeMenu = () => onMenuChange(null);
 
@@ -569,6 +675,17 @@ export function Shelf({
     } else if (entry.state === "missing" || entry.state === "needs-permission") {
       items.push({ id: "locateDocument", label: labels.locate, icon: "relink" });
     }
+    const filed = entry.collections ?? [];
+    collections.forEach((collection, index) => {
+      items.push({
+        id: `${COLLECTION_ROW}${collection.id}`,
+        label: collection.name,
+        checked: filed.includes(collection.id),
+        detail: String(counts.get(collection.id) ?? 0),
+        section: labels.collections,
+        groupStart: index === 0 && items.length > 0,
+      });
+    });
     // As drawn, Remove is the destructive row, set apart below the others.
     items.push({
       id: "removeFromShelf",
@@ -582,9 +699,33 @@ export function Shelf({
 
   const selectMenuItem = (id: string) => {
     if (!menuEntry) return;
+    if (id.startsWith(COLLECTION_ROW)) {
+      // A check box row files or unfiles the Document and keeps the menu open.
+      const collectionId = id.slice(COLLECTION_ROW.length);
+      onCollection({
+        kind: "shelf-collection",
+        action: "file",
+        collectionId,
+        documentId: menuEntry.id,
+        member: !(menuEntry.collections ?? []).includes(collectionId),
+      });
+      return;
+    }
     onCommand(id as FrameShelfCommandId, menuEntry.id);
     onMenuChange(null);
   };
+
+  const menuSlots = (entry: FrameShelfEntry) => ({
+    removeFromShelf: (
+      <NewCollectionField
+        labels={labels}
+        withLabel={collections.length === 0}
+        onAdd={(name) =>
+          onCollection({ kind: "shelf-collection", action: "create", name, documentId: entry.id })
+        }
+      />
+    ),
+  });
 
   // While the active row is scrolled out of the window, the first drawn cell
   // holds the Tab stop, so Tab always finds the Shelf.
@@ -742,6 +883,17 @@ export function Shelf({
         onSelect(entry.id);
       }}
       onKeyDown={(event) => onCellKeyDown(event, index)}
+      // With the rail drawn, a Document drags onto a Collection to be filed.
+      draggable={rail}
+      onDragStart={
+        rail
+          ? (event) => {
+              if (!event.dataTransfer) return;
+              event.dataTransfer.setData(DOCUMENT_DRAG_TYPE, entry.id);
+              event.dataTransfer.effectAllowed = "copy";
+            }
+          : undefined
+      }
     >
       {cellContent(entry, index)}
     </div>
@@ -749,14 +901,30 @@ export function Shelf({
 
   const openImport = () => onCommand("openFile");
   const clear = () => change(clearFilters(settings));
-  const optionsCount = settings.formats.length + settings.statuses.length;
+  const optionsCount =
+    settings.formats.length + settings.statuses.length + (active === null ? 0 : 1);
   const countText = filtering
     ? fill(labels.shownOf, { shown: entries.length, total: all.length })
     : fill(all.length === 1 ? labels.documentsCountOne : labels.documentsCountOther, {
         count: all.length,
       });
 
-  /** The removable chips of every active status and format filter. */
+  /** The removable chip of the filtered Collection, or nothing. */
+  const collectionChip = () => {
+    if (active === null) return null;
+    const text = fill(labels.collectionChip, { name: active.name });
+    return (
+      <Chip
+        key="collection"
+        onRemove={() => change({ ...settings, collection: null })}
+        removeLabel={fill(labels.removeFilter, { filter: text })}
+      >
+        {text}
+      </Chip>
+    );
+  };
+
+  /** The removable chips of every active status, format, and Collection filter. */
   const activeChips = () => [
     ...settings.statuses.map((status) => {
       const text = fill(labels.statusChip, { status: statusLabel(labels, status) });
@@ -786,7 +954,21 @@ export function Shelf({
         </Chip>
       );
     }),
+    collectionChip(),
   ];
+
+  // The options' Collection section: its picker button, and the picker it opens.
+  const collectionSection = {
+    collection: active,
+    pickerOpen: picker,
+    onCollectionPicker: (anchor: HTMLElement) => {
+      pickerAnchor.current = anchor;
+      setPicker(true);
+    },
+    onCollectionMenu: (anchor: HTMLElement) => {
+      if (active !== null) openCollectionMenu(active, anchor);
+    },
+  };
 
   let content: ComponentChildren;
   if (state.status === "loading") {
@@ -876,67 +1058,21 @@ export function Shelf({
   const ready = state.status === "ready" && all.length > 0;
 
   const header = wide ? (
-    <>
-      <header class="shelf__header shelf__header--wide">
-        <div class="shelf__spacer" />
-        {/* biome-ignore lint/a11y/noLabelWithoutControl: the input inside is the control; its aria-label names it. */}
-        <label class="shelf-search">
-          <Icon name="search" />
-          {searchField}
-          <span class="shelf-search__key" aria-hidden="true">
-            /
-          </span>
-        </label>
-        <Button variant="primary" onClick={openImport}>
-          <Icon name="import" />
-          {labels.import}
-        </Button>
-      </header>
-      <div class="shelf__toolbar">
-        <h1 class="shelf__heading">{labels.allDocuments}</h1>
-        <span class="shelf__count">{countText}</span>
-        <div class="shelf__spacer" />
-        {ready ? (
-          <>
-            <span ref={sortAnchor}>
-              <Button
-                aria-haspopup="dialog"
-                aria-expanded={options === "sort"}
-                aria-label={fill(labels.sortByValue, { sort: sortLabel(labels, settings.sort) })}
-                onClick={() => setOptions(options === "sort" ? null : "sort")}
-              >
-                <Icon name="sort" />
-                {sortLabel(labels, settings.sort)}
-                <Icon name="down" />
-              </Button>
-            </span>
-            <span ref={filtersAnchor}>
-              <Button
-                aria-haspopup="dialog"
-                aria-expanded={options === "filters"}
-                onClick={() => setOptions(options === "filters" ? null : "filters")}
-              >
-                <Icon name="filter" />
-                {labels.filters}
-                {optionsCount > 0 ? <span class="shelf__badge">{optionsCount}</span> : null}
-              </Button>
-            </span>
-            <LayoutControl labels={labels} settings={settings} onChange={change} compact />
-            {layout === "grid" ? (
-              <CoverSizeControl labels={labels} settings={settings} onChange={change} compact />
-            ) : null}
-          </>
-        ) : null}
-      </div>
-      {optionsCount > 0 ? (
-        <div class="shelf-chips">
-          {activeChips()}
-          <Button variant="ghost" class="shelf-chips__clear" onClick={clear}>
-            {labels.clearFilters}
-          </Button>
-        </div>
-      ) : null}
-    </>
+    <header class="shelf__header shelf__header--wide">
+      <div class="shelf__spacer" />
+      {/* biome-ignore lint/a11y/noLabelWithoutControl: the input inside is the control; its aria-label names it. */}
+      <label class="shelf-search">
+        <Icon name="search" />
+        {searchField}
+        <span class="shelf-search__key" aria-hidden="true">
+          /
+        </span>
+      </label>
+      <Button variant="primary" onClick={openImport}>
+        <Icon name="import" />
+        {labels.import}
+      </Button>
+    </header>
   ) : searchOpen ? (
     <>
       <header class="shelf__header shelf__header--search">
@@ -1029,6 +1165,7 @@ export function Shelf({
                 </Chip>
               );
             })}
+            {collectionChip()}
           </div>
           <p class="shelf__summary">
             <span>{countText}</span>
@@ -1039,22 +1176,98 @@ export function Shelf({
     </>
   );
 
+  // Wide only: the heading, count, and view controls above the grid, beside the rail.
+  const toolbar = wide ? (
+    <>
+      <div class="shelf__toolbar">
+        <h1 class="shelf__heading">{active?.name ?? labels.allDocuments}</h1>
+        <span class="shelf__count">{countText}</span>
+        <div class="shelf__spacer" />
+        {ready ? (
+          <>
+            <span ref={sortAnchor}>
+              <Button
+                aria-haspopup="dialog"
+                aria-expanded={options === "sort"}
+                aria-label={fill(labels.sortByValue, { sort: sortLabel(labels, settings.sort) })}
+                onClick={() => setOptions(options === "sort" ? null : "sort")}
+              >
+                <Icon name="sort" />
+                {sortLabel(labels, settings.sort)}
+                <Icon name="down" />
+              </Button>
+            </span>
+            <span ref={filtersAnchor}>
+              <Button
+                aria-haspopup="dialog"
+                aria-expanded={options === "filters"}
+                onClick={() => setOptions(options === "filters" ? null : "filters")}
+              >
+                <Icon name="filter" />
+                {labels.filters}
+                {optionsCount > 0 ? <span class="shelf__badge">{optionsCount}</span> : null}
+              </Button>
+            </span>
+            <LayoutControl labels={labels} settings={settings} onChange={change} compact />
+            {layout === "grid" ? (
+              <CoverSizeControl labels={labels} settings={settings} onChange={change} compact />
+            ) : null}
+          </>
+        ) : null}
+      </div>
+      {optionsCount > 0 ? (
+        <div class="shelf-chips">
+          {activeChips()}
+          <Button variant="ghost" class="shelf-chips__clear" onClick={clear}>
+            {labels.clearFilters}
+          </Button>
+        </div>
+      ) : null}
+    </>
+  ) : null;
+
   return (
     <div class="shelf">
       {header}
 
-      <div class="shelf__body" ref={body}>
-        {notice ? (
-          <div
-            class={notice.error ? "shelf-notice shelf-notice--error" : "shelf-notice"}
-            role="status"
-          >
-            <span class="shelf-notice__text">{notice.text}</span>
-            <IconButton label={labels.dismiss} icon="close" onClick={onNoticeClose} />
-          </div>
+      <div class="shelf__columns">
+        {rail ? (
+          <CollectionRail
+            labels={labels}
+            collections={collections}
+            counts={counts}
+            total={all.length}
+            active={active?.id ?? null}
+            onChoose={chooseCollection}
+            onCreate={() => setDialog({ kind: "create" })}
+            onMenu={openCollectionMenu}
+            onFile={(collectionId, documentId) =>
+              onCollection({
+                kind: "shelf-collection",
+                action: "file",
+                collectionId,
+                documentId,
+                member: true,
+              })
+            }
+          />
         ) : null}
+        <div class="shelf__main">
+          {toolbar}
+          <div class="shelf__body" ref={body}>
+            {notice ? (
+              <div
+                class={notice.error ? "shelf-notice shelf-notice--error" : "shelf-notice"}
+                role="status"
+              >
+                <span class="shelf-notice__text">{notice.text}</span>
+                <IconButton label={labels.dismiss} icon="close" onClick={onNoticeClose} />
+              </div>
+            ) : null}
 
-        {content}
+            {content}
+          </div>
+        </div>
       </div>
 
       {options === null ? null : wide ? (
@@ -1070,6 +1283,7 @@ export function Shelf({
             settings={settings}
             onChange={change}
             part={options === "sort" ? "sort" : "filters"}
+            {...collectionSection}
           />
         </Popover>
       ) : (
@@ -1085,7 +1299,13 @@ export function Shelf({
           }
           class="shelf-options-sheet"
         >
-          <ShelfOptions labels={labels} settings={settings} onChange={change} part="all" />
+          <ShelfOptions
+            labels={labels}
+            settings={settings}
+            onChange={change}
+            part="all"
+            {...collectionSection}
+          />
           <p class="shelf-options__footer">
             {fill(labels.remembered, { shown: entries.length, total: all.length })}
           </p>
@@ -1101,6 +1321,7 @@ export function Shelf({
             items={menuItems(menuEntry)}
             onSelect={selectMenuItem}
             header={<DocumentSummary entry={menuEntry} />}
+            slots={menuSlots(menuEntry)}
             inline
           />
         </Popover>
@@ -1113,9 +1334,53 @@ export function Shelf({
             items={menuItems(menuEntry)}
             onSelect={selectMenuItem}
             header={<DocumentSummary entry={menuEntry} />}
+            slots={menuSlots(menuEntry)}
             inline
           />
         </Sheet>
+      )}
+
+      {picker ? (
+        <CollectionPicker
+          labels={labels}
+          collections={collections}
+          active={active?.id ?? null}
+          wide={wide}
+          anchor={pickerAnchor}
+          onChoose={chooseCollection}
+          onClose={() => setPicker(false)}
+        />
+      ) : null}
+
+      {collectionMenu === null ? null : (
+        <CollectionMenu
+          labels={labels}
+          collection={collectionMenu}
+          wide={wide}
+          anchor={collectionMenuAnchor}
+          onClose={() => setCollectionMenu(null)}
+          onRename={() => {
+            setCollectionMenu(null);
+            setDialog({ kind: "rename", collection: collectionMenu });
+          }}
+          onDelete={() => {
+            setCollectionMenu(null);
+            setDialog({ kind: "delete", collection: collectionMenu });
+          }}
+        />
+      )}
+
+      {dialog === null ? null : (
+        <CollectionDialog
+          key={dialog.kind === "create" ? "create" : `${dialog.kind}-${dialog.collection.id}`}
+          labels={labels}
+          dialog={dialog}
+          collections={collections}
+          wide={wide}
+          onSubmit={submitDialog}
+          onDelete={deleteCollection}
+          onClose={() => setDialog(null)}
+        />
       )}
 
       {removal === null ? null : wide ? (

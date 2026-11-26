@@ -126,6 +126,26 @@ function shelfLabelsFrom(catalog: Record<string, string>): FrameShelfLabels {
     clearFilters: catalog["shelf.frame.clearFilters"],
     noMatch: catalog["shelf.frame.noMatch"],
     remembered: catalog["shelf.frame.remembered"],
+    collections: catalog["shelf.frame.collections"],
+    newCollection: catalog["shelf.frame.newCollection"],
+    newCollectionName: catalog["shelf.frame.newCollectionName"],
+    add: catalog["shelf.frame.add"],
+    railHint: catalog["shelf.frame.railHint"],
+    collection: catalog["shelf.frame.collection"],
+    anyCollection: catalog["shelf.frame.anyCollection"],
+    collectionChip: catalog["shelf.frame.collectionChip"],
+    moreForCollection: catalog["shelf.frame.moreForCollection"],
+    collectionName: catalog["shelf.frame.collectionName"],
+    create: catalog["shelf.frame.create"],
+    renameCollection: catalog["shelf.frame.renameCollection"],
+    renameAction: catalog["shelf.frame.renameAction"],
+    rename: catalog["shelf.frame.rename"],
+    deleteAction: catalog["shelf.frame.deleteAction"],
+    deleteCollectionTitle: catalog["shelf.frame.deleteCollectionTitle"],
+    deleteCollectionBody: catalog["shelf.frame.deleteCollectionBody"],
+    delete: catalog["shelf.frame.delete"],
+    duplicateCollection: catalog["shelf.frame.duplicateCollection"],
+    noCollections: catalog["shelf.frame.noCollections"],
   };
 }
 
@@ -975,9 +995,10 @@ describe("the Shelf", () => {
     expect(cellTitle(document.activeElement as HTMLElement)).toBe("Shelf Book 2");
     await user.keyboard("{ArrowLeft}");
     expect(document.activeElement).toBe(shelfCells()[0]);
-    // A six-column Wide grid puts the next row six cells along.
+    // At jsdom's 1024 px the Collections rail takes 240 px, and the five-column
+    // grid beside it puts the next row five cells along.
     await user.keyboard("{ArrowDown}");
-    expect(document.activeElement).toBe(shelfCells()[6]);
+    expect(document.activeElement).toBe(shelfCells()[5]);
     expect(shelfRowOf(document.activeElement as HTMLElement)).toBe(1);
     await user.keyboard("{ArrowUp}");
     expect(document.activeElement).toBe(shelfCells()[0]);
@@ -1664,6 +1685,7 @@ describe("the Shelf's views, sort, filters, and search (#945)", () => {
         formats: [],
         statuses: ["reading"],
         search: "",
+        collection: null,
       },
     });
     await vi.waitFor(() => expect(shelfCells()).toHaveLength(3));
@@ -1687,6 +1709,7 @@ describe("the Shelf's views, sort, filters, and search (#945)", () => {
         formats: [],
         statuses: ["new"],
         search: "",
+        collection: null,
       },
     });
     await vi.waitFor(() => expect(titles()).toEqual(["Dracula", "Fortunata y Jacinta"]));
@@ -1706,5 +1729,83 @@ describe("the Shelf's views, sort, filters, and search (#945)", () => {
 
     frame.port.deliver({ kind: "command", id: "showShelfOptions" });
     await vi.waitFor(() => expect(popover("Filters")).toBeDefined());
+  });
+});
+
+describe("Collections in the Frame (#946)", () => {
+  const collections = [
+    { id: "col-1", name: "Research" },
+    { id: "col-2", name: "Spanish classics" },
+  ];
+
+  function filedRows(): WireShelfRow[] {
+    const rows = viewRows();
+    return rows.map((row, index) =>
+      index === 0
+        ? { ...row, collections: ["col-1"] }
+        : index === 1
+          ? { ...row, collections: ["col-2"] }
+          : row
+    );
+  }
+
+  it("draws the rail, filters by a Collection, and answers the host Collection Commands", async () => {
+    frame = loadFrame("flowing.epub");
+    frame.open({
+      shelf: { status: "ready", entries: filedRows(), collections },
+      shelfLabels: SHELF_LABELS,
+    });
+    const rail = () =>
+      el("shelf-root").querySelector<HTMLElement>('aside[aria-label="Collections"]');
+    await vi.waitFor(() => expect(rail()).not.toBeNull());
+    const user = userEvent.setup();
+
+    // A rail row filters the Shelf; the Worker is told to remember it.
+    const research = Array.from(rail()?.querySelectorAll("button") ?? []).find((button) =>
+      button.textContent?.startsWith("Research")
+    ) as HTMLButtonElement;
+    await user.click(research);
+    await vi.waitFor(() => expect(shelfCells()).toHaveLength(1));
+    const views = posted("shelf-view");
+    expect(views[views.length - 1].settings).toMatchObject({ collection: "col-1" });
+
+    // Rename Collection acts on the filtered one; Create posts the change.
+    frame.port.deliver({ kind: "command", id: "renameCollection" });
+    const field = () =>
+      document.querySelector<HTMLInputElement>('[role="dialog"] input[type="text"]');
+    await vi.waitFor(() => expect(field()?.value).toBe("Research"));
+    await user.clear(field() as HTMLInputElement);
+    await user.type(field() as HTMLInputElement, "Notes{Enter}");
+    await vi.waitFor(() =>
+      expect(posted("shelf-collection")).toContainEqual({
+        kind: "shelf-collection",
+        action: "rename",
+        collectionId: "col-1",
+        name: "Notes",
+      })
+    );
+
+    // New Collection opens the empty dialog from anywhere on the Shelf.
+    frame.port.deliver({ kind: "command", id: "newCollection" });
+    await vi.waitFor(() => expect(field()?.value).toBe(""));
+    await user.type(field() as HTMLInputElement, "Poetry{Enter}");
+    await vi.waitFor(() =>
+      expect(posted("shelf-collection")).toContainEqual({
+        kind: "shelf-collection",
+        action: "create",
+        name: "Poetry",
+      })
+    );
+
+    // The Worker's republished Shelf draws the new Collection in the rail.
+    frame.port.deliver({
+      kind: "shelf",
+      state: {
+        status: "ready",
+        entries: filedRows(),
+        collections: [...collections, { id: "col-3", name: "Poetry" }],
+      },
+    });
+    await vi.waitFor(() => expect(rail()?.textContent).toContain("Poetry"));
   });
 });

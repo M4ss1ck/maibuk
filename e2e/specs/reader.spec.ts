@@ -600,6 +600,93 @@ test.describe("Reader", () => {
     await expect(titles).toHaveText(["Dune", "twelve-pages"]);
   });
 
+  test("make a Collection, file a Document from its menu, filter the Shelf to it from the rail, reload, rename it, and delete it @wf:reader-collections @sc:plugin.maibuk-reader.newCollection @sc:plugin.maibuk-reader.renameCollection @sc:plugin.maibuk-reader.deleteCollection @sandbox", async ({
+    page,
+  }) => {
+    // The rail is drawn once the Frame is at least 960 px wide.
+    await page.setViewportSize({ width: 1600, height: 900 });
+    const frame = pageFrame(page);
+    await page.goto("/");
+    await openReader(page);
+    await importFiles(page);
+    await focusDocument(page);
+    await page.keyboard.press("Escape");
+    await expect(shelfRow(page, "twelve-pages")).toBeVisible();
+    await chooseNextFile(page, EPUB);
+    await tabTo(page, frame.getByRole("button", { name: "Import", exact: true }), { max: 60 });
+    await page.keyboard.press("Enter");
+    await focusDocument(page);
+    await page.keyboard.press("Escape");
+    await expect(shelfRow(page, "Dune")).toBeVisible();
+    const rail = frame.getByRole("complementary", { name: "Collections" });
+    await expect(rail).toBeVisible();
+
+    // New Collection, from the palette.
+    await runHostCommand(page, "New Collection…");
+    const create = frame.getByRole("dialog", { name: "New Collection" });
+    await expect(create).toBeVisible();
+    await expect(create.getByRole("textbox", { name: "Name" })).toBeFocused();
+    await page.keyboard.type("Research");
+    await capture(page, "reader-collection-new");
+    await page.keyboard.press("Enter");
+    await expect(create).toBeHidden();
+    const research = rail.getByRole("button", { name: /^Research\s*0$/ });
+    await expect(research).toBeVisible();
+
+    // File Dune from its Document menu; the check box keeps the menu open.
+    await tabTo(page, shelfRow(page, "Dune"), { max: 60 });
+    const menu = await openRowMenu(page);
+    const box = menu.getByRole("menuitemcheckbox", { name: /^Research/ });
+    await pressUntilFocused(page, "ArrowDown", box, { max: 10 });
+    await page.keyboard.press("Space");
+    await expect(box).toHaveAttribute("aria-checked", "true");
+    await capture(page, "reader-collection-menu");
+    await page.keyboard.press("Escape");
+    await expect(rail.getByRole("button", { name: /^Research\s*1$/ })).toBeVisible();
+
+    // Filter to it from the rail.
+    const filed = rail.getByRole("button", { name: /^Research\s*1$/ });
+    await tabTo(page, filed, { max: 60, backwards: true });
+    await page.keyboard.press("Enter");
+    await expect(filed).toHaveAttribute("aria-current", "true");
+    await expect(frame.getByRole("heading", { level: 1, name: "Research" })).toBeVisible();
+    await expect(shelfRow(page, "twelve-pages")).toHaveCount(0);
+    await expect(shelfRow(page, "Dune")).toBeVisible();
+    await capture(page, "reader-collection-rail");
+
+    // Remembered across a reload.
+    await page.reload();
+    await expect(frame.getByRole("heading", { level: 1, name: "Research" })).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(shelfRow(page, "twelve-pages")).toHaveCount(0);
+
+    // Rename Collection acts on the filtered one.
+    await runHostCommand(page, "Rename Collection…");
+    const rename = frame.getByRole("dialog", { name: "Rename Collection" });
+    const name = rename.getByRole("textbox", { name: "Name" });
+    await expect(name).toBeFocused();
+    await expect(name).toHaveValue("Research");
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type("Notes");
+    await page.keyboard.press("Enter");
+    await expect(rename).toBeHidden();
+    await expect(frame.getByRole("heading", { level: 1, name: "Notes" })).toBeVisible();
+
+    // Delete Collection too, and every Document comes back.
+    await runHostCommand(page, "Delete Collection…");
+    const confirm = frame.getByRole("alertdialog", { name: "Delete “Notes”?" });
+    await expect(confirm).toBeVisible();
+    await expect(confirm.getByText("Its Documents stay on the Shelf.")).toBeVisible();
+    await capture(page, "reader-collection-delete");
+    await tabTo(page, confirm.getByRole("button", { name: "Delete", exact: true }), { max: 5 });
+    await page.keyboard.press("Enter");
+    await expect(confirm).toBeHidden();
+    await expect(frame.getByRole("heading", { level: 1, name: "All Documents" })).toBeVisible();
+    await expect(shelfRow(page, "twelve-pages")).toBeVisible();
+    await expect(rail.getByText("No Collections yet")).toBeVisible();
+  });
+
   test("drop the EPUB on the Shelf Frame, then the PDF on the open Document @wf:reader-drop @sandbox", async ({
     page,
   }) => {
