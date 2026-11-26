@@ -434,6 +434,12 @@ export interface MenuProps {
   onSelect: (id: string) => void;
   /** Content drawn above the rows, such as the row summary a Document menu shows. */
   header?: ComponentChildren;
+  /**
+   * Draw the rows in place, as the body of the Sheet or Popover that holds
+   * them. That container is the layer: it owns position, Escape, and focus
+   * return, so an inline Menu neither portals nor registers a layer of its own.
+   */
+  inline?: boolean;
   class?: string;
 }
 
@@ -458,10 +464,19 @@ function nextEnabled(items: ReadonlyArray<MenuItem>, from: number, delta: number
  * Space select, and Escape closes through the layer stack. Rows are 40 px on a
  * fine pointer and 44 px when the layout asks for the larger touch target.
  */
-export function Menu({ open, onClose, label, items, onSelect, header, class: extra }: MenuProps) {
+export function Menu({
+  open,
+  onClose,
+  label,
+  items,
+  onSelect,
+  header,
+  inline = false,
+  class: extra,
+}: MenuProps) {
   const { target } = useLayoutMode();
   const { ref: layerRef, nested } = useLayer({
-    active: open,
+    active: open && !inline,
     onEscape: onClose,
     modal: false,
     focusFirstControl: false,
@@ -484,7 +499,7 @@ export function Menu({ open, onClose, label, items, onSelect, header, class: ext
     }
   }, [open]);
 
-  usePosition(layerRef, anchorRef, open);
+  usePosition(layerRef, anchorRef, open && !inline);
 
   useEffect(() => {
     if (!open) return;
@@ -558,10 +573,11 @@ export function Menu({ open, onClose, label, items, onSelect, header, class: ext
 
   if (!open) return null;
 
-  return createPortal(
+  const modifier = inline ? "kit-menu--inline" : nested ? "kit-menu--nested" : "";
+  const menu = (
     <div
       ref={layerRef}
-      class={`kit-menu ${nested ? "kit-menu--nested" : ""} ${extra ?? ""}`.trim()}
+      class={`kit-menu ${modifier} ${extra ?? ""}`.trim()}
       role="menu"
       aria-label={label}
       tabIndex={-1}
@@ -587,7 +603,8 @@ export function Menu({ open, onClose, label, items, onSelect, header, class: ext
           {item.shortcut ? <span class="kit-menu__shortcut">{item.shortcut}</span> : null}
         </button>
       ))}
-    </div>,
-    document.body
+    </div>
   );
+
+  return inline ? menu : createPortal(menu, document.body);
 }

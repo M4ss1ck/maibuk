@@ -480,6 +480,19 @@ button.kit-chip {
   z-index: calc(var(--z-dialog) + 1);
 }
 
+/* An inline Menu is the body of the Sheet or Popover that holds it: that
+   container already draws the surface, so the rows sit flat inside it. */
+.kit-menu.kit-menu--inline {
+  position: static;
+  z-index: auto;
+  min-width: 0;
+  max-width: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .kit-menu__item {
   display: flex;
   align-items: center;
@@ -577,6 +590,12 @@ button.kit-chip {
   box-shadow: none;
   animation: none;
   transition: none;
+}
+
+/* The container already draws the ink border around an inline Menu. */
+[data-eink="true"] .kit-menu.kit-menu--inline,
+[data-motion="reduce"] .kit-menu.kit-menu--inline {
+  border: 0;
 }
 
 [data-eink="true"] .kit-scrim,

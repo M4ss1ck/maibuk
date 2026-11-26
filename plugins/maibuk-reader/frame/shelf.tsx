@@ -445,6 +445,7 @@ export function Shelf({
             items={menuItems(menuEntry)}
             onSelect={selectMenuItem}
             header={<DocumentSummary entry={menuEntry} />}
+            inline
           />
         </Popover>
       ) : (
@@ -456,6 +457,7 @@ export function Shelf({
             items={menuItems(menuEntry)}
             onSelect={selectMenuItem}
             header={<DocumentSummary entry={menuEntry} />}
+            inline
           />
         </Sheet>
       )}

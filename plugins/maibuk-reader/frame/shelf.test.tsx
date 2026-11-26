@@ -506,8 +506,10 @@ describe("Document menu", () => {
     const user = userEvent.setup({ delay: null });
     await mount(<Harness />);
     await press(() => user.click(screen.getByRole("button", { name: "More for Dune" })));
-    expect(screen.getByRole("dialog", { name: "Document actions" })).toHaveClass("kit-popover");
-    expect(screen.getByRole("menu", { name: "Document actions" })).toBeInTheDocument();
+    const popover = screen.getByRole("dialog", { name: "Document actions" });
+    expect(popover).toHaveClass("kit-popover");
+    // The rows are drawn inside the Popover, not in a second floating layer.
+    expect(within(popover).getByRole("menu", { name: "Document actions" })).toBeInTheDocument();
     await press(() => user.keyboard("{Escape}"));
 
     setWidth(500);
@@ -515,8 +517,17 @@ describe("Document menu", () => {
       window.dispatchEvent(new Event("resize"));
     });
     await press(() => user.click(screen.getByRole("button", { name: "More for Dune" })));
-    expect(screen.getByRole("dialog", { name: "Document actions" })).toHaveClass("kit-sheet");
-    expect(screen.getByRole("menu", { name: "Document actions" })).toBeInTheDocument();
+    const sheet = screen.getByRole("dialog", { name: "Document actions" });
+    expect(sheet).toHaveClass("kit-sheet");
+    // The rows are the Sheet's body: a Menu floating beside it sits under the
+    // Sheet's scrim, where a tap cannot reach it.
+    expect(within(sheet).getByRole("menu", { name: "Document actions" })).toBeInTheDocument();
+    expect(within(sheet).getByRole("menuitem", { name: "Open" })).toHaveFocus();
+    await press(() => user.keyboard("{ArrowDown}"));
+    expect(within(sheet).getByRole("menuitem", { name: "Remove from Shelf…" })).toHaveFocus();
+    await press(() => user.keyboard("{Escape}"));
+    expect(screen.queryByRole("dialog", { name: "Document actions" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "More for Dune" })).toHaveFocus();
   });
 
   it("draws the row summary above the menu rows in Wide and Narrow", async () => {

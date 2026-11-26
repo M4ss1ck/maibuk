@@ -570,6 +570,52 @@ describe("Menu", () => {
     expect(rerender.dataset.tick).toBe("1");
     expect(document.activeElement).toBe(screen.getByRole("menuitem", { name: /Settings/ }));
   });
+
+  it("draws inline as its Sheet's body and leaves Escape and focus return to the Sheet", async () => {
+    setWidth(500);
+    const user = userEvent.setup({ delay: null });
+    const selected: string[] = [];
+    function InlineCase() {
+      const [open, setOpen] = useState(false);
+      return (
+        <div>
+          <button type="button" onClick={() => setOpen(true)}>
+            Open actions
+          </button>
+          <Sheet open={open} onClose={() => setOpen(false)} title="Actions">
+            <Menu
+              open={open}
+              onClose={() => setOpen(false)}
+              label="Actions"
+              items={MENU_ITEMS}
+              onSelect={(id) => selected.push(id)}
+              inline
+            />
+          </Sheet>
+        </div>
+      );
+    }
+    await mount(<InlineCase />);
+    const trigger = screen.getByRole("button", { name: "Open actions" });
+    await press(() => user.click(trigger));
+
+    const sheet = screen.getByRole("dialog", { name: "Actions" });
+    const menu = screen.getByRole("menu", { name: "Actions" });
+    expect(sheet.contains(menu)).toBe(true);
+    expect(document.activeElement).toBe(screen.getByRole("menuitem", { name: "New note" }));
+    await press(() => user.keyboard("{ArrowDown}"));
+    expect(document.activeElement).toBe(screen.getByRole("menuitem", { name: /Settings/ }));
+
+    await press(() => user.keyboard("{Escape}"));
+    expect(screen.queryByRole("dialog", { name: "Actions" })).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+
+    await press(() => user.click(trigger));
+    await press(() => user.keyboard("{Enter}"));
+    expect(selected).toEqual(["new"]);
+    expect(screen.queryByRole("dialog", { name: "Actions" })).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
 });
 
 function NestedCase() {
