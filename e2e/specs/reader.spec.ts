@@ -287,7 +287,7 @@ test.describe("Reader", () => {
     await capture(page, "reader-search");
   });
 
-  test("a Missing Document shows its state, and Locate again keeps the Reading Position @wf:reader-missing-locate @sc:plugin.maibuk-reader.openFile @sandbox", async ({
+  test("a Missing Document shows its state, and Locate again keeps the Reading Position @wf:reader-missing-locate @sc:plugin.maibuk-reader.openFile @sc:plugin.maibuk-reader.locateDocument @sandbox", async ({
     page,
   }) => {
     await page.goto("/");
@@ -322,7 +322,7 @@ test.describe("Reader", () => {
     await expect(pageIndicator(page)).toContainText("4 of 12", { timeout: 30_000 });
   });
 
-  test("Remove from Shelf forgets the Document and leaves its file alone @wf:reader-remove @sandbox", async ({
+  test("Remove from Shelf forgets the Document and leaves its file alone @wf:reader-remove @sc:plugin.maibuk-reader.removeFromShelf @sandbox", async ({
     page,
   }) => {
     await page.goto("/");

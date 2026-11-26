@@ -32,6 +32,47 @@ function labelsFrom(catalog: Record<string, string>): Record<string, string> {
 const LABELS = labelsFrom(en as Record<string, string>);
 const LABELS_ES = labelsFrom(es as Record<string, string>);
 
+/** The `shelfLabels` map the Worker builds from its runtime catalog. */
+function shelfLabelsFrom(catalog: Record<string, string>) {
+  return {
+    shelf: catalog["page.shelf"],
+    import: catalog["shelf.frame.import"],
+    importFiles: catalog["shelf.frame.importFiles"],
+    emptyTitle: catalog["shelf.emptyTitle"],
+    emptyDescription: catalog["shelf.frame.emptyDescription"],
+    loading: catalog["shelf.loading"],
+    error: catalog["shelf.frame.error"],
+    documentsCount: catalog["shelf.frame.documentsCount"],
+    open: catalog["shelf.open"],
+    remove: catalog["shelf.frame.remove"],
+    locate: catalog["shelf.frame.locate"],
+    missing: catalog["shelf.frame.missing"],
+    moreFor: catalog["shelf.frame.moreFor"],
+    removeConfirm: catalog["shelf.frame.removeConfirm"],
+    cancel: catalog["shelf.frame.cancel"],
+    newLabel: catalog["shelf.frame.newLabel"],
+    finishedLabel: catalog["shelf.frame.finishedLabel"],
+    documentActions: catalog["shelf.frame.documentActions"],
+    dismiss: catalog["shelf.frame.dismiss"],
+  };
+}
+
+const SHELF_LABELS = shelfLabelsFrom(en as Record<string, string>);
+const SHELF_LABELS_ES = shelfLabelsFrom(es as Record<string, string>);
+
+/** One Shelf row the Worker hands the Frame. */
+const SHELF_ENTRY = {
+  id: "doc-1",
+  title: "Dune",
+  author: "",
+  format: "pdf",
+  state: "ok",
+  progressText: "New",
+  progressPercent: null,
+  statusText: null,
+  tone: 3,
+};
+
 /** One page label set: roman prelims, then 1..10, as the fixture carries. */
 const LABELS_WITH_PRELIMS = ["i", "ii", ...Array.from({ length: 10 }, (_, i) => String(i + 1))];
 
@@ -794,6 +835,26 @@ describe("labels", () => {
     expect(el("zoom-out").getAttribute("aria-label")).toBe(LABELS_ES.zoomOut);
     expect(el("fit-page").getAttribute("aria-label")).toBe(LABELS_ES.fitPage);
     expect(el("fullscreen-toggle").getAttribute("aria-label")).toBe(LABELS_ES.fullScreen);
+  });
+
+  it("hands the Shelf's labels to the Frame on a language change", async () => {
+    frame = loadFrame(createPdfStub());
+    frame.open({
+      view: "shelf",
+      entry: null,
+      shelf: { status: "ready", entries: [SHELF_ENTRY] },
+      shelfLabels: SHELF_LABELS,
+    });
+    await vi.waitFor(() => expect(el("shelf-root").textContent).toContain("Shelf"));
+
+    frame.port.deliver({
+      kind: "language",
+      language: "es",
+      labels: LABELS_ES,
+      shelfLabels: SHELF_LABELS_ES,
+    });
+    await vi.waitFor(() => expect(el("shelf-root").textContent).toContain("Estante"));
+    expect(el("shelf-root").textContent).toContain("Importar");
   });
 });
 

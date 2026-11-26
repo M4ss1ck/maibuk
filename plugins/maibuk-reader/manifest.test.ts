@@ -90,6 +90,8 @@ describe("Reader manifest", () => {
       "decreaseFontSize",
       "toggleContinuousScroll",
       "backToShelf",
+      "removeFromShelf",
+      "locateDocument",
     ]);
     for (const id of ["openReader", "openFile"]) {
       expect(commands.find((command) => command.id === id)?.contexts, id).toEqual(["global"]);
@@ -111,6 +113,24 @@ describe("Reader manifest", () => {
       "backToShelf",
     ]) {
       expect(commands.find((command) => command.id === id)?.contexts, id).toEqual(["document"]);
+    }
+    for (const id of ["removeFromShelf", "locateDocument"]) {
+      expect(commands.find((command) => command.id === id)?.contexts, id).toEqual(["reader"]);
+    }
+  });
+
+  it("offers the Shelf's row Commands on the Shelf page, with no default shortcuts", () => {
+    const commands = manifest().contributes?.commands ?? [];
+    for (const [id, label] of [
+      ["removeFromShelf", "Remove from Shelf…"],
+      ["locateDocument", "Locate"],
+    ] as const) {
+      const command = commands.find((candidate) => candidate.id === id);
+      expect(command?.contexts, id).toEqual(["reader"]);
+      expect(command?.label, id).toBe(label);
+      // The spec sheet's Keyboard table defines the grid's keys only, so these
+      // Commands reach the author through the menu, never a Default Shortcut.
+      expect(command?.defaults, id).toBeUndefined();
     }
   });
 

@@ -11,7 +11,7 @@
   </head>
   <body data-view="document">
     <!-- The Preact app (#942) draws the toolbar; reader.js mounts into this
-         root. The search bar, Contents panel, message area, and password
+         root. The search bar, Contents panel, Shelf, message area, and password
          prompt are portals the same app draws into their own roots. -->
     <div id="app-root"></div>
 
@@ -21,6 +21,10 @@
     <div id="body">
       <!-- The Preact app (#942) draws the Contents panel into this root. -->
       <div id="contents-root"></div>
+
+      <!-- The Preact app (#944) portals the Shelf in here, above the reading
+           surface. -->
+      <div id="shelf-root"></div>
 
       <main id="viewer">
         <div id="stage" hidden>

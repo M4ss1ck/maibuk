@@ -214,8 +214,12 @@ export interface FrameProtocol {
   onOpen?: (message: FrameOpenMessage) => void;
   /** Handles `command`; `entry.ts` assigns `runCommand`. */
   onCommand?: (id: string) => void;
-  /** Handles `language`; `entry.ts` re-labels its chrome. */
-  onLanguage?: (language: string, labels: FrameLabels | null) => void;
+  /** Handles `language`; `entry.ts` re-labels its chrome and the Shelf. */
+  onLanguage?: (
+    language: string,
+    labels: FrameLabels | null,
+    shelfLabels: FrameShelfLabels | null
+  ) => void;
   /** Handles `appearance`; `entry.ts` redraws the app in it. */
   onAppearance?: (appearance: Appearance) => void;
   /** Handles `shelf`; the Frame redraws the Shelf. */
@@ -349,7 +353,7 @@ export function createFrameProtocol(port: MessagePort | null | undefined): Frame
         return;
       case "language":
         if (typeof data.language === "string") {
-          client.onLanguage?.(data.language, data.labels ?? null);
+          client.onLanguage?.(data.language, data.labels ?? null, data.shelfLabels ?? null);
         }
         return;
       case "appearance":

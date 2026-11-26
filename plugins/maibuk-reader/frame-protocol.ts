@@ -199,7 +199,9 @@ export type FrameCommandId =
   | "increaseFontSize"
   | "decreaseFontSize"
   | "toggleContinuousScroll"
-  | "backToShelf";
+  | "backToShelf"
+  | "removeFromShelf"
+  | "locateDocument";
 
 /** The Shelf Commands the Frame sends to the Worker. */
 export type FrameShelfCommandId =

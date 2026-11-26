@@ -105,6 +105,16 @@
         "id": "backToShelf",
         "label": "Back to Shelf",
         "contexts": ["document"]
+      },
+      {
+        "id": "removeFromShelf",
+        "label": "Remove from Shelf…",
+        "contexts": ["reader"]
+      },
+      {
+        "id": "locateDocument",
+        "label": "Locate",
+        "contexts": ["reader"]
       }
     ],
     "pages": [

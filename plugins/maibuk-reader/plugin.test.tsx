@@ -9,7 +9,7 @@
 import { waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { createTestHost } from "@/features/plugins/test-kit";
-import { createPluginClient } from "@/plugin-sdk";
+import { PLUGIN_FRAME_MESSAGE, createPluginClient, type PluginMessagePort } from "@/plugin-sdk";
 import {
   PLUGIN_CANVAS_REFERENCE_LIST_REQUEST,
   PLUGIN_CANVAS_REFERENCE_OPEN_REQUEST,
@@ -29,6 +29,34 @@ import {
 } from "./shelf";
 import { epubBytes, pdfBytes, readerManifest, readerStorage, shelfEntry } from "./test-support";
 
+/** A Plugin port the test can also hand a Frame, the way the host runtime does. */
+function frameAwarePort(inner: MessagePort) {
+  let listener: ((event: MessageEvent) => void) | null = null;
+  inner.onmessage = (event) => listener?.(event);
+  const port = {
+    postMessage: (message: unknown, transfer?: Transferable[]) => {
+      if (transfer === undefined) inner.postMessage(message);
+      else inner.postMessage(message, transfer);
+    },
+    get onmessage() {
+      return listener;
+    },
+    set onmessage(next: ((event: MessageEvent) => void) | null) {
+      listener = next;
+    },
+    /** Hands the Plugin one Frame and returns the test's end of its port. */
+    frame(frameId: string, src: string): MessagePort {
+      const channel = new MessageChannel();
+      listener?.({
+        data: { kind: PLUGIN_FRAME_MESSAGE.kind, frameId, src },
+        ports: [channel.port1],
+      } as unknown as MessageEvent);
+      return channel.port2;
+    },
+  };
+  return port;
+}
+
 function hostFor(
   options: { files?: { name: string; bytes: Uint8Array }[]; storage?: Map<string, unknown> } = {}
 ) {
@@ -38,8 +66,9 @@ function hostFor(
     storage,
     files: options.files,
   });
-  startReader(createPluginClient(host.port), servePluginUi);
-  return { host, storage };
+  const port = frameAwarePort(host.port);
+  startReader(createPluginClient(port as PluginMessagePort), servePluginUi);
+  return { host, storage, port };
 }
 
 /** A Shelf row whose Fingerprint matches the seeded file exactly. */
@@ -60,6 +89,27 @@ describe("Reader Commands", () => {
     try {
       await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: OPEN_READER });
       expect(host.pageNavigations).toEqual([{ pluginId: "maibuk-reader", pageId: SHELF_PAGE_ID }]);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it.each([
+    "removeFromShelf",
+    "locateDocument",
+  ])("forwards %s to the mounted Shelf Frame", async (id) => {
+    const { host, port } = hostFor();
+    try {
+      // The Frame is mounted and its session is listening by the time this
+      // returns; the Worker must forward the Command to that same port.
+      const frame = port.frame("frame-1", "assets/ui/shelf.html");
+      const messages: Record<string, unknown>[] = [];
+      frame.onmessage = (event) => messages.push(event.data as Record<string, unknown>);
+      frame.start();
+
+      await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id });
+
+      await waitFor(() => expect(messages).toContainEqual({ kind: "command", id }));
     } finally {
       await host.stop();
     }

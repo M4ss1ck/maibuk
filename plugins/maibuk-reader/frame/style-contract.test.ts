@@ -99,6 +99,18 @@ describe("Frame shells", () => {
     // One shell, two views: no style or script may drift between the pages.
     expect(withoutView(shelfShell)).toBe(withoutView(documentShell));
   });
+
+  it.each(shells)("gives $name a Shelf root inside the body, before the viewer", ({
+    name,
+    html,
+  }) => {
+    const body = html.indexOf('<div id="body">');
+    const shelfRoot = html.indexOf('<div id="shelf-root"></div>');
+    const viewer = html.indexOf('<main id="viewer">');
+    expect(body, name).toBeGreaterThan(-1);
+    expect(shelfRoot, name).toBeGreaterThan(body);
+    expect(viewer, name).toBeGreaterThan(shelfRoot);
+  });
 });
 
 describe("live chrome", () => {

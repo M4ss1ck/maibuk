@@ -57,6 +57,8 @@ export const INCREASE_FONT_SIZE = "increaseFontSize";
 export const DECREASE_FONT_SIZE = "decreaseFontSize";
 export const TOGGLE_CONTINUOUS_SCROLL = "toggleContinuousScroll";
 export const BACK_TO_SHELF = "backToShelf";
+export const REMOVE_FROM_SHELF = "removeFromShelf";
+export const LOCATE_DOCUMENT = "locateDocument";
 
 /** The Commands the Frame handles itself, forwarded while it is open. */
 const FRAME_COMMANDS: ReadonlySet<FrameCommandId> = new Set<FrameCommandId>([
@@ -74,6 +76,8 @@ const FRAME_COMMANDS: ReadonlySet<FrameCommandId> = new Set<FrameCommandId>([
   DECREASE_FONT_SIZE,
   TOGGLE_CONTINUOUS_SCROLL,
   BACK_TO_SHELF,
+  REMOVE_FROM_SHELF,
+  LOCATE_DOCUMENT,
 ]);
 
 /**

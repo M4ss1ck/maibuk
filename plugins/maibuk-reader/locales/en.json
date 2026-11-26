@@ -18,6 +18,8 @@
   "commands.decreaseFontSize.label": "Decrease font size",
   "commands.toggleContinuousScroll.label": "Continuous scroll",
   "commands.backToShelf.label": "Back to Shelf",
+  "commands.removeFromShelf.label": "Remove from Shelf…",
+  "commands.locateDocument.label": "Locate",
   "pages.reader.title": "Reader",
   "pages.document.title": "Reading",
   "canvasReferenceSources.documents.label": "Documents"

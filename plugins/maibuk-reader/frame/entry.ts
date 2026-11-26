@@ -300,10 +300,20 @@ let wheelTurned = false;
 
 let pageLabels: string[] | null = null;
 
+/* The Shelf row whose Document the Frame last asked the Worker to open, so a
+   Back that switches to the Shelf puts focus back on that row. Cleared when the
+   Shelf open arrives; a row the refreshed Shelf no longer carries is dropped
+   then too. */
+let shelfOpenDocumentId: string | null = null;
+/* The Shelf row the author last selected, which a host Command acts on. */
+let shelfSelectedDocumentId: string | null = null;
+
 /* The chrome the Preact app draws: labels, toolbar state, page indicator, zoom
-   level, message, and password prompt. `entry.ts` owns the state and hands it
-   over the bridge; the app renders it and calls back through the actions. */
+   level, message, password prompt, and the Shelf. `entry.ts` owns the state and
+   hands it over the bridge; the app renders it and calls back through the
+   actions. */
 let chrome: ChromeState = {
+  view: "document",
   labels: labelsFromStrings(),
   toolbar: {
     previousDisabled: true,
@@ -320,6 +330,12 @@ let chrome: ChromeState = {
   message: { hidden: true, text: "", error: false },
   password: { visible: false, wrong: false },
   surfaces: { contentsOpen: false, findOpen: false, focus: null },
+  shelf: { status: "loading", entries: [] },
+  shelfLabels: null,
+  shelfNotice: null,
+  shelfRemoval: null,
+  menuDocumentId: null,
+  focusDocumentId: null,
 };
 
 const chromeListeners = new Set<(state: ChromeState) => void>();
@@ -338,8 +354,29 @@ const bridge: FrameBridge = {
       chromeListeners.delete(listener);
     };
   },
+  setView(view) {
+    publishChrome({ ...chrome, view });
+  },
   setLabels(labels) {
     publishChrome({ ...chrome, labels });
+  },
+  setShelf(shelf) {
+    publishChrome({ ...chrome, shelf });
+  },
+  setShelfLabels(shelfLabels) {
+    publishChrome({ ...chrome, shelfLabels });
+  },
+  setShelfNotice(shelfNotice) {
+    publishChrome({ ...chrome, shelfNotice });
+  },
+  setShelfRemoval(shelfRemoval) {
+    publishChrome({ ...chrome, shelfRemoval });
+  },
+  setMenuDocumentId(menuDocumentId) {
+    publishChrome({ ...chrome, menuDocumentId });
+  },
+  setFocusDocumentId(focusDocumentId) {
+    publishChrome({ ...chrome, focusDocumentId });
   },
   setToolbar(toolbar) {
     publishChrome({ ...chrome, toolbar });
@@ -372,6 +409,20 @@ const bridge: FrameBridge = {
     previousPage: () => previousPage(),
     nextPage: () => nextPage(),
     submitPassword: (value) => onPasswordSubmit(value),
+    shelfCommand: (id, documentId) => {
+      if (id === "openDocument" && documentId !== undefined) {
+        shelfOpenDocumentId = documentId;
+      }
+      if (documentId === undefined) post({ kind: "shelf-command", id });
+      else post({ kind: "shelf-command", id, documentId });
+    },
+    shelfSelect: (documentId) => {
+      shelfSelectedDocumentId = documentId;
+      post({ kind: "shelf-select", documentId });
+    },
+    shelfRemove: (documentId) => {
+      post({ kind: "shelf-remove", documentId });
+    },
   },
 };
 
@@ -645,7 +696,29 @@ async function handleOpen(message: FrameOpenMessage) {
   language = typeof message.language === "string" ? message.language : language;
   applyAppearance(message.appearance);
   setLabels();
+
+  const view = message.view === "shelf" ? "shelf" : "document";
+  bridge.setView(view);
+  bridge.setShelf(message.shelf ?? { status: "loading", entries: [] });
+  bridge.setShelfLabels(message.shelfLabels ?? null);
+  bridge.setShelfNotice(null);
+  bridge.setShelfRemoval(null);
+  bridge.setMenuDocumentId(null);
   resetDocument();
+  if (view === "shelf") {
+    // The Shelf owns the surface; the reading stage, viewer, message area, and
+    // password prompt stay hidden, so no "No Document open" shows.
+    if (viewer) viewer.hidden = true;
+    if (stage) stage.hidden = true;
+    hideMessage();
+    // Back from a Document restores focus to the row that opened it. The Shelf
+    // arrives loading first, so this lands before its rows do; the component
+    // focuses the row once the refreshed state draws it.
+    bridge.setFocusDocumentId(shelfOpenDocumentId);
+    shelfOpenDocumentId = null;
+    return;
+  }
+  if (viewer) viewer.hidden = false;
   if (!entry) {
     showMessage(t("empty"), false);
     return;
@@ -969,6 +1042,7 @@ function onHostMessage(event: MessageEvent) {
  * wheel zooms. Continuous scroll just scrolls.
  */
 function onWheel(event: WheelEvent) {
+  if (chrome.view === "shelf") return;
   if (!hasDocument()) return;
   if (event.ctrlKey || event.metaKey) {
     event.preventDefault();
@@ -1220,6 +1294,17 @@ function runCommand(id: string) {
     case "backToShelf":
       leave();
       return;
+    case "removeFromShelf":
+    case "locateDocument":
+      // A host Command acts on the Shelf row the author selected, never on a
+      // Document: the Frame only forwards it while the Shelf is the view.
+      if (chrome.view !== "shelf") return;
+      if (shelfSelectedDocumentId === null) {
+        post({ kind: "shelf-command", id });
+      } else {
+        post({ kind: "shelf-command", id, documentId: shelfSelectedDocumentId });
+      }
+      return;
     default:
       return;
   }
@@ -1227,6 +1312,8 @@ function runCommand(id: string) {
 
 function onKeyDown(event: KeyboardEvent) {
   if (event.defaultPrevented) return;
+  // The Shelf's grid and its layers own every key, Escape included.
+  if (chrome.view === "shelf") return;
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
     event.preventDefault();
     find.open();
@@ -1309,11 +1396,13 @@ function onKeyDown(event: KeyboardEvent) {
 let pointerStart: { x: number; y: number } | null = null;
 
 function onPointerDown(event: PointerEvent) {
+  if (chrome.view === "shelf") return;
   if (event.button !== undefined && event.button !== 0) return;
   pointerStart = { x: event.clientX, y: event.clientY };
 }
 
 function onPointerUp(event: PointerEvent) {
+  if (chrome.view === "shelf") return;
   if (!pointerStart) return;
   const start = pointerStart;
   pointerStart = null;
@@ -1426,12 +1515,40 @@ if (appRoot) {
 
 protocol.onOpen = handleOpen;
 protocol.onCommand = runCommand;
-protocol.onLanguage = (nextLanguage, labels) => {
+protocol.onLanguage = (nextLanguage, labels, shelfLabels) => {
   language = nextLanguage;
   if (labels) providedLabels = labels;
+  if (shelfLabels) bridge.setShelfLabels(shelfLabels);
   setLabels();
 };
 protocol.onAppearance = applyAppearance;
+protocol.onShelf = (state) => {
+  bridge.setShelf(state);
+  // A fresh Shelf ends the removal confirmation it may have changed, and a row
+  // that is gone no longer holds the focus a Back asked for.
+  bridge.setShelfRemoval(null);
+  const focus = chrome.focusDocumentId;
+  if (focus !== null && !state.entries.some((row) => row.id === focus)) {
+    bridge.setFocusDocumentId(null);
+  }
+  if (
+    shelfSelectedDocumentId !== null &&
+    !state.entries.some((row) => row.id === shelfSelectedDocumentId)
+  ) {
+    shelfSelectedDocumentId = null;
+  }
+};
+protocol.onRemoveCounts = (message) => {
+  bridge.setShelfRemoval({
+    documentId: message.documentId,
+    title: message.title,
+    body: message.body,
+    stats: message.stats,
+  });
+};
+protocol.onShelfResult = (message) => {
+  bridge.setShelfNotice(message === null ? null : { text: message, error: true });
+};
 
 if (port) {
   port.onmessage = onMessage;
