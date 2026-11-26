@@ -143,7 +143,9 @@ export interface FrameShelfLabels {
   emptyDescription: string;
   loading: string;
   error: string;
-  documentsCount: string;
+  /** "{{count}} Document", for exactly one. */
+  documentsCountOne: string;
+  documentsCountOther: string;
   open: string;
   remove: string;
   locate: string;

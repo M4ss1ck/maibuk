@@ -1021,7 +1021,7 @@ describe("language", () => {
       const message = await messageOf(harness, "language");
       expect((message.labels as Record<string, string>).back).toBe("Volver al estante");
       expect((message.shelfLabels as Record<string, string>).shelf).toBe("Estante");
-      expect((message.shelfLabels as Record<string, string>).documentsCount).toBe(
+      expect((message.shelfLabels as Record<string, string>).documentsCountOther).toBe(
         "{{count}} documentos"
       );
     } finally {

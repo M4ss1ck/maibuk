@@ -150,13 +150,16 @@
 
 .shelf-card__format {
   position: absolute;
-  top: var(--space-1);
-  right: var(--space-1);
-  padding: 0 var(--space-1);
-  border-radius: var(--radius-control);
-  background: var(--card);
-  color: var(--chrome-fg);
-  font-size: var(--type-label-size);
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--format-badge-bg);
+  color: var(--format-badge-fg);
+  font-size: 10px;
   font-weight: var(--type-label-weight);
   letter-spacing: var(--type-label-tracking);
   line-height: var(--type-label-line);
@@ -229,9 +232,25 @@
   line-height: var(--type-status-line);
 }
 
-.shelf-card__actions {
+/* Title and meta beside the More button, as "Shelf · desktop · grid M" draws them. */
+.shelf-card__info {
   display: flex;
-  justify-content: flex-end;
+  gap: var(--space-1);
+  align-items: flex-start;
+}
+
+.shelf-card__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.shelf-card__more {
+  flex: none;
+  margin-right: -6px;
+  color: var(--chrome-meta);
 }
 
 /* The Document a menu acts on, drawn above the menu rows in both layouts. */

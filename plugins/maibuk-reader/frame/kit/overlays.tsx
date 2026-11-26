@@ -252,6 +252,11 @@ export interface SheetProps {
   onClose: () => void;
   title: string;
   doneLabel?: string;
+  /**
+   * Keep the title as the Sheet's accessible name but do not draw it, for a
+   * Sheet whose body opens with its own heading, such as a Document summary.
+   */
+  titleHidden?: boolean;
   /** The layer's ARIA role; confirmation sheets announce an alertdialog. */
   role?: "dialog" | "alertdialog";
   children?: ComponentChildren;
@@ -268,6 +273,7 @@ export function Sheet({
   onClose,
   title,
   doneLabel,
+  titleHidden = false,
   role = "dialog",
   children,
   class: extra,
@@ -293,8 +299,17 @@ export function Sheet({
         tabIndex={-1}
       >
         <div class="kit-sheet__grab" aria-hidden="true" />
-        <div class="kit-sheet__header">
-          <h2 id={titleId} class="kit-sheet__title">
+        <div
+          class={
+            titleHidden && doneLabel === undefined
+              ? "kit-sheet__header kit-sheet__header--bare"
+              : "kit-sheet__header"
+          }
+        >
+          <h2
+            id={titleId}
+            class={titleHidden ? "kit-sheet__title kit-visually-hidden" : "kit-sheet__title"}
+          >
             {title}
           </h2>
           {doneLabel === undefined ? null : (
@@ -423,6 +438,10 @@ export interface MenuItem {
   icon?: IconName;
   shortcut?: string;
   disabled?: boolean;
+  /** Draws the row in the danger color, for an action that deletes. */
+  destructive?: boolean;
+  /** Starts a new group: a divider separates the row from the rows above it. */
+  groupStart?: boolean;
 }
 
 /** The props a Menu takes: open state, close, its label, optional header, rows, and selection. */
@@ -592,7 +611,9 @@ export function Menu({
           }}
           type="button"
           role="menuitem"
-          class="kit-menu__item"
+          class={`kit-menu__item${item.destructive ? " kit-menu__item--destructive" : ""}${
+            item.groupStart ? " kit-menu__item--group-start" : ""
+          }`}
           tabIndex={index === active && !item.disabled ? 0 : -1}
           disabled={item.disabled}
           style={{ height: `${target}px` }}

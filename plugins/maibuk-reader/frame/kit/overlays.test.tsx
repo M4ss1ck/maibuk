@@ -134,6 +134,19 @@ function DialogCase({ startOpen = false }: { startOpen?: boolean }) {
 }
 
 describe("Sheet", () => {
+  it("keeps a hidden title as its name while its body draws the heading", async () => {
+    setWidth(500);
+    await mount(
+      <Sheet open onClose={() => {}} title="Dune" titleHidden>
+        <h3>Dune, by Frank Herbert</h3>
+      </Sheet>
+    );
+    const sheet = screen.getByRole("dialog", { name: "Dune" });
+    const title = sheet.querySelector("h2");
+    expect(title).toHaveClass("kit-visually-hidden");
+    expect(sheet.querySelector(".kit-sheet__header")).toHaveClass("kit-sheet__header--bare");
+  });
+
   it("renders only in Narrow", async () => {
     setWidth(500);
     await mount(<SheetCase startOpen />);

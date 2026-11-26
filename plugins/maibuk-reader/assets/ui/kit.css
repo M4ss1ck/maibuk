@@ -386,6 +386,11 @@ button.kit-chip {
   min-height: 56px;
 }
 
+/* Nothing drawn in the header: the body's own heading sits under the grab. */
+.kit-sheet__header--bare {
+  min-height: 0;
+}
+
 .kit-sheet__title {
   min-width: 0;
   margin: 0;
@@ -520,6 +525,15 @@ button.kit-chip {
 .kit-menu__item:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: -2px;
+}
+
+.kit-menu__item--destructive {
+  color: var(--danger);
+}
+
+.kit-menu__item--group-start {
+  margin-top: var(--space-1);
+  border-top: 1px solid var(--chrome-border);
 }
 
 .kit-menu__item:disabled {

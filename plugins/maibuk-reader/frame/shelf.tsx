@@ -37,6 +37,9 @@ import { useLayoutMode } from "./use-layout-mode";
 /** The artboard's cover box; the Cover keeps its 2:3 ratio from this width. */
 const COVER_WIDTH = 128;
 
+/** The More button's size beside a cover's title on Wide, as "Shelf · desktop · grid M" draws it. */
+const MORE_WIDE_SIZE = { width: "28px", height: "28px" } as const;
+
 /** The Narrow gutter, gap, and the Wide gutter the design sheet names. */
 const NARROW_GUTTER = 16;
 const NARROW_GAP = 12;
@@ -291,7 +294,14 @@ export function Shelf({
     } else if (entry.state === "missing" || entry.state === "needs-permission") {
       items.push({ id: "locateDocument", label: labels.locate, icon: "relink" });
     }
-    items.push({ id: "removeFromShelf", label: labels.remove, icon: "trash" });
+    // As drawn, Remove is the destructive row, set apart below the others.
+    items.push({
+      id: "removeFromShelf",
+      label: labels.remove,
+      icon: "trash",
+      destructive: true,
+      groupStart: items.length > 0,
+    });
     return items;
   };
 
@@ -351,19 +361,25 @@ export function Shelf({
             />
           </span>
         )}
-        <span class="shelf-card__title">{entry.title}</span>
-        <span class="shelf-card__meta">{meta}</span>
-        {status === null ? null : <span class="shelf-card__status">{status}</span>}
-        <span class="shelf-card__actions">
-          <IconButton
-            label={moreLabel}
-            icon="more"
-            tabIndex={-1}
-            buttonRef={(node) => {
-              moreButtons.current[index] = node;
-            }}
-            onClick={() => openMenu(entry, moreButtons.current[index])}
-          />
+        <span class="shelf-card__info">
+          <span class="shelf-card__text">
+            <span class="shelf-card__title">{entry.title}</span>
+            <span class="shelf-card__meta">{meta}</span>
+            {status === null ? null : <span class="shelf-card__status">{status}</span>}
+          </span>
+          <span class="shelf-card__more">
+            <IconButton
+              label={moreLabel}
+              icon="moreV"
+              tabIndex={-1}
+              // Drawn at 28 px beside the title on Wide; Narrow keeps the 44 px touch target.
+              style={mode === "wide" ? MORE_WIDE_SIZE : undefined}
+              buttonRef={(node) => {
+                moreButtons.current[index] = node;
+              }}
+              onClick={() => openMenu(entry, moreButtons.current[index])}
+            />
+          </span>
         </span>
       </div>
     );
@@ -411,7 +427,11 @@ export function Shelf({
       <header class="shelf__header">
         <div class="shelf__titles">
           <h1 class="shelf__heading">{labels.shelf}</h1>
-          <p class="shelf__count">{fill(labels.documentsCount, { count: entries.length })}</p>
+          <p class="shelf__count">
+            {fill(entries.length === 1 ? labels.documentsCountOne : labels.documentsCountOther, {
+              count: entries.length,
+            })}
+          </p>
         </div>
         {mode === "wide" ? (
           <Button variant="primary" onClick={openImport}>
@@ -437,7 +457,7 @@ export function Shelf({
       </div>
 
       {menuEntry === null ? null : mode === "wide" ? (
-        <Popover open onClose={closeMenu} triggerRef={menuAnchor} label={labels.documentActions}>
+        <Popover open onClose={closeMenu} triggerRef={menuAnchor} label={menuEntry.title}>
           <Menu
             open
             onClose={closeMenu}
@@ -449,7 +469,7 @@ export function Shelf({
           />
         </Popover>
       ) : (
-        <Sheet open onClose={closeMenu} title={labels.documentActions}>
+        <Sheet open onClose={closeMenu} title={menuEntry.title} titleHidden>
           <Menu
             open
             onClose={closeMenu}

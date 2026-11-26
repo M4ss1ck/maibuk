@@ -33,7 +33,8 @@ const LABELS: FrameShelfLabels = {
   emptyDescription: "Open PDF, EPUB, MOBI, AZW3, FB2, or CBZ files from your device.",
   loading: "Loading your Shelf…",
   error: "Reader couldn't load your Shelf.",
-  documentsCount: "{{count}} Documents",
+  documentsCountOne: "{{count}} Document",
+  documentsCountOther: "{{count}} Documents",
   open: "Open",
   remove: "Remove from Shelf…",
   locate: "Locate",
@@ -262,7 +263,10 @@ describe("Shelf grid", () => {
     expect(empty?.[0]).toMatch(/text-align:\s*center/);
 
     const format = shelfCss.match(/\.shelf-card__format\s*\{[^}]*\}/);
-    expect(format?.[0]).toMatch(/right:\s*var\(--space-1\)/);
+    // The drawn badge: 6 px in from the corner, an ink pill from the tokens.
+    expect(format?.[0]).toMatch(/right:\s*6px/);
+    expect(format?.[0]).toMatch(/background:\s*var\(--format-badge-bg\)/);
+    expect(format?.[0]).toMatch(/color:\s*var\(--format-badge-fg\)/);
 
     const progress = shelfCss.match(/\.shelf-card__progress\s*\{[^}]*\}/);
     expect(progress?.[0]).toMatch(/height:\s*3px/);
@@ -506,7 +510,7 @@ describe("Document menu", () => {
     const user = userEvent.setup({ delay: null });
     await mount(<Harness />);
     await press(() => user.click(screen.getByRole("button", { name: "More for Dune" })));
-    const popover = screen.getByRole("dialog", { name: "Document actions" });
+    const popover = screen.getByRole("dialog", { name: "Dune" });
     expect(popover).toHaveClass("kit-popover");
     // The rows are drawn inside the Popover, not in a second floating layer.
     expect(within(popover).getByRole("menu", { name: "Document actions" })).toBeInTheDocument();
@@ -517,7 +521,9 @@ describe("Document menu", () => {
       window.dispatchEvent(new Event("resize"));
     });
     await press(() => user.click(screen.getByRole("button", { name: "More for Dune" })));
-    const sheet = screen.getByRole("dialog", { name: "Document actions" });
+    // As drawn, the Sheet is named by its Document; the summary is its heading.
+    const sheet = screen.getByRole("dialog", { name: "Dune" });
+    expect(within(sheet).queryByText("Document actions")).not.toBeInTheDocument();
     expect(sheet).toHaveClass("kit-sheet");
     // The rows are the Sheet's body: a Menu floating beside it sits under the
     // Sheet's scrim, where a tap cannot reach it.
@@ -526,8 +532,16 @@ describe("Document menu", () => {
     await press(() => user.keyboard("{ArrowDown}"));
     expect(within(sheet).getByRole("menuitem", { name: "Remove from Shelf…" })).toHaveFocus();
     await press(() => user.keyboard("{Escape}"));
-    expect(screen.queryByRole("dialog", { name: "Document actions" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Dune" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "More for Dune" })).toHaveFocus();
+  });
+
+  it("counts one Document in the singular and more in the plural", async () => {
+    setWidth(1024);
+    await mount(<Harness entries={[entry()]} />);
+    expect(screen.getByText("1 Document", { exact: true })).toBeInTheDocument();
+    await mount(<Harness entries={many(2)} />);
+    expect(screen.getByText("2 Documents", { exact: true })).toBeInTheDocument();
   });
 
   it("draws the row summary above the menu rows in Wide and Narrow", async () => {
