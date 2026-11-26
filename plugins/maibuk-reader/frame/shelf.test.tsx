@@ -958,6 +958,46 @@ describe("Shelf views, sort, and filters (#945)", () => {
     });
   });
 
+  it("resets every view choice from the View and filters Sheet by keyboard", async () => {
+    setWidth(390);
+    const user = userEvent.setup({ delay: null });
+    const onSettingsChange = vi.fn();
+    await mount(
+      <Harness
+        entries={[
+          entry({ id: "doc-1", title: "Zeta", format: "epub" }),
+          entry({ id: "doc-2", title: "Alpha", format: "pdf" }),
+          entry({ id: "doc-3", title: "Mid", format: "epub" }),
+        ]}
+        onSettingsChange={onSettingsChange}
+      />
+    );
+
+    const trigger = screen.getByRole("button", { name: "View, sort and filter" });
+    await press(() => user.click(trigger));
+    const dialog = screen.getByRole("dialog", { name: "View and filters" });
+    await press(() => user.click(within(dialog).getByRole("button", { name: "EPUB" })));
+    expect(onSettingsChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ formats: ["epub"] })
+    );
+
+    const reset = within(dialog).getByRole("button", { name: "Reset" });
+    act(() => {
+      reset.focus();
+    });
+    expect(document.activeElement).toBe(reset);
+    await press(() => user.keyboard("{Enter}"));
+    expect(onSettingsChange).toHaveBeenLastCalledWith({
+      layout: "grid",
+      coverSize: "medium",
+      sort: "recent",
+      descending: true,
+      formats: [],
+      statuses: [],
+      search: "",
+    });
+  });
+
   it("closes the View and filters Sheet on Escape and returns focus to its trigger", async () => {
     setWidth(390);
     const user = userEvent.setup({ delay: null });
@@ -1150,6 +1190,34 @@ describe("Shelf views, sort, and filters (#945)", () => {
     await press(() =>
       user.click(screen.getByRole("button", { name: "Remove filter Format: PDF" }))
     );
+    expect(onSettingsChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ statuses: ["new"], formats: [] })
+    );
+    const next = onSettingsChange.mock.lastCall?.[0] as ShelfViewSettings;
+    expect(next.formats).not.toContain("pdf");
+  });
+
+  it("removes a filter from its chip by keyboard", async () => {
+    setWidth(1200);
+    const user = userEvent.setup({ delay: null });
+    const onSettingsChange = vi.fn();
+    await mount(
+      <Harness
+        entries={[
+          entry({ id: "doc-1", title: "Pdf new", status: "new", format: "pdf" }),
+          entry({ id: "doc-2", title: "Epub reading" }),
+        ]}
+        settings={view({ statuses: ["new"], formats: ["pdf"] })}
+        onSettingsChange={onSettingsChange}
+      />
+    );
+
+    const chip = screen.getByRole("button", { name: "Remove filter Format: PDF" });
+    act(() => {
+      chip.focus();
+    });
+    expect(document.activeElement).toBe(chip);
+    await press(() => user.keyboard("{Enter}"));
     expect(onSettingsChange).toHaveBeenLastCalledWith(
       expect.objectContaining({ statuses: ["new"], formats: [] })
     );

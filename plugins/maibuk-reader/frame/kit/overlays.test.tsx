@@ -177,6 +177,41 @@ describe("Sheet", () => {
     expect(seen).toEqual(["reset", "close"]);
   });
 
+  it("runs the header Reset action by keyboard and keeps the Sheet open", async () => {
+    setWidth(500);
+    const user = userEvent.setup({ delay: null });
+    const seen: string[] = [];
+    await mount(
+      <Sheet
+        open
+        onClose={() => seen.push("close")}
+        title="View and filters"
+        doneLabel="Done"
+        actions={
+          <button type="button" onClick={() => seen.push("reset")}>
+            Reset
+          </button>
+        }
+      >
+        <p>Body</p>
+      </Sheet>
+    );
+    const sheet = screen.getByRole("dialog", { name: "View and filters" });
+    const header = sheet.querySelector(".kit-sheet__header") as HTMLElement;
+    const reset = within(header).getByRole("button", { name: "Reset" });
+
+    act(() => {
+      reset.focus();
+    });
+    expect(document.activeElement).toBe(reset);
+    await press(() => user.keyboard("{Enter}"));
+    expect(seen).toEqual(["reset"]);
+
+    await press(() => user.keyboard(" "));
+    expect(seen).toEqual(["reset", "reset"]);
+    expect(sheet).toBeInTheDocument();
+  });
+
   it("renders only in Narrow", async () => {
     setWidth(500);
     await mount(<SheetCase startOpen />);

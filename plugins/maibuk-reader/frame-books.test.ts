@@ -1403,6 +1403,27 @@ describe("the Shelf's views, sort, filters, and search (#945)", () => {
     expect(lastSettings()).toMatchObject({ sort: "added", descending: true });
   });
 
+  it("reverses the order by keyboard from its button, with Enter and Space", async () => {
+    frame = loadFrame("flowing.epub");
+    frame.open({ shelf: { status: "ready", entries: viewRows() }, shelfLabels: SHELF_LABELS });
+    await vi.waitFor(() => expect(shelfCells()).toHaveLength(6));
+    const user = userEvent.setup();
+
+    await user.click(byLabel("Sort by: Recent"));
+    await user.click(radio(popover("Sort by"), "Title"));
+    await vi.waitFor(() => expect(titles()).toEqual(TITLE_ASC));
+
+    byLabel("Reverse order: A to Z").focus();
+    await user.keyboard("{Enter}");
+    await vi.waitFor(() => expect(titles()).toEqual([...TITLE_ASC].reverse()));
+    expect(lastSettings()).toMatchObject({ sort: "title", descending: true });
+
+    byLabel("Reverse order: Z to A").focus();
+    await user.keyboard(" ");
+    await vi.waitFor(() => expect(titles()).toEqual(TITLE_ASC));
+    expect(lastSettings()).toMatchObject({ sort: "title", descending: false });
+  });
+
   it("filters by one status at a time, and removes the status from its toolbar chip", async () => {
     frame = loadFrame("flowing.epub");
     frame.open({ shelf: { status: "ready", entries: viewRows() }, shelfLabels: SHELF_LABELS });
@@ -1430,6 +1451,51 @@ describe("the Shelf's views, sort, filters, and search (#945)", () => {
     await vi.waitFor(() => expect(titles()).toEqual(["Persuasion"]));
     await user.click(byLabel("Remove filter Status: Finished"));
     await vi.waitFor(() => expect(titles()).toEqual(RECENT_ORDER));
+  });
+
+  it("toggles a status and a format in the Filters popover by keyboard, Enter and Space", async () => {
+    frame = loadFrame("flowing.epub");
+    frame.open({ shelf: { status: "ready", entries: viewRows() }, shelfLabels: SHELF_LABELS });
+    await vi.waitFor(() => expect(shelfCells()).toHaveLength(6));
+    const user = userEvent.setup();
+
+    await user.click(filtersButton());
+    const filters = popover("Filters");
+
+    buttonIn(filters, "New").focus();
+    await user.keyboard("{Enter}");
+    await vi.waitFor(() => expect(titles()).toEqual(["Dracula", "Fortunata y Jacinta"]));
+    expect(lastSettings()).toMatchObject({ statuses: ["new"] });
+
+    buttonIn(filters, "New").focus();
+    await user.keyboard("{Enter}");
+    await vi.waitFor(() => expect(titles()).toEqual(RECENT_ORDER));
+
+    buttonIn(filters, "PDF").focus();
+    await user.keyboard(" ");
+    await vi.waitFor(() => expect(titles()).toEqual(["Origin of Species"]));
+    expect(lastSettings()).toMatchObject({ formats: ["pdf"] });
+
+    buttonIn(filters, "PDF").focus();
+    await user.keyboard(" ");
+    await vi.waitFor(() => expect(titles()).toEqual(RECENT_ORDER));
+    expect(lastSettings()).toMatchObject({ statuses: [], formats: [] });
+  });
+
+  it("removes a filter from its toolbar chip by keyboard", async () => {
+    frame = loadFrame("flowing.epub");
+    frame.open({ shelf: { status: "ready", entries: viewRows() }, shelfLabels: SHELF_LABELS });
+    await vi.waitFor(() => expect(shelfCells()).toHaveLength(6));
+    const user = userEvent.setup();
+
+    await user.click(filtersButton());
+    await user.click(buttonIn(popover("Filters"), "Finished"));
+    await vi.waitFor(() => expect(titles()).toEqual(["Persuasion"]));
+
+    byLabel("Remove filter Status: Finished").focus();
+    await user.keyboard("{Enter}");
+    await vi.waitFor(() => expect(titles()).toEqual(RECENT_ORDER));
+    expect(lastSettings()).toMatchObject({ statuses: [] });
   });
 
   it("filters by each format, combines a status with a format, and badges the Filters button", async () => {
