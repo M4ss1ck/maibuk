@@ -779,3 +779,46 @@ button.kit-chip {
 [data-motion="reduce"] .kit-cover__image {
   animation: none;
 }
+
+/* A Menu's labelled group, as the Document menu's Collections draw it (#946). */
+.kit-menu__section {
+  margin: 0;
+  padding: var(--space-3) var(--space-2) var(--space-1);
+  border-top: 1px solid var(--chrome-border);
+  color: var(--chrome-meta);
+  font-size: var(--type-label-size);
+  font-weight: var(--type-label-weight);
+  letter-spacing: var(--type-label-tracking);
+  line-height: var(--type-label-line);
+  text-transform: var(--type-label-transform);
+}
+
+.kit-menu__check {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--chrome-meta);
+  border-radius: 5px;
+}
+
+.kit-menu__check--on {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--pfg);
+}
+
+.kit-menu__check svg {
+  width: 14px;
+  height: 14px;
+}
+
+.kit-menu__detail {
+  flex: none;
+  color: var(--chrome-meta);
+  font-size: var(--type-label-size);
+  font-variant-numeric: var(--type-numeric);
+}

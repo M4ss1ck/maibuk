@@ -696,6 +696,85 @@ describe("Menu", () => {
   });
 });
 
+describe("Menu checkbox rows (#946)", () => {
+  const CHECK_ITEMS: MenuItem[] = [
+    { id: "open", label: "Open", icon: "book" },
+    { id: "c:research", label: "Research", checked: true, detail: "24", section: "Collections" },
+    { id: "c:comics", label: "Comics", checked: false, detail: "3", section: "Collections" },
+    { id: "remove", label: "Remove", destructive: true, groupStart: true },
+  ];
+
+  function CheckCase({ onSelect }: { onSelect: (id: string) => void }) {
+    const [open, setOpen] = useState(true);
+    const [name, setName] = useState("");
+    return (
+      <Menu
+        open={open}
+        onClose={() => setOpen(false)}
+        label="Document actions"
+        items={CHECK_ITEMS}
+        onSelect={onSelect}
+        slots={{
+          remove: (
+            <input
+              aria-label="New Collection name"
+              value={name}
+              onInput={(event) => setName(event.currentTarget.value)}
+            />
+          ),
+        }}
+      />
+    );
+  }
+
+  it("draws checked rows as menu checkboxes inside their labelled group, with the detail", async () => {
+    setWidth(1024);
+    await mount(<CheckCase onSelect={() => {}} />);
+
+    const group = screen.getByRole("group", { name: "Collections" });
+    const research = within(group).getByRole("menuitemcheckbox", { name: /Research/ });
+    expect(research).toBeChecked();
+    expect(research).toHaveTextContent("24");
+    expect(within(group).getByRole("menuitemcheckbox", { name: /Comics/ })).not.toBeChecked();
+    expect(within(group).queryByRole("menuitem")).toBeNull();
+  });
+
+  it("toggles a checkbox row by Space and Enter and stays open", async () => {
+    setWidth(1024);
+    const seen: string[] = [];
+    const user = userEvent.setup({ delay: null });
+    await mount(<CheckCase onSelect={(id) => seen.push(id)} />);
+
+    await press(() => user.keyboard("{ArrowDown}"));
+    await press(() => user.keyboard(" "));
+    await press(() => user.keyboard("{ArrowDown}"));
+    await press(() => user.keyboard("{Enter}"));
+    expect(seen).toEqual(["c:research", "c:comics"]);
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    expect(document.activeElement).toBe(screen.getByRole("menuitemcheckbox", { name: /Comics/ }));
+  });
+
+  it("moves past a slot with the arrow keys, and typing in the slot never selects or jumps", async () => {
+    setWidth(1024);
+    const seen: string[] = [];
+    const user = userEvent.setup({ delay: null });
+    await mount(<CheckCase onSelect={(id) => seen.push(id)} />);
+
+    await press(() => user.keyboard("{End}"));
+    expect(document.activeElement).toBe(screen.getByRole("menuitem", { name: "Remove" }));
+    await press(() => user.keyboard("{ArrowUp}"));
+    expect(document.activeElement).toBe(screen.getByRole("menuitemcheckbox", { name: /Comics/ }));
+
+    await press(() => user.tab());
+    const field = screen.getByRole("textbox", { name: "New Collection name" });
+    expect(document.activeElement).toBe(field);
+    await press(() => user.keyboard("Ro {Enter}"));
+    expect(field).toHaveValue("Ro ");
+    expect(seen).toEqual([]);
+    expect(document.activeElement).toBe(field);
+  });
+});
+
 function NestedCase() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);

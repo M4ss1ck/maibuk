@@ -15,6 +15,7 @@
 
 import {
   type ComponentChildren,
+  Fragment,
   createPortal,
   type RefObject,
   type TargetedKeyboardEvent,
@@ -449,6 +450,18 @@ export interface MenuItem {
   destructive?: boolean;
   /** Starts a new group: a divider separates the row from the rows above it. */
   groupStart?: boolean;
+  /**
+   * Makes the row a `menuitemcheckbox` in this state, drawn with a check box.
+   * Selecting it toggles and keeps the Menu open, so several can change.
+   */
+  checked?: boolean;
+  /** A short muted text at the row's end, such as a count. */
+  detail?: string;
+  /**
+   * Names the group the row sits in: consecutive rows with the same section
+   * share one `role=group` with this label drawn above them.
+   */
+  section?: string;
 }
 
 /** The props a Menu takes: open state, close, its label, optional header, rows, and selection. */
@@ -466,7 +479,29 @@ export interface MenuProps {
    * return, so an inline Menu neither portals nor registers a layer of its own.
    */
   inline?: boolean;
+  /**
+   * Content drawn just before the row with the given id, outside the roving
+   * focus, such as a field the author types into. Tab reaches it; the arrow
+   * keys skip it, and keys pressed inside it stay its own.
+   */
+  slots?: Readonly<Record<string, ComponentChildren>>;
   class?: string;
+}
+
+/** Consecutive rows that share a section, in order; rows without one stand alone. */
+function groupRows(
+  items: ReadonlyArray<MenuItem>
+): Array<{ section: string | undefined; indices: number[] }> {
+  const groups: Array<{ section: string | undefined; indices: number[] }> = [];
+  items.forEach((item, index) => {
+    const last = groups[groups.length - 1];
+    if (last !== undefined && item.section !== undefined && last.section === item.section) {
+      last.indices.push(index);
+    } else {
+      groups.push({ section: item.section, indices: [index] });
+    }
+  });
+  return groups;
 }
 
 function firstEnabled(items: ReadonlyArray<MenuItem>): number {
@@ -498,6 +533,7 @@ export function Menu({
   onSelect,
   header,
   inline = false,
+  slots,
   class: extra,
 }: MenuProps) {
   const { target } = useLayoutMode();
@@ -543,7 +579,8 @@ export function Menu({
     const item = items[index];
     if (!item || item.disabled) return;
     onSelect(item.id);
-    onClose();
+    // A check box row toggles in place; every other row runs and closes.
+    if (item.checked === undefined) onClose();
   };
 
   const typeAhead = (character: string) => {
@@ -563,6 +600,9 @@ export function Menu({
   };
 
   const onKeyDown = (event: TargetedKeyboardEvent<HTMLDivElement>) => {
+    // A key pressed inside a slot (a text field) belongs to that slot.
+    const target = event.target;
+    if (!(target instanceof HTMLElement) || !target.classList.contains("kit-menu__item")) return;
     switch (event.key) {
       case "ArrowDown":
         event.preventDefault();
@@ -599,6 +639,45 @@ export function Menu({
 
   if (!open) return null;
 
+  const row = (item: MenuItem, index: number) => {
+    const checkbox = item.checked !== undefined;
+    return (
+      <Fragment key={item.id}>
+        {slots?.[item.id] ?? null}
+        {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: the role is menuitemcheckbox whenever aria-checked is set. */}
+        <button
+          ref={(node) => {
+            itemRefs.current[index] = node;
+          }}
+          type="button"
+          role={checkbox ? "menuitemcheckbox" : "menuitem"}
+          aria-checked={checkbox ? item.checked : undefined}
+          class={`kit-menu__item${item.destructive ? " kit-menu__item--destructive" : ""}${
+            item.groupStart ? " kit-menu__item--group-start" : ""
+          }`}
+          tabIndex={index === active && !item.disabled ? 0 : -1}
+          disabled={item.disabled}
+          style={{ height: `${target}px` }}
+          onClick={() => select(index)}
+        >
+          {checkbox ? (
+            <span
+              class={item.checked ? "kit-menu__check kit-menu__check--on" : "kit-menu__check"}
+              aria-hidden="true"
+            >
+              {item.checked ? <Icon name="check" /> : null}
+            </span>
+          ) : item.icon ? (
+            <Icon name={item.icon} />
+          ) : null}
+          <span class="kit-menu__label">{item.label}</span>
+          {item.detail ? <span class="kit-menu__detail">{item.detail}</span> : null}
+          {item.shortcut ? <span class="kit-menu__shortcut">{item.shortcut}</span> : null}
+        </button>
+      </Fragment>
+    );
+  };
+
   const modifier = inline ? "kit-menu--inline" : nested ? "kit-menu--nested" : "";
   const menu = (
     <div
@@ -610,27 +689,19 @@ export function Menu({
       onKeyDown={onKeyDown}
     >
       {header ?? null}
-      {items.map((item, index) => (
-        <button
-          key={item.id}
-          ref={(node) => {
-            itemRefs.current[index] = node;
-          }}
-          type="button"
-          role="menuitem"
-          class={`kit-menu__item${item.destructive ? " kit-menu__item--destructive" : ""}${
-            item.groupStart ? " kit-menu__item--group-start" : ""
-          }`}
-          tabIndex={index === active && !item.disabled ? 0 : -1}
-          disabled={item.disabled}
-          style={{ height: `${target}px` }}
-          onClick={() => select(index)}
-        >
-          {item.icon ? <Icon name={item.icon} /> : null}
-          <span class="kit-menu__label">{item.label}</span>
-          {item.shortcut ? <span class="kit-menu__shortcut">{item.shortcut}</span> : null}
-        </button>
-      ))}
+      {groupRows(items).map((group) => {
+        const rows = group.indices.map((index) => row(items[index], index));
+        if (group.section === undefined) return rows;
+        return (
+          // biome-ignore lint/a11y/useSemanticElements: a menu's group must be role=group; a fieldset is a form part.
+          <div key={`section-${group.indices[0]}`} role="group" aria-label={group.section}>
+            <p class="kit-menu__section" aria-hidden="true">
+              {group.section}
+            </p>
+            {rows}
+          </div>
+        );
+      })}
     </div>
   );
 
