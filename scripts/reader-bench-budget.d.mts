@@ -39,6 +39,8 @@ export interface ReaderBenchReport {
     before?: { ok: boolean; p95Ms: number; refreshIntervalMs?: number } | null;
     after?: { ok: boolean; p95Ms: number; refreshIntervalMs?: number } | null;
   } | null;
+  /** The 500-Document Shelf paint, Worker open to first painted grid (#945). */
+  shelf?: { documents: number; warmUps?: number; paintMs: number[]; cells: number } | null;
 }
 
 export interface ReaderBenchGate {

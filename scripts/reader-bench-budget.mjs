@@ -278,6 +278,27 @@ export function checkReaderBench(report) {
     );
   }
 
+  // The Shelf paint (#945, the 500-Document Shelf of #917). Unlike the gates
+  // above, this one is an absolute budget, not a delta: #917 sets the target
+  // that a 500-Document Shelf paints its first grid within 1000 ms.
+  const shelfPaint = report.shelf?.paintMs ?? [];
+  if (shelfPaint.length === 0) {
+    unmeasured.push("the Shelf paint run is missing");
+  } else {
+    const { documents, cells } = report.shelf;
+    const paint = median(shelfPaint);
+    gates.push(
+      gate(
+        "shelf-paint",
+        "500-Document Shelf paint (median, ms)",
+        paint,
+        1000,
+        paint <= 1000,
+        `${documents} Documents, ${cells} cells drawn, p95 ${nearestRank(shelfPaint, 0.95).toFixed(1)} ms`
+      )
+    );
+  }
+
   return {
     gates,
     trace,

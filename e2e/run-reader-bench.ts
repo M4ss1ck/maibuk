@@ -275,6 +275,7 @@ async function main(): Promise<number> {
         "reader-bench/startup.bench.ts",
         "reader-bench/control.bench.ts",
         "reader-bench/document.bench.ts",
+        "reader-bench/shelf.bench.ts",
       ],
       { READER_BENCH_PDF: fixtures.pdf, READER_BENCH_EPUB: fixtures.epub },
       "e2e/playwright.reader-bench.config.ts"
@@ -294,6 +295,10 @@ async function main(): Promise<number> {
       dir,
       "control.json"
     );
+    const shelf = readJson<{ documents: number; paintMs: number[]; cells: number }>(
+      dir,
+      "shelf.json"
+    );
     rmSync(dir, { recursive: true, force: true });
 
     if (code !== 0)
@@ -309,6 +314,7 @@ async function main(): Promise<number> {
       control: control ?? null,
       document: document ?? null,
       typing: { before: typingBefore, after: typingAfter },
+      shelf: shelf ?? null,
     };
     mkdirSync(dirname(REPORT), { recursive: true });
     writeFileSync(REPORT, `${JSON.stringify(report, null, 1)}\n`);
