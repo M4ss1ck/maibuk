@@ -7,7 +7,7 @@ A file the author opened in Reader. It stays the author's file, wherever it live
 _Avoid_: Book (a Book is the author's own writing), ebook, file (for one on the Shelf)
 
 **Shelf**:
-The Documents Reader remembers on this device, shown in the order and view the author picks. Opening the same file again finds its Document instead of adding a second one. Removing a Document from the Shelf forgets it and leaves the file alone.
+The Documents Reader remembers on this device, shown in the view, sort, filters, and search the author picks; Reader remembers those on this device too. Opening the same file again finds its Document instead of adding a second one. Removing a Document from the Shelf forgets it and leaves the file alone.
 _Avoid_: library (the Library is Maibuk's), recent files, history
 
 **Missing Document**:
@@ -28,6 +28,14 @@ _Avoid_: reflow mode, scroll mode
 **Import**:
 Adding Documents to the Shelf: the files the author picked, or every supported file in a folder the author picked and its subfolders. Reader checks the folder once, at that moment, and does not keep it; importing the same folder again finds only what is new. In Reader this is the meaning of Import; the root term (bringing work into the Library) does not apply here, because Reader never copies a file.
 _Avoid_: add to Shelf, scan, watch, sync (for a folder)
+
+**Date added**:
+When a Document was imported. The Shelf sorts by it. The copy says "added" because the author sees the Document arrive on the Shelf; the action itself is still Import.
+_Avoid_: date imported, created date (that is the file's)
+
+**Reading status**:
+Where the author stands with a Document, worked out from whether it was opened and how far the author got, never set by hand: _new_ until it is first opened, _finished_ once the author reaches its last page (progress of 99% or more), and _reading_ otherwise. The Shelf filters by it.
+_Avoid_: state, progress (that is the percentage), unread
 
 **Collection**:
 A group of Documents on the Shelf that the author makes and names. A Document can sit in several Collections; removing it from one leaves it on the Shelf.
