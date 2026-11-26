@@ -847,11 +847,6 @@
   border-radius: 8px;
 }
 
-/* Inside a row the item takes the width the More button leaves. */
-.shelf-rail__row .shelf-rail__item {
-  flex: 1;
-}
-
 .shelf-rail__row--drop {
   outline: 2px dashed var(--primary);
   outline-offset: -2px;
@@ -874,6 +869,11 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+
+/* Inside a row the item takes the width the More button leaves. */
+.shelf-rail__row .shelf-rail__item {
+  flex: 1;
 }
 
 .shelf-rail__item:hover {
