@@ -51,6 +51,7 @@ function settings(overrides: Partial<ShelfViewSettings> = {}): ShelfViewSettings
     formats: [],
     statuses: [],
     search: "",
+    collection: null,
     ...overrides,
   };
 }

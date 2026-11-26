@@ -126,6 +126,26 @@ function shelfLabelsFrom(catalog: Record<string, string>): FrameShelfLabels {
     clearFilters: catalog["shelf.frame.clearFilters"],
     noMatch: catalog["shelf.frame.noMatch"],
     remembered: catalog["shelf.frame.remembered"],
+    collections: catalog["shelf.frame.collections"],
+    newCollection: catalog["shelf.frame.newCollection"],
+    newCollectionName: catalog["shelf.frame.newCollectionName"],
+    add: catalog["shelf.frame.add"],
+    railHint: catalog["shelf.frame.railHint"],
+    collection: catalog["shelf.frame.collection"],
+    anyCollection: catalog["shelf.frame.anyCollection"],
+    collectionChip: catalog["shelf.frame.collectionChip"],
+    moreForCollection: catalog["shelf.frame.moreForCollection"],
+    collectionName: catalog["shelf.frame.collectionName"],
+    create: catalog["shelf.frame.create"],
+    renameCollection: catalog["shelf.frame.renameCollection"],
+    renameAction: catalog["shelf.frame.renameAction"],
+    rename: catalog["shelf.frame.rename"],
+    deleteAction: catalog["shelf.frame.deleteAction"],
+    deleteCollectionTitle: catalog["shelf.frame.deleteCollectionTitle"],
+    deleteCollectionBody: catalog["shelf.frame.deleteCollectionBody"],
+    delete: catalog["shelf.frame.delete"],
+    duplicateCollection: catalog["shelf.frame.duplicateCollection"],
+    noCollections: catalog["shelf.frame.noCollections"],
   };
 }
 
@@ -1664,6 +1684,7 @@ describe("the Shelf's views, sort, filters, and search (#945)", () => {
         formats: [],
         statuses: ["reading"],
         search: "",
+        collection: null,
       },
     });
     await vi.waitFor(() => expect(shelfCells()).toHaveLength(3));
@@ -1687,6 +1708,7 @@ describe("the Shelf's views, sort, filters, and search (#945)", () => {
         formats: [],
         statuses: ["new"],
         search: "",
+        collection: null,
       },
     });
     await vi.waitFor(() => expect(titles()).toEqual(["Dracula", "Fortunata y Jacinta"]));

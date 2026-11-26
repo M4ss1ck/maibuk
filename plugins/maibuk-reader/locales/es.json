@@ -23,6 +23,9 @@
   "commands.searchShelf.label": "Buscar en el estante",
   "commands.showShelfOptions.label": "Vista, orden y filtros…",
   "commands.clearShelfFilters.label": "Borrar filtros del estante",
+  "commands.newCollection.label": "Nueva colección…",
+  "commands.renameCollection.label": "Cambiar nombre de la colección…",
+  "commands.deleteCollection.label": "Eliminar colección…",
   "pages.reader.title": "Lector",
   "pages.document.title": "Lectura",
   "canvasReferenceSources.documents.label": "Documentos"

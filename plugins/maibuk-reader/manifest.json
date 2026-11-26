@@ -132,6 +132,21 @@
         "id": "clearShelfFilters",
         "label": "Clear Shelf filters",
         "contexts": ["reader"]
+      },
+      {
+        "id": "newCollection",
+        "label": "New Collection…",
+        "contexts": ["reader"]
+      },
+      {
+        "id": "renameCollection",
+        "label": "Rename Collection…",
+        "contexts": ["reader"]
+      },
+      {
+        "id": "deleteCollection",
+        "label": "Delete Collection…",
+        "contexts": ["reader"]
       }
     ],
     "pages": [

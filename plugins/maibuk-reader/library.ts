@@ -12,6 +12,7 @@
 
 import type { PluginClient } from "@/plugin-sdk";
 import {
+  COLLECTIONS_KEY,
   CURRENT_DOCUMENT_KEY,
   FINGERPRINT_WINDOW,
   SETTINGS_KEY,
@@ -21,18 +22,22 @@ import {
   bookmarksKey,
   clampSettings,
   clampShelfView,
+  collectionName,
   fingerprint,
   formatFromName,
   highlightsKey,
   markState,
+  parseCollections,
   parseShelf,
   positionKey,
   reattach,
   removeEntry,
+  sameCollectionName,
   sniffFormat,
   sortShelf,
   titleFromName,
   upsertByFingerprint,
+  type Collection,
   type DocumentFormat,
   type DocumentState,
   type ReaderSettings,
@@ -53,6 +58,14 @@ export interface RemovalCounts {
   bookmarks: number;
   highlights: number;
   notes: number;
+}
+
+/** Why a Collection write was refused: an empty name, or a name another Collection already has. */
+export class CollectionError extends Error {
+  constructor(readonly code: "empty-name" | "duplicate-name") {
+    super(code);
+    this.name = "CollectionError";
+  }
 }
 
 /** The error code the host puts on a refused File Grant call. */
@@ -104,6 +117,40 @@ function newDocumentId(): string {
   const random = globalThis.crypto?.randomUUID;
   if (typeof random === "function") return random.call(globalThis.crypto);
   return `doc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/** A stable, Plugin-local id for a new Collection. */
+function newCollectionId(): string {
+  const random = globalThis.crypto?.randomUUID;
+  if (typeof random === "function") return random.call(globalThis.crypto);
+  return `col-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/**
+ * The Collections with `documentId` added to or removed from the one named `id`.
+ * Returns the same list when the Collection is unknown or already in the state
+ * asked for, so the caller can skip the write.
+ */
+function setMember(
+  collections: Collection[],
+  id: string,
+  documentId: string,
+  member: boolean
+): Collection[] {
+  const target = collections.find((collection) => collection.id === id);
+  if (target === undefined || target.documentIds.includes(documentId) === member) {
+    return collections;
+  }
+  return collections.map((collection) =>
+    collection.id !== id
+      ? collection
+      : {
+          ...collection,
+          documentIds: member
+            ? [...collection.documentIds, documentId]
+            : collection.documentIds.filter((candidate) => candidate !== documentId),
+        }
+  );
 }
 
 /** The head and tail bytes a Fingerprint hashes, read in two calls. */
@@ -159,9 +206,33 @@ export interface ShelfService {
   rememberCurrent(id: string): Promise<void>;
   /** The Shelf row of the Document the Reading page last had open, if it is still on the Shelf. */
   loadCurrent(): Promise<ShelfEntry | null>;
+  /** The author's Collections in the order they were made; a missing or malformed value reads as none. A failed read throws. */
+  loadCollections(): Promise<Collection[]>;
+  /**
+   * Makes a Collection named `name`, or reuses the one whose name matches it
+   * ignoring case, and files `documentId` in it when that Document is on the
+   * Shelf. Throws a CollectionError with "empty-name" for a blank name.
+   */
+  createCollection(name: string, documentId?: string): Promise<Collection[]>;
+  /** Renames a Collection. Throws a CollectionError for a blank name or one another Collection has; an unknown id changes nothing. */
+  renameCollection(id: string, name: string): Promise<Collection[]>;
+  /** Deletes a Collection; its Documents stay on the Shelf and in any other Collection. */
+  deleteCollection(id: string): Promise<Collection[]>;
+  /**
+   * Files a Document in a Collection (`member` true) or takes it out of that
+   * Collection only. Adding needs the Document to be on the Shelf. An unknown
+   * Collection, or a change that changes nothing, writes nothing.
+   */
+  setInCollection(id: string, documentId: string, member: boolean): Promise<Collection[]>;
 }
 
 export function createShelfService(client: ReaderClient): ShelfService {
+  /** Saves the Collections and returns the saved list. */
+  async function writeCollections(collections: Collection[]): Promise<Collection[]> {
+    await client.storage.set({ key: COLLECTIONS_KEY, value: collections });
+    return collections;
+  }
+
   const library: ShelfService = {
     async loadShelf(): Promise<ShelfEntry[]> {
       // A failed read throws: the callers decide what it means, and the
@@ -203,6 +274,69 @@ export function createShelfService(client: ReaderClient): ShelfService {
       } catch {
         return null;
       }
+    },
+
+    async loadCollections(): Promise<Collection[]> {
+      return parseCollections(await client.storage.get({ key: COLLECTIONS_KEY }));
+    },
+
+    async createCollection(name, documentId): Promise<Collection[]> {
+      const cleaned = collectionName(name);
+      if (cleaned === "") throw new CollectionError("empty-name");
+      const collections = await library.loadCollections();
+      // A Document id that is not on the Shelf is not filed; the Collection is still made.
+      let filed: string | null = null;
+      if (documentId !== undefined) {
+        const shelf = await library.loadShelf();
+        if (shelf.some((entry) => entry.id === documentId)) filed = documentId;
+      }
+      const existing = collections.find((collection) =>
+        sameCollectionName(collection.name, cleaned)
+      );
+      if (existing === undefined) {
+        return writeCollections([
+          ...collections,
+          { id: newCollectionId(), name: cleaned, documentIds: filed === null ? [] : [filed] },
+        ]);
+      }
+      return writeCollections(
+        filed === null ? collections : setMember(collections, existing.id, filed, true)
+      );
+    },
+
+    async renameCollection(id, name): Promise<Collection[]> {
+      const cleaned = collectionName(name);
+      if (cleaned === "") throw new CollectionError("empty-name");
+      const collections = await library.loadCollections();
+      if (!collections.some((collection) => collection.id === id)) return collections;
+      if (
+        collections.some(
+          (collection) => collection.id !== id && sameCollectionName(collection.name, cleaned)
+        )
+      ) {
+        throw new CollectionError("duplicate-name");
+      }
+      return writeCollections(
+        collections.map((collection) =>
+          collection.id === id ? { ...collection, name: cleaned } : collection
+        )
+      );
+    },
+
+    async deleteCollection(id): Promise<Collection[]> {
+      const collections = await library.loadCollections();
+      if (!collections.some((collection) => collection.id === id)) return collections;
+      return writeCollections(collections.filter((collection) => collection.id !== id));
+    },
+
+    async setInCollection(id, documentId, member): Promise<Collection[]> {
+      const collections = await library.loadCollections();
+      if (member) {
+        const shelf = await library.loadShelf();
+        if (!shelf.some((entry) => entry.id === documentId)) return collections;
+      }
+      const next = setMember(collections, id, documentId, member);
+      return next === collections ? collections : writeCollections(next);
     },
 
     async saveShelf(shelf): Promise<void> {
@@ -335,6 +469,20 @@ export function createShelfService(client: ReaderClient): ShelfService {
       }
       const next = removeEntry(shelf, id);
       await library.saveShelf(next);
+      try {
+        const collections = await library.loadCollections();
+        if (collections.some((collection) => collection.documentIds.includes(id))) {
+          await writeCollections(
+            collections.map((collection) => ({
+              ...collection,
+              documentIds: collection.documentIds.filter((documentId) => documentId !== id),
+            }))
+          );
+        }
+      } catch {
+        // The Shelf removal already happened, and the Frame counts only Documents still
+        // on the Shelf, so a Collection that keeps the id is harmless until the next write.
+      }
       return next;
     },
 

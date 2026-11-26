@@ -428,7 +428,7 @@ describe("shelf", () => {
       await vi.waitFor(() => {
         const states = harness.messages.filter((message) => message.kind === "shelf");
         expect(states).toHaveLength(2);
-        expect(states[1].state).toEqual({ status: "ready", entries: [] });
+        expect(states[1].state).toEqual({ status: "ready", entries: [], collections: [] });
       });
     } finally {
       await harness.stop();

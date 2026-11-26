@@ -109,6 +109,26 @@ const LABELS: FrameShelfLabels = {
   clearFilters: "Clear filters",
   noMatch: "No Documents match",
   remembered: "Showing {{shown}} of {{total}}. Reader remembers these choices on this device.",
+  collections: "Collections",
+  newCollection: "New Collection",
+  newCollectionName: "New Collection name",
+  add: "Add",
+  railHint: "Drag a Document onto a Collection, or use its menu.",
+  collection: "Collection",
+  anyCollection: "Any Collection",
+  collectionChip: "Collection: {{name}}",
+  moreForCollection: "More for {{name}}",
+  collectionName: "Name",
+  create: "Create",
+  renameCollection: "Rename Collection",
+  renameAction: "Rename…",
+  rename: "Rename",
+  deleteAction: "Delete…",
+  deleteCollectionTitle: "Delete “{{name}}”?",
+  deleteCollectionBody: "Its Documents stay on the Shelf.",
+  delete: "Delete",
+  duplicateCollection: "A Collection with that name already exists.",
+  noCollections: "No Collections yet",
 };
 
 const REMOVAL: ShelfRemoval = {
@@ -955,6 +975,7 @@ describe("Shelf views, sort, and filters (#945)", () => {
       formats: [],
       statuses: [],
       search: "",
+      collection: null,
     });
   });
 
@@ -995,6 +1016,7 @@ describe("Shelf views, sort, and filters (#945)", () => {
       formats: [],
       statuses: [],
       search: "",
+      collection: null,
     });
   });
 

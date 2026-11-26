@@ -13,7 +13,10 @@ import {
   SHELF_VIEW_KEY,
   clampSettings,
   clampShelfView,
+  collectionName,
   defaultDescending,
+  parseCollections,
+  sameCollectionName,
   fingerprint,
   formatFromName,
   markState,
@@ -524,6 +527,7 @@ describe("clampShelfView()", () => {
       formats: ["pdf", "epub"],
       statuses: ["reading"],
       search: "dune",
+      collection: "col-a",
     };
     expect(clampShelfView(view)).toEqual(view);
   });
@@ -582,5 +586,89 @@ describe("shelf view key", () => {
 describe("storage keys", () => {
   it("keeps one Position key per Document", () => {
     expect(positionKey("doc-1")).toBe("position:doc-1");
+  });
+});
+
+describe("clampShelfView() collection", () => {
+  it("defaults to every Document, with no Collection", () => {
+    expect(DEFAULT_SHELF_VIEW.collection).toBeNull();
+    expect(clampShelfView({}).collection).toBeNull();
+    expect(clampShelfView(null).collection).toBeNull();
+  });
+
+  it("keeps a Collection id that is a string of 1 to 200 characters", () => {
+    expect(clampShelfView({ collection: "col-a" }).collection).toBe("col-a");
+    expect(clampShelfView({ collection: "c".repeat(200) }).collection).toHaveLength(200);
+  });
+
+  it("reads a non-string, empty, or 201-character Collection as null", () => {
+    expect(clampShelfView({ collection: 42 }).collection).toBeNull();
+    expect(clampShelfView({ collection: "" }).collection).toBeNull();
+    expect(clampShelfView({ collection: "c".repeat(201) }).collection).toBeNull();
+  });
+});
+
+describe("collectionName()", () => {
+  it("trims the name", () => {
+    expect(collectionName("  Summer reads \n")).toBe("Summer reads");
+  });
+
+  it("cuts the name to 100 characters, counting code points", () => {
+    const cut = collectionName(`${"x".repeat(98)}😀😀`);
+    expect(Array.from(cut)).toHaveLength(100);
+    expect(cut.endsWith("😀")).toBe(true);
+  });
+
+  it("trims again after the cut", () => {
+    expect(collectionName(`${"a".repeat(99)} b`)).toBe("a".repeat(99));
+  });
+
+  it("reads a blank name as empty", () => {
+    expect(collectionName("   ")).toBe("");
+  });
+});
+
+describe("sameCollectionName()", () => {
+  it("matches names that differ only in case and surrounding spaces", () => {
+    expect(sameCollectionName(" Dune ", "dune")).toBe(true);
+  });
+
+  it("does not match different names", () => {
+    expect(sameCollectionName("Dune", "Dune Messiah")).toBe(false);
+  });
+});
+
+describe("parseCollections()", () => {
+  it("reads anything that is not an array as no Collections", () => {
+    expect(parseCollections("nope")).toEqual([]);
+    expect(parseCollections({ id: "col-a" })).toEqual([]);
+    expect(parseCollections(null)).toEqual([]);
+  });
+
+  it("keeps the first record for a repeated id, in creation order", () => {
+    expect(
+      parseCollections([
+        { id: "col-b", name: "Emma", documentIds: [] },
+        { id: "col-a", name: "Dune", documentIds: [] },
+        { id: "col-b", name: "Again", documentIds: ["doc-1"] },
+      ])
+    ).toEqual([
+      { id: "col-b", name: "Emma", documentIds: [] },
+      { id: "col-a", name: "Dune", documentIds: [] },
+    ]);
+  });
+
+  it("stores the name normalized and keeps string documentIds once each, in order", () => {
+    expect(
+      parseCollections([
+        { id: "col-a", name: "  Dune  ", documentIds: ["doc-2", 5, "doc-1", "doc-2"] },
+      ])
+    ).toEqual([{ id: "col-a", name: "Dune", documentIds: ["doc-2", "doc-1"] }]);
+  });
+
+  it("gives a missing documentIds as an empty list", () => {
+    expect(parseCollections([{ id: "col-a", name: "Dune" }])).toEqual([
+      { id: "col-a", name: "Dune", documentIds: [] },
+    ]);
   });
 });

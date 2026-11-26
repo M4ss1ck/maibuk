@@ -95,6 +95,9 @@ describe("Reader manifest", () => {
       "searchShelf",
       "showShelfOptions",
       "clearShelfFilters",
+      "newCollection",
+      "renameCollection",
+      "deleteCollection",
     ]);
     for (const id of ["openReader", "openFile"]) {
       expect(commands.find((command) => command.id === id)?.contexts, id).toEqual(["global"]);
@@ -151,6 +154,21 @@ describe("Reader manifest", () => {
     expect(commands.find((command) => command.id === "findInDocument")?.defaults).toEqual([
       ["Mod+f"],
     ]);
+  });
+
+  it("offers the Collection Commands on the Shelf page, with no default shortcuts (#946)", () => {
+    const commands = manifest().contributes?.commands ?? [];
+    for (const [id, label] of [
+      ["newCollection", "New Collection…"],
+      ["renameCollection", "Rename Collection…"],
+      ["deleteCollection", "Delete Collection…"],
+    ] as const) {
+      const command = commands.find((candidate) => candidate.id === id);
+      expect(command?.contexts, id).toEqual(["reader"]);
+      expect(command?.label, id).toBe(label);
+      // The spec sheet's Keyboard table binds none of them.
+      expect(command?.defaults, id).toBeUndefined();
+    }
   });
 
   it("offers the Shelf's search and view Commands on the Shelf page (#945)", () => {

@@ -99,6 +99,8 @@ export interface FrameShelfEntry {
   addedAt: number;
   /** How far through the Document the author is, 0 to 1; 0 when new. */
   progress: number;
+  /** The ids of the Collections the Document is filed in (#946); absent means none. */
+  collections?: string[];
 }
 
 /** The localized UI strings the Frame shows, built by the Worker from i18n. */
@@ -231,12 +233,43 @@ export interface FrameShelfLabels {
   noMatch: string;
   /** Placeholders: {{shown}}, {{total}}. */
   remembered: string;
+  collections: string;
+  newCollection: string;
+  newCollectionName: string;
+  add: string;
+  railHint: string;
+  collection: string;
+  anyCollection: string;
+  /** Placeholders: {{name}}. */
+  collectionChip: string;
+  /** Placeholders: {{name}}. */
+  moreForCollection: string;
+  collectionName: string;
+  create: string;
+  renameCollection: string;
+  renameAction: string;
+  rename: string;
+  deleteAction: string;
+  /** Placeholders: {{name}}. */
+  deleteCollectionTitle: string;
+  deleteCollectionBody: string;
+  delete: string;
+  duplicateCollection: string;
+  noCollections: string;
 }
 
 /** What the Shelf draws: its loading, ready, or error state and its rows. */
 export interface FrameShelfState {
   status: "loading" | "ready" | "error";
   entries: FrameShelfEntry[];
+  /** The author's Collections in the order they were made (#946); absent means none. */
+  collections?: FrameCollection[];
+}
+
+/** One Collection the Shelf draws: its id and the author's name for it. */
+export interface FrameCollection {
+  id: string;
+  name: string;
 }
 
 /** One entry in the archive a reflowable Document is packed in. */
@@ -271,6 +304,9 @@ export type FrameCommandId =
   | "searchShelf"
   | "showShelfOptions"
   | "clearShelfFilters"
+  | "newCollection"
+  | "renameCollection"
+  | "deleteCollection"
   | "nextPage"
   | "previousPage"
   | "firstPage"
@@ -526,6 +562,22 @@ export interface FrameShelfViewMessage {
   settings: ShelfViewSettings;
 }
 
+/**
+ * Creates, renames, or deletes a Collection, or files a Document in one or
+ * takes it out (#946). The Worker stores the change and sends the Shelf again.
+ */
+export type FrameShelfCollectionMessage =
+  | { kind: "shelf-collection"; action: "create"; name: string; documentId?: string }
+  | { kind: "shelf-collection"; action: "rename"; collectionId: string; name: string }
+  | { kind: "shelf-collection"; action: "delete"; collectionId: string }
+  | {
+      kind: "shelf-collection";
+      action: "file";
+      collectionId: string;
+      documentId: string;
+      member: boolean;
+    };
+
 export type FrameToWorkerMessage =
   | FrameReadyMessage
   | FrameReadMessage
@@ -540,7 +592,8 @@ export type FrameToWorkerMessage =
   | FrameShelfCommandMessage
   | FrameShelfSelectMessage
   | FrameShelfRemoveMessage
-  | FrameShelfViewMessage;
+  | FrameShelfViewMessage
+  | FrameShelfCollectionMessage;
 
 /**
  * The Worker's handoff of one MessagePort to the nested pdf.js core Worker.

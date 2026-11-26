@@ -79,6 +79,8 @@ export interface ShelfViewSettings {
   formats: string[];
   statuses: ShelfStatus[];
   search: string;
+  /** The Collection the Shelf is narrowed to, by id, or null for every Document (#946). */
+  collection: string | null;
 }
 
 /** One Shelf row the Frame draws; the File Grant and Fingerprint stay in the Worker. */
@@ -101,6 +103,8 @@ export interface FrameShelfEntry {
   addedAt: number;
   /** How far through the Document the author is, 0 to 1; 0 when new. */
   progress: number;
+  /** The ids of the Collections the Document is filed in (#946); absent means none. */
+  collections?: string[];
 }
 
 /** The Reader settings the Worker hands the Frame. */
@@ -259,12 +263,43 @@ export interface FrameShelfLabels {
   noMatch: string;
   /** Placeholders: {{shown}}, {{total}}. */
   remembered: string;
+  collections: string;
+  newCollection: string;
+  newCollectionName: string;
+  add: string;
+  railHint: string;
+  collection: string;
+  anyCollection: string;
+  /** Placeholders: {{name}}. */
+  collectionChip: string;
+  /** Placeholders: {{name}}. */
+  moreForCollection: string;
+  collectionName: string;
+  create: string;
+  renameCollection: string;
+  renameAction: string;
+  rename: string;
+  deleteAction: string;
+  /** Placeholders: {{name}}. */
+  deleteCollectionTitle: string;
+  deleteCollectionBody: string;
+  delete: string;
+  duplicateCollection: string;
+  noCollections: string;
 }
 
 /** What the Shelf draws: its loading, ready, or error state and its rows. */
 export interface FrameShelfState {
   status: "loading" | "ready" | "error";
   entries: FrameShelfEntry[];
+  /** The author's Collections in the order they were made (#946); absent means none. */
+  collections?: FrameCollection[];
+}
+
+/** One Collection the Shelf draws: its id and the author's name for it. */
+export interface FrameCollection {
+  id: string;
+  name: string;
 }
 
 /** The Shelf Commands the Frame sends to the Worker. */

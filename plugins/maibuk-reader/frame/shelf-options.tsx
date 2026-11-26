@@ -45,6 +45,7 @@ export const DEFAULT_SHELF_VIEW: Readonly<ShelfViewSettings> = Object.freeze({
   formats: [],
   statuses: [],
   search: "",
+  collection: null,
 });
 
 /** A fresh copy of the default settings, with its own arrays. */
