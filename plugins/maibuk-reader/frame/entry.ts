@@ -32,6 +32,7 @@
 
 import {
   mountApp,
+  unmountApp,
   DEFAULT_APPEARANCE,
   type ChromeLabels,
   type ChromeState,
@@ -1533,6 +1534,7 @@ function cleanup() {
   viewer.removeEventListener("scroll", onViewerScroll);
   window.removeEventListener("message", onHostMessage);
   destroyDocument();
+  if (mountedRoot) unmountApp(mountedRoot);
 }
 
 /* Wiring ---------------------------------------------------------------- */
@@ -1549,7 +1551,11 @@ window.addEventListener("message", onHostMessage);
 updateControls();
 
 /** Mounts the app, then adopts the surfaces it drew and binds the search bar. */
+/** The root the app mounted into, so `cleanup` can unmount it. */
+let mountedRoot: HTMLElement | null = null;
+
 function startApp(root: HTMLElement) {
+  mountedRoot = root;
   mountApp(root, appearance, subscribeAppearance, bridge);
   adoptSurfaces();
   find.bind();

@@ -519,3 +519,11 @@ export function mountApp(
 ) {
   render(<App appearance={appearance} subscribe={subscribe} bridge={bridge} />, root);
 }
+
+/**
+ * Unmounts the app from `root`, so every effect it ran (the Shelf's document
+ * key listener among them) is torn down with the Frame.
+ */
+export function unmountApp(root: HTMLElement) {
+  render(null, root);
+}
