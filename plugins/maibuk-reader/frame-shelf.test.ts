@@ -13,6 +13,9 @@ import {
   shelfRemovalCopy,
   shelfTone,
 } from "./frame-shelf";
+import { sortSummary } from "./frame/shelf-options";
+import { fill } from "./frame/shelf-query";
+import { DEFAULT_SHELF_VIEW } from "./shelf";
 import { shelfEntry } from "./test-support";
 
 const LABELS_EN = {
@@ -70,6 +73,9 @@ const LABELS_EN = {
   sortProgress: "Progress",
   sortAdded: "Date added",
   reverseOrder: "Reverse order",
+  reverseOrderValue: "Reverse order: {{direction}}",
+  sortSummary: "{{sort}} · {{direction}}",
+  sortByValue: "Sort by: {{sort}}",
   newestFirst: "Newest first",
   oldestFirst: "Oldest first",
   aToZ: "A to Z",
@@ -147,6 +153,9 @@ const LABELS_ES = {
   sortProgress: "Progreso",
   sortAdded: "Fecha de adición",
   reverseOrder: "Invertir orden",
+  reverseOrderValue: "Invertir orden: {{direction}}",
+  sortSummary: "{{sort}} · {{direction}}",
+  sortByValue: "Ordenar por: {{sort}}",
   newestFirst: "Más recientes primero",
   oldestFirst: "Más antiguos primero",
   aToZ: "De la A a la Z",
@@ -383,6 +392,16 @@ describe("frameShelfLabels()", () => {
 
   it("builds every Spanish label from the runtime catalog", () => {
     expect(frameShelfLabels("es")).toEqual(LABELS_ES);
+  });
+
+  it("composes the sort summary and the sort and reverse names from one string each", () => {
+    const es = frameShelfLabels("es");
+    const byTitle = { ...DEFAULT_SHELF_VIEW, sort: "title", descending: false } as const;
+    expect(sortSummary(es, byTitle)).toBe("Título · De la A a la Z");
+    expect(fill(es.sortByValue, { sort: es.sortTitle })).toBe("Ordenar por: Título");
+    expect(fill(es.reverseOrderValue, { direction: es.aToZ })).toBe(
+      "Invertir orden: De la A a la Z"
+    );
   });
 
   it("follows the base language and falls back to English", () => {

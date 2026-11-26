@@ -42,6 +42,7 @@ import {
 } from "./shelf-options";
 import {
   COVER_WIDTHS,
+  fill,
   gridColumns,
   hasActiveFilters,
   matchRanges,
@@ -112,13 +113,6 @@ export interface ShelfProps {
   onNoticeClose: () => void;
   /** The author changed the view, sort, filters, or search. */
   onSettingsChange?: (settings: ShelfViewSettings) => void;
-}
-
-/** Fills `{{name}}` placeholders; an unknown name fills empty. */
-function fill(template: string, values: Readonly<Record<string, string | number>>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_match, name: string) =>
-    name in values ? String(values[name]) : ""
-  );
 }
 
 /** The Frame's own width, updated when the Pane resizes. */
@@ -908,7 +902,7 @@ export function Shelf({
               <Button
                 aria-haspopup="dialog"
                 aria-expanded={options === "sort"}
-                aria-label={`${labels.sortBy}: ${sortLabel(labels, settings.sort)}`}
+                aria-label={fill(labels.sortByValue, { sort: sortLabel(labels, settings.sort) })}
                 onClick={() => setOptions(options === "sort" ? null : "sort")}
               >
                 <Icon name="sort" />

@@ -10,6 +10,16 @@
 
 import type { FrameShelfEntry, ShelfCoverSize, ShelfSort, ShelfViewSettings } from "./types";
 
+/**
+ * Fills `{{name}}` placeholders in a localized template; an unknown name fills
+ * empty. Shared by the Frame's labels, the Shelf, and its options.
+ */
+export function fill(template: string, values: Readonly<Record<string, string | number>>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_match, name: string) =>
+    Object.hasOwn(values, name) ? String(values[name]) : ""
+  );
+}
+
 /** Text folded for matching: the folded form and where each folded unit came from. */
 export interface FoldedText {
   folded: string;

@@ -48,6 +48,7 @@ import { createMeta } from "./meta";
 import { createPdf, MAX_CACHED_PAGES } from "./pdf";
 import { createPosition } from "./position";
 import { clearFilters, defaultShelfView } from "./shelf-options";
+import { fill } from "./shelf-query";
 import { createFrameProtocol, errorCode, type FrameOpenMessage } from "./protocol";
 import type {
   Appearance,
@@ -583,10 +584,7 @@ function t(key: string, values?: Record<string, string | number>): string {
   const base = STRINGS[language.split(/[-_]/)[0]] || STRINGS.en;
   const merged = Object.assign({}, base, providedLabels || {});
   const template = typeof merged[key] === "string" ? merged[key] : key;
-  if (!values) return template;
-  return template.replace(/\{\{(\w+)\}\}/g, (_match, name) =>
-    Object.hasOwn(values, name) ? String(values[name]) : ""
-  );
+  return values ? fill(template, values) : template;
 }
 
 /** The label strings the Preact toolbar, search bar, and prompts draw. */

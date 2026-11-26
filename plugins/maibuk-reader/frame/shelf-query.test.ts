@@ -8,6 +8,7 @@
 import { describe, expect, it } from "vitest";
 import type { FrameShelfEntry, ShelfViewSettings } from "./types";
 import {
+  fill,
   COVER_WIDTHS,
   filterShelf,
   fold,
@@ -57,6 +58,14 @@ function settings(overrides: Partial<ShelfViewSettings> = {}): ShelfViewSettings
 function titles(rows: FrameShelfEntry[]): string[] {
   return rows.map((row) => row.title);
 }
+
+describe("fill", () => {
+  it("fills each placeholder, and fills an unknown or inherited name empty", () => {
+    expect(fill("{{page}} of {{count}}", { page: 3, count: 12 })).toBe("3 of 12");
+    expect(fill("Sort by: {{sort}}{{missing}}", { sort: "Title" })).toBe("Sort by: Title");
+    expect(fill("{{constructor}}{{toString}}", {})).toBe("");
+  });
+});
 
 describe("fold", () => {
   it("lowercases and strips diacritics, mapping each folded unit to its original index", () => {

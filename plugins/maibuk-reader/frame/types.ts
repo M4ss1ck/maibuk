@@ -232,6 +232,9 @@ export interface FrameShelfLabels {
   sortProgress: string;
   sortAdded: string;
   reverseOrder: string;
+  sortSummary: string;
+  reverseOrderValue: string;
+  sortByValue: string;
   newestFirst: string;
   oldestFirst: string;
   aToZ: string;

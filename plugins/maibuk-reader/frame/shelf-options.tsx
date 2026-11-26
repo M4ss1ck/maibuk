@@ -12,6 +12,7 @@
 import type { TargetedKeyboardEvent } from "preact";
 import { useRef } from "preact/hooks";
 import { Chip, Icon, Segmented, type SegmentedOption } from "./kit";
+import { fill } from "./shelf-query";
 import type {
   FrameShelfLabels,
   ShelfCoverSize,
@@ -107,7 +108,10 @@ export function directionLabel(
  */
 export function sortSummary(labels: FrameShelfLabels, settings: ShelfViewSettings): string {
   if (settings.sort === "recent" && settings.descending) return labels.recentFirst;
-  return `${sortLabel(labels, settings.sort)} · ${directionLabel(labels, settings.sort, settings.descending)}`;
+  return fill(labels.sortSummary, {
+    sort: sortLabel(labels, settings.sort),
+    direction: directionLabel(labels, settings.sort, settings.descending),
+  });
 }
 
 /** The name of one status. */
@@ -268,7 +272,9 @@ export function SortOptions({ labels, settings, onChange }: ShelfOptionsControlP
               <button
                 type="button"
                 class="shelf-sort__reverse"
-                aria-label={`${labels.reverseOrder}: ${directionLabel(labels, sort, settings.descending)}`}
+                aria-label={fill(labels.reverseOrderValue, {
+                  direction: directionLabel(labels, sort, settings.descending),
+                })}
                 onClick={() => onChange({ ...settings, descending: !settings.descending })}
               >
                 <Icon name="sort" />
