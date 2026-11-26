@@ -204,6 +204,9 @@ export interface FrameFoliate {
 
 /** The reading Commands the Frame handles while it is mounted. */
 export type FrameCommandId =
+  | "searchShelf"
+  | "showShelfOptions"
+  | "clearShelfFilters"
   | "nextPage"
   | "previousPage"
   | "firstPage"

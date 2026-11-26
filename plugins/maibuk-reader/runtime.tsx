@@ -59,6 +59,9 @@ export const TOGGLE_CONTINUOUS_SCROLL = "toggleContinuousScroll";
 export const BACK_TO_SHELF = "backToShelf";
 export const REMOVE_FROM_SHELF = "removeFromShelf";
 export const LOCATE_DOCUMENT = "locateDocument";
+export const SEARCH_SHELF = "searchShelf";
+export const SHOW_SHELF_OPTIONS = "showShelfOptions";
+export const CLEAR_SHELF_FILTERS = "clearShelfFilters";
 
 /** The Commands the Frame handles itself, forwarded while it is open. */
 const FRAME_COMMANDS: ReadonlySet<FrameCommandId> = new Set<FrameCommandId>([
@@ -78,6 +81,9 @@ const FRAME_COMMANDS: ReadonlySet<FrameCommandId> = new Set<FrameCommandId>([
   BACK_TO_SHELF,
   REMOVE_FROM_SHELF,
   LOCATE_DOCUMENT,
+  SEARCH_SHELF,
+  SHOW_SHELF_OPTIONS,
+  CLEAR_SHELF_FILTERS,
 ]);
 
 /**
