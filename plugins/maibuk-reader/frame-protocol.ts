@@ -12,7 +12,7 @@
  * the password form. Imports only `@/plugin-sdk` and this Plugin's files.
  */
 
-import type { ReaderSettings, ShelfProgress } from "./shelf";
+import type { ReaderSettings, ShelfProgress, ShelfStatus, ShelfViewSettings } from "./shelf";
 
 /** The page fit a fresh Document opens with, or a numeric zoom scale. */
 export type FrameZoom = number | "width" | "page";
@@ -62,6 +62,14 @@ export interface FrameEntry {
   format: string;
 }
 
+export type {
+  ShelfCoverSize,
+  ShelfLayout,
+  ShelfSort,
+  ShelfStatus,
+  ShelfViewSettings,
+} from "./shelf";
+
 /**
  * One Shelf row the Frame draws (#944). The File Grant and Fingerprint stay in
  * the Worker, so the Frame never sees where the author's file lives.
@@ -83,6 +91,14 @@ export interface FrameShelfEntry {
   statusText: string | null;
   /** One of the generated cover's eight tones, stable for the Document id. */
   tone: number;
+  /** New, reading, or finished, decided by the Worker from the stored progress. */
+  status: ShelfStatus;
+  /** Milliseconds since the Unix epoch: the last read, or the Import when never read. */
+  lastReadAt: number;
+  /** Milliseconds since the Unix epoch when the Document was imported. */
+  addedAt: number;
+  /** How far through the Document the author is, 0 to 1; 0 when new. */
+  progress: number;
 }
 
 /** The localized UI strings the Frame shows, built by the Worker from i18n. */
@@ -229,6 +245,8 @@ export interface FrameOpenMessage {
   shelf?: FrameShelfState;
   /** The Shelf's localized strings, rebuilt in the app language. */
   shelfLabels?: FrameShelfLabels;
+  /** The Shelf's remembered view, sort, filters, and search (#945). */
+  shelfView?: ShelfViewSettings;
   language: string;
   /** The appearance Maibuk draws with right now. */
   appearance: Appearance;
@@ -435,6 +453,12 @@ export interface FrameShelfRemoveMessage {
   documentId: string;
 }
 
+/** The author changed the Shelf's view, sort, filters, or search; the Worker stores it (#945). */
+export interface FrameShelfViewMessage {
+  kind: "shelf-view";
+  settings: ShelfViewSettings;
+}
+
 export type FrameToWorkerMessage =
   | FrameReadyMessage
   | FrameReadMessage
@@ -448,7 +472,8 @@ export type FrameToWorkerMessage =
   | FrameSettingsMessage
   | FrameShelfCommandMessage
   | FrameShelfSelectMessage
-  | FrameShelfRemoveMessage;
+  | FrameShelfRemoveMessage
+  | FrameShelfViewMessage;
 
 /**
  * The Worker's handoff of one MessagePort to the nested pdf.js core Worker.

@@ -38,6 +38,36 @@ export interface ShelfProgress {
   fraction?: number;
 }
 
+/** How the Shelf lays its Documents out (#945). */
+export type ShelfLayout = "grid" | "list" | "compact";
+
+/** The grid's cover width: 88, 128, or 176 px. */
+export type ShelfCoverSize = "small" | "medium" | "large";
+
+/** The orders the Shelf sorts by. */
+export type ShelfSort = "recent" | "title" | "author" | "progress" | "added";
+
+/**
+ * Where the author is in a Document: never opened, started, or at its last
+ * page (progress at 99% or more).
+ */
+export type ShelfStatus = "new" | "reading" | "finished";
+
+/**
+ * The Shelf's view, sort, filters, and search, as Reader remembers them on
+ * this device (#945). An empty filter list means no filter.
+ */
+export interface ShelfViewSettings {
+  layout: ShelfLayout;
+  coverSize: ShelfCoverSize;
+  sort: ShelfSort;
+  /** True when the sort runs from the largest value (newest, most read, Z) down. */
+  descending: boolean;
+  formats: string[];
+  statuses: ShelfStatus[];
+  search: string;
+}
+
 /** One Document on the Shelf. */
 export interface ShelfEntry {
   /** Plugin-local id; it names this Document's Reading Position key. */
@@ -53,6 +83,10 @@ export interface ShelfEntry {
   coverDataUrl?: string;
   /** Milliseconds since the Unix epoch. */
   lastReadAt: number;
+  /** Milliseconds since the Unix epoch when the Document was imported. */
+  addedAt: number;
+  /** Milliseconds since the Unix epoch when the author first reached the last page. */
+  finishedAt?: number;
   progress: ShelfProgress | null;
   /** Defaults to `ok`; a Missing Document carries `missing` and a reason. */
   state?: DocumentState;
@@ -350,6 +384,8 @@ export function parseShelf(value: unknown): ShelfEntry[] {
       continue;
     }
     const progress = isRecord(item.progress) ? parseProgress(item.progress) : null;
+    const lastReadAt =
+      typeof item.lastReadAt === "number" && Number.isFinite(item.lastReadAt) ? item.lastReadAt : 0;
     shelf.push({
       id,
       grant,
@@ -358,10 +394,14 @@ export function parseShelf(value: unknown): ShelfEntry[] {
       author: typeof item.author === "string" ? item.author : "",
       format: formatFromName(`x.${format}`) as DocumentFormat,
       ...(typeof item.coverDataUrl === "string" ? { coverDataUrl: item.coverDataUrl } : {}),
-      lastReadAt:
-        typeof item.lastReadAt === "number" && Number.isFinite(item.lastReadAt)
-          ? item.lastReadAt
-          : 0,
+      lastReadAt,
+      addedAt:
+        typeof item.addedAt === "number" && Number.isFinite(item.addedAt)
+          ? item.addedAt
+          : lastReadAt,
+      ...(typeof item.finishedAt === "number" && Number.isFinite(item.finishedAt)
+        ? { finishedAt: item.finishedAt }
+        : {}),
       progress,
       state: oneOf(
         item.state,
@@ -405,4 +445,102 @@ export function progressSummary(progress: ShelfProgress | null): ProgressSummary
     return { kind: "percent", percent: Math.round(progress.fraction * 100) };
   }
   return null;
+}
+
+/** A Document counts as finished from this fraction of its progress on. */
+export const FINISHED_THRESHOLD = 0.99;
+
+function clampUnit(value: number): number {
+  return Math.min(1, Math.max(0, value));
+}
+
+/**
+ * How far through the Document the author is, from 0 to 1. A page out of its
+ * count wins; a fraction is the fallback; anything else counts as unread.
+ */
+export function progressFraction(progress: ShelfProgress | null): number {
+  if (progress === null) return 0;
+  const { page, pageCount, fraction } = progress;
+  if (typeof page === "number" && typeof pageCount === "number" && pageCount > 0) {
+    return clampUnit(page / pageCount);
+  }
+  if (typeof fraction === "number" && Number.isFinite(fraction)) return clampUnit(fraction);
+  return 0;
+}
+
+/** Where the author is in a Document: never opened, reading, or finished. */
+export function shelfStatus(entry: Pick<ShelfEntry, "progress">): ShelfStatus {
+  if (entry.progress === null) return "new";
+  return progressFraction(entry.progress) >= FINISHED_THRESHOLD ? "finished" : "reading";
+}
+
+/**
+ * The Document with new progress read at `now`. The first time it reaches
+ * finished it stamps `finishedAt`; that stamp then stays, even if the author
+ * later reads back below the threshold.
+ */
+export function withProgress(entry: ShelfEntry, progress: ShelfProgress, now: number): ShelfEntry {
+  const next: ShelfEntry = { ...entry, progress, lastReadAt: now };
+  if (entry.finishedAt === undefined && shelfStatus(next) === "finished") {
+    next.finishedAt = now;
+  }
+  return next;
+}
+
+/** The key the Shelf's remembered view, sort, filters, and search live under. */
+export const SHELF_VIEW_KEY = "shelfView";
+
+/** Titles and authors read A to Z; everything else reads from the largest value down. */
+export function defaultDescending(sort: ShelfSort): boolean {
+  return sort !== "title" && sort !== "author";
+}
+
+/** The view, sort, filters, and search a fresh Plugin opens the Shelf with. */
+export const DEFAULT_SHELF_VIEW: ShelfViewSettings = {
+  layout: "grid",
+  coverSize: "medium",
+  sort: "recent",
+  descending: true,
+  formats: [],
+  statuses: [],
+  search: "",
+};
+
+/** The longest search the Shelf remembers, in characters. */
+const SHELF_SEARCH_LIMIT = 200;
+
+/** The formats in the order the Shelf's filter lists them. */
+const SHELF_FORMAT_ORDER: readonly DocumentFormat[] = ["pdf", "epub", "mobi", "azw3", "fb2", "cbz"];
+
+/** The statuses in the order the Shelf's filter lists them. */
+const SHELF_STATUS_ORDER: readonly ShelfStatus[] = ["new", "reading", "finished"];
+
+/**
+ * The Shelf's view from anything stored, field by field: an unknown layout,
+ * cover size, or sort falls back to the default; a missing direction follows
+ * the sort; formats and statuses keep only the known values, once each, in
+ * their canonical order; and the search is cut to 200 characters. The arrays
+ * are always fresh, never the default's.
+ */
+export function clampShelfView(value: unknown): ShelfViewSettings {
+  if (!isRecord(value)) return { ...DEFAULT_SHELF_VIEW, formats: [], statuses: [] };
+  const sort = oneOf<ShelfSort>(
+    value.sort,
+    ["recent", "title", "author", "progress", "added"],
+    DEFAULT_SHELF_VIEW.sort
+  );
+  const storedFormats: unknown[] = Array.isArray(value.formats) ? value.formats : [];
+  const storedStatuses: unknown[] = Array.isArray(value.statuses) ? value.statuses : [];
+  return {
+    layout: oneOf(value.layout, ["grid", "list", "compact"], DEFAULT_SHELF_VIEW.layout),
+    coverSize: oneOf(value.coverSize, ["small", "medium", "large"], DEFAULT_SHELF_VIEW.coverSize),
+    sort,
+    descending: typeof value.descending === "boolean" ? value.descending : defaultDescending(sort),
+    formats: SHELF_FORMAT_ORDER.filter((format) => storedFormats.includes(format)),
+    statuses: SHELF_STATUS_ORDER.filter((status) => storedStatuses.includes(status)),
+    search:
+      typeof value.search === "string"
+        ? Array.from(value.search).slice(0, SHELF_SEARCH_LIMIT).join("")
+        : "",
+  };
 }

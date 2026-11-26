@@ -219,6 +219,7 @@ export function createShelfService(client: ReaderClient): ShelfService {
         await releaseGrant(client, picked.grant);
         throw new Error(`Reader cannot open ${picked.name}`);
       }
+      const now = Date.now();
       const entry: ShelfEntry = {
         id: newDocumentId(),
         grant: picked.grant,
@@ -226,7 +227,8 @@ export function createShelfService(client: ReaderClient): ShelfService {
         title: titleFromName(picked.name),
         author: "",
         format,
-        lastReadAt: Date.now(),
+        lastReadAt: now,
+        addedAt: now,
         progress: null,
         state: "ok",
       };

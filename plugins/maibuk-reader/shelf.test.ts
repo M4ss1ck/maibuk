@@ -8,20 +8,27 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_READER_SETTINGS,
+  DEFAULT_SHELF_VIEW,
   FINGERPRINT_WINDOW,
+  SHELF_VIEW_KEY,
   clampSettings,
+  clampShelfView,
+  defaultDescending,
   fingerprint,
   formatFromName,
   markState,
   parseShelf,
   positionKey,
+  progressFraction,
   progressSummary,
   reattach,
   removeEntry,
+  shelfStatus,
   sniffFormat,
   sortShelf,
   titleFromName,
   upsertByFingerprint,
+  withProgress,
   type ShelfEntry,
 } from "./shelf";
 import { shelfEntry } from "./test-support";
@@ -355,6 +362,208 @@ describe("parseShelf()", () => {
   it("reads nothing from a malformed value", () => {
     expect(parseShelf("not a shelf")).toEqual([]);
     expect(parseShelf(null)).toEqual([]);
+  });
+
+  it("keeps a stored addedAt and finishedAt", () => {
+    const [entry] = parseShelf([
+      {
+        id: "one",
+        grant: "g1",
+        fingerprint: "f1",
+        title: "Dune",
+        format: "epub",
+        lastReadAt: 2_000,
+        addedAt: 500,
+        finishedAt: 1_500,
+        progress: null,
+      },
+    ]);
+    expect(entry.addedAt).toBe(500);
+    expect(entry.finishedAt).toBe(1_500);
+  });
+
+  it("falls back to lastReadAt for addedAt when the stored value is missing or not a number", () => {
+    const base = { grant: "g1", fingerprint: "f1", title: "Dune", format: "epub", progress: null };
+    const [missing, notNumber] = parseShelf([
+      { ...base, id: "missing", lastReadAt: 2_000 },
+      { ...base, id: "text", lastReadAt: 2_000, addedAt: "yesterday" },
+    ]);
+    expect(missing.addedAt).toBe(2_000);
+    expect(notNumber.addedAt).toBe(2_000);
+  });
+
+  it("leaves finishedAt unset when none is stored", () => {
+    const [entry] = parseShelf([
+      {
+        id: "one",
+        grant: "g1",
+        fingerprint: "f1",
+        title: "Dune",
+        format: "epub",
+        lastReadAt: 2_000,
+        progress: null,
+      },
+    ]);
+    expect(entry.finishedAt).toBeUndefined();
+  });
+});
+
+describe("progressFraction()", () => {
+  it("is zero with no progress", () => {
+    expect(progressFraction(null)).toBe(0);
+  });
+
+  it("prefers a page out of its count, clamped to 0..1", () => {
+    expect(progressFraction({ page: 3, pageCount: 12, fraction: 0.9 })).toBe(0.25);
+    expect(progressFraction({ page: 20, pageCount: 12 })).toBe(1);
+  });
+
+  it("falls back to a finite fraction, clamped to 0..1", () => {
+    expect(progressFraction({ fraction: 0.5 })).toBe(0.5);
+    expect(progressFraction({ fraction: -1 })).toBe(0);
+    expect(progressFraction({ fraction: 3 })).toBe(1);
+  });
+
+  it("uses the fraction when the page count is zero", () => {
+    expect(progressFraction({ page: 0, pageCount: 0, fraction: 0.5 })).toBe(0.5);
+  });
+
+  it("is zero when the progress has neither a page count nor a fraction", () => {
+    expect(progressFraction({ page: 4 })).toBe(0);
+  });
+});
+
+describe("shelfStatus()", () => {
+  it("is new when the Document was never opened", () => {
+    expect(shelfStatus({ progress: null })).toBe("new");
+  });
+
+  it("is reading below 99%", () => {
+    expect(shelfStatus({ progress: { fraction: 0.5 } })).toBe("reading");
+    expect(shelfStatus({ progress: { fraction: 0.989 } })).toBe("reading");
+    expect(shelfStatus({ progress: { page: 3, pageCount: 12 } })).toBe("reading");
+  });
+
+  it("is finished at 99% or more, and on the last page", () => {
+    expect(shelfStatus({ progress: { fraction: 0.99 } })).toBe("finished");
+    expect(shelfStatus({ progress: { page: 12, pageCount: 12 } })).toBe("finished");
+  });
+});
+
+describe("withProgress()", () => {
+  const reading = shelfEntry({ id: "one", grant: "g1", lastReadAt: 1_000, addedAt: 500 });
+  const last = { page: 12, pageCount: 12 };
+  const middle = { page: 3, pageCount: 12 };
+
+  it("stores the progress and stamps lastReadAt with now", () => {
+    const next = withProgress(reading, middle, 5_000);
+    expect(next.progress).toEqual(middle);
+    expect(next.lastReadAt).toBe(5_000);
+  });
+
+  it("leaves finishedAt unset while the Document is not finished", () => {
+    expect(withProgress(reading, middle, 5_000).finishedAt).toBeUndefined();
+  });
+
+  it("sets finishedAt the first time the author reaches the last page", () => {
+    expect(withProgress(reading, last, 5_000).finishedAt).toBe(5_000);
+  });
+
+  it("keeps the first finishedAt when the Document finishes again", () => {
+    const first = withProgress(reading, last, 5_000);
+    expect(withProgress(first, last, 9_000).finishedAt).toBe(5_000);
+  });
+
+  it("keeps finishedAt after progress drops back below the threshold", () => {
+    const first = withProgress(reading, last, 5_000);
+    const back = withProgress(first, middle, 9_000);
+    expect(back.progress).toEqual(middle);
+    expect(back.lastReadAt).toBe(9_000);
+    expect(back.finishedAt).toBe(5_000);
+  });
+});
+
+describe("defaultDescending()", () => {
+  it("sorts the newest, most read, and largest first for recent, progress, and added", () => {
+    expect(defaultDescending("recent")).toBe(true);
+    expect(defaultDescending("progress")).toBe(true);
+    expect(defaultDescending("added")).toBe(true);
+  });
+
+  it("sorts A to Z first for title and author", () => {
+    expect(defaultDescending("title")).toBe(false);
+    expect(defaultDescending("author")).toBe(false);
+  });
+});
+
+describe("clampShelfView()", () => {
+  it("returns the default view for anything that is not a record", () => {
+    expect(clampShelfView("nope")).toEqual(DEFAULT_SHELF_VIEW);
+    expect(clampShelfView(null)).toEqual(DEFAULT_SHELF_VIEW);
+    expect(clampShelfView(["list"])).toEqual(DEFAULT_SHELF_VIEW);
+  });
+
+  it("round-trips a full valid view", () => {
+    const view = {
+      layout: "list",
+      coverSize: "large",
+      sort: "title",
+      descending: false,
+      formats: ["pdf", "epub"],
+      statuses: ["reading"],
+      search: "dune",
+    };
+    expect(clampShelfView(view)).toEqual(view);
+  });
+
+  it("falls back to the default sort and its direction for an unknown sort", () => {
+    expect(clampShelfView({ sort: "bogus" })).toMatchObject({ sort: "recent", descending: true });
+    expect(clampShelfView({ sort: "bogus", descending: false })).toMatchObject({
+      sort: "recent",
+      descending: false,
+    });
+  });
+
+  it("takes the direction from the sort when descending is not stored", () => {
+    expect(clampShelfView({ sort: "title" }).descending).toBe(false);
+    expect(clampShelfView({ sort: "added" }).descending).toBe(true);
+  });
+
+  it("keeps only valid formats, unique, in canonical order", () => {
+    expect(clampShelfView({ formats: ["cbz", "docx", "pdf", "cbz", "epub"] }).formats).toEqual([
+      "pdf",
+      "epub",
+      "cbz",
+    ]);
+  });
+
+  it("reads formats as empty when the stored value is not an array", () => {
+    expect(clampShelfView({ formats: "pdf" }).formats).toEqual([]);
+  });
+
+  it("keeps only valid statuses, unique, in the order new, reading, finished", () => {
+    expect(
+      clampShelfView({ statuses: ["finished", "new", "finished", "bogus", "reading"] }).statuses
+    ).toEqual(["new", "reading", "finished"]);
+  });
+
+  it("cuts the search to 200 characters and reads a non-string search as empty", () => {
+    expect(clampShelfView({ search: "x".repeat(250) }).search).toHaveLength(200);
+    expect(clampShelfView({ search: 42 }).search).toBe("");
+  });
+
+  it("never returns the default view's arrays", () => {
+    const view = clampShelfView({});
+    expect(view.formats).not.toBe(DEFAULT_SHELF_VIEW.formats);
+    expect(view.statuses).not.toBe(DEFAULT_SHELF_VIEW.statuses);
+    view.formats.push("pdf");
+    expect(DEFAULT_SHELF_VIEW.formats).toEqual([]);
+  });
+});
+
+describe("shelf view key", () => {
+  it("keeps the remembered view under one key", () => {
+    expect(SHELF_VIEW_KEY).toBe("shelfView");
   });
 });
 
