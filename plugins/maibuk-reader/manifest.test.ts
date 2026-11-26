@@ -70,7 +70,7 @@ describe("Reader manifest", () => {
     expect(open?.contexts).toEqual(["reader"]);
   });
 
-  it("declares the Command set, with reading Commands scoped to the reading page", () => {
+  it("declares the Command set, with reading Commands on both Reader pages", () => {
     const commands = manifest().contributes?.commands ?? [];
     expect(commands.map((command) => command.id)).toEqual([
       "openReader",
@@ -112,7 +112,13 @@ describe("Reader manifest", () => {
       "toggleContinuousScroll",
       "backToShelf",
     ]) {
-      expect(commands.find((command) => command.id === id)?.contexts, id).toEqual(["document"]);
+      // The Shelf lives on the reader page and opens Documents in its Frame, so
+      // a reading Command must be reachable there too (#944), beside the
+      // reading page a cold open still navigates to.
+      expect(commands.find((command) => command.id === id)?.contexts, id).toEqual([
+        "document",
+        "reader",
+      ]);
     }
     for (const id of ["removeFromShelf", "locateDocument"]) {
       expect(commands.find((command) => command.id === id)?.contexts, id).toEqual(["reader"]);

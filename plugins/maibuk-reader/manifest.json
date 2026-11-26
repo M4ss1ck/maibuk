@@ -39,72 +39,72 @@
       {
         "id": "nextPage",
         "label": "Next page",
-        "contexts": ["document"]
+        "contexts": ["document", "reader"]
       },
       {
         "id": "previousPage",
         "label": "Previous page",
-        "contexts": ["document"]
+        "contexts": ["document", "reader"]
       },
       {
         "id": "firstPage",
         "label": "First page",
-        "contexts": ["document"]
+        "contexts": ["document", "reader"]
       },
       {
         "id": "lastPage",
         "label": "Last page",
-        "contexts": ["document"]
+        "contexts": ["document", "reader"]
       },
       {
         "id": "findInDocument",
         "label": "Find in Document",
-        "contexts": ["document"]
+        "contexts": ["document", "reader"]
       },
       {
         "id": "toggleContents",
         "label": "Toggle contents",
-        "contexts": ["document"]
+        "contexts": ["document", "reader"]
       },
       {
         "id": "zoomIn",
         "label": "Zoom in",
-        "contexts": ["document"]
+        "contexts": ["document", "reader"]
       },
       {
         "id": "zoomOut",
         "label": "Zoom out",
-        "contexts": ["document"]
+        "contexts": ["document", "reader"]
       },
       {
         "id": "fitWidth",
         "label": "Fit width",
-        "contexts": ["document"]
+        "contexts": ["document", "reader"]
       },
       {
         "id": "fitPage",
         "label": "Fit page",
-        "contexts": ["document"]
+        "contexts": ["document", "reader"]
       },
       {
         "id": "increaseFontSize",
         "label": "Increase font size",
-        "contexts": ["document"]
+        "contexts": ["document", "reader"]
       },
       {
         "id": "decreaseFontSize",
         "label": "Decrease font size",
-        "contexts": ["document"]
+        "contexts": ["document", "reader"]
       },
       {
         "id": "toggleContinuousScroll",
         "label": "Continuous scroll",
-        "contexts": ["document"]
+        "contexts": ["document", "reader"]
       },
       {
         "id": "backToShelf",
         "label": "Back to Shelf",
-        "contexts": ["document"]
+        "contexts": ["document", "reader"]
       },
       {
         "id": "removeFromShelf",

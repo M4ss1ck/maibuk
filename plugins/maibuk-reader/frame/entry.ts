@@ -308,6 +308,26 @@ let shelfOpenDocumentId: string | null = null;
 /* The Shelf row the author last selected, which a host Command acts on. */
 let shelfSelectedDocumentId: string | null = null;
 
+/* The reading Commands, which all act on an open Document. The Shelf lives in
+   this same page now (#944), so the host can send one while nothing is open:
+   each is a no-op then, the way the toolbar it drives is hidden. `backToShelf`
+   stays out of the set because on the Shelf it only asks for the Shelf again. */
+const READING_COMMANDS: ReadonlySet<string> = new Set([
+  "nextPage",
+  "previousPage",
+  "firstPage",
+  "lastPage",
+  "findInDocument",
+  "toggleContents",
+  "zoomIn",
+  "zoomOut",
+  "fitWidth",
+  "fitPage",
+  "increaseFontSize",
+  "decreaseFontSize",
+  "toggleContinuousScroll",
+]);
+
 /* The chrome the Preact app draws: labels, toolbar state, page indicator, zoom
    level, message, password prompt, and the Shelf. `entry.ts` owns the state and
    hands it over the bridge; the app renders it and calls back through the
@@ -1247,6 +1267,7 @@ function onPasswordSubmit(value: string) {
 
 /* Commands and keyboard ------------------------------------------------- */
 function runCommand(id: string) {
+  if (chrome.view === "shelf" && READING_COMMANDS.has(id)) return;
   switch (id) {
     case "nextPage":
       nextPage();

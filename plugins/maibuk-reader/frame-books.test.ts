@@ -1070,4 +1070,22 @@ describe("the Shelf", () => {
       { kind: "shelf-command", id: "removeFromShelf", documentId: "doc-2" },
     ]);
   });
+
+  it("ignores a reading Command on the Shelf and runs it once a Document is open", async () => {
+    frame = loadFrame("flowing.epub");
+    frame.open({ shelf: READY_SHELF, shelfLabels: SHELF_LABELS });
+    await vi.waitFor(() => expect(shelfCells()).toHaveLength(3));
+    // Find is a reading Command: with the Shelf as the view nothing it acts on
+    // is drawn, so a host Command for it is a no-op.
+    expect(el("search-bar").hidden).toBe(true);
+    frame.port.deliver({ kind: "command", id: "findInDocument" });
+    await Promise.resolve();
+    expect(el("search-bar").hidden).toBe(true);
+
+    // The same Command opens the bar once the Frame draws a Document.
+    frame.open();
+    await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 3 in this section"));
+    frame.port.deliver({ kind: "command", id: "findInDocument" });
+    await vi.waitFor(() => expect(el("search-bar").hidden).toBe(false));
+  });
 });
