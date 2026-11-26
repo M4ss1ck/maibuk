@@ -3390,7 +3390,10 @@ export const ROWS: MatrixRow[] = [
     area: "plugins",
     workflow:
       "Remove from Shelf, by keyboard from the Document's row inside the Shelf Frame: Shift+F10 opens the row's Document menu and Remove from Shelf… asks for confirmation, whose copy states the real counts (zero Bookmarks and Highlights until #958/#959), and the palette's “Remove from Shelf…” Command removes the selected row the same way. Reader ends the File Grant and forgets the Document, the row leaves the Shelf, and the empty Shelf explains itself again; asserts: the confirmation copy, the row, and the empty state; persists: yes (the removal, not the file: the author's file stays where it lives)",
-    edges: ["Remove from Shelf forgets the Document and leaves its file alone"],
+    edges: [
+      "Remove from Shelf forgets the Document and leaves its file alone",
+      "on a phone, the Shelf draws the phone grid and a tap on More opens the Document menu as a sheet",
+    ],
     terms: ["File Grant"],
     shortcuts: ["plugin.maibuk-reader.removeFromShelf"],
     routes: ["/", "/plugin/:pluginId/:pageId"],

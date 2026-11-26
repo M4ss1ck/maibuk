@@ -409,6 +409,7 @@ test.describe("Reader", () => {
     await tabTo(page, shelfRow(page, "twelve-pages"), { max: 60 });
     const menu = await openRowMenu(page);
     await expect(menu.getByRole("menuitem", { name: "Open", exact: true })).toBeFocused();
+    await capture(page, "reader-document-menu");
     await page.keyboard.press("ArrowDown");
     await expect(
       menu.getByRole("menuitem", { name: "Remove from Shelf…", exact: true })
@@ -481,5 +482,34 @@ test.describe("Reader", () => {
     await expect(shelfRow(page, "Dune")).toBeVisible();
     await expect(shelfRow(page, "twelve-pages")).toBeVisible();
     await capture(page, "reader-shelf-dropped");
+  });
+
+  test("on a phone, the Shelf draws the phone grid and a tap on More opens the Document menu as a sheet @wf:reader-remove @touch", async ({
+    page,
+  }) => {
+    await page.goto("/plugin/maibuk-reader/reader");
+    await expect(shelfHeading(page)).toBeVisible({ timeout: 60_000 });
+    await capture(page, "reader-shelf-empty-phone");
+    await pageFrame(page).getByRole("button", { name: "Import files" }).tap();
+    await expect(pageIndicator(page)).toBeVisible({ timeout: 30_000 });
+    await pageFrame(page).getByRole("button", { name: "Back to Shelf" }).tap();
+    await expect(shelfRow(page, "twelve-pages")).toBeVisible();
+    await capture(page, "reader-shelf-phone");
+
+    // Touch reaches the Document menu through the row's More button.
+    await pageFrame(page).getByRole("button", { name: "More for twelve-pages" }).tap();
+    const menu = documentMenu(page);
+    await expect(menu).toBeVisible();
+    await expect(menu.getByRole("menuitem", { name: "Open", exact: true })).toBeVisible();
+    await capture(page, "reader-document-menu-phone");
+    await menu.getByRole("menuitem", { name: "Remove from Shelf…", exact: true }).tap();
+    const confirm = pageFrame(page).getByRole("alertdialog", {
+      name: 'Remove "twelve-pages" from the Shelf?',
+    });
+    await expect(confirm).toContainText("Its 0 Bookmarks and 0 Highlights are deleted too.");
+    await capture(page, "reader-remove-confirm-phone");
+    await confirm.getByRole("button", { name: "Remove", exact: true }).tap();
+    await expect(shelfRow(page, "twelve-pages")).toHaveCount(0);
+    await expect(pageFrame(page).getByText("Your Shelf is empty", { exact: true })).toBeVisible();
   });
 });
