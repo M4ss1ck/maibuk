@@ -5,7 +5,7 @@
 // runner (e2e/run-reader-bench.ts) judges the numbers.
 import type { FrameLocator, Page } from "@playwright/test";
 import { leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
-import { runPaletteCommand } from "../support/palette";
+import { openPalette, runPaletteCommand, selectPaletteCommand } from "../support/palette";
 import { expect } from "../support/test";
 
 /** Where the specs write their JSON; the runner sets it and refuses a direct run. */
@@ -49,7 +49,11 @@ export async function openReader(page: Page): Promise<void> {
   await pressUntilFocused(page, "ArrowDown", navOption(page, "Reader"), { max: 20 });
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
-  await expect(page.getByRole("heading", { name: "Shelf", level: 2 })).toBeVisible();
+  // The Shelf draws inside the reader page's Frame (#944), headed "All
+  // Documents" on the Wide toolbar (#945).
+  await expect(
+    documentFrame(page).getByRole("heading", { name: /^(All Documents|Shelf)$/, level: 1 })
+  ).toBeVisible();
 }
 
 /** Leaves Reader for the Library with the sidebar, as the reader spec does. */
@@ -70,6 +74,16 @@ export async function focusDocument(page: Page): Promise<void> {
 export async function runHostCommand(page: Page, label: string): Promise<void> {
   await leaveFrame(page, frameElement(page));
   await runPaletteCommand(page, label);
+}
+
+/**
+ * Leaves the Frame, opens the palette, and makes `label` its active result,
+ * so the caller's own Enter runs it. A timed window can then start at that
+ * key press, without the palette's typing inside the measurement.
+ */
+export async function armHostCommand(page: Page, label: string): Promise<void> {
+  await leaveFrame(page, frameElement(page));
+  await selectPaletteCommand(page, await openPalette(page), label);
 }
 
 /** The Frame's page indicator text, read without waiting. */

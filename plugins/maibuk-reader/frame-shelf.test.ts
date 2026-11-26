@@ -13,6 +13,14 @@ import {
   shelfRemovalCopy,
   shelfTone,
 } from "./frame-shelf";
+import {
+  DEFAULT_SHELF_VIEW as FRAME_DEFAULT_SHELF_VIEW,
+  defaultDescending as frameDefaultDescending,
+  SHELF_SORTS,
+  sortSummary,
+} from "./frame/shelf-options";
+import { fill } from "./frame/shelf-query";
+import { DEFAULT_SHELF_VIEW, defaultDescending } from "./shelf";
 import { shelfEntry } from "./test-support";
 
 const LABELS_EN = {
@@ -36,6 +44,63 @@ const LABELS_EN = {
   finishedLabel: "Finished",
   documentActions: "Document actions",
   dismiss: "Dismiss",
+  allDocuments: "All Documents",
+  shownOf: "{{shown}} of {{total}}",
+  searchLabel: "Search the Shelf",
+  searchPlaceholder: "Search title or author",
+  closeSearch: "Close search",
+  clearSearch: "Clear search",
+  searchMatchesOne: '{{count}} Document matches "{{search}}" · {{layout}}',
+  searchMatchesOther: '{{count}} Documents match "{{search}}" · {{layout}}',
+  gridView: "Grid view",
+  listView: "List view",
+  compactView: "Compact view",
+  viewOptions: "View, sort and filter",
+  viewOptionsTitle: "View and filters",
+  reset: "Reset",
+  done: "Done",
+  layout: "View",
+  layoutLabel: "Shelf view",
+  layoutGrid: "Grid",
+  layoutList: "List",
+  layoutCompact: "Compact",
+  coverSize: "Cover size",
+  coverSmall: "Small",
+  coverMedium: "Medium",
+  coverLarge: "Large",
+  coverSmallShort: "S",
+  coverMediumShort: "M",
+  coverLargeShort: "L",
+  sortBy: "Sort by",
+  sortRecent: "Recent",
+  sortTitle: "Title",
+  sortAuthor: "Author",
+  sortProgress: "Progress",
+  sortAdded: "Date added",
+  reverseOrder: "Reverse order",
+  reverseOrderValue: "Reverse order: {{direction}}",
+  sortSummary: "{{sort}} · {{direction}}",
+  sortByValue: "Sort by: {{sort}}",
+  newestFirst: "Newest first",
+  oldestFirst: "Oldest first",
+  aToZ: "A to Z",
+  zToA: "Z to A",
+  mostReadFirst: "Most read first",
+  leastReadFirst: "Least read first",
+  recentFirst: "Recent first",
+  filters: "Filters",
+  status: "Status",
+  format: "Format",
+  all: "All",
+  statusNew: "New",
+  statusReading: "Reading",
+  statusFinished: "Finished",
+  statusChip: "Status: {{status}}",
+  formatChip: "Format: {{format}}",
+  removeFilter: "Remove filter {{filter}}",
+  clearFilters: "Clear filters",
+  noMatch: "No Documents match",
+  remembered: "Showing {{shown}} of {{total}}. Reader remembers these choices on this device.",
 };
 
 const LABELS_ES = {
@@ -59,6 +124,64 @@ const LABELS_ES = {
   finishedLabel: "Terminado",
   documentActions: "Acciones del documento",
   dismiss: "Cerrar",
+  allDocuments: "Todos los documentos",
+  shownOf: "{{shown}} de {{total}}",
+  searchLabel: "Buscar en el estante",
+  searchPlaceholder: "Buscar título o autor",
+  closeSearch: "Cerrar búsqueda",
+  clearSearch: "Borrar búsqueda",
+  searchMatchesOne: "{{count}} documento coincide con «{{search}}» · {{layout}}",
+  searchMatchesOther: "{{count}} documentos coinciden con «{{search}}» · {{layout}}",
+  gridView: "Vista de cuadrícula",
+  listView: "Vista de lista",
+  compactView: "Vista compacta",
+  viewOptions: "Vista, orden y filtros",
+  viewOptionsTitle: "Vista y filtros",
+  reset: "Restablecer",
+  done: "Listo",
+  layout: "Vista",
+  layoutLabel: "Vista del estante",
+  layoutGrid: "Cuadrícula",
+  layoutList: "Lista",
+  layoutCompact: "Compacta",
+  coverSize: "Tamaño de portada",
+  coverSmall: "Pequeña",
+  coverMedium: "Mediana",
+  coverLarge: "Grande",
+  coverSmallShort: "P",
+  coverMediumShort: "M",
+  coverLargeShort: "G",
+  sortBy: "Ordenar por",
+  sortRecent: "Recientes",
+  sortTitle: "Título",
+  sortAuthor: "Autor",
+  sortProgress: "Progreso",
+  sortAdded: "Fecha de adición",
+  reverseOrder: "Invertir orden",
+  reverseOrderValue: "Invertir orden: {{direction}}",
+  sortSummary: "{{sort}} · {{direction}}",
+  sortByValue: "Ordenar por: {{sort}}",
+  newestFirst: "Más recientes primero",
+  oldestFirst: "Más antiguos primero",
+  aToZ: "De la A a la Z",
+  zToA: "De la Z a la A",
+  mostReadFirst: "Más leídos primero",
+  leastReadFirst: "Menos leídos primero",
+  recentFirst: "Recientes primero",
+  filters: "Filtros",
+  status: "Estado",
+  format: "Formato",
+  all: "Todos",
+  statusNew: "Nuevo",
+  statusReading: "Leyendo",
+  statusFinished: "Terminado",
+  statusChip: "Estado: {{status}}",
+  formatChip: "Formato: {{format}}",
+  removeFilter: "Quitar filtro {{filter}}",
+  clearFilters: "Borrar filtros",
+  noMatch: "Ningún documento coincide",
+  remembered:
+    "Mostrando {{shown}} de {{total}}. Reader recuerda estas opciones en este dispositivo.",
 };
 
 describe("shelfTone()", () => {
@@ -116,6 +239,52 @@ describe("frameShelfEntry()", () => {
     );
     expect(wholeWithPages.progressText).toBe("Finished");
     expect(wholeWithPages.progressPercent).toBe(100);
+  });
+
+  it("carries the status, the dates, and the progress fraction for the Frame's sort and filter", () => {
+    const mapped = frameShelfEntry(
+      "en",
+      shelfEntry({
+        id: "doc-1",
+        grant: "g1",
+        lastReadAt: 5_000,
+        addedAt: 2_000,
+        progress: { page: 3, pageCount: 10 },
+      })
+    );
+    expect(mapped).toMatchObject({
+      status: "reading",
+      lastReadAt: 5_000,
+      addedAt: 2_000,
+      progress: 0.3,
+    });
+  });
+
+  it("reads a Document at 99.5% as Finished, at 100 percent", () => {
+    const mapped = frameShelfEntry(
+      "en",
+      shelfEntry({ id: "doc-1", grant: "g1", progress: { fraction: 0.995 } })
+    );
+    expect(mapped.status).toBe("finished");
+    expect(mapped.progressText).toBe("Finished");
+    expect(mapped.progressPercent).toBe(100);
+    expect(mapped.progress).toBe(0.995);
+  });
+
+  it("reads the last page of a Document as Finished", () => {
+    const mapped = frameShelfEntry(
+      "en",
+      shelfEntry({ id: "doc-1", grant: "g1", progress: { page: 12, pageCount: 12 } })
+    );
+    expect(mapped.status).toBe("finished");
+    expect(mapped.progressText).toBe("Finished");
+    expect(mapped.progressPercent).toBe(100);
+  });
+
+  it("reads a Document nothing is known about as new, with no progress", () => {
+    const mapped = frameShelfEntry("en", shelfEntry({ id: "doc-1", grant: "g1", progress: null }));
+    expect(mapped.status).toBe("new");
+    expect(mapped.progress).toBe(0);
   });
 
   it("says Missing for both a Missing Document and a permission re-request", () => {
@@ -182,11 +351,25 @@ describe("frameShelfEntry()", () => {
       progressPercent: null,
       statusText: null,
       tone: shelfTone("doc-1"),
+      status: "new",
+      lastReadAt: 1_000,
+      addedAt: 1_000,
+      progress: 0,
     });
     expect(mapped).not.toHaveProperty("grant");
     expect(mapped).not.toHaveProperty("fingerprint");
     expect(JSON.stringify(mapped)).not.toContain("grant-secret");
     expect(JSON.stringify(mapped)).not.toContain("fp-secret");
+  });
+
+  it("reads an opened Document with no saved position as reading at 0%", () => {
+    const mapped = frameShelfEntry(
+      "en",
+      shelfEntry({ id: "doc-1", grant: "grant-1", progress: null, openedAt: 2_000 })
+    );
+    expect(mapped.status).toBe("reading");
+    expect(mapped.progressText).toBe("0%");
+    expect(mapped.progressPercent).toBe(0);
   });
 
   it("leaves the cover out when the row has none", () => {
@@ -214,6 +397,16 @@ describe("frameShelfLabels()", () => {
 
   it("builds every Spanish label from the runtime catalog", () => {
     expect(frameShelfLabels("es")).toEqual(LABELS_ES);
+  });
+
+  it("composes the sort summary and the sort and reverse names from one string each", () => {
+    const es = frameShelfLabels("es");
+    const byTitle = { ...DEFAULT_SHELF_VIEW, sort: "title", descending: false } as const;
+    expect(sortSummary(es, byTitle)).toBe("Título · De la A a la Z");
+    expect(fill(es.sortByValue, { sort: es.sortTitle })).toBe("Ordenar por: Título");
+    expect(fill(es.reverseOrderValue, { direction: es.aToZ })).toBe(
+      "Invertir orden: De la A a la Z"
+    );
   });
 
   it("follows the base language and falls back to English", () => {
@@ -261,5 +454,16 @@ describe("shelfRemovalCopy()", () => {
       body: "Se eliminan también: 3 marcadores y 12 subrayados (5 con notas).",
       stats: "Se conservan las estadísticas de lectura. El archivo permanece en tu dispositivo.",
     });
+  });
+});
+
+describe("the Frame's copy of the Shelf defaults", () => {
+  // The Frame bundle cannot import the Worker's shelf.ts, so it keeps its own
+  // copy; a fresh Reader must draw the view the Worker stores.
+  it("matches the Worker's default view and each sort's default direction", () => {
+    expect(FRAME_DEFAULT_SHELF_VIEW).toEqual(DEFAULT_SHELF_VIEW);
+    for (const sort of SHELF_SORTS) {
+      expect(frameDefaultDescending(sort), sort).toBe(defaultDescending(sort));
+    }
   });
 });

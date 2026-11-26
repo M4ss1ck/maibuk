@@ -12,7 +12,7 @@
  * the password form. Imports only `@/plugin-sdk` and this Plugin's files.
  */
 
-import type { ReaderSettings, ShelfProgress } from "./shelf";
+import type { ReaderSettings, ShelfProgress, ShelfStatus, ShelfViewSettings } from "./shelf";
 
 /** The page fit a fresh Document opens with, or a numeric zoom scale. */
 export type FrameZoom = number | "width" | "page";
@@ -62,6 +62,14 @@ export interface FrameEntry {
   format: string;
 }
 
+export type {
+  ShelfCoverSize,
+  ShelfLayout,
+  ShelfSort,
+  ShelfStatus,
+  ShelfViewSettings,
+} from "./shelf";
+
 /**
  * One Shelf row the Frame draws (#944). The File Grant and Fingerprint stay in
  * the Worker, so the Frame never sees where the author's file lives.
@@ -83,6 +91,14 @@ export interface FrameShelfEntry {
   statusText: string | null;
   /** One of the generated cover's eight tones, stable for the Document id. */
   tone: number;
+  /** New, reading, or finished, decided by the Worker from the stored progress. */
+  status: ShelfStatus;
+  /** Milliseconds since the Unix epoch: the last read, or the Import when never read. */
+  lastReadAt: number;
+  /** Milliseconds since the Unix epoch when the Document was imported. */
+  addedAt: number;
+  /** How far through the Document the author is, 0 to 1; 0 when new. */
+  progress: number;
 }
 
 /** The localized UI strings the Frame shows, built by the Worker from i18n. */
@@ -151,6 +167,70 @@ export interface FrameShelfLabels {
   finishedLabel: string;
   documentActions: string;
   dismiss: string;
+  allDocuments: string;
+  /** Placeholders: {{shown}}, {{total}}. */
+  shownOf: string;
+  searchLabel: string;
+  searchPlaceholder: string;
+  closeSearch: string;
+  clearSearch: string;
+  /** Placeholders: {{count}}, {{layout}}, {{search}}. */
+  searchMatchesOne: string;
+  /** Placeholders: {{count}}, {{layout}}, {{search}}. */
+  searchMatchesOther: string;
+  gridView: string;
+  listView: string;
+  compactView: string;
+  viewOptions: string;
+  viewOptionsTitle: string;
+  reset: string;
+  done: string;
+  layout: string;
+  layoutLabel: string;
+  layoutGrid: string;
+  layoutList: string;
+  layoutCompact: string;
+  coverSize: string;
+  coverSmall: string;
+  coverMedium: string;
+  coverLarge: string;
+  coverSmallShort: string;
+  coverMediumShort: string;
+  coverLargeShort: string;
+  sortBy: string;
+  sortRecent: string;
+  sortTitle: string;
+  sortAuthor: string;
+  sortProgress: string;
+  sortAdded: string;
+  reverseOrder: string;
+  sortSummary: string;
+  reverseOrderValue: string;
+  sortByValue: string;
+  newestFirst: string;
+  oldestFirst: string;
+  aToZ: string;
+  zToA: string;
+  mostReadFirst: string;
+  leastReadFirst: string;
+  recentFirst: string;
+  filters: string;
+  status: string;
+  format: string;
+  all: string;
+  statusNew: string;
+  statusReading: string;
+  statusFinished: string;
+  /** Placeholders: {{status}}. */
+  statusChip: string;
+  /** Placeholders: {{format}}. */
+  formatChip: string;
+  /** Placeholders: {{filter}}. */
+  removeFilter: string;
+  clearFilters: string;
+  noMatch: string;
+  /** Placeholders: {{shown}}, {{total}}. */
+  remembered: string;
 }
 
 /** What the Shelf draws: its loading, ready, or error state and its rows. */
@@ -188,6 +268,9 @@ export interface FrameFoliate {
 
 /** The reading Commands the Frame handles while it is mounted. */
 export type FrameCommandId =
+  | "searchShelf"
+  | "showShelfOptions"
+  | "clearShelfFilters"
   | "nextPage"
   | "previousPage"
   | "firstPage"
@@ -229,6 +312,8 @@ export interface FrameOpenMessage {
   shelf?: FrameShelfState;
   /** The Shelf's localized strings, rebuilt in the app language. */
   shelfLabels?: FrameShelfLabels;
+  /** The Shelf's remembered view, sort, filters, and search (#945). */
+  shelfView?: ShelfViewSettings;
   language: string;
   /** The appearance Maibuk draws with right now. */
   appearance: Appearance;
@@ -435,6 +520,12 @@ export interface FrameShelfRemoveMessage {
   documentId: string;
 }
 
+/** The author changed the Shelf's view, sort, filters, or search; the Worker stores it (#945). */
+export interface FrameShelfViewMessage {
+  kind: "shelf-view";
+  settings: ShelfViewSettings;
+}
+
 export type FrameToWorkerMessage =
   | FrameReadyMessage
   | FrameReadMessage
@@ -448,7 +539,8 @@ export type FrameToWorkerMessage =
   | FrameSettingsMessage
   | FrameShelfCommandMessage
   | FrameShelfSelectMessage
-  | FrameShelfRemoveMessage;
+  | FrameShelfRemoveMessage
+  | FrameShelfViewMessage;
 
 /**
  * The Worker's handoff of one MessagePort to the nested pdf.js core Worker.

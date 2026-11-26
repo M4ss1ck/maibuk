@@ -18,7 +18,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import purify from "./vendor/dompurify/purify.es.mjs";
 // @ts-expect-error -- vendored plain JavaScript, no type declarations
 import * as foliate from "./vendor/foliate/foliate-parsers.min.mjs";
-import type { FrameShelfEntry, FrameShelfLabels, FrameShelfState } from "./frame/types";
+import type {
+  FrameShelfEntry,
+  FrameShelfLabels,
+  FrameShelfState,
+  ShelfViewSettings,
+} from "./frame/types";
 import { deflatedArchive } from "./test-support";
 import { ZipError, openZip } from "./zip";
 import en from "./locales/runtime/en.json";
@@ -64,6 +69,63 @@ function shelfLabelsFrom(catalog: Record<string, string>): FrameShelfLabels {
     finishedLabel: catalog["shelf.frame.finishedLabel"],
     documentActions: catalog["shelf.frame.documentActions"],
     dismiss: catalog["shelf.frame.dismiss"],
+    allDocuments: catalog["shelf.frame.allDocuments"],
+    shownOf: catalog["shelf.frame.shownOf"],
+    searchLabel: catalog["shelf.frame.searchLabel"],
+    searchPlaceholder: catalog["shelf.frame.searchPlaceholder"],
+    closeSearch: catalog["shelf.frame.closeSearch"],
+    clearSearch: catalog["shelf.frame.clearSearch"],
+    searchMatchesOne: catalog["shelf.frame.searchMatches.one"],
+    searchMatchesOther: catalog["shelf.frame.searchMatches.other"],
+    gridView: catalog["shelf.frame.gridView"],
+    listView: catalog["shelf.frame.listView"],
+    compactView: catalog["shelf.frame.compactView"],
+    viewOptions: catalog["shelf.frame.viewOptions"],
+    viewOptionsTitle: catalog["shelf.frame.viewOptionsTitle"],
+    reset: catalog["shelf.frame.reset"],
+    done: catalog["shelf.frame.done"],
+    layout: catalog["shelf.frame.layout"],
+    layoutLabel: catalog["shelf.frame.layoutLabel"],
+    layoutGrid: catalog["shelf.frame.layoutGrid"],
+    layoutList: catalog["shelf.frame.layoutList"],
+    layoutCompact: catalog["shelf.frame.layoutCompact"],
+    coverSize: catalog["shelf.frame.coverSize"],
+    coverSmall: catalog["shelf.frame.coverSmall"],
+    coverMedium: catalog["shelf.frame.coverMedium"],
+    coverLarge: catalog["shelf.frame.coverLarge"],
+    coverSmallShort: catalog["shelf.frame.coverSmallShort"],
+    coverMediumShort: catalog["shelf.frame.coverMediumShort"],
+    coverLargeShort: catalog["shelf.frame.coverLargeShort"],
+    sortBy: catalog["shelf.frame.sortBy"],
+    sortRecent: catalog["shelf.frame.sort.recent"],
+    sortTitle: catalog["shelf.frame.sort.title"],
+    sortAuthor: catalog["shelf.frame.sort.author"],
+    sortProgress: catalog["shelf.frame.sort.progress"],
+    sortAdded: catalog["shelf.frame.sort.added"],
+    reverseOrder: catalog["shelf.frame.reverseOrder"],
+    reverseOrderValue: catalog["shelf.frame.reverseOrderValue"],
+    sortSummary: catalog["shelf.frame.sortSummary"],
+    sortByValue: catalog["shelf.frame.sortByValue"],
+    newestFirst: catalog["shelf.frame.newestFirst"],
+    oldestFirst: catalog["shelf.frame.oldestFirst"],
+    aToZ: catalog["shelf.frame.aToZ"],
+    zToA: catalog["shelf.frame.zToA"],
+    mostReadFirst: catalog["shelf.frame.mostReadFirst"],
+    leastReadFirst: catalog["shelf.frame.leastReadFirst"],
+    recentFirst: catalog["shelf.frame.recentFirst"],
+    filters: catalog["shelf.frame.filters"],
+    status: catalog["shelf.frame.status"],
+    format: catalog["shelf.frame.format"],
+    all: catalog["shelf.frame.all"],
+    statusNew: catalog["shelf.frame.status.new"],
+    statusReading: catalog["shelf.frame.status.reading"],
+    statusFinished: catalog["shelf.frame.status.finished"],
+    statusChip: catalog["shelf.frame.statusChip"],
+    formatChip: catalog["shelf.frame.formatChip"],
+    removeFilter: catalog["shelf.frame.removeFilter"],
+    clearFilters: catalog["shelf.frame.clearFilters"],
+    noMatch: catalog["shelf.frame.noMatch"],
+    remembered: catalog["shelf.frame.remembered"],
   };
 }
 
@@ -80,6 +142,13 @@ type WireShelfRow = FrameShelfEntry & {
   storageKey: string;
 };
 
+/**
+ * Each wire row is read a moment before the one built ahead of it: the Worker
+ * sends its rows most recently read first, so the Frame's default Recent sort
+ * keeps the order a test builds them in.
+ */
+let nextReadAt = 1_000_000;
+
 /** A wire row with every drawn field, and the three the Frame never sees. */
 function wireRow(overrides: Partial<FrameShelfEntry> & { id: string }): WireShelfRow {
   return {
@@ -91,6 +160,10 @@ function wireRow(overrides: Partial<FrameShelfEntry> & { id: string }): WireShel
     progressPercent: null,
     statusText: null,
     tone: 0,
+    status: "reading",
+    lastReadAt: nextReadAt--,
+    addedAt: 0,
+    progress: 0.42,
     grant: `grant-${overrides.id}`,
     fingerprint: `fingerprint-${overrides.id}`,
     storageKey: `reader.shelf.${overrides.id}`,
@@ -199,6 +272,8 @@ interface OpenOptions {
   shelfLabels?: FrameShelfLabels;
   /** The language the open message names, so `labels` stay a matching set. */
   language?: string;
+  /** The Shelf view settings the Worker remembered; a shelf open sends them with the Shelf. */
+  shelfView?: ShelfViewSettings;
 }
 
 /** One `window.maibuk.port`: answers reads and archive requests from a fixture. */
@@ -325,6 +400,7 @@ function loadFrame(name: string, options: OpenOptions = {}): Frame {
           entry: null,
           shelf,
           shelfLabels: openOptions.shelfLabels ?? options.shelfLabels ?? null,
+          ...(openOptions.shelfView === undefined ? {} : { shelfView: openOptions.shelfView }),
         });
         return;
       }
@@ -360,9 +436,12 @@ function shelfCells(): HTMLElement[] {
   return Array.from(el("shelf-root").querySelectorAll<HTMLElement>('[role="gridcell"]'));
 }
 
-/** The title line of one drawn cell. */
+/** The title line of one drawn cell, in whichever layout the Shelf draws it. */
 function cellTitle(cell: HTMLElement): string {
-  return cell.querySelector(".shelf-card__title")?.textContent ?? "";
+  return (
+    cell.querySelector(".shelf-card__title, .shelf-list__title, .shelf-compact__title")
+      ?.textContent ?? ""
+  );
 }
 
 /** The cell whose title line reads `title`. */
@@ -380,6 +459,18 @@ function shelfRowOf(cell: HTMLElement): number {
 }
 
 /** The Shelf's heading text. */
+/**
+ * Tabs from the Shelf's toolbar into its grid: the search field is the first
+ * stop on Wide, then the header and toolbar controls, then the grid's one cell.
+ */
+async function tabToGrid(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+  for (let step = 0; step < 12; step++) {
+    await user.tab();
+    if ((document.activeElement as HTMLElement | null)?.getAttribute("role") === "gridcell") return;
+  }
+  throw new Error("Tab never reached the Shelf grid");
+}
+
 function shelfHeading(): string {
   return el("shelf-root").querySelector(".shelf__heading")?.textContent ?? "";
 }
@@ -823,7 +914,7 @@ describe("the Shelf", () => {
     frame.open({ shelf: READY_SHELF, shelfLabels: SHELF_LABELS });
     await vi.waitFor(() => expect(shelfCells()).toHaveLength(3));
 
-    expect(shelfHeading()).toBe("Shelf");
+    expect(shelfHeading()).toBe("All Documents");
     expect(shelfCount()).toBe("3 Documents");
     expect(shelfCells().map(cellTitle)).toEqual(["Dune", "Emma", "Broken Spine"]);
     expect(shelfCell("Dune").querySelector(".shelf-card__meta")?.textContent).toBe(
@@ -869,12 +960,15 @@ describe("the Shelf", () => {
     await vi.waitFor(() => expect(shelfCells()).toHaveLength(8));
     const user = userEvent.setup();
 
-    // The Shelf's header button is the first tab stop, the grid's single cell
-    // the second: Tab reaches the grid, not each of its eight rows.
+    // The search field is the first tab stop on Wide and the grid's single
+    // cell follows the toolbar: Tab reaches the grid, not each of its rows.
     await user.tab();
-    expect(document.activeElement).toBe(shelfButton("Import"));
-    await user.tab();
+    expect(document.activeElement).toBe(
+      el("shelf-root").querySelector('input[aria-label="Search the Shelf"]')
+    );
+    await tabToGrid(user);
     expect(document.activeElement).toBe(shelfCells()[0]);
+    expect(el("shelf-root").querySelectorAll('[role="gridcell"][tabindex="0"]')).toHaveLength(1);
 
     await user.keyboard("{ArrowRight}");
     expect(document.activeElement).toBe(shelfCells()[1]);
@@ -926,8 +1020,7 @@ describe("the Shelf", () => {
     const backButton = el("back");
 
     const user = userEvent.setup();
-    await user.tab();
-    await user.tab();
+    await tabToGrid(user);
     expect(document.activeElement).toBe(shelfCell("Dune"));
     await user.keyboard("{Enter}");
     expect(posted("shelf-command")).toContainEqual({
@@ -957,8 +1050,7 @@ describe("the Shelf", () => {
     await vi.waitFor(() => expect(shelfCells()).toHaveLength(3));
     const user = userEvent.setup();
 
-    await user.tab();
-    await user.tab();
+    await tabToGrid(user);
     await user.keyboard("{ArrowRight}");
     expect(document.activeElement).toBe(shelfCell("Emma"));
     await user.keyboard("{Enter}");
@@ -1018,7 +1110,7 @@ describe("the Shelf", () => {
   it("imports files from the empty Shelf through the pick flow", async () => {
     frame = loadFrame("flowing.epub");
     frame.open({ shelf: { status: "ready", entries: [] }, shelfLabels: SHELF_LABELS });
-    await vi.waitFor(() => expect(shelfHeading()).toBe("Shelf"));
+    await vi.waitFor(() => expect(shelfHeading()).toBe("All Documents"));
 
     expect(shelfCount()).toBe("0 Documents");
     expect(el("shelf-root").textContent).toContain("Your Shelf is empty");
@@ -1033,7 +1125,7 @@ describe("the Shelf", () => {
   it("re-labels the Shelf copy on a language change", async () => {
     frame = loadFrame("flowing.epub");
     frame.open({ shelf: READY_SHELF, shelfLabels: SHELF_LABELS });
-    await vi.waitFor(() => expect(shelfHeading()).toBe("Shelf"));
+    await vi.waitFor(() => expect(shelfHeading()).toBe("All Documents"));
 
     frame.port.deliver({
       kind: "language",
@@ -1041,7 +1133,7 @@ describe("the Shelf", () => {
       labels: LABELS_ES,
       shelfLabels: SHELF_LABELS_ES,
     });
-    await vi.waitFor(() => expect(shelfHeading()).toBe("Estante"));
+    await vi.waitFor(() => expect(shelfHeading()).toBe("Todos los documentos"));
     expect(shelfButton("Importar").textContent).toBe("Importar");
     expect(shelfCount()).toBe("3 documentos");
   });
@@ -1060,8 +1152,7 @@ describe("the Shelf", () => {
 
     // Selecting Emma makes it the row the next Command acts on.
     const user = userEvent.setup();
-    await user.tab();
-    await user.tab();
+    await tabToGrid(user);
     await user.keyboard("{ArrowRight}");
     expect(posted("shelf-select")).toContainEqual({ kind: "shelf-select", documentId: "doc-2" });
 
@@ -1088,5 +1179,532 @@ describe("the Shelf", () => {
     await vi.waitFor(() => expect(el("page-indicator").textContent).toBe("1 of 3 in this section"));
     frame.port.deliver({ kind: "command", id: "findInDocument" });
     await vi.waitFor(() => expect(el("search-bar").hidden).toBe(false));
+  });
+});
+
+/** The six rows the Shelf views, sort, filter, and search tests share (#945). */
+function viewRows(): WireShelfRow[] {
+  return [
+    wireRow({
+      id: "view-a",
+      title: "Middlemarch",
+      author: "George Eliot",
+      format: "epub",
+      status: "reading",
+      progress: 0.64,
+      lastReadAt: 600,
+      addedAt: 100,
+    }),
+    wireRow({
+      id: "view-b",
+      title: "Dracula",
+      author: "Bram Stoker",
+      format: "azw3",
+      status: "new",
+      progress: 0,
+      lastReadAt: 500,
+      addedAt: 600,
+    }),
+    wireRow({
+      id: "view-c",
+      title: "Persuasion",
+      author: "Jane Austen",
+      format: "mobi",
+      status: "finished",
+      progress: 1,
+      lastReadAt: 400,
+      addedAt: 300,
+    }),
+    wireRow({
+      id: "view-d",
+      title: "Little Nemo",
+      author: "Winsor McCay",
+      format: "cbz",
+      status: "reading",
+      progress: 0.05,
+      lastReadAt: 300,
+      addedAt: 500,
+    }),
+    wireRow({
+      id: "view-e",
+      title: "Origin of Species",
+      author: "",
+      format: "pdf",
+      status: "reading",
+      progress: 0.18,
+      lastReadAt: 200,
+      addedAt: 200,
+    }),
+    wireRow({
+      id: "view-f",
+      title: "Fortunata y Jacinta",
+      author: "Benito Pérez Galdós",
+      format: "fb2",
+      status: "new",
+      progress: 0,
+      lastReadAt: 100,
+      addedAt: 400,
+    }),
+  ];
+}
+
+const RECENT_ORDER = [
+  "Middlemarch",
+  "Dracula",
+  "Persuasion",
+  "Little Nemo",
+  "Origin of Species",
+  "Fortunata y Jacinta",
+];
+const TITLE_ASC = [
+  "Dracula",
+  "Fortunata y Jacinta",
+  "Little Nemo",
+  "Middlemarch",
+  "Origin of Species",
+  "Persuasion",
+];
+const AUTHOR_ASC = [
+  "Fortunata y Jacinta",
+  "Dracula",
+  "Middlemarch",
+  "Persuasion",
+  "Little Nemo",
+  "Origin of Species",
+];
+const AUTHOR_DESC = [
+  "Little Nemo",
+  "Persuasion",
+  "Middlemarch",
+  "Dracula",
+  "Fortunata y Jacinta",
+  "Origin of Species",
+];
+const PROGRESS_DESC = [
+  "Persuasion",
+  "Middlemarch",
+  "Origin of Species",
+  "Little Nemo",
+  "Dracula",
+  "Fortunata y Jacinta",
+];
+const ADDED_DESC = [
+  "Dracula",
+  "Little Nemo",
+  "Fortunata y Jacinta",
+  "Persuasion",
+  "Origin of Species",
+  "Middlemarch",
+];
+
+describe("the Shelf's views, sort, filters, and search (#945)", () => {
+  /** The Shelf's titles, in the order the grid draws them. */
+  function titles(): string[] {
+    return shelfCells().map(cellTitle);
+  }
+
+  /** The options popover whose visually hidden title reads `name`. */
+  function popover(name: string): HTMLElement {
+    const dialog = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"]')).find(
+      (candidate) => {
+        const labelId = candidate.getAttribute("aria-labelledby");
+        return labelId !== null && document.getElementById(labelId)?.textContent === name;
+      }
+    );
+    if (dialog === undefined) throw new Error(`no ${name} popover`);
+    return dialog;
+  }
+
+  /** The radio inside `scope` named by its aria-label, or by its text for a Sort row. */
+  function radio(scope: ParentNode, name: string): HTMLButtonElement {
+    const found = Array.from(scope.querySelectorAll<HTMLButtonElement>('[role="radio"]')).find(
+      (candidate) =>
+        (candidate.getAttribute("aria-label") ?? candidate.textContent?.trim()) === name
+    );
+    if (found === undefined) throw new Error(`no radio named ${name}`);
+    return found;
+  }
+
+  /** The button inside `scope` whose text is exactly `text`. */
+  function buttonIn(scope: ParentNode, text: string): HTMLButtonElement {
+    const found = Array.from(scope.querySelectorAll<HTMLButtonElement>("button")).find(
+      (candidate) => candidate.textContent?.trim() === text
+    );
+    if (found === undefined) throw new Error(`no button reading ${text}`);
+    return found;
+  }
+
+  /** The element in the document whose aria-label is exactly `label`. */
+  function byLabel(label: string): HTMLElement {
+    const found = document.querySelector<HTMLElement>(`[aria-label="${label}"]`);
+    if (found === null) throw new Error(`no element labelled ${label}`);
+    return found;
+  }
+
+  /** The Shelf's Filters toolbar button, which carries a badge once a filter is on. */
+  function filtersButton(): HTMLButtonElement {
+    const found = Array.from(el("shelf-root").querySelectorAll<HTMLButtonElement>("button")).find(
+      (candidate) => candidate.textContent?.startsWith("Filters") === true
+    );
+    if (found === undefined) throw new Error("no Filters button");
+    return found;
+  }
+
+  /** The settings of the last `shelf-view` the Frame posted. */
+  function lastSettings(): Record<string, unknown> {
+    const posts = posted("shelf-view");
+    const last = posts[posts.length - 1];
+    if (last === undefined) throw new Error("no shelf-view was posted");
+    return last.settings as Record<string, unknown>;
+  }
+
+  it("draws the Recent order by default, newest read first", async () => {
+    frame = loadFrame("flowing.epub");
+    frame.open({ shelf: { status: "ready", entries: viewRows() }, shelfLabels: SHELF_LABELS });
+    await vi.waitFor(() => expect(shelfCells()).toHaveLength(6));
+
+    expect(titles()).toEqual(RECENT_ORDER);
+  });
+
+  it("sorts by each order from the Sort popover, reverses it, and moves between orders by key", async () => {
+    frame = loadFrame("flowing.epub");
+    frame.open({ shelf: { status: "ready", entries: viewRows() }, shelfLabels: SHELF_LABELS });
+    await vi.waitFor(() => expect(shelfCells()).toHaveLength(6));
+    const user = userEvent.setup();
+
+    await user.click(byLabel("Sort by: Recent"));
+    const sort = popover("Sort by");
+
+    await user.click(radio(sort, "Title"));
+    await vi.waitFor(() => expect(titles()).toEqual(TITLE_ASC));
+    expect(lastSettings()).toMatchObject({ sort: "title", descending: false });
+
+    await user.click(byLabel("Reverse order: A to Z"));
+    await vi.waitFor(() => expect(titles()).toEqual([...TITLE_ASC].reverse()));
+    expect(lastSettings()).toMatchObject({ sort: "title", descending: true });
+
+    await user.click(radio(sort, "Author"));
+    await vi.waitFor(() => expect(titles()).toEqual(AUTHOR_ASC));
+    expect(lastSettings()).toMatchObject({ sort: "author", descending: false });
+
+    await user.click(byLabel("Reverse order: A to Z"));
+    await vi.waitFor(() => expect(titles()).toEqual(AUTHOR_DESC));
+    expect(lastSettings()).toMatchObject({ sort: "author", descending: true });
+
+    await user.click(radio(sort, "Progress"));
+    await vi.waitFor(() => expect(titles()).toEqual(PROGRESS_DESC));
+    expect(lastSettings()).toMatchObject({ sort: "progress", descending: true });
+
+    // Progress is the checked radio, so it holds the group's one Tab stop; ArrowDown moves to Date added.
+    radio(sort, "Progress").focus();
+    await user.keyboard("{ArrowDown}");
+    expect(document.activeElement).toBe(radio(sort, "Date added"));
+    await vi.waitFor(() => expect(titles()).toEqual(ADDED_DESC));
+    expect(lastSettings()).toMatchObject({ sort: "added", descending: true });
+  });
+
+  it("reverses the order by keyboard from its button, with Enter and Space", async () => {
+    frame = loadFrame("flowing.epub");
+    frame.open({ shelf: { status: "ready", entries: viewRows() }, shelfLabels: SHELF_LABELS });
+    await vi.waitFor(() => expect(shelfCells()).toHaveLength(6));
+    const user = userEvent.setup();
+
+    await user.click(byLabel("Sort by: Recent"));
+    await user.click(radio(popover("Sort by"), "Title"));
+    await vi.waitFor(() => expect(titles()).toEqual(TITLE_ASC));
+
+    byLabel("Reverse order: A to Z").focus();
+    await user.keyboard("{Enter}");
+    await vi.waitFor(() => expect(titles()).toEqual([...TITLE_ASC].reverse()));
+    expect(lastSettings()).toMatchObject({ sort: "title", descending: true });
+
+    byLabel("Reverse order: Z to A").focus();
+    await user.keyboard(" ");
+    await vi.waitFor(() => expect(titles()).toEqual(TITLE_ASC));
+    expect(lastSettings()).toMatchObject({ sort: "title", descending: false });
+  });
+
+  it("filters by one status at a time, and removes the status from its toolbar chip", async () => {
+    frame = loadFrame("flowing.epub");
+    frame.open({ shelf: { status: "ready", entries: viewRows() }, shelfLabels: SHELF_LABELS });
+    await vi.waitFor(() => expect(shelfCells()).toHaveLength(6));
+    const user = userEvent.setup();
+
+    await user.click(filtersButton());
+    const filters = popover("Filters");
+
+    await user.click(buttonIn(filters, "New"));
+    await vi.waitFor(() => expect(titles()).toEqual(["Dracula", "Fortunata y Jacinta"]));
+    expect(byLabel("Remove filter Status: New")).toBeDefined();
+
+    await user.click(byLabel("Remove filter Status: New"));
+    await vi.waitFor(() => expect(titles()).toEqual(RECENT_ORDER));
+
+    await user.click(buttonIn(filters, "Reading"));
+    await vi.waitFor(() =>
+      expect(titles()).toEqual(["Middlemarch", "Little Nemo", "Origin of Species"])
+    );
+    await user.click(buttonIn(filters, "Reading"));
+    await vi.waitFor(() => expect(titles()).toEqual(RECENT_ORDER));
+
+    await user.click(buttonIn(filters, "Finished"));
+    await vi.waitFor(() => expect(titles()).toEqual(["Persuasion"]));
+    await user.click(byLabel("Remove filter Status: Finished"));
+    await vi.waitFor(() => expect(titles()).toEqual(RECENT_ORDER));
+  });
+
+  it("toggles a status and a format in the Filters popover by keyboard, Enter and Space", async () => {
+    frame = loadFrame("flowing.epub");
+    frame.open({ shelf: { status: "ready", entries: viewRows() }, shelfLabels: SHELF_LABELS });
+    await vi.waitFor(() => expect(shelfCells()).toHaveLength(6));
+    const user = userEvent.setup();
+
+    await user.click(filtersButton());
+    const filters = popover("Filters");
+
+    buttonIn(filters, "New").focus();
+    await user.keyboard("{Enter}");
+    await vi.waitFor(() => expect(titles()).toEqual(["Dracula", "Fortunata y Jacinta"]));
+    expect(lastSettings()).toMatchObject({ statuses: ["new"] });
+
+    buttonIn(filters, "New").focus();
+    await user.keyboard("{Enter}");
+    await vi.waitFor(() => expect(titles()).toEqual(RECENT_ORDER));
+
+    buttonIn(filters, "PDF").focus();
+    await user.keyboard(" ");
+    await vi.waitFor(() => expect(titles()).toEqual(["Origin of Species"]));
+    expect(lastSettings()).toMatchObject({ formats: ["pdf"] });
+
+    buttonIn(filters, "PDF").focus();
+    await user.keyboard(" ");
+    await vi.waitFor(() => expect(titles()).toEqual(RECENT_ORDER));
+    expect(lastSettings()).toMatchObject({ statuses: [], formats: [] });
+  });
+
+  it("removes a filter from its toolbar chip by keyboard", async () => {
+    frame = loadFrame("flowing.epub");
+    frame.open({ shelf: { status: "ready", entries: viewRows() }, shelfLabels: SHELF_LABELS });
+    await vi.waitFor(() => expect(shelfCells()).toHaveLength(6));
+    const user = userEvent.setup();
+
+    await user.click(filtersButton());
+    await user.click(buttonIn(popover("Filters"), "Finished"));
+    await vi.waitFor(() => expect(titles()).toEqual(["Persuasion"]));
+
+    byLabel("Remove filter Status: Finished").focus();
+    await user.keyboard("{Enter}");
+    await vi.waitFor(() => expect(titles()).toEqual(RECENT_ORDER));
+    expect(lastSettings()).toMatchObject({ statuses: [] });
+  });
+
+  it("filters by each format, combines a status with a format, and badges the Filters button", async () => {
+    frame = loadFrame("flowing.epub");
+    frame.open({ shelf: { status: "ready", entries: viewRows() }, shelfLabels: SHELF_LABELS });
+    await vi.waitFor(() => expect(shelfCells()).toHaveLength(6));
+    const user = userEvent.setup();
+
+    await user.click(filtersButton());
+    const filters = popover("Filters");
+
+    const byFormat: Array<[string, string]> = [
+      ["PDF", "Origin of Species"],
+      ["EPUB", "Middlemarch"],
+      ["MOBI", "Persuasion"],
+      ["AZW3", "Dracula"],
+      ["FB2", "Fortunata y Jacinta"],
+      ["CBZ", "Little Nemo"],
+    ];
+    for (const [format, title] of byFormat) {
+      await user.click(buttonIn(filters, format));
+      await vi.waitFor(() => expect(titles()).toEqual([title]));
+      expect(lastSettings()).toMatchObject({ formats: [format.toLowerCase()] });
+      await user.click(buttonIn(filters, format));
+      await vi.waitFor(() => expect(titles()).toEqual(RECENT_ORDER));
+    }
+
+    await user.click(buttonIn(filters, "Reading"));
+    await user.click(buttonIn(filters, "CBZ"));
+    await vi.waitFor(() => expect(titles()).toEqual(["Little Nemo"]));
+    expect(filtersButton().querySelector(".shelf__badge")?.textContent).toBe("2");
+    expect(lastSettings()).toMatchObject({ statuses: ["reading"], formats: ["cbz"] });
+  });
+
+  it("says no Document matches, keeps the filter chips, and clears every filter from Clear filters", async () => {
+    frame = loadFrame("flowing.epub");
+    frame.open({ shelf: { status: "ready", entries: viewRows() }, shelfLabels: SHELF_LABELS });
+    await vi.waitFor(() => expect(shelfCells()).toHaveLength(6));
+    const user = userEvent.setup();
+
+    await user.click(filtersButton());
+    const filters = popover("Filters");
+    await user.click(buttonIn(filters, "Finished"));
+    await user.click(buttonIn(filters, "CBZ"));
+
+    await vi.waitFor(() => expect(el("shelf-root").textContent).toContain("No Documents match"));
+    expect(shelfCells()).toHaveLength(0);
+    expect(shelfButton("Clear filters")).toBeDefined();
+    expect(byLabel("Remove filter Status: Finished")).toBeDefined();
+    expect(byLabel("Remove filter Format: CBZ")).toBeDefined();
+
+    await user.click(shelfButton("Clear filters"));
+    await vi.waitFor(() => expect(titles()).toEqual(RECENT_ORDER));
+    expect(lastSettings()).toMatchObject({ formats: [], statuses: [], search: "" });
+  });
+
+  it("focuses the search by the searchShelf Command or Ctrl+F, filters as you type, and Escape clears it and returns focus", async () => {
+    frame = loadFrame("flowing.epub");
+    frame.open({ shelf: { status: "ready", entries: viewRows() }, shelfLabels: SHELF_LABELS });
+    await vi.waitFor(() => expect(shelfCells()).toHaveLength(6));
+    const user = userEvent.setup();
+    const searchField = () =>
+      el("shelf-root").querySelector<HTMLInputElement>('input[aria-label="Search the Shelf"]');
+
+    // Ctrl+F from the grid focuses the search field; Escape returns focus to the cell it came from.
+    await tabToGrid(user);
+    const firstCell = document.activeElement as HTMLElement;
+    // The Frame handles Ctrl+F itself so the browser's find bar stays shut.
+    let findHandled: boolean | null = null;
+    const onFind = (event: KeyboardEvent) => {
+      if (event.key === "f") findHandled = event.defaultPrevented;
+    };
+    window.addEventListener("keydown", onFind);
+    frame.cleanups.push(() => window.removeEventListener("keydown", onFind));
+    await user.keyboard("{Control>}f{/Control}");
+    expect(findHandled).toBe(true);
+    await vi.waitFor(() => expect(document.activeElement).toBe(searchField()));
+    await user.keyboard("{Escape}");
+    expect(searchField()?.value).toBe("");
+    await vi.waitFor(() => expect(titles()).toEqual(RECENT_ORDER));
+    expect(document.activeElement).toBe(firstCell);
+
+    // "/" is the searchShelf Command's Default Shortcut, so the Frame leaves it
+    // unhandled: the shim forwards it and the host, honoring a Custom Shortcut,
+    // answers with the Command, which focuses the search field.
+    let slashHandled: boolean | null = null;
+    const onSlash = (event: KeyboardEvent) => {
+      if (event.key === "/") slashHandled = event.defaultPrevented;
+    };
+    window.addEventListener("keydown", onSlash);
+    frame.cleanups.push(() => window.removeEventListener("keydown", onSlash));
+    await user.keyboard("/");
+    expect(slashHandled).toBe(false);
+    expect(document.activeElement).toBe(firstCell);
+    frame.port.deliver({ kind: "command", id: "searchShelf" });
+    await vi.waitFor(() => expect(document.activeElement).toBe(searchField()));
+    await user.keyboard("austen");
+    await vi.waitFor(() => expect(titles()).toEqual(["Persuasion"]));
+    expect(shelfCount()).toBe("1 of 6");
+
+    // A query that matches nothing draws the empty state, and the field keeps its text.
+    await user.keyboard("zz");
+    await vi.waitFor(() => expect(el("shelf-root").textContent).toContain("No Documents match"));
+    expect(shelfCount()).toBe("0 of 6");
+
+    // Accents are folded: "galdos" finds "Benito Pérez Galdós".
+    await user.clear(searchField() as HTMLInputElement);
+    await user.keyboard("galdos");
+    await vi.waitFor(() => expect(titles()).toEqual(["Fortunata y Jacinta"]));
+    expect(shelfCount()).toBe("1 of 6");
+
+    await user.keyboard("{Escape}");
+    expect(searchField()?.value).toBe("");
+    await vi.waitFor(() => expect(titles()).toEqual(RECENT_ORDER));
+    // Focus goes back to the Middlemarch cell that had it before "/". The search
+    // unmounted that cell while it filtered the grid, so the cell focus lands on
+    // is a new node for the same Document; the Document is what the author sees.
+    expect(document.activeElement?.getAttribute("role")).toBe("gridcell");
+    expect(cellTitle(document.activeElement as HTMLElement)).toBe("Middlemarch");
+    expect(lastSettings()).toMatchObject({ search: "" });
+  });
+
+  it("draws the chosen layout, hides Cover size outside Grid, and posts the cover size", async () => {
+    frame = loadFrame("flowing.epub");
+    frame.open({ shelf: { status: "ready", entries: viewRows() }, shelfLabels: SHELF_LABELS });
+    await vi.waitFor(() => expect(shelfCells()).toHaveLength(6));
+    const user = userEvent.setup();
+    const shelfView = () =>
+      document.querySelector<HTMLElement>('[role="radiogroup"][aria-label="Shelf view"]');
+    const coverSize = () =>
+      document.querySelector<HTMLElement>('[role="radiogroup"][aria-label="Cover size"]');
+
+    await user.click(radio(shelfView() as HTMLElement, "List"));
+    await vi.waitFor(() =>
+      expect(shelfCells().every((cell) => cell.classList.contains("shelf-list"))).toBe(true)
+    );
+    expect(shelfCells()).toHaveLength(6);
+    expect(coverSize()).toBeNull();
+    expect(lastSettings()).toMatchObject({ layout: "list" });
+
+    await user.click(radio(shelfView() as HTMLElement, "Compact"));
+    await vi.waitFor(() =>
+      expect(shelfCells().every((cell) => cell.classList.contains("shelf-compact"))).toBe(true)
+    );
+    expect(coverSize()).toBeNull();
+
+    await user.click(radio(shelfView() as HTMLElement, "Grid"));
+    await vi.waitFor(() => expect(coverSize()).not.toBeNull());
+    expect(shelfCells().every((cell) => cell.classList.contains("shelf-card"))).toBe(true);
+
+    await user.click(radio(coverSize() as HTMLElement, "Small"));
+    await vi.waitFor(() => expect(lastSettings()).toMatchObject({ coverSize: "small" }));
+    expect(titles()).toEqual(RECENT_ORDER);
+  });
+
+  it("restores the remembered view, sort, status filter, and search with the Shelf", async () => {
+    frame = loadFrame("flowing.epub");
+    frame.open({
+      shelf: { status: "ready", entries: viewRows() },
+      shelfLabels: SHELF_LABELS,
+      shelfView: {
+        layout: "list",
+        coverSize: "large",
+        sort: "title",
+        descending: true,
+        formats: [],
+        statuses: ["reading"],
+        search: "",
+      },
+    });
+    await vi.waitFor(() => expect(shelfCells()).toHaveLength(3));
+
+    expect(shelfCells().every((cell) => cell.classList.contains("shelf-list"))).toBe(true);
+    expect(titles()).toEqual(["Origin of Species", "Middlemarch", "Little Nemo"]);
+    expect(byLabel("Sort by: Title").textContent).toContain("Title");
+    expect(byLabel("Remove filter Status: Reading")).toBeDefined();
+  });
+
+  it("answers the host's search, filter-clear, and options Commands", async () => {
+    frame = loadFrame("flowing.epub");
+    frame.open({
+      shelf: { status: "ready", entries: viewRows() },
+      shelfLabels: SHELF_LABELS,
+      shelfView: {
+        layout: "grid",
+        coverSize: "medium",
+        sort: "recent",
+        descending: true,
+        formats: [],
+        statuses: ["new"],
+        search: "",
+      },
+    });
+    await vi.waitFor(() => expect(titles()).toEqual(["Dracula", "Fortunata y Jacinta"]));
+    const searchField = () =>
+      el("shelf-root").querySelector<HTMLInputElement>('input[aria-label="Search the Shelf"]');
+
+    frame.port.deliver({ kind: "command", id: "searchShelf" });
+    await vi.waitFor(() => expect(document.activeElement).toBe(searchField()));
+
+    (document.activeElement as HTMLElement).blur();
+    frame.port.deliver({ kind: "command", id: "findInDocument" });
+    await vi.waitFor(() => expect(document.activeElement).toBe(searchField()));
+
+    frame.port.deliver({ kind: "command", id: "clearShelfFilters" });
+    await vi.waitFor(() => expect(titles()).toEqual(RECENT_ORDER));
+    expect(lastSettings()).toMatchObject({ statuses: [], formats: [], search: "" });
+
+    frame.port.deliver({ kind: "command", id: "showShelfOptions" });
+    await vi.waitFor(() => expect(popover("Filters")).toBeDefined());
   });
 });

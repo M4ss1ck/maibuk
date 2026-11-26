@@ -87,6 +87,7 @@ export function shelfEntry(
     author: "",
     format: "pdf" as DocumentFormat,
     lastReadAt: 1_000,
+    addedAt: overrides.lastReadAt ?? 1_000,
     progress: null,
     state: "ok",
     ...overrides,

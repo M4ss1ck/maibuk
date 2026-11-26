@@ -55,6 +55,63 @@ function shelfLabelsFrom(catalog: Record<string, string>) {
     finishedLabel: catalog["shelf.frame.finishedLabel"],
     documentActions: catalog["shelf.frame.documentActions"],
     dismiss: catalog["shelf.frame.dismiss"],
+    allDocuments: catalog["shelf.frame.allDocuments"],
+    shownOf: catalog["shelf.frame.shownOf"],
+    searchLabel: catalog["shelf.frame.searchLabel"],
+    searchPlaceholder: catalog["shelf.frame.searchPlaceholder"],
+    closeSearch: catalog["shelf.frame.closeSearch"],
+    clearSearch: catalog["shelf.frame.clearSearch"],
+    searchMatchesOne: catalog["shelf.frame.searchMatches.one"],
+    searchMatchesOther: catalog["shelf.frame.searchMatches.other"],
+    gridView: catalog["shelf.frame.gridView"],
+    listView: catalog["shelf.frame.listView"],
+    compactView: catalog["shelf.frame.compactView"],
+    viewOptions: catalog["shelf.frame.viewOptions"],
+    viewOptionsTitle: catalog["shelf.frame.viewOptionsTitle"],
+    reset: catalog["shelf.frame.reset"],
+    done: catalog["shelf.frame.done"],
+    layout: catalog["shelf.frame.layout"],
+    layoutLabel: catalog["shelf.frame.layoutLabel"],
+    layoutGrid: catalog["shelf.frame.layoutGrid"],
+    layoutList: catalog["shelf.frame.layoutList"],
+    layoutCompact: catalog["shelf.frame.layoutCompact"],
+    coverSize: catalog["shelf.frame.coverSize"],
+    coverSmall: catalog["shelf.frame.coverSmall"],
+    coverMedium: catalog["shelf.frame.coverMedium"],
+    coverLarge: catalog["shelf.frame.coverLarge"],
+    coverSmallShort: catalog["shelf.frame.coverSmallShort"],
+    coverMediumShort: catalog["shelf.frame.coverMediumShort"],
+    coverLargeShort: catalog["shelf.frame.coverLargeShort"],
+    sortBy: catalog["shelf.frame.sortBy"],
+    sortRecent: catalog["shelf.frame.sort.recent"],
+    sortTitle: catalog["shelf.frame.sort.title"],
+    sortAuthor: catalog["shelf.frame.sort.author"],
+    sortProgress: catalog["shelf.frame.sort.progress"],
+    sortAdded: catalog["shelf.frame.sort.added"],
+    reverseOrder: catalog["shelf.frame.reverseOrder"],
+    reverseOrderValue: catalog["shelf.frame.reverseOrderValue"],
+    sortSummary: catalog["shelf.frame.sortSummary"],
+    sortByValue: catalog["shelf.frame.sortByValue"],
+    newestFirst: catalog["shelf.frame.newestFirst"],
+    oldestFirst: catalog["shelf.frame.oldestFirst"],
+    aToZ: catalog["shelf.frame.aToZ"],
+    zToA: catalog["shelf.frame.zToA"],
+    mostReadFirst: catalog["shelf.frame.mostReadFirst"],
+    leastReadFirst: catalog["shelf.frame.leastReadFirst"],
+    recentFirst: catalog["shelf.frame.recentFirst"],
+    filters: catalog["shelf.frame.filters"],
+    status: catalog["shelf.frame.status"],
+    format: catalog["shelf.frame.format"],
+    all: catalog["shelf.frame.all"],
+    statusNew: catalog["shelf.frame.status.new"],
+    statusReading: catalog["shelf.frame.status.reading"],
+    statusFinished: catalog["shelf.frame.status.finished"],
+    statusChip: catalog["shelf.frame.statusChip"],
+    formatChip: catalog["shelf.frame.formatChip"],
+    removeFilter: catalog["shelf.frame.removeFilter"],
+    clearFilters: catalog["shelf.frame.clearFilters"],
+    noMatch: catalog["shelf.frame.noMatch"],
+    remembered: catalog["shelf.frame.remembered"],
   };
 }
 
@@ -846,7 +903,7 @@ describe("labels", () => {
       shelf: { status: "ready", entries: [SHELF_ENTRY] },
       shelfLabels: SHELF_LABELS,
     });
-    await vi.waitFor(() => expect(el("shelf-root").textContent).toContain("Shelf"));
+    await vi.waitFor(() => expect(el("shelf-root").textContent).toContain("All Documents"));
 
     frame.port.deliver({
       kind: "language",
@@ -854,7 +911,7 @@ describe("labels", () => {
       labels: LABELS_ES,
       shelfLabels: SHELF_LABELS_ES,
     });
-    await vi.waitFor(() => expect(el("shelf-root").textContent).toContain("Estante"));
+    await vi.waitFor(() => expect(el("shelf-root").textContent).toContain("Todos los documentos"));
     expect(el("shelf-root").textContent).toContain("Importar");
   });
 });

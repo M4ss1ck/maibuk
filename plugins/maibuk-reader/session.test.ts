@@ -17,12 +17,16 @@ import { createShelfService } from "./library";
 import { SHELF_PAGE_ID, followReturnTarget, leaveReading } from "./runtime";
 import { createReaderSession, frameLabels, type ReaderSession } from "./session";
 import {
+  DEFAULT_SHELF_VIEW,
   SHELF_KEY,
+  SHELF_VIEW_KEY,
   bookmarksKey,
+  clampShelfView,
   highlightsKey,
   positionKey,
   type DocumentFormat,
   type ShelfEntry,
+  type ShelfViewSettings,
 } from "./shelf";
 import { deflatedArchive, inflateRaw, pdfBytes, readerManifest, shelfEntry } from "./test-support";
 
@@ -94,6 +98,12 @@ interface Harness {
   messages: Record<string, unknown>[];
   /** Sends one Frame -> Worker message. */
   send(message: unknown): void;
+  /**
+   * Every Frame -> Worker message the session's handler has been handed, in
+   * order: recorded by a listener added after the session's own, so it runs
+   * after the session's on each delivery.
+   */
+  delivered: Record<string, unknown>[];
   navigateToShelf: ReturnType<typeof vi.fn>;
   /** Handed the Document the author opens or picks from the Shelf. */
   openEntry: ReturnType<typeof vi.fn>;
@@ -149,6 +159,10 @@ function setup(
     onViewChange,
   });
   session.start();
+  const delivered: Record<string, unknown>[] = [];
+  channel.port1.addEventListener("message", (event: MessageEvent) => {
+    delivered.push(event.data as Record<string, unknown>);
+  });
   return {
     host,
     storage,
@@ -156,6 +170,7 @@ function setup(
     library,
     session,
     messages,
+    delivered,
     send(message: unknown) {
       channel.port2.postMessage(message);
     },
@@ -805,6 +820,157 @@ describe("position", () => {
       );
       expect(storage.get(positionKey("doc-1"))).toEqual({ kind: "page", page: 7, zoom: 1 });
     } finally {
+      await harness.stop();
+    }
+  });
+
+  it("stamps finishedAt at the first save that reaches the last page, and keeps that stamp", async () => {
+    const entry = shelfEntry({ id: "doc-1", grant: "grant-1", lastReadAt: 1_000 });
+    const storage = new Map<string, unknown>([[SHELF_KEY, [entry]]]);
+    const harness = setup({ entry, storage });
+    const now = vi.spyOn(Date, "now").mockReturnValue(5_000);
+    try {
+      await opened(harness);
+      harness.send({
+        kind: "position",
+        position: { kind: "page", page: 12, zoom: 1 },
+        progress: { fraction: 0.995 },
+      });
+      await vi.waitFor(() => {
+        expect((storage.get(SHELF_KEY) as ShelfEntry[])[0].finishedAt).toBe(5_000);
+      });
+      now.mockReturnValue(9_000);
+      harness.send({
+        kind: "position",
+        position: { kind: "page", page: 3, zoom: 1 },
+        progress: { page: 3, pageCount: 12 },
+      });
+      await vi.waitFor(() => {
+        expect((storage.get(SHELF_KEY) as ShelfEntry[])[0].progress).toEqual({
+          page: 3,
+          pageCount: 12,
+        });
+      });
+      const shelf = storage.get(SHELF_KEY) as ShelfEntry[];
+      expect(shelf[0].finishedAt).toBe(5_000);
+      expect(shelf[0].lastReadAt).toBe(9_000);
+    } finally {
+      now.mockRestore();
+      await harness.stop();
+    }
+  });
+});
+
+describe("shelf view", () => {
+  /** A Shelf view that differs from the default only by its search, so each write is told apart. */
+  function view(search: string): ShelfViewSettings {
+    return { ...DEFAULT_SHELF_VIEW, search };
+  }
+
+  /** Waits until the session has been handed `count` shelf-view messages. */
+  async function viewsDelivered(harness: Harness, count: number): Promise<void> {
+    await vi.waitFor(() =>
+      expect(harness.delivered.filter((message) => message.kind === "shelf-view")).toHaveLength(
+        count
+      )
+    );
+  }
+
+  it("opens the Shelf with the view the author left it in", async () => {
+    const stored = {
+      layout: "list",
+      coverSize: "small",
+      sort: "title",
+      descending: false,
+      formats: ["epub"],
+      statuses: ["finished"],
+      search: "Dune",
+    };
+    const storage = new Map<string, unknown>([[SHELF_VIEW_KEY, stored]]);
+    const harness = setup({ view: "shelf", storage });
+    try {
+      const open = await opened(harness);
+      expect(open.shelfView).toEqual(clampShelfView(stored));
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("leaves the Shelf view out of a Document open", async () => {
+    const entry = shelfEntry({ id: "doc-1", grant: "grant-1" });
+    const storage = new Map<string, unknown>([
+      [SHELF_KEY, [entry]],
+      [SHELF_VIEW_KEY, view("Dune")],
+    ]);
+    const harness = setup({ entry, storage });
+    try {
+      const open = await opened(harness);
+      expect(open.view).toBe("document");
+      expect(open).not.toHaveProperty("shelfView");
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("writes the newest view once the held write settles, at most two writes for a burst", async () => {
+    const storage = new Map<string, unknown>();
+    const harness = setup({ view: "shelf", storage });
+    const set = harness.client.storage.set.bind(harness.client.storage);
+    let viewWrites = 0;
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const spy = vi.spyOn(harness.client.storage, "set").mockImplementation(async (params) => {
+      if (params.key === SHELF_VIEW_KEY) {
+        viewWrites += 1;
+        // Only the first view write is held; the rest run straight through.
+        if (viewWrites === 1) await gate;
+      }
+      return set(params);
+    });
+    try {
+      await opened(harness);
+      harness.send({ kind: "shelf-view", settings: view("first") });
+      await vi.waitFor(() => expect(viewWrites).toBe(1));
+      for (const search of ["second", "third", "fourth", "fifth"]) {
+        harness.send({ kind: "shelf-view", settings: view(search) });
+      }
+      // All four reach the session while the first write is held, so they
+      // coalesce into the one write that follows it.
+      await viewsDelivered(harness, 5);
+      release();
+      await vi.waitFor(() => expect(storage.get(SHELF_VIEW_KEY)).toEqual(view("fifth")));
+      expect(viewWrites).toBe(2);
+      expect(storage.get(SHELF_VIEW_KEY)).toEqual(view("fifth"));
+    } finally {
+      spy.mockRestore();
+      await harness.stop();
+    }
+  });
+
+  it("swallows a failed write without a message to the Frame, and still writes the next view", async () => {
+    const storage = new Map<string, unknown>();
+    const harness = setup({ view: "shelf", storage });
+    const set = harness.client.storage.set.bind(harness.client.storage);
+    let failNext = true;
+    const spy = vi.spyOn(harness.client.storage, "set").mockImplementation(async (params) => {
+      if (params.key === SHELF_VIEW_KEY && failNext) {
+        failNext = false;
+        throw new Error("storage is down");
+      }
+      return set(params);
+    });
+    try {
+      await opened(harness);
+      harness.send({ kind: "shelf-view", settings: view("first") });
+      await vi.waitFor(() => expect(failNext).toBe(false));
+      expect(storage.has(SHELF_VIEW_KEY)).toBe(false);
+      harness.send({ kind: "shelf-view", settings: view("second") });
+      await vi.waitFor(() => expect(storage.get(SHELF_VIEW_KEY)).toEqual(view("second")));
+      expect(harness.messages.some((message) => message.kind === "shelf-result")).toBe(false);
+    } finally {
+      spy.mockRestore();
       await harness.stop();
     }
   });

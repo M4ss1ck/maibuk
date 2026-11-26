@@ -18,7 +18,13 @@ import { useState } from "preact/hooks";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Shelf, type ShelfNotice, type ShelfRemoval } from "./shelf";
-import type { FrameShelfEntry, FrameShelfLabels, FrameShelfState } from "./types";
+import { defaultShelfView } from "./shelf-options";
+import type {
+  FrameShelfEntry,
+  FrameShelfLabels,
+  FrameShelfState,
+  ShelfViewSettings,
+} from "./types";
 
 const containers: HTMLElement[] = [];
 const nativeWidth = window.innerWidth;
@@ -46,6 +52,63 @@ const LABELS: FrameShelfLabels = {
   finishedLabel: "Finished",
   documentActions: "Document actions",
   dismiss: "Dismiss",
+  allDocuments: "All Documents",
+  shownOf: "{{shown}} of {{total}}",
+  searchLabel: "Search the Shelf",
+  searchPlaceholder: "Search title or author",
+  closeSearch: "Close search",
+  clearSearch: "Clear search",
+  searchMatchesOne: '{{count}} Document matches "{{search}}" · {{layout}}',
+  searchMatchesOther: '{{count}} Documents match "{{search}}" · {{layout}}',
+  gridView: "Grid view",
+  listView: "List view",
+  compactView: "Compact view",
+  viewOptions: "View, sort and filter",
+  viewOptionsTitle: "View and filters",
+  reset: "Reset",
+  done: "Done",
+  layout: "View",
+  layoutLabel: "Shelf view",
+  layoutGrid: "Grid",
+  layoutList: "List",
+  layoutCompact: "Compact",
+  coverSize: "Cover size",
+  coverSmall: "Small",
+  coverMedium: "Medium",
+  coverLarge: "Large",
+  coverSmallShort: "S",
+  coverMediumShort: "M",
+  coverLargeShort: "L",
+  sortBy: "Sort by",
+  sortRecent: "Recent",
+  sortTitle: "Title",
+  sortAuthor: "Author",
+  sortProgress: "Progress",
+  sortAdded: "Date added",
+  reverseOrder: "Reverse order",
+  reverseOrderValue: "Reverse order: {{direction}}",
+  sortSummary: "{{sort}} · {{direction}}",
+  sortByValue: "Sort by: {{sort}}",
+  newestFirst: "Newest first",
+  oldestFirst: "Oldest first",
+  aToZ: "A to Z",
+  zToA: "Z to A",
+  mostReadFirst: "Most read first",
+  leastReadFirst: "Least read first",
+  recentFirst: "Recent first",
+  filters: "Filters",
+  status: "Status",
+  format: "Format",
+  all: "All",
+  statusNew: "New",
+  statusReading: "Reading",
+  statusFinished: "Finished",
+  statusChip: "Status: {{status}}",
+  formatChip: "Format: {{format}}",
+  removeFilter: "Remove filter {{filter}}",
+  clearFilters: "Clear filters",
+  noMatch: "No Documents match",
+  remembered: "Showing {{shown}} of {{total}}. Reader remembers these choices on this device.",
 };
 
 const REMOVAL: ShelfRemoval = {
@@ -66,8 +129,23 @@ function entry(overrides: Partial<FrameShelfEntry> = {}): FrameShelfEntry {
     progressPercent: 42,
     statusText: null,
     tone: 0,
+    status: "reading",
+    lastReadAt: 0,
+    addedAt: 0,
+    progress: 0.42,
     ...overrides,
   };
+}
+
+/**
+ * The Worker sends its rows most recently read first; a fixture that leaves
+ * `lastReadAt` unset gets times in its own order, so the default Recent sort
+ * keeps the order the test wrote.
+ */
+function workerOrder(entries: FrameShelfEntry[]): FrameShelfEntry[] {
+  return entries.map((row, index) =>
+    row.lastReadAt === 0 ? { ...row, lastReadAt: entries.length - index } : row
+  );
 }
 
 function many(count: number): FrameShelfEntry[] {
@@ -93,6 +171,11 @@ interface HarnessProps {
   onRemove?: (documentId: string) => void;
   onRemoveClose?: () => void;
   onNoticeClose?: () => void;
+  /** Omitted keeps the Shelf uncontrolled; given, the caller owns the settings. */
+  settings?: ShelfViewSettings;
+  onSettingsChange?: (settings: ShelfViewSettings) => void;
+  /** Bumped by the searchShelf Command. */
+  searchRequest?: number;
 }
 
 /** The controlled Shelf a real caller draws, with its menu and removal state. */
@@ -105,12 +188,15 @@ function Harness(props: HarnessProps) {
     <div>
       <button type="button">Before</button>
       <Shelf
-        state={{ status, entries }}
+        state={{ status, entries: workerOrder(entries) }}
         labels={LABELS}
         notice={notice}
         removal={removal}
         menuDocumentId={menuDocumentId}
         focusDocumentId={props.focusDocumentId}
+        settings={props.settings}
+        onSettingsChange={props.onSettingsChange}
+        searchRequest={props.searchRequest}
         onCommand={props.onCommand ?? (() => {})}
         onSelect={props.onSelect ?? (() => {})}
         onMenuChange={setMenuDocumentId}
@@ -209,13 +295,14 @@ afterEach(async () => {
 });
 
 describe("Shelf grid", () => {
-  it("draws 128 by 192 covers and three columns in Narrow", async () => {
-    setWidth(500);
+  it("fills three medium columns across a 390 px phone, as the artboard sizes them", async () => {
+    setWidth(390);
     const container = await mount(<Harness entries={many(7)} />);
 
+    // (390 - 2 x 16 gutter - 2 x 12 gap) / 3 columns, floored; the height keeps 2:3.
     const covers = Array.from(container.querySelectorAll<HTMLElement>(".kit-cover"));
-    expect(covers[0].style.width).toBe("128px");
-    expect(covers[0].style.height).toBe("192px");
+    expect(covers[0].style.width).toBe("111px");
+    expect(covers[0].style.height).toBe("167px");
 
     const rows = screen.getAllByRole("row");
     expect(rows).toHaveLength(3);
@@ -224,8 +311,8 @@ describe("Shelf grid", () => {
     expect(within(rows[2]).getAllByRole("gridcell")).toHaveLength(1);
   });
 
-  it("draws six columns in Wide and keeps the Worker order", async () => {
-    setWidth(1200);
+  it("draws six columns at the artboard's 1040 px Wide and keeps the Worker order", async () => {
+    setWidth(1040);
     await mount(
       <Harness
         entries={[
@@ -313,7 +400,7 @@ describe("Shelf grid", () => {
 
 describe("Shelf keyboard", () => {
   it("keeps one Tab stop and moves by cell with the arrow keys, Home, and End", async () => {
-    setWidth(500);
+    setWidth(390);
     const user = userEvent.setup({ delay: null });
     const selected: string[] = [];
     const commands: Array<[string, string | undefined]> = [];
@@ -715,5 +802,426 @@ describe("Remove confirmation", () => {
     await press(() => user.click(trigger));
     await press(() => user.click(screen.getByRole("button", { name: "Remove" })));
     expect(onRemove).toHaveBeenCalledWith("doc-1");
+  });
+});
+
+/** The settings a test starts from: the default view with the given changes. */
+function view(overrides: Partial<ShelfViewSettings> = {}): ShelfViewSettings {
+  return { ...defaultShelfView(), ...overrides };
+}
+
+/** The grid cell whose drawn title is `title`, or undefined when it is not drawn. */
+function gridCell(title: string): HTMLElement | undefined {
+  return screen
+    .queryAllByRole("gridcell")
+    .find((cell) => cell.querySelector(".shelf-card__title")?.textContent === title);
+}
+
+/** The drawn grid cells' titles, in the order they are drawn. */
+function drawnTitles(): Array<string | null | undefined> {
+  return screen
+    .getAllByRole("gridcell")
+    .map((cell) => cell.querySelector(".shelf-card__title")?.textContent);
+}
+
+describe("Shelf views, sort, and filters (#945)", () => {
+  it("draws the grid at each cover size on a Narrow phone", async () => {
+    setWidth(390);
+    const rows = async (coverSize: ShelfViewSettings["coverSize"]) => {
+      const container = await mount(
+        <Harness entries={many(9)} settings={view({ layout: "grid", coverSize })} />
+      );
+      const first = screen.getAllByRole("row")[0];
+      const count = within(first).getAllByRole("gridcell").length;
+      container.remove();
+      return count;
+    };
+
+    // The Narrow column count is round((390 - 32) / cover width): 88, 128, 176 px covers.
+    expect(await rows("small")).toBe(4);
+    expect(await rows("medium")).toBe(3);
+    expect(await rows("large")).toBe(2);
+  });
+
+  it("shows the Narrow header buttons, status chips, and summary, and filters by status", async () => {
+    setWidth(390);
+    const user = userEvent.setup({ delay: null });
+    const onSettingsChange = vi.fn();
+    await mount(
+      <Harness
+        entries={[
+          entry({ id: "doc-1", title: "Dune", status: "reading" }),
+          entry({ id: "doc-2", title: "Emma", status: "new" }),
+          entry({ id: "doc-3", title: "Persuasion", status: "finished" }),
+        ]}
+        onSettingsChange={onSettingsChange}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: "Search the Shelf" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View, sort and filter" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Import" })).toBeInTheDocument();
+
+    expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "New" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "Reading" })).toHaveAttribute(
+      "aria-pressed",
+      "false"
+    );
+    expect(screen.getByRole("button", { name: "Finished" })).toHaveAttribute(
+      "aria-pressed",
+      "false"
+    );
+
+    expect(screen.getByText("3 Documents", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText("Recent first", { exact: true })).toBeInTheDocument();
+
+    await press(() => user.click(screen.getByRole("button", { name: "Reading" })));
+    expect(onSettingsChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ statuses: ["reading"] })
+    );
+    expect(screen.getByRole("button", { name: "Reading" })).toHaveAttribute("aria-pressed", "true");
+    expect(drawnTitles()).toEqual(["Dune"]);
+  });
+
+  it("opens the View and filters Sheet, changes the view, sort, and filters, and resets", async () => {
+    setWidth(390);
+    const user = userEvent.setup({ delay: null });
+    const onSettingsChange = vi.fn();
+    await mount(
+      <Harness
+        entries={[
+          entry({ id: "doc-1", title: "Zeta", format: "epub" }),
+          entry({ id: "doc-2", title: "Alpha", format: "pdf" }),
+          entry({ id: "doc-3", title: "Mid", format: "epub" }),
+        ]}
+        onSettingsChange={onSettingsChange}
+      />
+    );
+
+    const trigger = screen.getByRole("button", { name: "View, sort and filter" });
+    await press(() => user.click(trigger));
+    const dialog = screen.getByRole("dialog", { name: "View and filters" });
+    expect(within(dialog).getByRole("button", { name: "Reset" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Done" })).toBeInTheDocument();
+    expect(dialog.contains(document.activeElement)).toBe(true);
+
+    // The footer counts what the Shelf shows, out of what it holds.
+    expect(
+      within(dialog).getByText("Showing 3 of 3. Reader remembers these choices on this device.", {
+        exact: true,
+      })
+    ).toBeInTheDocument();
+
+    // List draws the rows as list rows and hides the cover size group.
+    expect(within(dialog).getByRole("radiogroup", { name: "Cover size" })).toBeInTheDocument();
+    await press(() => user.click(within(dialog).getByRole("radio", { name: "List" })));
+    expect(
+      within(dialog).queryByRole("radiogroup", { name: "Cover size" })
+    ).not.toBeInTheDocument();
+    for (const cell of screen.getAllByRole("gridcell")) {
+      expect(cell).toHaveClass("shelf-list");
+    }
+    expect(onSettingsChange).toHaveBeenLastCalledWith(expect.objectContaining({ layout: "list" }));
+
+    // Title sorts A to Z; the rows follow it.
+    await press(() => user.click(within(dialog).getByRole("radio", { name: "Title" })));
+    expect(onSettingsChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sort: "title", descending: false })
+    );
+    expect(
+      screen
+        .getAllByRole("gridcell")
+        .map((cell) => cell.querySelector(".shelf-list__title")?.textContent)
+    ).toEqual(["Alpha", "Mid", "Zeta"]);
+
+    // The EPUB chip toggles that format and the footer follows the count.
+    await press(() => user.click(within(dialog).getByRole("button", { name: "EPUB" })));
+    expect(onSettingsChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ formats: ["epub"] })
+    );
+    expect(
+      within(dialog).getByText("Showing 2 of 3. Reader remembers these choices on this device.", {
+        exact: true,
+      })
+    ).toBeInTheDocument();
+
+    await press(() => user.click(within(dialog).getByRole("button", { name: "Reset" })));
+    expect(onSettingsChange).toHaveBeenLastCalledWith({
+      layout: "grid",
+      coverSize: "medium",
+      sort: "recent",
+      descending: true,
+      formats: [],
+      statuses: [],
+      search: "",
+    });
+  });
+
+  it("resets every view choice from the View and filters Sheet by keyboard", async () => {
+    setWidth(390);
+    const user = userEvent.setup({ delay: null });
+    const onSettingsChange = vi.fn();
+    await mount(
+      <Harness
+        entries={[
+          entry({ id: "doc-1", title: "Zeta", format: "epub" }),
+          entry({ id: "doc-2", title: "Alpha", format: "pdf" }),
+          entry({ id: "doc-3", title: "Mid", format: "epub" }),
+        ]}
+        onSettingsChange={onSettingsChange}
+      />
+    );
+
+    const trigger = screen.getByRole("button", { name: "View, sort and filter" });
+    await press(() => user.click(trigger));
+    const dialog = screen.getByRole("dialog", { name: "View and filters" });
+    await press(() => user.click(within(dialog).getByRole("button", { name: "EPUB" })));
+    expect(onSettingsChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ formats: ["epub"] })
+    );
+
+    const reset = within(dialog).getByRole("button", { name: "Reset" });
+    act(() => {
+      reset.focus();
+    });
+    expect(document.activeElement).toBe(reset);
+    await press(() => user.keyboard("{Enter}"));
+    expect(onSettingsChange).toHaveBeenLastCalledWith({
+      layout: "grid",
+      coverSize: "medium",
+      sort: "recent",
+      descending: true,
+      formats: [],
+      statuses: [],
+      search: "",
+    });
+  });
+
+  it("closes the View and filters Sheet on Escape and returns focus to its trigger", async () => {
+    setWidth(390);
+    const user = userEvent.setup({ delay: null });
+    await mount(<Harness entries={many(2)} />);
+
+    const trigger = screen.getByRole("button", { name: "View, sort and filter" });
+    await press(() => user.click(trigger));
+    expect(screen.getByRole("dialog", { name: "View and filters" })).toBeInTheDocument();
+
+    await press(() => user.keyboard("{Escape}"));
+    expect(screen.queryByRole("dialog", { name: "View and filters" })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("searches on a Narrow phone, marks the matched text, and clears on Escape", async () => {
+    setWidth(390);
+    const user = userEvent.setup({ delay: null });
+    await mount(
+      <Harness
+        entries={[
+          entry({ id: "doc-1", title: "Dune", author: "Frank Herbert" }),
+          entry({ id: "doc-2", title: "Emma", author: "Jane Austen" }),
+        ]}
+      />
+    );
+
+    await press(() => user.click(screen.getByRole("button", { name: "Search the Shelf" })));
+    expect(screen.getByRole("button", { name: "Close search" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Clear search" })).toBeInTheDocument();
+    expect(screen.getByRole("searchbox")).toHaveFocus();
+
+    await press(() => user.type(screen.getByRole("searchbox"), "dune"));
+    expect(drawnTitles()).toEqual(["Dune"]);
+    expect(
+      screen.getByText('1 Document matches "dune" · Grid view', { exact: true })
+    ).toBeInTheDocument();
+    expect(gridCell("Dune")?.querySelector(".shelf-card__title")?.innerHTML).toBe(
+      "<mark>Dune</mark>"
+    );
+
+    await press(() => user.keyboard("{Escape}"));
+    expect(screen.getByRole("button", { name: "Search the Shelf" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Close search" })).not.toBeInTheDocument();
+    expect(drawnTitles()).toEqual(["Dune", "Emma"]);
+  });
+
+  it("keeps focus in an open layer when the search Command arrives, and searches once it closes", async () => {
+    setWidth(1200);
+    const user = userEvent.setup({ delay: null });
+    const container = await mount(<Harness />);
+    const filters = screen.getByRole("button", { name: "Filters" });
+    act(() => filters.focus());
+    await press(() => user.keyboard("{Enter}"));
+    const layer = screen.getByRole("dialog", { name: "Filters" });
+    expect(layer).toContainElement(document.activeElement as HTMLElement);
+    const inLayer = document.activeElement;
+
+    // "/" or Ctrl+F typed in the popover reaches the host, which answers with
+    // the Command; the search stays behind the layer.
+    await act(() => {
+      render(<Harness searchRequest={1} />, container);
+    });
+    expect(document.activeElement).toBe(inLayer);
+    expect(screen.getByRole("dialog", { name: "Filters" })).toBeInTheDocument();
+
+    await press(() => user.keyboard("{Escape}"));
+    expect(screen.queryByRole("dialog", { name: "Filters" })).not.toBeInTheDocument();
+    await act(() => {
+      render(<Harness searchRequest={2} />, container);
+    });
+    expect(screen.getByRole("searchbox", { name: "Search the Shelf" })).toHaveFocus();
+  });
+
+  it("hands focus back to the row it came from when Escape clears a search that matched nothing", async () => {
+    setWidth(1200);
+    const user = userEvent.setup({ delay: null });
+    const dune = entry({ id: "doc-1", title: "Dune", author: "Frank Herbert" });
+    const emmaEntry = entry({ id: "doc-2", title: "Emma", author: "Jane Austen" });
+    const container = await mount(<Harness entries={[dune, emmaEntry]} />);
+    // The rows reorder before the search opens, so focus return must follow
+    // the Document, not the first render's order.
+    await act(() => {
+      render(<Harness entries={[emmaEntry, dune]} />, container);
+    });
+    expect(drawnTitles()).toEqual(["Emma", "Dune"]);
+    const emma = gridCell("Emma") as HTMLElement;
+    act(() => emma.focus());
+
+    // The searchShelf Command ("/" by default) opens the search.
+    await act(() => {
+      render(<Harness entries={[emmaEntry, dune]} searchRequest={1} />, container);
+    });
+    expect(screen.getByRole("searchbox", { name: "Search the Shelf" })).toHaveFocus();
+    await press(() => user.keyboard("zz"));
+    // No row is drawn while nothing matches, so the row focus came from is gone.
+    expect(screen.getByRole("heading", { name: "No Documents match" })).toBeInTheDocument();
+    expect(gridCell("Emma")).toBeUndefined();
+
+    await press(() => user.keyboard("{Escape}"));
+    expect(drawnTitles()).toEqual(["Emma", "Dune"]);
+    expect(gridCell("Emma")).toHaveFocus();
+  });
+
+  it("draws a list row with its title, author and format, and a compact row with its title, author and format", async () => {
+    setWidth(390);
+    const list = await mount(<Harness settings={view({ layout: "list" })} />);
+    const listCell = list.querySelector<HTMLElement>(".shelf-list");
+    expect(listCell).not.toBeNull();
+    expect(listCell?.querySelector(".shelf-list__title")?.textContent).toBe("Dune");
+    expect(listCell?.querySelector(".shelf-list__meta")?.textContent).toBe("Frank Herbert · EPUB");
+    expect(listCell?.querySelector(".shelf-list__status")?.textContent).toBe("42%");
+    expect(
+      within(listCell as HTMLElement).getByRole("button", { name: "More for Dune" })
+    ).toBeInTheDocument();
+
+    const compact = await mount(<Harness settings={view({ layout: "compact" })} />);
+    const compactCell = compact.querySelector<HTMLElement>(".shelf-compact");
+    expect(compactCell).not.toBeNull();
+    expect(compactCell?.querySelector(".shelf-compact__title")?.textContent).toBe("Dune");
+    expect(compactCell?.querySelector(".shelf-compact__author")?.textContent).toBe(
+      " · Frank Herbert"
+    );
+    expect(compactCell?.querySelector(".shelf-compact__format")?.textContent).toBe("EPUB");
+  });
+
+  it("virtualizes 500 Documents in Wide and moves focus across the whole list", async () => {
+    setWidth(1280);
+    const user = userEvent.setup({ delay: null });
+    await mount(<Harness entries={many(500)} />);
+
+    const drawn = screen.getAllByRole("gridcell");
+    expect(drawn.length).toBeLessThan(200);
+
+    const columns = within(screen.getAllByRole("row")[0]).getAllByRole("gridcell").length;
+    expect(screen.getByRole("grid")).toHaveAttribute(
+      "aria-rowcount",
+      String(Math.ceil(500 / columns))
+    );
+
+    await press(() => user.click(gridCell("Book 1") as HTMLElement));
+    await press(() => user.keyboard("{End}"));
+    expect(document.activeElement).toBe(gridCell("Book 500"));
+
+    await press(() => user.keyboard("{Home}"));
+    expect(document.activeElement).toBe(gridCell("Book 1"));
+  });
+
+  it("offers Clear filters on an empty match that resets the filters", async () => {
+    setWidth(390);
+    const user = userEvent.setup({ delay: null });
+    const onSettingsChange = vi.fn();
+    await mount(
+      <Harness
+        entries={[
+          entry({ id: "doc-1", title: "Dune", status: "reading" }),
+          entry({ id: "doc-2", title: "Emma", status: "new" }),
+        ]}
+        settings={view({ statuses: ["finished"] })}
+        onSettingsChange={onSettingsChange}
+      />
+    );
+
+    expect(screen.getByRole("heading", { name: "No Documents match" })).toBeInTheDocument();
+    await press(() => user.click(screen.getByRole("button", { name: "Clear filters" })));
+    expect(onSettingsChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ statuses: [], formats: [], search: "" })
+    );
+  });
+
+  it("draws removable filter chips and a Filters badge on Wide, and removes one filter", async () => {
+    setWidth(1200);
+    const user = userEvent.setup({ delay: null });
+    const onSettingsChange = vi.fn();
+    await mount(
+      <Harness
+        entries={[
+          entry({ id: "doc-1", title: "Pdf new", status: "new", format: "pdf" }),
+          entry({ id: "doc-2", title: "Epub reading" }),
+        ]}
+        settings={view({ statuses: ["new"], formats: ["pdf"] })}
+        onSettingsChange={onSettingsChange}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: "Remove filter Status: New" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Remove filter Format: PDF" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Clear filters" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Filters\s*2/ })).toBeInTheDocument();
+
+    await press(() =>
+      user.click(screen.getByRole("button", { name: "Remove filter Format: PDF" }))
+    );
+    expect(onSettingsChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ statuses: ["new"], formats: [] })
+    );
+    const next = onSettingsChange.mock.lastCall?.[0] as ShelfViewSettings;
+    expect(next.formats).not.toContain("pdf");
+  });
+
+  it("removes a filter from its chip by keyboard", async () => {
+    setWidth(1200);
+    const user = userEvent.setup({ delay: null });
+    const onSettingsChange = vi.fn();
+    await mount(
+      <Harness
+        entries={[
+          entry({ id: "doc-1", title: "Pdf new", status: "new", format: "pdf" }),
+          entry({ id: "doc-2", title: "Epub reading" }),
+        ]}
+        settings={view({ statuses: ["new"], formats: ["pdf"] })}
+        onSettingsChange={onSettingsChange}
+      />
+    );
+
+    const chip = screen.getByRole("button", { name: "Remove filter Format: PDF" });
+    act(() => {
+      chip.focus();
+    });
+    expect(document.activeElement).toBe(chip);
+    await press(() => user.keyboard("{Enter}"));
+    expect(onSettingsChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ statuses: ["new"], formats: [] })
+    );
+    const next = onSettingsChange.mock.lastCall?.[0] as ShelfViewSettings;
+    expect(next.formats).not.toContain("pdf");
   });
 });

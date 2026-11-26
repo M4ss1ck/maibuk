@@ -4,7 +4,7 @@
 // handshake accepted only from the Frame's own window, and teardown. Frames
 // get no accessibility test beyond the tab-order test (#402).
 
-import { act, render } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import "@/i18n";
@@ -452,6 +452,8 @@ describe("PluginFrame forwarded keys", () => {
     source: Window | null = iframe.contentWindow
   ) {
     act(() => {
+      // A key reaches the Frame only while the Frame holds focus.
+      if (document.activeElement !== iframe && source === iframe.contentWindow) iframe.focus();
       window.dispatchEvent(
         new MessageEvent("message", { data: { kind: FRAME_KEY_MESSAGE, ...data }, source })
       );
@@ -508,6 +510,33 @@ describe("PluginFrame forwarded keys", () => {
     forwardKey(iframe, { key: "Escape", code: "Escape" });
 
     expect(wrapper.dataset.fullscreen).toBeUndefined();
+  });
+
+  it("replays no forwarded key once focus has left the Frame", () => {
+    // A busy Frame posts the key late: by then Shift+Tab has moved focus to a
+    // host control, and replaying the key would act on that control instead.
+    const onTrigger = vi.fn();
+    const { container } = render(
+      <>
+        <button type="button">Host control</button>
+        <ShortcutFrame id={undoId} onTrigger={onTrigger} />
+      </>
+    );
+    const iframe = container.querySelector("iframe") as HTMLIFrameElement;
+    const hostControl = screen.getByRole("button", { name: "Host control" });
+    act(() => hostControl.focus());
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: { kind: FRAME_KEY_MESSAGE, key: "z", code: "KeyZ", ctrlKey: true },
+          source: iframe.contentWindow,
+        })
+      );
+    });
+
+    expect(onTrigger).not.toHaveBeenCalled();
+    expect(hostControl).toHaveFocus();
   });
 
   it("ignores a frame-key message from another window", () => {

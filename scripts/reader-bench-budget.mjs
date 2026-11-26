@@ -62,12 +62,13 @@ export function readerGrowthBytes(reader, control) {
 }
 
 /**
- * An iframe that belongs to Reader: the Reading Frame (its title), or the
- * Plugin's hidden sandbox host, which the Plugin runtime marks inert and
- * aria-hidden and which runs only Reader's Worker while a Document is open.
+ * An iframe that belongs to Reader: the reader page's Frame, titled "Reader"
+ * since the Shelf and the open Document share it (#944), or the older Reading
+ * Frame, or the Plugin's hidden sandbox host, which the Plugin runtime marks
+ * inert and aria-hidden and which runs only Reader's Worker.
  */
 export function isReaderIframe(frame) {
-  return frame.title === "Reading" || frame.ariaHidden === "true";
+  return frame.title === "Reader" || frame.title === "Reading" || frame.ariaHidden === "true";
 }
 
 /**
@@ -274,6 +275,27 @@ export function checkReaderBench(report) {
         limit,
         delta <= limit,
         `before p95 ${before.p95Ms.toFixed(1)} ms (frames budget ${before.ok ? "pass" : "fail"}); after p95 ${after.p95Ms.toFixed(1)} ms (frames budget ${after.ok ? "pass" : "fail"}); limit one vsync`
+      )
+    );
+  }
+
+  // The Shelf paint (#945, the 500-Document Shelf of #917). Unlike the gates
+  // above, this one is an absolute budget, not a delta: #917 sets the target
+  // that a 500-Document Shelf paints its first grid in under 1000 ms.
+  const shelfPaint = report.shelf?.paintMs ?? [];
+  if (shelfPaint.length === 0) {
+    unmeasured.push("the Shelf paint run is missing");
+  } else {
+    const { documents, cells } = report.shelf;
+    const paint = median(shelfPaint);
+    gates.push(
+      gate(
+        "shelf-paint",
+        "500-Document Shelf paint (median, ms)",
+        paint,
+        1000,
+        paint < 1000,
+        `${documents} Documents, ${cells} cells drawn, p95 ${nearestRank(shelfPaint, 0.95).toFixed(1)} ms`
       )
     );
   }

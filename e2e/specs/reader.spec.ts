@@ -73,9 +73,12 @@ const pageFrame = (page: Page): FrameLocator =>
 /** The wrapper's iframe, as a host locator, for the keyboard helpers. */
 const frameElement = (page: Page) => pageFrameWrapper(page).locator("iframe");
 
-/** The Shelf's own heading, drawn inside the Frame. */
+/**
+ * The Shelf's own heading, drawn inside the Frame: "All Documents" on the Wide
+ * toolbar, "Shelf" in the phone header (#945).
+ */
 const shelfHeading = (page: Page) =>
-  pageFrame(page).getByRole("heading", { name: "Shelf", level: 1 });
+  pageFrame(page).getByRole("heading", { name: /^(All Documents|Shelf)$/, level: 1 });
 
 /** The Shelf row for a Document, by the title its cover and title line carry. */
 const shelfRow = (page: Page, title: string) =>
@@ -177,6 +180,36 @@ async function openRowMenu(page: Page): Promise<Locator> {
   const menu = documentMenu(page);
   await expect(menu).toBeVisible();
   return menu;
+}
+
+/**
+ * The wide grid card's layout at one cover size, measured in the browser:
+ * the cover box is the cover's own width at 2:3, the format badge sits inside
+ * it, the progress bar spans the card, the title starts below the cover, and
+ * the meta line stays on one line. jsdom cannot lay these out.
+ */
+async function expectGridCard(page: Page, title: string, width: number): Promise<void> {
+  const card = shelfRow(page, title);
+  const box = async (selector: string) => {
+    const rect = await card.locator(selector).first().boundingBox();
+    if (rect === null) throw new Error(`${selector} is not drawn`);
+    return rect;
+  };
+  const cover = await box(".shelf-card__cover");
+  const image = await box(".kit-cover");
+  const badge = await box(".shelf-card__format");
+  const progress = await box(".shelf-card__progress");
+  const titleLine = await box(".shelf-card__title");
+  const meta = await box(".shelf-card__meta");
+  expect(cover.width).toBe(width);
+  expect(cover.height).toBe(width * 1.5);
+  expect(image.height).toBeLessThanOrEqual(cover.height);
+  expect(badge.x + badge.width).toBeLessThanOrEqual(cover.x + cover.width);
+  expect(progress.width).toBe(width);
+  expect(titleLine.y).toBeGreaterThanOrEqual(cover.y + cover.height);
+  expect(titleLine.height).toBeGreaterThan(0);
+  // One line of `--type-small-line` (18 px in tokens.css).
+  expect(meta.height).toBeLessThanOrEqual(18);
 }
 
 test.use({
@@ -449,6 +482,124 @@ test.describe("Reader", () => {
     await expect(pageFrame(page).getByText("Your Shelf is empty", { exact: true })).toBeVisible();
   });
 
+  test("switch the Shelf's view, sort by title, filter by format, search, and find it all again after a reload @wf:reader-shelf-view @sc:plugin.maibuk-reader.searchShelf @sc:plugin.maibuk-reader.showShelfOptions @sc:plugin.maibuk-reader.clearShelfFilters @sandbox", async ({
+    page,
+  }) => {
+    const frame = pageFrame(page);
+    await page.goto("/");
+    await openReader(page);
+    // Two Documents on the Shelf: the PDF from the empty state, then the EPUB
+    // from the toolbar's Import.
+    await importFiles(page);
+    await focusDocument(page);
+    await page.keyboard.press("Escape");
+    await expect(shelfRow(page, "twelve-pages")).toBeVisible();
+    await chooseNextFile(page, EPUB);
+    await tabTo(page, frame.getByRole("button", { name: "Import", exact: true }), { max: 60 });
+    await page.keyboard.press("Enter");
+    await focusDocument(page);
+    await page.keyboard.press("Escape");
+    await expect(shelfRow(page, "Dune")).toBeVisible();
+    await expect(frame.getByText("2 Documents", { exact: true })).toBeVisible();
+    // Opened once, so neither Document is new any more.
+    await expect(frame.getByText("New", { exact: true })).toHaveCount(0);
+    await expectGridCard(page, "Dune", 128);
+    await capture(page, "reader-shelf-grid-medium");
+
+    // Cover size: one Tab stop after the view switch; the arrows walk S, M, L.
+    const sizes = frame.getByRole("radiogroup", { name: "Cover size" });
+    await tabTo(page, sizes.getByRole("radio", { name: "Medium" }), { max: 60 });
+    await page.keyboard.press("ArrowLeft");
+    await expect(sizes.getByRole("radio", { name: "Small" })).toBeChecked();
+    await expectGridCard(page, "Dune", 88);
+    await capture(page, "reader-shelf-grid-small");
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    await expect(sizes.getByRole("radio", { name: "Large" })).toBeChecked();
+    await expectGridCard(page, "Dune", 176);
+    await capture(page, "reader-shelf-grid-large");
+    await page.keyboard.press("ArrowLeft");
+    await expect(sizes.getByRole("radio", { name: "Medium" })).toBeChecked();
+
+    // View: the Shelf view radio group is one Tab stop; ArrowRight picks List,
+    // then Compact, and ArrowLeft comes back to List.
+    const views = frame.getByRole("radiogroup", { name: "Shelf view" });
+    await tabTo(page, views.getByRole("radio", { name: "Grid" }), { max: 10, backwards: true });
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    await expect(views.getByRole("radio", { name: "Compact" })).toBeChecked();
+    await capture(page, "reader-shelf-compact");
+    await page.keyboard.press("ArrowLeft");
+    await expect(views.getByRole("radio", { name: "List" })).toBeChecked();
+    await expect(frame.getByRole("radiogroup", { name: "Cover size" })).toHaveCount(0);
+    await capture(page, "reader-shelf-list");
+
+    // Sort: the Sort popover's radio list, by keyboard, to Title (A to Z).
+    // Sort and Filters sit before the view switch, so Shift+Tab walks back.
+    await tabTo(page, frame.getByRole("button", { name: "Sort by: Recent" }), {
+      max: 10,
+      backwards: true,
+    });
+    await page.keyboard.press("Enter");
+    const sorts = frame.getByRole("radiogroup", { name: "Sort by" });
+    await expect(sorts.getByRole("radio", { name: "Recent" })).toBeVisible();
+    await capture(page, "reader-shelf-sort");
+    await tabTo(page, sorts.getByRole("radio", { name: "Recent" }), { max: 10 });
+    await page.keyboard.press("ArrowDown");
+    await expect(sorts.getByRole("radio", { name: "Title" })).toBeChecked();
+    await page.keyboard.press("Escape");
+    await expect(frame.getByRole("button", { name: "Sort by: Title" })).toBeVisible();
+    const titles = frame.locator(".shelf-list__title");
+    await expect(titles).toHaveText(["Dune", "twelve-pages"]);
+
+    // Filter: the Filters popover's PDF chip leaves the PDF alone, with its chip.
+    await tabTo(page, frame.getByRole("button", { name: /^Filters/ }), { max: 60 });
+    await page.keyboard.press("Enter");
+    await tabTo(page, frame.getByRole("button", { name: "PDF", exact: true }), { max: 20 });
+    await capture(page, "reader-shelf-filters");
+    await page.keyboard.press("Space");
+    await page.keyboard.press("Escape");
+    await expect(frame.getByRole("button", { name: "Remove filter Format: PDF" })).toBeVisible();
+    await expect(titles).toHaveText(["twelve-pages"]);
+    await expect(frame.getByText("1 of 2", { exact: true })).toBeVisible();
+    await capture(page, "reader-shelf-filtered");
+    await runHostCommand(page, "View, sort and filter…");
+    await expect(frame.getByRole("dialog", { name: "Filters" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await runHostCommand(page, "Clear Shelf filters");
+    await expect(titles).toHaveText(["Dune", "twelve-pages"]);
+
+    // Search: / focuses the field from the grid, typing filters, Escape clears
+    // it and hands focus back to the row it came from.
+    await tabTo(page, shelfRow(page, "Dune"), { max: 60 });
+    await page.keyboard.press("/");
+    const search = frame.getByRole("searchbox", { name: "Search the Shelf" });
+    await expect(search).toBeFocused();
+    await page.keyboard.type("twelve");
+    await expect(titles).toHaveText(["twelve-pages"]);
+    await capture(page, "reader-shelf-search");
+    // A search nothing matches says so in place of the rows.
+    await page.keyboard.type("zz");
+    await expect(frame.getByRole("heading", { name: "No Documents match" })).toBeVisible();
+    await capture(page, "reader-shelf-no-match");
+    await page.keyboard.press("Escape");
+    await expect(search).toHaveValue("");
+    await expect(titles).toHaveText(["Dune", "twelve-pages"]);
+    await expect(shelfRow(page, "Dune")).toBeFocused();
+    // Ctrl or Cmd+F, Find in Document's shortcut, searches the Shelf here.
+    await page.keyboard.press("ControlOrMeta+f");
+    await expect(search).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(shelfRow(page, "Dune")).toBeFocused();
+
+    // Remembered: a reload draws the same List view and Title sort.
+    await page.reload();
+    await expect(shelfHeading(page)).toBeVisible({ timeout: 30_000 });
+    await expect(views.getByRole("radio", { name: "List" })).toBeChecked();
+    await expect(frame.getByRole("button", { name: "Sort by: Title" })).toBeVisible();
+    await expect(titles).toHaveText(["Dune", "twelve-pages"]);
+  });
+
   test("drop the EPUB on the Shelf Frame, then the PDF on the open Document @wf:reader-drop @sandbox", async ({
     page,
   }) => {
@@ -495,6 +646,23 @@ test.describe("Reader", () => {
     await pageFrame(page).getByRole("button", { name: "Back to Shelf" }).tap();
     await expect(shelfRow(page, "twelve-pages")).toBeVisible();
     await capture(page, "reader-shelf-phone");
+
+    // The phone header's View, sort and filter button opens the options sheet.
+    await pageFrame(page).getByRole("button", { name: "View, sort and filter" }).tap();
+    const sheet = pageFrame(page).getByRole("dialog", { name: "View and filters" });
+    await expect(sheet).toBeVisible();
+    await capture(page, "reader-shelf-options-phone");
+    await sheet.getByRole("button", { name: "Done", exact: true }).tap();
+    await expect(sheet).toBeHidden();
+
+    // Its search button swaps the header for the search field.
+    await pageFrame(page).getByRole("button", { name: "Search the Shelf" }).tap();
+    const phoneSearch = pageFrame(page).getByRole("searchbox", { name: "Search the Shelf" });
+    await expect(phoneSearch).toBeFocused();
+    await page.keyboard.type("twelve");
+    await capture(page, "reader-shelf-search-phone");
+    await pageFrame(page).getByRole("button", { name: "Close search" }).tap();
+    await expect(phoneSearch).toHaveCount(0);
 
     // Touch reaches the Document menu through the row's More button.
     await pageFrame(page).getByRole("button", { name: "More for twelve-pages" }).tap();

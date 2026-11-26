@@ -22,7 +22,13 @@ import {
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { Button, IconButton } from "./kit";
 import { Shelf, type ShelfNotice, type ShelfRemoval } from "./shelf";
-import type { Appearance, FrameShelfCommandId, FrameShelfLabels, FrameShelfState } from "./types";
+import type {
+  Appearance,
+  FrameShelfCommandId,
+  FrameShelfLabels,
+  FrameShelfState,
+  ShelfViewSettings,
+} from "./types";
 import { useReducedMotion } from "./use-reduced-motion";
 
 /** The appearance the Frame draws with until Maibuk hands it another. */
@@ -124,6 +130,14 @@ export interface ChromeState {
   menuDocumentId: string | null;
   /** The Shelf row that takes focus the next time the grid draws. */
   focusDocumentId: string | null;
+  /** The Shelf's view, sort, filters, and search the Worker remembers (#945). */
+  shelfView: ShelfViewSettings;
+  /** The app language; it decides how the Shelf sorts names. */
+  language: string;
+  /** Bumped when a host Command asks to focus the Shelf's search. */
+  shelfSearchRequest: number;
+  /** Bumped when a host Command asks to open the Shelf's view and filter options. */
+  shelfOptionsRequest: number;
 }
 
 /** What the ported controls ask `entry.ts` to do. */
@@ -143,6 +157,8 @@ export interface ChromeActions {
   shelfCommand(id: FrameShelfCommandId, documentId?: string): void;
   shelfSelect(documentId: string): void;
   shelfRemove(documentId: string): void;
+  /** The author changed the Shelf's view, sort, filters, or search. */
+  shelfViewChange(settings: ShelfViewSettings): void;
 }
 
 /** The small bridge `entry.ts` hands the app: its state in, its actions out. */
@@ -163,6 +179,10 @@ export interface FrameBridge {
   setShelfRemoval(removal: ShelfRemoval | null): void;
   setMenuDocumentId(documentId: string | null): void;
   setFocusDocumentId(documentId: string | null): void;
+  setShelfView(settings: ShelfViewSettings): void;
+  setLanguage(language: string): void;
+  requestShelfSearch(): void;
+  requestShelfOptions(): void;
   actions: ChromeActions;
 }
 
@@ -461,6 +481,11 @@ function App({ appearance, subscribe, bridge }: AppProps) {
         removal={chrome.shelfRemoval}
         menuDocumentId={chrome.menuDocumentId}
         focusDocumentId={chrome.focusDocumentId}
+        settings={chrome.shelfView}
+        language={chrome.language}
+        searchRequest={chrome.shelfSearchRequest}
+        optionsRequest={chrome.shelfOptionsRequest}
+        onSettingsChange={bridge.actions.shelfViewChange}
         onCommand={bridge.actions.shelfCommand}
         onSelect={bridge.actions.shelfSelect}
         onMenuChange={(documentId) => bridge.setMenuDocumentId(documentId)}
@@ -493,4 +518,12 @@ export function mountApp(
   bridge: FrameBridge
 ) {
   render(<App appearance={appearance} subscribe={subscribe} bridge={bridge} />, root);
+}
+
+/**
+ * Unmounts the app from `root`, so every effect it ran (the Shelf's document
+ * key listener among them) is torn down with the Frame.
+ */
+export function unmountApp(root: HTMLElement) {
+  render(null, root);
 }

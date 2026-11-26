@@ -3402,6 +3402,25 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "reader-shelf-view",
+    area: "plugins",
+    workflow:
+      "The Shelf's view, sort, filters, and search (#945), by keyboard inside the reader page's Frame: the Shelf view radio group switches the grid to List (the Cover size switch leaves with the grid), the Sort popover's radio list sorts by Title, the Filters popover's PDF chip leaves only the PDF and draws its removable chip and the \"1 of 2\" count, the palette's “Clear Shelf filters” Command clears them, and / from a row focuses the search field, typing filters by title, and Escape clears it and returns focus to that row; a reload draws the same List view and Title sort; asserts: the drawn rows and their order, the chips, the count, focus, and the restored view; persists: yes (view, cover size, sort, filters, and search in Plugin storage on this device). Every sort order, status filter, cover size, and the phone Sheet are proven at the Frame seam in Reader's Vitest suite (frame-books.test.ts, frame/shelf.test.tsx)",
+    edges: [
+      "switch the Shelf's view, sort by title, filter by format, search, and find it all again after a reload",
+    ],
+    terms: [],
+    shortcuts: [
+      "plugin.maibuk-reader.searchShelf",
+      "plugin.maibuk-reader.showShelfOptions",
+      "plugin.maibuk-reader.clearShelfFilters",
+    ],
+    routes: ["/", "/plugin/:pluginId/:pageId"],
+    fixture: "empty",
+    tags: ["sandbox"],
+    status: "accepted",
+  },
+  {
     id: "reader-drop",
     area: "plugins",
     workflow:

@@ -11,7 +11,13 @@
 import type { FrameShelfEntry, FrameShelfLabels, FrameShelfState } from "./frame-protocol";
 import { format, translate, type ReaderKey } from "./i18n";
 import { baseLanguage } from "./language";
-import { progressSummary, type ShelfEntry } from "./shelf";
+import {
+  progressFraction,
+  progressSummary,
+  type ShelfEntry,
+  type ShelfStatus,
+  shelfStatus,
+} from "./shelf";
 
 /** The generated cover's eight tone pairs. */
 const TONE_COUNT = 8;
@@ -29,14 +35,20 @@ export function shelfTone(id: string): number {
   return (hash >>> 0) % TONE_COUNT;
 }
 
-/** The progress line for one row, localized, or New when the Shelf knows nothing yet. */
-function progressText(language: string, entry: ShelfEntry): string {
-  const progress = entry.progress;
-  if (progress !== null && progress.fraction === 1) {
+/**
+ * The progress line for one row, localized: New until the Document is opened,
+ * then its page or percentage (0% before a position is saved).
+ */
+function progressText(language: string, entry: ShelfEntry, status: ShelfStatus): string {
+  if (status === "finished") {
     return translate(language, "shelf.frame.finishedLabel");
   }
-  const summary = progressSummary(progress);
-  if (summary === null) return translate(language, "shelf.frame.newLabel");
+  const summary = progressSummary(entry.progress);
+  if (summary === null) {
+    return status === "new"
+      ? translate(language, "shelf.frame.newLabel")
+      : format(translate(language, "shelf.progress.percent"), { percent: 0 });
+  }
   if (summary.kind === "page") {
     return format(translate(language, "shelf.progress.page"), {
       page: summary.page,
@@ -51,12 +63,12 @@ function progressText(language: string, entry: ShelfEntry): string {
  * knows nothing yet. A page out of its count becomes the same whole percentage
  * the text does not spell out; a finished Document is always full.
  */
-function progressPercent(entry: ShelfEntry): number | null {
+function progressPercent(entry: ShelfEntry, status: ShelfStatus): number | null {
   const progress = entry.progress;
-  if (progress === null) return null;
-  if (progress.fraction === 1) return 100;
+  if (status === "new") return null;
+  if (status === "finished") return 100;
   const summary = progressSummary(progress);
-  if (summary === null) return null;
+  if (summary === null) return 0;
   if (summary.kind === "page") {
     return Math.min(100, Math.max(0, Math.round((summary.page / summary.pageCount) * 100)));
   }
@@ -82,6 +94,7 @@ function statusText(language: string, entry: ShelfEntry): string | null {
 
 /** One Shelf row as the Frame draws it. */
 export function frameShelfEntry(language: string, entry: ShelfEntry): FrameShelfEntry {
+  const status = shelfStatus(entry);
   return {
     id: entry.id,
     title: entry.title,
@@ -89,10 +102,14 @@ export function frameShelfEntry(language: string, entry: ShelfEntry): FrameShelf
     format: entry.format,
     state: entry.state ?? "ok",
     ...(entry.coverDataUrl === undefined ? {} : { coverDataUrl: entry.coverDataUrl }),
-    progressText: progressText(language, entry),
-    progressPercent: progressPercent(entry),
+    progressText: progressText(language, entry, status),
+    progressPercent: progressPercent(entry, status),
     statusText: statusText(language, entry),
     tone: shelfTone(entry.id),
+    status,
+    lastReadAt: entry.lastReadAt,
+    addedAt: entry.addedAt,
+    progress: progressFraction(entry.progress),
   };
 }
 
@@ -124,6 +141,63 @@ export function frameShelfLabels(language: string): FrameShelfLabels {
     finishedLabel: translate(language, "shelf.frame.finishedLabel"),
     documentActions: translate(language, "shelf.frame.documentActions"),
     dismiss: translate(language, "shelf.frame.dismiss"),
+    allDocuments: translate(language, "shelf.frame.allDocuments"),
+    shownOf: translate(language, "shelf.frame.shownOf"),
+    searchLabel: translate(language, "shelf.frame.searchLabel"),
+    searchPlaceholder: translate(language, "shelf.frame.searchPlaceholder"),
+    closeSearch: translate(language, "shelf.frame.closeSearch"),
+    clearSearch: translate(language, "shelf.frame.clearSearch"),
+    searchMatchesOne: translate(language, "shelf.frame.searchMatches.one"),
+    searchMatchesOther: translate(language, "shelf.frame.searchMatches.other"),
+    gridView: translate(language, "shelf.frame.gridView"),
+    listView: translate(language, "shelf.frame.listView"),
+    compactView: translate(language, "shelf.frame.compactView"),
+    viewOptions: translate(language, "shelf.frame.viewOptions"),
+    viewOptionsTitle: translate(language, "shelf.frame.viewOptionsTitle"),
+    reset: translate(language, "shelf.frame.reset"),
+    done: translate(language, "shelf.frame.done"),
+    layout: translate(language, "shelf.frame.layout"),
+    layoutLabel: translate(language, "shelf.frame.layoutLabel"),
+    layoutGrid: translate(language, "shelf.frame.layoutGrid"),
+    layoutList: translate(language, "shelf.frame.layoutList"),
+    layoutCompact: translate(language, "shelf.frame.layoutCompact"),
+    coverSize: translate(language, "shelf.frame.coverSize"),
+    coverSmall: translate(language, "shelf.frame.coverSmall"),
+    coverMedium: translate(language, "shelf.frame.coverMedium"),
+    coverLarge: translate(language, "shelf.frame.coverLarge"),
+    coverSmallShort: translate(language, "shelf.frame.coverSmallShort"),
+    coverMediumShort: translate(language, "shelf.frame.coverMediumShort"),
+    coverLargeShort: translate(language, "shelf.frame.coverLargeShort"),
+    sortBy: translate(language, "shelf.frame.sortBy"),
+    sortRecent: translate(language, "shelf.frame.sort.recent"),
+    sortTitle: translate(language, "shelf.frame.sort.title"),
+    sortAuthor: translate(language, "shelf.frame.sort.author"),
+    sortProgress: translate(language, "shelf.frame.sort.progress"),
+    sortAdded: translate(language, "shelf.frame.sort.added"),
+    reverseOrder: translate(language, "shelf.frame.reverseOrder"),
+    reverseOrderValue: translate(language, "shelf.frame.reverseOrderValue"),
+    sortSummary: translate(language, "shelf.frame.sortSummary"),
+    sortByValue: translate(language, "shelf.frame.sortByValue"),
+    newestFirst: translate(language, "shelf.frame.newestFirst"),
+    oldestFirst: translate(language, "shelf.frame.oldestFirst"),
+    aToZ: translate(language, "shelf.frame.aToZ"),
+    zToA: translate(language, "shelf.frame.zToA"),
+    mostReadFirst: translate(language, "shelf.frame.mostReadFirst"),
+    leastReadFirst: translate(language, "shelf.frame.leastReadFirst"),
+    recentFirst: translate(language, "shelf.frame.recentFirst"),
+    filters: translate(language, "shelf.frame.filters"),
+    status: translate(language, "shelf.frame.status"),
+    format: translate(language, "shelf.frame.format"),
+    all: translate(language, "shelf.frame.all"),
+    statusNew: translate(language, "shelf.frame.status.new"),
+    statusReading: translate(language, "shelf.frame.status.reading"),
+    statusFinished: translate(language, "shelf.frame.status.finished"),
+    statusChip: translate(language, "shelf.frame.statusChip"),
+    formatChip: translate(language, "shelf.frame.formatChip"),
+    removeFilter: translate(language, "shelf.frame.removeFilter"),
+    clearFilters: translate(language, "shelf.frame.clearFilters"),
+    noMatch: translate(language, "shelf.frame.noMatch"),
+    remembered: translate(language, "shelf.frame.remembered"),
   };
 }
 

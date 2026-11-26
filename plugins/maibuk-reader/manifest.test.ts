@@ -92,6 +92,9 @@ describe("Reader manifest", () => {
       "backToShelf",
       "removeFromShelf",
       "locateDocument",
+      "searchShelf",
+      "showShelfOptions",
+      "clearShelfFilters",
     ]);
     for (const id of ["openReader", "openFile"]) {
       expect(commands.find((command) => command.id === id)?.contexts, id).toEqual(["global"]);
@@ -137,6 +140,31 @@ describe("Reader manifest", () => {
       // The spec sheet's Keyboard table defines the grid's keys only, so these
       // Commands reach the author through the menu, never a Default Shortcut.
       expect(command?.defaults, id).toBeUndefined();
+    }
+  });
+
+  it("binds Find in Document to Ctrl or Cmd+F, which searches the Shelf on the Shelf (#945)", () => {
+    const commands = manifest().contributes?.commands ?? [];
+    // The spec sheet's Keyboard table: "Find in Document: Ctrl/Cmd+F", and on
+    // the Shelf "/ or Ctrl/Cmd+F" focuses the Shelf search. The Frame reroutes
+    // the Command there, so one shortcut serves both pages.
+    expect(commands.find((command) => command.id === "findInDocument")?.defaults).toEqual([
+      ["Mod+f"],
+    ]);
+  });
+
+  it("offers the Shelf's search and view Commands on the Shelf page (#945)", () => {
+    const commands = manifest().contributes?.commands ?? [];
+    for (const [id, label, defaults] of [
+      // The spec sheet's Keyboard table binds Shelf search to "/".
+      ["searchShelf", "Search the Shelf", [["/"]]],
+      ["showShelfOptions", "View, sort and filter…", undefined],
+      ["clearShelfFilters", "Clear Shelf filters", undefined],
+    ] as const) {
+      const command = commands.find((candidate) => candidate.id === id);
+      expect(command?.contexts, id).toEqual(["reader"]);
+      expect(command?.label, id).toBe(label);
+      expect(command?.defaults, id).toEqual(defaults);
     }
   });
 

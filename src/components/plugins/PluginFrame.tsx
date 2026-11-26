@@ -149,6 +149,12 @@ export function PluginFrame({
       if (kind === FRAME_KEY_MESSAGE) {
         const message = data as Record<string, unknown>;
         if (typeof message.key !== "string") return;
+        // Only while the Frame still holds focus. The message lands a task
+        // after the key, later still from a busy Frame: by then Tab has moved
+        // focus out natively, or the author has gone on to a host control
+        // such as the Command Palette, and replaying the key there would act
+        // on that control (a late Shift+Tab wiped the palette's query).
+        if (document.activeElement !== iframe) return;
         // Replay the forwarded key on the iframe: every host listener (the
         // `useShortcuts` capture and bubble paths, sequences, the Tutorial
         // filter, and this Frame's fullscreen Escape) then handles it as if the

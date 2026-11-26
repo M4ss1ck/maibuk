@@ -59,7 +59,8 @@
       {
         "id": "findInDocument",
         "label": "Find in Document",
-        "contexts": ["document", "reader"]
+        "contexts": ["document", "reader"],
+        "defaults": [["Mod+f"]]
       },
       {
         "id": "toggleContents",
@@ -114,6 +115,22 @@
       {
         "id": "locateDocument",
         "label": "Locate",
+        "contexts": ["reader"]
+      },
+      {
+        "id": "searchShelf",
+        "label": "Search the Shelf",
+        "contexts": ["reader"],
+        "defaults": [["/"]]
+      },
+      {
+        "id": "showShelfOptions",
+        "label": "View, sort and filter…",
+        "contexts": ["reader"]
+      },
+      {
+        "id": "clearShelfFilters",
+        "label": "Clear Shelf filters",
         "contexts": ["reader"]
       }
     ],

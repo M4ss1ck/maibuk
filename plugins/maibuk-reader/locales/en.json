@@ -20,6 +20,9 @@
   "commands.backToShelf.label": "Back to Shelf",
   "commands.removeFromShelf.label": "Remove from Shelf…",
   "commands.locateDocument.label": "Locate",
+  "commands.searchShelf.label": "Search the Shelf",
+  "commands.showShelfOptions.label": "View, sort and filter…",
+  "commands.clearShelfFilters.label": "Clear Shelf filters",
   "pages.reader.title": "Reader",
   "pages.document.title": "Reading",
   "canvasReferenceSources.documents.label": "Documents"

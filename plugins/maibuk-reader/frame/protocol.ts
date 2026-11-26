@@ -21,6 +21,7 @@ import type {
   FrameZipEntry,
   ReaderSettings,
   ReadingPosition,
+  ShelfViewSettings,
 } from "./types";
 
 /** Opens the Frame on the Shelf or on one Document. `pdfPort` is transferred alongside the message. */
@@ -34,6 +35,7 @@ export interface FrameOpenMessage {
   labels: FrameLabels;
   shelf?: FrameShelfState;
   shelfLabels?: FrameShelfLabels;
+  shelfView?: ShelfViewSettings;
   language: string;
   appearance: Appearance;
   pdf?: FramePdf;
@@ -151,10 +153,17 @@ export interface FrameShelfRemoveMessage {
   documentId: string;
 }
 
+/** The author changed the Shelf's view, sort, filters, or search; the Worker stores it. */
+export interface FrameShelfViewMessage {
+  kind: "shelf-view";
+  settings: ShelfViewSettings;
+}
+
 export type FrameToWorkerShelfMessage =
   | FrameShelfCommandMessage
   | FrameShelfSelectMessage
-  | FrameShelfRemoveMessage;
+  | FrameShelfRemoveMessage
+  | FrameShelfViewMessage;
 
 /** An error that carries the protocol's failure `code`. */
 export interface CodedError extends Error {

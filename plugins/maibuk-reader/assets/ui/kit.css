@@ -152,6 +152,10 @@
 }
 
 .kit-segmented__option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   min-height: 32px;
   padding: 0 var(--space-3);
   border: 0;
@@ -166,6 +170,11 @@
   transition:
     background-color var(--motion-duration-bars) var(--motion-ease),
     color var(--motion-duration-bars) var(--motion-ease);
+}
+
+.kit-segmented__option svg {
+  width: 18px;
+  height: 18px;
 }
 
 .kit-segmented__option[aria-checked="true"] {

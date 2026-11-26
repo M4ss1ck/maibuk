@@ -20,6 +20,9 @@
   "commands.backToShelf.label": "Volver al estante",
   "commands.removeFromShelf.label": "Quitar del estante…",
   "commands.locateDocument.label": "Localizar",
+  "commands.searchShelf.label": "Buscar en el estante",
+  "commands.showShelfOptions.label": "Vista, orden y filtros…",
+  "commands.clearShelfFilters.label": "Borrar filtros del estante",
   "pages.reader.title": "Lector",
   "pages.document.title": "Lectura",
   "canvasReferenceSources.documents.label": "Documentos"

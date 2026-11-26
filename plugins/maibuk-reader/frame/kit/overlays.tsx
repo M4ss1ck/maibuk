@@ -259,6 +259,11 @@ export interface SheetProps {
   titleHidden?: boolean;
   /** The layer's ARIA role; confirmation sheets announce an alertdialog. */
   role?: "dialog" | "alertdialog";
+  /**
+   * Header actions drawn before Done, such as Reset. With actions, Done is the
+   * header's primary button, as the "View and filters" Sheet draws it.
+   */
+  actions?: ComponentChildren;
   children?: ComponentChildren;
   class?: string;
 }
@@ -275,6 +280,7 @@ export function Sheet({
   doneLabel,
   titleHidden = false,
   role = "dialog",
+  actions,
   children,
   class: extra,
 }: SheetProps) {
@@ -312,8 +318,9 @@ export function Sheet({
           >
             {title}
           </h2>
+          {actions}
           {doneLabel === undefined ? null : (
-            <Button variant="ghost" onClick={onClose}>
+            <Button variant={actions === undefined ? "ghost" : "primary"} onClick={onClose}>
               {doneLabel}
             </Button>
           )}

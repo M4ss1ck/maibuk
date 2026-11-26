@@ -138,7 +138,14 @@ function styleObject(style: unknown): Record<string, string | number> {
 /** One option in a Segmented control. */
 export interface SegmentedOption<T extends string = string> {
   value: T;
+  /** The option's full name; it is also the visible text unless `text` or `iconOnly` says otherwise. */
   label: string;
+  /** An icon drawn before the text. */
+  icon?: IconName;
+  /** Draws the icon alone; `label` stays the option's accessible name. */
+  iconOnly?: boolean;
+  /** A shorter visible text, such as "S" for Small; `label` stays the accessible name. */
+  text?: string;
 }
 
 /** The props a Segmented control takes; selection stays controlled. */
@@ -219,8 +226,10 @@ export function Segmented<T extends string = string>({
             class="kit-segmented__option"
             onClick={() => select(index)}
             onKeyDown={(event) => onKeyDown(event, index)}
+            aria-label={option.iconOnly || option.text !== undefined ? option.label : undefined}
           >
-            {option.label}
+            {option.icon === undefined ? null : <Icon name={option.icon} />}
+            {option.iconOnly ? null : (option.text ?? option.label)}
           </button>
         );
       })}

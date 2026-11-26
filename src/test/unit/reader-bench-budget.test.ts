@@ -40,6 +40,7 @@ function report(
     afterLeave?: number;
     control?: { baseline: number; afterLeave: number } | null;
     typing?: Typing;
+    shelf?: ReaderBenchReport["shelf"];
     omitDocument?: boolean;
   } = {}
 ): ReaderBenchReport {
@@ -78,11 +79,16 @@ function report(
       before: { ok: false, p95Ms: 16.7, refreshIntervalMs: 16.7 },
       after: { ok: false, p95Ms: 16.7, refreshIntervalMs: 16.7 },
     },
+    shelf:
+      overrides.shelf === undefined
+        ? { documents: 500, warmUps: 2, paintMs: [390, 400, 410], cells: 40 }
+        : overrides.shelf,
   };
 }
 
 describe("reader bench budget", () => {
-  it("recognises the Reading Frame and the hidden sandbox host as Reader's iframes", () => {
+  it("recognises the reader page Frame, the Reading Frame, and the hidden sandbox host as Reader's iframes", () => {
+    expect(isReaderIframe({ title: "Reader", ariaHidden: null })).toBe(true);
     expect(isReaderIframe(READING)).toBe(true);
     expect(isReaderIframe(HOST_SANDBOX)).toBe(true);
     expect(isReaderIframe({ title: "Ads", ariaHidden: null })).toBe(false);
@@ -104,6 +110,7 @@ describe("reader bench budget", () => {
       "no-jank",
       "memory-vs-control",
       "editor-typing",
+      "shelf-paint",
     ]);
     expect(result.gates.filter((gate) => !gate.ok)).toEqual([]);
     expect(result.ok).toBe(true);
@@ -276,5 +283,54 @@ describe("reader bench budget", () => {
   it("marks typing unmeasured when the before or after run is missing", () => {
     const result = checkReaderBench(report({ typing: { before: null, after: null } }));
     expect(result.unmeasured).toContain("the editor typing run before or after reading is missing");
+  });
+
+  it("passes the Shelf paint gate when the median paint is under 1000 ms", () => {
+    // The absolute target from #917, not a delta: a 500-Document Shelf paints in under 1 s.
+    const result = checkReaderBench(
+      report({
+        shelf: { documents: 500, warmUps: 2, paintMs: [380, 400, 420], cells: 40 },
+      })
+    );
+    const row = result.gates.find((gate) => gate.id === "shelf-paint");
+    expect(row?.ok).toBe(true);
+    expect(row?.value).toBe(400);
+    expect(row?.limit).toBe(1000);
+    expect(row?.detail).toContain("500 Documents, 40 cells drawn");
+    expect(result.ok).toBe(true);
+  });
+
+  it("fails the Shelf paint gate when the median paint is past 1000 ms", () => {
+    const result = checkReaderBench(
+      report({
+        shelf: { documents: 500, warmUps: 2, paintMs: [1150, 1200, 1250], cells: 40 },
+      })
+    );
+    const row = result.gates.find((gate) => gate.id === "shelf-paint");
+    expect(row?.ok).toBe(false);
+    expect(row?.value).toBe(1200);
+    expect(result.ok).toBe(false);
+  });
+
+  it("fails the Shelf paint gate at exactly 1000 ms, since the target is under 1 s", () => {
+    const result = checkReaderBench(
+      report({
+        shelf: { documents: 500, warmUps: 2, paintMs: [990, 1000, 1010], cells: 40 },
+      })
+    );
+    expect(result.gates.find((gate) => gate.id === "shelf-paint")?.ok).toBe(false);
+  });
+
+  it("marks the run unmeasured when the Shelf paint run is missing", () => {
+    const result = checkReaderBench(report({ shelf: null }));
+    expect(result.unmeasured).toContain("the Shelf paint run is missing");
+    expect(result.gates.find((gate) => gate.id === "shelf-paint")).toBeUndefined();
+    expect(result.ok).toBe(false);
+  });
+
+  it("marks the run unmeasured when the Shelf paint samples are empty", () => {
+    const result = checkReaderBench(report({ shelf: { documents: 500, paintMs: [], cells: 0 } }));
+    expect(result.unmeasured).toContain("the Shelf paint run is missing");
+    expect(result.ok).toBe(false);
   });
 });

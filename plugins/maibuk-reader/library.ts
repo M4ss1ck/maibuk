@@ -16,9 +16,11 @@ import {
   FINGERPRINT_WINDOW,
   SETTINGS_KEY,
   SHELF_KEY,
+  SHELF_VIEW_KEY,
   SUPPORTED_EXTENSIONS,
   bookmarksKey,
   clampSettings,
+  clampShelfView,
   fingerprint,
   formatFromName,
   highlightsKey,
@@ -35,6 +37,7 @@ import {
   type DocumentState,
   type ReaderSettings,
   type ShelfEntry,
+  type ShelfViewSettings,
 } from "./shelf";
 
 /** The SDK surface the Shelf service needs. */
@@ -129,6 +132,10 @@ export interface ShelfService {
   saveShelf(shelf: readonly ShelfEntry[]): Promise<void>;
   loadSettings(): Promise<ReaderSettings>;
   saveSettings(settings: ReaderSettings): Promise<void>;
+  /** The Shelf's remembered view; a missing, malformed, or unreadable value falls back to the default. */
+  loadShelfView(): Promise<ShelfViewSettings>;
+  /** Stores the Shelf's view, clamped to what the Shelf can show. A failed write throws. */
+  saveShelfView(settings: ShelfViewSettings): Promise<void>;
   /** Picks a file, fingerprints it, and adds it to the Shelf or finds its Document. */
   openFileFlow(): Promise<ShelfEntry | null>;
   /**
@@ -169,6 +176,23 @@ export function createShelfService(client: ReaderClient): ShelfService {
       } catch {
         /* Storage full or blocked: a relaunch shows the Shelf's choice again. */
       }
+      // The first open stamps the Document as opened, so it is no longer new
+      // even before a Reading Position is saved, and it reads as most recent.
+      try {
+        const shelf = await library.loadShelf();
+        const entry = shelf.find((candidate) => candidate.id === id);
+        if (entry === undefined || entry.openedAt !== undefined) return;
+        const now = Date.now();
+        await library.saveShelf(
+          sortShelf(
+            shelf.map((candidate) =>
+              candidate.id === id ? { ...candidate, openedAt: now, lastReadAt: now } : candidate
+            )
+          )
+        );
+      } catch {
+        /* An unread Shelf is never written over; the Document stays new until it is read. */
+      }
     },
 
     async loadCurrent(): Promise<ShelfEntry | null> {
@@ -197,6 +221,18 @@ export function createShelfService(client: ReaderClient): ShelfService {
       await client.storage.set({ key: SETTINGS_KEY, value: clampSettings(settings) });
     },
 
+    async loadShelfView(): Promise<ShelfViewSettings> {
+      try {
+        return clampShelfView(await client.storage.get({ key: SHELF_VIEW_KEY }));
+      } catch {
+        return clampShelfView(null);
+      }
+    },
+
+    async saveShelfView(settings): Promise<void> {
+      await client.storage.set({ key: SHELF_VIEW_KEY, value: clampShelfView(settings) });
+    },
+
     async openFileFlow(): Promise<ShelfEntry | null> {
       const picked = await client.files.pick({ extensions: [...SUPPORTED_EXTENSIONS] });
       if (picked === null) return null;
@@ -219,6 +255,7 @@ export function createShelfService(client: ReaderClient): ShelfService {
         await releaseGrant(client, picked.grant);
         throw new Error(`Reader cannot open ${picked.name}`);
       }
+      const now = Date.now();
       const entry: ShelfEntry = {
         id: newDocumentId(),
         grant: picked.grant,
@@ -226,7 +263,8 @@ export function createShelfService(client: ReaderClient): ShelfService {
         title: titleFromName(picked.name),
         author: "",
         format,
-        lastReadAt: Date.now(),
+        lastReadAt: now,
+        addedAt: now,
         progress: null,
         state: "ok",
       };

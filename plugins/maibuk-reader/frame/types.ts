@@ -51,6 +51,36 @@ export interface FrameEntry {
   format: string;
 }
 
+/** How the Shelf lays its Documents out (#945). */
+export type ShelfLayout = "grid" | "list" | "compact";
+
+/** The grid's cover width: 88, 128, or 176 px. */
+export type ShelfCoverSize = "small" | "medium" | "large";
+
+/** The orders the Shelf sorts by. */
+export type ShelfSort = "recent" | "title" | "author" | "progress" | "added";
+
+/**
+ * Where the author is in a Document: never opened, started, or at its last
+ * page (progress at 99% or more).
+ */
+export type ShelfStatus = "new" | "reading" | "finished";
+
+/**
+ * The Shelf's view, sort, filters, and search, as Reader remembers them on
+ * this device (#945). An empty filter list means no filter.
+ */
+export interface ShelfViewSettings {
+  layout: ShelfLayout;
+  coverSize: ShelfCoverSize;
+  sort: ShelfSort;
+  /** True when the sort runs from the largest value (newest, most read, Z) down. */
+  descending: boolean;
+  formats: string[];
+  statuses: ShelfStatus[];
+  search: string;
+}
+
 /** One Shelf row the Frame draws; the File Grant and Fingerprint stay in the Worker. */
 export interface FrameShelfEntry {
   id: string;
@@ -63,6 +93,14 @@ export interface FrameShelfEntry {
   progressPercent: number | null;
   statusText: string | null;
   tone: number;
+  /** New, reading, or finished, decided by the Worker from the stored progress. */
+  status: ShelfStatus;
+  /** Milliseconds since the Unix epoch: the last read, or the Import when never read. */
+  lastReadAt: number;
+  /** Milliseconds since the Unix epoch when the Document was imported. */
+  addedAt: number;
+  /** How far through the Document the author is, 0 to 1; 0 when new. */
+  progress: number;
 }
 
 /** The Reader settings the Worker hands the Frame. */
@@ -157,6 +195,70 @@ export interface FrameShelfLabels {
   finishedLabel: string;
   documentActions: string;
   dismiss: string;
+  allDocuments: string;
+  /** Placeholders: {{shown}}, {{total}}. */
+  shownOf: string;
+  searchLabel: string;
+  searchPlaceholder: string;
+  closeSearch: string;
+  clearSearch: string;
+  /** Placeholders: {{count}}, {{layout}}, {{search}}. */
+  searchMatchesOne: string;
+  /** Placeholders: {{count}}, {{layout}}, {{search}}. */
+  searchMatchesOther: string;
+  gridView: string;
+  listView: string;
+  compactView: string;
+  viewOptions: string;
+  viewOptionsTitle: string;
+  reset: string;
+  done: string;
+  layout: string;
+  layoutLabel: string;
+  layoutGrid: string;
+  layoutList: string;
+  layoutCompact: string;
+  coverSize: string;
+  coverSmall: string;
+  coverMedium: string;
+  coverLarge: string;
+  coverSmallShort: string;
+  coverMediumShort: string;
+  coverLargeShort: string;
+  sortBy: string;
+  sortRecent: string;
+  sortTitle: string;
+  sortAuthor: string;
+  sortProgress: string;
+  sortAdded: string;
+  reverseOrder: string;
+  sortSummary: string;
+  reverseOrderValue: string;
+  sortByValue: string;
+  newestFirst: string;
+  oldestFirst: string;
+  aToZ: string;
+  zToA: string;
+  mostReadFirst: string;
+  leastReadFirst: string;
+  recentFirst: string;
+  filters: string;
+  status: string;
+  format: string;
+  all: string;
+  statusNew: string;
+  statusReading: string;
+  statusFinished: string;
+  /** Placeholders: {{status}}. */
+  statusChip: string;
+  /** Placeholders: {{format}}. */
+  formatChip: string;
+  /** Placeholders: {{filter}}. */
+  removeFilter: string;
+  clearFilters: string;
+  noMatch: string;
+  /** Placeholders: {{shown}}, {{total}}. */
+  remembered: string;
 }
 
 /** What the Shelf draws: its loading, ready, or error state and its rows. */

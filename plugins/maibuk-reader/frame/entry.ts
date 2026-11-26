@@ -32,6 +32,7 @@
 
 import {
   mountApp,
+  unmountApp,
   DEFAULT_APPEARANCE,
   type ChromeLabels,
   type ChromeState,
@@ -46,6 +47,8 @@ import { hooks, positionDebounceMs } from "./hooks";
 import { createMeta } from "./meta";
 import { createPdf, MAX_CACHED_PAGES } from "./pdf";
 import { createPosition } from "./position";
+import { clearFilters, defaultShelfView } from "./shelf-options";
+import { fill } from "./shelf-query";
 import { createFrameProtocol, errorCode, type FrameOpenMessage } from "./protocol";
 import type {
   Appearance,
@@ -356,6 +359,10 @@ let chrome: ChromeState = {
   shelfRemoval: null,
   menuDocumentId: null,
   focusDocumentId: null,
+  shelfView: defaultShelfView(),
+  language: "en",
+  shelfSearchRequest: 0,
+  shelfOptionsRequest: 0,
 };
 
 const chromeListeners = new Set<(state: ChromeState) => void>();
@@ -397,6 +404,18 @@ const bridge: FrameBridge = {
   },
   setFocusDocumentId(focusDocumentId) {
     publishChrome({ ...chrome, focusDocumentId });
+  },
+  setShelfView(shelfView) {
+    publishChrome({ ...chrome, shelfView });
+  },
+  setLanguage(nextLanguage) {
+    publishChrome({ ...chrome, language: nextLanguage });
+  },
+  requestShelfSearch() {
+    publishChrome({ ...chrome, shelfSearchRequest: chrome.shelfSearchRequest + 1 });
+  },
+  requestShelfOptions() {
+    publishChrome({ ...chrome, shelfOptionsRequest: chrome.shelfOptionsRequest + 1 });
   },
   setToolbar(toolbar) {
     publishChrome({ ...chrome, toolbar });
@@ -442,6 +461,11 @@ const bridge: FrameBridge = {
     },
     shelfRemove: (documentId) => {
       post({ kind: "shelf-remove", documentId });
+    },
+    shelfViewChange: (settings) => {
+      // The Frame draws the change at once; the Worker stores it for next time.
+      bridge.setShelfView(settings);
+      post({ kind: "shelf-view", settings });
     },
   },
 };
@@ -560,10 +584,7 @@ function t(key: string, values?: Record<string, string | number>): string {
   const base = STRINGS[language.split(/[-_]/)[0]] || STRINGS.en;
   const merged = Object.assign({}, base, providedLabels || {});
   const template = typeof merged[key] === "string" ? merged[key] : key;
-  if (!values) return template;
-  return template.replace(/\{\{(\w+)\}\}/g, (_match, name) =>
-    Object.hasOwn(values, name) ? String(values[name]) : ""
-  );
+  return values ? fill(template, values) : template;
 }
 
 /** The label strings the Preact toolbar, search bar, and prompts draw. */
@@ -721,6 +742,8 @@ async function handleOpen(message: FrameOpenMessage) {
   bridge.setView(view);
   bridge.setShelf(message.shelf ?? { status: "loading", entries: [] });
   bridge.setShelfLabels(message.shelfLabels ?? null);
+  if (message.shelfView) bridge.setShelfView(message.shelfView);
+  bridge.setLanguage(language);
   bridge.setShelfNotice(null);
   bridge.setShelfRemoval(null);
   bridge.setMenuDocumentId(null);
@@ -1267,6 +1290,21 @@ function onPasswordSubmit(value: string) {
 
 /* Commands and keyboard ------------------------------------------------- */
 function runCommand(id: string) {
+  if (chrome.view === "shelf") {
+    // On the Shelf, Find searches the Shelf, as Ctrl or Cmd+F does there.
+    if (id === "findInDocument" || id === "searchShelf") {
+      bridge.requestShelfSearch();
+      return;
+    }
+    if (id === "showShelfOptions") {
+      bridge.requestShelfOptions();
+      return;
+    }
+    if (id === "clearShelfFilters") {
+      bridge.actions.shelfViewChange(clearFilters(chrome.shelfView));
+      return;
+    }
+  }
   if (chrome.view === "shelf" && READING_COMMANDS.has(id)) return;
   switch (id) {
     case "nextPage":
@@ -1333,13 +1371,16 @@ function runCommand(id: string) {
 
 function onKeyDown(event: KeyboardEvent) {
   if (event.defaultPrevented) return;
-  // The Shelf's grid and its layers own every key, Escape included.
-  if (chrome.view === "shelf") return;
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
+  // Ctrl or Cmd+F is Find in Document's Default Shortcut. Handled here, it
+  // keeps the browser's find bar shut while focus is in the Frame; on the
+  // Shelf the Command searches the Shelf.
+  if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "f") {
     event.preventDefault();
-    find.open();
+    runCommand("findInDocument");
     return;
   }
+  // The Shelf's grid and its layers own every other key, Escape included.
+  if (chrome.view === "shelf") return;
   if (event.key === "Escape") {
     event.preventDefault();
     if (fullscreen) {
@@ -1494,6 +1535,7 @@ function cleanup() {
   viewer.removeEventListener("scroll", onViewerScroll);
   window.removeEventListener("message", onHostMessage);
   destroyDocument();
+  if (mountedRoot) unmountApp(mountedRoot);
 }
 
 /* Wiring ---------------------------------------------------------------- */
@@ -1509,8 +1551,12 @@ viewer.addEventListener("scroll", onViewerScroll, { passive: true });
 window.addEventListener("message", onHostMessage);
 updateControls();
 
+/** The root the app mounted into, so `cleanup` can unmount it. */
+let mountedRoot: HTMLElement | null = null;
+
 /** Mounts the app, then adopts the surfaces it drew and binds the search bar. */
 function startApp(root: HTMLElement) {
+  mountedRoot = root;
   mountApp(root, appearance, subscribeAppearance, bridge);
   adoptSurfaces();
   find.bind();
@@ -1538,6 +1584,7 @@ protocol.onOpen = handleOpen;
 protocol.onCommand = runCommand;
 protocol.onLanguage = (nextLanguage, labels, shelfLabels) => {
   language = nextLanguage;
+  bridge.setLanguage(nextLanguage);
   if (labels) providedLabels = labels;
   if (shelfLabels) bridge.setShelfLabels(shelfLabels);
   setLabels();
