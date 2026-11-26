@@ -16,9 +16,9 @@
 import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { chooseNextFile, installFilePicker } from "../support/file-picker";
-import { tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
 import {
+  armHostCommand,
   benchOut,
   documentFrame,
   focusDocument,
@@ -95,10 +95,10 @@ test("open, turn 20 pages, search, leave, and settle the heap: PDF and EPUB", as
   await openReader(page);
 
   // PDF: open by key press, first page, turns, search.
-  await tabTo(page, page.getByRole("button", { name: "Open file…", exact: true }), { max: 60 });
+  await armHostCommand(page, "Open file…");
   const pdfOpen = await timedWindow(page, windows, "open PDF", async () => {
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/document$/);
+    await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
     await focusDocument(page);
     await expect(pageIndicator(page)).toContainText(`1 of ${PDF_PAGES}`, { timeout: 120_000 });
   });
@@ -144,10 +144,10 @@ test("open, turn 20 pages, search, leave, and settle the heap: PDF and EPUB", as
   await runHostCommand(page, "Back to Shelf");
   await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
   await chooseNextFile(page, EPUB);
-  await tabTo(page, page.getByRole("button", { name: "Open file…", exact: true }), { max: 60 });
+  await armHostCommand(page, "Open file…");
   const epubOpen = await timedWindow(page, windows, "open EPUB", async () => {
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/document$/);
+    await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
     await focusDocument(page);
     await expect(pageIndicator(page)).toBeVisible({ timeout: 120_000 });
   });

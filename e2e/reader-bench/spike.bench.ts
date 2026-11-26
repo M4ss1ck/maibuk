@@ -15,9 +15,8 @@ import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Worker as PlaywrightWorker } from "@playwright/test";
 import { installFilePicker } from "../support/file-picker";
-import { tabTo } from "../support/keyboard";
 import { expect, test } from "../support/test";
-import { benchOut, focusDocument, openReader, pageIndicator } from "./support";
+import { armHostCommand, benchOut, focusDocument, openReader, pageIndicator } from "./support";
 
 const PDF = "large-document.pdf";
 const PDF_PAGES = 96;
@@ -74,7 +73,7 @@ test.describe("threading spike", () => {
       });
     }
 
-    await tabTo(page, page.getByRole("button", { name: "Open file…", exact: true }), { max: 60 });
+    await armHostCommand(page, "Open file…");
     await plugin.evaluate(() => {
       (
         globalThis as unknown as { __readerSpike: { armed: boolean; lags: number[] } }
@@ -83,7 +82,7 @@ test.describe("threading spike", () => {
     });
     const started = await page.evaluate(() => performance.now());
     await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/document$/);
+    await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
     await focusDocument(page);
     await expect(pageIndicator(page)).toContainText(`1 of ${PDF_PAGES}`, { timeout: 120_000 });
     const firstPageMs = (await page.evaluate(() => performance.now())) - started;

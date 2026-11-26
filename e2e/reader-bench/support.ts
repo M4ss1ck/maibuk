@@ -5,7 +5,7 @@
 // runner (e2e/run-reader-bench.ts) judges the numbers.
 import type { FrameLocator, Page } from "@playwright/test";
 import { leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
-import { runPaletteCommand } from "../support/palette";
+import { openPalette, runPaletteCommand, selectPaletteCommand } from "../support/palette";
 import { expect } from "../support/test";
 
 /** Where the specs write their JSON; the runner sets it and refuses a direct run. */
@@ -74,6 +74,16 @@ export async function focusDocument(page: Page): Promise<void> {
 export async function runHostCommand(page: Page, label: string): Promise<void> {
   await leaveFrame(page, frameElement(page));
   await runPaletteCommand(page, label);
+}
+
+/**
+ * Leaves the Frame, opens the palette, and makes `label` its active result,
+ * so the caller's own Enter runs it. A timed window can then start at that
+ * key press, without the palette's typing inside the measurement.
+ */
+export async function armHostCommand(page: Page, label: string): Promise<void> {
+  await leaveFrame(page, frameElement(page));
+  await selectPaletteCommand(page, await openPalette(page), label);
 }
 
 /** The Frame's page indicator text, read without waiting. */

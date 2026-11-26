@@ -125,15 +125,26 @@ function keyOfOptionId(active: string, keys: readonly (string | null)[]): string
   return keys.find((key): key is string => key !== null && active.endsWith(`-option-${key}`));
 }
 
+/**
+ * Opens the palette with F1 and waits for its field to take focus, which lands
+ * a beat after the dialog draws: a key typed before it would go nowhere, and the
+ * query would arrive with its head missing under load. Returns the dialog.
+ */
+export async function openPalette(page: Page, dialogName?: string): Promise<Locator> {
+  await page.keyboard.press("F1");
+  const dialog = paletteDialog(page, dialogName);
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("searchbox")).toBeFocused();
+  return dialog;
+}
+
 /** Opens the palette with F1, runs the Command named `label`, and waits for it to close. */
 export async function runPaletteCommand(
   page: Page,
   label: string,
   options: { dialogName?: string } = {}
 ): Promise<void> {
-  await page.keyboard.press("F1");
-  const dialog = paletteDialog(page, options.dialogName);
-  await expect(dialog).toBeVisible();
+  const dialog = await openPalette(page, options.dialogName);
   await selectPaletteCommand(page, dialog, label);
   await page.keyboard.press("Enter");
   await expect(dialog).toBeHidden();

@@ -87,7 +87,8 @@ function report(
 }
 
 describe("reader bench budget", () => {
-  it("recognises the Reading Frame and the hidden sandbox host as Reader's iframes", () => {
+  it("recognises the reader page Frame, the Reading Frame, and the hidden sandbox host as Reader's iframes", () => {
+    expect(isReaderIframe({ title: "Reader", ariaHidden: null })).toBe(true);
     expect(isReaderIframe(READING)).toBe(true);
     expect(isReaderIframe(HOST_SANDBOX)).toBe(true);
     expect(isReaderIframe({ title: "Ads", ariaHidden: null })).toBe(false);

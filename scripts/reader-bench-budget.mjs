@@ -62,12 +62,13 @@ export function readerGrowthBytes(reader, control) {
 }
 
 /**
- * An iframe that belongs to Reader: the Reading Frame (its title), or the
- * Plugin's hidden sandbox host, which the Plugin runtime marks inert and
- * aria-hidden and which runs only Reader's Worker while a Document is open.
+ * An iframe that belongs to Reader: the reader page's Frame, titled "Reader"
+ * since the Shelf and the open Document share it (#944), or the older Reading
+ * Frame, or the Plugin's hidden sandbox host, which the Plugin runtime marks
+ * inert and aria-hidden and which runs only Reader's Worker.
  */
 export function isReaderIframe(frame) {
-  return frame.title === "Reading" || frame.ariaHidden === "true";
+  return frame.title === "Reader" || frame.title === "Reading" || frame.ariaHidden === "true";
 }
 
 /**
