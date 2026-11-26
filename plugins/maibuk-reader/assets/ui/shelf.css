@@ -1,5 +1,5 @@
-/* The Reader Frame's Shelf (#944 packet 5). The cover grid is 128 x 192 in both
-   layouts; Narrow pads and gaps by 16 and 12 px, Wide by 24 px, and the Frame
+/* The Reader Frame's Shelf (#944 packet 5). Wide covers are 88, 128, or 176 px
+   wide at 2:3 by the cover size (`--shelf-cover-width`, set on each row); Narrow pads and gaps by 16 and 12 px, Wide by 24 px, and the Frame
    decides how many covers fit. Every color comes from tokens.css through the
    `--chrome-*`, `--card`, `--muted`, `--primary`, and `--danger` names; no rule
    here states a color of its own. */
@@ -112,7 +112,8 @@
 }
 
 /* The grid is one row per line of covers; each row carries the number of
-   128 px columns the Frame measured, so the covers stay exactly 128 x 192. */
+   cover-wide columns the Frame measured and the cover width itself as
+   `--shelf-cover-width`, so each card is exactly its cover's width. */
 /* No gap between rows: the Frame measures each row's own height and adds its
    stride, so the space between rows is the row's margin-bottom (see below). */
 .shelf__grid {
@@ -146,8 +147,8 @@
 
 .shelf-card__cover {
   position: relative;
-  width: 128px;
-  height: 192px;
+  width: var(--shelf-cover-width, 128px);
+  height: calc(var(--shelf-cover-width, 128px) * 1.5);
 }
 
 .shelf-card__format {
@@ -193,7 +194,7 @@
 
 .shelf-card__progress {
   display: block;
-  width: 128px;
+  width: 100%;
   height: 3px;
   overflow: hidden;
   border-radius: 999px;
@@ -222,6 +223,13 @@
   color: var(--chrome-meta);
   font-size: var(--type-small-size);
   line-height: var(--type-small-line);
+}
+
+/* Wide: author and progress on one line, cut with an ellipsis, as drawn. */
+.shelf-card:not(.shelf-card--narrow) .shelf-card__meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .shelf-card__status {

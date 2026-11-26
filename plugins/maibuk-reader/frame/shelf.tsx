@@ -857,6 +857,7 @@ export function Shelf({
                   gridTemplateColumns: wide
                     ? `repeat(${columns}, ${COVER_WIDTHS[settings.coverSize]}px)`
                     : `repeat(${columns}, minmax(0, 1fr))`,
+                  ...(wide && { "--shelf-cover-width": `${COVER_WIDTHS[settings.coverSize]}px` }),
                 }
               : undefined
           }

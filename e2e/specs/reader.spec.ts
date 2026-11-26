@@ -182,6 +182,36 @@ async function openRowMenu(page: Page): Promise<Locator> {
   return menu;
 }
 
+/**
+ * The wide grid card's layout at one cover size, measured in the browser:
+ * the cover box is the cover's own width at 2:3, the format badge sits inside
+ * it, the progress bar spans the card, the title starts below the cover, and
+ * the meta line stays on one line. jsdom cannot lay these out.
+ */
+async function expectGridCard(page: Page, title: string, width: number): Promise<void> {
+  const card = shelfRow(page, title);
+  const box = async (selector: string) => {
+    const rect = await card.locator(selector).first().boundingBox();
+    if (rect === null) throw new Error(`${selector} is not drawn`);
+    return rect;
+  };
+  const cover = await box(".shelf-card__cover");
+  const image = await box(".kit-cover");
+  const badge = await box(".shelf-card__format");
+  const progress = await box(".shelf-card__progress");
+  const titleLine = await box(".shelf-card__title");
+  const meta = await box(".shelf-card__meta");
+  expect(cover.width).toBe(width);
+  expect(cover.height).toBe(width * 1.5);
+  expect(image.height).toBeLessThanOrEqual(cover.height);
+  expect(badge.x + badge.width).toBeLessThanOrEqual(cover.x + cover.width);
+  expect(progress.width).toBe(width);
+  expect(titleLine.y).toBeGreaterThanOrEqual(cover.y + cover.height);
+  expect(titleLine.height).toBeGreaterThan(0);
+  // One line of `--type-small-line` (18 px in tokens.css).
+  expect(meta.height).toBeLessThanOrEqual(18);
+}
+
 test.use({
   plugins: ["maibuk-reader"],
   // A seeded Built-in approval starts disabled; Reader needs to be enabled, and
@@ -473,6 +503,7 @@ test.describe("Reader", () => {
     await expect(frame.getByText("2 Documents", { exact: true })).toBeVisible();
     // Opened once, so neither Document is new any more.
     await expect(frame.getByText("New", { exact: true })).toHaveCount(0);
+    await expectGridCard(page, "Dune", 128);
     await capture(page, "reader-shelf-grid-medium");
 
     // Cover size: one Tab stop after the view switch; the arrows walk S, M, L.
@@ -480,10 +511,12 @@ test.describe("Reader", () => {
     await tabTo(page, sizes.getByRole("radio", { name: "Medium" }), { max: 60 });
     await page.keyboard.press("ArrowLeft");
     await expect(sizes.getByRole("radio", { name: "Small" })).toBeChecked();
+    await expectGridCard(page, "Dune", 88);
     await capture(page, "reader-shelf-grid-small");
     await page.keyboard.press("ArrowRight");
     await page.keyboard.press("ArrowRight");
     await expect(sizes.getByRole("radio", { name: "Large" })).toBeChecked();
+    await expectGridCard(page, "Dune", 176);
     await capture(page, "reader-shelf-grid-large");
     await page.keyboard.press("ArrowLeft");
     await expect(sizes.getByRole("radio", { name: "Medium" })).toBeChecked();
