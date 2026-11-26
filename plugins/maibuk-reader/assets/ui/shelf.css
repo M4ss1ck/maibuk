@@ -809,3 +809,244 @@
 .shelf-popover .shelf-options {
   gap: 16px;
 }
+
+/* Collections (#946) ------------------------------------------------------ */
+
+/* The rail sits beside the toolbar and grid, under the 56 px header. */
+.shelf__columns {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.shelf__main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* "Shelf · desktop · grid M": 240 px wide, 16 px by 12 px padding, a border on its right. */
+.shelf-rail {
+  box-sizing: border-box;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 2px;
+  width: 240px;
+  padding: 16px 12px;
+  overflow-y: auto;
+  border-right: 1px solid var(--chrome-border);
+}
+
+.shelf-rail__row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+}
+
+.shelf-rail__row--drop {
+  outline: 2px dashed var(--primary);
+  outline-offset: -2px;
+}
+
+.shelf-rail__item {
+  box-sizing: border-box;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.shelf-rail__item:hover {
+  background: color-mix(in srgb, var(--muted) 60%, transparent);
+}
+
+.shelf-rail__item:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.shelf-rail__item[aria-current="true"] {
+  background: var(--muted);
+  font-weight: 600;
+}
+
+.shelf-rail__item svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.shelf-rail__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shelf-rail__count {
+  color: var(--mfg);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.shelf-rail__item[aria-current="true"] .shelf-rail__count {
+  color: var(--fg);
+}
+
+/* The More button covers the count while the row is hovered or holds focus; touch always shows it. */
+.shelf-rail__more {
+  position: absolute;
+  right: 4px;
+  display: inline-flex;
+  opacity: 0;
+}
+
+.shelf-rail__row:hover .shelf-rail__more,
+.shelf-rail__row:focus-within .shelf-rail__more {
+  opacity: 1;
+}
+
+.shelf-rail__row:hover .shelf-rail__count,
+.shelf-rail__row:focus-within .shelf-rail__count {
+  visibility: hidden;
+}
+
+@media (pointer: coarse) {
+  .shelf-rail__more {
+    position: static;
+    opacity: 1;
+  }
+
+  .shelf-rail__row .shelf-rail__count {
+    visibility: visible;
+  }
+}
+
+.shelf-rail__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 20px 0 6px;
+  padding: 0 10px;
+}
+
+.shelf-rail__label,
+.shelf-picker__empty,
+.shelf-rail__empty {
+  color: var(--mfg);
+  font-size: 12px;
+}
+
+.shelf-rail__label {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.shelf-rail__empty {
+  margin: 0;
+  padding: 0 10px;
+}
+
+.shelf-rail__hint {
+  margin: 0;
+  padding: 0 10px;
+  color: var(--mfg);
+  font-size: 12px;
+}
+
+/* The options' Collection section: the full-width picker button and its More button. */
+.shelf-options__picker-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.shelf-options__picker {
+  flex: 1;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.shelf-options__picker-text,
+.shelf-picker__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shelf-picker {
+  min-width: 240px;
+}
+
+.shelf-picker__empty {
+  margin: 8px 4px 0;
+}
+
+/* The text field the Collection dialogs and the Document menu share. */
+.shelf-field {
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--chrome-bg);
+  color: var(--chrome-fg);
+  font: inherit;
+}
+
+.shelf-field:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.shelf-field[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.shelf-collection-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.shelf-collection-form__label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.shelf-collection-form__error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 13px;
+}
+
+/* "Document menu with Collections": the field and Add button under the check box rows. */
+.shelf-menu-new__row {
+  display: flex;
+  gap: 8px;
+  padding: 6px 12px 8px;
+}

@@ -21,7 +21,14 @@ import {
 } from "preact";
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { Button, IconButton } from "./kit";
-import { Shelf, type ShelfNotice, type ShelfRemoval } from "./shelf";
+import type { FrameShelfCollectionMessage } from "./protocol";
+import {
+  Shelf,
+  type ShelfCollectionCommand,
+  type ShelfCollectionRequest,
+  type ShelfNotice,
+  type ShelfRemoval,
+} from "./shelf";
 import type {
   Appearance,
   FrameShelfCommandId,
@@ -138,6 +145,8 @@ export interface ChromeState {
   shelfSearchRequest: number;
   /** Bumped when a host Command asks to open the Shelf's view and filter options. */
   shelfOptionsRequest: number;
+  /** The latest host Collection Command for the Shelf (#946), or null. */
+  shelfCollectionRequest: ShelfCollectionRequest | null;
 }
 
 /** What the ported controls ask `entry.ts` to do. */
@@ -159,6 +168,8 @@ export interface ChromeActions {
   shelfRemove(documentId: string): void;
   /** The author changed the Shelf's view, sort, filters, or search. */
   shelfViewChange(settings: ShelfViewSettings): void;
+  /** The author made, renamed, deleted, or filed into a Collection (#946). */
+  shelfCollection(message: FrameShelfCollectionMessage): void;
 }
 
 /** The small bridge `entry.ts` hands the app: its state in, its actions out. */
@@ -183,6 +194,7 @@ export interface FrameBridge {
   setLanguage(language: string): void;
   requestShelfSearch(): void;
   requestShelfOptions(): void;
+  requestShelfCollection(command: ShelfCollectionCommand): void;
   actions: ChromeActions;
 }
 
@@ -485,6 +497,8 @@ function App({ appearance, subscribe, bridge }: AppProps) {
         language={chrome.language}
         searchRequest={chrome.shelfSearchRequest}
         optionsRequest={chrome.shelfOptionsRequest}
+        collectionRequest={chrome.shelfCollectionRequest}
+        onCollection={bridge.actions.shelfCollection}
         onSettingsChange={bridge.actions.shelfViewChange}
         onCommand={bridge.actions.shelfCommand}
         onSelect={bridge.actions.shelfSelect}

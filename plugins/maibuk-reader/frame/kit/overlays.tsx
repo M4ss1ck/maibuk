@@ -549,6 +549,10 @@ export function Menu({
   const itemsRef = useRef(items);
   itemsRef.current = items;
   const [active, setActive] = useState(() => firstEnabled(items));
+  // Keys dispatched before the Menu draws again (Preact batches renders) must
+  // move from the row the last key reached, not the one the last render drew.
+  const activeRef = useRef(active);
+  activeRef.current = active;
 
   useLayoutEffect(() => {
     if (!open) {
@@ -566,11 +570,13 @@ export function Menu({
   useEffect(() => {
     if (!open) return;
     const index = firstEnabled(itemsRef.current);
+    activeRef.current = index;
     setActive(index);
     itemRefs.current[index]?.focus();
   }, [open]);
 
   const moveTo = (index: number) => {
+    activeRef.current = index;
     setActive(index);
     itemRefs.current[index]?.focus();
   };
@@ -590,7 +596,7 @@ export function Menu({
     search.current = { text, at: now };
     const count = items.length;
     for (let step = 1; step <= count; step += 1) {
-      const index = (active + step) % count;
+      const index = (activeRef.current + step) % count;
       const item = items[index];
       if (!item.disabled && item.label.toLowerCase().startsWith(text)) {
         moveTo(index);
@@ -606,11 +612,11 @@ export function Menu({
     switch (event.key) {
       case "ArrowDown":
         event.preventDefault();
-        moveTo(nextEnabled(items, active, 1));
+        moveTo(nextEnabled(items, activeRef.current, 1));
         break;
       case "ArrowUp":
         event.preventDefault();
-        moveTo(nextEnabled(items, active, -1));
+        moveTo(nextEnabled(items, activeRef.current, -1));
         break;
       case "Home":
         event.preventDefault();
@@ -626,7 +632,7 @@ export function Menu({
       case "Enter":
       case " ":
         event.preventDefault();
-        select(active);
+        select(activeRef.current);
         break;
       default:
         if (event.key.length === 1 && event.key !== " ") {

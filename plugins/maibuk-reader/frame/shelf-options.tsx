@@ -11,7 +11,7 @@
 
 import type { TargetedKeyboardEvent } from "preact";
 import { useRef } from "preact/hooks";
-import { Button, Chip, Icon, Segmented, type SegmentedOption } from "./kit";
+import { Button, Chip, Icon, IconButton, Segmented, type SegmentedOption } from "./kit";
 import { fill } from "./shelf-query";
 import type {
   FrameCollection,
@@ -370,6 +370,7 @@ export function ShelfOptions({
   collection = null,
   pickerOpen = false,
   onCollectionPicker,
+  onCollectionMenu,
 }: ShelfOptionsControlProps & {
   part?: ShelfOptionsPart;
   /** The Collection the Shelf is narrowed to, or null for Any Collection (#946). */
@@ -378,6 +379,8 @@ export function ShelfOptions({
   pickerOpen?: boolean;
   /** Opens the Collection picker from its button; omitted draws no Collection section. */
   onCollectionPicker?: (anchor: HTMLElement) => void;
+  /** Opens the chosen Collection's menu (Rename, Delete), the touch path off the rail. */
+  onCollectionMenu?: (anchor: HTMLElement) => void;
 }) {
   const all = part === "all";
   return (
@@ -407,20 +410,31 @@ export function ShelfOptions({
           </Section>
           {onCollectionPicker === undefined ? null : (
             <Section label={labels.collection}>
-              <Button
-                class="shelf-options__picker"
-                aria-haspopup="dialog"
-                aria-expanded={pickerOpen}
-                aria-label={fill(labels.collectionChip, {
-                  name: collection?.name ?? labels.anyCollection,
-                })}
-                onClick={(event) => onCollectionPicker(event.currentTarget)}
-              >
-                <span class="shelf-options__picker-text">
-                  {collection?.name ?? labels.anyCollection}
-                </span>
-                <Icon name="down" />
-              </Button>
+              <div class="shelf-options__picker-row">
+                <Button
+                  class="shelf-options__picker"
+                  aria-haspopup="dialog"
+                  aria-expanded={pickerOpen}
+                  aria-label={fill(labels.collectionChip, {
+                    name: collection?.name ?? labels.anyCollection,
+                  })}
+                  onClick={(event) => onCollectionPicker(event.currentTarget)}
+                >
+                  <span class="shelf-options__picker-text">
+                    {collection?.name ?? labels.anyCollection}
+                  </span>
+                  <Icon name="down" />
+                </Button>
+                {collection === null || onCollectionMenu === undefined ? null : (
+                  <span class="shelf-options__picker-more">
+                    <IconButton
+                      label={fill(labels.moreForCollection, { name: collection.name })}
+                      icon="moreV"
+                      onClick={(event) => onCollectionMenu(event.currentTarget)}
+                    />
+                  </span>
+                )}
+              </div>
             </Section>
           )}
         </>

@@ -995,9 +995,10 @@ describe("the Shelf", () => {
     expect(cellTitle(document.activeElement as HTMLElement)).toBe("Shelf Book 2");
     await user.keyboard("{ArrowLeft}");
     expect(document.activeElement).toBe(shelfCells()[0]);
-    // A six-column Wide grid puts the next row six cells along.
+    // At jsdom's 1024 px the Collections rail takes 240 px, and the five-column
+    // grid beside it puts the next row five cells along.
     await user.keyboard("{ArrowDown}");
-    expect(document.activeElement).toBe(shelfCells()[6]);
+    expect(document.activeElement).toBe(shelfCells()[5]);
     expect(shelfRowOf(document.activeElement as HTMLElement)).toBe(1);
     await user.keyboard("{ArrowUp}");
     expect(document.activeElement).toBe(shelfCells()[0]);

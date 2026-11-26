@@ -10,16 +10,18 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { configure, getConfig, screen, within } from "@testing-library/react";
+import { configure, fireEvent, getConfig, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentChild } from "preact";
 import { render } from "preact";
 import { useState } from "preact/hooks";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Shelf, type ShelfNotice, type ShelfRemoval } from "./shelf";
+import type { FrameShelfCollectionMessage } from "./protocol";
+import { Shelf, type ShelfCollectionRequest, type ShelfNotice, type ShelfRemoval } from "./shelf";
 import { defaultShelfView } from "./shelf-options";
 import type {
+  FrameCollection,
   FrameShelfEntry,
   FrameShelfLabels,
   FrameShelfState,
@@ -196,6 +198,9 @@ interface HarnessProps {
   onSettingsChange?: (settings: ShelfViewSettings) => void;
   /** Bumped by the searchShelf Command. */
   searchRequest?: number;
+  collections?: FrameCollection[];
+  onCollection?: (message: FrameShelfCollectionMessage) => void;
+  collectionRequest?: ShelfCollectionRequest | null;
 }
 
 /** The controlled Shelf a real caller draws, with its menu and removal state. */
@@ -208,7 +213,7 @@ function Harness(props: HarnessProps) {
     <div>
       <button type="button">Before</button>
       <Shelf
-        state={{ status, entries: workerOrder(entries) }}
+        state={{ status, entries: workerOrder(entries), collections: props.collections }}
         labels={LABELS}
         notice={notice}
         removal={removal}
@@ -217,6 +222,8 @@ function Harness(props: HarnessProps) {
         settings={props.settings}
         onSettingsChange={props.onSettingsChange}
         searchRequest={props.searchRequest}
+        onCollection={props.onCollection}
+        collectionRequest={props.collectionRequest}
         onCommand={props.onCommand ?? (() => {})}
         onSelect={props.onSelect ?? (() => {})}
         onMenuChange={setMenuDocumentId}
@@ -331,8 +338,9 @@ describe("Shelf grid", () => {
     expect(within(rows[2]).getAllByRole("gridcell")).toHaveLength(1);
   });
 
-  it("draws six columns at the artboard's 1040 px Wide and keeps the Worker order", async () => {
-    setWidth(1040);
+  it("draws six columns beside the rail at the artboard's 1280 px Wide and keeps the Worker order", async () => {
+    // The artboard's 240 px Collections rail leaves the grid 1040 px.
+    setWidth(1280);
     await mount(
       <Harness
         entries={[
@@ -1245,5 +1253,483 @@ describe("Shelf views, sort, and filters (#945)", () => {
     );
     const next = onSettingsChange.mock.lastCall?.[0] as ShelfViewSettings;
     expect(next.formats).not.toContain("pdf");
+  });
+});
+
+describe("Collections (#946)", () => {
+  const COLLECTIONS: FrameCollection[] = [
+    { id: "col-1", name: "Research" },
+    { id: "col-2", name: "To read next" },
+  ];
+
+  /** Three Documents: Dune in Research, Emma in both, Kindred in none. */
+  function filed(): FrameShelfEntry[] {
+    return [
+      entry({ id: "doc-1", title: "Dune", collections: ["col-1"] }),
+      entry({ id: "doc-2", title: "Emma", collections: ["col-1", "col-2"] }),
+      entry({ id: "doc-3", title: "Kindred" }),
+    ];
+  }
+
+  /** The DataTransfer jsdom lacks: what a drag carries, by type. */
+  function dragData() {
+    const data = new Map<string, string>();
+    return {
+      get types() {
+        return [...data.keys()];
+      },
+      setData: (type: string, value: string) => data.set(type, value),
+      getData: (type: string) => data.get(type) ?? "",
+      dropEffect: "none",
+      effectAllowed: "all",
+    };
+  }
+
+  function rail(): HTMLElement {
+    return screen.getByRole("complementary", { name: "Collections" });
+  }
+
+  it("draws the rail on Wide from 960 px, and not at 959", async () => {
+    setWidth(959);
+    const first = await mount(<Harness entries={filed()} collections={COLLECTIONS} />);
+    expect(screen.queryByRole("complementary", { name: "Collections" })).toBeNull();
+    await act(() => {
+      render(null, first);
+    });
+
+    setWidth(960);
+    await mount(<Harness entries={filed()} collections={COLLECTIONS} />);
+    const aside = rail();
+    const all = within(aside).getByRole("button", { name: /All Documents\s*3/ });
+    expect(all).toHaveAttribute("aria-current", "true");
+    expect(within(aside).getByRole("button", { name: /Research\s*2/ })).toBeInTheDocument();
+    expect(within(aside).getByRole("button", { name: /To read next\s*1/ })).toBeInTheDocument();
+    expect(within(aside).getByText(LABELS.railHint)).toBeInTheDocument();
+  });
+
+  it("filters the Shelf to a Collection from the rail, names it in the heading, and goes back to All Documents", async () => {
+    setWidth(1280);
+    const user = userEvent.setup({ delay: null });
+    const onSettingsChange = vi.fn();
+    await mount(
+      <Harness entries={filed()} collections={COLLECTIONS} onSettingsChange={onSettingsChange} />
+    );
+
+    await press(() => user.click(within(rail()).getByRole("button", { name: /^Research/ })));
+    expect(onSettingsChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ collection: "col-1" })
+    );
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Research");
+    expect(screen.getAllByRole("gridcell").map((cell) => cell.dataset.documentId)).toEqual([
+      "doc-1",
+      "doc-2",
+    ]);
+    expect(within(rail()).getByRole("button", { name: /^Research/ })).toHaveAttribute(
+      "aria-current",
+      "true"
+    );
+    expect(screen.getByText("2 of 3")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Remove filter Collection: Research" })
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: /Filters\s*1/ })).toBeInTheDocument();
+
+    // Keyboard: Tab reaches All Documents, and Enter shows every Document again.
+    const all = within(rail()).getByRole("button", { name: /All Documents/ });
+    act(() => {
+      all.focus();
+    });
+    await press(() => user.keyboard("{Enter}"));
+    expect(onSettingsChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ collection: null })
+    );
+    expect(screen.getAllByRole("gridcell")).toHaveLength(3);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("All Documents");
+  });
+
+  it("ignores a remembered Collection that no longer exists", async () => {
+    setWidth(1280);
+    await mount(
+      <Harness
+        entries={filed()}
+        collections={COLLECTIONS}
+        settings={{ ...defaultShelfView(), collection: "gone" }}
+      />
+    );
+    expect(screen.getAllByRole("gridcell")).toHaveLength(3);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("All Documents");
+    expect(screen.queryByRole("button", { name: /Remove filter Collection/ })).toBeNull();
+  });
+
+  it("files a Document dropped on a rail Collection", async () => {
+    setWidth(1280);
+    const onCollection = vi.fn();
+    await mount(
+      <Harness entries={filed()} collections={COLLECTIONS} onCollection={onCollection} />
+    );
+
+    const kindred = screen
+      .getAllByRole("gridcell")
+      .find((cell) => cell.dataset.documentId === "doc-3") as HTMLElement;
+    expect(kindred).toHaveAttribute("draggable", "true");
+    const data = dragData();
+    const target = within(rail()).getByRole("button", { name: /^To read next/ })
+      .parentElement as HTMLElement;
+    await act(() => {
+      fireEvent.dragStart(kindred, { dataTransfer: data });
+      fireEvent.dragOver(target, { dataTransfer: data });
+    });
+    expect(target).toHaveClass("shelf-rail__row--drop");
+    await act(() => {
+      fireEvent.drop(target, { dataTransfer: data });
+    });
+    expect(onCollection).toHaveBeenCalledWith({
+      kind: "shelf-collection",
+      action: "file",
+      collectionId: "col-2",
+      documentId: "doc-3",
+      member: true,
+    });
+    expect(target).not.toHaveClass("shelf-rail__row--drop");
+  });
+
+  it("makes a New Collection from the rail: Create waits for a name and refuses a duplicate", async () => {
+    setWidth(1280);
+    const user = userEvent.setup({ delay: null });
+    const onCollection = vi.fn();
+    await mount(
+      <Harness entries={filed()} collections={COLLECTIONS} onCollection={onCollection} />
+    );
+
+    const newButton = within(rail()).getByRole("button", { name: "New Collection" });
+    await press(() => user.click(newButton));
+    const dialog = screen.getByRole("dialog", { name: "New Collection" });
+    const field = within(dialog).getByRole("textbox", { name: "Name" });
+    const create = within(dialog).getByRole("button", { name: "Create" });
+    expect(document.activeElement).toBe(field);
+    expect(create).toBeDisabled();
+
+    await press(() => user.keyboard(" research "));
+    expect(within(dialog).getByRole("alert")).toHaveTextContent(LABELS.duplicateCollection);
+    expect(field).toHaveAttribute("aria-invalid", "true");
+    expect(create).toBeDisabled();
+    // Enter on a refused name does nothing.
+    await press(() => user.keyboard("{Enter}"));
+    expect(onCollection).not.toHaveBeenCalled();
+
+    await press(() => user.clear(field));
+    await press(() => user.keyboard("  Poetry {Enter}"));
+    expect(onCollection).toHaveBeenCalledWith({
+      kind: "shelf-collection",
+      action: "create",
+      name: "Poetry",
+    });
+    expect(screen.queryByRole("dialog", { name: "New Collection" })).toBeNull();
+    expect(document.activeElement).toBe(newButton);
+  });
+
+  it("renames and deletes a rail Collection from its menu, by keyboard", async () => {
+    setWidth(1280);
+    const user = userEvent.setup({ delay: null });
+    const onCollection = vi.fn();
+    const onSettingsChange = vi.fn();
+    await mount(
+      <Harness
+        entries={filed()}
+        collections={COLLECTIONS}
+        onCollection={onCollection}
+        onSettingsChange={onSettingsChange}
+      />
+    );
+    const research = within(rail()).getByRole("button", { name: /^Research/ });
+
+    // Shift+F10 opens the row's menu, the keyboard twin of its More button.
+    act(() => {
+      research.focus();
+    });
+    await press(() => user.keyboard("{Shift>}{F10}{/Shift}"));
+    const menu = screen.getByRole("menu", { name: "Research" });
+    expect(document.activeElement).toBe(within(menu).getByRole("menuitem", { name: "Rename…" }));
+    await press(() => user.keyboard("{Enter}"));
+    const rename = screen.getByRole("dialog", { name: "Rename Collection" });
+    const field = within(rename).getByRole("textbox", { name: "Name" });
+    expect(field).toHaveValue("Research");
+    // The Collection's own name, in another case, is not a duplicate.
+    await press(() => user.clear(field));
+    await press(() => user.keyboard("RESEARCH{Enter}"));
+    expect(onCollection).toHaveBeenLastCalledWith({
+      kind: "shelf-collection",
+      action: "rename",
+      collectionId: "col-1",
+      name: "RESEARCH",
+    });
+    expect(screen.queryByRole("dialog", { name: "Rename Collection" })).toBeNull();
+
+    // Filter to it, then delete it: the Shelf goes back to every Document.
+    await press(() => user.click(research));
+    act(() => {
+      research.focus();
+    });
+    await press(() => user.keyboard("{ContextMenu}"));
+    await press(() => user.keyboard("{ArrowDown}{Enter}"));
+    const confirm = screen.getByRole("alertdialog", { name: "Delete “Research”?" });
+    expect(within(confirm).getByText(LABELS.deleteCollectionBody)).toBeInTheDocument();
+    await press(() => user.click(within(confirm).getByRole("button", { name: "Delete" })));
+    expect(onCollection).toHaveBeenLastCalledWith({
+      kind: "shelf-collection",
+      action: "delete",
+      collectionId: "col-1",
+    });
+    expect(onSettingsChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ collection: null })
+    );
+  });
+
+  it("cancels a Delete with Escape and keeps the Collection", async () => {
+    setWidth(1280);
+    const user = userEvent.setup({ delay: null });
+    const onCollection = vi.fn();
+    await mount(
+      <Harness entries={filed()} collections={COLLECTIONS} onCollection={onCollection} />
+    );
+    await press(() =>
+      user.click(within(rail()).getByRole("button", { name: "More for To read next" }))
+    );
+    await press(() => user.click(screen.getByRole("menuitem", { name: "Delete…" })));
+    expect(screen.getByRole("alertdialog", { name: "Delete “To read next”?" })).toBeInTheDocument();
+    await press(() => user.keyboard("{Escape}"));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(onCollection).not.toHaveBeenCalled();
+  });
+
+  it("files and unfiles a Document from its menu's check boxes, which keep the menu open", async () => {
+    setWidth(1280);
+    const user = userEvent.setup({ delay: null });
+    const onCollection = vi.fn();
+    await mount(
+      <Harness entries={filed()} collections={COLLECTIONS} onCollection={onCollection} />
+    );
+
+    const dune = screen
+      .getAllByRole("gridcell")
+      .find((cell) => cell.dataset.documentId === "doc-1") as HTMLElement;
+    act(() => {
+      dune.focus();
+    });
+    await press(() => user.keyboard("{Shift>}{F10}{/Shift}"));
+    const menu = screen.getByRole("menu", { name: "Document actions" });
+    const group = within(menu).getByRole("group", { name: "Collections" });
+    const research = within(group).getByRole("menuitemcheckbox", { name: /^Research/ });
+    const later = within(group).getByRole("menuitemcheckbox", { name: /^To read next/ });
+    expect(research).toHaveAttribute("aria-checked", "true");
+    expect(research).toHaveTextContent("2");
+    expect(later).toHaveAttribute("aria-checked", "false");
+
+    expect(document.activeElement).toBe(within(menu).getByRole("menuitem", { name: "Open" }));
+    // Open, then the two check boxes: the arrow keys walk the rows, not the field.
+    await press(() => user.keyboard("{ArrowDown}"));
+    expect(document.activeElement).toBe(research);
+    await press(() => user.keyboard("{ArrowDown}"));
+    expect(document.activeElement).toBe(later);
+    await press(() => user.keyboard(" "));
+    expect(onCollection).toHaveBeenLastCalledWith({
+      kind: "shelf-collection",
+      action: "file",
+      collectionId: "col-2",
+      documentId: "doc-1",
+      member: true,
+    });
+    await press(() => user.keyboard("{ArrowUp}{Enter}"));
+    expect(onCollection).toHaveBeenLastCalledWith({
+      kind: "shelf-collection",
+      action: "file",
+      collectionId: "col-1",
+      documentId: "doc-1",
+      member: false,
+    });
+    expect(screen.getByRole("menu", { name: "Document actions" })).toBeInTheDocument();
+    // From Research, past To read next, to Remove: the field between them is skipped.
+    await press(() => user.keyboard("{ArrowDown}{ArrowDown}"));
+    expect(document.activeElement).toBe(
+      within(menu).getByRole("menuitem", { name: "Remove from Shelf…" })
+    );
+  });
+
+  it("adds a New Collection from the Document menu's field and files the Document in it", async () => {
+    setWidth(390);
+    const user = userEvent.setup({ delay: null });
+    const onCollection = vi.fn();
+    await mount(<Harness entries={filed()} collections={[]} onCollection={onCollection} />);
+
+    await press(() => user.click(screen.getByRole("button", { name: "More for Kindred" })));
+    const sheet = screen.getByRole("dialog", { name: "Kindred" });
+    // With no Collection yet, the field draws the Collections label itself.
+    expect(within(sheet).getByText("Collections")).toBeInTheDocument();
+    const field = within(sheet).getByRole("textbox", { name: "New Collection name" });
+    const add = within(sheet).getByRole("button", { name: "Add" });
+    expect(add).toBeDisabled();
+    await press(() => user.click(field));
+    // Keys typed in the field are the field's: no type-ahead jumps to "Open".
+    await press(() => user.keyboard("Open shelf"));
+    expect(field).toHaveValue("Open shelf");
+    expect(document.activeElement).toBe(field);
+    await press(() => user.keyboard("{Enter}"));
+    expect(onCollection).toHaveBeenCalledWith({
+      kind: "shelf-collection",
+      action: "create",
+      name: "Open shelf",
+      documentId: "doc-3",
+    });
+    expect(field).toHaveValue("");
+    expect(screen.getByRole("dialog", { name: "Kindred" })).toBeInTheDocument();
+  });
+
+  it("picks a Collection in the Narrow Sheet, shows its chip, and removes it", async () => {
+    setWidth(390);
+    const user = userEvent.setup({ delay: null });
+    const onSettingsChange = vi.fn();
+    await mount(
+      <Harness entries={filed()} collections={COLLECTIONS} onSettingsChange={onSettingsChange} />
+    );
+
+    await press(() => user.click(screen.getByRole("button", { name: "View, sort and filter" })));
+    const sheet = screen.getByRole("dialog", { name: "View and filters" });
+    const pickerButton = within(sheet).getByRole("button", {
+      name: "Collection: Any Collection",
+    });
+    await press(() => user.click(pickerButton));
+    const picker = screen.getByRole("dialog", { name: "Collection" });
+    const any = within(picker).getByRole("radio", { name: "Any Collection" });
+    expect(any).toHaveAttribute("aria-checked", "true");
+    expect(document.activeElement).toBe(any);
+    // The arrow keys choose, as Sort by does.
+    await press(() => user.keyboard("{ArrowDown}"));
+    expect(onSettingsChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ collection: "col-1" })
+    );
+    await press(() => user.keyboard("{ArrowDown}{Enter}"));
+    expect(onSettingsChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ collection: "col-2" })
+    );
+    expect(screen.queryByRole("dialog", { name: "Collection" })).toBeNull();
+    expect(
+      within(sheet).getByRole("button", { name: "Collection: To read next" })
+    ).toBeInTheDocument();
+    await press(() => user.click(within(sheet).getByRole("button", { name: "Done" })));
+
+    expect(screen.getAllByRole("gridcell").map((cell) => cell.dataset.documentId)).toEqual([
+      "doc-2",
+    ]);
+    await press(() =>
+      user.click(screen.getByRole("button", { name: "Remove filter Collection: To read next" }))
+    );
+    expect(onSettingsChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ collection: null })
+    );
+    expect(screen.getAllByRole("gridcell")).toHaveLength(3);
+  });
+
+  it("renames the filtered Collection on Narrow from the More button beside its picker", async () => {
+    setWidth(390);
+    const user = userEvent.setup({ delay: null });
+    const onCollection = vi.fn();
+    await mount(
+      <Harness
+        entries={filed()}
+        collections={COLLECTIONS}
+        settings={{ ...defaultShelfView(), collection: "col-2" }}
+        onCollection={onCollection}
+      />
+    );
+    await press(() => user.click(screen.getByRole("button", { name: "View, sort and filter" })));
+    await press(() => user.click(screen.getByRole("button", { name: "More for To read next" })));
+    await press(() => user.click(screen.getByRole("menuitem", { name: "Rename…" })));
+    const rename = screen.getByRole("dialog", { name: "Rename Collection" });
+    const field = within(rename).getByRole("textbox", { name: "Name" });
+    await press(() => user.clear(field));
+    await press(() => user.type(field, "Soon"));
+    await press(() => user.click(within(rename).getByRole("button", { name: "Rename" })));
+    expect(onCollection).toHaveBeenCalledWith({
+      kind: "shelf-collection",
+      action: "rename",
+      collectionId: "col-2",
+      name: "Soon",
+    });
+  });
+
+  it("picks a Collection from the Wide Filters popover", async () => {
+    setWidth(800);
+    const user = userEvent.setup({ delay: null });
+    const onSettingsChange = vi.fn();
+    await mount(
+      <Harness entries={filed()} collections={COLLECTIONS} onSettingsChange={onSettingsChange} />
+    );
+    // Under 960 px the rail is not drawn; the Filters popover holds the choice.
+    expect(screen.queryByRole("complementary", { name: "Collections" })).toBeNull();
+    await press(() => user.click(screen.getByRole("button", { name: "Filters" })));
+    await press(() =>
+      user.click(screen.getByRole("button", { name: "Collection: Any Collection" }))
+    );
+    await press(() => user.click(screen.getByRole("radio", { name: "Research" })));
+    expect(onSettingsChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ collection: "col-1" })
+    );
+    expect(screen.queryByRole("radio", { name: "Research" })).toBeNull();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Research");
+  });
+
+  it("answers the host's Collection Commands: New always, Rename and Delete only while filtered", async () => {
+    setWidth(1280);
+    const user = userEvent.setup({ delay: null });
+    const container = await mount(<Harness entries={filed()} collections={COLLECTIONS} />);
+    const rerender = (props: HarnessProps) =>
+      act(() => {
+        render(<Harness entries={filed()} collections={COLLECTIONS} {...props} />, container);
+      });
+
+    await rerender({ collectionRequest: { command: "renameCollection", serial: 1 } });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await rerender({ collectionRequest: { command: "deleteCollection", serial: 2 } });
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+
+    await rerender({ collectionRequest: { command: "newCollection", serial: 3 } });
+    expect(screen.getByRole("dialog", { name: "New Collection" })).toBeInTheDocument();
+    await press(() => user.keyboard("{Escape}"));
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    const filtered = { ...defaultShelfView(), collection: "col-2" };
+    await rerender({
+      settings: filtered,
+      collectionRequest: { command: "renameCollection", serial: 4 },
+    });
+    expect(
+      within(screen.getByRole("dialog", { name: "Rename Collection" })).getByRole("textbox")
+    ).toHaveValue("To read next");
+    await press(() => user.keyboard("{Escape}"));
+    await rerender({
+      settings: filtered,
+      collectionRequest: { command: "deleteCollection", serial: 5 },
+    });
+    expect(screen.getByRole("alertdialog", { name: "Delete “To read next”?" })).toBeInTheDocument();
+  });
+
+  it("resets the Collection with the rest of the view and with Clear filters", async () => {
+    setWidth(1280);
+    const user = userEvent.setup({ delay: null });
+    const onSettingsChange = vi.fn();
+    await mount(
+      <Harness
+        entries={filed()}
+        collections={COLLECTIONS}
+        settings={{ ...defaultShelfView(), collection: "col-1", formats: ["pdf"] }}
+        onSettingsChange={onSettingsChange}
+      />
+    );
+    // The empty match and the chip row both offer it; the chip row's is the toolbar's.
+    const chips = document.querySelector(".shelf-chips") as HTMLElement;
+    await press(() => user.click(within(chips).getByRole("button", { name: "Clear filters" })));
+    expect(onSettingsChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ collection: null, formats: [] })
+    );
   });
 });

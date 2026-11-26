@@ -727,6 +727,23 @@ describe("Menu checkbox rows (#946)", () => {
     );
   }
 
+  it("moves from the row the last key reached when keys come faster than a render", async () => {
+    setWidth(1024);
+    const onSelect = vi.fn();
+    const user = userEvent.setup({ delay: null });
+    await mount(<CheckCase onSelect={onSelect} />);
+
+    // One keyboard call presses every key before the Menu draws again.
+    await act(async () => {
+      await user.keyboard("{ArrowDown}{ArrowDown}{Enter}");
+    });
+    expect(onSelect).toHaveBeenLastCalledWith("c:comics");
+    await act(async () => {
+      await user.keyboard("{ArrowUp}{Enter}");
+    });
+    expect(onSelect).toHaveBeenLastCalledWith("c:research");
+  });
+
   it("draws checked rows as menu checkboxes inside their labelled group, with the detail", async () => {
     setWidth(1024);
     await mount(<CheckCase onSelect={() => {}} />);

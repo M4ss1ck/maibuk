@@ -363,6 +363,7 @@ let chrome: ChromeState = {
   language: "en",
   shelfSearchRequest: 0,
   shelfOptionsRequest: 0,
+  shelfCollectionRequest: null,
 };
 
 const chromeListeners = new Set<(state: ChromeState) => void>();
@@ -417,6 +418,10 @@ const bridge: FrameBridge = {
   requestShelfOptions() {
     publishChrome({ ...chrome, shelfOptionsRequest: chrome.shelfOptionsRequest + 1 });
   },
+  requestShelfCollection(command) {
+    const serial = (chrome.shelfCollectionRequest?.serial ?? 0) + 1;
+    publishChrome({ ...chrome, shelfCollectionRequest: { command, serial } });
+  },
   setToolbar(toolbar) {
     publishChrome({ ...chrome, toolbar });
   },
@@ -466,6 +471,9 @@ const bridge: FrameBridge = {
       // The Frame draws the change at once; the Worker stores it for next time.
       bridge.setShelfView(settings);
       post({ kind: "shelf-view", settings });
+    },
+    shelfCollection: (message) => {
+      post(message);
     },
   },
 };
@@ -1302,6 +1310,10 @@ function runCommand(id: string) {
     }
     if (id === "clearShelfFilters") {
       bridge.actions.shelfViewChange(clearFilters(chrome.shelfView));
+      return;
+    }
+    if (id === "newCollection" || id === "renameCollection" || id === "deleteCollection") {
+      bridge.requestShelfCollection(id);
       return;
     }
   }
