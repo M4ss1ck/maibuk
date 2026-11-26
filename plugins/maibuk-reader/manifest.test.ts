@@ -3,9 +3,9 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parsePluginLocale, parsePluginManifest } from "@/features/plugins/manifest-validate";
 
-// The Reader manifest (#653): the host-rendered Shelf page behind a sidebar
-// entry, the whole-page Frame that will hold the reading surface, and the
-// reading Commands scoped to that Frame's page id.
+// The Reader manifest (#653, #944): the Shelf and reading Frames behind their
+// sidebar entry and Command, and the reading Commands scoped to the reading
+// page's id.
 describe("Reader manifest", () => {
   const text = readFileSync(join(__dirname, "manifest.json"), "utf8");
 
@@ -42,13 +42,17 @@ describe("Reader manifest", () => {
     expect(parsed.permissions.optional).toEqual([]);
   });
 
-  it("opens the Shelf from a navigating Command behind a sidebar entry", () => {
+  it("opens the Shelf Frame from a navigating Command behind a sidebar entry", () => {
     const contributes = manifest().contributes;
     const open = contributes?.commands?.find((command) => command.id === "openReader");
     expect(open?.navigates).toBe(true);
     const page = contributes?.pages?.find((candidate) => candidate.id === "reader");
-    expect(page).toMatchObject({ title: "Reader", command: "openReader" });
-    expect(page?.frame).toBeUndefined();
+    expect(page).toMatchObject({
+      title: "Reader",
+      command: "openReader",
+      frame: "assets/ui/shelf.html",
+      hideTitle: true,
+    });
     expect(contributes?.sidebarEntries).toEqual([{ page: "reader", icon: "book-open-text" }]);
   });
 

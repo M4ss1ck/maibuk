@@ -1,14 +1,15 @@
 /**
- * The Reader runtime (#653): the Shelf page, the document Frame handoff, and the
+ * The Reader runtime (#653, #944): the Shelf and Document Frame handoff, and the
  * Command handlers. Kept apart from `index.tsx` (the Worker bootstrap) so a test
  * can drive the same logic over the polyfill-free Remote UI entry the test kit
  * uses, without loading the Worker's Remote DOM polyfill into jsdom.
  *
- * This unit builds the Shelf and owns the document Frame handoff: opening a
- * Document stores `currentDocumentId` in memory, opens the Frame page, and
- * creates one session per mounted Frame. The session answers the Frame's reads,
- * saves its Reading Position, and receives the reading Commands. Imports only
- * `@/plugin-sdk` and this Plugin's files.
+ * The Shelf is a Frame page of its own (#944), so this unit no longer draws it:
+ * it creates one session per mounted Frame, chooses the view and the in-Frame
+ * Shelf from the Frame's source, and hands every open to the sessions. Opening
+ * a Document stores `currentDocumentId` in memory and shows it in the mounted
+ * Frame; only a cold open, with no Frame to switch, navigates the host to the
+ * Document page. Imports only `@/plugin-sdk` and this Plugin's files.
  */
 
 import type { ComponentType } from "react";
@@ -27,14 +28,16 @@ import type { FrameCommandId } from "./frame-protocol";
 import { format, translate } from "./i18n";
 import { createShelfService, type ShelfService } from "./library";
 import { createReaderSession, type ReaderSession } from "./session";
-import { SHELF_PAGE_ID, createShelfPage } from "./shelf-page";
 import { SHELF_KEY, type ShelfEntry, parseShelf, sortShelf } from "./shelf";
 
 /** The Shelf page id, exactly as the manifest declares it. */
-export { SHELF_PAGE_ID };
+export const SHELF_PAGE_ID = "reader";
 
 /** The whole-page Frame's id, exactly as the manifest declares it. */
 export const DOCUMENT_PAGE_ID = "document";
+
+/** The Shelf Frame source the manifest declares; the host hands it back with the mount. */
+export const SHELF_FRAME_SRC = "assets/ui/shelf.html";
 
 /** The Command-local ids the manifest declares. */
 export const OPEN_READER = "openReader";
@@ -189,6 +192,7 @@ export function startReader(client: PluginClient, serve: ReaderServe): void {
     .catch(() => {});
 
   client.onFrame((frame: PluginFrame) => {
+    const shelfInFrame = frame.src === SHELF_FRAME_SRC;
     const session = createReaderSession({
       client,
       library,
@@ -197,20 +201,27 @@ export function startReader(client: PluginClient, serve: ReaderServe): void {
       port: frame.port,
       returnLabel: () => runtime.returnLabel,
       navigateToShelf: () => leaveReading(client, runtime.returnLabel),
+      view: shelfInFrame ? "shelf" : "document",
+      shelfInFrame,
+      openEntry: (entry) => openReaderEntry(client, library, runtime, entry),
+      onViewChange: (view) => {
+        // Back to the in-Frame Shelf means no Document is open, so a later
+        // mount must not restore the one just left.
+        if (view === "shelf") {
+          runtime.currentEntry = null;
+          runtime.currentDocumentId = null;
+        }
+      },
       onDispose: () => {
         runtime.sessions.delete(frame.id);
       },
     });
     runtime.sessions.set(frame.id, session);
     session.start();
-    if (runtime.currentEntry === null) void restoreCurrentDocument(runtime, library);
+    // A Shelf Frame shows the Shelf, never the Document storage says was open.
+    if (!shelfInFrame && runtime.currentEntry === null)
+      void restoreCurrentDocument(runtime, library);
   });
-
-  function openDocument(entry: ShelfEntry): void {
-    void openEntry(client, library, runtime, entry);
-  }
-
-  const ShelfPage = createShelfPage({ client, library, onOpenDocument: openDocument });
 
   /**
    * The `documents` Canvas Reference source (#838): every Document on the Shelf
@@ -263,13 +274,13 @@ export function startReader(client: PluginClient, serve: ReaderServe): void {
     async open(id) {
       const entry = (await readShelf()).find((candidate) => candidate.id === id);
       if (entry === undefined) return "missing";
-      await openEntry(client, library, runtime, entry);
+      await openReaderEntry(client, library, runtime, entry);
       return "opened";
     },
   };
 
   serve(client, {
-    pages: { [SHELF_PAGE_ID]: ShelfPage },
+    pages: {},
     onHostRequest: canvasReferenceRequests({ documents: documentSource }, (method, params) =>
       handleHostRequest(client, library, runtime, method, params)
     ),
@@ -283,11 +294,12 @@ function broadcastCommand(runtime: ReaderRuntime, id: FrameCommandId): void {
 
 /**
  * Shows `entry` in every mounted Frame, remembers it as the Document to reopen,
- * and opens the Document page. Every way in (the Shelf, Open file…, a drop) ends
- * here, so switching saves the current Reading Position the same way.
+ * and opens the Document page only when no Frame is mounted to switch. Every
+ * way in (the in-Frame Shelf, Open file…, a drop, a Canvas Reference) ends here,
+ * so switching saves the current Reading Position the same way.
  */
-async function openEntry(
-  client: PluginClient,
+export async function openReaderEntry(
+  client: Pick<PluginClient, "navigation">,
   library: Pick<ShelfService, "rememberCurrent">,
   runtime: Pick<ReaderRuntime, "currentDocumentId" | "currentEntry" | "sessions">,
   entry: ShelfEntry
@@ -296,7 +308,9 @@ async function openEntry(
   runtime.currentDocumentId = entry.id;
   void library.rememberCurrent(entry.id);
   for (const session of runtime.sessions.values()) session.setEntry(entry);
-  await client.navigation.openPage({ pageId: DOCUMENT_PAGE_ID });
+  if (runtime.sessions.size === 0) {
+    await client.navigation.openPage({ pageId: DOCUMENT_PAGE_ID });
+  }
 }
 
 /**
@@ -321,7 +335,7 @@ async function handleDrop(
       skipped += 1;
     }
   }
-  if (first !== null) await openEntry(client, library, runtime, first);
+  if (first !== null) await openReaderEntry(client, library, runtime, first);
   if (skipped > 0) {
     const key = skipped === 1 ? "shelf.dropSkipped.one" : "shelf.dropSkipped.other";
     await client.notifications.show({
@@ -374,7 +388,7 @@ async function runReaderCommand(
   if (id === OPEN_FILE) {
     try {
       const entry = await library.openFileFlow();
-      if (entry !== null) await openEntry(client, library, runtime, entry);
+      if (entry !== null) await openReaderEntry(client, library, runtime, entry);
     } catch {
       await client.notifications.show({
         variant: "error",

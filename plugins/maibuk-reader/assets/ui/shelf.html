@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Reader Shelf</title>
+    <link rel="stylesheet" href="tokens.css" />
+    <link rel="stylesheet" href="kit.css" />
+    <link rel="stylesheet" href="reader.css" />
+  </head>
+  <body data-view="shelf">
+    <!-- The Preact app (#942) draws the toolbar; reader.js mounts into this
+         root. The search bar, Contents panel, message area, and password
+         prompt are portals the same app draws into their own roots. -->
+    <div id="app-root"></div>
+
+    <!-- The Preact app (#942) draws the search bar into this root. -->
+    <div id="search-root"></div>
+
+    <div id="body">
+      <!-- The Preact app (#942) draws the Contents panel into this root. -->
+      <div id="contents-root"></div>
+
+      <main id="viewer">
+        <div id="stage" hidden>
+          <canvas id="page"></canvas>
+          <div id="text-layer" class="textLayer"></div>
+        </div>
+        <!-- The Preact app portals the message area and password prompt in here,
+             beside the stage, so they keep their place in the viewer. -->
+      </main>
+    </div>
+
+    <script src="sanitizer.js"></script>
+    <script src="reader.js"></script>
+  </body>
+</html>

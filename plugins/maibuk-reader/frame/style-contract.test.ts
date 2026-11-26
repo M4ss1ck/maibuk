@@ -36,7 +36,9 @@ const kitSources = readdirSync(kitDir)
 
 const productionSources = [
   { name: "assets/ui/reader.html", source: read("assets", "ui", "reader.html") },
+  { name: "assets/ui/shelf.html", source: read("assets", "ui", "shelf.html") },
   { name: "assets/ui/kit.css", source: read("assets", "ui", "kit.css") },
+  { name: "assets/ui/reader.css", source: read("assets", "ui", "reader.css") },
   { name: "frame/app.tsx", source: read("frame", "app.tsx") },
   ...kitSources,
 ];
@@ -65,6 +67,34 @@ describe("layer order", () => {
     const rule = css.match(/\.kit-popover--nested[^{]*\{[^}]*\}/);
     expect(rule?.[0]).toContain(".kit-menu--nested");
     expect(rule?.[0]).toMatch(/z-index:\s*calc\(var\(--z-dialog\)\s*\+\s*1\)/);
+  });
+});
+
+describe("Frame shells", () => {
+  const shells = ["reader.html", "shelf.html"].map((name) => ({
+    name,
+    html: read("assets", "ui", name),
+  }));
+
+  it.each(shells)("links the shared Frame stylesheet and keeps $name free of styles", ({
+    name,
+    html,
+  }) => {
+    expect(html, name).toContain('<link rel="stylesheet" href="reader.css" />');
+    expect(html, name).not.toContain("<style>");
+  });
+
+  it("ships the Shelf page as the same shell, marked for the view it draws", () => {
+    const documentShell = read("assets", "ui", "reader.html");
+    const shelfShell = read("assets", "ui", "shelf.html");
+    const withoutView = (source: string) =>
+      source.replace(/<title>[^<]*<\/title>/, "").replace(/<body[^>]*>/, "");
+
+    expect(documentShell).toContain('<body data-view="document">');
+    expect(shelfShell).toContain('<body data-view="shelf">');
+    expect(shelfShell).toContain("<title>Reader Shelf</title>");
+    // One shell, two views: no style or script may drift between the pages.
+    expect(withoutView(shelfShell)).toBe(withoutView(documentShell));
   });
 });
 

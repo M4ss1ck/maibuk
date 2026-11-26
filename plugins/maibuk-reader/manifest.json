@@ -108,7 +108,13 @@
       }
     ],
     "pages": [
-      { "id": "reader", "title": "Reader", "command": "openReader", "hideTitle": true },
+      {
+        "id": "reader",
+        "title": "Reader",
+        "command": "openReader",
+        "frame": "assets/ui/shelf.html",
+        "hideTitle": true
+      },
       {
         "id": "document",
         "title": "Reading",

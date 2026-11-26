@@ -17,7 +17,6 @@ import {
   positionKey,
   progressSummary,
   reattach,
-  relativeTimestamp,
   removeEntry,
   sniffFormat,
   sortShelf,
@@ -342,17 +341,6 @@ describe("progressSummary()", () => {
     expect(progressSummary({ fraction: 0.423 })).toEqual({ kind: "percent", percent: 42 });
     expect(progressSummary({})).toBeNull();
     expect(progressSummary(null)).toBeNull();
-  });
-});
-
-describe("relativeTimestamp()", () => {
-  const now = Date.UTC(2026, 0, 20, 12);
-
-  it("names a relative time in the language it is given", () => {
-    expect(relativeTimestamp("en", now, now)).toBe("now");
-    expect(relativeTimestamp("es", now, now)).toBe("ahora");
-    expect(relativeTimestamp("en", now - 3 * 24 * 60 * 60 * 1000, now)).toBe("3 days ago");
-    expect(relativeTimestamp("es", now - 3 * 24 * 60 * 60 * 1000, now)).toBe("hace 3 días");
   });
 });
 

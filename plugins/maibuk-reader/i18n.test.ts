@@ -26,8 +26,8 @@ describe("runtime catalog", () => {
   });
 
   it("looks strings up in the signaled language, following the base subtag", () => {
-    expect(translate("en", "shelf.openFile")).toBe("Open file…");
-    expect(translate("es", "shelf.openFile")).toBe("Abrir archivo…");
+    expect(translate("en", "shelf.loading")).toBe("Loading your Shelf…");
+    expect(translate("es", "shelf.loading")).toBe("Cargando tu estante…");
     expect(translate("es-MX", "shelf.open")).toBe("Abrir");
     expect(translate("fr", "shelf.open")).toBe("Open");
   });

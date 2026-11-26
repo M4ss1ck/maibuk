@@ -406,36 +406,3 @@ export function progressSummary(progress: ShelfProgress | null): ProgressSummary
   }
   return null;
 }
-
-const MINUTE = 60;
-const HOUR = 60 * MINUTE;
-const DAY = 24 * HOUR;
-const MONTH = 30 * DAY;
-const YEAR = 365 * DAY;
-
-/**
- * The last-read time as a localized relative phrase ("yesterday", "hace 3
- * días"), through `Intl.RelativeTimeFormat`.
- */
-export function relativeTimestamp(
-  language: string,
-  timestamp: number,
-  now: number = Date.now()
-): string {
-  const seconds = Math.round((timestamp - now) / 1000);
-  const magnitude = Math.abs(seconds);
-  const [value, unit] =
-    magnitude < MINUTE
-      ? [0, "second"]
-      : magnitude < HOUR
-        ? [Math.round(seconds / MINUTE), "minute"]
-        : magnitude < DAY
-          ? [Math.round(seconds / HOUR), "hour"]
-          : magnitude < 26 * DAY
-            ? [Math.round(seconds / DAY), "day"]
-            : magnitude < 11 * MONTH
-              ? [Math.round(seconds / MONTH), "month"]
-              : [Math.round(seconds / YEAR), "year"];
-  const formatter = new Intl.RelativeTimeFormat(language, { numeric: "auto" });
-  return formatter.format(value, unit as Intl.RelativeTimeFormatUnit);
-}
