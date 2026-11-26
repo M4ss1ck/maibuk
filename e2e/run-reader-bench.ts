@@ -33,6 +33,8 @@ import {
   startPreview,
   sweepStalePreviews,
 } from "./preview-server.mjs";
+import { buildPluginFrameEntry } from "../scripts/build-plugin";
+import { shelfOpenMessage } from "./reader-bench/shelf-open";
 import { buildWeb, root, wallClock } from "./run-steps.mjs";
 
 const MEASUREMENTS_ROOT = "e2e/.output/reader-bench";
@@ -268,6 +270,16 @@ async function main(): Promise<number> {
     const dir = resolve(root, MEASUREMENTS_ROOT, String(started));
     rmSync(dir, { recursive: true, force: true });
     mkdirSync(dir, { recursive: true });
+    // The Shelf paint spec serves the Frame from Reader's source folder, so its
+    // bundle is built from this checkout first, as the Vitest setup does.
+    const readerDir = resolve(root, "plugins/maibuk-reader");
+    await buildPluginFrameEntry({
+      sourceDir: readerDir,
+      manifestPath: join(readerDir, "manifest.json"),
+    });
+    // The Shelf paint spec reads the Worker's open message from here.
+    const shelfOpen = join(fixtureDir, "shelf-open.json");
+    writeFileSync(shelfOpen, JSON.stringify(shelfOpenMessage()));
     const code = await runSpecs(
       options,
       dir,
@@ -277,7 +289,11 @@ async function main(): Promise<number> {
         "reader-bench/document.bench.ts",
         "reader-bench/shelf.bench.ts",
       ],
-      { READER_BENCH_PDF: fixtures.pdf, READER_BENCH_EPUB: fixtures.epub },
+      {
+        READER_BENCH_PDF: fixtures.pdf,
+        READER_BENCH_EPUB: fixtures.epub,
+        READER_BENCH_SHELF_OPEN: shelfOpen,
+      },
       "e2e/playwright.reader-bench.config.ts"
     );
     const typingAfter = runTyping("after reading");

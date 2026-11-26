@@ -49,7 +49,11 @@ export async function openReader(page: Page): Promise<void> {
   await pressUntilFocused(page, "ArrowDown", navOption(page, "Reader"), { max: 20 });
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
-  await expect(page.getByRole("heading", { name: "Shelf", level: 2 })).toBeVisible();
+  // The Shelf draws inside the reader page's Frame (#944), headed "All
+  // Documents" on the Wide toolbar (#945).
+  await expect(
+    documentFrame(page).getByRole("heading", { name: /^(All Documents|Shelf)$/, level: 1 })
+  ).toBeVisible();
 }
 
 /** Leaves Reader for the Library with the sidebar, as the reader spec does. */

@@ -1,46 +1,29 @@
 // Shelf paint (issue #945, #917's budget): how long the Reader Frame takes to
 // draw a 500-Document Shelf, from the Worker's `open` message to the first
 // frame painted after the grid's cells exist. The Frame is the built
-// `shelf.html` and `reader.js`, served from the web build's Plugin folder, with
+// `shelf.html` and `reader.js`, served from Reader's source folder after the runner builds its bundle, with
 // a MessageChannel standing in for the host's Frame port, so the number is the
 // Frame's own work: the query, the virtual window, and the first layout and
 // paint. Two warm-up loads are thrown away, then each sample is a fresh page.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
 import type { Page } from "@playwright/test";
-import { frameShelfState, frameShelfLabels } from "../../plugins/maibuk-reader/frame-shelf";
-import { frameLabels } from "../../plugins/maibuk-reader/session";
-import type { ShelfEntry } from "../../plugins/maibuk-reader/shelf";
 import { expect, test } from "../support/test";
 import { benchOut } from "./support";
 
 const WARM_UPS = 2;
 const SAMPLES = Number(process.env.READER_BENCH_SAMPLES ?? 10);
-const DOCUMENTS = 500;
 const ORIGIN = "https://reader-bench.local";
-const FORMATS = ["pdf", "epub", "mobi", "azw3", "fb2", "cbz"] as const;
-
-/** The web build's copy of the Frame files, or the source folder after `pnpm build:plugins`. */
+/** Reader's Frame files; the runner builds `reader.js` into this folder first. */
 function frameDir(): string {
-  const built = resolve("dist/plugins/maibuk-reader/assets/ui");
-  if (existsSync(join(built, "reader.js"))) return built;
   return resolve("plugins/maibuk-reader/assets/ui");
 }
 
-/** 500 Shelf rows with every status, format, and a spread of dates and progress. */
-function shelfRows(): ShelfEntry[] {
-  return Array.from({ length: DOCUMENTS }, (_, index) => ({
-    id: `bench-${index}`,
-    grant: `grant-${index}`,
-    fingerprint: `${index}:bench`,
-    title: `Bench Document ${index + 1}`,
-    author: `Author ${(index % 37) + 1}`,
-    format: FORMATS[index % FORMATS.length],
-    lastReadAt: 1_000_000 - index,
-    addedAt: 500_000 + ((index * 7919) % DOCUMENTS),
-    progress: index % 5 === 0 ? null : { fraction: (index % 100) / 100 },
-    state: "ok",
-  }));
+/** The Worker's `open` message the runner wrote (see `shelf-open.ts`). */
+function openMessage(): { shelf: { entries: unknown[] } } {
+  const path = process.env.READER_BENCH_SHELF_OPEN;
+  if (!path) throw new Error("READER_BENCH_SHELF_OPEN is required; run `pnpm bench:reader`");
+  return JSON.parse(readFileSync(path, "utf8"));
 }
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -84,11 +67,17 @@ async function paintOnce(page: Page, open: unknown): Promise<{ paintMs: number; 
   return page.evaluate(async (message) => {
     const bench = (window as unknown as { __bench: { port: MessagePort; ready: Promise<void> } })
       .__bench;
-    await bench.ready;
+    const ready = await Promise.race([
+      bench.ready.then(() => true),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 15_000)),
+    ]);
+    if (!ready) throw new Error("the Shelf Frame never posted ready");
     const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     const started = performance.now();
     bench.port.postMessage(message);
+    const deadline = started + 30_000;
     while (document.querySelectorAll('#shelf-root [role="gridcell"]').length === 0) {
+      if (performance.now() > deadline) throw new Error("the Shelf drew no cell in 30 s");
       await frame();
     }
     // The frame after the cells exist is the one that paints them.
@@ -103,19 +92,8 @@ async function paintOnce(page: Page, open: unknown): Promise<{ paintMs: number; 
 test("paints a 500-Document Shelf", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await prepare(page);
-  const open = {
-    kind: "open",
-    view: "shelf",
-    entry: null,
-    position: null,
-    settings: { fontSize: 100, lineWidth: "medium", pdfFit: "width", pdfLayout: "single" },
-    size: 0,
-    labels: frameLabels("en"),
-    shelf: frameShelfState("en", shelfRows()),
-    shelfLabels: frameShelfLabels("en"),
-    language: "en",
-    appearance: { colorScheme: "light", eink: false },
-  };
+  const open = openMessage();
+  const documents = open.shelf.entries.length;
 
   const paintMs: number[] = [];
   let cells = 0;
@@ -127,9 +105,9 @@ test("paints a 500-Document Shelf", async ({ page }) => {
   }
   // Virtualized: far fewer cells than Documents are drawn.
   expect(cells).toBeGreaterThan(0);
-  expect(cells).toBeLessThan(DOCUMENTS);
+  expect(cells).toBeLessThan(documents);
   writeFileSync(
     resolve(benchOut(), "shelf.json"),
-    `${JSON.stringify({ documents: DOCUMENTS, warmUps: WARM_UPS, paintMs, cells }, null, 1)}\n`
+    `${JSON.stringify({ documents, warmUps: WARM_UPS, paintMs, cells }, null, 1)}\n`
   );
 });
