@@ -285,7 +285,7 @@ describe("reader bench budget", () => {
     expect(result.unmeasured).toContain("the editor typing run before or after reading is missing");
   });
 
-  it("passes the Shelf paint gate when the median paint is within 1000 ms", () => {
+  it("passes the Shelf paint gate when the median paint is under 1000 ms", () => {
     // The absolute target from #917, not a delta: a 500-Document Shelf paints in under 1 s.
     const result = checkReaderBench(
       report({
@@ -310,6 +310,15 @@ describe("reader bench budget", () => {
     expect(row?.ok).toBe(false);
     expect(row?.value).toBe(1200);
     expect(result.ok).toBe(false);
+  });
+
+  it("fails the Shelf paint gate at exactly 1000 ms, since the target is under 1 s", () => {
+    const result = checkReaderBench(
+      report({
+        shelf: { documents: 500, warmUps: 2, paintMs: [990, 1000, 1010], cells: 40 },
+      })
+    );
+    expect(result.gates.find((gate) => gate.id === "shelf-paint")?.ok).toBe(false);
   });
 
   it("marks the run unmeasured when the Shelf paint run is missing", () => {

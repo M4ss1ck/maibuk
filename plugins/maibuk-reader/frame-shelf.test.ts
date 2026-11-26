@@ -13,9 +13,14 @@ import {
   shelfRemovalCopy,
   shelfTone,
 } from "./frame-shelf";
-import { sortSummary } from "./frame/shelf-options";
+import {
+  DEFAULT_SHELF_VIEW as FRAME_DEFAULT_SHELF_VIEW,
+  defaultDescending as frameDefaultDescending,
+  SHELF_SORTS,
+  sortSummary,
+} from "./frame/shelf-options";
 import { fill } from "./frame/shelf-query";
-import { DEFAULT_SHELF_VIEW } from "./shelf";
+import { DEFAULT_SHELF_VIEW, defaultDescending } from "./shelf";
 import { shelfEntry } from "./test-support";
 
 const LABELS_EN = {
@@ -449,5 +454,16 @@ describe("shelfRemovalCopy()", () => {
       body: "Se eliminan también: 3 marcadores y 12 subrayados (5 con notas).",
       stats: "Se conservan las estadísticas de lectura. El archivo permanece en tu dispositivo.",
     });
+  });
+});
+
+describe("the Frame's copy of the Shelf defaults", () => {
+  // The Frame bundle cannot import the Worker's shelf.ts, so it keeps its own
+  // copy; a fresh Reader must draw the view the Worker stores.
+  it("matches the Worker's default view and each sort's default direction", () => {
+    expect(FRAME_DEFAULT_SHELF_VIEW).toEqual(DEFAULT_SHELF_VIEW);
+    for (const sort of SHELF_SORTS) {
+      expect(frameDefaultDescending(sort), sort).toBe(defaultDescending(sort));
+    }
   });
 });

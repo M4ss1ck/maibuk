@@ -11,7 +11,13 @@
 import type { FrameShelfEntry, FrameShelfLabels, FrameShelfState } from "./frame-protocol";
 import { format, translate, type ReaderKey } from "./i18n";
 import { baseLanguage } from "./language";
-import { progressFraction, progressSummary, shelfStatus, type ShelfEntry } from "./shelf";
+import {
+  progressFraction,
+  progressSummary,
+  type ShelfEntry,
+  type ShelfStatus,
+  shelfStatus,
+} from "./shelf";
 
 /** The generated cover's eight tone pairs. */
 const TONE_COUNT = 8;
@@ -33,13 +39,13 @@ export function shelfTone(id: string): number {
  * The progress line for one row, localized: New until the Document is opened,
  * then its page or percentage (0% before a position is saved).
  */
-function progressText(language: string, entry: ShelfEntry): string {
-  if (shelfStatus(entry) === "finished") {
+function progressText(language: string, entry: ShelfEntry, status: ShelfStatus): string {
+  if (status === "finished") {
     return translate(language, "shelf.frame.finishedLabel");
   }
   const summary = progressSummary(entry.progress);
   if (summary === null) {
-    return shelfStatus(entry) === "new"
+    return status === "new"
       ? translate(language, "shelf.frame.newLabel")
       : format(translate(language, "shelf.progress.percent"), { percent: 0 });
   }
@@ -57,10 +63,10 @@ function progressText(language: string, entry: ShelfEntry): string {
  * knows nothing yet. A page out of its count becomes the same whole percentage
  * the text does not spell out; a finished Document is always full.
  */
-function progressPercent(entry: ShelfEntry): number | null {
+function progressPercent(entry: ShelfEntry, status: ShelfStatus): number | null {
   const progress = entry.progress;
-  if (shelfStatus(entry) === "new") return null;
-  if (shelfStatus(entry) === "finished") return 100;
+  if (status === "new") return null;
+  if (status === "finished") return 100;
   const summary = progressSummary(progress);
   if (summary === null) return 0;
   if (summary.kind === "page") {
@@ -88,6 +94,7 @@ function statusText(language: string, entry: ShelfEntry): string | null {
 
 /** One Shelf row as the Frame draws it. */
 export function frameShelfEntry(language: string, entry: ShelfEntry): FrameShelfEntry {
+  const status = shelfStatus(entry);
   return {
     id: entry.id,
     title: entry.title,
@@ -95,11 +102,11 @@ export function frameShelfEntry(language: string, entry: ShelfEntry): FrameShelf
     format: entry.format,
     state: entry.state ?? "ok",
     ...(entry.coverDataUrl === undefined ? {} : { coverDataUrl: entry.coverDataUrl }),
-    progressText: progressText(language, entry),
-    progressPercent: progressPercent(entry),
+    progressText: progressText(language, entry, status),
+    progressPercent: progressPercent(entry, status),
     statusText: statusText(language, entry),
     tone: shelfTone(entry.id),
-    status: shelfStatus(entry),
+    status,
     lastReadAt: entry.lastReadAt,
     addedAt: entry.addedAt,
     progress: progressFraction(entry.progress),
