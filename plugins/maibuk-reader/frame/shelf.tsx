@@ -286,6 +286,10 @@ export function Shelf({
   const searchInput = useRef<HTMLInputElement | null>(null);
   const searchButton = useRef<HTMLButtonElement | null>(null);
   const searchReturn = useRef<HTMLElement | null>(null);
+  /** The Document whose row the search was opened from, found again by id. */
+  const searchReturnId = useRef<string | null>(null);
+  /** A Document whose row takes focus once a render draws it. */
+  const pendingFocusId = useRef<string | null>(null);
   const focusSearchNext = useRef(false);
   const sortAnchor = useRef<HTMLSpanElement | null>(null);
   const filtersAnchor = useRef<HTMLSpanElement | null>(null);
@@ -351,9 +355,27 @@ export function Shelf({
     const index = pendingFocus.current;
     if (index === null) return;
     const cell = cells.current.get(index);
-    if (!cell) return;
+    // A row drawn by an earlier render may linger, unmounted, in the map.
+    if (!cell?.isConnected) return;
     pendingFocus.current = null;
     cell.focus();
+  });
+
+  // The same, by Document: the renders before the one that draws its row may
+  // still list other Documents at that index, so the row is matched by id.
+  useLayoutEffect(() => {
+    const id = pendingFocusId.current;
+    if (id === null) return;
+    const index = entries.findIndex((candidate) => candidate.id === id);
+    if (index === -1) return;
+    const cell = cells.current.get(index);
+    if (cell?.isConnected && cell.dataset.documentId === id) {
+      pendingFocusId.current = null;
+      setActiveIndex(index);
+      cell.focus();
+      return;
+    }
+    reveal(Math.floor(index / columns));
   });
 
   /** Scrolls the body until row `row` is fully on screen. */
@@ -414,6 +436,10 @@ export function Shelf({
     const active = document.activeElement;
     if (active instanceof HTMLElement && active !== searchInput.current) {
       searchReturn.current = active;
+      // Read from the cell itself: the `/` listener holds an older render's
+      // rows, whose order may differ from what is drawn.
+      searchReturnId.current =
+        active.closest<HTMLElement>("[data-document-id]")?.dataset.documentId ?? null;
     }
     if (searchInput.current) {
       searchInput.current.focus();
@@ -457,9 +483,17 @@ export function Shelf({
   /** Returns focus where it was before the search took it, or to the Shelf. */
   const returnFromSearch = () => {
     const target = searchReturn.current;
+    const targetId = searchReturnId.current;
     searchReturn.current = null;
+    searchReturnId.current = null;
     if (target?.isConnected && target !== searchInput.current) {
       target.focus();
+      return;
+    }
+    // A search that matched nothing unmounted the row: focus it again by its
+    // Document once the cleared Shelf draws it.
+    if (targetId !== null && all.some((candidate) => candidate.id === targetId)) {
+      pendingFocusId.current = targetId;
       return;
     }
     if (entries.length > 0) {
@@ -475,15 +509,18 @@ export function Shelf({
     if (event.key !== "Escape") return;
     event.preventDefault();
     event.stopPropagation();
+    // Return first: the cleared Shelf may draw synchronously, and a row it
+    // brings back must already be the one waiting for focus.
+    returnFromSearch();
     setSearch("");
     if (!wide) setSearchOpen(false);
-    returnFromSearch();
   };
 
   const closeSearch = () => {
     setSearch("");
     setSearchOpen(false);
     searchReturn.current = null;
+    searchReturnId.current = null;
     // The header swaps back; its Search button is where the author was.
     requestAnimationFrame(() => searchButton.current?.focus());
   };
@@ -708,6 +745,7 @@ export function Shelf({
     // biome-ignore lint/a11y/useSemanticElements: the Shelf is a cover grid, not tabular data; a WAI-ARIA grid is the right pattern.
     <div
       key={entry.id}
+      data-document-id={entry.id}
       ref={(node) => {
         if (node) cells.current.set(index, node);
         else cells.current.delete(index);

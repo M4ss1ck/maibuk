@@ -998,6 +998,33 @@ describe("Shelf views, sort, and filters (#945)", () => {
     expect(drawnTitles()).toEqual(["Dune", "Emma"]);
   });
 
+  it("hands focus back to the row it came from when Escape clears a search that matched nothing", async () => {
+    setWidth(1200);
+    const user = userEvent.setup({ delay: null });
+    const dune = entry({ id: "doc-1", title: "Dune", author: "Frank Herbert" });
+    const emmaEntry = entry({ id: "doc-2", title: "Emma", author: "Jane Austen" });
+    const container = await mount(<Harness entries={[dune, emmaEntry]} />);
+    // The rows reorder with no layer opening in between, so the Shelf's `/`
+    // listener still holds the first render's order.
+    await act(() => {
+      render(<Harness entries={[emmaEntry, dune]} />, container);
+    });
+    expect(drawnTitles()).toEqual(["Emma", "Dune"]);
+    const emma = gridCell("Emma") as HTMLElement;
+    act(() => emma.focus());
+
+    await press(() => user.keyboard("/"));
+    expect(screen.getByRole("searchbox", { name: "Search the Shelf" })).toHaveFocus();
+    await press(() => user.keyboard("zz"));
+    // No row is drawn while nothing matches, so the row focus came from is gone.
+    expect(screen.getByRole("heading", { name: "No Documents match" })).toBeInTheDocument();
+    expect(gridCell("Emma")).toBeUndefined();
+
+    await press(() => user.keyboard("{Escape}"));
+    expect(drawnTitles()).toEqual(["Emma", "Dune"]);
+    expect(gridCell("Emma")).toHaveFocus();
+  });
+
   it("draws a list row with its title, author and format, and a compact row with its title, author and format", async () => {
     setWidth(390);
     const list = await mount(<Harness settings={view({ layout: "list" })} />);
