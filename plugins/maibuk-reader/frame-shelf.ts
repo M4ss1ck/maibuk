@@ -11,7 +11,7 @@
 import type { FrameShelfEntry, FrameShelfLabels, FrameShelfState } from "./frame-protocol";
 import { format, translate, type ReaderKey } from "./i18n";
 import { baseLanguage } from "./language";
-import { progressSummary, type ShelfEntry } from "./shelf";
+import { progressFraction, progressSummary, shelfStatus, type ShelfEntry } from "./shelf";
 
 /** The generated cover's eight tone pairs. */
 const TONE_COUNT = 8;
@@ -31,11 +31,10 @@ export function shelfTone(id: string): number {
 
 /** The progress line for one row, localized, or New when the Shelf knows nothing yet. */
 function progressText(language: string, entry: ShelfEntry): string {
-  const progress = entry.progress;
-  if (progress !== null && progress.fraction === 1) {
+  if (shelfStatus(entry) === "finished") {
     return translate(language, "shelf.frame.finishedLabel");
   }
-  const summary = progressSummary(progress);
+  const summary = progressSummary(entry.progress);
   if (summary === null) return translate(language, "shelf.frame.newLabel");
   if (summary.kind === "page") {
     return format(translate(language, "shelf.progress.page"), {
@@ -54,7 +53,7 @@ function progressText(language: string, entry: ShelfEntry): string {
 function progressPercent(entry: ShelfEntry): number | null {
   const progress = entry.progress;
   if (progress === null) return null;
-  if (progress.fraction === 1) return 100;
+  if (shelfStatus(entry) === "finished") return 100;
   const summary = progressSummary(progress);
   if (summary === null) return null;
   if (summary.kind === "page") {
@@ -93,6 +92,10 @@ export function frameShelfEntry(language: string, entry: ShelfEntry): FrameShelf
     progressPercent: progressPercent(entry),
     statusText: statusText(language, entry),
     tone: shelfTone(entry.id),
+    status: shelfStatus(entry),
+    lastReadAt: entry.lastReadAt,
+    addedAt: entry.addedAt,
+    progress: progressFraction(entry.progress),
   };
 }
 

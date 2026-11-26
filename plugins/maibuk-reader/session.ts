@@ -58,9 +58,11 @@ import {
   clampSettings,
   positionKey,
   sortShelf,
+  withProgress,
   type ReaderSettings,
   type ShelfEntry,
   type ShelfProgress,
+  type ShelfViewSettings,
 } from "./shelf";
 import { translate } from "./i18n";
 
@@ -242,6 +244,36 @@ function joinChunks(chunks: readonly Uint8Array[], total: number): Uint8Array {
   return joined;
 }
 
+/**
+ * Writes the Shelf's view with at most one write in flight. While one runs, only
+ * the newest settings wait, and they are written once the running write settles,
+ * so a burst of view changes costs at most two writes. A failed write is dropped
+ * (the author keeps the Shelf as they see it), and the next settings still write.
+ */
+function coalescedShelfViewWriter(
+  save: (settings: ShelfViewSettings) => Promise<void>
+): (settings: ShelfViewSettings) => void {
+  let pending: ShelfViewSettings | null = null;
+  let writing = false;
+  async function drain(): Promise<void> {
+    writing = true;
+    while (pending !== null) {
+      const next = pending;
+      pending = null;
+      try {
+        await save(next);
+      } catch {
+        // A refused write leaves the stored view as it was; the author keeps the Shelf as shown.
+      }
+    }
+    writing = false;
+  }
+  return (settings) => {
+    pending = settings;
+    if (!writing) void drain();
+  };
+}
+
 /** Creates one session for one Frame port. Nothing starts until {@link ReaderSession.start}. */
 export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
   const { client, library, port } = deps;
@@ -264,6 +296,8 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
    * `back` awaits the tail so the Shelf draws the Position it just left.
    */
   let pendingPosition: Promise<void> = Promise.resolve();
+  /** Stores the Shelf's view as the Frame reports it; at most one write runs at a time. */
+  const writeShelfView = coalescedShelfViewWriter((settings) => library.saveShelfView(settings));
 
   function post(message: unknown, transfer?: Transferable[]): void {
     if (disposed) return;
@@ -367,8 +401,10 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     const shelfView = view === "shelf";
     const currentEntry = shelfView ? null : entry;
     let shelf: FrameShelfState;
+    let savedView: ShelfViewSettings | null = null;
     if (shelfView) {
       shelf = { status: "loading", entries: [] };
+      savedView = await library.loadShelfView();
     } else {
       try {
         shelf = frameShelfState(language, await library.loadShelf());
@@ -387,6 +423,7 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
       labels: frameLabels(language, deps.returnLabel()),
       shelf,
       shelfLabels: frameShelfLabels(language),
+      ...(savedView === null ? {} : { shelfView: savedView }),
       language,
       appearance,
     };
@@ -546,9 +583,7 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
       const shelf = await library.loadShelf();
       const next = sortShelf(
         shelf.map((candidate) =>
-          candidate.id === current.id
-            ? { ...candidate, progress, lastReadAt: Date.now() }
-            : candidate
+          candidate.id === current.id ? withProgress(candidate, progress, Date.now()) : candidate
         )
       );
       await library.saveShelf(next);
@@ -749,6 +784,9 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
         return;
       case "shelf-select":
         selectedDocumentId = message.documentId;
+        return;
+      case "shelf-view":
+        writeShelfView(message.settings);
         return;
       case "shelf-command":
         void handleShelfCommand(message);

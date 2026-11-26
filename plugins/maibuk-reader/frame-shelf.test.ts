@@ -118,6 +118,52 @@ describe("frameShelfEntry()", () => {
     expect(wholeWithPages.progressPercent).toBe(100);
   });
 
+  it("carries the status, the dates, and the progress fraction for the Frame's sort and filter", () => {
+    const mapped = frameShelfEntry(
+      "en",
+      shelfEntry({
+        id: "doc-1",
+        grant: "g1",
+        lastReadAt: 5_000,
+        addedAt: 2_000,
+        progress: { page: 3, pageCount: 10 },
+      })
+    );
+    expect(mapped).toMatchObject({
+      status: "reading",
+      lastReadAt: 5_000,
+      addedAt: 2_000,
+      progress: 0.3,
+    });
+  });
+
+  it("reads a Document at 99.5% as Finished, at 100 percent", () => {
+    const mapped = frameShelfEntry(
+      "en",
+      shelfEntry({ id: "doc-1", grant: "g1", progress: { fraction: 0.995 } })
+    );
+    expect(mapped.status).toBe("finished");
+    expect(mapped.progressText).toBe("Finished");
+    expect(mapped.progressPercent).toBe(100);
+    expect(mapped.progress).toBe(0.995);
+  });
+
+  it("reads the last page of a Document as Finished", () => {
+    const mapped = frameShelfEntry(
+      "en",
+      shelfEntry({ id: "doc-1", grant: "g1", progress: { page: 12, pageCount: 12 } })
+    );
+    expect(mapped.status).toBe("finished");
+    expect(mapped.progressText).toBe("Finished");
+    expect(mapped.progressPercent).toBe(100);
+  });
+
+  it("reads a Document nothing is known about as new, with no progress", () => {
+    const mapped = frameShelfEntry("en", shelfEntry({ id: "doc-1", grant: "g1", progress: null }));
+    expect(mapped.status).toBe("new");
+    expect(mapped.progress).toBe(0);
+  });
+
   it("says Missing for both a Missing Document and a permission re-request", () => {
     expect(
       frameShelfEntry("en", shelfEntry({ id: "doc-1", grant: "g1", state: "missing" })).statusText
@@ -182,6 +228,10 @@ describe("frameShelfEntry()", () => {
       progressPercent: null,
       statusText: null,
       tone: shelfTone("doc-1"),
+      status: "new",
+      lastReadAt: 1_000,
+      addedAt: 1_000,
+      progress: 0,
     });
     expect(mapped).not.toHaveProperty("grant");
     expect(mapped).not.toHaveProperty("fingerprint");

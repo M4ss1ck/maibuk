@@ -16,9 +16,11 @@ import {
   FINGERPRINT_WINDOW,
   SETTINGS_KEY,
   SHELF_KEY,
+  SHELF_VIEW_KEY,
   SUPPORTED_EXTENSIONS,
   bookmarksKey,
   clampSettings,
+  clampShelfView,
   fingerprint,
   formatFromName,
   highlightsKey,
@@ -35,6 +37,7 @@ import {
   type DocumentState,
   type ReaderSettings,
   type ShelfEntry,
+  type ShelfViewSettings,
 } from "./shelf";
 
 /** The SDK surface the Shelf service needs. */
@@ -129,6 +132,10 @@ export interface ShelfService {
   saveShelf(shelf: readonly ShelfEntry[]): Promise<void>;
   loadSettings(): Promise<ReaderSettings>;
   saveSettings(settings: ReaderSettings): Promise<void>;
+  /** The Shelf's remembered view; a missing, malformed, or unreadable value falls back to the default. */
+  loadShelfView(): Promise<ShelfViewSettings>;
+  /** Stores the Shelf's view, clamped to what the Shelf can show. A failed write throws. */
+  saveShelfView(settings: ShelfViewSettings): Promise<void>;
   /** Picks a file, fingerprints it, and adds it to the Shelf or finds its Document. */
   openFileFlow(): Promise<ShelfEntry | null>;
   /**
@@ -195,6 +202,18 @@ export function createShelfService(client: ReaderClient): ShelfService {
 
     async saveSettings(settings): Promise<void> {
       await client.storage.set({ key: SETTINGS_KEY, value: clampSettings(settings) });
+    },
+
+    async loadShelfView(): Promise<ShelfViewSettings> {
+      try {
+        return clampShelfView(await client.storage.get({ key: SHELF_VIEW_KEY }));
+      } catch {
+        return clampShelfView(null);
+      }
+    },
+
+    async saveShelfView(settings): Promise<void> {
+      await client.storage.set({ key: SHELF_VIEW_KEY, value: clampShelfView(settings) });
     },
 
     async openFileFlow(): Promise<ShelfEntry | null> {

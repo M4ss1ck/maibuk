@@ -11,12 +11,15 @@ import { createTestHost } from "@/features/plugins/test-kit";
 import { describe, expect, it } from "vitest";
 import { createShelfService, type ReaderClient } from "./library";
 import {
+  DEFAULT_SHELF_VIEW,
   SHELF_KEY,
+  SHELF_VIEW_KEY,
   bookmarksKey,
   fingerprint,
   highlightsKey,
   positionKey,
   type ShelfEntry,
+  type ShelfViewSettings,
 } from "./shelf";
 import { pdfBytes, readerManifest, shelfEntry } from "./test-support";
 
@@ -228,6 +231,21 @@ describe("shelveGrant()", () => {
       expect(shelf).toHaveLength(1);
       expect(shelf[0].grant).toBe(picked.grant);
       await expect(host.files.grants()).resolves.toHaveLength(1);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("stamps addedAt with the same moment as lastReadAt, the import", async () => {
+    const { host, storage, client, library } = setup();
+    try {
+      host.files.queuePick({ name: "Dune.pdf", bytes: pdfBytes("an imported PDF") });
+      const picked = await client.files.pick({ extensions: ["pdf"] });
+      if (picked === null) throw new Error("no File Grant to shelve");
+      const entry = await library.shelveGrant(picked);
+      expect(entry.addedAt).toBe(entry.lastReadAt);
+      const shelf = storage.get(SHELF_KEY) as ShelfEntry[];
+      expect(shelf[0].addedAt).toBe(shelf[0].lastReadAt);
     } finally {
       await host.stop();
     }
@@ -609,5 +627,82 @@ describe("the current Document", () => {
     await library.rememberCurrent("doc-1");
     await library.removeFromShelf("doc-1");
     expect(await library.loadCurrent()).toBeNull();
+  });
+});
+
+describe("the Shelf view", () => {
+  const CHOSEN: ShelfViewSettings = {
+    layout: "list",
+    coverSize: "large",
+    sort: "title",
+    descending: false,
+    formats: ["pdf", "epub"],
+    statuses: ["reading"],
+    search: "Dune",
+  };
+
+  it("saves the view and reads the same view back", async () => {
+    const { host, storage, library } = setup();
+    try {
+      await library.saveShelfView(CHOSEN);
+      expect(storage.get(SHELF_VIEW_KEY)).toEqual(CHOSEN);
+      await expect(library.loadShelfView()).resolves.toEqual(CHOSEN);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("clamps a malformed stored view field by field", async () => {
+    const { host, storage, library } = setup();
+    try {
+      storage.set(SHELF_VIEW_KEY, {
+        layout: "hologram",
+        coverSize: "huge",
+        sort: "nonsense",
+        descending: "yes",
+        formats: ["pdf", "pdf", "docx"],
+        statuses: ["finished", "bogus"],
+        search: "x".repeat(300),
+      });
+      await expect(library.loadShelfView()).resolves.toEqual({
+        layout: "grid",
+        coverSize: "medium",
+        sort: "recent",
+        descending: true,
+        formats: ["pdf"],
+        statuses: ["finished"],
+        search: "x".repeat(200),
+      });
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("falls back to the default view when the stored read fails", async () => {
+    const client = {
+      files: {},
+      storage: {
+        get: async () => {
+          throw new Error("storage is down");
+        },
+        set: async () => null,
+      },
+    } as unknown as ReaderClient;
+    await expect(createShelfService(client).loadShelfView()).resolves.toEqual(DEFAULT_SHELF_VIEW);
+  });
+
+  it("lets a failed save reach the caller", async () => {
+    const client = {
+      files: {},
+      storage: {
+        get: async () => null,
+        set: async () => {
+          throw new Error("storage is down");
+        },
+      },
+    } as unknown as ReaderClient;
+    await expect(createShelfService(client).saveShelfView(CHOSEN)).rejects.toThrow(
+      "storage is down"
+    );
   });
 });
