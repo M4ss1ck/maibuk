@@ -359,7 +359,7 @@ const documentFrame = (page: Page) => page.frameLocator('[data-plugin-frame="pag
 const pageIndicator = (page: Page) => documentFrame(page).locator("#page-indicator");
 /** The Shelf's own heading and its rows, drawn inside that Frame. */
 const shelfHeading = (page: Page) =>
-  documentFrame(page).getByRole("heading", { name: "Shelf", level: 1 });
+  documentFrame(page).getByRole("heading", { name: /^(All Documents|Shelf)$/, level: 1 });
 const shelfRow = (page: Page, title: string) =>
   documentFrame(page).getByRole("gridcell", { name: new RegExp(title) });
 
