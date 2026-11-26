@@ -6,10 +6,12 @@
  */
 
 import { describe, expect, it } from "vitest";
-import type { FrameShelfEntry, ShelfViewSettings } from "./types";
+import type { FrameCollection, FrameShelfEntry, ShelfViewSettings } from "./types";
 import {
+  activeCollection,
   fill,
   COVER_WIDTHS,
+  collectionCounts,
   filterShelf,
   fold,
   gridColumns,
@@ -336,5 +338,152 @@ describe("gridColumns", () => {
 
   it("exposes the three cover widths", () => {
     expect(COVER_WIDTHS).toEqual({ small: 88, medium: 128, large: 176 });
+  });
+});
+
+describe("Collections (#946)", () => {
+  const shelves: FrameCollection[] = [
+    { id: "c1", name: "Classics" },
+    { id: "c2", name: "Summer" },
+    { id: "c3", name: "Empty" },
+  ];
+  const rows = [
+    entry({ id: "a", title: "Alpha", collections: ["c1"] }),
+    entry({ id: "b", title: "Beta", collections: ["c1", "c2"] }),
+    entry({ id: "c", title: "Gamma" }),
+    entry({ id: "d", title: "Delta", format: "pdf", collections: ["c2"] }),
+  ];
+
+  describe("activeCollection", () => {
+    it("returns the Collection the settings name", () => {
+      expect(activeCollection({ collection: "c2" }, shelves)).toEqual({ id: "c2", name: "Summer" });
+    });
+
+    it("returns null when no Collection is set", () => {
+      expect(activeCollection({ collection: null }, shelves)).toBeNull();
+    });
+
+    it("returns null for a stale id that names no Collection", () => {
+      expect(activeCollection({ collection: "gone" }, shelves)).toBeNull();
+    });
+  });
+
+  describe("filterShelf by Collection", () => {
+    it("keeps only the Documents filed in the active Collection", () => {
+      expect(titles(filterShelf(rows, settings({ collection: "c1" }), shelves))).toEqual([
+        "Alpha",
+        "Beta",
+      ]);
+    });
+
+    it("keeps nothing for a Collection with no Documents in it", () => {
+      expect(titles(filterShelf(rows, settings({ collection: "c3" }), shelves))).toEqual([]);
+    });
+
+    it("ignores a stale id and keeps everything", () => {
+      expect(titles(filterShelf(rows, settings({ collection: "gone" }), shelves))).toEqual([
+        "Alpha",
+        "Beta",
+        "Gamma",
+        "Delta",
+      ]);
+    });
+
+    it("keeps everything when no Collection is set", () => {
+      expect(titles(filterShelf(rows, settings({ collection: null }), shelves))).toEqual([
+        "Alpha",
+        "Beta",
+        "Gamma",
+        "Delta",
+      ]);
+    });
+
+    it("applies the Collection and the format filter together", () => {
+      expect(
+        titles(filterShelf(rows, settings({ collection: "c2", formats: ["epub"] }), shelves))
+      ).toEqual(["Beta"]);
+      expect(
+        titles(filterShelf(rows, settings({ collection: "c2", formats: ["pdf"] }), shelves))
+      ).toEqual(["Delta"]);
+      expect(
+        titles(filterShelf(rows, settings({ collection: "c1", formats: ["pdf"] }), shelves))
+      ).toEqual([]);
+    });
+  });
+
+  describe("queryShelf by Collection", () => {
+    it("sorts the rows the Collection keeps", () => {
+      const sorted = queryShelf(
+        rows,
+        settings({ collection: "c2", sort: "title", descending: true }),
+        "en",
+        shelves
+      );
+      expect(titles(sorted)).toEqual(["Delta", "Beta"]);
+    });
+  });
+
+  describe("hasActiveFilters by Collection", () => {
+    it("is true when a known Collection is set", () => {
+      expect(hasActiveFilters(settings({ collection: "c1" }), shelves)).toBe(true);
+    });
+
+    it("is false for a stale id alone", () => {
+      expect(hasActiveFilters(settings({ collection: "gone" }), shelves)).toBe(false);
+      expect(hasActiveFilters(settings({ collection: "gone" }))).toBe(false);
+    });
+
+    it("is false when no Collection is set", () => {
+      expect(hasActiveFilters(settings({ collection: null }), shelves)).toBe(false);
+    });
+  });
+
+  describe("collectionCounts", () => {
+    it("counts zero for a Collection no entry lists", () => {
+      expect(collectionCounts(rows, shelves).get("c3")).toBe(0);
+    });
+
+    it("counts one entry", () => {
+      const counts = collectionCounts([entry({ collections: ["c1"] })], shelves);
+      expect(counts).toEqual(
+        new Map([
+          ["c1", 1],
+          ["c2", 0],
+          ["c3", 0],
+        ])
+      );
+    });
+
+    it("counts several entries per Collection", () => {
+      expect(collectionCounts(rows, shelves)).toEqual(
+        new Map([
+          ["c1", 2],
+          ["c2", 2],
+          ["c3", 0],
+        ])
+      );
+    });
+
+    it("does not count an id that names no Collection", () => {
+      const counts = collectionCounts([entry({ collections: ["gone", "c2"] })], shelves);
+      expect(counts.has("gone")).toBe(false);
+      expect(counts.get("c2")).toBe(1);
+      expect(counts.size).toBe(3);
+    });
+
+    it("counts an entry once even if it lists an id twice", () => {
+      const counts = collectionCounts([entry({ collections: ["c1", "c1"] })], shelves);
+      expect(counts.get("c1")).toBe(1);
+    });
+
+    it("is zero for every Collection when no entry is filed", () => {
+      expect(collectionCounts([entry({})], shelves)).toEqual(
+        new Map([
+          ["c1", 0],
+          ["c2", 0],
+          ["c3", 0],
+        ])
+      );
+    });
   });
 });

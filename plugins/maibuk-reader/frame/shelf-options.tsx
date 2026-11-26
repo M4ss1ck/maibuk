@@ -11,9 +11,10 @@
 
 import type { TargetedKeyboardEvent } from "preact";
 import { useRef } from "preact/hooks";
-import { Chip, Icon, Segmented, type SegmentedOption } from "./kit";
+import { Button, Chip, Icon, Segmented, type SegmentedOption } from "./kit";
 import { fill } from "./shelf-query";
 import type {
+  FrameCollection,
   FrameShelfLabels,
   ShelfCoverSize,
   ShelfLayout,
@@ -53,9 +54,9 @@ export function defaultShelfView(): ShelfViewSettings {
   return { ...DEFAULT_SHELF_VIEW, formats: [], statuses: [] };
 }
 
-/** The settings with filters and search cleared; view and sort stay. */
+/** The settings with filters, search, and the Collection cleared; view and sort stay. */
 export function clearFilters(settings: ShelfViewSettings): ShelfViewSettings {
-  return { ...settings, formats: [], statuses: [], search: "" };
+  return { ...settings, formats: [], statuses: [], search: "", collection: null };
 }
 
 /** The settings with `sort` chosen, in that sort's own starting direction. */
@@ -366,7 +367,18 @@ export function ShelfOptions({
   settings,
   onChange,
   part = "all",
-}: ShelfOptionsControlProps & { part?: ShelfOptionsPart }) {
+  collection = null,
+  pickerOpen = false,
+  onCollectionPicker,
+}: ShelfOptionsControlProps & {
+  part?: ShelfOptionsPart;
+  /** The Collection the Shelf is narrowed to, or null for Any Collection (#946). */
+  collection?: FrameCollection | null;
+  /** Whether the Collection picker this section opens is showing. */
+  pickerOpen?: boolean;
+  /** Opens the Collection picker from its button; omitted draws no Collection section. */
+  onCollectionPicker?: (anchor: HTMLElement) => void;
+}) {
   const all = part === "all";
   return (
     <div class="shelf-options">
@@ -393,6 +405,24 @@ export function ShelfOptions({
           <Section label={labels.format}>
             <FormatChips labels={labels} settings={settings} onChange={onChange} />
           </Section>
+          {onCollectionPicker === undefined ? null : (
+            <Section label={labels.collection}>
+              <Button
+                class="shelf-options__picker"
+                aria-haspopup="dialog"
+                aria-expanded={pickerOpen}
+                aria-label={fill(labels.collectionChip, {
+                  name: collection?.name ?? labels.anyCollection,
+                })}
+                onClick={(event) => onCollectionPicker(event.currentTarget)}
+              >
+                <span class="shelf-options__picker-text">
+                  {collection?.name ?? labels.anyCollection}
+                </span>
+                <Icon name="down" />
+              </Button>
+            </Section>
+          )}
         </>
       ) : null}
     </div>
