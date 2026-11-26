@@ -19,10 +19,17 @@ import {
 import { servePluginUi } from "@/plugin-sdk/ui-serve";
 import { format } from "./i18n";
 import en from "./locales/runtime/en.json";
-import { DOCUMENT_PAGE_ID, OPEN_READER, SHELF_PAGE_ID, startReader } from "./runtime";
+import {
+  DOCUMENT_PAGE_ID,
+  OPEN_READER,
+  SHELF_FRAME_SRC,
+  SHELF_PAGE_ID,
+  startReader,
+} from "./runtime";
 import {
   CURRENT_DOCUMENT_KEY,
   SHELF_KEY,
+  SHELF_VIEW_KEY,
   fingerprint,
   positionKey,
   type ShelfEntry,
@@ -462,6 +469,82 @@ describe("Reader Canvas Reference source", () => {
           id: "doc-1",
         })
       ).rejects.toThrow();
+    } finally {
+      await host.stop();
+    }
+  });
+});
+
+// The Shelf remembers its view, sort, filters, and search (#945): the Frame
+// sends each change through the Worker into Plugin storage, and the next Shelf
+// Frame opens with what was stored.
+describe("Reader Shelf view memory", () => {
+  /** Mounts a Shelf Frame, says it is ready, and collects what its session posts. */
+  function mountShelf(port: ReturnType<typeof frameAwarePort>, frameId: string) {
+    const frame = port.frame(frameId, SHELF_FRAME_SRC);
+    const messages: Record<string, unknown>[] = [];
+    frame.onmessage = (event) => messages.push(event.data as Record<string, unknown>);
+    frame.start();
+    frame.postMessage({ kind: "ready" });
+    return { frame, messages };
+  }
+
+  /** The `open` message the session posted to this Frame, once it has posted one. */
+  function openOf(messages: Record<string, unknown>[]): Record<string, unknown> | undefined {
+    return messages.find((message) => message.kind === "open");
+  }
+
+  it("remembers the Shelf's view, sort, filters, and search across a Frame reload (#945)", async () => {
+    const { host, storage, port } = hostFor();
+    const settings = {
+      layout: "compact",
+      coverSize: "large",
+      sort: "author",
+      descending: true,
+      formats: ["pdf"],
+      statuses: ["reading"],
+      search: "austen",
+    };
+    try {
+      const first = mountShelf(port, "frame-1");
+      await waitFor(() => expect(openOf(first.messages)).toBeDefined());
+
+      first.frame.postMessage({ kind: "shelf-view", settings });
+      await waitFor(() => expect(storage.get(SHELF_VIEW_KEY)).toEqual(settings));
+      first.frame.postMessage({ kind: "closed" });
+
+      const reloaded = mountShelf(port, "frame-2");
+      await waitFor(() => expect(openOf(reloaded.messages)).toBeDefined());
+      expect(openOf(reloaded.messages)?.shelfView).toEqual(settings);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("opens the Shelf with the clamped view when the stored value is malformed (#945)", async () => {
+    const storage = readerStorage();
+    storage.set(SHELF_VIEW_KEY, {
+      layout: "tiles",
+      coverSize: "large",
+      sort: "title",
+      descending: false,
+      formats: "pdf",
+      statuses: ["finished"],
+      search: "Dune",
+    });
+    const { host, port } = hostFor({ storage });
+    try {
+      const shelf = mountShelf(port, "frame-1");
+      await waitFor(() => expect(openOf(shelf.messages)).toBeDefined());
+      expect(openOf(shelf.messages)?.shelfView).toEqual({
+        layout: "grid",
+        coverSize: "large",
+        sort: "title",
+        descending: false,
+        formats: [],
+        statuses: ["finished"],
+        search: "Dune",
+      });
     } finally {
       await host.stop();
     }
