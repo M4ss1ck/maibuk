@@ -19,6 +19,7 @@
   --primary: var(--maibuk-color-primary);
   --pfg: var(--maibuk-color-primary-foreground);
   --danger: var(--maibuk-color-error-text);
+  --ok: var(--maibuk-color-success-text);
 
   /* A PDF page and its canvas draw on this surface, whatever the chrome. */
   --pdf-page: #ffffff;

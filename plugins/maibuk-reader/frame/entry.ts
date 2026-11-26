@@ -46,6 +46,7 @@ import { hooks, positionDebounceMs } from "./hooks";
 import { createMeta } from "./meta";
 import { createPdf, MAX_CACHED_PAGES } from "./pdf";
 import { createPosition } from "./position";
+import { clearFilters, defaultShelfView } from "./shelf-options";
 import { createFrameProtocol, errorCode, type FrameOpenMessage } from "./protocol";
 import type {
   Appearance,
@@ -356,6 +357,10 @@ let chrome: ChromeState = {
   shelfRemoval: null,
   menuDocumentId: null,
   focusDocumentId: null,
+  shelfView: defaultShelfView(),
+  language: "en",
+  shelfSearchRequest: 0,
+  shelfOptionsRequest: 0,
 };
 
 const chromeListeners = new Set<(state: ChromeState) => void>();
@@ -397,6 +402,18 @@ const bridge: FrameBridge = {
   },
   setFocusDocumentId(focusDocumentId) {
     publishChrome({ ...chrome, focusDocumentId });
+  },
+  setShelfView(shelfView) {
+    publishChrome({ ...chrome, shelfView });
+  },
+  setLanguage(nextLanguage) {
+    publishChrome({ ...chrome, language: nextLanguage });
+  },
+  requestShelfSearch() {
+    publishChrome({ ...chrome, shelfSearchRequest: chrome.shelfSearchRequest + 1 });
+  },
+  requestShelfOptions() {
+    publishChrome({ ...chrome, shelfOptionsRequest: chrome.shelfOptionsRequest + 1 });
   },
   setToolbar(toolbar) {
     publishChrome({ ...chrome, toolbar });
@@ -442,6 +459,11 @@ const bridge: FrameBridge = {
     },
     shelfRemove: (documentId) => {
       post({ kind: "shelf-remove", documentId });
+    },
+    shelfViewChange: (settings) => {
+      // The Frame draws the change at once; the Worker stores it for next time.
+      bridge.setShelfView(settings);
+      post({ kind: "shelf-view", settings });
     },
   },
 };
@@ -721,6 +743,8 @@ async function handleOpen(message: FrameOpenMessage) {
   bridge.setView(view);
   bridge.setShelf(message.shelf ?? { status: "loading", entries: [] });
   bridge.setShelfLabels(message.shelfLabels ?? null);
+  if (message.shelfView) bridge.setShelfView(message.shelfView);
+  bridge.setLanguage(language);
   bridge.setShelfNotice(null);
   bridge.setShelfRemoval(null);
   bridge.setMenuDocumentId(null);
@@ -1267,6 +1291,21 @@ function onPasswordSubmit(value: string) {
 
 /* Commands and keyboard ------------------------------------------------- */
 function runCommand(id: string) {
+  if (chrome.view === "shelf") {
+    // On the Shelf, Find searches the Shelf, as Ctrl or Cmd+F does there.
+    if (id === "findInDocument" || id === "searchShelf") {
+      bridge.requestShelfSearch();
+      return;
+    }
+    if (id === "showShelfOptions") {
+      bridge.requestShelfOptions();
+      return;
+    }
+    if (id === "clearShelfFilters") {
+      bridge.actions.shelfViewChange(clearFilters(chrome.shelfView));
+      return;
+    }
+  }
   if (chrome.view === "shelf" && READING_COMMANDS.has(id)) return;
   switch (id) {
     case "nextPage":
@@ -1538,6 +1577,7 @@ protocol.onOpen = handleOpen;
 protocol.onCommand = runCommand;
 protocol.onLanguage = (nextLanguage, labels, shelfLabels) => {
   language = nextLanguage;
+  bridge.setLanguage(nextLanguage);
   if (labels) providedLabels = labels;
   if (shelfLabels) bridge.setShelfLabels(shelfLabels);
   setLabels();

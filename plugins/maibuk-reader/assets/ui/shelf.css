@@ -113,10 +113,12 @@
 
 /* The grid is one row per line of covers; each row carries the number of
    128 px columns the Frame measured, so the covers stay exactly 128 x 192. */
+/* No gap between rows: the Frame measures each row's own height and adds its
+   stride, so the space between rows is the row's margin-bottom (see below). */
 .shelf__grid {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: 0;
 }
 
 .shelf__row {
@@ -337,11 +339,465 @@
     padding: var(--space-6);
   }
 
-  .shelf__grid {
-    gap: var(--space-6);
-  }
-
   .shelf__row {
     column-gap: var(--space-6);
   }
+}
+
+/* ---- Shelf in its Frame (#945): Wide and Narrow, the bars, and the options. ---- */
+
+/* Wide header bar, 56 px, with the search field beside the title. */
+.shelf__header--wide {
+  gap: 24px;
+  height: 56px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.shelf__spacer {
+  flex: 1;
+}
+
+/* The search field: a control on the card surface. Focus outlines the field. */
+.shelf-search {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 340px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--card);
+  color: var(--mfg);
+}
+
+.shelf-search svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.shelf-search:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.shelf-search__input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+}
+
+.shelf-search__input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+.shelf-search__key {
+  flex: none;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--mfg);
+  font-family: var(--type-code);
+  font-size: 11px;
+}
+
+/* Phone: the open search field takes the bar and draws a 2 px primary frame. */
+.shelf-search--open {
+  flex: 1;
+  width: auto;
+  height: 40px;
+  border: 2px solid var(--primary);
+}
+
+/* Phone header bar with the search field open. */
+.shelf__header--search {
+  gap: 4px;
+  height: 56px;
+  padding: 0 4px;
+}
+
+/* Toolbar: the heading, the count, and the Options button. */
+.shelf__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px 12px;
+}
+
+.shelf__toolbar .shelf__heading {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 28px;
+}
+
+.shelf__toolbar .shelf__count {
+  margin: 0;
+}
+
+.shelf__count {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The count of Options in effect, on the Options button. */
+.shelf__badge {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--fg);
+  color: var(--bg);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Filter chips: a wrapping row on Wide and Options; a scrolling strip on phone. */
+.shelf-chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 24px 16px;
+}
+
+.shelf-chips--scroll {
+  padding: 4px 16px 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.shelf-chips--scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.shelf-chips--scroll > * {
+  flex: none;
+}
+
+.shelf-chips--wrap {
+  flex-wrap: wrap;
+  padding: 0;
+}
+
+.shelf-chips__clear {
+  height: 32px;
+  color: var(--mfg);
+}
+
+/* Phone: the count and the sort summary above the grid. */
+.shelf__summary {
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  padding: 0 16px 10px;
+  color: var(--mfg);
+  font-size: 13px;
+}
+
+.shelf__result {
+  margin: 0;
+  padding: 8px 16px;
+  color: var(--mfg);
+  font-size: 13px;
+}
+
+/* Grid rows. The gap between rows is the row's margin-bottom; Wide spreads the
+   fixed-width covers across the row, Narrow fills its cells. */
+.shelf__grid--grid .shelf__row {
+  justify-content: space-between;
+  margin-bottom: 28px;
+}
+
+.shelf__row:has(> .shelf-card--narrow) {
+  column-gap: 12px;
+  margin-bottom: 18px;
+}
+
+/* Narrow cell: the cover fills the cell at 2:3; the Frame sets the cover's
+   width and height inline, so the override needs !important. */
+.shelf-card--narrow {
+  gap: 6px;
+}
+
+.shelf-card--narrow .shelf-card__cover {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 2 / 3;
+}
+
+.shelf-card--narrow .kit-cover {
+  /* biome-ignore lint/complexity/noImportantStyles: the Cover sets its size inline; only !important outranks it. */
+  width: 100% !important;
+  /* biome-ignore lint/complexity/noImportantStyles: the Cover sets its size inline; only !important outranks it. */
+  height: auto !important;
+  aspect-ratio: 2 / 3;
+}
+
+.shelf-card--narrow .shelf-card__title {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 15px;
+  -webkit-line-clamp: 2;
+}
+
+.shelf-card--narrow .shelf-card__meta {
+  color: var(--mfg);
+  font-size: 11px;
+  line-height: 14px;
+}
+
+/* Status line: New and Finished stand out in the foreground ink. Finished has
+   no success token in tokens.css, so it takes the foreground at 600. */
+.shelf-meta--new,
+.shelf-meta--finished {
+  color: var(--ok);
+  font-weight: 600;
+}
+
+.shelf-meta--new svg,
+.shelf-meta--finished svg {
+  width: 12px;
+  height: 12px;
+  margin-right: 2px;
+  vertical-align: -2px;
+}
+
+/* Search matches: the yellow highlight fill, inks inherited. */
+.shelf mark {
+  background: var(--highlight-yellow);
+  border-radius: 2px;
+  color: inherit;
+}
+
+/* List rows: one cell per row, a hairline between rows. */
+.shelf__row--line {
+  border-bottom: 1px solid var(--border);
+}
+
+.shelf-list {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 76px;
+  min-width: 0;
+  padding: 0 4px 0 16px;
+  cursor: default;
+}
+
+.shelf-list:focus-visible,
+.shelf-compact:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.shelf-list__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.shelf-list__title {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shelf-list__meta {
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--mfg);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shelf-list__progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.shelf-list__bar {
+  width: 96px;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--muted);
+}
+
+.shelf-list__status {
+  color: var(--mfg);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Compact rows: one line each, 44 px high. */
+.shelf-compact {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  min-width: 0;
+  padding: 0 16px;
+  font-size: 14px;
+  cursor: default;
+}
+
+.shelf-compact__text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shelf-compact__title {
+  font-weight: 500;
+}
+
+.shelf-compact__author {
+  color: var(--mfg);
+}
+
+.shelf-compact__format {
+  flex: none;
+  width: 36px;
+  color: var(--mfg);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.shelf-compact__meta {
+  flex: none;
+  width: 64px;
+  color: var(--mfg);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.shelf-row__missing {
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Options sheet: the segmented choices fill the width; sort and filter follow. */
+.shelf-options {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.shelf-options__label {
+  margin: 0 0 8px;
+  color: var(--mfg);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.shelf-segmented--fill {
+  display: flex;
+  width: 100%;
+}
+
+.shelf-segmented--fill .kit-segmented__option {
+  flex: 1;
+  height: 36px;
+}
+
+.shelf-sort {
+  border-top: 1px solid var(--border);
+}
+
+.shelf-sort__row {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+}
+
+.shelf-sort__option {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.shelf-sort__option[aria-checked="true"] {
+  font-weight: 600;
+}
+
+.shelf-sort__option:focus-visible,
+.shelf-sort__reverse:focus-visible {
+  outline: 2px solid var(--primary);
+}
+
+.shelf-sort__check {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  width: 20px;
+  color: var(--primary);
+}
+
+.shelf-sort__reverse {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--mfg);
+  font: inherit;
+  font-size: 13px;
+}
+
+.shelf-sort__reverse svg {
+  width: 16px;
+  height: 16px;
+}
+
+.shelf-options__footer {
+  margin: 20px 0 0;
+  color: var(--mfg);
+  font-size: 13px;
+}
+
+.shelf-popover {
+  box-sizing: border-box;
+  width: 320px;
+  padding: 16px;
+}
+
+.shelf-popover .shelf-options {
+  gap: 16px;
 }

@@ -64,6 +64,60 @@ function shelfLabelsFrom(catalog: Record<string, string>): FrameShelfLabels {
     finishedLabel: catalog["shelf.frame.finishedLabel"],
     documentActions: catalog["shelf.frame.documentActions"],
     dismiss: catalog["shelf.frame.dismiss"],
+    allDocuments: catalog["shelf.frame.allDocuments"],
+    shownOf: catalog["shelf.frame.shownOf"],
+    searchLabel: catalog["shelf.frame.searchLabel"],
+    searchPlaceholder: catalog["shelf.frame.searchPlaceholder"],
+    closeSearch: catalog["shelf.frame.closeSearch"],
+    clearSearch: catalog["shelf.frame.clearSearch"],
+    searchMatchesOne: catalog["shelf.frame.searchMatches.one"],
+    searchMatchesOther: catalog["shelf.frame.searchMatches.other"],
+    gridView: catalog["shelf.frame.gridView"],
+    listView: catalog["shelf.frame.listView"],
+    compactView: catalog["shelf.frame.compactView"],
+    viewOptions: catalog["shelf.frame.viewOptions"],
+    viewOptionsTitle: catalog["shelf.frame.viewOptionsTitle"],
+    reset: catalog["shelf.frame.reset"],
+    done: catalog["shelf.frame.done"],
+    layout: catalog["shelf.frame.layout"],
+    layoutLabel: catalog["shelf.frame.layoutLabel"],
+    layoutGrid: catalog["shelf.frame.layoutGrid"],
+    layoutList: catalog["shelf.frame.layoutList"],
+    layoutCompact: catalog["shelf.frame.layoutCompact"],
+    coverSize: catalog["shelf.frame.coverSize"],
+    coverSmall: catalog["shelf.frame.coverSmall"],
+    coverMedium: catalog["shelf.frame.coverMedium"],
+    coverLarge: catalog["shelf.frame.coverLarge"],
+    coverSmallShort: catalog["shelf.frame.coverSmallShort"],
+    coverMediumShort: catalog["shelf.frame.coverMediumShort"],
+    coverLargeShort: catalog["shelf.frame.coverLargeShort"],
+    sortBy: catalog["shelf.frame.sortBy"],
+    sortRecent: catalog["shelf.frame.sort.recent"],
+    sortTitle: catalog["shelf.frame.sort.title"],
+    sortAuthor: catalog["shelf.frame.sort.author"],
+    sortProgress: catalog["shelf.frame.sort.progress"],
+    sortAdded: catalog["shelf.frame.sort.added"],
+    reverseOrder: catalog["shelf.frame.reverseOrder"],
+    newestFirst: catalog["shelf.frame.newestFirst"],
+    oldestFirst: catalog["shelf.frame.oldestFirst"],
+    aToZ: catalog["shelf.frame.aToZ"],
+    zToA: catalog["shelf.frame.zToA"],
+    mostReadFirst: catalog["shelf.frame.mostReadFirst"],
+    leastReadFirst: catalog["shelf.frame.leastReadFirst"],
+    recentFirst: catalog["shelf.frame.recentFirst"],
+    filters: catalog["shelf.frame.filters"],
+    status: catalog["shelf.frame.status"],
+    format: catalog["shelf.frame.format"],
+    all: catalog["shelf.frame.all"],
+    statusNew: catalog["shelf.frame.status.new"],
+    statusReading: catalog["shelf.frame.status.reading"],
+    statusFinished: catalog["shelf.frame.status.finished"],
+    statusChip: catalog["shelf.frame.statusChip"],
+    formatChip: catalog["shelf.frame.formatChip"],
+    removeFilter: catalog["shelf.frame.removeFilter"],
+    clearFilters: catalog["shelf.frame.clearFilters"],
+    noMatch: catalog["shelf.frame.noMatch"],
+    remembered: catalog["shelf.frame.remembered"],
   };
 }
 
@@ -80,6 +134,13 @@ type WireShelfRow = FrameShelfEntry & {
   storageKey: string;
 };
 
+/**
+ * Each wire row is read a moment before the one built ahead of it: the Worker
+ * sends its rows most recently read first, so the Frame's default Recent sort
+ * keeps the order a test builds them in.
+ */
+let nextReadAt = 1_000_000;
+
 /** A wire row with every drawn field, and the three the Frame never sees. */
 function wireRow(overrides: Partial<FrameShelfEntry> & { id: string }): WireShelfRow {
   return {
@@ -92,7 +153,7 @@ function wireRow(overrides: Partial<FrameShelfEntry> & { id: string }): WireShel
     statusText: null,
     tone: 0,
     status: "reading",
-    lastReadAt: 0,
+    lastReadAt: nextReadAt--,
     addedAt: 0,
     progress: 0.42,
     grant: `grant-${overrides.id}`,
@@ -384,6 +445,18 @@ function shelfRowOf(cell: HTMLElement): number {
 }
 
 /** The Shelf's heading text. */
+/**
+ * Tabs from the Shelf's toolbar into its grid: the search field is the first
+ * stop on Wide, then the header and toolbar controls, then the grid's one cell.
+ */
+async function tabToGrid(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+  for (let step = 0; step < 12; step++) {
+    await user.tab();
+    if ((document.activeElement as HTMLElement | null)?.getAttribute("role") === "gridcell") return;
+  }
+  throw new Error("Tab never reached the Shelf grid");
+}
+
 function shelfHeading(): string {
   return el("shelf-root").querySelector(".shelf__heading")?.textContent ?? "";
 }
@@ -827,7 +900,7 @@ describe("the Shelf", () => {
     frame.open({ shelf: READY_SHELF, shelfLabels: SHELF_LABELS });
     await vi.waitFor(() => expect(shelfCells()).toHaveLength(3));
 
-    expect(shelfHeading()).toBe("Shelf");
+    expect(shelfHeading()).toBe("All Documents");
     expect(shelfCount()).toBe("3 Documents");
     expect(shelfCells().map(cellTitle)).toEqual(["Dune", "Emma", "Broken Spine"]);
     expect(shelfCell("Dune").querySelector(".shelf-card__meta")?.textContent).toBe(
@@ -873,12 +946,15 @@ describe("the Shelf", () => {
     await vi.waitFor(() => expect(shelfCells()).toHaveLength(8));
     const user = userEvent.setup();
 
-    // The Shelf's header button is the first tab stop, the grid's single cell
-    // the second: Tab reaches the grid, not each of its eight rows.
+    // The search field is the first tab stop on Wide and the grid's single
+    // cell follows the toolbar: Tab reaches the grid, not each of its rows.
     await user.tab();
-    expect(document.activeElement).toBe(shelfButton("Import"));
-    await user.tab();
+    expect(document.activeElement).toBe(
+      el("shelf-root").querySelector('input[aria-label="Search the Shelf"]')
+    );
+    await tabToGrid(user);
     expect(document.activeElement).toBe(shelfCells()[0]);
+    expect(el("shelf-root").querySelectorAll('[role="gridcell"][tabindex="0"]')).toHaveLength(1);
 
     await user.keyboard("{ArrowRight}");
     expect(document.activeElement).toBe(shelfCells()[1]);
@@ -930,8 +1006,7 @@ describe("the Shelf", () => {
     const backButton = el("back");
 
     const user = userEvent.setup();
-    await user.tab();
-    await user.tab();
+    await tabToGrid(user);
     expect(document.activeElement).toBe(shelfCell("Dune"));
     await user.keyboard("{Enter}");
     expect(posted("shelf-command")).toContainEqual({
@@ -961,8 +1036,7 @@ describe("the Shelf", () => {
     await vi.waitFor(() => expect(shelfCells()).toHaveLength(3));
     const user = userEvent.setup();
 
-    await user.tab();
-    await user.tab();
+    await tabToGrid(user);
     await user.keyboard("{ArrowRight}");
     expect(document.activeElement).toBe(shelfCell("Emma"));
     await user.keyboard("{Enter}");
@@ -1022,7 +1096,7 @@ describe("the Shelf", () => {
   it("imports files from the empty Shelf through the pick flow", async () => {
     frame = loadFrame("flowing.epub");
     frame.open({ shelf: { status: "ready", entries: [] }, shelfLabels: SHELF_LABELS });
-    await vi.waitFor(() => expect(shelfHeading()).toBe("Shelf"));
+    await vi.waitFor(() => expect(shelfHeading()).toBe("All Documents"));
 
     expect(shelfCount()).toBe("0 Documents");
     expect(el("shelf-root").textContent).toContain("Your Shelf is empty");
@@ -1037,7 +1111,7 @@ describe("the Shelf", () => {
   it("re-labels the Shelf copy on a language change", async () => {
     frame = loadFrame("flowing.epub");
     frame.open({ shelf: READY_SHELF, shelfLabels: SHELF_LABELS });
-    await vi.waitFor(() => expect(shelfHeading()).toBe("Shelf"));
+    await vi.waitFor(() => expect(shelfHeading()).toBe("All Documents"));
 
     frame.port.deliver({
       kind: "language",
@@ -1045,7 +1119,7 @@ describe("the Shelf", () => {
       labels: LABELS_ES,
       shelfLabels: SHELF_LABELS_ES,
     });
-    await vi.waitFor(() => expect(shelfHeading()).toBe("Estante"));
+    await vi.waitFor(() => expect(shelfHeading()).toBe("Todos los documentos"));
     expect(shelfButton("Importar").textContent).toBe("Importar");
     expect(shelfCount()).toBe("3 documentos");
   });
@@ -1064,8 +1138,7 @@ describe("the Shelf", () => {
 
     // Selecting Emma makes it the row the next Command acts on.
     const user = userEvent.setup();
-    await user.tab();
-    await user.tab();
+    await tabToGrid(user);
     await user.keyboard("{ArrowRight}");
     expect(posted("shelf-select")).toContainEqual({ kind: "shelf-select", documentId: "doc-2" });
 

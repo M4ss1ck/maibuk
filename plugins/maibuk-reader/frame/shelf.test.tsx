@@ -46,6 +46,60 @@ const LABELS: FrameShelfLabels = {
   finishedLabel: "Finished",
   documentActions: "Document actions",
   dismiss: "Dismiss",
+  allDocuments: "All Documents",
+  shownOf: "{{shown}} of {{total}}",
+  searchLabel: "Search the Shelf",
+  searchPlaceholder: "Search title or author",
+  closeSearch: "Close search",
+  clearSearch: "Clear search",
+  searchMatchesOne: '{{count}} Document matches "{{search}}" · {{layout}}',
+  searchMatchesOther: '{{count}} Documents match "{{search}}" · {{layout}}',
+  gridView: "Grid view",
+  listView: "List view",
+  compactView: "Compact view",
+  viewOptions: "View, sort and filter",
+  viewOptionsTitle: "View and filters",
+  reset: "Reset",
+  done: "Done",
+  layout: "View",
+  layoutLabel: "Shelf view",
+  layoutGrid: "Grid",
+  layoutList: "List",
+  layoutCompact: "Compact",
+  coverSize: "Cover size",
+  coverSmall: "Small",
+  coverMedium: "Medium",
+  coverLarge: "Large",
+  coverSmallShort: "S",
+  coverMediumShort: "M",
+  coverLargeShort: "L",
+  sortBy: "Sort by",
+  sortRecent: "Recent",
+  sortTitle: "Title",
+  sortAuthor: "Author",
+  sortProgress: "Progress",
+  sortAdded: "Date added",
+  reverseOrder: "Reverse order",
+  newestFirst: "Newest first",
+  oldestFirst: "Oldest first",
+  aToZ: "A to Z",
+  zToA: "Z to A",
+  mostReadFirst: "Most read first",
+  leastReadFirst: "Least read first",
+  recentFirst: "Recent first",
+  filters: "Filters",
+  status: "Status",
+  format: "Format",
+  all: "All",
+  statusNew: "New",
+  statusReading: "Reading",
+  statusFinished: "Finished",
+  statusChip: "Status: {{status}}",
+  formatChip: "Format: {{format}}",
+  removeFilter: "Remove filter {{filter}}",
+  clearFilters: "Clear filters",
+  noMatch: "No Documents match",
+  remembered: "Showing {{shown}} of {{total}}. Reader remembers these choices on this device.",
 };
 
 const REMOVAL: ShelfRemoval = {
@@ -66,8 +120,23 @@ function entry(overrides: Partial<FrameShelfEntry> = {}): FrameShelfEntry {
     progressPercent: 42,
     statusText: null,
     tone: 0,
+    status: "reading",
+    lastReadAt: 0,
+    addedAt: 0,
+    progress: 0.42,
     ...overrides,
   };
+}
+
+/**
+ * The Worker sends its rows most recently read first; a fixture that leaves
+ * `lastReadAt` unset gets times in its own order, so the default Recent sort
+ * keeps the order the test wrote.
+ */
+function workerOrder(entries: FrameShelfEntry[]): FrameShelfEntry[] {
+  return entries.map((row, index) =>
+    row.lastReadAt === 0 ? { ...row, lastReadAt: entries.length - index } : row
+  );
 }
 
 function many(count: number): FrameShelfEntry[] {
@@ -105,7 +174,7 @@ function Harness(props: HarnessProps) {
     <div>
       <button type="button">Before</button>
       <Shelf
-        state={{ status, entries }}
+        state={{ status, entries: workerOrder(entries) }}
         labels={LABELS}
         notice={notice}
         removal={removal}
@@ -209,13 +278,14 @@ afterEach(async () => {
 });
 
 describe("Shelf grid", () => {
-  it("draws 128 by 192 covers and three columns in Narrow", async () => {
-    setWidth(500);
+  it("fills three medium columns across a 390 px phone, as the artboard sizes them", async () => {
+    setWidth(390);
     const container = await mount(<Harness entries={many(7)} />);
 
+    // (390 - 2 x 16 gutter - 2 x 12 gap) / 3 columns, floored; the height keeps 2:3.
     const covers = Array.from(container.querySelectorAll<HTMLElement>(".kit-cover"));
-    expect(covers[0].style.width).toBe("128px");
-    expect(covers[0].style.height).toBe("192px");
+    expect(covers[0].style.width).toBe("111px");
+    expect(covers[0].style.height).toBe("167px");
 
     const rows = screen.getAllByRole("row");
     expect(rows).toHaveLength(3);
@@ -224,8 +294,8 @@ describe("Shelf grid", () => {
     expect(within(rows[2]).getAllByRole("gridcell")).toHaveLength(1);
   });
 
-  it("draws six columns in Wide and keeps the Worker order", async () => {
-    setWidth(1200);
+  it("draws six columns at the artboard's 1040 px Wide and keeps the Worker order", async () => {
+    setWidth(1040);
     await mount(
       <Harness
         entries={[
@@ -313,7 +383,7 @@ describe("Shelf grid", () => {
 
 describe("Shelf keyboard", () => {
   it("keeps one Tab stop and moves by cell with the arrow keys, Home, and End", async () => {
-    setWidth(500);
+    setWidth(390);
     const user = userEvent.setup({ delay: null });
     const selected: string[] = [];
     const commands: Array<[string, string | undefined]> = [];
