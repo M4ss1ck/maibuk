@@ -99,6 +99,21 @@ function SheetCase({ startOpen = false }: { startOpen?: boolean }) {
   );
 }
 
+function SheetWithoutDoneCase({ startOpen = false }: { startOpen?: boolean }) {
+  const [open, setOpen] = useState(startOpen);
+  return (
+    <div>
+      <button type="button" onClick={() => setOpen(true)}>
+        Open sheet
+      </button>
+      <Sheet open={open} onClose={() => setOpen(false)} title="Confirm removal">
+        <button type="button">Cancel</button>
+        <button type="button">Remove</button>
+      </Sheet>
+    </div>
+  );
+}
+
 function DialogCase({ startOpen = false }: { startOpen?: boolean }) {
   const [open, setOpen] = useState(startOpen);
   return (
@@ -183,6 +198,20 @@ describe("Sheet", () => {
     expect(rule?.[0]).toMatch(/border-radius:\s*var\(--radius-sheet\)/);
     expect(rule?.[0]).toMatch(/var\(--motion-sheet\)/);
     expect(sheetCss).toMatch(/\.kit-sheet__grab\s*\{[^}]*\}/);
+  });
+
+  it("leaves the Done button out when the caller supplies no label", async () => {
+    setWidth(500);
+    const user = userEvent.setup({ delay: null });
+    await mount(<SheetWithoutDoneCase startOpen />);
+
+    expect(screen.queryByRole("button", { name: "Done" })).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Confirm removal" })).toBeInTheDocument();
+    const cancel = screen.getByRole("button", { name: "Cancel" });
+    expect(document.activeElement).toBe(cancel);
+
+    await press(() => user.tab());
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Remove" }));
   });
 });
 

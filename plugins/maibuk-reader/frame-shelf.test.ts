@@ -33,6 +33,8 @@ const LABELS_EN = {
   cancel: "Cancel",
   newLabel: "New",
   finishedLabel: "Finished",
+  documentActions: "Document actions",
+  dismiss: "Dismiss",
 };
 
 const LABELS_ES = {
@@ -53,6 +55,8 @@ const LABELS_ES = {
   cancel: "Cancelar",
   newLabel: "Nuevo",
   finishedLabel: "Terminado",
+  documentActions: "Acciones del documento",
+  dismiss: "Cerrar",
 };
 
 describe("shelfTone()", () => {
@@ -75,6 +79,7 @@ describe("frameShelfEntry()", () => {
       shelfEntry({ id: "doc-1", grant: "g1", progress: { page: 34, pageCount: 210 } })
     );
     expect(mapped.progressText).toBe("p. 34 of 210");
+    expect(mapped.progressPercent).toBe(16);
   });
 
   it("maps a fraction to a whole percentage", () => {
@@ -83,28 +88,32 @@ describe("frameShelfEntry()", () => {
       shelfEntry({ id: "doc-1", grant: "g1", progress: { fraction: 0.423 } })
     );
     expect(mapped.progressText).toBe("42%");
+    expect(mapped.progressPercent).toBe(42);
   });
 
   it("says New when nothing is known yet", () => {
     const mapped = frameShelfEntry("en", shelfEntry({ id: "doc-1", grant: "g1", progress: null }));
     expect(mapped.progressText).toBe("New");
+    expect(mapped.progressPercent).toBeNull();
   });
 
   it("says Finished at a whole fraction, even beside a page count", () => {
-    expect(
-      frameShelfEntry("en", shelfEntry({ id: "doc-1", grant: "g1", progress: { fraction: 1 } }))
-        .progressText
-    ).toBe("Finished");
-    expect(
-      frameShelfEntry(
-        "en",
-        shelfEntry({
-          id: "doc-1",
-          grant: "g1",
-          progress: { page: 210, pageCount: 210, fraction: 1 },
-        })
-      ).progressText
-    ).toBe("Finished");
+    const whole = frameShelfEntry(
+      "en",
+      shelfEntry({ id: "doc-1", grant: "g1", progress: { fraction: 1 } })
+    );
+    expect(whole.progressText).toBe("Finished");
+    expect(whole.progressPercent).toBe(100);
+    const wholeWithPages = frameShelfEntry(
+      "en",
+      shelfEntry({
+        id: "doc-1",
+        grant: "g1",
+        progress: { page: 210, pageCount: 210, fraction: 1 },
+      })
+    );
+    expect(wholeWithPages.progressText).toBe("Finished");
+    expect(wholeWithPages.progressPercent).toBe(100);
   });
 
   it("says Missing for both a Missing Document and a permission re-request", () => {
@@ -168,6 +177,7 @@ describe("frameShelfEntry()", () => {
       state: "ok",
       coverDataUrl: "data:image/webp;base64,AAAA",
       progressText: "New",
+      progressPercent: null,
       statusText: null,
       tone: shelfTone("doc-1"),
     });

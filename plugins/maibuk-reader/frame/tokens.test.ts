@@ -326,12 +326,14 @@ describe("Cover", () => {
 });
 
 describe("Frame shells", () => {
-  it.each(shells)("links tokens.css, kit.css, then reader.css in $name", ({ html }) => {
+  it.each(shells)("links tokens.css, kit.css, reader.css, then shelf.css in $name", ({ html }) => {
     const tokens = html.indexOf('<link rel="stylesheet" href="tokens.css"');
     const kit = html.indexOf('<link rel="stylesheet" href="kit.css"');
     const reader = html.indexOf('<link rel="stylesheet" href="reader.css"');
+    const shelf = html.indexOf('<link rel="stylesheet" href="shelf.css"');
     expect(tokens).toBeGreaterThan(-1);
     expect(kit).toBeGreaterThan(tokens);
     expect(reader).toBeGreaterThan(kit);
+    expect(shelf).toBeGreaterThan(reader);
   });
 });

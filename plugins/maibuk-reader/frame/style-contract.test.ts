@@ -39,7 +39,9 @@ const productionSources = [
   { name: "assets/ui/shelf.html", source: read("assets", "ui", "shelf.html") },
   { name: "assets/ui/kit.css", source: read("assets", "ui", "kit.css") },
   { name: "assets/ui/reader.css", source: read("assets", "ui", "reader.css") },
+  { name: "assets/ui/shelf.css", source: read("assets", "ui", "shelf.css") },
   { name: "frame/app.tsx", source: read("frame", "app.tsx") },
+  { name: "frame/shelf.tsx", source: read("frame", "shelf.tsx") },
   ...kitSources,
 ];
 
@@ -81,6 +83,7 @@ describe("Frame shells", () => {
     html,
   }) => {
     expect(html, name).toContain('<link rel="stylesheet" href="reader.css" />');
+    expect(html, name).toContain('<link rel="stylesheet" href="shelf.css" />');
     expect(html, name).not.toContain("<style>");
   });
 

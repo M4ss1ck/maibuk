@@ -60,6 +60,7 @@ export interface FrameShelfEntry {
   state: "ok" | "missing" | "needs-permission" | "unreadable";
   coverDataUrl?: string;
   progressText: string;
+  progressPercent: number | null;
   statusText: string | null;
   tone: number;
 }
@@ -152,6 +153,8 @@ export interface FrameShelfLabels {
   cancel: string;
   newLabel: string;
   finishedLabel: string;
+  documentActions: string;
+  dismiss: string;
 }
 
 /** What the Shelf draws: its loading, ready, or error state and its rows. */

@@ -77,6 +77,8 @@ export interface FrameShelfEntry {
   coverDataUrl?: string;
   /** The localized progress line, already formatted. */
   progressText: string;
+  /** The whole percentage the drawn progress bar shows, or null when unknown. */
+  progressPercent: number | null;
   /** The localized state line, or null when the Document is readable. */
   statusText: string | null;
   /** One of the generated cover's eight tones, stable for the Document id. */
@@ -145,6 +147,8 @@ export interface FrameShelfLabels {
   cancel: string;
   newLabel: string;
   finishedLabel: string;
+  documentActions: string;
+  dismiss: string;
 }
 
 /** What the Shelf draws: its loading, ready, or error state and its rows. */

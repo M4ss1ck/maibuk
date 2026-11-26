@@ -34,6 +34,8 @@
   "shelf.frame.cancel": "Cancelar",
   "shelf.frame.newLabel": "Nuevo",
   "shelf.frame.finishedLabel": "Terminado",
+  "shelf.frame.documentActions": "Acciones del documento",
+  "shelf.frame.dismiss": "Cerrar",
   "viewer.back": "Volver al estante",
   "viewer.backTo": "Volver a {label}",
   "viewer.contents": "Contenido",

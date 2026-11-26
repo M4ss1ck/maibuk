@@ -47,6 +47,23 @@ function progressText(language: string, entry: ShelfEntry): string {
 }
 
 /**
+ * The whole percentage the drawn progress bar shows, or null when the Shelf
+ * knows nothing yet. A page out of its count becomes the same whole percentage
+ * the text does not spell out; a finished Document is always full.
+ */
+function progressPercent(entry: ShelfEntry): number | null {
+  const progress = entry.progress;
+  if (progress === null) return null;
+  if (progress.fraction === 1) return 100;
+  const summary = progressSummary(progress);
+  if (summary === null) return null;
+  if (summary.kind === "page") {
+    return Math.min(100, Math.max(0, Math.round((summary.page / summary.pageCount) * 100)));
+  }
+  return Math.min(100, Math.max(0, summary.percent));
+}
+
+/**
  * The state line for a file Reader cannot read, or null when it is readable.
  * The glossary calls a browser permission re-request a Missing Document too, so
  * `needs-permission` wears the same chip; an unreadable file says what it is.
@@ -73,6 +90,7 @@ export function frameShelfEntry(language: string, entry: ShelfEntry): FrameShelf
     state: entry.state ?? "ok",
     ...(entry.coverDataUrl === undefined ? {} : { coverDataUrl: entry.coverDataUrl }),
     progressText: progressText(language, entry),
+    progressPercent: progressPercent(entry),
     statusText: statusText(language, entry),
     tone: shelfTone(entry.id),
   };
@@ -103,6 +121,8 @@ export function frameShelfLabels(language: string): FrameShelfLabels {
     cancel: translate(language, "shelf.frame.cancel"),
     newLabel: translate(language, "shelf.frame.newLabel"),
     finishedLabel: translate(language, "shelf.frame.finishedLabel"),
+    documentActions: translate(language, "shelf.frame.documentActions"),
+    dismiss: translate(language, "shelf.frame.dismiss"),
   };
 }
 
