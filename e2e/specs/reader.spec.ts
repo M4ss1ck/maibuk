@@ -473,11 +473,30 @@ test.describe("Reader", () => {
     await expect(frame.getByText("2 Documents", { exact: true })).toBeVisible();
     // Opened once, so neither Document is new any more.
     await expect(frame.getByText("New", { exact: true })).toHaveCount(0);
+    await capture(page, "reader-shelf-grid-medium");
 
-    // View: the Shelf view radio group is one Tab stop; ArrowRight picks List.
-    const views = frame.getByRole("radiogroup", { name: "Shelf view" });
-    await tabTo(page, views.getByRole("radio", { name: "Grid" }), { max: 60 });
+    // Cover size: one Tab stop after the view switch; the arrows walk S, M, L.
+    const sizes = frame.getByRole("radiogroup", { name: "Cover size" });
+    await tabTo(page, sizes.getByRole("radio", { name: "Medium" }), { max: 60 });
+    await page.keyboard.press("ArrowLeft");
+    await expect(sizes.getByRole("radio", { name: "Small" })).toBeChecked();
+    await capture(page, "reader-shelf-grid-small");
     await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    await expect(sizes.getByRole("radio", { name: "Large" })).toBeChecked();
+    await capture(page, "reader-shelf-grid-large");
+    await page.keyboard.press("ArrowLeft");
+    await expect(sizes.getByRole("radio", { name: "Medium" })).toBeChecked();
+
+    // View: the Shelf view radio group is one Tab stop; ArrowRight picks List,
+    // then Compact, and ArrowLeft comes back to List.
+    const views = frame.getByRole("radiogroup", { name: "Shelf view" });
+    await tabTo(page, views.getByRole("radio", { name: "Grid" }), { max: 10, backwards: true });
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    await expect(views.getByRole("radio", { name: "Compact" })).toBeChecked();
+    await capture(page, "reader-shelf-compact");
+    await page.keyboard.press("ArrowLeft");
     await expect(views.getByRole("radio", { name: "List" })).toBeChecked();
     await expect(frame.getByRole("radiogroup", { name: "Cover size" })).toHaveCount(0);
     await capture(page, "reader-shelf-list");
@@ -491,6 +510,7 @@ test.describe("Reader", () => {
     await page.keyboard.press("Enter");
     const sorts = frame.getByRole("radiogroup", { name: "Sort by" });
     await expect(sorts.getByRole("radio", { name: "Recent" })).toBeVisible();
+    await capture(page, "reader-shelf-sort");
     await tabTo(page, sorts.getByRole("radio", { name: "Recent" }), { max: 10 });
     await page.keyboard.press("ArrowDown");
     await expect(sorts.getByRole("radio", { name: "Title" })).toBeChecked();
@@ -503,6 +523,7 @@ test.describe("Reader", () => {
     await tabTo(page, frame.getByRole("button", { name: /^Filters/ }), { max: 60 });
     await page.keyboard.press("Enter");
     await tabTo(page, frame.getByRole("button", { name: "PDF", exact: true }), { max: 20 });
+    await capture(page, "reader-shelf-filters");
     await page.keyboard.press("Space");
     await page.keyboard.press("Escape");
     await expect(frame.getByRole("button", { name: "Remove filter Format: PDF" })).toBeVisible();
@@ -523,6 +544,11 @@ test.describe("Reader", () => {
     await expect(search).toBeFocused();
     await page.keyboard.type("twelve");
     await expect(titles).toHaveText(["twelve-pages"]);
+    await capture(page, "reader-shelf-search");
+    // A search nothing matches says so in place of the rows.
+    await page.keyboard.type("zz");
+    await expect(frame.getByRole("heading", { name: "No Documents match" })).toBeVisible();
+    await capture(page, "reader-shelf-no-match");
     await page.keyboard.press("Escape");
     await expect(search).toHaveValue("");
     await expect(titles).toHaveText(["Dune", "twelve-pages"]);
@@ -582,6 +608,23 @@ test.describe("Reader", () => {
     await pageFrame(page).getByRole("button", { name: "Back to Shelf" }).tap();
     await expect(shelfRow(page, "twelve-pages")).toBeVisible();
     await capture(page, "reader-shelf-phone");
+
+    // The phone header's View, sort and filter button opens the options sheet.
+    await pageFrame(page).getByRole("button", { name: "View, sort and filter" }).tap();
+    const sheet = pageFrame(page).getByRole("dialog", { name: "View and filters" });
+    await expect(sheet).toBeVisible();
+    await capture(page, "reader-shelf-options-phone");
+    await sheet.getByRole("button", { name: "Done", exact: true }).tap();
+    await expect(sheet).toBeHidden();
+
+    // Its search button swaps the header for the search field.
+    await pageFrame(page).getByRole("button", { name: "Search the Shelf" }).tap();
+    const phoneSearch = pageFrame(page).getByRole("searchbox", { name: "Search the Shelf" });
+    await expect(phoneSearch).toBeFocused();
+    await page.keyboard.type("twelve");
+    await capture(page, "reader-shelf-search-phone");
+    await pageFrame(page).getByRole("button", { name: "Close search" }).tap();
+    await expect(phoneSearch).toHaveCount(0);
 
     // Touch reaches the Document menu through the row's More button.
     await pageFrame(page).getByRole("button", { name: "More for twelve-pages" }).tap();
