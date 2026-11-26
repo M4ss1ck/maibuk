@@ -1731,3 +1731,81 @@ describe("the Shelf's views, sort, filters, and search (#945)", () => {
     await vi.waitFor(() => expect(popover("Filters")).toBeDefined());
   });
 });
+
+describe("Collections in the Frame (#946)", () => {
+  const collections = [
+    { id: "col-1", name: "Research" },
+    { id: "col-2", name: "Spanish classics" },
+  ];
+
+  function filedRows(): WireShelfRow[] {
+    const rows = viewRows();
+    return rows.map((row, index) =>
+      index === 0
+        ? { ...row, collections: ["col-1"] }
+        : index === 1
+          ? { ...row, collections: ["col-2"] }
+          : row
+    );
+  }
+
+  it("draws the rail, filters by a Collection, and answers the host Collection Commands", async () => {
+    frame = loadFrame("flowing.epub");
+    frame.open({
+      shelf: { status: "ready", entries: filedRows(), collections },
+      shelfLabels: SHELF_LABELS,
+    });
+    const rail = () =>
+      el("shelf-root").querySelector<HTMLElement>('aside[aria-label="Collections"]');
+    await vi.waitFor(() => expect(rail()).not.toBeNull());
+    const user = userEvent.setup();
+
+    // A rail row filters the Shelf; the Worker is told to remember it.
+    const research = Array.from(rail()?.querySelectorAll("button") ?? []).find((button) =>
+      button.textContent?.startsWith("Research")
+    ) as HTMLButtonElement;
+    await user.click(research);
+    await vi.waitFor(() => expect(shelfCells()).toHaveLength(1));
+    const views = posted("shelf-view");
+    expect(views[views.length - 1].settings).toMatchObject({ collection: "col-1" });
+
+    // Rename Collection acts on the filtered one; Create posts the change.
+    frame.port.deliver({ kind: "command", id: "renameCollection" });
+    const field = () =>
+      document.querySelector<HTMLInputElement>('[role="dialog"] input[type="text"]');
+    await vi.waitFor(() => expect(field()?.value).toBe("Research"));
+    await user.clear(field() as HTMLInputElement);
+    await user.type(field() as HTMLInputElement, "Notes{Enter}");
+    await vi.waitFor(() =>
+      expect(posted("shelf-collection")).toContainEqual({
+        kind: "shelf-collection",
+        action: "rename",
+        collectionId: "col-1",
+        name: "Notes",
+      })
+    );
+
+    // New Collection opens the empty dialog from anywhere on the Shelf.
+    frame.port.deliver({ kind: "command", id: "newCollection" });
+    await vi.waitFor(() => expect(field()?.value).toBe(""));
+    await user.type(field() as HTMLInputElement, "Poetry{Enter}");
+    await vi.waitFor(() =>
+      expect(posted("shelf-collection")).toContainEqual({
+        kind: "shelf-collection",
+        action: "create",
+        name: "Poetry",
+      })
+    );
+
+    // The Worker's republished Shelf draws the new Collection in the rail.
+    frame.port.deliver({
+      kind: "shelf",
+      state: {
+        status: "ready",
+        entries: filedRows(),
+        collections: [...collections, { id: "col-3", name: "Poetry" }],
+      },
+    });
+    await vi.waitFor(() => expect(rail()?.textContent).toContain("Poetry"));
+  });
+});
