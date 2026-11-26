@@ -14,7 +14,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { configure, getConfig, screen } from "@testing-library/react";
+import { configure, getConfig, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentChild, RefObject } from "preact";
 import { createRef, render } from "preact";
@@ -145,6 +145,36 @@ describe("Sheet", () => {
     const title = sheet.querySelector("h2");
     expect(title).toHaveClass("kit-visually-hidden");
     expect(sheet.querySelector(".kit-sheet__header")).toHaveClass("kit-sheet__header--bare");
+  });
+
+  it("draws its own header actions in place of Done", async () => {
+    setWidth(500);
+    const user = userEvent.setup({ delay: null });
+    const seen: string[] = [];
+    await mount(
+      <Sheet
+        open
+        onClose={() => seen.push("close")}
+        title="View and filters"
+        doneLabel="Done"
+        actions={
+          <button type="button" onClick={() => seen.push("reset")}>
+            Reset
+          </button>
+        }
+      >
+        <p>Body</p>
+      </Sheet>
+    );
+    const sheet = screen.getByRole("dialog", { name: "View and filters" });
+    const header = sheet.querySelector(".kit-sheet__header") as HTMLElement;
+    expect(within(header).getByRole("button", { name: "Reset" })).toBeInTheDocument();
+    const done = within(header).getByRole("button", { name: "Done" });
+    expect(done).toHaveClass("kit-button--primary");
+
+    await press(() => user.click(within(header).getByRole("button", { name: "Reset" })));
+    await press(() => user.click(done));
+    expect(seen).toEqual(["reset", "close"]);
   });
 
   it("renders only in Narrow", async () => {
