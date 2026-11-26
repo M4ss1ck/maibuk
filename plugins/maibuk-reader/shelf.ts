@@ -260,6 +260,16 @@ export function positionKey(id: string): string {
   return `position:${id}`;
 }
 
+/** The key one Document's Bookmarks live under. */
+export function bookmarksKey(id: string): string {
+  return `bookmarks:${id}`;
+}
+
+/** The key one Document's Highlights live under. */
+export function highlightsKey(id: string): string {
+  return `highlights:${id}`;
+}
+
 /**
  * The key the open Document's id lives under, so a relaunch that lands on the
  * Reading page reopens it instead of showing no Document.

@@ -17,9 +17,11 @@ import {
   SETTINGS_KEY,
   SHELF_KEY,
   SUPPORTED_EXTENSIONS,
+  bookmarksKey,
   clampSettings,
   fingerprint,
   formatFromName,
+  highlightsKey,
   markState,
   parseShelf,
   positionKey,
@@ -43,11 +45,35 @@ export type LocateAgainResult =
   | { ok: true; entry: ShelfEntry }
   | { ok: false; reason: "cancelled" | "not-found" | "fingerprint-mismatch" };
 
+/** What removing a Document from the Shelf would discard. */
+export interface RemovalCounts {
+  bookmarks: number;
+  highlights: number;
+  notes: number;
+}
+
 /** The error code the host puts on a refused File Grant call. */
 function errorCode(error: unknown): string | null {
   if (typeof error !== "object" || error === null) return null;
   const code = (error as { code?: unknown }).code;
   return typeof code === "string" ? code : null;
+}
+
+/** The stored array under `key`, or none when the value is missing or malformed. */
+async function storedArray(client: ReaderClient, key: string): Promise<unknown[]> {
+  try {
+    const value = await client.storage.get({ key });
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Whether a stored Highlight carries a written note. */
+function hasNote(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
+  const note = (value as { note?: unknown }).note;
+  return typeof note === "string" && note !== "";
 }
 
 function errorMessage(error: unknown): string {
@@ -114,6 +140,8 @@ export interface ShelfService {
   shelveGrant(picked: ShelvedFile): Promise<ShelfEntry>;
   /** Marks every Document the device can no longer read, and returns the Shelf. */
   refreshStates(): Promise<ShelfEntry[]>;
+  /** What removing the Document would discard: its Bookmarks, Highlights, and written notes. */
+  removalCounts(id: string): Promise<RemovalCounts>;
   /** Forgets a Document and ends its File Grant; the author's file stays. */
   removeFromShelf(id: string): Promise<ShelfEntry[]>;
   /** Picks a file again for a Missing Document, keeping its Reading Position on a match. */
@@ -239,6 +267,16 @@ export function createShelfService(client: ReaderClient): ShelfService {
       return next;
     },
 
+    async removalCounts(id): Promise<RemovalCounts> {
+      const bookmarks = await storedArray(client, bookmarksKey(id));
+      const highlights = await storedArray(client, highlightsKey(id));
+      return {
+        bookmarks: bookmarks.length,
+        highlights: highlights.length,
+        notes: highlights.filter(hasNote).length,
+      };
+    },
+
     async removeFromShelf(id): Promise<ShelfEntry[]> {
       const shelf = await library.loadShelf();
       const entry = shelf.find((candidate) => candidate.id === id);
@@ -249,10 +287,12 @@ export function createShelfService(client: ReaderClient): ShelfService {
           // The grant may already be gone; forgetting the Document still works.
         }
       }
-      try {
-        await client.storage.delete({ key: positionKey(id) });
-      } catch {
-        // A Position that never existed needs no delete.
+      for (const key of [positionKey(id), bookmarksKey(id), highlightsKey(id)]) {
+        try {
+          await client.storage.delete({ key });
+        } catch {
+          // A key that never existed needs no delete.
+        }
       }
       const next = removeEntry(shelf, id);
       await library.saveShelf(next);
