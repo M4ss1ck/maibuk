@@ -43,6 +43,7 @@ import {
   type FramePositionMessage,
   type FrameReadMessage,
   type FrameSettingsMessage,
+  type FrameShelfCollectionMessage,
   type FrameShelfCommandMessage,
   type FrameShelfRemoveMessage,
   type FrameShelfState,
@@ -59,6 +60,7 @@ import {
   positionKey,
   sortShelf,
   withProgress,
+  type Collection,
   type ReaderSettings,
   type ShelfEntry,
   type ShelfProgress,
@@ -370,9 +372,23 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     }
   }
 
+  /** The author's Collections, or none when they can't be read: the Shelf still draws. */
+  async function collectionsOrNone(): Promise<Collection[]> {
+    try {
+      return await library.loadCollections();
+    } catch {
+      return [];
+    }
+  }
+
   /** Draws `shelf` in the Frame; the File Grant and Fingerprint stay here. */
-  function publishShelf(shelf: readonly ShelfEntry[]): void {
-    post({ kind: "shelf", state: frameShelfState(language, shelf) });
+  async function publishShelf(
+    shelf: readonly ShelfEntry[],
+    collections?: readonly Collection[]
+  ): Promise<void> {
+    const filed = collections ?? (await collectionsOrNone());
+    if (disposed) return;
+    post({ kind: "shelf", state: frameShelfState(language, shelf, filed) });
   }
 
   /** Refreshes every File Grant and replaces the Shelf the Frame draws. */
@@ -380,7 +396,7 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     try {
       const shelf = await library.refreshStates();
       if (disposed || view !== "shelf") return;
-      publishShelf(shelf);
+      await publishShelf(shelf);
     } catch {
       if (disposed || view !== "shelf") return;
       const state: FrameShelfState = { status: "error", entries: [] };
@@ -698,7 +714,7 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
           if (documentId === null) return;
           try {
             const result = await library.locateAgain(documentId);
-            publishShelf(await library.loadShelf());
+            await publishShelf(await library.loadShelf());
             if (result.ok) return;
             const notice = locateNotice(result.reason);
             if (notice !== null) post({ kind: "shelf-result", message: notice });
@@ -722,9 +738,41 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     try {
       const shelf = await library.removeFromShelf(message.documentId);
       if (selectedDocumentId === message.documentId) selectedDocumentId = null;
-      publishShelf(shelf);
+      await publishShelf(shelf);
     } catch {
       post({ kind: "shelf-result", message: translate(language, "shelf.remove.failed") });
+    }
+  }
+
+  /** Applies one Collection change, then redraws the Shelf with the stored result. */
+  async function handleShelfCollection(message: FrameShelfCollectionMessage): Promise<void> {
+    try {
+      let collections: Collection[];
+      switch (message.action) {
+        case "create":
+          collections = await library.createCollection(message.name, message.documentId);
+          break;
+        case "rename":
+          collections = await library.renameCollection(message.collectionId, message.name);
+          break;
+        case "delete":
+          collections = await library.deleteCollection(message.collectionId);
+          break;
+        case "file":
+          collections = await library.setInCollection(
+            message.collectionId,
+            message.documentId,
+            message.member
+          );
+          break;
+        default:
+          return;
+      }
+      if (disposed || view !== "shelf") return;
+      await publishShelf(await library.loadShelf(), collections);
+    } catch {
+      if (disposed) return;
+      post({ kind: "shelf-result", message: translate(language, "shelf.collection.failed") });
     }
   }
 
@@ -793,6 +841,9 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
         return;
       case "shelf-remove":
         void handleShelfRemove(message);
+        return;
+      case "shelf-collection":
+        void handleShelfCollection(message);
         return;
       case "back":
         void handleBack();

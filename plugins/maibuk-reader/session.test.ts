@@ -13,10 +13,12 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FILE_READ_MAX_BYTES, createPluginClient } from "@/plugin-sdk";
 import { createTestHost } from "@/features/plugins/test-kit";
+import type { FrameShelfState } from "./frame-protocol";
 import { createShelfService } from "./library";
 import { SHELF_PAGE_ID, followReturnTarget, leaveReading } from "./runtime";
 import { createReaderSession, frameLabels, type ReaderSession } from "./session";
 import {
+  COLLECTIONS_KEY,
   DEFAULT_SHELF_VIEW,
   SHELF_KEY,
   SHELF_VIEW_KEY,
@@ -566,6 +568,155 @@ describe("shelf", () => {
         title: "New",
         format: "pdf",
       });
+    } finally {
+      await harness.stop();
+    }
+  });
+});
+
+describe("Collections (#946)", () => {
+  /** The last Shelf state the Frame was sent. */
+  function lastShelf(harness: ReturnType<typeof setup>): FrameShelfState {
+    const states = harness.messages.filter((message) => message.kind === "shelf");
+    return states[states.length - 1]?.state as FrameShelfState;
+  }
+
+  it("publishes the Collections with the Shelf, and each row's Collection ids", async () => {
+    const storage = new Map<string, unknown>([
+      [SHELF_KEY, [shelfEntry({ id: "doc-1", grant: "grant-1" })]],
+      [COLLECTIONS_KEY, [{ id: "col-1", name: "Research", documentIds: ["doc-1"] }]],
+    ]);
+    const harness = setup({ view: "shelf", storage });
+    try {
+      await opened(harness);
+      await messageOf(harness, "shelf");
+      const state = lastShelf(harness);
+      expect(state.collections).toEqual([{ id: "col-1", name: "Research" }]);
+      expect(state.entries[0].collections).toEqual(["col-1"]);
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("creates a Collection, files the Document, and republishes the Shelf", async () => {
+    const storage = new Map<string, unknown>([
+      [SHELF_KEY, [shelfEntry({ id: "doc-1", grant: "grant-1" })]],
+    ]);
+    const harness = setup({ view: "shelf", storage });
+    try {
+      await opened(harness);
+      await messageOf(harness, "shelf");
+      harness.send({
+        kind: "shelf-collection",
+        action: "create",
+        name: "  To read ",
+        documentId: "doc-1",
+      });
+      await vi.waitFor(() =>
+        expect(lastShelf(harness).collections).toEqual([
+          { id: expect.any(String), name: "To read" },
+        ])
+      );
+      const [stored] = storage.get(COLLECTIONS_KEY) as { id: string; documentIds: string[] }[];
+      expect(stored.documentIds).toEqual(["doc-1"]);
+      expect(lastShelf(harness).entries[0].collections).toEqual([stored.id]);
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("renames, unfiles, and deletes a Collection, republishing after each", async () => {
+    const storage = new Map<string, unknown>([
+      [SHELF_KEY, [shelfEntry({ id: "doc-1", grant: "grant-1" })]],
+      [COLLECTIONS_KEY, [{ id: "col-1", name: "Research", documentIds: ["doc-1"] }]],
+    ]);
+    const harness = setup({ view: "shelf", storage });
+    try {
+      await opened(harness);
+      await messageOf(harness, "shelf");
+      harness.send({
+        kind: "shelf-collection",
+        action: "rename",
+        collectionId: "col-1",
+        name: "Notes",
+      });
+      await vi.waitFor(() =>
+        expect(lastShelf(harness).collections).toEqual([{ id: "col-1", name: "Notes" }])
+      );
+      harness.send({
+        kind: "shelf-collection",
+        action: "file",
+        collectionId: "col-1",
+        documentId: "doc-1",
+        member: false,
+      });
+      await vi.waitFor(() => expect(lastShelf(harness).entries[0].collections).toBeUndefined());
+      harness.send({
+        kind: "shelf-collection",
+        action: "file",
+        collectionId: "col-1",
+        documentId: "doc-1",
+        member: true,
+      });
+      await vi.waitFor(() => expect(lastShelf(harness).entries[0].collections).toEqual(["col-1"]));
+      harness.send({ kind: "shelf-collection", action: "delete", collectionId: "col-1" });
+      await vi.waitFor(() => expect(lastShelf(harness).collections).toEqual([]));
+      expect(storage.get(COLLECTIONS_KEY)).toEqual([]);
+      expect(lastShelf(harness).entries).toHaveLength(1);
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("reports a refused Collection write and leaves the Collections as they were", async () => {
+    const storage = new Map<string, unknown>([
+      [SHELF_KEY, [shelfEntry({ id: "doc-1", grant: "grant-1" })]],
+      [
+        COLLECTIONS_KEY,
+        [
+          { id: "col-1", name: "Research", documentIds: [] },
+          { id: "col-2", name: "Notes", documentIds: [] },
+        ],
+      ],
+    ]);
+    const harness = setup({ view: "shelf", storage });
+    try {
+      await opened(harness);
+      await messageOf(harness, "shelf");
+      harness.send({
+        kind: "shelf-collection",
+        action: "rename",
+        collectionId: "col-2",
+        name: "research",
+      });
+      const result = await messageOf(harness, "shelf-result");
+      expect(result.message).toBe("Reader couldn't save that Collection.");
+      expect((storage.get(COLLECTIONS_KEY) as { name: string }[]).map((c) => c.name)).toEqual([
+        "Research",
+        "Notes",
+      ]);
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("still draws the Shelf when the Collections can't be read", async () => {
+    class CollectionsDown extends Map<string, unknown> {
+      get(key: string): unknown {
+        if (key === COLLECTIONS_KEY) throw new Error("storage is down");
+        return super.get(key);
+      }
+    }
+    const storage = new CollectionsDown([
+      [SHELF_KEY, [shelfEntry({ id: "doc-1", grant: "grant-1" })]],
+    ]);
+    const harness = setup({ view: "shelf", storage });
+    try {
+      await opened(harness);
+      await messageOf(harness, "shelf");
+      await vi.waitFor(() => expect(lastShelf(harness).status).toBe("ready"));
+      expect(lastShelf(harness).collections).toEqual([]);
+      expect(lastShelf(harness).entries).toHaveLength(1);
     } finally {
       await harness.stop();
     }
