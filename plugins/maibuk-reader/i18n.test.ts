@@ -52,6 +52,12 @@ describe("runtime catalog", () => {
     expect(runtimeEn["shelf.frame.removeNotes"]).toBe(" ({{count}} with notes)");
     expect(runtimeEn["shelf.frame.newLabel"]).toBe("New");
     expect(runtimeEs["shelf.frame.finishedLabel"]).toBe("Terminado");
+    expect(runtimeEn["shelf.locate.notFound"]).toBe(
+      "Reader couldn't find that Document on your Shelf."
+    );
+    expect(runtimeEs["shelf.locate.notFound"]).toBe(
+      "Lector no encontró ese documento en tu estante."
+    );
   });
 });
 

@@ -14,6 +14,7 @@
   "shelf.progress.page": "pág. {{page}} de {{count}}",
   "shelf.progress.percent": "{{percent}}%",
   "shelf.locate.mismatch": "Ese archivo es otro documento. Lector mantuvo el documento perdido en tu estante.",
+  "shelf.locate.notFound": "Lector no encontró ese documento en tu estante.",
   "shelf.loading": "Cargando tu estante…",
   "shelf.openFailed": "Lector no puede abrir ese archivo.",
   "shelf.dropSkipped.one": "Lector no puede abrir 1 archivo soltado.",
