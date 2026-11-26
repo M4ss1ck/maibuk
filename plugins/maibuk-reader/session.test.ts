@@ -98,6 +98,12 @@ interface Harness {
   messages: Record<string, unknown>[];
   /** Sends one Frame -> Worker message. */
   send(message: unknown): void;
+  /**
+   * Every Frame -> Worker message the session's handler has been handed, in
+   * order: recorded by a listener added after the session's own, so it runs
+   * after the session's on each delivery.
+   */
+  delivered: Record<string, unknown>[];
   navigateToShelf: ReturnType<typeof vi.fn>;
   /** Handed the Document the author opens or picks from the Shelf. */
   openEntry: ReturnType<typeof vi.fn>;
@@ -153,6 +159,10 @@ function setup(
     onViewChange,
   });
   session.start();
+  const delivered: Record<string, unknown>[] = [];
+  channel.port1.addEventListener("message", (event: MessageEvent) => {
+    delivered.push(event.data as Record<string, unknown>);
+  });
   return {
     host,
     storage,
@@ -160,6 +170,7 @@ function setup(
     library,
     session,
     messages,
+    delivered,
     send(message: unknown) {
       channel.port2.postMessage(message);
     },
@@ -856,11 +867,13 @@ describe("shelf view", () => {
     return { ...DEFAULT_SHELF_VIEW, search };
   }
 
-  /** Lets queued Frame messages reach the session before the test moves on. */
-  async function settle(): Promise<void> {
-    for (let turn = 0; turn < 5; turn++) {
-      await new Promise((resolve) => setTimeout(resolve, 5));
-    }
+  /** Waits until the session has been handed `count` shelf-view messages. */
+  async function viewsDelivered(harness: Harness, count: number): Promise<void> {
+    await vi.waitFor(() =>
+      expect(harness.delivered.filter((message) => message.kind === "shelf-view")).toHaveLength(
+        count
+      )
+    );
   }
 
   it("opens the Shelf with the view the author left it in", async () => {
@@ -923,11 +936,12 @@ describe("shelf view", () => {
       for (const search of ["second", "third", "fourth", "fifth"]) {
         harness.send({ kind: "shelf-view", settings: view(search) });
       }
-      await settle();
+      // All four reach the session while the first write is held, so they
+      // coalesce into the one write that follows it.
+      await viewsDelivered(harness, 5);
       release();
       await vi.waitFor(() => expect(storage.get(SHELF_VIEW_KEY)).toEqual(view("fifth")));
-      await settle();
-      expect(viewWrites).toBeLessThanOrEqual(2);
+      expect(viewWrites).toBe(2);
       expect(storage.get(SHELF_VIEW_KEY)).toEqual(view("fifth"));
     } finally {
       spy.mockRestore();
@@ -950,7 +964,7 @@ describe("shelf view", () => {
     try {
       await opened(harness);
       harness.send({ kind: "shelf-view", settings: view("first") });
-      await settle();
+      await vi.waitFor(() => expect(failNext).toBe(false));
       expect(storage.has(SHELF_VIEW_KEY)).toBe(false);
       harness.send({ kind: "shelf-view", settings: view("second") });
       await vi.waitFor(() => expect(storage.get(SHELF_VIEW_KEY)).toEqual(view("second")));
