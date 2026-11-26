@@ -171,6 +171,8 @@ interface HarnessProps {
   /** Omitted keeps the Shelf uncontrolled; given, the caller owns the settings. */
   settings?: ShelfViewSettings;
   onSettingsChange?: (settings: ShelfViewSettings) => void;
+  /** Bumped by the searchShelf Command. */
+  searchRequest?: number;
 }
 
 /** The controlled Shelf a real caller draws, with its menu and removal state. */
@@ -191,6 +193,7 @@ function Harness(props: HarnessProps) {
         focusDocumentId={props.focusDocumentId}
         settings={props.settings}
         onSettingsChange={props.onSettingsChange}
+        searchRequest={props.searchRequest}
         onCommand={props.onCommand ?? (() => {})}
         onSelect={props.onSelect ?? (() => {})}
         onMenuChange={setMenuDocumentId}
@@ -998,14 +1001,41 @@ describe("Shelf views, sort, and filters (#945)", () => {
     expect(drawnTitles()).toEqual(["Dune", "Emma"]);
   });
 
+  it("keeps focus in an open layer when the search Command arrives, and searches once it closes", async () => {
+    setWidth(1200);
+    const user = userEvent.setup({ delay: null });
+    const container = await mount(<Harness />);
+    const filters = screen.getByRole("button", { name: "Filters" });
+    act(() => filters.focus());
+    await press(() => user.keyboard("{Enter}"));
+    const layer = screen.getByRole("dialog", { name: "Filters" });
+    expect(layer).toContainElement(document.activeElement as HTMLElement);
+    const inLayer = document.activeElement;
+
+    // "/" or Ctrl+F typed in the popover reaches the host, which answers with
+    // the Command; the search stays behind the layer.
+    await act(() => {
+      render(<Harness searchRequest={1} />, container);
+    });
+    expect(document.activeElement).toBe(inLayer);
+    expect(screen.getByRole("dialog", { name: "Filters" })).toBeInTheDocument();
+
+    await press(() => user.keyboard("{Escape}"));
+    expect(screen.queryByRole("dialog", { name: "Filters" })).not.toBeInTheDocument();
+    await act(() => {
+      render(<Harness searchRequest={2} />, container);
+    });
+    expect(screen.getByRole("searchbox", { name: "Search the Shelf" })).toHaveFocus();
+  });
+
   it("hands focus back to the row it came from when Escape clears a search that matched nothing", async () => {
     setWidth(1200);
     const user = userEvent.setup({ delay: null });
     const dune = entry({ id: "doc-1", title: "Dune", author: "Frank Herbert" });
     const emmaEntry = entry({ id: "doc-2", title: "Emma", author: "Jane Austen" });
     const container = await mount(<Harness entries={[dune, emmaEntry]} />);
-    // The rows reorder with no layer opening in between, so the Shelf's `/`
-    // listener still holds the first render's order.
+    // The rows reorder before the search opens, so focus return must follow
+    // the Document, not the first render's order.
     await act(() => {
       render(<Harness entries={[emmaEntry, dune]} />, container);
     });
@@ -1013,7 +1043,10 @@ describe("Shelf views, sort, and filters (#945)", () => {
     const emma = gridCell("Emma") as HTMLElement;
     act(() => emma.focus());
 
-    await press(() => user.keyboard("/"));
+    // The searchShelf Command ("/" by default) opens the search.
+    await act(() => {
+      render(<Harness entries={[emmaEntry, dune]} searchRequest={1} />, container);
+    });
     expect(screen.getByRole("searchbox", { name: "Search the Shelf" })).toHaveFocus();
     await press(() => user.keyboard("zz"));
     // No row is drawn while nothing matches, so the row focus came from is gone.

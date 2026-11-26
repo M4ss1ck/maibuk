@@ -586,6 +586,11 @@ test.describe("Reader", () => {
     await expect(search).toHaveValue("");
     await expect(titles).toHaveText(["Dune", "twelve-pages"]);
     await expect(shelfRow(page, "Dune")).toBeFocused();
+    // Ctrl or Cmd+F, Find in Document's shortcut, searches the Shelf here.
+    await page.keyboard.press("ControlOrMeta+f");
+    await expect(search).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(shelfRow(page, "Dune")).toBeFocused();
 
     // Remembered: a reload draws the same List view and Title sort.
     await page.reload();

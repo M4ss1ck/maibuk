@@ -1373,13 +1373,16 @@ function runCommand(id: string) {
 
 function onKeyDown(event: KeyboardEvent) {
   if (event.defaultPrevented) return;
-  // The Shelf's grid and its layers own every key, Escape included.
-  if (chrome.view === "shelf") return;
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
+  // Ctrl or Cmd+F is Find in Document's Default Shortcut. Handled here, it
+  // keeps the browser's find bar shut while focus is in the Frame; on the
+  // Shelf the Command searches the Shelf.
+  if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "f") {
     event.preventDefault();
-    find.open();
+    runCommand("findInDocument");
     return;
   }
+  // The Shelf's grid and its layers own every other key, Escape included.
+  if (chrome.view === "shelf") return;
   if (event.key === "Escape") {
     event.preventDefault();
     if (fullscreen) {
@@ -1550,10 +1553,10 @@ viewer.addEventListener("scroll", onViewerScroll, { passive: true });
 window.addEventListener("message", onHostMessage);
 updateControls();
 
-/** Mounts the app, then adopts the surfaces it drew and binds the search bar. */
 /** The root the app mounted into, so `cleanup` can unmount it. */
 let mountedRoot: HTMLElement | null = null;
 
+/** Mounts the app, then adopts the surfaces it drew and binds the search bar. */
 function startApp(root: HTMLElement) {
   mountedRoot = root;
   mountApp(root, appearance, subscribeAppearance, bridge);

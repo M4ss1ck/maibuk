@@ -143,6 +143,16 @@ describe("Reader manifest", () => {
     }
   });
 
+  it("binds Find in Document to Ctrl or Cmd+F, which searches the Shelf on the Shelf (#945)", () => {
+    const commands = manifest().contributes?.commands ?? [];
+    // The spec sheet's Keyboard table: "Find in Document: Ctrl/Cmd+F", and on
+    // the Shelf "/ or Ctrl/Cmd+F" focuses the Shelf search. The Frame reroutes
+    // the Command there, so one shortcut serves both pages.
+    expect(commands.find((command) => command.id === "findInDocument")?.defaults).toEqual([
+      ["Mod+f"],
+    ]);
+  });
+
   it("offers the Shelf's search and view Commands on the Shelf page (#945)", () => {
     const commands = manifest().contributes?.commands ?? [];
     for (const [id, label, defaults] of [

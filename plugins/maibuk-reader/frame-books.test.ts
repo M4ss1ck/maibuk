@@ -1483,7 +1483,7 @@ describe("the Shelf's views, sort, filters, and search (#945)", () => {
     expect(lastSettings()).toMatchObject({ formats: [], statuses: [], search: "" });
   });
 
-  it("focuses the search by / or Ctrl+F, filters as you type, and Escape clears it and returns focus", async () => {
+  it("focuses the search by the searchShelf Command or Ctrl+F, filters as you type, and Escape clears it and returns focus", async () => {
     frame = loadFrame("flowing.epub");
     frame.open({ shelf: { status: "ready", entries: viewRows() }, shelfLabels: SHELF_LABELS });
     await vi.waitFor(() => expect(shelfCells()).toHaveLength(6));
@@ -1494,16 +1494,35 @@ describe("the Shelf's views, sort, filters, and search (#945)", () => {
     // Ctrl+F from the grid focuses the search field; Escape returns focus to the cell it came from.
     await tabToGrid(user);
     const firstCell = document.activeElement as HTMLElement;
+    // The Frame handles Ctrl+F itself so the browser's find bar stays shut.
+    let findHandled: boolean | null = null;
+    const onFind = (event: KeyboardEvent) => {
+      if (event.key === "f") findHandled = event.defaultPrevented;
+    };
+    window.addEventListener("keydown", onFind);
+    frame.cleanups.push(() => window.removeEventListener("keydown", onFind));
     await user.keyboard("{Control>}f{/Control}");
-    expect(document.activeElement).toBe(searchField());
+    expect(findHandled).toBe(true);
+    await vi.waitFor(() => expect(document.activeElement).toBe(searchField()));
     await user.keyboard("{Escape}");
     expect(searchField()?.value).toBe("");
     await vi.waitFor(() => expect(titles()).toEqual(RECENT_ORDER));
     expect(document.activeElement).toBe(firstCell);
 
-    // "/" from the same cell focuses the search field; typing filters the grid.
+    // "/" is the searchShelf Command's Default Shortcut, so the Frame leaves it
+    // unhandled: the shim forwards it and the host, honoring a Custom Shortcut,
+    // answers with the Command, which focuses the search field.
+    let slashHandled: boolean | null = null;
+    const onSlash = (event: KeyboardEvent) => {
+      if (event.key === "/") slashHandled = event.defaultPrevented;
+    };
+    window.addEventListener("keydown", onSlash);
+    frame.cleanups.push(() => window.removeEventListener("keydown", onSlash));
     await user.keyboard("/");
-    expect(document.activeElement).toBe(searchField());
+    expect(slashHandled).toBe(false);
+    expect(document.activeElement).toBe(firstCell);
+    frame.port.deliver({ kind: "command", id: "searchShelf" });
+    await vi.waitFor(() => expect(document.activeElement).toBe(searchField()));
     await user.keyboard("austen");
     await vi.waitFor(() => expect(titles()).toEqual(["Persuasion"]));
     expect(shelfCount()).toBe("1 of 6");

@@ -132,14 +132,6 @@ function useViewportWidth(): number {
   return width;
 }
 
-/** Whether a key press lands in a text field, where `/` is a character. */
-function typingTarget(target: EventTarget | null): boolean {
-  return (
-    target instanceof HTMLElement &&
-    (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)
-  );
-}
-
 /** `text` with every stretch the search matched wrapped in a mark. */
 function Marked({ text, search }: { text: string; search: string }) {
   const ranges = matchRanges(text, search);
@@ -457,23 +449,11 @@ export function Shelf({
     searchInput.current.focus();
   });
 
-  // `/` anywhere on the Shelf, or Ctrl or Cmd+F, focuses the search field.
+  // The searchShelf Command ("/" by default) and Find in Document (Ctrl or
+  // Cmd+F) reach here through the host, so a Custom Shortcut rebinds them. An
+  // open layer keeps focus: the search waits behind it.
   useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.altKey || layerOpen) return;
-      const slash = event.key === "/" && !event.ctrlKey && !event.metaKey;
-      const find = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f";
-      if (!slash && !find) return;
-      if (slash && typingTarget(event.target)) return;
-      event.preventDefault();
-      focusSearch();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [layerOpen]);
-
-  useEffect(() => {
-    if (searchRequest > 0) focusSearch();
+    if (searchRequest > 0 && !layerOpen) focusSearch();
   }, [searchRequest]);
 
   useEffect(() => {

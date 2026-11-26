@@ -59,7 +59,8 @@
       {
         "id": "findInDocument",
         "label": "Find in Document",
-        "contexts": ["document", "reader"]
+        "contexts": ["document", "reader"],
+        "defaults": [["Mod+f"]]
       },
       {
         "id": "toggleContents",
