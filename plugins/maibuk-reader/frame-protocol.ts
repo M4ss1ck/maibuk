@@ -62,6 +62,27 @@ export interface FrameEntry {
   format: string;
 }
 
+/**
+ * One Shelf row the Frame draws (#944). The File Grant and Fingerprint stay in
+ * the Worker, so the Frame never sees where the author's file lives.
+ */
+export interface FrameShelfEntry {
+  id: string;
+  title: string;
+  author: string;
+  format: string;
+  /** Whether the file can be read right now. */
+  state: "ok" | "missing" | "needs-permission" | "unreadable";
+  /** Generated-cover artwork, when the Document has one. */
+  coverDataUrl?: string;
+  /** The localized progress line, already formatted. */
+  progressText: string;
+  /** The localized state line, or null when the Document is readable. */
+  statusText: string | null;
+  /** One of the generated cover's eight tones, stable for the Document id. */
+  tone: number;
+}
+
 /** The localized UI strings the Frame shows, built by the Worker from i18n. */
 export interface FrameLabels {
   back: string;
@@ -103,6 +124,33 @@ export interface FrameLabels {
   continuousScroll: string;
   fullScreen: string;
   exitFullScreen: string;
+}
+
+/** The localized Shelf strings the Frame shows, built by the Worker from i18n. */
+export interface FrameShelfLabels {
+  shelf: string;
+  import: string;
+  importFiles: string;
+  emptyTitle: string;
+  emptyDescription: string;
+  loading: string;
+  error: string;
+  documentsCount: string;
+  open: string;
+  remove: string;
+  locate: string;
+  missing: string;
+  moreFor: string;
+  removeConfirm: string;
+  cancel: string;
+  newLabel: string;
+  finishedLabel: string;
+}
+
+/** What the Shelf draws: its loading, ready, or error state and its rows. */
+export interface FrameShelfState {
+  status: "loading" | "ready" | "error";
+  entries: FrameShelfEntry[];
 }
 
 /** One entry in the archive a reflowable Document is packed in. */
@@ -149,17 +197,30 @@ export type FrameCommandId =
   | "toggleContinuousScroll"
   | "backToShelf";
 
+/** The Shelf Commands the Frame sends to the Worker. */
+export type FrameShelfCommandId =
+  | "openDocument"
+  | "removeFromShelf"
+  | "locateDocument"
+  | "openFile";
+
 /* Worker -> Frame */
 
-/** Opens one Document. `pdfPort` is transferred alongside the message. */
+/** Opens the Frame on the Shelf or on one Document. `pdfPort` is transferred alongside the message. */
 export interface FrameOpenMessage {
   kind: "open";
+  /** Which view the Frame shows; absent means the Document view. */
+  view?: "shelf" | "document";
   entry: FrameEntry | null;
   position: ReadingPosition | null;
   settings: ReaderSettings;
   /** The file's size in bytes; the Frame never reads the whole file. */
   size: number;
   labels: FrameLabels;
+  /** The Shelf state the Frame draws when it opens on the Shelf. */
+  shelf?: FrameShelfState;
+  /** The Shelf's localized strings, rebuilt in the app language. */
+  shelfLabels?: FrameShelfLabels;
   language: string;
   /** The appearance Maibuk draws with right now. */
   appearance: Appearance;
@@ -195,6 +256,8 @@ export interface FrameLanguageMessage {
   language: string;
   /** The same labels, rebuilt in the new language. */
   labels?: FrameLabels;
+  /** The Shelf's labels and row copy, rebuilt in the new language. */
+  shelfLabels?: FrameShelfLabels;
 }
 
 /** Tells the Frame Maibuk's appearance changed, so it redraws in it. */
@@ -231,6 +294,30 @@ export interface FrameZipErrorMessage {
   code: "corrupt" | "drm" | "missing";
 }
 
+/** Replaces the Shelf the Frame draws with its loading, ready, or error state. */
+export interface FrameShelfMessage {
+  kind: "shelf";
+  state: FrameShelfState;
+}
+
+/** The localized Remove from Shelf copy for one Document, built from real counts. */
+export interface FrameRemoveCountsMessage {
+  kind: "remove-counts";
+  documentId: string;
+  /** The dialog's heading, already localized. */
+  title: string;
+  /** The line naming what is deleted too, already localized. */
+  body: string;
+  /** The line promising Reading Stats are kept, already localized. */
+  stats: string;
+}
+
+/** Answers a Shelf Command; `message` is a localized notice, or omitted when it succeeded. */
+export interface FrameShelfResultMessage {
+  kind: "shelf-result";
+  message?: string;
+}
+
 export type WorkerToFrameMessage =
   | FrameOpenMessage
   | FrameBytesMessage
@@ -240,7 +327,10 @@ export type WorkerToFrameMessage =
   | FrameAppearanceMessage
   | FrameZipListMessage
   | FrameZipDataMessage
-  | FrameZipErrorMessage;
+  | FrameZipErrorMessage
+  | FrameShelfMessage
+  | FrameRemoveCountsMessage
+  | FrameShelfResultMessage;
 
 /* Frame -> Worker */
 
@@ -318,6 +408,25 @@ export interface FrameSettingsMessage {
   settings: ReaderSettings;
 }
 
+/** Runs one Shelf Command; `documentId` names the row it acts on. */
+export interface FrameShelfCommandMessage {
+  kind: "shelf-command";
+  id: FrameShelfCommandId;
+  documentId?: string;
+}
+
+/** Selects one row in the Shelf grid. */
+export interface FrameShelfSelectMessage {
+  kind: "shelf-select";
+  documentId: string;
+}
+
+/** Confirms removal of one Document from the Shelf. */
+export interface FrameShelfRemoveMessage {
+  kind: "shelf-remove";
+  documentId: string;
+}
+
 export type FrameToWorkerMessage =
   | FrameReadyMessage
   | FrameReadMessage
@@ -328,7 +437,10 @@ export type FrameToWorkerMessage =
   | FrameLoadErrorMessage
   | FrameZipListRequest
   | FrameZipEntryRequest
-  | FrameSettingsMessage;
+  | FrameSettingsMessage
+  | FrameShelfCommandMessage
+  | FrameShelfSelectMessage
+  | FrameShelfRemoveMessage;
 
 /**
  * The Worker's handoff of one MessagePort to the nested pdf.js core Worker.

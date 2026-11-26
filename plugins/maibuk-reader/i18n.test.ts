@@ -41,6 +41,18 @@ describe("runtime catalog", () => {
     );
     expect(format(translate("en", "shelf.progress.percent"), { percent: 42 })).toBe("42%");
   });
+
+  it("ships the Shelf Frame copy in both languages", () => {
+    expect(runtimeEn["shelf.frame.import"]).toBe("Import");
+    expect(runtimeEs["shelf.frame.import"]).toBe("Importar");
+    expect(runtimeEn["shelf.frame.importFiles"]).toBe("Import files");
+    expect(runtimeEn["shelf.frame.removeTitle"]).toBe('Remove "{{title}}" from the Shelf?');
+    expect(runtimeEs["shelf.frame.removeTitle"]).toBe('¿Quitar "{{title}}" del estante?');
+    expect(runtimeEn["shelf.frame.removeNote"]).toBe(" ({{count}} with note)");
+    expect(runtimeEn["shelf.frame.removeNotes"]).toBe(" ({{count}} with notes)");
+    expect(runtimeEn["shelf.frame.newLabel"]).toBe("New");
+    expect(runtimeEs["shelf.frame.finishedLabel"]).toBe("Terminado");
+  });
 });
 
 describe("manifest locales", () => {

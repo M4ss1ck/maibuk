@@ -51,6 +51,19 @@ export interface FrameEntry {
   format: string;
 }
 
+/** One Shelf row the Frame draws; the File Grant and Fingerprint stay in the Worker. */
+export interface FrameShelfEntry {
+  id: string;
+  title: string;
+  author: string;
+  format: string;
+  state: "ok" | "missing" | "needs-permission" | "unreadable";
+  coverDataUrl?: string;
+  progressText: string;
+  statusText: string | null;
+  tone: number;
+}
+
 /** The Reader settings the Worker hands the Frame. */
 export interface ReaderSettings {
   fontSize: number;
@@ -119,3 +132,37 @@ export interface FrameLabels {
   fullScreen: string;
   exitFullScreen: string;
 }
+
+/** The localized Shelf strings the Frame shows. */
+export interface FrameShelfLabels {
+  shelf: string;
+  import: string;
+  importFiles: string;
+  emptyTitle: string;
+  emptyDescription: string;
+  loading: string;
+  error: string;
+  documentsCount: string;
+  open: string;
+  remove: string;
+  locate: string;
+  missing: string;
+  moreFor: string;
+  removeConfirm: string;
+  cancel: string;
+  newLabel: string;
+  finishedLabel: string;
+}
+
+/** What the Shelf draws: its loading, ready, or error state and its rows. */
+export interface FrameShelfState {
+  status: "loading" | "ready" | "error";
+  entries: FrameShelfEntry[];
+}
+
+/** The Shelf Commands the Frame sends to the Worker. */
+export type FrameShelfCommandId =
+  | "openDocument"
+  | "removeFromShelf"
+  | "locateDocument"
+  | "openFile";
