@@ -4,6 +4,8 @@
     <meta charset="utf-8" />
     <meta name="color-scheme" content="light dark" />
     <title>Reader</title>
+    <link rel="stylesheet" href="tokens.css" />
+    <link rel="stylesheet" href="kit.css" />
     <style>
       :root {
         color-scheme: var(--maibuk-color-scheme, light dark);
@@ -28,9 +30,9 @@
         margin: 0;
         display: flex;
         flex-direction: column;
-        background: var(--maibuk-color-background);
-        color: var(--maibuk-color-foreground);
-        font-family: var(--maibuk-font-sans, system-ui, sans-serif);
+        background: var(--bg);
+        color: var(--fg);
+        font-family: var(--type-ui);
         overflow: hidden;
       }
 
@@ -41,8 +43,8 @@
         flex-wrap: wrap;
         gap: 0.25rem 0.75rem;
         padding: 0.375rem 0.5rem;
-        border-bottom: 1px solid var(--maibuk-color-border);
-        background: var(--maibuk-color-card);
+        border-bottom: 1px solid var(--border);
+        background: var(--card);
       }
 
       .group {
@@ -55,69 +57,7 @@
         width: 1px;
         height: 1.25rem;
         margin: 0 0.25rem;
-        background: var(--maibuk-color-border);
-      }
-
-      button {
-        font: inherit;
-        padding: 0.35rem 0.65rem;
-        border-radius: 0.5rem;
-        border: 1px solid var(--maibuk-color-border);
-        background: var(--maibuk-color-secondary);
-        color: var(--maibuk-color-foreground);
-        cursor: pointer;
-      }
-
-      button:hover {
-        background: var(--maibuk-color-muted);
-      }
-
-      .icon-button {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 2rem;
-        height: 2rem;
-        padding: 0;
-        border: 0;
-        border-radius: 0.375rem;
-        background: transparent;
-        color: var(--maibuk-color-muted-foreground);
-      }
-
-      .icon-button:hover:not(:disabled) {
-        background: var(--maibuk-color-muted);
-        color: var(--maibuk-color-foreground);
-      }
-
-      .icon-button:disabled {
-        opacity: 0.4;
-        cursor: default;
-      }
-
-      .icon-button[aria-pressed="true"],
-      .icon-button[aria-expanded="true"] {
-        background: var(--maibuk-color-muted);
-        color: var(--maibuk-color-primary);
-      }
-
-      .icon-button svg {
-        width: 1.125rem;
-        height: 1.125rem;
-        fill: none;
-        stroke: currentColor;
-        stroke-width: 2;
-        stroke-linecap: round;
-        stroke-linejoin: round;
-      }
-
-      .icon-button .when-fullscreen,
-      :root[data-fullscreen="true"] .icon-button .when-windowed {
-        display: none;
-      }
-
-      :root[data-fullscreen="true"] .icon-button .when-fullscreen {
-        display: inline;
+        background: var(--border);
       }
 
       /* The PDF-only controls; a Flowing view sizes its text instead. */
@@ -125,6 +65,14 @@
       body[data-mode="flow"] #fit-page,
       body[data-mode="flow"] .zoom .divider,
       body:not([data-mode="pdf"]) #layout-toggle {
+        display: none;
+      }
+
+      /* The kit wraps each icon button for its tooltip; hide that wrapper too,
+         so a hidden control leaves no gap in the group. */
+      body[data-mode="flow"] .zoom > .kit-icon-button:has(#fit-width),
+      body[data-mode="flow"] .zoom > .kit-icon-button:has(#fit-page),
+      body:not([data-mode="pdf"]) .zoom > .kit-icon-button:has(#layout-toggle) {
         display: none;
       }
 
@@ -144,7 +92,7 @@
       #zoom-level,
       #search-status {
         font-variant-numeric: tabular-nums;
-        color: var(--maibuk-color-muted-foreground);
+        color: var(--mfg);
         white-space: nowrap;
       }
 
@@ -160,8 +108,8 @@
         align-items: center;
         gap: 0.5rem;
         padding: 0.4rem 0.75rem;
-        border-bottom: 1px solid var(--maibuk-color-border);
-        background: var(--maibuk-color-card);
+        border-bottom: 1px solid var(--border);
+        background: var(--card);
       }
 
       #search-input {
@@ -170,9 +118,9 @@
         font: inherit;
         padding: 0.35rem 0.5rem;
         border-radius: 0.4rem;
-        border: 1px solid var(--maibuk-color-border);
-        background: var(--maibuk-color-background);
-        color: var(--maibuk-color-foreground);
+        border: 1px solid var(--border);
+        background: var(--bg);
+        color: var(--fg);
       }
 
       #body {
@@ -186,8 +134,8 @@
         max-width: 40vw;
         overflow: auto;
         padding: 0.75rem;
-        border-right: 1px solid var(--maibuk-color-border);
-        background: var(--maibuk-color-card);
+        border-right: 1px solid var(--border);
+        background: var(--card);
       }
 
       #contents h2 {
@@ -213,7 +161,7 @@
       }
 
       [role="treeitem"]:hover {
-        background: var(--maibuk-color-muted);
+        background: var(--muted);
       }
 
       #viewer {
@@ -225,20 +173,20 @@
         align-items: flex-start;
         justify-content: center;
         padding: 1rem;
-        background: var(--maibuk-color-muted);
+        background: var(--muted);
       }
 
       #stage {
         position: relative;
         flex: 0 0 auto;
-        background: var(--maibuk-color-background);
-        box-shadow: 0 1px 6px rgb(0 0 0 / 18%);
+        background: var(--bg);
+        box-shadow: var(--shadow-page);
       }
 
       /* A Flowing Document reads as one page: the area around its text column
          takes the page's color, so the column needs no visible edge. */
       body[data-mode="flow"] #viewer {
-        background: var(--maibuk-color-background);
+        background: var(--bg);
       }
 
       body[data-mode="flow"] #stage {
@@ -259,13 +207,13 @@
       .pdf-page {
         position: relative;
         flex: 0 0 auto;
-        background: #ffffff;
-        box-shadow: 0 1px 6px rgb(0 0 0 / 18%);
+        background: var(--pdf-page);
+        box-shadow: var(--shadow-page);
       }
 
       #stage canvas {
         display: block;
-        background: #ffffff;
+        background: var(--pdf-page);
       }
 
       /* pdf.js puts the selectable text over the canvas; the viewer CSS that
@@ -289,20 +237,20 @@
       }
 
       .reader-search-hit.is-current {
-        background: var(--maibuk-color-primary);
-        color: var(--maibuk-color-primary-foreground);
+        background: var(--primary);
+        color: var(--pfg);
       }
 
       #message {
         margin: 2rem auto;
         max-width: 34rem;
-        color: var(--maibuk-color-muted-foreground);
+        color: var(--mfg);
         text-align: center;
         line-height: 1.5;
       }
 
       #message[data-error="true"] {
-        color: var(--maibuk-color-error-text);
+        color: var(--danger);
       }
 
       #password-form {
@@ -313,8 +261,8 @@
         width: min(22rem, 100%);
         padding: 1.25rem;
         border-radius: 0.75rem;
-        border: 1px solid var(--maibuk-color-border);
-        background: var(--maibuk-color-card);
+        border: 1px solid var(--border);
+        background: var(--card);
       }
 
       #password-form h2 {
@@ -326,14 +274,14 @@
         font: inherit;
         padding: 0.45rem 0.55rem;
         border-radius: 0.4rem;
-        border: 1px solid var(--maibuk-color-border);
-        background: var(--maibuk-color-background);
-        color: var(--maibuk-color-foreground);
+        border: 1px solid var(--border);
+        background: var(--bg);
+        color: var(--fg);
       }
 
       #password-error {
         margin: 0;
-        color: var(--maibuk-color-error-text);
+        color: var(--danger);
       }
     </style>
   </head>

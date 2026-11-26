@@ -1,0 +1,739 @@
+/* The Reader Frame's kit (#943 unit 2): Button, IconButton, Segmented, Chip,
+   Switch and Slider. Every color comes from tokens.css; this file states no
+   color of its own. Reading-aware controls draw in `--chrome-*`, the Segmented
+   track and thumb in `--muted`/`--card`, and selected or accented controls in
+   `--primary`, so a Reading Theme and E-ink Mode take the kit over with the
+   rest of the chrome. Motion uses the token durations, which E-ink Mode and
+   reduced motion resolve to zero. */
+
+/* One visible focus ring for every kit control. */
+.kit-button:focus-visible,
+.kit-icon-button__button:focus-visible,
+.kit-segmented__option:focus-visible,
+.kit-chip:focus-visible,
+.kit-chip__remove:focus-visible,
+.kit-switch:focus-visible,
+.kit-slider__range:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Button: 36 px high, 8 px radius, 14/500. */
+.kit-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--chrome-fg);
+  font-family: var(--type-ui);
+  font-size: var(--type-body-size);
+  font-weight: 500;
+  line-height: var(--type-body-line);
+  cursor: pointer;
+  transition:
+    background-color var(--motion-duration-bars) var(--motion-ease),
+    border-color var(--motion-duration-bars) var(--motion-ease),
+    color var(--motion-duration-bars) var(--motion-ease);
+}
+
+.kit-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.kit-button--primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--pfg);
+}
+
+.kit-button--primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.kit-button--secondary {
+  background: var(--card);
+  border-color: var(--chrome-border);
+}
+
+.kit-button--secondary:hover:not(:disabled) {
+  background: var(--muted);
+}
+
+.kit-button--ghost {
+  background: transparent;
+}
+
+.kit-button--ghost:hover:not(:disabled) {
+  background: var(--chrome-border);
+}
+
+.kit-button--destructive {
+  background: transparent;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.kit-button--destructive:hover:not(:disabled) {
+  background: var(--danger);
+  color: var(--chrome-bg);
+}
+
+/* IconButton: the square target comes from useLayoutMode on the element. */
+.kit-icon-button {
+  position: relative;
+  display: inline-flex;
+}
+
+.kit-icon-button__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--chrome-fg);
+  cursor: pointer;
+  transition: background-color var(--motion-duration-bars) var(--motion-ease);
+}
+
+.kit-icon-button__button:hover:not(:disabled) {
+  background: var(--chrome-border);
+}
+
+.kit-icon-button__button[aria-pressed="true"],
+.kit-icon-button__button[aria-expanded="true"] {
+  background: var(--chrome-border);
+  color: var(--primary);
+}
+
+.kit-icon-button__button svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+.kit-icon-button__button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* The Wide-only tooltip, placed under its button. */
+.kit-tooltip {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 50%;
+  z-index: var(--z-popover);
+  transform: translateX(-50%);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--space-1);
+  background: var(--chrome-fg);
+  color: var(--chrome-bg);
+  font-family: var(--type-ui);
+  font-size: var(--type-small-size);
+  font-weight: 500;
+  line-height: var(--type-small-line);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Segmented: muted track, 3 px pad, card thumb. */
+.kit-segmented {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: var(--radius-control);
+  background: var(--muted);
+}
+
+.kit-segmented__option {
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: calc(var(--radius-control) - 3px);
+  background: transparent;
+  color: var(--chrome-meta);
+  font-family: var(--type-ui);
+  font-size: var(--type-small-size);
+  font-weight: 500;
+  line-height: var(--type-small-line);
+  cursor: pointer;
+  transition:
+    background-color var(--motion-duration-bars) var(--motion-ease),
+    color var(--motion-duration-bars) var(--motion-ease);
+}
+
+.kit-segmented__option[aria-checked="true"] {
+  background: var(--card);
+  color: var(--chrome-fg);
+  box-shadow: var(--shadow-page);
+}
+
+/* Chip: a 32 px pill; pressed fills with ink. */
+.kit-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 32px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--chrome-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--chrome-fg);
+  font-family: var(--type-ui);
+  font-size: var(--type-small-size);
+  font-weight: var(--type-small-weight);
+  line-height: var(--type-small-line);
+  white-space: nowrap;
+}
+
+button.kit-chip {
+  cursor: pointer;
+  transition:
+    background-color var(--motion-duration-bars) var(--motion-ease),
+    color var(--motion-duration-bars) var(--motion-ease);
+}
+
+.kit-chip[aria-pressed="true"] {
+  background: var(--chrome-fg);
+  border-color: var(--chrome-fg);
+  color: var(--chrome-bg);
+}
+
+.kit-chip--removable {
+  padding-right: var(--space-1);
+}
+
+.kit-chip__label {
+  min-width: 0;
+}
+
+.kit-chip__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background-color var(--motion-duration-bars) var(--motion-ease);
+}
+
+.kit-chip__remove:hover {
+  background: var(--chrome-border);
+}
+
+/* Switch: a 40x24 track, label at the left, the whole row is the control. */
+.kit-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--chrome-fg);
+  font-family: var(--type-ui);
+  font-size: var(--type-body-size);
+  font-weight: var(--type-body-weight);
+  line-height: var(--type-body-line);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--motion-duration-bars) var(--motion-ease);
+}
+
+.kit-switch:hover:not(:disabled) {
+  background: var(--chrome-border);
+}
+
+.kit-switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.kit-switch__label {
+  min-width: 0;
+}
+
+.kit-switch__track {
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--muted);
+  transition: background-color var(--motion-duration-bars) var(--motion-ease);
+}
+
+.kit-switch[aria-checked="true"] .kit-switch__track {
+  background: var(--primary);
+}
+
+.kit-switch__thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--card);
+  box-shadow: var(--shadow-page);
+  transition: transform var(--motion-duration-bars) var(--motion-ease);
+}
+
+.kit-switch[aria-checked="true"] .kit-switch__thumb {
+  transform: translateX(16px);
+}
+
+/* Slider: native range with the accent, a tabular value at the right. */
+.kit-slider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.kit-slider__range {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--primary);
+}
+
+.kit-slider__value {
+  min-width: 3ch;
+  color: var(--chrome-meta);
+  font-family: var(--type-ui);
+  font-size: var(--type-small-size);
+  font-weight: var(--type-status-weight);
+  font-variant-numeric: var(--type-numeric);
+  line-height: var(--type-small-line);
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Overlays and Menu (#943 unit 3). Sheet and Dialog sit on the sheet-and-dialog
+   layer over a scrim; Popover and Menu sit on the popover layer and are
+   positioned by the Frame. Every color comes from tokens.css; E-ink Mode and
+   reduced motion drop the shadows and motion and draw borders in full ink. */
+
+.kit-layer {
+  position: fixed;
+  inset: 0;
+  display: flex;
+}
+
+.kit-layer--sheet {
+  z-index: var(--z-dialog);
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.kit-layer--dialog {
+  z-index: var(--z-dialog);
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+}
+
+.kit-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--scrim);
+  animation: kit-scrim-in var(--motion-duration-scrim) var(--motion-ease);
+  transition: var(--motion-scrim);
+}
+
+/* Sheet: Narrow only. 16 px top radii, a grab handle, the title row, and Done. */
+.kit-sheet {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: 85vh;
+  padding: 0 var(--space-4) var(--space-4);
+  border-radius: var(--radius-sheet);
+  background: var(--card);
+  color: var(--chrome-fg);
+  box-shadow: var(--shadow-page);
+  animation: kit-sheet-in var(--motion-duration-sheet) var(--motion-ease);
+  transition: var(--motion-sheet);
+}
+
+.kit-sheet__grab {
+  width: var(--space-9);
+  height: var(--space-1);
+  margin: var(--space-2) auto 0;
+  border-radius: 999px;
+  background: var(--chrome-border);
+}
+
+.kit-sheet__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 56px;
+}
+
+.kit-sheet__title {
+  min-width: 0;
+  margin: 0;
+  color: var(--chrome-fg);
+  font-family: var(--type-ui);
+  font-size: var(--type-title-size);
+  font-weight: var(--type-title-weight);
+  line-height: var(--type-title-line);
+}
+
+.kit-sheet__body {
+  overflow-y: auto;
+  color: var(--chrome-fg);
+  font-family: var(--type-ui);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+
+/* Dialog: Wide only, centered, capped at 640 px, actions right-aligned. */
+.kit-dialog {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  max-height: 85vh;
+  overflow-y: auto;
+  padding: var(--space-6);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  color: var(--chrome-fg);
+  box-shadow: var(--shadow-page);
+}
+
+.kit-dialog__title {
+  margin: 0 0 var(--space-3);
+  color: var(--chrome-fg);
+  font-family: var(--type-ui);
+  font-size: var(--type-title-size);
+  font-weight: var(--type-title-weight);
+  line-height: var(--type-title-line);
+}
+
+.kit-dialog__body {
+  color: var(--chrome-fg);
+  font-family: var(--type-ui);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+
+.kit-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+/* Popover: Wide only, 12 px radius, positioned by the Frame under its trigger. */
+.kit-popover {
+  position: fixed;
+  z-index: var(--z-popover);
+  min-width: 200px;
+  max-width: min(320px, calc(100vw - var(--space-4)));
+  padding: var(--space-2);
+  border: 1px solid var(--chrome-border);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  color: var(--chrome-fg);
+  box-shadow: var(--shadow-page);
+  font-family: var(--type-ui);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+
+/* Menu: rows 40 px (44 px under a coarse pointer), icon + label + shortcut. */
+.kit-menu {
+  position: fixed;
+  z-index: var(--z-popover);
+  min-width: 180px;
+  max-width: min(320px, calc(100vw - var(--space-4)));
+  padding: var(--space-1);
+  border: 1px solid var(--chrome-border);
+  border-radius: var(--radius-control);
+  background: var(--card);
+  color: var(--chrome-fg);
+  box-shadow: var(--shadow-page);
+}
+
+/* A Popover or Menu opened while a Sheet or Dialog is already on the stack is
+   nested: only that instance moves one step above the modal layer so it clears
+   the modal and its scrim. Plain Popover and Menu stay on --z-popover. */
+.kit-popover--nested,
+.kit-menu--nested {
+  z-index: calc(var(--z-dialog) + 1);
+}
+
+.kit-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 40px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--chrome-fg);
+  font-family: var(--type-ui);
+  font-size: var(--type-body-size);
+  font-weight: var(--type-body-strong-weight);
+  line-height: var(--type-body-line);
+  text-align: left;
+  cursor: pointer;
+}
+
+.kit-menu__item:hover:not(:disabled),
+.kit-menu__item:focus-visible {
+  background: var(--chrome-border);
+}
+
+.kit-menu__item:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.kit-menu__item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.kit-menu__label {
+  min-width: 0;
+  flex: 1;
+}
+
+.kit-menu__shortcut {
+  flex: none;
+  color: var(--chrome-meta);
+  font-size: var(--type-small-size);
+  font-weight: var(--type-small-weight);
+  font-variant-numeric: var(--type-numeric);
+  line-height: var(--type-small-line);
+}
+
+@media (pointer: coarse) {
+  .kit-menu__item {
+    min-height: 44px;
+  }
+}
+
+.kit-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes kit-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes kit-scrim-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* E-ink Mode and reduced motion: no shadows, no motion, full-ink borders. */
+[data-eink="true"] .kit-sheet,
+[data-motion="reduce"] .kit-sheet,
+[data-eink="true"] .kit-dialog,
+[data-motion="reduce"] .kit-dialog,
+[data-eink="true"] .kit-popover,
+[data-motion="reduce"] .kit-popover,
+[data-eink="true"] .kit-menu,
+[data-motion="reduce"] .kit-menu {
+  border: 1px solid var(--chrome-border);
+  box-shadow: none;
+  animation: none;
+  transition: none;
+}
+
+[data-eink="true"] .kit-scrim,
+[data-motion="reduce"] .kit-scrim {
+  animation: none;
+  transition: none;
+}
+
+/* Cover and ProgressCard (#943 unit 4). A generated Cover draws the
+   artboard's tone surface with a spine shade; a pending cover draws the muted
+   dashed surface; a real image fades in over the generated cover with the
+   120 ms Cover motion token. ProgressCard floats at the Shelf's bottom-right
+   on the import layer. Every color and the cover shadow come from
+   tokens.css; E-ink Mode and reduced motion drop the shade, shadow and fade,
+   and draw the pending border in full ink. */
+
+.kit-cover {
+  position: relative;
+  flex: none;
+  overflow: hidden;
+  border-radius: var(--radius-cover);
+  box-shadow: var(--cover-shadow);
+}
+
+.kit-cover__generated,
+.kit-cover__pending {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+}
+
+/* The generated surface: tone background and ink from the cover tokens, the
+   padding and gap from the size, and the artboard's left-edge spine shade. */
+.kit-cover__generated {
+  display: flex;
+  flex-direction: column;
+  background-image: var(--cover-spine);
+}
+
+.kit-cover__rule {
+  display: block;
+  width: 24%;
+  height: 2px;
+  background: currentColor;
+  opacity: 0.55;
+}
+
+.kit-cover__title {
+  flex: 1;
+  overflow: hidden;
+  font-family: var(--type-cover-family);
+  font-weight: var(--type-cover-weight);
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+}
+
+.kit-cover__author {
+  font-family: var(--type-ui);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+/* The pending surface: muted fill, dashed border, format label and title. */
+.kit-cover__pending {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border: 1px dashed var(--cover-pending-border);
+  border-radius: var(--radius-cover);
+  background: var(--cover-pending-bg);
+  color: var(--cover-pending-ink);
+  font-family: var(--type-ui);
+}
+
+.kit-cover__format {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.kit-cover__pending-title {
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+/* A real cover arrives over the placeholder in 120 ms; an error removes it and
+   the generated cover stays. */
+.kit-cover__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  animation: kit-cover-in var(--motion-duration-cover) var(--motion-ease);
+}
+
+@keyframes kit-cover-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ProgressCard: floating at the Shelf's bottom-right on the import layer. */
+.kit-progress-card {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: var(--z-import);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: min(320px, calc(100vw - var(--space-8)));
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--chrome-border);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  color: var(--chrome-fg);
+  box-shadow: var(--shadow-page);
+  font-family: var(--type-ui);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+}
+
+.kit-progress-card__title {
+  margin: 0;
+  font-size: var(--type-body-size);
+  font-weight: 600;
+  line-height: var(--type-body-line);
+}
+
+.kit-progress-card__bar {
+  width: 100%;
+  accent-color: var(--primary);
+}
+
+.kit-progress-card__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.kit-progress-card__count {
+  color: var(--chrome-meta);
+  font-size: var(--type-small-size);
+  font-weight: var(--type-status-weight);
+  font-variant-numeric: var(--type-numeric);
+  line-height: var(--type-small-line);
+}
+
+/* E-ink Mode and reduced motion: no cover fade, no shadows. The pending
+   border turns full ink through its token. */
+[data-eink="true"] .kit-cover__image,
+[data-motion="reduce"] .kit-cover__image {
+  animation: none;
+}
