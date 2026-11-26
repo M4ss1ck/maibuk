@@ -166,29 +166,27 @@
   text-transform: uppercase;
 }
 
-.shelf-card__alert {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--danger);
-}
-
-.shelf-card__alert svg {
-  width: var(--space-8);
-  height: var(--space-8);
-}
-
+/* The Missing chip as drawn: the alert icon and label in the danger color. */
 .shelf-card__chip {
   position: absolute;
-  bottom: var(--space-2);
-  left: var(--space-2);
-  height: auto;
+  bottom: 6px;
+  left: 6px;
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  height: 22px;
   padding: 0 var(--space-2);
+  border-radius: 999px;
   background: var(--card);
+  color: var(--danger);
   font-size: var(--type-label-size);
+  font-weight: 600;
   line-height: var(--type-label-line);
+}
+
+.shelf-card__chip svg {
+  width: 14px;
+  height: 14px;
 }
 
 .shelf-card__progress {

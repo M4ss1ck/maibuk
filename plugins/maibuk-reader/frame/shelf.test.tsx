@@ -303,8 +303,10 @@ describe("Shelf grid", () => {
     expect(covers[2].style.opacity).toBe("1");
     expect(covers[3].style.opacity).toBe("1");
 
-    expect(container.querySelectorAll(".shelf-card__alert")).toHaveLength(2);
-    expect(screen.getAllByText("Missing")).toHaveLength(2);
+    // The chip carries the alert icon and the "Missing" label, as drawn.
+    const chips = screen.getAllByText("Missing");
+    expect(chips).toHaveLength(2);
+    for (const chip of chips) expect(chip.querySelector("svg")).not.toBeNull();
     expect(screen.getByText("Can't open this file")).toBeInTheDocument();
   });
 });

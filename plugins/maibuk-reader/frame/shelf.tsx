@@ -135,6 +135,7 @@ function RemoveActions({
         {labels.cancel}
       </Button>
       <Button variant="destructive" onClick={onRemove}>
+        <Icon name="trash" />
         {labels.removeConfirm}
       </Button>
     </>
@@ -347,11 +348,11 @@ export function Shelf({
           />
           <span class="shelf-card__format">{entry.format.toUpperCase()}</span>
           {missing ? (
-            <span class="shelf-card__alert" aria-hidden="true">
+            <span class="shelf-card__chip">
               <Icon name="alert" />
+              {labels.missing}
             </span>
           ) : null}
-          {missing ? <span class="kit-chip shelf-card__chip">{labels.missing}</span> : null}
         </div>
         {entry.progressPercent === null ? null : (
           <span class="shelf-card__progress" aria-hidden="true">
