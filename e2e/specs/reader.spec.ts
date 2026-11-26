@@ -1,7 +1,10 @@
 // Reader, the Built-in Plugin that opens the author's own files (#653): the
-// Shelf lists Documents it remembers, opening one hands the frame to the
+// Shelf lists Documents it remembers, opening one hands the Frame to the
 // Document's Reading Position, a Missing Document can be located again without
-// losing that Position, and Remove forgets it. A file dropped from the file
+// losing that Position, and Remove forgets it. Since #944 the Shelf is the
+// reader page's own Frame (`assets/ui/shelf.html`): opening a Document from the
+// Shelf, and going Back to it, happens inside that one Frame, so the host URL
+// stays `/plugin/maibuk-reader/reader` throughout. A file dropped from the file
 // manager is the one way in no key reaches (#828), so that path goes through
 // `support/file-drop.ts`, which sends the events a real drag sends. The file
 // dialog is the E2E lane's File System Access double (`support/file-picker.ts`):
@@ -10,18 +13,20 @@
 // Tagged @sandbox because Reader is a Frame and a Worker plugin: the lane runs
 // it on Chromium, WebKit, and Firefox.
 //
-// Every pick is opened by a key press (the "Open file…" button, or the Command
-// of the same name); the double only answers the dialog the browser would have
-// shown.
+// Every pick is opened by a key press (the Shelf's "Import files" button, or
+// the "Open file…" Command); the double only answers the dialog the browser
+// would have shown. Every Shelf action is a key press too: Enter on a row, the
+// row's Document menu from Shift+F10, or a palette Command acting on the row
+// the author last focused.
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import type { FrameLocator, Page } from "@playwright/test";
+import type { FrameLocator, Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { dropFiles, type DroppedFile } from "../support/file-drop";
 import { chooseNextFile, installFilePicker, setFileMissing } from "../support/file-picker";
 import { leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
-import { runPaletteCommand } from "../support/palette";
+import { paletteDialog, selectPaletteCommand } from "../support/palette";
 import { REPO_ROOT } from "../support/seed/seeds";
 import { expect, test } from "../support/test";
 
@@ -54,36 +59,43 @@ function droppedFixture(name: string): DroppedFile {
 }
 
 /**
- * Where a drop lands on the Shelf: the page's own heading, so the event bubbles
- * to the host page root that owns the drop listeners. No `data-testid` marks
- * that root and its classes say nothing, while the heading is the stable name
- * the page proves it has.
+ * The reader page's one page Frame wrapper, the host element around the iframe.
+ * It is also where the host's drop listener takes a file: the hook lives on the
+ * page root, so a drop on the wrapper bubbles to it whether the Frame draws the
+ * Shelf or an open Document.
  */
-const shelfDropTarget = (page: Page) => page.getByRole("heading", { name: "Shelf", level: 2 });
+const pageFrameWrapper = (page: Page) => page.locator('[data-plugin-frame="page"]');
 
-/**
- * Where a drop lands on the open Document: the whole-page Frame's wrapper, the
- * host element around the iframe. The document itself is inside the sandboxed
- * Frame, which the author's drop never reaches.
- */
-const documentDropTarget = (page: Page) => page.locator('[data-plugin-frame="page"]');
-
-/** The whole-page Frame the Document page renders. */
-const documentFrame = (page: Page): FrameLocator =>
+/** The Frame the reader page mounts: the Shelf, and the Document opened in it. */
+const pageFrame = (page: Page): FrameLocator =>
   page.frameLocator('[data-plugin-frame="page"] iframe');
-const frameElement = (page: Page) => page.locator('[data-plugin-frame="page"] iframe');
+
+/** The wrapper's iframe, as a host locator, for the keyboard helpers. */
+const frameElement = (page: Page) => pageFrameWrapper(page).locator("iframe");
+
+/** The Shelf's own heading, drawn inside the Frame. */
+const shelfHeading = (page: Page) =>
+  pageFrame(page).getByRole("heading", { name: "Shelf", level: 1 });
+
+/** The Shelf row for a Document, by the title its cover and title line carry. */
+const shelfRow = (page: Page, title: string) =>
+  pageFrame(page).getByRole("gridcell", { name: new RegExp(title) });
+
+/** The Document menu a Shelf row opens, inside the Frame. */
+const documentMenu = (page: Page) =>
+  pageFrame(page).getByRole("menu", { name: "Document actions" });
 
 /** The Frame's own page indicator, e.g. "2 (4 of 12)". */
-const pageIndicator = (page: Page) => documentFrame(page).locator("#page-indicator");
+const pageIndicator = (page: Page) => pageFrame(page).locator("#page-indicator");
 
-/** Opens Reader from the sidebar, waiting for the Plugin's launch scan. */
+/** Opens Reader from the sidebar, waiting for the Frame's Shelf. */
 async function openReader(page: Page): Promise<void> {
   await expect(navOption(page, "Reader")).toBeVisible({ timeout: 60_000 });
   await tabTo(page, navOption(page, "Books"), { max: 60 });
   await pressUntilFocused(page, "ArrowDown", navOption(page, "Reader"), { max: 20 });
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
-  await expect(page.getByRole("heading", { name: "Shelf", level: 2 })).toBeVisible();
+  await expect(shelfHeading(page)).toBeVisible({ timeout: 30_000 });
 }
 
 /** Leaves the Plugin page for the Library, so the next mount starts fresh. */
@@ -99,27 +111,31 @@ async function goHome(page: Page): Promise<void> {
 }
 
 /**
- * Opens the Document whose row is on the Shelf. Pass `fromAbove` when focus was
- * lost inside the card (its focused button unmounted): Firefox then resumes
- * Tab and Shift+Tab from the removed button's slot, which skips an "Open" drawn
- * in that slot both ways. Walking back to "Open file…" above the card first
- * gives every engine the same starting point.
+ * Shelves a file from the empty Shelf: "Import files" opens the picker, the
+ * Document opens in the same Frame, and the host URL stays on /reader.
  */
-async function openFromShelf(page: Page, { fromAbove = false } = {}): Promise<void> {
-  if (fromAbove) {
-    await tabTo(page, page.getByRole("button", { name: "Open file…", exact: true }), {
-      max: 60,
-      backwards: true,
-    });
-  }
-  await tabTo(page, page.getByRole("button", { name: "Open", exact: true }), { max: 60 });
+async function importFiles(page: Page): Promise<void> {
+  await tabTo(page, pageFrame(page).getByRole("button", { name: "Import files", exact: true }), {
+    max: 60,
+  });
   await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/document$/);
+  await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
 }
 
-/** Tabs from the host page into the Frame, so the reading keys reach it. */
+/**
+ * Opens a Document whose row is on the Shelf: Tab to the grid's one cell for
+ * that title and Enter, which asks the Worker to open it inside the same Frame.
+ * The URL never leaves /reader, so nothing else marks the switch.
+ */
+async function openFromShelf(page: Page, title: string = "twelve-pages"): Promise<void> {
+  await tabTo(page, shelfRow(page, title), { max: 60 });
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
+}
+
+/** Tabs from the host into the Frame, so the reading keys reach it. */
 async function focusDocument(page: Page): Promise<FrameLocator> {
-  const frame = documentFrame(page);
+  const frame = pageFrame(page);
   await expect(pageIndicator(page)).toBeVisible({ timeout: 30_000 });
   await tabTo(page, frameElement(page), { max: 60 });
   return frame;
@@ -131,12 +147,36 @@ async function pageForward(page: Page, count: number): Promise<void> {
 }
 
 /**
+ * Opens the palette with F1 and runs the Command named `label`. The palette's
+ * field takes focus a beat after the dialog draws, so this waits for it before
+ * typing: a key that lands before the field does would be typed nowhere and the
+ * query would arrive with its head missing under load.
+ */
+async function runPalette(page: Page, label: string): Promise<void> {
+  await page.keyboard.press("F1");
+  const dialog = paletteDialog(page);
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("searchbox")).toBeFocused();
+  await selectPaletteCommand(page, dialog, label);
+  await page.keyboard.press("Enter");
+  await expect(dialog).toBeHidden();
+}
+
+/**
  * Runs a palette Command from the host. The Frame keeps keyboard focus while it
  * is mounted, so focus leaves it first or F1 would open nothing.
  */
 async function runHostCommand(page: Page, label: string): Promise<void> {
   await leaveFrame(page, frameElement(page));
-  await runPaletteCommand(page, label);
+  await runPalette(page, label);
+}
+
+/** Opens the focused row's Document menu with Shift+F10 and returns it. */
+async function openRowMenu(page: Page): Promise<Locator> {
+  await page.keyboard.press("Shift+F10");
+  const menu = documentMenu(page);
+  await expect(menu).toBeVisible();
+  return menu;
 }
 
 test.use({
@@ -157,15 +197,12 @@ test.describe("Reader", () => {
   }) => {
     await page.goto("/");
     await openReader(page);
-    await expect(page.getByText("Your Shelf is empty", { exact: true })).toBeVisible();
+    await expect(pageFrame(page).getByText("Your Shelf is empty", { exact: true })).toBeVisible();
     await capture(page, "reader-shelf-empty");
 
-    await tabTo(page, page.getByRole("button", { name: "Open file…", exact: true }), {
-      max: 60,
-    });
-    await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/document$/);
-
+    // "Import files" shelves the PDF and opens it inside the same Frame: the
+    // host URL stays on /reader, and the Frame draws the Document instead.
+    await importFiles(page);
     const frame = await focusDocument(page);
     await expect(pageIndicator(page)).toContainText("1 of 12");
 
@@ -186,11 +223,15 @@ test.describe("Reader", () => {
 
     await runHostCommand(page, "Find in Document");
     await expect(frame.getByRole("searchbox")).toBeVisible();
+    await focusDocument(page);
     await page.keyboard.press("Escape");
+    await expect(frame.getByRole("searchbox")).toBeHidden();
 
     await runHostCommand(page, "Toggle contents");
     await expect(frame.getByRole("tree")).toBeVisible();
+    await focusDocument(page);
     await page.keyboard.press("Escape");
+    await expect(frame.getByRole("tree")).toBeHidden();
 
     // The zoom Commands are keyboard-reachable through the palette even
     // though Reader ships them unbound; the Frame's own zoom readout moves.
@@ -202,14 +243,18 @@ test.describe("Reader", () => {
     await runHostCommand(page, "Fit width");
     await runHostCommand(page, "Fit page");
 
+    // Back to Shelf returns to the Shelf inside the same Frame, still on
+    // /reader, with the Reading Position drawn on the row.
     await runHostCommand(page, "Back to Shelf");
     await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
-    await expect(page.getByText("p. 4 of 12", { exact: true })).toBeVisible();
-    await expect(page.getByText("twelve-pages", { exact: true })).toBeVisible();
+    await expect(shelfHeading(page)).toBeVisible();
+    await expect(shelfRow(page, "twelve-pages")).toContainText("p. 4 of 12");
     await capture(page, "reader-shelf-filled");
 
+    // A reload at /reader draws the Shelf again; reopening its row opens the
+    // Document in the Frame at page 4.
     await page.reload();
-    await openReader(page);
+    await expect(shelfHeading(page)).toBeVisible({ timeout: 60_000 });
     await openFromShelf(page);
     await expect(pageIndicator(page)).toContainText("4 of 12", { timeout: 30_000 });
 
@@ -236,12 +281,14 @@ test.describe("Reader", () => {
   }) => {
     await page.goto("/");
     await expect(navOption(page, "Reader")).toBeVisible({ timeout: 60_000 });
-    await runPaletteCommand(page, "Open Reader");
+    await runPalette(page, "Open Reader");
     await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
+    await expect(shelfHeading(page)).toBeVisible({ timeout: 30_000 });
 
+    // "Open file…" from the palette shelves the EPUB and opens it in the
+    // reader page's Frame; the host URL never leaves /reader.
     await chooseNextFile(page, EPUB);
-    await runPaletteCommand(page, "Open file…");
-    await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/document$/);
+    await runHostCommand(page, "Open file…");
 
     const frame = await focusDocument(page);
     await expect(frame.getByRole("heading", { name: "One" })).toBeVisible({ timeout: 30_000 });
@@ -256,13 +303,15 @@ test.describe("Reader", () => {
     await expect(visible).toBeVisible();
     await capture(page, "reader-flowing-view");
 
+    // Escape returns to the Shelf inside the same Frame, still on /reader.
     await page.keyboard.press("Escape");
     await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
+    await expect(shelfHeading(page)).toBeVisible();
 
-    await openFromShelf(page);
+    await openFromShelf(page, "Dune");
     await expect(pageIndicator(page)).toHaveText(spot ?? "", { timeout: 30_000 });
     await expect(
-      documentFrame(page).getByText(
+      pageFrame(page).getByText(
         /The spice must flow across Arrakis\.|The journey continues past the desert\./
       )
     ).toBeVisible();
@@ -273,6 +322,7 @@ test.describe("Reader", () => {
     await runHostCommand(page, "Toggle contents");
     await expect(frame.getByRole("tree").getByText("One", { exact: true })).toBeVisible();
     await capture(page, "reader-contents");
+    await focusDocument(page);
     await page.keyboard.press("Escape");
     await expect(frame.getByRole("tree")).toBeHidden();
 
@@ -292,34 +342,56 @@ test.describe("Reader", () => {
   }) => {
     await page.goto("/");
     await openReader(page);
-    await tabTo(page, page.getByRole("button", { name: "Open file…", exact: true }), { max: 60 });
-    await page.keyboard.press("Enter");
+    await importFiles(page);
     await focusDocument(page);
     await pageForward(page, 3);
     await expect(pageIndicator(page)).toContainText("4 of 12");
     await page.keyboard.press("Escape");
-    await expect(page.getByText("p. 4 of 12", { exact: true })).toBeVisible();
+    await expect(shelfRow(page, "twelve-pages")).toContainText("p. 4 of 12");
 
     // The device can no longer read the file: the next mount marks the row.
     await setFileMissing(page, PDF, true);
     await goHome(page);
     await openReader(page);
-    await expect(page.getByText("Missing Document", { exact: true })).toBeVisible();
+    await expect(
+      shelfRow(page, "twelve-pages").getByText("Missing", { exact: true })
+    ).toBeVisible();
     await capture(page, "reader-missing-document");
 
-    // Locate again… with the same bytes reattaches the Document.
+    // The palette's "Locate" acts on the row the author selected: the same
+    // bytes match its Fingerprint and reattach the Document, Position kept.
+    await tabTo(page, shelfRow(page, "twelve-pages"), { max: 60 });
     await setFileMissing(page, PDF, false);
     await chooseNextFile(page, PDF);
-    await tabTo(page, page.getByRole("button", { name: "Locate again…", exact: true }), {
-      max: 60,
-    });
-    await page.keyboard.press("Enter");
-    await expect(page.getByText("Missing Document", { exact: true })).toHaveCount(0);
-    await expect(page.getByText("p. 4 of 12", { exact: true })).toBeVisible();
+    await runHostCommand(page, "Locate");
+    await expect(pageFrame(page).getByText("Missing", { exact: true })).toHaveCount(0);
+    await expect(shelfRow(page, "twelve-pages")).toContainText("p. 4 of 12");
 
-    // "Locate again…" unmounts with focus on it, and "Open" takes its slot.
-    await openFromShelf(page, { fromAbove: true });
+    // The row's own Document menu locates it again, by keyboard: Shift+F10
+    // offers Locate first on a Missing row, and Enter takes it.
+    await setFileMissing(page, PDF, true);
+    await goHome(page);
+    await openReader(page);
+    await expect(
+      shelfRow(page, "twelve-pages").getByText("Missing", { exact: true })
+    ).toBeVisible();
+    await setFileMissing(page, PDF, false);
+    await chooseNextFile(page, PDF);
+    await tabTo(page, shelfRow(page, "twelve-pages"), { max: 60 });
+    const menu = await openRowMenu(page);
+    const locate = menu.getByRole("menuitem", { name: "Locate", exact: true });
+    await expect(locate).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(pageFrame(page).getByText("Missing", { exact: true })).toHaveCount(0);
+    await expect(shelfRow(page, "twelve-pages")).toContainText("p. 4 of 12");
+
+    // Reopening lands on page 4, and Back returns focus to the row that opened it.
+    await openFromShelf(page);
     await expect(pageIndicator(page)).toContainText("4 of 12", { timeout: 30_000 });
+    await focusDocument(page);
+    await page.keyboard.press("Escape");
+    await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
+    await expect(shelfRow(page, "twelve-pages")).toBeFocused();
   });
 
   test("Remove from Shelf forgets the Document and leaves its file alone @wf:reader-remove @sc:plugin.maibuk-reader.removeFromShelf @sandbox", async ({
@@ -327,31 +399,66 @@ test.describe("Reader", () => {
   }) => {
     await page.goto("/");
     await openReader(page);
-    await tabTo(page, page.getByRole("button", { name: "Open file…", exact: true }), { max: 60 });
-    await page.keyboard.press("Enter");
+    await importFiles(page);
     await focusDocument(page);
     await page.keyboard.press("Escape");
-    await expect(page.getByText("twelve-pages", { exact: true })).toBeVisible();
+    await expect(shelfRow(page, "twelve-pages")).toBeVisible();
 
-    await tabTo(page, page.getByRole("button", { name: "Remove from Shelf", exact: true }), {
-      max: 60,
-    });
+    // Shift+F10 opens the row's Document menu; Remove from Shelf… asks first,
+    // and the confirmation states the real counts it would delete.
+    await tabTo(page, shelfRow(page, "twelve-pages"), { max: 60 });
+    const menu = await openRowMenu(page);
+    await expect(menu.getByRole("menuitem", { name: "Open", exact: true })).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect(
+      menu.getByRole("menuitem", { name: "Remove from Shelf…", exact: true })
+    ).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect(page.getByText("twelve-pages", { exact: true })).toHaveCount(0);
-    await expect(page.getByText("Your Shelf is empty", { exact: true })).toBeVisible();
+
+    const dialog = pageFrame(page).getByRole("alertdialog", {
+      name: 'Remove "twelve-pages" from the Shelf?',
+    });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText("Its 0 Bookmarks and 0 Highlights are deleted too.");
+    await expect(dialog).toContainText("Reading Stats are kept. The file stays on your device.");
+    await capture(page, "reader-remove-confirm");
+    await expect(dialog.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(dialog.getByRole("button", { name: "Remove", exact: true })).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(shelfRow(page, "twelve-pages")).toHaveCount(0);
+    await expect(pageFrame(page).getByText("Your Shelf is empty", { exact: true })).toBeVisible();
+
+    // The palette's "Remove from Shelf…" Command removes the selected row the
+    // same way, so a re-picked file goes through the confirmation again.
+    await importFiles(page);
+    await focusDocument(page);
+    await page.keyboard.press("Escape");
+    await expect(shelfRow(page, "twelve-pages")).toBeVisible();
+    await tabTo(page, shelfRow(page, "twelve-pages"), { max: 60 });
+    await runHostCommand(page, "Remove from Shelf…");
+    const confirm = pageFrame(page).getByRole("alertdialog", {
+      name: 'Remove "twelve-pages" from the Shelf?',
+    });
+    await expect(confirm).toBeVisible();
+    await expect(confirm.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Enter");
+    await expect(shelfRow(page, "twelve-pages")).toHaveCount(0);
+    await expect(pageFrame(page).getByText("Your Shelf is empty", { exact: true })).toBeVisible();
   });
 
-  test("drop the EPUB on the Shelf, then the PDF on the open Document @wf:reader-drop @sandbox", async ({
+  test("drop the EPUB on the Shelf Frame, then the PDF on the open Document @wf:reader-drop @sandbox", async ({
     page,
   }) => {
     await page.goto("/");
     await openReader(page);
-    await expect(page.getByText("Your Shelf is empty", { exact: true })).toBeVisible();
+    await expect(pageFrame(page).getByText("Your Shelf is empty", { exact: true })).toBeVisible();
 
-    // A drop on the Shelf shelves the Document and opens it, the same way the
-    // "Open file…" button's pick does.
-    await dropFiles(shelfDropTarget(page), [droppedFixture(EPUB)]);
-    await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/document$/);
+    // A drop on the reader page's Frame wrapper shelves the Document and opens
+    // it inside that same Frame, exactly as the "Import files" pick does.
+    await dropFiles(pageFrameWrapper(page), [droppedFixture(EPUB)]);
+    await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
     const frame = await focusDocument(page);
     await expect(frame.getByRole("heading", { name: "One" })).toBeVisible({ timeout: 30_000 });
     await expect(
@@ -361,19 +468,18 @@ test.describe("Reader", () => {
     ).toBeVisible();
     await capture(page, "reader-drop-epub");
 
-    // A drop on the open Document, outside its Frame, switches to the PDF.
-    await dropFiles(documentDropTarget(page), [droppedFixture(PDF)]);
+    // A drop on the same open-document Frame switches to the PDF.
+    await dropFiles(pageFrameWrapper(page), [droppedFixture(PDF)]);
     await expect(pageIndicator(page)).toContainText("of 12", { timeout: 30_000 });
     await capture(page, "reader-drop-pdf");
 
-    // Escape leaves the Frame for the Shelf, which lists both Documents. The
-    // Frame keeps focus through the switch; re-entering it is a no-op there and
-    // finds it again if the drop happened to move focus.
+    // Escape leaves the Document for the Shelf inside the same Frame, which
+    // lists both Documents.
     await focusDocument(page);
     await page.keyboard.press("Escape");
     await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
-    await expect(page.getByText("Dune", { exact: true })).toBeVisible();
-    await expect(page.getByText("twelve-pages", { exact: true })).toBeVisible();
+    await expect(shelfRow(page, "Dune")).toBeVisible();
+    await expect(shelfRow(page, "twelve-pages")).toBeVisible();
     await capture(page, "reader-shelf-dropped");
   });
 });

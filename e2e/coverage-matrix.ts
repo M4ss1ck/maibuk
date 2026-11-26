@@ -3343,7 +3343,7 @@ export const ROWS: MatrixRow[] = [
     id: "reader-open-reopen",
     area: "plugins",
     workflow:
-      "Reader, the Built-in Plugin that opens the author's own files (#653): enable it, open its Shelf from the sidebar, and pick a file with the keyboard — the “Open file…” button, or the Command of the same name from the palette — so a File Grant hands the Frame the Document without a copy in the Library. The Page view pages with the arrow keys and with the Next page, Previous page, First page, and Last page Commands; Find in Document, Toggle contents, Zoom in, Zoom out, Fit width, and Fit page run from the palette; Escape (or the Back to Shelf Command) returns to the Shelf, which shows “p. 4 of 12”; a reload and reopening the Document from the Shelf lands on page 4 again. A reflowable EPUB in the Flowing view pages forward twice, and reopening it returns to the same spot; asserts: the Frame's page indicator, the Shelf's Reading Position, the visible EPUB text, the search box and Contents tree; persists: yes (the Shelf and Reading Position in Plugin storage, the File Grant in the browser's handle store)",
+      "Reader, the Built-in Plugin that opens the author's own files (#653): enable it, open its Shelf from the sidebar, and pick a file with the keyboard — the empty Shelf's “Import files” button, or the “Open file…” Command from the palette — so a File Grant hands the Frame the Document without a copy in the Library. The Shelf is the reader page's own Frame, and a Document opens inside that same Frame: the host URL stays /plugin/maibuk-reader/reader. The Page view pages with the arrow keys and with the Next page, Previous page, First page, and Last page Commands; Find in Document, Toggle contents, Zoom in, Zoom out, Fit width, Fit page, and Continuous scroll run from the palette on the reader page; Escape (or the Back to Shelf Command) returns to the Shelf inside the same Frame, which draws “p. 4 of 12” on the row; a reload at /reader and reopening the row lands on page 4 again. A reflowable EPUB in the Flowing view pages forward twice, and reopening it from its row returns to the same spot; asserts: the Frame's page indicator, the Reading Position on the Shelf row, the visible EPUB text, the search box and Contents tree, and the URL that never leaves /reader; persists: yes (the Shelf and Reading Position in Plugin storage, the File Grant in the browser's handle store)",
     edges: [
       "PDF: page forward to page 4, back to the Shelf, reload, and reopen at page 4",
       "Flowing EPUB: page forward twice, back to the Shelf, and reopen at the same spot",
@@ -3374,9 +3374,9 @@ export const ROWS: MatrixRow[] = [
     id: "reader-missing-locate",
     area: "plugins",
     workflow:
-      "A Document Reader can no longer read becomes a Missing Document: the Shelf marks the row after the file's stat fails, and Locate again… — the Command Palette's Open file… behind the Shelf's button — picks the same bytes again, which matches its Fingerprint and reattaches it with its Reading Position kept. Removing the Missing Document instead forgets it; asserts: the Missing Document state, its disappearance, the kept “p. 4 of 12”, and the page the Document opens on; persists: yes",
+      "A Document Reader can no longer read becomes a Missing Document: the Shelf marks the row with the Missing chip after the file's stat fails, and Locate — the row's Document menu entry, opened with Shift+F10, and the Command Palette's “Locate” on the selected row — picks the same bytes again, which matches its Fingerprint and reattaches it with its Reading Position kept. The row's menu also offers Remove from Shelf…; asserts: the Missing chip and its disappearance after each Locate path, the kept “p. 4 of 12”, the page the Document opens on, and focus back on the row; persists: yes",
     edges: [
-      "A Missing Document says so on the Shelf, and Locate again reattaches the same file with its Reading Position kept",
+      "A Missing Document says so on the Shelf, and Locate from its row menu and from the palette reattaches the same file with its Reading Position kept",
     ],
     terms: ["File Grant", "Reading Position"],
     shortcuts: ["plugin.maibuk-reader.openFile", "plugin.maibuk-reader.locateDocument"],
@@ -3389,7 +3389,7 @@ export const ROWS: MatrixRow[] = [
     id: "reader-remove",
     area: "plugins",
     workflow:
-      "Remove from Shelf, by keyboard from the Document's row: Reader ends the File Grant and forgets the Document, the row leaves the Shelf, and the empty Shelf explains itself again; asserts: the row and the empty state; persists: yes (the removal, not the file: the author's file stays where it lives)",
+      "Remove from Shelf, by keyboard from the Document's row inside the Shelf Frame: Shift+F10 opens the row's Document menu and Remove from Shelf… asks for confirmation, whose copy states the real counts (zero Bookmarks and Highlights until #958/#959), and the palette's “Remove from Shelf…” Command removes the selected row the same way. Reader ends the File Grant and forgets the Document, the row leaves the Shelf, and the empty Shelf explains itself again; asserts: the confirmation copy, the row, and the empty state; persists: yes (the removal, not the file: the author's file stays where it lives)",
     edges: ["Remove from Shelf forgets the Document and leaves its file alone"],
     terms: ["File Grant"],
     shortcuts: ["plugin.maibuk-reader.removeFromShelf"],
@@ -3402,9 +3402,9 @@ export const ROWS: MatrixRow[] = [
     id: "reader-drop",
     area: "plugins",
     workflow:
-      "Dropping a file from the file manager onto Reader (#828), the one way in no key reaches: the reflowable EPUB dropped on the Shelf opens on the Document page, and the twelve-page PDF dropped on that open Document switches to it, both exactly as a pick does; asserts: the Document the drop opens each time, the visible EPUB text, the PDF's page indicator, and the Shelf listing both titles; persists: yes (the Documents on the Shelf and their Reading Position in Plugin storage; a synthetic drop carries no file handle, so its File Grants are session grants and handle persistence is owned by the web File Grant store's Vitest suite). What a drop does beyond these two paths stays with Reader's Vitest plugin suite: the unsupported and skipped counts, dedupe by Fingerprint, the Missing Document reattach, and the order of several drops. The Tauri desktop never delivers a drop to the DOM — it arrives through the webview's drag-drop event and is hit-tested against the page — so it is checked by hand, not here",
+      "Dropping a file from the file manager onto Reader (#828), the one way in no key reaches: the reflowable EPUB dropped on the reader page's Frame wrapper opens inside that same Frame on the Document view, and the twelve-page PDF dropped on the same open-document Frame switches to it, both exactly as a pick does and both leaving the host URL on /plugin/maibuk-reader/reader; Escape returns to the Shelf inside the Frame, which lists both titles; asserts: the URL that never leaves /reader, the visible EPUB text, the PDF's page indicator, and the Shelf rows; persists: yes (the Documents on the Shelf and their Reading Position in Plugin storage; a synthetic drop carries no file handle, so its File Grants are session grants and handle persistence is owned by the web File Grant store's Vitest suite). What a drop does beyond these two paths stays with Reader's Vitest plugin suite: the unsupported and skipped counts, dedupe by Fingerprint, the Missing Document reattach, and the order of several drops. The Tauri desktop never delivers a drop to the DOM — it arrives through the webview's drag-drop event and is hit-tested against the page — so it is checked by hand, not here",
     edges: [
-      "Dropping the EPUB on the Shelf opens it, and dropping the PDF on the open Document switches to it",
+      "Dropping the EPUB on the Shelf Frame opens it in that Frame, and dropping the PDF on the open Document switches to it",
     ],
     terms: ["File Grant", "Reading Position"],
     shortcuts: [],
