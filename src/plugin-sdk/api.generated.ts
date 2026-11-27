@@ -765,7 +765,7 @@ export interface PluginApiMethods {
     input: Record<string, never>;
     output: string[];
   };
-  /** Shows Maibuk's file dialog filtered to these file types and returns the picked file's File Grant, or null when the author cancels. With folder: true it shows the folder dialog instead and returns the folder's name and one File Grant per file in it and its subfolders whose extension is one of these, ignoring case, exactly as if each were picked; symbolic links are not followed and nothing about the folder is kept. Refused with user-action-required unless the author's own click, key press, or Command run caused the call. Picking a file this Plugin already holds a grant for returns the same grant id. */
+  /** Shows Maibuk's file dialog filtered to these file types and returns the picked file's File Grant, or null when the author cancels. With folder: true it shows the folder dialog instead and returns the folder's name and one File Grant per file in it and its subfolders of one of these file types, ignoring case, exactly as if each were picked; symbolic links are not followed and nothing about the folder is kept. Refused with user-action-required unless the author's own click, key press, or Command run caused the call. Picking a file this Plugin already holds a grant for returns the same grant id. */
   "files.pick": {
     input: {
       /** Lowercase extensions without a dot, such as pdf or epub. */
@@ -1071,7 +1071,7 @@ export interface PluginApi {
     keys(params?: PluginApiMethods["storage.keys"]["input"]): Promise<PluginApiMethods["storage.keys"]["output"]>;
   };
   files: {
-    /** Shows Maibuk's file dialog filtered to these file types and returns the picked file's File Grant, or null when the author cancels. With folder: true it shows the folder dialog instead and returns the folder's name and one File Grant per file in it and its subfolders whose extension is one of these, ignoring case, exactly as if each were picked; symbolic links are not followed and nothing about the folder is kept. Refused with user-action-required unless the author's own click, key press, or Command run caused the call. Picking a file this Plugin already holds a grant for returns the same grant id. */
+    /** Shows Maibuk's file dialog filtered to these file types and returns the picked file's File Grant, or null when the author cancels. With folder: true it shows the folder dialog instead and returns the folder's name and one File Grant per file in it and its subfolders of one of these file types, ignoring case, exactly as if each were picked; symbolic links are not followed and nothing about the folder is kept. Refused with user-action-required unless the author's own click, key press, or Command run caused the call. Picking a file this Plugin already holds a grant for returns the same grant id. */
     pick(params: PluginApiMethods["files.pick"]["input"] & { folder: true }): Promise<{
       /** The picked folder's own name, never its path. */
       folder: string;
