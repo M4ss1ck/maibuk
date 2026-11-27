@@ -276,9 +276,16 @@ class FileGrantsPlugin(private val activity: Activity) : Plugin(activity) {
             continue
           }
           val name = it.text(DocumentsContract.Document.COLUMN_DISPLAY_NAME) ?: continue
-          val size = it.number(DocumentsContract.Document.COLUMN_SIZE) ?: continue
-          if (size < 0 || !matchesExtension(name, extensions)) continue
+          if (!matchesExtension(name, extensions)) continue
           val uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
+          // Measured the way a single pick measures, so a provider that reports
+          // no size still yields a grant; one that cannot be measured is left out.
+          val size = documentSize(
+            it.number(DocumentsContract.Document.COLUMN_SIZE),
+            { descriptorSize(uri) },
+            { countStream(uri) },
+            true,
+          ) ?: continue
           found.add(FolderDocument(uri, name, size))
         }
       }

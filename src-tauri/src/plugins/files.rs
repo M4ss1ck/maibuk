@@ -875,6 +875,14 @@ fn matching_files(root: &Path, extensions: &[String]) -> Vec<PathBuf> {
 /// `content://<authority>/tree/<treeId>/document/<docId>` gives
 /// `content://<authority>/tree/<treeId>`. None for any other shape, including a
 /// document URI with no tree.
+/// Adds a folder pick's grant unless it is already listed: a file met twice
+/// (or one the Plugin already held) still appears once.
+pub fn push_once(grants: &mut Vec<GrantInfo>, info: GrantInfo) {
+    if !grants.iter().any(|seen| seen.grant == info.grant) {
+        grants.push(info);
+    }
+}
+
 #[cfg_attr(not(target_os = "android"), allow(dead_code))]
 pub fn tree_uri_of(uri: &str) -> Option<&str> {
     let tree = uri.find("/tree/")?;
@@ -942,11 +950,7 @@ pub async fn plugin_files_pick_folder<R: tauri::Runtime>(
     let mut grants: Vec<GrantInfo> = Vec::new();
     for path in matching_files(&folder, &extensions) {
         match state.grant(&plugin_id, &path) {
-            Ok(info) => {
-                if !grants.iter().any(|seen| seen.grant == info.grant) {
-                    grants.push(info);
-                }
-            }
+            Ok(info) => push_once(&mut grants, info),
             Err(error) if error.starts_with(FILE_MISSING) => {}
             Err(error) => return Err(error),
         }
@@ -1047,7 +1051,7 @@ pub fn plugin_files_clear_all(state: tauri::State<'_, GrantStore>) -> Result<(),
 #[cfg(target_os = "android")]
 pub mod android {
     use super::{
-        file_missing, internal_error, stat_size, tree_uri_of, validate_extensions,
+        file_missing, internal_error, push_once, stat_size, tree_uri_of, validate_extensions,
         validate_plugin_id, FolderPick, GrantInfo, GrantStat, GrantStore,
     };
     use serde::{Deserialize, Serialize};
@@ -1092,9 +1096,15 @@ pub mod android {
             trees.sort_unstable();
             trees.dedup();
             for tree in trees {
-                if !grants.holds_under(tree) {
-                    self.release(tree);
-                }
+                self.release_tree_unless_held(grants, tree);
+            }
+        }
+
+        /// Gives a picked folder's read permission back once no grant lives
+        /// under it; an earlier pick of the same folder may still hold some.
+        fn release_tree_unless_held(&self, grants: &GrantStore, tree: &str) {
+            if !grants.holds_under(tree) {
+                self.release(tree);
             }
         }
     }
@@ -1233,10 +1243,8 @@ pub mod android {
         // The tree's permission stays only while a grant lives under it: an
         // earlier pick of this folder may hold some, so the check runs here.
         let release_unheld_tree = || {
-            if !grants.holds_under(&tree) {
-                if let Ok(documents) = documents(&app) {
-                    documents.release(&tree);
-                }
+            if let Ok(documents) = documents(&app) {
+                documents.release_tree_unless_held(&grants, &tree);
             }
         };
         if picked.error.is_some() {
@@ -1248,11 +1256,7 @@ pub mod android {
         let mut failure = None;
         for document in &picked.documents {
             match grants.grant_document(&plugin_id, &document.uri, &document.name, document.size) {
-                Ok(info) => {
-                    if !held.iter().any(|seen| seen.grant == info.grant) {
-                        held.push(info);
-                    }
-                }
+                Ok(info) => push_once(&mut held, info),
                 Err(error) => {
                     failure = Some(error);
                     break;
@@ -2501,6 +2505,20 @@ mod tests {
     fn sorted(mut paths: Vec<PathBuf>) -> Vec<PathBuf> {
         paths.sort();
         paths
+    }
+
+    #[test]
+    fn push_once_lists_each_grant_once_in_first_seen_order() {
+        let grant = |id: &str| GrantInfo {
+            grant: id.to_string(),
+            name: format!("{id}.epub"),
+            size: 1,
+        };
+        let mut grants = Vec::new();
+        for id in ["a", "b", "a"] {
+            push_once(&mut grants, grant(id));
+        }
+        assert_eq!(grants, vec![grant("a"), grant("b")]);
     }
 
     #[test]
