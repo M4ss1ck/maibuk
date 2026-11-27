@@ -103,7 +103,7 @@ Every user-visible string must use `useTranslation()` and have keys in both `src
 
 ### Linting and formatting
 
-There is no ESLint or Prettier. Three gates run in CI's fast `checks` job: `pnpm typecheck` (TypeScript strict mode, `tsconfig.json`), `pnpm lint`, and `pnpm check:deprecated`. Vitest strips types without checking them, so a type error in a test file passes `pnpm test:run` and fails only `pnpm typecheck`. Run all three before pushing.
+There is no ESLint or Prettier. Three gates run in CI's fast `checks` job: `pnpm typecheck` (TypeScript strict mode, `tsconfig.json`, plus `tsconfig.node.json` for `vite.config.ts`), `pnpm lint`, and `pnpm check:deprecated`. Vitest strips types without checking them, so a type error in a test file passes `pnpm test:run` and fails only `pnpm typecheck`. Run all three before pushing.
 
 **Lint and format stay at zero findings.** `pnpm lint` (`scripts/lint.mjs`) runs `biome check` over the whole repo and fails on any error, warning, or info, and on any unformatted file. `pnpm lint:fix` applies Biome's safe fixes and formatting. Fix a finding at its cause. A `biome-ignore` needs a reason saying why the rule is wrong for that line (the `!important` that beats Joyride's inline styles in `src/index.css`); never disable a rule in `biome.json` to clear a finding.
 

@@ -62,7 +62,7 @@ pnpm dev:web          # Web-only dev
 pnpm test             # Tests in watch mode (TDD loop)
 pnpm test:run         # Tests once
 pnpm test:coverage    # Coverage report with thresholds
-pnpm typecheck        # tsc over src/, test files included
+pnpm typecheck        # tsc over src/ (tests included) and vite.config.ts
 pnpm test:guards      # tests that read the repo from disk (seconds)
 pnpm lint             # Biome lint + format, zero findings (pnpm lint:fix fixes)
 pnpm check:deprecated # no @deprecated APIs (CI, ~8s)
