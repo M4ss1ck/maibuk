@@ -22,7 +22,7 @@
     "lint": "node scripts/lint.mjs",
     "lint:fix": "biome check --write",
     "check:deprecated": "node scripts/deprecated-apis.mjs",
-    "typecheck": "tsc",
+    "typecheck": "tsc && tsc -p tsconfig.node.json --noEmit",
     "format": "biome format",
     "format:fix": "biome format --write",
     "tauri": "tauri",

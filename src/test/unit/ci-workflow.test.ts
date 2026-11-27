@@ -18,8 +18,10 @@ function job(name: string): string {
 describe("CI workflow", () => {
   // A type error in a test file once reached main: Vitest strips types without
   // checking them, and tsc only ran inside the last step of a 10-minute job.
+  // Plain `tsc` skips referenced projects, so vite.config.ts (tsconfig.node.json)
+  // went unchecked and its errors showed only in the editor.
   it("typechecks in the fast job, apart from the test shards", () => {
-    expect(packageJson.scripts.typecheck).toBe("tsc");
+    expect(packageJson.scripts.typecheck).toBe("tsc && tsc -p tsconfig.node.json --noEmit");
     const checks = job("checks");
     expect(checks).toContain("run: pnpm typecheck");
     expect(checks).toContain("run: pnpm lint");

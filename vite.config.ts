@@ -8,7 +8,7 @@ import { extname, join, normalize, resolve, sep } from "node:path";
 import { version } from "./package.json";
 import { DEP_EXCLUDE, DEP_SCAN_ENTRIES, devWatchIgnored } from "./scripts/dev-server.mjs";
 import { startupScreenPlugin } from "./scripts/startup-screen.mjs";
-import { TEST_TIMEOUT_MS } from "./src/test/time-budget";
+import { TEST_TIMEOUT_MS } from "./scripts/test-timeout.mjs";
 
 const host = process.env.TAURI_DEV_HOST;
 const buildTarget = process.env.VITE_BUILD_TARGET || "tauri";
@@ -159,7 +159,7 @@ export default defineConfig(() => ({
     // concatenate a root one.
     projects: [
       {
-        extends: true,
+        extends: true as const,
         test: {
           name: "dom",
           environment: "jsdom",
@@ -167,7 +167,7 @@ export default defineConfig(() => ({
         },
       },
       {
-        extends: true,
+        extends: true as const,
         test: {
           name: "node",
           environment: "node",

@@ -7,9 +7,13 @@
 // one generous value, a test may not pick its own, and slowness is reported by
 // the time budget reporter instead of failing the run.
 
+// The value lives in scripts/test-timeout.mjs so vite.config.ts can read it
+// outside the app's tsconfig project.
+import { TEST_TIMEOUT_MS } from "../../scripts/test-timeout.mjs";
+
 /** Stops hung tests; sized against CI measurements. Long sweeps are split;
  * the Tutorial run has the exception below. */
-export const TEST_TIMEOUT_MS = 60_000;
+export { TEST_TIMEOUT_MS };
 
 /** `waitFor` / `findBy*`. They return as soon as the condition holds, so a long
  * limit only costs time when the test is failing anyway. */
