@@ -13,6 +13,7 @@ import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
 import app.tauri.annotation.TauriPlugin
 import app.tauri.plugin.Invoke
+import app.tauri.plugin.JSArray
 import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
 import java.io.InputStream
@@ -41,6 +42,18 @@ fun pickerMimeTypes(extensions: List<String>, lookup: (String) -> String?): List
 }
 
 private const val GENERIC_MIME_TYPE = "application/octet-stream"
+
+/**
+ * Whether a document called `name` has one of `extensions` (lowercase, no dot),
+ * ignoring case. A dot file such as `.epub` has no extension, the same as on the
+ * desktop, and a name ending in a dot has none either.
+ */
+fun matchesExtension(name: String, extensions: List<String>): Boolean {
+  val dot = name.lastIndexOf('.')
+  if (dot <= 0 || dot == name.length - 1) return false
+  val extension = name.substring(dot + 1)
+  return extensions.any { it.equals(extension, ignoreCase = true) }
+}
 
 /**
  * The size a description carries: the column the provider filled, else the
@@ -105,6 +118,69 @@ class FileGrantsPlugin(private val activity: Activity) : Plugin(activity) {
     }
   }
 
+  /**
+   * Opens the system folder picker. The extensions are parsed here so a
+   * malformed call rejects before the picker opens; `pickFolderResult` parses
+   * them again to walk the tree.
+   */
+  @Command
+  fun pickFolder(invoke: Invoke) {
+    try {
+      invoke.parseArgs(PickDocumentArgs::class.java)
+      val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+      startActivityForResult(invoke, intent, "pickFolderResult")
+    } catch (error: Exception) {
+      invoke.reject(error.message ?: "The folder picker could not open")
+    }
+  }
+
+  /**
+   * Walks the picked tree and answers with its name and every document under it
+   * whose name matches the extensions and whose size is known. The tree's read
+   * permission is the one that is persisted; the child documents carry none.
+   * The answer always names the tree, even when the walk failed (`error`), and
+   * never releases it here: an earlier pick of the same folder may still hold
+   * grants under it, which only Rust knows, so Rust releases the tree once no
+   * grant needs it.
+   */
+  @ActivityCallback
+  fun pickFolderResult(invoke: Invoke, result: ActivityResult) {
+    val treeUri = result.data?.data
+    // A cancel resolves with no URI, the same way the file picker does.
+    if (result.resultCode != Activity.RESULT_OK || treeUri == null) {
+      invoke.resolve(JSObject())
+      return
+    }
+    // A provider that offers no persistable permission still reads for this
+    // run; the grants then read as gone after a restart.
+    try {
+      activity.contentResolver.takePersistableUriPermission(
+        treeUri,
+        Intent.FLAG_GRANT_READ_URI_PERMISSION,
+      )
+    } catch (_: SecurityException) {}
+    val answer = JSObject()
+    answer.put("tree", treeUri.toString())
+    try {
+      val extensions = invoke.parseArgs(PickDocumentArgs::class.java).extensions.toList()
+      val documents = JSArray()
+      for (document in walkFolder(treeUri, extensions)) {
+        val entry = JSObject()
+        entry.put("uri", document.uri.toString())
+        entry.put("name", document.name)
+        entry.put("size", document.size)
+        documents.put(entry)
+      }
+      answer.put("folder", folderName(treeUri))
+      answer.put("documents", documents)
+    } catch (error: Exception) {
+      // Resolve, not reject: Rust must still hear the tree to decide whether
+      // its permission goes back.
+      answer.put("error", error.message ?: "The picked folder is unreadable")
+    }
+    invoke.resolve(answer)
+  }
+
   @ActivityCallback
   fun pickResult(invoke: Invoke, result: ActivityResult) {
     val uri = result.data?.data
@@ -167,6 +243,66 @@ class FileGrantsPlugin(private val activity: Activity) : Plugin(activity) {
       releasePermission(Uri.parse(invoke.parseArgs(DocumentArgs::class.java).uri))
     } catch (_: Exception) {}
     invoke.resolve()
+  }
+
+  private class FolderDocument(val uri: Uri, val name: String, val size: Long)
+
+  /**
+   * Every document under the tree's root, in any subfolder, that matches
+   * `extensions` and reports a size. Iterative: a pending stack of folder ids,
+   * so a deep tree cannot exhaust the call stack.
+   */
+  private fun walkFolder(treeUri: Uri, extensions: List<String>): List<FolderDocument> {
+    val found = mutableListOf<FolderDocument>()
+    val pending = ArrayDeque<String>()
+    pending.add(DocumentsContract.getTreeDocumentId(treeUri))
+    val columns = arrayOf(
+      DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+      DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+      DocumentsContract.Document.COLUMN_MIME_TYPE,
+      DocumentsContract.Document.COLUMN_SIZE,
+    )
+    while (pending.isNotEmpty()) {
+      val folderId = pending.removeLast()
+      val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, folderId)
+      val cursor = activity.contentResolver.query(childrenUri, columns, null, null, null)
+        ?: continue
+      cursor.use {
+        while (it.moveToNext()) {
+          val docId = it.text(DocumentsContract.Document.COLUMN_DOCUMENT_ID) ?: continue
+          val mime = it.text(DocumentsContract.Document.COLUMN_MIME_TYPE)
+          if (mime == DocumentsContract.Document.MIME_TYPE_DIR) {
+            pending.add(docId)
+            continue
+          }
+          val name = it.text(DocumentsContract.Document.COLUMN_DISPLAY_NAME) ?: continue
+          val size = it.number(DocumentsContract.Document.COLUMN_SIZE) ?: continue
+          if (size < 0 || !matchesExtension(name, extensions)) continue
+          val uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
+          found.add(FolderDocument(uri, name, size))
+        }
+      }
+    }
+    return found
+  }
+
+  /**
+   * The picked folder's display name. A provider that cannot name it gives an
+   * empty string, which Rust passes on as the folder's name.
+   */
+  private fun folderName(treeUri: Uri): String {
+    val rootUri = DocumentsContract.buildDocumentUriUsingTree(
+      treeUri,
+      DocumentsContract.getTreeDocumentId(treeUri),
+    )
+    val column = DocumentsContract.Document.COLUMN_DISPLAY_NAME
+    return try {
+      activity.contentResolver.query(rootUri, arrayOf(column), null, null, null)?.use {
+        if (it.moveToFirst()) it.text(column) ?: "" else ""
+      } ?: ""
+    } catch (_: Exception) {
+      ""
+    }
   }
 
   /** Hands the read permission the system holds for `uri` back to the system. */

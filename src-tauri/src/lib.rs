@@ -167,6 +167,8 @@ pub fn run() {
             #[cfg(desktop)]
             plugins::files::plugin_files_pick,
             #[cfg(desktop)]
+            plugins::files::plugin_files_pick_folder,
+            #[cfg(desktop)]
             plugins::files::plugin_files_drop,
             #[cfg(desktop)]
             plugins::files::plugin_files_read,
@@ -182,6 +184,8 @@ pub fn run() {
             plugins::files::plugin_files_clear_all,
             #[cfg(target_os = "android")]
             plugins::files::android::plugin_files_pick,
+            #[cfg(target_os = "android")]
+            plugins::files::android::plugin_files_pick_folder,
             #[cfg(target_os = "android")]
             plugins::files::android::plugin_files_read,
             #[cfg(target_os = "android")]
