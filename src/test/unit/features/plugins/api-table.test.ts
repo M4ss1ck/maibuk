@@ -39,6 +39,7 @@ import {
   PLUGIN_API_METHODS,
   PLUGIN_API_STREAMING_METHODS,
   type PluginApiEvents as GeneratedEvents,
+  type PluginApi,
   type PluginApiMethods,
 } from "@/plugin-sdk/api.generated";
 
@@ -333,6 +334,36 @@ describe("generated SDK files", () => {
     const docs = renderPluginApiDocs(PLUGIN_API_TABLE);
     expect(docs).toContain("### `files.save`");
     expect(docs).toContain("AsyncIterable<Uint8Array>");
+  });
+});
+
+describe("files.pick folder option (#947)", () => {
+  type Grant = { grant: string; name: string; size: number };
+  // Only the type is under test: the call never runs.
+  const pick = (() => Promise.resolve(null)) as unknown as PluginApi["files"]["pick"];
+
+  it("keeps a file pick's output a File Grant, so an existing caller still typechecks", () => {
+    expectTypeOf(pick({ extensions: ["pdf"] })).resolves.toEqualTypeOf<Grant | null>();
+    expectTypeOf(
+      pick({ extensions: ["pdf"], folder: false })
+    ).resolves.toEqualTypeOf<Grant | null>();
+  });
+
+  it("types a folder pick's output as the folder's name and its grants", () => {
+    expectTypeOf(pick({ extensions: ["pdf"], folder: true })).resolves.toEqualTypeOf<{
+      folder: string;
+      grants: Grant[];
+    } | null>();
+  });
+
+  it("accepts both shapes on the wire, and refuses a folder pick missing its grants", () => {
+    const row = PLUGIN_API_TABLE.find((entry) => entry.id === "files.pick")!;
+    const grant = { grant: "g", name: "a.pdf", size: 1 };
+    expect(row.output.safeParse(grant).success).toBe(true);
+    expect(row.output.safeParse({ folder: "Books", grants: [grant] }).success).toBe(true);
+    expect(row.output.safeParse(null).success).toBe(true);
+    expect(row.output.safeParse({ folder: "Books" }).success).toBe(false);
+    expect(row.input.safeParse({ extensions: ["pdf"], folder: true }).success).toBe(true);
   });
 });
 

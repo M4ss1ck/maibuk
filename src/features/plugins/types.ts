@@ -11,7 +11,11 @@ import type { BookStatus } from "@/features/books/types";
 import type { ChapterStatus, ChapterType } from "@/features/chapters/types";
 import type { Language } from "@/features/settings/types";
 import type { PluginStopMessageReason } from "@/features/plugins/stop-messages";
-import type { MemoryPluginFileGrantFile, PluginFileGrant } from "@/features/plugins/file-grants";
+import type {
+  MemoryPluginFileGrantFile,
+  MemoryPluginFileGrantFolder,
+  PluginFileGrant,
+} from "@/features/plugins/file-grants";
 import type { PluginAppearance } from "@/features/plugins/appearance";
 import type { MemorySystemNotificationAdapter } from "@/features/plugins/system-notifications";
 import type { PluginDirectoryAdapter, PluginFetchAdapter } from "@/lib/platform/types";
@@ -961,6 +965,12 @@ export interface TestHostFiles {
   /** Queues the file the Plugin's next `files.pick` returns; null means the author cancelled. */
   queuePick(file: MemoryPluginFileGrantFile | null): void;
   /**
+   * Queues the folder the Plugin's next `files.pick` with `folder: true`
+   * walks; null means the author cancelled. Every file in it is listed,
+   * matching or not: the host filters by the Plugin's extensions.
+   */
+  queueFolderPick(folder: MemoryPluginFileGrantFolder | null): void;
+  /**
    * Simulates the author dropping `files` on the Plugin's `page`: mints a File
    * Grant per file and emits `files.dropped` to a Plugin that subscribed and
    * holds `files:pick`. Resolves with whether the event was delivered. Throws
@@ -1242,6 +1252,13 @@ export interface PluginApiRow<
   acceptsBlob?: true;
   /** At most one accepted call per this many milliseconds, per Plugin. */
   minIntervalMs?: number;
+  /**
+   * The output narrowed by one boolean input field, for the SDK's typed
+   * overloads: a call passing `flag: true` resolves to `set`, one leaving it
+   * out or false to `unset`. `output` stays the wire schema and accepts both,
+   * so adding a flag never changes the type an existing call resolves to.
+   */
+  outputByFlag?: { flag: string; set: z.ZodType; unset: z.ZodType };
 }
 
 /**

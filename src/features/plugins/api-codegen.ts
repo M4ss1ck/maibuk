@@ -18,6 +18,7 @@ import {
   chunkJsonSchema,
   inputJsonSchema,
   outputJsonSchema,
+  outputSchemaOf,
   payloadJsonSchema,
 } from "@/features/plugins/api-table";
 import type { PluginApiEventRow, PluginApiRow } from "@/features/plugins/types";
@@ -218,6 +219,19 @@ function renderClientNode(node: NamespaceNode, indent: string): string {
       const method = `PluginApiMethods[${JSON.stringify(row.id)}]`;
       const optional = hasRequiredInput(row) ? "" : "?";
       const listener = row.chunk ? `, listener?: PluginStreamListener<${method}["chunk"]>` : "";
+      const byFlag = row.outputByFlag;
+      if (byFlag) {
+        // Typed overloads: the flag picks the output, and the last signature
+        // takes a flag whose value is only known at run time.
+        const typeOf = (schema: PluginApiRow["output"]) =>
+          jsonSchemaToTypeScript(outputSchemaOf(schema), indent);
+        lines.push(
+          `${docComment(row.description, indent)}${indent}${name}(params: ${method}["input"] & { ${byFlag.flag}: true }${listener}): Promise<${typeOf(byFlag.set)}>;`,
+          `${indent}${name}(params${optional}: ${method}["input"] & { ${byFlag.flag}?: false }${listener}): Promise<${typeOf(byFlag.unset)}>;`,
+          `${indent}${name}(params${optional}: ${method}["input"]${listener}): Promise<${method}["output"]>;`
+        );
+        continue;
+      }
       lines.push(
         `${docComment(row.description, indent)}${indent}${name}(params${optional}: ${method}["input"]${listener}): Promise<${method}["output"]>;`
       );

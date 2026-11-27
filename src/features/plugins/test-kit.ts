@@ -812,7 +812,10 @@ export function createTestHost(options: TestHostOptions): TestHost {
     // same `PluginFileGrantStore` seam the app's handlers use; `files.pick` is a
     // user action here because the kit runs the Plugin's Commands and clicks
     // synthetically (`hasUserActivation` below).
-    "files.pick": ({ extensions }) => fileGrants.pick(options.manifest.id, extensions),
+    "files.pick": ({ extensions, folder }) =>
+      folder
+        ? fileGrants.pickFolder(options.manifest.id, extensions)
+        : fileGrants.pick(options.manifest.id, extensions),
     // The bytes arrive as the broker's checked `blob` message; the save flow is
     // the app's own, over the memory saver above (ADR 0040).
     "files.save": async ({ name, mimeType }, { blob }) => ({
@@ -1203,6 +1206,9 @@ export function createTestHost(options: TestHostOptions): TestHost {
       clipboard = next;
     },
     files: {
+      queueFolderPick(folder) {
+        fileGrants.queueFolderPick(options.manifest.id, folder);
+      },
       queuePick(file) {
         fileGrants.queuePick(options.manifest.id, file);
       },

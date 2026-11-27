@@ -2,7 +2,7 @@
 
 import type { PluginStreamListener } from "@/plugin-sdk/protocol";
 
-export const PLUGIN_API_VERSION = "0.1.16";
+export const PLUGIN_API_VERSION = "0.1.17";
 
 export const PLUGIN_API_METHODS = [
   "library.books.list",
@@ -765,18 +765,29 @@ export interface PluginApiMethods {
     input: Record<string, never>;
     output: string[];
   };
-  /** Shows Maibuk's file dialog filtered to these file types and returns the picked file's File Grant, or null when the author cancels. Refused with user-action-required unless the author's own click, key press, or Command run caused the call. Picking a file this Plugin already holds a grant for returns the same grant id. */
+  /** Shows Maibuk's file dialog filtered to these file types and returns the picked file's File Grant, or null when the author cancels. With folder: true it shows the folder dialog instead and returns the folder's name and one File Grant per file in it and its subfolders whose extension is one of these, ignoring case, exactly as if each were picked; symbolic links are not followed and nothing about the folder is kept. Refused with user-action-required unless the author's own click, key press, or Command run caused the call. Picking a file this Plugin already holds a grant for returns the same grant id. */
   "files.pick": {
     input: {
       /** Lowercase extensions without a dot, such as pdf or epub. */
       extensions: string[];
       /** Only one file at a time for now. */
       multiple?: false;
+      /** true picks a folder: every matching file in it and its subfolders, read once, now. */
+      folder?: boolean;
     };
     output: {
       grant: string;
       name: string;
       size: number;
+    } | {
+      /** The picked folder's own name, never its path. */
+      folder: string;
+      /** One File Grant per matching file, each once. */
+      grants: {
+        grant: string;
+        name: string;
+        size: number;
+      }[];
     } | null;
   };
   /** Saves a file under the name and MIME type you give: Maibuk asks the author where to save it and writes the bytes you send right after this call. Maibuk keeps only the base name (no folders, no leading dots, at most 255 bytes) and refuses a name that names no file type or one an executable uses. Refused with user-action-required unless the author's own click, key press, or Command run caused the call, and not-implemented on a device that cannot save yet. */
@@ -1060,7 +1071,22 @@ export interface PluginApi {
     keys(params?: PluginApiMethods["storage.keys"]["input"]): Promise<PluginApiMethods["storage.keys"]["output"]>;
   };
   files: {
-    /** Shows Maibuk's file dialog filtered to these file types and returns the picked file's File Grant, or null when the author cancels. Refused with user-action-required unless the author's own click, key press, or Command run caused the call. Picking a file this Plugin already holds a grant for returns the same grant id. */
+    /** Shows Maibuk's file dialog filtered to these file types and returns the picked file's File Grant, or null when the author cancels. With folder: true it shows the folder dialog instead and returns the folder's name and one File Grant per file in it and its subfolders whose extension is one of these, ignoring case, exactly as if each were picked; symbolic links are not followed and nothing about the folder is kept. Refused with user-action-required unless the author's own click, key press, or Command run caused the call. Picking a file this Plugin already holds a grant for returns the same grant id. */
+    pick(params: PluginApiMethods["files.pick"]["input"] & { folder: true }): Promise<{
+      /** The picked folder's own name, never its path. */
+      folder: string;
+      /** One File Grant per matching file, each once. */
+      grants: {
+        grant: string;
+        name: string;
+        size: number;
+      }[];
+    } | null>;
+    pick(params: PluginApiMethods["files.pick"]["input"] & { folder?: false }): Promise<{
+      grant: string;
+      name: string;
+      size: number;
+    } | null>;
     pick(params: PluginApiMethods["files.pick"]["input"]): Promise<PluginApiMethods["files.pick"]["output"]>;
     /** Saves a file under the name and MIME type you give: Maibuk asks the author where to save it and writes the bytes you send right after this call. Maibuk keeps only the base name (no folders, no leading dots, at most 255 bytes) and refuses a name that names no file type or one an executable uses. Refused with user-action-required unless the author's own click, key press, or Command run caused the call, and not-implemented on a device that cannot save yet. */
     save(params: PluginApiMethods["files.save"]["input"]): Promise<PluginApiMethods["files.save"]["output"]>;

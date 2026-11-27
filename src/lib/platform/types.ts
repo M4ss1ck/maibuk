@@ -273,6 +273,16 @@ export interface PluginFileGrant {
 }
 
 /**
+ * What a folder `files.pick` returns: the picked folder's own name (never its
+ * path) and one grant per matching file in it and its subfolders, each exactly
+ * the grant a single pick of that file would return.
+ */
+export interface PluginFolderPick {
+  folder: string;
+  grants: PluginFileGrant[];
+}
+
+/**
  * One file the author dropped on the host, as the platform can describe it: a
  * browser hands over the dropped `File` and the handle promise taken from
  * `DataTransferItem.getAsFileSystemHandle()` inside the drop event (null where
@@ -307,6 +317,14 @@ export interface PluginFileGrantStore {
    * already holds a grant for returns the same grant id.
    */
   pick(pluginId: string, extensions: readonly string[]): Promise<PluginFileGrant | null>;
+  /**
+   * Shows the host's folder dialog and walks the picked folder once, now:
+   * every file in it and its subfolders whose extension is one of
+   * `extensions` (ignoring case) gets the grant `pick` would give it, in walk
+   * order, each grant once. Symbolic links are not followed. Null when the
+   * author cancelled. Nothing about the folder is kept.
+   */
+  pickFolder(pluginId: string, extensions: readonly string[]): Promise<PluginFolderPick | null>;
   /**
    * Mints one File Grant per dropped file the store can grant, in order, with
    * the same per-Plugin scoping and the same dedupe as `pick`: a file this

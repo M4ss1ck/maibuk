@@ -2113,6 +2113,30 @@ describe("createTestHost() File Grants", () => {
     }
   });
 
+  it("walks a queued folder for files.pick with folder: true, granting only matching files", async () => {
+    const host = createTestHost({ manifest: filesManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      host.files.queueFolderPick({
+        name: "Notes",
+        files: [FILE, { name: "cover.png", bytes: new Uint8Array([1]) }],
+      });
+
+      const picked = await client.files.pick({ extensions: ["txt"], folder: true });
+
+      expect(picked).toEqual({
+        folder: "Notes",
+        grants: [{ grant: expect.any(String), name: FILE.name, size: BYTES.length }],
+      });
+      await expect(host.files.grants()).resolves.toEqual(picked?.grants);
+
+      host.files.queueFolderPick(null);
+      await expect(client.files.pick({ extensions: ["txt"], folder: true })).resolves.toBeNull();
+    } finally {
+      await host.stop();
+    }
+  });
+
   it("seeds the store with the files a test hands it, and makes one missing", async () => {
     const host = createTestHost({ manifest: filesManifest(), files: [FILE] });
     try {
