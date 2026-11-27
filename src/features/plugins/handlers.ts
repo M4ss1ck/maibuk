@@ -308,8 +308,10 @@ export function createPluginHandlers(manifest: PluginHandlersManifest): PluginAp
       runClipboard("written", (clipboard) => clipboard.writeText(text)).then(() => null),
     // File Grant rows resolve through the store; `async` also makes a missing
     // store a rejected promise, the way every other host failure arrives.
-    "files.pick": async ({ extensions }, { pluginId }) =>
-      pluginFileGrantStore().pick(pluginId, extensions),
+    "files.pick": async ({ extensions, folder }, { pluginId }) =>
+      folder
+        ? pluginFileGrantStore().pickFolder(pluginId, extensions)
+        : pluginFileGrantStore().pick(pluginId, extensions),
     // The bytes arrived as one `blob` message the broker checked; the name the
     // author sees is the cleaned one, never the Plugin's path or dots.
     "files.save": async ({ name, mimeType }, { blob }) => ({

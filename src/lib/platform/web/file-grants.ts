@@ -12,11 +12,13 @@
  * breaking a Plugin's pick.
  */
 
+import { hasPluginFileExtension } from "@/lib/platform/plugin-file-extensions";
 import type {
   PluginDroppedFile,
   PluginFileGrant,
   PluginFileGrantStore,
   PluginFileStat,
+  PluginFolderPick,
 } from "@/lib/platform/types";
 import { PluginApiError } from "@/plugin-sdk/protocol";
 
@@ -28,6 +30,7 @@ type GrantPermission = "denied" | "granted" | "prompt";
 
 // Only the slice this store uses: the project has no @types package for the File System Access API.
 interface StoredFileGrant {
+  readonly kind: "file";
   readonly name: string;
   getFile(): Promise<File>;
   isSameEntry(other: StoredFileGrant): Promise<boolean>;
@@ -44,17 +47,29 @@ interface OpenFilePickerOptions {
   }[];
 }
 
-// The DOM typings do not declare window.showOpenFilePicker.
+// A folder entry is either a file to match or a subfolder to walk.
+interface StoredDirectoryHandle {
+  readonly kind: "directory";
+  readonly name: string;
+  values(): AsyncIterable<StoredFileGrant | StoredDirectoryHandle>;
+}
+
+// The DOM typings do not declare window.showOpenFilePicker or window.showDirectoryPicker.
 type ShowOpenFilePicker = (options: OpenFilePickerOptions) => Promise<StoredFileGrant[]>;
+type ShowDirectoryPicker = (options: { mode: "read" }) => Promise<StoredDirectoryHandle>;
 
 /** The extra arguments tests substitute; the app passes none. */
 export interface WebPluginFileGrantDeps {
   /** `window.showOpenFilePicker`; absent means the session-only input fallback. */
   showOpenFilePicker?: ShowOpenFilePicker;
+  /** `window.showDirectoryPicker`; absent means the session-only folder input fallback. */
+  showDirectoryPicker?: ShowDirectoryPicker;
   /** The factory grants persist through; absent means session-only grants. */
   indexedDB?: IDBFactory;
   /** The picker used where the File System Access API is missing. */
   pickWithInput?: (extensions: readonly string[]) => Promise<File | null>;
+  /** The folder picker used where `showDirectoryPicker` is missing; null means cancelled. */
+  pickFolderWithInput?: () => Promise<File[] | null>;
   /** Grant id source, so a test can name them. */
   randomId?: () => string;
 }
@@ -88,6 +103,14 @@ function internalError(): PluginApiError {
   });
 }
 
+// The browser shows its picker only inside a user activation.
+function userActionRequired(): PluginApiError {
+  return new PluginApiError({
+    code: "user-action-required",
+    message: "The browser opens its file picker only after a click or key press",
+  });
+}
+
 function needsPermission(): PluginApiError {
   return new PluginApiError({
     code: "file-needs-permission",
@@ -110,6 +133,11 @@ function grantKey(pluginId: string, grant: string): string {
 function windowPicker(): ShowOpenFilePicker | null {
   const picker = (globalThis as { showOpenFilePicker?: unknown }).showOpenFilePicker;
   return typeof picker === "function" ? (picker as ShowOpenFilePicker).bind(globalThis) : null;
+}
+
+function windowDirectoryPicker(): ShowDirectoryPicker | null {
+  const picker = (globalThis as { showDirectoryPicker?: unknown }).showDirectoryPicker;
+  return typeof picker === "function" ? (picker as ShowDirectoryPicker).bind(globalThis) : null;
 }
 
 // Browsers without the File System Access API still fire `cancel` on dismissal.
@@ -145,6 +173,44 @@ function pickWithFileInput(extensions: readonly string[]): Promise<File | null> 
   });
 }
 
+// The folder twin of `pickWithFileInput`: a `webkitdirectory` input hands over
+// every file under the chosen folder, each with its path in `webkitRelativePath`.
+// A change with no files is a picked empty folder; only a dismissal without a
+// change reads as a cancel.
+function pickFolderWithFileInput(): Promise<File[] | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.webkitdirectory = true;
+    input.multiple = true;
+    input.style.display = "none";
+    document.body.append(input);
+
+    let settled = false;
+    const finish = (files: File[] | null): void => {
+      if (settled) return;
+      settled = true;
+      input.remove();
+      resolve(files);
+    };
+
+    input.addEventListener("change", () => finish(Array.from(input.files ?? [])), { once: true });
+    input.addEventListener("cancel", () => finish(null), { once: true });
+    // `change` trails the focus return on some browsers, so look on the next task.
+    window.addEventListener(
+      "focus",
+      () => {
+        setTimeout(() => {
+          const files = Array.from(input.files ?? []);
+          finish(files.length > 0 ? files : null);
+        }, 0);
+      },
+      { once: true }
+    );
+    input.click();
+  });
+}
+
 function isPersistedGrant(value: unknown): value is PersistedGrant {
   if (typeof value !== "object" || value === null) return false;
   const record = value as Record<string, unknown>;
@@ -164,6 +230,7 @@ export function createWebPluginFileGrantStore(
   const session = new Map<string, SessionGrant>();
   const randomId = deps.randomId ?? (() => crypto.randomUUID());
   const pickWithInput = deps.pickWithInput ?? pickWithFileInput;
+  const pickFolderWithInput = deps.pickFolderWithInput ?? pickFolderWithFileInput;
 
   // Read per call, so a test can swap the factory for each store.
   function factory(): IDBFactory | undefined {
@@ -366,13 +433,7 @@ export function createWebPluginFileGrantStore(
       });
     } catch (error) {
       if (errorName(error) === "AbortError") return null;
-      // The browser shows the picker only inside a user activation.
-      if (errorName(error) === "NotAllowedError") {
-        throw new PluginApiError({
-          code: "user-action-required",
-          message: "The browser opens its file picker only after a click or key press",
-        });
-      }
+      if (errorName(error) === "NotAllowedError") throw userActionRequired();
       throw error;
     }
 
@@ -380,6 +441,75 @@ export function createWebPluginFileGrantStore(
     if (!handle) return null;
 
     return grantHandle(pluginId, handle);
+  }
+
+  // A folder entry the store cannot hold persistently still grants its File for the session.
+  async function grantFolderEntry(
+    pluginId: string,
+    entry: StoredFileGrant
+  ): Promise<PluginFileGrant> {
+    try {
+      return await grantHandle(pluginId, entry);
+    } catch {
+      return sessionGrant(pluginId, await entry.getFile());
+    }
+  }
+
+  // Walks the folder depth first in the order the browser lists it, granting every
+  // matching file once; `grants` keeps the first occurrence of each grant id.
+  async function grantFolderFiles(
+    pluginId: string,
+    extensions: readonly string[],
+    directory: StoredDirectoryHandle,
+    grants: Map<string, PluginFileGrant>
+  ): Promise<void> {
+    for await (const entry of directory.values()) {
+      if (entry.kind === "directory") {
+        await grantFolderFiles(pluginId, extensions, entry, grants);
+        continue;
+      }
+      if (!hasPluginFileExtension(entry.name, extensions)) continue;
+      const grant = await grantFolderEntry(pluginId, entry);
+      if (!grants.has(grant.grant)) grants.set(grant.grant, grant);
+    }
+  }
+
+  async function pickDirectory(
+    pluginId: string,
+    extensions: readonly string[],
+    showDirectoryPicker: ShowDirectoryPicker
+  ): Promise<PluginFolderPick | null> {
+    let directory: StoredDirectoryHandle;
+    try {
+      directory = await showDirectoryPicker({ mode: "read" });
+    } catch (error) {
+      if (errorName(error) === "AbortError") return null;
+      if (errorName(error) === "NotAllowedError") throw userActionRequired();
+      throw error;
+    }
+
+    const grants = new Map<string, PluginFileGrant>();
+    await grantFolderFiles(pluginId, extensions, directory, grants);
+    return { folder: directory.name, grants: [...grants.values()] };
+  }
+
+  // The input fallback names the folder after the first file's first path segment;
+  // a picked folder with no files, or files without a relative path, names it "".
+  async function pickFolderSessionOnly(
+    pluginId: string,
+    extensions: readonly string[]
+  ): Promise<PluginFolderPick | null> {
+    const files = await pickFolderWithInput();
+    if (!files) return null;
+
+    const grants = new Map<string, PluginFileGrant>();
+    for (const file of files) {
+      if (!hasPluginFileExtension(file.name, extensions)) continue;
+      const grant = sessionGrant(pluginId, file);
+      if (!grants.has(grant.grant)) grants.set(grant.grant, grant);
+    }
+    const folder = files[0]?.webkitRelativePath.split("/")[0] ?? "";
+    return { folder, grants: [...grants.values()] };
   }
 
   async function pickSessionOnly(
@@ -396,6 +526,12 @@ export function createWebPluginFileGrantStore(
       const showOpenFilePicker = deps.showOpenFilePicker ?? windowPicker();
       if (showOpenFilePicker) return pickHandle(pluginId, extensions, showOpenFilePicker);
       return pickSessionOnly(pluginId, extensions);
+    },
+
+    async pickFolder(pluginId, extensions): Promise<PluginFolderPick | null> {
+      const showDirectoryPicker = deps.showDirectoryPicker ?? windowDirectoryPicker();
+      if (showDirectoryPicker) return pickDirectory(pluginId, extensions, showDirectoryPicker);
+      return pickFolderSessionOnly(pluginId, extensions);
     },
 
     async drop(pluginId, files: readonly PluginDroppedFile[]): Promise<PluginFileGrant[]> {

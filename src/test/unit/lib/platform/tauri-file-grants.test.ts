@@ -41,6 +41,25 @@ describe("createTauriPluginFileGrantStore()", () => {
     await expect(store.pick("tracer", ["pdf"])).resolves.toBeNull();
   });
 
+  it("asks Rust to pick and walk a folder, and hands back its name and grants", async () => {
+    const folder = { folder: "Books", grants: [{ grant: "c3", name: "a.epub", size: 9 }] };
+    mockInvoke.mockResolvedValue(folder);
+    const store = createTauriPluginFileGrantStore();
+
+    await expect(store.pickFolder("tracer", ["epub"])).resolves.toEqual(folder);
+    expect(mockInvoke).toHaveBeenCalledWith("plugin_files_pick_folder", {
+      pluginId: "tracer",
+      extensions: ["epub"],
+    });
+  });
+
+  it("returns null when the author cancels the folder picker", async () => {
+    mockInvoke.mockResolvedValue(null);
+    const store = createTauriPluginFileGrantStore();
+
+    await expect(store.pickFolder("tracer", ["epub"])).resolves.toBeNull();
+  });
+
   it("reads a byte range and hands back the ArrayBuffer Rust sent", async () => {
     const bytes = new TextEncoder().encode("contents").buffer;
     mockInvoke.mockResolvedValue(bytes);

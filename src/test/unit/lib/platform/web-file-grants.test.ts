@@ -95,6 +95,30 @@ function droppedHandle(file: File, handle: Promise<TestHandle | null> | null): P
   return { file, handle: handle as unknown as Promise<FileSystemHandle | null> | null };
 }
 
+/** A `FileSystemDirectoryHandle` stand-in: a name and entries, walked in the order given. */
+class TestDirectory {
+  readonly kind = "directory";
+  readonly name: string;
+  private readonly entries: (TestHandle | TestDirectory)[];
+
+  constructor(name: string, entries: (TestHandle | TestDirectory)[]) {
+    this.name = name;
+    this.entries = entries;
+  }
+
+  async *values(): AsyncGenerator<TestHandle | TestDirectory> {
+    for (const entry of this.entries) yield entry;
+  }
+}
+
+/** A file the input fallback hands over for a folder pick: its path under the picked folder. */
+function fileInFolder(relativePath: string, bytes: string): File {
+  const name = relativePath.split("/").pop() ?? relativePath;
+  const file = pickedFile(name, bytes);
+  Object.defineProperty(file, "webkitRelativePath", { value: relativePath });
+  return file;
+}
+
 /** The grant a pick must return; a cancelled pick fails here, not a later line. */
 async function pickGrant(
   store: PluginFileGrantStore,
@@ -514,5 +538,183 @@ describe("createWebPluginFileGrantStore(): dropping", () => {
     await expect(store.list("reader")).resolves.toEqual([
       { grant: "grant-1", name: "dropped.pdf", size: 5 },
     ]);
+  });
+});
+
+describe("createWebPluginFileGrantStore(): folder picks", () => {
+  it("walks nested subfolders, matches extensions ignoring case, and grants one file per match", async () => {
+    const root = new TestDirectory("Library", [
+      new TestHandle({ name: "a.epub", bytes: "one" }),
+      new TestDirectory("Fiction", [
+        new TestHandle({ name: "B.EPUB", bytes: "two" }),
+        new TestDirectory("Deep", [new TestHandle({ name: "c.epub", bytes: "three" })]),
+      ]),
+      new TestHandle({ name: "cover.jpg", bytes: "img" }),
+      new TestHandle({ name: "notes.txt", bytes: "x" }),
+    ]);
+    const showDirectoryPicker = vi.fn(async () => root);
+    const store = createWebPluginFileGrantStore({
+      indexedDB: new IDBFactory(),
+      showDirectoryPicker,
+      randomId: sequentialIds(),
+    });
+
+    await expect(store.pickFolder("reader", ["epub"])).resolves.toEqual({
+      folder: "Library",
+      grants: [
+        { grant: "grant-1", name: "a.epub", size: 3 },
+        { grant: "grant-2", name: "B.EPUB", size: 3 },
+        { grant: "grant-3", name: "c.epub", size: 5 },
+      ],
+    });
+    expect(showDirectoryPicker).toHaveBeenCalledWith({ mode: "read" });
+  });
+
+  it("returns null and grants nothing when the author cancels the folder picker", async () => {
+    const store = createWebPluginFileGrantStore({
+      indexedDB: new IDBFactory(),
+      showDirectoryPicker: vi.fn(async () => {
+        throw new DOMException("Aborted", "AbortError");
+      }),
+      randomId: sequentialIds(),
+    });
+
+    await expect(store.pickFolder("reader", ["epub"])).resolves.toBeNull();
+    await expect(store.list("reader")).resolves.toEqual([]);
+  });
+
+  it("refuses with user-action-required when the browser blocks the folder picker", async () => {
+    const store = createWebPluginFileGrantStore({
+      indexedDB: new IDBFactory(),
+      showDirectoryPicker: vi.fn(async () => {
+        throw new DOMException("No activation", "NotAllowedError");
+      }),
+      randomId: sequentialIds(),
+    });
+
+    await expect(store.pickFolder("reader", ["epub"])).rejects.toMatchObject({
+      code: "user-action-required",
+    });
+  });
+
+  it("reads, stats, and releases a folder grant like a picked file grant", async () => {
+    const root = new TestDirectory("Library", [
+      new TestHandle({ name: "a.epub", bytes: "hello", lastModified: 42 }),
+    ]);
+    const store = createWebPluginFileGrantStore({
+      indexedDB: new IDBFactory(),
+      showDirectoryPicker: vi.fn(async () => root),
+      randomId: sequentialIds(),
+    });
+    const folder = await store.pickFolder("reader", ["epub"]);
+    const [grant] = folder?.grants ?? [];
+    if (!grant) throw new Error("The folder pick returned no File Grant");
+
+    const bytes = await store.read("reader", grant.grant, 0, 5);
+    expect(new TextDecoder().decode(bytes)).toBe("hello");
+    await expect(store.stat("reader", grant.grant)).resolves.toEqual({
+      name: "a.epub",
+      size: 5,
+      modified: 42,
+    });
+
+    await store.release("reader", grant.grant);
+    await expect(store.read("reader", grant.grant, 0, 5)).rejects.toMatchObject({
+      code: "file-missing",
+    });
+  });
+
+  it("returns the grant already held when the folder holds a file the Plugin picked", async () => {
+    const store = createWebPluginFileGrantStore({
+      indexedDB: new IDBFactory(),
+      showOpenFilePicker: pickerFor([
+        new TestHandle({ name: "a.epub", bytes: "hello", entry: "entry-1" }),
+      ]),
+      showDirectoryPicker: vi.fn(
+        async () =>
+          new TestDirectory("Library", [
+            new TestHandle({ name: "a.epub", bytes: "hello", entry: "entry-1" }),
+          ])
+      ),
+      randomId: sequentialIds(),
+    });
+    const picked = await pickGrant(store);
+
+    await expect(store.pickFolder("reader", ["epub"])).resolves.toEqual({
+      folder: "Library",
+      grants: [picked],
+    });
+  });
+
+  it("lists each grant once when a folder names the same file entry twice", async () => {
+    const store = createWebPluginFileGrantStore({
+      indexedDB: new IDBFactory(),
+      showDirectoryPicker: vi.fn(
+        async () =>
+          new TestDirectory("Library", [
+            new TestHandle({ name: "a.epub", bytes: "hello", entry: "entry-1" }),
+            new TestDirectory("Copy", [
+              new TestHandle({ name: "a.epub", bytes: "hello", entry: "entry-1" }),
+            ]),
+          ])
+      ),
+      randomId: sequentialIds(),
+    });
+
+    await expect(store.pickFolder("reader", ["epub"])).resolves.toEqual({
+      folder: "Library",
+      grants: [{ grant: "grant-1", name: "a.epub", size: 5 }],
+    });
+  });
+
+  it("filters the input fallback by extension and names the folder from its relative path", async () => {
+    vi.stubGlobal("showDirectoryPicker", undefined);
+    const pickFolderWithInput = vi.fn(async () => [
+      fileInFolder("Library/a.epub", "one"),
+      fileInFolder("Library/cover.jpg", "img"),
+      fileInFolder("Library/Sub/B.EPUB", "two"),
+    ]);
+    const store = createWebPluginFileGrantStore({
+      indexedDB: new IDBFactory(),
+      pickFolderWithInput,
+      randomId: sequentialIds(),
+    });
+
+    await expect(store.pickFolder("reader", ["epub"])).resolves.toEqual({
+      folder: "Library",
+      grants: [
+        { grant: "grant-1", name: "a.epub", size: 3 },
+        { grant: "grant-2", name: "B.EPUB", size: 3 },
+      ],
+    });
+    await expect(store.list("reader")).resolves.toEqual([
+      { grant: "grant-1", name: "a.epub", size: 3 },
+      { grant: "grant-2", name: "B.EPUB", size: 3 },
+    ]);
+  });
+
+  it("returns null when the folder input fallback is cancelled", async () => {
+    vi.stubGlobal("showDirectoryPicker", undefined);
+    const store = createWebPluginFileGrantStore({
+      indexedDB: new IDBFactory(),
+      pickFolderWithInput: async () => null,
+      randomId: sequentialIds(),
+    });
+
+    await expect(store.pickFolder("reader", ["epub"])).resolves.toBeNull();
+  });
+
+  it("names the folder empty when the input fallback hands over no files", async () => {
+    vi.stubGlobal("showDirectoryPicker", undefined);
+    const store = createWebPluginFileGrantStore({
+      indexedDB: new IDBFactory(),
+      pickFolderWithInput: async () => [],
+      randomId: sequentialIds(),
+    });
+
+    await expect(store.pickFolder("reader", ["epub"])).resolves.toEqual({
+      folder: "",
+      grants: [],
+    });
   });
 });

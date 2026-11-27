@@ -2,7 +2,9 @@ package com.massick.maibuk
 
 import java.io.ByteArrayInputStream
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class FileGrantsPluginTest {
@@ -99,5 +101,33 @@ class FileGrantsPluginTest {
   @Test
   fun countsAnEmptyDocumentAsZero() {
     assertEquals(0L, countBytes(ByteArrayInputStream(ByteArray(0))))
+  }
+
+  @Test
+  fun matchesAnExtensionRegardlessOfCase() {
+    assertTrue(matchesExtension("B.EPUB", listOf("epub")))
+    assertTrue(matchesExtension("c.EpUb", listOf("epub")))
+  }
+
+  @Test
+  fun matchesTheLastExtensionOfAMultiDotName() {
+    assertTrue(matchesExtension("Vol 1.final.epub", listOf("epub")))
+  }
+
+  @Test
+  fun leavesOutAnotherExtension() {
+    assertFalse(matchesExtension("notes.txt", listOf("epub", "pdf")))
+    assertFalse(matchesExtension("book.epub.part", listOf("epub")))
+  }
+
+  @Test
+  fun aDotFileHasNoExtension() {
+    assertFalse(matchesExtension(".epub", listOf("epub")))
+  }
+
+  @Test
+  fun aNameWithNoExtensionNeverMatches() {
+    assertFalse(matchesExtension("epub", listOf("epub")))
+    assertFalse(matchesExtension("book.", listOf("epub")))
   }
 }

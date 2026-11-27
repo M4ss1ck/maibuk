@@ -14,6 +14,7 @@ import type {
   PluginFileGrant,
   PluginFileGrantStore,
   PluginFileStat,
+  PluginFolderPick,
 } from "@/lib/platform/types";
 import { PluginApiError, type PluginApiErrorCode } from "@/plugin-sdk/protocol";
 
@@ -50,6 +51,18 @@ export function createTauriPluginFileGrantStore(): PluginFileGrantStore {
   return {
     async pick(pluginId: string, extensions: readonly string[]): Promise<PluginFileGrant | null> {
       return call<PluginFileGrant | null>("plugin_files_pick", {
+        pluginId,
+        extensions: [...extensions],
+      });
+    },
+
+    async pickFolder(
+      pluginId: string,
+      extensions: readonly string[]
+    ): Promise<PluginFolderPick | null> {
+      // Rust shows the folder dialog and walks it once, minting each grant the
+      // way `plugin_files_pick` would.
+      return call<PluginFolderPick | null>("plugin_files_pick_folder", {
         pluginId,
         extensions: [...extensions],
       });

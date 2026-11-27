@@ -383,6 +383,25 @@ impl GrantStore {
             .unwrap_or(false)
     }
 
+    #[cfg_attr(not(target_os = "android"), allow(dead_code))]
+    /// Whether any grant names a document inside `prefix`, a tree or a folder
+    /// URI: a record path that is `prefix` followed by `/`.
+    pub fn holds_under(&self, prefix: &str) -> bool {
+        self.records()
+            .map(|mut slot| {
+                slot.as_mut()
+                    .expect("records() loads the record")
+                    .iter()
+                    .any(|record| {
+                        record
+                            .path
+                            .strip_prefix(prefix)
+                            .is_some_and(|rest| rest.starts_with('/'))
+                    })
+            })
+            .unwrap_or(false)
+    }
+
     /// The record behind (plugin_id, grant). A grant of another Plugin is
     /// unknown here, so it reports the same `file-missing` as an id that never
     /// existed.
@@ -808,6 +827,70 @@ fn new_grant_id() -> String {
     format!("{high:016x}{low:016x}")
 }
 
+/// What `files.pickFolder` returns: the folder's own name, never its path, and
+/// one grant per matching file in it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FolderPick {
+    pub folder: String,
+    pub grants: Vec<GrantInfo>,
+}
+
+/// Every regular file under `root`, in any subfolder, whose extension (ignoring
+/// case) is one of `extensions`, sorted by full path. Walks with an explicit
+/// stack and `symlink_metadata`, so a symbolic link to a file or a folder is
+/// neither followed nor returned, and a link back to an ancestor cannot loop.
+/// An entry that cannot be read is skipped.
+#[cfg_attr(mobile, allow(dead_code))]
+fn matching_files(root: &Path, extensions: &[String]) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    let mut folders = vec![root.to_path_buf()];
+    while let Some(folder) = folders.pop() {
+        let Ok(entries) = std::fs::read_dir(&folder) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Ok(metadata) = std::fs::symlink_metadata(&path) else {
+                continue;
+            };
+            if metadata.is_dir() {
+                folders.push(path);
+            } else if metadata.is_file() {
+                let matches = path
+                    .extension()
+                    .map(|ext| ext.to_string_lossy().to_lowercase())
+                    .is_some_and(|ext| extensions.contains(&ext));
+                if matches {
+                    found.push(path);
+                }
+            }
+        }
+    }
+    found.sort();
+    found
+}
+
+/// The tree a Storage Access Framework child URI sits under:
+/// `content://<authority>/tree/<treeId>/document/<docId>` gives
+/// `content://<authority>/tree/<treeId>`. None for any other shape, including a
+/// document URI with no tree.
+/// Adds a folder pick's grant unless it is already listed: a file met twice
+/// (or one the Plugin already held) still appears once.
+pub fn push_once(grants: &mut Vec<GrantInfo>, info: GrantInfo) {
+    if !grants.iter().any(|seen| seen.grant == info.grant) {
+        grants.push(info);
+    }
+}
+
+#[cfg_attr(not(target_os = "android"), allow(dead_code))]
+pub fn tree_uri_of(uri: &str) -> Option<&str> {
+    let tree = uri.find("/tree/")?;
+    let document = uri.find("/document/")?;
+    // The tree id must be non-empty and lie wholly before the document part.
+    (document > tree + "/tree/".len()).then(|| &uri[..document])
+}
+
 /// Open Maibuk's file dialog filtered to `extensions` and grant the author's
 /// pick to `plugin_id`. Resolves to `None` when the author cancels. The path
 /// stays in Rust: the webview only ever sees a grant id.
@@ -835,6 +918,47 @@ pub async fn plugin_files_pick<R: tauri::Runtime>(
         .into_path()
         .map_err(|_| file_missing("the picked file is not on this device"))?;
     state.grant(&plugin_id, &path).map(Some)
+}
+
+/// Open Maibuk's folder dialog and grant every file in the picked folder, and
+/// its subfolders, whose extension is one of `extensions`, to `plugin_id`.
+/// Resolves to `None` when the author cancels. A file that vanishes between the
+/// walk and its grant is left out; any other grant failure fails the pick.
+#[cfg(desktop)]
+#[tauri::command]
+pub async fn plugin_files_pick_folder<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    window: tauri::WebviewWindow<R>,
+    state: tauri::State<'_, GrantStore>,
+    plugin_id: String,
+    extensions: Vec<String>,
+) -> Result<Option<FolderPick>, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    validate_extensions(&extensions)?;
+    let Some(picked) = app
+        .dialog()
+        .file()
+        .set_parent(&window)
+        .blocking_pick_folder()
+    else {
+        return Ok(None);
+    };
+    let folder = picked
+        .into_path()
+        .map_err(|_| file_missing("the picked folder is not on this device"))?;
+    let mut grants: Vec<GrantInfo> = Vec::new();
+    for path in matching_files(&folder, &extensions) {
+        match state.grant(&plugin_id, &path) {
+            Ok(info) => push_once(&mut grants, info),
+            Err(error) if error.starts_with(FILE_MISSING) => {}
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(Some(FolderPick {
+        folder: file_name(&folder),
+        grants,
+    }))
 }
 
 /// Grant the files the author dropped on the window to `plugin_id`. The webview
@@ -927,8 +1051,8 @@ pub fn plugin_files_clear_all(state: tauri::State<'_, GrantStore>) -> Result<(),
 #[cfg(target_os = "android")]
 pub mod android {
     use super::{
-        file_missing, internal_error, stat_size, validate_extensions, validate_plugin_id, GrantInfo,
-        GrantStat, GrantStore,
+        file_missing, internal_error, push_once, stat_size, tree_uri_of, validate_extensions,
+        validate_plugin_id, FolderPick, GrantInfo, GrantStat, GrantStore,
     };
     use serde::{Deserialize, Serialize};
     use tauri::plugin::{Builder, PluginHandle, TauriPlugin};
@@ -960,9 +1084,27 @@ pub mod android {
                 .run_mobile_plugin::<serde_json::Value>("release", UriArgs { uri });
         }
 
-        fn release_all(&self, uris: &[String]) {
+        /// Gives back the permission of each URI no grant needs any more. A
+        /// folder pick's documents carry no permission of their own: the tree
+        /// they were picked under does. So that tree is released too, once no
+        /// grant names a document inside it.
+        fn release_all(&self, grants: &GrantStore, uris: &[String]) {
             for uri in uris {
                 self.release(uri);
+            }
+            let mut trees: Vec<&str> = uris.iter().filter_map(|uri| tree_uri_of(uri)).collect();
+            trees.sort_unstable();
+            trees.dedup();
+            for tree in trees {
+                self.release_tree_unless_held(grants, tree);
+            }
+        }
+
+        /// Gives a picked folder's read permission back once no grant lives
+        /// under it; an earlier pick of the same folder may still hold some.
+        fn release_tree_unless_held(&self, grants: &GrantStore, tree: &str) {
+            if !grants.holds_under(tree) {
+                self.release(tree);
             }
         }
     }
@@ -982,6 +1124,32 @@ pub mod android {
     #[derive(Serialize)]
     struct PickArgs {
         extensions: Vec<String>,
+    }
+
+    /// The folder picker's answer: no folder when the author cancelled, else
+    /// the folder's name and every matching document in it.
+    #[derive(Deserialize)]
+    struct PickedFolder {
+        /// The picked tree's URI, which holds the persisted read permission;
+        /// absent on cancel.
+        #[serde(default)]
+        tree: Option<String>,
+        /// Set when the walk failed after the tree was picked.
+        #[serde(default)]
+        error: Option<String>,
+        #[serde(default)]
+        folder: Option<String>,
+        #[serde(default)]
+        documents: Vec<PickedDocument>,
+    }
+
+    #[derive(Deserialize)]
+    struct PickedDocument {
+        uri: String,
+        #[serde(default)]
+        name: String,
+        #[serde(default)]
+        size: u64,
     }
 
     #[derive(Serialize)]
@@ -1046,6 +1214,75 @@ pub mod android {
         granted.map(Some)
     }
 
+    /// Open the system folder picker and grant every document under the picked
+    /// folder, in any subfolder, whose extension is one of `extensions`, to
+    /// `plugin_id`. Resolves to `None` when the author cancels. Kotlin walks the
+    /// tree and hands back each match; the tree's own read permission is what
+    /// the grants rely on, and it is given back when nothing is granted.
+    #[tauri::command]
+    pub async fn plugin_files_pick_folder<R: Runtime>(
+        app: AppHandle<R>,
+        plugin_id: String,
+        extensions: Vec<String>,
+    ) -> Result<Option<FolderPick>, String> {
+        validate_extensions(&extensions)?;
+        validate_plugin_id(&plugin_id)?;
+        let handle = documents(&app)?.0.clone();
+        // The call waits for the author and the walk, so it waits off the async
+        // workers.
+        let picked = tauri::async_runtime::spawn_blocking(move || {
+            handle.run_mobile_plugin::<PickedFolder>("pickFolder", PickArgs { extensions })
+        })
+        .await
+        .map_err(|_| internal_error("the folder picker stopped"))?
+        .map_err(|_| internal_error("the folder picker failed"))?;
+        let Some(tree) = picked.tree.clone() else {
+            return Ok(None);
+        };
+        let grants = app.state::<GrantStore>();
+        // The tree's permission stays only while a grant lives under it: an
+        // earlier pick of this folder may hold some, so the check runs here.
+        let release_unheld_tree = || {
+            if let Ok(documents) = documents(&app) {
+                documents.release_tree_unless_held(&grants, &tree);
+            }
+        };
+        if picked.error.is_some() {
+            release_unheld_tree();
+            return Err(internal_error("the picked folder could not be read"));
+        }
+        let folder = picked.folder.unwrap_or_default();
+        let mut held: Vec<GrantInfo> = Vec::new();
+        let mut failure = None;
+        for document in &picked.documents {
+            match grants.grant_document(&plugin_id, &document.uri, &document.name, document.size) {
+                Ok(info) => push_once(&mut held, info),
+                Err(error) => {
+                    failure = Some(error);
+                    break;
+                }
+            }
+        }
+        if let Some(error) = failure {
+            // A document this pick could not grant keeps no permission; the
+            // tree it sat under goes too, unless another grant still needs it.
+            let orphaned: Vec<String> = picked
+                .documents
+                .iter()
+                .map(|document| document.uri.clone())
+                .filter(|uri| !grants.holds(uri))
+                .collect();
+            documents(&app)?.release_all(&grants, &orphaned);
+            release_unheld_tree();
+            return Err(error);
+        }
+        release_unheld_tree();
+        Ok(Some(FolderPick {
+            folder,
+            grants: held,
+        }))
+    }
+
     /// Read a byte range through a grant, opening the document through the
     /// content resolver. The bytes cross as raw IPC. The open and the read both
     /// block on the system, and the invoke handler runs inline, so they run on
@@ -1103,8 +1340,9 @@ pub mod android {
         plugin_id: String,
         grant: String,
     ) -> Result<(), String> {
-        let orphaned = app.state::<GrantStore>().release(&plugin_id, &grant)?;
-        documents(&app)?.release_all(&orphaned);
+        let grants = app.state::<GrantStore>();
+        let orphaned = grants.release(&plugin_id, &grant)?;
+        documents(&app)?.release_all(&grants, &orphaned);
         Ok(())
     }
 
@@ -1130,16 +1368,18 @@ pub mod android {
         app: AppHandle<R>,
         plugin_id: String,
     ) -> Result<(), String> {
-        let orphaned = app.state::<GrantStore>().clear_plugin(&plugin_id)?;
-        documents(&app)?.release_all(&orphaned);
+        let grants = app.state::<GrantStore>();
+        let orphaned = grants.clear_plugin(&plugin_id)?;
+        documents(&app)?.release_all(&grants, &orphaned);
         Ok(())
     }
 
     /// End every File Grant on this device.
     #[tauri::command]
     pub async fn plugin_files_clear_all<R: Runtime>(app: AppHandle<R>) -> Result<(), String> {
-        let orphaned = app.state::<GrantStore>().clear_all()?;
-        documents(&app)?.release_all(&orphaned);
+        let grants = app.state::<GrantStore>();
+        let orphaned = grants.clear_all()?;
+        documents(&app)?.release_all(&grants, &orphaned);
         Ok(())
     }
 }
@@ -2256,5 +2496,179 @@ mod tests {
         assert!(store.holds(BOOK_URI));
         assert_eq!(store.list_with("tracer", |_| None).unwrap()[0].grant, grant);
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    fn extensions(list: &[&str]) -> Vec<String> {
+        list.iter().map(|ext| ext.to_string()).collect()
+    }
+
+    fn sorted(mut paths: Vec<PathBuf>) -> Vec<PathBuf> {
+        paths.sort();
+        paths
+    }
+
+    #[test]
+    fn push_once_lists_each_grant_once_in_first_seen_order() {
+        let grant = |id: &str| GrantInfo {
+            grant: id.to_string(),
+            name: format!("{id}.epub"),
+            size: 1,
+        };
+        let mut grants = Vec::new();
+        for id in ["a", "b", "a"] {
+            push_once(&mut grants, grant(id));
+        }
+        assert_eq!(grants, vec![grant("a"), grant("b")]);
+    }
+
+    #[test]
+    fn matching_files_walks_every_subfolder() {
+        let dir = temp_dir("walk-nested");
+        std::fs::create_dir_all(dir.join("a/b")).unwrap();
+        let top = file_in(&dir, "top.epub", b"x");
+        let middle = file_in(&dir.join("a"), "middle.epub", b"x");
+        let deep = file_in(&dir.join("a/b"), "deep.epub", b"x");
+        file_in(&dir.join("a/b"), "notes.txt", b"x");
+
+        let found = matching_files(&dir, &extensions(&["epub"]));
+
+        assert_eq!(found, sorted(vec![top, middle, deep]));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn matching_files_matches_the_extension_in_any_case() {
+        let dir = temp_dir("walk-case");
+        let upper = file_in(&dir, "B.EPUB", b"x");
+        let mixed = file_in(&dir, "c.EpUb", b"x");
+
+        let found = matching_files(&dir, &extensions(&["epub"]));
+
+        assert_eq!(found, sorted(vec![upper, mixed]));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn matching_files_leaves_out_other_extensions_and_dot_files() {
+        let dir = temp_dir("walk-exclude");
+        file_in(&dir, "notes.txt", b"x");
+        file_in(&dir, "epub", b"x");
+        file_in(&dir, ".epub", b"x");
+        file_in(&dir, "book.epub.part", b"x");
+        let keep = file_in(&dir, "book.epub", b"x");
+
+        let found = matching_files(&dir, &extensions(&["epub"]));
+
+        assert_eq!(found, vec![keep]);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn matching_files_never_follows_or_returns_a_symbolic_link() {
+        use std::os::unix::fs::symlink;
+
+        let dir = temp_dir("walk-symlink");
+        let real_folder = dir.join("real");
+        std::fs::create_dir_all(&real_folder).unwrap();
+        let real = file_in(&real_folder, "real.epub", b"x");
+        let root_file = file_in(&dir, "root.epub", b"x");
+        // A link to a file that looks like a match, a link to a folder that
+        // holds one, and a link from inside the folder back to the root.
+        symlink(&real, dir.join("file-link.epub")).unwrap();
+        symlink(&real_folder, dir.join("folder-link")).unwrap();
+        symlink(&dir, real_folder.join("loop")).unwrap();
+
+        let found = matching_files(&dir, &extensions(&["epub"]));
+
+        assert_eq!(found, sorted(vec![root_file, real]));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn matching_files_returns_paths_sorted_by_full_path() {
+        let dir = temp_dir("walk-sorted");
+        std::fs::create_dir_all(dir.join("z")).unwrap();
+        file_in(&dir, "m.epub", b"x");
+        file_in(&dir.join("z"), "a.epub", b"x");
+        file_in(&dir, "b.epub", b"x");
+
+        let found = matching_files(&dir, &extensions(&["epub"]));
+
+        assert_eq!(found.len(), 3);
+        assert_eq!(found, sorted(found.clone()));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn granting_each_matching_file_twice_returns_the_same_grant_ids() {
+        let dir = temp_dir("walk-grant");
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+        file_in(&dir, "one.epub", b"0123");
+        file_in(&dir.join("sub"), "two.EPUB", b"01");
+        let store = store_in(&dir);
+        let paths = matching_files(&dir, &extensions(&["epub"]));
+        assert_eq!(paths.len(), 2);
+
+        let first: Vec<GrantInfo> = paths
+            .iter()
+            .map(|path| store.grant("tracer", path).unwrap())
+            .collect();
+        let second: Vec<GrantInfo> = paths
+            .iter()
+            .map(|path| store.grant("tracer", path).unwrap())
+            .collect();
+
+        assert_eq!(first, second);
+        assert_eq!(store.list("tracer").unwrap().len(), 2);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_folder_pick_serializes_its_fields_in_camel_case() {
+        let pick = FolderPick {
+            folder: "Books".to_string(),
+            grants: vec![GrantInfo {
+                grant: "g1".to_string(),
+                name: "a.epub".to_string(),
+                size: 3,
+            }],
+        };
+
+        assert_eq!(
+            serde_json::to_value(pick).unwrap(),
+            json!({"folder": "Books", "grants": [{"grant": "g1", "name": "a.epub", "size": 3}]})
+        );
+    }
+
+    #[test]
+    fn tree_uri_of_names_the_tree_a_saf_child_sits_under() {
+        assert_eq!(
+            tree_uri_of("content://auth/tree/primary%3ABooks/document/primary%3ABooks%2Fa.epub"),
+            Some("content://auth/tree/primary%3ABooks")
+        );
+    }
+
+    #[test]
+    fn tree_uri_of_is_none_without_a_tree_before_a_document() {
+        assert_eq!(tree_uri_of("content://docs/document/x"), None);
+        assert_eq!(tree_uri_of("content://docs/tree/t"), None);
+        assert_eq!(tree_uri_of("content://docs/document/x/tree/t"), None);
+        assert_eq!(tree_uri_of("content://docs/tree//document/x"), None);
+    }
+
+    #[test]
+    fn holds_under_matches_only_a_document_inside_the_prefix() {
+        let store = GrantStore::in_memory();
+        store
+            .grant_document("tracer", "content://auth/tree/t/document/d1", "a.epub", 1)
+            .unwrap();
+
+        assert!(store.holds_under("content://auth/tree/t"));
+        // A document is not inside itself, and a tree whose id only starts the
+        // same way is a different tree.
+        assert!(!store.holds_under("content://auth/tree/t/document/d1"));
+        assert!(!store.holds_under("content://auth/tree/tt"));
+        assert!(!GrantStore::in_memory().holds_under("content://auth/tree/t"));
     }
 }

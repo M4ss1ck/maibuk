@@ -49,6 +49,9 @@ import type { PluginManifest } from "@/features/plugins/types";
 // notifications.systemStatus and notifications.requestSystemPermission behind
 // the system-notifications Plugin Permission (#869), additive: a ^0.1.15
 // Plugin keeps loading.
+// 0.1.17 adds the folder option on files.pick, so a Plugin gets one File Grant
+// per matching file in a picked folder and its subfolders (#947), additive: a
+// ^0.1.16 Plugin keeps loading.
 
 function manifestWith(apiVersion: string): PluginManifest {
   const result = validateManifestValue({
@@ -72,8 +75,16 @@ function manifestWith(apiVersion: string): PluginManifest {
 const APP = "0.12.0";
 
 describe("Plugin API patch compatibility (ADR 0029)", () => {
-  it("the host reports Plugin API 0.1.16", () => {
-    expect(PLUGIN_API_VERSION).toBe("0.1.16");
+  it("the host reports Plugin API 0.1.17", () => {
+    expect(PLUGIN_API_VERSION).toBe("0.1.17");
+  });
+
+  it("a ^0.1.16 Plugin still loads against the 0.1.17 host", () => {
+    const verdict = checkPluginCompatibility(manifestWith("^0.1.16"), {
+      apiVersion: "0.1.17",
+      appVersion: APP,
+    });
+    expect(verdict.verdict).toBe("ok");
   });
 
   it("a ^0.1.15 Plugin still loads against the 0.1.16 host", () => {

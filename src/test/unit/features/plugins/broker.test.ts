@@ -1322,7 +1322,8 @@ describe("File Grants (ADR 0036)", () => {
   /** The six `files.*` handlers over one in-memory store, in the broker's shape. */
   function fileHandlers(store: MemoryPluginFileGrantStore): PluginApiHandlers {
     return {
-      "files.pick": ({ extensions }, { pluginId }) => store.pick(pluginId, extensions),
+      "files.pick": ({ extensions, folder }, { pluginId }) =>
+        folder ? store.pickFolder(pluginId, extensions) : store.pick(pluginId, extensions),
       "files.read": ({ grant, offset, length }, { pluginId }) =>
         store.read(pluginId, grant, offset, length),
       "files.stat": ({ grant }, { pluginId }) => store.stat(pluginId, grant),
@@ -1485,6 +1486,76 @@ describe("File Grants (ADR 0036)", () => {
       beta.client.files.read({ grant: alphaGrant.grant, offset: 0, length: 1 })
     );
     expect(error.code).toBe("file-missing");
+  });
+
+  it("grants every matching file in a picked folder, as if each were picked", async () => {
+    const store = createMemoryPluginFileGrantStore();
+    store.queueFolderPick("fixture", {
+      name: "Books",
+      files: [
+        FILE,
+        { name: "skip.txt", bytes: new Uint8Array([9]) },
+        { name: "B.PDF", bytes: new Uint8Array([7]) },
+      ],
+    });
+    const { client } = setup({
+      declared: ["files:pick"],
+      hasUserActivation: () => true,
+      handlers: fileHandlers(store),
+    });
+
+    const picked = await client.files.pick({ extensions: ["pdf"], folder: true });
+
+    expect(picked).toEqual({
+      folder: "Books",
+      grants: [
+        { grant: expect.any(String), name: "a.pdf", size: 5 },
+        { grant: expect.any(String), name: "B.PDF", size: 1 },
+      ],
+    });
+    if (!picked || !("grants" in picked)) throw new Error("expected a folder pick");
+    const [first] = picked.grants;
+    if (!first) throw new Error("expected a grant");
+    const read = await client.files.read({ grant: first.grant, offset: 0, length: 2 });
+    expect([...new Uint8Array(read)]).toEqual([1, 2]);
+    await expect(client.files.stat({ grant: first.grant })).resolves.toMatchObject({
+      name: "a.pdf",
+      size: 5,
+    });
+    await expect(client.files.release({ grant: first.grant })).resolves.toBeNull();
+    await expect(client.files.list()).resolves.toHaveLength(1);
+  });
+
+  it("returns null for a cancelled folder pick and grants nothing", async () => {
+    const store = createMemoryPluginFileGrantStore();
+    store.queueFolderPick("fixture", null);
+    const { client } = setup({
+      declared: ["files:pick"],
+      hasUserActivation: () => true,
+      handlers: fileHandlers(store),
+    });
+
+    await expect(client.files.pick({ extensions: ["pdf"], folder: true })).resolves.toBeNull();
+    await expect(client.files.list()).resolves.toEqual([]);
+  });
+
+  it("refuses a folder pick without files:pick, and outside the author's action", async () => {
+    const store = createMemoryPluginFileGrantStore();
+    store.queueFolderPick("fixture", { name: "Books", files: [FILE] });
+    const denied = setup({
+      declared: ["files:pick"],
+      grantedAtStart: [],
+      handlers: fileHandlers(store),
+    });
+    const deniedError = await refusal(
+      denied.client.files.pick({ extensions: ["pdf"], folder: true })
+    );
+    expect(deniedError.code).toBe("permission-denied");
+
+    const idle = setup({ declared: ["files:pick"], handlers: fileHandlers(store) });
+    const idleError = await refusal(idle.client.files.pick({ extensions: ["pdf"], folder: true }));
+    expect(idleError.code).toBe("user-action-required");
+    expect(await store.list("fixture")).toEqual([]);
   });
 
   it("ends a grant on release", async () => {
