@@ -194,8 +194,14 @@ export async function runImport(
   const { client, library } = deps;
   const now = deps.now ?? Date.now;
   const report = emptyReport(source, picked.length);
-  /** Fingerprints this Import already sorted. */
-  const seen = new Set<string>();
+  /**
+   * How this Import sorted each Fingerprint, so a second copy repeats the
+   * first copy's outcome: only a copy of a file it added is a duplicate.
+   */
+  const seen = new Map<
+    string,
+    { kind: "added" } | { kind: "onShelf" } | { kind: "unreadable"; reason: UnreadableReason }
+  >();
 
   /** Releases `grant` unless a Shelf Document holds it. */
   async function letGo(grant: string): Promise<void> {
@@ -223,12 +229,14 @@ export async function runImport(
       await letGo(file.grant);
       return;
     }
-    if (seen.has(print)) {
-      report.duplicates += 1;
+    const first = seen.get(print);
+    if (first !== undefined) {
+      if (first.kind === "added") report.duplicates += 1;
+      else if (first.kind === "onShelf") report.alreadyOnShelf.push(file.name);
+      else report.unreadable.push({ name: file.name, reason: first.reason });
       await letGo(file.grant);
       return;
     }
-    seen.add(print);
 
     const match = (await library.loadShelf()).find((entry) => entry.fingerprint === print);
     if (match !== undefined && relinkable(match)) {
@@ -242,12 +250,14 @@ export async function runImport(
         return result.shelf;
       });
       if (relinked) {
+        seen.set(print, { kind: "onShelf" });
         report.relinked.push(file.name);
         if (match.grant !== file.grant) await letGo(match.grant);
         return;
       }
     }
     if (match !== undefined) {
+      seen.set(print, { kind: "onShelf" });
       report.alreadyOnShelf.push(file.name);
       if (match.grant !== file.grant) await letGo(file.grant);
       return;
@@ -257,6 +267,7 @@ export async function runImport(
     const reason =
       format === null ? "unsupported" : await unreadableReason(client, file, format, head);
     if (format === null || reason !== null) {
+      seen.set(print, { kind: "unreadable", reason: reason ?? "unsupported" });
       report.unreadable.push({ name: file.name, reason: reason ?? "unsupported" });
       await letGo(file.grant);
       return;
@@ -283,6 +294,7 @@ export async function runImport(
       added = true;
       return [...shelf, entry];
     });
+    seen.set(print, added ? { kind: "added" } : { kind: "onShelf" });
     if (added) report.added.push(file.name);
     else report.alreadyOnShelf.push(file.name);
   }
@@ -293,8 +305,10 @@ export async function runImport(
     try {
       await sortOne(picked[index]);
     } catch {
-      // A Shelf that could not be read or written: the file is named, the rest go on.
+      // A Shelf that could not be read or written: the file is named, its
+      // grant let go like every other file not added, and the rest go on.
       report.unreadable.push({ name: picked[index].name, reason: "unreadable" });
+      await letGo(picked[index].grant);
     }
     report.processed += 1;
     options.onProgress?.(copyReport(report));
@@ -390,7 +404,7 @@ export function createImporter(deps: ImportDeps): Importer {
   };
 }
 
-/** The extensions Import asks the host for: every format Reader opens. */
+/** What the author picked to import: several files, or one folder and its subfolders. */
 export type ImportPickKind = "files" | "folder";
 
 /**

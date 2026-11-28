@@ -183,6 +183,45 @@ describe("runImport()", () => {
     }
   });
 
+  // A second copy repeats the first copy's outcome: only a copy of a file this
+  // Import added is a duplicate "added once".
+  it("reports a second copy as the first was sorted: already on the Shelf, or unreadable", async () => {
+    const { host, client, library, pickFolder, shelf } = setup();
+    try {
+      await runImport(
+        { client, library },
+        await pickFolder([{ name: "Dune.pdf", bytes: pdfBytes("dune") }]),
+        {
+          kind: "folder",
+          name: "Library",
+        }
+      );
+      const before = shelf();
+      const report = await runImport(
+        { client, library },
+        await pickFolder([
+          { name: "Dune.pdf", bytes: pdfBytes("dune") },
+          { name: "Sub/Dune.pdf", bytes: pdfBytes("dune") },
+          { name: "broken.epub", bytes: fixture("corrupt.epub") },
+          { name: "broken (1).epub", bytes: fixture("corrupt.epub") },
+        ]),
+        { kind: "folder", name: "Library" }
+      );
+      expect(names(report)).toEqual({
+        added: [],
+        alreadyOnShelf: ["Dune.pdf", "Sub/Dune.pdf"],
+        relinked: [],
+        unreadable: ["broken (1).epub:corrupt", "broken.epub:corrupt"],
+        duplicates: 0,
+      });
+      expect(shelf()).toEqual(before);
+      const live = (await client.files.list()).map((grant) => grant.grant).sort();
+      expect(live).toEqual(before.map((entry) => entry.grant).sort());
+    } finally {
+      await host.stop();
+    }
+  });
+
   it("names every file Reader cannot open with its reason, and adds none of them", async () => {
     const { host, client, library, pickFolder, shelf } = setup();
     try {
