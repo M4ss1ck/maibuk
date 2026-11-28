@@ -1197,6 +1197,13 @@
   line-height: var(--type-small-line);
 }
 
+/* Narrow shows the report as a full-height Sheet, not the kit's 85vh (#948). */
+.kit-layer--sheet.shelf-import-report .kit-sheet {
+  height: 100vh;
+  max-height: 100vh;
+  border-radius: 0;
+}
+
 .kit-layer--dialog.shelf-import-report .kit-dialog {
   max-width: 1040px;
   width: calc(100vw - 64px);

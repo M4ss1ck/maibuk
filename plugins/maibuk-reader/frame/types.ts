@@ -302,7 +302,6 @@ export interface FrameShelfLabels {
   importDismiss: string;
   importKeepReading: string;
   reportTitle: string;
-  reportClose: string;
   reportAdded: string;
   reportAlreadyOnShelf: string;
   reportRelinked: string;

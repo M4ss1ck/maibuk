@@ -159,7 +159,6 @@ function shelfLabelsFrom(catalog: Record<string, string>): FrameShelfLabels {
     importDismiss: catalog["shelf.frame.importDismiss"],
     importKeepReading: catalog["shelf.frame.importKeepReading"],
     reportTitle: catalog["shelf.frame.reportTitle"],
-    reportClose: catalog["shelf.frame.reportClose"],
     reportAdded: catalog["shelf.frame.reportAdded"],
     reportAlreadyOnShelf: catalog["shelf.frame.reportAlreadyOnShelf"],
     reportRelinked: catalog["shelf.frame.reportRelinked"],

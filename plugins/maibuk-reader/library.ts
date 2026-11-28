@@ -176,7 +176,6 @@ export async function fingerprintBytes(
 /** What the Shelf service exposes to the page and the Commands. */
 export interface ShelfService {
   loadShelf(): Promise<ShelfEntry[]>;
-  saveShelf(shelf: readonly ShelfEntry[]): Promise<void>;
   /**
    * Reads the Shelf, applies `change`, and writes the sorted result, one
    * change at a time: an Import adding Documents and a Reading Position save
@@ -350,10 +349,6 @@ export function createShelfService(client: ReaderClient): ShelfService {
       }
       const next = setMember(collections, id, documentId, member);
       return next === collections ? collections : writeCollections(next);
-    },
-
-    async saveShelf(shelf): Promise<void> {
-      await exclusive(() => client.storage.set({ key: SHELF_KEY, value: shelf }));
     },
 
     updateShelf(change): Promise<ShelfEntry[]> {

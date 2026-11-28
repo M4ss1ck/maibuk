@@ -148,7 +148,6 @@ const LABELS: FrameShelfLabels = {
   importKeepReading:
     "Keep reading; the import runs in the background. Cancel keeps what was added.",
   reportTitle: "Import report",
-  reportClose: "Close report",
   reportAdded: "Added",
   reportAlreadyOnShelf: "Already on the Shelf",
   reportRelinked: "Relinked (were Missing)",

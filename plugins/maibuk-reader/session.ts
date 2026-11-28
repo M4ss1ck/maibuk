@@ -87,7 +87,10 @@ export const IMPORT_THROTTLE_MS = 400;
 /** How long the Shelf Frame may take over one Document's cover before it is skipped (#948). */
 export const COVER_JOB_TIMEOUT_MS = 30_000;
 
-/** The largest cover data URL the Shelf keeps, as the Frame encodes it. */
+/**
+ * The largest cover data URL the Shelf keeps. It mirrors `COVER_MAX_BYTES` in
+ * `frame/meta.ts`, which encodes it: the Frame may not import Worker code.
+ */
 const COVER_MAX_BYTES = 50 * 1024;
 
 /** Whether the Frame's answer is a small JPEG data URL, the only cover the Shelf stores. */

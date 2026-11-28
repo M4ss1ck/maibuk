@@ -12,7 +12,13 @@
  * the password form. Imports only `@/plugin-sdk` and this Plugin's files.
  */
 
-import type { ReaderSettings, ShelfProgress, ShelfStatus, ShelfViewSettings } from "./shelf";
+import type {
+  DocumentFormat,
+  ReaderSettings,
+  ShelfProgress,
+  ShelfStatus,
+  ShelfViewSettings,
+} from "./shelf";
 
 /** The page fit a fresh Document opens with, or a numeric zoom scale. */
 export type FrameZoom = number | "width" | "page";
@@ -272,7 +278,6 @@ export interface FrameShelfLabels {
   importDismiss: string;
   importKeepReading: string;
   reportTitle: string;
-  reportClose: string;
   reportAdded: string;
   reportAlreadyOnShelf: string;
   reportRelinked: string;
@@ -525,7 +530,7 @@ export interface FrameImportMessage {
 export interface FrameCoverJobMessage {
   kind: "cover-job";
   documentId: string;
-  format: string;
+  format: DocumentFormat;
   /** The file's size in bytes. */
   size: number;
   /** foliate-js's parsers, for every format but PDF. */

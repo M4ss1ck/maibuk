@@ -263,7 +263,6 @@ export function frameShelfLabels(language: string): FrameShelfLabels {
     importDismiss: translate(language, "shelf.frame.importDismiss"),
     importKeepReading: translate(language, "shelf.frame.importKeepReading"),
     reportTitle: translate(language, "shelf.frame.reportTitle"),
-    reportClose: translate(language, "shelf.frame.reportClose"),
     reportAdded: translate(language, "shelf.frame.reportAdded"),
     reportAlreadyOnShelf: translate(language, "shelf.frame.reportAlreadyOnShelf"),
     reportRelinked: translate(language, "shelf.frame.reportRelinked"),

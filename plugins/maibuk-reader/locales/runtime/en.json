@@ -170,7 +170,6 @@
   "shelf.frame.importDismiss": "Dismiss",
   "shelf.frame.importKeepReading": "Keep reading; the import runs in the background. Cancel keeps what was added.",
   "shelf.frame.reportTitle": "Import report",
-  "shelf.frame.reportClose": "Close report",
   "shelf.frame.reportAdded": "Added",
   "shelf.frame.reportAlreadyOnShelf": "Already on the Shelf",
   "shelf.frame.reportRelinked": "Relinked (were Missing)",

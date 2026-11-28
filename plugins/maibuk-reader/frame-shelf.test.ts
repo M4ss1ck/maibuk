@@ -139,7 +139,6 @@ const LABELS_EN = {
   importKeepReading:
     "Keep reading; the import runs in the background. Cancel keeps what was added.",
   reportTitle: "Import report",
-  reportClose: "Close report",
   reportAdded: "Added",
   reportAlreadyOnShelf: "Already on the Shelf",
   reportRelinked: "Relinked (were Missing)",
@@ -265,7 +264,6 @@ const LABELS_ES = {
   importKeepReading:
     "Sigue leyendo; la importación continúa en segundo plano. Cancelar conserva lo añadido.",
   reportTitle: "Informe de importación",
-  reportClose: "Cerrar informe",
   reportAdded: "Añadidos",
   reportAlreadyOnShelf: "Ya en el estante",
   reportRelinked: "Revinculados (estaban perdidos)",
