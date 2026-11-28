@@ -131,6 +131,31 @@ const LABELS: FrameShelfLabels = {
   delete: "Delete",
   duplicateCollection: "A Collection with that name already exists.",
   noCollections: "No Collections yet",
+  importDescription:
+    "PDF, EPUB, MOBI, AZW3, FB2 and CBZ. Reader opens files where they are and never copies them.",
+  importFilesOption: "Files",
+  importFilesHint: "Pick one or several files.",
+  importFolderOption: "Folder",
+  importFolderHint:
+    "Every supported file in a folder and its subfolders. Reader reads it once, now, and does not watch it. Importing it again adds only what is new.",
+  importFolder: "Import folder",
+  importClose: "Close",
+  importProgressLabel: "Import progress",
+  importCancel: "Cancel",
+  importViewReport: "View report",
+  importDismiss: "Dismiss",
+  importKeepReading:
+    "Keep reading; the import runs in the background. Cancel keeps what was added.",
+  reportTitle: "Import report",
+  reportClose: "Close report",
+  reportAdded: "Added",
+  reportAlreadyOnShelf: "Already on the Shelf",
+  reportRelinked: "Relinked (were Missing)",
+  reportRelinkedShort: "Relinked",
+  reportUnreadable: "Unreadable",
+  reportUnreadableHint: "Reader could not open these. Deal with them outside Reader.",
+  reportDetails: "Details",
+  reportNone: "None",
 };
 
 const REMOVAL: ShelfRemoval = {

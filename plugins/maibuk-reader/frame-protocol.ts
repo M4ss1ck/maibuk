@@ -83,6 +83,8 @@ export interface FrameShelfEntry {
   state: "ok" | "missing" | "needs-permission" | "unreadable";
   /** Generated-cover artwork, when the Document has one. */
   coverDataUrl?: string;
+  /** True from Import until the Frame looked for the file's own cover (#948). */
+  coverPending?: boolean;
   /** The localized progress line, already formatted. */
   progressText: string;
   /** The whole percentage the drawn progress bar shows, or null when unknown. */
@@ -256,6 +258,62 @@ export interface FrameShelfLabels {
   delete: string;
   duplicateCollection: string;
   noCollections: string;
+  /* Import (#948) */
+  importDescription: string;
+  importFilesOption: string;
+  importFilesHint: string;
+  importFolderOption: string;
+  importFolderHint: string;
+  importFolder: string;
+  importClose: string;
+  importProgressLabel: string;
+  importCancel: string;
+  importViewReport: string;
+  importDismiss: string;
+  importKeepReading: string;
+  reportTitle: string;
+  reportClose: string;
+  reportAdded: string;
+  reportAlreadyOnShelf: string;
+  reportRelinked: string;
+  reportRelinkedShort: string;
+  reportUnreadable: string;
+  reportUnreadableHint: string;
+  reportDetails: string;
+  reportNone: string;
+}
+
+/** One file the Import could not open, its reason already localized. */
+export interface FrameImportUnreadable {
+  name: string;
+  reason: string;
+}
+
+/** The finished Import's report as the Frame draws it (#948); strings already localized. */
+export interface FrameImportReport {
+  /** Where the files came from, how many, and when it finished. */
+  subtitle: string;
+  added: string[];
+  alreadyOnShelf: string[];
+  relinked: string[];
+  unreadable: FrameImportUnreadable[];
+  /** The line about duplicates added once, or "" when there were none. */
+  duplicatesText: string;
+}
+
+/** The background Import as the Shelf's ProgressCard draws it (#948). */
+export interface FrameImportState {
+  status: "running" | "done";
+  source: "files" | "folder";
+  /** The card's title, such as `Importing "Library"`. */
+  title: string;
+  processed: number;
+  found: number;
+  /** Such as "128 of 312 files". */
+  progressText: string;
+  /** Such as "96 added · 22 already on Shelf · 3 relinked · 1 unreadable". */
+  countsText: string;
+  report: FrameImportReport;
 }
 
 /** What the Shelf draws: its loading, ready, or error state and its rows. */
@@ -322,14 +380,19 @@ export type FrameCommandId =
   | "toggleContinuousScroll"
   | "backToShelf"
   | "removeFromShelf"
-  | "locateDocument";
+  | "locateDocument"
+  | "viewImportReport";
 
 /** The Shelf Commands the Frame sends to the Worker. */
 export type FrameShelfCommandId =
   | "openDocument"
   | "removeFromShelf"
   | "locateDocument"
-  | "openFile";
+  | "openFile"
+  | "importFiles"
+  | "importFolder"
+  | "cancelImport"
+  | "dismissImport";
 
 /* Worker -> Frame */
 
@@ -447,6 +510,12 @@ export interface FrameShelfResultMessage {
   message?: string;
 }
 
+/** The background Import changed: a file was sorted, it finished, or it was dismissed (null). */
+export interface FrameImportMessage {
+  kind: "import";
+  state: FrameImportState | null;
+}
+
 export type WorkerToFrameMessage =
   | FrameOpenMessage
   | FrameBytesMessage
@@ -459,7 +528,8 @@ export type WorkerToFrameMessage =
   | FrameZipErrorMessage
   | FrameShelfMessage
   | FrameRemoveCountsMessage
-  | FrameShelfResultMessage;
+  | FrameShelfResultMessage
+  | FrameImportMessage;
 
 /* Frame -> Worker */
 

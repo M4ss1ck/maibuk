@@ -8,8 +8,14 @@
  * only what the Frame draws, so the author's file never leaks across the port.
  */
 
-import type { FrameShelfEntry, FrameShelfLabels, FrameShelfState } from "./frame-protocol";
+import type {
+  FrameImportState,
+  FrameShelfEntry,
+  FrameShelfLabels,
+  FrameShelfState,
+} from "./frame-protocol";
 import { format, translate, type ReaderKey } from "./i18n";
+import type { ImportReport, ImportState, UnreadableReason } from "./import";
 import { baseLanguage } from "./language";
 import {
   progressFraction,
@@ -103,6 +109,7 @@ export function frameShelfEntry(language: string, entry: ShelfEntry): FrameShelf
     format: entry.format,
     state: entry.state ?? "ok",
     ...(entry.coverDataUrl === undefined ? {} : { coverDataUrl: entry.coverDataUrl }),
+    ...(entry.coverPending === true ? { coverPending: true } : {}),
     progressText: progressText(language, entry, status),
     progressPercent: progressPercent(entry, status),
     statusText: statusText(language, entry),
@@ -243,6 +250,28 @@ export function frameShelfLabels(language: string): FrameShelfLabels {
     delete: translate(language, "shelf.frame.delete"),
     duplicateCollection: translate(language, "shelf.frame.duplicateCollection"),
     noCollections: translate(language, "shelf.frame.noCollections"),
+    importDescription: translate(language, "shelf.frame.importDescription"),
+    importFilesOption: translate(language, "shelf.frame.importFilesOption"),
+    importFilesHint: translate(language, "shelf.frame.importFilesHint"),
+    importFolderOption: translate(language, "shelf.frame.importFolderOption"),
+    importFolderHint: translate(language, "shelf.frame.importFolderHint"),
+    importFolder: translate(language, "shelf.frame.importFolder"),
+    importClose: translate(language, "shelf.frame.importClose"),
+    importProgressLabel: translate(language, "shelf.frame.importProgressLabel"),
+    importCancel: translate(language, "shelf.frame.importCancel"),
+    importViewReport: translate(language, "shelf.frame.importViewReport"),
+    importDismiss: translate(language, "shelf.frame.importDismiss"),
+    importKeepReading: translate(language, "shelf.frame.importKeepReading"),
+    reportTitle: translate(language, "shelf.frame.reportTitle"),
+    reportClose: translate(language, "shelf.frame.reportClose"),
+    reportAdded: translate(language, "shelf.frame.reportAdded"),
+    reportAlreadyOnShelf: translate(language, "shelf.frame.reportAlreadyOnShelf"),
+    reportRelinked: translate(language, "shelf.frame.reportRelinked"),
+    reportRelinkedShort: translate(language, "shelf.frame.reportRelinkedShort"),
+    reportUnreadable: translate(language, "shelf.frame.reportUnreadable"),
+    reportUnreadableHint: translate(language, "shelf.frame.reportUnreadableHint"),
+    reportDetails: translate(language, "shelf.frame.reportDetails"),
+    reportNone: translate(language, "shelf.frame.reportNone"),
   };
 }
 
@@ -315,5 +344,134 @@ export function shelfRemovalCopy(
       }
     ),
     stats: translate(language, "shelf.frame.stats"),
+  };
+}
+
+const UNREADABLE_REASON: Readonly<Record<UnreadableReason, ReaderKey>> = {
+  drm: "shelf.import.reason.drm",
+  corrupt: "shelf.import.reason.corrupt",
+  unsupported: "shelf.import.reason.unsupported",
+  unreadable: "shelf.import.reason.unreadable",
+};
+
+/** A count in its singular or plural template, such as "1 file found". */
+function countText(language: string, count: number, one: ReaderKey, other: ReaderKey): string {
+  return format(translate(language, count === 1 ? one : other), { count });
+}
+
+/** The card's title: what is being imported, or that it finished or was cancelled. */
+function importTitle(
+  language: string,
+  status: ImportState["status"],
+  report: ImportReport
+): string {
+  const { source } = report;
+  if (status === "done" && report.cancelled)
+    return translate(language, "shelf.import.titleCancelled");
+  if (source.kind === "files") {
+    return translate(
+      language,
+      status === "running" ? "shelf.import.titleFiles" : "shelf.import.titleFilesDone"
+    );
+  }
+  const key = status === "running" ? "shelf.import.titleFolder" : "shelf.import.titleFolderDone";
+  return format(translate(language, key), { name: source.name });
+}
+
+/** "96 added · 22 already on Shelf · 3 relinked · 1 unreadable"; a zero past "added" stays out. */
+function importCounts(language: string, report: ImportReport): string {
+  const parts = [
+    countText(
+      language,
+      report.added.length,
+      "shelf.import.countAdded.one",
+      "shelf.import.countAdded.other"
+    ),
+  ];
+  const rest: [number, ReaderKey, ReaderKey][] = [
+    [
+      report.alreadyOnShelf.length,
+      "shelf.import.countAlreadyOnShelf.one",
+      "shelf.import.countAlreadyOnShelf.other",
+    ],
+    [report.relinked.length, "shelf.import.countRelinked.one", "shelf.import.countRelinked.other"],
+    [
+      report.unreadable.length,
+      "shelf.import.countUnreadable.one",
+      "shelf.import.countUnreadable.other",
+    ],
+  ];
+  for (const [count, one, other] of rest) {
+    if (count > 0) parts.push(countText(language, count, one, other));
+  }
+  return parts.join(" · ");
+}
+
+/** Where the files came from, how many, and when the Import finished or was cancelled. */
+function importSubtitle(language: string, report: ImportReport): string {
+  const { source } = report;
+  const parts = [
+    source.kind === "folder"
+      ? format(translate(language, "shelf.import.sourceFolder"), { name: source.name })
+      : translate(language, "shelf.import.sourceFiles"),
+    countText(language, report.found, "shelf.import.found.one", "shelf.import.found.other"),
+  ];
+  if (report.finishedAt !== undefined) {
+    const time = new Intl.DateTimeFormat(language, { hour: "2-digit", minute: "2-digit" }).format(
+      report.finishedAt
+    );
+    const key = report.cancelled ? "shelf.import.cancelledAt" : "shelf.import.finishedAt";
+    parts.push(format(translate(language, key), { time }));
+  }
+  return parts.join(" · ");
+}
+
+/** The line about files the Import found twice and added once, or "". */
+function duplicatesText(language: string, report: ImportReport): string {
+  if (report.duplicates <= 0) return "";
+  return report.source.kind === "folder"
+    ? countText(
+        language,
+        report.duplicates,
+        "shelf.import.duplicatesFolder.one",
+        "shelf.import.duplicatesFolder.other"
+      )
+    : countText(
+        language,
+        report.duplicates,
+        "shelf.import.duplicates.one",
+        "shelf.import.duplicates.other"
+      );
+}
+
+/**
+ * The background Import as the Shelf's card and report draw it (#948), every
+ * string localized here so the Frame only lays it out. File names stay as the
+ * host gave them; the host never hands Reader a path.
+ */
+export function frameImportState(language: string, state: ImportState): FrameImportState {
+  const { report, status } = state;
+  return {
+    status,
+    source: report.source.kind,
+    title: importTitle(language, status, report),
+    processed: report.processed,
+    found: report.found,
+    progressText: format(translate(language, "shelf.import.progress"), {
+      processed: report.processed,
+      found: report.found,
+    }),
+    countsText: importCounts(language, report),
+    report: {
+      subtitle: importSubtitle(language, report),
+      added: [...report.added],
+      alreadyOnShelf: [...report.alreadyOnShelf],
+      relinked: [...report.relinked],
+      unreadable: report.unreadable.map(({ name, reason }) => ({
+        name,
+        reason: translate(language, UNREADABLE_REASON[reason]),
+      })),
+      duplicatesText: duplicatesText(language, report),
+    },
   };
 }
