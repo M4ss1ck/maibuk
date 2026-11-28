@@ -68,8 +68,14 @@ import type {
   FrameShelfState,
   ShelfViewSettings,
 } from "./types";
-import type { FrameShelfCollectionMessage } from "./protocol";
-import { type ImportKind, ImportCard, ImportChooser, ImportReport } from "./shelf-import";
+import type { FrameShelfCollectionMessage, FrameShelfImportMessage } from "./protocol";
+import {
+  type CollisionChoice,
+  type ImportKind,
+  ImportCard,
+  ImportChooser,
+  ImportReport,
+} from "./shelf-import";
 import { useLayoutMode } from "./use-layout-mode";
 
 /** The More button's size beside a cover's title on Wide, as "Shelf · desktop · grid M" draws it. */
@@ -155,6 +161,8 @@ export interface ShelfProps {
   importState?: FrameImportState | null;
   /** Bumped by the View import report Command: opens the finished Import's report. */
   importReportRequest?: number;
+  /** The author applied collision choices or changed the folder Collection option (#949). */
+  onImport?: (message: FrameShelfImportMessage) => void;
 }
 
 /** The Frame's own width, updated when the Pane resizes. */
@@ -288,6 +296,7 @@ export function Shelf({
   collectionRequest = null,
   importState = null,
   importReportRequest = 0,
+  onImport = () => {},
 }: ShelfProps) {
   const { mode } = useLayoutMode();
   const wide = mode === "wide";
@@ -319,6 +328,23 @@ export function Shelf({
   const [picker, setPicker] = useState(false);
   const [chooser, setChooser] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  // The author's collision choices live here, so "Close, decide later" and
+  // View report bring back the same rows with the same choices (#949).
+  const [choices, setChoices] = useState<Record<string, CollisionChoice>>({});
+  const collisions = importState?.status === "done" ? importState.report.collisions : [];
+  const collisionIds = collisions.map((collision) => collision.id).join("\n");
+  useEffect(() => {
+    const ids = new Set(collisionIds === "" ? [] : collisionIds.split("\n"));
+    setChoices((current) => {
+      const kept = Object.entries(current).filter(([id]) => ids.has(id));
+      return kept.length === Object.keys(current).length ? current : Object.fromEntries(kept);
+    });
+  }, [collisionIds]);
+  // The folder Collection option draws the author's last choice at once; the Worker stores it.
+  const [collect, setCollect] = useState(state.importCollect !== false);
+  useEffect(() => {
+    setCollect(state.importCollect !== false);
+  }, [state.importCollect]);
   const pickerAnchor = useRef<HTMLElement | null>(null);
   const [collectionMenu, setCollectionMenu] = useState<FrameCollection | null>(null);
   const collectionMenuAnchor = useRef<HTMLElement | null>(null);
@@ -1431,6 +1457,11 @@ export function Shelf({
         open={chooser}
         wide={wide}
         labels={labels}
+        collect={collect}
+        onCollectChange={(next) => {
+          setCollect(next);
+          onImport({ kind: "shelf-import", action: "collect", collect: next });
+        }}
         onClose={() => setChooser(false)}
         onPick={pickImport}
       />
@@ -1441,6 +1472,14 @@ export function Shelf({
           wide={wide}
           state={importState}
           labels={labels}
+          choices={choices}
+          onChoose={(id, choice) => setChoices((current) => ({ ...current, [id]: choice }))}
+          onChooseAll={(choice) =>
+            setChoices(Object.fromEntries(collisions.map((collision) => [collision.id, choice])))
+          }
+          onApply={() => {
+            onImport({ kind: "shelf-import", action: "resolve", choices });
+          }}
           onClose={() => setReportOpen(false)}
         />
       )}

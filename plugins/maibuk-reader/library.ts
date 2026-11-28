@@ -231,6 +231,19 @@ export interface ShelfService {
    * Collection, or a change that changes nothing, writes nothing.
    */
   setInCollection(id: string, documentId: string, member: boolean): Promise<Collection[]>;
+  /**
+   * Files every Shelf Document in `documentIds` in the Collection named `name`,
+   * made when none has that name (ignoring case, as `createCollection` does),
+   * in one write (#949). A blank name or no Shelf Document writes nothing.
+   */
+  fileInCollection(name: string, documentIds: readonly string[]): Promise<Collection[]>;
+  /**
+   * Puts `entry` in the place of the Document `oldId` (#949): it joins the old
+   * Document's Collections, and the old Document leaves the Shelf with its
+   * Reading Position, Bookmarks, and Highlights; its File Grant is released.
+   * Resolves false, changing nothing, when `oldId` is no longer on the Shelf.
+   */
+  replaceDocument(oldId: string, entry: ShelfEntry): Promise<boolean>;
 }
 
 export function createShelfService(client: ReaderClient): ShelfService {
@@ -349,6 +362,68 @@ export function createShelfService(client: ReaderClient): ShelfService {
       }
       const next = setMember(collections, id, documentId, member);
       return next === collections ? collections : writeCollections(next);
+    },
+
+    async fileInCollection(name, documentIds): Promise<Collection[]> {
+      const cleaned = collectionName(name);
+      const collections = await library.loadCollections();
+      if (cleaned === "") return collections;
+      const onShelf = new Set((await library.loadShelf()).map((entry) => entry.id));
+      const ids = documentIds.filter((documentId) => onShelf.has(documentId));
+      if (ids.length === 0) return collections;
+      const existing = collections.find((collection) =>
+        sameCollectionName(collection.name, cleaned)
+      );
+      if (existing === undefined) {
+        return writeCollections([
+          ...collections,
+          { id: newCollectionId(), name: cleaned, documentIds: [...new Set(ids)] },
+        ]);
+      }
+      const merged = [...new Set([...existing.documentIds, ...ids])];
+      if (merged.length === existing.documentIds.length) return collections;
+      return writeCollections(
+        collections.map((collection) =>
+          collection.id === existing.id ? { ...collection, documentIds: merged } : collection
+        )
+      );
+    },
+
+    async replaceDocument(oldId, entry): Promise<boolean> {
+      const found: { old?: ShelfEntry } = {};
+      await library.updateShelf((shelf) => {
+        found.old = shelf.find((candidate) => candidate.id === oldId);
+        if (found.old === undefined) return null;
+        return [...removeEntry(shelf, oldId), entry];
+      });
+      const { old } = found;
+      if (old === undefined) return false;
+      // The new Document is on the Shelf: from here on, a failure leaves stale
+      // data behind, never a lost Document.
+      const collections = await library.loadCollections().catch(() => []);
+      if (collections.some((collection) => collection.documentIds.includes(oldId))) {
+        await writeCollections(
+          collections.map((collection) => ({
+            ...collection,
+            documentIds: [
+              ...new Set(
+                collection.documentIds.map((documentId) =>
+                  documentId === oldId ? entry.id : documentId
+                )
+              ),
+            ],
+          }))
+        ).catch(() => undefined);
+      }
+      for (const key of [positionKey(oldId), bookmarksKey(oldId), highlightsKey(oldId)]) {
+        try {
+          await client.storage.delete({ key });
+        } catch {
+          // A key that never existed needs no delete.
+        }
+      }
+      if (old.grant !== entry.grant) await releaseGrant(client, old.grant);
+      return true;
     },
 
     updateShelf(change): Promise<ShelfEntry[]> {

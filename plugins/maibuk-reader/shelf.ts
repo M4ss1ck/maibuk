@@ -503,6 +503,13 @@ export function withProgress(entry: ShelfEntry, progress: ShelfProgress, now: nu
 /** The key the Shelf's remembered view, sort, filters, and search live under. */
 export const SHELF_VIEW_KEY = "shelfView";
 
+/**
+ * The key the Import sheet's folder Collection option lives under (#949): a
+ * folder Import files its Documents in a Collection named after the folder
+ * unless the author turned it off. Anything but `false` reads as on.
+ */
+export const IMPORT_COLLECT_KEY = "importCollect";
+
 /** One Collection: a group of Documents the author makes and names (#946). */
 export interface Collection {
   /** Plugin-local id. */

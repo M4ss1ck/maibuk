@@ -461,6 +461,40 @@ describe("Segmented", () => {
     expect(document.activeElement).toBe(small);
     expect(seen).toEqual(["small"]);
   });
+
+  it("puts the first option in the Tab order when nothing is selected, and ArrowRight selects the next", async () => {
+    const seen: string[] = [];
+    const user = userEvent.setup({ delay: null });
+    function Unselected() {
+      const [value, setValue] = useState<string | null>(null);
+      return (
+        <div>
+          <Segmented
+            label="Layout"
+            value={value}
+            options={[
+              { value: "single", label: "Single" },
+              { value: "continuous", label: "Continuous" },
+              { value: "spread", label: "Spread" },
+            ]}
+            onChange={(next) => {
+              setValue(next);
+              seen.push(next);
+            }}
+          />
+          <button type="button">After</button>
+        </div>
+      );
+    }
+    await mount(<Unselected />);
+
+    await press(() => user.tab());
+    expect(document.activeElement).toBe(screen.getByRole("radio", { name: "Single" }));
+
+    await press(() => user.keyboard("{ArrowRight}"));
+    expect(document.activeElement).toBe(screen.getByRole("radio", { name: "Continuous" }));
+    expect(seen).toEqual(["continuous"]);
+  });
 });
 
 function ToggleChipHarness({ onChange }: { onChange?: (pressed: boolean) => void }) {

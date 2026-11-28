@@ -269,6 +269,11 @@ export interface SheetProps {
    * header's primary button, as the "View and filters" Sheet draws it.
    */
   actions?: ComponentChildren;
+  /**
+   * Drawn under the scrolling body and kept in view, for actions too wide for
+   * the title row, such as the Import report's count, Close, and Apply.
+   */
+  footer?: ComponentChildren;
   children?: ComponentChildren;
   class?: string;
 }
@@ -286,6 +291,7 @@ export function Sheet({
   titleHidden = false,
   role = "dialog",
   actions,
+  footer,
   children,
   class: extra,
 }: SheetProps) {
@@ -331,6 +337,7 @@ export function Sheet({
           )}
         </div>
         <div class="kit-sheet__body">{children}</div>
+        {footer === undefined ? null : <div class="kit-sheet__footer">{footer}</div>}
       </div>
     </div>,
     document.body

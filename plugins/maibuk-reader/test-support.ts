@@ -93,3 +93,23 @@ export function shelfEntry(
     ...overrides,
   };
 }
+
+/**
+ * A small readable EPUB whose OPF names `title` and `author`, so an Import
+ * reads them (#949). `text` changes its bytes, and so its Fingerprint.
+ */
+export function metaEpub(title: string, author: string, text = "Reader test"): Uint8Array {
+  const xml = (value: string) => encoder.encode(value);
+  return zipSync({
+    mimetype: [xml("application/epub+zip"), { level: 0 }],
+    "META-INF/container.xml": xml(
+      '<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>'
+    ),
+    "OEBPS/content.opf": xml(
+      `<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>${title}</dc:title><dc:creator>${author}</dc:creator></metadata><manifest><item id="c" href="c.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c"/></spine></package>`
+    ),
+    "OEBPS/c.xhtml": xml(
+      `<html xmlns="http://www.w3.org/1999/xhtml"><body><p>${text}</p></body></html>`
+    ),
+  });
+}

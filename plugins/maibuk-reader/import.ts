@@ -6,6 +6,9 @@
  * - Same Fingerprint as a Missing Document: relinked, keeping its id and so its
  *   Reading Position, Bookmarks, and Highlights.
  * - The same Fingerprint twice in one Import: added once.
+ * - Same title and author as a Shelf Document, another Fingerprint: a
+ *   collision (#949). It waits in the report, its grant held, until the author
+ *   chooses Keep both, Replace, or Skip for every collision and applies them.
  * - A file Reader cannot open (DRM, damaged, not a format it reads, bytes it
  *   cannot read): named with its reason, never added.
  * - Anything else: added with its cover pending, so the Frame fills it in later.
@@ -21,16 +24,19 @@
  */
 
 import { FILE_READ_MAX_BYTES } from "@/plugin-sdk";
+import { readFileMeta } from "./import-meta";
 import {
   fingerprintBytes,
   newDocumentId,
   type ReaderClient,
+  type RemovalCounts,
   type ShelfService,
   type ShelvedFile,
 } from "./library";
 import {
   formatFromName,
   reattach,
+  type ShelfProgress,
   sniffFormat,
   titleFromName,
   type DocumentFormat,
@@ -38,8 +44,44 @@ import {
 } from "./shelf";
 import { openZip, ZipError } from "./zip";
 
-/** Where the Import's files came from: a pick of files, or a picked folder by its own name. */
-export type ImportSource = { kind: "files" } | { kind: "folder"; name: string };
+/**
+ * Where the Import's files came from: a pick of files, or a picked folder by
+ * its own name. `collect` files the folder's added Documents in a Collection
+ * named after it (#949).
+ */
+export type ImportSource = { kind: "files" } | { kind: "folder"; name: string; collect?: boolean };
+
+/** What the author chose for one collision (#949). */
+export type CollisionChoice = "keep" | "replace" | "skip";
+
+/** The Shelf Document a found file collides with, as the report describes it. */
+export interface CollidingDocument {
+  id: string;
+  title: string;
+  author: string;
+  format: DocumentFormat;
+  /** Bytes, from its Fingerprint. */
+  size: number;
+  progress: ShelfProgress | null;
+  openedAt?: number;
+  /** What Replace would drop with it. */
+  removal: RemovalCounts;
+}
+
+/**
+ * A found file whose title and author match a Shelf Document but whose
+ * Fingerprint differs (#949). Its grant stays held until the author applies a choice.
+ */
+export interface ImportCollision {
+  /** Unique within this Import. */
+  id: string;
+  file: ShelvedFile;
+  fingerprint: string;
+  format: DocumentFormat;
+  title: string;
+  author: string;
+  existing: CollidingDocument;
+}
 
 /** Why Reader could not open an imported file. */
 export type UnreadableReason = "drm" | "corrupt" | "unsupported" | "unreadable";
@@ -62,6 +104,10 @@ export interface ImportReport {
   alreadyOnShelf: string[];
   relinked: string[];
   unreadable: UnreadableFile[];
+  /** Collisions still waiting for the author's choice (#949). */
+  collisions: ImportCollision[];
+  /** The Collection the folder's added Documents were filed in, when the author asked for one (#949). */
+  collection?: string;
   /** Files whose Fingerprint an earlier file in the same Import already had. */
   duplicates: number;
   /** True when the author cancelled before every file was sorted. */
@@ -93,6 +139,11 @@ export function copyReport(report: ImportReport): ImportReport {
     alreadyOnShelf: [...report.alreadyOnShelf],
     relinked: [...report.relinked],
     unreadable: report.unreadable.map((item) => ({ ...item })),
+    collisions: report.collisions.map((item) => ({
+      ...item,
+      file: { ...item.file },
+      existing: { ...item.existing, removal: { ...item.existing.removal } },
+    })),
   };
 }
 
@@ -106,9 +157,25 @@ export function emptyReport(source: ImportSource, found: number): ImportReport {
     alreadyOnShelf: [],
     relinked: [],
     unreadable: [],
+    collisions: [],
     duplicates: 0,
     cancelled: false,
   };
+}
+
+/**
+ * A title or author as a collision compares it (#949): trimmed, whitespace
+ * runs collapsed to one space, and case ignored.
+ */
+export function collisionKey(title: string, author: string): string {
+  const clean = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleLowerCase();
+  return `${clean(title)}\u0000${clean(author)}`;
+}
+
+/** A file's size in bytes, from the `${size}:` its Fingerprint starts with. */
+function sizeFromFingerprint(print: string): number {
+  const size = Number.parseInt(print.slice(0, print.indexOf(":")), 10);
+  return Number.isFinite(size) && size >= 0 ? size : 0;
 }
 
 /** A Missing Document an Import may relink: its file moved, or the browser must ask again. */
@@ -200,24 +267,16 @@ export async function runImport(
    */
   const seen = new Map<
     string,
-    { kind: "added" } | { kind: "onShelf" } | { kind: "unreadable"; reason: UnreadableReason }
+    | { kind: "added" }
+    | { kind: "onShelf" }
+    | { kind: "collision" }
+    | { kind: "unreadable"; reason: UnreadableReason }
   >();
+  /** The ids of the Documents this Import added, for the folder's Collection. */
+  const addedIds: string[] = [];
 
   /** Releases `grant` unless a Shelf Document holds it. */
-  async function letGo(grant: string): Promise<void> {
-    try {
-      const shelf = await library.loadShelf();
-      if (shelf.some((entry) => entry.grant === grant)) return;
-    } catch {
-      // An unread Shelf may hold this grant: keep it rather than break a Document.
-      return;
-    }
-    try {
-      await client.files.release({ grant });
-    } catch {
-      // The grant may already be gone.
-    }
-  }
+  const letGo = (grant: string) => releaseUnlessHeld(client, library, grant);
 
   async function sortOne(file: ShelvedFile): Promise<void> {
     let head: Uint8Array;
@@ -231,7 +290,7 @@ export async function runImport(
     }
     const first = seen.get(print);
     if (first !== undefined) {
-      if (first.kind === "added") report.duplicates += 1;
+      if (first.kind === "added" || first.kind === "collision") report.duplicates += 1;
       else if (first.kind === "onShelf") report.alreadyOnShelf.push(file.name);
       else report.unreadable.push({ name: file.name, reason: first.reason });
       await letGo(file.grant);
@@ -273,20 +332,38 @@ export async function runImport(
       return;
     }
 
-    const time = now();
-    const entry: ShelfEntry = {
-      id: newDocumentId(),
-      grant: file.grant,
-      fingerprint: print,
-      title: titleFromName(file.name),
-      author: "",
-      format,
-      coverPending: true,
-      lastReadAt: time,
-      addedAt: time,
-      progress: null,
-      state: "ok",
-    };
+    const meta = await readFileMeta(rangedReader(client, file.grant), file.size, format, head);
+    const title = meta.title === "" ? titleFromName(file.name) : meta.title;
+    const key = collisionKey(title, meta.author);
+    const twin = (await library.loadShelf()).find(
+      (entry) => entry.fingerprint !== print && collisionKey(entry.title, entry.author) === key
+    );
+    if (twin !== undefined) {
+      seen.set(print, { kind: "collision" });
+      report.collisions.push({
+        id: `collision-${report.collisions.length + 1}`,
+        file: { ...file },
+        fingerprint: print,
+        format,
+        title,
+        author: meta.author,
+        existing: {
+          id: twin.id,
+          title: twin.title,
+          author: twin.author,
+          format: twin.format,
+          size: sizeFromFingerprint(twin.fingerprint),
+          progress: twin.progress,
+          ...(twin.openedAt === undefined ? {} : { openedAt: twin.openedAt }),
+          removal: await library
+            .removalCounts(twin.id)
+            .catch(() => ({ bookmarks: 0, highlights: 0, notes: 0 })),
+        },
+      });
+      return;
+    }
+
+    const entry = importedEntry(file, print, format, title, meta.author, now());
     let added = false;
     await library.updateShelf((shelf) => {
       // Another path may have shelved the same file while this one was probed.
@@ -295,8 +372,10 @@ export async function runImport(
       return [...shelf, entry];
     });
     seen.set(print, added ? { kind: "added" } : { kind: "onShelf" });
-    if (added) report.added.push(file.name);
-    else report.alreadyOnShelf.push(file.name);
+    if (added) {
+      report.added.push(file.name);
+      addedIds.push(entry.id);
+    } else report.alreadyOnShelf.push(file.name);
   }
 
   let index = 0;
@@ -317,8 +396,142 @@ export async function runImport(
     report.cancelled = true;
     for (const file of picked.slice(index)) await letGo(file.grant);
   }
+  if (source.kind === "folder" && source.collect === true) {
+    if (await fileInFolderCollection(library, source.name, addedIds)) {
+      report.collection = source.name;
+    }
+  }
   report.finishedAt = now();
   return report;
+}
+
+/** A new Shelf row for an imported file, its cover pending. */
+function importedEntry(
+  file: ShelvedFile,
+  print: string,
+  format: DocumentFormat,
+  title: string,
+  author: string,
+  time: number
+): ShelfEntry {
+  return {
+    id: newDocumentId(),
+    grant: file.grant,
+    fingerprint: print,
+    title,
+    author,
+    format,
+    coverPending: true,
+    lastReadAt: time,
+    addedAt: time,
+    progress: null,
+    state: "ok",
+  };
+}
+
+/**
+ * Files `ids` in the folder's Collection, and says whether any were filed; a
+ * refused write leaves them on the Shelf, unfiled.
+ */
+async function fileInFolderCollection(
+  library: ShelfService,
+  name: string,
+  ids: readonly string[]
+): Promise<boolean> {
+  if (ids.length === 0) return false;
+  try {
+    await library.fileInCollection(name, ids);
+    return true;
+  } catch {
+    // The Documents are on the Shelf; only the filing was lost.
+    return false;
+  }
+}
+
+/**
+ * Applies the author's choice for every collision (#949). Keep both adds the
+ * file as its own Document; Replace puts it in the old Document's place and
+ * Collections, dropping the old Reading Position, Bookmarks, and Highlights;
+ * Skip lets the file go. A Replace whose old Document has left the Shelf
+ * meanwhile adds the file instead. Resolves with the report after the choices.
+ */
+export async function applyCollisionChoices(
+  deps: ImportDeps,
+  report: ImportReport,
+  choices: Readonly<Record<string, CollisionChoice>>
+): Promise<ImportReport> {
+  const { client, library } = deps;
+  const now = deps.now ?? Date.now;
+  const next = copyReport(report);
+  const filed: string[] = [];
+  for (const collision of report.collisions) {
+    const choice = choices[collision.id];
+    const { file } = collision;
+    try {
+      if (choice === "skip") {
+        await releaseUnlessHeld(client, library, file.grant);
+        continue;
+      }
+      const entry = importedEntry(
+        file,
+        collision.fingerprint,
+        collision.format,
+        collision.title,
+        collision.author,
+        now()
+      );
+      if (choice === "replace" && (await library.replaceDocument(collision.existing.id, entry))) {
+        next.added.push(file.name);
+        filed.push(entry.id);
+        continue;
+      }
+      let added = false;
+      await library.updateShelf((shelf) => {
+        if (shelf.some((candidate) => candidate.fingerprint === collision.fingerprint)) return null;
+        added = true;
+        return [...shelf, entry];
+      });
+      if (added) {
+        next.added.push(file.name);
+        filed.push(entry.id);
+      } else {
+        next.alreadyOnShelf.push(file.name);
+        await releaseUnlessHeld(client, library, file.grant);
+      }
+    } catch {
+      next.unreadable.push({ name: file.name, reason: "unreadable" });
+      await releaseUnlessHeld(client, library, file.grant);
+    }
+  }
+  next.collisions = [];
+  if (report.source.kind === "folder" && report.source.collect === true) {
+    if (await fileInFolderCollection(library, report.source.name, filed)) {
+      next.collection = report.source.name;
+    }
+  }
+  return next;
+}
+
+/**
+ * Releases `grant` unless a Shelf Document holds it. An unread Shelf may hold
+ * it, so a failed read keeps it rather than break a Document.
+ */
+async function releaseUnlessHeld(
+  client: ReaderClient,
+  library: ShelfService,
+  grant: string
+): Promise<void> {
+  try {
+    const shelf = await library.loadShelf();
+    if (shelf.some((entry) => entry.grant === grant)) return;
+  } catch {
+    return;
+  }
+  try {
+    await client.files.release({ grant });
+  } catch {
+    // The grant may already be gone.
+  }
 }
 
 /** The background Import the Shelf draws: running with its counts so far, or done with its report. */
@@ -335,11 +548,19 @@ export interface ImportState {
 export interface Importer {
   /** The running or finished Import, or null when there is none to show. */
   readonly state: ImportState | null;
-  /** Starts an Import; false, starting nothing, while another one runs. */
+  /**
+   * Starts an Import; false, starting nothing, while another one runs or the
+   * last one still has collisions to resolve.
+   */
   start(picked: readonly ShelvedFile[], source: ImportSource): boolean;
+  /**
+   * Applies a choice for every collision of the finished Import (#949).
+   * Resolves false, applying nothing, when one has no choice or none waits.
+   */
+  resolve(choices: Readonly<Record<string, CollisionChoice>>): Promise<boolean>;
   /** Cancels the running Import before its next file; the Documents added stay. */
   cancel(): void;
-  /** Forgets a finished Import, so the card and report go away. */
+  /** Forgets a finished Import, so the card and report go away; never while collisions wait. */
   dismiss(): void;
   /** Resolves when the running Import finishes; at once when none runs. */
   idle(): Promise<void>;
@@ -347,10 +568,16 @@ export interface Importer {
   subscribe(listener: (state: ImportState | null) => void): () => void;
 }
 
+/** Whether a finished Import still has collisions waiting for the author. */
+export function hasCollisions(state: ImportState | null): boolean {
+  return state?.status === "done" && state.report.collisions.length > 0;
+}
+
 export function createImporter(deps: ImportDeps): Importer {
   let state: ImportState | null = null;
   let controller: AbortController | null = null;
   let running: Promise<void> = Promise.resolve();
+  let resolving = false;
   const listeners = new Set<(state: ImportState | null) => void>();
 
   function emit(next: ImportState | null): void {
@@ -369,7 +596,7 @@ export function createImporter(deps: ImportDeps): Importer {
       return state;
     },
     start(picked, source): boolean {
-      if (state?.status === "running") return false;
+      if (state?.status === "running" || hasCollisions(state)) return false;
       const abort = new AbortController();
       controller = abort;
       emit({ status: "running", report: emptyReport(source, picked.length) });
@@ -385,11 +612,25 @@ export function createImporter(deps: ImportDeps): Importer {
       });
       return true;
     },
+    async resolve(choices): Promise<boolean> {
+      const current = state;
+      if (current?.status !== "done" || !hasCollisions(current) || resolving) return false;
+      const valid = new Set<CollisionChoice>(["keep", "replace", "skip"]);
+      if (!current.report.collisions.every((item) => valid.has(choices[item.id]))) return false;
+      resolving = true;
+      try {
+        const report = await applyCollisionChoices(deps, current.report, choices);
+        if (state === current) emit({ status: "done", report });
+        return true;
+      } finally {
+        resolving = false;
+      }
+    },
     cancel(): void {
       controller?.abort();
     },
     dismiss(): void {
-      if (state?.status !== "done") return;
+      if (state?.status !== "done" || hasCollisions(state)) return;
       emit(null);
     },
     idle(): Promise<void> {
@@ -416,13 +657,19 @@ export async function pickAndImport(
   client: ReaderClient,
   importer: Importer,
   kind: ImportPickKind,
-  extensions: readonly string[]
+  extensions: readonly string[],
+  options: { collect?: boolean } = {}
 ): Promise<boolean> {
-  if (importer.state?.status === "running") return false;
+  const state = importer.state;
+  if (state?.status === "running" || hasCollisions(state)) return false;
   if (kind === "folder") {
     const picked = await client.files.pick({ extensions: [...extensions], folder: true });
     if (picked === null) return false;
-    return importer.start(picked.grants, { kind: "folder", name: picked.folder });
+    return importer.start(picked.grants, {
+      kind: "folder",
+      name: picked.folder,
+      collect: options.collect === true,
+    });
   }
   const picked = await client.files.pick({ extensions: [...extensions], multiple: true });
   if (picked === null || picked.grants.length === 0) return false;

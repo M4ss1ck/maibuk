@@ -13,9 +13,10 @@ import type {
   FrameShelfEntry,
   FrameShelfLabels,
   FrameShelfState,
+  FrameImportCollision,
 } from "./frame-protocol";
 import { format, translate, type ReaderKey } from "./i18n";
-import type { ImportReport, ImportState, UnreadableReason } from "./import";
+import type { ImportCollision, ImportReport, ImportState, UnreadableReason } from "./import";
 import { baseLanguage } from "./language";
 import {
   progressFraction,
@@ -271,6 +272,20 @@ export function frameShelfLabels(language: string): FrameShelfLabels {
     reportUnreadableHint: translate(language, "shelf.frame.reportUnreadableHint"),
     reportDetails: translate(language, "shelf.frame.reportDetails"),
     reportNone: translate(language, "shelf.frame.reportNone"),
+    reportCollisionsTile: translate(language, "shelf.frame.reportCollisionsTile"),
+    reportCollisions: translate(language, "shelf.frame.reportCollisions"),
+    reportCollisionsHint: translate(language, "shelf.frame.reportCollisionsHint"),
+    applyToAll: translate(language, "shelf.frame.applyToAll"),
+    applyToAllLabel: translate(language, "shelf.frame.applyToAllLabel"),
+    keepBoth: translate(language, "shelf.frame.keepBoth"),
+    replace: translate(language, "shelf.frame.replace"),
+    skip: translate(language, "shelf.frame.skip"),
+    onTheShelf: translate(language, "shelf.frame.onTheShelf"),
+    newFile: translate(language, "shelf.frame.newFile"),
+    closeDecideLater: translate(language, "shelf.frame.closeDecideLater"),
+    applyChoices: translate(language, "shelf.frame.applyChoices"),
+    importCollectFolder: translate(language, "shelf.frame.importCollectFolder"),
+    importCollectFolderHint: translate(language, "shelf.frame.importCollectFolderHint"),
   };
 }
 
@@ -400,6 +415,11 @@ function importCounts(language: string, report: ImportReport): string {
       "shelf.import.countUnreadable.other",
     ],
   ];
+  rest.splice(2, 0, [
+    report.collisions.length,
+    "shelf.import.countCollisions.one",
+    "shelf.import.countCollisions.other",
+  ]);
   for (const [count, one, other] of rest) {
     if (count > 0) parts.push(countText(language, count, one, other));
   }
@@ -443,6 +463,91 @@ function duplicatesText(language: string, report: ImportReport): string {
       );
 }
 
+/** A size in megabytes with one decimal, never below 0.1, such as "2.4 MB". */
+function sizeText(language: string, bytes: number): string {
+  const megabytes = Math.max(0.1, bytes / (1024 * 1024));
+  const size = new Intl.NumberFormat(language, {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(megabytes);
+  return format(translate(language, "shelf.import.fileSize"), { size });
+}
+
+/** A fraction as a whole percentage, such as "34%" (or "34 %" in Spanish). */
+function percentText(language: string, fraction: number): string {
+  return new Intl.NumberFormat(language, { style: "percent", maximumFractionDigits: 0 }).format(
+    fraction
+  );
+}
+
+/** "A, B and C" with the catalog's own "and". */
+function joinItems(language: string, items: readonly string[]): string {
+  if (items.length <= 1) return items.join("");
+  const and = translate(language, "shelf.import.and");
+  return `${items.slice(0, -1).join(", ")} ${and} ${items[items.length - 1]}`;
+}
+
+/** One collision with every string the report draws (#949). */
+function frameCollision(language: string, collision: ImportCollision): FrameImportCollision {
+  const { existing } = collision;
+  const status = shelfStatus(existing);
+  const fraction = progressFraction(existing.progress);
+  const state =
+    status === "new"
+      ? translate(language, "shelf.frame.status.new")
+      : status === "finished"
+        ? translate(language, "shelf.frame.status.finished")
+        : format(translate(language, "shelf.import.readPercent"), {
+            percent: percentText(language, fraction),
+          });
+  const drops: string[] = [];
+  if (status !== "new") {
+    drops.push(
+      format(translate(language, "shelf.import.dropPosition"), {
+        percent: percentText(language, fraction),
+      })
+    );
+  }
+  const { bookmarks, highlights } = existing.removal;
+  if (bookmarks > 0) {
+    drops.push(
+      countText(
+        language,
+        bookmarks,
+        "shelf.import.dropBookmarks.one",
+        "shelf.import.dropBookmarks.other"
+      )
+    );
+  }
+  if (highlights > 0) {
+    drops.push(
+      countText(
+        language,
+        highlights,
+        "shelf.import.dropHighlights.one",
+        "shelf.import.dropHighlights.other"
+      )
+    );
+  }
+  return {
+    id: collision.id,
+    title: existing.title,
+    author: existing.author,
+    fileName: collision.file.name,
+    existingText: [existing.format.toUpperCase(), sizeText(language, existing.size), state].join(
+      " · "
+    ),
+    newText: [collision.format.toUpperCase(), sizeText(language, collision.file.size)].join(" · "),
+    replaceWarning:
+      drops.length === 0
+        ? translate(language, "shelf.import.replaceDropsNothing")
+        : format(translate(language, "shelf.import.replaceDrops"), {
+            items: joinItems(language, drops),
+          }),
+    choiceLabel: format(translate(language, "shelf.import.choiceFor"), { title: existing.title }),
+  };
+}
+
 /**
  * The background Import as the Shelf's card and report draw it (#948), every
  * string localized here so the Frame only lays it out. File names stay as the
@@ -471,6 +576,15 @@ export function frameImportState(language: string, state: ImportState): FrameImp
         reason: translate(language, UNREADABLE_REASON[reason]),
       })),
       duplicatesText: duplicatesText(language, report),
+      collisions: report.collisions.map((collision) => frameCollision(language, collision)),
+      showMoreOne: translate(language, "shelf.import.showMore.one"),
+      showMoreOther: translate(language, "shelf.import.showMore.other"),
+      chosenCount: translate(language, "shelf.import.chosenCount"),
+      chosen: translate(language, "shelf.import.chosen"),
+      collectionText:
+        report.collection === undefined
+          ? ""
+          : format(translate(language, "shelf.import.inCollection"), { name: report.collection }),
     },
   };
 }

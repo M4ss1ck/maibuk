@@ -21,7 +21,7 @@ import {
 } from "preact";
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { Button, IconButton } from "./kit";
-import type { FrameShelfCollectionMessage } from "./protocol";
+import type { FrameShelfCollectionMessage, FrameShelfImportMessage } from "./protocol";
 import {
   Shelf,
   type ShelfCollectionCommand,
@@ -175,6 +175,8 @@ export interface ChromeActions {
   shelfViewChange(settings: ShelfViewSettings): void;
   /** The author made, renamed, deleted, or filed into a Collection (#946). */
   shelfCollection(message: FrameShelfCollectionMessage): void;
+  /** The author applied collision choices or changed the folder Collection option (#949). */
+  shelfImport(message: FrameShelfImportMessage): void;
 }
 
 /** The small bridge `entry.ts` hands the app: its state in, its actions out. */
@@ -508,6 +510,7 @@ function App({ appearance, subscribe, bridge }: AppProps) {
         importState={chrome.importState}
         importReportRequest={chrome.importReportRequest}
         onCollection={bridge.actions.shelfCollection}
+        onImport={bridge.actions.shelfImport}
         onSettingsChange={bridge.actions.shelfViewChange}
         onCommand={bridge.actions.shelfCommand}
         onSelect={bridge.actions.shelfSelect}

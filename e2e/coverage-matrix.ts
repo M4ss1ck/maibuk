@@ -3462,6 +3462,21 @@ export const ROWS: MatrixRow[] = [
     status: "accepted",
   },
   {
+    id: "reader-import-collisions",
+    area: "plugins",
+    workflow:
+      "Resolving Import collisions (#949), by keyboard inside the reader page's Frame: a folder Import adds flowing.epub, and a second folder Import from the toolbar's Import chooser finds the same EPUB with deflated entries (same title and author, another Fingerprint); the card reads “1 collision” and offers no Dismiss; View report shows the “Collisions to resolve” tile, the new file's name, and “0 of 1”; Enter on Apply choices does nothing; the row's radio group takes the Tab stop on its first option and ArrowRight chooses Replace, which shows the Replace warning; Close, decide later closes the report and View report brings back Replace still chosen; Space on Apply to all's Keep both chooses it for every row, Apply choices applies it, the collision section goes, and the Shelf counts 2 Documents; asserts: the card's counts and buttons, the report's tile, footer count, radios, warning note, and the Shelf count; persists: yes (the Shelf and the folder Collection in Plugin storage). Replace and Skip on storage, Collections carried over, and the Narrow sheet are proven in Reader's Vitest suite (import.test.ts, session.test.ts, frame/shelf.test.tsx)",
+    edges: [
+      "resolve a collision by keyboard: Apply waits for a choice, and Close, decide later keeps it",
+    ],
+    terms: [],
+    shortcuts: ["plugin.maibuk-reader.importFolder", "plugin.maibuk-reader.viewImportReport"],
+    routes: ["/", "/plugin/:pluginId/:pageId"],
+    fixture: "empty",
+    tags: [],
+    status: "accepted",
+  },
+  {
     id: "reader-drop",
     area: "plugins",
     workflow:

@@ -25,6 +25,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } fro
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { FrameLocator, Locator, Page } from "@playwright/test";
+import { unzipSync, zipSync } from "fflate";
 import { capture } from "../support/capture";
 import { dropFiles, type DroppedFile } from "../support/file-drop";
 import {
@@ -577,10 +578,9 @@ test.describe("Reader", () => {
     await page.keyboard.press("Escape");
     await expect(shelfRow(page, "twelve-pages")).toBeVisible();
     await chooseNextFile(page, EPUB);
-    // The row carries the file name until the EPUB opens and its own title,
-    // "Dune", replaces it.
-    await importFromToolbar(page, "flowing");
-    await openFromShelf(page, "flowing");
+    // Import reads the EPUB's own title, so the row says "Dune" from the start (#949).
+    await importFromToolbar(page, "Dune");
+    await openFromShelf(page, "Dune");
     await focusDocument(page);
     await page.keyboard.press("Escape");
     await expect(shelfRow(page, "Dune")).toBeVisible();
@@ -698,10 +698,9 @@ test.describe("Reader", () => {
     await page.keyboard.press("Escape");
     await expect(shelfRow(page, "twelve-pages")).toBeVisible();
     await chooseNextFile(page, EPUB);
-    // The row carries the file name until the EPUB opens and its own title,
-    // "Dune", replaces it.
-    await importFromToolbar(page, "flowing");
-    await openFromShelf(page, "flowing");
+    // Import reads the EPUB's own title, so the row says "Dune" from the start (#949).
+    await importFromToolbar(page, "Dune");
+    await openFromShelf(page, "Dune");
     await focusDocument(page);
     await page.keyboard.press("Escape");
     await expect(shelfRow(page, "Dune")).toBeVisible();
@@ -977,8 +976,10 @@ test.describe("Reader Import", () => {
     const story = readFileSync(fixturePath(FB2), "utf8");
     const files: Record<string, Uint8Array> = {};
     for (let index = 0; index < 400; index += 1) {
+      // Each copy names its own title: copies sharing one would be collisions (#949).
+      const copy = story.replace(/<book-title>([^<]*)</, `<book-title>$1 ${index}<`);
       files[`story-${String(index).padStart(3, "0")}.fb2`] = new TextEncoder().encode(
-        `${story}\n<!-- copy ${index} -->\n`
+        `${copy}\n<!-- copy ${index} -->\n`
       );
     }
     const folder = libraryFolder(files);
@@ -1011,5 +1012,101 @@ test.describe("Reader Import", () => {
     await expect(pageFrame(page).getByText(`${added} Documents`, { exact: true })).toBeVisible({
       timeout: 30_000,
     });
+  });
+});
+
+// Import collisions (#949): a file with a Shelf Document's title and author but
+// another Fingerprint waits in the report until the author chooses. The Keep
+// both, Replace, and Skip rules are proven in Reader's Vitest suite
+// (import.test.ts); this spec proves the report's keyboard flow in a browser.
+test.describe("Reader Import collisions", () => {
+  test("resolve a collision by keyboard: Apply waits for a choice, and Close, decide later keeps it @wf:reader-import-collisions @sc:plugin.maibuk-reader.importFolder @sc:plugin.maibuk-reader.viewImportReport @chromium-only", async ({
+    page,
+  }) => {
+    // The same EPUB, its entries deflated: the same title and author, other bytes.
+    const original = unzipSync(readFileSync(fixturePath(EPUB)));
+    const rezipped = zipSync(
+      Object.fromEntries(
+        Object.entries(original).map(([name, data]) => [
+          name,
+          [data, { level: name === "mimetype" ? 0 : 6 }] as const,
+        ])
+      )
+    );
+    await useFolderInput(page);
+    await page.goto("/");
+    await openReader(page);
+    await importFolderWith(
+      page,
+      pageFrame(page).getByRole("button", { name: "Import folder", exact: true }),
+      libraryFolder({ [EPUB]: EPUB })
+    );
+    const card = importCard(page);
+    await expect(card).toContainText("1 added", { timeout: 30_000 });
+    await tabTo(page, card.getByRole("button", { name: "Dismiss" }), { max: 60 });
+    await page.keyboard.press("Enter");
+
+    await tabToEither(page, pageFrame(page).getByRole("button", { name: "Import", exact: true }));
+    await page.keyboard.press("Enter");
+    const chooser = pageFrame(page).getByRole("dialog", { name: "Import" });
+    await expect(
+      chooser.getByRole("checkbox", { name: /^Put a folder's Documents in a Collection/ })
+    ).toBeChecked();
+    await capture(page, "reader-import-chooser-collect");
+    await importFolderWith(
+      page,
+      chooser.getByRole("button", { name: /^Folder/ }),
+      libraryFolder({ "dune-second-edition.epub": rezipped })
+    );
+    await expect(card).toContainText("1 collision", { timeout: 30_000 });
+    // Undecided collisions keep the card: it offers View report, never Dismiss.
+    await expect(card.getByRole("button", { name: "Dismiss" })).toHaveCount(0);
+
+    const report = await openImportReport(page);
+    await expect(reportTile(report, "Collisions to resolve")).toContainText("1");
+    await expect(report).toContainText("dune-second-edition.epub");
+    await expect(report).toContainText("0 of 1");
+    const apply = report.getByRole("button", { name: "Apply choices" });
+    await tabTo(page, apply, { max: 40 });
+    await page.keyboard.press("Enter");
+    await expect(report).toContainText("0 of 1");
+
+    // The row's radio group: its first option holds the tab stop; an arrow chooses.
+    const row = report.getByRole("radiogroup", { name: /^Choice for / });
+    await tabTo(page, row.getByRole("radio", { name: "Keep both" }), { max: 40 });
+    await page.keyboard.press("ArrowRight");
+    await expect(row.getByRole("radio", { name: "Replace", checked: true })).toBeVisible();
+    await expect(report.getByRole("note")).toContainText("Replace drops");
+    await capture(page, "reader-import-collisions");
+
+    // Close, decide later; View report brings back the same choice.
+    await tabTo(page, report.getByRole("button", { name: "Close, decide later" }), { max: 40 });
+    await page.keyboard.press("Enter");
+    await expect(report).toBeHidden();
+    const reopened = await openImportReport(page);
+    await expect(
+      reopened
+        .getByRole("radiogroup", { name: /^Choice for / })
+        .getByRole("radio", { name: "Replace", checked: true })
+    ).toBeVisible();
+
+    // Narrow draws the same report as a full-height sheet.
+    const wideSize = page.viewportSize();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(reopened.getByRole("button", { name: "Close, decide later" })).toBeVisible();
+    await capture(page, "reader-import-collisions-narrow");
+    if (wideSize !== null) await page.setViewportSize(wideSize);
+    await expect(reopened.getByRole("button", { name: "Close, decide later" })).toBeVisible();
+
+    // Apply to all: Keep both, then Apply adds the second edition as its own Document.
+    const all = reopened.getByRole("radiogroup", { name: "Apply to all collisions" });
+    await tabTo(page, all.getByRole("radio", { name: "Keep both" }), { max: 40 });
+    await page.keyboard.press("Space");
+    await expect(reopened).toContainText("1 of 1");
+    await tabTo(page, reopened.getByRole("button", { name: "Apply choices" }), { max: 40 });
+    await page.keyboard.press("Enter");
+    await expect(reopened.getByRole("radiogroup", { name: /^Choice for / })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await expect(pageFrame(page).getByText("2 Documents", { exact: true })).toBeVisible();
   });
 });
