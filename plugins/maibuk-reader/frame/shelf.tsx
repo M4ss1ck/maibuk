@@ -61,6 +61,7 @@ import {
 } from "./shelf-query";
 import type {
   FrameCollection,
+  FrameImportState,
   FrameShelfCommandId,
   FrameShelfEntry,
   FrameShelfLabels,
@@ -68,6 +69,7 @@ import type {
   ShelfViewSettings,
 } from "./types";
 import type { FrameShelfCollectionMessage } from "./protocol";
+import { type ImportKind, ImportCard, ImportChooser, ImportReport } from "./shelf-import";
 import { useLayoutMode } from "./use-layout-mode";
 
 /** The More button's size beside a cover's title on Wide, as "Shelf · desktop · grid M" draws it. */
@@ -149,6 +151,10 @@ export interface ShelfProps {
   onCollection?: (message: FrameShelfCollectionMessage) => void;
   /** The latest host Collection Command, or null. */
   collectionRequest?: ShelfCollectionRequest | null;
+  /** The Worker's background Import, running or finished, or null (#948). */
+  importState?: FrameImportState | null;
+  /** Bumped by the View import report Command: opens the finished Import's report. */
+  importReportRequest?: number;
 }
 
 /** The Frame's own width, updated when the Pane resizes. */
@@ -214,6 +220,7 @@ function DocumentSummary({ entry }: { entry: FrameShelfEntry }) {
         tone={entry.tone}
         src={entry.coverDataUrl}
         missing={missing}
+        pending={entry.coverPending === true}
       />
       <div class="shelf-summary__text">
         <span class="shelf-summary__title">{entry.title}</span>
@@ -279,6 +286,8 @@ export function Shelf({
   onSettingsChange,
   onCollection = () => {},
   collectionRequest = null,
+  importState = null,
+  importReportRequest = 0,
 }: ShelfProps) {
   const { mode } = useLayoutMode();
   const wide = mode === "wide";
@@ -308,6 +317,8 @@ export function Shelf({
   const [activeIndex, setActiveIndex] = useState(0);
   const [options, setOptions] = useState<ShelfOptionsPart | null>(null);
   const [picker, setPicker] = useState(false);
+  const [chooser, setChooser] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const pickerAnchor = useRef<HTMLElement | null>(null);
   const [collectionMenu, setCollectionMenu] = useState<FrameCollection | null>(null);
   const collectionMenuAnchor = useRef<HTMLElement | null>(null);
@@ -560,6 +571,12 @@ export function Shelf({
     if (optionsRequest > 0) setOptions(wide ? "filters" : "all");
   }, [optionsRequest, wide]);
 
+  // The View import report Command opens a finished Import's report; a serial
+  // from before this mount, or an Import still running, opens nothing.
+  useEffect(() => {
+    if (importReportRequest > 0 && importState?.status === "done") setReportOpen(true);
+  }, [importReportRequest]);
+
   /** Returns focus where it was before the search took it, or to the Shelf. */
   const returnFromSearch = () => {
     const target = searchReturn.current;
@@ -781,6 +798,7 @@ export function Shelf({
         tone={entry.tone}
         src={entry.coverDataUrl}
         missing={missing}
+        pending={entry.coverPending === true}
       />
     );
     if (layout === "list") {
@@ -899,7 +917,12 @@ export function Shelf({
     </div>
   );
 
-  const openImport = () => onCommand("openFile");
+  const importing = importState?.status === "running";
+  const openImport = () => setChooser(true);
+  const pickImport = (kind: ImportKind) => {
+    setChooser(false);
+    onCommand(kind === "files" ? "importFiles" : "importFolder");
+  };
   const clear = () => change(clearFilters(settings));
   const optionsCount =
     settings.formats.length + settings.statuses.length + (active === null ? 0 : 1);
@@ -980,9 +1003,18 @@ export function Shelf({
       <div class="shelf__empty">
         <h2 class="shelf__empty-title">{labels.emptyTitle}</h2>
         <p class="shelf__empty-text">{labels.emptyDescription}</p>
-        <Button variant="primary" onClick={openImport}>
-          {labels.importFiles}
-        </Button>
+        <div class="shelf__empty-actions">
+          <Button variant="primary" disabled={importing} onClick={() => onCommand("importFiles")}>
+            {labels.importFiles}
+          </Button>
+          <Button
+            variant="secondary"
+            disabled={importing}
+            onClick={() => onCommand("importFolder")}
+          >
+            {labels.importFolder}
+          </Button>
+        </div>
       </div>
     );
   } else if (entries.length === 0) {
@@ -1068,7 +1100,7 @@ export function Shelf({
           /
         </span>
       </label>
-      <Button variant="primary" onClick={openImport}>
+      <Button variant="primary" disabled={importing} onClick={openImport}>
         <Icon name="import" />
         {labels.import}
       </Button>
@@ -1121,7 +1153,7 @@ export function Shelf({
             />
           </>
         ) : null}
-        <IconButton label={labels.import} icon="import" onClick={openImport} />
+        <IconButton label={labels.import} icon="import" disabled={importing} onClick={openImport} />
       </header>
       {ready ? (
         <>
@@ -1265,6 +1297,18 @@ export function Shelf({
               </div>
             ) : null}
 
+            {importState == null ? null : (
+              <ImportCard
+                state={importState}
+                labels={labels}
+                onCancel={() => onCommand("cancelImport")}
+                onViewReport={() => setReportOpen(true)}
+                onDismiss={() => {
+                  setReportOpen(false);
+                  onCommand("dismissImport");
+                }}
+              />
+            )}
             {content}
           </div>
         </div>
@@ -1380,6 +1424,24 @@ export function Shelf({
           onSubmit={submitDialog}
           onDelete={deleteCollection}
           onClose={() => setDialog(null)}
+        />
+      )}
+
+      <ImportChooser
+        open={chooser}
+        wide={wide}
+        labels={labels}
+        onClose={() => setChooser(false)}
+        onPick={pickImport}
+      />
+
+      {importState == null ? null : (
+        <ImportReport
+          open={reportOpen && importState.status === "done"}
+          wide={wide}
+          state={importState}
+          labels={labels}
+          onClose={() => setReportOpen(false)}
         />
       )}
 

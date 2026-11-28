@@ -146,6 +146,27 @@ function shelfLabelsFrom(catalog: Record<string, string>): FrameShelfLabels {
     delete: catalog["shelf.frame.delete"],
     duplicateCollection: catalog["shelf.frame.duplicateCollection"],
     noCollections: catalog["shelf.frame.noCollections"],
+    importDescription: catalog["shelf.frame.importDescription"],
+    importFilesOption: catalog["shelf.frame.importFilesOption"],
+    importFilesHint: catalog["shelf.frame.importFilesHint"],
+    importFolderOption: catalog["shelf.frame.importFolderOption"],
+    importFolderHint: catalog["shelf.frame.importFolderHint"],
+    importFolder: catalog["shelf.frame.importFolder"],
+    importClose: catalog["shelf.frame.importClose"],
+    importProgressLabel: catalog["shelf.frame.importProgressLabel"],
+    importCancel: catalog["shelf.frame.importCancel"],
+    importViewReport: catalog["shelf.frame.importViewReport"],
+    importDismiss: catalog["shelf.frame.importDismiss"],
+    importKeepReading: catalog["shelf.frame.importKeepReading"],
+    reportTitle: catalog["shelf.frame.reportTitle"],
+    reportAdded: catalog["shelf.frame.reportAdded"],
+    reportAlreadyOnShelf: catalog["shelf.frame.reportAlreadyOnShelf"],
+    reportRelinked: catalog["shelf.frame.reportRelinked"],
+    reportRelinkedShort: catalog["shelf.frame.reportRelinkedShort"],
+    reportUnreadable: catalog["shelf.frame.reportUnreadable"],
+    reportUnreadableHint: catalog["shelf.frame.reportUnreadableHint"],
+    reportDetails: catalog["shelf.frame.reportDetails"],
+    reportNone: catalog["shelf.frame.reportNone"],
   };
 }
 
@@ -1139,8 +1160,14 @@ describe("the Shelf", () => {
       "Open PDF, EPUB, MOBI, AZW3, FB2, or CBZ files from your device."
     );
 
-    await userEvent.setup().click(shelfButton("Import files"));
-    expect(posted("shelf-command")).toContainEqual({ kind: "shelf-command", id: "openFile" });
+    // Both buttons start a background Import (#948); neither opens a Document.
+    const user = userEvent.setup();
+    await user.click(shelfButton("Import files"));
+    await user.click(shelfButton("Import folder"));
+    expect(posted("shelf-command")).toEqual([
+      { kind: "shelf-command", id: "importFiles" },
+      { kind: "shelf-command", id: "importFolder" },
+    ]);
   });
 
   it("re-labels the Shelf copy on a language change", async () => {
@@ -1807,5 +1834,110 @@ describe("Collections in the Frame (#946)", () => {
       },
     });
     await vi.waitFor(() => expect(rail()?.textContent).toContain("Poetry"));
+  });
+});
+
+describe("cover jobs on the Shelf (#948)", () => {
+  const COVER = "data:image/jpeg;base64,COVER";
+
+  beforeEach(() => {
+    // jsdom decodes and draws no image: the bitmap and canvas stand in for them.
+    Object.defineProperty(globalThis, "createImageBitmap", {
+      configurable: true,
+      writable: true,
+      value: vi.fn(async () => ({ width: 480, height: 720 })),
+    });
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      drawImage() {},
+    } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue(COVER);
+  });
+
+  /** The Worker's cover job for `name`, as the Shelf session sends it. */
+  function coverJob(name: string, format: string): Record<string, unknown> {
+    return {
+      kind: "cover-job",
+      documentId: "doc-7",
+      format,
+      size: fixture(name).length,
+      foliate: "export {};",
+    };
+  }
+
+  function coverAnswer(): Record<string, unknown> | undefined {
+    return frame?.port.messages.find((message) => message.kind === "cover");
+  }
+
+  /** Every read and archive request the Frame sent. */
+  function requests(): Record<string, unknown>[] {
+    return (frame?.port.messages ?? []).filter((message) =>
+      ["read", "zip-list", "zip-entry"].includes(String(message.kind))
+    );
+  }
+
+  it("reads an EPUB's own cover by the job's id and answers with it", async () => {
+    frame = loadFrame("flowing.epub", { shelf: READY_SHELF, shelfLabels: SHELF_LABELS });
+    frame.open();
+    await vi.waitFor(() => expect(shelfCells()).toHaveLength(3));
+    frame.port.deliver(coverJob("flowing.epub", "epub"));
+    await vi.waitFor(() =>
+      expect(coverAnswer()).toEqual({ kind: "cover", documentId: "doc-7", coverDataUrl: COVER })
+    );
+    expect(requests().map((request) => request.documentId)).not.toContain(undefined);
+    expect(requests().map((request) => request.name)).toContain("OEBPS/images/cover.png");
+    // The Shelf stays as it was while the cover is drawn.
+    expect(shelfCells()).toHaveLength(3);
+  });
+
+  it("draws a CBZ's cover from its first page in reading order", async () => {
+    frame = loadFrame("pages.cbz", { shelf: READY_SHELF, shelfLabels: SHELF_LABELS });
+    frame.open();
+    frame.port.deliver(coverJob("pages.cbz", "cbz"));
+    await vi.waitFor(() => expect(coverAnswer()?.coverDataUrl).toBe(COVER));
+    const archive = await archiveOf(fixture("pages.cbz"));
+    const collator = new Intl.Collator(undefined, { numeric: true });
+    const first = archive.entries
+      .map(({ name }) => name)
+      .filter((name) => /\.(png|jpe?g|gif|webp)$/i.test(name))
+      .sort(collator.compare)[0];
+    const entries = requests().filter((request) => request.kind === "zip-entry");
+    expect(entries.map((request) => request.name)).toEqual([first]);
+  });
+
+  it("imports foliate's parsers once for every cover job the Frame runs", async () => {
+    const importFoliate = vi.fn(async () => foliate);
+    frame = loadFrame("flowing.epub", {
+      shelf: READY_SHELF,
+      shelfLabels: SHELF_LABELS,
+      hooks: { importFoliate },
+    });
+    frame.open();
+    frame.port.deliver(coverJob("flowing.epub", "epub"));
+    await vi.waitFor(() => expect(coverAnswer()?.documentId).toBe("doc-7"));
+    frame.port.deliver({ ...coverJob("flowing.epub", "epub"), documentId: "doc-8" });
+    await vi.waitFor(() => {
+      const answers = (frame?.port.messages ?? []).filter((message) => message.kind === "cover");
+      expect(answers.map((answer) => answer.documentId)).toEqual(["doc-7", "doc-8"]);
+    });
+    expect(importFoliate).toHaveBeenCalledTimes(1);
+  });
+
+  it("answers with no cover when the Document will not open", async () => {
+    frame = loadFrame("corrupt.epub", { shelf: READY_SHELF, shelfLabels: SHELF_LABELS });
+    frame.open();
+    frame.port.deliver(coverJob("corrupt.epub", "epub"));
+    await vi.waitFor(() => expect(coverAnswer()).toEqual({ kind: "cover", documentId: "doc-7" }));
+  });
+
+  it("answers nothing for a job an open overtook", async () => {
+    frame = loadFrame("flowing.epub", { shelf: READY_SHELF, shelfLabels: SHELF_LABELS });
+    frame.open();
+    frame.port.deliver(coverJob("flowing.epub", "epub"));
+    frame.open();
+    // A fresh job after the open still runs, so the dropped one had time to answer.
+    frame.port.deliver({ ...coverJob("flowing.epub", "epub"), documentId: "doc-8" });
+    await vi.waitFor(() => expect(coverAnswer()?.documentId).toBe("doc-8"));
+    const answers = (frame?.port.messages ?? []).filter((message) => message.kind === "cover");
+    expect(answers.map((answer) => answer.documentId)).toEqual(["doc-8"]);
   });
 });

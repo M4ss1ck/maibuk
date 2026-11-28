@@ -3,6 +3,8 @@
   "description": "Reads PDF, EPUB, MOBI, AZW3, FB2, and CBZ files from your device beside your writing, and remembers where you were.",
   "commands.openReader.label": "Open Reader",
   "commands.openFile.label": "Open file…",
+  "commands.importFiles.label": "Import files…",
+  "commands.importFolder.label": "Import folder…",
   "commands.openDocument.label": "Open Document",
   "commands.nextPage.label": "Next page",
   "commands.previousPage.label": "Previous page",
@@ -26,6 +28,8 @@
   "commands.newCollection.label": "New Collection…",
   "commands.renameCollection.label": "Rename Collection…",
   "commands.deleteCollection.label": "Delete Collection…",
+  "commands.cancelImport.label": "Cancel import",
+  "commands.viewImportReport.label": "View import report",
   "pages.reader.title": "Reader",
   "pages.document.title": "Reading",
   "canvasReferenceSources.documents.label": "Documents"

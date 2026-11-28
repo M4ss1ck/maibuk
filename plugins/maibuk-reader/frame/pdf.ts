@@ -20,7 +20,8 @@ import { hooks } from "./hooks";
 import type { FramePdf, FrameZoom, ReaderSettings, ReadingPosition } from "./types";
 
 const INITIAL_CHUNK_BYTES = 1 << 20;
-const RANGE_CHUNK_BYTES = 1 << 20;
+/** The most one pdf.js range read asks the Worker for. */
+export const RANGE_CHUNK_BYTES = 1 << 20;
 /** How many drawn pages the cache keeps before trimming. */
 export const MAX_CACHED_PAGES = 5;
 /**
@@ -235,6 +236,20 @@ function savedZoom(saved: ReadingPosition | null, fallback: FrameZoom): FrameZoo
   return fallback;
 }
 
+/** Imports pdf.js's display module from the source the Worker sent, or the test stub. */
+export async function importPdfjs(displaySource: string): Promise<PdfJsModule> {
+  if (hooks && typeof hooks.importPdfjs === "function") {
+    return (await hooks.importPdfjs(displaySource)) as PdfJsModule;
+  }
+  const url = URL.createObjectURL(new Blob([displaySource], { type: "text/javascript" }));
+  try {
+    const module: unknown = await import(/* @vite-ignore */ url);
+    return module as PdfJsModule;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 /**
  * The PDF engine over the containers and live state `deps` supplies: the
  * loading task, the slots, the Continuous scroll observer, and the cache.
@@ -297,19 +312,6 @@ export function createPdf(deps: FramePdfDeps): FramePdfEngine {
     if (!isErrorLike(error)) return false;
     if (error.name === "PasswordException") return true;
     return Boolean(pdfjs && pdfjs.PasswordException && error instanceof pdfjs.PasswordException);
-  }
-
-  async function importPdfjs(displaySource: string): Promise<PdfJsModule> {
-    if (hooks && typeof hooks.importPdfjs === "function") {
-      return (await hooks.importPdfjs(displaySource)) as PdfJsModule;
-    }
-    const url = URL.createObjectURL(new Blob([displaySource], { type: "text/javascript" }));
-    try {
-      const module: unknown = await import(/* @vite-ignore */ url);
-      return module as PdfJsModule;
-    } finally {
-      URL.revokeObjectURL(url);
-    }
   }
 
   function injectCss(css: string) {

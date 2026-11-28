@@ -1322,8 +1322,12 @@ describe("File Grants (ADR 0036)", () => {
   /** The six `files.*` handlers over one in-memory store, in the broker's shape. */
   function fileHandlers(store: MemoryPluginFileGrantStore): PluginApiHandlers {
     return {
-      "files.pick": ({ extensions, folder }, { pluginId }) =>
-        folder ? store.pickFolder(pluginId, extensions) : store.pick(pluginId, extensions),
+      "files.pick": ({ extensions, folder, multiple }, { pluginId }) =>
+        folder
+          ? store.pickFolder(pluginId, extensions)
+          : multiple
+            ? store.pickMany(pluginId, extensions).then((grants) => (grants ? { grants } : null))
+            : store.pick(pluginId, extensions),
       "files.read": ({ grant, offset, length }, { pluginId }) =>
         store.read(pluginId, grant, offset, length),
       "files.stat": ({ grant }, { pluginId }) => store.stat(pluginId, grant),
@@ -1524,6 +1528,32 @@ describe("File Grants (ADR 0036)", () => {
     });
     await expect(client.files.release({ grant: first.grant })).resolves.toBeNull();
     await expect(client.files.list()).resolves.toHaveLength(1);
+  });
+
+  it("returns the grants of a multiple pick through the broker, each file once", async () => {
+    const store = createMemoryPluginFileGrantStore();
+    store.queuePick("fixture", FILE);
+    const held = await store.pick("fixture", ["pdf"]);
+    store.queueFilesPick("fixture", [
+      FILE,
+      { name: "B.PDF", bytes: new Uint8Array([7]) },
+      { name: "skip.txt", bytes: new Uint8Array([9]) },
+    ]);
+    const { client } = setup({
+      declared: ["files:pick"],
+      hasUserActivation: () => true,
+      handlers: fileHandlers(store),
+    });
+
+    const picked = await client.files.pick({ extensions: ["pdf"], multiple: true });
+
+    expect(picked).toEqual({
+      grants: [
+        { grant: held?.grant, name: "a.pdf", size: 5 },
+        { grant: expect.any(String), name: "B.PDF", size: 1 },
+      ],
+    });
+    await expect(client.files.list()).resolves.toHaveLength(2);
   });
 
   it("returns null for a cancelled folder pick and grants nothing", async () => {

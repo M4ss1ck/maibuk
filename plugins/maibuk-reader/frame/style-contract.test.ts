@@ -72,6 +72,22 @@ describe("layer order", () => {
   });
 });
 
+describe("the Import report and card (#948)", () => {
+  const shelf = withoutComments(read("assets", "ui", "shelf.css"));
+
+  it("caps the Wide report at 1040 px and fills a Narrow screen with its Sheet", () => {
+    const dialog = shelf.match(/\.shelf-import-report \.kit-dialog\s*\{[^}]*\}/);
+    const sheet = shelf.match(/\.shelf-import-report \.kit-sheet\s*\{[^}]*\}/);
+    expect(dialog?.[0]).toMatch(/max-width:\s*1040px/);
+    expect(sheet?.[0]).toMatch(/max-height:\s*100vh/);
+  });
+
+  it("keeps the floating Import card below the modal layers", () => {
+    const card = shelf.match(/\.shelf-import-card\s*\{[^}]*\}/);
+    expect(card?.[0]).toMatch(/z-index:\s*var\(--z-panel\)/);
+  });
+});
+
 describe("Frame shells", () => {
   const shells = ["reader.html", "shelf.html"].map((name) => ({
     name,

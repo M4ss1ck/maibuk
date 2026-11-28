@@ -56,6 +56,10 @@ const FOCUSABLE_SELECTOR = [
   "select:not([disabled])",
   "textarea:not([disabled])",
   '[tabindex]:not([tabindex="-1"])',
+  // A <details> disclosure's summary takes focus natively (the Import report's
+  // Details, #948); left out, Tab from a focused summary read it as outside the
+  // layer and jumped back to the first control.
+  "details > summary:first-of-type",
 ].join(",");
 
 function isVisible(element: HTMLElement): boolean {

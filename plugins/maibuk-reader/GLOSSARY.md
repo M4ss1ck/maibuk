@@ -11,7 +11,7 @@ The Documents Reader remembers on this device, shown in the view, sort, filters,
 _Avoid_: library (the Library is Maibuk's), recent files, history
 
 **Missing Document**:
-A Document on the Shelf that Reader can no longer read, because the file moved, was deleted, or (on the web) the browser asks again before letting Reader read it. The author can locate it again or remove it.
+A Document on the Shelf that Reader can no longer read, because the file moved, was deleted, or (on the web) the browser asks again before letting Reader read it. The author can locate it again or remove it. An Import that finds a file with its Fingerprint locates it again on its own: the report counts it as relinked.
 _Avoid_: broken, lost
 
 **Reading Position**:

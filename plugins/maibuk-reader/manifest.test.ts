@@ -75,6 +75,8 @@ describe("Reader manifest", () => {
     expect(commands.map((command) => command.id)).toEqual([
       "openReader",
       "openFile",
+      "importFiles",
+      "importFolder",
       "openDocument",
       "nextPage",
       "previousPage",
@@ -98,8 +100,10 @@ describe("Reader manifest", () => {
       "newCollection",
       "renameCollection",
       "deleteCollection",
+      "cancelImport",
+      "viewImportReport",
     ]);
-    for (const id of ["openReader", "openFile"]) {
+    for (const id of ["openReader", "openFile", "importFiles", "importFolder"]) {
       expect(commands.find((command) => command.id === id)?.contexts, id).toEqual(["global"]);
     }
     for (const id of [
@@ -126,7 +130,7 @@ describe("Reader manifest", () => {
         "reader",
       ]);
     }
-    for (const id of ["removeFromShelf", "locateDocument"]) {
+    for (const id of ["removeFromShelf", "locateDocument", "cancelImport", "viewImportReport"]) {
       expect(commands.find((command) => command.id === id)?.contexts, id).toEqual(["reader"]);
     }
   });

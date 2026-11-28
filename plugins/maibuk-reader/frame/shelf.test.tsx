@@ -22,6 +22,7 @@ import { Shelf, type ShelfCollectionRequest, type ShelfNotice, type ShelfRemoval
 import { defaultShelfView } from "./shelf-options";
 import type {
   FrameCollection,
+  FrameImportState,
   FrameShelfEntry,
   FrameShelfLabels,
   FrameShelfState,
@@ -131,6 +132,30 @@ const LABELS: FrameShelfLabels = {
   delete: "Delete",
   duplicateCollection: "A Collection with that name already exists.",
   noCollections: "No Collections yet",
+  importDescription:
+    "PDF, EPUB, MOBI, AZW3, FB2 and CBZ. Reader opens files where they are and never copies them.",
+  importFilesOption: "Files",
+  importFilesHint: "Pick one or several files.",
+  importFolderOption: "Folder",
+  importFolderHint:
+    "Every supported file in a folder and its subfolders. Reader reads it once, now, and does not watch it. Importing it again adds only what is new.",
+  importFolder: "Import folder",
+  importClose: "Close",
+  importProgressLabel: "Import progress",
+  importCancel: "Cancel",
+  importViewReport: "View report",
+  importDismiss: "Dismiss",
+  importKeepReading:
+    "Keep reading; the import runs in the background. Cancel keeps what was added.",
+  reportTitle: "Import report",
+  reportAdded: "Added",
+  reportAlreadyOnShelf: "Already on the Shelf",
+  reportRelinked: "Relinked (were Missing)",
+  reportRelinkedShort: "Relinked",
+  reportUnreadable: "Unreadable",
+  reportUnreadableHint: "Reader could not open these. Deal with them outside Reader.",
+  reportDetails: "Details",
+  reportNone: "None",
 };
 
 const REMOVAL: ShelfRemoval = {
@@ -718,7 +743,7 @@ describe("Shelf states", () => {
       screen.getByText("Open PDF, EPUB, MOBI, AZW3, FB2, or CBZ files from your device.")
     ).toBeInTheDocument();
     await press(() => user.click(screen.getByRole("button", { name: "Import files" })));
-    expect(commands).toEqual([["openFile", undefined]]);
+    expect(commands).toEqual([["importFiles", undefined]]);
   });
 
   it("shows the loading and error states", async () => {
@@ -1747,5 +1772,400 @@ describe("Collections (#946)", () => {
     expect(onSettingsChange).toHaveBeenLastCalledWith(
       expect.objectContaining({ collection: null, formats: [] })
     );
+  });
+});
+
+/** A background Import in progress, with the counts the card and report draw. */
+function running(overrides: Partial<FrameImportState> = {}): FrameImportState {
+  return {
+    status: "running",
+    source: "folder",
+    title: 'Importing "Library"',
+    processed: 128,
+    found: 312,
+    progressText: "128 of 312 files",
+    countsText: "96 added · 22 already on Shelf · 3 relinked · 1 unreadable",
+    report: {
+      subtitle: "From the folder Library",
+      added: [],
+      alreadyOnShelf: [],
+      relinked: [],
+      unreadable: [],
+      duplicatesText: "",
+    },
+    ...overrides,
+  };
+}
+
+/** A finished Import whose report lists every kind of row. */
+function finished(overrides: Partial<FrameImportState> = {}): FrameImportState {
+  return running({
+    status: "done",
+    title: 'Imported "Library"',
+    processed: 312,
+    progressText: "312 of 312 files",
+    countsText: "2 added · 1 already on Shelf · 1 relinked · 1 unreadable",
+    report: {
+      subtitle: "From the folder Library · 312 files found",
+      added: ["Dune", "Emma"],
+      alreadyOnShelf: ["Persuasion"],
+      relinked: ["Hyperion"],
+      unreadable: [{ name: "broken.epub", reason: "Could not open the archive" }],
+      duplicatesText: "1 duplicate was added once",
+    },
+    ...overrides,
+  });
+}
+
+interface ImportHarnessProps {
+  entries?: FrameShelfEntry[];
+  importState?: FrameImportState | null;
+  importReportRequest?: number;
+  onCommand?: (id: string, documentId?: string) => void;
+}
+
+/** The Shelf a real caller draws, with its Import state and report Command. */
+function ImportHarness({
+  entries = [entry()],
+  importState = null,
+  importReportRequest = 0,
+  onCommand = () => {},
+}: ImportHarnessProps) {
+  return (
+    <div>
+      <button type="button">Before</button>
+      <Shelf
+        state={{ status: "ready", entries: workerOrder(entries) }}
+        labels={LABELS}
+        menuDocumentId={null}
+        importState={importState}
+        importReportRequest={importReportRequest}
+        onCommand={onCommand}
+        onSelect={() => {}}
+        onMenuChange={() => {}}
+        onRemove={() => {}}
+        onRemoveClose={() => {}}
+        onNoticeClose={() => {}}
+      />
+    </div>
+  );
+}
+
+/**
+ * jsdom and user-event do not activate a focused `<summary>` on Enter, though
+ * a browser does: Enter fires the summary's click and the native details
+ * toggles. This stands in for that one browser activation, so the real key
+ * press still moves focus to the summary and the assertion reads the open state.
+ */
+function activateSummaryOnEnter(): () => void {
+  const onKeyDown = (event: KeyboardEvent) => {
+    const target = event.target;
+    if (event.key === "Enter" && target instanceof HTMLElement && target.tagName === "SUMMARY") {
+      target.click();
+    }
+  };
+  document.addEventListener("keydown", onKeyDown);
+  return () => document.removeEventListener("keydown", onKeyDown);
+}
+
+describe("Import (#948)", () => {
+  it("opens the Wide chooser from the Import button, sends the Folder pick by keyboard, and closes", async () => {
+    setWidth(1024);
+    const user = userEvent.setup({ delay: null });
+    const commands: string[] = [];
+    await mount(<ImportHarness onCommand={(id) => commands.push(id)} />);
+
+    const importButton = screen.getByRole("button", { name: "Import" });
+    act(() => {
+      importButton.focus();
+    });
+    await press(() => user.keyboard("{Enter}"));
+    const chooser = screen.getByRole("dialog", { name: "Import" });
+    expect(chooser).toHaveClass("kit-dialog");
+    expect(within(chooser).getByText(LABELS.importDescription)).toBeInTheDocument();
+
+    // The chooser opens on its first option; one Tab reaches Folder.
+    await press(() => user.tab());
+    expect(document.activeElement).toBe(within(chooser).getByRole("button", { name: /Folder/ }));
+    await press(() => user.keyboard("{Enter}"));
+    expect(commands).toEqual(["importFolder"]);
+    expect(screen.queryByRole("dialog", { name: "Import" })).not.toBeInTheDocument();
+  });
+
+  it("sends the Files pick from the chooser and closes it", async () => {
+    setWidth(1024);
+    const user = userEvent.setup({ delay: null });
+    const commands: string[] = [];
+    await mount(<ImportHarness onCommand={(id) => commands.push(id)} />);
+
+    act(() => {
+      screen.getByRole("button", { name: "Import" }).focus();
+    });
+    await press(() => user.keyboard("{Enter}"));
+    const chooser = screen.getByRole("dialog", { name: "Import" });
+    expect(document.activeElement).toBe(within(chooser).getByRole("button", { name: /Files/ }));
+    await press(() => user.keyboard("{Enter}"));
+    expect(commands).toEqual(["importFiles"]);
+    expect(screen.queryByRole("dialog", { name: "Import" })).not.toBeInTheDocument();
+  });
+
+  it("closes the chooser on Escape without sending a command and returns focus to Import", async () => {
+    setWidth(1024);
+    const user = userEvent.setup({ delay: null });
+    const onCommand = vi.fn();
+    await mount(<ImportHarness onCommand={onCommand} />);
+
+    const importButton = screen.getByRole("button", { name: "Import" });
+    act(() => {
+      importButton.focus();
+    });
+    await press(() => user.keyboard("{Enter}"));
+    expect(screen.getByRole("dialog", { name: "Import" })).toBeInTheDocument();
+
+    await press(() => user.keyboard("{Escape}"));
+    expect(screen.queryByRole("dialog", { name: "Import" })).not.toBeInTheDocument();
+    expect(onCommand).not.toHaveBeenCalled();
+    expect(importButton).toHaveFocus();
+  });
+
+  it("opens the Narrow chooser as a Sheet from the header icon, and both options work by keyboard", async () => {
+    setWidth(500);
+    const user = userEvent.setup({ delay: null });
+    const commands: string[] = [];
+    await mount(<ImportHarness onCommand={(id) => commands.push(id)} />);
+
+    act(() => {
+      screen.getByRole("button", { name: "Import" }).focus();
+    });
+    await press(() => user.keyboard("{Enter}"));
+    const sheet = screen.getByRole("dialog", { name: "Import" });
+    expect(sheet).toHaveClass("kit-sheet");
+
+    // The Sheet opens on its Close button, so one Tab reaches Files.
+    await press(() => user.tab());
+    expect(document.activeElement).toBe(within(sheet).getByRole("button", { name: /Files/ }));
+    await press(() => user.keyboard("{Enter}"));
+    expect(commands).toEqual(["importFiles"]);
+    expect(screen.queryByRole("dialog", { name: "Import" })).not.toBeInTheDocument();
+
+    act(() => {
+      screen.getByRole("button", { name: "Import" }).focus();
+    });
+    await press(() => user.keyboard("{Enter}"));
+    await press(() => user.tab());
+    await press(() => user.tab());
+    expect(document.activeElement).toBe(
+      within(screen.getByRole("dialog", { name: "Import" })).getByRole("button", { name: /Folder/ })
+    );
+    await press(() => user.keyboard("{Enter}"));
+    expect(commands).toEqual(["importFiles", "importFolder"]);
+  });
+
+  it("offers both Import files and Import folder on an empty Shelf, each sent by keyboard", async () => {
+    setWidth(1024);
+    const user = userEvent.setup({ delay: null });
+    const commands: string[] = [];
+    await mount(<ImportHarness entries={[]} onCommand={(id) => commands.push(id)} />);
+
+    const files = screen.getByRole("button", { name: "Import files" });
+    const folder = screen.getByRole("button", { name: "Import folder" });
+    expect(files.parentElement).toHaveClass("shelf__empty-actions");
+    expect(folder.parentElement).toBe(files.parentElement);
+
+    act(() => {
+      files.focus();
+    });
+    await press(() => user.keyboard("{Enter}"));
+    act(() => {
+      folder.focus();
+    });
+    await press(() => user.keyboard("{Enter}"));
+    expect(commands).toEqual(["importFiles", "importFolder"]);
+  });
+
+  it("draws the running card as a live status with its counts, cancels by keyboard, and disables Import", async () => {
+    setWidth(1024);
+    const user = userEvent.setup({ delay: null });
+    const commands: string[] = [];
+    await mount(<ImportHarness importState={running()} onCommand={(id) => commands.push(id)} />);
+
+    const status = screen.getByRole("status", { name: "Import progress" });
+    expect(within(status).getByText('Importing "Library"')).toBeInTheDocument();
+    expect(within(status).getByText("128 of 312 files")).toBeInTheDocument();
+    expect(
+      within(status).getByText("96 added · 22 already on Shelf · 3 relinked · 1 unreadable")
+    ).toBeInTheDocument();
+    expect(within(status).getByText(LABELS.importKeepReading)).toBeInTheDocument();
+    expect(within(status).queryByRole("button", { name: "View report" })).not.toBeInTheDocument();
+
+    expect(screen.getByRole("button", { name: "Import" })).toBeDisabled();
+
+    const cancel = within(status).getByRole("button", { name: "Cancel" });
+    act(() => {
+      cancel.focus();
+    });
+    await press(() => user.keyboard("{Enter}"));
+    expect(commands).toEqual(["cancelImport"]);
+  });
+
+  it("keeps the empty Shelf's Import buttons from starting a second Import while one runs", async () => {
+    setWidth(1024);
+    const user = userEvent.setup({ delay: null });
+    const commands: string[] = [];
+    await mount(
+      <ImportHarness entries={[]} importState={running()} onCommand={(id) => commands.push(id)} />
+    );
+    await user.click(screen.getByRole("button", { name: LABELS.importFiles }));
+    await user.click(screen.getByRole("button", { name: LABELS.importFolder }));
+    expect(commands).toEqual([]);
+  });
+
+  it("shows View report on a done card, opens the report by keyboard, and returns focus on Escape", async () => {
+    setWidth(1024);
+    const user = userEvent.setup({ delay: null });
+    await mount(<ImportHarness importState={finished()} />);
+
+    const status = screen.getByRole("status", { name: "Import progress" });
+    const viewReport = within(status).getByRole("button", { name: "View report" });
+    act(() => {
+      viewReport.focus();
+    });
+    await press(() => user.keyboard("{Enter}"));
+
+    const report = screen.getByRole("dialog", { name: "Import report" });
+    expect(
+      within(report).getByText("From the folder Library · 312 files found")
+    ).toBeInTheDocument();
+    const tiles = Array.from(report.querySelectorAll(".shelf-report__tile")).map((tile) => [
+      tile.querySelector("b")?.textContent,
+      tile.querySelector("span")?.textContent,
+    ]);
+    expect(tiles).toEqual([
+      ["2", "Added"],
+      ["1", "Already on the Shelf"],
+      ["1", "Relinked (were Missing)"],
+      ["1", "Unreadable"],
+    ]);
+    const unreadable = report.querySelector(".shelf-report__unreadable") as HTMLElement;
+    expect(within(unreadable).getByText("broken.epub")).toBeInTheDocument();
+    expect(within(unreadable).getByText("Could not open the archive")).toBeInTheDocument();
+    expect(within(report).getByText("1 duplicate was added once")).toBeInTheDocument();
+
+    await press(() => user.keyboard("{Escape}"));
+    expect(screen.queryByRole("dialog", { name: "Import report" })).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(viewReport);
+  });
+
+  it("sends Dismiss from a done card by keyboard", async () => {
+    setWidth(1024);
+    const user = userEvent.setup({ delay: null });
+    const commands: string[] = [];
+    await mount(<ImportHarness importState={finished()} onCommand={(id) => commands.push(id)} />);
+
+    const status = screen.getByRole("status", { name: "Import progress" });
+    const dismiss = within(status).getByRole("button", { name: "Dismiss" });
+    act(() => {
+      dismiss.focus();
+    });
+    await press(() => user.keyboard("{Enter}"));
+    expect(commands).toEqual(["dismissImport"]);
+  });
+
+  it("opens the details accordions by keyboard and says None for an empty list", async () => {
+    const stopActivation = activateSummaryOnEnter();
+    setWidth(1024);
+    const user = userEvent.setup({ delay: null });
+    await mount(<ImportHarness importState={finished()} />);
+
+    act(() => {
+      screen.getByRole("button", { name: "View report" }).focus();
+    });
+    await press(() => user.keyboard("{Enter}"));
+    const report = screen.getByRole("dialog", { name: "Import report" });
+
+    const added = Array.from(report.querySelectorAll("details")).find((details) =>
+      details.querySelector("summary")?.textContent?.startsWith("Added")
+    ) as HTMLElement;
+    const addedSummary = added.querySelector("summary") as HTMLElement;
+    act(() => {
+      addedSummary.focus();
+    });
+    await press(() => user.keyboard("{Enter}"));
+    expect(within(added).getByText("Dune")).toBeVisible();
+    expect(within(added).getByText("Emma")).toBeVisible();
+
+    const relinked = Array.from(report.querySelectorAll("details")).find((details) =>
+      details.querySelector("summary")?.textContent?.startsWith("Relinked")
+    ) as HTMLElement;
+    const relinkedSummary = relinked.querySelector("summary") as HTMLElement;
+    act(() => {
+      relinkedSummary.focus();
+    });
+    await press(() => user.keyboard("{Enter}"));
+    expect(within(relinked).getByText("Hyperion")).toBeVisible();
+    stopActivation();
+  });
+
+  it("says None inside a details list with no names", async () => {
+    const stopActivation = activateSummaryOnEnter();
+    setWidth(1024);
+    const user = userEvent.setup({ delay: null });
+    const base = finished();
+    await mount(
+      <ImportHarness importState={finished({ report: { ...base.report, relinked: [] } })} />
+    );
+
+    act(() => {
+      screen.getByRole("button", { name: "View report" }).focus();
+    });
+    await press(() => user.keyboard("{Enter}"));
+    const report = screen.getByRole("dialog", { name: "Import report" });
+    const relinked = Array.from(report.querySelectorAll("details")).find((details) =>
+      details.querySelector("summary")?.textContent?.startsWith("Relinked")
+    ) as HTMLElement;
+    const relinkedSummary = relinked.querySelector("summary") as HTMLElement;
+    act(() => {
+      relinkedSummary.focus();
+    });
+    await press(() => user.keyboard("{Enter}"));
+    expect(within(relinked).getByText("None")).toBeVisible();
+    stopActivation();
+  });
+
+  it("opens the report when a finished Import's report Command arrives, and not while it runs", async () => {
+    setWidth(1024);
+    const container = await mount(
+      <ImportHarness importState={finished()} importReportRequest={0} />
+    );
+    expect(screen.queryByRole("dialog", { name: "Import report" })).not.toBeInTheDocument();
+
+    await act(() => {
+      render(<ImportHarness importState={finished()} importReportRequest={1} />, container);
+    });
+    expect(screen.getByRole("dialog", { name: "Import report" })).toBeInTheDocument();
+  });
+
+  it("ignores the report Command while the Import is still running", async () => {
+    setWidth(1024);
+    const container = await mount(
+      <ImportHarness importState={running()} importReportRequest={0} />
+    );
+    await act(() => {
+      render(<ImportHarness importState={running()} importReportRequest={1} />, container);
+    });
+    expect(screen.queryByRole("dialog", { name: "Import report" })).not.toBeInTheDocument();
+  });
+
+  it("draws the pending cover for a Document still being imported, and keeps its title", async () => {
+    setWidth(1024);
+    await mount(
+      <ImportHarness
+        entries={[entry({ id: "doc-p", title: "Arriving Book", coverPending: true })]}
+      />
+    );
+
+    const cell = gridCell("Arriving Book");
+    expect(cell).toBeDefined();
+    expect(cell?.querySelector(".kit-cover__pending")).not.toBeNull();
   });
 });

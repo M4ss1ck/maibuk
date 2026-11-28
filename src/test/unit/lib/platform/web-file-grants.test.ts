@@ -718,3 +718,185 @@ describe("createWebPluginFileGrantStore(): folder picks", () => {
     });
   });
 });
+
+describe("createWebPluginFileGrantStore(): picking several files", () => {
+  it("opens the picker with several files allowed and grants each file once, in dialog order", async () => {
+    const indexedDB = new IDBFactory();
+    const picker = pickerFor([
+      new TestHandle({ name: "a.pdf", bytes: "one" }),
+      new TestHandle({ name: "b.pdf", bytes: "two" }),
+      // The same file entry as the first, so the dialog names it twice.
+      new TestHandle({ name: "a.pdf", bytes: "one" }),
+    ]);
+    const store = createWebPluginFileGrantStore({
+      indexedDB,
+      showOpenFilePicker: picker,
+      randomId: sequentialIds(),
+    });
+
+    await expect(store.pickMany("reader", ["pdf", "epub"])).resolves.toEqual([
+      { grant: "grant-1", name: "a.pdf", size: 3 },
+      { grant: "grant-2", name: "b.pdf", size: 3 },
+    ]);
+    expect(picker).toHaveBeenCalledWith({
+      multiple: true,
+      excludeAcceptAllOption: false,
+      types: [
+        {
+          description: "Documents",
+          accept: { "application/octet-stream": [".pdf", ".epub"] },
+        },
+      ],
+    });
+
+    const next = createWebPluginFileGrantStore({ indexedDB, randomId: sequentialIds() });
+    await expect(next.list("reader")).resolves.toEqual([
+      { grant: "grant-1", name: "a.pdf", size: 3 },
+      { grant: "grant-2", name: "b.pdf", size: 3 },
+    ]);
+  });
+
+  it("returns null when the author cancels the picker", async () => {
+    const store = createWebPluginFileGrantStore({
+      indexedDB: new IDBFactory(),
+      showOpenFilePicker: pickerFor(new DOMException("Aborted", "AbortError")),
+      randomId: sequentialIds(),
+    });
+
+    await expect(store.pickMany("reader", ["pdf"])).resolves.toBeNull();
+  });
+
+  it("returns null when the picker hands back no file", async () => {
+    const store = createWebPluginFileGrantStore({
+      indexedDB: new IDBFactory(),
+      showOpenFilePicker: pickerFor([]),
+      randomId: sequentialIds(),
+    });
+
+    await expect(store.pickMany("reader", ["pdf"])).resolves.toBeNull();
+  });
+
+  it("refuses with user-action-required when the browser blocks the picker", async () => {
+    const store = createWebPluginFileGrantStore({
+      indexedDB: new IDBFactory(),
+      showOpenFilePicker: pickerFor(new DOMException("No activation", "NotAllowedError")),
+      randomId: sequentialIds(),
+    });
+
+    await expect(store.pickMany("reader", ["pdf"])).rejects.toMatchObject({
+      code: "user-action-required",
+    });
+  });
+
+  describe("the input fallback", () => {
+    interface FakeFileInput {
+      type: string;
+      accept: string;
+      multiple: boolean;
+      files: File[];
+      style: { display: string };
+      listeners: Map<string, () => void>;
+      addEventListener(type: string, listener: () => void): void;
+      click(): void;
+      remove(): void;
+    }
+
+    /** A `<input type="file">` stand-in: the dialog answers with `files`, or cancels. */
+    function stubFileInput(answer: File[] | "cancel"): FakeFileInput[] {
+      const inputs: FakeFileInput[] = [];
+      vi.stubGlobal("showOpenFilePicker", undefined);
+      vi.stubGlobal("document", {
+        createElement: () => {
+          const input: FakeFileInput = {
+            type: "",
+            accept: "",
+            multiple: false,
+            files: [],
+            style: { display: "" },
+            listeners: new Map(),
+            addEventListener(type, listener) {
+              this.listeners.set(type, listener);
+            },
+            click() {
+              if (answer === "cancel") {
+                this.listeners.get("cancel")?.();
+                return;
+              }
+              this.files = answer;
+              this.listeners.get("change")?.();
+            },
+            remove() {},
+          };
+          inputs.push(input);
+          return input;
+        },
+        body: { append() {} },
+      });
+      vi.stubGlobal("window", { addEventListener() {} });
+      return inputs;
+    }
+
+    it("sets multiple on the input, and grants each picked file for the session", async () => {
+      const inputs = stubFileInput([pickedFile("a.pdf", "one"), pickedFile("b.pdf", "two")]);
+      const store = createWebPluginFileGrantStore({
+        indexedDB: new IDBFactory(),
+        randomId: sequentialIds(),
+      });
+
+      await expect(store.pickMany("reader", ["pdf"])).resolves.toEqual([
+        { grant: "grant-1", name: "a.pdf", size: 3 },
+        { grant: "grant-2", name: "b.pdf", size: 3 },
+      ]);
+      expect(inputs[0]).toMatchObject({ type: "file", accept: ".pdf", multiple: true });
+    });
+
+    it("leaves multiple off for a single pick", async () => {
+      const inputs = stubFileInput([pickedFile("a.pdf", "one")]);
+      const store = createWebPluginFileGrantStore({
+        indexedDB: new IDBFactory(),
+        randomId: sequentialIds(),
+      });
+
+      await expect(store.pick("reader", ["pdf"])).resolves.toEqual({
+        grant: "grant-1",
+        name: "a.pdf",
+        size: 3,
+      });
+      expect(inputs[0]?.multiple).toBe(false);
+    });
+
+    // A browser without showDirectoryPicker (Firefox, Safari) imports a folder
+    // through this input (#948): every file under it, filtered by extension.
+    it("picks a folder through a webkitdirectory input and grants each matching file for the session", async () => {
+      vi.stubGlobal("showDirectoryPicker", undefined);
+      const inputs = stubFileInput([
+        fileInFolder("Library/a.epub", "one"),
+        fileInFolder("Library/cover.jpg", "img"),
+        fileInFolder("Library/Sub/b.epub", "two"),
+      ]);
+      const store = createWebPluginFileGrantStore({
+        indexedDB: new IDBFactory(),
+        randomId: sequentialIds(),
+      });
+
+      await expect(store.pickFolder("reader", ["epub"])).resolves.toEqual({
+        folder: "Library",
+        grants: [
+          { grant: "grant-1", name: "a.epub", size: 3 },
+          { grant: "grant-2", name: "b.epub", size: 3 },
+        ],
+      });
+      expect(inputs[0]).toMatchObject({ type: "file", webkitdirectory: true, multiple: true });
+    });
+
+    it("returns null when the input is cancelled", async () => {
+      stubFileInput("cancel");
+      const store = createWebPluginFileGrantStore({
+        indexedDB: new IDBFactory(),
+        randomId: sequentialIds(),
+      });
+
+      await expect(store.pickMany("reader", ["pdf"])).resolves.toBeNull();
+    });
+  });
+});

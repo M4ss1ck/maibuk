@@ -506,9 +506,9 @@ test.describe("Maps and Documents Canvas References @wf:plugins-canvas-reference
   }) => {
     // A file pick, a PDF parse, and two Settings round trips outrun the 30s default.
     test.setTimeout(90_000);
-    // Reader shelves the picked PDF and opens it inside the reader page's own
-    // Frame: the host URL never leaves /reader. The Shelf then answers the
-    // Documents tab.
+    // Reader imports the picked PDF onto its Shelf in the background (#948),
+    // and Enter on its row opens it inside the reader page's own Frame: the
+    // host URL never leaves /reader. The Shelf then answers the Documents tab.
     await page.goto("/");
     await openReader(page);
     await tabTo(
@@ -516,6 +516,10 @@ test.describe("Maps and Documents Canvas References @wf:plugins-canvas-reference
       documentFrame(page).getByRole("button", { name: "Import files", exact: true }),
       { max: 60 }
     );
+    await page.keyboard.press("Enter");
+    const row = documentFrame(page).getByRole("gridcell", { name: /twelve-pages/ });
+    await expect(row).toBeVisible({ timeout: 30_000 });
+    await tabTo(page, row, { max: 60 });
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
     await expect(pageIndicator(page)).toContainText("of 12", { timeout: 30_000 });

@@ -17,7 +17,7 @@ import type { McpToolProjection, PluginApiEventRow, PluginApiRow } from "@/featu
 import { FILE_READ_MAX_BYTES } from "@/plugin-sdk/protocol";
 
 /** The Plugin API's own semver, separate from Maibuk's release number. */
-export const PLUGIN_API_VERSION = "0.1.17";
+export const PLUGIN_API_VERSION = "0.1.18";
 
 export const PLUGIN_API_NAMESPACES = [
   "library",
@@ -69,6 +69,12 @@ const pickedFileGrant = z.strictObject({
 const pickedFolder = z.strictObject({
   folder: z.string().describe("The picked folder's own name, never its path."),
   grants: z.array(pickedFileGrant).describe("One File Grant per matching file, each once."),
+});
+/** A multiple `files.pick`: one File Grant per picked file, in the order the dialog returned them. */
+const pickedFiles = z.strictObject({
+  grants: z
+    .array(pickedFileGrant)
+    .describe("One File Grant per picked file, in the order the dialog returned them, each once."),
 });
 /** The OS's answer, as the System Notification adapter reports it (ADR 0042). */
 const systemNotificationPermission = z.enum(["granted", "denied", "default"]);
@@ -823,14 +829,17 @@ export const PLUGIN_API_TABLE = [
   defineApiRow({
     id: "files.pick",
     description:
-      "Shows Maibuk's file dialog filtered to these file types and returns the picked file's File Grant, or null when the author cancels. With folder: true it shows the folder dialog instead and returns the folder's name and one File Grant per file in it and its subfolders of one of these file types, ignoring case, exactly as if each were picked; symbolic links are not followed and nothing about the folder is kept. Refused with user-action-required unless the author's own click, key press, or Command run caused the call. Picking a file this Plugin already holds a grant for returns the same grant id.",
+      "Shows Maibuk's file dialog filtered to these file types and returns the picked file's File Grant, or null when the author cancels. With folder: true it shows the folder dialog instead and returns the folder's name and one File Grant per file in it and its subfolders of one of these file types, ignoring case, exactly as if each were picked; symbolic links are not followed and nothing about the folder is kept. With multiple: true the author can pick several files at once, and it returns one File Grant per picked file, each once, in a grants list; folder: true wins over multiple. Refused with user-action-required unless the author's own click, key press, or Command run caused the call. Picking a file this Plugin already holds a grant for returns the same grant id.",
     input: z.strictObject({
       extensions: z
         .array(z.string().regex(/^[a-z0-9]{1,16}$/))
         .min(1)
         .max(32)
         .describe("Lowercase extensions without a dot, such as pdf or epub."),
-      multiple: z.literal(false).optional().describe("Only one file at a time for now."),
+      multiple: z
+        .boolean()
+        .optional()
+        .describe("true lets the author pick several files in one dialog."),
       folder: z
         .boolean()
         .optional()
@@ -839,14 +848,16 @@ export const PLUGIN_API_TABLE = [
         ),
     }),
     output: z
-      .union([pickedFileGrant, pickedFolder])
+      .union([pickedFileGrant, pickedFolder, pickedFiles])
       .nullable()
       .describe(
-        "The picked File Grant, the folder's name and grants for a folder pick, or null when the author cancelled."
+        "The picked File Grant, the folder's name and grants for a folder pick, the grants of a multiple pick, or null when the author cancelled or picked nothing."
       ),
     outputByFlag: {
-      flag: "folder",
-      set: pickedFolder.nullable(),
+      flags: [
+        { flag: "folder", set: pickedFolder.nullable() },
+        { flag: "multiple", set: pickedFiles.nullable() },
+      ],
       unset: pickedFileGrant.nullable(),
     },
     permission: "files:pick",

@@ -221,13 +221,21 @@ function renderClientNode(node: NamespaceNode, indent: string): string {
       const listener = row.chunk ? `, listener?: PluginStreamListener<${method}["chunk"]>` : "";
       const byFlag = row.outputByFlag;
       if (byFlag) {
-        // Typed overloads: the flag picks the output, and the last signature
-        // takes a flag whose value is only known at run time.
+        // Typed overloads: a flag set to true picks its output, in the order
+        // the flags are listed; with none set the unset output applies. The
+        // last signature takes flags whose values are only known at run time.
         const typeOf = (schema: PluginApiRow["output"]) =>
           jsonSchemaToTypeScript(outputSchemaOf(schema), indent);
+        const docs = docComment(row.description, indent);
+        byFlag.flags.forEach(({ flag, set }, index) => {
+          const head = index === 0 ? docs : "";
+          lines.push(
+            `${head}${indent}${name}(params: ${method}["input"] & { ${flag}: true }${listener}): Promise<${typeOf(set)}>;`
+          );
+        });
+        const unsetFlags = byFlag.flags.map(({ flag }) => `${flag}?: false`).join("; ");
         lines.push(
-          `${docComment(row.description, indent)}${indent}${name}(params: ${method}["input"] & { ${byFlag.flag}: true }${listener}): Promise<${typeOf(byFlag.set)}>;`,
-          `${indent}${name}(params${optional}: ${method}["input"] & { ${byFlag.flag}?: false }${listener}): Promise<${typeOf(byFlag.unset)}>;`,
+          `${indent}${name}(params${optional}: ${method}["input"] & { ${unsetFlags} }${listener}): Promise<${typeOf(byFlag.unset)}>;`,
           `${indent}${name}(params${optional}: ${method}["input"]${listener}): Promise<${method}["output"]>;`
         );
         continue;

@@ -7,6 +7,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  frameImportState,
   frameShelfEntry,
   frameShelfLabels,
   frameShelfState,
@@ -20,6 +21,7 @@ import {
   sortSummary,
 } from "./frame/shelf-options";
 import { fill } from "./frame/shelf-query";
+import type { ImportReport, ImportSource } from "./import";
 import { DEFAULT_SHELF_VIEW, defaultDescending } from "./shelf";
 import { shelfEntry } from "./test-support";
 
@@ -121,6 +123,30 @@ const LABELS_EN = {
   delete: "Delete",
   duplicateCollection: "A Collection with that name already exists.",
   noCollections: "No Collections yet",
+  importDescription:
+    "PDF, EPUB, MOBI, AZW3, FB2 and CBZ. Reader opens files where they are and never copies them.",
+  importFilesOption: "Files",
+  importFilesHint: "Pick one or several files.",
+  importFolderOption: "Folder",
+  importFolderHint:
+    "Every supported file in a folder and its subfolders. Reader reads it once, now, and does not watch it. Importing it again adds only what is new.",
+  importFolder: "Import folder",
+  importClose: "Close",
+  importProgressLabel: "Import progress",
+  importCancel: "Cancel",
+  importViewReport: "View report",
+  importDismiss: "Dismiss",
+  importKeepReading:
+    "Keep reading; the import runs in the background. Cancel keeps what was added.",
+  reportTitle: "Import report",
+  reportAdded: "Added",
+  reportAlreadyOnShelf: "Already on the Shelf",
+  reportRelinked: "Relinked (were Missing)",
+  reportRelinkedShort: "Relinked",
+  reportUnreadable: "Unreadable",
+  reportUnreadableHint: "Reader could not open these. Deal with them outside Reader.",
+  reportDetails: "Details",
+  reportNone: "None",
 };
 
 const LABELS_ES = {
@@ -222,6 +248,30 @@ const LABELS_ES = {
   delete: "Eliminar",
   duplicateCollection: "Ya existe una colección con ese nombre.",
   noCollections: "Aún no hay colecciones",
+  importDescription:
+    "PDF, EPUB, MOBI, AZW3, FB2 y CBZ. Reader abre los archivos donde están y nunca los copia.",
+  importFilesOption: "Archivos",
+  importFilesHint: "Elige uno o varios archivos.",
+  importFolderOption: "Carpeta",
+  importFolderHint:
+    "Cada archivo compatible de una carpeta y sus subcarpetas. Reader la lee una vez, ahora, y no la vigila. Importarla de nuevo solo añade lo nuevo.",
+  importFolder: "Importar carpeta",
+  importClose: "Cerrar",
+  importProgressLabel: "Progreso de la importación",
+  importCancel: "Cancelar",
+  importViewReport: "Ver informe",
+  importDismiss: "Descartar",
+  importKeepReading:
+    "Sigue leyendo; la importación continúa en segundo plano. Cancelar conserva lo añadido.",
+  reportTitle: "Informe de importación",
+  reportAdded: "Añadidos",
+  reportAlreadyOnShelf: "Ya en el estante",
+  reportRelinked: "Revinculados (estaban perdidos)",
+  reportRelinkedShort: "Revinculados",
+  reportUnreadable: "Ilegibles",
+  reportUnreadableHint: "Reader no pudo abrirlos. Resuélvelos fuera de Reader.",
+  reportDetails: "Detalles",
+  reportNone: "Ninguno",
 };
 
 describe("shelfTone()", () => {
@@ -505,5 +555,145 @@ describe("the Frame's copy of the Shelf defaults", () => {
     for (const sort of SHELF_SORTS) {
       expect(frameDefaultDescending(sort), sort).toBe(defaultDescending(sort));
     }
+  });
+});
+
+describe("frameImportState()", () => {
+  /** `emptyReport` from import.ts, inline: importing it pulls DOM code into this node test. */
+  const emptyReport = (source: ImportSource, found: number): ImportReport => ({
+    source,
+    found,
+    processed: 0,
+    added: [],
+    alreadyOnShelf: [],
+    relinked: [],
+    unreadable: [],
+    duplicates: 0,
+    cancelled: false,
+  });
+  const FINISHED = Date.UTC(2026, 10, 28, 14, 32);
+  const clock = (language: string) =>
+    new Intl.DateTimeFormat(language, { hour: "2-digit", minute: "2-digit" }).format(FINISHED);
+
+  function report(overrides: Partial<ImportReport>): ImportReport {
+    return { ...emptyReport({ kind: "folder", name: "Library" }, 312), ...overrides };
+  }
+
+  it("draws a running folder Import with its title, progress, and counts so far", () => {
+    const state = frameImportState("en", {
+      status: "running",
+      report: report({
+        processed: 128,
+        added: Array.from({ length: 96 }, (_, i) => `book-${i}.epub`),
+        alreadyOnShelf: Array.from({ length: 22 }, (_, i) => `old-${i}.epub`),
+        relinked: ["a.pdf", "b.pdf", "c.pdf"],
+        unreadable: [{ name: "locked.azw3", reason: "drm" }],
+      }),
+    });
+    expect(state).toMatchObject({
+      status: "running",
+      source: "folder",
+      title: 'Importing "Library"',
+      processed: 128,
+      found: 312,
+      progressText: "128 of 312 files",
+      countsText: "96 added · 22 already on Shelf · 3 relinked · 1 unreadable",
+    });
+    expect(state.report.subtitle).toBe('Folder "Library" and its subfolders · 312 files found');
+  });
+
+  it("leaves the counts that are still zero out, but always says how many were added", () => {
+    const state = frameImportState("en", { status: "running", report: report({ processed: 1 }) });
+    expect(state.countsText).toBe("0 added");
+  });
+
+  it("names picked files as such and says when the Import finished", () => {
+    const state = frameImportState("en", {
+      status: "done",
+      report: {
+        ...emptyReport({ kind: "files" }, 1),
+        processed: 1,
+        added: ["dune.epub"],
+        finishedAt: FINISHED,
+      },
+    });
+    expect(state.title).toBe("Imported files");
+    expect(state.source).toBe("files");
+    expect(state.report.subtitle).toBe(`Picked files · 1 file found · finished at ${clock("en")}`);
+    expect(state.report.added).toEqual(["dune.epub"]);
+  });
+
+  it("titles a finished folder Import by the folder, and a cancelled one as cancelled", () => {
+    const done = frameImportState("en", {
+      status: "done",
+      report: report({ processed: 312, finishedAt: FINISHED }),
+    });
+    expect(done.title).toBe('Imported "Library"');
+    const cancelled = frameImportState("en", {
+      status: "done",
+      report: report({ processed: 40, cancelled: true, finishedAt: FINISHED }),
+    });
+    expect(cancelled.title).toBe("Import cancelled");
+    expect(cancelled.report.subtitle).toBe(
+      `Folder "Library" and its subfolders · 312 files found · cancelled at ${clock("en")}`
+    );
+  });
+
+  it("localizes each unreadable reason and keeps file names as they are", () => {
+    const state = frameImportState("en", {
+      status: "done",
+      report: report({
+        unreadable: [
+          { name: "locked.azw3", reason: "drm" },
+          { name: "half.epub", reason: "corrupt" },
+          { name: "notes.txt", reason: "unsupported" },
+          { name: "odd.pdf", reason: "unreadable" },
+        ],
+        finishedAt: FINISHED,
+      }),
+    });
+    expect(state.report.unreadable).toEqual([
+      { name: "locked.azw3", reason: "Protected by DRM" },
+      { name: "half.epub", reason: "Corrupt or incomplete file" },
+      { name: "notes.txt", reason: "Not a format Reader opens" },
+      { name: "odd.pdf", reason: "Reader could not read this file" },
+    ]);
+  });
+
+  it("says how many duplicates were added once, and nothing when there were none", () => {
+    const none = frameImportState("en", { status: "done", report: report({ finishedAt: 1 }) });
+    expect(none.report.duplicatesText).toBe("");
+    const one = frameImportState("en", { status: "done", report: report({ duplicates: 1 }) });
+    expect(one.report.duplicatesText).toBe("1 duplicate file inside the folder was added once.");
+    const three = frameImportState("en", { status: "done", report: report({ duplicates: 3 }) });
+    expect(three.report.duplicatesText).toBe(
+      "3 duplicate files inside the folder were added once."
+    );
+    const files = frameImportState("en", {
+      status: "done",
+      report: { ...emptyReport({ kind: "files" }, 4), duplicates: 2 },
+    });
+    expect(files.report.duplicatesText).toBe("2 duplicate files were added once.");
+  });
+
+  it("speaks Spanish when the host does", () => {
+    const state = frameImportState("es-ES", {
+      status: "running",
+      report: report({
+        processed: 2,
+        added: ["a.epub"],
+        unreadable: [{ name: "x", reason: "drm" }],
+      }),
+    });
+    expect(state.title).toBe("Importando «Library»");
+    expect(state.progressText).toBe("2 de 312 archivos");
+    expect(state.countsText).toBe("1 añadido · 1 ilegible");
+  });
+
+  it("hands the Frame a copy: a later file never changes a state already sent", () => {
+    const live = report({ added: ["a.epub"] });
+    const state = frameImportState("en", { status: "running", report: live });
+    live.added.push("b.epub");
+    expect(state.report.added).toEqual(["a.epub"]);
   });
 });

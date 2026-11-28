@@ -13,6 +13,7 @@ import type {
   Appearance,
   FrameEntry,
   FrameFoliate,
+  FrameImportState,
   FrameLabels,
   FramePdf,
   FrameShelfCommandId,
@@ -120,6 +121,26 @@ export interface FrameShelfResultMessage {
   message?: string;
 }
 
+/** The background Import changed: a file was sorted, it finished, or it was dismissed (null). */
+export interface FrameImportMessage {
+  kind: "import";
+  state: FrameImportState | null;
+}
+
+/**
+ * Asks the Shelf Frame for one Document's own cover (#948); its reads carry
+ * `documentId`. `pdfPort` is transferred alongside the message.
+ */
+export interface FrameCoverJobMessage {
+  kind: "cover-job";
+  documentId: string;
+  format: string;
+  size: number;
+  foliate?: string;
+  pdf?: FramePdf;
+  pdfPort?: MessagePort;
+}
+
 export type WorkerToFrameMessage =
   | FrameOpenMessage
   | FrameBytesMessage
@@ -132,7 +153,9 @@ export type WorkerToFrameMessage =
   | FrameZipErrorMessage
   | FrameShelfMessage
   | FrameRemoveCountsMessage
-  | FrameShelfResultMessage;
+  | FrameShelfResultMessage
+  | FrameImportMessage
+  | FrameCoverJobMessage;
 
 /** Runs one Shelf Command; `documentId` names the row it acts on. */
 export interface FrameShelfCommandMessage {
@@ -222,12 +245,15 @@ type FrameZipAnswer = { entries: FrameZipEntry[] } | FrameZipEntryData;
 export interface FrameProtocol {
   /** Sends one message to the Worker; nothing is sent once {@link close} ran. */
   post(message: unknown, transfer?: Transferable[]): void;
-  /** Reads `length` bytes at `offset`, and none at all at or below zero. */
-  requestBytes(offset: number, length: number): Promise<Uint8Array>;
-  /** Lists the archive the Document is packed in. */
-  requestZipList(): Promise<{ entries: FrameZipEntry[] }>;
+  /**
+   * Reads `length` bytes at `offset`, and none at all at or below zero. A
+   * `documentId` reads a cover job's Document instead of the open one (#948).
+   */
+  requestBytes(offset: number, length: number, documentId?: string): Promise<Uint8Array>;
+  /** Lists the archive the Document (or the cover job's `documentId`) is packed in. */
+  requestZipList(documentId?: string): Promise<{ entries: FrameZipEntry[] }>;
   /** Reads one archive entry as the Worker stored it. */
-  requestZipEntry(name: string): Promise<FrameZipEntryData>;
+  requestZipEntry(name: string, documentId?: string): Promise<FrameZipEntryData>;
   /** Rejects every byte read still in flight with `reason`. */
   abortReads(reason: string): void;
   /** Rejects every archive request still in flight with `reason`. */
@@ -254,6 +280,10 @@ export interface FrameProtocol {
   onRemoveCounts?: (message: FrameRemoveCountsMessage) => void;
   /** Handles `shelf-result`; the Frame shows the notice, or clears it. */
   onShelfResult?: (message: string | null) => void;
+  /** Handles `import`; the Shelf draws the Import's card and report, or drops them on null (#948). */
+  onImport?: (state: FrameImportState | null) => void;
+  /** Handles `cover-job`; the Shelf Frame draws that Document's cover (#948). */
+  onCoverJob?: (job: FrameCoverJobMessage) => void;
 }
 
 /** Whether one port message names a message the Frame handles. */
@@ -323,28 +353,33 @@ export function createFrameProtocol(port: MessagePort | null | undefined): Frame
     pending.reject(codedError(`Reader could not read this file (${code})`, code));
   }
 
-  function requestBytes(offset: number, length: number): Promise<Uint8Array> {
+  /** The `documentId` field a request carries only when it reads a cover job's Document. */
+  function documentField(documentId: string | undefined): { documentId?: string } {
+    return documentId === undefined ? {} : { documentId };
+  }
+
+  function requestBytes(offset: number, length: number, documentId?: string): Promise<Uint8Array> {
     if (length <= 0) return Promise.resolve(new Uint8Array(0));
     const id = nextReadId++;
     return new Promise((resolve, reject) => {
       pendingReads.set(id, { resolve, reject });
-      post({ kind: "read", id, offset, length });
+      post({ kind: "read", id, offset, length, ...documentField(documentId) });
     });
   }
 
-  function requestZipList(): Promise<{ entries: FrameZipEntry[] }> {
+  function requestZipList(documentId?: string): Promise<{ entries: FrameZipEntry[] }> {
     const id = nextZipId++;
     return new Promise((resolve, reject) => {
       waitForZip(id, resolve, reject);
-      post({ kind: "zip-list", id });
+      post({ kind: "zip-list", id, ...documentField(documentId) });
     });
   }
 
-  function requestZipEntry(name: string): Promise<FrameZipEntryData> {
+  function requestZipEntry(name: string, documentId?: string): Promise<FrameZipEntryData> {
     const id = nextZipId++;
     return new Promise((resolve, reject) => {
       waitForZip(id, resolve, reject);
-      post({ kind: "zip-entry", id, name });
+      post({ kind: "zip-entry", id, name, ...documentField(documentId) });
     });
   }
 
@@ -406,6 +441,14 @@ export function createFrameProtocol(port: MessagePort | null | undefined): Frame
         return;
       case "shelf-result":
         client.onShelfResult?.(typeof data.message === "string" ? data.message : null);
+        return;
+      case "import":
+        client.onImport?.(
+          typeof data.state === "object" && data.state !== null ? data.state : null
+        );
+        return;
+      case "cover-job":
+        if (typeof data.documentId === "string") client.onCoverJob?.(data);
         return;
       default:
         return;

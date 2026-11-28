@@ -12,7 +12,13 @@
  * the password form. Imports only `@/plugin-sdk` and this Plugin's files.
  */
 
-import type { ReaderSettings, ShelfProgress, ShelfStatus, ShelfViewSettings } from "./shelf";
+import type {
+  DocumentFormat,
+  ReaderSettings,
+  ShelfProgress,
+  ShelfStatus,
+  ShelfViewSettings,
+} from "./shelf";
 
 /** The page fit a fresh Document opens with, or a numeric zoom scale. */
 export type FrameZoom = number | "width" | "page";
@@ -83,6 +89,8 @@ export interface FrameShelfEntry {
   state: "ok" | "missing" | "needs-permission" | "unreadable";
   /** Generated-cover artwork, when the Document has one. */
   coverDataUrl?: string;
+  /** True from Import until the Frame looked for the file's own cover (#948). */
+  coverPending?: boolean;
   /** The localized progress line, already formatted. */
   progressText: string;
   /** The whole percentage the drawn progress bar shows, or null when unknown. */
@@ -256,6 +264,61 @@ export interface FrameShelfLabels {
   delete: string;
   duplicateCollection: string;
   noCollections: string;
+  /* Import (#948) */
+  importDescription: string;
+  importFilesOption: string;
+  importFilesHint: string;
+  importFolderOption: string;
+  importFolderHint: string;
+  importFolder: string;
+  importClose: string;
+  importProgressLabel: string;
+  importCancel: string;
+  importViewReport: string;
+  importDismiss: string;
+  importKeepReading: string;
+  reportTitle: string;
+  reportAdded: string;
+  reportAlreadyOnShelf: string;
+  reportRelinked: string;
+  reportRelinkedShort: string;
+  reportUnreadable: string;
+  reportUnreadableHint: string;
+  reportDetails: string;
+  reportNone: string;
+}
+
+/** One file the Import could not open, its reason already localized. */
+export interface FrameImportUnreadable {
+  name: string;
+  reason: string;
+}
+
+/** The finished Import's report as the Frame draws it (#948); strings already localized. */
+export interface FrameImportReport {
+  /** Where the files came from, how many, and when it finished. */
+  subtitle: string;
+  added: string[];
+  alreadyOnShelf: string[];
+  relinked: string[];
+  unreadable: FrameImportUnreadable[];
+  /** The line about duplicates added once, or "" when there were none. */
+  duplicatesText: string;
+}
+
+/** The background Import as the Shelf's ProgressCard draws it (#948). */
+export interface FrameImportState {
+  status: "running" | "done";
+  source: "files" | "folder";
+  /** The card's title, such as `Importing "Library"`. */
+  title: string;
+  processed: number;
+  found: number;
+  /** Such as "128 of 312 files". */
+  progressText: string;
+  /** Such as "96 added · 22 already on Shelf · 3 relinked · 1 unreadable". */
+  countsText: string;
+  report: FrameImportReport;
 }
 
 /** What the Shelf draws: its loading, ready, or error state and its rows. */
@@ -322,14 +385,19 @@ export type FrameCommandId =
   | "toggleContinuousScroll"
   | "backToShelf"
   | "removeFromShelf"
-  | "locateDocument";
+  | "locateDocument"
+  | "viewImportReport";
 
 /** The Shelf Commands the Frame sends to the Worker. */
 export type FrameShelfCommandId =
   | "openDocument"
   | "removeFromShelf"
   | "locateDocument"
-  | "openFile";
+  | "openFile"
+  | "importFiles"
+  | "importFolder"
+  | "cancelImport"
+  | "dismissImport";
 
 /* Worker -> Frame */
 
@@ -447,6 +515,31 @@ export interface FrameShelfResultMessage {
   message?: string;
 }
 
+/** The background Import changed: a file was sorted, it finished, or it was dismissed (null). */
+export interface FrameImportMessage {
+  kind: "import";
+  state: FrameImportState | null;
+}
+
+/**
+ * Asks the Shelf Frame for one Document's own cover (#948). The Frame reads it
+ * with reads and archive requests that carry this `documentId`, draws the
+ * cover with the engine it opens Documents with, and answers with `cover`.
+ * One job runs at a time; a later `open` cancels it.
+ */
+export interface FrameCoverJobMessage {
+  kind: "cover-job";
+  documentId: string;
+  format: DocumentFormat;
+  /** The file's size in bytes. */
+  size: number;
+  /** foliate-js's parsers, for every format but PDF. */
+  foliate?: string;
+  /** pdf.js's display module and its core's port, for a PDF. */
+  pdf?: FramePdf;
+  pdfPort?: MessagePort;
+}
+
 export type WorkerToFrameMessage =
   | FrameOpenMessage
   | FrameBytesMessage
@@ -459,7 +552,9 @@ export type WorkerToFrameMessage =
   | FrameZipErrorMessage
   | FrameShelfMessage
   | FrameRemoveCountsMessage
-  | FrameShelfResultMessage;
+  | FrameShelfResultMessage
+  | FrameImportMessage
+  | FrameCoverJobMessage;
 
 /* Frame -> Worker */
 
@@ -474,6 +569,8 @@ export interface FrameReadMessage {
   id: number;
   offset: number;
   length: number;
+  /** The cover job's Document this read is for; the open Document when absent (#948). */
+  documentId?: string;
 }
 
 /** Reports where the author is; the Frame debounces it before sending. */
@@ -489,6 +586,16 @@ export interface FrameMetaMessage {
   title?: string;
   author?: string;
   pageCount?: number;
+  coverDataUrl?: string;
+}
+
+/**
+ * Answers a `cover-job`: the Document's own cover as a small JPEG data URL, or
+ * none when it has none or could not be read (#948).
+ */
+export interface FrameCoverMessage {
+  kind: "cover";
+  documentId: string;
   coverDataUrl?: string;
 }
 
@@ -522,6 +629,8 @@ export interface FrameLoadErrorMessage {
 export interface FrameZipListRequest {
   kind: "zip-list";
   id: number;
+  /** The cover job's Document; the open Document when absent (#948). */
+  documentId?: string;
 }
 
 /** Asks for one archive entry, answered with `zip-data` or `zip-error`. */
@@ -529,6 +638,8 @@ export interface FrameZipEntryRequest {
   kind: "zip-entry";
   id: number;
   name: string;
+  /** The cover job's Document; the open Document when absent (#948). */
+  documentId?: string;
 }
 
 /** Reports a settings change the Frame made, such as a font size step. */
@@ -583,6 +694,7 @@ export type FrameToWorkerMessage =
   | FrameReadMessage
   | FramePositionMessage
   | FrameMetaMessage
+  | FrameCoverMessage
   | FrameBackMessage
   | FrameClosedMessage
   | FrameLoadErrorMessage

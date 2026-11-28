@@ -126,6 +126,37 @@ class FileGrantsPluginTest {
   }
 
   @Test
+  fun aSinglePickIsItsDataUri() {
+    assertEquals(listOf("content://a/1"), pickedUris("content://a/1", emptyList()))
+  }
+
+  @Test
+  fun aMultiPickIsEveryClipUriInPickedOrder() {
+    assertEquals(
+      listOf("content://a/1", "content://a/2", "content://a/3"),
+      pickedUris(null, listOf("content://a/1", "content://a/2", "content://a/3")),
+    )
+  }
+
+  @Test
+  fun clipDataWinsOverTheDataUri() {
+    assertEquals(listOf("content://a/2"), pickedUris("content://a/1", listOf("content://a/2")))
+  }
+
+  @Test
+  fun aPickListedTwiceAppearsOnce() {
+    assertEquals(
+      listOf("content://a/1", "content://a/2"),
+      pickedUris(null, listOf("content://a/1", "content://a/2", "content://a/1")),
+    )
+  }
+
+  @Test
+  fun aCancelledPickHasNoUris() {
+    assertEquals(emptyList<String>(), pickedUris<String>(null, emptyList()))
+  }
+
+  @Test
   fun aNameWithNoExtensionNeverMatches() {
     assertFalse(matchesExtension("epub", listOf("epub")))
     assertFalse(matchesExtension("book.", listOf("epub")))

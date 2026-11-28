@@ -69,6 +69,11 @@ export interface MemoryPluginFileGrantSeed extends MemoryPluginFileGrantFile {
 export interface MemoryPluginFileGrantStore extends PluginFileGrantStore {
   /** Queues the file the Plugin's next `pick` returns; null means the author cancelled. */
   queuePick(pluginId: string, file: MemoryPluginFileGrantFile | null): void;
+  /**
+   * Queues the files the Plugin's next `pickMany` returns, in dialog order;
+   * null means the author cancelled, and an empty list picks nothing.
+   */
+  queueFilesPick(pluginId: string, files: readonly MemoryPluginFileGrantFile[] | null): void;
   /** Queues the folder the Plugin's next `pickFolder` returns; null means the author cancelled. */
   queueFolderPick(pluginId: string, folder: MemoryPluginFileGrantFolder | null): void;
   /** Makes the file behind `grant` unreadable: `read` and `stat` throw `file-missing`. */
@@ -149,6 +154,7 @@ export function createMemoryPluginFileGrantStore(
   const byPlugin = new Map<string, Map<string, GrantRecord>>();
   const queues = new Map<string, (MemoryPluginFileGrantFile | null)[]>();
   const folderQueues = new Map<string, (MemoryPluginFileGrantFolder | null)[]>();
+  const filesQueues = new Map<string, (readonly MemoryPluginFileGrantFile[] | null)[]>();
   const missing = new Set<string>();
   let nextGrant = 1;
 
@@ -200,6 +206,11 @@ export function createMemoryPluginFileGrantStore(
       queue.push(folder);
       folderQueues.set(pluginId, queue);
     },
+    queueFilesPick(pluginId, files): void {
+      const queue = filesQueues.get(pluginId) ?? [];
+      queue.push(files);
+      filesQueues.set(pluginId, queue);
+    },
     setMissing(grant): void {
       missing.add(grant);
     },
@@ -207,6 +218,17 @@ export function createMemoryPluginFileGrantStore(
       const file = queues.get(pluginId)?.shift() ?? null;
       if (file === null) return null;
       return addGrant(pluginId, file);
+    },
+    async pickMany(pluginId, extensions): Promise<PluginFileGrant[] | null> {
+      const files = filesQueues.get(pluginId)?.shift() ?? null;
+      if (files === null || files.length === 0) return null;
+      const grants = new Map<string, PluginFileGrant>();
+      for (const file of files) {
+        if (!hasPluginFileExtension(file.name, extensions)) continue;
+        const grant = addGrant(pluginId, file);
+        grants.set(grant.grant, grant);
+      }
+      return [...grants.values()];
     },
     async pickFolder(pluginId, extensions): Promise<PluginFolderPick | null> {
       const folder = folderQueues.get(pluginId)?.shift() ?? null;
@@ -280,11 +302,13 @@ export function createMemoryPluginFileGrantStore(
       byPlugin.delete(pluginId);
       queues.delete(pluginId);
       folderQueues.delete(pluginId);
+      filesQueues.delete(pluginId);
     },
     async clearAll(): Promise<void> {
       byPlugin.clear();
       queues.clear();
       folderQueues.clear();
+      filesQueues.clear();
       missing.clear();
     },
   };

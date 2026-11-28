@@ -104,7 +104,7 @@ export interface ShelvedFile {
 }
 
 /** Ends a File Grant, ignoring a host that says it is already gone. */
-async function releaseGrant(client: ReaderClient, grant: string): Promise<void> {
+export async function releaseGrant(client: ReaderClient, grant: string): Promise<void> {
   try {
     await client.files.release({ grant });
   } catch {
@@ -113,7 +113,7 @@ async function releaseGrant(client: ReaderClient, grant: string): Promise<void> 
 }
 
 /** A stable, Plugin-local id for a new Document. */
-function newDocumentId(): string {
+export function newDocumentId(): string {
   const random = globalThis.crypto?.randomUUID;
   if (typeof random === "function") return random.call(globalThis.crypto);
   return `doc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -154,7 +154,7 @@ function setMember(
 }
 
 /** The head and tail bytes a Fingerprint hashes, read in two calls. */
-async function fingerprintBytes(
+export async function fingerprintBytes(
   client: ReaderClient,
   grant: string,
   size: number
@@ -176,7 +176,14 @@ async function fingerprintBytes(
 /** What the Shelf service exposes to the page and the Commands. */
 export interface ShelfService {
   loadShelf(): Promise<ShelfEntry[]>;
-  saveShelf(shelf: readonly ShelfEntry[]): Promise<void>;
+  /**
+   * Reads the Shelf, applies `change`, and writes the sorted result, one
+   * change at a time: an Import adding Documents and a Reading Position save
+   * never read the same Shelf and write over each other (#948). `change`
+   * returns null, or the array it was given, to write nothing. Resolves with
+   * the Shelf as stored after the change. A failed read throws before `change` runs.
+   */
+  updateShelf(change: (shelf: ShelfEntry[]) => ShelfEntry[] | null): Promise<ShelfEntry[]>;
   loadSettings(): Promise<ReaderSettings>;
   saveSettings(settings: ReaderSettings): Promise<void>;
   /** The Shelf's remembered view; a missing, malformed, or unreadable value falls back to the default. */
@@ -233,6 +240,14 @@ export function createShelfService(client: ReaderClient): ShelfService {
     return collections;
   }
 
+  /** The tail of the Shelf's write queue: every read-change-write runs after the last. */
+  let shelfQueue: Promise<unknown> = Promise.resolve();
+  function exclusive<T>(task: () => Promise<T>): Promise<T> {
+    const run = shelfQueue.then(task, task);
+    shelfQueue = run.catch(() => undefined);
+    return run;
+  }
+
   const library: ShelfService = {
     async loadShelf(): Promise<ShelfEntry[]> {
       // A failed read throws: the callers decide what it means, and the
@@ -250,17 +265,14 @@ export function createShelfService(client: ReaderClient): ShelfService {
       // The first open stamps the Document as opened, so it is no longer new
       // even before a Reading Position is saved, and it reads as most recent.
       try {
-        const shelf = await library.loadShelf();
-        const entry = shelf.find((candidate) => candidate.id === id);
-        if (entry === undefined || entry.openedAt !== undefined) return;
-        const now = Date.now();
-        await library.saveShelf(
-          sortShelf(
-            shelf.map((candidate) =>
-              candidate.id === id ? { ...candidate, openedAt: now, lastReadAt: now } : candidate
-            )
-          )
-        );
+        await library.updateShelf((shelf) => {
+          const entry = shelf.find((candidate) => candidate.id === id);
+          if (entry === undefined || entry.openedAt !== undefined) return null;
+          const now = Date.now();
+          return shelf.map((candidate) =>
+            candidate.id === id ? { ...candidate, openedAt: now, lastReadAt: now } : candidate
+          );
+        });
       } catch {
         /* An unread Shelf is never written over; the Document stays new until it is read. */
       }
@@ -339,8 +351,15 @@ export function createShelfService(client: ReaderClient): ShelfService {
       return next === collections ? collections : writeCollections(next);
     },
 
-    async saveShelf(shelf): Promise<void> {
-      await client.storage.set({ key: SHELF_KEY, value: shelf });
+    updateShelf(change): Promise<ShelfEntry[]> {
+      return exclusive(async () => {
+        const shelf = sortShelf(parseShelf(await client.storage.get({ key: SHELF_KEY })));
+        const next = change(shelf);
+        if (next === null || next === shelf) return shelf;
+        const sorted = sortShelf(next);
+        await client.storage.set({ key: SHELF_KEY, value: sorted });
+        return sorted;
+      });
     },
 
     async loadSettings(): Promise<ReaderSettings> {
@@ -404,10 +423,11 @@ export function createShelfService(client: ReaderClient): ShelfService {
       };
       // A failed read throws before any write. The picked grant stays held: an
       // unread Shelf may already hold that same grant for another Document.
-      const shelf = await library.loadShelf();
-      const existing = shelf.find((candidate) => candidate.fingerprint === print);
-      const next = upsertByFingerprint(shelf, entry);
-      await library.saveShelf(next);
+      let existing: ShelfEntry | undefined;
+      const next = await library.updateShelf((shelf) => {
+        existing = shelf.find((candidate) => candidate.fingerprint === print);
+        return upsertByFingerprint(shelf, entry);
+      });
       if (existing !== undefined && existing.grant !== picked.grant) {
         try {
           await client.files.release({ grant: existing.grant });
@@ -420,11 +440,13 @@ export function createShelfService(client: ReaderClient): ShelfService {
 
     async refreshStates(): Promise<ShelfEntry[]> {
       const shelf = await library.loadShelf();
-      let next = shelf;
+      // Stat every grant first, then apply the states to the Shelf as it is
+      // then: an Import may have added Documents while the stats ran.
+      const states = new Map<string, { grant: string; state: DocumentState; reason?: string }>();
       for (const entry of shelf) {
         try {
           await client.files.stat({ grant: entry.grant });
-          next = markState(next, entry.id, "ok");
+          states.set(entry.id, { grant: entry.grant, state: "ok" });
         } catch (error) {
           const code = errorCode(error);
           const state: DocumentState =
@@ -433,11 +455,19 @@ export function createShelfService(client: ReaderClient): ShelfService {
               : code === "file-needs-permission"
                 ? "needs-permission"
                 : "unreadable";
-          next = markState(next, entry.id, state, errorMessage(error));
+          states.set(entry.id, { grant: entry.grant, state, reason: errorMessage(error) });
         }
       }
-      await library.saveShelf(next);
-      return next;
+      return library.updateShelf((current) => {
+        let next = current;
+        for (const entry of current) {
+          const found = states.get(entry.id);
+          // A Document relinked since its stat keeps the state its new grant earned.
+          if (found === undefined || found.grant !== entry.grant) continue;
+          next = markState(next, entry.id, found.state, found.reason);
+        }
+        return next;
+      });
     },
 
     async removalCounts(id): Promise<RemovalCounts> {
@@ -467,8 +497,7 @@ export function createShelfService(client: ReaderClient): ShelfService {
           // A key that never existed needs no delete.
         }
       }
-      const next = removeEntry(shelf, id);
-      await library.saveShelf(next);
+      const next = await library.updateShelf((current) => removeEntry(current, id));
       try {
         const collections = await library.loadCollections();
         if (collections.some((collection) => collection.documentIds.includes(id))) {
@@ -490,9 +519,18 @@ export function createShelfService(client: ReaderClient): ShelfService {
       const picked = await client.files.pick({ extensions: [...SUPPORTED_EXTENSIONS] });
       if (picked === null) return { ok: false, reason: "cancelled" };
       const { print } = await fingerprintBytes(client, picked.grant, picked.size);
-      const shelf = await library.loadShelf();
-      const missingEntry = shelf.find((candidate) => candidate.id === id);
-      const result = reattach(shelf, id, print, picked.grant);
+      const seen: {
+        shelf: ShelfEntry[];
+        missing?: ShelfEntry;
+        result: ReturnType<typeof reattach>;
+      } = { shelf: [], result: { ok: false, reason: "not-found" } };
+      await library.updateShelf((current) => {
+        seen.shelf = current;
+        seen.missing = current.find((candidate) => candidate.id === id);
+        seen.result = reattach(current, id, print, picked.grant);
+        return seen.result.ok ? seen.result.shelf : null;
+      });
+      const { shelf, missing: missingEntry, result } = seen;
       if (!result.ok) {
         // Another Document may hold the same grant: picking its file again
         // returns its grant id, and releasing it would break that Document.
@@ -505,7 +543,6 @@ export function createShelfService(client: ReaderClient): ShelfService {
         }
         return { ok: false, reason: result.reason };
       }
-      await library.saveShelf(result.shelf);
       if (missingEntry !== undefined && missingEntry.grant !== picked.grant) {
         try {
           await client.files.release({ grant: missingEntry.grant });
@@ -527,7 +564,7 @@ export function createShelfService(client: ReaderClient): ShelfService {
         return false;
       }
       if (!allowed) return false;
-      await library.saveShelf(markState(shelf, id, "ok"));
+      await library.updateShelf((current) => markState(current, id, "ok"));
       return true;
     },
   };

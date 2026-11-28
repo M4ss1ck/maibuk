@@ -68,6 +68,8 @@ export interface WebPluginFileGrantDeps {
   indexedDB?: IDBFactory;
   /** The picker used where the File System Access API is missing. */
   pickWithInput?: (extensions: readonly string[]) => Promise<File | null>;
+  /** The picker used for `pickMany` where the File System Access API is missing; null means cancelled. */
+  pickManyWithInput?: (extensions: readonly string[]) => Promise<File[] | null>;
   /** The folder picker used where `showDirectoryPicker` is missing; null means cancelled. */
   pickFolderWithInput?: () => Promise<File[] | null>;
   /** Grant id source, so a test can name them. */
@@ -142,35 +144,47 @@ function windowDirectoryPicker(): ShowDirectoryPicker | null {
 
 // Browsers without the File System Access API still fire `cancel` on dismissal.
 // One that does not only reveals a cancel by focus coming back with no file chosen,
-// which is why the focus listener settles the pick as well.
-function pickWithFileInput(extensions: readonly string[]): Promise<File | null> {
+// which is why the focus listener settles the pick as well. `multiple` lets the
+// author choose several files; a single pick reads only the first.
+function pickFilesWithFileInput(
+  extensions: readonly string[],
+  multiple: boolean
+): Promise<File[] | null> {
   return new Promise((resolve) => {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = extensions.map((extension) => `.${extension}`).join(",");
+    input.multiple = multiple;
     input.style.display = "none";
     document.body.append(input);
 
     let settled = false;
-    const finish = (file: File | null): void => {
+    const finish = (files: File[] | null): void => {
       if (settled) return;
       settled = true;
       input.remove();
-      resolve(file);
+      resolve(files);
     };
+    const chosen = (): File[] => Array.from(input.files ?? []);
 
-    input.addEventListener("change", () => finish(input.files?.[0] ?? null), { once: true });
+    input.addEventListener("change", () => finish(chosen().length > 0 ? chosen() : null), {
+      once: true,
+    });
     input.addEventListener("cancel", () => finish(null), { once: true });
     // `change` trails the focus return on some browsers, so look on the next task.
     window.addEventListener(
       "focus",
       () => {
-        setTimeout(() => finish(input.files?.[0] ?? null), 0);
+        setTimeout(() => finish(chosen().length > 0 ? chosen() : null), 0);
       },
       { once: true }
     );
     input.click();
   });
+}
+
+function pickWithFileInput(extensions: readonly string[]): Promise<File | null> {
+  return pickFilesWithFileInput(extensions, false).then((files) => files?.[0] ?? null);
 }
 
 // The folder twin of `pickWithFileInput`: a `webkitdirectory` input hands over
@@ -230,6 +244,8 @@ export function createWebPluginFileGrantStore(
   const session = new Map<string, SessionGrant>();
   const randomId = deps.randomId ?? (() => crypto.randomUUID());
   const pickWithInput = deps.pickWithInput ?? pickWithFileInput;
+  const pickManyWithInput =
+    deps.pickManyWithInput ?? ((extensions) => pickFilesWithFileInput(extensions, true));
   const pickFolderWithInput = deps.pickFolderWithInput ?? pickFolderWithFileInput;
 
   // Read per call, so a test can swap the factory for each store.
@@ -412,15 +428,15 @@ export function createWebPluginFileGrantStore(
     return { grant, name: file.name, size: file.size };
   }
 
-  async function pickHandle(
-    pluginId: string,
+  // The handles the browser's picker returned, or null when the author cancelled.
+  async function pickHandles(
     extensions: readonly string[],
-    showOpenFilePicker: ShowOpenFilePicker
-  ): Promise<PluginFileGrant | null> {
-    let handles: StoredFileGrant[];
+    showOpenFilePicker: ShowOpenFilePicker,
+    multiple: boolean
+  ): Promise<StoredFileGrant[] | null> {
     try {
-      handles = await showOpenFilePicker({
-        multiple: false,
+      return await showOpenFilePicker({
+        multiple,
         excludeAcceptAllOption: false,
         types: [
           {
@@ -436,11 +452,35 @@ export function createWebPluginFileGrantStore(
       if (errorName(error) === "NotAllowedError") throw userActionRequired();
       throw error;
     }
+  }
 
-    const handle = handles[0];
+  async function pickHandle(
+    pluginId: string,
+    extensions: readonly string[],
+    showOpenFilePicker: ShowOpenFilePicker
+  ): Promise<PluginFileGrant | null> {
+    const handles = await pickHandles(extensions, showOpenFilePicker, false);
+    const handle = handles?.[0];
     if (!handle) return null;
 
     return grantHandle(pluginId, handle);
+  }
+
+  // Every handle the browser returned, granted in dialog order, each grant once.
+  async function pickHandleMany(
+    pluginId: string,
+    extensions: readonly string[],
+    showOpenFilePicker: ShowOpenFilePicker
+  ): Promise<PluginFileGrant[] | null> {
+    const handles = await pickHandles(extensions, showOpenFilePicker, true);
+    if (!handles || handles.length === 0) return null;
+
+    const grants = new Map<string, PluginFileGrant>();
+    for (const handle of handles) {
+      const grant = await grantHandle(pluginId, handle);
+      if (!grants.has(grant.grant)) grants.set(grant.grant, grant);
+    }
+    return [...grants.values()];
   }
 
   // A folder entry the store cannot hold persistently still grants its File for the session.
@@ -521,11 +561,32 @@ export function createWebPluginFileGrantStore(
     return sessionGrant(pluginId, file);
   }
 
+  async function pickSessionOnlyMany(
+    pluginId: string,
+    extensions: readonly string[]
+  ): Promise<PluginFileGrant[] | null> {
+    const files = await pickManyWithInput(extensions);
+    if (!files || files.length === 0) return null;
+
+    const grants = new Map<string, PluginFileGrant>();
+    for (const file of files) {
+      const grant = sessionGrant(pluginId, file);
+      if (!grants.has(grant.grant)) grants.set(grant.grant, grant);
+    }
+    return [...grants.values()];
+  }
+
   return {
     async pick(pluginId, extensions): Promise<PluginFileGrant | null> {
       const showOpenFilePicker = deps.showOpenFilePicker ?? windowPicker();
       if (showOpenFilePicker) return pickHandle(pluginId, extensions, showOpenFilePicker);
       return pickSessionOnly(pluginId, extensions);
+    },
+
+    async pickMany(pluginId, extensions): Promise<PluginFileGrant[] | null> {
+      const showOpenFilePicker = deps.showOpenFilePicker ?? windowPicker();
+      if (showOpenFilePicker) return pickHandleMany(pluginId, extensions, showOpenFilePicker);
+      return pickSessionOnlyMany(pluginId, extensions);
     },
 
     async pickFolder(pluginId, extensions): Promise<PluginFolderPick | null> {

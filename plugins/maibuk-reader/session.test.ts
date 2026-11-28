@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FILE_READ_MAX_BYTES, createPluginClient } from "@/plugin-sdk";
 import { createTestHost } from "@/features/plugins/test-kit";
 import type { FrameShelfState } from "./frame-protocol";
+import { createImporter, type ImportReport, type ImportState, type Importer } from "./import";
 import { createShelfService } from "./library";
 import { SHELF_PAGE_ID, followReturnTarget, leaveReading } from "./runtime";
 import { createReaderSession, frameLabels, type ReaderSession } from "./session";
@@ -30,7 +31,14 @@ import {
   type ShelfEntry,
   type ShelfViewSettings,
 } from "./shelf";
-import { deflatedArchive, inflateRaw, pdfBytes, readerManifest, shelfEntry } from "./test-support";
+import {
+  deflatedArchive,
+  epubBytes,
+  inflateRaw,
+  pdfBytes,
+  readerManifest,
+  shelfEntry,
+} from "./test-support";
 
 /** The Worker the session starts for pdf.js's core, recording what it was told. */
 class RecordedWorker {
@@ -131,6 +139,10 @@ function setup(
     openEntry?: (entry: ShelfEntry) => Promise<void> | void;
     /** Told which view the session switched to. */
     onViewChange?: (view: "shelf" | "document") => void;
+    /** The Worker's background Import; built from the harness's client when "real". */
+    importer?: Importer | "real";
+    importThrottleMs?: number;
+    coverJobTimeoutMs?: number;
   } = {}
 ): Harness {
   const storage = options.storage ?? new Map<string, unknown>();
@@ -159,6 +171,9 @@ function setup(
     shelfInFrame: options.shelfInFrame,
     openEntry,
     onViewChange,
+    importer: options.importer === "real" ? createImporter({ client, library }) : options.importer,
+    importThrottleMs: options.importThrottleMs,
+    coverJobTimeoutMs: options.coverJobTimeoutMs,
   });
   session.start();
   const delivered: Record<string, unknown>[] = [];
@@ -185,6 +200,52 @@ function setup(
       await host.stop();
     },
   };
+}
+
+/** An Importer the test drives by hand: `emit` changes its state and tells the session. */
+function stubImporter(initial: ImportState | null = null) {
+  let state = initial;
+  const listeners = new Set<(state: ImportState | null) => void>();
+  return {
+    get state() {
+      return state;
+    },
+    start: vi.fn(() => true),
+    cancel: vi.fn(),
+    dismiss: vi.fn(),
+    idle: async () => {},
+    subscribe(listener: (state: ImportState | null) => void) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    emit(next: ImportState | null) {
+      state = next;
+      for (const listener of [...listeners]) listener(next);
+    },
+    listeners,
+  };
+}
+
+/** A folder Import's report with `processed` of `found` files sorted, all added. */
+function importReport(processed: number, found = 10): ImportReport {
+  return {
+    source: { kind: "folder", name: "Library" },
+    found,
+    processed,
+    added: Array.from({ length: processed }, (_, index) => `book-${index}.epub`),
+    alreadyOnShelf: [],
+    relinked: [],
+    unreadable: [],
+    duplicates: 0,
+    cancelled: false,
+  };
+}
+
+/** Every `import` message the Frame received, in order. */
+function importMessages(harness: Harness): Record<string, unknown>[] {
+  return harness.messages.filter((message) => message.kind === "import");
 }
 
 /** The first message of `kind`, waiting until it arrives. */
@@ -1568,6 +1629,407 @@ describe("return target", () => {
         ])
       );
       expect(harness.host.returns).toEqual([]);
+    } finally {
+      await harness.stop();
+    }
+  });
+});
+
+describe("import (#948)", () => {
+  it("imports a picked folder in the background, drawing its card, its rows, and its report", async () => {
+    const harness = setup({ view: "shelf", importer: "real", importThrottleMs: 0 });
+    try {
+      await opened(harness);
+      harness.host.files.queueFolderPick({
+        name: "Library",
+        files: [
+          { name: "dune.pdf", bytes: pdfBytes("dune") },
+          { name: "emma.pdf", bytes: pdfBytes("emma") },
+        ],
+      });
+      harness.send({ kind: "shelf-command", id: "importFolder" });
+      await vi.waitFor(() => {
+        const last = importMessages(harness).at(-1)?.state as { status?: string } | null;
+        expect(last?.status).toBe("done");
+      });
+      const done = importMessages(harness).at(-1)?.state as Record<string, unknown>;
+      expect(done).toMatchObject({
+        source: "folder",
+        title: 'Imported "Library"',
+        progressText: "2 of 2 files",
+        countsText: "2 added",
+      });
+      expect((done.report as { added: string[] }).added.sort()).toEqual(["dune.pdf", "emma.pdf"]);
+      // The first file drew the card at once, as "running", before the finish.
+      expect((importMessages(harness)[0].state as { status: string }).status).toBe("running");
+      await vi.waitFor(() => {
+        const shelves = harness.messages.filter((message) => message.kind === "shelf");
+        const rows = (shelves.at(-1)?.state as FrameShelfState | undefined)?.entries ?? [];
+        expect(rows.map((row) => row.title).sort()).toEqual(["dune", "emma"]);
+        expect(rows.every((row) => row.coverPending === true)).toBe(true);
+      });
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("draws a running Import at most once per throttle, and a status change at once", async () => {
+    vi.useFakeTimers();
+    const importer = stubImporter();
+    const harness = setup({ view: "shelf", importer, importThrottleMs: 400 });
+    try {
+      harness.send({ kind: "ready" });
+      await vi.waitFor(() => expect(harness.messages.some((m) => m.kind === "open")).toBe(true));
+      importer.emit({ status: "running", report: importReport(0) });
+      for (let processed = 1; processed <= 5; processed += 1) {
+        importer.emit({ status: "running", report: importReport(processed) });
+      }
+      await vi.waitFor(() => expect(importMessages(harness)).toHaveLength(1));
+      expect((importMessages(harness)[0].state as { processed: number }).processed).toBe(0);
+
+      await vi.advanceTimersByTimeAsync(400);
+      await vi.waitFor(() => expect(importMessages(harness)).toHaveLength(2));
+      // The trailing draw reads the latest state, not the one that set the timer.
+      expect((importMessages(harness)[1].state as { processed: number }).processed).toBe(5);
+
+      importer.emit({ status: "done", report: { ...importReport(10), finishedAt: 0 } });
+      await vi.waitFor(() => expect(importMessages(harness)).toHaveLength(3));
+      expect((importMessages(harness)[2].state as { status: string }).status).toBe("done");
+
+      importer.emit(null);
+      await vi.waitFor(() => expect(importMessages(harness)).toHaveLength(4));
+      expect(importMessages(harness)[3].state).toBeNull();
+    } finally {
+      await harness.stop();
+      vi.useRealTimers();
+    }
+  });
+
+  it("draws an Import already running when a Frame opens, so a Shelf mounted mid-Import shows it", async () => {
+    const importer = stubImporter({ status: "running", report: importReport(3) });
+    const harness = setup({ view: "shelf", importer });
+    try {
+      await opened(harness);
+      const message = await messageOf(harness, "import");
+      expect(message.state).toMatchObject({ status: "running", progressText: "3 of 10 files" });
+      const openIndex = harness.messages.findIndex((m) => m.kind === "open");
+      expect(harness.messages.indexOf(message)).toBeGreaterThan(openIndex);
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("sends nothing about Import before the Frame opened, and nothing when none ran", async () => {
+    const importer = stubImporter();
+    const harness = setup({ view: "shelf", importer });
+    try {
+      importer.emit({ status: "running", report: importReport(1) });
+      await opened(harness);
+      await messageOf(harness, "shelf");
+      // The open drew the running Import once; the emit before it drew nothing.
+      expect(importMessages(harness)).toHaveLength(1);
+      importer.emit(null);
+      await vi.waitFor(() => expect(importMessages(harness)).toHaveLength(2));
+    } finally {
+      await harness.stop();
+    }
+    const quiet = setup({ view: "shelf", importer: stubImporter() });
+    try {
+      await opened(quiet);
+      await messageOf(quiet, "shelf");
+      expect(importMessages(quiet)).toEqual([]);
+    } finally {
+      await quiet.stop();
+    }
+  });
+
+  it("cancels and dismisses the Import from the Shelf's commands", async () => {
+    const importer = stubImporter();
+    const harness = setup({ view: "shelf", importer });
+    try {
+      await opened(harness);
+      harness.send({ kind: "shelf-command", id: "cancelImport" });
+      harness.send({ kind: "shelf-command", id: "dismissImport" });
+      await vi.waitFor(() => expect(importer.dismiss).toHaveBeenCalledTimes(1));
+      expect(importer.cancel).toHaveBeenCalledTimes(1);
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("starts nothing when the author cancels the pick, and names a failed Import", async () => {
+    const importer = stubImporter();
+    const harness = setup({ view: "shelf", importer });
+    try {
+      await opened(harness);
+      harness.host.files.queueFilesPick([]);
+      harness.send({ kind: "shelf-command", id: "importFiles" });
+      importer.start.mockImplementationOnce(() => {
+        throw new Error("storage is down");
+      });
+      harness.host.files.queueFilesPick([{ name: "dune.epub", bytes: epubBytes("dune") }]);
+      harness.send({ kind: "shelf-command", id: "importFiles" });
+      const result = await messageOf(harness, "shelf-result");
+      expect(result.message).toBe("Reader couldn't import those files.");
+      expect(importer.start).toHaveBeenCalledTimes(1);
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("redraws the Import in the new language", async () => {
+    const importer = stubImporter({ status: "running", report: importReport(2) });
+    const harness = setup({ view: "shelf", importer });
+    try {
+      await opened(harness);
+      await messageOf(harness, "import");
+      harness.session.setLanguage("es");
+      await vi.waitFor(() => expect(importMessages(harness)).toHaveLength(2));
+      expect(importMessages(harness)[1].state).toMatchObject({
+        title: "Importando «Library»",
+        progressText: "2 de 10 archivos",
+      });
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("stops listening to the Importer once the Frame closes", async () => {
+    const importer = stubImporter();
+    const harness = setup({ view: "shelf", importer });
+    await opened(harness);
+    expect(importer.listeners.size).toBe(1);
+    await harness.stop();
+    expect(importer.listeners.size).toBe(0);
+  });
+});
+
+describe("Shelf writes during an Import (#948)", () => {
+  it("keeps an imported row and a Reading Position saved at the same time", async () => {
+    const entry = shelfEntry({ id: "doc-1", grant: "grant-1", title: "Dune" });
+    const storage = new Map<string, unknown>([[SHELF_KEY, [entry]]]);
+    const harness = setup({ entry, storage });
+    try {
+      await opened(harness);
+      const imported = shelfEntry({ id: "doc-2", grant: "grant-2", title: "Emma" });
+      // Both writes start together: the Import's goes through the same queue.
+      const importing = harness.library.updateShelf((shelf) => [...shelf, imported]);
+      harness.send({
+        kind: "position",
+        position: { kind: "page", page: 2, zoom: 1 },
+        progress: { page: 2, pageCount: 10 },
+      });
+      await importing;
+      await vi.waitFor(() => {
+        const shelf = storage.get(SHELF_KEY) as ShelfEntry[];
+        expect(shelf.find((row) => row.id === "doc-1")?.progress).toMatchObject({ page: 2 });
+      });
+      const shelf = storage.get(SHELF_KEY) as ShelfEntry[];
+      expect(shelf.map((row) => row.id).sort()).toEqual(["doc-1", "doc-2"]);
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("clears a pending cover once the Document opened and reported its metadata", async () => {
+    const entry = {
+      ...shelfEntry({ id: "doc-1", grant: "grant-1", title: "dune" }),
+      coverPending: true as const,
+    };
+    const storage = new Map<string, unknown>([[SHELF_KEY, [entry]]]);
+    const harness = setup({ entry, storage });
+    try {
+      await opened(harness);
+      harness.send({ kind: "meta", title: "Dune" });
+      await vi.waitFor(() => {
+        const shelf = storage.get(SHELF_KEY) as ShelfEntry[];
+        expect(shelf[0].title).toBe("Dune");
+      });
+      expect((storage.get(SHELF_KEY) as ShelfEntry[])[0].coverPending).toBeUndefined();
+    } finally {
+      await harness.stop();
+    }
+  });
+});
+
+describe("covers after an Import (#948)", () => {
+  const COVER = "data:image/jpeg;base64,AAAA";
+
+  /** A pending-cover Shelf row over a live File Grant holding `fixture`. */
+  async function pendingRow(
+    harness: Harness,
+    id: string,
+    fixture = "flowing.epub",
+    format: DocumentFormat = "epub"
+  ): Promise<ShelfEntry> {
+    const bytes = new Uint8Array(readFileSync(join(__dirname, "fixtures", fixture)));
+    harness.host.files.queuePick({ name: fixture, bytes });
+    const picked = await harness.client.files.pick({ extensions: [format], multiple: false });
+    if (picked === null) throw new Error("the pick was refused");
+    return {
+      ...shelfEntry({
+        id,
+        grant: picked.grant,
+        fingerprint: `${bytes.length}:${id}`,
+        title: id,
+        format,
+      }),
+      coverPending: true as const,
+    };
+  }
+
+  /** Opens a Shelf Frame over `rows`, sharing the harness's host so the grants stay live. */
+  async function shelfWith(
+    build: (harness: Harness) => Promise<ShelfEntry[]>,
+    options: { coverJobTimeoutMs?: number } = {}
+  ): Promise<Harness> {
+    const storage = new Map<string, unknown>();
+    const harness = setup({ view: "shelf", shelfInFrame: true, storage, ...options });
+    storage.set(SHELF_KEY, await build(harness));
+    await opened(harness);
+    return harness;
+  }
+
+  function coverJobs(harness: Harness): Record<string, unknown>[] {
+    return harness.messages.filter((message) => message.kind === "cover-job");
+  }
+
+  function row(harness: Harness, id: string): ShelfEntry | undefined {
+    return (harness.storage.get(SHELF_KEY) as ShelfEntry[]).find(
+      (candidate) => candidate.id === id
+    );
+  }
+
+  it("asks the Shelf Frame for a pending cover, reads that Document, and stores the cover", async () => {
+    const harness = await shelfWith(async (h) => [await pendingRow(h, "doc-1")]);
+    try {
+      const job = await messageOf(harness, "cover-job");
+      expect(job).toMatchObject({ documentId: "doc-1", format: "epub" });
+      expect(typeof job.foliate).toBe("string");
+      harness.send({ kind: "zip-list", id: 7, documentId: "doc-1" });
+      const list = await messageOf(harness, "zip-list");
+      expect((list.entries as { name: string }[]).map(({ name }) => name)).toContain(
+        "OEBPS/images/cover.png"
+      );
+      const shelfDraws = harness.messages.filter((message) => message.kind === "shelf").length;
+      harness.send({ kind: "cover", documentId: "doc-1", coverDataUrl: COVER });
+      await vi.waitFor(() => expect(row(harness, "doc-1")?.coverDataUrl).toBe(COVER));
+      expect(row(harness, "doc-1")?.coverPending).toBeUndefined();
+      // The Shelf redraws, so the real cover fades in over the generated one.
+      await vi.waitFor(() => {
+        expect(harness.messages.filter((message) => message.kind === "shelf").length).toBe(
+          shelfDraws + 1
+        );
+      });
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("asks for one cover at a time and moves on once the Frame answers", async () => {
+    const harness = await shelfWith(async (h) => [
+      await pendingRow(h, "doc-1"),
+      await pendingRow(h, "doc-2"),
+    ]);
+    try {
+      await messageOf(harness, "cover-job");
+      expect(coverJobs(harness).map((job) => job.documentId)).toEqual(["doc-1"]);
+      // No cover in the file: the row stops waiting and keeps its generated cover.
+      harness.send({ kind: "cover", documentId: "doc-1" });
+      await vi.waitFor(() => expect(coverJobs(harness)).toHaveLength(2));
+      expect(coverJobs(harness)[1].documentId).toBe("doc-2");
+      expect(row(harness, "doc-1")?.coverPending).toBeUndefined();
+      expect(row(harness, "doc-1")?.coverDataUrl).toBeUndefined();
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("stores only a small JPEG data URL as a cover", async () => {
+    const harness = await shelfWith(async (h) => [await pendingRow(h, "doc-1")]);
+    try {
+      await messageOf(harness, "cover-job");
+      harness.send({ kind: "cover", documentId: "doc-1", coverDataUrl: "javascript:alert(1)" });
+      await vi.waitFor(() => expect(row(harness, "doc-1")?.coverPending).toBeUndefined());
+      expect(row(harness, "doc-1")?.coverDataUrl).toBeUndefined();
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("skips a Document whose cover job the Frame never answers", async () => {
+    const harness = await shelfWith(
+      async (h) => [await pendingRow(h, "doc-1"), await pendingRow(h, "doc-2")],
+      { coverJobTimeoutMs: 20 }
+    );
+    try {
+      await vi.waitFor(() => expect(coverJobs(harness)).toHaveLength(2));
+      expect(coverJobs(harness).map((job) => job.documentId)).toEqual(["doc-1", "doc-2"]);
+      expect(row(harness, "doc-1")?.coverPending).toBeUndefined();
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("reads nothing for a Document no cover job holds", async () => {
+    const harness = await shelfWith(async (h) => [await pendingRow(h, "doc-1")]);
+    try {
+      await messageOf(harness, "cover-job");
+      harness.send({ kind: "read", id: 3, offset: 0, length: 16, documentId: "doc-9" });
+      const bytes = await messageOf(harness, "bytes");
+      expect((bytes.buffer as ArrayBuffer).byteLength).toBe(0);
+      harness.send({ kind: "read", id: 4, offset: 0, length: 16, documentId: "doc-1" });
+      await vi.waitFor(() => {
+        const answer = harness.messages.find(
+          (message) => message.kind === "bytes" && message.id === 4
+        );
+        expect((answer?.buffer as ArrayBuffer | undefined)?.byteLength).toBe(16);
+      });
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("drops the job when a Document opens and asks again back on the Shelf", async () => {
+    let reading: ShelfEntry | null = null;
+    const harness = await shelfWith(async (h) => {
+      const pending = await pendingRow(h, "doc-1");
+      reading = { ...(await pendingRow(h, "doc-2")) };
+      delete reading.coverPending;
+      return [pending, reading];
+    });
+    try {
+      await messageOf(harness, "cover-job");
+      harness.session.setEntry(reading);
+      await vi.waitFor(() => {
+        expect(harness.messages.filter((message) => message.kind === "open")).toHaveLength(2);
+      });
+      // A late answer for the dropped job changes nothing.
+      harness.send({ kind: "cover", documentId: "doc-1", coverDataUrl: COVER });
+      harness.send({ kind: "zip-list", id: 9, documentId: "doc-1" });
+      const error = await messageOf(harness, "zip-error");
+      expect(error).toMatchObject({ id: 9, code: "corrupt" });
+      expect(row(harness, "doc-1")?.coverPending).toBe(true);
+      await harness.session.showShelf();
+      await vi.waitFor(() => expect(coverJobs(harness)).toHaveLength(2));
+      expect(coverJobs(harness)[1].documentId).toBe("doc-1");
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("hands a PDF's cover job its own pdf.js core and stops it after the answer", async () => {
+    const harness = await shelfWith(async (h) => [
+      await pendingRow(h, "doc-1", "twelve-pages.pdf", "pdf"),
+    ]);
+    try {
+      const job = await messageOf(harness, "cover-job");
+      expect(job.pdfPort).toBeInstanceOf(MessagePort);
+      expect((job.pdf as { displaySource: string }).displaySource.length).toBeGreaterThan(0);
+      expect(workers).toHaveLength(1);
+      harness.send({ kind: "cover", documentId: "doc-1", coverDataUrl: COVER });
+      await vi.waitFor(() => expect(row(harness, "doc-1")?.coverDataUrl).toBe(COVER));
+      expect(workers[0].terminate).toHaveBeenCalled();
     } finally {
       await harness.stop();
     }

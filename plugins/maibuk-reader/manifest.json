@@ -31,6 +31,16 @@
         "contexts": ["global"]
       },
       {
+        "id": "importFiles",
+        "label": "Import files…",
+        "contexts": ["global"]
+      },
+      {
+        "id": "importFolder",
+        "label": "Import folder…",
+        "contexts": ["global"]
+      },
+      {
         "id": "openDocument",
         "label": "Open Document",
         "contexts": ["reader"],
@@ -146,6 +156,16 @@
       {
         "id": "deleteCollection",
         "label": "Delete Collection…",
+        "contexts": ["reader"]
+      },
+      {
+        "id": "cancelImport",
+        "label": "Cancel import",
+        "contexts": ["reader"]
+      },
+      {
+        "id": "viewImportReport",
+        "label": "View import report",
         "contexts": ["reader"]
       }
     ],
