@@ -53,7 +53,8 @@ interface PickerPayload {
 interface FilePickerGlobal {
   files: Map<string, { base64?: string; url?: string; type: string; blob?: Promise<Blob> }>;
   missing: Set<string>;
-  next: string | null;
+  /** The next pick's answer: one name, several (a multiple pick, #948), or the first file. */
+  next: string | string[] | null;
 }
 
 const PICKER_GLOBAL = "__maibukE2EFilePicker";
@@ -171,10 +172,10 @@ export async function installFilePicker(page: Page, files: PickerFile[]): Promis
       }
 
       const picker = async (): Promise<HandleFile[]> => {
-        const name = state.next ?? state.files.keys().next().value;
-        if (typeof name !== "string") return [];
+        const next = state.next ?? state.files.keys().next().value;
         state.next = null;
-        return [(await fileFor(name)) as HandleFile];
+        const names = Array.isArray(next) ? next : typeof next === "string" ? [next] : [];
+        return (await Promise.all(names.map(fileFor))) as HandleFile[];
       };
       (window as unknown as Record<string, unknown>).showOpenFilePicker = picker;
     },
@@ -196,6 +197,20 @@ export async function chooseNextFile(page: Page, name: string): Promise<void> {
   );
 }
 
+/** Makes the next pick answer with every file in `names`, as a multiple pick does (#948). */
+export async function chooseNextFiles(page: Page, names: string[]): Promise<void> {
+  await page.evaluate(
+    ({ globalName, names: next }) => {
+      const state = (window as unknown as Record<string, unknown>)[globalName] as
+        | FilePickerGlobal
+        | undefined;
+      if (state === undefined) throw new Error("the E2E file picker is not installed");
+      state.next = next;
+    },
+    { globalName: PICKER_GLOBAL, names }
+  );
+}
+
 /** Makes `name`'s `getFile` fail, or lets it read again (Missing Document). */
 export async function setFileMissing(page: Page, name: string, missing: boolean): Promise<void> {
   await page.evaluate(
@@ -209,4 +224,20 @@ export async function setFileMissing(page: Page, name: string, missing: boolean)
     },
     { globalName: PICKER_GLOBAL, name, missing }
   );
+}
+
+/**
+ * Makes the web File Grant store fall back to its `webkitdirectory` input, the
+ * folder dialog Playwright can answer: Chromium's own showDirectoryPicker opens
+ * an OS dialog no test can reach. Firefox and Safari have no showDirectoryPicker,
+ * so their authors always take this path. Playwright answers a
+ * directory input in Chromium only, so specs using it are `@chromium-only`.
+ */
+export async function useFolderInput(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "showDirectoryPicker", {
+      configurable: true,
+      value: undefined,
+    });
+  });
 }

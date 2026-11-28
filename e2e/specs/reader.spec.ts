@@ -13,25 +13,35 @@
 // Tagged @sandbox because Reader is a Frame and a Worker plugin: the lane runs
 // it on Chromium, WebKit, and Firefox.
 //
-// Every pick is opened by a key press (the Shelf's "Import files" button, or
-// the "Open file…" Command); the double only answers the dialog the browser
-// would have shown. Every Shelf action is a key press too: Enter on a row, the
+// Every pick is made by a key press (the Shelf's "Import files" button, or the
+// "Open file…" Command); the double only answers the dialog the browser would
+// have shown. "Import files" shelves the pick in the background and leaves it
+// closed, so Enter on its row opens it; "Open file…" opens it at once. Every
+// Shelf action is a key press too: Enter on a row, the
 // row's Document menu from Shift+F10, or a palette Command acting on the row
 // the author last focused.
 
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import type { FrameLocator, Locator, Page } from "@playwright/test";
 import { capture } from "../support/capture";
 import { dropFiles, type DroppedFile } from "../support/file-drop";
-import { chooseNextFile, installFilePicker, setFileMissing } from "../support/file-picker";
-import { leaveFrame, pressUntilFocused, tabTo } from "../support/keyboard";
+import {
+  chooseNextFile,
+  chooseNextFiles,
+  installFilePicker,
+  setFileMissing,
+  useFolderInput,
+} from "../support/file-picker";
+import { leaveFrame, pressUntilFocused, tabTo, tabToEither } from "../support/keyboard";
 import { paletteDialog, selectPaletteCommand } from "../support/palette";
 import { REPO_ROOT } from "../support/seed/seeds";
 import { expect, test } from "../support/test";
 
 const PDF = "twelve-pages.pdf";
 const EPUB = "flowing.epub";
+const FB2 = "story.fb2";
 
 /** The fixtures Reader opens: a twelve-page PDF and a reflowable EPUB. */
 const FIXTURES = [
@@ -41,7 +51,56 @@ const FIXTURES = [
     path: "plugins/maibuk-reader/fixtures/flowing.epub",
     type: "application/epub+zip",
   },
+  { name: FB2, path: "plugins/maibuk-reader/fixtures/story.fb2", type: "application/xml" },
 ];
+
+/** A committed Reader fixture, by file name. */
+const fixturePath = (name: string) => resolve(REPO_ROOT, "plugins/maibuk-reader/fixtures", name);
+
+/**
+ * A folder named `Library` in a fresh temporary directory, for a folder Import
+ * (#948): `files` maps each path inside it to the bytes or fixture it holds.
+ */
+function libraryFolder(files: Record<string, string | Uint8Array>): string {
+  const root = join(mkdtempSync(join(tmpdir(), "maibuk-reader-import-")), "Library");
+  for (const [path, source] of Object.entries(files)) {
+    const target = join(root, path);
+    mkdirSync(join(target, ".."), { recursive: true });
+    if (typeof source === "string") copyFileSync(fixturePath(source), target);
+    else writeFileSync(target, source);
+  }
+  return root;
+}
+
+/** The Shelf's Import card, a live status region inside the Frame. */
+const importCard = (page: Page) => pageFrame(page).getByRole("status", { name: "Import progress" });
+
+/** The Import report, a Dialog at desktop widths. */
+const importReport = (page: Page) => pageFrame(page).getByRole("dialog", { name: "Import report" });
+
+/**
+ * Imports a folder: Enter on `button` (the empty Shelf's "Import folder", or
+ * the chooser's Folder option) opens the folder dialog, which answers with `folder`.
+ */
+async function importFolderWith(page: Page, button: Locator, folder: string): Promise<void> {
+  await tabTo(page, button, { max: 60 });
+  const chooser = page.waitForEvent("filechooser");
+  await page.keyboard.press("Enter");
+  await (await chooser).setFiles(folder);
+}
+
+/** Opens the finished Import's report from its card by keyboard. */
+async function openImportReport(page: Page): Promise<Locator> {
+  await tabTo(page, importCard(page).getByRole("button", { name: "View report" }), { max: 60 });
+  await page.keyboard.press("Enter");
+  const report = importReport(page);
+  await expect(report).toBeVisible();
+  return report;
+}
+
+/** The report's count tile for `label`, e.g. "Added". */
+const reportTile = (report: Locator, label: string) =>
+  report.locator(".shelf-report__tile").filter({ hasText: new RegExp(`^\\d+${label}$`) });
 
 const primaryNav = (page: Page) => page.getByRole("listbox", { name: "Primary navigation" });
 const navOption = (page: Page, name: string) =>
@@ -114,15 +173,38 @@ async function goHome(page: Page): Promise<void> {
 }
 
 /**
- * Shelves a file from the empty Shelf: "Import files" opens the picker, the
- * Document opens in the same Frame, and the host URL stays on /reader.
+ * Shelves a file from the empty Shelf: "Import files" opens the picker, and the
+ * pick imports in the background. The Document is not opened; its row appears
+ * on the Shelf, and the host URL stays on /reader.
  */
-async function importFiles(page: Page): Promise<void> {
+async function importFiles(page: Page, title: string = "twelve-pages"): Promise<void> {
   await tabTo(page, pageFrame(page).getByRole("button", { name: "Import files", exact: true }), {
     max: 60,
   });
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
+  await expect(shelfRow(page, title)).toBeVisible({ timeout: 30_000 });
+}
+
+/**
+ * Shelves a file from a Shelf that already has rows: the toolbar's Import opens
+ * the chooser with "Files" focused, and Enter picks. Like the empty Shelf's
+ * button, the pick imports in the background and only its row appears.
+ */
+async function importFromToolbar(page: Page, title: string): Promise<void> {
+  // The toolbar sits before the rows, so focus may have to walk back to it.
+  await tabToEither(page, pageFrame(page).getByRole("button", { name: "Import", exact: true }));
+  await page.keyboard.press("Enter");
+  const chooser = pageFrame(page).getByRole("dialog", { name: "Import" });
+  await expect(chooser.getByRole("button", { name: /^Files/ })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(shelfRow(page, title)).toBeVisible({ timeout: 30_000 });
+}
+
+/** Shelves a file from the empty Shelf, then opens its row: the old one-step pick. */
+async function importAndOpen(page: Page, title: string = "twelve-pages"): Promise<void> {
+  await importFiles(page, title);
+  await openFromShelf(page, title);
 }
 
 /**
@@ -233,9 +315,9 @@ test.describe("Reader", () => {
     await expect(pageFrame(page).getByText("Your Shelf is empty", { exact: true })).toBeVisible();
     await capture(page, "reader-shelf-empty");
 
-    // "Import files" shelves the PDF and opens it inside the same Frame: the
-    // host URL stays on /reader, and the Frame draws the Document instead.
-    await importFiles(page);
+    // "Import files" shelves the PDF in the background; Enter on its row opens
+    // it inside the same Frame, and the host URL stays on /reader.
+    await importAndOpen(page);
     const frame = await focusDocument(page);
     await expect(pageIndicator(page)).toContainText("1 of 12");
 
@@ -375,7 +457,7 @@ test.describe("Reader", () => {
   }) => {
     await page.goto("/");
     await openReader(page);
-    await importFiles(page);
+    await importAndOpen(page);
     await focusDocument(page);
     await pageForward(page, 3);
     await expect(pageIndicator(page)).toContainText("4 of 12");
@@ -432,7 +514,7 @@ test.describe("Reader", () => {
   }) => {
     await page.goto("/");
     await openReader(page);
-    await importFiles(page);
+    await importAndOpen(page);
     await focusDocument(page);
     await page.keyboard.press("Escape");
     await expect(shelfRow(page, "twelve-pages")).toBeVisible();
@@ -465,7 +547,7 @@ test.describe("Reader", () => {
 
     // The palette's "Remove from Shelf…" Command removes the selected row the
     // same way, so a re-picked file goes through the confirmation again.
-    await importFiles(page);
+    await importAndOpen(page);
     await focusDocument(page);
     await page.keyboard.press("Escape");
     await expect(shelfRow(page, "twelve-pages")).toBeVisible();
@@ -490,13 +572,15 @@ test.describe("Reader", () => {
     await openReader(page);
     // Two Documents on the Shelf: the PDF from the empty state, then the EPUB
     // from the toolbar's Import.
-    await importFiles(page);
+    await importAndOpen(page);
     await focusDocument(page);
     await page.keyboard.press("Escape");
     await expect(shelfRow(page, "twelve-pages")).toBeVisible();
     await chooseNextFile(page, EPUB);
-    await tabTo(page, frame.getByRole("button", { name: "Import", exact: true }), { max: 60 });
-    await page.keyboard.press("Enter");
+    // The row carries the file name until the EPUB opens and its own title,
+    // "Dune", replaces it.
+    await importFromToolbar(page, "flowing");
+    await openFromShelf(page, "flowing");
     await focusDocument(page);
     await page.keyboard.press("Escape");
     await expect(shelfRow(page, "Dune")).toBeVisible();
@@ -508,7 +592,8 @@ test.describe("Reader", () => {
 
     // Cover size: one Tab stop after the view switch; the arrows walk S, M, L.
     const sizes = frame.getByRole("radiogroup", { name: "Cover size" });
-    await tabTo(page, sizes.getByRole("radio", { name: "Medium" }), { max: 60 });
+    // Back from the EPUB, focus is on its row, after the toolbar: walk either way.
+    await tabToEither(page, sizes.getByRole("radio", { name: "Medium" }), { max: 60 });
     await page.keyboard.press("ArrowLeft");
     await expect(sizes.getByRole("radio", { name: "Small" })).toBeChecked();
     await expectGridCard(page, "Dune", 88);
@@ -608,13 +693,15 @@ test.describe("Reader", () => {
     const frame = pageFrame(page);
     await page.goto("/");
     await openReader(page);
-    await importFiles(page);
+    await importAndOpen(page);
     await focusDocument(page);
     await page.keyboard.press("Escape");
     await expect(shelfRow(page, "twelve-pages")).toBeVisible();
     await chooseNextFile(page, EPUB);
-    await tabTo(page, frame.getByRole("button", { name: "Import", exact: true }), { max: 60 });
-    await page.keyboard.press("Enter");
+    // The row carries the file name until the EPUB opens and its own title,
+    // "Dune", replaces it.
+    await importFromToolbar(page, "flowing");
+    await openFromShelf(page, "flowing");
     await focusDocument(page);
     await page.keyboard.press("Escape");
     await expect(shelfRow(page, "Dune")).toBeVisible();
@@ -695,7 +782,7 @@ test.describe("Reader", () => {
     await expect(pageFrame(page).getByText("Your Shelf is empty", { exact: true })).toBeVisible();
 
     // A drop on the reader page's Frame wrapper shelves the Document and opens
-    // it inside that same Frame, exactly as the "Import files" pick does.
+    // it inside that same Frame. Unlike "Import files", a drop still opens it.
     await dropFiles(pageFrameWrapper(page), [droppedFixture(EPUB)]);
     await expect(page).toHaveURL(/\/plugin\/maibuk-reader\/reader$/);
     const frame = await focusDocument(page);
@@ -725,10 +812,16 @@ test.describe("Reader", () => {
   test("on a phone, the Shelf draws the phone grid and a tap on More opens the Document menu as a sheet @wf:reader-remove @touch", async ({
     page,
   }) => {
+    // The background Import and the open through the More menu outrun the 30s default.
+    test.setTimeout(60_000);
     await page.goto("/plugin/maibuk-reader/reader");
     await expect(shelfHeading(page)).toBeVisible({ timeout: 60_000 });
     await capture(page, "reader-shelf-empty-phone");
     await pageFrame(page).getByRole("button", { name: "Import files" }).tap();
+    await expect(shelfRow(page, "twelve-pages")).toBeVisible({ timeout: 30_000 });
+    // Touch opens a row through its More menu's Open.
+    await pageFrame(page).getByRole("button", { name: "More for twelve-pages" }).tap();
+    await documentMenu(page).getByRole("menuitem", { name: "Open", exact: true }).tap();
     await expect(pageIndicator(page)).toBeVisible({ timeout: 30_000 });
     await pageFrame(page).getByRole("button", { name: "Back to Shelf" }).tap();
     await expect(shelfRow(page, "twelve-pages")).toBeVisible();
@@ -766,5 +859,157 @@ test.describe("Reader", () => {
     await confirm.getByRole("button", { name: "Remove", exact: true }).tap();
     await expect(shelfRow(page, "twelve-pages")).toHaveCount(0);
     await expect(pageFrame(page).getByText("Your Shelf is empty", { exact: true })).toBeVisible();
+  });
+});
+
+// The background Import (#948): picked files or a whole folder land on the
+// Shelf while the author keeps reading, the card counts them, Cancel keeps what
+// was added, and the report names every file. Every rule behind the counts
+// (Fingerprint skip, relink, duplicates, the sort) is proven in Reader's Vitest
+// suite (import.test.ts); these specs prove the flows in a real browser.
+test.describe("Reader Import", () => {
+  test("import two picked files, read the report by keyboard, and open its Details @wf:reader-import @sc:plugin.maibuk-reader.importFiles @sc:plugin.maibuk-reader.viewImportReport @sandbox", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await openReader(page);
+    // The palette's "Import files…" Command runs the same pick as the empty
+    // Shelf's button, which the other Reader specs press.
+    await chooseNextFiles(page, [PDF, FB2]);
+    await runHostCommand(page, "Import files…");
+
+    // Both Documents land on the Shelf; neither opens.
+    await expect(shelfRow(page, "twelve-pages")).toBeVisible({ timeout: 30_000 });
+    await expect(pageFrame(page).getByText("2 Documents", { exact: true })).toBeVisible();
+    const card = importCard(page);
+    await expect(card).toContainText("Imported files");
+    await expect(card).toContainText("2 added");
+    await capture(page, "reader-import-done");
+
+    const report = await openImportReport(page);
+    await expect(report).toContainText("Picked files");
+    await expect(reportTile(report, "Added")).toContainText("2");
+    await expect(reportTile(report, "Unreadable")).toContainText("0");
+    await capture(page, "reader-import-report");
+
+    // Enter on a Details summary opens its list, as a browser's native
+    // <details> does; the jsdom suite cannot press it for real.
+    // Added is the first of the three Details lists.
+    const added = report.locator("details").first();
+    const summary = added.locator("summary");
+    await expect(summary).toHaveText(/^Added\s*2$/);
+    await tabTo(page, summary, { max: 20 });
+    await expect(added.getByText(PDF, { exact: true })).toBeHidden();
+    await page.keyboard.press("Enter");
+    await expect(added.getByText(PDF, { exact: true })).toBeVisible();
+    await expect(added.getByText(FB2, { exact: true })).toBeVisible();
+    await page.keyboard.press("Enter");
+    await expect(added.getByText(PDF, { exact: true })).toBeHidden();
+
+    // Escape closes the report and returns focus to the card's View report.
+    await page.keyboard.press("Escape");
+    await expect(report).toBeHidden();
+    await expect(card.getByRole("button", { name: "View report" })).toBeFocused();
+  });
+
+  test("import a folder through the directory input, then import it again and add nothing @wf:reader-import @sc:plugin.maibuk-reader.importFolder @sc:plugin.maibuk-reader.viewImportReport @chromium-only", async ({
+    page,
+  }) => {
+    const folder = libraryFolder({
+      [EPUB]: EPUB,
+      "Sub/twelve-pages.pdf": PDF,
+      "Sub/broken.epub": "corrupt.epub",
+      "notes.txt": new TextEncoder().encode("not a Document"),
+    });
+    await useFolderInput(page);
+    await page.goto("/");
+    await openReader(page);
+    await importFolderWith(
+      page,
+      pageFrame(page).getByRole("button", { name: "Import folder", exact: true }),
+      folder
+    );
+
+    await expect(shelfRow(page, "twelve-pages")).toBeVisible({ timeout: 30_000 });
+    await expect(pageFrame(page).getByText("2 Documents", { exact: true })).toBeVisible();
+    const card = importCard(page);
+    await expect(card).toContainText('Imported "Library"');
+    await expect(card).toContainText("2 added");
+    await expect(card).toContainText("1 unreadable");
+
+    let report = await openImportReport(page);
+    await expect(report).toContainText('Folder "Library" and its subfolders');
+    await expect(report).toContainText("3 files found");
+    await expect(reportTile(report, "Added")).toContainText("2");
+    await expect(reportTile(report, "Unreadable")).toContainText("1");
+    const unreadable = report.getByRole("region", { name: "Unreadable" });
+    await expect(unreadable).toContainText("broken.epub");
+    await expect(unreadable).toContainText("Corrupt or incomplete file");
+    await capture(page, "reader-import-folder-report");
+    await page.keyboard.press("Escape");
+    await expect(report).toBeHidden();
+
+    // The toolbar's Import opens the chooser; its Folder option imports the
+    // same folder again, which finds every Document already on the Shelf.
+    await tabToEither(page, pageFrame(page).getByRole("button", { name: "Import", exact: true }));
+    await page.keyboard.press("Enter");
+    const chooser = pageFrame(page).getByRole("dialog", { name: "Import" });
+    await expect(chooser.getByRole("button", { name: /^Files/ })).toBeFocused();
+    await capture(page, "reader-import-chooser");
+    await importFolderWith(page, chooser.getByRole("button", { name: /^Folder/ }), folder);
+    await expect(card).toContainText("0 added", { timeout: 30_000 });
+    await expect(card).toContainText("2 already on Shelf");
+    // The palette's "View import report" Command opens the same report.
+    await runHostCommand(page, "View import report");
+    report = importReport(page);
+    await expect(report).toBeVisible();
+    await expect(reportTile(report, "Added")).toContainText("0");
+    await expect(reportTile(report, "Already on the Shelf")).toContainText("2");
+    await page.keyboard.press("Escape");
+    await expect(pageFrame(page).getByText("2 Documents", { exact: true })).toBeVisible();
+  });
+
+  test("Cancel a running folder Import by keyboard and keep what it added, after a reload too @wf:reader-import @sc:plugin.maibuk-reader.importFolder @sc:plugin.maibuk-reader.cancelImport @chromium-only", async ({
+    page,
+  }) => {
+    // Enough distinct Documents that the Import is still running when Cancel
+    // lands: each copy differs by a trailing comment, so none is a duplicate.
+    const story = readFileSync(fixturePath(FB2), "utf8");
+    const files: Record<string, Uint8Array> = {};
+    for (let index = 0; index < 400; index += 1) {
+      files[`story-${String(index).padStart(3, "0")}.fb2`] = new TextEncoder().encode(
+        `${story}\n<!-- copy ${index} -->\n`
+      );
+    }
+    const folder = libraryFolder(files);
+    await useFolderInput(page);
+    await page.goto("/");
+    await openReader(page);
+    await importFolderWith(
+      page,
+      pageFrame(page).getByRole("button", { name: "Import folder", exact: true }),
+      folder
+    );
+
+    const card = importCard(page);
+    await expect(card).toContainText("of 400 files", { timeout: 30_000 });
+    await capture(page, "reader-import-running");
+    // The palette's "Cancel import" Command; the card's own Cancel button is
+    // pressed by keyboard in Reader's Frame suite (frame/shelf.test.tsx).
+    await runHostCommand(page, "Cancel import");
+    await expect(card).toContainText("Import cancelled", { timeout: 30_000 });
+
+    const counts = (await card.textContent()) ?? "";
+    const added = Number(/(\d+) added/.exec(counts)?.[1]);
+    expect(added).toBeGreaterThan(0);
+    expect(added).toBeLessThan(400);
+    await expect(pageFrame(page).getByText(`${added} Documents`, { exact: true })).toBeVisible();
+
+    // What Cancel kept is stored: a reload draws the same Shelf.
+    await page.reload();
+    await expect(shelfHeading(page)).toBeVisible({ timeout: 60_000 });
+    await expect(pageFrame(page).getByText(`${added} Documents`, { exact: true })).toBeVisible({
+      timeout: 30_000,
+    });
   });
 });

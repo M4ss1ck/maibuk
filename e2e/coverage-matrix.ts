@@ -3343,7 +3343,7 @@ export const ROWS: MatrixRow[] = [
     id: "reader-open-reopen",
     area: "plugins",
     workflow:
-      "Reader, the Built-in Plugin that opens the author's own files (#653): enable it, open its Shelf from the sidebar, and pick a file with the keyboard — the empty Shelf's “Import files” button, or the “Open file…” Command from the palette — so a File Grant hands the Frame the Document without a copy in the Library. The Shelf is the reader page's own Frame, and a Document opens inside that same Frame: the host URL stays /plugin/maibuk-reader/reader. The Page view pages with the arrow keys and with the Next page, Previous page, First page, and Last page Commands; Find in Document, Toggle contents, Zoom in, Zoom out, Fit width, Fit page, and Continuous scroll run from the palette on the reader page; Escape (or the Back to Shelf Command) returns to the Shelf inside the same Frame, which draws “p. 4 of 12” on the row; a reload at /reader and reopening the row lands on page 4 again. A reflowable EPUB in the Flowing view pages forward twice, and reopening it from its row returns to the same spot; asserts: the Frame's page indicator, the Reading Position on the Shelf row, the visible EPUB text, the search box and Contents tree, and the URL that never leaves /reader; persists: yes (the Shelf and Reading Position in Plugin storage, the File Grant in the browser's handle store)",
+      "Reader, the Built-in Plugin that opens the author's own files (#653): enable it, open its Shelf from the sidebar, and pick a file with the keyboard — the empty Shelf's “Import files” button, which adds the file to the Shelf in the background (Enter on its row opens it), or the “Open file…” Command from the palette, which opens it directly — so a File Grant hands the Frame the Document without a copy in the Library. The Shelf is the reader page's own Frame, and a Document opens inside that same Frame: the host URL stays /plugin/maibuk-reader/reader. The Page view pages with the arrow keys and with the Next page, Previous page, First page, and Last page Commands; Find in Document, Toggle contents, Zoom in, Zoom out, Fit width, Fit page, and Continuous scroll run from the palette on the reader page; Escape (or the Back to Shelf Command) returns to the Shelf inside the same Frame, which draws “p. 4 of 12” on the row; a reload at /reader and reopening the row lands on page 4 again. A reflowable EPUB in the Flowing view pages forward twice, and reopening it from its row returns to the same spot; asserts: the Frame's page indicator, the Reading Position on the Shelf row, the visible EPUB text, the search box and Contents tree, and the URL that never leaves /reader; persists: yes (the Shelf and Reading Position in Plugin storage, the File Grant in the browser's handle store)",
     edges: [
       "PDF: page forward to page 4, back to the Shelf, reload, and reopen at page 4",
       "Flowing EPUB: page forward twice, back to the Shelf, and reopen at the same spot",
@@ -3433,6 +3433,28 @@ export const ROWS: MatrixRow[] = [
       "plugin.maibuk-reader.newCollection",
       "plugin.maibuk-reader.renameCollection",
       "plugin.maibuk-reader.deleteCollection",
+    ],
+    routes: ["/", "/plugin/:pluginId/:pageId"],
+    fixture: "empty",
+    tags: ["sandbox"],
+    status: "accepted",
+  },
+  {
+    id: "reader-import",
+    area: "plugins",
+    workflow:
+      "The background Import (#948), by keyboard inside the reader page's Frame: the palette's “Import files…” Command answers the picker with two files, both land on the Shelf without opening, and the Import card reads “Imported files” and “2 added”; Enter on View report opens the Import report, whose Added tile counts 2, Enter on the Added Details summary lists both file names and Enter again folds it, and Escape returns focus to View report. The empty Shelf's “Import folder” answers the browser's directory input (Chromium) with a Library folder holding an EPUB, a PDF and a corrupt EPUB in a subfolder, and a text file: two are added, the report names the corrupt one with “Corrupt or incomplete file”, and importing the same folder again from the toolbar's Import chooser (Folder option) adds nothing and reports both as already on the Shelf, in the report the palette's “View import report” Command opens. The palette's “Cancel import” Command cancels a running 400-file folder Import, whose card then reads “Import cancelled”; the Shelf keeps exactly the Documents it added, and a reload draws the same count; asserts: the Shelf rows and count, the card's title and counts, the report's tiles, Unreadable list, and Details, and focus; persists: yes (the Shelf in Plugin storage; folder grants from the directory input are session grants). Every Import rule (Fingerprint skip, relink, duplicates, the sort), the phone Sheets, and covers arriving after the rows are proven in Reader's Vitest suite (import.test.ts, session.test.ts, frame/shelf.test.tsx, frame-books.test.ts)",
+    edges: [
+      "import two picked files, read the report by keyboard, and open its Details",
+      "import a folder through the directory input, then import it again and add nothing",
+      "Cancel a running folder Import by keyboard and keep what it added, after a reload too",
+    ],
+    terms: [],
+    shortcuts: [
+      "plugin.maibuk-reader.importFiles",
+      "plugin.maibuk-reader.importFolder",
+      "plugin.maibuk-reader.cancelImport",
+      "plugin.maibuk-reader.viewImportReport",
     ],
     routes: ["/", "/plugin/:pluginId/:pageId"],
     fixture: "empty",
