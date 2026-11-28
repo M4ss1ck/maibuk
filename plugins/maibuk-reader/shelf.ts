@@ -83,6 +83,11 @@ export interface ShelfEntry {
   format: DocumentFormat;
   /** A JPEG or WebP data URL made at first open; absent until covers exist. */
   coverDataUrl?: string;
+  /**
+   * True from Import until the Frame has looked for the file's own cover
+   * (#948): the Shelf draws the pending cover meanwhile.
+   */
+  coverPending?: true;
   /** Milliseconds since the Unix epoch. */
   lastReadAt: number;
   /** Milliseconds since the Unix epoch when the Document was imported. */
@@ -398,6 +403,7 @@ export function parseShelf(value: unknown): ShelfEntry[] {
       author: typeof item.author === "string" ? item.author : "",
       format: formatFromName(`x.${format}`) as DocumentFormat,
       ...(typeof item.coverDataUrl === "string" ? { coverDataUrl: item.coverDataUrl } : {}),
+      ...(item.coverPending === true ? { coverPending: true as const } : {}),
       lastReadAt,
       addedAt:
         typeof item.addedAt === "number" && Number.isFinite(item.addedAt)
