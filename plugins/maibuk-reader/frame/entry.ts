@@ -495,6 +495,9 @@ const bridge: FrameBridge = {
     shelfCollection: (message) => {
       post(message);
     },
+    shelfImport: (message) => {
+      post(message);
+    },
   },
 };
 

@@ -167,6 +167,20 @@ function shelfLabelsFrom(catalog: Record<string, string>): FrameShelfLabels {
     reportUnreadableHint: catalog["shelf.frame.reportUnreadableHint"],
     reportDetails: catalog["shelf.frame.reportDetails"],
     reportNone: catalog["shelf.frame.reportNone"],
+    reportCollisionsTile: catalog["shelf.frame.reportCollisionsTile"],
+    reportCollisions: catalog["shelf.frame.reportCollisions"],
+    reportCollisionsHint: catalog["shelf.frame.reportCollisionsHint"],
+    applyToAll: catalog["shelf.frame.applyToAll"],
+    applyToAllLabel: catalog["shelf.frame.applyToAllLabel"],
+    keepBoth: catalog["shelf.frame.keepBoth"],
+    replace: catalog["shelf.frame.replace"],
+    skip: catalog["shelf.frame.skip"],
+    onTheShelf: catalog["shelf.frame.onTheShelf"],
+    newFile: catalog["shelf.frame.newFile"],
+    closeDecideLater: catalog["shelf.frame.closeDecideLater"],
+    applyChoices: catalog["shelf.frame.applyChoices"],
+    importCollectFolder: catalog["shelf.frame.importCollectFolder"],
+    importCollectFolderHint: catalog["shelf.frame.importCollectFolderHint"],
   };
 }
 

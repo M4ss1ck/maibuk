@@ -286,12 +286,44 @@ export interface FrameShelfLabels {
   reportUnreadableHint: string;
   reportDetails: string;
   reportNone: string;
+  /* Import collisions (#949) */
+  reportCollisionsTile: string;
+  reportCollisions: string;
+  reportCollisionsHint: string;
+  applyToAll: string;
+  applyToAllLabel: string;
+  keepBoth: string;
+  replace: string;
+  skip: string;
+  onTheShelf: string;
+  newFile: string;
+  closeDecideLater: string;
+  applyChoices: string;
+  importCollectFolder: string;
+  importCollectFolderHint: string;
 }
 
 /** One file the Import could not open, its reason already localized. */
 export interface FrameImportUnreadable {
   name: string;
   reason: string;
+}
+
+/** One collision as the report draws it (#949); every string already localized. */
+export interface FrameImportCollision {
+  id: string;
+  title: string;
+  author: string;
+  /** The new file's name, as the host gave it. */
+  fileName: string;
+  /** The Shelf Document, such as "EPUB · 1.8 MB · read 34%". */
+  existingText: string;
+  /** The new file, such as "EPUB · 2.4 MB". */
+  newText: string;
+  /** What Replace drops, shown when Replace is chosen. */
+  replaceWarning: string;
+  /** The row's radio group label, such as "Choice for Middlemarch". */
+  choiceLabel: string;
 }
 
 /** The finished Import's report as the Frame draws it (#948); strings already localized. */
@@ -304,6 +336,16 @@ export interface FrameImportReport {
   unreadable: FrameImportUnreadable[];
   /** The line about duplicates added once, or "" when there were none. */
   duplicatesText: string;
+  /** Collisions waiting for the author's choice (#949). */
+  collisions: FrameImportCollision[];
+  /** The "Show 5 more collisions" template; {{count}} is filled in by the Frame. */
+  showMoreOne: string;
+  showMoreOther: string;
+  /** The footer's "7 of 9" template with {{chosen}} and {{total}}, and the words after it. */
+  chosenCount: string;
+  chosen: string;
+  /** The line naming the folder's Collection, or "" when the Import filed none. */
+  collectionText: string;
 }
 
 /** The background Import as the Shelf's ProgressCard draws it (#948). */
@@ -327,6 +369,8 @@ export interface FrameShelfState {
   entries: FrameShelfEntry[];
   /** The author's Collections in the order they were made (#946); absent means none. */
   collections?: FrameCollection[];
+  /** Whether a folder Import files its Documents in a Collection named after it (#949). */
+  importCollect?: boolean;
 }
 
 /** One Collection the Shelf draws: its id and the author's name for it. */
@@ -689,6 +733,18 @@ export type FrameShelfCollectionMessage =
       member: boolean;
     };
 
+/**
+ * Applies a choice for every collision of the finished Import, or remembers
+ * the folder Collection option (#949).
+ */
+export type FrameShelfImportMessage =
+  | {
+      kind: "shelf-import";
+      action: "resolve";
+      choices: Record<string, "keep" | "replace" | "skip">;
+    }
+  | { kind: "shelf-import"; action: "collect"; collect: boolean };
+
 export type FrameToWorkerMessage =
   | FrameReadyMessage
   | FrameReadMessage
@@ -705,7 +761,8 @@ export type FrameToWorkerMessage =
   | FrameShelfSelectMessage
   | FrameShelfRemoveMessage
   | FrameShelfViewMessage
-  | FrameShelfCollectionMessage;
+  | FrameShelfCollectionMessage
+  | FrameShelfImportMessage;
 
 /**
  * The Worker's handoff of one MessagePort to the nested pdf.js core Worker.

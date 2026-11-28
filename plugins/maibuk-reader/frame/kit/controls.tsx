@@ -151,7 +151,8 @@ export interface SegmentedOption<T extends string = string> {
 /** The props a Segmented control takes; selection stays controlled. */
 export interface SegmentedProps<T extends string = string> {
   label: string;
-  value: T;
+  /** The selected option, or null when none is chosen yet: the first option then holds the tab stop. */
+  value: T | null;
   options: ReadonlyArray<SegmentedOption<T>>;
   onChange: (value: T) => void;
   class?: string;
@@ -212,6 +213,7 @@ export function Segmented<T extends string = string>({
     <div role="radiogroup" aria-label={label} class={classes("kit-segmented", extra)}>
       {options.map((option, index) => {
         const selected = option.value === value;
+        const tabStop = selected || (index === 0 && !options.some((item) => item.value === value));
         return (
           // biome-ignore lint/a11y/useSemanticElements: a Frame runs no host React Aria and owns its roving radio group here (ADR 0021).
           <button
@@ -222,7 +224,7 @@ export function Segmented<T extends string = string>({
             type="button"
             role="radio"
             aria-checked={selected}
-            tabIndex={selected ? 0 : -1}
+            tabIndex={tabStop ? 0 : -1}
             class="kit-segmented__option"
             onClick={() => select(index)}
             onKeyDown={(event) => onKeyDown(event, index)}

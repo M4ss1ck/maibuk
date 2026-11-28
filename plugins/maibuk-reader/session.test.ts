@@ -14,13 +14,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FILE_READ_MAX_BYTES, createPluginClient } from "@/plugin-sdk";
 import { createTestHost } from "@/features/plugins/test-kit";
 import type { FrameShelfState } from "./frame-protocol";
-import { createImporter, type ImportReport, type ImportState, type Importer } from "./import";
+import {
+  createImporter,
+  type ImportCollision,
+  type ImportReport,
+  type ImportState,
+  type Importer,
+} from "./import";
 import { createShelfService } from "./library";
 import { SHELF_PAGE_ID, followReturnTarget, leaveReading } from "./runtime";
 import { createReaderSession, frameLabels, type ReaderSession } from "./session";
 import {
   COLLECTIONS_KEY,
   DEFAULT_SHELF_VIEW,
+  IMPORT_COLLECT_KEY,
   SHELF_KEY,
   SHELF_VIEW_KEY,
   bookmarksKey,
@@ -493,7 +500,12 @@ describe("shelf", () => {
       await vi.waitFor(() => {
         const states = harness.messages.filter((message) => message.kind === "shelf");
         expect(states).toHaveLength(2);
-        expect(states[1].state).toEqual({ status: "ready", entries: [], collections: [] });
+        expect(states[1].state).toEqual({
+          status: "ready",
+          entries: [],
+          collections: [],
+          importCollect: true,
+        });
       });
     } finally {
       await harness.stop();
@@ -1803,6 +1815,186 @@ describe("import (#948)", () => {
     expect(importer.listeners.size).toBe(1);
     await harness.stop();
     expect(importer.listeners.size).toBe(0);
+  });
+});
+
+describe("Import collisions (#949)", () => {
+  const MB = 1024 * 1024;
+
+  /** One collision: a picked file whose title and author match a Document already on the Shelf. */
+  function collision(): ImportCollision {
+    return {
+      id: "collision-1",
+      file: { grant: "grant-new", name: "middlemarch-illustrated.epub", size: 2.4 * MB },
+      fingerprint: "fingerprint-new",
+      format: "epub",
+      title: "Middlemarch",
+      author: "George Eliot",
+      existing: {
+        id: "d1",
+        title: "Middlemarch",
+        author: "George Eliot",
+        format: "epub",
+        size: 1.8 * MB,
+        progress: { page: 34, pageCount: 100 },
+        openedAt: 5,
+        removal: { bookmarks: 2, highlights: 7, notes: 0 },
+      },
+    };
+  }
+
+  /** Every `shelf` state the Frame received, in order. */
+  function shelfStates(harness: Harness): Record<string, unknown>[] {
+    return harness.messages.filter((message) => message.kind === "shelf");
+  }
+
+  it("applies the author's choices through the Importer, then draws the Shelf again", async () => {
+    const importer = stubImporter({
+      status: "done",
+      report: { ...importReport(1), finishedAt: 0, collisions: [collision()] },
+    });
+    const harness = setup({ view: "shelf", importer });
+    try {
+      await opened(harness);
+      await vi.waitFor(() => expect(shelfStates(harness).length).toBeGreaterThan(0));
+      const before = shelfStates(harness).length;
+      harness.send({
+        kind: "shelf-import",
+        action: "resolve",
+        choices: { "collision-1": "keep" },
+      });
+      await vi.waitFor(() => expect(importer.resolve).toHaveBeenCalledTimes(1));
+      expect(importer.resolve).toHaveBeenCalledWith({ "collision-1": "keep" });
+      await vi.waitFor(() => expect(shelfStates(harness).length).toBe(before + 1));
+      expect(harness.messages.some((message) => message.kind === "shelf-result")).toBe(false);
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("tells the author the choices did not apply when the Importer refuses them", async () => {
+    const importer = stubImporter({
+      status: "done",
+      report: { ...importReport(1), finishedAt: 0, collisions: [collision()] },
+    });
+    importer.resolve.mockResolvedValueOnce(false);
+    const harness = setup({ view: "shelf", importer });
+    try {
+      await opened(harness);
+      harness.send({
+        kind: "shelf-import",
+        action: "resolve",
+        choices: { "collision-1": "replace" },
+      });
+      await vi.waitFor(() =>
+        expect(harness.messages.some((message) => message.kind === "shelf-result")).toBe(true)
+      );
+      expect(harness.messages.find((message) => message.kind === "shelf-result")).toEqual({
+        kind: "shelf-result",
+        message: "Reader couldn't apply those choices. Try again.",
+      });
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("stores the folder Collection option the author turned off, and the next Shelf carries it", async () => {
+    const storage = new Map<string, unknown>();
+    const importer = stubImporter();
+    const harness = setup({ view: "shelf", storage, importer });
+    try {
+      await opened(harness);
+      await vi.waitFor(() => expect(shelfStates(harness).length).toBeGreaterThan(0));
+      harness.send({ kind: "shelf-import", action: "collect", collect: false });
+      await vi.waitFor(() => expect(storage.get(IMPORT_COLLECT_KEY)).toBe(false));
+      const before = shelfStates(harness).length;
+      // A Collection change redraws the Shelf, so the next state shows the stored option.
+      harness.send({ kind: "shelf-collection", action: "create", name: "Favorites" });
+      await vi.waitFor(() => expect(shelfStates(harness).length).toBe(before + 1));
+      expect(shelfStates(harness).at(-1)?.state).toMatchObject({ importCollect: false });
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("draws the folder Collection option on when nothing is stored", async () => {
+    const importer = stubImporter();
+    const harness = setup({ view: "shelf", importer });
+    try {
+      await opened(harness);
+      await vi.waitFor(() => expect(shelfStates(harness).length).toBeGreaterThan(0));
+      expect(shelfStates(harness).at(-1)?.state).toMatchObject({ importCollect: true });
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("starts a folder Import with the stored Collection option off", async () => {
+    const importer = stubImporter();
+    const harness = setup({
+      view: "shelf",
+      importer,
+      storage: new Map<string, unknown>([[IMPORT_COLLECT_KEY, false]]),
+    });
+    try {
+      await opened(harness);
+      harness.host.files.queueFolderPick({
+        name: "Library",
+        files: [{ name: "dune.pdf", bytes: pdfBytes("dune") }],
+      });
+      harness.send({ kind: "shelf-command", id: "importFolder" });
+      await vi.waitFor(() => expect(importer.start).toHaveBeenCalledTimes(1));
+      expect(importer.start).toHaveBeenCalledWith(expect.any(Array), {
+        kind: "folder",
+        name: "Library",
+        collect: false,
+      });
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("starts a folder Import with the Collection option on by default", async () => {
+    const importer = stubImporter();
+    const harness = setup({ view: "shelf", importer });
+    try {
+      await opened(harness);
+      harness.host.files.queueFolderPick({
+        name: "Library",
+        files: [{ name: "dune.pdf", bytes: pdfBytes("dune") }],
+      });
+      harness.send({ kind: "shelf-command", id: "importFolder" });
+      await vi.waitFor(() => expect(importer.start).toHaveBeenCalledTimes(1));
+      expect(importer.start).toHaveBeenCalledWith(expect.any(Array), {
+        kind: "folder",
+        name: "Library",
+        collect: true,
+      });
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("does not open a pick while the last Import's collisions wait for a choice", async () => {
+    const importer = stubImporter({
+      status: "done",
+      report: { ...importReport(1), finishedAt: 0, collisions: [collision()] },
+    });
+    const harness = setup({ view: "shelf", importer });
+    try {
+      await opened(harness);
+      harness.send({ kind: "shelf-command", id: "importFiles" });
+      await vi.waitFor(() =>
+        expect(harness.messages.some((message) => message.kind === "shelf-result")).toBe(true)
+      );
+      expect(harness.messages.find((message) => message.kind === "shelf-result")).toEqual({
+        kind: "shelf-result",
+        message: "Resolve the last Import's collisions first: View report.",
+      });
+      expect(importer.start).not.toHaveBeenCalled();
+    } finally {
+      await harness.stop();
+    }
   });
 });
 

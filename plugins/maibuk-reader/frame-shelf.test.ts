@@ -21,7 +21,7 @@ import {
   sortSummary,
 } from "./frame/shelf-options";
 import { fill } from "./frame/shelf-query";
-import type { ImportReport, ImportSource } from "./import";
+import type { CollidingDocument, ImportReport, ImportSource } from "./import";
 import { DEFAULT_SHELF_VIEW, defaultDescending } from "./shelf";
 import { shelfEntry } from "./test-support";
 
@@ -147,6 +147,20 @@ const LABELS_EN = {
   reportUnreadableHint: "Reader could not open these. Deal with them outside Reader.",
   reportDetails: "Details",
   reportNone: "None",
+  reportCollisionsTile: "Collisions to resolve",
+  reportCollisions: "Collisions",
+  reportCollisionsHint: "Same title and author as a Shelf Document, different file.",
+  applyToAll: "Apply to all",
+  applyToAllLabel: "Apply to all collisions",
+  keepBoth: "Keep both",
+  replace: "Replace",
+  skip: "Skip",
+  onTheShelf: "On the Shelf",
+  newFile: "New file",
+  closeDecideLater: "Close, decide later",
+  applyChoices: "Apply choices",
+  importCollectFolder: "Put a folder's Documents in a Collection named after the folder",
+  importCollectFolderHint: "Folder imports only. Reader remembers this choice.",
 };
 
 const LABELS_ES = {
@@ -272,6 +286,21 @@ const LABELS_ES = {
   reportUnreadableHint: "Reader no pudo abrirlos. Resuélvelos fuera de Reader.",
   reportDetails: "Detalles",
   reportNone: "Ninguno",
+  reportCollisionsTile: "Colisiones por resolver",
+  reportCollisions: "Colisiones",
+  reportCollisionsHint: "Mismo título y autor que un documento del estante, otro archivo.",
+  applyToAll: "Aplicar a todas",
+  applyToAllLabel: "Aplicar a todas las colisiones",
+  keepBoth: "Conservar ambos",
+  replace: "Reemplazar",
+  skip: "Omitir",
+  onTheShelf: "En el estante",
+  newFile: "Archivo nuevo",
+  closeDecideLater: "Cerrar y decidir después",
+  applyChoices: "Aplicar elecciones",
+  importCollectFolder:
+    "Poner los documentos de una carpeta en una colección con el nombre de la carpeta",
+  importCollectFolderHint: "Solo al importar carpetas. Reader recuerda esta elección.",
 };
 
 describe("shelfTone()", () => {
@@ -696,5 +725,88 @@ describe("frameImportState()", () => {
     const state = frameImportState("en", { status: "running", report: live });
     live.added.push("b.epub");
     expect(state.report.added).toEqual(["a.epub"]);
+  });
+
+  describe("collisions (#949)", () => {
+    const MB = 1024 * 1024;
+    /** A done report with one collision: the existing Document, and the new file that matches it. */
+    function collisionReport(existing: Partial<CollidingDocument> = {}): ImportReport {
+      return report({
+        collisions: [
+          {
+            id: "collision-1",
+            file: { grant: "g", name: "middlemarch-illustrated.epub", size: 2.4 * MB },
+            fingerprint: "fingerprint-new",
+            format: "epub",
+            title: "Middlemarch",
+            author: "George Eliot",
+            existing: {
+              id: "d1",
+              title: "Middlemarch",
+              author: "George Eliot",
+              format: "epub",
+              size: 1.8 * MB,
+              progress: { page: 34, pageCount: 100 },
+              openedAt: 5,
+              removal: { bookmarks: 2, highlights: 7, notes: 0 },
+              ...existing,
+            },
+          },
+        ],
+      });
+    }
+
+    it("describes the existing Document, the new file, and what Replace drops", () => {
+      const state = frameImportState("en", {
+        status: "done",
+        report: collisionReport(),
+      });
+      const [collision] = state.report.collisions;
+      expect(collision).toMatchObject({
+        id: "collision-1",
+        title: "Middlemarch",
+        author: "George Eliot",
+        fileName: "middlemarch-illustrated.epub",
+        existingText: "EPUB · 1.8 MB · read 34%",
+        newText: "EPUB · 2.4 MB",
+        replaceWarning:
+          "Replace drops the Reading Position (34%), 2 Bookmarks and 7 Highlights. Its Collections carry over.",
+        choiceLabel: "Choice for Middlemarch",
+      });
+      expect(state.countsText).toContain("1 collision");
+    });
+
+    it("speaks Spanish with a decimal comma and a no-break space before the percent", () => {
+      const state = frameImportState("es", { status: "done", report: collisionReport() });
+      expect(state.report.collisions[0].existingText).toBe("EPUB · 1,8 MB · leído 34 %");
+    });
+
+    it("says a never-opened Document is New, and that Replace drops nothing", () => {
+      const state = frameImportState("en", {
+        status: "done",
+        report: collisionReport({
+          progress: null,
+          openedAt: undefined,
+          removal: { bookmarks: 0, highlights: 0, notes: 0 },
+        }),
+      });
+      const [collision] = state.report.collisions;
+      expect(collision.existingText.endsWith(" · New")).toBe(true);
+      expect(collision.replaceWarning).toBe(
+        "Replace drops no Reading Position, Bookmarks or Highlights; it has none. Its Collections carry over."
+      );
+    });
+
+    it("names the Collection the added Documents were filed in, and says nothing without one", () => {
+      const filed = frameImportState("en", {
+        status: "done",
+        report: report({ collection: "Library" }),
+      });
+      expect(filed.report.collectionText).toBe(
+        'Added Documents are already on the Shelf in the Collection "Library".'
+      );
+      const unfiled = frameImportState("en", { status: "done", report: report({}) });
+      expect(unfiled.report.collectionText).toBe("");
+    });
   });
 });

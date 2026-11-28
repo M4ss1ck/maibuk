@@ -156,6 +156,20 @@ const LABELS: FrameShelfLabels = {
   reportUnreadableHint: "Reader could not open these. Deal with them outside Reader.",
   reportDetails: "Details",
   reportNone: "None",
+  reportCollisionsTile: "Collisions to resolve",
+  reportCollisions: "Collisions",
+  reportCollisionsHint: "Same title and author as a Shelf Document, different file.",
+  applyToAll: "Apply to all",
+  applyToAllLabel: "Apply to all collisions",
+  keepBoth: "Keep both",
+  replace: "Replace",
+  skip: "Skip",
+  onTheShelf: "On the Shelf",
+  newFile: "New file",
+  closeDecideLater: "Close, decide later",
+  applyChoices: "Apply choices",
+  importCollectFolder: "Put a folder's Documents in a Collection named after the folder",
+  importCollectFolderHint: "Folder imports only. Reader remembers this choice.",
 };
 
 const REMOVAL: ShelfRemoval = {
@@ -1792,6 +1806,12 @@ function running(overrides: Partial<FrameImportState> = {}): FrameImportState {
       relinked: [],
       unreadable: [],
       duplicatesText: "",
+      collisions: [],
+      showMoreOne: "Show 1 more collision",
+      showMoreOther: "Show {{count}} more collisions",
+      chosenCount: "{{chosen}} of {{total}}",
+      chosen: "collisions chosen.",
+      collectionText: "",
     },
     ...overrides,
   };
@@ -1806,6 +1826,7 @@ function finished(overrides: Partial<FrameImportState> = {}): FrameImportState {
     progressText: "312 of 312 files",
     countsText: "2 added · 1 already on Shelf · 1 relinked · 1 unreadable",
     report: {
+      ...running().report,
       subtitle: "From the folder Library · 312 files found",
       added: ["Dune", "Emma"],
       alreadyOnShelf: ["Persuasion"],

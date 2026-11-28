@@ -46,6 +46,7 @@ import {
   type FrameReadMessage,
   type FrameSettingsMessage,
   type FrameShelfCollectionMessage,
+  type FrameShelfImportMessage,
   type FrameShelfCommandMessage,
   type FrameShelfRemoveMessage,
   type FrameShelfState,
@@ -64,6 +65,7 @@ import { ZipError, openZip, type ZipArchive } from "./zip";
 import {
   DEFAULT_READER_SETTINGS,
   clampSettings,
+  IMPORT_COLLECT_KEY,
   positionKey,
   SUPPORTED_EXTENSIONS,
   withProgress,
@@ -450,14 +452,54 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     }
   }
 
+  /** The folder Collection option (#949), read once per session; on unless turned off. */
+  let importCollect: boolean | null = null;
+  async function loadImportCollect(): Promise<boolean> {
+    if (importCollect !== null) return importCollect;
+    try {
+      importCollect = (await client.storage.get({ key: IMPORT_COLLECT_KEY })) !== false;
+    } catch {
+      importCollect = true;
+    }
+    return importCollect;
+  }
+
+  /** Applies the author's collision choices, or remembers the folder Collection option (#949). */
+  async function handleShelfImport(message: FrameShelfImportMessage): Promise<void> {
+    if (message.action === "collect") {
+      importCollect = message.collect === true;
+      try {
+        await client.storage.set({ key: IMPORT_COLLECT_KEY, value: importCollect });
+      } catch {
+        // The option still holds for this session.
+      }
+      return;
+    }
+    if (importer === null) return;
+    try {
+      const applied = await importer.resolve(message.choices);
+      if (!applied) {
+        post({ kind: "shelf-result", message: translate(language, "shelf.import.applyFailed") });
+        return;
+      }
+      await publishShelf(await library.loadShelf());
+    } catch {
+      post({ kind: "shelf-result", message: translate(language, "shelf.import.applyFailed") });
+    }
+  }
+
   /** Draws `shelf` in the Frame; the File Grant and Fingerprint stay here. */
   async function publishShelf(
     shelf: readonly ShelfEntry[],
     collections?: readonly Collection[]
   ): Promise<void> {
     const filed = collections ?? (await collectionsOrNone());
+    const collect = await loadImportCollect();
     if (disposed) return;
-    post({ kind: "shelf", state: frameShelfState(language, shelf, filed) });
+    post({
+      kind: "shelf",
+      state: { ...frameShelfState(language, shelf, filed), importCollect: collect },
+    });
     startCoverJob(shelf);
   }
 
@@ -951,12 +993,20 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
         case "importFiles":
         case "importFolder": {
           if (importer === null) return;
+          if (importer.state?.status === "done" && importer.state.report.collisions.length > 0) {
+            post({
+              kind: "shelf-result",
+              message: translate(language, "shelf.import.resolveFirst"),
+            });
+            return;
+          }
           try {
             await pickAndImport(
               client,
               importer,
               message.id === "importFiles" ? "files" : "folder",
-              SUPPORTED_EXTENSIONS
+              SUPPORTED_EXTENSIONS,
+              { collect: await loadImportCollect() }
             );
           } catch {
             post({ kind: "shelf-result", message: translate(language, "shelf.import.failed") });
@@ -1088,6 +1138,9 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
         return;
       case "shelf-collection":
         void handleShelfCollection(message);
+        return;
+      case "shelf-import":
+        void handleShelfImport(message);
         return;
       case "back":
         void handleBack();

@@ -198,12 +198,25 @@ export type FrameShelfCollectionMessage =
       member: boolean;
     };
 
+/**
+ * Applies a choice for every collision of the finished Import, or remembers
+ * the folder Collection option (#949).
+ */
+export type FrameShelfImportMessage =
+  | {
+      kind: "shelf-import";
+      action: "resolve";
+      choices: Record<string, "keep" | "replace" | "skip">;
+    }
+  | { kind: "shelf-import"; action: "collect"; collect: boolean };
+
 export type FrameToWorkerShelfMessage =
   | FrameShelfCommandMessage
   | FrameShelfSelectMessage
   | FrameShelfRemoveMessage
   | FrameShelfViewMessage
-  | FrameShelfCollectionMessage;
+  | FrameShelfCollectionMessage
+  | FrameShelfImportMessage;
 
 /** An error that carries the protocol's failure `code`. */
 export interface CodedError extends Error {
