@@ -208,10 +208,29 @@ async function pdfMeta(read: RangedRead, size: number, head: Uint8Array): Promis
       ? await read(Math.max(0, size - PDF_TAIL), Math.min(size, PDF_TAIL))
       : new Uint8Array(0);
   const text = `${latin1(head)}\n${latin1(tail)}`;
+  const info = pdfInfoDictionary(text);
   return {
-    title: pdfValue(text, "Title"),
-    author: pdfValue(text, "Author"),
+    title: pdfValue(info, "Title"),
+    author: pdfValue(info, "Author"),
   };
+}
+
+/**
+ * The text of the document information dictionary the trailer (or a
+ * cross-reference stream) names with `/Info N G R`, or "" when the scanned text
+ * holds none. Only that object counts: an outline item's `/Title` names a
+ * chapter, never the Document.
+ */
+function pdfInfoDictionary(text: string): string {
+  const refs = [...text.matchAll(/\/Info\s+(\d+)\s+(\d+)\s+R/g)];
+  for (const ref of refs.reverse()) {
+    const object = new RegExp(`(?:^|[^\\d])${ref[1]}\\s+${ref[2]}\\s+obj\\b`).exec(text);
+    if (object === null) continue;
+    const start = object.index + object[0].length;
+    const end = text.indexOf("endobj", start);
+    return text.slice(start, end === -1 ? undefined : end);
+  }
+  return "";
 }
 
 /** The first string value of `/key` in the scanned text; non-string values are skipped. */

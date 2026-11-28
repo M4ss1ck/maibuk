@@ -601,6 +601,36 @@ describe("collisions (#949)", () => {
     }
   });
 
+  it("names the folder's Collection only when it filed something, and files a Replace in it", async () => {
+    const ctx = setup();
+    const { host, client, library, pickFolder, shelf, storage } = ctx;
+    try {
+      const old = await shelfWithMiddlemarch(ctx);
+      const report = await runImport(
+        { client, library },
+        await pickFolder([
+          { name: "middlemarch-2.epub", bytes: metaEpub("Middlemarch", "George Eliot", "second") },
+        ]),
+        { kind: "folder", name: "Library", collect: true }
+      );
+      // Only a collision: nothing was filed, so the report names no Collection.
+      expect(report.collection).toBeUndefined();
+      const next = await applyCollisionChoices({ client, library }, report, {
+        [report.collisions[0].id]: "replace",
+      });
+      expect(next.collection).toBe("Library");
+      const replaced = shelf()[0];
+      expect(replaced.id).not.toBe(old.id);
+      const collections = storage.get(COLLECTIONS_KEY) as Collection[];
+      expect(collections.map((item) => [item.name, item.documentIds])).toEqual([
+        ["Eliot", [replaced.id]],
+        ["Library", [replaced.id]],
+      ]);
+    } finally {
+      await host.stop();
+    }
+  });
+
   it("does not file anything when the author left the option off", async () => {
     const { host, client, library, pickFolder, storage } = setup();
     try {
@@ -617,7 +647,7 @@ describe("collisions (#949)", () => {
 });
 
 describe("createImporter() collisions (#949)", () => {
-  it("applies only when every collision has a choice, and keeps the report until then", async () => {
+  it("applies only when every collision has a choice, and apply to all sets every row", async () => {
     const ctx = setup();
     const { host, client, library, pickFiles, pickFolder, shelf } = ctx;
     try {

@@ -274,37 +274,45 @@ describe("readFileMeta: mobi and azw3", () => {
 });
 
 describe("readFileMeta: pdf", () => {
-  const pdf = (body: string) => latin1(`%PDF-1.4\n${body}\n%%EOF\n`);
+  const pdf = (body: string) =>
+    latin1(`%PDF-1.4\n${body}\ntrailer << /Root 9 0 R /Info 1 0 R >>\n%%EOF\n`);
 
+  it("reads only the information dictionary, never an outline item's /Title", async () => {
+    const bytes = pdf(
+      "5 0 obj << /Title (Chapter One) /Parent 4 0 R >> endobj\n1 0 obj << /Producer (x) >> endobj"
+    );
+    expect(await meta(bytes, "pdf")).toEqual({ title: "", author: "" });
+  });
   it("reads a literal title with backslash escapes", async () => {
     const bytes = pdf("1 0 obj << /Title (Moby\\-Dick) /Author (Herman Melville) >> endobj");
     expect(await meta(bytes, "pdf")).toEqual({ title: "Moby-Dick", author: "Herman Melville" });
   });
 
   it("decodes octal escapes and nested balanced parentheses", async () => {
-    const bytes = pdf("<< /Title (Moby\\050Dick\\051 (Vol. 1)) >>");
+    const bytes = pdf("1 0 obj << /Title (Moby\\050Dick\\051 (Vol. 1)) >>");
     expect((await meta(bytes, "pdf")).title).toBe("Moby(Dick) (Vol. 1)");
   });
 
   it("decodes a UTF-16BE hex title with a BOM", async () => {
-    const bytes = pdf("<< /Title <FEFF00DC00620065 0072> >>");
+    const bytes = pdf("1 0 obj << /Title <FEFF00DC00620065 0072> >>");
     expect((await meta(bytes, "pdf")).title).toBe("Über");
   });
 
   it("skips a non-string value and takes the next string", async () => {
-    const bytes = pdf("<< /Title 12 0 R >> << /Title (Second) >>");
+    const bytes = pdf("1 0 obj << /Title 12 0 R /Title (Second) >> endobj");
     expect((await meta(bytes, "pdf")).title).toBe("Second");
   });
 
   it("finds the info dictionary in the last 64 KB of a large file", async () => {
     const padding = "%".repeat(200_000);
-    const bytes = pdf(`${padding}\n<< /Title (At The End) >>`);
+    const bytes = pdf(`${padding}\n1 0 obj << /Title (At The End) >> endobj`);
     expect((await meta(bytes, "pdf")).title).toBe("At The End");
   });
 
   it("reads the committed fixture without throwing", async () => {
     const result = await meta(fixture("twelve-pages.pdf"), "pdf");
-    expect(typeof result.title).toBe("string");
+    // Its outline names chapters with /Title; it has no information dictionary title.
+    expect(result).toEqual({ title: "", author: "" });
   });
 });
 

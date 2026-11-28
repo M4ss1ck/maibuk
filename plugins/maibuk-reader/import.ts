@@ -397,8 +397,9 @@ export async function runImport(
     for (const file of picked.slice(index)) await letGo(file.grant);
   }
   if (source.kind === "folder" && source.collect === true) {
-    report.collection = source.name;
-    await fileInFolderCollection(library, source.name, addedIds);
+    if (await fileInFolderCollection(library, source.name, addedIds)) {
+      report.collection = source.name;
+    }
   }
   report.finishedAt = now();
   return report;
@@ -428,17 +429,22 @@ function importedEntry(
   };
 }
 
-/** Files `ids` in the folder's Collection; a refused write leaves them on the Shelf, unfiled. */
+/**
+ * Files `ids` in the folder's Collection, and says whether any were filed; a
+ * refused write leaves them on the Shelf, unfiled.
+ */
 async function fileInFolderCollection(
   library: ShelfService,
   name: string,
   ids: readonly string[]
-): Promise<void> {
-  if (ids.length === 0) return;
+): Promise<boolean> {
+  if (ids.length === 0) return false;
   try {
     await library.fileInCollection(name, ids);
+    return true;
   } catch {
     // The Documents are on the Shelf; only the filing was lost.
+    return false;
   }
 }
 
@@ -476,6 +482,7 @@ export async function applyCollisionChoices(
       );
       if (choice === "replace" && (await library.replaceDocument(collision.existing.id, entry))) {
         next.added.push(file.name);
+        filed.push(entry.id);
         continue;
       }
       let added = false;
@@ -498,7 +505,9 @@ export async function applyCollisionChoices(
   }
   next.collisions = [];
   if (report.source.kind === "folder" && report.source.collect === true) {
-    await fileInFolderCollection(library, report.source.name, filed);
+    if (await fileInFolderCollection(library, report.source.name, filed)) {
+      next.collection = report.source.name;
+    }
   }
   return next;
 }
