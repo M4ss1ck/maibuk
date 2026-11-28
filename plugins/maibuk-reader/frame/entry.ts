@@ -364,6 +364,8 @@ let chrome: ChromeState = {
   shelfSearchRequest: 0,
   shelfOptionsRequest: 0,
   shelfCollectionRequest: null,
+  importState: null,
+  importReportRequest: 0,
 };
 
 const chromeListeners = new Set<(state: ChromeState) => void>();
@@ -421,6 +423,12 @@ const bridge: FrameBridge = {
   requestShelfCollection(command) {
     const serial = (chrome.shelfCollectionRequest?.serial ?? 0) + 1;
     publishChrome({ ...chrome, shelfCollectionRequest: { command, serial } });
+  },
+  setImportState(importState) {
+    publishChrome({ ...chrome, importState });
+  },
+  requestImportReport() {
+    publishChrome({ ...chrome, importReportRequest: chrome.importReportRequest + 1 });
   },
   setToolbar(toolbar) {
     publishChrome({ ...chrome, toolbar });
@@ -1316,6 +1324,11 @@ function runCommand(id: string) {
       bridge.requestShelfCollection(id);
       return;
     }
+    if (id === "viewImportReport") {
+      // Only a finished Import has a report; the Shelf ignores the request otherwise.
+      if (chrome.importState?.status === "done") bridge.requestImportReport();
+      return;
+    }
   }
   if (chrome.view === "shelf" && READING_COMMANDS.has(id)) return;
   switch (id) {
@@ -1625,6 +1638,9 @@ protocol.onRemoveCounts = (message) => {
     body: message.body,
     stats: message.stats,
   });
+};
+protocol.onImport = (state) => {
+  bridge.setImportState(state);
 };
 protocol.onShelfResult = (message) => {
   bridge.setShelfNotice(message === null ? null : { text: message, error: true });

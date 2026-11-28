@@ -32,6 +32,7 @@ import {
 import type {
   Appearance,
   FrameShelfCommandId,
+  FrameImportState,
   FrameShelfLabels,
   FrameShelfState,
   ShelfViewSettings,
@@ -147,6 +148,10 @@ export interface ChromeState {
   shelfOptionsRequest: number;
   /** The latest host Collection Command for the Shelf (#946), or null. */
   shelfCollectionRequest: ShelfCollectionRequest | null;
+  /** The Worker's background Import, running or finished, or null (#948). */
+  importState: FrameImportState | null;
+  /** Bumped when the View import report Command asks the Shelf to open the report. */
+  importReportRequest: number;
 }
 
 /** What the ported controls ask `entry.ts` to do. */
@@ -195,6 +200,8 @@ export interface FrameBridge {
   requestShelfSearch(): void;
   requestShelfOptions(): void;
   requestShelfCollection(command: ShelfCollectionCommand): void;
+  setImportState(state: FrameImportState | null): void;
+  requestImportReport(): void;
   actions: ChromeActions;
 }
 
@@ -498,6 +505,8 @@ function App({ appearance, subscribe, bridge }: AppProps) {
         searchRequest={chrome.shelfSearchRequest}
         optionsRequest={chrome.shelfOptionsRequest}
         collectionRequest={chrome.shelfCollectionRequest}
+        importState={chrome.importState}
+        importReportRequest={chrome.importReportRequest}
         onCollection={bridge.actions.shelfCollection}
         onSettingsChange={bridge.actions.shelfViewChange}
         onCommand={bridge.actions.shelfCommand}

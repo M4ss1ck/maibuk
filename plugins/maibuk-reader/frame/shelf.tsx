@@ -61,6 +61,7 @@ import {
 } from "./shelf-query";
 import type {
   FrameCollection,
+  FrameImportState,
   FrameShelfCommandId,
   FrameShelfEntry,
   FrameShelfLabels,
@@ -149,6 +150,10 @@ export interface ShelfProps {
   onCollection?: (message: FrameShelfCollectionMessage) => void;
   /** The latest host Collection Command, or null. */
   collectionRequest?: ShelfCollectionRequest | null;
+  /** The Worker's background Import, running or finished, or null (#948). */
+  importState?: FrameImportState | null;
+  /** Bumped by the View import report Command: opens the finished Import's report. */
+  importReportRequest?: number;
 }
 
 /** The Frame's own width, updated when the Pane resizes. */
