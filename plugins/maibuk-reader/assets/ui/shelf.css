@@ -1152,6 +1152,13 @@
   }
 }
 
+/* The kit floats the card on the import layer, above Dialogs. On the Shelf a
+   Sheet or Dialog is modal, so it must cover the card: left above them, the
+   card took the taps meant for a phone Sheet's lower rows (#948). */
+.shelf-import-card .kit-progress-card {
+  z-index: var(--z-panel);
+}
+
 .shelf-import-card__dismiss {
   position: absolute;
   top: 8px;
