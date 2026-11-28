@@ -978,8 +978,10 @@ test.describe("Reader Import", () => {
     const story = readFileSync(fixturePath(FB2), "utf8");
     const files: Record<string, Uint8Array> = {};
     for (let index = 0; index < 400; index += 1) {
+      // Each copy names its own title: copies sharing one would be collisions (#949).
+      const copy = story.replace(/<book-title>([^<]*)</, `<book-title>$1 ${index}<`);
       files[`story-${String(index).padStart(3, "0")}.fb2`] = new TextEncoder().encode(
-        `${story}\n<!-- copy ${index} -->\n`
+        `${copy}\n<!-- copy ${index} -->\n`
       );
     }
     const folder = libraryFolder(files);
@@ -1049,6 +1051,10 @@ test.describe("Reader Import collisions", () => {
     await tabToEither(page, pageFrame(page).getByRole("button", { name: "Import", exact: true }));
     await page.keyboard.press("Enter");
     const chooser = pageFrame(page).getByRole("dialog", { name: "Import" });
+    await expect(
+      chooser.getByRole("checkbox", { name: /^Put a folder's Documents in a Collection/ })
+    ).toBeChecked();
+    await capture(page, "reader-import-chooser-collect");
     await importFolderWith(
       page,
       chooser.getByRole("button", { name: /^Folder/ }),
@@ -1085,6 +1091,14 @@ test.describe("Reader Import collisions", () => {
         .getByRole("radiogroup", { name: /^Choice for / })
         .getByRole("radio", { name: "Replace", checked: true })
     ).toBeVisible();
+
+    // Narrow draws the same report as a full-height sheet.
+    const wideSize = page.viewportSize();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(reopened.getByRole("button", { name: "Close, decide later" })).toBeVisible();
+    await capture(page, "reader-import-collisions-narrow");
+    if (wideSize !== null) await page.setViewportSize(wideSize);
+    await expect(reopened.getByRole("button", { name: "Close, decide later" })).toBeVisible();
 
     // Apply to all: Keep both, then Apply adds the second edition as its own Document.
     const all = reopened.getByRole("radiogroup", { name: "Apply to all collisions" });
