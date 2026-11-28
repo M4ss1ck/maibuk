@@ -17,11 +17,13 @@ import { render } from "preact";
 import { useState } from "preact/hooks";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { FrameShelfCollectionMessage } from "./protocol";
+import { tabTo } from "../test-support";
+import type { FrameShelfCollectionMessage, FrameShelfImportMessage } from "./protocol";
 import { Shelf, type ShelfCollectionRequest, type ShelfNotice, type ShelfRemoval } from "./shelf";
 import { defaultShelfView } from "./shelf-options";
 import type {
   FrameCollection,
+  FrameImportCollision,
   FrameImportState,
   FrameShelfEntry,
   FrameShelfLabels,
@@ -1842,7 +1844,9 @@ interface ImportHarnessProps {
   entries?: FrameShelfEntry[];
   importState?: FrameImportState | null;
   importReportRequest?: number;
+  importCollect?: boolean;
   onCommand?: (id: string, documentId?: string) => void;
+  onImport?: (message: FrameShelfImportMessage) => void;
 }
 
 /** The Shelf a real caller draws, with its Import state and report Command. */
@@ -1850,18 +1854,21 @@ function ImportHarness({
   entries = [entry()],
   importState = null,
   importReportRequest = 0,
+  importCollect,
   onCommand = () => {},
+  onImport = () => {},
 }: ImportHarnessProps) {
   return (
     <div>
       <button type="button">Before</button>
       <Shelf
-        state={{ status: "ready", entries: workerOrder(entries) }}
+        state={{ status: "ready", entries: workerOrder(entries), importCollect }}
         labels={LABELS}
         menuDocumentId={null}
         importState={importState}
         importReportRequest={importReportRequest}
         onCommand={onCommand}
+        onImport={onImport}
         onSelect={() => {}}
         onMenuChange={() => {}}
         onRemove={() => {}}
@@ -2188,5 +2195,269 @@ describe("Import (#948)", () => {
     const cell = gridCell("Arriving Book");
     expect(cell).toBeDefined();
     expect(cell?.querySelector(".kit-cover__pending")).not.toBeNull();
+  });
+});
+
+const middlemarch: FrameImportCollision = {
+  id: "collision-1",
+  title: "Middlemarch",
+  author: "George Eliot",
+  fileName: "middlemarch-illustrated.epub",
+  existingText: "EPUB · 1.8 MB · read 34%",
+  newText: "EPUB · 2.4 MB",
+  replaceWarning:
+    "Replace drops the Reading Position (34%), 2 Bookmarks and 7 Highlights. Its Collections carry over.",
+  choiceLabel: "Choice for Middlemarch",
+};
+
+const persuasion: FrameImportCollision = {
+  id: "collision-2",
+  title: "Persuasion",
+  author: "Jane Austen",
+  fileName: "persuasion-2nd-edition.epub",
+  existingText: "EPUB · 0.9 MB · read 80%",
+  newText: "EPUB · 0.9 MB",
+  replaceWarning:
+    "Replace drops the Reading Position (80%) and 1 Bookmark. Its Collections carry over.",
+  choiceLabel: "Choice for Persuasion",
+};
+
+/** Six collisions, so the report shows four and offers "Show 2 more collisions". */
+function sixCollisions(): FrameImportCollision[] {
+  const titles = ["Dune", "Emma", "Hyperion", "Ulysses", "Beloved", "Kim"];
+  return titles.map((title, index) => ({
+    id: `collision-${index + 1}`,
+    title,
+    author: "",
+    fileName: `${title.toLowerCase()}.epub`,
+    existingText: "EPUB · 1.0 MB · read 10%",
+    newText: "EPUB · 1.1 MB",
+    replaceWarning: `Replace drops the Reading Position (10%) of ${title}.`,
+    choiceLabel: `Choice for ${title}`,
+  }));
+}
+
+/** A finished Import whose report holds the given collisions. */
+function finishedWithCollisions(collisions: FrameImportCollision[]): FrameImportState {
+  const base = finished();
+  return finished({ report: { ...base.report, collisions } });
+}
+
+/** Opens the report from the done card with View report, by keyboard. */
+async function openReportByKeyboard(
+  user: ReturnType<typeof userEvent.setup>
+): Promise<HTMLElement> {
+  const viewReport = screen.getByRole("button", { name: "View report" });
+  act(() => {
+    viewReport.focus();
+  });
+  await press(() => user.keyboard("{Enter}"));
+  return screen.getByRole("dialog", { name: "Import report" });
+}
+
+describe("Import collisions (#949)", () => {
+  it("chooses both rows with the keyboard, shows Replace's warning, and applies with Enter", async () => {
+    setWidth(1024);
+    const user = userEvent.setup({ delay: null });
+    const onImport = vi.fn();
+    await mount(
+      <ImportHarness
+        importState={finishedWithCollisions([middlemarch, persuasion])}
+        onImport={onImport}
+      />
+    );
+    const report = await openReportByKeyboard(user);
+    const firstRow = within(report).getByRole("radiogroup", { name: "Choice for Middlemarch" });
+    const secondRow = within(report).getByRole("radiogroup", { name: "Choice for Persuasion" });
+
+    // Nothing is chosen yet, so Apply stays inert: Enter sends nothing.
+    await tabTo(user, within(report).getByRole("button", { name: "Apply choices" }));
+    await press(() => user.keyboard("{Enter}"));
+    expect(onImport).not.toHaveBeenCalled();
+
+    // With nothing chosen, the first radio is the row's tab stop.
+    await tabTo(user, within(firstRow).getByRole("radio", { name: "Keep both" }));
+    await press(() => user.keyboard("{ArrowRight}"));
+    expect(
+      within(firstRow).getByRole("radio", { name: "Replace", checked: true })
+    ).toBeInTheDocument();
+    expect(within(report).getByText(middlemarch.replaceWarning)).toBeInTheDocument();
+    expect(within(report).getByText("1 of 2")).toBeInTheDocument();
+
+    await tabTo(user, within(secondRow).getByRole("radio", { name: "Keep both" }));
+    await press(() => user.keyboard("{ArrowLeft}"));
+    expect(
+      within(secondRow).getByRole("radio", { name: "Skip", checked: true })
+    ).toBeInTheDocument();
+    expect(within(report).getByText("2 of 2")).toBeInTheDocument();
+
+    await tabTo(user, within(report).getByRole("button", { name: "Apply choices" }));
+    await press(() => user.keyboard("{Enter}"));
+    expect(onImport).toHaveBeenCalledTimes(1);
+    expect(onImport).toHaveBeenCalledWith({
+      kind: "shelf-import",
+      action: "resolve",
+      choices: { "collision-1": "replace", "collision-2": "skip" },
+    });
+  });
+
+  it("applies one choice to every row from Apply to all", async () => {
+    setWidth(1024);
+    const user = userEvent.setup({ delay: null });
+    const onImport = vi.fn();
+    await mount(
+      <ImportHarness
+        importState={finishedWithCollisions([middlemarch, persuasion])}
+        onImport={onImport}
+      />
+    );
+    const report = await openReportByKeyboard(user);
+
+    await user.click(
+      within(within(report).getByRole("radiogroup", { name: "Apply to all collisions" })).getByRole(
+        "radio",
+        { name: "Skip" }
+      )
+    );
+    for (const choiceLabel of [middlemarch.choiceLabel, persuasion.choiceLabel]) {
+      const row = within(report).getByRole("radiogroup", { name: choiceLabel });
+      expect(within(row).getByRole("radio", { name: "Skip", checked: true })).toBeInTheDocument();
+    }
+    expect(within(report).getByText("2 of 2")).toBeInTheDocument();
+
+    await user.click(within(report).getByRole("button", { name: "Apply choices" }));
+    expect(onImport).toHaveBeenCalledWith({
+      kind: "shelf-import",
+      action: "resolve",
+      choices: { "collision-1": "skip", "collision-2": "skip" },
+    });
+  });
+
+  it("closes with Close, decide later, keeps the choices on View report, and has no Dismiss while waiting", async () => {
+    setWidth(1024);
+    const user = userEvent.setup({ delay: null });
+    const onImport = vi.fn();
+    await mount(
+      <ImportHarness
+        importState={finishedWithCollisions([middlemarch, persuasion])}
+        onImport={onImport}
+      />
+    );
+    const report = await openReportByKeyboard(user);
+    const firstRow = within(report).getByRole("radiogroup", { name: "Choice for Middlemarch" });
+    await tabTo(user, within(firstRow).getByRole("radio", { name: "Keep both" }));
+    await press(() => user.keyboard("{ArrowRight}"));
+    expect(
+      within(firstRow).getByRole("radio", { name: "Replace", checked: true })
+    ).toBeInTheDocument();
+
+    await user.click(within(report).getByRole("button", { name: "Close, decide later" }));
+    expect(screen.queryByRole("dialog", { name: "Import report" })).not.toBeInTheDocument();
+    expect(onImport).not.toHaveBeenCalled();
+
+    const status = screen.getByRole("status", { name: "Import progress" });
+    expect(within(status).queryByRole("button", { name: "Dismiss" })).not.toBeInTheDocument();
+
+    await user.click(within(status).getByRole("button", { name: "View report" }));
+    const reopened = screen.getByRole("dialog", { name: "Import report" });
+    const reopenedRow = within(reopened).getByRole("radiogroup", {
+      name: "Choice for Middlemarch",
+    });
+    expect(
+      within(reopenedRow).getByRole("radio", { name: "Replace", checked: true })
+    ).toBeInTheDocument();
+    expect(within(reopened).getByText(middlemarch.replaceWarning)).toBeInTheDocument();
+  });
+
+  it("shows four collisions and reveals the rest with Show 2 more collisions", async () => {
+    setWidth(1024);
+    const user = userEvent.setup({ delay: null });
+    await mount(<ImportHarness importState={finishedWithCollisions(sixCollisions())} />);
+    const report = await openReportByKeyboard(user);
+
+    expect(within(report).getAllByRole("radiogroup", { name: /^Choice for / })).toHaveLength(4);
+    await user.click(within(report).getByRole("button", { name: "Show 2 more collisions" }));
+    expect(within(report).getAllByRole("radiogroup", { name: /^Choice for / })).toHaveLength(6);
+    expect(
+      within(report).queryByRole("button", { name: "Show 2 more collisions" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("draws the same rows and footer in a Narrow sheet, and applies by keyboard", async () => {
+    setWidth(500);
+    const user = userEvent.setup({ delay: null });
+    const onImport = vi.fn();
+    await mount(
+      <ImportHarness
+        importState={finishedWithCollisions([middlemarch, persuasion])}
+        onImport={onImport}
+      />
+    );
+    const sheet = await openReportByKeyboard(user);
+    expect(sheet).toHaveClass("kit-sheet");
+    expect(within(sheet).getAllByRole("radiogroup", { name: /^Choice for / })).toHaveLength(2);
+    expect(within(sheet).getByText(middlemarch.existingText)).toBeInTheDocument();
+    expect(within(sheet).getByText(persuasion.existingText)).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: "Close, decide later" })).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: "Apply choices" })).toBeInTheDocument();
+
+    const firstRow = within(sheet).getByRole("radiogroup", { name: "Choice for Middlemarch" });
+    const secondRow = within(sheet).getByRole("radiogroup", { name: "Choice for Persuasion" });
+    await tabTo(user, within(firstRow).getByRole("radio", { name: "Keep both" }));
+    await press(() => user.keyboard("{ArrowRight}"));
+    await tabTo(user, within(secondRow).getByRole("radio", { name: "Keep both" }));
+    await press(() => user.keyboard("{ArrowLeft}"));
+    expect(within(sheet).getByText("2 of 2")).toBeInTheDocument();
+
+    await tabTo(user, within(sheet).getByRole("button", { name: "Apply choices" }));
+    await press(() => user.keyboard("{Enter}"));
+    expect(onImport).toHaveBeenCalledWith({
+      kind: "shelf-import",
+      action: "resolve",
+      choices: { "collision-1": "replace", "collision-2": "skip" },
+    });
+  });
+
+  it("checks the folder Collection option by default and sends Space as collect false", async () => {
+    setWidth(1024);
+    const user = userEvent.setup({ delay: null });
+    const onImport = vi.fn();
+    await mount(<ImportHarness onImport={onImport} />);
+
+    act(() => {
+      screen.getByRole("button", { name: "Import" }).focus();
+    });
+    await press(() => user.keyboard("{Enter}"));
+    const chooser = screen.getByRole("dialog", { name: "Import" });
+    const option = within(chooser).getByRole("checkbox", {
+      name: /^Put a folder's Documents in a Collection/,
+      checked: true,
+    });
+
+    await tabTo(user, option);
+    await press(() => user.keyboard(" "));
+    expect(onImport).toHaveBeenCalledWith({
+      kind: "shelf-import",
+      action: "collect",
+      collect: false,
+    });
+  });
+
+  it("draws the folder Collection option unchecked when the Shelf says importCollect is false", async () => {
+    setWidth(1024);
+    await mount(<ImportHarness importCollect={false} />);
+
+    act(() => {
+      screen.getByRole("button", { name: "Import" }).focus();
+    });
+    const user = userEvent.setup({ delay: null });
+    await press(() => user.keyboard("{Enter}"));
+    const chooser = screen.getByRole("dialog", { name: "Import" });
+    expect(
+      within(chooser).getByRole("checkbox", {
+        name: /^Put a folder's Documents in a Collection/,
+        checked: false,
+      })
+    ).toBeInTheDocument();
   });
 });
