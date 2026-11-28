@@ -318,6 +318,13 @@ export interface PluginFileGrantStore {
    */
   pick(pluginId: string, extensions: readonly string[]): Promise<PluginFileGrant | null>;
   /**
+   * Shows the host's file dialog allowing several files, filtered to
+   * `extensions`. Each picked file gets exactly the grant `pick` would give it
+   * (same dedupe: a file already held returns its grant id), each grant once,
+   * in dialog order. Null when the author cancelled or picked nothing.
+   */
+  pickMany(pluginId: string, extensions: readonly string[]): Promise<PluginFileGrant[] | null>;
+  /**
    * Shows the host's folder dialog and walks the picked folder once, now:
    * every file in it and its subfolders whose extension is one of
    * `extensions` (ignoring case) gets the grant `pick` would give it, in walk

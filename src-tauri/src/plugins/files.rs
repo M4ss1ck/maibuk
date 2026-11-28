@@ -961,6 +961,57 @@ pub async fn plugin_files_pick_folder<R: tauri::Runtime>(
     }))
 }
 
+/// Grants each picked path to `plugin_id` exactly as a single pick grants its
+/// one path, in the order picked. A path the Plugin already holds returns its
+/// existing grant, and each grant id appears once.
+#[cfg_attr(mobile, allow(dead_code))]
+fn grant_each(
+    state: &GrantStore,
+    plugin_id: &str,
+    paths: &[PathBuf],
+) -> Result<Vec<GrantInfo>, String> {
+    let mut grants: Vec<GrantInfo> = Vec::new();
+    for path in paths {
+        push_once(&mut grants, state.grant(plugin_id, path)?);
+    }
+    Ok(grants)
+}
+
+/// Open Maibuk's file dialog filtered to `extensions`, letting the author pick
+/// several files, and grant each pick to `plugin_id`. Resolves to `None` when
+/// the author cancels or picks nothing. Paths stay in Rust, as in
+/// `plugin_files_pick`.
+#[cfg(desktop)]
+#[tauri::command]
+pub async fn plugin_files_pick_many<R: tauri::Runtime>(
+    app: tauri::AppHandle<R>,
+    window: tauri::WebviewWindow<R>,
+    state: tauri::State<'_, GrantStore>,
+    plugin_id: String,
+    extensions: Vec<String>,
+) -> Result<Option<Vec<GrantInfo>>, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    validate_extensions(&extensions)?;
+    let mut picker = app.dialog().file().set_parent(&window);
+    if !extensions.is_empty() {
+        let filters: Vec<&str> = extensions.iter().map(String::as_str).collect();
+        picker = picker.add_filter("Documents", &filters);
+    }
+    let Some(picked) = picker.blocking_pick_files() else {
+        return Ok(None);
+    };
+    let paths = picked
+        .into_iter()
+        .map(|file| {
+            file.into_path()
+                .map_err(|_| file_missing("the picked file is not on this device"))
+        })
+        .collect::<Result<Vec<PathBuf>, String>>()?;
+    let grants = grant_each(&state, &plugin_id, &paths)?;
+    Ok((!grants.is_empty()).then_some(grants))
+}
+
 /// Grant the files the author dropped on the window to `plugin_id`. The webview
 /// names the paths, and Rust mints a grant only for a path its own drop handler
 /// saw, so a Plugin can read what the author dropped and never a path it made
@@ -1281,6 +1332,56 @@ pub mod android {
             folder,
             grants: held,
         }))
+    }
+
+    /// The many-file picker's answer: no documents when the author cancelled.
+    #[derive(Deserialize)]
+    struct PickedMany {
+        #[serde(default)]
+        documents: Option<Vec<PickedDocument>>,
+    }
+
+    /// Open the system document picker with several selection allowed, filtered
+    /// to `extensions`, and grant each pick to `plugin_id`. Resolves to `None`
+    /// when the author cancels or picks nothing.
+    #[tauri::command]
+    pub async fn plugin_files_pick_many<R: Runtime>(
+        app: AppHandle<R>,
+        plugin_id: String,
+        extensions: Vec<String>,
+    ) -> Result<Option<Vec<GrantInfo>>, String> {
+        validate_extensions(&extensions)?;
+        validate_plugin_id(&plugin_id)?;
+        let handle = documents(&app)?.0.clone();
+        // The call waits for the author, so it waits off the async workers.
+        let picked = tauri::async_runtime::spawn_blocking(move || {
+            handle.run_mobile_plugin::<PickedMany>("pickMany", PickArgs { extensions })
+        })
+        .await
+        .map_err(|_| internal_error("the document picker stopped"))?
+        .map_err(|_| internal_error("the document picker failed"))?;
+        let Some(picked_documents) = picked.documents else {
+            return Ok(None);
+        };
+        let grants = app.state::<GrantStore>();
+        let mut held: Vec<GrantInfo> = Vec::new();
+        for document in &picked_documents {
+            match grants.grant_document(&plugin_id, &document.uri, &document.name, document.size) {
+                Ok(info) => push_once(&mut held, info),
+                Err(error) => {
+                    // A document this pick could not grant keeps no permission.
+                    // Documents a grant already holds keep theirs.
+                    let orphaned: Vec<String> = picked_documents
+                        .iter()
+                        .map(|document| document.uri.clone())
+                        .filter(|uri| !grants.holds(uri))
+                        .collect();
+                    documents(&app)?.release_all(&grants, &orphaned);
+                    return Err(error);
+                }
+            }
+        }
+        Ok((!held.is_empty()).then_some(held))
     }
 
     /// Read a byte range through a grant, opening the document through the
@@ -2519,6 +2620,56 @@ mod tests {
             push_once(&mut grants, grant(id));
         }
         assert_eq!(grants, vec![grant("a"), grant("b")]);
+    }
+
+    #[test]
+    fn grant_each_returns_one_grant_per_path_in_picked_order() {
+        let dir = temp_dir("pick-many-order");
+        let a = file_in(&dir, "a.epub", b"aaa");
+        let b = file_in(&dir, "b.epub", b"bbbb");
+        let store = store_in(&dir);
+
+        let grants = grant_each(&store, "tracer", &[b.clone(), a.clone()]).unwrap();
+
+        assert_eq!(grants.len(), 2);
+        assert_eq!(grants[0].name, "b.epub");
+        assert_eq!(grants[0].size, 4);
+        assert_eq!(grants[1].name, "a.epub");
+        assert_eq!(grants[0], store.grant("tracer", &b).unwrap());
+        assert_eq!(grants[1], store.grant("tracer", &a).unwrap());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn grant_each_reuses_the_grant_a_path_already_holds_and_lists_it_once() {
+        let dir = temp_dir("pick-many-dedupe");
+        let a = file_in(&dir, "a.epub", b"aaa");
+        let b = file_in(&dir, "b.epub", b"bbb");
+        let store = store_in(&dir);
+        let held = store.grant("tracer", &a).unwrap();
+
+        // The second path names `a` through another spelling, so it is the
+        // same file and must come back as the grant it already holds.
+        let alias = dir.join(".").join("a.epub");
+        let grants = grant_each(&store, "tracer", &[a.clone(), alias, b]).unwrap();
+
+        assert_eq!(grants.len(), 2);
+        assert_eq!(grants[0], held);
+        assert_eq!(store.list("tracer").unwrap().len(), 2);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn grant_each_fails_on_a_picked_file_that_is_gone() {
+        let dir = temp_dir("pick-many-gone");
+        let a = file_in(&dir, "a.epub", b"aaa");
+        let gone = dir.join("gone.epub");
+        let store = store_in(&dir);
+
+        let error = grant_each(&store, "tracer", &[a, gone]).unwrap_err();
+
+        assert!(error.starts_with(FILE_MISSING), "{error}");
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

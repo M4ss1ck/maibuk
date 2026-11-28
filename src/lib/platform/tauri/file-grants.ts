@@ -56,6 +56,18 @@ export function createTauriPluginFileGrantStore(): PluginFileGrantStore {
       });
     },
 
+    async pickMany(
+      pluginId: string,
+      extensions: readonly string[]
+    ): Promise<PluginFileGrant[] | null> {
+      // Rust shows the dialog allowing several files and mints each grant the
+      // way `plugin_files_pick` would, in dialog order.
+      return call<PluginFileGrant[] | null>("plugin_files_pick_many", {
+        pluginId,
+        extensions: [...extensions],
+      });
+    },
+
     async pickFolder(
       pluginId: string,
       extensions: readonly string[]

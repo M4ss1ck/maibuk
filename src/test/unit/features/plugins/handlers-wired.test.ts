@@ -442,9 +442,13 @@ describe("createPluginHandlers(): File Grants", () => {
       folder: "Books",
       grants: [{ name: "b.PDF", size: 1 }],
     });
+    store.queueFilesPick("tracer", [{ name: "c.pdf", bytes: new Uint8Array([8, 9]) }]);
+    await expect(pick({ extensions: ["pdf"], multiple: true }, context)).resolves.toMatchObject({
+      grants: [{ name: "c.pdf", size: 2 }],
+    });
 
     await expect(release({ grant: grant.grant }, context)).resolves.toBeNull();
-    await expect(list({}, context)).resolves.toMatchObject([{ name: "b.PDF" }]);
+    await expect(list({}, context)).resolves.toMatchObject([{ name: "b.PDF" }, { name: "c.pdf" }]);
   });
 
   it("keeps each Plugin's grants out of another Plugin's reach", async () => {

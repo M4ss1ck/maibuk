@@ -2137,6 +2137,31 @@ describe("createTestHost() File Grants", () => {
     }
   });
 
+  it("grants each queued file for files.pick with multiple: true, in order, and returns them as grants", async () => {
+    const host = createTestHost({ manifest: filesManifest() });
+    try {
+      const client = createPluginClient(host.port);
+      const OTHER = { name: "cover.png", bytes: new Uint8Array([1]) };
+      const SECOND = { name: "two.txt", bytes: new Uint8Array([7, 8]) };
+      host.files.queueFilesPick([FILE, OTHER, SECOND]);
+
+      const picked = await client.files.pick({ extensions: ["txt"], multiple: true });
+
+      expect(picked).toEqual({
+        grants: [
+          { grant: expect.any(String), name: FILE.name, size: BYTES.length },
+          { grant: expect.any(String), name: SECOND.name, size: 2 },
+        ],
+      });
+      await expect(host.files.grants()).resolves.toEqual(picked?.grants);
+
+      host.files.queueFilesPick(null);
+      await expect(client.files.pick({ extensions: ["txt"], multiple: true })).resolves.toBeNull();
+    } finally {
+      await host.stop();
+    }
+  });
+
   it("seeds the store with the files a test hands it, and makes one missing", async () => {
     const host = createTestHost({ manifest: filesManifest(), files: [FILE] });
     try {

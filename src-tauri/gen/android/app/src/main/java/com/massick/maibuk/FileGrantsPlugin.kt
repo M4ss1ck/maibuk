@@ -44,6 +44,15 @@ fun pickerMimeTypes(extensions: List<String>, lookup: (String) -> String?): List
 private const val GENERIC_MIME_TYPE = "application/octet-stream"
 
 /**
+ * The URIs a multi-file pick handed back. Android puts several picks in the
+ * result's clip data, and a single pick in its data URI, which some providers
+ * also copy into the clip data. The clip data wins when it has any, and each
+ * URI appears once, in the order the picker gave them.
+ */
+fun <T> pickedUris(data: T?, clip: List<T>): List<T> =
+  clip.ifEmpty { listOfNotNull(data) }.distinct()
+
+/**
  * Whether a document called `name` has one of `extensions` (lowercase, no dot),
  * ignoring case. A dot file such as `.epub` has no extension, the same as on the
  * desktop, and a name ending in a dot has none either.
@@ -104,18 +113,81 @@ class FileGrantsPlugin(private val activity: Activity) : Plugin(activity) {
   fun pick(invoke: Invoke) {
     try {
       val args = invoke.parseArgs(PickDocumentArgs::class.java)
-      val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-        addCategory(Intent.CATEGORY_OPENABLE)
-        type = "*/*"
-        val types = pickerMimeTypes(args.extensions.toList()) {
-          MimeTypeMap.getSingleton().getMimeTypeFromExtension(it)
-        }
-        if (types.isNotEmpty()) putExtra(Intent.EXTRA_MIME_TYPES, types.toTypedArray())
-      }
-      startActivityForResult(invoke, intent, "pickResult")
+      startActivityForResult(invoke, openDocumentIntent(args.extensions.toList()), "pickResult")
     } catch (error: Exception) {
       invoke.reject(error.message ?: "The document picker could not open")
     }
+  }
+
+  /**
+   * Opens the system document picker with several selection allowed, filtered
+   * to the same MIME types as `pick`. `pickManyResult` reads the picks back.
+   */
+  @Command
+  fun pickMany(invoke: Invoke) {
+    try {
+      val args = invoke.parseArgs(PickDocumentArgs::class.java)
+      val intent = openDocumentIntent(args.extensions.toList()).apply {
+        putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+      }
+      startActivityForResult(invoke, intent, "pickManyResult")
+    } catch (error: Exception) {
+      invoke.reject(error.message ?: "The document picker could not open")
+    }
+  }
+
+  /**
+   * Takes the persisted read permission on each picked document, measures it
+   * the way `pickResult` does, and answers with every one that can be read.
+   * A document that cannot be read gives its permission back here, since Rust
+   * never hears of it, and is left out. A cancel answers with no `documents`.
+   */
+  @ActivityCallback
+  fun pickManyResult(invoke: Invoke, result: ActivityResult) {
+    val data = result.data
+    if (result.resultCode != Activity.RESULT_OK || data == null) {
+      invoke.resolve(JSObject())
+      return
+    }
+    val clip = data.clipData
+    val clipUris = if (clip == null) {
+      emptyList()
+    } else {
+      (0 until clip.itemCount).map { clip.getItemAt(it).uri }
+    }
+    val uris = pickedUris(data.data, clipUris)
+    if (uris.isEmpty()) {
+      invoke.resolve(JSObject())
+      return
+    }
+    val documents = JSArray()
+    for (uri in uris) {
+      try {
+        activity.contentResolver.takePersistableUriPermission(
+          uri,
+          Intent.FLAG_GRANT_READ_URI_PERMISSION,
+        )
+      } catch (_: SecurityException) {}
+      try {
+        val document = describe(uri, measure = true)
+        val entry = JSObject()
+        entry.put("uri", uri.toString())
+        entry.put("name", document.name)
+        // A pick always names a size: describe measured one or failed here.
+        entry.put(
+          "size",
+          requireNotNull(document.size) {
+            "This document does not report its size and cannot be read to measure it"
+          },
+        )
+        documents.put(entry)
+      } catch (_: Exception) {
+        releasePermission(uri)
+      }
+    }
+    val answer = JSObject()
+    answer.put("documents", documents)
+    invoke.resolve(answer)
   }
 
   /**
@@ -217,6 +289,20 @@ class FileGrantsPlugin(private val activity: Activity) : Plugin(activity) {
       invoke.reject(error.message ?: "The picked document is unreadable")
     }
   }
+
+  /**
+   * The picker intent for `extensions`: documents the system can open, filtered
+   * to the MIME types the extensions name. Shared by `pick` and `pickMany`.
+   */
+  private fun openDocumentIntent(extensions: List<String>): Intent =
+    Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+      addCategory(Intent.CATEGORY_OPENABLE)
+      type = "*/*"
+      val types = pickerMimeTypes(extensions) {
+        MimeTypeMap.getSingleton().getMimeTypeFromExtension(it)
+      }
+      if (types.isNotEmpty()) putExtra(Intent.EXTRA_MIME_TYPES, types.toTypedArray())
+    }
 
   /** Name, size, and last-modified time; rejects a document that is gone. */
   @Command

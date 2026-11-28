@@ -356,6 +356,26 @@ describe("files.pick folder option (#947)", () => {
     } | null>();
   });
 
+  it("types a multiple pick's output as one grant list, and a folder pick still wins", () => {
+    expectTypeOf(pick({ extensions: ["pdf"], multiple: true })).resolves.toEqualTypeOf<{
+      grants: Grant[];
+    } | null>();
+    expectTypeOf(
+      pick({ extensions: ["pdf"], multiple: true, folder: true })
+    ).resolves.toEqualTypeOf<{
+      folder: string;
+      grants: Grant[];
+    } | null>();
+  });
+
+  it("accepts multiple: true on the wire, and a grants list as its output", () => {
+    const row = PLUGIN_API_TABLE.find((entry) => entry.id === "files.pick")!;
+    const grant = { grant: "g", name: "a.pdf", size: 1 };
+    expect(row.input.safeParse({ extensions: ["pdf"], multiple: true }).success).toBe(true);
+    expect(row.output.safeParse({ grants: [grant, { ...grant, grant: "h" }] }).success).toBe(true);
+    expect(row.output.safeParse({ grants: [grant], extra: 1 }).success).toBe(false);
+  });
+
   it("accepts both shapes on the wire, and refuses a folder pick missing its grants", () => {
     const row = PLUGIN_API_TABLE.find((entry) => entry.id === "files.pick")!;
     const grant = { grant: "g", name: "a.pdf", size: 1 };

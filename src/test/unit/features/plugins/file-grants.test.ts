@@ -136,6 +136,63 @@ describe("createMemoryPluginFileGrantStore(): picking a folder", () => {
   });
 });
 
+describe("createMemoryPluginFileGrantStore(): picking several files", () => {
+  const FILES = [
+    { name: "one.epub", bytes: new Uint8Array([1]) },
+    { name: "notes.txt", bytes: new Uint8Array([2]) },
+    { name: "TWO.EPUB", bytes: new Uint8Array([3, 3]) },
+  ];
+
+  it("grants each picked file whose extension matches, ignoring case, in dialog order", async () => {
+    const store = createMemoryPluginFileGrantStore();
+    store.queueFilesPick("echoes", FILES);
+
+    const picked = await store.pickMany("echoes", ["epub"]);
+
+    expect(picked?.map((grant) => [grant.name, grant.size])).toEqual([
+      ["one.epub", 1],
+      ["TWO.EPUB", 2],
+    ]);
+    expect(await store.list("echoes")).toHaveLength(2);
+  });
+
+  it("returns the grant a single pick gave a file already held, and each grant once", async () => {
+    const store = createMemoryPluginFileGrantStore();
+    const file = { name: "one.epub", bytes: new Uint8Array([1]) };
+    store.queuePick("echoes", file);
+    const single = await store.pick("echoes", ["epub"]);
+    store.queueFilesPick("echoes", [file, { ...file }]);
+
+    const picked = await store.pickMany("echoes", ["epub"]);
+
+    expect(picked).toEqual([single]);
+    expect(await store.list("echoes")).toHaveLength(1);
+  });
+
+  it("returns null when the author cancels", async () => {
+    const store = createMemoryPluginFileGrantStore();
+    store.queueFilesPick("echoes", null);
+
+    await expect(store.pickMany("echoes", ["epub"])).resolves.toBeNull();
+    expect(await store.list("echoes")).toEqual([]);
+  });
+
+  it("returns null when the dialog returns nothing", async () => {
+    const store = createMemoryPluginFileGrantStore();
+    store.queueFilesPick("echoes", []);
+
+    await expect(store.pickMany("echoes", ["epub"])).resolves.toBeNull();
+  });
+
+  it("returns an empty list, not null, when picked files match none of the extensions", async () => {
+    const store = createMemoryPluginFileGrantStore();
+    store.queueFilesPick("echoes", [{ name: "notes.txt", bytes: new Uint8Array([2]) }]);
+
+    await expect(store.pickMany("echoes", ["epub"])).resolves.toEqual([]);
+    expect(await store.list("echoes")).toEqual([]);
+  });
+});
+
 describe("createMemoryPluginFileGrantStore(): dropping", () => {
   it("mints one grant per dropped file, scoped to the Plugin and in order", async () => {
     const store = createMemoryPluginFileGrantStore();

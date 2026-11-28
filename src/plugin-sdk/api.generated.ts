@@ -2,7 +2,7 @@
 
 import type { PluginStreamListener } from "@/plugin-sdk/protocol";
 
-export const PLUGIN_API_VERSION = "0.1.17";
+export const PLUGIN_API_VERSION = "0.1.18";
 
 export const PLUGIN_API_METHODS = [
   "library.books.list",
@@ -765,13 +765,13 @@ export interface PluginApiMethods {
     input: Record<string, never>;
     output: string[];
   };
-  /** Shows Maibuk's file dialog filtered to these file types and returns the picked file's File Grant, or null when the author cancels. With folder: true it shows the folder dialog instead and returns the folder's name and one File Grant per file in it and its subfolders of one of these file types, ignoring case, exactly as if each were picked; symbolic links are not followed and nothing about the folder is kept. Refused with user-action-required unless the author's own click, key press, or Command run caused the call. Picking a file this Plugin already holds a grant for returns the same grant id. */
+  /** Shows Maibuk's file dialog filtered to these file types and returns the picked file's File Grant, or null when the author cancels. With folder: true it shows the folder dialog instead and returns the folder's name and one File Grant per file in it and its subfolders of one of these file types, ignoring case, exactly as if each were picked; symbolic links are not followed and nothing about the folder is kept. With multiple: true the author can pick several files at once, and it returns one File Grant per picked file, each once, in a grants list; folder: true wins over multiple. Refused with user-action-required unless the author's own click, key press, or Command run caused the call. Picking a file this Plugin already holds a grant for returns the same grant id. */
   "files.pick": {
     input: {
       /** Lowercase extensions without a dot, such as pdf or epub. */
       extensions: string[];
-      /** Only one file at a time for now. */
-      multiple?: false;
+      /** true lets the author pick several files in one dialog. */
+      multiple?: boolean;
       /** true picks a folder: every matching file in it and its subfolders, read once, now. */
       folder?: boolean;
     };
@@ -783,6 +783,13 @@ export interface PluginApiMethods {
       /** The picked folder's own name, never its path. */
       folder: string;
       /** One File Grant per matching file, each once. */
+      grants: {
+        grant: string;
+        name: string;
+        size: number;
+      }[];
+    } | {
+      /** One File Grant per picked file, in the order the dialog returned them, each once. */
       grants: {
         grant: string;
         name: string;
@@ -1071,7 +1078,7 @@ export interface PluginApi {
     keys(params?: PluginApiMethods["storage.keys"]["input"]): Promise<PluginApiMethods["storage.keys"]["output"]>;
   };
   files: {
-    /** Shows Maibuk's file dialog filtered to these file types and returns the picked file's File Grant, or null when the author cancels. With folder: true it shows the folder dialog instead and returns the folder's name and one File Grant per file in it and its subfolders of one of these file types, ignoring case, exactly as if each were picked; symbolic links are not followed and nothing about the folder is kept. Refused with user-action-required unless the author's own click, key press, or Command run caused the call. Picking a file this Plugin already holds a grant for returns the same grant id. */
+    /** Shows Maibuk's file dialog filtered to these file types and returns the picked file's File Grant, or null when the author cancels. With folder: true it shows the folder dialog instead and returns the folder's name and one File Grant per file in it and its subfolders of one of these file types, ignoring case, exactly as if each were picked; symbolic links are not followed and nothing about the folder is kept. With multiple: true the author can pick several files at once, and it returns one File Grant per picked file, each once, in a grants list; folder: true wins over multiple. Refused with user-action-required unless the author's own click, key press, or Command run caused the call. Picking a file this Plugin already holds a grant for returns the same grant id. */
     pick(params: PluginApiMethods["files.pick"]["input"] & { folder: true }): Promise<{
       /** The picked folder's own name, never its path. */
       folder: string;
@@ -1082,7 +1089,15 @@ export interface PluginApi {
         size: number;
       }[];
     } | null>;
-    pick(params: PluginApiMethods["files.pick"]["input"] & { folder?: false }): Promise<{
+    pick(params: PluginApiMethods["files.pick"]["input"] & { multiple: true }): Promise<{
+      /** One File Grant per picked file, in the order the dialog returned them, each once. */
+      grants: {
+        grant: string;
+        name: string;
+        size: number;
+      }[];
+    } | null>;
+    pick(params: PluginApiMethods["files.pick"]["input"] & { folder?: false; multiple?: false }): Promise<{
       grant: string;
       name: string;
       size: number;

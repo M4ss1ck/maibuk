@@ -971,6 +971,12 @@ export interface TestHostFiles {
    */
   queueFolderPick(folder: MemoryPluginFileGrantFolder | null): void;
   /**
+   * Queues the files the Plugin's next `files.pick` with `multiple: true`
+   * returns, in dialog order; null means the author cancelled. The host
+   * filters them by the Plugin's extensions, as the dialog would.
+   */
+  queueFilesPick(files: readonly MemoryPluginFileGrantFile[] | null): void;
+  /**
    * Simulates the author dropping `files` on the Plugin's `page`: mints a File
    * Grant per file and emits `files.dropped` to a Plugin that subscribed and
    * holds `files:pick`. Resolves with whether the event was delivered. Throws
@@ -1253,12 +1259,16 @@ export interface PluginApiRow<
   /** At most one accepted call per this many milliseconds, per Plugin. */
   minIntervalMs?: number;
   /**
-   * The output narrowed by one boolean input field, for the SDK's typed
-   * overloads: a call passing `flag: true` resolves to `set`, one leaving it
-   * out or false to `unset`. `output` stays the wire schema and accepts both,
-   * so adding a flag never changes the type an existing call resolves to.
+   * The output narrowed by boolean input fields, for the SDK's typed
+   * overloads: a call passing `flag: true` resolves to that flag's `set`, the
+   * first flag in `flags` that is true wins, and a call passing none resolves
+   * to `unset`. `output` stays the wire schema and accepts every shape, so
+   * adding a flag never changes the type an existing call resolves to.
    */
-  outputByFlag?: { flag: string; set: z.ZodType; unset: z.ZodType };
+  outputByFlag?: {
+    flags: readonly { flag: string; set: z.ZodType }[];
+    unset: z.ZodType;
+  };
 }
 
 /**
