@@ -578,10 +578,9 @@ test.describe("Reader", () => {
     await page.keyboard.press("Escape");
     await expect(shelfRow(page, "twelve-pages")).toBeVisible();
     await chooseNextFile(page, EPUB);
-    // The row carries the file name until the EPUB opens and its own title,
-    // "Dune", replaces it.
-    await importFromToolbar(page, "flowing");
-    await openFromShelf(page, "flowing");
+    // Import reads the EPUB's own title, so the row says "Dune" from the start (#949).
+    await importFromToolbar(page, "Dune");
+    await openFromShelf(page, "Dune");
     await focusDocument(page);
     await page.keyboard.press("Escape");
     await expect(shelfRow(page, "Dune")).toBeVisible();
@@ -699,10 +698,9 @@ test.describe("Reader", () => {
     await page.keyboard.press("Escape");
     await expect(shelfRow(page, "twelve-pages")).toBeVisible();
     await chooseNextFile(page, EPUB);
-    // The row carries the file name until the EPUB opens and its own title,
-    // "Dune", replaces it.
-    await importFromToolbar(page, "flowing");
-    await openFromShelf(page, "flowing");
+    // Import reads the EPUB's own title, so the row says "Dune" from the start (#949).
+    await importFromToolbar(page, "Dune");
+    await openFromShelf(page, "Dune");
     await focusDocument(page);
     await page.keyboard.press("Escape");
     await expect(shelfRow(page, "Dune")).toBeVisible();
