@@ -865,6 +865,30 @@ describe("createWebPluginFileGrantStore(): picking several files", () => {
       expect(inputs[0]?.multiple).toBe(false);
     });
 
+    // A browser without showDirectoryPicker (Firefox, Safari) imports a folder
+    // through this input (#948): every file under it, filtered by extension.
+    it("picks a folder through a webkitdirectory input and grants each matching file for the session", async () => {
+      vi.stubGlobal("showDirectoryPicker", undefined);
+      const inputs = stubFileInput([
+        fileInFolder("Library/a.epub", "one"),
+        fileInFolder("Library/cover.jpg", "img"),
+        fileInFolder("Library/Sub/b.epub", "two"),
+      ]);
+      const store = createWebPluginFileGrantStore({
+        indexedDB: new IDBFactory(),
+        randomId: sequentialIds(),
+      });
+
+      await expect(store.pickFolder("reader", ["epub"])).resolves.toEqual({
+        folder: "Library",
+        grants: [
+          { grant: "grant-1", name: "a.epub", size: 3 },
+          { grant: "grant-2", name: "b.epub", size: 3 },
+        ],
+      });
+      expect(inputs[0]).toMatchObject({ type: "file", webkitdirectory: true, multiple: true });
+    });
+
     it("returns null when the input is cancelled", async () => {
       stubFileInput("cancel");
       const store = createWebPluginFileGrantStore({
