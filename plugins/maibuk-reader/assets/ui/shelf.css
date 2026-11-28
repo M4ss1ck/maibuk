@@ -1056,3 +1056,259 @@
   gap: 8px;
   padding: 6px 12px 8px;
 }
+
+/* "Import (#948)": the chooser's options, the background Import card, and the
+   report. Wide starts at 600 px, the same breakpoint the rest of the Shelf uses. */
+.shelf__empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: center;
+}
+
+.shelf-import__description {
+  margin: 0 0 var(--space-4);
+  color: var(--chrome-meta);
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line);
+}
+
+.shelf-import__option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--chrome-border);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  color: var(--chrome-fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.shelf-import__option + .shelf-import__option {
+  margin-top: var(--space-3);
+}
+
+.shelf-import__option:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.shelf-import__icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-control);
+  background: var(--muted);
+  color: var(--mfg);
+}
+
+.shelf-import__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.shelf-import__option-title {
+  font-size: 15px;
+  font-weight: var(--type-heading-weight);
+  line-height: 20px;
+}
+
+.shelf-import__option-hint {
+  color: var(--chrome-meta);
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line);
+}
+
+.shelf-import-card {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  padding: var(--space-4);
+  border: 1px solid var(--chrome-border);
+  border-radius: var(--radius-card);
+  background: var(--card);
+  color: var(--chrome-fg);
+  box-shadow: var(--shadow-page);
+}
+
+@media (min-width: 600px) {
+  .shelf-import-card {
+    position: sticky;
+    bottom: 16px;
+    margin-left: auto;
+    max-width: 420px;
+  }
+}
+
+.shelf-import-card__dismiss {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+.shelf-import-card__progress {
+  display: block;
+  margin-top: var(--space-2);
+  padding-right: 40px;
+  color: var(--chrome-meta);
+  font-size: var(--type-small-size);
+  font-variant-numeric: var(--type-numeric);
+}
+
+.shelf-import-card__hint {
+  margin: var(--space-2) 0 0;
+  color: var(--chrome-meta);
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line);
+}
+
+.kit-layer--dialog.shelf-import-report .kit-dialog {
+  max-width: 1040px;
+  width: calc(100vw - 64px);
+}
+
+.shelf-report__subtitle {
+  margin: 0 0 var(--space-4);
+  color: var(--chrome-meta);
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line);
+}
+
+.shelf-report__tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0 0 var(--space-5);
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 600px) {
+  .shelf-report__tiles {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.shelf-report__tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--chrome-border);
+  border-radius: var(--radius-control);
+}
+
+.shelf-report__tile b {
+  font-size: var(--type-display-size);
+  font-weight: var(--type-display-weight);
+  line-height: var(--type-display-line);
+  font-variant-numeric: var(--type-numeric);
+}
+
+.shelf-report__tile span {
+  color: var(--chrome-meta);
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line);
+}
+
+.shelf-report__unreadable {
+  margin: 0 0 var(--space-5);
+  padding: var(--space-4);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-control);
+}
+
+.shelf-report__unreadable h3,
+.shelf-report__details-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--type-heading-size);
+  font-weight: var(--type-heading-weight);
+  line-height: var(--type-heading-line);
+}
+
+.shelf-report__unreadable p {
+  margin: 0 0 var(--space-3);
+  color: var(--chrome-meta);
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line);
+}
+
+.shelf-report__unreadable ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shelf-report__unreadable li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--chrome-border);
+}
+
+.shelf-report__name {
+  overflow-wrap: anywhere;
+  font-weight: var(--type-body-strong-weight);
+}
+
+.shelf-report__reason {
+  color: var(--chrome-meta);
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line);
+}
+
+.shelf-report__details {
+  border-top: 1px solid var(--chrome-border);
+}
+
+.shelf-report__details summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.shelf-report__details summary:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.shelf-report__count {
+  color: var(--chrome-meta);
+  font-variant-numeric: var(--type-numeric);
+}
+
+.shelf-report__details ul {
+  margin: 0 0 var(--space-3);
+  padding: 0 0 0 var(--space-4);
+  overflow-wrap: anywhere;
+}
+
+.shelf-report__none {
+  margin: 0 0 var(--space-3);
+  color: var(--chrome-meta);
+  font-size: var(--type-small-size);
+}
+
+.shelf-report__duplicates {
+  margin: var(--space-4) 0 0;
+  color: var(--chrome-meta);
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line);
+}
