@@ -12,10 +12,25 @@ import { join } from "node:path";
 import { createPluginClient } from "@/plugin-sdk";
 import { createTestHost } from "@/features/plugins/test-kit";
 import { describe, expect, it } from "vitest";
-import { runImport, type ImportReport } from "./import";
+import {
+  applyCollisionChoices,
+  collisionKey,
+  createImporter,
+  runImport,
+  type ImportReport,
+} from "./import";
 import { createShelfService } from "./library";
-import { SHELF_KEY, SUPPORTED_EXTENSIONS, positionKey, type ShelfEntry } from "./shelf";
-import { epubBytes, pdfBytes, readerManifest } from "./test-support";
+import {
+  COLLECTIONS_KEY,
+  SHELF_KEY,
+  SUPPORTED_EXTENSIONS,
+  bookmarksKey,
+  highlightsKey,
+  positionKey,
+  type Collection,
+  type ShelfEntry,
+} from "./shelf";
+import { epubBytes, metaEpub, pdfBytes, readerManifest } from "./test-support";
 
 const fixture = (name: string) => new Uint8Array(readFileSync(join(__dirname, "fixtures", name)));
 
@@ -54,7 +69,7 @@ const names = (report: ImportReport) => ({
 });
 
 describe("runImport()", () => {
-  it("adds every readable file, titled after its name, with its cover pending", async () => {
+  it("adds every readable file, titled from its own metadata or else its name, with its cover pending", async () => {
     const { host, client, library, pickFolder, shelf } = setup();
     try {
       const grants = await pickFolder([
@@ -70,11 +85,12 @@ describe("runImport()", () => {
       expect(report.cancelled).toBe(false);
       expect(
         shelf()
-          .map((entry) => [entry.title, entry.format, entry.coverPending])
+          .map((entry) => [entry.title, entry.author, entry.format, entry.coverPending])
           .sort()
       ).toEqual([
-        ["Dune", "pdf", true],
-        ["Emma", "epub", true],
+        // Dune.pdf names no title, so its file name does; flowing.epub's OPF names its own.
+        ["Dune", "", "pdf", true],
+        ["Dune", "Frank Herbert", "epub", true],
       ]);
     } finally {
       await host.stop();
@@ -239,7 +255,7 @@ describe("runImport()", () => {
         added: ["Fine.mobi"],
         unreadable: ["Broken.epub:corrupt", "Locked.epub:drm", "Store.mobi:drm"],
       });
-      expect(shelf().map((entry) => entry.title)).toEqual(["Fine"]);
+      expect(shelf().map((entry) => entry.title)).toEqual(["Notes"]);
       // The unreadable files' grants are released.
       expect(await client.files.list()).toHaveLength(1);
     } finally {
@@ -397,6 +413,246 @@ describe("runImport()", () => {
       expect(shelf().find((entry) => entry.id === openId)?.progress).toMatchObject({
         fraction: 0.5,
       });
+    } finally {
+      await host.stop();
+    }
+  });
+});
+
+describe("collisions (#949)", () => {
+  const folder = { kind: "folder", name: "Library" } as const;
+
+  /** A Shelf with Middlemarch read to 34%, 2 Bookmarks, 1 Highlight, and in the Collection "Eliot". */
+  async function shelfWithMiddlemarch(ctx: ReturnType<typeof setup>) {
+    const { client, library, pickFiles, storage, shelf } = ctx;
+    await runImport(
+      { client, library },
+      await pickFiles([
+        { name: "middlemarch.epub", bytes: metaEpub("Middlemarch", "George Eliot", "first") },
+      ]),
+      { kind: "files" }
+    );
+    const old = shelf()[0];
+    storage.set(positionKey(old.id), { kind: "fixed", page: 3 });
+    storage.set(bookmarksKey(old.id), [{ id: "b1" }, { id: "b2" }]);
+    storage.set(highlightsKey(old.id), [{ id: "h1" }]);
+    await library.updateShelf((rows) =>
+      rows.map((row) => ({ ...row, progress: { page: 34, pageCount: 100 }, openedAt: 5 }))
+    );
+    await library.createCollection("Eliot", old.id);
+    return shelf()[0];
+  }
+
+  it("compares titles and authors ignoring case, outer spaces, and runs of whitespace", () => {
+    expect(collisionKey("  Don  Quijote ", "MIGUEL de\tCervantes")).toBe(
+      collisionKey("don quijote", "Miguel de Cervantes")
+    );
+    expect(collisionKey("Emma", "Austen")).not.toBe(collisionKey("Emma", "Brontë"));
+  });
+
+  it("holds a file whose title and author match a Shelf Document but whose Fingerprint differs", async () => {
+    const ctx = setup();
+    const { host, client, library, pickFolder, shelf } = ctx;
+    try {
+      const old = await shelfWithMiddlemarch(ctx);
+      const before = shelf();
+      const report = await runImport(
+        { client, library },
+        await pickFolder([
+          {
+            name: "middlemarch-illustrated.epub",
+            bytes: metaEpub(" middlemarch ", "GEORGE  ELIOT", "second"),
+          },
+          { name: "Emma.epub", bytes: metaEpub("Emma", "Jane Austen") },
+        ]),
+        folder
+      );
+      expect(report.added).toEqual(["Emma.epub"]);
+      expect(report.collisions).toHaveLength(1);
+      expect(report.collisions[0]).toMatchObject({
+        title: "middlemarch",
+        file: { name: "middlemarch-illustrated.epub" },
+        existing: {
+          id: old.id,
+          title: "Middlemarch",
+          author: "George Eliot",
+          progress: { page: 34, pageCount: 100 },
+          removal: { bookmarks: 2, highlights: 1 },
+        },
+      });
+      // The colliding file is not on the Shelf yet, and its grant is held for the choice.
+      expect(shelf().filter((row) => row.title.toLowerCase() === "middlemarch")).toEqual(before);
+      expect((await client.files.list()).map((grant) => grant.grant)).toContain(
+        report.collisions[0].file.grant
+      );
+      // Imported Documents carry their own title and author.
+      expect(shelf().find((row) => row.title === "Emma")?.author).toBe("Jane Austen");
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("Keep both adds the file as its own Document; Skip leaves the Shelf unchanged and lets the file go", async () => {
+    const ctx = setup();
+    const { host, client, library, pickFolder, shelf } = ctx;
+    try {
+      await shelfWithMiddlemarch(ctx);
+      const files = [
+        { name: "middlemarch-2.epub", bytes: metaEpub("Middlemarch", "George Eliot", "second") },
+      ];
+      const skipped = await runImport({ client, library }, await pickFolder(files), folder);
+      const before = shelf();
+      const afterSkip = await applyCollisionChoices({ client, library }, skipped, {
+        [skipped.collisions[0].id]: "skip",
+      });
+      expect(afterSkip.collisions).toEqual([]);
+      expect(shelf()).toEqual(before);
+      expect((await client.files.list()).map((grant) => grant.grant)).not.toContain(
+        skipped.collisions[0].file.grant
+      );
+
+      const kept = await runImport({ client, library }, await pickFolder(files), folder);
+      const afterKeep = await applyCollisionChoices({ client, library }, kept, {
+        [kept.collisions[0].id]: "keep",
+      });
+      expect(afterKeep.added).toEqual(["middlemarch-2.epub"]);
+      expect(shelf()).toHaveLength(2);
+      expect(shelf().every((row) => row.title === "Middlemarch")).toBe(true);
+      // The old Document keeps everything it had.
+      expect(before.every((row) => shelf().some((now) => now.id === row.id))).toBe(true);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("Replace keeps the old Document's Collections and drops its Reading Position, Bookmarks, and Highlights", async () => {
+    const ctx = setup();
+    const { host, client, library, pickFolder, shelf, storage } = ctx;
+    try {
+      const old = await shelfWithMiddlemarch(ctx);
+      const report = await runImport(
+        { client, library },
+        await pickFolder([
+          { name: "middlemarch-2.epub", bytes: metaEpub("Middlemarch", "George Eliot", "second") },
+        ]),
+        folder
+      );
+      const next = await applyCollisionChoices({ client, library }, report, {
+        [report.collisions[0].id]: "replace",
+      });
+      expect(next.collisions).toEqual([]);
+      const rows = shelf();
+      expect(rows).toHaveLength(1);
+      expect(rows[0].id).not.toBe(old.id);
+      expect(rows[0]).toMatchObject({ title: "Middlemarch", progress: null, coverPending: true });
+      expect(rows[0].fingerprint).toBe(report.collisions[0].fingerprint);
+      const collections = storage.get(COLLECTIONS_KEY) as Collection[];
+      expect(collections.find((item) => item.name === "Eliot")?.documentIds).toEqual([rows[0].id]);
+      for (const key of [positionKey(old.id), bookmarksKey(old.id), highlightsKey(old.id)]) {
+        expect(storage.has(key)).toBe(false);
+      }
+      // The old file's grant is released; the new one is held by the Shelf.
+      const live = (await client.files.list()).map((grant) => grant.grant);
+      expect(live).toEqual([rows[0].grant]);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("files a folder's added Documents in a Collection named after it, reusing one with that name", async () => {
+    const ctx = setup();
+    const { host, client, library, pickFolder, shelf, storage } = ctx;
+    try {
+      await library.createCollection("Library");
+      const report = await runImport(
+        { client, library },
+        await pickFolder([
+          { name: "Emma.epub", bytes: metaEpub("Emma", "Jane Austen") },
+          { name: "Dune.pdf", bytes: pdfBytes("dune") },
+        ]),
+        { kind: "folder", name: "Library", collect: true }
+      );
+      expect(report.collection).toBe("Library");
+      const collections = storage.get(COLLECTIONS_KEY) as Collection[];
+      expect(collections).toHaveLength(1);
+      expect([...collections[0].documentIds].sort()).toEqual(
+        shelf()
+          .map((row) => row.id)
+          .sort()
+      );
+
+      // A Keep both from a later collision joins the same Collection.
+      const second = await runImport(
+        { client, library },
+        await pickFolder(
+          [{ name: "Emma 2.epub", bytes: metaEpub("Emma", "Jane Austen", "two") }],
+          "Classics"
+        ),
+        { kind: "folder", name: "Classics", collect: true }
+      );
+      await applyCollisionChoices({ client, library }, second, {
+        [second.collisions[0].id]: "keep",
+      });
+      const after = storage.get(COLLECTIONS_KEY) as Collection[];
+      expect(after.map((item) => item.name)).toEqual(["Library", "Classics"]);
+      expect(after[1].documentIds).toHaveLength(1);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("does not file anything when the author left the option off", async () => {
+    const { host, client, library, pickFolder, storage } = setup();
+    try {
+      await runImport(
+        { client, library },
+        await pickFolder([{ name: "Emma.epub", bytes: metaEpub("Emma", "Jane Austen") }]),
+        folder
+      );
+      expect(storage.has(COLLECTIONS_KEY)).toBe(false);
+    } finally {
+      await host.stop();
+    }
+  });
+});
+
+describe("createImporter() collisions (#949)", () => {
+  it("applies only when every collision has a choice, and keeps the report until then", async () => {
+    const ctx = setup();
+    const { host, client, library, pickFiles, pickFolder, shelf } = ctx;
+    try {
+      await runImport(
+        { client, library },
+        await pickFiles([
+          { name: "a.epub", bytes: metaEpub("Middlemarch", "George Eliot", "a") },
+          { name: "b.epub", bytes: metaEpub("Dracula", "Bram Stoker", "a") },
+        ]),
+        { kind: "files" }
+      );
+      const importer = createImporter({ client, library });
+      importer.start(
+        await pickFolder([
+          { name: "a2.epub", bytes: metaEpub("Middlemarch", "George Eliot", "b") },
+          { name: "b2.epub", bytes: metaEpub("Dracula", "Bram Stoker", "b") },
+        ]),
+        { kind: "folder", name: "Library" }
+      );
+      await importer.idle();
+      const [first, second] = importer.state?.report.collisions ?? [];
+      expect(second).toBeDefined();
+
+      // One choice missing: nothing applies, dismiss and a new Import are refused.
+      expect(await importer.resolve({ [first.id]: "skip" })).toBe(false);
+      importer.dismiss();
+      expect(importer.state?.report.collisions).toHaveLength(2);
+      expect(importer.start([], { kind: "files" })).toBe(false);
+
+      // Apply to all is every row with the same choice.
+      expect(await importer.resolve({ [first.id]: "keep", [second.id]: "keep" })).toBe(true);
+      expect(importer.state?.report.collisions).toEqual([]);
+      expect(shelf()).toHaveLength(4);
+      importer.dismiss();
+      expect(importer.state).toBeNull();
     } finally {
       await host.stop();
     }

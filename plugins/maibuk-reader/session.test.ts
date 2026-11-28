@@ -213,6 +213,7 @@ function stubImporter(initial: ImportState | null = null) {
     start: vi.fn(() => true),
     cancel: vi.fn(),
     dismiss: vi.fn(),
+    resolve: vi.fn(async () => true),
     idle: async () => {},
     subscribe(listener: (state: ImportState | null) => void) {
       listeners.add(listener);
@@ -238,6 +239,7 @@ function importReport(processed: number, found = 10): ImportReport {
     alreadyOnShelf: [],
     relinked: [],
     unreadable: [],
+    collisions: [],
     duplicates: 0,
     cancelled: false,
   };

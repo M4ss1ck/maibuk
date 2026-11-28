@@ -568,6 +568,7 @@ describe("frameImportState()", () => {
     alreadyOnShelf: [],
     relinked: [],
     unreadable: [],
+    collisions: [],
     duplicates: 0,
     cancelled: false,
   });
