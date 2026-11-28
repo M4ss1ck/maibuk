@@ -231,15 +231,17 @@ function Collisions({ report, labels, choices, onChoose, onChooseAll }: Collisio
           <h3 id={COLLISIONS_TITLE_ID}>{labels.reportCollisions}</h3>
           <p>{labels.reportCollisionsHint}</p>
         </div>
-        <span class="shelf-report__apply-all" aria-hidden="true">
-          {labels.applyToAll}
-        </span>
-        <Segmented<CollisionChoice>
-          label={labels.applyToAllLabel}
-          value={common}
-          options={options}
-          onChange={onChooseAll}
-        />
+        <div class="shelf-report__apply-all-group">
+          <span class="shelf-report__apply-all" aria-hidden="true">
+            {labels.applyToAll}
+          </span>
+          <Segmented<CollisionChoice>
+            label={labels.applyToAllLabel}
+            value={common}
+            options={options}
+            onChange={onChooseAll}
+          />
+        </div>
       </div>
       <ul ref={list} class="shelf-report__collision-list">
         {shown.map((collision) => (
@@ -458,7 +460,7 @@ export function ImportReport({
       title={labels.reportTitle}
       doneLabel={colliding ? undefined : labels.importClose}
       class={reportClass}
-      actions={colliding ? actions : undefined}
+      footer={colliding ? actions : undefined}
     >
       {body}
     </Sheet>

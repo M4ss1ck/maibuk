@@ -177,6 +177,42 @@ describe("Sheet", () => {
     expect(seen).toEqual(["reset", "close"]);
   });
 
+  it("draws a footer under its body, out of the header, and reaches it by Tab", async () => {
+    setWidth(500);
+    const user = userEvent.setup({ delay: null });
+    const seen: string[] = [];
+    await mount(
+      <Sheet
+        open
+        onClose={() => {}}
+        title="Import report"
+        footer={
+          <button type="button" onClick={() => seen.push("apply")}>
+            Apply choices
+          </button>
+        }
+      >
+        <button type="button">Body action</button>
+      </Sheet>
+    );
+    const sheet = screen.getByRole("dialog", { name: "Import report" });
+    const header = sheet.querySelector(".kit-sheet__header") as HTMLElement;
+    const footer = sheet.querySelector(".kit-sheet__footer") as HTMLElement;
+    expect(within(header).queryByRole("button", { name: "Apply choices" })).toBeNull();
+    const apply = within(footer).getByRole("button", { name: "Apply choices" });
+    // The footer follows the body, so it stays below the rows the body scrolls.
+    const body = sheet.querySelector(".kit-sheet__body") as HTMLElement;
+    expect(body.compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    act(() => {
+      within(body).getByRole("button", { name: "Body action" }).focus();
+    });
+    await press(() => user.tab());
+    expect(apply).toHaveFocus();
+    await press(() => user.keyboard("{Enter}"));
+    expect(seen).toEqual(["apply"]);
+  });
+
   it("runs the header Reset action by keyboard and keeps the Sheet open", async () => {
     setWidth(500);
     const user = userEvent.setup({ delay: null });

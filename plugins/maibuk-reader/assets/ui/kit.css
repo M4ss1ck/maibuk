@@ -418,6 +418,14 @@ button.kit-chip {
   line-height: var(--type-body-line);
 }
 
+/* Sheet footer: under the scrolling body, divided from it, never scrolled away. */
+.kit-sheet__footer {
+  flex: none;
+  margin-top: auto;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--chrome-border);
+}
+
 /* Dialog: Wide only, centered, capped at 640 px, actions right-aligned. */
 .kit-dialog {
   position: relative;

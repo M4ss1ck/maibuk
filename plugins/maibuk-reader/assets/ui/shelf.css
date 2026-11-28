@@ -1449,6 +1449,13 @@
   font-weight: var(--type-heading-weight);
 }
 
+/* The label and its control wrap together, never apart. */
+.shelf-report__apply-all-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
 .shelf-report__collisions-title p,
 .shelf-report__apply-all {
   margin: 2px 0 0;

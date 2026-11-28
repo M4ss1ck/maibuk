@@ -2406,8 +2406,13 @@ describe("Import collisions (#949)", () => {
     expect(within(sheet).getAllByRole("radiogroup", { name: /^Choice for / })).toHaveLength(2);
     expect(within(sheet).getByText(middlemarch.existingText)).toBeInTheDocument();
     expect(within(sheet).getByText(persuasion.existingText)).toBeInTheDocument();
-    expect(within(sheet).getByRole("button", { name: "Close, decide later" })).toBeInTheDocument();
-    expect(within(sheet).getByRole("button", { name: "Apply choices" })).toBeInTheDocument();
+    // The count and both buttons sit in the Sheet's footer, never squeezed into its title row.
+    const header = sheet.querySelector(".kit-sheet__header") as HTMLElement;
+    const footer = sheet.querySelector(".kit-sheet__footer") as HTMLElement;
+    expect(within(header).queryByRole("button", { name: "Apply choices" })).toBeNull();
+    expect(within(footer).getByText("0 of 2")).toBeInTheDocument();
+    expect(within(footer).getByRole("button", { name: "Close, decide later" })).toBeInTheDocument();
+    expect(within(footer).getByRole("button", { name: "Apply choices" })).toBeInTheDocument();
 
     const firstRow = within(sheet).getByRole("radiogroup", { name: "Choice for Middlemarch" });
     const secondRow = within(sheet).getByRole("radiogroup", { name: "Choice for Persuasion" });
