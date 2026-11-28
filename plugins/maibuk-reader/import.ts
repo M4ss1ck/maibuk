@@ -569,7 +569,7 @@ export interface Importer {
 }
 
 /** Whether a finished Import still has collisions waiting for the author. */
-function hasCollisions(state: ImportState | null): boolean {
+export function hasCollisions(state: ImportState | null): boolean {
   return state?.status === "done" && state.report.collisions.length > 0;
 }
 

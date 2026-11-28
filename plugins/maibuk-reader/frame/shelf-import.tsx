@@ -14,7 +14,7 @@
  * pair the removal confirmation uses.
  */
 
-import { useState } from "preact/hooks";
+import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import { Button, Dialog, Icon, IconButton, ProgressCard, Segmented, Sheet } from "./kit";
 import { fill } from "./shelf-query";
 import type { FrameImportCollision, FrameImportState, FrameShelfLabels } from "./types";
@@ -204,6 +204,13 @@ interface CollisionsProps {
 /** The collision section: its heading, Apply to all, and one row per collision (#949). */
 function Collisions({ report, labels, choices, onChoose, onChooseAll }: CollisionsProps) {
   const [expanded, setExpanded] = useState(false);
+  const list = useRef<HTMLUListElement>(null);
+  // "Show N more" leaves when pressed: focus moves to the first row it revealed.
+  useLayoutEffect(() => {
+    if (!expanded) return;
+    const row = list.current?.children[COLLISIONS_SHOWN];
+    row?.querySelector<HTMLElement>('[role="radio"][tabindex="0"]')?.focus();
+  }, [expanded]);
   const { collisions } = report;
   const options = [
     { value: "keep", label: labels.keepBoth },
@@ -234,7 +241,7 @@ function Collisions({ report, labels, choices, onChoose, onChooseAll }: Collisio
           onChange={onChooseAll}
         />
       </div>
-      <ul class="shelf-report__collision-list">
+      <ul ref={list} class="shelf-report__collision-list">
         {shown.map((collision) => (
           <CollisionRow
             key={collision.id}

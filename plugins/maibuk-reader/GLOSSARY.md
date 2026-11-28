@@ -29,6 +29,10 @@ _Avoid_: reflow mode, scroll mode
 Adding Documents to the Shelf: the files the author picked, or every supported file in a folder the author picked and its subfolders. Reader checks the folder once, at that moment, and does not keep it; importing the same folder again finds only what is new. In Reader this is the meaning of Import; the root term (bringing work into the Library) does not apply here, because Reader never copies a file.
 _Avoid_: add to Shelf, scan, watch, sync (for a folder)
 
+**Collision**:
+A file an Import found whose title and author match a Shelf Document's (ignoring case and extra spaces) but whose Fingerprint differs: a second edition, or the same book in another format. It waits in the Import's report until the author chooses Keep both (it becomes its own Document), Replace (it takes the old Document's place and Collections; the old Reading Position, Bookmarks, and Highlights go), or Skip (nothing changes). Here it does not mean the root's Conflict or Shortcut Conflict.
+_Avoid_: conflict, duplicate (a duplicate shares the Fingerprint)
+
 **Date added**:
 When a Document was imported. The Shelf sorts by it. The copy says "added" because the author sees the Document arrive on the Shelf; the action itself is still Import.
 _Avoid_: date imported, created date (that is the file's)

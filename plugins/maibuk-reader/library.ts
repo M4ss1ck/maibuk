@@ -422,13 +422,7 @@ export function createShelfService(client: ReaderClient): ShelfService {
           // A key that never existed needs no delete.
         }
       }
-      if (old.grant !== entry.grant) {
-        try {
-          await client.files.release({ grant: old.grant });
-        } catch {
-          // The grant may already be gone.
-        }
-      }
+      if (old.grant !== entry.grant) await releaseGrant(client, old.grant);
       return true;
     },
 

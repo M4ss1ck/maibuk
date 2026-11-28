@@ -631,6 +631,68 @@ describe("collisions (#949)", () => {
     }
   });
 
+  it("Replace adds the file as its own Document when the old one left the Shelf meanwhile", async () => {
+    const ctx = setup();
+    const { host, client, library, pickFolder, shelf } = ctx;
+    try {
+      const old = await shelfWithMiddlemarch(ctx);
+      const report = await runImport(
+        { client, library },
+        await pickFolder([
+          { name: "middlemarch-2.epub", bytes: metaEpub("Middlemarch", "George Eliot", "second") },
+        ]),
+        folder
+      );
+      await library.removeFromShelf(old.id);
+      expect(await library.replaceDocument(old.id, { ...old, id: "other" })).toBe(false);
+      const next = await applyCollisionChoices({ client, library }, report, {
+        [report.collisions[0].id]: "replace",
+      });
+      expect(next.added).toEqual(["middlemarch-2.epub"]);
+      expect(shelf().map((row) => row.fingerprint)).toEqual([report.collisions[0].fingerprint]);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("names a file whose choice could not be applied as unreadable and lets its grant go", async () => {
+    const ctx = setup();
+    const { host, client, library, pickFolder, storage } = ctx;
+    try {
+      await shelfWithMiddlemarch(ctx);
+      const report = await runImport(
+        { client, library },
+        await pickFolder([
+          { name: "middlemarch-2.epub", bytes: metaEpub("Middlemarch", "George Eliot", "second") },
+        ]),
+        folder
+      );
+      const grant = report.collisions[0].file.grant;
+      // A Shelf that no longer parses as a list fails the write the choice needs.
+      const failing = { ...library, updateShelf: () => Promise.reject(new Error("refused")) };
+      const next = await applyCollisionChoices({ client, library: failing }, report, {
+        [report.collisions[0].id]: "keep",
+      });
+      expect(next.unreadable).toEqual([{ name: "middlemarch-2.epub", reason: "unreadable" }]);
+      expect(next.collisions).toEqual([]);
+      expect((await client.files.list()).map((item) => item.grant)).not.toContain(grant);
+      expect(storage.get(SHELF_KEY)).toHaveLength(1);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("fileInCollection writes nothing for a blank name or ids not on the Shelf", async () => {
+    const { host, library, storage } = setup();
+    try {
+      await library.fileInCollection("   ", ["doc-1"]);
+      await library.fileInCollection("Library", ["not-on-shelf"]);
+      expect(storage.has(COLLECTIONS_KEY)).toBe(false);
+    } finally {
+      await host.stop();
+    }
+  });
+
   it("does not file anything when the author left the option off", async () => {
     const { host, client, library, pickFolder, storage } = setup();
     try {

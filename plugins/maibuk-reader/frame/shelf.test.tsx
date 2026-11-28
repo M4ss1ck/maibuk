@@ -2369,15 +2369,23 @@ describe("Import collisions (#949)", () => {
     expect(within(reopened).getByText(middlemarch.replaceWarning)).toBeInTheDocument();
   });
 
-  it("shows four collisions and reveals the rest with Show 2 more collisions", async () => {
+  it("shows four collisions, reveals the rest by keyboard, and moves focus to the first revealed row", async () => {
     setWidth(1024);
     const user = userEvent.setup({ delay: null });
     await mount(<ImportHarness importState={finishedWithCollisions(sixCollisions())} />);
     const report = await openReportByKeyboard(user);
 
     expect(within(report).getAllByRole("radiogroup", { name: /^Choice for / })).toHaveLength(4);
-    await user.click(within(report).getByRole("button", { name: "Show 2 more collisions" }));
+    await tabTo(user, within(report).getByRole("button", { name: "Show 2 more collisions" }));
+    await user.keyboard("{Enter}");
     expect(within(report).getAllByRole("radiogroup", { name: /^Choice for / })).toHaveLength(6);
+    // The button leaves; focus lands on the first row it revealed.
+    expect(
+      within(within(report).getByRole("radiogroup", { name: "Choice for Beloved" })).getByRole(
+        "radio",
+        { name: "Keep both" }
+      )
+    ).toHaveFocus();
     expect(
       within(report).queryByRole("button", { name: "Show 2 more collisions" })
     ).not.toBeInTheDocument();

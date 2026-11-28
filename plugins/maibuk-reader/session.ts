@@ -23,7 +23,7 @@
 import { FILE_READ_MAX_BYTES, type PluginClient } from "@/plugin-sdk";
 import type { PluginApiErrorCode } from "@/plugin-sdk";
 import type { ShelfService } from "./library";
-import { pickAndImport, type Importer, type ImportState } from "./import";
+import { hasCollisions, pickAndImport, type Importer, type ImportState } from "./import";
 import {
   foliateSource,
   purifySource,
@@ -993,7 +993,7 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
         case "importFiles":
         case "importFolder": {
           if (importer === null) return;
-          if (importer.state?.status === "done" && importer.state.report.collisions.length > 0) {
+          if (hasCollisions(importer.state)) {
             post({
               kind: "shelf-result",
               message: translate(language, "shelf.import.resolveFirst"),
