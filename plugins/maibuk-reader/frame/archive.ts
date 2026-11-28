@@ -28,6 +28,9 @@ export const IMAGE_EXTENSIONS = [
   ".avif",
 ];
 
+/** The largest FB2 the Frame reads whole; a larger one is refused as too large. */
+export const FB2_MAX_BYTES = 20 * 1024 * 1024;
+
 /** Why a document could not be opened. */
 export class DocumentError extends Error {
   declare code: "drm" | "corrupt" | "too-large";

@@ -1130,3 +1130,47 @@ describe("a page shown again", () => {
     }
   });
 });
+
+describe("cover jobs on the Shelf (#948)", () => {
+  /** Opens the Frame on the Shelf, as the Worker does while an Import adds Documents. */
+  function openShelf(current: Frame): void {
+    current.port.deliver({
+      kind: "open",
+      view: "shelf",
+      entry: null,
+      position: null,
+      settings: { fontSize: 100, lineWidth: "medium", pdfFit: "width" },
+      size: 0,
+      labels: LABELS,
+      language: "en",
+      appearance: { colorScheme: "light", eink: false },
+      shelf: { status: "ready", entries: [] },
+      shelfLabels: null,
+    });
+  }
+
+  it("draws a PDF's first page for a cover job, reading that Document by its id", async () => {
+    frame = loadFrame(createPdfStub());
+    openShelf(frame);
+    const pdfPort = new FakePdfPort();
+    frame.port.deliver({
+      kind: "cover-job",
+      documentId: "doc-7",
+      format: "pdf",
+      size: 4096,
+      pdf: { displaySource: "export {};", css: "" },
+      pdfPort,
+    });
+    await vi.waitFor(() =>
+      expect(frame?.port.messages.find((message) => message.kind === "cover")).toEqual({
+        kind: "cover",
+        documentId: "doc-7",
+        coverDataUrl: "data:image/jpeg;base64,COVER",
+      })
+    );
+    const reads = frame.port.messages.filter((message) => message.kind === "read");
+    expect(reads.length).toBeGreaterThan(0);
+    expect(reads.every((read) => read.documentId === "doc-7")).toBe(true);
+    expect(pdfPort.start).toHaveBeenCalled();
+  });
+});

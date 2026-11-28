@@ -97,6 +97,15 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+/** A CBZ's page names: its images, in natural reading order. */
+export function comicPages(entries: readonly FrameZipEntry[]): string[] {
+  const collator = new Intl.Collator(undefined, { numeric: true });
+  return entries
+    .map((item) => item.name)
+    .filter((name) => IMAGE_EXTENSIONS.some((extension) => name.toLowerCase().endsWith(extension)))
+    .sort(collator.compare);
+}
+
 /**
  * The Comic view over the archive `deps` supplies: the page list, one `blob:`
  * URL per page, and the prefetch and trim that keep the cache small.
@@ -106,14 +115,7 @@ export function createComic(deps: FrameComicDeps): FrameComic {
   let comicFiles: string[] = [];
 
   function load(): ComicDocument {
-    const collator = new Intl.Collator(undefined, { numeric: true });
-    comicFiles = deps.archive
-      .entries()
-      .map((item) => item.name)
-      .filter((name) =>
-        IMAGE_EXTENSIONS.some((extension) => name.toLowerCase().endsWith(extension))
-      )
-      .sort(collator.compare);
+    comicFiles = comicPages(deps.archive.entries());
     if (comicFiles.length === 0) throw new DocumentError("corrupt", "This archive has no images");
     return {
       metadata: { title: deps.title() },

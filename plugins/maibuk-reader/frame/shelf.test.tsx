@@ -2009,6 +2009,18 @@ describe("Import (#948)", () => {
     expect(commands).toEqual(["cancelImport"]);
   });
 
+  it("keeps the empty Shelf's Import buttons from starting a second Import while one runs", async () => {
+    setWidth(1024);
+    const user = userEvent.setup({ delay: null });
+    const commands: string[] = [];
+    await mount(
+      <ImportHarness entries={[]} importState={running()} onCommand={(id) => commands.push(id)} />
+    );
+    await user.click(screen.getByRole("button", { name: LABELS.importFiles }));
+    await user.click(screen.getByRole("button", { name: LABELS.importFolder }));
+    expect(commands).toEqual([]);
+  });
+
   it("shows View report on a done card, opens the report by keyboard, and returns focus on Escape", async () => {
     setWidth(1024);
     const user = userEvent.setup({ delay: null });

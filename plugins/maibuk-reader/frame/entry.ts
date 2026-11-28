@@ -38,14 +38,15 @@ import {
   type ChromeState,
   type FrameBridge,
 } from "./app";
-import { createArchive, DocumentError } from "./archive";
+import { createArchive, DocumentError, FB2_MAX_BYTES } from "./archive";
 import { createComic } from "./comic";
+import { createCovers } from "./covers";
 import { createContents, documentOutline } from "./contents";
 import { createFind } from "./find";
 import { createFlow, textNodes, type FlowAnchor } from "./flow";
 import { hooks, positionDebounceMs } from "./hooks";
 import { createMeta } from "./meta";
-import { createPdf, MAX_CACHED_PAGES } from "./pdf";
+import { createPdf, importPdfjs, MAX_CACHED_PAGES } from "./pdf";
 import { createPosition } from "./position";
 import { clearFilters, defaultShelfView } from "./shelf-options";
 import { fill } from "./shelf-query";
@@ -169,6 +170,17 @@ const meta = createMeta({
   comicFiles: () => comic.files(),
   archive,
   isPageMode,
+  mediaTypeFor: (name) => sanitizer.mediaTypeFor(name),
+});
+/* The Shelf's cover jobs: imported Documents' own covers, drawn one at a time
+   after the Import added them (#948). */
+const covers = createCovers({
+  post,
+  requestBytes,
+  requestZipList,
+  requestZipEntry,
+  importFoliate: (source) => importFoliate(source),
+  importPdfjs,
   mediaTypeFor: (name) => sanitizer.mediaTypeFor(name),
 });
 /* The Reading Position: the message each view reports, debounced once the author
@@ -745,6 +757,8 @@ function onMessage(event: MessageEvent) {
 /* Opening --------------------------------------------------------------- */
 
 async function handleOpen(message: FrameOpenMessage) {
+  // Any open ends the Shelf's cover job; the Worker asks again when the Shelf draws.
+  covers.cancel();
   entry = message.entry || null;
   position = message.position || null;
   settings = message.settings || settings;
@@ -814,7 +828,6 @@ function resetDocument() {
 
 /* Documents: archive, parsers, Flowing and Page views ----------------------- */
 const sanitizer = (globalThis as any).ReaderSanitizer;
-const FB2_MAX_BYTES = 20 * 1024 * 1024;
 
 /* The Flowing engine: one sanitized section at a time, its columns, the CFI and
    character offsets they report, and the Page view a pre-paginated EPUB draws
@@ -1546,6 +1559,7 @@ function onResize() {
 }
 
 function cleanup() {
+  covers.cancel();
   destroyed = true;
   protocol.close();
   positionEngine.stop();
@@ -1638,6 +1652,9 @@ protocol.onRemoveCounts = (message) => {
     body: message.body,
     stats: message.stats,
   });
+};
+protocol.onCoverJob = (job) => {
+  void covers.run(job);
 };
 protocol.onImport = (state) => {
   bridge.setImportState(state);
