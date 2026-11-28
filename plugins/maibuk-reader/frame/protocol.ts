@@ -13,6 +13,7 @@ import type {
   Appearance,
   FrameEntry,
   FrameFoliate,
+  FrameImportState,
   FrameLabels,
   FramePdf,
   FrameShelfCommandId,
@@ -120,6 +121,12 @@ export interface FrameShelfResultMessage {
   message?: string;
 }
 
+/** The background Import changed: a file was sorted, it finished, or it was dismissed (null). */
+export interface FrameImportMessage {
+  kind: "import";
+  state: FrameImportState | null;
+}
+
 export type WorkerToFrameMessage =
   | FrameOpenMessage
   | FrameBytesMessage
@@ -132,7 +139,8 @@ export type WorkerToFrameMessage =
   | FrameZipErrorMessage
   | FrameShelfMessage
   | FrameRemoveCountsMessage
-  | FrameShelfResultMessage;
+  | FrameShelfResultMessage
+  | FrameImportMessage;
 
 /** Runs one Shelf Command; `documentId` names the row it acts on. */
 export interface FrameShelfCommandMessage {
@@ -254,6 +262,8 @@ export interface FrameProtocol {
   onRemoveCounts?: (message: FrameRemoveCountsMessage) => void;
   /** Handles `shelf-result`; the Frame shows the notice, or clears it. */
   onShelfResult?: (message: string | null) => void;
+  /** Handles `import`; the Shelf draws the Import's card and report, or drops them on null (#948). */
+  onImport?: (state: FrameImportState | null) => void;
 }
 
 /** Whether one port message names a message the Frame handles. */
@@ -406,6 +416,11 @@ export function createFrameProtocol(port: MessagePort | null | undefined): Frame
         return;
       case "shelf-result":
         client.onShelfResult?.(typeof data.message === "string" ? data.message : null);
+        return;
+      case "import":
+        client.onImport?.(
+          typeof data.state === "object" && data.state !== null ? data.state : null
+        );
         return;
       default:
         return;

@@ -23,6 +23,7 @@
 import { FILE_READ_MAX_BYTES, type PluginClient } from "@/plugin-sdk";
 import type { PluginApiErrorCode } from "@/plugin-sdk";
 import type { ShelfService } from "./library";
+import { pickAndImport, type Importer, type ImportState } from "./import";
 import {
   foliateSource,
   purifySource,
@@ -52,13 +53,18 @@ import {
   type FrameZipListRequest,
   type ReadingPosition,
 } from "./frame-protocol";
-import { frameShelfLabels, frameShelfState, shelfRemovalCopy } from "./frame-shelf";
+import {
+  frameImportState,
+  frameShelfLabels,
+  frameShelfState,
+  shelfRemovalCopy,
+} from "./frame-shelf";
 import { ZipError, openZip, type ZipArchive } from "./zip";
 import {
   DEFAULT_READER_SETTINGS,
   clampSettings,
   positionKey,
-  sortShelf,
+  SUPPORTED_EXTENSIONS,
   withProgress,
   type Collection,
   type ReaderSettings,
@@ -73,6 +79,9 @@ export type SessionClient = Pick<PluginClient, "files" | "storage" | "appearance
 
 /** The appearance the Frame draws with when the host serves none. */
 const DEFAULT_APPEARANCE: Appearance = { colorScheme: "light", eink: false };
+
+/** How often a running Import redraws the Shelf's card and rows, at most (#948). */
+export const IMPORT_THROTTLE_MS = 400;
 
 /** What the runtime gives one mounted Frame. */
 export interface ReaderSessionDeps {
@@ -102,6 +111,10 @@ export interface ReaderSessionDeps {
   onViewChange?(view: "shelf" | "document"): void;
   /** Called once when the session stops, so the runtime forgets the Frame. */
   onDispose?(): void;
+  /** The Worker's one background Import, which outlives this Frame (#948). */
+  importer?: Importer;
+  /** How often a running Import redraws, at most; IMPORT_THROTTLE_MS when absent. */
+  importThrottleMs?: number;
 }
 
 /** A session the runtime can address for the life of one mounted Frame. */
@@ -125,6 +138,8 @@ export interface ReaderSession {
   command(id: FrameCommandId): void;
   /** Stops pdf.js, releases the port, and ignores anything later. */
   dispose(): void;
+  /** The view the Frame shows now. */
+  readonly view: "shelf" | "document";
   /** True once the session stopped. */
   readonly disposed: boolean;
 }
@@ -300,6 +315,13 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
   let pendingPosition: Promise<void> = Promise.resolve();
   /** Stores the Shelf's view as the Frame reports it; at most one write runs at a time. */
   const writeShelfView = coalescedShelfViewWriter((settings) => library.saveShelfView(settings));
+  const importer = deps.importer ?? null;
+  const importThrottleMs = deps.importThrottleMs ?? IMPORT_THROTTLE_MS;
+  /** The trailing redraw a running Import waits for; null when none is due. */
+  let importTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The Import status this Frame last drew, so a status change always draws at once. */
+  let drawnImportStatus: ImportState["status"] | null = null;
+  let unsubscribeImport: (() => void) | null = null;
 
   function post(message: unknown, transfer?: Transferable[]): void {
     if (disposed) return;
@@ -391,6 +413,40 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     post({ kind: "shelf", state: frameShelfState(language, shelf, filed) });
   }
 
+  /**
+   * Draws the Importer's state in the Frame: the Shelf's card and report. On
+   * the Shelf it also redraws the rows, so imported Documents appear as they
+   * are added rather than all at the end.
+   */
+  function drawImport(): void {
+    if (importTimer !== null) {
+      clearTimeout(importTimer);
+      importTimer = null;
+    }
+    if (disposed || importer === null) return;
+    const state = importer.state;
+    drawnImportStatus = state?.status ?? null;
+    post({ kind: "import", state: state === null ? null : frameImportState(language, state) });
+    if (state !== null && view === "shelf") {
+      void library
+        .loadShelf()
+        .then((shelf) => publishShelf(shelf))
+        .catch(() => {
+          // The rows stay as drawn; the next file or the finish redraws them.
+        });
+    }
+  }
+
+  /** The first file and every status change draw at once; files between them at most every throttle. */
+  function onImportChange(state: ImportState | null): void {
+    if (disposed || !opened) return;
+    if (state?.status === "running" && drawnImportStatus === "running") {
+      importTimer ??= setTimeout(drawImport, importThrottleMs);
+      return;
+    }
+    drawImport();
+  }
+
   /** Refreshes every File Grant and replaces the Shelf the Frame draws. */
   async function refreshShelf(): Promise<void> {
     try {
@@ -445,6 +501,7 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     };
     if (shelfView) {
       post(message);
+      if (importer?.state != null) drawImport();
       void refreshShelf();
       return;
     }
@@ -459,6 +516,7 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
       message.foliate = { source: foliateSource(), purify: purifySource() };
     }
     post(message);
+    if (importer?.state != null) drawImport();
   }
 
   /** Reads `length` bytes at `offset`, in the chunks the File Grant API allows. */
@@ -596,13 +654,11 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     }
     const progress: ShelfProgress = message.progress;
     try {
-      const shelf = await library.loadShelf();
-      const next = sortShelf(
+      const next = await library.updateShelf((shelf) =>
         shelf.map((candidate) =>
           candidate.id === current.id ? withProgress(candidate, progress, Date.now()) : candidate
         )
       );
-      await library.saveShelf(next);
       const updated = next.find((candidate) => candidate.id === current.id);
       if (updated !== undefined && entry?.id === current.id) entry = updated;
     } catch {
@@ -615,30 +671,31 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     metaApplied = true;
     const current = entry;
     try {
-      const shelf = await library.loadShelf();
-      let changed = false;
-      const next = shelf.map((candidate) => {
-        if (candidate.id !== current.id) return candidate;
-        const updated: ShelfEntry = { ...candidate };
-        if (typeof message.title === "string" && message.title.trim() !== "") {
-          updated.title = message.title.trim();
-        }
-        if (typeof message.author === "string" && message.author.trim() !== "") {
-          updated.author = message.author.trim();
-        }
-        if (typeof message.coverDataUrl === "string" && updated.coverDataUrl === undefined) {
-          updated.coverDataUrl = message.coverDataUrl;
-        }
-        if (typeof message.pageCount === "number" && updated.progress !== null) {
-          updated.progress = { ...updated.progress, pageCount: message.pageCount };
-        }
-        if (JSON.stringify(updated) !== JSON.stringify(candidate)) changed = true;
-        return updated;
+      const next = await library.updateShelf((shelf) => {
+        let changed = false;
+        const mapped = shelf.map((candidate) => {
+          if (candidate.id !== current.id) return candidate;
+          const updated: ShelfEntry = { ...candidate };
+          // The Frame looked for the file's own cover on open, found or not (#948).
+          delete updated.coverPending;
+          if (typeof message.title === "string" && message.title.trim() !== "") {
+            updated.title = message.title.trim();
+          }
+          if (typeof message.author === "string" && message.author.trim() !== "") {
+            updated.author = message.author.trim();
+          }
+          if (typeof message.coverDataUrl === "string" && updated.coverDataUrl === undefined) {
+            updated.coverDataUrl = message.coverDataUrl;
+          }
+          if (typeof message.pageCount === "number" && updated.progress !== null) {
+            updated.progress = { ...updated.progress, pageCount: message.pageCount };
+          }
+          if (JSON.stringify(updated) !== JSON.stringify(candidate)) changed = true;
+          return updated;
+        });
+        return changed ? mapped : null;
       });
-      if (changed) {
-        await library.saveShelf(sortShelf(next));
-        entry = next.find((candidate) => candidate.id === current.id) ?? current;
-      }
+      entry = next.find((candidate) => candidate.id === current.id) ?? current;
     } catch {
       // The Document's own metadata is a nicety; the Shelf keeps its row.
     }
@@ -651,13 +708,13 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     if (entry === null) return;
     const current = entry;
     try {
-      const shelf = await library.loadShelf();
-      const next = shelf.map((candidate) =>
-        candidate.id === current.id
-          ? { ...candidate, state: "unreadable" as const, reason: message.reason }
-          : candidate
+      const next = await library.updateShelf((shelf) =>
+        shelf.map((candidate) =>
+          candidate.id === current.id
+            ? { ...candidate, state: "unreadable" as const, reason: message.reason }
+            : candidate
+        )
       );
-      await library.saveShelf(next);
       const updated = next.find((candidate) => candidate.id === current.id);
       if (updated !== undefined && entry?.id === current.id) entry = updated;
     } catch {
@@ -728,6 +785,27 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
           if (picked !== null) await deps.openEntry?.(picked);
           return;
         }
+        case "importFiles":
+        case "importFolder": {
+          if (importer === null) return;
+          try {
+            await pickAndImport(
+              client,
+              importer,
+              message.id === "importFiles" ? "files" : "folder",
+              SUPPORTED_EXTENSIONS
+            );
+          } catch {
+            post({ kind: "shelf-result", message: translate(language, "shelf.import.failed") });
+          }
+          return;
+        }
+        case "cancelImport":
+          importer?.cancel();
+          return;
+        case "dismissImport":
+          importer?.dismiss();
+          return;
       }
     } catch {
       post({ kind: "shelf-result", message: translate(language, "shelf.openFailed") });
@@ -860,6 +938,12 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     if (disposed) return;
     disposed = true;
     deps.onDispose?.();
+    unsubscribeImport?.();
+    unsubscribeImport = null;
+    if (importTimer !== null) {
+      clearTimeout(importTimer);
+      importTimer = null;
+    }
     archive = null;
     openingArchive = null;
     if (pdfPort !== null) {
@@ -887,9 +971,13 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     get disposed() {
       return disposed;
     },
+    get view() {
+      return view;
+    },
     start(): void {
       port.onmessage = (event: MessageEvent) => handleMessage(event.data);
       port.start();
+      unsubscribeImport = importer?.subscribe(onImportChange) ?? null;
     },
     setEntry(next: ShelfEntry | null): void {
       entry = next;
@@ -909,6 +997,7 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
         labels: frameLabels(next, deps.returnLabel()),
         shelfLabels: frameShelfLabels(next),
       });
+      if (importer?.state != null) drawImport();
     },
     setAppearance(next: Appearance): void {
       post({ kind: "appearance", appearance: next });

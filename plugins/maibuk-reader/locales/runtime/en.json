@@ -206,5 +206,7 @@
   "shelf.import.reason.drm": "Protected by DRM",
   "shelf.import.reason.corrupt": "Corrupt or incomplete file",
   "shelf.import.reason.unsupported": "Not a format Reader opens",
-  "shelf.import.reason.unreadable": "Reader could not read this file"
+  "shelf.import.reason.unreadable": "Reader could not read this file",
+  "shelf.import.failed": "Reader couldn't import those files.",
+  "shelf.import.finishedNotice": "Import finished: {{counts}}"
 }

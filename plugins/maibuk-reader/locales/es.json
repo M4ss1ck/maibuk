@@ -3,6 +3,8 @@
   "description": "Lee archivos PDF, EPUB, MOBI, AZW3, FB2 y CBZ de tu dispositivo junto a lo que escribes, y recuerda por dónde ibas.",
   "commands.openReader.label": "Abrir Lector",
   "commands.openFile.label": "Abrir archivo…",
+  "commands.importFiles.label": "Importar archivos…",
+  "commands.importFolder.label": "Importar carpeta…",
   "commands.openDocument.label": "Abrir documento",
   "commands.nextPage.label": "Página siguiente",
   "commands.previousPage.label": "Página anterior",
@@ -26,6 +28,8 @@
   "commands.newCollection.label": "Nueva colección…",
   "commands.renameCollection.label": "Cambiar nombre de la colección…",
   "commands.deleteCollection.label": "Eliminar colección…",
+  "commands.cancelImport.label": "Cancelar importación",
+  "commands.viewImportReport.label": "Ver informe de importación",
   "pages.reader.title": "Lector",
   "pages.document.title": "Lectura",
   "canvasReferenceSources.documents.label": "Documentos"

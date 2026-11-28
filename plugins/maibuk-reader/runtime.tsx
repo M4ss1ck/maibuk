@@ -26,9 +26,11 @@ import {
 } from "@/plugin-sdk";
 import type { FrameCommandId } from "./frame-protocol";
 import { format, translate } from "./i18n";
+import { createImporter, pickAndImport, type Importer, type ImportState } from "./import";
 import { createShelfService, type ShelfService } from "./library";
+import { frameImportState } from "./frame-shelf";
 import { createReaderSession, type ReaderSession } from "./session";
-import { SHELF_KEY, type ShelfEntry, parseShelf, sortShelf } from "./shelf";
+import { SHELF_KEY, SUPPORTED_EXTENSIONS, type ShelfEntry, parseShelf, sortShelf } from "./shelf";
 
 /** The Shelf page id, exactly as the manifest declares it. */
 export const SHELF_PAGE_ID = "reader";
@@ -42,6 +44,10 @@ export const SHELF_FRAME_SRC = "assets/ui/shelf.html";
 /** The Command-local ids the manifest declares. */
 export const OPEN_READER = "openReader";
 export const OPEN_FILE = "openFile";
+export const IMPORT_FILES = "importFiles";
+export const IMPORT_FOLDER = "importFolder";
+export const CANCEL_IMPORT = "cancelImport";
+export const VIEW_IMPORT_REPORT = "viewImportReport";
 export const OPEN_DOCUMENT = "openDocument";
 export const NEXT_PAGE = "nextPage";
 export const PREVIOUS_PAGE = "previousPage";
@@ -90,6 +96,7 @@ const FRAME_COMMANDS: ReadonlySet<FrameCommandId> = new Set<FrameCommandId>([
   NEW_COLLECTION,
   RENAME_COLLECTION,
   DELETE_COLLECTION,
+  VIEW_IMPORT_REPORT,
 ]);
 
 /**
@@ -171,6 +178,7 @@ export async function leaveReading(
 /** Wires the client to the Shelf page, the document Frame, and the Commands. */
 export function startReader(client: PluginClient, serve: ReaderServe): void {
   const library = createShelfService(client);
+  const importer = createImporter({ client, library });
   const runtime: ReaderRuntime = {
     currentDocumentId: null,
     currentEntry: null,
@@ -199,6 +207,7 @@ export function startReader(client: PluginClient, serve: ReaderServe): void {
     })
     .catch(() => {});
   followReturnTarget(client, runtime);
+  announceFinishedImport(client, importer, runtime);
   void client
     .on("files.dropped", (payload) => {
       pendingDrops = pendingDrops
@@ -231,6 +240,7 @@ export function startReader(client: PluginClient, serve: ReaderServe): void {
       onDispose: () => {
         runtime.sessions.delete(frame.id);
       },
+      importer,
     });
     runtime.sessions.set(frame.id, session);
     session.start();
@@ -298,8 +308,38 @@ export function startReader(client: PluginClient, serve: ReaderServe): void {
   serve(client, {
     pages: {},
     onHostRequest: canvasReferenceRequests({ documents: documentSource }, (method, params) =>
-      handleHostRequest(client, library, runtime, method, params)
+      handleHostRequest(client, library, importer, runtime, method, params)
     ),
+  });
+}
+
+/**
+ * Tells the author an Import finished when no mounted Frame shows the Shelf,
+ * whose card would otherwise say so (#948): an Import started by a global
+ * Command while reading ends with this notice instead of moving the author.
+ */
+function announceFinishedImport(
+  client: Pick<PluginClient, "notifications">,
+  importer: Importer,
+  runtime: ReaderRuntime
+): void {
+  let previous: ImportState["status"] | null = null;
+  importer.subscribe((state) => {
+    const finished = previous === "running" && state?.status === "done";
+    previous = state?.status ?? null;
+    if (!finished || state === null) return;
+    for (const session of runtime.sessions.values()) {
+      if (!session.disposed && session.view === "shelf") return;
+    }
+    const counts = frameImportState(runtime.language, state).countsText;
+    void client.notifications
+      .show({
+        variant: "success",
+        message: format(translate(runtime.language, "shelf.import.finishedNotice"), { counts }),
+      })
+      .catch(() => {
+        // A refused notice must not break the Import's listeners.
+      });
   });
 }
 
@@ -368,13 +408,14 @@ function isFrameCommand(id: string): id is FrameCommandId {
 function handleHostRequest(
   client: PluginClient,
   library: ReturnType<typeof createShelfService>,
+  importer: Importer,
   runtime: ReaderRuntime,
   method: string,
   params: unknown
 ): unknown {
   if (method === "health.check") return "pong";
   if (method === PLUGIN_COMMAND_RUN_REQUEST)
-    return runReaderCommand(client, library, runtime, params);
+    return runReaderCommand(client, library, importer, runtime, params);
   throw new Error(`No handler for ${method}`);
 }
 
@@ -387,6 +428,7 @@ function handleHostRequest(
 async function runReaderCommand(
   client: PluginClient,
   library: ReturnType<typeof createShelfService>,
+  importer: Importer,
   runtime: ReaderRuntime,
   params: unknown
 ): Promise<null> {
@@ -411,6 +453,28 @@ async function runReaderCommand(
         message: translate(runtime.language, "shelf.openFailed"),
       });
     }
+    return null;
+  }
+  if (id === IMPORT_FILES || id === IMPORT_FOLDER) {
+    // The Import runs in the background wherever the author is; the Shelf's
+    // card shows it, and a notice says when it finished if no Shelf is shown.
+    try {
+      await pickAndImport(
+        client,
+        importer,
+        id === IMPORT_FILES ? "files" : "folder",
+        SUPPORTED_EXTENSIONS
+      );
+    } catch {
+      await client.notifications.show({
+        variant: "error",
+        message: translate(runtime.language, "shelf.import.failed"),
+      });
+    }
+    return null;
+  }
+  if (id === CANCEL_IMPORT) {
+    importer.cancel();
     return null;
   }
   if (isFrameCommand(id)) {

@@ -104,6 +104,7 @@ describe("Reader Commands", () => {
   it.each([
     "removeFromShelf",
     "locateDocument",
+    "viewImportReport",
   ])("forwards %s to the mounted Shelf Frame", async (id) => {
     const { host, port } = hostFor();
     try {
@@ -117,6 +118,68 @@ describe("Reader Commands", () => {
       await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id });
 
       await waitFor(() => expect(messages).toContainEqual({ kind: "command", id }));
+    } finally {
+      await host.stop();
+    }
+  });
+});
+
+// Import (#948): the global Commands pick files or a folder and import them in
+// the Worker's one background Importer. The Shelf's card says when it finished;
+// with no Shelf shown, a notice does, so the author can keep reading.
+describe("Reader Import Commands", () => {
+  const folder = [
+    { name: "dune.pdf", bytes: pdfBytes("dune") },
+    { name: "emma.pdf", bytes: pdfBytes("emma") },
+  ];
+
+  it("imports a picked folder from the global Command and says so when no Shelf is shown", async () => {
+    const { host, storage } = hostFor();
+    try {
+      host.files.queueFolderPick({ name: "Library", files: folder });
+      await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: "importFolder" });
+      await waitFor(() => expect(host.notifications).toHaveLength(1));
+      expect(host.notifications[0]).toMatchObject({
+        variant: "success",
+        message: format(en["shelf.import.finishedNotice"], { counts: "2 added" }),
+      });
+      const shelf = storage.get(SHELF_KEY) as ShelfEntry[];
+      expect(shelf.map((entry) => entry.title).sort()).toEqual(["dune", "emma"]);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("leaves the notice to the Shelf's card while a Shelf Frame shows it", async () => {
+    const { host, port } = hostFor();
+    try {
+      const frame = port.frame("frame-1", SHELF_FRAME_SRC);
+      const messages: Record<string, unknown>[] = [];
+      frame.onmessage = (event) => messages.push(event.data as Record<string, unknown>);
+      frame.start();
+      frame.postMessage({ kind: "ready" });
+      await waitFor(() => expect(messages.some((m) => m.kind === "open")).toBe(true));
+
+      host.files.queueFilesPick(folder);
+      await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: "importFiles" });
+      await waitFor(() => {
+        const last = messages.filter((m) => m.kind === "import").at(-1);
+        expect((last?.state as { status?: string } | null)?.status).toBe("done");
+      });
+      expect(host.notifications).toEqual([]);
+    } finally {
+      await host.stop();
+    }
+  });
+
+  it("starts nothing when the author cancels the pick", async () => {
+    const { host, storage } = hostFor();
+    try {
+      host.files.queueFilesPick([]);
+      await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: "importFiles" });
+      await host.broker.request(PLUGIN_COMMAND_RUN_REQUEST, { id: "cancelImport" });
+      expect(host.notifications).toEqual([]);
+      expect(storage.get(SHELF_KEY) ?? []).toEqual([]);
     } finally {
       await host.stop();
     }
