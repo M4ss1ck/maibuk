@@ -516,6 +516,25 @@ export interface FrameImportMessage {
   state: FrameImportState | null;
 }
 
+/**
+ * Asks the Shelf Frame for one Document's own cover (#948). The Frame reads it
+ * with reads and archive requests that carry this `documentId`, draws the
+ * cover with the engine it opens Documents with, and answers with `cover`.
+ * One job runs at a time; a later `open` cancels it.
+ */
+export interface FrameCoverJobMessage {
+  kind: "cover-job";
+  documentId: string;
+  format: string;
+  /** The file's size in bytes. */
+  size: number;
+  /** foliate-js's parsers, for every format but PDF. */
+  foliate?: string;
+  /** pdf.js's display module and its core's port, for a PDF. */
+  pdf?: FramePdf;
+  pdfPort?: MessagePort;
+}
+
 export type WorkerToFrameMessage =
   | FrameOpenMessage
   | FrameBytesMessage
@@ -529,7 +548,8 @@ export type WorkerToFrameMessage =
   | FrameShelfMessage
   | FrameRemoveCountsMessage
   | FrameShelfResultMessage
-  | FrameImportMessage;
+  | FrameImportMessage
+  | FrameCoverJobMessage;
 
 /* Frame -> Worker */
 
@@ -544,6 +564,8 @@ export interface FrameReadMessage {
   id: number;
   offset: number;
   length: number;
+  /** The cover job's Document this read is for; the open Document when absent (#948). */
+  documentId?: string;
 }
 
 /** Reports where the author is; the Frame debounces it before sending. */
@@ -559,6 +581,16 @@ export interface FrameMetaMessage {
   title?: string;
   author?: string;
   pageCount?: number;
+  coverDataUrl?: string;
+}
+
+/**
+ * Answers a `cover-job`: the Document's own cover as a small JPEG data URL, or
+ * none when it has none or could not be read (#948).
+ */
+export interface FrameCoverMessage {
+  kind: "cover";
+  documentId: string;
   coverDataUrl?: string;
 }
 
@@ -592,6 +624,8 @@ export interface FrameLoadErrorMessage {
 export interface FrameZipListRequest {
   kind: "zip-list";
   id: number;
+  /** The cover job's Document; the open Document when absent (#948). */
+  documentId?: string;
 }
 
 /** Asks for one archive entry, answered with `zip-data` or `zip-error`. */
@@ -599,6 +633,8 @@ export interface FrameZipEntryRequest {
   kind: "zip-entry";
   id: number;
   name: string;
+  /** The cover job's Document; the open Document when absent (#948). */
+  documentId?: string;
 }
 
 /** Reports a settings change the Frame made, such as a font size step. */
@@ -653,6 +689,7 @@ export type FrameToWorkerMessage =
   | FrameReadMessage
   | FramePositionMessage
   | FrameMetaMessage
+  | FrameCoverMessage
   | FrameBackMessage
   | FrameClosedMessage
   | FrameLoadErrorMessage

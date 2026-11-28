@@ -42,6 +42,7 @@ import {
   type FrameOpenMessage,
   type FramePdf,
   type FramePositionMessage,
+  type FrameCoverJobMessage,
   type FrameReadMessage,
   type FrameSettingsMessage,
   type FrameShelfCollectionMessage,
@@ -83,6 +84,42 @@ const DEFAULT_APPEARANCE: Appearance = { colorScheme: "light", eink: false };
 /** How often a running Import redraws the Shelf's card and rows, at most (#948). */
 export const IMPORT_THROTTLE_MS = 400;
 
+/** How long the Shelf Frame may take over one Document's cover before it is skipped (#948). */
+export const COVER_JOB_TIMEOUT_MS = 30_000;
+
+/** The largest cover data URL the Shelf keeps, as the Frame encodes it. */
+const COVER_MAX_BYTES = 50 * 1024;
+
+/** Whether the Frame's answer is a small JPEG data URL, the only cover the Shelf stores. */
+function isCoverDataUrl(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    value.startsWith("data:image/jpeg;base64,") &&
+    value.length <= COVER_MAX_BYTES
+  );
+}
+
+/** One Document's archive, opened once on its first request. */
+interface ArchiveSlot {
+  archive: ZipArchive | null;
+  opening: Promise<ZipArchive> | null;
+}
+
+/** What one Document's reads come from: its File Grant, its size, and its archive. */
+interface DocumentSource {
+  grant: string;
+  size: number;
+  archive: ArchiveSlot;
+}
+
+/** The Document whose cover the Shelf Frame is drawing, and what its read holds. */
+interface CoverJob extends DocumentSource {
+  documentId: string;
+  core: PdfCore | null;
+  port: MessagePort | null;
+  timer: ReturnType<typeof setTimeout>;
+}
+
 /** What the runtime gives one mounted Frame. */
 export interface ReaderSessionDeps {
   client: SessionClient;
@@ -115,6 +152,8 @@ export interface ReaderSessionDeps {
   importer?: Importer;
   /** How often a running Import redraws, at most; IMPORT_THROTTLE_MS when absent. */
   importThrottleMs?: number;
+  /** How long one cover job may run; COVER_JOB_TIMEOUT_MS when absent. */
+  coverJobTimeoutMs?: number;
 }
 
 /** A session the runtime can address for the life of one mounted Frame. */
@@ -305,8 +344,12 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
   let metaApplied = false;
   let core: PdfCore | null = null;
   let pdfPort: MessagePort | null = null;
-  let archive: ZipArchive | null = null;
-  let openingArchive: Promise<ZipArchive> | null = null;
+  /** The open Document's archive, once a request opened it. */
+  let documentArchive: ArchiveSlot = { archive: null, opening: null };
+  /** The Document whose cover the Shelf Frame is drawing now (#948), one at a time. */
+  let coverJob: CoverJob | null = null;
+  /** Documents asked for a cover this session, so a failed one is not asked for again. */
+  const coverAsked = new Set<string>();
   /**
    * Reading Position saves run one after another, latest last, so two saves
    * never read and write the Shelf row at the same time and lose one update.
@@ -317,6 +360,7 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
   const writeShelfView = coalescedShelfViewWriter((settings) => library.saveShelfView(settings));
   const importer = deps.importer ?? null;
   const importThrottleMs = deps.importThrottleMs ?? IMPORT_THROTTLE_MS;
+  const coverJobTimeoutMs = deps.coverJobTimeoutMs ?? COVER_JOB_TIMEOUT_MS;
   /** The trailing redraw a running Import waits for; null when none is due. */
   let importTimer: ReturnType<typeof setTimeout> | null = null;
   /** The Import status this Frame last drew, so a status change always draws at once. */
@@ -378,8 +422,8 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     openGeneration += 1;
     metaApplied = false;
     opened = false;
-    archive = null;
-    openingArchive = null;
+    documentArchive = { archive: null, opening: null };
+    cancelCoverJob();
     if (core !== null) {
       core.dispose();
       core = null;
@@ -411,6 +455,115 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     const filed = collections ?? (await collectionsOrNone());
     if (disposed) return;
     post({ kind: "shelf", state: frameShelfState(language, shelf, filed) });
+    startCoverJob(shelf);
+  }
+
+  /**
+   * Asks the Shelf Frame for the next imported Document's own cover (#948). The
+   * Frame owns parsing, so it draws the cover with the engine it opens
+   * Documents with; this end answers its reads from that Document's File Grant.
+   */
+  function startCoverJob(shelf: readonly ShelfEntry[]): void {
+    if (disposed || !opened || view !== "shelf" || coverJob !== null) return;
+    const next = shelf.find(
+      (candidate) =>
+        candidate.coverPending === true &&
+        candidate.state === "ok" &&
+        candidate.coverDataUrl === undefined &&
+        !coverAsked.has(candidate.id)
+    );
+    if (next === undefined) return;
+    coverAsked.add(next.id);
+    const size = sizeFromFingerprint(next.fingerprint);
+    const job: CoverJob = {
+      documentId: next.id,
+      grant: next.grant,
+      size,
+      archive: { archive: null, opening: null },
+      core: null,
+      port: null,
+      timer: setTimeout(() => {
+        // A Frame that never answers must not hold the queue: the row keeps
+        // its generated cover, and opening the Document still finds the real one.
+        if (coverJob === job) void finishCover(job.documentId, undefined);
+      }, coverJobTimeoutMs),
+    };
+    coverJob = job;
+    const message: FrameCoverJobMessage = {
+      kind: "cover-job",
+      documentId: next.id,
+      format: next.format,
+      size,
+    };
+    if (next.format === "pdf") {
+      job.core = startPdfCore();
+      const channel = new MessageChannel();
+      job.port = channel.port2;
+      job.core.worker.postMessage({ kind: "maibuk:pdf-port", port: channel.port1 }, [
+        channel.port1,
+      ]);
+      message.pdf = { displaySource: pdfDisplaySource(), css: "" };
+      message.pdfPort = channel.port2;
+      post(message, [channel.port2]);
+      return;
+    }
+    message.foliate = foliateSource();
+    post(message);
+  }
+
+  /** Stops the cover job's pdf.js core and its deadline. */
+  function endCoverJob(): CoverJob | null {
+    const job = coverJob;
+    if (job === null) return null;
+    coverJob = null;
+    clearTimeout(job.timer);
+    job.core?.dispose();
+    try {
+      job.port?.close();
+    } catch {
+      // Already closed.
+    }
+    return job;
+  }
+
+  /** Drops the cover job unfinished, so the Shelf asks for it again next time it draws. */
+  function cancelCoverJob(): void {
+    const job = endCoverJob();
+    if (job !== null) coverAsked.delete(job.documentId);
+  }
+
+  /**
+   * Files the Frame's answer to a cover job: the cover when it found one, and
+   * no longer pending either way, then redraws the Shelf, which asks for the next.
+   */
+  async function finishCover(documentId: string, coverDataUrl: unknown): Promise<void> {
+    if (coverJob?.documentId !== documentId) return;
+    endCoverJob();
+    let shelf: readonly ShelfEntry[] | null = null;
+    try {
+      shelf = await library.updateShelf((current) => {
+        let changed = false;
+        const mapped = current.map((candidate) => {
+          if (candidate.id !== documentId || candidate.coverPending !== true) return candidate;
+          changed = true;
+          const updated: ShelfEntry = { ...candidate };
+          delete updated.coverPending;
+          if (isCoverDataUrl(coverDataUrl) && updated.coverDataUrl === undefined) {
+            updated.coverDataUrl = coverDataUrl;
+          }
+          return updated;
+        });
+        return changed ? mapped : null;
+      });
+    } catch {
+      // The row keeps its generated cover; `coverAsked` stops a retry this session.
+    }
+    if (disposed || view !== "shelf") return;
+    try {
+      await publishShelf(shelf ?? (await library.loadShelf()));
+    } catch {
+      // The rows stay as drawn; the next redraw asks for the next cover.
+    }
   }
 
   /**
@@ -519,15 +672,36 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     if (importer?.state != null) drawImport();
   }
 
+  /**
+   * What a Frame read or archive request reads: the cover job's Document when it
+   * names one, else the open Document. A request for a Document no job holds
+   * reads nothing.
+   */
+  function sourceFor(documentId: string | undefined): DocumentSource | null {
+    if (typeof documentId === "string") {
+      return coverJob?.documentId === documentId ? coverJob : null;
+    }
+    if (entry === null) return null;
+    return {
+      grant: entry.grant,
+      size: sizeFromFingerprint(entry.fingerprint),
+      archive: documentArchive,
+    };
+  }
+
   /** Reads `length` bytes at `offset`, in the chunks the File Grant API allows. */
-  async function readRange(offset: number, length: number): Promise<Uint8Array> {
-    if (entry === null || length <= 0) return new Uint8Array(0);
+  async function readRange(
+    source: DocumentSource,
+    offset: number,
+    length: number
+  ): Promise<Uint8Array> {
+    if (length <= 0) return new Uint8Array(0);
     const chunks: Uint8Array[] = [];
     let total = 0;
     while (total < length) {
       const take = Math.min(length - total, FILE_READ_MAX_BYTES);
       const buffer = await client.files.read({
-        grant: entry.grant,
+        grant: source.grant,
         offset: offset + total,
         length: take,
       });
@@ -540,23 +714,23 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     return joinChunks(chunks, total);
   }
 
-  /** Opens the archive once, reusing it for every later entry request. */
-  function ensureArchive(): Promise<ZipArchive> {
-    if (archive !== null) return Promise.resolve(archive);
-    if (openingArchive !== null) return openingArchive;
-    if (entry === null) {
+  /** Opens the source's archive once, reusing it for every later entry request. */
+  function ensureArchive(source: DocumentSource | null): Promise<ZipArchive> {
+    if (source === null) {
       return Promise.reject(new ZipError("corrupt", "No Document is open"));
     }
-    const size = sizeFromFingerprint(entry.fingerprint);
-    const opening = openZip(readRange, size)
+    const slot = source.archive;
+    if (slot.archive !== null) return Promise.resolve(slot.archive);
+    if (slot.opening !== null) return slot.opening;
+    const opening = openZip((offset, length) => readRange(source, offset, length), source.size)
       .then((opened) => {
-        archive = opened;
+        slot.archive = opened;
         return opened;
       })
       .finally(() => {
-        openingArchive = null;
+        slot.opening = null;
       });
-    openingArchive = opening;
+    slot.opening = opening;
     return opening;
   }
 
@@ -566,7 +740,7 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
 
   async function answerZipList(message: FrameZipListRequest): Promise<void> {
     try {
-      const opened = await ensureArchive();
+      const opened = await ensureArchive(sourceFor(message.documentId));
       post({
         kind: "zip-list",
         id: message.id,
@@ -584,7 +758,7 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
    */
   async function answerZipEntry(message: FrameZipEntryRequest): Promise<void> {
     try {
-      const opened = await ensureArchive();
+      const opened = await ensureArchive(sourceFor(message.documentId));
       const { bytes, deflated } = await opened.stored(message.name);
       const buffer = bytes.buffer.slice(
         bytes.byteOffset,
@@ -608,28 +782,14 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
     const id = message.id;
     const offset = Math.max(0, Math.floor(message.offset));
     const length = Math.max(0, Math.floor(message.length));
-    if (entry === null || length === 0) {
+    const source = sourceFor(message.documentId);
+    if (source === null || length === 0) {
       const empty = new ArrayBuffer(0);
       post({ kind: "bytes", id, buffer: empty }, [empty]);
       return;
     }
-    const chunks: Uint8Array[] = [];
-    let total = 0;
     try {
-      while (total < length) {
-        const take = Math.min(length - total, FILE_READ_MAX_BYTES);
-        const buffer = await client.files.read({
-          grant: entry.grant,
-          offset: offset + total,
-          length: take,
-        });
-        const bytes = new Uint8Array(buffer);
-        if (bytes.byteLength === 0) break;
-        chunks.push(bytes);
-        total += bytes.byteLength;
-        if (bytes.byteLength < take) break;
-      }
-      const joined = joinChunks(chunks, total);
+      const joined = await readRange(source, offset, length);
       post({ kind: "bytes", id, buffer: joined.buffer }, [joined.buffer]);
     } catch (error) {
       post({ kind: "read-error", id, code: errorCode(error) });
@@ -905,6 +1065,9 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
       case "meta":
         void applyMeta(message);
         return;
+      case "cover":
+        void finishCover(message.documentId, message.coverDataUrl);
+        return;
       case "load-error":
         void markUnreadable(message);
         return;
@@ -944,8 +1107,8 @@ export function createReaderSession(deps: ReaderSessionDeps): ReaderSession {
       clearTimeout(importTimer);
       importTimer = null;
     }
-    archive = null;
-    openingArchive = null;
+    documentArchive = { archive: null, opening: null };
+    endCoverJob();
     if (pdfPort !== null) {
       try {
         pdfPort.close();

@@ -142,6 +142,7 @@ function setup(
     /** The Worker's background Import; built from the harness's client when "real". */
     importer?: Importer | "real";
     importThrottleMs?: number;
+    coverJobTimeoutMs?: number;
   } = {}
 ): Harness {
   const storage = options.storage ?? new Map<string, unknown>();
@@ -172,6 +173,7 @@ function setup(
     onViewChange,
     importer: options.importer === "real" ? createImporter({ client, library }) : options.importer,
     importThrottleMs: options.importThrottleMs,
+    coverJobTimeoutMs: options.coverJobTimeoutMs,
   });
   session.start();
   const delivered: Record<string, unknown>[] = [];
@@ -1844,6 +1846,190 @@ describe("Shelf writes during an Import (#948)", () => {
         expect(shelf[0].title).toBe("Dune");
       });
       expect((storage.get(SHELF_KEY) as ShelfEntry[])[0].coverPending).toBeUndefined();
+    } finally {
+      await harness.stop();
+    }
+  });
+});
+
+describe("covers after an Import (#948)", () => {
+  const COVER = "data:image/jpeg;base64,AAAA";
+
+  /** A pending-cover Shelf row over a live File Grant holding `fixture`. */
+  async function pendingRow(
+    harness: Harness,
+    id: string,
+    fixture = "flowing.epub",
+    format: DocumentFormat = "epub"
+  ): Promise<ShelfEntry> {
+    const bytes = new Uint8Array(readFileSync(join(__dirname, "fixtures", fixture)));
+    harness.host.files.queuePick({ name: fixture, bytes });
+    const picked = await harness.client.files.pick({ extensions: [format], multiple: false });
+    if (picked === null) throw new Error("the pick was refused");
+    return {
+      ...shelfEntry({
+        id,
+        grant: picked.grant,
+        fingerprint: `${bytes.length}:${id}`,
+        title: id,
+        format,
+      }),
+      coverPending: true as const,
+    };
+  }
+
+  /** Opens a Shelf Frame over `rows`, sharing the harness's host so the grants stay live. */
+  async function shelfWith(
+    build: (harness: Harness) => Promise<ShelfEntry[]>,
+    options: { coverJobTimeoutMs?: number } = {}
+  ): Promise<Harness> {
+    const storage = new Map<string, unknown>();
+    const harness = setup({ view: "shelf", shelfInFrame: true, storage, ...options });
+    storage.set(SHELF_KEY, await build(harness));
+    await opened(harness);
+    return harness;
+  }
+
+  function coverJobs(harness: Harness): Record<string, unknown>[] {
+    return harness.messages.filter((message) => message.kind === "cover-job");
+  }
+
+  function row(harness: Harness, id: string): ShelfEntry | undefined {
+    return (harness.storage.get(SHELF_KEY) as ShelfEntry[]).find(
+      (candidate) => candidate.id === id
+    );
+  }
+
+  it("asks the Shelf Frame for a pending cover, reads that Document, and stores the cover", async () => {
+    const harness = await shelfWith(async (h) => [await pendingRow(h, "doc-1")]);
+    try {
+      const job = await messageOf(harness, "cover-job");
+      expect(job).toMatchObject({ documentId: "doc-1", format: "epub" });
+      expect(typeof job.foliate).toBe("string");
+      harness.send({ kind: "zip-list", id: 7, documentId: "doc-1" });
+      const list = await messageOf(harness, "zip-list");
+      expect((list.entries as { name: string }[]).map(({ name }) => name)).toContain(
+        "OEBPS/images/cover.png"
+      );
+      const shelfDraws = harness.messages.filter((message) => message.kind === "shelf").length;
+      harness.send({ kind: "cover", documentId: "doc-1", coverDataUrl: COVER });
+      await vi.waitFor(() => expect(row(harness, "doc-1")?.coverDataUrl).toBe(COVER));
+      expect(row(harness, "doc-1")?.coverPending).toBeUndefined();
+      // The Shelf redraws, so the real cover fades in over the generated one.
+      await vi.waitFor(() => {
+        expect(harness.messages.filter((message) => message.kind === "shelf").length).toBe(
+          shelfDraws + 1
+        );
+      });
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("asks for one cover at a time and moves on once the Frame answers", async () => {
+    const harness = await shelfWith(async (h) => [
+      await pendingRow(h, "doc-1"),
+      await pendingRow(h, "doc-2"),
+    ]);
+    try {
+      await messageOf(harness, "cover-job");
+      expect(coverJobs(harness).map((job) => job.documentId)).toEqual(["doc-1"]);
+      // No cover in the file: the row stops waiting and keeps its generated cover.
+      harness.send({ kind: "cover", documentId: "doc-1" });
+      await vi.waitFor(() => expect(coverJobs(harness)).toHaveLength(2));
+      expect(coverJobs(harness)[1].documentId).toBe("doc-2");
+      expect(row(harness, "doc-1")?.coverPending).toBeUndefined();
+      expect(row(harness, "doc-1")?.coverDataUrl).toBeUndefined();
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("stores only a small JPEG data URL as a cover", async () => {
+    const harness = await shelfWith(async (h) => [await pendingRow(h, "doc-1")]);
+    try {
+      await messageOf(harness, "cover-job");
+      harness.send({ kind: "cover", documentId: "doc-1", coverDataUrl: "javascript:alert(1)" });
+      await vi.waitFor(() => expect(row(harness, "doc-1")?.coverPending).toBeUndefined());
+      expect(row(harness, "doc-1")?.coverDataUrl).toBeUndefined();
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("skips a Document whose cover job the Frame never answers", async () => {
+    const harness = await shelfWith(
+      async (h) => [await pendingRow(h, "doc-1"), await pendingRow(h, "doc-2")],
+      { coverJobTimeoutMs: 20 }
+    );
+    try {
+      await vi.waitFor(() => expect(coverJobs(harness)).toHaveLength(2));
+      expect(coverJobs(harness).map((job) => job.documentId)).toEqual(["doc-1", "doc-2"]);
+      expect(row(harness, "doc-1")?.coverPending).toBeUndefined();
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("reads nothing for a Document no cover job holds", async () => {
+    const harness = await shelfWith(async (h) => [await pendingRow(h, "doc-1")]);
+    try {
+      await messageOf(harness, "cover-job");
+      harness.send({ kind: "read", id: 3, offset: 0, length: 16, documentId: "doc-9" });
+      const bytes = await messageOf(harness, "bytes");
+      expect((bytes.buffer as ArrayBuffer).byteLength).toBe(0);
+      harness.send({ kind: "read", id: 4, offset: 0, length: 16, documentId: "doc-1" });
+      await vi.waitFor(() => {
+        const answer = harness.messages.find(
+          (message) => message.kind === "bytes" && message.id === 4
+        );
+        expect((answer?.buffer as ArrayBuffer | undefined)?.byteLength).toBe(16);
+      });
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("drops the job when a Document opens and asks again back on the Shelf", async () => {
+    let reading: ShelfEntry | null = null;
+    const harness = await shelfWith(async (h) => {
+      const pending = await pendingRow(h, "doc-1");
+      reading = { ...(await pendingRow(h, "doc-2")) };
+      delete reading.coverPending;
+      return [pending, reading];
+    });
+    try {
+      await messageOf(harness, "cover-job");
+      harness.session.setEntry(reading);
+      await vi.waitFor(() => {
+        expect(harness.messages.filter((message) => message.kind === "open")).toHaveLength(2);
+      });
+      // A late answer for the dropped job changes nothing.
+      harness.send({ kind: "cover", documentId: "doc-1", coverDataUrl: COVER });
+      harness.send({ kind: "zip-list", id: 9, documentId: "doc-1" });
+      const error = await messageOf(harness, "zip-error");
+      expect(error).toMatchObject({ id: 9, code: "corrupt" });
+      expect(row(harness, "doc-1")?.coverPending).toBe(true);
+      await harness.session.showShelf();
+      await vi.waitFor(() => expect(coverJobs(harness)).toHaveLength(2));
+      expect(coverJobs(harness)[1].documentId).toBe("doc-1");
+    } finally {
+      await harness.stop();
+    }
+  });
+
+  it("hands a PDF's cover job its own pdf.js core and stops it after the answer", async () => {
+    const harness = await shelfWith(async (h) => [
+      await pendingRow(h, "doc-1", "twelve-pages.pdf", "pdf"),
+    ]);
+    try {
+      const job = await messageOf(harness, "cover-job");
+      expect(job.pdfPort).toBeInstanceOf(MessagePort);
+      expect((job.pdf as { displaySource: string }).displaySource.length).toBeGreaterThan(0);
+      expect(workers).toHaveLength(1);
+      harness.send({ kind: "cover", documentId: "doc-1", coverDataUrl: COVER });
+      await vi.waitFor(() => expect(row(harness, "doc-1")?.coverDataUrl).toBe(COVER));
+      expect(workers[0].terminate).toHaveBeenCalled();
     } finally {
       await harness.stop();
     }
