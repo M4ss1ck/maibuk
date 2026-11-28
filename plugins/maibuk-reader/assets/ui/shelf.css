@@ -1131,11 +1131,19 @@
   line-height: var(--type-small-line);
 }
 
+/* The Shelf's Import card floats at the bottom, as the ImportProgress artboard
+   draws it: across a phone's width, at the bottom right on Wide. It is the
+   one card; the kit ProgressCard inside it draws only its rows. It sits below
+   modal layers, so a Sheet or Dialog covers it: above them, it took the taps
+   meant for a phone Sheet's lower rows (#948). */
 .shelf-import-card {
-  position: relative;
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 16px;
+  z-index: var(--z-panel);
   box-sizing: border-box;
-  width: 100%;
-  padding: var(--space-4);
+  padding: 14px 16px;
   border: 1px solid var(--chrome-border);
   border-radius: var(--radius-card);
   background: var(--card);
@@ -1145,18 +1153,26 @@
 
 @media (min-width: 600px) {
   .shelf-import-card {
-    position: sticky;
-    bottom: 16px;
-    margin-left: auto;
-    max-width: 420px;
+    left: auto;
+    right: var(--space-4);
+    bottom: var(--space-4);
+    width: min(360px, calc(100vw - var(--space-8)));
   }
 }
 
-/* The kit floats the card on the import layer, above Dialogs. On the Shelf a
-   Sheet or Dialog is modal, so it must cover the card: left above them, the
-   card took the taps meant for a phone Sheet's lower rows (#948). */
+/* Room under the last rows, so they scroll clear of the floating card. */
+.shelf__body:has(> .shelf-import-card) {
+  padding-bottom: 200px;
+}
+
 .shelf-import-card .kit-progress-card {
-  z-index: var(--z-panel);
+  position: static;
+  width: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
 }
 
 .shelf-import-card__dismiss {
@@ -1288,6 +1304,7 @@
   justify-content: space-between;
   gap: var(--space-2);
   min-height: 44px;
+  padding: 0 var(--space-3);
   cursor: pointer;
 }
 
